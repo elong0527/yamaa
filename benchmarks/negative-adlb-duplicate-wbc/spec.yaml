@@ -96,5 +96,4 @@ rows:
       DTYPE: {literal: CALCULATION}
 
 verifications:
-  - unique:
-      columns: [USUBJID, VISIT, PARAMCD]
+  - unique: [USUBJID, VISIT, PARAMCD]

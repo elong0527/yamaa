@@ -700,9 +700,9 @@ mod execution {
                 "SRC: {path: nested/data.csv, types: {ID: int}}",
             ] {
                 for child_path in [None, Some("child.csv")] {
-                    let mut entry = String::from("schema_version: '1.0'\nparent: parent.yaml\ndomain: TEST\nkeys: [ID]\noutput: {path: result.csv, columns: [ID]}\ncolumns: [{name: ID, type: int, derivation: {source: SRC.ID}}]\n");
+                    let mut entry = String::from("schema_version: '1.0'\nparent: parent.yaml\ndomain: TEST\nkeys: [ID]\noutput: {path: result.csv, columns: [ID]}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\n");
                     if let Some(path) = child_path {
-                        entry.push_str(&format!("input: {{SRC: {{path: {path}}}}}\n"));
+                        entry.push_str(&format!("input: {{SRC: {path}}}\n"));
                     }
                     let parent = format!("schema_version: '1.0'\ninput: {{{declaration}}}\n");
                     let document = yamaa_adapters::shipped_schema::prepare(

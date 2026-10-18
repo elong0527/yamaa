@@ -96,7 +96,7 @@ const GROUPED: &str = "keys: KEYS\n\
     \x20   derivations:\n\
     \x20     USUBJID: VS.USUBJID\n\
     \x20     PARAMCD: VS.VSTESTCD\n\
-    \x20     AVAL: {aggregate: {expr: \"MEAN(VS.VSSTRESN)\"}}\n";
+    \x20     AVAL: {aggregate: \"MEAN(VS.VSSTRESN)\"}\n";
 
 // One row per record with a result; the record without one is suppressed.
 const RECORDS: &str = "keys: KEYS\n\

@@ -1423,7 +1423,14 @@ mod service {
         use crate::support::document::Tree;
 
         fn prepared() -> PreparedSpecification {
+            // The canonical document normalization admits: every shorthand is
+            // expanded to its class.
             let column = |name, operation, item| {
+                let field = if operation == "odm" {
+                    "item"
+                } else {
+                    "variable"
+                };
                 Tree::map(vec![
                     ("name", Tree::text(name)),
                     ("type", Tree::text("str")),
@@ -1431,7 +1438,10 @@ mod service {
                         "derivation",
                         Tree::map(vec![(
                             "value",
-                            Tree::map(vec![(operation, Tree::text(item))]),
+                            Tree::map(vec![(
+                                operation,
+                                Tree::map(vec![(field, Tree::text(item))]),
+                            )]),
                         )]),
                     ),
                 ])

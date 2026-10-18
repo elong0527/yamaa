@@ -45,8 +45,8 @@ columns:
         missing: Rest of World
         unmapped: Rest of World
     verifications:
-      allowed_values:
-        values: [North America, Europe, Rest of World]
+      - allowed_values:
+          values: [North America, Europe, Rest of World]
 
 verifications:
   - row_count:

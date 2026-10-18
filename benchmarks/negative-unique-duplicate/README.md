@@ -19,14 +19,12 @@ rejected and no artifact is accepted.
 ## How to fix
 
 Decide whether a record represents a subject or a site before editing
-anything. Assert uniqueness on the columns that truly identify a record.
-Either check the subject identifiers:
+anything. When a record is a subject, the keys already make each subject
+appear once; remove the check on `SITEID` rather than restate them:
 
 ```yaml
-verifications:
-  - unique:
-      columns: [STUDYID, USUBJID]
+keys: [STUDYID, USUBJID]
 ```
 
-or, when one record per site is the intent, aggregate the subjects to site
-records before asserting.
+When one record per site is the intent, aggregate the subjects to site
+records before asserting that each site appears once.

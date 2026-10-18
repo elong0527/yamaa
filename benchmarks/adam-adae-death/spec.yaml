@@ -71,8 +71,8 @@ columns:
     derivation:
       flag: "DTHDT IS NOT NULL"
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
 verifications:
   - row_count:

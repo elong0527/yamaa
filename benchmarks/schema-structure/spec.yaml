@@ -104,6 +104,5 @@ rows:
       PARAM: {literal: Lowest Result of Visit}
       AVISIT: {literal: OVERALL}
       AVAL:
-        aggregate:
-          expr: "MIN(LB.LBSTRESN)"
+        aggregate: "MIN(LB.LBSTRESN)"
       DTYPE: {literal: LOWEST}

@@ -33,6 +33,11 @@ pub enum DescriptorIssue {
     SizeNonnegative,
     ValuesRequiresString,
     ValuesTextSequence,
+    /// A union holding a type and a list of it would admit two spellings of one
+    /// value (SCHEMA-10).
+    SingleOrList {
+        member: String,
+    },
 }
 
 /// Policy and unsupported-language outcomes are never structural schema diagnostics.
@@ -165,6 +170,20 @@ impl Descriptor {
                     byte,
                 }),
                 Err(error) => return Err(DescriptorError::TypeLimit(error)),
+            }
+        }
+        for member in &members {
+            let super::TypeNode::List(inner) = member.nodes()[member.root()] else {
+                continue;
+            };
+            let inner = member.node_text(inner).expect("parsed type node");
+            if members
+                .iter()
+                .any(|other| other.node_text(other.root()) == Some(inner))
+            {
+                issues.push(DescriptorIssue::SingleOrList {
+                    member: inner.into(),
+                });
             }
         }
         let required_id = field("required");

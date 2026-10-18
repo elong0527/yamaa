@@ -84,8 +84,8 @@ columns:
     derivation:
       flag: "NMEAS = NTARGET"
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
 verifications:
   - row_count:

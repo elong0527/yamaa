@@ -38,7 +38,7 @@ columns:
     type: str
     label: Reported Name of Drug, Med, or Therapy
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   - name: CMINDC
     type: str
@@ -72,8 +72,8 @@ columns:
     type: str
     label: Dose Units
     verifications:
-      allowed_values:
-        values: [mg]
+      - allowed_values:
+          values: [mg]
 
   - name: FRQLBL
     type: str

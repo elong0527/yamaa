@@ -97,7 +97,7 @@ columns:
   label: Analysis Start Date
   derivation: ICE_RAW.ICEDTC
   verifications:
-    not_missing: {}
+    - not_missing: {}
 
 - name: ICEPRIO
   type: int
@@ -151,7 +151,7 @@ columns:
   label: Matched Subject Identifier
   derivation: SUBJECT.USUBJID
   verifications:
-    not_missing: {}
+    - not_missing: {}
 
 verifications:
 - assert:

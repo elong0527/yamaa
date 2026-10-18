@@ -28,8 +28,8 @@ columns:
     type: str
     label: Parameter Code
     verifications:
-      allowed_values:
-        values: [ALT, AST, ASTALT]
+      - allowed_values:
+          values: [ALT, AST, ASTALT]
 
   - name: PARAM
     type: str

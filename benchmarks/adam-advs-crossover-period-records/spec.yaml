@@ -79,8 +79,8 @@ columns:
             OR (ADTM IS NULL AND ADT >= ADSL.AP01SDT)
           then: {literal: 1}
     verifications:
-      allowed_values:
-        values: [1, 2]
+      - allowed_values:
+          values: [1, 2]
 
   # The actual treatment of the record's period.
   - name: TRTA
@@ -93,8 +93,8 @@ columns:
         - when: "APERIOD = 2"
           then: ADSL.TRT02A
     verifications:
-      allowed_values:
-        values: [DRUG A, PLACEBO]
+      - allowed_values:
+          values: [DRUG A, PLACEBO]
 
 verifications:
   - row_count:

@@ -117,16 +117,7 @@ model!(
 model!(
     INTERMEDIATE_CHECK,
     "IntermediateVerification",
-    [required!(
-        "unique",
-        Union(&[
-            ("list[str]", STRINGS),
-            (
-                "function-after[reject_null_id(), IntermediateUnique]",
-                Object(UNIQUE)
-            )
-        ])
-    ),]
+    [required!("unique", Object(UNIQUE))]
 );
 model!(
     INTERMEDIATE,

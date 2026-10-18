@@ -80,8 +80,8 @@ columns:
         - when: "P01EXN IS NOT NULL"
           then: {literal: ONGOING}
     verifications:
-      allowed_values:
-        values: [COMPLETED, DISCONTINUED, ONGOING]
+      - allowed_values:
+          values: [COMPLETED, DISCONTINUED, ONGOING]
 
   # The reason is the standardized term, not the reported text.
   - name: DCP01RS
@@ -104,8 +104,8 @@ columns:
         - when: "P02EXN IS NOT NULL"
           then: {literal: ONGOING}
     verifications:
-      allowed_values:
-        values: [COMPLETED, DISCONTINUED, ONGOING]
+      - allowed_values:
+          values: [COMPLETED, DISCONTINUED, ONGOING]
 
   - name: DCP02RS
     type: str

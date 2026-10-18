@@ -142,6 +142,46 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     assert_eq!(ordinary[0].code, SchemaMissingRequiredField);
     assert_eq!(ordinary[0].definition().requirement, Some("REQ-0285"));
 
+    // A written long form holding only its shorthand's field restates it; the
+    // resolved, canonical document holds that long form and is not refused.
+    let shorthand = schema(
+        vec![field("item", "item_value", false)],
+        vec![
+            (
+                "item_value",
+                T::map(vec![(
+                    "type",
+                    T::List(vec![T::text("str"), T::text("item_class")]),
+                )]),
+            ),
+            ("item_class", T::List(vec![field("name", "str", true)])),
+        ],
+    );
+    let long_form = document(T::map(vec![(
+        "item",
+        T::map(vec![("name", T::text("DM"))]),
+    )]));
+    let findings = shorthand.validate_document(&long_form).unwrap();
+    check(
+        &mut reached,
+        &findings,
+        SchemaRedundantLongForm,
+        "item",
+        "redundant_long_form",
+        "SCHEMA-15",
+    );
+    assert_eq!(
+        findings[0].context,
+        [
+            ("field", C::Text("name".into())),
+            ("shorthand", C::InputValue(4)),
+        ]
+    );
+    assert!(shorthand
+        .validate_resolved_document(&long_form)
+        .unwrap()
+        .is_empty());
+
     let operations = schema(
         vec![field("derive", "derivation", false)],
         vec![

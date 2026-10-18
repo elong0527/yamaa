@@ -74,16 +74,16 @@ columns:
           then: {literal: HIGH}
         - otherwise: {literal: NORMAL}
     verifications:
-      allowed_values:
-        values: [LOW, NORMAL, HIGH]
+      - allowed_values:
+          values: [LOW, NORMAL, HIGH]
 
   - name: ABLFL
     type: str
     label: Baseline Record Flag
     derivation: ADLB_RAW.ABLFL
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
   # The flagged baseline record's value and mark, repeated on every record of
   # the subject and parameter. With no flagged record both are empty; ONLY()
@@ -106,8 +106,8 @@ columns:
         group_by: [STUDYID, USUBJID, PARAMCD]
         expr: "ONLY(ANRIND)"
     verifications:
-      allowed_values:
-        values: [LOW, NORMAL, HIGH]
+      - allowed_values:
+          values: [LOW, NORMAL, HIGH]
 
   # Baseline mark first; empty when either mark is missing.
   - name: SHIFT1
@@ -156,8 +156,8 @@ columns:
           then: {literal: Y}
         - otherwise: {literal: N}
     verifications:
-      allowed_values:
-        values: [Y, N]
+      - allowed_values:
+          values: [Y, N]
 
   # The low tail: a result below the lower limit of normal (LLN).
   - name: CRIT2
@@ -181,8 +181,8 @@ columns:
           then: {literal: Y}
         - otherwise: {literal: N}
     verifications:
-      allowed_values:
-        values: [Y, N]
+      - allowed_values:
+          values: [Y, N]
 
 verifications:
   - row_count:

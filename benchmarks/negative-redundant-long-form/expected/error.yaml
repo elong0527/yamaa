@@ -1,0 +1,8 @@
+phase: validation
+condition: redundant_long_form
+spec_paths:
+  - columns.WTMAX.derivation.aggregate
+requirement: SCHEMA-15
+context:
+  field: expr
+  shorthand: MAX(VS.WEIGHT)

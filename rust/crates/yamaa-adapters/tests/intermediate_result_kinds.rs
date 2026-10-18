@@ -56,7 +56,7 @@ fn identity(specification: &str) -> Identity<'_> {
 const SPECIFICATION: &str = "schema_version: '1.0'
 domain: ADSL
 keys: [USUBJID]
-input: {EX: {path: ex.csv}}
+input: {EX: ex.csv}
 base: EX
 output: {path: out.csv, columns: [USUBJID, TRTSDT, TRTEDT]}
 intermediates:
@@ -219,7 +219,7 @@ fn heterogeneous_specification(expression: &str) -> String {
 }
 const HETEROGENEOUS_CHOICES: [&str; 2] = [
     "{first_available: {sources: [EXENDT0, EXSTDT], missing: 17}}",
-    "{case: [{when: 'EX.EXENDT0 IS NOT NULL', then: {source: EXENDT0}}, {otherwise: {literal: 17}}]}",
+    "{case: [{when: 'EX.EXENDT0 IS NOT NULL', then: EXENDT0}, {otherwise: {literal: 17}}]}",
 ];
 
 #[test]
@@ -285,7 +285,7 @@ fn unknown_choices_report_the_actual_integer_when_date_sources_are_missing() {
 
 fn assert_integer_day_count(expression: &str, integer_row: &str, float_row: &str) {
     let specification = SPECIFICATION
-            .replace("EX: {path: ex.csv}", "EX: {path: ex.csv, types: {EXINT: int, EXFLOAT: float}}")
+            .replace("EX: ex.csv", "EX: {path: ex.csv, types: {EXINT: int, EXFLOAT: float}}")
             .replace("EXENDT: DERIVATION", &format!("SELECTED: {expression}\n      EXENDT: {{shift: {{type: date, source: EXSTDT, days: SELECTED}}}}"));
     let study = Study::new(&specification);
     let path = study.specification();
@@ -339,7 +339,7 @@ fn numeric_choices_preserve_a_selected_integer_for_an_integer_only_operation() {
         "{first_available: {sources: [EXINT, EXFLOAT]}}",
         "{greatest: {sources: [EXINT, EXFLOAT]}}",
         "{least: {sources: [EXINT, EXFLOAT]}}",
-        "{case: [{when: 'EX.EXINT IS NOT NULL', then: {source: EXINT}}, {otherwise: {source: EXFLOAT}}]}",
+        "{case: [{when: 'EX.EXINT IS NOT NULL', then: EXINT}, {otherwise: EXFLOAT}]}",
     ] {
         assert_integer_day_count(expression, "S01,2024-01-01,,1,1.0", "S01,2024-01-01,,,1.0");
     }
@@ -357,10 +357,7 @@ fn nullif_preserves_an_integer_until_a_present_float_operand_promotes_it() {
 #[test]
 fn unknown_kind_survives_later_aliases_and_choices() {
     for expression in HETEROGENEOUS_CHOICES {
-        for alias in [
-            "{source: EXENDT}",
-            "{first_available: {sources: [EXENDT, EXSTDT]}}",
-        ] {
+        for alias in ["EXENDT", "{first_available: {sources: [EXENDT, EXSTDT]}}"] {
             let specification = heterogeneous_specification(expression)
                 .replace("    filter:", &format!("      ALIAS: {alias}\n    filter:"))
                 .replace("EX.EXENDT >= EX.ANCHOR", "EX.ALIAS >= 17");
@@ -393,7 +390,7 @@ fn unknown_kind_survives_later_aliases_and_choices() {
 fn unknown_kind_flows_through_an_earlier_selector_in_dependency_order() {
     let specification = heterogeneous_specification(HETEROGENEOUS_CHOICES[0])
         .replace("    filter: 'EX.EXENDT >= EX.ANCHOR'\n", "")
-        .replace("intermediates:\n", "intermediates:\n  - id: EXP2\n    dataset: EX\n    derivations:\n      COPY: {source: EXP.EXENDT}\n      ANCHOR2: {source: EXP.ANCHOR}\n    filter: 'EX.COPY >= EX.ANCHOR2'\n    no_match: {literal: null}\n")
+        .replace("intermediates:\n", "intermediates:\n  - id: EXP2\n    dataset: EX\n    derivations:\n      COPY: EXP.EXENDT\n      ANCHOR2: EXP.ANCHOR\n    filter: 'EX.COPY >= EX.ANCHOR2'\n    no_match: {literal: null}\n")
         .replace("derivation: EXP.EXENDT", "derivation: EXP2.COPY");
     let study = Study::new(&specification);
     let path = study.specification();
@@ -449,8 +446,8 @@ fn generic_predicate_consumers_use_the_named_intermediates_unknown_kind() {
 #[test]
 fn unknown_numeric_operands_do_not_invent_an_integer_result_kind() {
     let specification = SPECIFICATION
-        .replace("EX: {path: ex.csv}", "EX: {path: ex.csv, types: {EXINT: int, EXFLOAT: float}}")
-        .replace("EXENDT: DERIVATION", "SELECTED: {first_available: {sources: [EXINT, EXFLOAT]}}\n      RESULT: {compute: {expr: 'SELECTED + 1'}}\n      EXENDT: {source: EXENDT0}")
+        .replace("EX: ex.csv", "EX: {path: ex.csv, types: {EXINT: int, EXFLOAT: float}}")
+        .replace("EXENDT: DERIVATION", "SELECTED: {first_available: {sources: [EXINT, EXFLOAT]}}\n      RESULT: {compute: {expr: 'SELECTED + 1'}}\n      EXENDT: EXENDT0")
         .replace("filter: 'EX.EXENDT >= EX.EXSTDT'", "filter: \"EX.RESULT >= 'not a number'\"");
     let study = Study::new(&specification);
     let path = study.specification();
@@ -481,7 +478,7 @@ fn nested_lookup_specification() -> &'static str {
     "schema_version: '1.0'
 domain: TEST
 keys: [USUBJID]
-input: {EX: {path: ex.csv}}
+input: {EX: ex.csv}
 base: EX
 output: {path: out.csv, columns: [USUBJID, SELECTED]}
 intermediates:
@@ -496,7 +493,7 @@ intermediates:
     derivations:
       DATE: {to_date: {source: EXSTDTC}}
       CHOICE: {first_available: {sources: [DATE], missing: 17}}
-      SELECTED: {source: DATES.DATE}
+      SELECTED: DATES.DATE
     no_match: {literal: null}
 columns:
   - {name: USUBJID, type: str, derivation: EX.USUBJID}
@@ -624,7 +621,7 @@ fn raw_boolean_key_values_use_equality_without_requiring_an_order() {
         let specification = nested_lookup_specification()
             .replace("{to_date: {source: EXENDTC}}", "{literal: true}")
             .replace("missing: 17", &format!("missing: {missing}"))
-            .replace("{source: DATES.DATE}", "{source: DATES.USUBJID}")
+            .replace("SELECTED: DATES.DATE", "SELECTED: DATES.USUBJID")
             .replace(
                 "type: date, derivation: RESULT.SELECTED",
                 "type: str, derivation: RESULT.SELECTED",

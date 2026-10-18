@@ -49,9 +49,8 @@ fn checks(d: &Document, column: usize, name: &str) -> Vec<usize> {
     let Some(id) = present_field(d, column, "verifications") else {
         return Vec::new();
     };
-    let entries = match &d.nodes()[id] {
-        N::Sequence(entries) => entries.as_slice(),
-        _ => std::slice::from_ref(&id),
+    let N::Sequence(entries) = &d.nodes()[id] else {
+        return Vec::new();
     };
     entries.iter().filter_map(|&id| d.field(id, name)).collect()
 }

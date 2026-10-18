@@ -429,8 +429,6 @@ def repeated_row_derivations(document: Document, value: Mapping) -> Iterator[Dep
 def _key_equals_output_keys(key: object, output_keys: Sequence[str]) -> bool:
     """True when an explicit key states exactly the output keys."""
     wanted = set(output_keys)
-    if isinstance(key, str):
-        return {key} == wanted
     if isinstance(key, list):
         return all(isinstance(item, str) for item in key) and set(key) == wanted
     if isinstance(key, Mapping):

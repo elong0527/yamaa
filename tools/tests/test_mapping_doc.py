@@ -159,7 +159,7 @@ class SdtmMappingTests(unittest.TestCase):
                 {
                     "name": "SEX",
                     "type": "str",
-                    "verifications": {"allowed_values": {"values": ["F", "M"]}},
+                    "verifications": [{"allowed_values": {"values": ["F", "M"]}}],
                 }
             ],
         }

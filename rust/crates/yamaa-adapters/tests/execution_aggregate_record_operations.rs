@@ -258,7 +258,10 @@ mod execution {
             let source = original_fieldless_count("COUNT(OTHER.*)", "{N: K}", "")
                 .replace("keys: [K]", "keys: [N]")
                 .replace("columns: [K, V]", "columns: [N, V]")
-                .replace("        key: {N: K}\n", "")
+                .replace(
+                    "      aggregate:\n        expr: 'COUNT(OTHER.*)'\n        key: {N: K}\n",
+                    "      aggregate: 'COUNT(OTHER.*)'\n",
+                )
                 .replace("name: K", "name: N");
             let fixture = fieldless_count_fixture(&source);
             let result = fixture.run().unwrap_or_else(|issues| panic!("{issues:?}"));
@@ -410,7 +413,7 @@ mod execution {
 domain: ADQS
 keys: [STUDYID, USUBJID]
 input:
-  QS: {path: input/qs.csv}
+  QS: input/qs.csv
 output:
   path: adqs.csv
   columns: [STUDYID, USUBJID, AVAL]
@@ -452,7 +455,7 @@ S1,001,PF03,SCALE,3
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
-  EX: {path: input/ex.csv}
+  EX: input/ex.csv
 output:
   path: adsl.csv
   columns: [STUDYID, USUBJID, TRTEDT]
@@ -668,7 +671,7 @@ S1,002,2024-06
             .unwrap();
             let path = fixture.0.join("spec.yaml");
             let spec = fs::read_to_string(&path).unwrap()
-        .replace("  QS: {path: input/qs.csv}", "  QS: {path: input/qs.csv}\n  DS: {path: input/ds.csv}")
+        .replace("  QS: input/qs.csv", "  QS: input/qs.csv\n  DS: input/ds.csv")
         .replace("output:\n", &format!("intermediates:\n  - id: CAP\n    dataset: DS\n    key: [STUDYID, USUBJID]{}\noutput:\n", if keep { "\n    order_by: [DS.DSNUM]\n    keep: first" } else { "" }))
         .replace("  - id: subscale\n", "  - id: subscale\n    dataset: QS\n");
             fs::write(path, spec).unwrap();

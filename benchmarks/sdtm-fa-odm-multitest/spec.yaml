@@ -94,7 +94,7 @@ columns:
     label: Object of the Observation
     derivation: SIBLING_FAOBJ.Value
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   - name: FACAT
     type: str
