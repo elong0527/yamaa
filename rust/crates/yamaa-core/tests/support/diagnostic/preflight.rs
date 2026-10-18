@@ -1057,7 +1057,7 @@ pub(crate) fn intermediate_reached() -> BTreeSet<ConditionCode> {
             repeated("intermediates[0].key[3]"),
         ],
     ));
-    for variant in 0..3 {
+    for variant in 0..4 {
         let mut fields = base(
             "TEST",
             inputs(),
@@ -1076,7 +1076,12 @@ pub(crate) fn intermediate_reached() -> BTreeSet<ConditionCode> {
                     ("nulls", Tree::text("last")),
                 ])]),
             )),
-            _ => declaration.push(("keep", Tree::text("last"))),
+            2 => declaration.push(("keep", Tree::text("last"))),
+            // An order with no term gives `keep` nothing to choose by.
+            _ => {
+                declaration.push(("order_by", Tree::List(Vec::new())));
+                declaration.push(("keep", Tree::text("last")));
+            }
         }
         fields.push(("intermediates", Tree::List(vec![Tree::map(declaration)])));
         let expected = if variant == 0 {
