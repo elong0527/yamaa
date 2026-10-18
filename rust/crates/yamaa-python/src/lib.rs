@@ -16,6 +16,8 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<api_entry::Run>()?;
     module.add_class::<api_entry::ProjectRun>()?;
     module.add_class::<api_entry::Submission>()?;
+    module.add_class::<api_entry::Plans>()?;
+    module.add_function(wrap_pyfunction!(api_entry::_plans, module)?)?;
     module.add_function(wrap_pyfunction!(api_entry::_spec_check, module)?)?;
     module.add_function(wrap_pyfunction!(api_entry::_spec_run, module)?)?;
     module.add_function(wrap_pyfunction!(api_entry::_spec_resolve, module)?)?;
