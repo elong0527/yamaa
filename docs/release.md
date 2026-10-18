@@ -7,7 +7,9 @@ open gates live in GitHub issues and pull requests, not here.
 ## Supported platforms
 
 - CPython 3.12, 3.13, 3.14 and 3.15 wheels and source builds on Linux
-  x86_64, macOS arm64 and Windows x64.
+  x86_64, macOS arm64 and Windows x64. The Linux wheel is `manylinux_2_34`
+  and needs glibc 2.34 or later, for example RHEL 9, Ubuntu 22.04 or
+  Debian 12; older systems build from the Python source archive.
 - R 4.6.1 source builds on the same three hosts, each passing strict
   `R CMD check` with **Status: OK**.
 - Other runtimes and architectures, free-threaded Python, musl and R binary
@@ -185,8 +187,12 @@ The workflow downloads the qualified artifacts and publishes their unchanged
 bytes: one wheel per supported OS, the tested Linux Python sdist and the tested
 Linux R source tarball. Other native source lanes qualify their own host-built
 archives. Missing, expired or ambiguous artifacts fail publication; an existing
-release is never overwritten. The release includes committed notes from
-`docs/releases/<version>.md` and identifies the native run and selected artifacts.
+release is never overwritten. Re-running failed jobs or all jobs keeps a run
+eligible: earlier attempts' artifacts stay on the run, and the workflow takes
+only the copy that its uploading job created during the execution the run's
+final attempt lists. The release body is the committed notes from
+`docs/releases/<version>.md`, then a "Qualified native artifacts" section that
+links the native run attempt and lists the selected artifacts.
 This route uses the workflow's GitHub token and needs no package-index
 credentials. The workflow has no PyPI step: 0.4.0 is distributed as GitHub
 release assets only, and those assets do not establish PyPI publication. PyPI
