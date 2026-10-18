@@ -1396,6 +1396,34 @@ fn bind_range(
         Err(_) => Err(BindError::Internal),
     }
 }
+/// A qualified range value reads the record that built the current row
+/// (REQ-0472, REQ-0085), so it must name the driver of each row the
+/// aggregate is derived for. Another input has no record for that row: the
+/// value is refused as unknown (REQ-0121), once however many row templates
+/// derive the aggregate.
+pub(super) fn admit_ranges<'a>(
+    expressions: impl IntoIterator<Item = &'a Expression>,
+    driver: usize,
+    refused: &mut BTreeSet<String>,
+    findings: &mut Vec<BindFinding>,
+) {
+    for expression in expressions {
+        crate::dataset::visit_ranges(expression, &mut |range| {
+            let current = range.current();
+            if matches!(current.read, crate::dataset::CurrentRead::Record { source, .. } if source != driver)
+            {
+                let path = format!("{}.value", range.path());
+                if refused.insert(path.clone()) {
+                    findings.push(BindFinding::AggregateDiagnostic(diagnostic(
+                        crate::diagnostic::ConditionCode::IntermediateRangeReference,
+                        &path,
+                        &[("identifier", &current.identifier)],
+                    )));
+                }
+            }
+        });
+    }
+}
 #[allow(clippy::too_many_arguments)]
 fn bind_derivations(
     declaration: &Declaration,

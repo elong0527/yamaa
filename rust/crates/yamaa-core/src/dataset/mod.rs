@@ -23,6 +23,7 @@ pub use flags::{flag_condition_diagnostic, Flag, FlagBinding, FlagError, FlagRea
 mod functions;
 pub use functions::{BoundFunction, BoundProjectFunction, FunctionArgument, FunctionInput};
 mod aggregate;
+pub(crate) use aggregate::visit_ranges;
 pub use aggregate::{
     AggregateBinding, AggregateBindingError, AggregateDerivation, AggregatePhase,
     AggregateRelation, AggregateRowContext, AggregateSource, BoundAggregate,
@@ -78,6 +79,8 @@ pub use row_stages::{read_requires_window, window_stages};
 mod row_drivers;
 mod windows;
 pub use windows::{ContextWindow, OrderTerm, Window, WindowKind};
+pub mod resolved;
+pub use resolved::{ResolutionError, ResolvedPlan};
 
 /// Already bound expressions; no host joins or lookup fallback are implicit.
 #[derive(Clone, Debug, PartialEq)]
@@ -967,9 +970,12 @@ fn current_record_read(
                         .iter()
                         .flat_map(|key| key.value.reads())
                         .any(|read| matches!(read, MatchRead::Record { .. }))
-                        || item
-                            .current_fields()
-                            .any(|field| matches!(field.read, CurrentRead::Record { .. }))
+                        // Like a secondary key read, a row-phase current field
+                        // on a secondary port reads that input's own records.
+                        || item.current_fields().any(|field| {
+                            matches!(field.read, CurrentRead::Record { source, .. }
+                                if source == 0 || scope == RecordReadScope::All)
+                        })
                 })
         }
         Expression::SourceBinding { source, .. } => {

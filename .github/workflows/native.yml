@@ -1,10 +1,9 @@
 name: Native qualification
 
+# Release qualification, not a development check: dispatch it on main for a
+# release candidate, or push a qualification/issue-* branch.
 on:
   workflow_dispatch:
-  schedule:
-    # Full qualification nightly; dispatch it for a release candidate.
-    - cron: '17 5 * * *'
   push:
     branches: ['qualification/issue-*']
 

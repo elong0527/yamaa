@@ -1945,6 +1945,7 @@ impl Rows {
                 diagnostics: analyzed.diagnostics,
             });
         }
+        let mut refused = std::collections::BTreeSet::new();
         for template in &templates {
             relation_predicates::admit_reads(
                 template
@@ -1955,6 +1956,22 @@ impl Rows {
                 &intermediates,
                 template.mode.source_index(),
                 &template.mode,
+                &mut findings,
+            );
+            // A column this template does not derive itself is completed for
+            // its rows in the column phase.
+            aggregates::admit_ranges(
+                columns
+                    .iter()
+                    .filter(|column| {
+                        template
+                            .assignments
+                            .iter()
+                            .all(|own| own.column != column.column)
+                    })
+                    .map(|assignment| &assignment.expression),
+                template.mode.source_index(),
+                &mut refused,
                 &mut findings,
             );
         }

@@ -33,10 +33,13 @@ UNSAID = re.compile(
 )
 # Wording that tells the agent how to compute rather than what a value is:
 # joins, filters, sorting, keeping a record, loops, steps and code. Literal
-# values are set aside first (`_prose`), so a "FILTER" label is not wording.
+# values are set aside first (`_prose`), so a "FILTER" label is not wording,
+# and a join that names both inputs, `Join AE to DM on USUBJID`, reads
+# `Join to on`.
 PROCEDURE = re.compile(
     r"\b(?:left|right|inner|outer|full|cross|anti|semi)[ -]join\b"
-    r"|\bjoin(?:ed|ing|s)? on\b|\bmerg(?:e|ed|es|ing)\b|\bfilter(?:ed|ing|s)?\b"
+    r"|\bjoin(?:ed|ing|s)?(?: (?:to|with|and|onto|into))? on\b"
+    r"|\bmerg(?:e|ed|es|ing)\b|\bfilter(?:ed|ing|s)?\b"
     r"|\bgroup(?:ed|ing|s)? by\b"
     r"|\bsort(?:ed|ing|s)? (?:the )?(?:records|rows|data(?:sets?)?|by)\b"
     r"|\b(?:keep|keeps|kept|retain|retains|retained) (?:only )?the (?:first|last)\b"
@@ -46,6 +49,15 @@ PROCEDURE = re.compile(
     r"|\bde-?duplicat\w*|\b(?:drop|remove) duplicates\b|\bcoalesce\w*"
     r"|\bintermediate (?:datasets?|results?|variables?|columns?|tables?)\b"
     r"|==|!=|<-|:=",
+    re.IGNORECASE,
+)
+# The verbs of those procedures, as whole words. One written in capitals
+# ("FILTER AE to fatal records") is still wording, so `_prose` keeps it; a
+# code that only starts like one (SORTORD, COALESCEVAL) is a code.
+VERBS = re.compile(
+    r"join(?:ed|ing|s)?|merg(?:e|ed|es|ing)|filter(?:ed|ing|s)?"
+    r"|group(?:ed|ing|s)?|sort(?:ed|ing|s)?|keeps?|kept|retain(?:ed|s)?"
+    r"|(?:loop|iterate)s?|coalesce[ds]?|deduplicat(?:e|ed|es|ing)|drop|remove",
     re.IGNORECASE,
 )
 # What a conventions prompt may name: a quoted value, an upper-case code or
@@ -64,8 +76,19 @@ def words(text: str) -> str:
 
 
 def _prose(text: str) -> str:
-    """The text without its literal values: quoted text and upper-case codes."""
-    return re.sub(r'"[^"]*"|\b[A-Z][A-Z0-9_]+\b', " ", text)
+    """The text without its literal values. An upper-case code leaves
+    nothing, so the words around it meet; a quoted value leaves `""`, so
+    the words on either side never read as one phrase: `joined with "T" on`
+    is not `joined with on`. A procedure verb in capitals (`VERBS`) is
+    wording and stays."""
+
+    def literal(match: re.Match[str]) -> str:
+        value = match.group(0)
+        if value.startswith('"'):
+            return '""'
+        return value if VERBS.fullmatch(value) else " "
+
+    return re.sub(r'"[^"]*"|\b[A-Z][A-Z0-9_]+\b', literal, text)
 
 
 def procedure_problems(text: str) -> list[str]:
