@@ -64,6 +64,7 @@
 }
 
 .spec <- function(path, project) {
+  force(path) # an argument mistake fails the call, not the first method
   object <- new.env(parent = emptyenv())
   object$check <- function() .check(.reply(.native_spec_check(path, project, .version())))
   object$resolve <- function() .reply(.native_spec_resolve(path, project, .version()))
@@ -103,6 +104,7 @@
 }
 
 .submission <- function(handle) {
+  force(handle) # compose now: the result is a snapshot of the files as called
   object <- new.env(parent = emptyenv())
   .read_only(object, "issues", function() .reply(.native_submission_issues(handle)))
   object$save <- function() invisible(.reply(.native_submission_save(handle)))
