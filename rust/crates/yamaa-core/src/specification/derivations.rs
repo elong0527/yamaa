@@ -793,10 +793,11 @@ pub(super) fn bind_row(
             intermediates,
         ),
         Operation::Window(window) => {
-            if window.group_findings(catalog, driver, row, phase, findings)? {
-                return Ok(None);
-            }
-            window.bind_available(catalog, available, edges, findings)
+            // The binder still runs after a refused group read, so it reports
+            // the unknown and foreign fields that `group_findings` leaves to it.
+            let refused = window.group_findings(catalog, driver, row, phase, findings)?;
+            let bound = window.bind_available(catalog, available, edges, findings)?;
+            Ok(if refused { None } else { bound })
         }
         Operation::FirstAvailable(selection) => bind_selection(
             selection,

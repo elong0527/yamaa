@@ -123,5 +123,23 @@ fn grouped_windows_read_only_group_keys_of_the_driver() {
                 "{order}"
             );
         }
+        // A refused group read does not hide another read the binder refuses:
+        // the unknown field is reported at its own entry in the same pass.
+        let fixture = Fixture::new(&specification.replace("ORDER", "SRC.VAL, SRC.MISSING"));
+        let domain = fixture.run();
+        let reported = domain
+            .issues()
+            .iter()
+            .map(|issue| (issue.condition.to_string(), issue.spec_paths.clone()))
+            .collect::<Vec<_>>();
+        let missing = path.replace("order_by[0]", "order_by[1]");
+        assert!(
+            reported.contains(&("ungrouped_driver_field".into(), vec![path.into()])),
+            "{reported:?}"
+        );
+        assert!(
+            reported.contains(&("unknown_field".into(), vec![missing])),
+            "{reported:?}"
+        );
     }
 }
