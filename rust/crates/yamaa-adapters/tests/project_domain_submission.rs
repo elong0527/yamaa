@@ -655,6 +655,66 @@ mod project {
                 );
             }
         }
+        /// A per-value check finds the rows of its code by comparing the code with
+        /// the test code column, which must therefore hold text (REQ-1164). Where
+        /// value metadata builds no such check, no code is compared.
+        #[test]
+        fn per_value_checks_over_a_nontext_test_code_fail_before_data() {
+            let integer = |raw: String| {
+                raw.replace("{name: LBTESTCD, type: str}", "{name: LBTESTCD, type: int}")
+                    .replace("{literal: GLUC}", "{literal: '1'}")
+                    .replace("{literal: CREAT}", "{literal: '2'}")
+            };
+            let study = Study::new();
+            let issues = study.check(&integer(value_length_spec("5")));
+            assert_eq!(issues.len(), 1, "{issues:?}");
+            assert_eq!(
+                (
+                    issues[0].phase.as_str(),
+                    issues[0].condition.as_str(),
+                    issues[0].requirement.as_deref()
+                ),
+                (
+                    "validation",
+                    "value_metadata_requires_literal_testcd",
+                    Some("REQ-1164")
+                )
+            );
+            assert_eq!(issues[0].spec_paths, ["rows.glucose.submission"]);
+            assert_eq!(
+                yamaa_adapters::json_wire::encode(&issues[0].context),
+                "{\"declared_type\":\"int\",\"discriminator\":\"LBTESTCD\"}"
+            );
+            let origin_only = ROW_CT.replace("codelist: DEFAULT", "length: 3").replace(
+                "{codelist: GLUCOSE}",
+                "{origin: {type: Collected, source: Vendor}}",
+            );
+            for raw in [value_length_spec("3"), origin_only] {
+                let issues = study.check(&integer(raw));
+                assert!(issues.is_empty(), "{issues:?}");
+            }
+            // A per-value codelist the environment binds selects its rows the same way.
+            fs::write(study.0.join("spec.yaml"), integer(ROW_CT.into())).unwrap();
+            fs::write(study.0.join("environment.yaml"), CT_ENV).unwrap();
+            let path = study.0.join("spec.yaml");
+            let environment = study.0.join("environment.yaml");
+            let host = yamaa_core::project_function::Language::Python;
+            let Err(error) = yamaa_adapters::file_workflow::select(
+                path.to_str().unwrap(),
+                environment.to_str().unwrap(),
+                host,
+            ) else {
+                panic!("a per-value codelist over an integer test code was admitted");
+            };
+            let issues = yamaa_adapters::project_application::selection_failure(&error, host);
+            assert_eq!(issues.len(), 1, "{issues:?}");
+            assert_eq!(
+                issues[0].condition,
+                "value_metadata_requires_literal_testcd"
+            );
+            assert_eq!(issues[0].spec_paths, ["rows.glucose.submission"]);
+            assert!(!study.0.join("input.csv").exists());
+        }
         #[test]
         fn effective_value_metadata_rejects_invalid_bounds_types_and_explicit_length_conflicts_before_data(
         ) {

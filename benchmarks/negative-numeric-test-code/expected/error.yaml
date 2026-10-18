@@ -1,0 +1,8 @@
+phase: validation
+condition: value_metadata_requires_literal_testcd
+spec_paths:
+  - rows.glucose.submission
+requirement: REQ-1164
+context:
+  discriminator: LBTESTCD
+  declared_type: int
