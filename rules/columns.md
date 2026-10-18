@@ -249,7 +249,8 @@ dictionary entry, and a `function` argument passes the missing value as
 | extract | `missing` | Missing string input |
 | extract | `no_match` | Non-missing string does not match |
 | template | `missing` | Any placeholder value is missing |
-| impute | `impute.invalid`, `precision.invalid` | Text that is not collected date text ([TIME-13](temporal.md#time-13)) |
+| impute | `impute.invalid`, `precision.invalid` | Text that is not collected date text, an ISO 8601 interval or duration included ([TIME-13](temporal.md#time-13)) |
+| impute | `dtc.invalid` | A date part that is not its field's digits or lies outside its range ([TIME-19](temporal.md#time-19)) |
 | impute | `duration_value.invalid` | Invalid fixed-length duration text ([TIME-17](temporal.md#time-17)) |
 | convert | `unconvertible` | Failed output conversion |
 

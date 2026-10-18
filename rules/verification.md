@@ -475,7 +475,7 @@ exactly as [CHECK-18](#check-18) orders the warning log. `SPEC_PATH` is
 its key and its join to the warning log. `EVALUATED_COUNT` and `FAILURE_COUNT`
 count the unit the check itself counts.
 
-Evidence: `schema-verification-log`, `schema-row-count-fractions`.
+Evidence: `schema-verification-log`, `schema-row-count-fractions`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::date_and_time_data_types_check_each_completed_value_against_their_form`.
 Replaces: REQ-1174, REQ-1175, REQ-1176, REQ-1178.
 
 | Column | Type | Value |
@@ -499,7 +499,14 @@ within the log; the warning log's row for the same path carries the complete
 `OFFENDING_KEYS` evidence [CHECK-18](#check-18) requires, and offending keys
 stay out of this log. `CHECK` is the verification's registered name under
 [CHECK-1](#check-1), and `TARGET` is the column a column verification infers
-under [CHECK-1](#check-1), missing for a dataset verification.
+under [CHECK-1](#check-1), missing for a dataset verification. A check that
+submission metadata implies is recorded under the name of the verification it
+fails as: a mandatory column's as `not_missing`
+([SUB-11](profiles/submission.md#sub-11)), a declared length's as `max_length`
+([SUB-8](profiles/submission.md#sub-8)) and a codelist binding's as
+`allowed_values`. The ISO 8601 form of a date or time data type
+([SUB-26](profiles/submission.md#sub-26)) has no registered verification and is
+recorded as `data_type`.
 
 The unit `EVALUATED_COUNT` and `FAILURE_COUNT` count is:
 

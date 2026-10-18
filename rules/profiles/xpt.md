@@ -148,7 +148,8 @@ Evidence: `sdtm-dm-xpt`, `adam-adsl-xpt`.
 
 A SAS date and datetime count from midnight on 1960-01-01 on the same wall
 clock the value names; a value before the origin is negative. The canonical
-text of an `sdtm` or `send` date is 10 bytes and of a datetime 19 bytes.
+text of an `sdtm` or `send` date is 10 bytes, and such a dataset carries no
+`datetime` column ([SUB-27](submission.md#sub-27)).
 
 <a id="xpt-7"></a>
 
@@ -221,7 +222,10 @@ Evidence: `adam-adsl-xpt`, `rust/crates/yamaa-core/tests/support/diagnostic/subm
 Width and decimals are decimal integers without a leading zero, at most 32767,
 and decimals may be `0`. `8.2` is the empty name with width 8 and 2 decimals,
 `BEST12.` the name `BEST` with width 12, and `E8601DA10.` the name `E8601DA`
-with width 10. A value-level `display_format` is described in the document but
+with width 10. `TIME8.` is the name `TIME` with width 8, the display of an
+`int` column holding seconds since midnight, such as an ADaM `*TM` time
+([TIME-20](../temporal.md#time-20)); the NAMESTR carries it as it carries
+any other numeric format. A value-level `display_format` is described in the document but
 not written in the file, which has one format per variable. The failure
 reports the dataset, the column and the declared format at
 `<family>.specs[<n>].columns.<column>.submission.display_format`, before any

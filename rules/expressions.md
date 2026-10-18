@@ -97,8 +97,8 @@ Evidence: `rust/crates/yamaa-core/src/specification/static_types/tests.rs::numer
 | Expression | Class | Result type |
 | --- | --- | --- |
 | `str_pad`, `str_extract`, `str_replace`, `str_template`, `str_case` | fixed | `str` |
-| `cut`, `precision`, `imputation_flag`, `baseline_flag`, `odm` | fixed | `str` |
-| `row_number`, `rank`, `study_day`, `to_epoch_day` | fixed | `int` |
+| `cut`, `precision`, `imputation_flag`, `baseline_flag`, `odm`, `dtc` | fixed | `str` |
+| `row_number`, `rank`, `study_day`, `to_epoch_day`, `time_of_day` | fixed | `int` |
 | `round_half_away_from_zero`, `duration_value` | fixed | `float` |
 | `to_date` | fixed | `date` |
 | `diff` | by parameter | `int` with `type: date`; with `type: datetime`, `int` in `second` and `float` in `minute`, `hour` or `day` |
