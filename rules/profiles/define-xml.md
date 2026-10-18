@@ -209,7 +209,7 @@ An implementation must not mint an identifier from a counter, a hash or a
 random value. One base `ItemDef` is generated per dataset and column, and
 neither base nor per-value `ItemDef` elements are shared between datasets.
 
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/schema_submission.rs::value_identifiers_survive_unrelated_insertion_and_row_reordering`, `rust/crates/yamaa-core/tests/schema_submission.rs::value_identifier_retains_the_literal_with_xml_attribute_escaping`.
+Evidence: `sdtm-dm-metadata`, `adam-adlb-metadata`, `rust/crates/yamaa-core/tests/schema_submission.rs::value_identifiers_survive_unrelated_insertion_and_entry_reordering`, `rust/crates/yamaa-core/tests/schema_submission.rs::where_values_keep_their_text_with_xml_escaping`.
 Replaces: REQ-0970, REQ-0972, REQ-0973, REQ-1068.
 
 | Object | Identifier |
@@ -219,24 +219,24 @@ Replaces: REQ-0970, REQ-0972, REQ-0973, REQ-1068.
 | `def:Standard` | `STD.<standard.id>` |
 | `ItemGroupDef` | `IG.<dataset.id>` |
 | `ItemDef` | `IT.<dataset.id>.<column>` |
-| `ItemDef`, per value | `IT.<dataset.id>.<column>.<test code>` |
+| `ItemDef`, per value | `IT.<dataset.id>.<column>.<entry id>` |
 | `def:ValueListDef` | `VL.<dataset.id>.<column>` |
-| `def:WhereClauseDef` | `WC.<dataset.id>.<column>.<test code>` |
+| `def:WhereClauseDef` | `WC.<dataset.id>.<column>.<entry id>` |
 | `CodeList` | `CL.<codelist.id>` |
 | `MethodDef` | `MT.<dataset.id>.<column>` |
-| `MethodDef`, per value | `MT.<dataset.id>.<column>.<test code>` |
+| `MethodDef`, per value | `MT.<dataset.id>.<column>.<entry id>` |
 | `def:CommentDef`, dataset | `COM.<dataset.id>` |
 | `def:CommentDef`, column | `COM.<dataset.id>.<column>` |
-| `def:CommentDef`, per value | `COM.<dataset.id>.<column>.<test code>` |
+| `def:CommentDef`, per value | `COM.<dataset.id>.<column>.<entry id>` |
 | `def:leaf`, document | `LF.<document.id>` |
 | `def:leaf`, dataset archive | `LF.<dataset.id>` |
 
-A per-value test code is the declared string literal of `<DOMAIN>TESTCD`,
-retained verbatim in the identifier before XML escaping. It identifies the
-value independently of row order; `ItemRef.OrderNumber` remains the value's
-position in the list. OIDs admit string values, while a `def:leaf` ID
-separately requires an XML NCName. Generated text remains subject to
-[DEFINE-24](#define-24).
+A per-value entry id is the `id` of the column's value-level entry
+([SUB-12](submission.md#sub-12)), an identifier unique within the column. It
+identifies the definition independently of entry order; `ItemRef.OrderNumber`
+remains the entry's position in the list. OIDs admit string values, while a
+`def:leaf` ID separately requires an XML NCName. Generated text remains
+subject to [DEFINE-24](#define-24).
 
 A generated identifier is a function of declarations a reviewer can read, so a
 document regenerated after an unrelated edit keeps every identifier it had.
@@ -248,7 +248,7 @@ Per-value definitions follow [DEFINE-27](#define-27).
 
 Collisions are impossible rather than resolved. Dataset, codelist, standard and
 document identifiers are each unique within the study document; a column name
-is unique within its specification; a column's distinct test codes identify its
+is unique within its specification; a column's entry ids identify its
 per-value definitions; and the prefixes are disjoint. Two kinds of object share
 one identifier space, `def:leaf`, so a document identifier must not equal a
 dataset identifier.
@@ -291,7 +291,7 @@ Replaces: REQ-0974, REQ-0975, REQ-0976, REQ-0977, REQ-0978.
       <def:AnnotatedCRF>           annotated_crf documents, declaration order
       <def:SupplementalDoc>        supplemental documents, declaration order
       <def:ValueListDef>*          dataset order, then output.columns order
-      <def:WhereClauseDef>*        value-list order, then value order
+      <def:WhereClauseDef>*        value-list order, then entry order
       <ItemGroupDef>*              datasets, in entry order
       <ItemDef>*                   dataset order, then output.columns order; per-value definitions follow their base column
       <CodeList>*                  codelists, in declaration order
@@ -305,7 +305,7 @@ Replaces: REQ-0974, REQ-0975, REQ-0976, REQ-0977, REQ-0978.
 
 Comment definitions are emitted per dataset in entry order: the dataset's own
 comment first, its columns' comments in `output.columns` order, with each
-column's per-value comments following its base comment in value order.
+column's per-value comments following its base comment in entry order.
 
 A dataset's `def:leaf` is a child of its `ItemGroupDef`. A supporting
 document's `def:leaf` is a child of `MetaDataVersion`, as the schema requires.
@@ -522,7 +522,7 @@ Replaces: REQ-0992, REQ-0993, REQ-0994.
 | `SASFieldName` | the column name, when [DEFINE-22](#define-22) admits it |
 | `def:DisplayFormat` | `submission.display_format`, or the format [SUB-25](submission.md#sub-25) fixes |
 | `def:CommentOID` | generated, when `submission.comment` is declared |
-| `Description` | the column's `label` |
+| `Description` | the column's `label`, or a per-value definition's entry `label` when declared |
 | `CodeListRef` | the bound codelist's generated identifier, when declared |
 | `def:Origin` | per the origin mapping below |
 
@@ -622,7 +622,7 @@ remaining byte-level decisions are fixed exactly as the list below states. The
 bytes are fixed rather than the information: the same inputs produce
 byte-identical files, and a golden document is compared byte for byte.
 
-Evidence: `sdtm-dm-metadata`, `rust/tests/host-fixtures/cases.json::newlines-in-text`, `rust/crates/yamaa-core/tests/schema_submission.rs::value_identifier_retains_the_literal_with_xml_attribute_escaping`.
+Evidence: `sdtm-dm-metadata`, `rust/tests/host-fixtures/cases.json::newlines-in-text`, `rust/crates/yamaa-core/tests/schema_submission.rs::where_values_keep_their_text_with_xml_escaping`.
 Replaces: REQ-1005, REQ-1006, REQ-1008.
 
 - the first line is `<?xml version="1.0" encoding="UTF-8"?>`;
@@ -717,46 +717,50 @@ fails under `Submission` or `xpt` instead.
 
 <a id="define-27"></a>
 
-### DEFINE-27. A row template's `submission` map generates a value list, where clauses and per-value definitions
+### DEFINE-27. A column's value-level entries generate one value list, and a where clause and a definition per entry
 
-For each column carrying value-level metadata ([SUB-12](submission.md#sub-12)),
-the document generates one `def:ValueListDef` with one ordered `ItemRef` per
-distinct test code, and one per-value `ItemDef` per value carrying the
-column-level declaration merged with the row-level overrides. Each value-list
-`ItemRef` carries a `def:WhereClauseRef` to a generated `def:WhereClauseDef`.
-Every admitted row-level `submission` map must have its complete generated
-form.
+For each column declaring `value_level` entries
+([SUB-12](submission.md#sub-12)), the document generates one
+`def:ValueListDef` with one `ItemRef` per entry, in entry order, each carrying
+a `def:WhereClauseRef`; one `def:WhereClauseDef` per entry with one
+`RangeCheck` per where column; and one per-value `ItemDef` per entry carrying
+the column's metadata merged with the entry's. The column's own `ItemDef`
+carries the `def:ValueListRef`.
 
-Evidence: `sdtm-lb-metadata`, `rust/crates/yamaa-core/tests/schema_submission.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `rust/crates/yamaa-adapters/tests/file_resources.rs::lb_value_metadata_uses_original_published_bytes_and_family_valid_completion`.
+Evidence: `sdtm-lb-metadata`, `adam-adlb-metadata`, `sdtm-suppdm-metadata`, `rust/crates/yamaa-core/tests/schema_submission.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `rust/crates/yamaa-core/tests/schema_submission.rs::several_values_are_a_membership_and_several_columns_one_range_check_each`, `rust/crates/yamaa-adapters/tests/file_resources.rs::lb_value_metadata_uses_original_published_bytes_and_family_valid_completion`.
 Replaces: REQ-1013, REQ-1169.
 
-A row template's `submission` map declares per-value metadata against
-statically enumerated `--TESTCD` literals. The mapping to Define-XML is fixed:
+The mapping to Define-XML is fixed:
 
-- for each column carrying value-level metadata, the document generates one
-  `def:ValueListDef` containing one ordered `ItemRef` per distinct test code
-  value, in row declaration order with each code's first occurrence retained.
-  The column's `ItemDef` carries its single `def:ValueListRef` after its
-  `def:Origin`;
-- each value's entry becomes a per-value `ItemDef` carrying the column-level
-  declaration merged with the row-level overrides;
-- each value list `ItemRef` carries a `def:WhereClauseRef` to a generated
-  `def:WhereClauseDef`. Its `RangeCheck` has `Comparator="EQ"`,
-  `SoftHard="Soft"`, `def:ItemOID` referring to the `<DOMAIN>TESTCD` `ItemDef`,
-  and a `CheckValue` containing the literal code; and
-- each per-value `ItemDef` carries its effective inherited or overridden
-  `def:Origin`, codelist and other submission metadata. Associated methods,
-  comments and document references remain resolvable.
+- each value-list `ItemRef` carries `ItemOID`, the entry's per-value
+  identifier ([DEFINE-9](#define-9)), `OrderNumber`, the entry's one-based
+  position among the column's entries, `Mandatory`, the entry's resolution of
+  [SUB-10](submission.md#sub-10), and `Role` and `MethodOID` when its merged
+  metadata declares them. The column's `ItemDef` carries its single
+  `def:ValueListRef` after its `def:Origin`;
+- each `def:WhereClauseDef` carries one `RangeCheck` per where column, in the
+  clause's written order: `Comparator="EQ"` when the column lists one value
+  and `"IN"` when it lists several, `SoftHard="Soft"`, `def:ItemOID` the where
+  column's `ItemDef` identifier, and one `CheckValue` per listed value in
+  written order; and
+- each per-value `ItemDef` maps the merged metadata as
+  [DEFINE-19](#define-19) does, with the entry's `label` as its
+  `Description` when declared and its `Length` from
+  [SUB-24](submission.md#sub-24) or [SUB-7](submission.md#sub-7). Associated
+  methods, comments and document references remain resolvable.
+
+A transport file carries columns, not value-level definitions
+([JSON-9](dataset-json.md#json-9), [XPT-4](xpt.md#xpt-4)); a value-level
+`Length` measured over an entry's rows appears in the document alone.
 
 This linkage follows the bundled authoritative Define-XML 2.1 XSDs:
 `define-extension.xsd` places `ValueListRef` only in the `ItemDef` extension
 (at most one), places `WhereClauseRef` in the `ItemRef` extension, and orders
 all `ValueListDef` elements before all `WhereClauseDef` elements ahead of the
 ordinary metadata definitions. `define-ns.xsd` requires a nonempty value list
-with unique item references and order numbers. A value list for every code
-linked from the column's `ItemRef` would violate these constraints.
+with unique item references and order numbers, and a where clause with at
+least one `RangeCheck`. A value list per entry linked from the column's
+`ItemRef` would violate these constraints.
 
-A generator that cannot consume an entry fails loudly under the `Submission`
-context, naming its row and column; it never quietly omits per-value
-definitions. The generator consumes the bounded typed map and the semantics of
-this rule.
+A generator that cannot consume an entry fails loudly, naming its column and
+entry; it never quietly omits a per-value definition.
