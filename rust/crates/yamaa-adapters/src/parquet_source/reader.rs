@@ -294,11 +294,16 @@ fn read_interpreted(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
 
     // Normalization can make a required stored float missing. The language's
     // typed table admits missing values for every column, regardless of storage.
+    // Each field takes its array's type: a view or dictionary hint names only a
+    // layout (REQ-1032), and the values above are already plain.
     let output_schema = Arc::new(arrow_schema::Schema::new(
         arrow_schema
             .fields()
             .iter()
-            .map(|field| arrow_schema::Field::new(field.name(), field.data_type().clone(), true))
+            .zip(&arrays)
+            .map(|(field, array)| {
+                arrow_schema::Field::new(field.name(), array.data_type().clone(), true)
+            })
             .collect::<Vec<_>>(),
     ));
     let batch = RecordBatch::try_new(output_schema, arrays).map_err(|_| Error::Malformed)?;

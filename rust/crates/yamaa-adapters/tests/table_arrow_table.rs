@@ -2645,6 +2645,373 @@ mod table {
             broken.truncate(broken.len() - 1);
             assert!(matches!(parse(&broken), Err(Error::Malformed)));
         }
+
+        mod schema_layouts {
+            //! Files written here by the parquet crate's Arrow writer, whose Arrow
+            //! schema hint names a view or dictionary layout. The stored Parquet
+            //! type still decides the column type (REQ-1032). Expected cells are
+            //! authored here, never read back from a candidate reader.
+            use arrow_array::{
+                types::{
+                    ArrowDictionaryKeyType, Int16Type, Int32Type, Int64Type, Int8Type, UInt16Type,
+                    UInt32Type, UInt64Type, UInt8Type,
+                },
+                Array, ArrayRef, BinaryArray, Date32Array, DictionaryArray, Float64Array,
+                Int64Array, LargeStringArray, PrimitiveArray, RecordBatch, StringArray,
+                StringViewArray, TimestampMicrosecondArray,
+            };
+            use arrow_buffer::ArrowNativeType;
+            use arrow_schema::{DataType, Field, Schema, SchemaRef, TimeUnit};
+            use parquet::{
+                arrow::{
+                    arrow_reader::ArrowReaderMetadata, arrow_writer::ArrowWriterOptions,
+                    encode_arrow_schema, ArrowWriter,
+                },
+                file::{metadata::KeyValue, properties::WriterProperties},
+            };
+            use std::sync::Arc;
+            use yamaa_adapters::parquet_source::{parse, parse_odm, Error};
+            use yamaa_core::{
+                table::{TableAccess, ValueRef},
+                value::ColumnType,
+            };
+
+            /// Rows of every text column: a repeat, a null, an empty string and
+            /// a non-ASCII value.
+            const TEXT: [Option<&str>; 6] = [
+                Some("b"),
+                None,
+                Some(""),
+                Some("a"),
+                Some("b"),
+                Some("\u{3b2}"),
+            ];
+
+            /// One column: its name, the array the writer stores and the type
+            /// the file's Arrow schema hint names.
+            type Column = (&'static str, ArrayRef, DataType);
+
+            /// Write one batch, optionally dictionary-encoded, in pages of at
+            /// most two rows so a dictionary page serves several data pages.
+            /// The writer embeds its batch schema as the hint, but it cannot
+            /// store a dictionary of views, doubles, dates or timestamps. Where
+            /// a hinted type differs from its stored array, the hinted schema
+            /// replaces the writer's, through the encoder the writer uses itself.
+            fn write(columns: &[Column], dictionary: bool) -> Vec<u8> {
+                let schema = |kind: fn(&Column) -> DataType| {
+                    Schema::new(
+                        columns
+                            .iter()
+                            .map(|column| Field::new(column.0, kind(column), true))
+                            .collect::<Vec<_>>(),
+                    )
+                };
+                let stored = Arc::new(schema(|column| column.1.data_type().clone()));
+                let hint = schema(|column| column.2.clone());
+                let authored = hint != *stored;
+                let batch = RecordBatch::try_new(
+                    stored.clone(),
+                    columns.iter().map(|column| column.1.clone()).collect(),
+                )
+                .unwrap();
+                let properties = WriterProperties::builder()
+                    .set_dictionary_enabled(dictionary)
+                    .set_write_batch_size(2)
+                    .set_data_page_row_count_limit(2)
+                    .build();
+                let options = ArrowWriterOptions::new()
+                    .with_properties(properties)
+                    .with_skip_arrow_metadata(authored);
+                let mut bytes = Vec::new();
+                let mut writer =
+                    ArrowWriter::try_new_with_options(&mut bytes, stored, options).unwrap();
+                if authored {
+                    writer.append_key_value_metadata(KeyValue::new(
+                        "ARROW:schema".into(),
+                        encode_arrow_schema(&hint),
+                    ));
+                }
+                writer.write(&batch).unwrap();
+                writer.close().unwrap();
+                bytes
+            }
+
+            /// The Arrow schema the parquet crate derives from the file, with
+            /// its hint applied: proof that each case reaches the reader with
+            /// the layout it names.
+            fn hinted(bytes: &[u8]) -> SchemaRef {
+                let bytes = bytes::Bytes::copy_from_slice(bytes);
+                ArrowReaderMetadata::load(&bytes, Default::default())
+                    .unwrap()
+                    .schema()
+                    .clone()
+            }
+
+            /// `values` indexed by `keys`; a null key is a null row.
+            fn dictionary<K: ArrowDictionaryKeyType>(
+                keys: &[Option<usize>],
+                values: &ArrayRef,
+            ) -> ArrayRef {
+                let keys: PrimitiveArray<K> = keys
+                    .iter()
+                    .map(|key| key.map(|key| K::Native::from_usize(key).unwrap()))
+                    .collect();
+                Arc::new(DictionaryArray::<K>::try_new(keys, values.clone()).unwrap())
+            }
+
+            /// Dictionaries under index type `K` of plain, large and view
+            /// strings, as (stored array, hinted type). A dictionary of views
+            /// stores the dictionary of plain strings.
+            fn keyed<K: ArrowDictionaryKeyType>(
+                keys: &[Option<usize>],
+                plain: &ArrayRef,
+                large: &ArrayRef,
+            ) -> [(ArrayRef, DataType); 3] {
+                let view =
+                    DataType::Dictionary(Box::new(K::DATA_TYPE), Box::new(DataType::Utf8View));
+                let [plain, large] = [plain, large].map(|values| dictionary::<K>(keys, values));
+                [
+                    (plain.clone(), plain.data_type().clone()),
+                    (large.clone(), large.data_type().clone()),
+                    (plain, view),
+                ]
+            }
+
+            /// Every Arrow layout of `TEXT`: the three string types, and a
+            /// dictionary of each under each index width. The second dictionary
+            /// entry is null, so a null row comes both from a null key and from
+            /// a key that selects the null entry.
+            fn text_layouts() -> Vec<(ArrayRef, DataType)> {
+                let entries = [Some("b"), None, Some(""), Some("a"), Some("\u{3b2}")];
+                let plain: ArrayRef = Arc::new(StringArray::from(entries.to_vec()));
+                let large: ArrayRef = Arc::new(LargeStringArray::from(entries.to_vec()));
+                let mut layouts: Vec<(ArrayRef, DataType)> = vec![
+                    (Arc::new(StringArray::from(TEXT.to_vec())), DataType::Utf8),
+                    (
+                        Arc::new(LargeStringArray::from(TEXT.to_vec())),
+                        DataType::LargeUtf8,
+                    ),
+                    (
+                        Arc::new(StringViewArray::from(TEXT.to_vec())),
+                        DataType::Utf8View,
+                    ),
+                ];
+                for keys in [
+                    [Some(0), None, Some(2), Some(3), Some(0), Some(4)],
+                    [Some(0), Some(1), Some(2), Some(3), Some(0), Some(4)],
+                ] {
+                    layouts.extend(keyed::<Int8Type>(&keys, &plain, &large));
+                    layouts.extend(keyed::<Int16Type>(&keys, &plain, &large));
+                    layouts.extend(keyed::<Int32Type>(&keys, &plain, &large));
+                    layouts.extend(keyed::<Int64Type>(&keys, &plain, &large));
+                    layouts.extend(keyed::<UInt8Type>(&keys, &plain, &large));
+                    layouts.extend(keyed::<UInt16Type>(&keys, &plain, &large));
+                    layouts.extend(keyed::<UInt32Type>(&keys, &plain, &large));
+                    layouts.extend(keyed::<UInt64Type>(&keys, &plain, &large));
+                }
+                layouts
+            }
+
+            fn kinds(table: &impl TableAccess) -> Vec<(&str, ColumnType)> {
+                table
+                    .schema()
+                    .columns()
+                    .iter()
+                    .map(|column| (column.name.as_str(), column.kind))
+                    .collect()
+            }
+
+            #[test]
+            fn view_and_dictionary_text_layouts_read_as_the_same_text() {
+                let ids: ArrayRef = Arc::new(Int64Array::from_iter_values(1..=6));
+                let layouts = text_layouts();
+                // Three string types, then 2 key patterns x 8 index widths x 3.
+                assert_eq!(layouts.len(), 51);
+                for (stored, hint) in layouts {
+                    for encoded in [false, true] {
+                        let bytes = write(
+                            &[
+                                ("ID", ids.clone(), DataType::Int64),
+                                ("S", stored.clone(), hint.clone()),
+                            ],
+                            encoded,
+                        );
+                        assert_eq!(hinted(&bytes).field(1).data_type(), &hint);
+                        let table = parse(&bytes)
+                            .unwrap_or_else(|error| panic!("{hint} ({encoded}): {error:?}"));
+                        assert_eq!(
+                            kinds(&table),
+                            [("ID", ColumnType::Int), ("S", ColumnType::Str)],
+                            "{hint}"
+                        );
+                        for (row, expected) in TEXT.into_iter().enumerate() {
+                            assert_eq!(
+                                table.cell(row, 1).unwrap(),
+                                expected.map_or(ValueRef::Missing, ValueRef::Str),
+                                "{hint} ({encoded}) row {row}"
+                            );
+                        }
+                    }
+                }
+            }
+
+            #[test]
+            fn dictionaries_of_the_other_admitted_types_read_as_their_value_type() {
+                let keys = [Some(0), None, Some(1), Some(0)];
+                let int = dictionary::<Int32Type>(
+                    &keys,
+                    &(Arc::new(Int64Array::from(vec![i64::MIN, 7])) as ArrayRef),
+                );
+                let hint = |index: DataType, value: DataType| {
+                    DataType::Dictionary(Box::new(index), Box::new(value))
+                };
+                // The writer stores a dictionary of int64 itself. Doubles, dates
+                // and timestamps are stored decoded; only the hint names their
+                // dictionary.
+                let columns = [
+                    ("I", int.clone(), int.data_type().clone()),
+                    (
+                        "F",
+                        Arc::new(Float64Array::from(vec![
+                            Some(-0.0),
+                            None,
+                            Some(f64::from_bits(1)),
+                            Some(-0.0),
+                        ])) as ArrayRef,
+                        hint(DataType::Int8, DataType::Float64),
+                    ),
+                    (
+                        "D",
+                        Arc::new(Date32Array::from(vec![
+                            Some(-719_162),
+                            None,
+                            Some(2_932_896),
+                            Some(-719_162),
+                        ])) as ArrayRef,
+                        hint(DataType::UInt16, DataType::Date32),
+                    ),
+                    (
+                        "T",
+                        Arc::new(TimestampMicrosecondArray::from(vec![
+                            Some(-1_000_000),
+                            None,
+                            Some(0),
+                            Some(-1_000_000),
+                        ])) as ArrayRef,
+                        hint(
+                            DataType::UInt32,
+                            DataType::Timestamp(TimeUnit::Microsecond, None),
+                        ),
+                    ),
+                ];
+                for encoded in [false, true] {
+                    let bytes = write(&columns, encoded);
+                    let restored = hinted(&bytes);
+                    for (index, column) in columns.iter().enumerate() {
+                        assert_eq!(restored.field(index).data_type(), &column.2);
+                    }
+                    let table = parse(&bytes).unwrap();
+                    assert_eq!(
+                        kinds(&table),
+                        [
+                            ("I", ColumnType::Int),
+                            ("F", ColumnType::Float),
+                            ("D", ColumnType::Date),
+                            ("T", ColumnType::DateTime),
+                        ]
+                    );
+                    for column in 0..4 {
+                        assert_eq!(table.cell(1, column).unwrap(), ValueRef::Missing);
+                    }
+                    for row in [0, 3] {
+                        assert_eq!(table.cell(row, 0).unwrap(), ValueRef::Int(i64::MIN));
+                        let ValueRef::Float(value) = table.cell(row, 1).unwrap() else {
+                            panic!("float")
+                        };
+                        assert_eq!(value.get().to_bits(), (-0.0f64).to_bits());
+                        let ValueRef::Date(value) = table.cell(row, 2).unwrap() else {
+                            panic!("date")
+                        };
+                        assert_eq!(value.to_string(), "0001-01-01");
+                        let ValueRef::DateTime(value) = table.cell(row, 3).unwrap() else {
+                            panic!("datetime")
+                        };
+                        assert_eq!(value.fields(), (1969, 12, 31, 23, 59, 59));
+                    }
+                    assert_eq!(table.cell(2, 0).unwrap(), ValueRef::Int(7));
+                    let ValueRef::Float(value) = table.cell(2, 1).unwrap() else {
+                        panic!("float")
+                    };
+                    assert_eq!(value.get().to_bits(), 1);
+                    let ValueRef::Date(value) = table.cell(2, 2).unwrap() else {
+                        panic!("date")
+                    };
+                    assert_eq!(value.to_string(), "9999-12-31");
+                    let ValueRef::DateTime(value) = table.cell(2, 3).unwrap() else {
+                        panic!("datetime")
+                    };
+                    assert_eq!(value.fields(), (1970, 1, 1, 0, 0, 0));
+                }
+            }
+
+            #[test]
+            fn a_dictionary_of_a_refused_type_keeps_its_stored_type_spelling() {
+                let values: ArrayRef = Arc::new(BinaryArray::from(vec![b"x".as_slice()]));
+                let array = dictionary::<Int32Type>(&[Some(0)], &values);
+                let bytes = write(&[("B", array.clone(), array.data_type().clone())], true);
+                assert!(matches!(
+                    parse(&bytes),
+                    Err(Error::Unsupported { field, stored_type })
+                        if field == "B"
+                            && stored_type == "dictionary<values=binary, indices=int32, ordered=0>"
+                ));
+            }
+
+            #[test]
+            fn odm_fields_read_text_through_view_and_dictionary_layouts() {
+                use yamaa_core::odm_source::FIELDS;
+                let rows = |field: &str| [format!("{field}-1"), format!("{field}-2")];
+                let columns: Vec<Column> = FIELDS
+                    .iter()
+                    .enumerate()
+                    .map(|(index, field)| {
+                        let [first, second] = rows(field);
+                        let array: ArrayRef = match index % 3 {
+                            0 => Arc::new(StringViewArray::from_iter_values([first, second])),
+                            1 => dictionary::<UInt32Type>(
+                                &[Some(1), Some(0)],
+                                &(Arc::new(LargeStringArray::from_iter_values([second, first]))
+                                    as ArrayRef),
+                            ),
+                            _ => dictionary::<Int8Type>(
+                                &[Some(0), Some(1)],
+                                &(Arc::new(StringArray::from_iter_values([first, second]))
+                                    as ArrayRef),
+                            ),
+                        };
+                        let kind = array.data_type().clone();
+                        (*field, array, kind)
+                    })
+                    .collect();
+                let table = parse_odm(&write(&columns, true)).unwrap();
+                assert_eq!(
+                    kinds(&table),
+                    FIELDS
+                        .iter()
+                        .map(|field| (*field, ColumnType::Str))
+                        .collect::<Vec<_>>()
+                );
+                for (column, field) in FIELDS.iter().enumerate() {
+                    for (row, expected) in rows(field).iter().enumerate() {
+                        assert_eq!(
+                            table.cell(row, column).unwrap(),
+                            ValueRef::Str(expected.as_str()),
+                            "{field}"
+                        );
+                    }
+                }
+            }
+        }
     }
     #[cfg(feature = "yaml")]
     mod predicate_diagnostics {
