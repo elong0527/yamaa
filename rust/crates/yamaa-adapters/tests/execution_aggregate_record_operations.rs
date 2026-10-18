@@ -1330,7 +1330,7 @@ S1,002,2024-06
         /// finding is decided from. `domain` reaches each of them once it reads or
         /// binds the inputs. A case that `check` starts to report fails until it
         /// leaves this list.
-        const NOT_REPORTED_BY_CHECK: [(&str, &str); 26] = [
+        const NOT_REPORTED_BY_CHECK: [(&str, &str); 25] = [
             (
                 "negative-adlb-computed-param",
                 "a cycle through an aggregate and a case",
@@ -1359,10 +1359,6 @@ S1,002,2024-06
             (
                 "negative-lookup-mismatched",
                 "the fields stored in the current input",
-            ),
-            (
-                "negative-lookup-range-other-input",
-                "the drivers of the rows that read a lookup range",
             ),
             (
                 "negative-lookup-unknown-key",

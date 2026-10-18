@@ -106,12 +106,17 @@ a named intermediate selects for the row, qualified by its id. A value read
 from a driver's record must name the driver of every row that reads the
 lookup, wherever the lookup is read: in a row template, that template's driver
 ([LOOKUP-2](#lookup-2)), and during column derivation, the driver of every row
-template the read can evaluate on. A value naming nothing the current row
-holds, such as a field of another input or of the lookup's own relation, fails
-as `unknown_field` at `between.value`, once per range, whichever kind of
-lookup declares it. A field of another input is never read through the
-implicit join ([LOOKUP-1](#lookup-1)); bring it onto the row as a column
-first, and name the column:
+template the read can evaluate on. A row reads a named intermediate through
+its derivations or its row template's `filter`, through an aggregate's
+`derive` binding, and through the range value of another lookup it reads. A
+value naming nothing the current row holds, such as a field of another input
+or of the lookup's own relation, fails as `unknown_field` at `between.value`,
+once per range, whichever kind of lookup declares it. Which input drives each
+row is declared, so `check` reports a value qualified by an input that drives
+none of those rows from the declarations alone, whether or not that input
+stores the field. A field of another input is never read through the implicit
+join ([LOOKUP-1](#lookup-1)); bring it onto the row as a column first, and
+name the column:
 
 ```yaml
 columns:

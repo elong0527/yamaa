@@ -591,6 +591,14 @@ impl Declaration {
             }
         })
     }
+    /// The declared range whose value binding reads for the current row.
+    /// Binding reports a declaration defect, such as a range without a bound,
+    /// before it reads the value.
+    pub(super) fn current_range(&self) -> Option<&lookup_range::Declaration> {
+        self.range
+            .as_ref()
+            .filter(|_| self.declaration_findings.is_empty())
+    }
     /// The authored range value, when the binding declares a range.
     pub(super) fn range_value(&self) -> Option<&str> {
         self.range.as_ref().map(|range| range.value.as_str())

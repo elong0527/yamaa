@@ -211,13 +211,6 @@ impl PreparedSpecification {
                     self.rows.is_none().then_some(&self.output),
                     findings,
                 )?;
-                // Without row templates, the base drives every row.
-                aggregates::check_ranges(
-                    &declaration.operation,
-                    &self.sources,
-                    &[self.source().name.as_str()],
-                    findings,
-                );
                 if let Some(outputs) = &outputs {
                     dependencies.push(Some(self.formula_reads(declaration, outputs, findings)));
                 }
@@ -233,14 +226,16 @@ impl PreparedSpecification {
                 self.formula_dependencies(&dependencies, findings)?;
             }
             if let Some(rows) = &self.rows {
-                rows.check_findings(
-                    &self.output,
-                    &input,
-                    &self.sources,
-                    &self.intermediates,
-                    findings,
-                )?;
+                rows.check_findings(&self.output, &input, findings)?;
             }
+            // Binding admits range values once every row's reads are bound.
+            lookup_range::check(
+                self.range_contexts(),
+                &self.intermediates,
+                &self.sources,
+                self.project_calls.as_ref(),
+                findings,
+            );
             Ok(())
         };
         collect(&mut findings).map_err(|error| match error {
@@ -256,6 +251,28 @@ impl PreparedSpecification {
             }
         }
         Ok(self)
+    }
+
+    /// The contexts whose rows read lookup ranges ([`lookup_range::check`]).
+    /// Without row templates the base drives every row, and its qualifier
+    /// reads the row's own record.
+    fn range_contexts(&self) -> Vec<lookup_range::Declared<'_>> {
+        match &self.rows {
+            Some(rows) => rows.range_contexts(&self.sources, &self.intermediates),
+            None => {
+                let base = self.source().name.as_str();
+                vec![lookup_range::Declared {
+                    evaluated: self
+                        .declarations
+                        .iter()
+                        .map(|declaration| {
+                            lookup_range::Evaluated::Operation(&declaration.operation, Some(base))
+                        })
+                        .collect(),
+                    drivers: vec![base],
+                }]
+            }
+        }
     }
 
     /// A formula binds without a source schema: a qualified name is a declared

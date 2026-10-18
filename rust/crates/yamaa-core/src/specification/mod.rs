@@ -2488,13 +2488,14 @@ impl PreparedSpecification {
             .flatten();
         // Every row is built from the base driver, the primary port.
         lookup_range::admit(
-            [(
-                assignments
+            [lookup_range::Context {
+                expressions: assignments
                     .values()
                     .map(|assignment| &assignment.expression)
                     .collect(),
-                vec![0],
-            )],
+                named: Vec::new(),
+                drivers: vec![0],
+            }],
             &intermediates,
             &mut findings,
         );
