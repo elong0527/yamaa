@@ -219,6 +219,41 @@ mod table {
             ));
         }
         #[test]
+        fn empty_dataset_reads_column_metadata_from_every_page() {
+            // No records, and the name and attributes of the second column
+            // are on the second metadata page.
+            use crate::support::sas7bdat::{Dataset, Kind, Layout, Page, Pointer, META};
+            let dataset = Dataset::new(Layout::LE64, &[("X", Kind::Num, 8), ("Y", Kind::Num, 8)]);
+            let layout = dataset.layout;
+            let (blob, compression, names) = dataset.text();
+            let first = vec![
+                Pointer::metadata(layout.row_size(16, 0, 0, 0, compression)),
+                Pointer::metadata(layout.column_size(2)),
+                Pointer::metadata(layout.column_text(&blob)),
+                Pointer::metadata(layout.column_name(&names[..1])),
+                Pointer::metadata(layout.column_attrs(&dataset.fields[..1])),
+            ];
+            let second = vec![
+                Pointer::metadata(layout.column_name(&names[1..])),
+                Pointer::metadata(layout.column_attrs(&dataset.fields[1..])),
+            ];
+            let bytes = dataset.file(&[
+                Page::new(META, first, vec![]),
+                Page::new(META, second, vec![]),
+            ]);
+            let table = read_built(&bytes).unwrap();
+            assert_eq!(table.row_count(), 0);
+            assert_eq!(
+                table
+                    .schema()
+                    .columns()
+                    .iter()
+                    .map(|column| (column.name.as_str(), column.kind))
+                    .collect::<Vec<_>>(),
+                [("X", ColumnType::Float), ("Y", ColumnType::Float)]
+            );
+        }
+        #[test]
         fn sas_7_release_strings_and_tk_revisions_are_accepted() {
             // The header's release field reads major.minor, a revision tag
             // and a revision. Release 8 and 9 tags are M, J or T (as in TK);

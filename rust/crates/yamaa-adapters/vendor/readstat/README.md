@@ -73,6 +73,7 @@ by hand, inside the local changes above, or declined here with its reason.
 | `da9fcaa4` | A numeric value whose column width is outside 1 to 8 bytes fails instead of shifting by an undefined amount. | Ported |
 | `5850fb57` (release field) | The header's release field is copied into a terminated buffer before `sscanf` reads it. The deleted-row part of this commit is listed below. | Ported |
 | `a0aa9f31` | RDC decompresses into the dataset's row buffer instead of allocating one per row. | Ported |
+| `a2fcaa91` | A dataset with no records reads every page, so column metadata on a later page is not lost. | Ported |
 | `3c68974f` | Allocation failures are checked. | Already covered by the local checked allocations |
 | `4d3c7f77` | A zero-width character column is accepted; its values are empty text. | Ported |
 | `b2d5407d`, `bb29605a`, `95aee731` | The release field accepts revision tags `J` and `TK` for SAS 8 and 9, any tag for other majors such as SAS 7, and the alternative magic number whose first 28 bytes are zero. | Ported |
