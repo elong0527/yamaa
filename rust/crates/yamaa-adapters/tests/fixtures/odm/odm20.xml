@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ODM xmlns="http://www.cdisc.org/ns/odm/v2.0"
+     ODMVersion="2.0" FileOID="FILE.20">
+  <Study OID="S.20">
+    <MetaDataVersion OID="M.20" Name="Metadata">
+      <StudyEventDef OID="E.20" Name="Screening"/>
+      <ItemGroupDef OID="FO.20" Name="Biomarker form"/>
+      <ItemGroupDef OID="IG.20" Name="Biomarker group"/>
+      <ItemDef OID="I.TEST" Name="Test name" DataType="text"/>
+      <ItemDef OID="I.RESULT" Name="Test result" DataType="text"/>
+    </MetaDataVersion>
+  </Study>
+  <ClinicalData StudyOID="S.20" MetaDataVersionOID="M.20">
+    <SubjectData SubjectKey="SUBJECT-20">
+      <StudyEventData StudyEventOID="E.20">
+        <ItemGroupData ItemGroupOID="FO.20" ItemGroupRepeatKey="2">
+          <ItemGroupData ItemGroupOID="IG.20" ItemGroupRepeatKey="3">
+            <ItemData ItemOID="I.TEST"><Value>PD-L1</Value></ItemData>
+            <ItemData ItemOID="I.RESULT"><Value/></ItemData>
+          </ItemGroupData>
+        </ItemGroupData>
+      </StudyEventData>
+    </SubjectData>
+  </ClinicalData>
+</ODM>

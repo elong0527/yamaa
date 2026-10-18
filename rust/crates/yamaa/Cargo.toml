@@ -8,13 +8,15 @@ authors.workspace = true
 publish.workspace = true
 
 [features]
-default = ["yaml", "parquet", "readstat"]
+default = ["yaml", "parquet", "readstat", "odm"]
 # Document syntax admission; owned core documents do not require this parser.
 yaml = ["yamaa-adapters/yaml"]
 # Source and artifact codecs share one edge, including native Zstd compression.
 parquet = ["yamaa-adapters/parquet"]
 # SAS binary input only; disabling this feature omits the bundled ReadStat build.
 readstat = ["yamaa-adapters/readstat"]
+# ODM XML clinical items from plain XML or plain/gzip TAR input; pure Rust.
+odm = ["yamaa-adapters/odm"]
 
 [dependencies]
 # The forwarded format features above are the only admission edges: without

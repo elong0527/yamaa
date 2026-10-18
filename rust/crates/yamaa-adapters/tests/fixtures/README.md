@@ -179,6 +179,16 @@ This qualifies a Unix study-source adapter. Entry/layer/environment/codelist cap
 
 The Windows implementations use retained handles in [windows_file.rs](../../src/windows_file.rs) and [file_publication_windows.rs](../../src/file_publication_windows.rs). The installed Python and R suites cover original-file access and publication on Windows.
 
+## odm
+# ODM XML reader documents
+
+`odm/odm13.xml` and `odm/odm20.xml` are the two documents of the Python ODM
+reader suite, copied byte for byte from `python/tests/odm/_odm_documents.py`,
+so the cases ported into `odm_xml.rs` apply the same edits to the same text.
+TAR and gzip inputs are written at test time by `support/odm_files.rs`; no
+binary archive is committed. Expected values are the ones the Python suite
+asserts or ones read from the documents by hand; no Rust output generated them.
+
 ## odm_deferred
 # Deferred ODM defaults
 

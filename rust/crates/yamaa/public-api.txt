@@ -8,6 +8,7 @@ yamaa: pub mod engine
 yamaa: pub mod error
 yamaa: pub mod functions
 yamaa: pub mod observe
+yamaa: pub mod odm
 yamaa: pub mod resolver
 yamaa: pub mod scalar
 yamaa: pub mod table
@@ -56,6 +57,9 @@ yamaa::LockReason: pub use yamaa::error::LockReason
 yamaa::LockSyntaxError: pub use yamaa::error::LockSyntaxError
 yamaa::MemoryResolver: pub use yamaa::resolver::MemoryResolver
 yamaa::Node: pub use yamaa::observe::Node
+yamaa::ODM_COLUMNS: pub use yamaa::odm::ODM_COLUMNS
+yamaa::OdmError: pub use yamaa::error::OdmError
+yamaa::OdmOptions: pub use yamaa::odm::OdmOptions
 yamaa::Outcome: pub use yamaa::observe::Outcome
 yamaa::Parameter: pub use yamaa::functions::Parameter
 yamaa::Phase: pub use yamaa::observe::Phase
@@ -239,6 +243,7 @@ yamaa::error::Error: pub enum Error [derive(Clone, Debug)] [non_exhaustive]
 yamaa::error::Error::Cancelled: Cancelled
 yamaa::error::Error::Host: Host(FunctionError)
 yamaa::error::Error::Internal: Internal { code: &'static str }
+yamaa::error::Error::Odm: Odm(OdmError)
 yamaa::error::Error::Rejected: Rejected(Report)
 yamaa::error::Error::Resolver: Resolver(ResolverFailure)
 yamaa::error::Error::Table: Table(TableError)
@@ -288,6 +293,10 @@ yamaa::error::LockSyntaxError::Document: Document { resource_refusal: bool, }
 yamaa::error::LockSyntaxError::Json: Json { line: usize, column: usize, }
 yamaa::error::LockSyntaxError::Limit: Limit { resource: &'static str, limit: usize, actual: Option<usize>, }
 yamaa::error::LockSyntaxError::Shape: Shape { field: &'static str, }
+yamaa::error::OdmError: impl OdmError
+yamaa::error::OdmError: pub struct OdmError [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::error::OdmError::code: pub fn code(&self) -> &'static str
+yamaa::error::OdmError::message: pub fn message(&self) -> &str
 yamaa::error::ResolverFailure: impl ResolverFailure
 yamaa::error::ResolverFailure: pub struct ResolverFailure [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::error::ResolverFailure::code: pub fn code(&self) -> &'static str
@@ -387,6 +396,21 @@ yamaa::observe::Refusal: pub struct Refusal [derive(Clone, Copy, Debug, Eq, Part
 yamaa::observe::Refusal::limit: pub limit: usize
 yamaa::observe::Refusal::required: pub required: Option<usize>
 yamaa::observe::Refusal::resource: pub resource: &'static str
+yamaa::odm::ODM_COLUMNS: pub const ODM_COLUMNS: [&str; 30]
+yamaa::odm::OdmOptions: impl Default for OdmOptions
+yamaa::odm::OdmOptions: impl OdmOptions
+yamaa::odm::OdmOptions: pub struct OdmOptions [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::odm::OdmOptions::archive_member: pub archive_member: Option<String>
+yamaa::odm::OdmOptions::max_archive_members: pub max_archive_members: usize
+yamaa::odm::OdmOptions::max_expanded_bytes: pub max_expanded_bytes: u64
+yamaa::odm::OdmOptions::max_xml_depth: pub max_xml_depth: usize
+yamaa::odm::OdmOptions::new: pub fn new() -> Self
+yamaa::odm::OdmOptions::with_archive_member: pub fn with_archive_member(mut self, member: impl Into<String>) -> Self
+yamaa::odm::OdmOptions::with_max_archive_members: pub fn with_max_archive_members(mut self, limit: usize) -> Self
+yamaa::odm::OdmOptions::with_max_expanded_bytes: pub fn with_max_expanded_bytes(mut self, limit: u64) -> Self
+yamaa::odm::OdmOptions::with_max_xml_depth: pub fn with_max_xml_depth(mut self, limit: usize) -> Self
+yamaa::odm::read_odm: pub fn read_odm(path: &Path, options: &OdmOptions) -> Result<Table, Error>
+yamaa::read_odm: pub use yamaa::odm::read_odm
 yamaa::resolver::MemoryResolver: impl MemoryResolver
 yamaa::resolver::MemoryResolver: impl ResourceResolver for MemoryResolver
 yamaa::resolver::MemoryResolver: pub struct MemoryResolver [derive(Default)] [non_exhaustive]

@@ -34,7 +34,7 @@ jobs:
       - name: Check fixtures, dependency edges and linked native symbols
         run: |
           failed=()
-          for selection in none yaml parquet readstat all; do
+          for selection in none yaml parquet readstat odm all; do
             echo "::group::$selection"
             python -m tools.ci.format_features "$selection" || failed+=("$selection")
             echo "::endgroup::"
