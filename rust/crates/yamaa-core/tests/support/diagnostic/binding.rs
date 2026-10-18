@@ -474,6 +474,20 @@ pub(crate) fn window_reached() -> BTreeSet<ConditionCode> {
             ".window.order_by",
             vec![("operation", text("baseline_flag"))],
         ),
+        (
+            "row_number",
+            T::map(vec![(
+                "window",
+                T::map(vec![
+                    ("group_by", T::List(vec![T::text("ID"), T::text("ID")])),
+                    ("order_by", T::List(vec![T::text("ID")])),
+                ]),
+            )]),
+            "invalid_field_type",
+            "REQ-0293",
+            ".window.group_by[1]",
+            vec![("identifier", text("ID"))],
+        ),
     ] {
         let prepared = compile(
             T::map(vec![("value", T::map(vec![(operation, payload)]))]),
