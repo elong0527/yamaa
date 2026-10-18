@@ -4,125 +4,96 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-"""Build ADVS from ADVS_RAW and AWINDOW.
-
-Each measurement record is matched to the analysis window of its own
-study whose [AWLO, AWHI] range (both ends inclusive) contains the
-record's study day (ADY). A window whose last day was never stated is
-not open-ended: a study day on or past its first day has no window.
-ANL01FL flags, within each study/subject/parameter/analysis-visit
-group, the record nearest the window target day (lowest VSSEQ wins a
-tie).
-"""
-
 import csv
-import os
 
 INPUT_DIR = "/app/input"
 OUTPUT_DIR = "/app/output"
 
-OUT_COLUMNS = [
-    "STUDYID", "USUBJID", "PARAMCD", "VSSEQ", "VISIT", "ADT", "ADY",
-    "AVAL", "AVISIT", "AVISITN", "AWTARGET", "AWTDIFF", "ANL01FL",
-]
-
-
-def to_int(value):
-    """Parse an integer cell; return None when the cell is blank."""
-    if value is None:
-        return None
-    value = value.strip()
-    if value == "":
-        return None
-    return int(value)
-
 
 def read_csv(path):
-    with open(path, newline="") as handle:
-        return list(csv.DictReader(handle))
+    with open(path, newline="") as f:
+        return list(csv.DictReader(f))
+
+
+def to_int(text):
+    if text is None or text.strip() == "":
+        return None
+    return int(text)
 
 
 def main():
-    raw = read_csv(os.path.join(INPUT_DIR, "advs_raw.csv"))
-    window_rows = read_csv(os.path.join(INPUT_DIR, "awindow.csv"))
+    raw = read_csv(f"{INPUT_DIR}/advs_raw.csv")
+    windows = read_csv(f"{INPUT_DIR}/awindow.csv")
 
-    # Windows keyed by study. A window matches only when both bounds
-    # were stated; an absent bound is not an open-ended one.
-    windows = {}
-    for row in window_rows:
-        windows.setdefault(row["STUDYID"], []).append(
-            {
-                "avisit": row["AVISIT"],
-                "avisitn": to_int(row["AVISITN"]),
-                "awlo": to_int(row["AWLO"]),
-                "awhi": to_int(row["AWHI"]),
-                "awtarget": to_int(row["AWTARGET"]),
-            }
-        )
+    windows_by_study = {}
+    for w in windows:
+        windows_by_study.setdefault(w["STUDYID"], []).append(w)
 
     records = []
     for row in raw:
         ady = to_int(row["ADY"])
-        match = None
+        matched = None
         if ady is not None:
-            for window in windows.get(row["STUDYID"], []):
-                if (
-                    window["awlo"] is not None
-                    and window["awhi"] is not None
-                    and window["awlo"] <= ady <= window["awhi"]
-                ):
-                    match = window
+            for w in windows_by_study.get(row["STUDYID"], []):
+                lo = to_int(w["AWLO"])
+                hi = to_int(w["AWHI"])
+                # An absent bound is not an open-ended one: a window
+                # whose last day was never stated matches nothing.
+                if lo is None or hi is None:
+                    continue
+                if lo <= ady <= hi:
+                    matched = w
                     break
-        record = {
+
+        rec = {
             "STUDYID": row["STUDYID"],
             "USUBJID": row["USUBJID"],
             "PARAMCD": row["PARAMCD"],
-            "VSSEQ": to_int(row["VSSEQ"]),
+            "VSSEQ": row["VSSEQ"],
             "VISIT": row["VISIT"],
             "ADT": row["ADT"],
-            "ADY": ady,
+            "ADY": row["ADY"],
             "AVAL": row["AVAL"],
-            "AVISIT": match["avisit"] if match else None,
-            "AVISITN": match["avisitn"] if match else None,
-            "AWTARGET": match["awtarget"] if match else None,
-            "AWTDIFF": (ady - match["awtarget"]) if match else None,
+            "AVISIT": "",
+            "AVISITN": "",
+            "AWTARGET": "",
+            "AWTDIFF": "",
             "ANL01FL": "",
         }
-        records.append(record)
+        diff = None
+        if matched is not None:
+            target = to_int(matched["AWTARGET"])
+            rec["AVISIT"] = matched["AVISIT"]
+            rec["AVISITN"] = matched["AVISITN"]
+            rec["AWTARGET"] = matched["AWTARGET"]
+            if target is not None:
+                diff = ady - target
+                rec["AWTDIFF"] = str(diff)
+        rec["_diff"] = diff
+        records.append(rec)
 
-    # Flag the record nearest its window target within each
-    # study/subject/parameter/analysis-visit group; the lower VSSEQ
-    # breaks a tie. Records with no window are never flagged.
+    # ANL01FL is Y on the record nearest its window target among the
+    # records for the same study, subject, parameter and analysis
+    # visit; the lower VSSEQ breaks a tie.
     groups = {}
-    for record in records:
-        if record["AVISIT"] is None:
+    for rec in records:
+        if rec["AVISIT"] == "" or rec["_diff"] is None:
             continue
-        key = (
-            record["STUDYID"],
-            record["USUBJID"],
-            record["PARAMCD"],
-            record["AVISIT"],
-        )
-        groups.setdefault(key, []).append(record)
+        key = (rec["STUDYID"], rec["USUBJID"], rec["PARAMCD"], rec["AVISIT"])
+        groups.setdefault(key, []).append(rec)
     for group in groups.values():
-        best = min(
-            group,
-            key=lambda r: (abs(r["AWTDIFF"]), r["VSSEQ"]),
-        )
+        best = min(group, key=lambda r: (abs(r["_diff"]), int(r["VSSEQ"])))
         best["ANL01FL"] = "Y"
 
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    out_path = os.path.join(OUTPUT_DIR, "advs.csv")
-    with open(out_path, "w", newline="") as handle:
-        writer = csv.writer(handle)
-        writer.writerow(OUT_COLUMNS)
-        for record in records:
-            writer.writerow(
-                [
-                    "" if record[col] is None else record[col]
-                    for col in OUT_COLUMNS
-                ]
-            )
+    fieldnames = [
+        "STUDYID", "USUBJID", "PARAMCD", "VSSEQ", "VISIT", "ADT", "ADY",
+        "AVAL", "AVISIT", "AVISITN", "AWTARGET", "AWTDIFF", "ANL01FL",
+    ]
+    with open(f"{OUTPUT_DIR}/advs.csv", "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for rec in records:
+            writer.writerow({k: rec[k] for k in fieldnames})
 
 
 if __name__ == "__main__":

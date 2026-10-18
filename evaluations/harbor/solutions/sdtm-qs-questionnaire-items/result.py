@@ -4,26 +4,19 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-"""Build the SDTM QS dataset from ITEMS, NOTDONE, ODM and VISITS.
+"""Build the SDTM QS dataset (PHQ-9) from ITEMS, NOTDONE, ODM and VISITS."""
 
-One record per questionnaire item per subject per visit, plus a
-total-score record for every visit where all nine items were answered,
-a NOT DONE record for a skipped item, and a single QSALL record for a
-refused questionnaire.
-"""
-
-from collections import defaultdict
-
-import pandas as pd
+import csv
+import os
 
 INPUT_DIR = "/app/input"
 OUTPUT_DIR = "/app/output"
 
 RESPONSE_TEXT = {
-    "0": "Not at all",
-    "1": "Several days",
-    "2": "More than half the days",
-    "3": "Nearly every day",
+    0: "Not at all",
+    1: "Several days",
+    2: "More than half the days",
+    3: "Nearly every day",
 }
 
 COLUMNS = [
@@ -33,152 +26,155 @@ COLUMNS = [
 ]
 
 
-def read(name):
-    return pd.read_csv(
-        f"{INPUT_DIR}/{name}", dtype=str, keep_default_na=False
-    )
+def read_csv(name):
+    with open(os.path.join(INPUT_DIR, name), newline="", encoding="utf-8") as fh:
+        return list(csv.DictReader(fh))
 
 
 def main():
-    items = read("items.csv")
-    odm = read("odm.csv")
-    notdone = read("notdone.csv")
-    visits = read("visits.csv")
+    items = read_csv("items.csv")
+    notdone = read_csv("notdone.csv")
+    odm = read_csv("odm.csv")
+    visits = read_csv("visits.csv")
 
-    item_by_oid = {
-        row["ItemOID"]: row for _, row in items.iterrows()
-    }
-    item_oids = list(items["ItemOID"])
+    # Item metadata keyed by ItemOID, kept in ITEMS order.
+    item_by_oid = {row["ItemOID"]: row for row in items}
 
+    # Visit number and collection date per (subject, study event).
     visit_info = {}
-    for _, row in visits.iterrows():
+    for row in visits:
         visit_info[(row["SubjectKey"], row["StudyEventOID"])] = (
             int(row["VISITNUM"]),
             row["VisitDate"],
         )
 
-    # NOTDONE rows: one naming an item is that item's own record; one
-    # naming no item stands for the whole questionnaire.
-    skipped = {}
-    refused = {}
-    study_by_key = {}
-    for _, row in notdone.iterrows():
+    # Collected scores: (subject, event, item oid) -> int score.
+    collected = {}
+    study_by_subject = {}
+    for row in odm:
+        study_by_subject[row["SubjectKey"]] = row["StudyOID"]
+        if row["ItemOID"] in item_by_oid:
+            collected[(row["SubjectKey"], row["StudyEventOID"], row["ItemOID"])] = int(row["Value"])
+
+    # Not-done declarations: whole questionnaire (item oid empty) or per item.
+    refused = {}       # (subject, event) -> reason
+    skipped = {}       # (subject, event, item oid) -> reason
+    for row in notdone:
         key = (row["SubjectKey"], row["StudyEventOID"])
-        study_by_key[key] = row["StudyOID"]
         if row["ItemOID"]:
             skipped[key + (row["ItemOID"],)] = row["Reason"]
         else:
             refused[key] = row["Reason"]
 
-    # Collected scores keyed by subject, visit and item.
-    responses = defaultdict(dict)
-    subject_visits = set()
-    for _, row in odm.iterrows():
-        key = (row["SubjectKey"], row["StudyEventOID"])
-        responses[key][row["ItemOID"]] = row["Value"]
-        subject_visits.add(key)
-        study_by_key[key] = row["StudyOID"]
-    subject_visits |= set(refused)
-    subject_visits |= set(skipped_key[:2] for skipped_key in skipped)
+    # Every subject/visit seen in ODM, NOTDONE or VISITS.
+    subject_events = set()
+    for subject, event in visit_info:
+        subject_events.add((subject, event))
+    for subject, event, _oid in collected:
+        subject_events.add((subject, event))
+    for subject, event in refused:
+        subject_events.add((subject, event))
+    for subject, event, _oid in skipped:
+        subject_events.add((subject, event))
+
+    def sort_key(se):
+        subject, event = se
+        visitnum = visit_info.get((subject, event), (0, ""))[0]
+        return (subject, visitnum, event)
 
     records = []
-    for subject, visit in subject_visits:
-        visitnum, visit_date = visit_info[(subject, visit)]
+    for subject, event in sorted(subject_events, key=sort_key):
+        visitnum, visit_date = visit_info.get((subject, event), ("", ""))
+        studyid = study_by_subject.get(subject, "")
         blfl = "Y" if visitnum == 1 else ""
         base = {
             "DOMAIN": "QS",
-            "STUDYID": study_by_key[(subject, visit)],
+            "STUDYID": studyid,
             "USUBJID": subject,
             "QSCAT": "PHQ-9",
             "VISITNUM": visitnum,
             "QSDTC": visit_date,
+            "QSBLFL": blfl,
         }
         visit_records = []
-        if (subject, visit) in refused:
-            visit_records.append({
-                **base,
+        if (subject, event) in refused:
+            rec = dict(base)
+            rec.update({
                 "QSTESTCD": "QSALL",
                 "QSTEST": "All Questionnaires",
                 "QSORRES": "",
                 "QSSTRESC": "",
                 "QSSTRESN": "",
                 "QSSTAT": "NOT DONE",
-                "QSREASND": refused[(subject, visit)],
-                "QSBLFL": blfl,
+                "QSREASND": refused[(subject, event)],
                 "QSDRVFL": "",
-                "_rank": 2,
             })
+            visit_records.append(rec)
         else:
-            answered = responses.get((subject, visit), {})
-            all_answered = True
+            answered = 0
             total = 0
-            for oid in item_oids:
-                item = item_by_oid[oid]
-                record = {
-                    **base,
+            for item in items:
+                oid = item["ItemOID"]
+                key = (subject, event, oid)
+                rec = dict(base)
+                rec.update({
                     "QSTESTCD": item["QSTESTCD"],
                     "QSTEST": item["QSTEST"],
-                    "QSBLFL": blfl,
                     "QSDRVFL": "",
-                    "_rank": 0,
-                }
-                skip_key = (subject, visit, oid)
-                if skip_key in skipped:
-                    all_answered = False
-                    record.update({
+                })
+                if key in skipped:
+                    rec.update({
                         "QSORRES": "",
                         "QSSTRESC": "",
                         "QSSTRESN": "",
                         "QSSTAT": "NOT DONE",
-                        "QSREASND": skipped[skip_key],
+                        "QSREASND": skipped[key],
                     })
-                elif oid in answered:
-                    score = answered[oid]
-                    total += int(score)
-                    record.update({
+                elif key in collected:
+                    score = collected[key]
+                    answered += 1
+                    total += score
+                    rec.update({
                         "QSORRES": RESPONSE_TEXT[score],
-                        "QSSTRESC": score,
-                        "QSSTRESN": int(score),
+                        "QSSTRESC": str(score),
+                        "QSSTRESN": score,
                         "QSSTAT": "",
                         "QSREASND": "",
                     })
                 else:
-                    all_answered = False
                     continue
-                visit_records.append(record)
-            if all_answered:
-                visit_records.append({
-                    **base,
+                visit_records.append(rec)
+            if answered == len(items):
+                rec = dict(base)
+                rec.update({
                     "QSTESTCD": "PHQ9T",
-                    "QSTEST": "Patient Health Questionnaire 9 item "
-                              "total score",
+                    "QSTEST": "Patient Health Questionnaire 9 item total score",
                     "QSORRES": "",
                     "QSSTRESC": str(total),
                     "QSSTRESN": total,
                     "QSSTAT": "",
                     "QSREASND": "",
-                    "QSBLFL": blfl,
                     "QSDRVFL": "Y",
-                    "_rank": 1,
                 })
-        # QSSEQ order: visit number, then item records by QSTESTCD,
-        # then the total-score record, then the refused record.
-        visit_records.sort(key=lambda r: (r["_rank"], r["QSTESTCD"]))
-        for record in visit_records:
-            record["_visitnum"] = visitnum
+                visit_records.append(rec)
+        # QSSEQ within the visit follows QSTESTCD order; the total-score
+        # record (PHQ9T) and the refused record (QSALL) sort last anyway.
+        visit_records.sort(key=lambda r: r["QSTESTCD"])
         records.extend(visit_records)
 
-    records.sort(key=lambda r: (r["USUBJID"], r["_visitnum"],
-                                r["_rank"], r["QSTESTCD"]))
-    seq = defaultdict(int)
-    for record in records:
-        seq[record["USUBJID"]] += 1
-        record["QSSEQ"] = seq[record["USUBJID"]]
-        del record["_rank"]
-        del record["_visitnum"]
+    # QSSEQ numbers each subject's records from 1.
+    seq_by_subject = {}
+    for rec in records:
+        subject = rec["USUBJID"]
+        seq_by_subject[subject] = seq_by_subject.get(subject, 0) + 1
+        rec["QSSEQ"] = seq_by_subject[subject]
 
-    qs = pd.DataFrame(records, columns=COLUMNS)
-    qs.to_csv(f"{OUTPUT_DIR}/qs.csv", index=False)
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    with open(os.path.join(OUTPUT_DIR, "qs.csv"), "w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=COLUMNS)
+        writer.writeheader()
+        for rec in records:
+            writer.writerow({col: rec.get(col, "") for col in COLUMNS})
 
 
 if __name__ == "__main__":

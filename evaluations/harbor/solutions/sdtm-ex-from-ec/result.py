@@ -4,112 +4,141 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-"""Build the SDTM EX dataset from the ODM extract and the kit list.
+from pathlib import Path
 
-One record per administration: an EC form occurrence whose occurrence
-item (IT.EC.ECOCCUR) is "Y". Dose derivation depends on the collected
-form:
-- TABLET:   number of tablets times tablet strength.
-- INFUSION: collected mg/kg dose times body weight at the same visit.
-- KITDOSE:  treatment and dose from the kit list for the kit number
-            (a listed dose of zero stays zero).
-- AUCDOSE:  the AUC target as collected; unit "AUC" instead of "mg".
-EXSEQ numbers each subject's records from 1 by start date.
-"""
+import polars as pl
 
-import csv
-from collections import OrderedDict
+odm = pl.read_csv("/app/input/odm.csv", infer_schema=False)
+kit = pl.read_csv("/app/input/kit_list.csv", infer_schema=False)
 
-INPUT_DIR = "/app/input"
-OUTPUT_DIR = "/app/output"
+kit_map = {r["KIT"]: (r["TREATMENT"], r["DOSE_MG"]) for r in kit.to_dicts()}
+
+ec_forms = odm.filter(pl.col("FormOID") == "FO.EC")
+vs_forms = odm.filter(pl.col("FormOID") == "FO.VS")
+
+# Body weight per visit: SubjectKey + StudyEventOID + StudyEventRepeatKey.
+vs_wide = (
+    vs_forms.filter(pl.col("ItemOID") == "IT.VS.WEIGHT")
+    .group_by("StudyOID", "SubjectKey", "StudyEventOID", "StudyEventRepeatKey")
+    .agg(pl.col("Value").first().alias("WEIGHT"))
+    .with_columns(pl.col("WEIGHT").cast(pl.Float64, strict=False))
+)
+
+ec_wide = (
+    ec_forms.group_by(
+        "StudyOID",
+        "SubjectKey",
+        "StudyEventOID",
+        "StudyEventRepeatKey",
+        "FormRepeatKey",
+    )
+    .agg(
+        pl.col("Value").filter(pl.col("ItemOID") == "IT.EC.ECOCCUR").first().alias("ECOCCUR"),
+        pl.col("Value").filter(pl.col("ItemOID") == "IT.EC.ECTRT").first().alias("ECTRT"),
+        pl.col("Value").filter(pl.col("ItemOID") == "IT.EC.FORM").first().alias("FORM"),
+        pl.col("Value").filter(pl.col("ItemOID") == "IT.EC.TABLETS").first().alias("TABLETS"),
+        pl.col("Value").filter(pl.col("ItemOID") == "IT.EC.STRENGTHMG").first().alias("STRENGTHMG"),
+        pl.col("Value").filter(pl.col("ItemOID") == "IT.EC.DOSEMKG").first().alias("DOSEMKG"),
+        pl.col("Value").filter(pl.col("ItemOID") == "IT.EC.KIT").first().alias("KIT"),
+        pl.col("Value").filter(pl.col("ItemOID") == "IT.EC.AUCTARGET").first().alias("AUCTARGET"),
+        pl.col("Value").filter(pl.col("ItemOID") == "IT.EC.ECSTDTC").first().alias("ECSTDTC"),
+        pl.col("Value").filter(pl.col("ItemOID") == "IT.EC.ECENDTC").first().alias("ECENDTC"),
+    )
+    .join(
+        vs_wide,
+        on=["StudyOID", "SubjectKey", "StudyEventOID", "StudyEventRepeatKey"],
+        how="left",
+    )
+    .filter(pl.col("ECOCCUR") == "Y")
+)
 
 
-def num(text):
-    value = float(text)
-    return int(value) if value == int(value) else value
+def num(v):
+    if v is None or v == "":
+        return None
+    try:
+        return float(v)
+    except ValueError:
+        return None
 
 
-def fmt(value):
-    if value is None:
-        return ""
-    if isinstance(value, float) and value == int(value):
-        return str(int(value))
-    return str(value)
-
-
-def main():
-    with open(f"{INPUT_DIR}/kit_list.csv", newline="") as fh:
-        kits = {row["KIT"]: row for row in csv.DictReader(fh)}
-
-    with open(f"{INPUT_DIR}/odm.csv", newline="") as fh:
-        odm = list(csv.DictReader(fh))
-
-    study_id = odm[0]["StudyOID"]
-
-    # Group EC form items per form occurrence; collect visit weights.
-    forms = OrderedDict()
-    weights = {}
-    for row in odm:
-        visit_key = (row["SubjectKey"], row["StudyEventOID"],
-                     row["StudyEventRepeatKey"])
-        if row["ItemOID"] == "IT.VS.WEIGHT":
-            weights[visit_key] = num(row["Value"])
-        if row["FormOID"] != "FO.EC":
-            continue
-        form_key = visit_key + (row["FormRepeatKey"],
-                                row["ItemGroupRepeatKey"])
-        forms.setdefault(form_key, {})[row["ItemOID"]] = row["Value"]
-
-    records = []
-    for (subject, *_rest, _fr, _igr), items in forms.items():
-        if items.get("IT.EC.ECOCCUR") != "Y":
-            continue
-        form = items.get("IT.EC.FORM", "")
-        start = items.get("IT.EC.ECSTDTC", "")
-        end = items.get("IT.EC.ECENDTC", "")
-        if form == "KITDOSE":
-            kit = kits[items["IT.EC.KIT"]]
-            treatment = kit["TREATMENT"]
-            dose = num(kit["DOSE_MG"])
-        else:
-            treatment = items.get("IT.EC.ECTRT", "")
-            if form == "TABLET":
-                dose = num(items["IT.EC.TABLETS"]) * num(
-                    items["IT.EC.STRENGTHMG"])
-            elif form == "INFUSION":
-                visit_key = (subject, _rest[0], _rest[1])
-                dose = num(items["IT.EC.DOSEMKG"]) * weights[visit_key]
-            elif form == "AUCDOSE":
-                dose = num(items["IT.EC.AUCTARGET"])
-            else:
-                dose = None
-        unit = "AUC" if form == "AUCDOSE" else "mg"
-        records.append({
-            "DOMAIN": "EX",
-            "STUDYID": study_id,
-            "USUBJID": subject,
-            "EXTRT": treatment,
+records: list[dict] = []
+for row in ec_wide.to_dicts():
+    study = row["StudyOID"]
+    subj = row["SubjectKey"]
+    form = row["FORM"] or ""
+    usubjid = subj
+    if form == "KITDOSE":
+        treatment, dose_mg = kit_map.get(row["KIT"] or "", (None, None))
+        trt = treatment
+        dose = num(dose_mg)
+        dosu = "mg"
+    elif form == "TABLET":
+        trt = row["ECTRT"] or None
+        tablets = num(row["TABLETS"])
+        strength = num(row["STRENGTHMG"])
+        dose = tablets * strength if tablets is not None and strength is not None else None
+        dosu = "mg"
+    elif form == "INFUSION":
+        trt = row["ECTRT"] or None
+        perkg = num(row["DOSEMKG"])
+        weight = row["WEIGHT"]
+        dose = perkg * weight if perkg is not None and weight is not None else None
+        dosu = "mg"
+    elif form == "AUCDOSE":
+        trt = row["ECTRT"] or None
+        dose = num(row["AUCTARGET"])
+        dosu = "AUC"
+    else:
+        trt = row["ECTRT"] or None
+        dose = None
+        dosu = "mg"
+    records.append(
+        {
+            "STUDYID": study,
+            "USUBJID": usubjid,
+            "EXTRT": trt,
             "EXDOSE": dose,
-            "EXDOSU": unit,
-            "EXSTDTC": start,
-            "EXENDTC": end,
-        })
+            "EXDOSU": dosu,
+            "EXSTDTC": row["ECSTDTC"] or None,
+            "EXENDTC": row["ECENDTC"] or None,
+            "FORMREPEAT": int(row["FormRepeatKey"]) if row["FormRepeatKey"] else 0,
+        }
+    )
 
-    records.sort(key=lambda r: (r["USUBJID"], r["EXSTDTC"]))
-    counters = {}
-    for rec in records:
-        counters[rec["USUBJID"]] = counters.get(rec["USUBJID"], 0) + 1
-        rec["EXSEQ"] = counters[rec["USUBJID"]]
+ex = (
+    pl.DataFrame(
+        records,
+        schema={
+            "STUDYID": pl.String,
+            "USUBJID": pl.String,
+            "EXTRT": pl.String,
+            "EXDOSE": pl.Float64,
+            "EXDOSU": pl.String,
+            "EXSTDTC": pl.String,
+            "EXENDTC": pl.String,
+            "FORMREPEAT": pl.Int64,
+        },
+    )
+    .with_columns(
+        DOMAIN=pl.lit("EX"),
+        EXSTDTC_DT=pl.col("EXSTDTC").str.to_date(strict=False),
+    )
+    .sort(["STUDYID", "USUBJID", "EXSTDTC_DT", "FORMREPEAT"], nulls_last=True)
+    .with_columns(EXSEQ=pl.col("USUBJID").cum_count().over(["STUDYID", "USUBJID"]))
+    .with_columns(EXSEQ=pl.col("EXSEQ").cast(pl.Int64))
+    .select(
+        "DOMAIN",
+        "STUDYID",
+        "USUBJID",
+        "EXSEQ",
+        "EXTRT",
+        "EXDOSE",
+        "EXDOSU",
+        "EXSTDTC",
+        "EXENDTC",
+    )
+)
 
-    columns = ["DOMAIN", "STUDYID", "USUBJID", "EXSEQ", "EXTRT",
-               "EXDOSE", "EXDOSU", "EXSTDTC", "EXENDTC"]
-    with open(f"{OUTPUT_DIR}/ex.csv", "w", newline="") as fh:
-        writer = csv.DictWriter(fh, fieldnames=columns)
-        writer.writeheader()
-        for rec in records:
-            writer.writerow({c: fmt(rec[c]) if c == "EXDOSE" else rec[c]
-                             for c in columns})
-
-
-if __name__ == "__main__":
-    main()
+Path("/app/output").mkdir(exist_ok=True)
+ex.write_csv("/app/output/ex.csv")

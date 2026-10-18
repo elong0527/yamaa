@@ -4,78 +4,98 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-"""Build ADAE with query grouping columns (SMQ01, SMQ02, CQ01).
+"""Create the ADAE dataset with query grouping columns from AE and QUERIES.
 
-Reads AE and QUERIES from /app/input and writes /app/output/adae.csv.
-Membership of an event in a grouping is decided by its AEDECOD: the
-QUERIES dictionary lists coded terms under query groupings, identified
-by PREFIX (SMQ01 = first standardized query, SMQ02 = second standardized
-query, CQ01 = sponsor-defined customized query).
+Membership of an adverse event in a query grouping is decided by its
+AEDECOD: the QUERIES dictionary lists coded terms under groupings, and
+every event with the same coded term shows the same grouping entries.
+SMQ01/SMQ02 columns carry the name, code and scope of the first/second
+standardized query grouping for the term; CQ01NAM carries the name of
+the sponsor-defined customized query grouping. Events without an
+AEDECOD, or whose term is not listed under a grouping, get no value in
+that grouping's columns.
 """
 
-import pandas as pd
+import csv
+import os
 
 INPUT_DIR = "/app/input"
-OUTPUT_PATH = "/app/output/adae.csv"
-
-COLUMNS = [
-    "STUDYID",
-    "USUBJID",
-    "AESEQ",
-    "AETERM",
-    "AEDECOD",
-    "SMQ01NAM",
-    "SMQ01CD",
-    "SMQ01SC",
-    "SMQ02NAM",
-    "SMQ02CD",
-    "SMQ02SC",
-    "CQ01NAM",
-]
+OUTPUT_DIR = "/app/output"
 
 
-def main() -> None:
-    ae = pd.read_csv(
-        f"{INPUT_DIR}/ae.csv", dtype=str, keep_default_na=False
-    )
-    queries = pd.read_csv(
-        f"{INPUT_DIR}/queries.csv", dtype=str, keep_default_na=False
-    )
+def read_csv(path):
+    with open(path, newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
 
-    # Index the dictionary by (prefix, coded term).
-    lookup = {}
-    for row in queries.itertuples(index=False):
-        lookup[(row.PREFIX, row.TERM)] = (row.GRPNAME, row.GRPID, row.SCOPE)
 
-    def grouping(decod: str, prefix: str):
-        if decod == "":
-            return ("", "", "")
-        return lookup.get((prefix, decod), ("", "", ""))
+def main():
+    ae_rows = read_csv(os.path.join(INPUT_DIR, "ae.csv"))
+    query_rows = read_csv(os.path.join(INPUT_DIR, "queries.csv"))
 
-    records = []
-    for row in ae.itertuples(index=False):
-        smq01 = grouping(row.AEDECOD, "SMQ01")
-        smq02 = grouping(row.AEDECOD, "SMQ02")
-        cq01 = grouping(row.AEDECOD, "CQ01")
-        records.append(
+    # Index the dictionary by prefix and coded term. A term appears at
+    # most once under a given prefix; each entry gives the grouping
+    # name, its code (standardized groupings only) and the scope of the
+    # term's membership (standardized groupings only).
+    dictionary = {}
+    for row in query_rows:
+        dictionary[(row["PREFIX"], row["TERM"])] = row
+
+    def grouping(prefix, term):
+        """Return (name, code, scope) for a term under a prefix."""
+        entry = dictionary.get((prefix, term))
+        if entry is None:
+            return "", "", ""
+        return entry["GRPNAME"], entry["GRPID"], entry["SCOPE"]
+
+    out_rows = []
+    for ae in ae_rows:
+        decod = ae["AEDECOD"]
+        if decod:
+            smq01nam, smq01cd, smq01sc = grouping("SMQ01", decod)
+            smq02nam, smq02cd, smq02sc = grouping("SMQ02", decod)
+            cq01nam, _, _ = grouping("CQ01", decod)
+        else:
+            smq01nam = smq01cd = smq01sc = ""
+            smq02nam = smq02cd = smq02sc = ""
+            cq01nam = ""
+        out_rows.append(
             {
-                "STUDYID": row.STUDYID,
-                "USUBJID": row.USUBJID,
-                "AESEQ": row.AESEQ,
-                "AETERM": row.AETERM,
-                "AEDECOD": row.AEDECOD,
-                "SMQ01NAM": smq01[0],
-                "SMQ01CD": smq01[1],
-                "SMQ01SC": smq01[2],
-                "SMQ02NAM": smq02[0],
-                "SMQ02CD": smq02[1],
-                "SMQ02SC": smq02[2],
-                "CQ01NAM": cq01[0],
+                "STUDYID": ae["STUDYID"],
+                "USUBJID": ae["USUBJID"],
+                "AESEQ": ae["AESEQ"],
+                "AETERM": ae["AETERM"],
+                "AEDECOD": decod,
+                "SMQ01NAM": smq01nam,
+                "SMQ01CD": smq01cd,
+                "SMQ01SC": smq01sc,
+                "SMQ02NAM": smq02nam,
+                "SMQ02CD": smq02cd,
+                "SMQ02SC": smq02sc,
+                "CQ01NAM": cq01nam,
             }
         )
 
-    adae = pd.DataFrame.from_records(records, columns=COLUMNS)
-    adae.to_csv(OUTPUT_PATH, index=False)
+    columns = [
+        "STUDYID",
+        "USUBJID",
+        "AESEQ",
+        "AETERM",
+        "AEDECOD",
+        "SMQ01NAM",
+        "SMQ01CD",
+        "SMQ01SC",
+        "SMQ02NAM",
+        "SMQ02CD",
+        "SMQ02SC",
+        "CQ01NAM",
+    ]
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    with open(
+        os.path.join(OUTPUT_DIR, "adae.csv"), "w", newline="", encoding="utf-8"
+    ) as handle:
+        writer = csv.DictWriter(handle, fieldnames=columns)
+        writer.writeheader()
+        writer.writerows(out_rows)
 
 
 if __name__ == "__main__":

@@ -4,68 +4,73 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-"""Build the SDTM DM dataset (one record per subject) with death date/flag.
+"""Create the SDTM DM dataset with death date and death flag.
 
-Death date (DTHDTC) derivation, in priority order:
-1. Latest DSSTDTC among the subject's disposition records whose decoded
-   term (DSDECOD) is "DEATH" and that carry a start date.
-2. Otherwise, latest AEENDTC among the subject's adverse events whose
-   outcome (AEOUT) is "FATAL" and that carry an end date.
-3. Otherwise, no value.
-
-DTHFL is "Y" when either source supplies a death date, else blank.
+One record per subject (from DM_RAW). DTHDTC is the latest start date
+among the subject's disposition records with decoded term "DEATH"
+that carry a start date; if the subject has no such record, it is the
+latest end date among the subject's adverse events with outcome
+"FATAL" that carry an end date. DTHFL is "Y" when either source
+supplies a death date, and blank otherwise.
 """
 
-import pandas as pd
+import csv
+from collections import OrderedDict
+from pathlib import Path
 
-INPUT_DIR = "/app/input"
-OUTPUT_DIR = "/app/output"
-
-
-def read_csv(name):
-    return pd.read_csv(f"{INPUT_DIR}/{name}", dtype=str, keep_default_na=False)
+INPUT_DIR = Path("/app/input")
+OUTPUT_DIR = Path("/app/output")
 
 
-def latest_date_by_subject(df, subject_col, date_col, mask):
-    """Return {USUBJID: latest non-blank date string} for masked rows."""
-    selected = df.loc[mask & (df[date_col].str.strip() != "")]
-    result = {}
-    for usubjid, dates in selected.groupby(subject_col)[date_col]:
-        # ISO 8601 date text sorts chronologically.
-        result[usubjid] = max(dates)
-    return result
+def read_rows(name):
+    with open(INPUT_DIR / name, newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
+
+
+def latest_date(dates):
+    """Latest non-blank ISO date string, or "" when none is present."""
+    present = [d.strip() for d in dates if d and d.strip()]
+    return max(present) if present else ""
 
 
 def main():
-    dm_raw = read_csv("dm_raw.csv")
-    ds = read_csv("ds.csv")
-    ae = read_csv("ae.csv")
+    subjects = read_rows("dm_raw.csv")
+    ds_rows = read_rows("ds.csv")
+    ae_rows = read_rows("ae.csv")
 
-    ds_death = latest_date_by_subject(
-        ds, "USUBJID", "DSSTDTC", ds["DSDECOD"] == "DEATH"
-    )
-    ae_fatal = latest_date_by_subject(
-        ae, "USUBJID", "AEENDTC", ae["AEOUT"] == "FATAL"
-    )
+    ds_death_dates = {}
+    for row in ds_rows:
+        if row["DSDECOD"] == "DEATH":
+            ds_death_dates.setdefault(row["USUBJID"], []).append(row["DSSTDTC"])
 
-    rows = []
-    for _, subject in dm_raw.iterrows():
+    ae_fatal_dates = {}
+    for row in ae_rows:
+        if row["AEOUT"] == "FATAL":
+            ae_fatal_dates.setdefault(row["USUBJID"], []).append(row["AEENDTC"])
+
+    out_rows = []
+    for subject in subjects:
         usubjid = subject["USUBJID"]
-        dthdtc = ds_death.get(usubjid) or ae_fatal.get(usubjid) or ""
-        rows.append(
-            {
-                "DOMAIN": "DM",
-                "STUDYID": subject["STUDYID"],
-                "USUBJID": usubjid,
-                "DTHDTC": dthdtc,
-                "DTHFL": "Y" if dthdtc else "",
-            }
+        dthdtc = latest_date(ds_death_dates.get(usubjid, []))
+        if not dthdtc:
+            dthdtc = latest_date(ae_fatal_dates.get(usubjid, []))
+        out_rows.append(
+            OrderedDict(
+                DOMAIN="DM",
+                STUDYID=subject["STUDYID"],
+                USUBJID=usubjid,
+                DTHDTC=dthdtc,
+                DTHFL="Y" if dthdtc else "",
+            )
         )
 
-    dm = pd.DataFrame(
-        rows, columns=["DOMAIN", "STUDYID", "USUBJID", "DTHDTC", "DTHFL"]
-    )
-    dm.to_csv(f"{OUTPUT_DIR}/dm.csv", index=False)
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    with open(OUTPUT_DIR / "dm.csv", "w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(
+            handle, fieldnames=["DOMAIN", "STUDYID", "USUBJID", "DTHDTC", "DTHFL"]
+        )
+        writer.writeheader()
+        writer.writerows(out_rows)
 
 
 if __name__ == "__main__":

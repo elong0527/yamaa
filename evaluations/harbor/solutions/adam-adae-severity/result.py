@@ -4,24 +4,54 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-"""Create the ADAE dataset from the AE and SUPP datasets.
+import csv
+from pathlib import Path
 
-One record per adverse event in AE. AESEV is the severity recorded in
-SUPP, matched to an event on STUDYID, USUBJID, and AESEQ together.
-AESEV has no value when the event has no supplemental record, or when
-its supplemental record carries no severity. A supplemental record for
-an event that was never collected creates no row.
-"""
 
-import pandas as pd
+INPUT_DIR = Path("/app/input")
+OUTPUT_DIR = Path("/app/output")
+OUTPUT_COLUMNS = ["STUDYID", "USUBJID", "AESEQ", "AEDECOD", "AESEV"]
 
-AE = pd.read_csv("/app/input/ae.csv", dtype=str, keep_default_na=False)
-SUPP = pd.read_csv("/app/input/supp.csv", dtype=str, keep_default_na=False)
 
-KEYS = ["STUDYID", "USUBJID", "AESEQ"]
+def main():
+    severity_by_event = {}
 
-adae = AE.merge(SUPP[KEYS + ["AESEV"]], on=KEYS, how="left", sort=False)
-adae["AESEV"] = adae["AESEV"].fillna("")
+    with (INPUT_DIR / "supp.csv").open(newline="", encoding="utf-8") as supp_file:
+        supp_reader = csv.DictReader(supp_file)
+        for supp_row in supp_reader:
+            event_key = (
+                supp_row["STUDYID"],
+                supp_row["USUBJID"],
+                supp_row["AESEQ"],
+            )
+            if event_key not in severity_by_event:
+                severity_by_event[event_key] = supp_row.get("AESEV") or ""
 
-adae = adae[["STUDYID", "USUBJID", "AESEQ", "AEDECOD", "AESEV"]]
-adae.to_csv("/app/output/adae.csv", index=False)
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    with (INPUT_DIR / "ae.csv").open(newline="", encoding="utf-8") as ae_file, (
+        OUTPUT_DIR / "adae.csv"
+    ).open("w", newline="", encoding="utf-8") as output_file:
+        ae_reader = csv.DictReader(ae_file)
+        writer = csv.DictWriter(output_file, fieldnames=OUTPUT_COLUMNS)
+        writer.writeheader()
+
+        for ae_row in ae_reader:
+            event_key = (
+                ae_row["STUDYID"],
+                ae_row["USUBJID"],
+                ae_row["AESEQ"],
+            )
+            writer.writerow(
+                {
+                    "STUDYID": ae_row["STUDYID"],
+                    "USUBJID": ae_row["USUBJID"],
+                    "AESEQ": ae_row["AESEQ"],
+                    "AEDECOD": ae_row["AEDECOD"],
+                    "AESEV": severity_by_event.get(event_key, ""),
+                }
+            )
+
+
+if __name__ == "__main__":
+    main()

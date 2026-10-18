@@ -4,124 +4,118 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-"""Build ADSL with new anticancer therapy (NACT) derivations.
+"""Create an ADSL dataset with new anticancer therapy variables.
 
-Reads ADSL, CM and PR from /app/input and writes /app/output/adsl.csv
-with one record per subject and columns STUDYID, USUBJID, TRTSDT,
-NACTDT, NACTDY, NACTFL.
+Reads the ADSL, CM and PR datasets from /app/input and writes
+/app/output/adsl.csv with one record per subject and the columns
+STUDYID, USUBJID, TRTSDT, NACTDT, NACTDY, NACTFL.
 
-A medication record qualifies when CMCAT is "ON TREATMENT"; a procedure
-record qualifies when PRCAT is "CANCER RELATED" and PRSCAT is
-"ON TREATMENT". A qualifying record counts only when its start date is
-on or after the subject's TRTSDT, and a qualifying record with no start
-date never counts. A medication start recorded as year and month only
-is taken as the 15th of that month; a full recorded start date stands
-as recorded. NACTDT is the earlier of the earliest qualifying
-medication and procedure start dates, NACTDY its study day counted
-from TRTSDT, and NACTFL is "Y" exactly when NACTDT has a value.
+A medication record qualifies when its CMCAT is "ON TREATMENT". A
+procedure record qualifies when its PRCAT is "CANCER RELATED" and its
+PRSCAT is "ON TREATMENT". A qualifying record counts only when its
+start date is on or after TRTSDT; a qualifying record with no start
+date does not count. A start recorded as a year and month only is
+imputed to the 15th of that month; a full recorded start date stands
+as recorded.
+
+NACTDT is the earlier of the subject's earliest qualifying medication
+start date and earliest qualifying procedure start date, and has no
+value when no qualifying record counts. NACTDY is the study day of
+NACTDT counted from TRTSDT (TRTSDT itself is day 1). NACTFL is "Y"
+when NACTDT has a value and has no value otherwise.
 """
 
-import os
+import csv
 from datetime import date
+from pathlib import Path
 
-import pandas as pd
+INPUT_DIR = Path("/app/input")
+OUTPUT_DIR = Path("/app/output")
 
 
-def parse_med_start(raw):
-    """Medication start: full date as recorded; YYYY-MM -> the 15th."""
-    raw = (raw or "").strip()
-    if not raw:
+def parse_start_date(value):
+    """Return a date from an ISO 8601 date string, or None.
+
+    A full date (YYYY-MM-DD) stands as recorded. A year-and-month
+    value (YYYY-MM) is imputed to the 15th of that month. A missing
+    value returns None.
+    """
+    value = (value or "").strip()
+    if not value:
         return None
-    parts = raw.split("-")
+    parts = value.split("-")
     if len(parts) == 3:
-        return date(int(parts[0]), int(parts[1]), int(parts[2]))
+        year, month, day = (int(part) for part in parts)
+        return date(year, month, day)
     if len(parts) == 2:
-        return date(int(parts[0]), int(parts[1]), 15)
+        year, month = (int(part) for part in parts)
+        return date(year, month, 15)
     return None
 
 
-def parse_full_date(raw):
-    """Full ISO date, or None when absent or not a full date."""
-    raw = (raw or "").strip()
-    if not raw:
-        return None
-    parts = raw.split("-")
-    if len(parts) == 3:
-        return date(int(parts[0]), int(parts[1]), int(parts[2]))
-    return None
+def read_csv(path):
+    with open(path, newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
 
 
 def main():
-    adsl = pd.read_csv("/app/input/adsl.csv", dtype=str, keep_default_na=False)
-    cm = pd.read_csv("/app/input/cm.csv", dtype=str, keep_default_na=False)
-    pr = pd.read_csv("/app/input/pr.csv", dtype=str, keep_default_na=False)
+    adsl = read_csv(INPUT_DIR / "adsl.csv")
+    cm = read_csv(INPUT_DIR / "cm.csv")
+    pr = read_csv(INPUT_DIR / "pr.csv")
 
-    trtsdt = {}
-    for _, row in adsl.iterrows():
-        trtsdt[(row["STUDYID"], row["USUBJID"])] = parse_full_date(row["TRTSDT"])
+    trtsdt_by_subject = {
+        row["USUBJID"]: parse_start_date(row["TRTSDT"]) for row in adsl
+    }
 
+    # Earliest counting start date per subject across both sources.
     earliest = {}
 
-    def consider(key, start):
-        if key not in earliest or start < earliest[key]:
-            earliest[key] = start
+    def consider(usubjid, start):
+        if start is None:
+            return
+        trtsdt = trtsdt_by_subject.get(usubjid)
+        if trtsdt is None or start < trtsdt:
+            return
+        if usubjid not in earliest or start < earliest[usubjid]:
+            earliest[usubjid] = start
 
-    for _, row in cm.iterrows():
-        if row["CMCAT"] != "ON TREATMENT":
+    for row in cm:
+        if (row.get("CMCAT") or "").strip() != "ON TREATMENT":
             continue
-        key = (row["STUDYID"], row["USUBJID"])
-        start = parse_med_start(row["CMSTDTC"])
-        ref = trtsdt.get(key)
-        if start is not None and ref is not None and start >= ref:
-            consider(key, start)
+        consider(row["USUBJID"], parse_start_date(row.get("CMSTDTC", "")))
 
-    for _, row in pr.iterrows():
-        if row["PRCAT"] != "CANCER RELATED" or row["PRSCAT"] != "ON TREATMENT":
+    for row in pr:
+        if (row.get("PRCAT") or "").strip() != "CANCER RELATED":
             continue
-        key = (row["STUDYID"], row["USUBJID"])
-        start = parse_full_date(row["PRSTDTC"])
-        ref = trtsdt.get(key)
-        if start is not None and ref is not None and start >= ref:
-            consider(key, start)
+        if (row.get("PRSCAT") or "").strip() != "ON TREATMENT":
+            continue
+        consider(row["USUBJID"], parse_start_date(row.get("PRSTDTC", "")))
 
-    rows = []
-    for _, row in adsl.iterrows():
-        key = (row["STUDYID"], row["USUBJID"])
-        nactdt = earliest.get(key)
-        if nactdt is None:
-            rows.append(
-                {
-                    "STUDYID": row["STUDYID"],
-                    "USUBJID": row["USUBJID"],
-                    "TRTSDT": row["TRTSDT"],
-                    "NACTDT": "",
-                    "NACTDY": "",
-                    "NACTFL": "",
-                }
-            )
-        else:
-            ref = trtsdt[key]
-            if nactdt >= ref:
-                nactdy = (nactdt - ref).days + 1
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    fieldnames = ["STUDYID", "USUBJID", "TRTSDT", "NACTDT", "NACTDY", "NACTFL"]
+    with open(OUTPUT_DIR / "adsl.csv", "w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in adsl:
+            usubjid = row["USUBJID"]
+            trtsdt = trtsdt_by_subject[usubjid]
+            nactdt = earliest.get(usubjid)
+            if nactdt is None:
+                nactdt_text, nactdy_text, nactfl = "", "", ""
             else:
-                nactdy = (nactdt - ref).days
-            rows.append(
+                nactdt_text = nactdt.isoformat()
+                nactdy_text = str((nactdt - trtsdt).days + 1)
+                nactfl = "Y"
+            writer.writerow(
                 {
                     "STUDYID": row["STUDYID"],
-                    "USUBJID": row["USUBJID"],
+                    "USUBJID": usubjid,
                     "TRTSDT": row["TRTSDT"],
-                    "NACTDT": nactdt.isoformat(),
-                    "NACTDY": nactdy,
-                    "NACTFL": "Y",
+                    "NACTDT": nactdt_text,
+                    "NACTDY": nactdy_text,
+                    "NACTFL": nactfl,
                 }
             )
-
-    out = pd.DataFrame(
-        rows,
-        columns=["STUDYID", "USUBJID", "TRTSDT", "NACTDT", "NACTDY", "NACTFL"],
-    )
-    os.makedirs("/app/output", exist_ok=True)
-    out.to_csv("/app/output/adsl.csv", index=False)
 
 
 if __name__ == "__main__":

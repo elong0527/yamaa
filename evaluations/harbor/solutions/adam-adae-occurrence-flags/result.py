@@ -4,17 +4,27 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-"""Create ADAE occurrence flags (AOCCFL, AOCCSFL, AOCCPFL) from ADAE_RAW.
+"""Create ADAE with occurrence flags from ADAE_RAW.
 
-An event is treatment-emergent when TRTEMFL is "Y"; only such events can
-be flagged. Within each grouping, the first treatment-emergent event is
-the one with the earliest ASTDT, with the lower AESEQ breaking a tie.
+One record per adverse event. Treatment-emergent events (TRTEMFL = "Y")
+are flagged at three levels:
+
+- AOCCFL:  the subject's first treatment-emergent event.
+- AOCCSFL: the subject's first treatment-emergent event within each
+  body system.
+- AOCCPFL: the subject's first treatment-emergent event within each
+  dictionary-derived term, counted inside its body system.
+
+The first event at each level is the treatment-emergent event with the
+earliest ASTDT; a lower AESEQ breaks a tie between events on the same
+date. Non-treatment-emergent events are never flagged, and subjects
+with no treatment-emergent events have no flags at all.
 """
 
-import pandas as pd
+import csv
 
-INPUT_DIR = "/app/input"
-OUTPUT_DIR = "/app/output"
+INPUT_PATH = "/app/input/adae_raw.csv"
+OUTPUT_PATH = "/app/output/adae.csv"
 
 COLUMNS = [
     "STUDYID",
@@ -30,31 +40,39 @@ COLUMNS = [
 ]
 
 
-def first_event_index(df, group_cols):
-    """Index of the first treatment-emergent event within each group."""
-    te = df[df["TRTEMFL"] == "Y"].copy()
-    te["_seq"] = te["AESEQ"].astype(int)
-    te = te.sort_values(["ASTDT", "_seq"], kind="mergesort")
-    return set(te.groupby(group_cols, sort=False).head(1).index)
+def main() -> None:
+    with open(INPUT_PATH, newline="") as handle:
+        rows = list(csv.DictReader(handle))
 
+    for row in rows:
+        row["AOCCFL"] = ""
+        row["AOCCSFL"] = ""
+        row["AOCCPFL"] = ""
 
-def main():
-    df = pd.read_csv(
-        f"{INPUT_DIR}/adae_raw.csv", dtype=str, keep_default_na=False
+    # Rank treatment-emergent events by start date, then sequence.
+    emergent = [row for row in rows if row["TRTEMFL"] == "Y"]
+    emergent.sort(key=lambda row: (row["USUBJID"], row["ASTDT"], int(row["AESEQ"])))
+
+    def flag_first(key_of, flag_column: str) -> None:
+        seen = set()
+        for row in emergent:
+            key = key_of(row)
+            if key not in seen:
+                seen.add(key)
+                row[flag_column] = "Y"
+
+    flag_first(lambda row: row["USUBJID"], "AOCCFL")
+    flag_first(lambda row: (row["USUBJID"], row["AEBODSYS"]), "AOCCSFL")
+    flag_first(
+        lambda row: (row["USUBJID"], row["AEBODSYS"], row["AEDECOD"]),
+        "AOCCPFL",
     )
 
-    first_subject = first_event_index(df, ["STUDYID", "USUBJID"])
-    first_bodsys = first_event_index(df, ["STUDYID", "USUBJID", "AEBODSYS"])
-    first_pt = first_event_index(
-        df, ["STUDYID", "USUBJID", "AEBODSYS", "AEDECOD"]
-    )
-
-    df["AOCCFL"] = ["Y" if i in first_subject else "" for i in df.index]
-    df["AOCCSFL"] = ["Y" if i in first_bodsys else "" for i in df.index]
-    df["AOCCPFL"] = ["Y" if i in first_pt else "" for i in df.index]
-
-    out = df[COLUMNS]
-    out.to_csv(f"{OUTPUT_DIR}/adae.csv", index=False)
+    with open(OUTPUT_PATH, "w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=COLUMNS)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({column: row[column] for column in COLUMNS})
 
 
 if __name__ == "__main__":

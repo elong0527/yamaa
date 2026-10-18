@@ -4,104 +4,111 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-"""Build the SDTM MH dataset from MH_ITEMS and ODM extracts.
+from pathlib import Path
 
-One record per condition asked about on the checklist or volunteered in
-free text. Checklist records come first per subject, in form order, then
-volunteered conditions by visit (screening before baseline) and form
-repeat number.
-"""
-
-import pandas as pd
-
-INPUT_DIR = "/app/input"
-OUTPUT_DIR = "/app/output"
-
-COLUMNS = [
-    "DOMAIN",
-    "STUDYID",
-    "USUBJID",
-    "MHSEQ",
-    "MHTERM",
-    "MHCAT",
-    "MHPRESP",
-    "MHOCCUR",
-    "MHSTAT",
-]
-
-VISIT_ORDER = {"SCREENING": 0, "BASELINE": 1}
+import polars as pl
 
 
-def clean(value):
-    """Return the value as a string, treating missing values as blank."""
-    if value is None or (isinstance(value, float) and pd.isna(value)):
-        return ""
-    return str(value)
+def _present(value) -> bool:
+    return value is not None and str(value) != ""
 
 
-def main():
-    items = pd.read_csv(f"{INPUT_DIR}/mh_items.csv", dtype=str)
-    odm = pd.read_csv(f"{INPUT_DIR}/odm.csv", dtype=str)
+items = pl.read_csv("/app/input/mh_items.csv", infer_schema=False)
+odm = pl.read_csv("/app/input/odm.csv", infer_schema=False)
 
-    term_by_item = dict(zip(items["ItemOID"], items["MHTERM"]))
-    order_by_item = {
-        item: int(order) for item, order in zip(items["ItemOID"], items["SORTORD"])
-    }
+meta = {row["ItemOID"]: (row["MHTERM"], int(row["SORTORD"])) for row in items.to_dicts()}
+checklist_oids = {oid for oid in meta if (odm["ItemOID"] == oid).any()}
 
-    checklist = odm[odm["ItemGroupOID"] == "IG.MH.CHECKLIST"]
-    freetext = odm[odm["ItemGroupOID"] == "IG.MH.FREETEXT"]
+visit_order = {"SCREENING": 0, "BASELINE": 1}
 
-    records = []
-    for subject in sorted(odm["SubjectKey"].unique()):
-        subject_records = []
+records_by_subject: dict[tuple[str, str], dict] = {}
+for row in odm.to_dicts():
+    studyid, usubjid = str(row["StudyOID"]), str(row["SubjectKey"])
+    key = (studyid, usubjid)
+    records_by_subject.setdefault(key, {"checklist": {}, "volunteered": []})
 
-        asked = checklist[checklist["SubjectKey"] == subject].copy()
-        asked["_form_order"] = asked["ItemOID"].map(order_by_item)
-        asked = asked.sort_values("_form_order", kind="stable")
-        for _, row in asked.iterrows():
-            answer = clean(row["Value"])
-            subject_records.append(
-                {
-                    "DOMAIN": "MH",
-                    "STUDYID": row["StudyOID"],
-                    "USUBJID": subject,
-                    "MHTERM": term_by_item[row["ItemOID"]],
-                    "MHCAT": "DISEASE-SPECIFIC HISTORY",
-                    "MHPRESP": "Y",
-                    "MHOCCUR": answer,
-                    "MHSTAT": "" if answer else "NOT DONE",
-                }
-            )
-
-        volunteered = freetext[freetext["SubjectKey"] == subject].copy()
-        volunteered["_visit_order"] = volunteered["StudyEventOID"].map(
-            lambda event: VISIT_ORDER.get(event, len(VISIT_ORDER))
+for row in odm.to_dicts():
+    key = (str(row["StudyOID"]), str(row["SubjectKey"]))
+    oid, value = str(row["ItemOID"]), row["Value"]
+    if oid in checklist_oids:
+        # Last collected answer wins when an item repeats, including blanks.
+        records_by_subject[key]["checklist"][oid] = value if _present(value) else None
+    elif not _present(value):
+        continue
+    else:
+        # Each volunteered condition is its own record, even when its
+        # repeat number is reused at another visit.
+        event = str(row["StudyEventOID"])
+        records_by_subject[key]["volunteered"].append(
+            {
+                "term": str(value),
+                "visit_rank": visit_order.get(event, 99),
+                "repeat": int(row["ItemGroupRepeatKey"] or 1),
+            }
         )
-        volunteered["_repeat"] = volunteered["ItemGroupRepeatKey"].astype(int)
-        volunteered = volunteered.sort_values(
-            ["_visit_order", "_repeat"], kind="stable"
+
+rows = []
+for (studyid, usubjid), parts in records_by_subject.items():
+    ordered = sorted(parts["checklist"].items(), key=lambda kv: meta[kv[0]][1])
+    seq = 0
+    for oid, answer in ordered:
+        seq += 1
+        term, _ = meta[oid]
+        answered = answer in ("Y", "N")
+        rows.append(
+            {
+                "DOMAIN": "MH",
+                "STUDYID": studyid,
+                "USUBJID": usubjid,
+                "MHSEQ": str(seq),
+                "MHTERM": term,
+                "MHCAT": "DISEASE-SPECIFIC HISTORY",
+                "MHPRESP": "Y",
+                "MHOCCUR": answer if answered else None,
+                "MHSTAT": None if answered else "NOT DONE",
+            }
         )
-        for _, row in volunteered.iterrows():
-            subject_records.append(
-                {
-                    "DOMAIN": "MH",
-                    "STUDYID": row["StudyOID"],
-                    "USUBJID": subject,
-                    "MHTERM": clean(row["Value"]),
-                    "MHCAT": "GENERAL HISTORY",
-                    "MHPRESP": "",
-                    "MHOCCUR": "",
-                    "MHSTAT": "",
-                }
-            )
+    volunteered = sorted(
+        parts["volunteered"], key=lambda v: (v["visit_rank"], v["repeat"])
+    )
+    for entry in volunteered:
+        seq += 1
+        rows.append(
+            {
+                "DOMAIN": "MH",
+                "STUDYID": studyid,
+                "USUBJID": usubjid,
+                "MHSEQ": str(seq),
+                "MHTERM": entry["term"],
+                "MHCAT": "GENERAL HISTORY",
+                "MHPRESP": None,
+                "MHOCCUR": None,
+                "MHSTAT": None,
+            }
+        )
 
-        for seq, record in enumerate(subject_records, start=1):
-            record["MHSEQ"] = seq
-            records.append(record)
+mh = (
+    pl.DataFrame(
+        rows,
+        schema={
+            "DOMAIN": pl.String,
+            "STUDYID": pl.String,
+            "USUBJID": pl.String,
+            "MHSEQ": pl.String,
+            "MHTERM": pl.String,
+            "MHCAT": pl.String,
+            "MHPRESP": pl.String,
+            "MHOCCUR": pl.String,
+            "MHSTAT": pl.String,
+        },
+    )
+    .with_columns(pl.col("MHSEQ").cast(pl.Int64).alias("_seq"))
+    .sort(["USUBJID", "_seq"])
+    .select(
+        "DOMAIN", "STUDYID", "USUBJID", "MHSEQ", "MHTERM", "MHCAT",
+        "MHPRESP", "MHOCCUR", "MHSTAT",
+    )
+)
 
-    mh = pd.DataFrame(records, columns=COLUMNS)
-    mh.to_csv(f"{OUTPUT_DIR}/mh.csv", index=False)
-
-
-if __name__ == "__main__":
-    main()
+Path("/app/output").mkdir(exist_ok=True)
+mh.write_csv("/app/output/mh.csv")

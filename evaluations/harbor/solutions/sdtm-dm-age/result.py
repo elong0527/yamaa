@@ -6,26 +6,27 @@
 
 """Build the SDTM DM dataset (one record per subject) from the ODM extract.
 
-Reads /app/input/odm.csv, writes /app/output/dm.csv with columns
+Reads /app/input/odm.csv (long format: one row per collected item) and
+writes /app/output/dm.csv with columns
 DOMAIN, STUDYID, USUBJID, RFICDTC, BRTHDTC, AGE, AGEU.
-
-AGE is the whole calendar years between the birth date and the informed
-consent date; a February 29 birthday has its anniversary on February 28
-in a common year. Birth dates collected only to the month or the year
-cannot give completed years, so AGE (and AGEU) stay empty for them.
 """
 
-import calendar
+import csv
+import os
+from calendar import isleap
 
-import pandas as pd
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-INPUT_ODM = "/app/input/odm.csv"
-OUTPUT_DM = "/app/output/dm.csv"
+BIRTH_ITEM = "IT.DM.BRTHDT"
+CONSENT_ITEM = "IT.DM.RFICDTC"
 
 
 def parse_full_date(text):
-    """Return (year, month, day) for a full ISO date, else None."""
-    parts = text.split("-")
+    """Return (year, month, day) if text is a full ISO date, else None."""
+    if not text:
+        return None
+    parts = text.strip().split("-")
     if len(parts) != 3:
         return None
     try:
@@ -35,66 +36,74 @@ def parse_full_date(text):
     return year, month, day
 
 
-def completed_years(birth_text, consent_text):
-    """Whole calendar years from birth date to consent date, or None.
+def completed_years(birth, consent):
+    """Whole calendar years between birth and consent dates.
 
-    None when either date is missing or the birth date was collected
-    only to the month or the year.
+    One year fewer when the birthday falls after the consent date's
+    month and day. A February 29 birthday has its anniversary on
+    February 28 in a common year.
     """
-    if not birth_text or not consent_text:
-        return None
-    birth = parse_full_date(birth_text)
-    consent = parse_full_date(consent_text)
-    if birth is None or consent is None:
-        return None
     by, bm, bd = birth
     cy, cm, cd = consent
-    # A February 29 birthday has its anniversary on February 28 in a
-    # common year.
-    if bm == 2 and bd == 29 and not calendar.isleap(cy):
-        bm, bd = 2, 28
+    if (bm, bd) == (2, 29) and not isleap(cy):
+        anniversary = (2, 28)
+    else:
+        anniversary = (bm, bd)
     years = cy - by
-    if (cm, cd) < (bm, bd):
+    if anniversary > (cm, cd):
         years -= 1
     return years
 
 
 def main():
-    odm = pd.read_csv(INPUT_ODM, dtype=str, keep_default_na=False)
+    with open(os.path.join(INPUT_DIR, "odm.csv"), newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
 
     subjects = {}
     order = []
-    for row in odm.itertuples(index=False):
-        key = (row.StudyOID, row.SubjectKey)
+    for row in rows:
+        key = (row["StudyOID"], row["SubjectKey"])
         if key not in subjects:
             subjects[key] = {"RFICDTC": "", "BRTHDTC": ""}
             order.append(key)
-        if row.ItemOID == "IT.DM.RFICDTC":
-            subjects[key]["RFICDTC"] = row.Value
-        elif row.ItemOID == "IT.DM.BRTHDT":
-            subjects[key]["BRTHDTC"] = row.Value
+        item = row["ItemOID"]
+        value = (row["Value"] or "").strip()
+        if item == CONSENT_ITEM and not subjects[key]["RFICDTC"]:
+            subjects[key]["RFICDTC"] = value
+        elif item == BIRTH_ITEM and not subjects[key]["BRTHDTC"]:
+            subjects[key]["BRTHDTC"] = value
 
-    records = []
+    out_rows = []
     for study_oid, subject_key in order:
-        values = subjects[(study_oid, subject_key)]
-        age = completed_years(values["BRTHDTC"], values["RFICDTC"])
-        records.append(
+        vals = subjects[(study_oid, subject_key)]
+        rficdtc = vals["RFICDTC"]
+        brthdtc = vals["BRTHDTC"]
+
+        age = ""
+        birth = parse_full_date(brthdtc)
+        consent = parse_full_date(rficdtc)
+        if birth is not None and consent is not None:
+            age = str(completed_years(birth, consent))
+        ageu = "YEARS" if age else ""
+
+        out_rows.append(
             {
                 "DOMAIN": "DM",
                 "STUDYID": study_oid,
                 "USUBJID": subject_key,
-                "RFICDTC": values["RFICDTC"],
-                "BRTHDTC": values["BRTHDTC"],
-                "AGE": "" if age is None else age,
-                "AGEU": "" if age is None else "YEARS",
+                "RFICDTC": rficdtc,
+                "BRTHDTC": brthdtc,
+                "AGE": age,
+                "AGEU": ageu,
             }
         )
 
-    dm = pd.DataFrame(
-        records,
-        columns=["DOMAIN", "STUDYID", "USUBJID", "RFICDTC", "BRTHDTC", "AGE", "AGEU"],
-    )
-    dm.to_csv(OUTPUT_DM, index=False)
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    fieldnames = ["DOMAIN", "STUDYID", "USUBJID", "RFICDTC", "BRTHDTC", "AGE", "AGEU"]
+    with open(os.path.join(OUTPUT_DIR, "dm.csv"), "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(out_rows)
 
 
 if __name__ == "__main__":

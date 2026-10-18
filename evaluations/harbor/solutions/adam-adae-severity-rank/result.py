@@ -4,56 +4,80 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-"""Create ADAE from AE with severity numeric code and per-subject ranks.
+"""Build the ADAE severity-rank dataset from the AE dataset.
 
-ASEVN maps ASEV (MILD/MODERATE/SEVERE) to 1/2/3. SEVRANK is the
-competition rank of the event within the subject, worst severity first;
-events without a reported severity rank after all reported ones and
-share a single rank. SEVLVL is the dense rank, with an unreported
-severity counting as one further distinct level.
+One record per adverse event. ASEVN is the numeric form of the
+reported severity (MILD=1, MODERATE=2, SEVERE=3, blank when no
+severity was reported). SEVRANK is the competition rank of the event
+within its subject, worst severity first: events sharing a severity
+share a rank and the ranks they would otherwise fill are skipped, and
+events with no reported severity rank after every reported event and
+share one rank. SEVLVL is the dense rank: each distinct severity,
+worst first, takes the next number, with an unreported severity
+counting as one further distinct severity.
 """
 
-import pandas as pd
+import csv
+import os
+from collections import defaultdict
 
 INPUT_DIR = "/app/input"
-OUTPUT_PATH = "/app/output/adae.csv"
+OUTPUT_DIR = "/app/output"
 
-SEV_NUM = {"MILD": 1, "MODERATE": 2, "SEVERE": 3}
+SEVERITY_CODES = {"MILD": 1, "MODERATE": 2, "SEVERE": 3}
+
+COLUMNS = ["STUDYID", "USUBJID", "AESEQ", "ASEV", "ASEVN", "SEVRANK", "SEVLVL"]
 
 
-def main() -> None:
-    ae = pd.read_csv(f"{INPUT_DIR}/ae.csv", dtype=str, keep_default_na=False)
+def main():
+    with open(os.path.join(INPUT_DIR, "ae.csv"), newline="") as handle:
+        events = list(csv.DictReader(handle))
 
-    ae["ASEV"] = ae["AESEV"]
-    ae["ASEVN"] = ae["ASEV"].map(SEV_NUM)
+    by_subject = defaultdict(list)
+    for event in events:
+        by_subject[event["USUBJID"]].append(event)
 
-    sevrank = pd.Series(index=ae.index, dtype=int)
-    sevlvl = pd.Series(index=ae.index, dtype=int)
-    for _, group in ae.groupby("USUBJID", sort=False):
-        values = group["ASEVN"]
-        reported = sorted({v for v in values if pd.notna(v)}, reverse=True)
-        n_reported_events = int(values.notna().sum())
-        # Dense level per reported severity; unreported is one past the last.
-        dense = {v: i + 1 for i, v in enumerate(reported)}
-        blank_dense = len(reported) + 1
-        blank_rank = n_reported_events + 1
-        for idx, v in values.items():
-            if pd.notna(v):
-                sevrank[idx] = 1 + int((values > v).sum())
-                sevlvl[idx] = dense[v]
+    rank_of = {}  # id(event) -> (SEVRANK, SEVLVL)
+    for subject_events in by_subject.values():
+        for event in subject_events:
+            event["_asevn"] = SEVERITY_CODES.get(event["AESEV"].strip())
+
+        reported = [e["_asevn"] for e in subject_events if e["_asevn"] is not None]
+        distinct = sorted(set(reported), reverse=True)
+        dense = {value: i + 1 for i, value in enumerate(distinct)}
+        n_reported = len(reported)
+
+        for event in subject_events:
+            asevn = event["_asevn"]
+            if asevn is None:
+                # After every event with a reported severity; all
+                # unreported events share one rank / one level. With
+                # no reported events at all this yields rank 1, level 1.
+                sevrank = n_reported + 1
+                sevlvl = len(distinct) + 1
             else:
-                sevrank[idx] = blank_rank
-                sevlvl[idx] = blank_dense
-    ae["SEVRANK"] = sevrank
-    ae["SEVLVL"] = sevlvl
+                sevrank = 1 + sum(1 for value in reported if value > asevn)
+                sevlvl = dense[asevn]
+            rank_of[id(event)] = (sevrank, sevlvl)
 
-    out = ae[["STUDYID", "USUBJID", "AESEQ", "ASEV", "ASEVN", "SEVRANK", "SEVLVL"]]
-    out = out.assign(
-        ASEVN=out["ASEVN"].map(lambda v: "" if pd.isna(v) else int(v)),
-        SEVRANK=out["SEVRANK"].astype(int),
-        SEVLVL=out["SEVLVL"].astype(int),
-    )
-    out.to_csv(OUTPUT_PATH, index=False)
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    with open(os.path.join(OUTPUT_DIR, "adae.csv"), "w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=COLUMNS)
+        writer.writeheader()
+        for event in events:
+            sevrank, sevlvl = rank_of[id(event)]
+            asevn = event["_asevn"]
+            writer.writerow(
+                {
+                    "STUDYID": event["STUDYID"],
+                    "USUBJID": event["USUBJID"],
+                    "AESEQ": event["AESEQ"],
+                    "ASEV": event["AESEV"],
+                    "ASEVN": "" if asevn is None else asevn,
+                    "SEVRANK": sevrank,
+                    "SEVLVL": sevlvl,
+                }
+            )
 
 
 if __name__ == "__main__":

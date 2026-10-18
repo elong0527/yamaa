@@ -6,43 +6,48 @@
 
 """Build the SDTM LB dataset from DM, LBRANGE, and LB_RAW.
 
-One record per collected test result in LB_RAW. The record's test code
-and the subject's sex (from DM) together select the reference entry in
-LBRANGE, which supplies the standard unit and the lower/upper reference
-limits. LBNRIND flags the result against those limits.
+One record per collected test result in LB_RAW. The reference range
+(unit and limits) is selected by the record's test code together with
+the subject's sex from DM. LBNRIND flags the result against the limits.
 """
 
-import pandas as pd
+import csv
+import os
 
 INPUT_DIR = "/app/input"
-OUTPUT_PATH = "/app/output/lb.csv"
+OUTPUT_DIR = "/app/output"
 
 
-def read_csv(name):
-    return pd.read_csv(
-        f"{INPUT_DIR}/{name}", dtype=str, keep_default_na=False
-    )
+def read_rows(name):
+    with open(os.path.join(INPUT_DIR, name), newline="") as handle:
+        return list(csv.DictReader(handle))
 
 
 def main():
-    dm = read_csv("dm.csv")
-    lbrange = read_csv("lbrange.csv")
-    lb_raw = read_csv("lb_raw.csv")
+    dm = read_rows("dm.csv")
+    lbrange = read_rows("lbrange.csv")
+    lb_raw = read_rows("lb_raw.csv")
 
-    sex_by_subject = {
-        (row.STUDYID, row.USUBJID): row.SEX for row in dm.itertuples()
-    }
-    range_by_test_sex = {
-        (row.LBTESTCD, row.SEX): (row.UNIT, row.NRLO, row.NRHI)
-        for row in lbrange.itertuples()
+    sex_by_subject = {row["USUBJID"]: row["SEX"] for row in dm}
+    range_by_key = {
+        (row["LBTESTCD"], row["SEX"]): row for row in lbrange
     }
 
     records = []
-    for row in lb_raw.itertuples():
-        sex = sex_by_subject.get((row.STUDYID, row.USUBJID), "")
-        unit, nrlo, nrhi = range_by_test_sex.get((row.LBTESTCD, sex), ("", "", ""))
+    for row in lb_raw:
+        sex = sex_by_subject.get(row["USUBJID"], "")
+        entry = range_by_key.get((row["LBTESTCD"], sex))
 
-        result = row.LBSTRESN
+        if entry is None:
+            unit = ""
+            nrlo = ""
+            nrhi = ""
+        else:
+            unit = entry["UNIT"]
+            nrlo = entry["NRLO"]
+            nrhi = entry["NRHI"]
+
+        result = row["LBSTRESN"]
         nrind = ""
         if result != "" and nrlo != "" and nrhi != "":
             value = float(result)
@@ -56,10 +61,10 @@ def main():
         records.append(
             {
                 "DOMAIN": "LB",
-                "STUDYID": row.STUDYID,
-                "USUBJID": row.USUBJID,
-                "LBSEQ": row.LBSEQ,
-                "LBTESTCD": row.LBTESTCD,
+                "STUDYID": row["STUDYID"],
+                "USUBJID": row["USUBJID"],
+                "LBSEQ": row["LBSEQ"],
+                "LBTESTCD": row["LBTESTCD"],
                 "LBSTRESN": result,
                 "LBSTRESU": unit,
                 "LBSTNRLO": nrlo,
@@ -68,7 +73,7 @@ def main():
             }
         )
 
-    columns = [
+    fieldnames = [
         "DOMAIN",
         "STUDYID",
         "USUBJID",
@@ -80,8 +85,13 @@ def main():
         "LBSTNRHI",
         "LBNRIND",
     ]
-    lb = pd.DataFrame(records, columns=columns)
-    lb.to_csv(OUTPUT_PATH, index=False)
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    with open(
+        os.path.join(OUTPUT_DIR, "lb.csv"), "w", newline=""
+    ) as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(records)
 
 
 if __name__ == "__main__":

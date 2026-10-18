@@ -6,28 +6,30 @@
 
 """Build the SDTM DS dataset from the ODM extract.
 
-One record per subject for each of the two milestones: end of treatment
-(StudyEventOID EOT, DSSEQ 1) and end of study (EOS, DSSEQ 2). The
-completion flag, reason text, controlled code, and start date of a
-milestone are collected as separate ODM items; the record for the
-milestone carries the values of that milestone's items.
+One record per subject for each of the two milestones: end of
+treatment (EOT) and end of study (EOS). Each milestone's completion
+flag, reason text, controlled code, and start date are collected as
+separate items in the ODM rows; the record for a milestone carries
+the values of that milestone's items, in whatever order the input
+rows hold them.
 """
 
-import pandas as pd
+import csv
+from pathlib import Path
 
-INPUT_ODM = "/app/input/odm.csv"
-OUTPUT_DS = "/app/output/ds.csv"
+INPUT = Path("/app/input")
+OUTPUT = Path("/app/output")
 
-ITEM_COMPLETION = "IT.DS.COMP"
-ITEM_REASON = "IT.DS.REASON"
-ITEM_REASON_CODE = "IT.DS.REASONCD"
-ITEM_START_DATE = "IT.DS.DTC"
-
-# (StudyEventOID, DSSEQ, DSSCAT) in output order.
+# (StudyEventOID, DSSEQ, DSSCAT) for each milestone, in DSSEQ order.
 MILESTONES = [
     ("EOT", 1, "STUDY TREATMENT"),
     ("EOS", 2, "STUDY"),
 ]
+
+ITEM_COMPLETION = "IT.DS.COMP"
+ITEM_REASON = "IT.DS.REASON"
+ITEM_REASON_CODE = "IT.DS.REASONCD"
+ITEM_DATE = "IT.DS.DTC"
 
 COLUMNS = [
     "DOMAIN",
@@ -43,42 +45,48 @@ COLUMNS = [
 
 
 def main() -> None:
-    odm = pd.read_csv(INPUT_ODM, dtype=str, keep_default_na=False)
+    with open(INPUT / "odm.csv", newline="") as handle:
+        odm_rows = list(csv.DictReader(handle))
+
+    # Collect each milestone's items per subject:
+    # items[(subject, event)][item oid] = value.
+    items: dict[tuple[str, str], dict[str, str]] = {}
+    study_by_subject: dict[str, str] = {}
+    for row in odm_rows:
+        subject = row["SubjectKey"]
+        study_by_subject.setdefault(subject, row["StudyOID"])
+        key = (subject, row["StudyEventOID"])
+        items.setdefault(key, {})[row["ItemOID"]] = row["Value"]
 
     records = []
-    for subject_key in sorted(odm["SubjectKey"].unique()):
-        subject_rows = odm[odm["SubjectKey"] == subject_key]
-        study_id = subject_rows["StudyOID"].iloc[0]
+    for subject in sorted(study_by_subject):
         for event_oid, dsseq, dsscat in MILESTONES:
-            milestone_rows = subject_rows[
-                subject_rows["StudyEventOID"] == event_oid
-            ]
-            items = dict(
-                zip(milestone_rows["ItemOID"], milestone_rows["Value"])
-            )
-            completion = items.get(ITEM_COMPLETION, "")
-            if completion == "COMPLETED":
+            collected = items.get((subject, event_oid), {})
+            if collected.get(ITEM_COMPLETION) == "COMPLETED":
                 dsterm = "COMPLETED"
                 dsdecod = "COMPLETED"
             else:
-                dsterm = items.get(ITEM_REASON, "")
-                dsdecod = items.get(ITEM_REASON_CODE, "")
+                dsterm = collected.get(ITEM_REASON, "")
+                dsdecod = collected.get(ITEM_REASON_CODE, "")
             records.append(
                 {
                     "DOMAIN": "DS",
-                    "STUDYID": study_id,
-                    "USUBJID": subject_key,
-                    "DSSEQ": dsseq,
+                    "STUDYID": study_by_subject[subject],
+                    "USUBJID": subject,
+                    "DSSEQ": str(dsseq),
                     "DSCAT": "DISPOSITION EVENT",
                     "DSSCAT": dsscat,
                     "DSTERM": dsterm,
                     "DSDECOD": dsdecod,
-                    "DSSTDTC": items.get(ITEM_START_DATE, ""),
+                    "DSSTDTC": collected.get(ITEM_DATE, ""),
                 }
             )
 
-    ds = pd.DataFrame.from_records(records, columns=COLUMNS)
-    ds.to_csv(OUTPUT_DS, index=False)
+    OUTPUT.mkdir(parents=True, exist_ok=True)
+    with open(OUTPUT / "ds.csv", "w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=COLUMNS)
+        writer.writeheader()
+        writer.writerows(records)
 
 
 if __name__ == "__main__":

@@ -4,64 +4,92 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-import pandas as pd
+"""Build the SDTM AE dataset from AE_RAW and MEDDRA_SYNTHETIC.
+
+One record per adverse event. The coded hierarchy for each record comes
+from the MEDDRA_SYNTHETIC row that holds the record's AELLTCD on the
+primary path (PRIMARY_SOC == "Y"); secondary paths are never used.
+"""
+
+import polars as pl
 
 INPUT_DIR = "/app/input"
 OUTPUT_DIR = "/app/output"
 
-ae = pd.read_csv(f"{INPUT_DIR}/ae_raw.csv", dtype=str, keep_default_na=False)
-meddra = pd.read_csv(
-    f"{INPUT_DIR}/meddra_synthetic.csv", dtype=str, keep_default_na=False
-)
-
-# Keep only the primary path for each LLT code.
-primary = meddra[meddra["PRIMARY_SOC"] == "Y"]
-hierarchy = {}
-for _, row in primary.iterrows():
-    hierarchy[row["LLTCD"]] = row
-
 COLUMNS = [
-    "DOMAIN", "STUDYID", "USUBJID", "AESEQ", "AETERM", "AELLT", "AELLTCD",
-    "AEDECOD", "AEPTCD", "AEHLT", "AEHLTCD", "AEHLGT", "AEHLGTCD",
-    "AEBODSYS", "AEBODSCD", "AESOC", "AESOCCD",
+    "DOMAIN",
+    "STUDYID",
+    "USUBJID",
+    "AESEQ",
+    "AETERM",
+    "AELLT",
+    "AELLTCD",
+    "AEDECOD",
+    "AEPTCD",
+    "AEHLT",
+    "AEHLTCD",
+    "AEHLGT",
+    "AEHLGTCD",
+    "AEBODSYS",
+    "AEBODSCD",
+    "AESOC",
+    "AESOCCD",
 ]
 
-records = []
-for _, event in ae.iterrows():
-    code = event["AELLTCD"]
-    record = {
-        "DOMAIN": "AE",
-        "STUDYID": event["STUDYID"],
-        "USUBJID": event["USUBJID"],
-        "AESEQ": event["AESEQ"],
-        "AETERM": event["AETERM"],
-        "AELLT": "",
-        "AELLTCD": code,
-        "AEDECOD": "",
-        "AEPTCD": "",
-        "AEHLT": "",
-        "AEHLTCD": "",
-        "AEHLGT": "",
-        "AEHLGTCD": "",
-        "AEBODSYS": "",
-        "AEBODSCD": "",
-        "AESOC": "",
-        "AESOCCD": "",
-    }
-    if code and code in hierarchy:
-        path = hierarchy[code]
-        record["AELLT"] = path["LLTNAME"]
-        record["AEDECOD"] = path["PTNAME"]
-        record["AEPTCD"] = path["PTCD"]
-        record["AEHLT"] = path["HLTNAME"]
-        record["AEHLTCD"] = path["HLTCD"]
-        record["AEHLGT"] = path["HLGTNAME"]
-        record["AEHLGTCD"] = path["HLGTCD"]
-        record["AEBODSYS"] = path["SOCNAME"]
-        record["AEBODSCD"] = path["SOCCD"]
-        record["AESOC"] = path["SOCNAME"]
-        record["AESOCCD"] = path["SOCCD"]
-    records.append(record)
 
-out = pd.DataFrame(records, columns=COLUMNS)
-out.to_csv(f"{OUTPUT_DIR}/ae.csv", index=False)
+def main() -> None:
+    ae_raw = pl.read_csv(f"{INPUT_DIR}/ae_raw.csv", infer_schema=False)
+    meddra = pl.read_csv(
+        f"{INPUT_DIR}/meddra_synthetic.csv", infer_schema=False
+    )
+
+    # Primary path only: one row per LLT code.
+    hierarchy = {}
+    for row in meddra.filter(pl.col("PRIMARY_SOC") == "Y").iter_rows(named=True):
+        hierarchy[row["LLTCD"]] = row
+
+    records = []
+    for ae in ae_raw.iter_rows(named=True):
+        lltcd = ae["AELLTCD"] or None
+        med = hierarchy.get(lltcd) if lltcd else None
+        if med is None:
+            # No assigned code, or no dictionary row: AELLT and every
+            # hierarchy column are blank; AELLTCD keeps the code as
+            # collected.
+            llt = pt = ptcd = hlt = hltcd = None
+            hlgt = hlgtcd = soc = soccd = None
+        else:
+            llt = med["LLTNAME"]
+            pt, ptcd = med["PTNAME"], med["PTCD"]
+            hlt, hltcd = med["HLTNAME"], med["HLTCD"]
+            hlgt, hlgtcd = med["HLGTNAME"], med["HLGTCD"]
+            soc, soccd = med["SOCNAME"], med["SOCCD"]
+        records.append(
+            {
+                "DOMAIN": "AE",
+                "STUDYID": ae["STUDYID"],
+                "USUBJID": ae["USUBJID"],
+                "AESEQ": ae["AESEQ"],
+                "AETERM": ae["AETERM"],
+                "AELLT": llt,
+                "AELLTCD": lltcd,
+                "AEDECOD": pt,
+                "AEPTCD": ptcd,
+                "AEHLT": hlt,
+                "AEHLTCD": hltcd,
+                "AEHLGT": hlgt,
+                "AEHLGTCD": hlgtcd,
+                "AEBODSYS": soc,
+                "AEBODSCD": soccd,
+                "AESOC": soc,
+                "AESOCCD": soccd,
+            }
+        )
+
+    pl.DataFrame(records, schema={c: pl.Utf8 for c in COLUMNS}).write_csv(
+        f"{OUTPUT_DIR}/ae.csv"
+    )
+
+
+if __name__ == "__main__":
+    main()

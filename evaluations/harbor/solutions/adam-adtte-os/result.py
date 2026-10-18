@@ -4,111 +4,96 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-"""Create ADTTE (Overall Survival) from ADRS and ADSL.
+"""Create the ADTTE overall-survival dataset from ADRS and ADSL.
 
-One record per subject. Survival time is counted from the
-randomization date (RANDDT in ADSL). A qualifying death is an ADRS
-record with PARAMCD "DEATH", AVALC "Y", ANL01FL "Y" and a recorded
-ADT; the earliest such record (lowest ASEQ on a tie) is the event.
-Subjects without a qualifying death are censored at their last-alive
-date (LSTALVDT) when it falls after randomization, and at
-randomization otherwise.
+One record per subject. A qualifying death is an ADRS record with
+PARAMCD "DEATH", AVALC "Y", ANL01FL "Y" and a recorded ADT; the
+earliest such date (lowest ASEQ on a tie) is the event. Subjects
+without a qualifying death are censored at their last-alive date when
+it falls after randomization, and at randomization otherwise.
 """
 
-import pandas as pd
+import csv
+from datetime import date
 
 INPUT_DIR = "/app/input"
 OUTPUT_DIR = "/app/output"
 
-COLUMNS = [
-    "STUDYID",
-    "USUBJID",
-    "PARAMCD",
-    "PARAM",
-    "STARTDT",
-    "ADT",
-    "AVAL",
-    "CNSR",
-    "EVNTDESC",
-    "CNSDTDSC",
-    "SRCDOM",
-    "SRCVAR",
-    "SRCSEQ",
-]
+
+def parse_date(text):
+    text = (text or "").strip()
+    if not text:
+        return None
+    return date.fromisoformat(text)
 
 
-def parse_date(value):
-    """Parse an ISO date string; return a Timestamp or NaT."""
-    if value is None or str(value).strip() == "":
-        return pd.NaT
-    return pd.Timestamp(str(value).strip())
-
-
-def fmt_date(ts):
-    return "" if pd.isna(ts) else ts.strftime("%Y-%m-%d")
+def read_rows(path):
+    with open(path, newline="") as handle:
+        return list(csv.DictReader(handle))
 
 
 def main():
-    adsl = pd.read_csv(f"{INPUT_DIR}/adsl.csv", dtype=str, keep_default_na=False)
-    adrs = pd.read_csv(f"{INPUT_DIR}/adrs.csv", dtype=str, keep_default_na=False)
+    adsl = read_rows(f"{INPUT_DIR}/adsl.csv")
+    adrs = read_rows(f"{INPUT_DIR}/adrs.csv")
 
-    # Qualifying death records per subject.
-    deaths = adrs[
-        (adrs["PARAMCD"] == "DEATH")
-        & (adrs["AVALC"] == "Y")
-        & (adrs["ANL01FL"] == "Y")
-        & (adrs["ADT"].str.strip() != "")
-    ].copy()
-    deaths["_adt"] = deaths["ADT"].map(parse_date)
-    deaths["_aseq"] = deaths["ASEQ"].astype(int)
-    deaths = deaths.sort_values(["_adt", "_aseq"])
-    death_by_subject = {}
-    for _, row in deaths.iterrows():
-        death_by_subject.setdefault(row["USUBJID"], row)
+    # Select each subject's qualifying death record: earliest ADT,
+    # lowest ASEQ on a tied date.
+    deaths = {}
+    for row in adrs:
+        if row["PARAMCD"] != "DEATH":
+            continue
+        if row["AVALC"] != "Y" or row["ANL01FL"] != "Y":
+            continue
+        death_date = parse_date(row["ADT"])
+        if death_date is None:
+            continue
+        key = (death_date, int(row["ASEQ"]))
+        subject = row["USUBJID"]
+        if subject not in deaths or key < deaths[subject][0]:
+            deaths[subject] = (key, row)
 
     records = []
-    for _, subj in adsl.iterrows():
-        studyid = subj["STUDYID"]
-        usubjid = subj["USUBJID"]
-        startdt = parse_date(subj["RANDDT"])
-        lstalvdt = parse_date(subj["LSTALVDT"])
+    for subject_row in adsl:
+        studyid = subject_row["STUDYID"]
+        usubjid = subject_row["USUBJID"]
+        startdt = parse_date(subject_row["RANDDT"])
+        lstalvdt = parse_date(subject_row["LSTALVDT"])
 
-        death = death_by_subject.get(usubjid)
-        if death is not None:
-            death_adt = death["_adt"]
-            adt = death_adt if death_adt >= startdt else startdt
-            cnsr = 0
+        if usubjid in deaths:
+            _, death_row = deaths[usubjid]
+            death_date = parse_date(death_row["ADT"])
+            adt = death_date if death_date >= startdt else startdt
+            cnsr = "0"
             evntdesc = "Death"
             cnsdtdsc = ""
             srcdom = "ADRS"
             srcvar = "ADT"
-            srcseq = str(death["_aseq"])
+            srcseq = death_row["ASEQ"]
         else:
-            cnsr = 1
-            srcdom = "ADSL"
-            srcseq = ""
-            if not pd.isna(lstalvdt) and lstalvdt > startdt:
-                adt = lstalvdt
+            at_last_alive = lstalvdt is not None and lstalvdt > startdt
+            adt = lstalvdt if at_last_alive else startdt
+            cnsr = "1"
+            if at_last_alive:
                 evntdesc = "Alive"
                 cnsdtdsc = "Alive During Study"
                 srcvar = "LSTALVDT"
             else:
-                adt = startdt
                 evntdesc = "Randomization"
                 cnsdtdsc = "Randomization"
                 srcvar = "RANDDT"
+            srcdom = "ADSL"
+            srcseq = ""
 
         aval = (adt - startdt).days + 1
-
         records.append(
             {
                 "STUDYID": studyid,
                 "USUBJID": usubjid,
                 "PARAMCD": "OS",
                 "PARAM": "Overall Survival",
-                "STARTDT": fmt_date(startdt),
-                "ADT": fmt_date(adt),
-                "AVAL": aval,
+                "STARTDT": startdt.isoformat(),
+                "ADT": adt.isoformat(),
+                "AVAL": str(aval),
                 "CNSR": cnsr,
                 "EVNTDESC": evntdesc,
                 "CNSDTDSC": cnsdtdsc,
@@ -118,8 +103,25 @@ def main():
             }
         )
 
-    out = pd.DataFrame(records, columns=COLUMNS)
-    out.to_csv(f"{OUTPUT_DIR}/adtte.csv", index=False)
+    columns = [
+        "STUDYID",
+        "USUBJID",
+        "PARAMCD",
+        "PARAM",
+        "STARTDT",
+        "ADT",
+        "AVAL",
+        "CNSR",
+        "EVNTDESC",
+        "CNSDTDSC",
+        "SRCDOM",
+        "SRCVAR",
+        "SRCSEQ",
+    ]
+    with open(f"{OUTPUT_DIR}/adtte.csv", "w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=columns)
+        writer.writeheader()
+        writer.writerows(records)
 
 
 if __name__ == "__main__":

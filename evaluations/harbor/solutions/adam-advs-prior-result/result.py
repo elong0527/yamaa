@@ -4,64 +4,63 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-"""Create ADVS from VS with PREVAVALC, the closest earlier non-blank
-AVALC for the same subject and series.
+"""Build ADVS from the VS dataset: one record per collected row, with
+PREVAVALC set to the closest earlier non-blank AVALC for the same
+subject and series.
 
-Rows are grouped by subject and series (rows with no SERIES value share
-one series). Within a series, rows are ordered by AVISITN with a missing
-AVISITN last; rows sharing an AVISITN, or both missing one, keep their
-collected order. PREVAVALC is the most recent non-blank AVALC earlier in
-that order, never the row's own AVALC, and blank when no earlier row in
-the series has a non-blank AVALC.
+Rows with no SERIES value share one series. Within a subject and
+series, rows are ordered by AVISITN with a missing AVISITN last, and
+rows that tie keep their collected order. Blank results never serve as
+a previous value, and a previous value never crosses a series or a
+subject.
 """
 
-import pandas as pd
+import csv
 
 INPUT_VS = "/app/input/vs.csv"
 OUTPUT_ADVS = "/app/output/advs.csv"
 
-COLUMNS = ["STUDYID", "USUBJID", "VSSEQ", "SERIES", "AVISITN", "AVALC"]
-
-
-def is_blank(value):
-    return value is None or str(value).strip() == ""
+COLUMNS = ["STUDYID", "USUBJID", "VSSEQ", "SERIES", "AVISITN", "AVALC",
+           "PREVAVALC"]
 
 
 def visit_key(row):
-    """Sort key: AVISITN ascending, missing AVISITN last."""
-    avisitn = row["AVISITN"]
-    if is_blank(avisitn):
+    """Sort key: AVISITN ascending, a missing AVISITN last.
+
+    The sort is stable, so rows sharing an AVISITN, or both missing
+    one, keep their collected order.
+    """
+    text = row["AVISITN"].strip()
+    if text == "":
         return (1, 0.0)
-    return (0, float(avisitn))
+    return (0, float(text))
 
 
 def main():
-    vs = pd.read_csv(INPUT_VS, dtype=str, keep_default_na=False)
-    for column in COLUMNS:
-        if column not in vs.columns:
-            vs[column] = ""
-    vs = vs[COLUMNS].copy()
-    vs["_collected"] = range(len(vs))
+    with open(INPUT_VS, newline="") as handle:
+        rows = list(csv.DictReader(handle))
 
-    prev = [""] * len(vs)
+    groups = {}
+    for index, row in enumerate(rows):
+        key = (row["USUBJID"], row["SERIES"])
+        groups.setdefault(key, []).append(index)
 
-    # Group by subject and series; blank SERIES values share one series.
-    for _, group in vs.groupby(["STUDYID", "USUBJID", "SERIES"],
-                               sort=False):
-        # Stable sort keeps collected order within equal AVISITN keys.
-        # groupby preserves collected order within the group, and
-        # sorted() is stable, so ties on AVISITN (or both missing) keep
-        # their collected order.
-        ordered = sorted(group.to_dict("records"), key=visit_key)
-        last_non_blank = ""
-        for row in ordered:
-            prev[row["_collected"]] = last_non_blank
-            if not is_blank(row["AVALC"]):
-                last_non_blank = row["AVALC"]
+    previous = {}
+    for indexes in groups.values():
+        last_nonblank = ""
+        for index in sorted(indexes, key=lambda i: visit_key(rows[i])):
+            previous[index] = last_nonblank
+            avalc = rows[index]["AVALC"]
+            if avalc.strip() != "":
+                last_nonblank = avalc
 
-    vs["PREVAVALC"] = prev
-    out = vs[COLUMNS + ["PREVAVALC"]]
-    out.to_csv(OUTPUT_ADVS, index=False)
+    with open(OUTPUT_ADVS, "w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=COLUMNS)
+        writer.writeheader()
+        for index, row in enumerate(rows):
+            out = {name: row[name] for name in COLUMNS if name != "PREVAVALC"}
+            out["PREVAVALC"] = previous[index]
+            writer.writerow(out)
 
 
 if __name__ == "__main__":

@@ -4,98 +4,152 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-"""Exposure-adjusted incidence: build ADRISK and ADINC from ADAE and ADSL.
+import csv
+from datetime import date, timedelta
+from pathlib import Path
 
-ADRISK: one record per study, subject, and prespecified event term
-("DIARRHOEA", "HEADACHE"), with the first in-window onset date, an event
-indicator, and days at risk. ADINC: exposure-adjusted incidence per study,
-actual treatment, and term.
-"""
 
-import pandas as pd
-
-INPUT_DIR = "/app/input"
-OUTPUT_DIR = "/app/output"
-
+INPUT_DIR = Path("/app/input")
+OUTPUT_DIR = Path("/app/output")
 TERMS = ["DIARRHOEA", "HEADACHE"]
-WINDOW_DAYS_AFTER_LAST_DOSE = 30
+
+
+def parse_date(value: str) -> date:
+    return date.fromisoformat(value)
 
 
 def main() -> None:
-    adsl = pd.read_csv(f"{INPUT_DIR}/adsl.csv", dtype=str)
-    adae = pd.read_csv(f"{INPUT_DIR}/adae.csv", dtype=str)
+    with open(INPUT_DIR / "adsl.csv", newline="", encoding="utf-8") as handle:
+        adsl_rows = list(csv.DictReader(handle))
+    with open(INPUT_DIR / "adae.csv", newline="", encoding="utf-8") as handle:
+        adae_rows = list(csv.DictReader(handle))
 
-    adsl["TRTSDT"] = pd.to_datetime(adsl["TRTSDT"])
-    adsl["TRTEDT"] = pd.to_datetime(adsl["TRTEDT"])
-    if not adae.empty:
-        adae["ASTDT"] = pd.to_datetime(adae["ASTDT"])
+    # One subject record, retaining the order in which subjects appear.
+    subjects = {}
+    subject_order = []
+    for row in adsl_rows:
+        key = (row["STUDYID"], row["USUBJID"])
+        first_dose = parse_date(row["TRTSDT"])
+        last_dose = parse_date(row["TRTEDT"])
+        if key not in subjects:
+            subjects[key] = {
+                "STUDYID": row["STUDYID"],
+                "USUBJID": row["USUBJID"],
+                "TRT01A": row["TRT01A"],
+                "first_dose": first_dose,
+                "last_dose": last_dose,
+            }
+            subject_order.append(key)
+        else:
+            subjects[key]["first_dose"] = min(
+                subjects[key]["first_dose"], first_dose
+            )
+            subjects[key]["last_dose"] = max(subjects[key]["last_dose"], last_dose)
 
-    rows = []
-    for _, subj in adsl.iterrows():
-        first_dose = subj["TRTSDT"]
-        window_end = subj["TRTEDT"] + pd.Timedelta(
-            days=WINDOW_DAYS_AFTER_LAST_DOSE
-        )
-        subj_ae = adae[adae["USUBJID"] == subj["USUBJID"]] if not adae.empty \
-            else adae
+    # Index event onset dates by subject and prespecified term.
+    onsets = {}
+    for row in adae_rows:
+        if row["AEDECOD"] not in TERMS or not row["ASTDT"]:
+            continue
+        key = (row["STUDYID"], row["USUBJID"], row["AEDECOD"])
+        onsets.setdefault(key, []).append(parse_date(row["ASTDT"]))
+
+    risk_rows = []
+    for key in subject_order:
+        subject = subjects[key]
+        first_dose = subject["first_dose"]
+        window_end = subject["last_dose"] + timedelta(days=30)
+
         for term in TERMS:
-            onsets = subj_ae.loc[
-                (subj_ae["AEDECOD"] == term)
-                & (subj_ae["ASTDT"] >= first_dose)
-                & (subj_ae["ASTDT"] <= window_end),
-                "ASTDT",
+            in_window = [
+                onset
+                for onset in onsets.get(
+                    (subject["STUDYID"], subject["USUBJID"], term), []
+                )
+                if first_dose <= onset <= window_end
             ]
-            if len(onsets) > 0:
-                firstdt = onsets.min()
-                eventn = 1
-                riskdays = (firstdt - first_dose).days + 1
-            else:
-                firstdt = pd.NaT
-                eventn = 0
-                riskdays = (window_end - first_dose).days + 1
-            rows.append(
+            first_date = min(in_window) if in_window else None
+            event_n = 1 if in_window else 0
+            risk_end = first_date if event_n else window_end
+
+            risk_rows.append(
                 {
-                    "STUDYID": subj["STUDYID"],
-                    "USUBJID": subj["USUBJID"],
-                    "TRT01A": subj["TRT01A"],
+                    "STUDYID": subject["STUDYID"],
+                    "USUBJID": subject["USUBJID"],
+                    "TRT01A": subject["TRT01A"],
                     "AEDECOD": term,
-                    "FIRSTDT": firstdt,
-                    "EVENTN": eventn,
-                    "RISKDAYS": riskdays,
+                    "FIRSTDT": first_date.isoformat() if first_date else "",
+                    "EVENTN": event_n,
+                    "RISKDAYS": (risk_end - first_dose).days + 1,
                 }
             )
 
-    adrisk = pd.DataFrame(
-        rows,
-        columns=[
-            "STUDYID", "USUBJID", "TRT01A", "AEDECOD",
-            "FIRSTDT", "EVENTN", "RISKDAYS",
-        ],
-    )
-    adrisk = adrisk.sort_values(
-        ["STUDYID", "USUBJID", "AEDECOD"]
-    ).reset_index(drop=True)
-    adrisk_out = adrisk.copy()
-    adrisk_out["FIRSTDT"] = adrisk_out["FIRSTDT"].dt.strftime("%Y-%m-%d")
-    adrisk_out["FIRSTDT"] = adrisk_out["FIRSTDT"].fillna("")
-    adrisk_out.to_csv(f"{OUTPUT_DIR}/adrisk.csv", index=False)
+    # Aggregate in the order treatments and terms first appear in ADRISK.
+    incidence = {}
+    incidence_order = []
+    for row in risk_rows:
+        key = (row["STUDYID"], row["TRT01A"], row["AEDECOD"])
+        if key not in incidence:
+            incidence[key] = {
+                "STUDYID": row["STUDYID"],
+                "TRT01A": row["TRT01A"],
+                "AEDECOD": row["AEDECOD"],
+                "NSUBJ": 0,
+                "PERSONDAYS": 0,
+            }
+            incidence_order.append(key)
+        incidence[key]["NSUBJ"] += row["EVENTN"]
+        incidence[key]["PERSONDAYS"] += row["RISKDAYS"]
 
-    grouped = (
-        adrisk.groupby(["STUDYID", "TRT01A", "AEDECOD"], as_index=False)
-        .agg(
-            NSUBJ=("EVENTN", "sum"),
-            PERSONDAYS=("RISKDAYS", "sum"),
+    incidence_rows = []
+    for key in incidence_order:
+        row = incidence[key]
+        person_years = row["PERSONDAYS"] / 365.25
+        incidence_rows.append(
+            {
+                "STUDYID": row["STUDYID"],
+                "TRT01A": row["TRT01A"],
+                "AEDECOD": row["AEDECOD"],
+                "NSUBJ": row["NSUBJ"],
+                "PERSONDAYS": row["PERSONDAYS"],
+                "PERSONYRS": person_years,
+                "EAIR100": 100 * row["NSUBJ"] / person_years,
+            }
         )
-        .sort_values(["STUDYID", "TRT01A", "AEDECOD"])
-        .reset_index(drop=True)
-    )
-    grouped["PERSONYRS"] = grouped["PERSONDAYS"] / 365.25
-    grouped["EAIR100"] = 100 * grouped["NSUBJ"] / grouped["PERSONYRS"]
-    adinc = grouped[
-        ["STUDYID", "TRT01A", "AEDECOD", "NSUBJ",
-         "PERSONDAYS", "PERSONYRS", "EAIR100"]
+
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    risk_fields = [
+        "STUDYID",
+        "USUBJID",
+        "TRT01A",
+        "AEDECOD",
+        "FIRSTDT",
+        "EVENTN",
+        "RISKDAYS",
     ]
-    adinc.to_csv(f"{OUTPUT_DIR}/adinc.csv", index=False)
+    with open(
+        OUTPUT_DIR / "adrisk.csv", "w", newline="", encoding="utf-8"
+    ) as handle:
+        writer = csv.DictWriter(handle, fieldnames=risk_fields)
+        writer.writeheader()
+        writer.writerows(risk_rows)
+
+    incidence_fields = [
+        "STUDYID",
+        "TRT01A",
+        "AEDECOD",
+        "NSUBJ",
+        "PERSONDAYS",
+        "PERSONYRS",
+        "EAIR100",
+    ]
+    with open(
+        OUTPUT_DIR / "adinc.csv", "w", newline="", encoding="utf-8"
+    ) as handle:
+        writer = csv.DictWriter(handle, fieldnames=incidence_fields)
+        writer.writeheader()
+        writer.writerows(incidence_rows)
 
 
 if __name__ == "__main__":

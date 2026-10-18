@@ -4,161 +4,170 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-"""Build the SDTM LB dataset from the ODM extract in /app/input.
+from pathlib import Path
 
-One record per reported result across the serum (LB), skin biopsy (BX),
-saliva (SAL) and tape-strip (TS) forms. Writes /app/output/lb.csv.
-"""
+import polars as pl
 
-import csv
-from collections import OrderedDict
 
-INPUT_PATH = "/app/input/odm.csv"
-OUTPUT_PATH = "/app/output/lb.csv"
+def _present(value) -> bool:
+    return value is not None and str(value) != ""
 
-COLUMNS = [
-    "DOMAIN", "STUDYID", "USUBJID", "LBSEQ", "VISIT", "VISITNUM",
-    "LBTESTCD", "LBTEST", "LBCAT", "LBSPEC", "LBLOC", "LBORRES",
-    "LBORRESU", "LBSTRESC", "LBSTRESN", "LBSTRESU", "LBSTAT", "LBDTC",
-]
 
-VISITS = {
-    "SCRN": ("SCREENING", "1"),
-    "BL": ("BASELINE", "2"),
-    "D21": ("DAY 21", "3"),
-    "UNSCH": ("UNSCHEDULED", None),
+odm = pl.read_csv("/app/input/odm.csv", infer_schema=False)
+
+# Each form occurrence keeps its own date; lesional comes before
+# non-lesional from the same form.
+test_meta = {
+    "VITD": ("VITD25OH", "25-Hydroxyvitamin D", "CHEMISTRY", "SERUM", None, "ng/mL"),
+    "IL13_LES": ("IL13", "Interleukin 13 mRNA", "GENE EXPRESSION", "SKIN BIOPSY", "LESIONAL", "CYCLE"),
+    "IL13_NONLES": ("IL13", "Interleukin 13 mRNA", "GENE EXPRESSION", "SKIN BIOPSY", "NON-LESIONAL", "CYCLE"),
+    "SAL_CAMP": ("CAMPPRO", "Cathelicidin Protein", "ANTIMICROBIAL PEPTIDE", "SALIVA", None, "ng/mL"),
+    "TS_CAMP_LES": ("CAMPPRO", "Cathelicidin Protein", "ANTIMICROBIAL PEPTIDE", "TAPE STRIP", "LESIONAL", "ng/mL"),
+    "TS_CAMP_NONLES": ("CAMPPRO", "Cathelicidin Protein", "ANTIMICROBIAL PEPTIDE", "TAPE STRIP", "NON-LESIONAL", "ng/mL"),
+}
+visit_meta = {
+    "SCRN": ("SCREENING", 1.0),
+    "BL": ("BASELINE", 2.0),
+    "D21": ("DAY 21", 3.0),
 }
 
-# Item name -> (LBTESTCD, LBTEST, LBCAT, LBSPEC, LBLOC, unit)
-RESULT_ITEMS = {
-    "VITD": ("VITD25OH", "25-Hydroxyvitamin D", "CHEMISTRY", "SERUM",
-             "", "ng/mL"),
-    "IL13_LES": ("IL13", "Interleukin 13 mRNA", "GENE EXPRESSION",
-                 "SKIN BIOPSY", "LESIONAL", "CYCLE"),
-    "IL13_NONLES": ("IL13", "Interleukin 13 mRNA", "GENE EXPRESSION",
-                    "SKIN BIOPSY", "NON-LESIONAL", "CYCLE"),
-    "SAL_CAMP": ("CAMPPRO", "Cathelicidin Protein",
-                 "ANTIMICROBIAL PEPTIDE", "SALIVA", "", "ng/mL"),
-    "TS_CAMP_LES": ("CAMPPRO", "Cathelicidin Protein",
-                    "ANTIMICROBIAL PEPTIDE", "TAPE STRIP", "LESIONAL",
-                    "ng/mL"),
-    "TS_CAMP_NONLES": ("CAMPPRO", "Cathelicidin Protein",
-                       "ANTIMICROBIAL PEPTIDE", "TAPE STRIP",
-                       "NON-LESIONAL", "ng/mL"),
-}
 
-RESULT_GROUPS = {"LB", "BX", "SAL", "TS"}
+def _result_key(itemoid: str) -> str | None:
+    short = itemoid.split(".")[-1]
+    return short if short in test_meta else None
 
 
-def last_segment(oid):
-    return oid.rsplit(".", 1)[-1]
+groups: dict[tuple, dict] = {}
+for row in odm.to_dicts():
+    key = (
+        str(row["StudyOID"]),
+        str(row["SubjectKey"]),
+        str(row["StudyEventOID"]),
+        str(row["ItemGroupOID"]),
+        str(row["ItemGroupRepeatKey"]),
+    )
+    groups.setdefault(key, {})[str(row["ItemOID"])] = row["Value"]
 
-
-def format_number(text):
-    value = float(text)
-    if value == int(value):
-        return str(int(value))
-    return repr(value)
-
-
-def main():
-    with open(INPUT_PATH, newline="") as handle:
-        rows = list(csv.DictReader(handle))
-
-    # Group items by form instance:
-    # (subject, event, event repeat, group, group repeat).
-    forms = OrderedDict()
-    for row in rows:
-        group = last_segment(row["ItemGroupOID"])
-        if group not in RESULT_GROUPS:
+rows = []
+for (studyid, subj, event_oid, _group_oid, group_rep), values in groups.items():
+    event_short = event_oid.split(".")[-1]
+    # The collection date from the date item on the same form.
+    lbdtc = None
+    for oid, val in values.items():
+        if oid.split(".")[-1].endswith("DTC") and _present(val):
+            lbdtc = str(val).strip()
+    if event_short == "UNSCH":
+        visit, visitnum = "UNSCHEDULED", 2 + float(group_rep) / 100
+    else:
+        visit, visitnum = visit_meta.get(event_short, (None, None))
+    for oid, val in values.items():
+        rkey = _result_key(oid)
+        if rkey is None:
             continue
-        key = (
-            row["SubjectKey"],
-            last_segment(row["StudyEventOID"]),
-            row["StudyEventRepeatKey"],
-            group,
-            row["ItemGroupRepeatKey"],
-        )
-        form = forms.setdefault(key, {"study": row["StudyOID"],
-                                      "date": "", "results": []})
-        item = last_segment(row["ItemOID"])
-        if item.endswith("DTC"):
-            form["date"] = row["Value"]
-        elif item in RESULT_ITEMS:
-            form["results"].append((item, row["Value"]))
+        text = str(val) if _present(val) else ""
+        # An item with no reported value produces no record.
+        if text == "":
+            continue
+        testcd, test, cat, spec, loc, unit = test_meta[rkey]
+        if text == "NOT DONE":
+            rows.append(
+                {
+                    "DOMAIN": "LB",
+                    "STUDYID": studyid,
+                    "USUBJID": subj,
+                    "VISIT": visit,
+                    "VISITNUM": visitnum,
+                    "LBTESTCD": testcd,
+                    "LBTEST": test,
+                    "LBCAT": cat,
+                    "LBSPEC": spec,
+                    "LBLOC": loc,
+                    "LBORRES": None,
+                    "LBORRESU": None,
+                    "LBSTRESC": None,
+                    "LBSTRESN": None,
+                    "LBSTRESU": None,
+                    "LBSTAT": "NOT DONE",
+                    "LBDTC": lbdtc,
+                }
+            )
+        else:
+            try:
+                number = float(text)
+            except ValueError:
+                number = None
+            rows.append(
+                {
+                    "DOMAIN": "LB",
+                    "STUDYID": studyid,
+                    "USUBJID": subj,
+                    "VISIT": visit,
+                    "VISITNUM": visitnum,
+                    "LBTESTCD": testcd,
+                    "LBTEST": test,
+                    "LBCAT": cat,
+                    "LBSPEC": spec,
+                    "LBLOC": loc,
+                    "LBORRES": text,
+                    "LBORRESU": unit,
+                    "LBSTRESC": text,
+                    "LBSTRESN": number,
+                    "LBSTRESU": unit,
+                    "LBSTAT": None,
+                    "LBDTC": lbdtc,
+                }
+            )
 
-    # Assign unscheduled-visit occurrence numbers per subject: each
-    # distinct (event repeat, group repeat) instance in date order.
-    unscheduled = {}
-    for (subject, event, event_rep, group, group_rep), form in forms.items():
-        if event == "UNSCH" and form["results"]:
-            unscheduled.setdefault(subject, {})[
-                (event_rep, group_rep)] = form["date"]
-    visitnum_unscheduled = {}
-    for subject, instances in unscheduled.items():
-        ordered = sorted(instances.items(),
-                         key=lambda kv: (kv[1], kv[0][0], kv[0][1]))
-        for index, (instance_key, _date) in enumerate(ordered, start=1):
-            visitnum_unscheduled[(subject, instance_key)] = \
-                "2.%02d" % index
+loc_rank = {"LESIONAL": 0, "NON-LESIONAL": 1, None: 2}
+rows.sort(
+    key=lambda r: (
+        r["USUBJID"],
+        r["LBDTC"] or "",
+        r["LBTESTCD"],
+        r["LBSPEC"],
+        loc_rank[r["LBLOC"]],
+    )
+)
+seq_by_subject: dict[str, int] = {}
+for row in rows:
+    seq_by_subject[row["USUBJID"]] = seq_by_subject.get(row["USUBJID"], 0) + 1
+    row["LBSEQ"] = str(seq_by_subject[row["USUBJID"]])
 
-    records = []
-    for (subject, event, event_rep, group, group_rep), form in forms.items():
-        visit, visitnum = VISITS[event]
-        if event == "UNSCH":
-            visitnum = visitnum_unscheduled.get(
-                (subject, (event_rep, group_rep)), "2.01")
-        for item, value in form["results"]:
-            if value == "":
-                continue
-            testcd, test, cat, spec, loc, unit = RESULT_ITEMS[item]
-            record = {
-                "DOMAIN": "LB",
-                "STUDYID": form["study"],
-                "USUBJID": subject,
-                "VISIT": visit,
-                "VISITNUM": visitnum,
-                "LBTESTCD": testcd,
-                "LBTEST": test,
-                "LBCAT": cat,
-                "LBSPEC": spec,
-                "LBLOC": loc,
-                "LBDTC": form["date"],
-            }
-            if value == "NOT DONE":
-                record.update({
-                    "LBORRES": "", "LBORRESU": "", "LBSTRESC": "",
-                    "LBSTRESN": "", "LBSTRESU": "", "LBSTAT": "NOT DONE",
-                })
-            else:
-                record.update({
-                    "LBORRES": value, "LBORRESU": unit,
-                    "LBSTRESC": value, "LBSTRESN": format_number(value),
-                    "LBSTRESU": unit, "LBSTAT": "",
-                })
-            records.append(record)
+lb = (
+    pl.DataFrame(
+        rows,
+        schema={
+            "DOMAIN": pl.String,
+            "STUDYID": pl.String,
+            "USUBJID": pl.String,
+            "LBSEQ": pl.String,
+            "VISIT": pl.String,
+            "VISITNUM": pl.Float64,
+            "LBTESTCD": pl.String,
+            "LBTEST": pl.String,
+            "LBCAT": pl.String,
+            "LBSPEC": pl.String,
+            "LBLOC": pl.String,
+            "LBORRES": pl.String,
+            "LBORRESU": pl.String,
+            "LBSTRESC": pl.String,
+            "LBSTRESN": pl.Float64,
+            "LBSTRESU": pl.String,
+            "LBSTAT": pl.String,
+            "LBDTC": pl.String,
+        },
+    )
+    .with_columns(
+        pl.col("LBSEQ").cast(pl.Int64).alias("_seq"),
+        pl.col("VISITNUM").cast(pl.Float64).alias("_visitnum"),
+    )
+    .sort(["USUBJID", "_seq"])
+    .select(
+        "DOMAIN", "STUDYID", "USUBJID", "LBSEQ", "VISIT", "VISITNUM",
+        "LBTESTCD", "LBTEST", "LBCAT", "LBSPEC", "LBLOC", "LBORRES",
+        "LBORRESU", "LBSTRESC", "LBSTRESN", "LBSTRESU", "LBSTAT", "LBDTC",
+    )
+)
 
-    by_subject = {}
-    for record in records:
-        by_subject.setdefault(record["USUBJID"], []).append(record)
-
-    ordered_records = []
-    for subject in sorted(by_subject):
-        subject_records = sorted(
-            by_subject[subject],
-            key=lambda r: (r["LBDTC"], r["LBTESTCD"], r["LBSPEC"],
-                           r["LBLOC"]),
-        )
-        for index, record in enumerate(subject_records, start=1):
-            record["LBSEQ"] = str(index)
-            ordered_records.append(record)
-
-    with open(OUTPUT_PATH, "w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=COLUMNS)
-        writer.writeheader()
-        for record in ordered_records:
-            writer.writerow({col: record.get(col, "") for col in COLUMNS})
-
-
-if __name__ == "__main__":
-    main()
+Path("/app/output").mkdir(exist_ok=True)
+lb.write_csv("/app/output/lb.csv")

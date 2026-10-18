@@ -4,59 +4,90 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-"""Build the ADSL randomization dataset from the DM (and ODM) inputs.
+"""Create the ADSL randomization dataset from the DM and ODM datasets.
 
 One record per subject with columns:
 STUDYID, USUBJID, RANDDT, RANDDY, RANDDTC
 
-- RANDDT: the collected randomization date.
-- RANDDY: study day of RANDDT measured from RFSTDTC (the reference start
-  date): on or after RFSTDTC the day is the difference in days plus 1,
-  before RFSTDTC it is the (negative) difference in days. Blank when
-  RANDDT or RFSTDTC has no value.
-- RANDDTC: the collected randomization moment RANDDTTM as text at
-  whole-second precision, date and time joined by T with the seconds
-  always shown. Written from the collected moment independently of the
-  collected date; blank when no moment was collected.
+- RANDDT is the subject's randomization date from DM.
+- RANDDY is the study day of RANDDT measured from RFSTDTC (the subject's
+  reference start date): there is no study day 0, so a randomization on
+  RFSTDTC is day 1 and the day before RFSTDTC is day -1. RANDDY has no
+  value when RANDDT or RFSTDTC has no value.
+- RANDDTC is the collected randomization moment RANDDTTM written as text
+  at whole-second precision (date and time joined by T, seconds always
+  shown). It is written independently of the collected date, so a
+  subject with a collected moment but no collected date still has
+  RANDDTC while RANDDT and RANDDY have no value.
 """
 
-import pandas as pd
+import polars as pl
 
 INPUT_DIR = "/app/input"
-OUTPUT_FILE = "/app/output/adsl.csv"
+OUTPUT_DIR = "/app/output"
+
+
+def check_odm_agrees_with_dm(dm: pl.DataFrame) -> None:
+    """Confirm the ODM collected DM values agree with the DM dataset."""
+    odm = pl.read_csv(f"{INPUT_DIR}/odm.csv", infer_schema=False)
+    items = odm.filter(pl.col("ItemGroupOID") == "IG.DM").pivot(
+        values="Value", index="SubjectKey", on="ItemOID"
+    )
+    for item, column, fmt in (
+        ("IT.DM.RFSTDTC", "RFSTDTC", "%Y-%m-%d"),
+        ("IT.DM.RANDDT", "RANDDT", "%Y-%m-%d"),
+        ("IT.DM.RANDDTTM", "RANDDTTM", "%Y-%m-%d %H:%M:%S"),
+    ):
+        if item not in items.columns:
+            if dm[column].is_not_null().any():
+                raise ValueError(f"ODM has no {item} but DM has {column}")
+            continue
+        collected = items.select(
+            pl.col("SubjectKey").alias("USUBJID"),
+            pl.col(item).alias("collected"),
+        )
+        joined = dm.join(collected, on="USUBJID", how="left")
+        typed_text = joined[column].dt.strftime(fmt)
+        collected_text = joined["collected"]
+        if column == "RANDDTTM":
+            # Collected moments may carry only minute precision
+            # ("2024-03-04T10:30"); normalize to whole seconds.
+            collected_text = (
+                pl.when(collected_text.str.len_chars() == 16)
+                .then(collected_text.str.replace("T", " ") + ":00")
+                .otherwise(collected_text.str.replace("T", " "))
+            )
+        mismatch = joined.filter(
+            typed_text.is_not_null()
+            & collected_text.is_not_null()
+            & (typed_text != collected_text)
+        )
+        if mismatch.height:
+            raise ValueError(
+                f"ODM collected {column} disagrees with DM for "
+                f"{mismatch['USUBJID'].to_list()}"
+            )
 
 
 def main() -> None:
-    dm = pd.read_parquet(f"{INPUT_DIR}/dm.parquet")
+    dm = pl.read_parquet(f"{INPUT_DIR}/dm.parquet")
+    check_odm_agrees_with_dm(dm)
 
-    rows = []
-    for rec in dm.to_dict("records"):
-        randdt = rec["RANDDT"]
-        rfstdtc = rec["RFSTDTC"]
-        randdttm = rec["RANDDTTM"]
+    diff_days = (pl.col("RANDDT") - pl.col("RFSTDTC")).dt.total_days()
+    adsl = dm.select(
+        "STUDYID",
+        "USUBJID",
+        "RANDDT",
+        pl.when(pl.col("RANDDT").is_null() | pl.col("RFSTDTC").is_null())
+        .then(None)
+        .when(diff_days >= 0)
+        .then(diff_days + 1)
+        .otherwise(diff_days)
+        .alias("RANDDY"),
+        pl.col("RANDDTTM").dt.strftime("%Y-%m-%dT%H:%M:%S").alias("RANDDTC"),
+    )
 
-        randdt_text = "" if pd.isna(randdt) else randdt.isoformat()
-
-        if pd.isna(randdt) or pd.isna(rfstdtc):
-            randdy = ""
-        else:
-            diff = (randdt - rfstdtc).days
-            randdy = diff + 1 if diff >= 0 else diff
-
-        randdtc = "" if pd.isna(randdttm) else randdttm.strftime("%Y-%m-%dT%H:%M:%S")
-
-        rows.append(
-            {
-                "STUDYID": rec["STUDYID"],
-                "USUBJID": rec["USUBJID"],
-                "RANDDT": randdt_text,
-                "RANDDY": randdy,
-                "RANDDTC": randdtc,
-            }
-        )
-
-    adsl = pd.DataFrame(rows, columns=["STUDYID", "USUBJID", "RANDDT", "RANDDY", "RANDDTC"])
-    adsl.to_csv(OUTPUT_FILE, index=False)
+    adsl.write_csv(f"{OUTPUT_DIR}/adsl.csv")
 
 
 if __name__ == "__main__":

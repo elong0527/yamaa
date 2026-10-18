@@ -4,13 +4,13 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-"""Build ADTR: sum of target lesion diameters per subject and assessment.
+"""Build ADTR: one record per subject and scheduled tumor assessment.
 
-Reads TR, TRVISIT and TU from /app/input and writes /app/output/adtr.csv
-with one record per subject and scheduled tumor assessment (from TRVISIT).
+Reads TR, TRVISIT and TU from /app/input and writes the ADaM ADTR
+dataset (sum of target lesion diameters) to /app/output/adtr.csv.
 """
 
-import pandas as pd
+import polars as pl
 
 INPUT_DIR = "/app/input"
 OUTPUT_PATH = "/app/output/adtr.csv"
@@ -19,99 +19,99 @@ PARAMCD = "SDIAM"
 PARAM = "Sum of Target Lesion Diameters (mm)"
 
 
-def format_number(value):
-    """Render a number without a trailing .0 when it is integral."""
-    if pd.isna(value):
-        return ""
-    number = float(value)
-    if number == int(number):
-        return str(int(number))
-    return repr(number)
-
-
-def main():
-    tr = pd.read_csv(f"{INPUT_DIR}/tr.csv", dtype=str, keep_default_na=False)
-    trvisit = pd.read_csv(
-        f"{INPUT_DIR}/trvisit.csv", dtype=str, keep_default_na=False
-    )
-    tu = pd.read_csv(f"{INPUT_DIR}/tu.csv", dtype=str, keep_default_na=False)
-
-    # Numeric result; blank text becomes missing.
-    tr["TRSTRESN_NUM"] = pd.to_numeric(tr["TRSTRESN"], errors="coerce")
+def main() -> None:
+    tr = pl.read_csv(f"{INPUT_DIR}/tr.csv", infer_schema=False)
+    trvisit = pl.read_csv(f"{INPUT_DIR}/trvisit.csv", infer_schema=False)
+    tu = pl.read_csv(f"{INPUT_DIR}/tu.csv", infer_schema=False)
 
     # Target longest-diameter records only.
-    target = tr[(tr["TRGRPID"] == "TARGET") & (tr["TRTESTCD"] == "LDIAM")]
+    target = tr.filter(
+        (pl.col("TRGRPID") == "TARGET") & (pl.col("TRTESTCD") == "LDIAM")
+    ).with_columns(pl.col("TRSTRESN").cast(pl.Float64, strict=False))
 
-    # Number of target lesions selected at study entry, per subject.
-    ntarget = (
-        tu[tu["TUGRPID"] == "TARGET"]
-        .groupby(["STUDYID", "USUBJID"])
-        .size()
-        .rename("NTARGET")
-    )
-
-    rows = []
-    for _, visit in trvisit.iterrows():
-        key = (visit["STUDYID"], visit["USUBJID"], visit["AVISIT"])
-        records = target[
-            (target["STUDYID"] == key[0])
-            & (target["USUBJID"] == key[1])
-            & (target["AVISIT"] == key[2])
-        ]
-        n_target = int(ntarget.get((key[0], key[1]), 0))
-
-        if len(records) == 0:
-            # No target longest-diameter records at this assessment.
-            aval = ""
-            nmeas = ""
-        else:
-            measured = records["TRSTRESN_NUM"].dropna()
-            nmeas = str(len(measured))
-            # A missing result contributes nothing; no measured lesion
-            # means the sum has no value. A zero result counts as measured.
-            aval = format_number(measured.sum()) if len(measured) > 0 else ""
-
-        anl01fl = "Y" if nmeas != "" and int(nmeas) == n_target else ""
-
-        rows.append(
-            {
-                "STUDYID": visit["STUDYID"],
-                "USUBJID": visit["USUBJID"],
-                "AVISIT": visit["AVISIT"],
-                "AVISITN": format_number(
-                    pd.to_numeric(visit["AVISITN"], errors="coerce")
-                ),
-                "ADT": visit["ADT"],
-                "PARAMCD": PARAMCD,
-                "PARAM": PARAM,
-                "AVAL": aval,
-                "NMEAS": nmeas,
-                "NTARGET": str(n_target),
-                "ANL01FL": anl01fl,
+    # Per subject and assessment: how many such records exist, how many
+    # carry a result, and the sum of the measured diameters. AVAL stays
+    # missing when nothing was measured; NMEAS stays missing when the
+    # assessment has no target longest-diameter records at all.
+    if target.height:
+        measured = target.group_by(["STUDYID", "USUBJID", "AVISIT"]).agg(
+            pl.len().alias("_NREC"),
+            pl.col("TRSTRESN").count().alias("NMEAS"),
+            pl.col("TRSTRESN").sum().alias("_SUM"),
+        )
+    else:
+        measured = pl.DataFrame(
+            schema={
+                "STUDYID": pl.String,
+                "USUBJID": pl.String,
+                "AVISIT": pl.String,
+                "_NREC": pl.UInt32,
+                "NMEAS": pl.UInt32,
+                "_SUM": pl.Float64,
             }
         )
+    measured = measured.with_columns(
+        pl.when(pl.col("NMEAS") > 0)
+        .then(pl.col("_SUM"))
+        .otherwise(None)
+        .alias("AVAL"),
+        pl.when(pl.col("_NREC") > 0)
+        .then(pl.col("NMEAS"))
+        .otherwise(None)
+        .cast(pl.Int64)
+        .alias("NMEAS"),
+    ).drop(["_NREC", "_SUM"])
 
-    columns = [
-        "STUDYID",
-        "USUBJID",
-        "AVISIT",
-        "AVISITN",
-        "ADT",
-        "PARAMCD",
-        "PARAM",
-        "AVAL",
-        "NMEAS",
-        "NTARGET",
-        "ANL01FL",
-    ]
-    adtr = pd.DataFrame(rows, columns=columns)
-    adtr["_VISITN_NUM"] = pd.to_numeric(adtr["AVISITN"], errors="coerce")
-    adtr = adtr.sort_values(["USUBJID", "_VISITN_NUM"]).drop(
-        columns="_VISITN_NUM"
+    # Number of target lesions in the subject's lesion inventory; the
+    # same at every assessment of the subject.
+    ntarget = (
+        tu.filter(pl.col("TUGRPID") == "TARGET")
+        .group_by(["STUDYID", "USUBJID"])
+        .agg(pl.len().cast(pl.Int64).alias("NTARGET"))
     )
-    adtr = adtr.reset_index(drop=True)
-    adtr.to_csv(OUTPUT_PATH, index=False)
-    print(adtr.to_string(index=False))
+
+    adtr = (
+        trvisit.join(
+            measured, on=["STUDYID", "USUBJID", "AVISIT"], how="left"
+        )
+        .join(ntarget, on=["STUDYID", "USUBJID"], how="left")
+        .with_columns(
+            pl.col("NTARGET").fill_null(0),
+            pl.col("AVISITN").cast(pl.Int64, strict=False),
+            pl.lit(PARAMCD).alias("PARAMCD"),
+            pl.lit(PARAM).alias("PARAM"),
+            pl.when(
+                pl.col("NMEAS").is_not_null()
+                & (pl.col("NMEAS") == pl.col("NTARGET"))
+            )
+            .then(pl.lit("Y"))
+            .otherwise(None)
+            .alias("ANL01FL"),
+        )
+        .sort(["USUBJID", "AVISITN"])
+        .select(
+            [
+                "STUDYID",
+                "USUBJID",
+                "AVISIT",
+                "AVISITN",
+                "ADT",
+                "PARAMCD",
+                "PARAM",
+                "AVAL",
+                "NMEAS",
+                "NTARGET",
+                "ANL01FL",
+            ]
+        )
+    )
+
+    # Write whole-number sums without a decimal part.
+    aval = adtr["AVAL"].drop_nulls()
+    if aval.len() and (aval == aval.cast(pl.Int64)).all():
+        adtr = adtr.with_columns(pl.col("AVAL").cast(pl.Int64))
+
+    adtr.write_csv(OUTPUT_PATH)
 
 
 if __name__ == "__main__":

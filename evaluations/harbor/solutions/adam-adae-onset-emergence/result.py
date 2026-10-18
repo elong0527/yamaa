@@ -4,100 +4,123 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-"""Create the ADAE dataset (one record per adverse event) from ADSL and AE.
+"""Create ADAE (one record per adverse event) from ADSL and AE.
 
-Treatment emergence is decided at second precision against the window from
-first exposure (TRTSDTM) through 30 days after last exposure (TEENDDTM).
+Treatment emergence is decided at second precision: an onset collected
+without seconds has its seconds taken as zero. TRTEMFL is "Y" when the
+onset moment is at or after the first exposure moment and at or before
+the end of the treatment-emergent window (30 days after last exposure).
 """
 
-import os
-from datetime import timedelta
-
-import pandas as pd
+import csv
+from datetime import datetime, timedelta
 
 INPUT_DIR = "/app/input"
 OUTPUT_DIR = "/app/output"
 
 
-def to_datetime(series):
-    """Parse ISO datetime text; empty text and unparseable values are NaT.
+def parse_dtm(value):
+    """Parse an ISO datetime; missing seconds are taken as zero."""
+    value = (value or "").strip()
+    if not value:
+        return None
+    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(value, fmt)
+        except ValueError:
+            continue
+    raise ValueError(f"Unrecognised datetime value: {value!r}")
 
-    A value collected without seconds (e.g. '2025-03-04T11:45') parses with
-    seconds taken as zero.
-    """
-    return pd.to_datetime(series.replace("", None), errors="coerce", format="mixed")
 
-
-def fmt_datetime(value):
-    if pd.isna(value):
+def format_dtm(value):
+    if value is None:
         return ""
     return value.strftime("%Y-%m-%dT%H:%M:%S")
 
 
+def read_csv(path):
+    with open(path, newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
+
+
 def main():
-    adsl = pd.read_csv(
-        os.path.join(INPUT_DIR, "adsl.csv"), dtype=str, keep_default_na=False
-    )
-    ae = pd.read_csv(
-        os.path.join(INPUT_DIR, "ae.csv"), dtype=str, keep_default_na=False
-    )
+    adsl = read_csv(f"{INPUT_DIR}/adsl.csv")
+    ae = read_csv(f"{INPUT_DIR}/ae.csv")
 
-    adsl["TRTSDTM_DT"] = to_datetime(adsl["TRTSDTM"])
-    adsl["TRTENDTM_DT"] = to_datetime(adsl["TRTENDTM"])
-    adsl["TEENDDTM_DT"] = to_datetime(adsl["TEENDDTM"])
-    # TEENDDTM is 30 days after last exposure when not supplied directly.
-    missing_end = adsl["TEENDDTM_DT"].isna() & adsl["TRTENDTM_DT"].notna()
-    adsl.loc[missing_end, "TEENDDTM_DT"] = adsl.loc[
-        missing_end, "TRTENDTM_DT"
-    ] + timedelta(days=30)
+    subjects = {}
+    for row in adsl:
+        trtsdtm = parse_dtm(row.get("TRTSDTM"))
+        trtendtm = parse_dtm(row.get("TRTENDTM"))
+        teenddtm = parse_dtm(row.get("TEENDDTM"))
+        if teenddtm is None and trtendtm is not None:
+            teenddtm = trtendtm + timedelta(days=30)
+        subjects[(row["STUDYID"], row["USUBJID"])] = (trtsdtm, teenddtm)
 
-    df = ae.merge(
-        adsl[["STUDYID", "USUBJID", "TRTSDTM_DT", "TEENDDTM_DT"]],
-        on=["STUDYID", "USUBJID"],
-        how="left",
-    )
-    df["ASTDTM_DT"] = to_datetime(df["AESTDTC"])
+    records = []
+    for row in ae:
+        key = (row["STUDYID"], row["USUBJID"])
+        trtsdtm, teenddtm = subjects.get(key, (None, None))
+        astdtm = parse_dtm(row.get("AESTDTC"))
 
-    def trtemfl(row):
-        if pd.isna(row["TRTSDTM_DT"]):
-            return ""
-        if pd.isna(row["ASTDTM_DT"]):
-            return "Y"
-        if row["ASTDTM_DT"] < row["TRTSDTM_DT"]:
-            return ""
-        if pd.notna(row["TEENDDTM_DT"]) and row["ASTDTM_DT"] > row["TEENDDTM_DT"]:
-            return ""
-        return "Y"
+        if trtsdtm is None:
+            trtemfl = ""
+        elif astdtm is None:
+            trtemfl = "Y"
+        elif astdtm < trtsdtm:
+            trtemfl = ""
+        elif teenddtm is not None and astdtm > teenddtm:
+            trtemfl = ""
+        else:
+            trtemfl = "Y"
 
-    df["TRTEMFL"] = df.apply(trtemfl, axis=1)
+        records.append(
+            {
+                "STUDYID": row["STUDYID"],
+                "USUBJID": row["USUBJID"],
+                "AESEQ": row["AESEQ"],
+                "AETERM": row["AETERM"],
+                "ASTDTM": astdtm,
+                "TRTSDTM": trtsdtm,
+                "TEENDDTM": teenddtm,
+                "TRTEMFL": trtemfl,
+                "AOCCFL": "",
+            }
+        )
 
-    # AOCCFL flags each subject's earliest treatment-emergent event by onset
-    # moment; ties on the same onset second go to the lower AESEQ. A
-    # treatment-emergent event with no onset moment is never flagged.
-    df["AOCCFL"] = ""
-    df["AESEQ_NUM"] = pd.to_numeric(df["AESEQ"], errors="coerce")
-    emergent = df[(df["TRTEMFL"] == "Y") & df["ASTDTM_DT"].notna()].sort_values(
-        ["STUDYID", "USUBJID", "ASTDTM_DT", "AESEQ_NUM"]
-    )
-    first_idx = emergent.groupby(["STUDYID", "USUBJID"]).head(1).index
-    df.loc[first_idx, "AOCCFL"] = "Y"
+    # AOCCFL flags each subject's earliest treatment-emergent event by
+    # onset moment; ties on the same onset second go to the lower AESEQ.
+    # Events without an onset moment never carry AOCCFL.
+    earliest = {}
+    for record in records:
+        if record["TRTEMFL"] != "Y" or record["ASTDTM"] is None:
+            continue
+        key = (record["STUDYID"], record["USUBJID"])
+        candidate = (record["ASTDTM"], int(record["AESEQ"]))
+        if key not in earliest or candidate < earliest[key][0]:
+            earliest[key] = (candidate, record)
+    for _, record in earliest.values():
+        record["AOCCFL"] = "Y"
 
-    out = pd.DataFrame(
-        {
-            "STUDYID": df["STUDYID"],
-            "USUBJID": df["USUBJID"],
-            "AESEQ": df["AESEQ"],
-            "AETERM": df["AETERM"],
-            "ASTDTM": df["ASTDTM_DT"].map(fmt_datetime),
-            "TRTSDTM": df["TRTSDTM_DT"].map(fmt_datetime),
-            "TEENDDTM": df["TEENDDTM_DT"].map(fmt_datetime),
-            "TRTEMFL": df["TRTEMFL"],
-            "AOCCFL": df["AOCCFL"],
-        }
-    )
-
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    out.to_csv(os.path.join(OUTPUT_DIR, "adae.csv"), index=False)
+    columns = [
+        "STUDYID",
+        "USUBJID",
+        "AESEQ",
+        "AETERM",
+        "ASTDTM",
+        "TRTSDTM",
+        "TEENDDTM",
+        "TRTEMFL",
+        "AOCCFL",
+    ]
+    with open(f"{OUTPUT_DIR}/adae.csv", "w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=columns)
+        writer.writeheader()
+        for record in records:
+            out = dict(record)
+            out["ASTDTM"] = format_dtm(record["ASTDTM"])
+            out["TRTSDTM"] = format_dtm(record["TRTSDTM"])
+            out["TEENDDTM"] = format_dtm(record["TEENDDTM"])
+            writer.writerow(out)
 
 
 if __name__ == "__main__":
