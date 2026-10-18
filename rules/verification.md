@@ -433,10 +433,11 @@ execution counted none. Check rows keep execution order: column declaration
 order first, then dataset-verification order, each check that ran and held
 included. A failed stage contributes the checks it evaluated, at least one of
 them `violated` at `error` severity. A check that submission metadata adds, the
-presence check of [SUB-11](profiles/submission.md#sub-11) or a bound codelist
-check, is a row like a declared verification, at the path of the declaration
-that adds it. A value-level codelist check runs once per bound codelist; each
-run is its own row, at the path that declares that codelist.
+presence check of [SUB-11](profiles/submission.md#sub-11), a bound codelist
+check or a value-level check of [SUB-13](profiles/submission.md#sub-13), is a
+row like a declared verification, at the path of the declaration that adds it.
+A value-level codelist check runs once per bound codelist; each run is its own
+row, at the path that declares that codelist.
 
 <a id="check-24"></a>
 
@@ -504,7 +505,9 @@ A check's `COUNT` and `TOTAL` count the unit the check itself counts:
 - output rows for a row-wise check;
 - distinct combinations for `unique`;
 - groups for a check that partitions the artifact, where an ungrouped
-  `row_count` is the one group [CHECK-13](#check-13) bounds.
+  `row_count` is the one group [CHECK-13](#check-13) bounds;
+- the artifact as one unit for the check that a value-level entry matches a
+  row ([SUB-13](profiles/submission.md#sub-13)).
 
 A row-wise check's `TOTAL` is every output row it evaluated, a row whose value
 is missing included even where the missing value passes the check under
@@ -539,8 +542,9 @@ Replaces: REQ-0394.
 
 A scalar above `U+FFFF` is its JSON surrogate-pair escape. `KEYS` is an array
 holding one object per offending row, its output keys by name, or per
-offending group, its grouping columns by name; an ungrouped `row_count` has
-the one empty group `[{}]`. Empty remaining context is `{}`.
+offending group, its grouping columns by name; an ungrouped `row_count` and a
+value-level entry that matches no row have the one empty group `[{}]`. Empty
+remaining context is `{}`.
 
 <a id="check-26"></a>
 

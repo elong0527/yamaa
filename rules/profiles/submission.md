@@ -329,11 +329,12 @@ Every completed value of a column whose resolved `mandatory` is true must be
 present. [OUTPUT-3](../output.md#output-3) checks a key column. Any other
 mandatory column is checked where [Verification](../verification.md) runs a
 column verification and fails as `not_missing` fails. A value-level `mandatory`
-decides only the rows of its test code. A `not_missing` verification on a
-column that is mandatory on every row restates the fact and fails validation.
+decides only the rows its entry's where clause selects. A `not_missing`
+verification on a column that is mandatory on every row restates the fact and
+fails validation.
 
 Fails: `not_missing_failed`, `redundant_declaration`.
-Evidence: `negative-mandatory-arm-missing`, `negative-required-sex-missing`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::value_level_mandatory_applies_only_to_the_rows_of_its_test_code`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::restated_facts_and_relaxed_keys_fail_validation_before_data`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionMandatoryRedundant`.
+Evidence: `negative-mandatory-arm-missing`, `negative-required-sex-missing`, `negative-value-level-mandatory-missing`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::value_level_mandatory_applies_only_to_the_rows_of_its_test_code`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::restated_facts_and_relaxed_keys_fail_validation_before_data`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionMandatoryRedundant`.
 Replaces: REQ-0885, REQ-0916.
 
 The domain build enforces the resolution of [SUB-10](#sub-10) without a study
@@ -344,83 +345,131 @@ the failure count and the offending keys, as a failed `not_missing` does, at
 the path of the declaration that makes the column mandatory:
 `columns.<column>.submission.mandatory`, or
 `columns.<column>.submission.core` when `core` derives it, and the same fields
-under `rows.<row>.submission.<column>` for a value-level entry.
+under `columns.<column>.submission.value_level.<id>` for a value-level entry.
 
 A value-level entry that resolves differently from its column decides the rows
-whose completed `<DOMAIN>TESTCD` is its test code ([SUB-12](#sub-12)), and the
-column's resolution decides every other row. A value-level `mandatory: false`
-therefore exempts its test code from a mandatory column, and a value-level
-`mandatory: true` requires values on its test code's rows alone.
+its where clause selects ([SUB-12](#sub-12)), and the column's resolution
+decides every other row. A value-level `mandatory: false` therefore exempts
+its entry's rows from a mandatory column, and a value-level `mandatory: true`
+requires values on its entry's rows alone.
 
 The redundant finding reports the verification's path and, in `stated_by`,
 the declaration that already states the fact. A `not_missing` on a key column
 is redundant under [CHECK-5](../verification.md#check-5). A `not_missing` on a
-column that some test code exempts still requires values on that test code's
-rows, so it is not redundant.
+column that some entry exempts still requires values on that entry's rows, so
+it is not redundant.
 
 ## Value-level metadata
 
 <a id="sub-12"></a>
 
-### SUB-12. A row template's `submission` map declares metadata for one literal test code of its domain
+### SUB-12. A column's `value_level` entries give the rows their where clause selects their own metadata
 
-A `rows` entry may carry a `submission` map keyed by column name. Each entry
-declares the submission metadata for one value of the row's discriminator, the
-domain's `<DOMAIN>TESTCD` column, and fields it leaves absent inherit from the
-column-level `submission`. The domain must declare `<DOMAIN>TESTCD`, and the
-row template must derive it as `{literal: <code>}` with a string code. Each key
-must name a declared column in `output.columns` that the row template or the
-column declaration derives.
+A column's `submission` may declare `value_level` entries. Each entry has an
+`id` unique within the column, a `where` clause, and metadata fields that
+override the column's on the rows the clause selects; a field it leaves absent
+inherits the column's. `where` maps declared `str` output columns, other than
+the column itself, to nonempty lists of distinct values, and selects a row
+when every listed column holds one of its values. Two entries whose where
+clauses can select one row fail validation.
 
-Fails: `value_metadata_requires_testcd`, `value_metadata_requires_literal_testcd`, `value_metadata_unknown_column`, `value_metadata_not_output_column`.
-Evidence: `sdtm-lb-metadata`, `negative-numeric-test-code`, `rust/crates/yamaa-core/tests/schema_submission.rs::each_independent_value_admission_control_has_the_required_condition_and_row_path`, `rust/crates/yamaa-core/tests/schema_submission.rs::overrides_inherit_complete_metadata_and_preserve_written_occurrences`.
+Fails: `value_level_where_invalid`, `duplicate_identifier`, `value_level_overlap`.
+Evidence: `sdtm-lb-metadata`, `adam-adlb-metadata`, `sdtm-suppdm-metadata`, `negative-value-level-overlap`, `negative-value-level-where-column`, `negative-numeric-test-code`, `rust/crates/yamaa-core/src/submission_values.rs::static_findings_name_the_entry_column_and_fault`, `rust/crates/yamaa-core/tests/schema_submission.rs::each_independent_value_admission_control_has_the_required_condition_and_entry_path`, `rust/crates/yamaa-core/tests/schema_submission.rs::entries_inherit_complete_metadata_and_preserve_written_occurrences`.
 Replaces: REQ-1162, REQ-1163, REQ-1164, REQ-1165, REQ-1166.
 
-The column-level `submission` stays the shared declaration for the column, and
-the row-level entry supplies per-value overrides. A findings domain can thus
-give each `--TESTCD` its own codelist, origin or length without repeating the
+The column-level `submission` stays the shared declaration for the column,
+and each entry supplies the metadata of the rows its where clause selects. An
+ADaM `AVAL` can thus state each parameter's precision by `PARAMCD`, a
+supplemental qualifier dataset each qualifier's codelist by `QNAM`, and a
+findings domain each test's origin by `<DOMAIN>TESTCD`, without repeating the
 shared metadata.
 
-A row template carrying `submission` without a declared `<DOMAIN>TESTCD`
-column has no discriminator to hang values on, and the declaration fails with
-`value_metadata_requires_testcd`. A dynamic expression leaves the value unknown
-until data arrives, and value-level metadata is validated without data
-([SUB-23](#sub-23)), so a dynamic discriminator fails loudly, with
-`value_metadata_requires_literal_testcd`, rather than silently attaching
-metadata to an unknown value. A check applied only to the rows of one code,
-such as a value-level `length` that differs from the column's, finds those rows
-by comparing the code with `<DOMAIN>TESTCD`. That column must then be declared
-`str`: a column of another type never equals a string code under
-[VALUE-19](../values.md#value-19), and the declaration fails the same way
-rather than checking no row. A key naming anything other than a declared
-column the row template or the column declaration derives fails with
-`value_metadata_unknown_column`; it is not an ignored declaration.
-[SUB-1](#sub-1) applies per value: metadata for an internal column fails with
-`value_metadata_not_output_column` at row level exactly as it does at column
-level.
+An entry declares any column metadata field except `value_level`: `core`,
+`mandatory`, `role`, `data_type`, `length`, `significant_digits`,
+`display_format`, `codelist`, `inventory_vocabulary`, `origin`, `method` and
+`comment`, and `label`, the description of its definition
+([DEFINE-27](define-xml.md#define-27)), which defaults to the column's
+`label`. The entry's metadata merges field by field over the column's: a
+field the entry declares replaces the column's whole, nested classes such as
+`origin` included, and every rule of this profile applies to the merged
+metadata. An entry is reported at
+`columns.<column>.submission.value_level.<id>`.
+
+One value in a where clause selects the rows holding it, several values the
+rows holding any of them, and several columns the rows meeting every column.
+A where column is compared on its completed value under [Values](../values.md)
+equality, and a missing value matches no listed value. Listed values are
+strings, which a value of another type never equals under
+[VALUE-19](../values.md#value-19), so a where column must be `str`. A where
+clause that names no column, or a where column that is the column itself, is
+not a declared column, is not in `output.columns`, is not of type `str`, lists
+no value or lists one value twice, fails with `value_level_where_invalid` at
+`<entry>.where.<where column>`, or at `<entry>.where` for a clause without
+columns, reporting the column, the entry, the where column and the `reason`:
+`no_columns`, `self`, `undeclared`, `not_output`, `not_str`, `no_values` or
+`duplicate_value`. A schema-valid `id` is an identifier; two entries of one
+column with the same `id` fail with `duplicate_identifier` at `<entry>.id`.
+
+Validation decides that two where clauses can select one row when one
+clause's columns are all columns of the other and every column they share
+lists a common value: the clauses then select at least one common row
+whatever the data. The failure is `value_level_overlap`, naming both where
+clauses in declaration order and reporting the column and both entries. Two
+clauses over columns neither of which contains the other's are admitted, and
+[SUB-13](#sub-13) fails a row both select.
+
+`value_level` is a list, so a later layer replaces it whole
+([LAYER-6](../inheritance.md#layer-6)). An entry's `id` names its definitions
+in a document independently of entry order ([DEFINE-9](define-xml.md#define-9)).
 
 <a id="sub-13"></a>
 
-### SUB-13. Value-level declarations for one column and test code agree, and each is refuted against its own derivation
+### SUB-13. Each row matches at most one entry of a column, an entry that matches no row warns, and an entry's origin is refuted on the rows it selects
 
-Two row templates may declare submission metadata for the same column and test
-code only with identical declarations: identical declarations describe one
-value, and conflicting declarations fail rather than merge. The refutations of
-computed, literal and copied values in [SUB-19](#sub-19) apply to each
-value-level entry against the derivation that produces the column's value in
-that row template.
+Every build of a specification declaring value-level entries checks the
+completed rows before publication: a row two entries of one column select
+fails, reporting its keys and the entries' ids, and an entry that selects no
+row is a `warning`. An entry's own origin is refuted under
+[SUB-19](#sub-19) against every derivation of the column that can produce a
+row its where clause selects, and against every derivation of the column when
+that cannot be known.
 
-Fails: `conflicting_value_metadata`, `refuted_value_origin`.
-Evidence: `rust/crates/yamaa-core/tests/schema_submission.rs::identical_declarations_at_distinct_nodes_share_one_value_definition`, `rust/crates/yamaa-core/tests/schema_submission.rs::each_independent_value_admission_control_has_the_required_condition_and_row_path`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionValueOriginRefuted`.
+Fails: `value_level_multiple_matches`, `value_level_unmatched`, `refuted_value_origin`.
+Evidence: `negative-value-level-ambiguous-row`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::a_row_two_entries_select_fails_with_its_keys_and_both_entries`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::an_entry_that_matches_no_row_is_a_warning_and_scoped_checks_read_their_rows`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::predecessor_columns_copy_the_column_their_description_names`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionValueOriginRefuted`.
 Replaces: REQ-1167, REQ-1168.
 
-That derivation is the row template's derivation, or the column-level
-derivation when the row template inherits a uniform one. The refutation follows
-the entry, and the origin claim is per value. Conflicting declarations fail
-with `conflicting_value_metadata`, not a last-wins merge; a value-level origin
-the derivation refutes fails with `refuted_value_origin`, and so does a
-value-level `Predecessor` whose derivation is not the copy
-[SUB-20](#sub-20) requires.
+Both checks run where [Verification](../verification.md) runs a column
+verification, after the column's declared verifications and before its other
+submission checks, and the run report records each as a `check` row named
+`value_level` ([CHECK-23](../verification.md#check-23)). The check at
+`columns.<column>.submission.value_level` fails with
+`value_level_multiple_matches` when any row is selected by two entries,
+reporting the column, the failure count, the offending keys and, aligned with
+them, the ids of the entries each row matches.
+
+The check of one entry, at the entry's path, has `warning` severity with the
+semantics of [CHECK-2](../verification.md#check-2): it fails nothing and
+changes no row. It examines the artifact as one unit, and an entry that
+selects no row is violated with `value_level_unmatched`, reporting the column
+and the entry. The violation is not an issue: it is a row of every run's
+report, with `COUNT` and `TOTAL` `1` and `KEYS` `[{}]`
+([CHECK-24](../verification.md#check-24)). Declaring entries does not require
+`output.report` ([CHECK-22](../verification.md#check-22)); the file carries
+the row when the specification declares one.
+
+A construction is a row template, or the construction from column derivations
+of a specification without row templates. A construction cannot produce a row
+an entry selects when it derives a where column as a bare `literal` outside
+the entry's values, a missing literal included, and every row it produces is
+selected when it derives every where column as a literal among them. An
+entry's origin is refuted against the column's derivation in every
+construction that can produce its rows, with the table and the copy check of
+[SUB-19](#sub-19) and [SUB-20](#sub-20); the column's own origin answers for
+every construction no entry declaring its own origin selects completely. An
+entry without its own origin answers with the column's, which the column's
+refutation covers. A refuted entry fails with `refuted_value_origin` at the
+entry's path, reporting the column, the entry, the refuting derivation and the
+declared type.
 
 ## Origin
 
@@ -623,7 +672,9 @@ this specification; [SUB-20](#sub-20) checks the copy a `Predecessor` claims,
 which only a bare `source` of the predecessor's input dataset makes.
 
 When the entries of a row-derived column disagree, no shared type is an error,
-not a silently admitted origin. A refuted origin fails with
+not a silently admitted origin. A row template every row of which a value-level
+entry declaring its own origin selects answers to that entry instead
+([SUB-13](#sub-13)). A refuted origin fails with
 `origin_contradicts_derivation`, reporting the column, the declared type and
 the derivation that refutes it.
 
@@ -654,9 +705,9 @@ under [SUB-19](#sub-19), but neither is a `source` of the predecessor's input
 dataset. A bare `source` of another dataset or column, such a pivot or lookup
 read, or a `source` without the `filter` a written condition requires, fails
 with `origin_contradicts_derivation`, reporting the column, the predecessor and
-the reason. A value-level `Predecessor` entry is checked against its row
-template's derivation and fails with `refuted_value_origin`, as
-[SUB-13](#sub-13) states.
+the reason. A value-level `Predecessor` entry is checked against the
+derivations that can produce the rows it selects and fails with
+`refuted_value_origin`, as [SUB-13](#sub-13) states.
 
 The copy is checked when the specification is validated on its own. The
 labels are compared when a document composes the specification: composition
@@ -739,8 +790,8 @@ Checked when the specification is validated on its own:
 - the graph refutations of [SUB-19](#sub-19), the form of a `Predecessor`
   description ([SUB-16](#sub-16)) and the copy it claims
   ([SUB-20](#sub-20));
-- the value-level declaration rules of [SUB-12](#sub-12) and
-  [SUB-13](#sub-13);
+- the value-level declaration rules of [SUB-12](#sub-12) and the entry
+  origin refutation of [SUB-13](#sub-13);
 - the presence of `method` for a declared `Derived` origin
   ([SUB-18](#sub-18));
 - the resolution of `mandatory` from the keys, its declaration and the class's
@@ -760,8 +811,10 @@ Checked when a document composes the specification:
   the section's documents and depend on its `context`, and the predecessor
   labels of [SUB-20](#sub-20), which read every section's specifications.
 
-The transport lengths of [SUB-24](#sub-24) are measured after composition, from
-the published artifacts, when a transport is requested.
+The row checks of [SUB-13](#sub-13) run in every build of the specification,
+before publication. The transport lengths of [SUB-24](#sub-24) are measured
+after composition, from the published artifacts, when a transport is
+requested.
 
 Only the study document says which standard the identifier names. A
 specification that is never composed carries declarations no family has
@@ -777,11 +830,11 @@ When the selected section requests a transport, a character column's length is
 the longest published value, in bytes and at least 1, across every composed
 dataset of the section that carries a column of that name; a SUPP-- dataset is
 measured on its own. A value-level definition's length is the longest value
-over the rows its test code selects. A `text` column's document `Length` and
+over the rows its where clause selects. A `text` column's document `Length` and
 Dataset-JSON `length` are that length, and its SAS Transport variable that
 wide; the declared `length` stays the bound [SUB-8](#sub-8) enforces.
 
-Evidence: `sdtm-dm-metadata`, `sdtm-dm-xpt`, `adam-adsl-xpt`, `rust/crates/yamaa-adapters/tests/submission_transport.rs::shared_column_lengths_span_datasets_and_supplemental_datasets_stand_alone`.
+Evidence: `sdtm-dm-metadata`, `sdtm-dm-xpt`, `adam-adsl-xpt`, `sdtm-suppdm-metadata`, `rust/crates/yamaa-adapters/tests/submission_transport.rs::shared_column_lengths_span_datasets_and_supplemental_datasets_stand_alone`.
 
 A character column is a `str` column, and a `date` or `datetime` outside `adam`,
 which travels as its canonical text ([XPT-6](xpt.md#xpt-6)); only a `text`
