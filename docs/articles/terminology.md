@@ -18,7 +18,7 @@ Keep sponsor-defined lists in a source that omits `standard`.
 |---|---|
 | Published terminology | Set `standard.name`, `standard.publishing_set`, and `standard.version` once for all lists in that source. |
 | Sponsor-defined list | Omit `standard`; supply the list and its items. |
-| Sponsor extension of a published list | Keep the published `standard`, set the list's `extensible: true`, and mark added items `extended: true`. |
+| Sponsor extension of a published list | Keep the published `standard`, set the list's `extensible: true`, and mark added items `extended: true` with no `alias`: an added value has no NCI code. |
 
 The terminology release is separate from `schema_version` and from an
 implementation-guide version such as `sdtm.standard.version` (`SDTMIG`).
@@ -148,8 +148,10 @@ checking.
 In this example, changing `SEX` to `INVALID`, `AGEGR1` to `OTHER` or `DTYPE` to
 `OTHER` fails the build's value check. `DTYPE` is extensible, which lets the
 study add a value: declare it as an item marked `extended: true`, and the
-Define-XML document marks it as an extended value. A text list binds to `str`,
-an integer list to `int`, and a float list to `float`.
+Define-XML document marks it as an extended value. An added value has no
+published concept identifier, so it declares no `alias`, and a submission
+document requires none of it. A text list binds to `str`, an integer list to
+`int`, and a float list to `float`.
 
 A list with `items` already states its column's value set, so an
 `allowed_values` verification on the same column is rejected as a redundant

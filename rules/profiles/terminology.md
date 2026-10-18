@@ -48,8 +48,9 @@ Evidence: `sdtm-dm-metadata`, `sdtm-ae-coding`, `sdtm-vs-epoch-from-subject-elem
 Replaces: REQ-0928, REQ-0930, REQ-0958.
 
 Both aliases are optional here; [DEFINE-4](define-xml.md#define-4) states when a
-document requires an alias. A `standard` naming a declared standard whose type
-is not `CT` fails validation.
+document requires an alias, and [CT-6](#ct-6) refuses one on a sponsor-extended
+item, which has no published identifier. A `standard` naming a declared
+standard whose type is not `CT` fails validation.
 
 ## Values
 
@@ -110,21 +111,33 @@ with gaps.
 
 <a id="ct-6"></a>
 
-### CT-6. Only an extensible published codelist may carry sponsor-extended items
+### CT-6. Only an extensible published codelist may carry sponsor-extended items, and an extended item declares no alias
 
 `extended` marks an item the sponsor added to a published list. It defaults to
 false and may be true only on an `extensible` codelist whose source declares
-`standard`. An `extended: true` item on a sponsor-defined or non-extensible
-codelist fails validation.
+`standard`. An extended item has no published identifier, so it declares no
+`alias`. An `extended: true` item on a sponsor-defined or non-extensible
+codelist, or one that declares `alias`, fails validation.
 
-Fails: `codelist_extension_not_admitted`.
-Evidence: `rust/crates/yamaa-core/tests/project_execution.rs::extensions_require_both_a_published_source_and_an_extensible_list`, `rust/crates/yamaa-core/tests/project_execution.rs::complete_independent_item_findings_survive_invalid_shape`, `rust/crates/yamaa-core/tests/support/project_environment.rs`.
+Fails: `codelist_extension_not_admitted`, `codelist_extended_alias`.
+Evidence: `sdtm-ta-sponsor-epoch`, `rust/crates/yamaa-core/tests/project_execution.rs::extensions_require_both_a_published_source_and_an_extensible_list`, `rust/crates/yamaa-core/tests/project_execution.rs::extended_items_carry_no_published_alias`, `rust/crates/yamaa-core/tests/project_execution.rs::complete_independent_item_findings_survive_invalid_shape`, `rust/crates/yamaa-core/tests/support/project_environment.rs`.
 Replaces: REQ-0934, REQ-0952.
 
 Adding a value to a list that admits no additions is a contradiction rather
 than an extension. A sponsor addition is an item like any other, so
 [CT-7](#ct-7) enforces it with the published items, and
 [DEFINE-20](define-xml.md#define-20) marks it `def:ExtendedValue="Yes"`.
+
+An item's `alias` carries the published identifier of the value
+([CT-2](#ct-2)), which [DEFINE-20](define-xml.md#define-20) writes as its NCI
+code. A sponsor addition has none, so [DEFINE-4](define-xml.md#define-4)
+requires no alias of it under `context: Submission`, and an alias declared on
+it would claim a code the published list does not assign. An extension the
+list does not admit fails with `codelist_extension_not_admitted` at the item's
+`extended`; an alias on an extended item fails with `codelist_extended_alias`
+at the item's `alias`, reporting the codelist, the item's value and the alias.
+Both are checked wherever the environment's codelists are validated, in every
+context.
 
 ## Bindings
 

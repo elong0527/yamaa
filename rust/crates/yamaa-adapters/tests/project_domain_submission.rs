@@ -1133,6 +1133,87 @@ columns:
             assert!(!study.0.join("input.csv").exists());
         }
 
+        /// SUB-19's bare reads beyond a `source`: an `ONLY` pivot of long
+        /// collected records and a plain lookup copy a stored value.
+        const READS: &str = r#"schema_version: '1.0'
+domain: LB
+keys: [USUBJID, LBTESTCD]
+input: {ODM: input.csv, RANGES: ranges.csv}
+intermediates:
+  - id: RANGE
+    dataset: RANGES
+    key: {TESTCD: LBTESTCD}
+output: {path: output.csv, columns: [USUBJID, LBTESTCD, LBORRES, LBORNRLO]}
+columns:
+  - {name: USUBJID, type: str, derivation: ODM.SubjectKey}
+  - {name: LBTESTCD, type: str}
+  - name: LBORRES
+    type: str
+    submission: {origin: {type: Collected, source: Investigator}}
+  - name: LBORNRLO
+    type: str
+    derivation: RANGE.LOW
+    submission: {origin: {type: Collected, source: Vendor}}
+rows:
+  - id: glucose
+    dataset: ODM
+    group_by: [ODM.SubjectKey]
+    derivations:
+      LBTESTCD: {literal: GLUC}
+      LBORRES:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.LB.GLUC'"
+          expr: "ONLY(ODM.Value)"
+"#;
+        #[test]
+        fn pivots_and_plain_lookups_are_bare_reads_that_admit_collected() {
+            // A pivot selects the one collected value of its group, and a lookup
+            // that declares no derivations copies the record it selects.
+            let study = Study::new();
+            let issues = study.check(READS);
+            assert!(issues.is_empty(), "{issues:?}");
+            let shorthand = READS.replace(
+                "aggregate:\n          filter: \"ODM.ItemOID = 'IT.LB.GLUC'\"\n          expr: \"ONLY(ODM.Value)\"",
+                "aggregate: \"ONLY(ODM.Value)\"",
+            );
+            assert!(study.check(&shorthand).is_empty());
+            for (from, to, column) in [
+                // Any other reduction computes the value it returns.
+                ("ONLY(ODM.Value)", "MAX(ODM.Value)", "LBORRES"),
+                // A lookup that derives fields is not a plain copy.
+                (
+                    "key: {TESTCD: LBTESTCD}\n",
+                    "key: {TESTCD: LBTESTCD}\n    derivations:\n      LOWTEXT: {str_case: {source: LOW, to: upper}}\n",
+                    "LBORNRLO",
+                ),
+            ] {
+                let issues = study.check(&READS.replacen(from, to, 1));
+                let refuted: Vec<_> = issues
+                    .iter()
+                    .filter(|issue| issue.condition == "origin_contradicts_derivation")
+                    .collect();
+                assert_eq!(refuted.len(), 1, "{column}: {issues:?}");
+                assert_eq!(
+                    refuted[0].spec_paths,
+                    [format!("columns.{column}.submission")]
+                );
+                assert_eq!(refuted[0].context["origin_type"], "Collected");
+                assert_eq!(
+                    refuted[0].context["admitted"],
+                    yamaa_adapters::json!(["Assigned", "Derived", "Not Available", "Other"])
+                );
+            }
+            // A plain lookup is a bare read, but it is no predecessor's dataset.
+            let issues = study.check(&READS.replace(
+                "{origin: {type: Collected, source: Vendor}}",
+                "{origin: {type: Predecessor, description: RANGE.LOW}}",
+            ));
+            assert_eq!(issues.len(), 1, "{issues:?}");
+            assert_eq!(issues[0].condition, "origin_contradicts_derivation");
+            assert_eq!(issues[0].context["reason"], "predecessor_source");
+            assert!(!study.0.join("input.csv").exists());
+        }
+
         const PREDECESSORS: &str = r#"schema_version: '1.0'
 domain: ADSL
 keys: [USUBJID]

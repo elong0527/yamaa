@@ -28,17 +28,24 @@ and a directory listing is not one.
 
 <a id="define-2"></a>
 
-### DEFINE-2. The section's `define` target names the document's file and must end in `.xml`
+### DEFINE-2. The section's `define` target names the document's file, ends in `.xml`, and is `define.xml` beside a transport
 
 The selected section's `define` names the file the document produces, and its
-extension must be `.xml`. The extension mapping of
-[OUTPUT-5](../output.md#output-5) is not consulted: that
-mapping selects a profile for a dataset artifact, and this artifact has one
-form. A `define` target whose extension is not `.xml` fails validation.
+extension must be `.xml`; when the section requests a transport, its file name
+must be exactly `define.xml`. The extension mapping of
+[OUTPUT-5](../output.md#output-5) is not consulted: that mapping selects a
+profile for a dataset artifact, and this artifact has one form. A `define`
+target whose extension is not `.xml`, or that is not named `define.xml` beside
+a transport, fails validation.
 
 Fails: `value_not_permitted`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionDefineExtension`.
+Evidence: `sdtm-dm-metadata`, `negative-transport-define-name`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionDefineExtension`.
 Replaces: REQ-0961, REQ-1014.
+
+The transport files are written beside the document
+([JSON-1](dataset-json.md#json-1)) and Dataset-JSON names it as `define.xml`
+([JSON-8](dataset-json.md#json-8)). The file name is compared exactly, case
+included, and the directory is free.
 
 <a id="define-3"></a>
 
@@ -66,13 +73,13 @@ with `value_not_permitted`.
 `context` states whether the document is used in a submission. Under
 `context: Other`, a document is generated from whatever the declarations supply
 and is valid against the Define-XML 2.1 schema. Under `context: Submission`,
-each requirement listed below additionally holds; each is a conditional
-requirement the Define-XML specification places on a regulatory submission. A
+each requirement listed below additionally holds; each is a requirement the
+Define-XML specification or a regulator's transport places on a submission. A
 requirement unmet under `Submission` fails, reporting the requirement and the
 position.
 
-Fails: `missing_required_field`.
-Evidence: `sdtm-dm-metadata`, `sdtm-vs-epoch-from-subject-elements`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionCdiscAliasMissing`, `rust/crates/yamaa-adapters/tests/file_resources.rs::collected_origins_name_their_form_page_under_submission`.
+Fails: `missing_required_field`, `sas_name_too_long`, `transport_label_invalid`, `transport_text_invalid`.
+Evidence: `sdtm-dm-metadata`, `sdtm-ta-sponsor-epoch`, `sdtm-vs-epoch-from-subject-elements`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionCdiscAliasMissing`, `rust/tests/host-fixtures/cases.json::submission-column-label`, `rust/crates/yamaa-adapters/tests/file_resources.rs::collected_origins_name_their_form_page_under_submission`.
 Replaces: REQ-0963, REQ-1003, REQ-1004, REQ-1024.
 
 Nothing in this profile is relaxed by `Other`; that context only omits the
@@ -82,6 +89,11 @@ requirements a regulator imposes. Under `Submission`:
   and `send` families;
 - every dataset's `SASDatasetName` and every column's `SASFieldName` is
   written, so [DEFINE-22](#define-22) must admit every name;
+- every dataset's `submission.label` and every column's `label` is at most 40
+  characters of printable ASCII ([XPT-5](xpt.md#xpt-5));
+- when a transport is requested, every published text value is printable
+  ASCII of at most 200 bytes ([XPT-7](xpt.md#xpt-7)), for a Dataset-JSON file
+  as for a SAS Transport file;
 - every dataset carries a `def:ArchiveLocationID`, unless it declares
   `has_no_data`;
 - every dataset carries a `Description` and a `def:Class`;
@@ -94,13 +106,20 @@ requirements a regulator imposes. Under `Submission`:
   `documents` with at least one `pages` reference into the annotated case
   report form, which [SUB-17](submission.md#sub-17) requires; and
 - every codelist that declares `items` and is drawn from a standard whose name
-  is `CDISC/NCI` declares `alias`, and so does every one of its items. An
-  external codelist is excluded: it represents its dictionary rather than CDISC
-  controlled terminology, and has no items to identify.
+  is `CDISC/NCI` declares `alias`, and so does every one of its items except
+  one declared `extended: true`, which has no NCI code and declares no alias
+  ([CT-6](terminology.md#ct-6)). An external codelist is excluded: it
+  represents its dictionary rather than CDISC controlled terminology, and has
+  no items to identify.
 
-A codelist or item `alias` missing under `Submission` fails with
-`missing_required_field`. A collected origin without a page reference fails as
-[SUB-17](submission.md#sub-17) states.
+A codelist `alias`, or the `alias` of a published item, missing under
+`Submission` fails with `missing_required_field`; a sponsor's extension of an
+extensible list, such as an added epoch, unit or test code, needs none. A
+collected origin without a page reference fails as
+[SUB-17](submission.md#sub-17) states. A name, label or text value outside
+these limits fails as [XPT-5](xpt.md#xpt-5) and [XPT-7](xpt.md#xpt-7) state;
+under `context: Other`, a SAS Transport file still refuses what it cannot
+carry.
 
 ## Composition
 
@@ -396,45 +415,48 @@ Replaces: REQ-0985, REQ-0986.
 | `Repeating` | `Yes` when `submission.repeating`, else `No` |
 | `IsReferenceData` | `Yes` when `submission.reference_data`, else `No` |
 | `def:Structure` | `submission.structure` |
-| `def:ArchiveLocationID` | the dataset's generated leaf identifier |
+| `def:ArchiveLocationID` | the dataset's generated leaf identifier, when it has a leaf |
 | `def:StandardOID` | the generated identifier of the standard [DEFINE-6](#define-6) binds |
 | `def:CommentOID` | generated, when `submission.comment` is declared |
 | `def:HasNoData` | `Yes` when `submission.has_no_data`, else omitted |
 | `Description` | `submission.label` |
 | `ItemRef` | one per `output.columns` entry, in that order |
 | `def:Class` | `submission.class`, with `def:SubClass` when declared |
-| `def:leaf` | the artifact, per [DEFINE-16](#define-16) |
+| `def:leaf` | the file the package carries, per [DEFINE-16](#define-16) |
 
 A declared `Purpose` could only agree with or contradict the derivation.
 
 <a id="define-16"></a>
 
-### DEFINE-16. A dataset's leaf names the file the package carries, relative to the document and inside its directory
+### DEFINE-16. A dataset's leaf names its transport file or its artifact, relative to the document and inside its directory
 
 The dataset's `def:leaf` names the file the package carries for that dataset:
-the JSON target derived from its specification's output path when the selected
-section requests `dataset_json` ([JSON-12](dataset-json.md#json-12)), and
-otherwise the artifact its specification produces. `xlink:href` is that path
-relative to the directory holding the generated document, written with `/`
-separators, and `def:title` is the path's final component. The href must not
-begin with a parent traversal.
+its transport file beside the document when the selected section requests a
+transport ([JSON-1](dataset-json.md#json-1)), and otherwise the artifact its
+specification produces. `xlink:href` is that path relative to the directory
+holding the generated document, written with `/` separators, and `def:title`
+is the path's final component. The href must not begin with a parent
+traversal. A dataset with no data and no transport file has no leaf.
 
 Fails: `artifact_outside_document`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::inherited_original_output_supplies_both_json_capture_and_publication_target`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::DefineArtifactOutsidePackage`.
+Evidence: `sdtm-dm-metadata`, `sdtm-dm-xpt`, `rust/crates/yamaa-adapters/tests/file_resources.rs::inherited_original_output_supplies_both_json_capture_and_publication_target`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::DefineArtifactOutsidePackage`.
 Replaces: REQ-0987, REQ-0988, REQ-1021.
 
 A document that pointed outside its own directory would describe a file that is
-not in the package it belongs to. An artifact path that cannot be expressed
-relative to the document's directory without a parent traversal fails with
-`artifact_outside_document`, reporting the dataset and both paths.
+not in the package it belongs to. Without a transport, an artifact path that
+cannot be expressed relative to the document's directory without a parent
+traversal fails with `artifact_outside_document`, reporting the dataset and
+both paths. A transport file is the document's sibling, so its href is its file
+name wherever the artifact is published.
 
-The leaf names a file this language produced, and the two it produces are the
-artifact [Output](../output.md) publishes and the
-Dataset-JSON file [Dataset-JSON](dataset-json.md) writes beside this document.
-A document that named any other container would assert a file no run wrote. A
-package that converts its artifacts to a container neither profile writes
-regenerates the document against the converted paths, and that conversion is
-outside this language.
+The leaf names a file this language produced: the artifact
+[Output](../output.md) publishes, the Dataset-JSON file
+[Dataset-JSON](dataset-json.md) writes or the SAS Transport file
+[SAS Transport](xpt.md) writes. A document that named any other container would
+assert a file no run wrote. When a transport is requested, a dataset declared
+to have no data has no file ([JSON-3](dataset-json.md#json-3)); its
+`ItemGroupDef` carries neither `def:ArchiveLocationID` nor `def:leaf`, as
+[DEFINE-4](#define-4) admits for `def:HasNoData`.
 
 <a id="define-17"></a>
 
@@ -499,10 +521,10 @@ Replaces: REQ-0992, REQ-0993, REQ-0994.
 | `OID` | generated |
 | `Name` | the column name |
 | `DataType` | the resolved submission data type of [SUB-6](submission.md#sub-6) |
-| `Length` | `submission.length`, when [Submission metadata](submission.md) admits it |
+| `Length` | the length of [SUB-7](submission.md#sub-7), [SUB-24](submission.md#sub-24) or [SUB-25](submission.md#sub-25), when one applies |
 | `SignificantDigits` | `submission.significant_digits`, when [Submission metadata](submission.md) admits it |
 | `SASFieldName` | the column name, when [DEFINE-22](#define-22) admits it |
-| `def:DisplayFormat` | `submission.display_format`, when declared |
+| `def:DisplayFormat` | `submission.display_format`, or the format [SUB-25](submission.md#sub-25) fixes |
 | `def:CommentOID` | generated, when `submission.comment` is declared |
 | `Description` | the column's `label` |
 | `CodeListRef` | the bound codelist's generated identifier, when declared |
@@ -532,7 +554,7 @@ produces `CodeListItem` children when its items declare `decode` and
 `EnumeratedItem` children when they do not. A codelist declaring `external`
 carries one `ExternalCodeList` child and no items.
 
-Evidence: `sdtm-dm-metadata`, `sdtm-ae-coding`, `python/tests/installed/installed_public_define.py::test_ae_vs_independent_fixed_time_schema_and_structure`.
+Evidence: `sdtm-dm-metadata`, `sdtm-ae-coding`, `sdtm-ta-sponsor-epoch`, `python/tests/installed/installed_public_define.py::test_ae_vs_independent_fixed_time_schema_and_structure`.
 Replaces: REQ-0995, REQ-0996, REQ-0997, REQ-0998.
 
 A codelist declaring `items` therefore always carries exactly one of
@@ -545,7 +567,8 @@ within a codelist, so the element is determined rather than chosen per item.
 Each item carries `CodedValue` from `value`, `Rank` when declared, and
 `def:ExtendedValue="Yes"` when `extended`. A `CodeListItem` carries a `Decode`
 child holding the decode text, and either element carries an `Alias` child with
-`Context="nci:ExtCodeID"` when the item declares `alias`. Items keep the
+`Context="nci:ExtCodeID"` when the item declares `alias`, which an extended
+item never does ([CT-6](terminology.md#ct-6)). Items keep the
 codelist's declaration order, and `OrderNumber` is not written: the document
 order already presents them in it, and a second ordering could disagree.
 
@@ -576,19 +599,21 @@ reference.
 
 <a id="define-22"></a>
 
-### DEFINE-22. Transport names are written only when they have at most eight characters
+### DEFINE-22. Transport names are written only when they match the SAS transport name patterns
 
-`SASDatasetName` and `SASFieldName` are written only for names of at most eight
-characters matching `^[A-Za-z_][A-Za-z0-9_]*$`. A longer name is omitted, and
-fails under `Submission` instead. Define-XML carries a long `Alias` element,
-which [DEFINE-26](#define-26) defers.
+`SASDatasetName` is written only for a dataset name matching
+`^[A-Z][A-Z0-9]{0,7}$`, and `SASFieldName` only for a column name matching
+`^[A-Z][A-Z0-9_]{0,7}$`. A name its pattern refuses is omitted, and fails
+instead under `Submission` or when the section requests `xpt`. Define-XML
+carries a long `Alias` element, which [DEFINE-26](#define-26) defers.
 
 Fails: `sas_name_too_long`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionSasName`.
+Evidence: `sdtm-dm-metadata`, `negative-transport-name-too-long`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionSasName`.
 Replaces: REQ-1002, REQ-1023.
 
-A transport name this rule does not admit fails under `Submission` with
-`sas_name_too_long`, reporting the name.
+A transport name this rule does not admit fails with `sas_name_too_long` at the
+dataset's or column's position, reporting the name and the pattern; lower case,
+a leading underscore and a ninth character are all refused.
 
 ## Serialization
 
@@ -693,7 +718,7 @@ Replaces: REQ-1011, REQ-1012.
 The long transport-name `Alias` and `FormalExpression` have a declaration but
 no generation, and each is stated rather than silently dropped. For a name
 longer than eight characters [DEFINE-22](#define-22) omits the attribute and
-fails under `Submission` instead.
+fails under `Submission` or `xpt` instead.
 
 <a id="define-27"></a>
 
