@@ -1,0 +1,693 @@
+//! The wire type of each Thrift field the native decoder reads.
+//!
+//! parquet 57.3.0 reads a known field id by its declared type whatever wire
+//! type its field header carries, reads each element of a known list by its
+//! declared type whatever element type the list header carries, and takes a
+//! known `bool` from the field header, panicking when there is none. It skips
+//! only an unknown id by that field's own wire type. A known field with
+//! another wire type would make the native decoder read other bytes, or other
+//! values, than the ones admission checked. Admission therefore refuses it as
+//! malformed wherever it occurs, repeats included.
+//!
+//! The table follows parquet 57.3.0's readers as this build calls them:
+//! `parquet_metadata_from_bytes`, `read_row_group`, `read_column_chunk`,
+//! `read_column_metadata` and the page header readers in
+//! `file/metadata/thrift/mod.rs`; the readers `thrift_struct!`
+//! (`parquet_macros.rs`) generates for the structs declared there, in
+//! `file/metadata/mod.rs` and in `basic.rs`; and the hand-written readers of
+//! `LogicalType`, `ColumnOrder` and `EncodingMask` in `basic.rs`. The native
+//! page reader uses `PageHeader::read_thrift_without_stats`, since page
+//! statistics are off by default, so it skips data page statistics like any
+//! unknown field. This build does not enable parquet's `encryption` feature,
+//! so it also skips the encryption fields of `FileMetaData` and `ColumnChunk`.
+use super::compact::{Cursor, Error, Value};
+
+/// A Thrift struct or union that the native decoder reads field by field.
+#[derive(Clone, Copy, Debug)]
+pub(super) enum Shape {
+    FileMetaData,
+    SchemaElement,
+    /// A union: the native decoder reads the one variant present.
+    LogicalType,
+    DecimalType,
+    /// `TimeType` and `TimestampType`, which share one declaration.
+    TimestampType,
+    /// A union of empty structs.
+    TimeUnit,
+    IntType,
+    VariantType,
+    GeometryType,
+    GeographyType,
+    RowGroup,
+    SortingColumn,
+    ColumnChunk,
+    ColumnMetaData,
+    Statistics,
+    PageEncodingStats,
+    SizeStatistics,
+    GeospatialStatistics,
+    BoundingBox,
+    KeyValue,
+    /// A union whose one known variant is an empty struct.
+    ColumnOrder,
+    PageHeader,
+    DataPageHeader,
+    DataPageHeaderV2,
+    DictionaryPageHeader,
+    /// No field is read: `IndexPageHeader`, and the empty structs of the
+    /// union variants that carry no value.
+    Empty,
+}
+
+/// The wire type the native decoder reads a known field with.
+#[derive(Clone, Copy, Debug)]
+enum Wire {
+    Bool,
+    Byte,
+    I16,
+    I32,
+    I64,
+    Double,
+    Binary,
+    List(&'static Wire),
+    Struct(Shape),
+}
+
+impl Wire {
+    /// Whether a held wire type is this one. Either boolean wire type carries
+    /// a boolean field's value.
+    fn admits(self, kind: u8) -> bool {
+        matches!(
+            (self, kind),
+            (Self::Bool, 1 | 2)
+                | (Self::Byte, 3)
+                | (Self::I16, 4)
+                | (Self::I32, 5)
+                | (Self::I64, 6)
+                | (Self::Double, 7)
+                | (Self::Binary, 8)
+                | (Self::List(_), 9)
+                | (Self::Struct(_), 12)
+        )
+    }
+}
+
+impl Shape {
+    /// The wire type of field `id`, or `None` for a field the native decoder
+    /// skips by its own wire type.
+    fn field(self, id: i16) -> Option<Wire> {
+        use Shape::*;
+        use Wire::{Binary, Bool, Byte, Double, List, I16, I32, I64};
+        Some(match (self, id) {
+            (FileMetaData, 1) => I32,
+            (FileMetaData, 2) => List(&Wire::Struct(SchemaElement)),
+            (FileMetaData, 3) => I64,
+            (FileMetaData, 4) => List(&Wire::Struct(RowGroup)),
+            (FileMetaData, 5) => List(&Wire::Struct(KeyValue)),
+            (FileMetaData, 6) => Binary,
+            (FileMetaData, 7) => List(&Wire::Struct(ColumnOrder)),
+            (SchemaElement, 1..=3 | 5..=9) => I32,
+            (SchemaElement, 4) => Binary,
+            (SchemaElement, 10) => Wire::Struct(LogicalType),
+            // Id 9 is reserved, and an unknown variant is skipped.
+            (LogicalType, 1..=4 | 6 | 11..=15) => Wire::Struct(Empty),
+            (LogicalType, 5) => Wire::Struct(DecimalType),
+            (LogicalType, 7 | 8) => Wire::Struct(TimestampType),
+            (LogicalType, 10) => Wire::Struct(IntType),
+            (LogicalType, 16) => Wire::Struct(VariantType),
+            (LogicalType, 17) => Wire::Struct(GeometryType),
+            (LogicalType, 18) => Wire::Struct(GeographyType),
+            (DecimalType, 1 | 2) => I32,
+            (TimestampType, 1) => Bool,
+            (TimestampType, 2) => Wire::Struct(TimeUnit),
+            (TimeUnit, 1..=3) => Wire::Struct(Empty),
+            (IntType, 1) => Byte,
+            (IntType, 2) => Bool,
+            (VariantType, 1) => Byte,
+            (GeometryType | GeographyType, 1) => Binary,
+            (GeographyType, 2) => I32,
+            // total_compressed_size (6) is skipped.
+            (RowGroup, 1) => List(&Wire::Struct(ColumnChunk)),
+            (RowGroup, 2 | 3 | 5) => I64,
+            (RowGroup, 4) => List(&Wire::Struct(SortingColumn)),
+            (RowGroup, 7) => I16,
+            (SortingColumn, 1) => I32,
+            (SortingColumn, 2 | 3) => Bool,
+            (ColumnChunk, 1) => Binary,
+            (ColumnChunk, 2 | 4 | 6) => I64,
+            (ColumnChunk, 3) => Wire::Struct(ColumnMetaData),
+            (ColumnChunk, 5 | 7) => I32,
+            // path_in_schema (3) and key_value_metadata (8) are skipped.
+            (ColumnMetaData, 1 | 4 | 15) => I32,
+            (ColumnMetaData, 2) => List(&I32),
+            (ColumnMetaData, 5..=7 | 9..=11 | 14) => I64,
+            (ColumnMetaData, 12) => Wire::Struct(Statistics),
+            (ColumnMetaData, 13) => List(&Wire::Struct(PageEncodingStats)),
+            (ColumnMetaData, 16) => Wire::Struct(SizeStatistics),
+            (ColumnMetaData, 17) => Wire::Struct(GeospatialStatistics),
+            (Statistics, 1 | 2 | 5 | 6) => Binary,
+            (Statistics, 3 | 4) => I64,
+            (Statistics, 7 | 8) => Bool,
+            (PageEncodingStats, 1..=3) => I32,
+            (SizeStatistics, 1) => I64,
+            (SizeStatistics, 2 | 3) => List(&I64),
+            (GeospatialStatistics, 1) => Wire::Struct(BoundingBox),
+            (GeospatialStatistics, 2) => List(&I32),
+            (BoundingBox, 1..=8) => Double,
+            (KeyValue, 1 | 2) => Binary,
+            (ColumnOrder, 1) => Wire::Struct(Empty),
+            (PageHeader, 1..=4) => I32,
+            (PageHeader, 5) => Wire::Struct(DataPageHeader),
+            (PageHeader, 6) => Wire::Struct(Empty),
+            (PageHeader, 7) => Wire::Struct(DictionaryPageHeader),
+            (PageHeader, 8) => Wire::Struct(DataPageHeaderV2),
+            // Each data page header's statistics are skipped.
+            (DataPageHeader, 1..=4) => I32,
+            (DataPageHeaderV2, 1..=6) => I32,
+            (DataPageHeaderV2, 7) => Bool,
+            (DictionaryPageHeader, 1 | 2) => I32,
+            (DictionaryPageHeader, 3) => Bool,
+            _ => return None,
+        })
+    }
+}
+
+/// Refuse a known field of the admitted struct `value`, read as `shape`,
+/// whose held wire type is not the one the native decoder reads it with, at
+/// every depth the decoder reaches. Each byte is read once.
+pub(super) fn check(value: Value<'_>, shape: Shape) -> Result<(), Error> {
+    walk(&mut Cursor::new(value), shape)
+}
+
+fn walk(cursor: &mut Cursor<'_>, shape: Shape) -> Result<(), Error> {
+    let mut previous = 0;
+    while let Some((id, kind)) = cursor.field(previous)? {
+        previous = id;
+        let Some(wire) = shape.field(id) else {
+            cursor.skip_value(kind)?;
+            continue;
+        };
+        if !wire.admits(kind) {
+            return Err(Error::Malformed);
+        }
+        match wire {
+            Wire::Struct(shape) => walk(cursor, shape)?,
+            Wire::List(element) => {
+                let (held, count) = cursor.collection()?;
+                // The native decoder reads no element of an empty list.
+                if count != 0 && !element.admits(held) {
+                    return Err(Error::Malformed);
+                }
+                for _ in 0..count {
+                    match *element {
+                        Wire::Struct(shape) => walk(cursor, shape)?,
+                        _ => cursor.skip_element(held)?,
+                    }
+                }
+            }
+            _ => cursor.skip_value(kind)?,
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::{framing, reader};
+    use arrow_array::{Int64Array, TimestampMicrosecondArray};
+
+    fn varint(mut value: u64, output: &mut Vec<u8>) {
+        while value >= 0x80 {
+            output.push(value as u8 | 0x80);
+            value >>= 7;
+        }
+        output.push(value as u8);
+    }
+
+    fn zigzag(value: i64) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        varint(((value << 1) ^ (value >> 63)) as u64, &mut bytes);
+        bytes
+    }
+
+    /// A Compact Protocol struct, written one field at a time.
+    #[derive(Default)]
+    struct Fields {
+        bytes: Vec<u8>,
+        last: i16,
+    }
+
+    impl Fields {
+        /// A field header of wire type `kind`, then `value` as given.
+        fn raw(mut self, id: i16, kind: u8, value: &[u8]) -> Self {
+            match i32::from(id) - i32::from(self.last) {
+                delta @ 1..=15 => self.bytes.push((delta as u8) << 4 | kind),
+                _ => {
+                    self.bytes.push(kind);
+                    self.bytes.extend(zigzag(id.into()));
+                }
+            }
+            self.last = id;
+            self.bytes.extend(value);
+            self
+        }
+
+        fn i32(self, id: i16, value: i64) -> Self {
+            self.raw(id, 5, &zigzag(value))
+        }
+
+        fn i64(self, id: i16, value: i64) -> Self {
+            self.raw(id, 6, &zigzag(value))
+        }
+
+        fn double(self, id: i16, value: f64) -> Self {
+            self.raw(id, 7, &value.to_le_bytes())
+        }
+
+        fn bool(self, id: i16, value: bool) -> Self {
+            self.raw(id, if value { 1 } else { 2 }, &[])
+        }
+
+        fn binary(self, id: i16, value: &[u8]) -> Self {
+            let mut bytes = Vec::new();
+            varint(value.len() as u64, &mut bytes);
+            bytes.extend(value);
+            self.raw(id, 8, &bytes)
+        }
+
+        fn uuid(self, id: i16) -> Self {
+            self.raw(id, 13, &[0x75; 16])
+        }
+
+        fn strct(self, id: i16, value: Fields) -> Self {
+            self.raw(id, 12, &value.end())
+        }
+
+        /// A list of encoded elements of wire type `element`.
+        fn list(self, id: i16, element: u8, items: &[Vec<u8>]) -> Self {
+            self.collection(id, 9, element, items)
+        }
+
+        /// A list (`kind` 9) or a set (`kind` 10) of at most 14 elements.
+        fn collection(self, id: i16, kind: u8, element: u8, items: &[Vec<u8>]) -> Self {
+            assert!(items.len() < 15);
+            let mut bytes = vec![(items.len() as u8) << 4 | element];
+            bytes.extend(items.concat());
+            self.raw(id, kind, &bytes)
+        }
+
+        /// The first form when `wrong`, the second otherwise.
+        fn pick(self, wrong: bool, mistyped: fn(Self) -> Self, typed: fn(Self) -> Self) -> Self {
+            if wrong {
+                mistyped(self)
+            } else {
+                typed(self)
+            }
+        }
+
+        fn end(mut self) -> Vec<u8> {
+            self.bytes.push(0);
+            self.bytes
+        }
+    }
+
+    /// Where a case adds fields: after the fields of one struct of `file`.
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    enum At {
+        File,
+        Leaf,
+        Group,
+        Chunk,
+        Meta,
+        Page,
+        Data,
+    }
+
+    /// The fields one case adds, and where.
+    type Addition = (At, fn(Fields) -> Fields);
+
+    /// An independently authored file: one REQUIRED INT64 column `V` holding
+    /// `values` in one uncompressed PLAIN V1 data page, with only the fields
+    /// parquet requires. `extra` adds fields to the struct `at` names.
+    fn file(values: &[i64], at: At, extra: impl Fn(Fields) -> Fields) -> Vec<u8> {
+        let add = |here: At, fields: Fields| if here == at { extra(fields) } else { fields };
+        let rows = values.len() as i64;
+        let body: Vec<u8> = values
+            .iter()
+            .flat_map(|value| value.to_le_bytes())
+            .collect();
+        let size = body.len() as i64;
+        // num_values; PLAIN; RLE definition and repetition levels.
+        let data = Fields::default().i32(1, rows).i32(2, 0).i32(3, 3).i32(4, 3);
+        // DATA_PAGE; uncompressed and compressed sizes.
+        let page = Fields::default().i32(1, 0).i32(2, size).i32(3, size);
+        let page = add(At::Page, page.strct(5, add(At::Data, data))).end();
+        let chunk = (page.len() + body.len()) as i64;
+        let meta = Fields::default()
+            .i32(1, 2) // INT64
+            .list(2, 5, &[zigzag(0)]) // encodings: PLAIN
+            .list(3, 8, &[b"\x01V".to_vec()]) // path_in_schema
+            .i32(4, 0) // UNCOMPRESSED
+            .i64(5, rows)
+            .i64(6, chunk)
+            .i64(7, chunk)
+            .i64(9, 4); // data_page_offset
+        let column = Fields::default().i64(2, 0).strct(3, add(At::Meta, meta));
+        let group = Fields::default().list(1, 12, &[add(At::Chunk, column).end()]);
+        let group = add(At::Group, group.i64(2, chunk).i64(3, rows)).end();
+        let root = Fields::default().binary(4, b"schema").i32(5, 1).end();
+        // INT64; REQUIRED; name.
+        let leaf = add(
+            At::Leaf,
+            Fields::default().i32(1, 2).i32(3, 0).binary(4, b"V"),
+        )
+        .end();
+        let footer = Fields::default().i32(1, 1).list(2, 12, &[root, leaf]);
+        let footer = add(At::File, footer.i64(3, rows).list(4, 12, &[group])).end();
+        let mut bytes = b"PAR1".to_vec();
+        bytes.extend(page);
+        bytes.extend(body);
+        bytes.extend(&footer);
+        bytes.extend((footer.len() as u32).to_le_bytes());
+        bytes.extend(b"PAR1");
+        bytes
+    }
+
+    fn malformed(bytes: &[u8]) -> bool {
+        matches!(framing::admit(bytes), Err(framing::Error::Malformed))
+    }
+
+    fn timestamp(unit: Fields) -> Fields {
+        Fields::default().strct(8, Fields::default().bool(1, false).strct(2, unit))
+    }
+
+    fn integer() -> Fields {
+        Fields::default().raw(1, 3, &[64]).bool(2, true)
+    }
+
+    fn bounding_box() -> Fields {
+        let corners = Fields::default().double(1, 0.0).double(2, 1.0);
+        corners.double(3, 0.0).double(4, 1.0)
+    }
+
+    #[test]
+    fn the_authored_file_reads_through_admission_and_the_native_decoder() {
+        let decoded = reader::read(&file(&[7, -1], At::File, |fields| fields)).unwrap();
+        let column = decoded.batches[0].column(0);
+        let values = column.as_any().downcast_ref::<Int64Array>().unwrap();
+        assert_eq!(values.values(), &[7, -1]);
+    }
+
+    /// For each Thrift struct the native decoder reads, one known field with
+    /// another wire type is malformed, and the same field with its declared
+    /// wire type is admitted.
+    #[test]
+    fn a_mistyped_known_field_of_each_struct_is_malformed() {
+        type Case = (&'static str, At, fn(Fields, bool) -> Fields);
+        let cases: [Case; 27] = [
+            // created_by as a UUID, which the native copy presents as a binary.
+            ("FileMetaData", At::File, |f, wrong| {
+                f.pick(wrong, |f| f.uuid(6), |f| f.binary(6, b"yamaa test"))
+            }),
+            ("SchemaElement", At::Leaf, |f, wrong| {
+                f.pick(wrong, |f| f.binary(9, b"7"), |f| f.i32(9, 7))
+            }),
+            // The INTEGER variant as a binary holding an IntType.
+            ("LogicalType", At::Leaf, |f, wrong| {
+                let union = Fields::default();
+                let union = union.pick(
+                    wrong,
+                    |u| u.binary(10, &integer().end()),
+                    |u| u.strct(10, integer()),
+                );
+                f.strct(10, union)
+            }),
+            ("DecimalType", At::Leaf, |f, wrong| {
+                let decimal = Fields::default().pick(wrong, |d| d.i64(1, 2), |d| d.i32(1, 2));
+                f.strct(10, Fields::default().strct(5, decimal.i32(2, 10)))
+            }),
+            ("TimestampType", At::Leaf, |f, wrong| {
+                let unit = Fields::default().strct(2, Fields::default());
+                let time = Fields::default().pick(wrong, |t| t.i32(1, 0), |t| t.bool(1, false));
+                f.strct(10, Fields::default().strct(8, time.strct(2, unit)))
+            }),
+            // MICROS as an empty binary, one byte like an empty struct.
+            ("TimeUnit", At::Leaf, |f, wrong| {
+                let unit = Fields::default().pick(
+                    wrong,
+                    |u| u.binary(2, b""),
+                    |u| u.strct(2, Fields::default()),
+                );
+                f.strct(10, timestamp(unit))
+            }),
+            ("IntType", At::Leaf, |f, wrong| {
+                let int = Fields::default().pick(wrong, |i| i.i32(1, 64), |i| i.raw(1, 3, &[64]));
+                f.strct(10, Fields::default().strct(10, int.bool(2, true)))
+            }),
+            ("IntType", At::Leaf, |f, wrong| {
+                let int = Fields::default().raw(1, 3, &[64]);
+                let int = int.pick(wrong, |i| i.i32(2, 1), |i| i.bool(2, true));
+                f.strct(10, Fields::default().strct(10, int))
+            }),
+            ("VariantType", At::Leaf, |f, wrong| {
+                let variant = Fields::default().pick(wrong, |v| v.i32(1, 1), |v| v.raw(1, 3, &[1]));
+                f.strct(10, Fields::default().strct(16, variant))
+            }),
+            ("GeometryType", At::Leaf, |f, wrong| {
+                let crs = Fields::default().pick(wrong, |g| g.i32(1, 0), |g| g.binary(1, b"crs"));
+                f.strct(10, Fields::default().strct(17, crs))
+            }),
+            ("GeographyType", At::Leaf, |f, wrong| {
+                let edges = Fields::default().pick(wrong, |g| g.binary(2, b"1"), |g| g.i32(2, 1));
+                f.strct(10, Fields::default().strct(18, edges))
+            }),
+            ("RowGroup", At::Group, |f, wrong| {
+                f.pick(wrong, |g| g.binary(5, b"4"), |g| g.i64(5, 4))
+            }),
+            ("SortingColumn", At::Group, |f, wrong| {
+                let column = Fields::default().i32(1, 0);
+                let column = column.pick(wrong, |s| s.i32(2, 0), |s| s.bool(2, false));
+                f.list(4, 12, &[column.bool(3, true).end()])
+            }),
+            // offset_index_length as a UUID.
+            ("ColumnChunk", At::Chunk, |f, wrong| {
+                f.pick(wrong, |c| c.uuid(5), |c| c.i32(5, 16))
+            }),
+            ("ColumnMetaData", At::Meta, |f, wrong| {
+                f.pick(wrong, |m| m.binary(14, b"0"), |m| m.i64(14, 0))
+            }),
+            ("Statistics", At::Meta, |f, wrong| {
+                let stats = Fields::default().i64(3, 0);
+                f.strct(12, stats.pick(wrong, |s| s.i32(7, 0), |s| s.bool(7, true)))
+            }),
+            ("PageEncodingStats", At::Meta, |f, wrong| {
+                let stats = Fields::default().i32(1, 0).i32(2, 0);
+                let stats = stats.pick(wrong, |s| s.binary(3, b"1"), |s| s.i32(3, 1));
+                f.list(13, 12, &[stats.end()])
+            }),
+            ("SizeStatistics", At::Meta, |f, wrong| {
+                let size = Fields::default().pick(wrong, |s| s.binary(1, b""), |s| s.i64(1, 0));
+                f.strct(16, size)
+            }),
+            // geospatial_types holding binaries rather than i32 values.
+            ("GeospatialStatistics", At::Meta, |f, wrong| {
+                let geo = Fields::default().pick(
+                    wrong,
+                    |g| g.list(2, 8, &[b"\x011".to_vec()]),
+                    |g| g.list(2, 5, &[zigzag(1)]),
+                );
+                f.strct(17, geo)
+            }),
+            ("BoundingBox", At::Meta, |f, wrong| {
+                let xmin = Fields::default().pick(wrong, |b| b.i64(1, 0), |b| b.double(1, 0.0));
+                let corners = xmin.double(2, 1.0).double(3, 0.0).double(4, 1.0);
+                f.strct(17, Fields::default().strct(1, corners))
+            }),
+            ("KeyValue", At::File, |f, wrong| {
+                let pair = Fields::default().pick(wrong, |k| k.i32(1, 0), |k| k.binary(1, b"k"));
+                f.list(5, 12, &[pair.binary(2, b"v").end()])
+            }),
+            // TYPE_ORDER as an i32 zero, one byte like an empty struct.
+            ("ColumnOrder", At::File, |f, wrong| {
+                let order = Fields::default().pick(
+                    wrong,
+                    |o| o.i32(1, 0),
+                    |o| o.strct(1, Fields::default()),
+                );
+                f.list(7, 12, &[order.end()])
+            }),
+            ("PageHeader", At::Page, |f, wrong| {
+                f.pick(wrong, |p| p.binary(4, b"crc"), |p| p.i32(4, 0))
+            }),
+            // A repeated num_values as a raw byte 1, which admission read as
+            // 1 and the native decoder as the varint -1.
+            ("DataPageHeader", At::Data, |f, wrong| {
+                f.pick(wrong, |d| d.raw(1, 3, &[1]), |d| d.i32(1, 1))
+            }),
+            // A V2 header the native decoder reads although the page is V1.
+            ("DataPageHeaderV2", At::Page, |f, wrong| {
+                let v2 = Fields::default().i32(1, 1).i32(2, 0);
+                let v2 = v2.pick(wrong, |v| v.binary(3, b"1"), |v| v.i32(3, 1));
+                f.strct(8, v2.i32(4, 0).i32(5, 0).i32(6, 0))
+            }),
+            ("DictionaryPageHeader", At::Page, |f, wrong| {
+                let dictionary = Fields::default().i32(1, 0).i32(2, 0);
+                let dictionary = dictionary.pick(wrong, |d| d.i32(3, 0), |d| d.bool(3, false));
+                f.strct(7, dictionary)
+            }),
+            // An IndexPageHeader holds no field the native decoder reads.
+            ("IndexPageHeader", At::Page, |f, wrong| {
+                f.pick(
+                    wrong,
+                    |p| p.binary(6, b""),
+                    |p| p.strct(6, Fields::default().binary(1, b"any")),
+                )
+            }),
+        ];
+        for (name, at, add) in cases {
+            let refused = file(&[7], at, |fields| add(fields, true));
+            assert!(malformed(&refused), "{name}: mistyped");
+            let admitted = file(&[7], at, |fields| add(fields, false));
+            framing::admit(&admitted).unwrap_or_else(|error| panic!("{name}: {error:?}"));
+        }
+    }
+
+    #[test]
+    fn sets_maps_element_types_and_every_repeat_of_a_known_field_are_checked() {
+        let pair = || Fields::default().binary(1, b"k").binary(2, b"v").end();
+        let cases: [Addition; 4] = [
+            // A set where the schema declares a list: the native copy would
+            // present it as the identically encoded list.
+            (At::File, |f| {
+                f.collection(5, 10, 12, &[Fields::default().end()])
+            }),
+            // A map, which no known field declares, as file_path.
+            (At::Chunk, |f| f.raw(1, 11, &[0])),
+            // key_value_metadata declaring binary elements.
+            (At::File, |f| f.list(5, 8, &[b"\x00".to_vec()])),
+            // A mistyped first crc, then a well-typed last one.
+            (At::Page, |f| f.binary(4, b"").i32(4, 0)),
+        ];
+        for (index, (at, add)) in cases.into_iter().enumerate() {
+            assert!(malformed(&file(&[7], at, add)), "case {index}");
+        }
+        let well_typed_pairs = file(&[7], At::File, |f| f.list(5, 12, &[pair(), pair()]));
+        framing::admit(&well_typed_pairs).unwrap();
+        // The native decoder reads no element of an empty list and skips an
+        // unknown field, or an unknown union variant, by its own wire type.
+        let admitted: [Addition; 3] = [
+            (At::File, |f| f.list(5, 8, &[]).list(7, 0, &[])),
+            (At::Meta, |f| {
+                let set = f.uuid(90).collection(91, 10, 5, &[zigzag(1)]);
+                set.raw(92, 11, &[0])
+                    .binary(3, b"path_in_schema is skipped")
+            }),
+            (At::Leaf, |f| {
+                f.strct(10, Fields::default().binary(9, b"reserved"))
+            }),
+        ];
+        for (index, (at, add)) in admitted.into_iter().enumerate() {
+            framing::admit(&file(&[7], at, add)).unwrap_or_else(|e| panic!("{index}: {e:?}"));
+        }
+    }
+
+    #[test]
+    fn well_typed_optional_fields_still_read() {
+        let bytes = file(&[0, 1_000_000], At::Leaf, |f| {
+            f.strct(10, timestamp(Fields::default().strct(2, Fields::default())))
+        });
+        let decoded = reader::read(&bytes).unwrap();
+        let column = decoded.batches[0].column(0);
+        let values = column.as_any().downcast_ref::<TimestampMicrosecondArray>();
+        assert_eq!(values.unwrap().values(), &[0, 1_000_000]);
+        let cases: [Addition; 5] = [
+            (At::File, |f| {
+                let pair = Fields::default().binary(1, b"k").binary(2, b"v").end();
+                let order = Fields::default().strct(1, Fields::default()).end();
+                let f = f.list(5, 12, &[pair]).binary(6, b"yamaa test");
+                f.list(7, 12, &[order])
+            }),
+            (At::Group, |f| {
+                let sorting = Fields::default().i32(1, 0).bool(2, false).bool(3, true);
+                f.list(4, 12, &[sorting.end()])
+                    .i64(5, 4)
+                    .raw(7, 4, &zigzag(0))
+            }),
+            (At::Chunk, |f| f.i64(4, 0).i32(5, 0).i64(6, 0).i32(7, 0)),
+            (At::Meta, |f| {
+                let stats = Fields::default()
+                    .i64(3, 0)
+                    .i64(4, 2)
+                    .bool(7, true)
+                    .bool(8, true);
+                let encodings = Fields::default().i32(1, 0).i32(2, 0).i32(3, 1).end();
+                let size = Fields::default().i64(1, 0);
+                let size = size.list(2, 6, &[zigzag(2)]).list(3, 6, &[zigzag(2)]);
+                let geo = Fields::default().strct(1, bounding_box());
+                let geo = geo.list(2, 5, &[zigzag(1)]);
+                let f = f.i64(10, 0).strct(12, stats).list(13, 12, &[encodings]);
+                f.i64(14, 0).i32(15, 0).strct(16, size).strct(17, geo)
+            }),
+            (At::Page, |f| {
+                let dictionary = Fields::default().i32(1, 0).i32(2, 0).bool(3, false);
+                let v2 = Fields::default().i32(1, 2).i32(2, 0).i32(3, 2).i32(4, 0);
+                let v2 = v2.i32(5, 0).i32(6, 0).bool(7, false);
+                let f = f
+                    .strct(6, Fields::default())
+                    .strct(7, dictionary)
+                    .strct(8, v2);
+                f.i32(4, 0)
+            }),
+        ];
+        for (at, add) in cases {
+            let decoded = reader::read(&file(&[7, -1], at, add));
+            let decoded = decoded.unwrap_or_else(|error| panic!("{at:?}: {error:?}"));
+            let column = decoded.batches[0].column(0);
+            let values = column.as_any().downcast_ref::<Int64Array>().unwrap();
+            assert_eq!(values.values(), &[7, -1], "{at:?}");
+        }
+    }
+
+    #[test]
+    fn a_crc_binary_cannot_hide_another_data_page_header() {
+        use yamaa_core::diagnostic::{ParquetFinding, SourceFinding};
+        // The native decoder read the binary's length prefix as the crc, then
+        // its content as a second data page header declaring
+        // BYTE_STREAM_SPLIT. It decoded the PLAIN page admission checked as
+        // [1, 2] into [8589934593, 0].
+        let hidden = Fields {
+            bytes: Vec::new(),
+            last: 4,
+        };
+        let hidden = hidden.strct(5, Fields::default().i32(1, 2).i32(2, 9).i32(3, 3).i32(4, 3));
+        let bytes = file(&[1, 2], At::Page, |f| f.binary(4, &hidden.bytes));
+        let Err(error) = super::super::parse(&bytes) else {
+            panic!("the hidden data page header was read");
+        };
+        assert!(matches!(
+            error.finding("RAW", "raw.parquet"),
+            Some(SourceFinding::Parquet {
+                finding: ParquetFinding::Invalid,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn mistyped_known_booleans_are_malformed_before_the_native_decoder_unwraps_them() {
+        // parquet 57.3.0 takes a known boolean from its field header and
+        // panics when an i32 zero carries it instead.
+        for bytes in [
+            file(&[7], At::Group, |f| {
+                let sorting = Fields::default().i32(1, 0).i32(2, 0).bool(3, true);
+                f.list(4, 12, &[sorting.end()])
+            }),
+            file(&[7], At::Meta, |f| f.strct(12, Fields::default().i32(7, 0))),
+            file(&[7], At::Page, |f| {
+                f.strct(7, Fields::default().i32(1, 0).i32(2, 0).i32(3, 0))
+            }),
+        ] {
+            assert_eq!(reader::read(&bytes).unwrap_err(), reader::Error::Malformed);
+        }
+    }
+}
