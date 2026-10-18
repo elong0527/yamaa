@@ -59,7 +59,9 @@ table-sized metadata allocation. Allocation arithmetic and source page/header
 extents are checked. Compressed SAS row buffers are allocated only after
 physical scalar widths and offsets pass, when columns are submitted for a
 compressed row or, if uncompressed rows came first, at the first compressed
-row. Snapshot reads and seeks validate their ranges against the held input.
+row. Columns are submitted only once every declared column has attributes and
+a name: a column without attributes would otherwise read as a zero-width
+character column. Snapshot reads and seeks validate their ranges against the held input.
 The SAS header/page sizes are bounded by the captured snapshot framing, rather
 than a separate 16 MiB threshold. Their minimum framing sizes still apply.
 Text-blob count follows the 65,536 slots addressable by source uint16 references.
@@ -86,13 +88,13 @@ reviews the commits after the baseline and moves it.
 | `0a1771f7` | A compressed record SAS moved to another page is read at its reference (code `0x03`), from its moved slot (code `0x02` or `0x06`); a moved record no reference reaches (code `0x09` or `0x0d`) is skipped. | Ported; locally, a record no reference reaches counts as deleted, so the row-size subheader must count it |
 | `39027f57`, `b05b6456` | A version 8 transport file reads exactly the observations its `OBSV8` header counts, so trailing all-blank records are data. A zero count stays unknown. | Ported; locally the count is parsed with `strtoll`, admitted before any record is read, must be met, and may be followed only by blank padding |
 | `0dc2aeee` | Without a count, a trailing all-blank record at least 80 bytes wide is data, since padding is always shorter than one 80-byte record. This applies to version 5 files too. | Ported |
-| `da9fcaa4` | A numeric value whose column width is outside 1 to 8 bytes fails instead of shifting by an undefined amount. | Ported |
+| `da9fcaa4` | A numeric value whose column width is outside 1 to 8 bytes fails instead of shifting by an undefined amount. | Ported. Every column has attributes when columns are submitted, and later attributes subheaders describe further slots, so a submitted width cannot change; the guard is defensive. |
 | `5850fb57` (release field) | The header's release field is copied into a terminated buffer before `sscanf` reads it. | Ported |
 | `3c68974f` | Allocation failures are checked. | Already covered by the local checked allocations |
 | `73a35397` | Transport label buffers keep their memory when `realloc` fails. | Already covered by the local checked reallocations |
 | `a0aa9f31` | RDC decompresses into the dataset's row buffer instead of allocating one per row. | Ported |
 | `a2fcaa91` | A dataset with no records reads every page, so column metadata on a later page is not lost. | Ported |
-| `4d3c7f77` | A zero-width character column is accepted; its values are empty text. | Ported |
+| `4d3c7f77` | A zero-width character column is accepted; its values are empty text. | Ported. A column that has no attributes is not a zero-width column: submission waits for every column's attributes and name. |
 | `b2d5407d`, `bb29605a`, `95aee731` | The release field accepts revision tags `J` and `TK` for SAS 8 and 9, any tag for other majors such as SAS 7, and the alternative magic number whose first 28 bytes are zero. | Ported |
 | `d6ffcec1`, `73756b20` | Encoding code 136 names CP932 and code 38 names ISO-8859-10. | Ported. The name is recorded metadata only; the declared encoding decodes text. |
 | `fdf4e1e0`, `5c446781`, `4010db5e`, `6f2bcc65`, `6443b805`, `1badba77`, `fa08c079` | Display format digits, widths and informats are read into each variable's format strings, in SAS datasets and version 8 transport files. | Not ported: the bridge passes on only names, widths and storage types, and display formats never select types, so these change no result. Reading informat text references would also refuse a file whose unused informat reference is out of range. |

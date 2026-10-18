@@ -174,27 +174,41 @@ mod table {
             assert_eq!(table.cell(1, 1).unwrap(), ValueRef::Str(""));
         }
         #[test]
-        fn numeric_width_changed_after_columns_were_submitted_fails_as_malformed() {
-            // The first attributes subheader describes only X, so Y is
-            // submitted as a zero-width character column. A later
-            // attributes subheader then makes Y a numeric column of width
-            // zero before a row reaches it.
+        fn columns_without_attributes_or_names_at_their_first_record_fail_as_malformed() {
+            // Two numeric columns, X and Y. A column that no attributes
+            // subheader has described would read as a zero-width character
+            // column, so each case below must fail rather than yield an
+            // empty Y: Y's attributes never arrive, Y's name never arrives,
+            // or Y's attributes arrive, as a numeric column of width zero,
+            // only after the first record.
             use crate::support::sas7bdat::{
                 Cell, Dataset, Field, Kind, Layout, Page, Pointer, META, MIX,
             };
             let mut dataset =
                 Dataset::new(Layout::LE32, &[("X", Kind::Num, 8), ("Y", Kind::Num, 8)]);
             dataset.total = 2;
-            dataset.mix_rows = 1;
+            dataset.mix_rows = 2;
             let layout = dataset.layout;
             let (blob, compression, names) = dataset.text();
-            let metadata = vec![
-                Pointer::metadata(layout.row_size(16, 2, 0, 1, compression)),
-                Pointer::metadata(layout.column_size(2)),
-                Pointer::metadata(layout.column_text(&blob)),
-                Pointer::metadata(layout.column_name(&names)),
-                Pointer::metadata(layout.column_attrs(&dataset.fields[..1])),
-            ];
+            let file = |names: &[_], fields: &[Field], later: Vec<Pointer>, mix_rows: u64| {
+                let metadata = vec![
+                    Pointer::metadata(layout.row_size(16, 2, 0, mix_rows, compression)),
+                    Pointer::metadata(layout.column_size(2)),
+                    Pointer::metadata(layout.column_text(&blob)),
+                    Pointer::metadata(layout.column_name(names)),
+                    Pointer::metadata(layout.column_attrs(fields)),
+                ];
+                let row = dataset.row(&[Cell::Num(1.0), Cell::Num(2.0)]);
+                let rows = vec![row; mix_rows as usize];
+                let mut pages = vec![Page::new(MIX, metadata, rows)];
+                if !later.is_empty() {
+                    pages.push(Page::new(META, later, vec![]));
+                }
+                dataset.file(&pages)
+            };
+            let complete = file(&names, &dataset.fields, vec![], 2);
+            let table = read_built(&complete).unwrap();
+            assert_eq!(cells(&table), [[float(1.0), float(2.0)]; 2]);
             let row = dataset.row(&[Cell::Num(1.0), Cell::Num(2.0)]);
             let changed = Field {
                 name: "Y".into(),
@@ -202,21 +216,20 @@ mod table {
                 offset: 8,
                 width: 0,
             };
-            let bytes = dataset.file(&[
-                Page::new(MIX, metadata, vec![row.clone()]),
-                Page::new(
-                    META,
-                    vec![
-                        Pointer::metadata(layout.column_attrs(&[changed])),
-                        Pointer::raw_row(row),
-                    ],
-                    vec![],
-                ),
-            ]);
-            assert!(matches!(
-                read_built(&bytes),
-                Err(Error::Invalid("malformed"))
-            ));
+            let late = vec![
+                Pointer::metadata(layout.column_attrs(&[changed])),
+                Pointer::raw_row(row),
+            ];
+            for bytes in [
+                file(&names, &dataset.fields[..1], vec![], 2),
+                file(&names[..1], &dataset.fields, vec![], 2),
+                file(&names, &dataset.fields[..1], late, 1),
+            ] {
+                assert!(matches!(
+                    read_built(&bytes),
+                    Err(Error::Invalid("malformed"))
+                ));
+            }
         }
         #[test]
         fn empty_dataset_reads_column_metadata_from_every_page() {

@@ -812,6 +812,11 @@ static readstat_error_t sas7bdat_submit_columns(sas7bdat_ctx_t *ctx, int compres
      * source-authoritative; do not infer a packed row size from field widths. */
     if (!yamaa_readstat_admit(ctx->row_limit, ctx->column_count))
         return READSTAT_ERROR_MALLOC;
+    /* A column without attributes is a zero-filled slot, which reads as a
+     * zero-width character column. Every declared column needs attributes
+     * and a name before any is submitted. */
+    if (ctx->col_attrs_count < ctx->column_count || ctx->col_names_count < ctx->column_count)
+        return READSTAT_ERROR_PARSE;
     for (uint32_t i = 0; i < ctx->column_count; i++) {
         col_info_t *column = &ctx->col_info[i];
         if ((retval = sas7bdat_validate_column(column)) != READSTAT_OK)
