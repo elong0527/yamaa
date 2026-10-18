@@ -2056,7 +2056,14 @@ mod execution {
             assert_eq!(original.as_ref() as *const Opaque, address);
             assert_eq!(*primary.reads.borrow(), [(0, 0), (0, 1)]);
             assert_eq!(*donor.reads.borrow(), [(0, 0), (0, 1), (0, 2)]);
-            assert!(result.handler_counts.is_empty());
+            assert_eq!(
+                result
+                    .handler_counts
+                    .iter()
+                    .map(|h| (h.spec_path.as_str(), h.handler, h.count))
+                    .collect::<Vec<_>>(),
+                [("columns.A.source.no_match", HandlerKind::NoMatch, 0)]
+            );
         }
         #[test]
         fn current_access_failure_precedes_matching_and_retains_native_owner() {
@@ -2085,7 +2092,14 @@ mod execution {
             assert_eq!(original.as_ref() as *const Opaque, address);
             assert_eq!(*primary.reads.borrow(), [(0, 0), (0, 1)]);
             assert!(donor.reads.borrow().is_empty());
-            assert!(result.handler_counts.is_empty());
+            assert_eq!(
+                result
+                    .handler_counts
+                    .iter()
+                    .map(|h| (h.spec_path.as_str(), h.handler, h.count))
+                    .collect::<Vec<_>>(),
+                [("columns.A.source.no_match", HandlerKind::NoMatch, 0)]
+            );
         }
     }
     mod key_source_selection {

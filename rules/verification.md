@@ -401,13 +401,13 @@ a stale report from an earlier run.
 
 The report's rows come in this order: one `run` row; one `input` row per input
 dataset in declaration order; one `rows` row per row template, or one for root
-`base` without row templates; one `handler` row per handler path in execution
-order, zero counts included; one `column` row per output column in
+`base` without row templates; one `handler` row per handler path in
+registration order, zero counts included; one `column` row per output column in
 `output.columns` order, for a successful run only; and one `check` row per
 evaluated column or dataset verification in execution order. An intermediate's
 verifications have no row, and a check a stopped run never reached has none.
 
-Evidence: `schema-verification-log`, `schema-row-count-fractions`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::failed_runs_report_the_prefix_they_reached_and_no_columns`.
+Evidence: `schema-verification-log`, `schema-row-count-fractions`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::failed_runs_report_the_prefix_they_reached_and_no_columns`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::handler_rows_register_every_path_at_zero_in_one_order`.
 Replaces: REQ-0393, REQ-1175.
 
 `SPEC_PATH` names each row's stable specification item and is unique within
@@ -424,12 +424,13 @@ the report:
 
 The `rows` row of root `base` names the driver even when `base` is omitted
 and the single declared input drives row construction. The handler rows are
-exactly the handler paths the run counted under
-[COLUMN-14](columns.md#column-14), in that order, the default substitutions
-counted like handlers included: a `partial` date ([TIME-2](temporal.md#time-2)),
-`crossed_bounds` ([TIME-9](temporal.md#time-9)) and a missing `impute` or
-`precision` source ([TIME-13](temporal.md#time-13)). A run that never reached
-execution counted none. Check rows keep execution order: column declaration
+exactly the handler paths the run registered under
+[COLUMN-14](columns.md#column-14), in its registration order, the paths inside
+intermediate derivations and the default substitutions counted like handlers
+included: a `partial` date ([TIME-2](temporal.md#time-2)), `crossed_bounds`
+([TIME-9](temporal.md#time-9)) and a missing `impute` or `precision` source
+([TIME-13](temporal.md#time-13)). A run that never reached execution registered
+none. Check rows keep execution order: column declaration
 order first, then dataset-verification order, each check that ran and held
 included. A failed stage contributes the checks it evaluated, at least one of
 them `violated` at `error` severity. A check that submission metadata adds, the
@@ -569,7 +570,7 @@ Evidence: `rust/crates/yamaa-core/tests/relations_reference_scope.rs::verificati
 Replaces: REQ-0395, REQ-1178.
 
 The rows correspond one to one with what the executor evaluated: the declared
-inputs, the row templates, the handler paths it counted, the declared output
+inputs, the row templates, the handler paths it registered, the declared output
 columns of a successful run, and the column and dataset checks it evaluated. A
 run fails with a named condition only
 under [CHECK-2](#check-2) and the other rules; a report that fails its own

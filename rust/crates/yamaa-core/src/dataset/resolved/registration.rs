@@ -1,24 +1,19 @@
 //! What a run registers before reading any row: handler sites and callback
 //! signatures.
 //!
-//! The handler table reproduces the registration walk at the top of
-//! `DatasetPlan::execute`: the plan's conversion handlers, the conversion
-//! handlers of each intermediate's donor plan, then the sites of the six
-//! walkers, in their sequence, for every template assignment, column
-//! assignment and intermediate key expression. Sites no walker reaches
-//! register when they first fire; sites inside donor derivations are counted
-//! locally and never reported.
+//! Every handler site is registered at zero before any row is read, so a site
+//! that never fires reports zero (COLUMN-14). The handler table is the
+//! executor's registration walk (`DatasetPlan::register_handlers`): the
+//! plan's conversion handlers, those of each intermediate's donor plan, then
+//! every site of each derivation in evaluation order (template assignments,
+//! column assignments, intermediate key expressions), then every site of each
+//! intermediate's derivations, intermediate by intermediate in declaration
+//! order, each followed by the key expressions of the intermediates its
+//! derivations read. Each derivation's sites come in expression order: a
+//! node's own sites, then its operands' in written order. A site registers
+//! once, where the walk first reaches it.
 use super::build::Sites;
 use super::*;
-
-const WALKERS: [Walker; 6] = [
-    Walker::Scalar,
-    Walker::Imputation,
-    Walker::StrCase,
-    Walker::StrExtract,
-    Walker::StrReplace,
-    Walker::StrTemplate,
-];
 
 /// One callback site found while lowering, in lowering order.
 pub(super) struct Call {
@@ -33,33 +28,22 @@ pub(super) fn build(
     calls: Vec<Call>,
 ) -> Result<(), ResolutionError> {
     let count = sites.entries.len();
-    let eager = eager_order(plan, count);
+    let mut order = registration_order(plan, count);
+    // A site the walk does not reach still registers up front; the check
+    // against the executor's walk then names it.
     let mut placed = vec![false; count];
-    let mut order: Vec<(usize, Registration)> = Vec::with_capacity(count);
-    for site in eager {
+    for &site in &order {
         placed[site] = true;
-        order.push((site, Registration::Eager));
     }
-    for (site, done) in placed.iter_mut().enumerate() {
-        if !*done && sites.reported[site] {
-            *done = true;
-            order.push((site, Registration::OnFirstFire));
-        }
-    }
-    for (site, done) in placed.iter().enumerate() {
-        if !*done {
-            order.push((site, Registration::Unreported));
-        }
-    }
+    order.extend((0..count).filter(|&site| !placed[site]));
     let mut remap = vec![None; count];
     let mut table = Vec::with_capacity(count);
-    for (site, registration) in order {
+    for site in order {
         remap[site] = Some(HandlerSiteId(table.len() as u32));
         let (path, kind) = &sites.entries[site];
         table.push(HandlerSite {
             path: path.clone(),
             kind: *kind,
-            registration,
         });
     }
     let renumber = |site: HandlerSiteId| remap[site.index()].ok_or(ResolutionError::Capacity);
@@ -79,8 +63,8 @@ pub(super) fn build(
     Ok(())
 }
 
-/// The registration walk over the arena, in today's order.
-fn eager_order(plan: &ResolvedPlan, count: usize) -> Vec<usize> {
+/// The registration walk over the arena, in report order.
+fn registration_order(plan: &ResolvedPlan, count: usize) -> Vec<usize> {
     let dataset = RegionId::DATASET;
     let mut walk = Walk {
         plan,
@@ -103,19 +87,27 @@ fn eager_order(plan: &ResolvedPlan, count: usize) -> Vec<usize> {
     }
     for template in plan.region_templates(dataset) {
         for binding in plan.row_bindings(template) {
-            walk.six(plan.binding(binding).expr);
+            walk.node(plan.binding(binding).expr);
         }
     }
     for &column in &plan.region(dataset).column_order {
         if let Some(binding) = plan.column_bindings(column).next() {
-            walk.six(plan.binding(binding).expr);
+            walk.node(plan.binding(binding).expr);
         }
     }
+    walk.keys(dataset);
+    // Each intermediate's derivations, in declaration order, then the key
+    // expressions of the intermediates they read, as bound for the donor
+    // records. A nested donor plan is an earlier intermediate's, walked in its
+    // turn.
     for &relation in &named {
-        for key in &plan.relation(relation).keys {
-            if let KeyValue::Expr(expr) = key.value {
-                walk.six(expr);
+        if let Some(donor) = plan.relation(relation).derivations {
+            for &column in &plan.region(donor).column_order {
+                if let Some(binding) = plan.column_bindings(column).next() {
+                    walk.node(plan.binding(binding).expr);
+                }
             }
+            walk.keys(donor);
         }
     }
     walk.order
@@ -132,159 +124,30 @@ impl Walk<'_> {
             self.order.push(site.index());
         }
     }
-    /// Register the sites this walker owns on one node, in node order.
-    fn tagged(&mut self, expr: ExprId, walker: Walker) {
-        for index in 0..self.plan.sites(expr).len() {
-            let site = self.plan.sites(expr)[index];
-            if site.walker == Some(walker) {
-                self.register(site.site);
-            }
-        }
-    }
-    fn six(&mut self, expr: ExprId) {
-        for walker in WALKERS {
-            self.walk(walker, expr);
-        }
-    }
-    fn recurse(&mut self, walker: Walker, expr: ExprId, role: OperandRole) {
-        for index in 0..self.plan.operands(expr).len() {
-            let operand = self.plan.operands(expr)[index];
-            if operand.role == role {
-                self.walk(walker, operand.expr);
-            }
-        }
-    }
-    /// Each walker's recursion follows its legacy counterpart exactly,
-    /// including the operation families it does not descend into.
-    fn walk(&mut self, walker: Walker, expr: ExprId) {
-        use ExprKind as K;
-        use OperandRole::{Branch, Selection, Value};
-        let kind = self.plan.expr(expr).kind;
-        match walker {
-            Walker::Scalar => match kind {
-                K::Aggregate(_) => {
-                    for index in 0..self.plan.operands(expr).len() {
-                        let operand = self.plan.operands(expr)[index];
-                        match operand.role {
-                            OperandRole::Key => self.six(operand.expr),
-                            OperandRole::Derivation => {
-                                self.tagged(operand.expr, Walker::Scalar);
-                                for inner in 0..self.plan.operands(operand.expr).len() {
-                                    let inner = self.plan.operands(operand.expr)[inner];
-                                    self.six(inner.expr);
-                                }
-                            }
-                            _ => (),
-                        }
+    /// The key expressions of a region's named intermediates, in order.
+    fn keys(&mut self, region: RegionId) {
+        let plan = self.plan;
+        for relation in plan.region_relations(region) {
+            let node = plan.relation(relation);
+            if matches!(node.kind, RelationKind::Named { .. }) {
+                for key in &node.keys {
+                    if let KeyValue::Expr(expr) = key.value {
+                        self.node(expr);
                     }
                 }
-                K::MappingCut | K::SourceBinding | K::SourceLookup(_) | K::JoinedSource(_) => {
-                    self.tagged(expr, Walker::Scalar);
-                    self.recurse(walker, expr, Value);
-                }
-                // An implicit join's `absent` count and a formula's or flag's
-                // `missing` count register at their own node.
-                K::Joined(_) | K::Compute | K::Function | K::ProjectFunction | K::Flag => {
-                    self.tagged(expr, Walker::Scalar)
-                }
-                K::FirstAvailable => {
-                    self.tagged(expr, Walker::Scalar);
-                    self.recurse(walker, expr, Selection);
-                }
-                K::Extreme | K::Imputation | K::Temporal | K::StrTemplate => {
-                    self.recurse(walker, expr, Value)
-                }
-                K::Case => self.recurse(walker, expr, Branch),
-                K::StrCase | K::StrExtract | K::StrReplace | K::StrPad | K::Round => {
-                    self.recurse(walker, expr, Value)
-                }
-                _ => (),
-            },
-            Walker::Imputation => match kind {
-                K::Imputation | K::Temporal => {
-                    self.tagged(expr, Walker::Imputation);
-                    self.recurse(walker, expr, Value);
-                }
-                K::StrCase
-                | K::StrPad
-                | K::StrExtract
-                | K::StrReplace
-                | K::MappingCut
-                | K::Round
-                | K::Extreme
-                | K::StrTemplate => self.recurse(walker, expr, Value),
-                K::Case => self.recurse(walker, expr, Branch),
-                _ => (),
-            },
-            Walker::StrCase => match kind {
-                K::StrCase => {
-                    self.tagged(expr, Walker::StrCase);
-                    self.recurse(walker, expr, Value);
-                }
-                K::Extreme
-                | K::Imputation
-                | K::StrTemplate
-                | K::Temporal
-                | K::StrExtract
-                | K::StrReplace
-                | K::StrPad
-                | K::MappingCut
-                | K::Round => self.recurse(walker, expr, Value),
-                K::Case => self.recurse(walker, expr, Branch),
-                _ => (),
-            },
-            // The extraction walker does not descend into `str_contains`.
-            Walker::StrExtract => match kind {
-                K::StrExtract => {
-                    self.tagged(expr, Walker::StrExtract);
-                    self.recurse(walker, expr, Value);
-                }
-                K::Extreme
-                | K::Imputation
-                | K::StrTemplate
-                | K::Temporal
-                | K::StrCase
-                | K::StrPad
-                | K::StrReplace
-                | K::MappingCut
-                | K::Round => self.recurse(walker, expr, Value),
-                K::Case => self.recurse(walker, expr, Branch),
-                _ => (),
-            },
-            Walker::StrReplace => match kind {
-                K::StrReplace => {
-                    self.tagged(expr, Walker::StrReplace);
-                    self.recurse(walker, expr, Value);
-                }
-                K::Extreme
-                | K::Imputation
-                | K::StrTemplate
-                | K::Temporal
-                | K::StrCase
-                | K::StrPad
-                | K::StrExtract
-                | K::MappingCut
-                | K::Round => self.recurse(walker, expr, Value),
-                K::Case => self.recurse(walker, expr, Branch),
-                _ => (),
-            },
-            Walker::StrTemplate => match kind {
-                K::StrTemplate => {
-                    self.tagged(expr, Walker::StrTemplate);
-                    self.recurse(walker, expr, Value);
-                }
-                K::Extreme
-                | K::Imputation
-                | K::Temporal
-                | K::StrCase
-                | K::StrPad
-                | K::StrExtract
-                | K::StrReplace
-                | K::MappingCut
-                | K::Round => self.recurse(walker, expr, Value),
-                K::Case => self.recurse(walker, expr, Branch),
-                _ => (),
-            },
+            }
+        }
+    }
+    /// A node's own sites in node order, then its operands' in operand order.
+    /// Predicate operands carry no sites.
+    fn node(&mut self, expr: ExprId) {
+        for index in 0..self.plan.sites(expr).len() {
+            let site = self.plan.sites(expr)[index];
+            self.register(site.site);
+        }
+        for index in 0..self.plan.operands(expr).len() {
+            let operand = self.plan.operands(expr)[index];
+            self.node(operand.expr);
         }
     }
 }

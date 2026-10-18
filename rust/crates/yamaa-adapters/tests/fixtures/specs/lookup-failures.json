@@ -354,7 +354,23 @@
         }
       }
     ],
-    "handler_counts": []
+    "handler_counts": [
+      {
+        "spec_path": "columns.DTHDY.derivation.source.no_match",
+        "handler": "no_match",
+        "count": 0
+      },
+      {
+        "spec_path": "columns.DTHCAUS.derivation.source.no_match",
+        "handler": "no_match",
+        "count": 0
+      },
+      {
+        "spec_path": "columns.DTHPTERM.derivation.source.no_match",
+        "handler": "no_match",
+        "count": 0
+      }
+    ]
   },
   {
     "name": "require_match",
@@ -390,6 +406,11 @@
         "spec_path": "columns.DTHDY.derivation.source.multiple_matches",
         "handler": "multiple_matches",
         "count": 1
+      },
+      {
+        "spec_path": "columns.DTHCAUS.derivation.source.multiple_matches",
+        "handler": "multiple_matches",
+        "count": 0
       }
     ]
   }

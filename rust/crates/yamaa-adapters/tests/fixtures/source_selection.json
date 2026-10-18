@@ -87,14 +87,24 @@
           "count": 1
         },
         {
-          "spec_path": "columns.B.derivation.source.absent",
-          "handler": "absent",
+          "spec_path": "columns.A.derivation.source.no_match",
+          "handler": "no_match",
           "count": 0
         },
         {
           "spec_path": "columns.B.derivation.source.multiple_matches",
           "handler": "multiple_matches",
           "count": 1
+        },
+        {
+          "spec_path": "columns.B.derivation.source.absent",
+          "handler": "absent",
+          "count": 0
+        },
+        {
+          "spec_path": "columns.B.derivation.source.no_match",
+          "handler": "no_match",
+          "count": 0
         }
       ],
       "source_reads": [
@@ -418,19 +428,34 @@
           "count": 0
         },
         {
-          "spec_path": "columns.B.derivation.source.multiple_matches",
-          "handler": "multiple_matches",
-          "count": 1
-        },
-        {
           "spec_path": "columns.A.derivation.first_available.sources[0].multiple_matches",
           "handler": "multiple_matches",
           "count": 1
         },
         {
+          "spec_path": "columns.A.derivation.first_available.sources[0].no_match",
+          "handler": "no_match",
+          "count": 0
+        },
+        {
+          "spec_path": "columns.B.derivation.source.multiple_matches",
+          "handler": "multiple_matches",
+          "count": 1
+        },
+        {
+          "spec_path": "columns.B.derivation.source.no_match",
+          "handler": "no_match",
+          "count": 0
+        },
+        {
           "spec_path": "columns.C.derivation.source.multiple_matches",
           "handler": "multiple_matches",
           "count": 1
+        },
+        {
+          "spec_path": "columns.C.derivation.source.no_match",
+          "handler": "no_match",
+          "count": 0
         }
       ],
       "source_reads": [

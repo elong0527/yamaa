@@ -1074,13 +1074,13 @@ mod execution {
                         1
                     ),
                     (
-                        "read.C2.multiple_matches",
-                        yamaa_core::numeric_lifecycle::HandlerKind::MultipleMatches,
+                        "read.C1.no_match",
+                        yamaa_core::numeric_lifecycle::HandlerKind::NoMatch,
                         1
                     ),
                     (
-                        "read.C1.no_match",
-                        yamaa_core::numeric_lifecycle::HandlerKind::NoMatch,
+                        "read.C2.multiple_matches",
+                        yamaa_core::numeric_lifecycle::HandlerKind::MultipleMatches,
                         1
                     ),
                     (
@@ -1106,7 +1106,35 @@ mod execution {
             );
             assert_eq!(*current.reads.borrow(), [(0, 0), (0, 1)]);
             assert_eq!(*donor.reads.borrow(), [(0, 0), (0, 1)]);
-            assert!(result.handler_counts.is_empty());
+            assert_eq!(
+                result
+                    .handler_counts
+                    .iter()
+                    .map(|h| (h.spec_path.as_str(), h.handler, h.count))
+                    .collect::<Vec<_>>(),
+                [
+                    (
+                        "read.C1.multiple_matches",
+                        yamaa_core::numeric_lifecycle::HandlerKind::MultipleMatches,
+                        0
+                    ),
+                    (
+                        "read.C1.no_match",
+                        yamaa_core::numeric_lifecycle::HandlerKind::NoMatch,
+                        0
+                    ),
+                    (
+                        "read.C2.multiple_matches",
+                        yamaa_core::numeric_lifecycle::HandlerKind::MultipleMatches,
+                        0
+                    ),
+                    (
+                        "read.C2.no_match",
+                        yamaa_core::numeric_lifecycle::HandlerKind::NoMatch,
+                        0
+                    ),
+                ]
+            );
         }
         #[test]
         fn unmatched_rows_do_not_resolve_any_predicate_operand() {
@@ -1154,9 +1182,19 @@ mod execution {
                     .collect::<Vec<_>>(),
                 [
                     (
+                        "read.C1.multiple_matches",
+                        yamaa_core::numeric_lifecycle::HandlerKind::MultipleMatches,
+                        0
+                    ),
+                    (
                         "read.C1.no_match",
                         yamaa_core::numeric_lifecycle::HandlerKind::NoMatch,
                         3
+                    ),
+                    (
+                        "read.C2.multiple_matches",
+                        yamaa_core::numeric_lifecycle::HandlerKind::MultipleMatches,
+                        0
                     ),
                     (
                         "read.C2.no_match",
@@ -1196,7 +1234,35 @@ mod execution {
                     (0, 1)
                 ]
             );
-            assert!(result.handler_counts.is_empty());
+            assert_eq!(
+                result
+                    .handler_counts
+                    .iter()
+                    .map(|h| (h.spec_path.as_str(), h.handler, h.count))
+                    .collect::<Vec<_>>(),
+                [
+                    (
+                        "read.C1.multiple_matches",
+                        yamaa_core::numeric_lifecycle::HandlerKind::MultipleMatches,
+                        0
+                    ),
+                    (
+                        "read.C1.no_match",
+                        yamaa_core::numeric_lifecycle::HandlerKind::NoMatch,
+                        0
+                    ),
+                    (
+                        "read.C2.multiple_matches",
+                        yamaa_core::numeric_lifecycle::HandlerKind::MultipleMatches,
+                        0
+                    ),
+                    (
+                        "read.C2.no_match",
+                        yamaa_core::numeric_lifecycle::HandlerKind::NoMatch,
+                        0
+                    ),
+                ]
+            );
         }
 
         fn rebuilt(
@@ -1276,9 +1342,19 @@ mod execution {
                     .collect::<Vec<_>>(),
                 [
                     (
+                        "read.C1.multiple_matches",
+                        yamaa_core::numeric_lifecycle::HandlerKind::MultipleMatches,
+                        0
+                    ),
+                    (
                         "read.C1.no_match",
                         yamaa_core::numeric_lifecycle::HandlerKind::NoMatch,
                         2
+                    ),
+                    (
+                        "read.C2.multiple_matches",
+                        yamaa_core::numeric_lifecycle::HandlerKind::MultipleMatches,
+                        0
                     ),
                     (
                         "read.C2.no_match",
@@ -1369,9 +1445,19 @@ mod execution {
                     .collect::<Vec<_>>(),
                 [
                     (
+                        "read.C1.multiple_matches",
+                        yamaa_core::numeric_lifecycle::HandlerKind::MultipleMatches,
+                        0
+                    ),
+                    (
                         "read.C1.no_match",
                         yamaa_core::numeric_lifecycle::HandlerKind::NoMatch,
                         1
+                    ),
+                    (
+                        "read.C2.multiple_matches",
+                        yamaa_core::numeric_lifecycle::HandlerKind::MultipleMatches,
+                        0
                     ),
                     (
                         "read.C2.no_match",
