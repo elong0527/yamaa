@@ -3,17 +3,22 @@
 import gzip
 import io
 import json
+import os
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
 from python import yamaa_build_backend as _BACKEND_MODULE
+from tools.ci.toolchain import channel
 from tools.packaging import check_cargo_lock as guard
+from tools.paths import WORKSPACE
 
 backend = _BACKEND_MODULE
 preserve_workspace = _BACKEND_MODULE.preserve_workspace
@@ -168,6 +173,51 @@ def test_vendored_sources_refuse_any_workspace_patch(
     (workspace / "Cargo.toml").write_text(manifest + "[workspace]\nmembers = []\n")
     with pytest.raises(ValueError, match="must not declare \\[patch\\]"):
         list(backend.vendored_sources(workspace))
+
+
+@pytest.mark.skipif(shutil.which("cargo") is None, reason="cargo is unavailable")
+def test_source_archive_listing_writes_nothing_into_vendored_crates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # maturin lists each path dependency with `cargo package --list`. A
+    # vendored crate is its own workspace root, so the pinned Cargo created
+    # that root's target directory inside the vendored sources, and
+    # vendored_sources refused the source archive. The stand-in runs the same
+    # listing, with the pinned toolchain, on a copy of the vendored crates.
+    workspace = tmp_path / "rust"
+    shutil.copytree(WORKSPACE / "vendor", workspace / "vendor")
+    shutil.copy2(WORKSPACE / "Cargo.toml", workspace / "Cargo.toml")
+    crates = sorted((workspace / "vendor").iterdir())
+    assert crates
+    sources = list(backend.vendored_sources(workspace))
+
+    def build_sdist(sdist_directory, config_settings):
+        for crate in crates:
+            listing = subprocess.run(
+                [
+                    "cargo",
+                    "package",
+                    "--list",
+                    "--allow-dirty",
+                    "--manifest-path",
+                    str(crate / "Cargo.toml"),
+                ],
+                env=os.environ | {"RUSTUP_TOOLCHAIN": channel()},
+                capture_output=True,
+                text=True,
+            )
+            assert listing.returncode == 0, listing.stderr
+        return "yamaa.tar.gz"
+
+    monkeypatch.delenv("CARGO_TARGET_DIR", raising=False)
+    monkeypatch.setitem(
+        sys.modules, "maturin", SimpleNamespace(build_sdist=build_sdist)
+    )
+    monkeypatch.setattr(backend, "native_test_fixtures", lambda workspace: [])
+    monkeypatch.setattr(backend, "preserve_workspace", lambda *arguments: None)
+    assert backend.build_sdist(str(tmp_path)) == "yamaa.tar.gz"
+    assert list(backend.vendored_sources(workspace)) == sources
+    assert "CARGO_TARGET_DIR" not in os.environ
 
 
 def _make_archive_with_extra(

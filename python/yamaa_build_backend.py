@@ -431,7 +431,24 @@ def build_sdist(sdist_directory, config_settings=None):
         (project / config["tool"]["maturin"]["manifest-path"]).resolve().parents[2]
     )
     fixtures = native_test_fixtures(workspace)
-    filename = maturin.build_sdist(sdist_directory, config_settings)
+    # maturin lists each path dependency's files with `cargo package --list`.
+    # A vendored crate is excluded from the workspace, so it is its own
+    # workspace root, and Cargo 1.99.1, unlike 1.90.0, creates that root's
+    # target directory (with a CACHEDIR.TAG) inside the vendored sources, which
+    # vendored_sources then refuses. Listing compiles nothing, so Cargo gets a
+    # scratch target directory and writes nothing into the packaged sources.
+    previous = os.environ.get("CARGO_TARGET_DIR")
+    with tempfile.TemporaryDirectory(
+        prefix="yamaa-sdist-cargo-", ignore_cleanup_errors=True
+    ) as scratch:
+        os.environ["CARGO_TARGET_DIR"] = scratch
+        try:
+            filename = maturin.build_sdist(sdist_directory, config_settings)
+        finally:
+            if previous is None:
+                os.environ.pop("CARGO_TARGET_DIR", None)
+            else:
+                os.environ["CARGO_TARGET_DIR"] = previous
     preserve_workspace(Path(sdist_directory) / filename, workspace, fixtures)
     return filename
 
