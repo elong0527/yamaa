@@ -48,15 +48,20 @@ impl Study {
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
         std::fs::create_dir_all(&root).unwrap();
-        Self(std::fs::canonicalize(root).unwrap())
+        // The engine's spelling: no Windows verbatim prefix.
+        Self(yamaa_adapters::canonical_path::canonicalize(root).unwrap())
     }
     fn write(&self, name: &str, contents: impl AsRef<[u8]>) {
         let path = self.0.join(name);
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, contents).unwrap();
     }
+    /// A file's identity as the engine reports it, with forward slashes.
     fn path(&self, name: &str) -> String {
-        self.0.join(name).to_str().unwrap().to_owned()
+        let path = self.0.join(name).to_str().unwrap().to_owned();
+        #[cfg(windows)]
+        let path = path.replace('\\', "/");
+        path
     }
     fn read(&self, name: &str) -> Option<String> {
         std::fs::read_to_string(self.0.join(name)).ok()
