@@ -409,36 +409,45 @@ reading column's `no_match` for a named intermediate
 evaluated is not a handler site: its absence gives missing, uncounted.
 
 A run registers every handler path before it reads any row, so a run reports
-a path even when it answers nothing. That covers every declared handler, every
-default substitution counted like one, and each named intermediate read: its
-reading path's `no_match`, and its `multiple_matches` when the intermediate
-declares `keep`. A read that requires a match registers no `no_match` and no
-`absent`. When an intermediate's `between` value, or a current-record operand
-of its derivations, reads another intermediate, that read's handlers count at
-the same reading path.
+a path even when it answers nothing. That covers every declared handler and
+every default substitution counted like one, a `partial` date and
+`not_after` included; the `multiple_matches` of each `keep`, on a source
+binding, a collected value or a named intermediate read; and each named
+intermediate read's `no_match` at its reading path. A read that requires a
+match registers no `no_match` and no `absent`. When an intermediate's
+`between` value, or a current-record operand of its derivations, reads another
+intermediate, that read's handlers count at the same reading path.
 
-Handler rows come in registration order. First come the `unconvertible`
-paths of the output derivations, in declaration order with the row templates'
-before the columns', then those of each intermediate's typed derivations. Then
-each derivation in the order the run evaluates it: the row templates'
-derivations, template by template, then the column derivations, then the
-intermediates' key expressions. Each lists its other paths in expression
-order: an operation's own paths before those of the expressions it reads,
-which follow in the order the operation reads them. An operation lists its own
-paths as `missing` or `fallback`, `unmapped`, `invalid`, `not_after` and
-`partial`, then a lookup's `multiple_matches` before its `no_match` or
-`absent`. Last come the paths inside intermediate derivations, intermediate by
-intermediate: each derivation in declaration order, then the key expressions
-of the intermediates those derivations read, as bound for the donor records.
-A path is registered once, where this order first reaches it.
+Handler rows come in registration order. The dataset's own paths come first:
+the `unconvertible` paths of the output derivations, in declaration order with
+the row templates' before the columns'; then each derivation in the order the
+run evaluates it, the row templates' derivations template by template, then
+the column derivations; then the intermediates' key expressions. Each
+derivation lists its other paths in expression order: an operation's own paths
+before those of the expressions it reads, which follow in the order the
+operation reads them. An operation lists its own paths as `missing` or
+`fallback`, `unmapped`, `invalid`, `not_after` and `partial`, then a lookup's
+`multiple_matches` before its `no_match` or `absent`. Then each intermediate
+with derivations follows in turn, its paths in the same order: the
+`unconvertible` paths of its typed derivations, each derivation in declaration
+order, then the key expressions of the intermediates those derivations read,
+as bound for the donor records. A path is registered once, where this order
+first reaches it.
 
 A path inside an intermediate's `derivations:`
 ([LOOKUP-15](lookup.md#lookup-15)) counts the donor records it answers each
 time the run builds those records, so its count follows how often they are
-built, not the output rows. A derivation that reads the current input record
-builds them again for each current record. Another intermediate's derivation
-that reads the intermediate ([LOOKUP-16](lookup.md#lookup-16)) builds them
-again each time its own records are built.
+built, not the output rows. The run builds them at most once, when the
+intermediate is first read, and again: for each current record when a
+derivation reads the current input record; after each row template for a
+`SELF` intermediate, whose completed rows grow
+([LOOKUP-7](lookup.md#lookup-7)); for the column phase when the
+intermediate's key, or the key of an intermediate its current-record operands
+read, depends on a window over the completed rows; and inside each build of
+another intermediate whose derivation reads it
+([LOOKUP-16](lookup.md#lookup-16)). The key expression of an intermediate that
+another intermediate's derivation reads also counts the evaluations made for
+those donor records.
 
 ## Diagnostic citations
 
