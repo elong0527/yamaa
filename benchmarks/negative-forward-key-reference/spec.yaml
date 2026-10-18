@@ -1,0 +1,70 @@
+schema_version: "1.0"
+domain: ADVS
+keys: [STUDYID, USUBJID, PARAMCD, AVISITN]
+input:
+  VS_RAW:
+    path: input/vs_raw.csv
+    types: {VSDTC: date, SYSBP: float, DIABP: float}
+
+output:
+  path: advs.csv
+  columns: [STUDYID, USUBJID, PARAMCD, AVISITN, ADT, AVAL, ABLFL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: VS_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: VS_RAW.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+
+  - name: ADT
+    type: date
+    label: Analysis Date
+    derivation: VS_RAW.VSDTC
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+
+  # Intentionally out of order: ABLFL reads AVISITN, which is declared after
+  # it. AVISITN is a key, but the visit numbers are counted after both row
+  # templates have built their rows, so it is not available any earlier
+  # than other later columns, and the specification is rejected before any
+  # data is read.
+  - name: ABLFL
+    type: str
+    label: Baseline Record Flag
+    derivation:
+      flag: "AVISITN = 1"
+
+  # Each subject's visits numbered by date; both measurements taken at one
+  # visit share its number.
+  - name: AVISITN
+    type: int
+    label: Analysis Visit (N)
+    derivation:
+      rank:
+        method: dense
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [ADT]
+
+rows:
+  # One systolic and one diastolic row per collected visit.
+  - id: systolic
+    derivations:
+      PARAMCD: {literal: SYSBP}
+      AVAL: VS_RAW.SYSBP
+
+  - id: diastolic
+    derivations:
+      PARAMCD: {literal: DIABP}
+      AVAL: VS_RAW.DIABP
