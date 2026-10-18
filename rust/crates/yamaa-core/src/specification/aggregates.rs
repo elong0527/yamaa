@@ -1287,9 +1287,6 @@ pub(super) fn bind(
     Ok(Some(Expression::Aggregate(std::boxed::Box::new(bound))))
 }
 
-/// A qualified aggregate's range (LOOKUP-9): bounds are fields of its
-/// relation and the value a value of the current row, admitted for every row
-/// the column is derived for ([`lookup_range::admit`]).
 /// Visit every qualified aggregate a row evaluates directly, through lazy and
 /// nested alternatives. A derive binding evaluates for a donor record instead.
 fn visit(expression: &Expression, visitor: &mut impl FnMut(&crate::dataset::BoundAggregate)) {
@@ -1380,6 +1377,7 @@ pub(super) fn admit_record_keys(
 pub(super) fn late_ranges(plan: &crate::dataset::DatasetPlan) -> Vec<BindFinding> {
     let width = plan.output().columns().len();
     let mut findings = Vec::new();
+    let mut reported = BTreeSet::new();
     for template in plan.templates() {
         let deferred =
             crate::dataset::window_stages(&template.assignments, width, plan.intermediates());
@@ -1408,11 +1406,7 @@ pub(super) fn late_ranges(plan: &crate::dataset::DatasetPlan) -> Vec<BindFinding
                     crate::dataset::CurrentRead::Record { .. } => false,
                 };
                 let path = format!("{}.value", range.path());
-                if late
-                    && !findings.iter().any(|prior| {
-                        matches!(prior, BindFinding::Scalar(prior) if prior.spec_paths == [path.clone()])
-                    })
-                {
+                if late && reported.insert(path.clone()) {
                     findings.push(BindFinding::Scalar(crate::application_issue::unsupported(
                         "aggregate_range_window_read",
                         Some(&path),
@@ -1424,6 +1418,9 @@ pub(super) fn late_ranges(plan: &crate::dataset::DatasetPlan) -> Vec<BindFinding
     findings
 }
 
+/// A qualified aggregate's range (LOOKUP-9): bounds are fields of its
+/// relation and the value a value of the current row, admitted for every row
+/// the column is derived for ([`lookup_range::admit`]).
 fn bind_range(
     declaration: &Declaration,
     catalog: &Catalog,

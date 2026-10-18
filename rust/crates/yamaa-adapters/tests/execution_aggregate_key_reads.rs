@@ -149,16 +149,11 @@ fn an_aggregate_key_reads_the_driver_of_every_row_that_evaluates_it() {
         run(specification(&column("DEVICE"), "", Some(""))),
         Ok(format!("{counted}a,HOME,\n"))
     );
-    // A column derivation reads the primary input's record as its current
-    // record, so a key naming the home record names no current-row value,
-    // even where only home rows evaluate it. A plain read of the home record
-    // there fails the same way (NAME-3).
+    // Where only home rows evaluate the count, the home record names its
+    // device: home subject a used D2, calibrated once.
     assert_eq!(
         run(specification(&nested("HOME.DEVICE"), own, Some(""))),
-        refused(
-            "columns.NCAL.derivation.case[0].then.aggregate.key.DEVICE",
-            "HOME.DEVICE"
-        )
+        Ok("ID,ORIGIN,NCAL\na,CLINIC,0\nb,CLINIC,0\na,HOME,1\n".into())
     );
 }
 
