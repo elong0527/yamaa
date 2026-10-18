@@ -1290,7 +1290,7 @@ mod file {
         fn metadata_only(temp: &Temp, section: &str, context: &str) {
             let environment = fs::read_to_string(temp.0.join("environment.yaml"))
                 .unwrap()
-                .replace("dataset_json: true", "dataset_json: false")
+                .replace("  transport: dataset_json\n", "")
                 .replace("context: Submission", &format!("context: {context}"))
                 .replace(
                     "sdtm:\n  standard:\n    name: SDTMIG",
@@ -1438,7 +1438,7 @@ mod file {
         const STUDY_LB: &str = "schema_version: '1.0'\ndomain: LB\nkeys: [USUBJID, LBTESTCD]\ninput: {RAW: raw.csv}\noutput: {path: lb.csv, columns: [USUBJID, LBTESTCD]}\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: RAW.USUBJID\n    submission: {core: Req, length: 20, origin: {type: Assigned, source: Sponsor}}\n  - name: LBTESTCD\n    type: str\n    label: Lab Test or Examination Short Name\n    derivation: RAW.LBTESTCD\n    submission: {core: Req, length: 8, origin: {type: Assigned, source: Sponsor}}\nsubmission: {label: Laboratory Test Results, class: FINDINGS, structure: One record per lab test per subject, repeating: true}\n";
         const STUDY_ADLB: &str = "schema_version: '1.0'\ndomain: ADLB\nkeys: [USUBJID, PARAMCD]\ninput: {LB: lb.csv}\noutput: {path: adlb.csv, columns: [USUBJID, PARAMCD, SRCDOM]}\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: LB.USUBJID\n    submission: {core: Req, mandatory: true, length: 20, origin: {type: Predecessor, description: LB.USUBJID}}\n  - name: PARAMCD\n    type: str\n    label: Parameter Code\n    derivation: LB.LBTESTCD\n    submission: {core: Req, mandatory: true, length: 8, origin: {type: Predecessor, description: LB.LBTESTCD}}\n  - name: SRCDOM\n    type: str\n    label: Source Data\n    derivation: {literal: LB}\n    submission: {core: Perm, mandatory: false, length: 8, inventory_vocabulary: true, origin: {type: Assigned}}\nsubmission: {label: Laboratory Analysis Dataset, class: BASIC DATA STRUCTURE, structure: One record per subject per parameter, repeating: true}\n";
         const STUDY_SDTM: &str = "sdtm:\n  standard: {name: SDTMIG, version: '3.4', status: Final}\n  specs: [sdtm/lb.yaml]\n  define: sdtm/define.xml\n";
-        const STUDY_ADAM: &str = "schema_version: '1.0'\nstudy: {id: STUDY, name: Study, description: Cross-section witness, protocol_name: Protocol}\nadam:\n  standard: {name: ADaMIG, version: '1.3', status: Final}\n  specs: [adlb.yaml]\n  define: define.xml\n  dataset_json: true\n  source_system_version: '1.0'\n";
+        const STUDY_ADAM: &str = "schema_version: '1.0'\nstudy: {id: STUDY, name: Study, description: Cross-section witness, protocol_name: Protocol}\nadam:\n  standard: {name: ADaMIG, version: '1.3', status: Final}\n  specs: [adlb.yaml]\n  define: define.xml\n  transport: dataset_json\n  source_system_version: '1.0'\n";
         fn cross_section(adlb: &str, published: &str, sdtm: bool) -> (Temp, Define) {
             let temp = Temp::new();
             fs::create_dir(temp.0.join("sdtm")).unwrap();
