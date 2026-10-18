@@ -168,8 +168,10 @@ all, so `unconvertible` never fires for one.
 
 <a id="req-0361"></a>
 
-**REQ-0361.** Implementations must report each handler path's record count.
-A handler firing zero times is reportable and is not an error.
+**REQ-0361.** Each handler path's record count is a `handler` row of the run
+report under [REQ-0393](verification.md#req-0393), for a failed run as well as
+a successful one. A handler firing zero times is reportable and is not an
+error.
 
 ## Error conditions
 

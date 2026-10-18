@@ -252,5 +252,5 @@ support or an engine refusal; neither asserts a language rule violation.
 <a id="req-0241"></a>
 
 **REQ-0241.** A failed error-level verification: fail under [Verification](verification.md). A
-warning-level violation leaves the primary artifact intact and enters [Verification](verification.md)'s
-warning log.
+warning-level violation leaves the primary artifact intact and is recorded in
+[Verification](verification.md)'s run report.

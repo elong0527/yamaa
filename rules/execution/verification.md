@@ -75,18 +75,20 @@ column verifications finish.
 **REQ-0373.** A failed `error` verification fails execution. Implementations
 must report its stable specification path, failure count, and representative
 offending keys. Reporting limits may be implementation options but must not
-change pass or fail. A `warning` violation records every offending key under
-[REQ-0392](verification.md#req-0392) rather than applying the reporting limit.
+change pass or fail. Every evaluated check, a `warning` violation included, is
+a row of the run report under [REQ-0393](verification.md#req-0393), which
+records every offending key under [REQ-1176](verification.md#req-1176) rather
+than applying the reporting limit.
 
 <a id="req-0374"></a>
 
 **REQ-0374.** Every column, dataset, and intermediate verification may
 declare a nonempty `id`. A declared ID names the check for readers and is
-included in failure reports; column and dataset IDs also appear in governed
-logs. When it is omitted, the verification's specification path identifies
-the check; the `VERIFICATION_ID` field stays missing rather than copying
-the path. An explicit ID remains
-useful when a check needs a name that survives reordering of a specification.
+included in failure reports; column and dataset IDs also appear in the run
+report. When it is omitted, the verification's specification path identifies
+the check; the report's `ID` stays missing rather than copying the path. An
+explicit ID remains useful when a check needs a name that survives reordering
+of a specification.
 
 ### Column verifications
 
@@ -238,7 +240,7 @@ set, grouped by subject and parameter. Its `when` selects the rows that
 carry a baseline value. A group whose rows never carry one is not required
 to have one.
 
-### Severity and the warning log
+### Severity
 
 <a id="req-0389"></a>
 
@@ -257,44 +259,168 @@ the same [Execution lifecycle](lifecycle.md) stage as before.
 Warning findings before a later error do not make the failed run
 successful. No accepted artifact is produced.
 
+### The run report
+
+<a id="req-1173"></a>
+
+**REQ-1173.** Once a specification is admitted, every run builds one run
+report, whether it succeeds or fails, and every host returns it;
+[REQ-1330](../storage/publication.md#req-1330) states which report the host
+returns for a producer graph. The report records what the run read, counted,
+and checked. `output.report` names the file the report is written to and has
+no default. [Artifact publication](../storage/publication.md) selects the
+file's profile from its path, requires it to differ from `output.path`, and
+writes it for a failed run too, replacing a stale report from an earlier run.
+
 <a id="req-0391"></a>
 
-**REQ-0391.** A specification declaring any warning must declare
-`output.warning_log`. Its path must differ from `output.path` and selects an
-[Artifact publication](../storage/publication.md) profile by the same closed extension mapping. A successful run produces
-this sidecar even when no warning is violated; the empty case is a header-only
-dataset, so publication replaces a stale non-empty log from an earlier run.
+**REQ-0391.** A specification declaring any `warning` verification must
+declare `output.report`. A specification whose checks are all `error` may omit
+it.
 
-<a id="req-0392"></a>
+<a id="req-1177"></a>
 
-**REQ-0392.** The warning log is version 1.0 and has exactly these columns,
-in this order and with these [Types and conversion](../values/types.md) types:
+**REQ-1177.** A specification refused while it is prepared, before its run
+begins, has no report: its issues are the whole result. Once the run has
+begun, every failure is a failed run with a report, including a declaration
+finding raised when its inputs are bound. A run that stops before it reads an
+input or before execution still reports its run, its inputs, and its row
+templates, leaving missing every count it never reached.
 
-| Column | Type | Value |
-|---|---|---|
-| `LOG_VERSION` | `str` | `1.0` |
-| `ARTIFACT` | `str` | the specification's `output.path` |
-| `SEVERITY` | `str` | `warning` |
-| `CONDITION` | `str` | the stable failed condition |
-| `REQUIREMENT` | `str` | the numbered requirement defining the check |
-| `SPEC_PATH` | `str` | the violated check's stable specification path |
-| `VERIFICATION_ID` | `str` | its declared ID, or missing when it has none |
-| `FAILURE_COUNT` | `int` | the total number of offending rows or groups |
-| `OFFENDING_KEYS` | `str` | every offending key or group as canonical JSON |
-| `DETAILS` | `str` | remaining condition context as canonical JSON |
+The report is diagnostic output, never one of
+[Artifact publication](../storage/publication.md)'s artifacts. A failed run's
+report records the failure but makes nothing publishable, and
+[REQ-0390](verification.md#req-0390) is unchanged: a failed `error`
+verification still produces no accepted artifact.
+
+<a id="req-0396"></a>
+
+**REQ-0396.** The report is built after the run's last stage, once the outcome
+is final: after every verification and the output declaration checks for a run
+that got that far, and after the primary artifact is encoded. A report that
+cannot be built, verified, or rendered refuses the build under
+[REQ-1178](verification.md#req-1178) instead of recording a failure inside
+itself.
+
+### Report rows
 
 <a id="req-0393"></a>
 
-**REQ-0393.** There is one row per violated warning declaration, keyed by
-`SPEC_PATH`. Rows keep execution order: column declaration order first, then
-dataset-verification order. `FAILURE_COUNT` is positive. `OFFENDING_KEYS` is
-the complete ordered sequence, not the bounded sample an error report may
-show. For grouped `row_count`, `DETAILS.counts` is the complete sequence of
-observed counts aligned with those groups.
+**REQ-0393.** The report's rows come in this order: one `run` row; one `input`
+row per input dataset, in declaration order; one `rows` row per row template,
+or one for root `base` without row templates; one `handler` row per handler
+path, in execution order, zero counts included; one `column` row per output
+column, in `output.columns` order, for a successful run only; and one `check`
+row per evaluated verification, in execution order. A check a stopped run never
+reached has no row.
+
+<a id="req-1175"></a>
+
+**REQ-1175.** `SPEC_PATH` names each row's stable specification item and is
+unique within the report:
+
+| Kind | `SPEC_PATH` |
+|---|---|
+| `run` | `output` |
+| `input` | `input.<NAME>` |
+| `rows` | `rows[<i>]`, or `base` without row templates |
+| `handler` | the handler path [REQ-0361](handlers.md#req-0361) counts |
+| `column` | `columns.<NAME>` |
+| `check` | the check's stable specification path |
+
+The `rows` row of root `base` names the driver even when `base` is omitted and
+the single declared input drives row construction. The handler rows are
+exactly the handler paths the run counted under
+[REQ-0361](handlers.md#req-0361), in execution order; a run that never reached
+execution counted none. Check rows keep execution order: column declaration
+order first, then dataset-verification order, each check that ran and held
+included. A failed stage contributes the checks it evaluated, at least one of
+them `violated` at `error` severity. A check that submission metadata adds,
+such as the codelist enforcement of
+[REQ-0940](../submission/terminology.md#req-0940), is a row like a declared
+verification, at the path of the declaration that adds it. A value-level
+codelist check runs once per bound codelist; each run is its own row, at the
+path that declares that codelist.
+
+### Report columns
+
+<a id="req-0392"></a>
+
+**REQ-0392.** The report has exactly these fourteen columns, in this order and
+with these [Types and conversion](../values/types.md) types. A kind leaves
+missing each column the table gives it no value for. The report carries no
+version and no timestamp: the same specification and inputs give the same
+report bytes.
+
+| Column | Type | Value |
+|---|---|---|
+| `ARTIFACT` | `str` | the specification's `output.path` |
+| `KIND` | `str` | `run`, `input`, `rows`, `handler`, `column`, or `check` |
+| `SPEC_PATH` | `str` | the row's stable specification path ([REQ-1175](verification.md#req-1175)) |
+| `NAME` | `str` | input dataset name; the driver dataset of a row template; handler name; column name; the check's registered verification name; missing for `run` |
+| `ID` | `str` | a check's declared `id`, else missing |
+| `TARGET` | `str` | the column a handler or a column check belongs to, else missing |
+| `RULE` | `str` | the requirement that a check's condition, or the condition a handler answers, cites under [REQ-1297](lifecycle.md#req-1297), else missing |
+| `SEVERITY` | `str` | check: `error` or `warning` |
+| `OUTCOME` | `str` | run: `succeeded` or `failed`; check: `held` or `violated` |
+| `CONDITION` | `str` | run: the fatal condition of a failed run; check: the failed condition |
+| `COUNT` | `int` | run: output rows, missing when failed; input: records read; rows: rows emitted; handler: records answered; column: missing values; check: offending rows or groups, `0` when held |
+| `TOTAL` | `int` | rows: driver records read; column: output rows; check: rows or groups evaluated; else missing |
+| `KEYS` | `str` | violated check: every offending key or group as canonical JSON; else missing |
+| `DETAILS` | `str` | canonical JSON: the condition context of a violated check, the input's file facts, a `str` column's longest value, else `{}` |
+
+<a id="req-1174"></a>
+
+**REQ-1174.** `NAME` of a check is its registered name under
+[REQ-0371](verification.md#req-0371), and a column check's `TARGET` is the
+column it infers under [REQ-0372](verification.md#req-0372). A handler's
+`TARGET` is the output column whose derivation declares it, missing for a named
+intermediate's own derivations and match keys. A handler answers the condition
+its operation raises without it, and its `RULE` is the requirement that
+condition cites: `unconvertible` cites the conversion rule of
+[REQ-0013](../values/types.md#req-0013) and `absent` the unknown-name rule of
+[REQ-0103](../specification/binding.md#req-0103). `RULE` is missing whenever
+the condition cites no requirement.
+
+<a id="req-1176"></a>
+
+**REQ-1176.** An input's `COUNT` is the records it decoded, and its `DETAILS`
+is
+`{"bytes": <byte length>, "path": "<path as declared>", "profile": "<profile>"}`,
+with `"schema": "<producing specification path as declared>"` for an input
+linked under [REQ-0520](../storage/ingestion.md#req-0520).
+`bytes` is the byte length of the file snapshot read. For an input that reads
+a producer's held serialized artifact under
+[REQ-1247](../storage/resources.md#req-1247), it is the length of the encoded
+artifact the consumer read. It is `null` for an input supplied as a host table
+and for one never read, whose `COUNT` is missing.
+
+A row template's `TOTAL` is every record of its input dataset driver, or the
+records a named intermediate driver selects, and its `COUNT` is the rows it
+emitted after its filter. Both are missing for a row template that did not
+complete. A `column` row's `COUNT` is the column's missing values over the
+output rows in `TOTAL`, and a `str` column's `DETAILS` is
+`{"max_length": <n>}`, its longest present value in
+[Text values](../values/text.md) scalar values (`0` when none is present).
+
+A check's `COUNT` and `TOTAL` count the unit the check itself counts:
+
+- output rows for a row-wise check;
+- distinct combinations for `unique`;
+- groups for a check that partitions the artifact, where an ungrouped
+  `row_count` is the one group [REQ-0385](verification.md#req-0385) bounds.
+
+`COUNT` is therefore never greater than `TOTAL`, and is `0` exactly when
+`OUTCOME` is `held`. A held check leaves `CONDITION` and `KEYS` missing and
+`DETAILS` `{}`. A violated one carries the condition its failure reports,
+`KEYS` with the complete ordered sequence of offending keys or groups rather
+than the bounded sample an error report may show, and `DETAILS` with that
+failure's remaining context. For grouped `row_count`, `DETAILS.counts` is the
+complete sequence of observed counts aligned with those groups.
 
 <a id="req-0394"></a>
 
-**REQ-0394.** The two JSON fields are compact ASCII JSON:
+**REQ-0394.** `KEYS` and `DETAILS` are compact ASCII JSON:
 
 - no insignificant whitespace;
 - object names ordered by [Text values](../values/text.md);
@@ -303,127 +429,36 @@ observed counts aligned with those groups.
 - strings escaped to ASCII by JSON's short escapes where one exists and
   lower-case `\\u` hexadecimal escapes otherwise.
 
-A scalar above `U+FFFF` is its JSON surrogate-pair escape. The empty key
-sequence is `[]` and empty remaining context is `{}`.
+A scalar above `U+FFFF` is its JSON surrogate-pair escape. `KEYS` is an array
+holding one object per offending row, its output keys by name, or per
+offending group, its grouping columns by name; a dataset-level `row_count` has
+the one empty group `[{}]`. Empty remaining context is `{}`.
+
+### Report verification
 
 <a id="req-0395"></a>
 
-**REQ-0395.** The log is verified before it becomes an artifact. These
-properties of the log must hold:
+**REQ-0395.** The report is verified before any host sees it or any byte of
+it is written. These properties of the report must hold:
 
 - its columns, types, and order;
-- non-missing and unique `SPEC_PATH`;
-- fixed version and severity;
-- positive count;
-- complete key sequence;
-- one-to-one correspondence with the executor's warning findings.
+- one row per run, input dataset, row template, handler path, output column,
+  and evaluated check, each kind in order;
+- a non-missing `SPEC_PATH` unique within the report;
+- each kind's outcome, severity, and condition vocabularies;
+- `KEYS` on exactly the violated checks;
+- `COUNT` no greater than `TOTAL` where both exist.
 
-A malformed log is an execution defect, not a warning that can be logged
-inside itself.
-
-<a id="req-0396"></a>
-
-**REQ-0396.** The warning log is built only for a successful execution, after
-all verifications and before publication. A warning-log build or serialization
-failure fails the run and prevents primary-artifact publication.
-[Artifact publication](../storage/publication.md) defines how a runner publishes the completed pair.
-
-### The verification log
-
-<a id="req-1173"></a>
-
-**REQ-1173.** `output.verification_log` names a governed sidecar recording
-the outcome of every verification the specification declares, held or
-violated. Declaring it is independent of severity: a specification whose
-checks are all `error` may declare it, and one declaring warnings may omit
-it. [Artifact publication](../storage/publication.md) selects its profile from its path by the same closed
-extension mapping and requires that path to differ from `output.path` and
-`output.warning_log`. A run that declares the field always produces the
-log, violations or not, so publication replaces a stale log from an
-earlier run. This is what the warning log cannot state: a header-only log
-is the same bytes whether every declared check held or the specification
-declared no warning at all.
-
-<a id="req-1174"></a>
-
-**REQ-1174.** The verification log is version 1.0 and has exactly these
-columns, in this order and with these [Types and conversion](../values/types.md) types:
-
-| Column | Type | Value |
-|---|---|---|
-| `REPORT_VERSION` | `str` | `1.0` |
-| `ARTIFACT` | `str` | the specification's `output.path` |
-| `SPEC_PATH` | `str` | the check's stable specification path |
-| `VERIFICATION_ID` | `str` | its declared ID, or missing when it has none |
-| `CHECK` | `str` | the registered verification name |
-| `TARGET` | `str` | the verified column, or missing for a dataset verification |
-| `REQUIREMENT` | `str` | the numbered requirement defining the check |
-| `SEVERITY` | `str` | `error` or `warning` |
-| `OUTCOME` | `str` | `held` or `violated` |
-| `CONDITION` | `str` | the stable failed condition, or missing when `OUTCOME` is `held` |
-| `EVALUATED_COUNT` | `int` | rows, or groups for a grouped check, the check examined |
-| `FAILURE_COUNT` | `int` | offending rows or groups; `0` when `OUTCOME` is `held` |
-| `DETAILS` | `str` | remaining condition context as canonical JSON |
-
-<a id="req-1175"></a>
-
-**REQ-1175.** There is one row for every declared check rather than one row
-per violation. A check that ran and held is therefore a row. Rows keep
-execution order: column declaration order first, then dataset-verification
-order, exactly as [REQ-0393](verification.md#req-0393) orders the log.
-`SPEC_PATH` is the key. It is non-missing, unique within the log, and the
-join to the warning log, whose row for the same path carries the complete
-`OFFENDING_KEYS` evidence [REQ-0393](verification.md#req-0393) requires.
-Offending keys stay out of the log. `CHECK` is the verification's registered name under
-[REQ-0371](verification.md#req-0371), and `TARGET` is the column a column
-verification infers under [REQ-0372](verification.md#req-0372), missing for a
-dataset verification.
-
-<a id="req-1176"></a>
-
-**REQ-1176.** `EVALUATED_COUNT` and `FAILURE_COUNT` count the unit the check
-itself counts:
-
-- output rows for a row-wise check;
-- distinct combinations for `unique`;
-- groups for a check that partitions the artifact, where an ungrouped
-  `row_count` is the one group [REQ-0385](verification.md#req-0385) bounds.
-
-`FAILURE_COUNT` is therefore never greater than `EVALUATED_COUNT`, and is
-`0` exactly when `OUTCOME` is `held`. A held check leaves `CONDITION`
-missing and `DETAILS` `{}`. A violated one carries the stable condition its
-failure reports and that failure's remaining context, encoded by
-[REQ-0394](verification.md#req-0394) unchanged rather than by a second
-encoding.
-
-<a id="req-1177"></a>
-
-**REQ-1177.** The log is written for a failed run as well as a successful
-one. It is diagnostic output rather than one of
-[Artifact publication](../storage/publication.md)'s artifacts. Therefore, a
-failed `error` verification still produces no accepted artifact, and
-[REQ-0390](verification.md#req-0390) is unchanged. The log records the
-failure but does not make the run publishable. Its rows are the checks the
-run evaluated, in execution order. The stage that failed contributes the
-checks it evaluated, at least one of them `violated` at `error` severity,
-and a check a stopped run never reached has no row. The log
-states what was checked and nothing more.
+A malformed report is an execution defect, not a finding it can record.
 
 <a id="req-1178"></a>
 
-**REQ-1178.** The log is verified before it is written:
-
-- its columns, types, and order;
-- its fixed version;
-- non-missing and unique `SPEC_PATH`;
-- `OUTCOME` exactly `held` or `violated`;
-- the count relationship [REQ-1176](verification.md#req-1176) fixes;
-- one-to-one correspondence with the checks the executor evaluated,
-  including agreement with the warning log about every warning that log
-  carries.
-
-A malformed log is an execution defect, not a finding that can be recorded
-inside itself.
+**REQ-1178.** The rows correspond one to one with what the executor
+evaluated: the declared inputs, the row templates, the handler paths it
+counted, the declared output columns, and the checks it evaluated. A run fails
+with a named condition only under [REQ-0373](verification.md#req-0373) and the
+other rules. A report that fails its own verification refuses the build, and
+no partial report is returned or written.
 
 ### Interface behavior
 
@@ -484,10 +519,13 @@ the bounds are in the declaration at that path.
 <a id="req-0406"></a>
 
 **REQ-0406.** Any `error` verification failure: fail and report it. A
-  `warning` violation follows [REQ-0389](verification.md#req-0389) through [REQ-0396](verification.md#req-0396) instead.
+  `warning` violation follows [REQ-0389](verification.md#req-0389) and
+  [REQ-0390](verification.md#req-0390) instead, and the run report records it
+  under [REQ-0393](verification.md#req-0393).
 
 <a id="req-1179"></a>
 
-**REQ-1179.** An `output.verification_log` whose path collides with
-  `output.path` or `output.warning_log`, or whose extension names no
-  profile: fail validation under [REQ-1180](../storage/publication.md#req-1180).
+**REQ-1179.** An `output.report` whose path collides with `output.path`, or
+  whose extension names no profile: fail validation under
+  [REQ-0756](../storage/publication.md#req-0756) and
+  [REQ-1180](../storage/publication.md#req-1180).

@@ -73,8 +73,8 @@ repository-authored value.
 `declaring` selects the directory of the file that writes the path; `entry`
 selects the directory of the specification's entry file. The schema fixes the
 closed values and default. On an input dataset this setting applies to both
-`path` and `schema`; on `output` it applies to `path`, `warning_log` and
-`verification_log`. Other document resources use their declaring file.
+`path` and `schema`; on `output` it applies to `path` and `report`. Other
+document resources use their declaring file.
 An inherited input uses its composed setting, even when another layer supplied
 the path. An inherited output uses its complete inherited declaration.
 
@@ -120,7 +120,8 @@ the input's selected `relative_to` base under [REQ-0780](resources.md#req-0780).
 The producing specification that `schema` names already exists. Its
 `output.path`, resolved with the producer's own selected base, must name the same
 artifact location. Workflow execution consumes held serialized producer bytes;
-explicit Save publishes those bytes under [Publication](publication.md).
+explicit Save publishes those bytes under
+[REQ-1330](publication.md#req-1330).
 
 <a id="req-0782"></a>
 
@@ -193,7 +194,7 @@ when content does.
 | --- | --- |
 | `project_path` | Local resource a run reads or publishes; a relative spelling uses the base selected by REQ-0780 and an absolute spelling names its local location. |
 | `dataset_class.relative_to` | Base for the input dataset's `path` and `schema`. |
-| `output_class.relative_to` | Base for the primary artifact and its warning and verification logs. |
+| `output_class.relative_to` | Base for the primary artifact and its run report file. |
 
 ## Error conditions
 
