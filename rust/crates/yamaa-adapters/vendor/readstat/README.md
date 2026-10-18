@@ -2,7 +2,9 @@
 
 This directory vendors the MIT-licensed SAS reader subset of ReadStat 1.1.9,
 upstream commit `104ba03a8da116eb8c094abc18bc2530b733eda9` from
-<https://github.com/WizardMac/ReadStat>. The upstream license is in `LICENSE`.
+<https://github.com/WizardMac/ReadStat>, with the later upstream fixes listed
+under [Upstream changes after 1.1.9](#upstream-changes-after-119), ported by
+hand. The upstream license is in `LICENSE`.
 SAS writer/header-construction helpers are omitted from the shared upstream
 header reader unit. The adapter exports only a read-only memory bridge and
 builds no writer or hash-table code.
@@ -15,6 +17,8 @@ bridge; C owns ReadStat unions and bitfields. No dynamic ReadStat library,
 Python/R reader package, generated bindings, configure program, platform iconv,
 or network access is needed during package builds. The iconv shim fails closed;
 Rust strictly decodes the explicitly declared source encoding.
+
+## Local changes
 
 Local changes are limited to removal of writer helpers, the integration bridge
 and iconv shim, checked
@@ -57,9 +61,22 @@ A small independently repacked haven fixture with 4,097 valid text
 blobs preserves all twenty numeric cells and is accepted by the independent
 pandas SAS reader; no lower 4,096-blob ceiling is applied.
 
+## Upstream changes after 1.1.9
+
+Each upstream commit after `104ba03a` that changes a vendored reader is ported
+by hand, inside the local changes above, or declined here with its reason.
+
+| Upstream commits | Change | Status |
+| --- | --- | --- |
+| `365c743e`, `78bb8a94` | A 64-bit subheader's eight-byte signature is compared in full, so a row stored uncompressed in a compressed dataset is not read as metadata when its first four bytes match a signature. Big-endian files keep their four-byte layout. | Ported |
+
+## Tests
+
 The independent adapter controls cover XPT v5/v8, long field names, multiple
 members, numeric missing tags, declared Unicode decoding, exact narrowing and
 1960 epochs, SAS uncompressed/RLE/RDC storage, records deleted in place,
 malformed/truncated input, compressed-data corruption, and source limits.
+SAS7BDAT files for the ported upstream changes are assembled at test time from
+the documented layout by `tests/support/sas7bdat.rs`.
 Source fixtures and licenses are cataloged separately; expected values are
 never generated with this reader.

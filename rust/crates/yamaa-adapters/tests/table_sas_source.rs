@@ -32,6 +32,113 @@ mod table {
                 ordinal: None,
             }
         }
+        fn float(value: f64) -> ValueRef<'static> {
+            ValueRef::Float(yamaa_core::value::FiniteFloat::new(value).unwrap())
+        }
+        /// Every cell of a decoded table, row by row.
+        fn cells(table: &yamaa_adapters::arrow_table::ArrowTable) -> Vec<Vec<ValueRef<'_>>> {
+            (0..table.row_count())
+                .map(|row| {
+                    (0..table.schema().columns().len())
+                        .map(|column| table.cell(row, column).unwrap())
+                        .collect()
+                })
+                .collect()
+        }
+        /// A file built at test time, read as `built.sas7bdat`.
+        fn read_built(bytes: &[u8]) -> Result<yamaa_adapters::arrow_table::ArrowTable, Error> {
+            sas_source::parse(bytes, &declaration("built.sas7bdat"))
+        }
+        #[test]
+        fn raw_rows_that_begin_like_a_subheader_signature_stay_rows_in_64_bit_files() {
+            // A compressed dataset keeps a row it could not compress as an
+            // uncompressed subheader. In a 64-bit little-endian file each row
+            // below opens with the four bytes of a subheader signature, but
+            // only a whole eight-byte signature opens a subheader.
+            use crate::support::sas7bdat::{Cell, Dataset, Kind, Layout, Page, Pointer, META};
+            let mut dataset =
+                Dataset::new(Layout::LE64, &[("X", Kind::Num, 8), ("T", Kind::Chr, 8)]);
+            dataset.compression = Some(*b"SASYZCRL");
+            let leading: [[u8; 4]; 9] = [
+                [0xFF, 0xFF, 0xFF, 0xFF], // column names
+                [0xFD, 0xFF, 0xFF, 0xFF], // column text
+                [0xFE, 0xFF, 0xFF, 0xFF], // column list
+                [0xF8, 0xFF, 0xFF, 0xFF], // the unnamed 0xFFFFFFF8 family
+                [0xFC, 0xFF, 0xFF, 0xFF], // column attributes
+                [0x00, 0xFC, 0xFF, 0xFF], // subheader counts
+                [0xFE, 0xFB, 0xFF, 0xFF], // column format
+                [0xF7, 0xF7, 0xF7, 0xF7], // row size
+                [0xF6, 0xF6, 0xF6, 0xF6], // column size
+            ];
+            let values: Vec<f64> = leading
+                .iter()
+                .map(|bytes| {
+                    f64::from_le_bytes([
+                        bytes[0], bytes[1], bytes[2], bytes[3], 0xFF, 0xFF, 0xEF, 0x3F,
+                    ])
+                })
+                .collect();
+            assert_eq!(values[0], 0.9999999999999999);
+            dataset.total = 1 + values.len() as u64;
+            let mut pointers = dataset.metadata();
+            pointers.push(Pointer::rle_row(
+                &dataset.row(&[Cell::Num(1.5), Cell::Text(b"rle")]),
+            ));
+            let labels: Vec<String> = (0..values.len()).map(|row| format!("raw{row}")).collect();
+            for (value, label) in values.iter().zip(&labels) {
+                pointers.push(Pointer::raw_row(
+                    dataset.row(&[Cell::Num(*value), Cell::Text(label.as_bytes())]),
+                ));
+            }
+            pointers.push(Pointer::truncated());
+            let bytes = dataset.file(&[Page::new(META, pointers, vec![])]);
+            let table = read_built(&bytes).unwrap();
+            let mut expected = vec![vec![float(1.5), ValueRef::Str("rle")]];
+            for (value, label) in values.iter().zip(&labels) {
+                expected.push(vec![float(*value), ValueRef::Str(label)]);
+            }
+            assert_eq!(cells(&table), expected);
+        }
+        #[test]
+        fn big_endian_64_bit_signatures_keep_their_four_byte_layout() {
+            // In a 64-bit big-endian file the row-size signature is followed
+            // by four unspecified bytes, and only 0xFFFFFFFF opens the
+            // 0xFFFF... family. Rows that open with another member of that
+            // family stay rows. Their leading bytes make each double a NaN,
+            // which SAS reads as a special missing value.
+            use crate::support::sas7bdat::{Cell, Dataset, Kind, Layout, Page, Pointer, META};
+            let mut dataset =
+                Dataset::new(Layout::BE64, &[("X", Kind::Num, 8), ("T", Kind::Chr, 8)]);
+            dataset.compression = Some(*b"SASYZCRL");
+            let leading: [[u8; 4]; 6] = [
+                [0xFF, 0xFF, 0xFF, 0xFD], // column text
+                [0xFF, 0xFF, 0xFF, 0xFE], // column list
+                [0xFF, 0xFF, 0xFF, 0xF8], // the unnamed 0xFFFFFFF8 family
+                [0xFF, 0xFF, 0xFF, 0xFC], // column attributes
+                [0xFF, 0xFF, 0xFC, 0x00], // subheader counts
+                [0xFF, 0xFF, 0xFB, 0xFE], // column format
+            ];
+            dataset.total = 1 + leading.len() as u64;
+            let mut pointers = dataset.metadata();
+            pointers.push(Pointer::rle_row(
+                &dataset.row(&[Cell::Num(-2.25), Cell::Text(b"rle")]),
+            ));
+            let labels: Vec<String> = (0..leading.len()).map(|row| format!("raw{row}")).collect();
+            for (bytes, label) in leading.iter().zip(&labels) {
+                let number = [bytes[0], bytes[1], bytes[2], bytes[3], 0, 0, 0, 0];
+                pointers.push(Pointer::raw_row(
+                    dataset.row(&[Cell::Bytes(&number), Cell::Text(label.as_bytes())]),
+                ));
+            }
+            pointers.push(Pointer::truncated());
+            let bytes = dataset.file(&[Page::new(META, pointers, vec![])]);
+            let table = read_built(&bytes).unwrap();
+            let mut expected = vec![vec![float(-2.25), ValueRef::Str("rle")]];
+            for label in &labels {
+                expected.push(vec![ValueRef::Missing, ValueRef::Str(label)]);
+            }
+            assert_eq!(cells(&table), expected);
+        }
         #[test]
         fn rle_and_rdc_compression_equal_independent_upstream_csv_truth() {
             let expected =
