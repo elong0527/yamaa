@@ -31,12 +31,12 @@ admission, SAS physical extent validation, shared ownership of column-text
 metadata pages, unsupported compression signature
 rejection, transport physical type/offset and partial-row validation, transport
 version 8 observation count admission, overlapping RDC back-reference
-propagation, accounting for records deleted in place, exact IBM numeric
-precision facts used by narrowing, a row text scratch buffer sized from the
-validated submitted columns rather than from every column attribute slot, and a
-transport member that declares no variables (or a negative count) reaching the
-metadata handler, as a SAS file without columns does, instead of failing as an
-empty allocation. SAS metadata still records the embedded encoding but
+propagation, accounting for records deleted in place, and exact IBM numeric
+precision facts used by narrowing. The row text scratch buffer is sized from
+the validated submitted columns rather than from every column attribute slot.
+A transport member that declares no variables (or a negative count) reaches
+the metadata handler, as a SAS file without columns does, instead of failing
+as an empty allocation. SAS metadata still records the embedded encoding but
 does not override the explicit declaration. The bridge contains snapshot memory
 IO callbacks and never initializes filesystem IO. Rust contains every callback
 panic before it reaches C. The parent parser lifetime contains all callbacks.
