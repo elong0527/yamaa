@@ -117,6 +117,7 @@ keep their `REQ-NNNN` requirements and are listed with the prefix `REQ`.
 | [Controlled terminology](profiles/terminology.md) | CT | Declare codelists once and enforce the items each binding lists. |
 | [Define-XML](profiles/define-xml.md) | DEFINE | Compose study metadata into deterministic Define-XML 2.1 documents. |
 | [Dataset-JSON](profiles/dataset-json.md) | JSON | Write a dataset and its submission metadata as one deterministic Dataset-JSON 1.1 file. |
+| [SAS Transport](profiles/xpt.md) | XPT | Write a dataset as one deterministic SAS Transport version 5 file in the public record layout. |
 | [Project functions](profiles/functions.md) | FUNC | Resolve immutable runtimes and validate function inputs, results, and activation conformance. |
 
 The [requirement index](https://elong0527.github.io/yamaa/reference/requirements/),

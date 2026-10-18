@@ -49,8 +49,9 @@ see the [contributor guide](../../CONTRIBUTING.md).
 
 - `yamaa_domain()` builds one dataset; `yamaa_check()` checks a specification
   without reading study data.
-- `yamaa_define()` renders Define-XML, and Dataset-JSON on request, without
-  running a specification.
+- `yamaa_define()` renders Define-XML, and a SAS Transport version 5 or
+  Dataset-JSON file per dataset when a section sets `transport: xpt` or
+  `transport: dataset_json`, without running a specification.
 - Inputs can be CSV, Parquet, SAS datasets (`.sas7bdat`) or SAS transport v5/v8
   files (`.xpt`); outputs are CSV or Parquet.
 - Output data frames hold dates as `Date`, datetimes as UTC `POSIXct`, integer

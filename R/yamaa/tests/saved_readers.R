@@ -64,10 +64,17 @@ check_csv <- function(saved, empty) {
 
 check_submission <- function(directory, profile, empty) {
   document <- yamaa_define(file.path(directory, "environment.yaml"), "sdtm", created = truth$created)
+  if (empty) {
+    # A transported dataset without rows must declare it has no data.
+    stopifnot(identical(document$issues$condition, "transport_dataset_empty"))
+    failed <- tryCatch({document$save(); FALSE}, yamaa_define_error = function(error) TRUE)
+    stopifnot(failed, !file.exists(file.path(directory, c("test.json", "define.xml"))))
+    return(invisible(NULL))
+  }
   stopifnot(nrow(document$issues) == 0L)
   unlink(file.path(directory, c("spec.yaml", "environment.yaml", paste0("output.", profile))))
   stopifnot(identical(document$save(), TRUE), identical(document$save(), FALSE))
-  saved <- rawfile(file.path(directory, "output.json"))
+  saved <- rawfile(file.path(directory, "test.json"))
   # bigint_as_char is required: R doubles cannot carry every signed-i64 value.
   data <- jsonlite::fromJSON(rawToChar(saved), simplifyVector = FALSE, bigint_as_char = TRUE)
   row_lines <- grep("^    \\[", strsplit(rawToChar(saved), "\n", fixed = TRUE)[[1L]], value = TRUE)
@@ -108,7 +115,7 @@ check_submission <- function(directory, profile, empty) {
     stopifnot(identical(actual, expected))
   }
   xml <- rawToChar(rawfile(file.path(directory, "define.xml")))
-  stopifnot(grepl('xlink:href="output.json"', xml, fixed = TRUE))
+  stopifnot(grepl('xlink:href="test.json"', xml, fixed = TRUE))
   for (i in seq_along(columns)) {
     # Full immutable XML goldens are owned by public_define.R. This control also
     # links every new typed JSON column to its corresponding saved XML item.
@@ -141,7 +148,7 @@ run_saved_readers <- function() {
     }
     writeBin(original, entry)
     check_submission(directory, profile, empty)
-    unlink(file.path(directory, c("output.json", "define.xml")))
+    unlink(file.path(directory, c("test.json", "define.xml")))
   }
 }
 

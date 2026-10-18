@@ -286,6 +286,7 @@ mod diagnostics {
             reached.extend(project_activation::reached());
             reached.extend(project_functions::reached());
             reached.extend(project_environment::reached());
+            reached.extend(project_environment::extended_alias_reached());
             reached.extend(project_lock::reached());
             let lock = yamaa_core::application_issue::lock_mismatch(
                 [("package".into(), JsonValue::String("project".into()))].into(),

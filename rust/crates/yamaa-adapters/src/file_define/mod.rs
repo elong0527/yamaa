@@ -269,10 +269,31 @@ impl Ports for NativePorts {
         Ok(document)
     }
     fn specification(document: &Self::Specification) -> service::SpecificationView<'_> {
+        use yamaa_core::schema::DocumentNode as N;
+        let model = document.model().document();
+        let inputs = model
+            .field(model.root(), "input")
+            .and_then(|node| match &model.nodes()[node] {
+                N::Mapping(fields) => Some(fields),
+                _ => None,
+            })
+            .into_iter()
+            .flatten()
+            .filter_map(|&(key, _)| match &model.nodes()[key] {
+                N::Text(name) => Some(name.as_str()),
+                _ => None,
+            })
+            .filter_map(|name| {
+                document
+                    .written_input_origin(name, "path")
+                    .map(|origin| (name, origin))
+            })
+            .collect();
         service::SpecificationView {
-            document: document.model().document(),
+            document: model,
             source: &document.source().identity,
             output: document.written_output_origin(),
+            inputs,
         }
     }
     fn location(&self, path: &str, declaring: &str, written: &str) -> Result<String, Failure> {
@@ -280,20 +301,15 @@ impl Ports for NativePorts {
             .location_from(declaring, written)
             .map_err(|error| resource(path, written, error))
     }
-    fn json_written(&self, written: &str) -> String {
-        Path::new(written)
-            .with_extension("json")
-            .to_string_lossy()
-            .into_owned()
+    fn transport_written(&self, define: &str, file: &str) -> String {
+        // Written paths use `/` separators; the file replaces the final one.
+        match define.rfind('/') {
+            Some(separator) => format!("{}{file}", &define[..=separator]),
+            None => file.into(),
+        }
     }
     fn same_location(&self, left: &str, right: &str) -> bool {
         same_location(Path::new(left), Path::new(right))
-    }
-    fn same_parent(&self, left: &str, right: &str) -> bool {
-        Path::new(left)
-            .parent()
-            .zip(Path::new(right).parent())
-            .is_some_and(|(left, right)| same_location(left, right))
     }
     fn package_reference(&self, target: &str, define: &str) -> Option<String> {
         package_reference(
@@ -346,6 +362,13 @@ impl Ports for NativePorts {
         table: &T,
     ) -> Result<Vec<u8>, yamaa_core::submission_composition::Finding> {
         crate::submission_json::render(document, table)
+    }
+    fn render_xpt<T: yamaa_core::table::TableAccess>(
+        &mut self,
+        document: &yamaa_core::submission_xpt::XptDocument,
+        table: &T,
+    ) -> Result<Vec<u8>, yamaa_core::submission_composition::Finding> {
+        crate::submission_xpt::render(document, table)
     }
     fn target(&self, path: &str, declaring: &str, written: &str) -> Result<Self::Target, Failure> {
         self.resources()

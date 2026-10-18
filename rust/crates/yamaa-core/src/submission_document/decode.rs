@@ -20,7 +20,7 @@ const SECTION: &[FieldName] = &[
     FieldName::Specs,
     FieldName::Define,
     FieldName::Documents,
-    FieldName::DatasetJson,
+    FieldName::Transport,
     FieldName::Context,
     FieldName::XmlLang,
     FieldName::FileOid,
@@ -271,21 +271,6 @@ impl<'a> Parser<'a> {
             }
         }
     }
-    fn boolean(&mut self, origin: Origin, path: Path) -> Result<Option<Field<bool>>, Cause> {
-        match origin.node {
-            None => Ok(Some(Field {
-                value: false,
-                origin,
-            })),
-            Some(node) => match self.input.nodes()[node] {
-                N::Boolean(value) => Ok(Some(Field { value, origin })),
-                _ => {
-                    self.fault(node, Some(origin), path, Kind::ExpectedBoolean)?;
-                    Ok(None)
-                }
-            },
-        }
-    }
     fn sequence(
         &mut self,
         origin: Origin,
@@ -477,10 +462,20 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        let dataset_json = self.boolean(
-            self.get(node, FieldName::DatasetJson),
-            path.field(FieldName::DatasetJson),
-        )?;
+        let transport_origin = self.get(node, FieldName::Transport);
+        let transport = if transport_origin.node.is_some() {
+            self.choice(
+                transport_origin,
+                path.field(FieldName::Transport),
+                &[
+                    ("xpt", Transport::Xpt),
+                    ("dataset_json", Transport::DatasetJson),
+                ],
+                None,
+            )?
+        } else {
+            None
+        };
         let context = self.choice(
             self.get(node, FieldName::Context),
             path.field(FieldName::Context),
@@ -512,35 +507,30 @@ impl<'a> Parser<'a> {
             path,
             TextRule::NonEmpty,
         )?;
-        Ok(standard
-            .zip(define)
-            .zip(dataset_json)
-            .zip(context)
-            .zip(xml_lang)
-            .map(
-                |((((standard, define), dataset_json), context), xml_lang)| Section {
-                    family,
-                    origin,
-                    standard,
-                    specs: Field {
-                        value: specs,
-                        origin: specs_origin,
-                    },
-                    define,
-                    documents: Field {
-                        value: documents,
-                        origin: docs_origin,
-                    },
-                    dataset_json,
-                    context,
-                    xml_lang,
-                    file_oid,
-                    metadata_version,
-                    originator,
-                    stylesheet,
-                    source_system_version,
+        Ok(standard.zip(define).zip(context).zip(xml_lang).map(
+            |(((standard, define), context), xml_lang)| Section {
+                family,
+                origin,
+                standard,
+                specs: Field {
+                    value: specs,
+                    origin: specs_origin,
                 },
-            ))
+                define,
+                documents: Field {
+                    value: documents,
+                    origin: docs_origin,
+                },
+                transport,
+                context,
+                xml_lang,
+                file_oid,
+                metadata_version,
+                originator,
+                stylesheet,
+                source_system_version,
+            },
+        ))
     }
     fn run(&mut self, root: usize) -> Result<Declarations, Cause> {
         let N::Mapping(fields) = &self.input.nodes()[root] else {

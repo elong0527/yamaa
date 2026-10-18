@@ -251,14 +251,39 @@ class PublicConformance(unittest.TestCase):
         self.assertEqual(self.verdict()["verdict"], "mismatch")
 
     def test_define_and_resolved_spec_have_explicit_dispositions(self):
-        for name in ["define.xml", "dm.json", "spec_resolved.yaml"]:
+        (self.case / "environment.yaml").write_text("schema_version: '1.0'\n")
+        (self.case / "benchmark.yaml").write_text(
+            METADATA + "define:\n  environment: environment.yaml\n  standard: sdtm\n"
+            "  created: '2026-09-11T00:00:00'\n"
+        )
+        self.example = judge.plan(self.fixtures)["examples"][0]
+        for name in ["define.xml", "dm.json", "dm.xpt", "spec_resolved.yaml"]:
             (self.case / "expected" / name).write_text("independent truth")
         verdict = self.verdict()
         self.assertEqual(verdict["verdict"], "pass")
         self.assertEqual(
             {r["artifact"] for r in verdict["not_compared"]},
-            {"define.xml", "dm.json", "spec_resolved.yaml"},
+            {"define.xml", "dm.json", "dm.xpt", "spec_resolved.yaml"},
         )
+        # A Define benchmark's expected failure belongs to its Define call: the
+        # domain build must still pass and save, and the error is not compared.
+        (self.case / "expected/error.yaml").write_text(
+            "phase: validation\ncondition: value_not_permitted\n"
+            "spec_paths: [sdtm.define]\n"
+        )
+        verdict = self.verdict()
+        self.assertEqual(verdict["verdict"], "pass", verdict)
+        self.assertIn("error.yaml", {r["artifact"] for r in verdict["not_compared"]})
+        self.build["issues"] = [
+            {"phase": "validation", "condition": "value_not_permitted"}
+        ]
+        self.assertEqual(self.verdict()["verdict"], "mismatch")
+
+    def test_define_files_without_a_define_call_are_not_dispositioned(self):
+        (self.case / "expected/define.xml").write_text("independent truth")
+        verdict = self.verdict()
+        self.assertEqual(verdict["verdict"], "pass")
+        self.assertEqual(verdict["not_compared"], [])
 
     def test_missing_record_errors_and_deliberately_broken_output_fails_gate(self):
         inventory = self.root / "inventory.json"

@@ -3,7 +3,7 @@
 //! the column it copies (SUB-16, SUB-20). Shared by the domain build and by
 //! composition; no study, host or data access.
 use crate::{
-    expression,
+    expression::{self, NodeKind, Reducer},
     schema::{Document, DocumentNode as N},
     specification_submission_document::OriginType,
     text_template::StringTemplate,
@@ -13,7 +13,9 @@ use std::collections::BTreeSet;
 /// The four derivation rows of SUB-19's table.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum DerivationKind {
-    /// A bare `source` or `odm` read: nothing was computed.
+    /// A bare read: a `source`, an `odm` read or an `ONLY` pivot of one
+    /// variable, none through an intermediate that computes. Nothing was
+    /// computed.
     Source,
     /// A bare `literal`: the same value in every row, read from no input.
     Literal,
@@ -57,38 +59,64 @@ impl DerivationKind {
 #[derive(Clone, Debug, Default)]
 pub(crate) struct Reads {
     inputs: BTreeSet<String>,
-    intermediates: BTreeSet<String>,
+    /// Plain lookups: named intermediates over a declared input that declare
+    /// no `derivations`, so every field read through one is a stored value of
+    /// the record it selects.
+    plain: BTreeSet<String>,
+    /// Every other named intermediate: one that declares `derivations` or
+    /// reads `SELF`, the completed output rows.
+    computing: BTreeSet<String>,
 }
 
 impl Reads {
     pub(crate) fn of(document: &Document) -> Self {
         let root = document.root();
-        let inputs = match document.field(root, "input").map(|n| &document.nodes()[n]) {
-            Some(N::Mapping(entries)) => entries
-                .iter()
-                .filter_map(|&(key, _)| text(document, key).map(String::from))
-                .collect(),
-            _ => BTreeSet::new(),
-        };
-        let intermediates = items(document, document.field(root, "intermediates"))
-            .iter()
-            .filter_map(|&item| document.field(item, "id").and_then(|id| text(document, id)))
-            .map(String::from)
-            .collect();
+        let inputs: BTreeSet<String> =
+            match document.field(root, "input").map(|n| &document.nodes()[n]) {
+                Some(N::Mapping(entries)) => entries
+                    .iter()
+                    .filter_map(|&(key, _)| text(document, key).map(String::from))
+                    .collect(),
+                _ => BTreeSet::new(),
+            };
+        let mut plain = BTreeSet::new();
+        let mut computing = BTreeSet::new();
+        for &item in items(document, document.field(root, "intermediates")) {
+            let Some(id) = document.field(item, "id").and_then(|id| text(document, id)) else {
+                continue;
+            };
+            let derives = matches!(
+                document.field(item, "derivations").map(|n| &document.nodes()[n]),
+                Some(N::Mapping(entries)) if !entries.is_empty()
+            );
+            let over_input = document
+                .field(item, "dataset")
+                .and_then(|dataset| text(document, dataset))
+                .is_some_and(|dataset| inputs.contains(dataset));
+            if over_input && !derives {
+                plain.insert(id.to_owned());
+            } else {
+                computing.insert(id.to_owned());
+            }
+        }
         Self {
             inputs,
-            intermediates,
+            plain,
+            computing,
         }
     }
-    /// A read that looks no record up through a named intermediate.
+    /// A read that looks no record up through a named intermediate that
+    /// computes: a plain lookup copies a stored value, as a bare read does.
     fn bare(&self, name: &str) -> bool {
         name.split_once('.')
-            .is_none_or(|(qualifier, _)| !self.intermediates.contains(qualifier))
+            .is_none_or(|(qualifier, _)| !self.computing.contains(qualifier))
     }
-    /// A read of a value a declared input dataset carries.
+    /// A read of a value a declared input dataset carries, directly or
+    /// through a plain lookup of one.
     fn input(&self, name: &str) -> bool {
-        name.split_once('.')
-            .is_some_and(|(qualifier, _)| self.inputs.contains(qualifier))
+        name.split_once('.').is_some_and(|(qualifier, _)| {
+            self.inputs.contains(qualifier) || self.plain.contains(qualifier)
+        })
     }
     fn reads(&self, name: &str, strict: bool) -> bool {
         if strict {
@@ -126,6 +154,38 @@ fn keyword(document: &Document, node: usize) -> Option<(&str, usize)> {
     }
 }
 
+/// The one variable an `aggregate` pivots: its `expr` is exactly
+/// `ONLY(<variable>)`, which selects one stored value and computes nothing,
+/// and it declares no `derive` bindings, which would compute the value read.
+fn pivot(document: &Document, payload: usize) -> Option<String> {
+    // A lone aggregate formula is the shorthand of the class's `expr`.
+    let expr = match text(document, payload) {
+        Some(expr) => expr,
+        None => {
+            let derives = matches!(
+                document.field(payload, "derive").map(|n| &document.nodes()[n]),
+                Some(N::Sequence(bindings)) if !bindings.is_empty()
+            );
+            if derives {
+                return None;
+            }
+            text(document, document.field(payload, "expr")?)?
+        }
+    };
+    let parsed = expression::parse(expr).ok()?;
+    let root = parsed.ungroup(parsed.root());
+    let NodeKind::Reduction {
+        reducer: Reducer::Only,
+        operand,
+        ..
+    } = parsed.nodes()[root].kind
+    else {
+        return None;
+    };
+    let operand = parsed.ungroup(operand);
+    (parsed.nodes()[operand].kind == NodeKind::Identifier).then(|| parsed.text(operand).into())
+}
+
 /// Classify one derivation, a column's or a row template's, by SUB-19's table.
 pub(crate) fn classify(document: &Document, node: usize, reads: &Reads) -> DerivationKind {
     let node = document.field(node, "value").unwrap_or(node);
@@ -142,6 +202,11 @@ pub(crate) fn classify(document: &Document, node: usize, reads: &Reads) -> Deriv
         Some(("odm", _)) => DerivationKind::Source,
         Some(("source", payload)) => match variable(document, payload) {
             Some(name) if reads.bare(name) => DerivationKind::Source,
+            _ => DerivationKind::Computed,
+        },
+        // A pivot of long records to their one value reads it as stored.
+        Some(("aggregate", payload)) => match pivot(document, payload) {
+            Some(name) if reads.bare(&name) => DerivationKind::Source,
             _ => DerivationKind::Computed,
         },
         _ if recode(document, node, reads, false) => DerivationKind::Recode,
@@ -218,6 +283,9 @@ fn nested(document: &Document, node: usize, reads: &Reads, strict: bool) -> bool
         Some(("source", payload)) => {
             variable(document, payload).is_some_and(|name| reads.reads(name, strict))
         }
+        Some(("aggregate", payload)) => {
+            pivot(document, payload).is_some_and(|name| reads.reads(&name, strict))
+        }
         _ => recode(document, node, reads, strict),
     }
 }
@@ -280,12 +348,14 @@ impl CopyFailure {
     }
 }
 
-/// Check that a bare `source` derivation reads the predecessor column and,
-/// when the description writes a where clause, declares a `filter`.
+/// Check that a bare `source` derivation reads the predecessor column through
+/// the input dataset declared under the predecessor's name and, when the
+/// description writes a where clause, declares a `filter`.
 pub(crate) fn copies(
     document: &Document,
     node: usize,
     predecessor: &Predecessor<'_>,
+    reads: &Reads,
 ) -> Result<(), CopyFailure> {
     let node = document.field(node, "value").unwrap_or(node);
     let source = match keyword(document, node) {
@@ -295,7 +365,10 @@ pub(crate) fn copies(
     let named = source
         .and_then(|source| variable(document, source))
         .and_then(|name| name.split_once('.'));
-    if named != Some((predecessor.dataset, predecessor.column)) {
+    // A plain lookup is a bare read, but it reads no predecessor dataset.
+    if named != Some((predecessor.dataset, predecessor.column))
+        || !reads.inputs.contains(predecessor.dataset)
+    {
         return Err(CopyFailure::Source);
     }
     if predecessor.selected && source.and_then(|s| document.field(s, "filter")).is_none() {
@@ -369,6 +442,52 @@ mod tests {
         ] {
             assert_eq!(predecessor(invalid), None, "{invalid:?}");
         }
+    }
+
+    #[test]
+    fn only_the_reduction_of_one_variable_to_its_one_value_is_a_pivot() {
+        let formula = |expr: &str| {
+            let document = Document::new(vec![N::Text(expr.into())], 0).unwrap();
+            pivot(&document, 0)
+        };
+        assert_eq!(formula("ONLY(ODM.Value)").as_deref(), Some("ODM.Value"));
+        assert_eq!(
+            formula(" ( ONLY( (LBORRES) ) ) ").as_deref(),
+            Some("LBORRES")
+        );
+        for computed in [
+            "ONLY(ODM.Value) + 1",
+            "ONLY(ODM.Value * 2)",
+            "-ONLY(ODM.Value)",
+            "MAX(ODM.Value)",
+            "COUNT(ODM.*)",
+            "ONLY('text')",
+            "ODM.Value",
+            "ONLY(",
+        ] {
+            assert_eq!(formula(computed), None, "{computed}");
+        }
+        // The class form pivots its `expr` unless a derive binding computes it.
+        let class = |derive: bool| {
+            let mut nodes = vec![
+                N::Text("expr".into()),
+                N::Text("ONLY(VALUE)".into()),
+                N::Text("derive".into()),
+            ];
+            if derive {
+                nodes.push(N::Text("binding".into()));
+                nodes.push(N::Sequence(vec![3]));
+            } else {
+                nodes.push(N::Sequence(vec![]));
+            }
+            let bindings = nodes.len() - 1;
+            nodes.push(N::Mapping(vec![(0, 1), (2, bindings)]));
+            let root = nodes.len() - 1;
+            let document = Document::new(nodes, root).unwrap();
+            pivot(&document, root)
+        };
+        assert_eq!(class(false).as_deref(), Some("VALUE"));
+        assert_eq!(class(true), None);
     }
 
     #[test]

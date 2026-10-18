@@ -268,11 +268,8 @@ fn item_definition(
             "SignificantDigits",
             meta.significant_digits.as_ref().map(|v| &v.value),
         )
-        .optional("SASFieldName", model::sas_name(name).then_some(name))
-        .optional(
-            "def:DisplayFormat",
-            meta.display_format.as_ref().map(|v| &v.value),
-        )
+        .optional("SASFieldName", model::column_name(name).then_some(name))
+        .optional("def:DisplayFormat", column.display_format.as_ref())
         .optional(
             "def:CommentOID",
             meta.comment.as_ref().map(|_| format!("COM.{identity}")),
@@ -341,11 +338,15 @@ fn push_item_groups(metadata: &mut Element, study: &Study, language: &str) {
                     "Tabulation"
                 },
             )
-            .optional("SASDatasetName", model::sas_name(id).then_some(id))
+            .optional("SASDatasetName", model::dataset_name(id).then_some(id))
             .attr("Repeating", yes(sub.repeating.value))
             .attr("IsReferenceData", yes(sub.reference_data.value))
             .attr("def:Structure", &sub.structure.value)
-            .attr("def:ArchiveLocationID", format!("LF.{id}"))
+            // A dataset with no data and no transport file has no leaf.
+            .optional(
+                "def:ArchiveLocationID",
+                dataset.href.as_ref().map(|_| format!("LF.{id}")),
+            )
             .attr(
                 "def:StandardOID",
                 format!("STD.{}", section.standard.name.value.name()),
@@ -383,12 +384,9 @@ fn push_item_groups(metadata: &mut Element, study: &Study, language: &str) {
             );
         }
         group.push(class);
-        group.leaf(
-            id,
-            &dataset.href,
-            dataset.href.rsplit('/').next().unwrap_or(&dataset.href),
-            None,
-        );
+        if let Some(href) = &dataset.href {
+            group.leaf(id, href, href.rsplit('/').next().unwrap_or(href), None);
+        }
         metadata.push(group);
     }
 }
