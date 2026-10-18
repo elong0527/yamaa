@@ -716,5 +716,115 @@ pub(super) fn admit(
     }
     let lengths = admit_entries(d, columns, output, &reads, result)?;
     apply_value_bounds_and_inventory(d, columns, output, inventory, groups, result, &lengths)?;
+    data_type_checks(d, columns, output, groups)?;
+    reject_datetime_columns(d, columns, &carried, result)?;
+    Ok(())
+}
+
+/// SUB-26: a `str` column whose submission data type is a date or time type
+/// has each present completed value checked against that type's ISO 8601
+/// form, after its length and before its terminology. A value-level entry
+/// declaring a data type other than the column's decides the rows its where
+/// clause selects, and the column's data type every other row.
+fn data_type_checks(
+    d: &Document,
+    columns: &[usize],
+    output: &TableSchema,
+    groups: &mut [verifications::Verifications],
+) -> Result<(), PrepareError> {
+    use crate::iso8601::Form;
+    for (index, &node) in columns.iter().enumerate() {
+        if text(d, field(d, node, "type")?)? != "str" {
+            continue;
+        }
+        let name = output.columns()[index].name.as_str();
+        let declared =
+            present_field(d, node, "submission").and_then(|id| string(d, id, "data_type"));
+        let effective = declared.unwrap_or("text");
+        // Entries declaring their own, different data type, each over the
+        // rows its where clause selects. Value-level admission reports a
+        // clause it cannot select by.
+        let mut overrides = Vec::new();
+        for entry in values::entries(d, node) {
+            let Some(own) = string(d, entry.node, "data_type") else {
+                continue;
+            };
+            if own == effective {
+                continue;
+            }
+            let Some(clause) = super::value_level::clause(&entry, output, index) else {
+                continue;
+            };
+            overrides.push((
+                clause,
+                Form::of(own),
+                format!("{}.data_type", values::path(name, entry.id)),
+            ));
+        }
+        let path = format!("columns.{name}.submission.data_type");
+        if let Some(form) = declared.and_then(Form::of) {
+            // Every row but those the overriding entries select.
+            let scope = (!overrides.is_empty()).then(|| RowScope {
+                clauses: overrides
+                    .iter()
+                    .map(|(clause, _, _)| clause.clone())
+                    .collect(),
+                include: false,
+            });
+            groups[index].append_metadata(Verification {
+                path,
+                check: Check::DataType { form, scope },
+            });
+        }
+        for (clause, form, path) in overrides {
+            if let Some(form) = form {
+                groups[index].append_metadata(Verification {
+                    path,
+                    check: Check::DataType {
+                        form,
+                        scope: Some(RowScope {
+                            clauses: vec![clause],
+                            include: true,
+                        }),
+                    },
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+/// SUB-27: a dataset whose class is a tabulation class, so of the `sdtm` or
+/// `send` family, writes no `datetime` column; its date and time text is a
+/// `str` column with a date or time data type.
+fn reject_datetime_columns(
+    d: &Document,
+    columns: &[usize],
+    output: &BTreeSet<&str>,
+    result: &mut Vec<PreflightFinding>,
+) -> Result<(), PrepareError> {
+    let Some(class) =
+        present_field(d, d.root(), "submission").and_then(|id| string(d, id, "class"))
+    else {
+        return Ok(());
+    };
+    if !crate::specification_submission_document::DatasetClass::tabulation_name(class) {
+        return Ok(());
+    }
+    for &column in columns {
+        let name = text(d, field(d, column, "name")?)?;
+        if output.contains(name) && text(d, field(d, column, "type")?)? == "datetime" {
+            result.push(finding(
+                C::SubmissionDatetimeColumn,
+                &format!("columns.{name}.type"),
+                &[
+                    ("column", s(name)),
+                    ("value", s("datetime")),
+                    ("class", s(class)),
+                    ("permitted", V::Array(vec![s("str"), s("date")])),
+                ],
+            ));
+        }
+    }
     Ok(())
 }

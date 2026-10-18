@@ -1898,6 +1898,7 @@ fn check_family(check: &Check) -> CheckFamily {
     match check {
         Check::NotMissing => CheckFamily::NotMissing,
         Check::Mandatory(_) => CheckFamily::Mandatory,
+        Check::DataType { .. } => CheckFamily::DataType,
         Check::AllowedValues(_) => CheckFamily::AllowedValues,
         Check::Codelist { .. } => CheckFamily::Codelist,
         Check::ValueCodelists { .. } => CheckFamily::ValueCodelists,

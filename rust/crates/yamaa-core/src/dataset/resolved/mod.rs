@@ -550,6 +550,7 @@ pub enum CheckFamily {
     IntermediateUnique,
     NotMissing,
     Mandatory,
+    DataType,
     AllowedValues,
     Codelist,
     ValueCodelists,

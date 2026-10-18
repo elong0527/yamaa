@@ -1,0 +1,13 @@
+phase: impute
+condition: invalid_date_text
+spec_paths:
+  - columns.AESTDTC.derivation.dtc
+requirement: TIME-19
+context:
+  part: month
+  source: AE_RAW.AESTMO
+  value: "3"
+  keys:
+    - STUDYID: YAMAA-01
+      USUBJID: YAMAA-01-001
+      AESEQ: 2

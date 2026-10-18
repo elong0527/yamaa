@@ -1,6 +1,5 @@
-"""Qualify one independent adapter format selection and its native dependency edges."""
+"""Smoke-test minimal Rust format builds and their native dependency edges."""
 
-import argparse
 import json
 import re
 import subprocess
@@ -10,12 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = ROOT / "rust/Cargo.toml"
 FORMATS = {
     "none": [],
-    "yaml": ["yaml"],
-    "parquet": ["parquet"],
-    "readstat": ["readstat"],
-    "odm": ["odm"],
     "yaml-parquet": ["yaml", "parquet"],
-    "all": ["yaml", "parquet", "readstat", "odm"],
 }
 
 
@@ -33,11 +27,8 @@ def packages(tree):
     return {line.split()[0] for line in tree.splitlines() if line.strip()}
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("selection", choices=FORMATS)
-    args = parser.parse_args()
-    enabled = FORMATS[args.selection]
+def qualify(selection, enabled):
+    print(f"Checking {selection}", flush=True)
     features = ["--no-default-features"]
     if enabled:
         features += ["--features", ",".join(enabled)]
@@ -46,7 +37,7 @@ def main():
             "tree",
             "--locked",
             "-p",
-            "yamaa-adapters",
+            "yamaa",
             *features,
             "--prefix",
             "none",
@@ -62,38 +53,12 @@ def main():
         ("quick-xml", "odm"),
     ]:
         if (package in tree) != (feature in enabled):
-            raise RuntimeError(f"unexpected {package} dependency for {args.selection}")
+            raise RuntimeError(f"unexpected {package} dependency for {selection}")
     if ("flate2" in tree) != bool({"parquet", "odm"}.intersection(enabled)):
-        raise RuntimeError(f"unexpected flate2 dependency for {args.selection}")
+        raise RuntimeError(f"unexpected flate2 dependency for {selection}")
     if ("cc" in tree) != bool({"parquet", "readstat"}.intersection(enabled)):
-        raise RuntimeError(f"unexpected native C build dependency for {args.selection}")
-    core = packages(
-        cargo(
-            "tree",
-            "--locked",
-            "-p",
-            "yamaa-core",
-            "--prefix",
-            "none",
-            "--format",
-            "{p}",
-            capture=True,
-        )
-    )
-    if core.intersection(
-        {
-            "yamaa-saphyr-parser",
-            "parquet",
-            "arrow-array",
-            "arrow-ipc",
-            "cc",
-            "zstd-sys",
-            "quick-xml",
-            "flate2",
-        }
-    ):
-        raise RuntimeError("semantic core depends on a physical reader")
-    cargo("test", "--locked", "-p", "yamaa-adapters", *features)
+        raise RuntimeError(f"unexpected native C build dependency for {selection}")
+    cargo("check", "--locked", "-p", "yamaa", *features)
     messages = cargo(
         "test",
         "--locked",
@@ -121,10 +86,40 @@ def main():
         (r"\bZSTD_\w+", "parquet"),
     ]:
         if bool(re.search(expression, symbols)) != (feature in enabled):
-            raise RuntimeError(
-                f"unexpected linked {feature} symbols for {args.selection}"
-            )
-    print(f"{args.selection}: fixtures, Cargo graph and native symbols passed")
+            raise RuntimeError(f"unexpected linked {feature} symbols for {selection}")
+    subprocess.run([executables[0]], cwd=ROOT, check=True)
+    print(f"{selection}: fixtures, Cargo graph and native symbols passed", flush=True)
+
+
+def main():
+    core = packages(
+        cargo(
+            "tree",
+            "--locked",
+            "-p",
+            "yamaa-core",
+            "--prefix",
+            "none",
+            "--format",
+            "{p}",
+            capture=True,
+        )
+    )
+    if core.intersection(
+        {
+            "yamaa-saphyr-parser",
+            "parquet",
+            "arrow-array",
+            "arrow-ipc",
+            "cc",
+            "zstd-sys",
+            "quick-xml",
+            "flate2",
+        }
+    ):
+        raise RuntimeError("semantic core depends on a physical reader")
+    for selection, enabled in FORMATS.items():
+        qualify(selection, enabled)
 
 
 if __name__ == "__main__":

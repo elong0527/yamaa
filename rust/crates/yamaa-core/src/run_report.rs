@@ -274,6 +274,7 @@ pub fn handler_condition(path: &str, handler: &str) -> Option<ConditionCode> {
         H::Invalid => match operation {
             "impute" | "precision" | "to_date" => C::ImputeInvalid,
             "duration_value" => C::DurationInvalid,
+            "dtc" => C::DateTextInvalid,
             _ => return None,
         },
         H::Partial | H::CrossedBounds => return None,

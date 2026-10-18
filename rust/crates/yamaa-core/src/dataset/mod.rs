@@ -68,7 +68,7 @@ pub use crate::text_pad::StringPad;
 pub use crate::text_replace::StringReplace;
 pub use crate::text_template::StringTemplate;
 pub use temporal::{
-    CalendarUnit, DateBounds, ElapsedUnit, InvalidTemporal, Temporal, TemporalKind,
+    CalendarUnit, DateBounds, ElapsedUnit, InvalidTemporal, Temporal, TemporalKind, DATE_PARTS,
 };
 pub use temporal_arithmetic::TemporalStep;
 mod selection;
@@ -342,6 +342,13 @@ pub enum Check {
     /// Presence required by the column's resolved `mandatory`. Without a scope
     /// every row is checked; a scope selects rows by value-level where clauses.
     Mandatory(Option<RowScope>),
+    /// The ISO 8601 form a `str` column's date or time submission data type
+    /// names (SUB-26). Without a scope every row is checked; a scope selects
+    /// rows by value-level where clauses.
+    DataType {
+        form: crate::iso8601::Form,
+        scope: Option<RowScope>,
+    },
     /// Already converted, present permitted values for the owning column.
     AllowedValues(Vec<Value>),
     /// Fixed environment terminology at the owning column's checkpoint.
@@ -480,9 +487,11 @@ impl Check {
     /// The where clauses a value-level check selects its rows by.
     pub fn clauses(&self) -> Vec<&WhereClause> {
         match self {
-            Self::Mandatory(Some(scope)) | Self::ValueMaxLength { scope, .. } => {
-                scope.clauses.iter().collect()
+            Self::Mandatory(Some(scope))
+            | Self::DataType {
+                scope: Some(scope), ..
             }
+            | Self::ValueMaxLength { scope, .. } => scope.clauses.iter().collect(),
             Self::ValueCodelists {
                 overrides,
                 bindings,
@@ -1611,6 +1620,7 @@ impl DatasetPlan {
                     verification.check,
                     Check::NotMissing
                         | Check::Mandatory(_)
+                        | Check::DataType { .. }
                         | Check::AllowedValues(_)
                         | Check::Codelist { .. }
                         | Check::ValueCodelists { .. }
@@ -1647,9 +1657,11 @@ impl DatasetPlan {
                     return Err(PlanError::InvalidColumns);
                 }
                 let scoped = match &verification.check {
-                    Check::Mandatory(Some(scope)) | Check::ValueMaxLength { scope, .. } => {
-                        !scope.clauses.is_empty()
+                    Check::Mandatory(Some(scope))
+                    | Check::DataType {
+                        scope: Some(scope), ..
                     }
+                    | Check::ValueMaxLength { scope, .. } => !scope.clauses.is_empty(),
                     Check::ValueCodelists {
                         overrides,
                         bindings,
@@ -2325,6 +2337,7 @@ fn validate_plan_verifications(
         match &verification.check {
             Check::NotMissing
             | Check::Mandatory(_)
+            | Check::DataType { .. }
             | Check::AllowedValues(_)
             | Check::Codelist { .. }
             | Check::ValueCodelists { .. }

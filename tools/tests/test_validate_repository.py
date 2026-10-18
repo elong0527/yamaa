@@ -17,6 +17,12 @@ from tools.validation import repository_artifacts as OWNER_REPOSITORY_ARTIFACTS
 from tools.validation import repository_manifests as OWNER_REPOSITORY_MANIFESTS
 from tools.validation import repository_structure as OWNER_REPOSITORY_STRUCTURE
 
+# Directories the repository walkers skip: a nested checkout, Rust build output,
+# a cache and the root build output. Authored files beside them, at the root and
+# in a nested directory named build, are still checked.
+SKIPPED_LOCATIONS = (".worktrees/x/", "rust/target/", ".cache/", "build/")
+CHECKED_LOCATIONS = ("", "docs/build/")
+
 
 class TestYamlLoader(unittest.TestCase):
     def test_yaml_12_boolean_resolution(self):
@@ -200,6 +206,24 @@ class TestTextSourceBoundary(unittest.TestCase):
         self.assertEqual(
             errors,
             ["ERROR: reference.csv:2:1: non_ascii_source byte 0xC3"],
+        )
+
+    def test_skips_nested_checkouts_build_output_and_caches(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            for directory in SKIPPED_LOCATIONS + CHECKED_LOCATIONS:
+                source = root / directory / "notes.md"
+                source.parent.mkdir(parents=True, exist_ok=True)
+                source.write_text(chr(0x00E9), encoding="utf-8")
+
+            errors = OWNER_EDITORIAL.validate_ascii_sources(root)
+
+        self.assertEqual(
+            errors,
+            [
+                "ERROR: docs/build/notes.md:1:1: non_ascii_source byte 0xC3",
+                "ERROR: notes.md:1:1: non_ascii_source byte 0xC3",
+            ],
         )
 
     def test_rejects_a_decoded_surrogate(self):
@@ -648,6 +672,29 @@ class TestValidatorCLI(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("ERROR", result.stdout)
         self.assertIn("syntax.yaml", result.stdout)
+
+    def test_yaml_check_skips_nested_checkouts_build_output_and_caches(self):
+        for directory in SKIPPED_LOCATIONS + CHECKED_LOCATIONS:
+            folder = self.root_dir / directory
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / "bad.yaml").write_text("a: 1\na: 2\n")
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "tools.validation.validate_repository",
+                "--root",
+                str(self.root_dir),
+            ],
+            capture_output=True,
+            text=True,
+        )
+
+        for directory in CHECKED_LOCATIONS:
+            self.assertIn(f"ERROR: {directory}bad.yaml:", result.stdout)
+        for directory in SKIPPED_LOCATIONS:
+            self.assertNotIn(f"ERROR: {directory}", result.stdout)
 
     def test_schema_shared_include_is_not_a_cycle(self):
         yaml_dir = self.root_dir / "yaml"

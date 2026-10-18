@@ -97,7 +97,9 @@ pub(crate) fn validate(check: &Check, kind: ColumnType) -> Result<(), PlanError>
         {
             return Err(PlanError::InvalidBounds)
         }
-        Check::Matches(_) if kind != ColumnType::Str => return Err(PlanError::InvalidColumns),
+        Check::Matches(_) | Check::DataType { .. } if kind != ColumnType::Str => {
+            return Err(PlanError::InvalidColumns)
+        }
         _ => {}
     }
     Ok(())
@@ -124,6 +126,7 @@ pub fn column_code(check: &Check) -> Option<ConditionCode> {
     Some(match check {
         Check::NotMissing => ConditionCode::VerificationNotMissingFailed,
         Check::Mandatory(_) => ConditionCode::SubmissionMandatoryFailed,
+        Check::DataType { .. } => ConditionCode::SubmissionDataTypeFailed,
         Check::AllowedValues(_) => ConditionCode::VerificationAllowedValuesFailed,
         Check::Codelist { .. } | Check::ValueCodelists { .. } => {
             ConditionCode::VerificationCodelistFailed
@@ -209,6 +212,9 @@ pub fn column_offenders<'a>(
             let failed = match check {
                 Check::NotMissing | Check::Mandatory(_) => matches!(value, Value::Missing),
                 _ if matches!(value, Value::Missing) => false,
+                Check::DataType { form, .. } => {
+                    matches!(value, Value::Str(text) if !form.admits(text))
+                }
                 Check::AllowedValues(accepted)
                 | Check::Inventory {
                     values: accepted, ..
@@ -271,6 +277,9 @@ pub fn column_diagnostic(
     }
     if let Check::Codelist { id, .. } = check {
         context.insert("codelist".into(), JsonValue::String(id.clone()));
+    }
+    if let Check::DataType { form, .. } = check {
+        context.insert("data_type".into(), JsonValue::String(form.name().into()));
     }
     Some(Diagnostic {
         code,

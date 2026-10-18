@@ -238,6 +238,17 @@ fn recode(document: &Document, node: usize, reads: &Reads, strict: bool) -> bool
                     variable(document, source).is_some_and(|name| reads.reads(name, strict))
                 })
         }
+        // An ISO 8601 assembly of collected date parts.
+        "dtc" => {
+            let parts = crate::dataset::DATE_PARTS
+                .iter()
+                .filter_map(|name| document.field(payload, name))
+                .collect::<Vec<_>>();
+            !parts.is_empty()
+                && parts.iter().all(|&part| {
+                    variable(document, part).is_some_and(|name| reads.reads(name, strict))
+                })
+        }
         "str_template" => {
             let template = text(document, payload)
                 .or_else(|| text(document, document.field(payload, "template")?));

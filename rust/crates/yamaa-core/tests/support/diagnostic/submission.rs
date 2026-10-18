@@ -418,6 +418,12 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             "JSON-5",
             31,
         ),
+        (
+            SubmissionDatetimeColumn,
+            "value_not_permitted",
+            "SUB-27",
+            32,
+        ),
     ] {
         let mut project = project();
         let mut spec = specification();
@@ -598,6 +604,19 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             31 => {
                 project.set(&["sdtm", "datasets"], Tree::text("json"));
                 spec.set(&["output", "decimals"], Tree::integer("2"));
+            }
+            // An `sdtm` dataset carries its date and time text as `str`.
+            32 => {
+                let mut moment = column("DTM");
+                *moment.at(&["type"]) = Tree::text("datetime");
+                moment.remove(&["submission", "length"]);
+                moment.set(
+                    &["derivation"],
+                    Tree::map(vec![("source", Tree::text("SRC.DTM"))]),
+                );
+                *spec.at(&["columns"]) = Tree::list(vec![column("VALUE"), moment]);
+                *spec.at(&["output", "columns"]) =
+                    Tree::list(vec![Tree::text("VALUE"), Tree::text("DTM")]);
             }
             _ => unreachable!(),
         }

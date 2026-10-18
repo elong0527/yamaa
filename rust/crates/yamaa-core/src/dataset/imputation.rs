@@ -316,47 +316,41 @@ impl Collected {
     }
 }
 
+/// Why text is not collected date text.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NotCollected {
+    /// An ISO 8601 interval or duration, which names no single date.
+    IntervalOrDuration,
+    Invalid,
+}
+
 /// Read `YYYY[-MM[-DD[Thh[:mm[:ss]]]]]`, each field with the width and range
-/// of a complete temporal value. Any other text is not collected date text.
-fn collected(text: &str) -> Option<Collected> {
-    let bytes = text.as_bytes();
-    if !matches!(bytes.len(), 4 | 7 | 10 | 13 | 16 | 19) {
-        return None;
-    }
-    let digits = |range: std::ops::Range<usize>| {
-        bytes[range].iter().try_fold(0u16, |number, byte| {
-            byte.is_ascii_digit()
-                .then(|| number * 10 + u16::from(byte - b'0'))
-        })
+/// of a complete temporal value or written `-` when unknown, and reduce it to
+/// its right-truncated prefix: the fields before the first unknown one.
+/// `Ok(None)` is text whose year is unknown, so its prefix carries nothing.
+fn collected(text: &str) -> Result<Option<Collected>, NotCollected> {
+    let Some(fields) = crate::iso8601::collected(text) else {
+        return Err(if crate::iso8601::interval_or_duration(text) {
+            NotCollected::IntervalOrDuration
+        } else {
+            NotCollected::Invalid
+        });
     };
-    let field = |at: usize, separator: u8, last: u8| -> Option<Option<u8>> {
-        if bytes.len() <= at {
-            return Some(None);
-        }
-        let value = digits(at + 1..at + 3)? as u8;
-        (bytes[at] == separator && value <= last).then_some(Some(value))
+    let prefix = fields
+        .iter()
+        .take_while(|field| field.is_some())
+        .map(|field| field.expect("known prefix field"))
+        .collect::<Vec<_>>();
+    let field = |index: usize| prefix.get(index).map(|&value| value as u8);
+    let Some(&year) = prefix.first() else {
+        return Ok(None);
     };
-    let year = digits(0..4).filter(|year| *year > 0)?;
-    let month = field(4, b'-', 12)?.filter(|month| *month > 0);
-    if bytes.len() > 4 && month.is_none() {
-        return None;
-    }
-    let day = field(7, b'-', 31)?;
-    if let (Some(month), Some(day)) = (month, day) {
-        if day == 0 || day > month_length(year, month)? {
-            return None;
-        }
-    }
-    Some(Collected {
+    Ok(Some(Collected {
         year,
-        month,
-        day,
-        time: [
-            field(10, b'T', 23)?,
-            field(13, b':', 59)?,
-            field(16, b':', 59)?,
-        ],
-    })
+        month: field(1),
+        day: field(2),
+        time: [field(3), field(4), field(5)],
+    }))
 }
 
 impl Completion {
@@ -620,12 +614,17 @@ impl Imputation {
             ],
         )
     }
-    fn recover(&self, text: &str) -> Result<ImputationStep, Diagnostic> {
+    /// A declared `invalid` answers text that is not collected date text; an
+    /// interval or duration without it fails with its own condition.
+    fn recover(&self, text: &str, reason: NotCollected) -> Result<ImputationStep, Diagnostic> {
         if self.invalid.is_some() {
             return Ok(ImputationStep::Recovered { handler: "invalid" });
         }
         Err(diagnostic(
-            C::ImputeInvalid,
+            match reason {
+                NotCollected::IntervalOrDuration => C::ImputeIntervalText,
+                NotCollected::Invalid => C::ImputeInvalid,
+            },
             &self.path,
             &[
                 ("operation", Value::Str(self.operation().into())),
@@ -657,10 +656,13 @@ impl Imputation {
                 Value::DateTime(moment)
             }
             (K::Impute(completion), ValueRef::Str(text)) => {
-                let Some(collected) = collected(text) else {
-                    return self.recover(text);
+                return match collected(text) {
+                    Ok(Some(collected)) => self.complete(completion, collected),
+                    // A prefix that carries no year is coarser than every
+                    // minimum precision.
+                    Ok(None) => Ok(ImputationStep::Value(Value::Missing)),
+                    Err(reason) => self.recover(text, reason),
                 };
-                return self.complete(completion, collected);
             }
             (
                 K::Precision {
@@ -675,12 +677,14 @@ impl Imputation {
                 ValueRef::DateTime(moment),
             ) => Value::Str(moment.collected_precision().word().into()),
             (K::Precision { target }, ValueRef::Str(text)) => {
-                let Some(collected) = collected(text) else {
-                    return self.recover(text);
+                let precision = match collected(text) {
+                    Ok(Some(collected)) => collected.precision(),
+                    Ok(None) => Precision::None,
+                    Err(reason) => return self.recover(text, reason),
                 };
                 let precision = match target {
-                    TemporalType::Date => collected.precision().min(Precision::Day),
-                    TemporalType::DateTime => collected.precision(),
+                    TemporalType::Date => precision.min(Precision::Day),
+                    TemporalType::DateTime => precision,
                 };
                 Value::Str(precision.word().into())
             }
@@ -700,13 +704,17 @@ impl Imputation {
             ) => flag(part, seconds_collected, moment.collected_precision()),
             (K::ToDate, ValueRef::DateTime(moment)) => Value::Date(moment.date()),
             (K::ToDate, ValueRef::Str(text)) => match collected(text) {
-                Some(collected) => match collected.date() {
+                Ok(Some(collected)) => match collected.date() {
                     Some(date) => Value::Date(date),
                     None => return Ok(ImputationStep::Partial),
                 },
-                None => {
+                Ok(None) => return Ok(ImputationStep::Partial),
+                Err(reason) => {
                     return Err(diagnostic(
-                        C::ToDateInvalid,
+                        match reason {
+                            NotCollected::IntervalOrDuration => C::ToDateIntervalText,
+                            NotCollected::Invalid => C::ToDateInvalid,
+                        },
                         &self.path,
                         &[
                             ("operation", Value::Str("to_date".into())),
@@ -931,15 +939,27 @@ mod tests {
             ("2025-03-04T08:30", Precision::Minute),
             ("2025-03-04T08:30:15", Precision::Second),
             ("2024-02-29T23:59:59", Precision::Second),
+            // An unknown component ends the right-truncated prefix.
+            ("2025---04", Precision::Year),
+            ("2025-03--T08:30", Precision::Month),
+            ("2025-03-04T-:30", Precision::Day),
+            ("2025-03-04T08:-:15", Precision::Hour),
+            ("2025-03-04T08:30:-", Precision::Minute),
         ] {
             assert_eq!(
-                collected(text).map(Collected::precision),
-                Some(precision),
+                collected(text).map(|reading| reading.map(Collected::precision)),
+                Ok(Some(precision)),
                 "{text}"
             );
         }
+        // An unknown year leaves a prefix that carries nothing.
+        for text in ["--03-04", "-----T08:30", "--02-29"] {
+            assert_eq!(collected(text), Ok(None), "{text}");
+        }
         for text in [
             "",
+            "-",
+            "-----T-",
             "0000",
             "202",
             "20250",
@@ -950,6 +970,8 @@ mod tests {
             "2025-02-29",
             "2025-04-31",
             "2025-03-00",
+            "2025---32",
+            "--02-30",
             "2025-03-04 08",
             "2025-03-04t08",
             "2025-03-04T24",
@@ -957,11 +979,24 @@ mod tests {
             "2025-03-04T08:30:60",
             "2025-03-04T08:30:15Z",
             "2025-03-04T08:30:15.5",
-            "2025---04",
+            "2025-",
             "UNK",
             "２０２５",
         ] {
-            assert_eq!(collected(text), None, "{text:?}");
+            assert_eq!(collected(text), Err(NotCollected::Invalid), "{text:?}");
+        }
+        for text in [
+            "2025-01-01/2025-01-10",
+            "2025-01-01T08:00/PT2H",
+            "P3D",
+            "PT2H30M",
+            "-PT15M",
+        ] {
+            assert_eq!(
+                collected(text),
+                Err(NotCollected::IntervalOrDuration),
+                "{text:?}"
+            );
         }
     }
 

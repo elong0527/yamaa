@@ -1456,6 +1456,7 @@ impl DatasetPlan {
             let record = match &verification.check {
                 Check::NotMissing
                 | Check::Mandatory(_)
+                | Check::DataType { .. }
                 | Check::AllowedValues(_)
                 | Check::Codelist { .. }
                 | Check::ValueCodelists { .. }
@@ -1717,6 +1718,7 @@ impl DatasetPlan {
                         }
                         Check::NotMissing
                         | Check::Mandatory(_)
+                        | Check::DataType { .. }
                         | Check::AllowedValues(_)
                         | Check::Codelist { .. }
                         | Check::ValueCodelists { .. }
@@ -1759,9 +1761,13 @@ impl DatasetPlan {
                                                 _,
                                             ) => scope.selects(row),
                                             (Check::ValueMaxLength { scope, .. }, _)
-                                            | (Check::Mandatory(Some(scope)), _) => {
-                                                scope.selects(row)
-                                            }
+                                            | (Check::Mandatory(Some(scope)), _)
+                                            | (
+                                                Check::DataType {
+                                                    scope: Some(scope), ..
+                                                },
+                                                _,
+                                            ) => scope.selects(row),
                                             _ => true,
                                         };
                                         selected.then_some(index)
