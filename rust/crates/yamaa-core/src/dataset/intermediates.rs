@@ -164,6 +164,44 @@ impl Intermediate {
     }
 }
 
+/// The handlers a read of a named intermediate counts at the reading path:
+/// `multiple_matches` when `keep` chose among several candidates
+/// (LOOKUP-10), and `no_match` when no candidate survived and no
+/// `require_match` fails the read instead (LOOKUP-24).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ReadHandlers {
+    pub multiple_matches: bool,
+    pub no_match: bool,
+}
+
+/// The handlers a read of each intermediate counts: its own, and those of the
+/// earlier intermediates its `between` value and derivation operands read,
+/// which count at the same reading path. A filter's reads are predicates and
+/// count nothing. `Err` names an intermediate read before it is declared.
+pub fn read_handlers(intermediates: &[Intermediate]) -> Result<Vec<ReadHandlers>, usize> {
+    let mut handlers: Vec<ReadHandlers> = Vec::with_capacity(intermediates.len());
+    for item in intermediates {
+        let mut own = ReadHandlers {
+            multiple_matches: item.selection.is_some(),
+            no_match: !item.require_match,
+        };
+        let operands = item
+            .range
+            .iter()
+            .map(|range| range.current())
+            .chain(item.derivations.iter().flat_map(|derived| &derived.current));
+        for current in operands {
+            if let CurrentRead::Intermediate { index, .. } = current.read {
+                let earlier = handlers.get(index).ok_or(index)?;
+                own.multiple_matches |= earlier.multiple_matches;
+                own.no_match |= earlier.no_match;
+            }
+        }
+        handlers.push(own);
+    }
+    Ok(handlers)
+}
+
 /// Kept current-side reads carry the dependencies of the earlier selector too.
 /// The lookup borrows either a complete plan or still-binding optional declarations.
 pub fn visit_output_dependencies<'a>(

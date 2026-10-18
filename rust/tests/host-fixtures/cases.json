@@ -2549,6 +2549,11 @@
           "handlers": [
             {
               "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            },
+            {
+              "count": 0,
               "handler": "missing",
               "spec_path": "intermediates[0].key.M.str_case.missing"
             }
@@ -2565,6 +2570,11 @@
           "issues": [],
           "csv": "K,V\n1,hit1\n2,hit2\n",
           "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            },
             {
               "count": 0,
               "handler": "partial",
@@ -2585,6 +2595,11 @@
           "handlers": [
             {
               "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            },
+            {
+              "count": 0,
               "handler": "missing",
               "spec_path": "intermediates[0].key.M.precision.missing"
             }
@@ -2601,6 +2616,11 @@
           "issues": [],
           "csv": "K,V\n1,hit1\n2,hit2\n",
           "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            },
             {
               "count": 0,
               "handler": "missing",
@@ -2621,6 +2641,11 @@
           "handlers": [
             {
               "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            },
+            {
+              "count": 0,
               "handler": "missing",
               "spec_path": "intermediates[0].key.M.impute.missing"
             }
@@ -2639,6 +2664,11 @@
           "handlers": [
             {
               "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            },
+            {
+              "count": 0,
               "handler": "missing",
               "spec_path": "intermediates[0].key.M.impute.missing"
             }
@@ -2654,7 +2684,13 @@
           "check_issues": [],
           "issues": [],
           "csv": "K,V\n1,hit1\n2,hit2\n",
-          "handlers": []
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            }
+          ]
         },
         {
           "name": "epoch-day",
@@ -2666,7 +2702,13 @@
           "check_issues": [],
           "issues": [],
           "csv": "K,V\n1,hit1\n2,hit2\n",
-          "handlers": []
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            }
+          ]
         },
         {
           "name": "date-difference",
@@ -2678,7 +2720,13 @@
           "check_issues": [],
           "issues": [],
           "csv": "K,V\n1,hit1\n2,hit2\n",
-          "handlers": []
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            }
+          ]
         },
         {
           "name": "study-day",
@@ -2690,7 +2738,13 @@
           "check_issues": [],
           "issues": [],
           "csv": "K,V\n1,hit1\n2,hit2\n",
-          "handlers": []
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            }
+          ]
         },
         {
           "name": "mapping-runtime-int",
@@ -2703,6 +2757,11 @@
           "issues": [],
           "csv": "K,V\n1,hit1\n2,hit2\n",
           "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            },
             {
               "count": 0,
               "handler": "missing",
@@ -2720,7 +2779,13 @@
           "check_issues": [],
           "issues": [],
           "csv": "K,V\n1,hit1\n2,hit2\n",
-          "handlers": []
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            }
+          ]
         },
         {
           "name": "least-date-operands",
@@ -2732,7 +2797,13 @@
           "check_issues": [],
           "issues": [],
           "csv": "K,V\n1,hit1\n2,hit2\n",
-          "handlers": []
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            }
+          ]
         },
         {
           "name": "cut",
@@ -2745,6 +2816,11 @@
           "issues": [],
           "csv": "K,V\n1,hit1\n2,hit2\n",
           "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            },
             {
               "count": 0,
               "handler": "missing",
@@ -2762,7 +2838,13 @@
           "check_issues": [],
           "issues": [],
           "csv": "K,V\n1,hit1\n2,hit2\n",
-          "handlers": []
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            }
+          ]
         },
         {
           "name": "string-extraction",
@@ -2775,6 +2857,11 @@
           "issues": [],
           "csv": "K,V\n1,hit1\n2,hit2\n",
           "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            },
             {
               "count": 0,
               "handler": "missing",
@@ -2792,7 +2879,13 @@
           "check_issues": [],
           "issues": [],
           "csv": "K,V\n1,hit1\n2,hit2\n",
-          "handlers": []
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            }
+          ]
         },
         {
           "name": "case-key-explicitly-deferred",
@@ -2840,7 +2933,13 @@
           "check_issues": [],
           "issues": [],
           "csv": "K,V\n1,hit1\n2,hit2\n",
-          "handlers": []
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            }
+          ]
         },
         {
           "name": "aggregate-count-repeated-output-dependency",
@@ -2894,7 +2993,13 @@
           "check_issues": [],
           "issues": [],
           "csv": "K,V\n1,hit1\n2,hit2\n3,hit3\n",
-          "handlers": []
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            }
+          ]
         },
         {
           "name": "rank-completed-current-relation",
@@ -2906,7 +3011,13 @@
           "check_issues": [],
           "issues": [],
           "csv": "K,V\n1,hit1\n2,hit2\n",
-          "handlers": []
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            }
+          ]
         },
         {
           "name": "qualified-current-source-operands",
@@ -2918,7 +3029,13 @@
           "check_issues": [],
           "issues": [],
           "csv": "K,V\n1,hit1\n2,hit2\n",
-          "handlers": []
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            }
+          ]
         },
         {
           "name": "key-string-missing-handler",
@@ -2931,6 +3048,11 @@
           "issues": [],
           "csv": "K,V\n1,hit1\n2,hit2\n",
           "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            },
             {
               "count": 1,
               "handler": "missing",
@@ -2951,13 +3073,13 @@
           "handlers": [
             {
               "count": 1,
-              "handler": "missing",
-              "spec_path": "intermediates[0].key.M.precision.missing"
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
             },
             {
               "count": 1,
-              "handler": "no_match",
-              "spec_path": "columns.V.derivation.source.no_match"
+              "handler": "missing",
+              "spec_path": "intermediates[0].key.M.precision.missing"
             }
           ]
         },
@@ -2972,6 +3094,11 @@
           "issues": [],
           "csv": "K,V\n1,hit1\n2,hit2\n",
           "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            },
             {
               "count": 0,
               "handler": "missing",
@@ -3123,7 +3250,13 @@
           "check_issues": [],
           "issues": [],
           "csv": "K,W,V\n1,3,first\n2,2,middle\n3,1,last\n",
-          "handlers": []
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            }
+          ]
         },
         {
           "name": "correlated-key-derived-donor-operand",
@@ -3135,7 +3268,23 @@
           },
           "check_issues": [],
           "issues": [],
-          "handlers": [],
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            },
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "intermediates[1].derivations.VALUE.source.no_match"
+            },
+            {
+              "count": 0,
+              "handler": "missing",
+              "spec_path": "intermediates[0].key.M.str_case.missing"
+            }
+          ],
           "csv": "K,V\n1,hit1\n2,hit2\n"
         },
         {
@@ -3200,7 +3349,13 @@
           "check_issues": [],
           "issues": [],
           "csv": "K,V\n1,hit1\n2,hit2\n",
-          "handlers": []
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            }
+          ]
         },
         {
           "name": "datetime-shift-deferred-comparison",
@@ -3212,7 +3367,13 @@
           "check_issues": [],
           "issues": [],
           "csv": "K,V\n1,hit1\n2,hit2\n",
-          "handlers": []
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            }
+          ]
         },
         {
           "name": "datetime-difference-deferred-comparison",
@@ -3224,7 +3385,13 @@
           "check_issues": [],
           "issues": [],
           "csv": "K,V\n1,hit1\n2,hit2\n",
-          "handlers": []
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            }
+          ]
         },
         {
           "name": "duration-value-deferred-comparison",
@@ -3236,7 +3403,13 @@
           "check_issues": [],
           "issues": [],
           "csv": "K,V\n1,hit1\n2,hit2\n",
-          "handlers": []
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            }
+          ]
         },
         {
           "name": "aggregate-date-shift-deferred-comparison",
@@ -3314,7 +3487,13 @@
           "check_issues": [],
           "issues": [],
           "csv": "K,V\n1,first\n2,first\n3,last\n",
-          "handlers": []
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            }
+          ]
         },
         {
           "name": "locf-excluding-current-completed-current-relation",
@@ -3344,7 +3523,13 @@
           "check_issues": [],
           "issues": [],
           "csv": "K,V\n1,hit1\n2,hit2\n3,hit3\n",
-          "handlers": []
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            }
+          ]
         },
         {
           "name": "independent-mixed-primary-long-column",
@@ -3357,6 +3542,11 @@
           "check_issues": [],
           "issues": [],
           "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            },
             {
               "count": 0,
               "handler": "missing",
@@ -3376,6 +3566,16 @@
           "check_issues": [],
           "issues": [],
           "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "rows[0].derivations.V.source.no_match"
+            },
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "rows[1].derivations.V.source.no_match"
+            },
             {
               "count": 0,
               "handler": "missing",
@@ -3399,6 +3599,11 @@
               "count": 0,
               "handler": "missing",
               "spec_path": "rows[1].derivations.K.str_case.missing"
+            },
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
             }
           ],
           "csv": "ID,V\nroot-only,one\na,one\nb,two\nc,three\n"
@@ -3414,6 +3619,11 @@
           "check_issues": [],
           "issues": [],
           "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            },
             {
               "count": 0,
               "handler": "missing",
@@ -3435,6 +3645,11 @@
           "handlers": [
             {
               "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            },
+            {
+              "count": 0,
               "handler": "missing",
               "spec_path": "intermediates[0].key.K.str_case.missing"
             }
@@ -3452,6 +3667,11 @@
           "check_issues": [],
           "issues": [],
           "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            },
             {
               "count": 0,
               "handler": "missing",
@@ -3473,6 +3693,11 @@
           "handlers": [
             {
               "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            },
+            {
+              "count": 0,
               "handler": "missing",
               "spec_path": "intermediates[0].key.K.str_case.missing"
             }
@@ -3490,6 +3715,11 @@
           "check_issues": [],
           "issues": [],
           "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "rows[0].derivations.V.source.no_match"
+            },
             {
               "count": 0,
               "handler": "missing",
@@ -3511,6 +3741,11 @@
           "handlers": [
             {
               "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            },
+            {
+              "count": 0,
               "handler": "missing",
               "spec_path": "intermediates[0].key.K.str_case.missing"
             }
@@ -3528,6 +3763,11 @@
           "check_issues": [],
           "issues": [],
           "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            },
             {
               "count": 0,
               "handler": "missing",
@@ -3549,6 +3789,11 @@
           "handlers": [
             {
               "count": 0,
+              "handler": "no_match",
+              "spec_path": "rows[1].derivations.V.source.no_match"
+            },
+            {
+              "count": 0,
               "handler": "missing",
               "spec_path": "intermediates[0].key.K.str_case.missing"
             }
@@ -3565,7 +3810,13 @@
           },
           "check_issues": [],
           "issues": [],
-          "handlers": [],
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "rows[1].derivations.V.source.no_match"
+            }
+          ],
           "csv": "ID,V\nroot,ROOT\na,one\nb,two\nc,three\n"
         },
         {
@@ -3578,7 +3829,13 @@
           },
           "check_issues": [],
           "issues": [],
-          "handlers": [],
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "rows[1].derivations.V.source.no_match"
+            }
+          ],
           "csv": "ID,V\nroot,ROOT\na,one\nb,two\nc,three\n"
         },
         {
@@ -3608,7 +3865,13 @@
               }
             }
           ],
-          "handlers": []
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            }
+          ]
         },
         {
           "name": "independent-same-selector-across-window-phases",
@@ -3619,7 +3882,23 @@
           },
           "check_issues": [],
           "issues": [],
-          "handlers": [],
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "rows[0].derivations.EARLY.source.no_match"
+            },
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "rows[1].derivations.EARLY.source.no_match"
+            },
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.LATE.derivation.source.no_match"
+            }
+          ],
           "csv": "ID,T,EARLY,LATE\n1,A,one,one\n2,A,two,three\n1,B,one,two\n2,B,two,four\n"
         },
         {
@@ -3631,7 +3910,23 @@
           },
           "check_issues": [],
           "issues": [],
-          "handlers": [],
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "rows[0].derivations.EARLY.source.no_match"
+            },
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "rows[1].derivations.EARLY.source.no_match"
+            },
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.LATE.derivation.source.no_match"
+            }
+          ],
           "csv": "ID,T,EARLY,LATE\n1,A,one,one\n2,A,two,three\n1,B,one,two\n2,B,two,four\n"
         },
         {
@@ -3682,6 +3977,16 @@
           "check_issues": [],
           "handlers": [
             {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "rows[0].derivations.EARLY.source.no_match"
+            },
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.LATE.derivation.source.no_match"
+            },
+            {
               "count": 1,
               "handler": "missing",
               "spec_path": "intermediates[0].key.M.str_case.missing"
@@ -3700,6 +4005,16 @@
           "issues": [],
           "check_issues": [],
           "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "rows[0].derivations.EARLY.source.no_match"
+            },
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.LATE.derivation.source.no_match"
+            },
             {
               "count": 1,
               "handler": "missing",
@@ -3747,7 +4062,18 @@
               }
             }
           ],
-          "handlers": [],
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            },
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V2.derivation.source.no_match"
+            }
+          ],
           "csv": null
         },
         {
@@ -3785,7 +4111,18 @@
               }
             }
           ],
-          "handlers": [],
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.source.no_match"
+            },
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V2.derivation.source.no_match"
+            }
+          ],
           "csv": null
         }
       ]

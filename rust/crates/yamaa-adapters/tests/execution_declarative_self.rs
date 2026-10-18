@@ -137,9 +137,13 @@ rows:
                 result.observations()["handler_counts"],
                 yamaa_adapters::json!([
                     {"spec_path":"rows[1].derivations.V.compute.multiple_matches","handler":"multiple_matches","count":1},
+                    {"spec_path":"rows[1].derivations.V.compute.no_match","handler":"no_match","count":0},
                     {"spec_path":"rows[2].derivations.V.compute.multiple_matches","handler":"multiple_matches","count":2},
+                    {"spec_path":"rows[2].derivations.V.compute.no_match","handler":"no_match","count":0},
                     {"spec_path":"columns.FINAL.derivation.source.multiple_matches","handler":"multiple_matches","count":5},
+                    {"spec_path":"columns.FINAL.derivation.source.no_match","handler":"no_match","count":0},
                     {"spec_path":"columns.FIRST.derivation.source.multiple_matches","handler":"multiple_matches","count":5},
+                    {"spec_path":"columns.FIRST.derivation.source.no_match","handler":"no_match","count":0},
                 ])
             );
             // The two third-template records both see completed value 15, never 115
@@ -190,8 +194,13 @@ rows:
             assert_eq!(
                 result.observations()["handler_counts"],
                 yamaa_adapters::json!([
+                    {"spec_path":"rows[1].derivations.V.compute.multiple_matches","handler":"multiple_matches","count":0},
                     {"spec_path":"rows[1].derivations.V.compute.no_match","handler":"no_match","count":1},
+                    {"spec_path":"rows[2].derivations.V.compute.multiple_matches","handler":"multiple_matches","count":0},
+                    {"spec_path":"rows[2].derivations.V.compute.no_match","handler":"no_match","count":0},
                     {"spec_path":"columns.FINAL.derivation.source.multiple_matches","handler":"multiple_matches","count":3},
+                    {"spec_path":"columns.FINAL.derivation.source.no_match","handler":"no_match","count":0},
+                    {"spec_path":"columns.FIRST.derivation.source.multiple_matches","handler":"multiple_matches","count":0},
                     {"spec_path":"columns.FIRST.derivation.source.no_match","handler":"no_match","count":3},
                 ])
             );

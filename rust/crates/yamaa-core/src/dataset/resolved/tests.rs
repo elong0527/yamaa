@@ -488,7 +488,8 @@ fn upper(column: usize, path: &str, operand: Expression) -> Expression {
     }
 }
 
-/// Registration reaches some sites up front; others register when they fire.
+/// Sites at every depth: a conversion handler, an operation, one nested in a
+/// `first_available` operand, and a named read.
 fn handler_plan() -> DatasetPlan {
     let text = ColumnType::Str;
     DatasetPlan::new_with_intermediates(
@@ -512,7 +513,6 @@ fn handler_plan() -> DatasetPlan {
             assignments: vec![
                 assign(0, Expression::Source(0)),
                 assign(1, upper(1, "columns.UP.derivation", Expression::Source(1))),
-                // The case walker does not descend into `first_available`.
                 assign(
                     2,
                     Expression::FirstAvailable(Box::new(FirstAvailable::new(
@@ -559,40 +559,36 @@ fn handler_plan() -> DatasetPlan {
 }
 
 #[test]
-fn registration_reproduces_the_eager_walk_and_marks_first_firings() {
+fn registration_registers_every_site_up_front_in_expression_order() {
     let plan = handler_plan();
     let resolved = plan.resolve().unwrap();
     let table: Vec<_> = resolved
         .handlers()
         .iter()
-        .map(|site| (&*site.path, site.kind, site.registration))
+        .map(|site| (&*site.path, site.kind))
         .collect();
     use HandlerKind as H;
-    use Registration::{Eager, OnFirstFire};
     assert_eq!(
         table,
         [
-            ("columns.UP.unconvertible", H::Unconvertible, Eager),
-            ("columns.UP.derivation.missing", H::Missing, Eager),
-            ("columns.ALT.derivation.missing", H::Missing, Eager),
-            ("columns.CAT.derivation.missing", H::Missing, Eager),
-            (
-                "columns.ALT.derivation.sources[0].missing",
-                H::Missing,
-                OnFirstFire
-            ),
-            ("columns.C4.derivation.no_match", H::NoMatch, OnFirstFire),
+            ("columns.UP.unconvertible", H::Unconvertible),
+            ("columns.UP.derivation.missing", H::Missing),
+            ("columns.ALT.derivation.missing", H::Missing),
+            ("columns.ALT.derivation.sources[0].missing", H::Missing),
+            ("columns.CAT.derivation.missing", H::Missing),
+            ("columns.C4.derivation.no_match", H::NoMatch),
         ]
     );
-    // The same walk the executor runs registers the eager prefix.
+    // The walk the executor runs registers the whole table, zeros included.
     let mut counter = crate::numeric_lifecycle::HandlerCounter::default();
     plan.register_handlers(&mut counter);
     let walked: Vec<_> = counter
         .snapshot()
         .iter()
-        .map(|entry| (entry.spec_path.as_str(), entry.handler, Eager))
+        .map(|entry| (entry.spec_path.as_str(), entry.handler))
         .collect();
-    assert_eq!(walked, table[..4]);
+    assert_eq!(walked, table);
+    assert!(counter.snapshot().iter().all(|entry| entry.count == 0));
     let up = resolved.binding(BindingId(1));
     assert_eq!(up.unconvertible, Some(HandlerSiteId(0)));
     let read = resolved.binding(BindingId(4));
@@ -608,6 +604,87 @@ fn registration_reproduces_the_eager_walk_and_marks_first_firings() {
     assert_eq!(info.effects, Effects::Handlers);
     let info = resolved.schedule()[position(&resolved, Step::Row(BindingId(4)))];
     assert_eq!(info.partition, PartitionClass::Global);
+}
+
+/// A named read counts `no_match` whether or not the intermediate declares
+/// it; only `require_match` removes the site, and only `keep` adds
+/// `multiple_matches` (LOOKUP-24, LOOKUP-10).
+#[test]
+fn a_named_read_has_a_no_match_site_unless_it_requires_a_match() {
+    let sites = |no_match: Option<Value>, require_match: bool, keep: bool| {
+        let mut intermediate = lookup();
+        intermediate.no_match = no_match;
+        intermediate.require_match = require_match;
+        intermediate.selection = keep.then(|| crate::dataset::SourceSelection {
+            order_by: vec![OrderTerm {
+                column: 1,
+                descending: false,
+                nulls_first: true,
+            }],
+            keep: crate::dataset::Keep::First,
+        });
+        let plan = DatasetPlan::new_with_intermediates(
+            SourceSchemas {
+                primary: ints(&["ID"]),
+                secondary: vec![SecondarySource {
+                    name: "LKP".into(),
+                    schema: schema(&[("ID", ColumnType::Int), ("VAL", ColumnType::Str)]),
+                }],
+            },
+            vec![intermediate],
+            schema(&[("ID", ColumnType::Int), ("LV", ColumnType::Str)]),
+            vec![RowTemplate {
+                mode: RowMode::Records,
+                assignments: vec![
+                    assign(0, Expression::Source(0)),
+                    assign(
+                        1,
+                        Expression::Intermediate {
+                            index: 0,
+                            column: 1,
+                        },
+                    ),
+                ],
+                filter: None,
+            }],
+            vec![],
+            vec![0],
+            vec![],
+        )
+        .unwrap();
+        let resolved = plan.resolve().unwrap();
+        let mut counter = crate::numeric_lifecycle::HandlerCounter::default();
+        plan.register_handlers(&mut counter);
+        let table: Vec<_> = resolved
+            .handlers()
+            .iter()
+            .map(|site| (site.path.to_string(), site.kind))
+            .collect();
+        let walked: Vec<_> = counter
+            .snapshot()
+            .iter()
+            .map(|entry| (entry.spec_path.clone(), entry.handler))
+            .collect();
+        assert_eq!(table, walked);
+        table
+    };
+    let no_match = || {
+        (
+            "columns.C1.derivation.no_match".to_string(),
+            HandlerKind::NoMatch,
+        )
+    };
+    let multiple = || {
+        (
+            "columns.C1.derivation.multiple_matches".to_string(),
+            HandlerKind::MultipleMatches,
+        )
+    };
+    assert_eq!(sites(None, false, false), [no_match()]);
+    assert_eq!(sites(Some(Value::Missing), false, false), [no_match()]);
+    assert_eq!(sites(None, true, false), []);
+    assert_eq!(sites(None, false, true), [multiple(), no_match()]);
+    assert_eq!(sites(None, true, true), [multiple()]);
 }
 
 #[test]

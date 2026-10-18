@@ -2102,9 +2102,19 @@ columns:
                         "count": 1,
                     },
                     {
+                        "spec_path": "rows[1].derivations.V.compute.no_match",
+                        "handler": "no_match",
+                        "count": 0,
+                    },
+                    {
                         "spec_path": "rows[2].derivations.V.compute.multiple_matches",
                         "handler": "multiple_matches",
                         "count": 2,
+                    },
+                    {
+                        "spec_path": "rows[2].derivations.V.compute.no_match",
+                        "handler": "no_match",
+                        "count": 0,
                     },
                     {
                         "spec_path": "columns.FINAL.derivation.source.multiple_matches",
@@ -2112,9 +2122,19 @@ columns:
                         "count": 5,
                     },
                     {
+                        "spec_path": "columns.FINAL.derivation.source.no_match",
+                        "handler": "no_match",
+                        "count": 0,
+                    },
+                    {
                         "spec_path": "columns.FIRST.derivation.source.multiple_matches",
                         "handler": "multiple_matches",
                         "count": 5,
+                    },
+                    {
+                        "spec_path": "columns.FIRST.derivation.source.no_match",
+                        "handler": "no_match",
+                        "count": 0,
                     },
                 ],
             )
@@ -2348,13 +2368,13 @@ columns:
                         "count": 1,
                     },
                     {
-                        "spec_path": "rows[0].derivations.B.source.multiple_matches",
-                        "handler": "multiple_matches",
+                        "spec_path": "rows[0].derivations.A.source.no_match",
+                        "handler": "no_match",
                         "count": 1,
                     },
                     {
-                        "spec_path": "rows[0].derivations.A.source.no_match",
-                        "handler": "no_match",
+                        "spec_path": "rows[0].derivations.B.source.multiple_matches",
+                        "handler": "multiple_matches",
                         "count": 1,
                     },
                     {

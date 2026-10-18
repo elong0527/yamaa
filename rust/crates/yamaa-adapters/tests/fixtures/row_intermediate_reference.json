@@ -299,6 +299,11 @@
           "spec_path": "columns.EOTFL.derivation.flag.missing",
           "handler": "missing",
           "count": 0
+        },
+        {
+          "spec_path": "intermediates[1].derivations.ENDPOINT.source.no_match",
+          "handler": "no_match",
+          "count": 9
         }
       ],
       "findings": [],
@@ -1107,7 +1112,23 @@
         "src.csv": "ID,K,KEEP\na,x,0\nb,y,1\nc,z,0\n",
         "donor.csv": "K,V\nx,X\ny,Y\n"
       },
-      "handler_counts": [],
+      "handler_counts": [
+        {
+          "spec_path": "rows[0].derivations.ROWV.source.no_match",
+          "handler": "no_match",
+          "count": 0
+        },
+        {
+          "spec_path": "rows[1].derivations.ROWV.source.no_match",
+          "handler": "no_match",
+          "count": 0
+        },
+        {
+          "spec_path": "columns.COLV.derivation.source.no_match",
+          "handler": "no_match",
+          "count": 0
+        }
+      ],
       "findings": [],
       "csv": "ID,SECTION,KEY,ROWV,COLV\na,L,x,X,X\nb,L,x,X,X\nc,L,x,X,X\na,H,y,Y,Y\nb,H,y,Y,Y\nc,H,y,Y,Y\n",
       "select_calls": [
@@ -1249,7 +1270,23 @@
         "src.csv": "ID,K,KEEP\na,x,0\nb,y,1\nc,z,0\n",
         "donor.csv": "K,V\nx,X\ny,Y\nx,X2\n"
       },
-      "handler_counts": [],
+      "handler_counts": [
+        {
+          "spec_path": "rows[0].derivations.ROWV.source.no_match",
+          "handler": "no_match",
+          "count": 0
+        },
+        {
+          "spec_path": "rows[1].derivations.ROWV.source.no_match",
+          "handler": "no_match",
+          "count": 0
+        },
+        {
+          "spec_path": "columns.COLV.derivation.source.no_match",
+          "handler": "no_match",
+          "count": 0
+        }
+      ],
       "findings": [
         {
           "phase": "join",
@@ -1292,7 +1329,23 @@
         "src.csv": "ID,K,KEEP\na,x,0\nb,y,1\nc,z,0\n",
         "donor.csv": "K,V\nx,X\ny,Y\n"
       },
-      "handler_counts": [],
+      "handler_counts": [
+        {
+          "spec_path": "rows[0].derivations.ROWV.source.no_match",
+          "handler": "no_match",
+          "count": 0
+        },
+        {
+          "spec_path": "rows[1].derivations.ROWV.source.no_match",
+          "handler": "no_match",
+          "count": 0
+        },
+        {
+          "spec_path": "columns.COLV.derivation.source.no_match",
+          "handler": "no_match",
+          "count": 0
+        }
+      ],
       "findings": [
         {
           "phase": "convert",
@@ -1383,7 +1436,23 @@
         "src.csv": "ID,K,KEEP\n",
         "donor.csv": "K,V\nx,X\ny,Y\n"
       },
-      "handler_counts": [],
+      "handler_counts": [
+        {
+          "spec_path": "rows[0].derivations.ROWV.source.no_match",
+          "handler": "no_match",
+          "count": 0
+        },
+        {
+          "spec_path": "rows[1].derivations.ROWV.source.no_match",
+          "handler": "no_match",
+          "count": 0
+        },
+        {
+          "spec_path": "columns.COLV.derivation.source.no_match",
+          "handler": "no_match",
+          "count": 0
+        }
+      ],
       "findings": [],
       "csv": "ID,SECTION,KEY,ROWV,COLV\n",
       "select_calls": []
@@ -1399,6 +1468,11 @@
           "spec_path": "rows[0].derivations.ROWV.source.no_match",
           "handler": "no_match",
           "count": 1
+        },
+        {
+          "spec_path": "rows[1].derivations.ROWV.source.no_match",
+          "handler": "no_match",
+          "count": 0
         },
         {
           "spec_path": "columns.COLV.derivation.source.no_match",
@@ -1453,6 +1527,11 @@
           "spec_path": "columns.AVALC.derivation.source.multiple_matches",
           "handler": "multiple_matches",
           "count": 2
+        },
+        {
+          "spec_path": "columns.AVALC.derivation.source.no_match",
+          "handler": "no_match",
+          "count": 0
         }
       ],
       "findings": [],
@@ -1470,6 +1549,11 @@
           "spec_path": "columns.FIRSTDT.derivation.source.multiple_matches",
           "handler": "multiple_matches",
           "count": 4
+        },
+        {
+          "spec_path": "columns.FIRSTDT.derivation.source.no_match",
+          "handler": "no_match",
+          "count": 0
         }
       ],
       "findings": [],
@@ -1508,7 +1592,13 @@
         "src.csv": "ID,K\na,10\nb,20\n",
         "donor.csv": "CODE,V\n11,alpha\n21,beta\n"
       },
-      "handler_counts": [],
+      "handler_counts": [
+        {
+          "spec_path": "columns.LABEL.derivation.str_template.template.no_match",
+          "handler": "no_match",
+          "count": 0
+        }
+      ],
       "findings": [],
       "csv": "ID,SECTION,LABEL\na,first,value:alpha\nb,first,value:beta\na,fixed,fixed\nb,fixed,fixed\n"
     },
@@ -1523,6 +1613,11 @@
         {
           "spec_path": "columns.LABEL.derivation.str_extract.missing",
           "handler": "missing",
+          "count": 0
+        },
+        {
+          "spec_path": "columns.LABEL.derivation.str_extract.source.no_match",
+          "handler": "no_match",
           "count": 0
         }
       ],
