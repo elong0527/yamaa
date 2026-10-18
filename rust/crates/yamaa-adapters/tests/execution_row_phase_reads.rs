@@ -49,6 +49,29 @@ impl Fixture {
         assert!(!self.0.join("out.csv").exists());
         issues
     }
+    fn output(&self) -> String {
+        let specification = self.0.join("spec.yaml");
+        let specification = specification.to_str().unwrap();
+        let mut domain = file_application::domain(
+            yamaa_core::project_function::Language::Python,
+            Request {
+                specification,
+                environment: None,
+            },
+            Identity {
+                runtime: "test",
+                runtime_version: "test",
+                engine_version: yamaa_core::VERSION,
+                example: "row-phase-reads",
+                specification,
+                base_directory: ".",
+            },
+        )
+        .unwrap();
+        assert!(domain.issues().is_empty(), "{:?}", domain.issues());
+        assert!(domain.save().unwrap());
+        fs::read_to_string(self.0.join("out.csv")).unwrap()
+    }
 }
 impl Drop for Fixture {
     fn drop(&mut self) {
@@ -114,6 +137,100 @@ fn row_operands_reading_a_column_phase_column_report_its_phase_boundary() {
                 }
             })],
             "{operand}"
+        );
+    }
+}
+
+#[test]
+fn a_lookup_matching_on_a_column_phase_column_reports_its_phase_boundary() {
+    // SEQ is a window, so only the column phase completes it. K matches on it
+    // through its key, W through its range, and W2 through W's range value
+    // (LOOKUP-2).
+    let specification = |row: &str, filter: &str, column: &str| {
+        format!(
+            "schema_version: '1.0'\ndomain: OUT\nkeys: [ID, VAL]\n\
+             input:\n  SRC: {{path: source.csv, types: {{ID: int, VAL: int}}}}\n  \
+             WIN: {{path: win.csv, types: {{ONE: int, LO: int, HI: int}}}}\n\
+             output: {{path: out.csv, columns: [ID, VAL, SEQ, VALUE]}}\n\
+             intermediates:\n  - id: K\n    dataset: WIN\n    key: {{LO: SEQ}}\n    \
+             no_match: null\n  - id: W\n    dataset: WIN\n    \
+             between: {{value: SEQ, lower: LO, upper: HI}}\n    key: {{ONE: {{literal: 1}}}}\n    \
+             no_match: null\n  - id: W2\n    dataset: WIN\n    key: {{ONE: {{literal: 1}}}}\n    \
+             between: {{value: W.LO, lower: LO, upper: HI}}\n    no_match: null\n\
+             columns:\n  - {{name: ID, type: int}}\n  - {{name: VAL, type: int}}\n\
+             \x20 - name: SEQ\n    type: int\n    derivation:\n      row_number:\n        \
+             window: {{group_by: [ID], order_by: [VAL]}}\n\
+             \x20 - {{name: VALUE, type: str{column}}}\n\
+             rows:\n  - id: record\n    dataset: SRC\n{filter}    derivations:\n      \
+             ID: SRC.ID\n      VAL: SRC.VAL\n{row}"
+        )
+    };
+    let refused = |path: &str, intermediate: &str| {
+        vec![yamaa_adapters::json!({
+            "phase": "validation",
+            "condition": "phase_boundary",
+            "requirement": "LOOKUP-2",
+            "spec_paths": [path],
+            "context": {
+                "identifier": "SEQ",
+                "intermediate": intermediate,
+                "row": "record",
+                "available_phase": "column_derivation",
+                "required_phase": "row_construction"
+            }
+        })]
+    };
+    let window = "ONE,LO,HI,NAME\n1,1,1,FIRST\n1,2,9,LATER\n";
+    for (row, filter, path, intermediate) in [
+        (
+            "      VALUE: K.NAME\n",
+            "",
+            "rows[0].derivations.VALUE.source",
+            "K",
+        ),
+        (
+            "      VALUE: W.NAME\n",
+            "",
+            "rows[0].derivations.VALUE.source",
+            "W",
+        ),
+        (
+            "      VALUE: W2.NAME\n",
+            "",
+            "rows[0].derivations.VALUE.source",
+            "W2",
+        ),
+        (
+            "      VALUE: {literal: x}\n",
+            "    filter: 'K.NAME IS NOT NULL'\n",
+            "rows[0].filter",
+            "K",
+        ),
+        (
+            "      VALUE: {literal: x}\n",
+            "    filter: 'W.NAME IS NOT NULL'\n",
+            "rows[0].filter",
+            "W",
+        ),
+    ] {
+        let fixture = Fixture::new(&specification(row, filter, ""));
+        fs::write(fixture.0.join("win.csv"), window).unwrap();
+        assert_eq!(
+            fixture.issues().iter().map(issue).collect::<Vec<_>>(),
+            refused(path, intermediate),
+            "{row}{filter}"
+        );
+    }
+    // Read by a column instead, each lookup matches after SEQ is numbered:
+    // SEQ 1 falls in FIRST, whose LO 1 falls in FIRST again, and SEQ 2 in
+    // LATER, whose LO 2 falls in LATER. K matches the same LO values.
+    for read in ["W2.NAME", "K.NAME"] {
+        let fixture = Fixture::new(&specification("", "", &format!(", derivation: {read}")));
+        fs::write(fixture.0.join("win.csv"), window).unwrap();
+        assert_eq!(
+            fixture.output(),
+            "ID,VAL,SEQ,VALUE\n1,3,2,LATER\n1,1,1,FIRST\n2,5,1,FIRST\n",
+            "{read}"
         );
     }
 }

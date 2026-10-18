@@ -145,6 +145,35 @@ fn a_specification_without_rows_resolves_one_key_grain_template() {
 }
 
 #[test]
+fn a_dtc_part_after_the_year_is_read_only_when_reached() {
+    use yamaa_core::dataset::resolved::{Demand, ExprId, ExprKind};
+    // `dtc` stops at its first missing part (TIME-19), so only the year is
+    // always read; `study_day` reads both of its dates.
+    let plan = bind("sdtm-ae-partial-dates");
+    let resolved = plan.resolve().unwrap();
+    let demands = |operation: &str| {
+        (0..resolved.exprs().len())
+            .map(|index| ExprId::try_from(index).unwrap())
+            .filter(|&id| {
+                let node = resolved.expr(id);
+                node.kind == ExprKind::Temporal && node.path.ends_with(operation)
+            })
+            .map(|id| {
+                let operands = resolved.operands(id);
+                operands.iter().map(|operand| operand.demand).collect()
+            })
+            .collect::<Vec<Vec<_>>>()
+    };
+    let (always, reached) = (Demand::Always, Demand::Reached);
+    let assembly = vec![always, reached, reached];
+    assert_eq!(demands(".dtc"), [assembly.clone(), assembly]);
+    assert_eq!(
+        demands(".study_day"),
+        [vec![always, always], vec![always, always]]
+    );
+}
+
+#[test]
 fn a_failed_resolution_check_is_an_internal_bind_rejection() {
     use yamaa_adapters::{specification_diagnostics::failure, specification_run::Error};
     use yamaa_core::{dataset::ResolutionError, specification::BindError};

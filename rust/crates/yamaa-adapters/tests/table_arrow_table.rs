@@ -2581,7 +2581,6 @@ mod table {
         #[test]
         fn unsupported_stored_types_retain_independent_arrow_type_spelling() {
             for (name, expected) in [
-                ("int32", "int32"),
                 ("uint64", "uint64"),
                 ("float32", "float"),
                 ("binary", "binary"),
@@ -2598,6 +2597,21 @@ mod table {
                     "{name}"
                 );
             }
+        }
+
+        #[test]
+        fn the_pyarrow_int32_fixture_reads_as_int() {
+            // An unannotated INT32, as pyarrow writes an int32 column, is a
+            // signed 32-bit integer (REQ-1032). The fixture keeps the name it
+            // had while 0.4.0 refused it.
+            let table = parse(&content("unsupported-int32")).unwrap();
+            let column = &table.schema().columns()[0];
+            assert_eq!(
+                (column.name.as_str(), column.kind),
+                ("FIELD", ColumnType::Int)
+            );
+            assert_eq!(table.row_count(), 1);
+            assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Int(1));
         }
 
         #[test]
@@ -2662,6 +2676,495 @@ mod table {
             let mut broken = content("boolean");
             broken.truncate(broken.len() - 1);
             assert!(matches!(parse(&broken), Err(Error::Malformed)));
+        }
+
+        mod authored {
+            //! Parquet metadata authored one Compact Protocol field at a time,
+            //! for files the parquet crate's writers refuse to write.
+
+            fn varint(mut value: u64, output: &mut Vec<u8>) {
+                while value >= 0x80 {
+                    output.push(value as u8 | 0x80);
+                    value >>= 7;
+                }
+                output.push(value as u8);
+            }
+
+            pub(super) fn zigzag(value: i64) -> Vec<u8> {
+                let mut bytes = Vec::new();
+                varint(((value << 1) ^ (value >> 63)) as u64, &mut bytes);
+                bytes
+            }
+
+            /// A Compact Protocol struct, written one field at a time.
+            #[derive(Default)]
+            pub(super) struct Fields {
+                bytes: Vec<u8>,
+                last: i16,
+            }
+
+            impl Fields {
+                pub(super) fn raw(mut self, id: i16, kind: u8, value: &[u8]) -> Self {
+                    match id - self.last {
+                        delta @ 1..=15 => self.bytes.push((delta as u8) << 4 | kind),
+                        _ => {
+                            self.bytes.push(kind);
+                            self.bytes.extend(zigzag(id.into()));
+                        }
+                    }
+                    self.last = id;
+                    self.bytes.extend(value);
+                    self
+                }
+
+                pub(super) fn integer(self, id: i16, kind: u8, value: i64) -> Self {
+                    self.raw(id, kind, &zigzag(value))
+                }
+
+                pub(super) fn binary(self, id: i16, value: &[u8]) -> Self {
+                    let mut bytes = Vec::new();
+                    varint(value.len() as u64, &mut bytes);
+                    bytes.extend(value);
+                    self.raw(id, 8, &bytes)
+                }
+
+                pub(super) fn boolean(self, id: i16, value: bool) -> Self {
+                    self.raw(id, if value { 1 } else { 2 }, &[])
+                }
+
+                pub(super) fn strct(self, id: i16, value: Fields) -> Self {
+                    self.raw(id, 12, &value.end())
+                }
+
+                /// A list of encoded elements of wire type `kind`.
+                pub(super) fn list(self, id: i16, kind: u8, items: &[Vec<u8>]) -> Self {
+                    let mut bytes = Vec::new();
+                    if items.len() < 15 {
+                        bytes.push((items.len() as u8) << 4 | kind);
+                    } else {
+                        bytes.push(0xf0 | kind);
+                        varint(items.len() as u64, &mut bytes);
+                    }
+                    bytes.extend(items.concat());
+                    self.raw(id, 9, &bytes)
+                }
+
+                pub(super) fn end(mut self) -> Vec<u8> {
+                    self.bytes.push(0);
+                    self.bytes
+                }
+            }
+        }
+
+        mod row_groups {
+            //! More row groups than parquet 57.3.0 decodes from one footer
+            //! (#2940), one record per row group, as pyarrow and Polars write
+            //! them with `row_group_size=1`. The parquet crate's writer refuses
+            //! a 32,769th row group, so these files are authored here one
+            //! Compact Protocol field at a time. Expected cells are the values
+            //! the test writes, never read back from a candidate reader.
+            use super::authored::{zigzag, Fields};
+            use arrow_array::{ArrayRef, Int64Array, RecordBatch};
+            use parquet::arrow::ArrowWriter;
+            use std::sync::Arc;
+            use yamaa_adapters::parquet_source::parse;
+            use yamaa_core::{
+                table::{TableAccess, ValueRef},
+                value::ColumnType,
+            };
+
+            /// Which row groups hold their ordinal.
+            #[derive(Clone, Copy, Debug)]
+            enum Ordinals {
+                /// None, as pyarrow writes them.
+                Absent,
+                /// The first 32,768, numbered 0 to 32,767, as Polars writes them.
+                Polars,
+            }
+
+            /// The value of record `row`: its index, missing in every seventh
+            /// record.
+            fn value(row: usize) -> Option<i64> {
+                (row % 7 != 6).then_some(row as i64)
+            }
+
+            /// `rows` records of one OPTIONAL INT64 field `RID` holding
+            /// `value`, in one-row row groups. Each row group is one
+            /// uncompressed PLAIN V1 page.
+            fn file(rows: usize, ordinals: Ordinals) -> Vec<u8> {
+                let mut bytes = b"PAR1".to_vec();
+                let mut groups = Vec::with_capacity(rows);
+                for row in 0..rows {
+                    // Definition levels: their length, then one RLE run.
+                    let value = value(row);
+                    let mut body = vec![2, 0, 0, 0, 2, u8::from(value.is_some())];
+                    body.extend(value.map(i64::to_le_bytes).unwrap_or_default());
+                    // num_values; PLAIN; RLE definition and repetition levels.
+                    let data = Fields::default().integer(1, 5, 1).integer(2, 5, 0);
+                    let data = data.integer(3, 5, 3).integer(4, 5, 3);
+                    // DATA_PAGE; uncompressed and compressed sizes.
+                    let size = body.len() as i64;
+                    let page = Fields::default().integer(1, 5, 0).integer(2, 5, size);
+                    let page = page.integer(3, 5, size).strct(5, data).end();
+                    let offset = bytes.len() as i64;
+                    let length = (page.len() + body.len()) as i64;
+                    bytes.extend(page);
+                    bytes.extend(body);
+                    let meta = Fields::default()
+                        .integer(1, 5, 2) // INT64
+                        .list(2, 5, &[zigzag(0), zigzag(3)]) // PLAIN, RLE
+                        .list(3, 8, &[b"\x03RID".to_vec()]) // path_in_schema
+                        .integer(4, 5, 0) // UNCOMPRESSED
+                        .integer(5, 6, 1) // num_values
+                        .integer(6, 6, length)
+                        .integer(7, 6, length)
+                        .integer(9, 6, offset); // data_page_offset
+                    let chunk = Fields::default().integer(2, 6, 0).strct(3, meta);
+                    let group = Fields::default().list(1, 12, &[chunk.end()]);
+                    let group = group.integer(2, 6, length).integer(3, 6, 1);
+                    groups.push(match ordinals {
+                        Ordinals::Polars if row < 32_768 => group.integer(7, 4, row as i64).end(),
+                        _ => group.end(),
+                    });
+                }
+                let root = Fields::default().binary(4, b"schema").integer(5, 5, 1);
+                // INT64; OPTIONAL; name.
+                let field = Fields::default().integer(1, 5, 2).integer(3, 5, 1);
+                let schema = [root.end(), field.binary(4, b"RID").end()];
+                let footer = Fields::default()
+                    .integer(1, 5, 2)
+                    .list(2, 12, &schema)
+                    .integer(3, 6, rows as i64)
+                    .list(4, 12, &groups)
+                    .binary(6, b"yamaa test")
+                    .end();
+                bytes.extend(&footer);
+                bytes.extend((footer.len() as u32).to_le_bytes());
+                bytes.extend(b"PAR1");
+                bytes
+            }
+
+            /// The same records in one row group, written by the parquet
+            /// crate's Arrow writer.
+            fn one_row_group(rows: usize) -> Vec<u8> {
+                let values: ArrayRef = Arc::new(Int64Array::from_iter((0..rows).map(value)));
+                let batch = RecordBatch::try_from_iter([("RID", values)]).unwrap();
+                let mut bytes = Vec::new();
+                let mut writer = ArrowWriter::try_new(&mut bytes, batch.schema(), None).unwrap();
+                writer.write(&batch).unwrap();
+                writer.close().unwrap();
+                bytes
+            }
+
+            #[test]
+            fn every_record_reads_in_order_past_the_row_groups_one_footer_numbers() {
+                // Row-group sizing does not change the delivered records
+                // (REQ-1037), whichever row groups hold an ordinal.
+                for (rows, ordinals) in [
+                    (32_768, Some(Ordinals::Polars)),
+                    (32_769, Some(Ordinals::Absent)),
+                    (40_000, Some(Ordinals::Polars)),
+                    (40_000, None),
+                ] {
+                    let bytes = match ordinals {
+                        Some(ordinals) => file(rows, ordinals),
+                        None => one_row_group(rows),
+                    };
+                    let table = parse(&bytes)
+                        .unwrap_or_else(|error| panic!("{rows} {ordinals:?}: {error:?}"));
+                    assert_eq!(table.row_count(), rows, "{ordinals:?}");
+                    let column = &table.schema().columns()[0];
+                    assert_eq!(
+                        (column.name.as_str(), column.kind),
+                        ("RID", ColumnType::Int)
+                    );
+                    for row in 0..rows {
+                        assert_eq!(
+                            table.cell(row, 0).unwrap(),
+                            value(row).map_or(ValueRef::Missing, ValueRef::Int),
+                            "{rows} {ordinals:?} row {row}"
+                        );
+                    }
+                }
+            }
+        }
+
+        mod integer_annotations {
+            //! Integer fields with the physical types and annotations DuckDB,
+            //! pyarrow and Polars write (#2940), written here by the parquet
+            //! crate's writers. A textual schema names a converted type alone,
+            //! or a logical type with its converted type. A signed annotation
+            //! whose width fits the physical type reads as `int`, as does an
+            //! INT32 without an annotation; an unsigned one stays refused.
+            //! Expected cells are the values the test writes, never read back
+            //! from a candidate reader.
+            use super::authored::{zigzag, Fields};
+            use arrow_array::{ArrayRef, Int16Array, Int32Array, Int8Array, RecordBatch};
+            use parquet::{
+                arrow::ArrowWriter, basic::Repetition, column::writer::ColumnWriter,
+                file::writer::SerializedFileWriter, schema::parser::parse_message_type,
+            };
+            use std::sync::Arc;
+            use yamaa_adapters::{
+                arrow_table::ArrowTable,
+                parquet_source::{parse, Error},
+            };
+            use yamaa_core::{
+                table::{TableAccess, ValueRef},
+                value::ColumnType,
+            };
+
+            /// One row group holding `columns[i]` in field `i` of `schema`,
+            /// with a null for each `None`.
+            fn write(schema: &str, columns: &[Vec<Option<i64>>]) -> Vec<u8> {
+                let schema = Arc::new(parse_message_type(schema).unwrap());
+                let optional: Vec<_> = schema
+                    .get_fields()
+                    .iter()
+                    .map(|field| field.get_basic_info().repetition() == Repetition::OPTIONAL)
+                    .collect();
+                let mut bytes = Vec::new();
+                let mut writer =
+                    SerializedFileWriter::new(&mut bytes, schema, Default::default()).unwrap();
+                let mut group = writer.next_row_group().unwrap();
+                for (values, optional) in columns.iter().zip(optional) {
+                    let mut column = group.next_column().unwrap().unwrap();
+                    let levels: Vec<_> = values.iter().map(|v| i16::from(v.is_some())).collect();
+                    let levels = optional.then_some(levels.as_slice());
+                    let present = values.iter().flatten().copied();
+                    match column.untyped() {
+                        ColumnWriter::Int32ColumnWriter(writer) => {
+                            let present: Vec<_> =
+                                present.map(|v| i32::try_from(v).unwrap()).collect();
+                            writer.write_batch(&present, levels, None).unwrap()
+                        }
+                        ColumnWriter::Int64ColumnWriter(writer) => {
+                            let present: Vec<_> = present.collect();
+                            writer.write_batch(&present, levels, None).unwrap()
+                        }
+                        _ => unreachable!(),
+                    };
+                    column.close().unwrap();
+                }
+                group.close().unwrap();
+                writer.close().unwrap();
+                bytes
+            }
+
+            /// The least and greatest value of a signed width, a null and zero.
+            fn extremes(bits: u32) -> Vec<Option<i64>> {
+                let greatest = i64::MAX >> (64 - bits);
+                vec![Some(-greatest - 1), None, Some(greatest), Some(0)]
+            }
+
+            /// Every field reads as `int` and holds the values written.
+            fn assert_int_cells(table: &ArrowTable, columns: &[Vec<Option<i64>>]) {
+                let kinds: Vec<_> = table.schema().columns().iter().map(|c| c.kind).collect();
+                assert_eq!(kinds, vec![ColumnType::Int; columns.len()]);
+                for (index, values) in columns.iter().enumerate() {
+                    assert_eq!(table.row_count(), values.len());
+                    for (row, value) in values.iter().enumerate() {
+                        assert_eq!(
+                            table.cell(row, index).unwrap(),
+                            value.map_or(ValueRef::Missing, ValueRef::Int),
+                            "field {index} row {row}"
+                        );
+                    }
+                }
+            }
+
+            #[test]
+            fn duckdb_signed_integer_fields_read_as_int() {
+                // DuckDB 1.5.6 writes BIGINT, INTEGER, SMALLINT and TINYINT
+                // fields OPTIONAL, with the converted type alone and no field
+                // id, under a root named duckdb_schema.
+                let schema = "message duckdb_schema {
+                    OPTIONAL INT64 B (INT_64);
+                    OPTIONAL INT32 I (INT_32);
+                    OPTIONAL INT32 S (INT_16);
+                    OPTIONAL INT32 T (INT_8);
+                }";
+                let columns = [64, 32, 16, 8].map(extremes);
+                assert_int_cells(&parse(&write(schema, &columns)).unwrap(), &columns);
+            }
+
+            #[test]
+            fn unannotated_int32_fields_read_as_int() {
+                // pyarrow and Polars write int32 columns without an annotation.
+                let schema = "message schema {
+                    OPTIONAL INT32 P;
+                    REQUIRED INT32 Q;
+                }";
+                let columns = [
+                    extremes(32),
+                    vec![Some(i64::from(i32::MIN)), Some(-1), Some(0), Some(1)],
+                ];
+                assert_int_cells(&parse(&write(schema, &columns)).unwrap(), &columns);
+                // The Arrow writer stores an int32 array the same way, under an
+                // Arrow schema hint naming int32.
+                let int32: ArrayRef = Arc::new(Int32Array::from_iter(
+                    columns[0]
+                        .iter()
+                        .map(|v| v.map(|v| i32::try_from(v).unwrap())),
+                ));
+                let batch = RecordBatch::try_from_iter([("P", int32)]).unwrap();
+                let mut bytes = Vec::new();
+                let mut writer = ArrowWriter::try_new(&mut bytes, batch.schema(), None).unwrap();
+                writer.write(&batch).unwrap();
+                writer.close().unwrap();
+                assert_int_cells(&parse(&bytes).unwrap(), &columns[..1]);
+            }
+
+            #[test]
+            fn logical_signed_integer_annotations_read_as_int() {
+                // `Int(64, signed)` with `INT_64` is the DuckDB BIGINT field as
+                // pyarrow reports it. A REQUIRED field reads the same.
+                let schema = "message schema {
+                    OPTIONAL INT64 L64 (INTEGER(64,true));
+                    OPTIONAL INT32 L32 (INTEGER(32,true));
+                    OPTIONAL INT32 L16 (INTEGER(16,true));
+                    REQUIRED INT32 L8 (INTEGER(8,true));
+                }";
+                let mut columns = [64, 32, 16].map(extremes).to_vec();
+                columns.push(vec![Some(-128), Some(127), Some(0), Some(1)]);
+                assert_int_cells(&parse(&write(schema, &columns)).unwrap(), &columns);
+                // The Arrow writer stores int8 and int16 arrays as pyarrow and
+                // Polars do: INT32 annotated Int(8 | 16, signed), INT_8 | INT_16,
+                // under an Arrow schema hint naming int8 and int16.
+                let columns = [extremes(8), extremes(16)];
+                let int8: ArrayRef = Arc::new(Int8Array::from_iter(
+                    columns[0]
+                        .iter()
+                        .map(|v| v.map(|v| i8::try_from(v).unwrap())),
+                ));
+                let int16: ArrayRef = Arc::new(Int16Array::from_iter(
+                    columns[1]
+                        .iter()
+                        .map(|v| v.map(|v| i16::try_from(v).unwrap())),
+                ));
+                let batch = RecordBatch::try_from_iter([("A", int8), ("B", int16)]).unwrap();
+                let mut bytes = Vec::new();
+                let mut writer = ArrowWriter::try_new(&mut bytes, batch.schema(), None).unwrap();
+                writer.write(&batch).unwrap();
+                writer.close().unwrap();
+                assert_int_cells(&parse(&bytes).unwrap(), &columns);
+            }
+
+            #[test]
+            fn unsigned_annotations_stay_refused() {
+                // DuckDB writes UBIGINT through UTINYINT with the unsigned
+                // converted types alone; pyarrow and Polars add the logical
+                // type.
+                for (field, expected) in [
+                    ("OPTIONAL INT64 F (UINT_64);", "uint64"),
+                    ("OPTIONAL INT32 F (UINT_32);", "uint32"),
+                    ("OPTIONAL INT32 F (UINT_16);", "uint16"),
+                    ("OPTIONAL INT32 F (UINT_8);", "uint8"),
+                    ("OPTIONAL INT64 F (INTEGER(64,false));", "uint64"),
+                    ("OPTIONAL INT32 F (INTEGER(8,false));", "uint8"),
+                ] {
+                    let bytes = write(&format!("message schema {{ {field} }}"), &[vec![Some(1)]]);
+                    assert!(
+                        matches!(
+                            parse(&bytes),
+                            Err(Error::Unsupported { field, stored_type })
+                                if field == "F" && stored_type == expected
+                        ),
+                        "{field}"
+                    );
+                }
+            }
+
+            /// One REQUIRED field `F` of physical type `physical` (1 for INT32,
+            /// 2 for INT64), annotated by the logical type `Int(bits, signed)`
+            /// alone, holding `value` in one PLAIN page. The parquet crate's
+            /// writer refuses an annotation the physical type cannot carry.
+            fn annotated(physical: i64, bits: u8, value: &[u8]) -> Vec<u8> {
+                // num_values; PLAIN; RLE definition and repetition levels.
+                let data = Fields::default().integer(1, 5, 1).integer(2, 5, 0);
+                let data = data.integer(3, 5, 3).integer(4, 5, 3);
+                // DATA_PAGE; uncompressed and compressed sizes.
+                let size = value.len() as i64;
+                let page = Fields::default().integer(1, 5, 0).integer(2, 5, size);
+                let page = page.integer(3, 5, size).strct(5, data).end();
+                let length = (page.len() + value.len()) as i64;
+                let meta = Fields::default()
+                    .integer(1, 5, physical)
+                    .list(2, 5, &[zigzag(0)]) // PLAIN
+                    .list(3, 8, &[b"\x01F".to_vec()]) // path_in_schema
+                    .integer(4, 5, 0) // UNCOMPRESSED
+                    .integer(5, 6, 1) // num_values
+                    .integer(6, 6, length)
+                    .integer(7, 6, length)
+                    .integer(9, 6, 4); // data_page_offset
+                let chunk = Fields::default().integer(2, 6, 0).strct(3, meta);
+                let group = Fields::default().list(1, 12, &[chunk.end()]);
+                let group = group.integer(2, 6, length).integer(3, 6, 1).end();
+                // The INTEGER variant of LogicalType: IntType(bitWidth, isSigned).
+                let int = Fields::default().raw(1, 3, &[bits]).boolean(2, true);
+                let logical = Fields::default().strct(10, int);
+                let root = Fields::default().binary(4, b"schema").integer(5, 5, 1);
+                let field = Fields::default().integer(1, 5, physical).integer(3, 5, 0);
+                let field = field.binary(4, b"F").strct(10, logical);
+                let footer = Fields::default()
+                    .integer(1, 5, 1)
+                    .list(2, 12, &[root.end(), field.end()])
+                    .integer(3, 6, 1)
+                    .list(4, 12, &[group])
+                    .end();
+                let mut bytes = b"PAR1".to_vec();
+                bytes.extend(page);
+                bytes.extend(value);
+                bytes.extend(&footer);
+                bytes.extend((footer.len() as u32).to_le_bytes());
+                bytes.extend(b"PAR1");
+                bytes
+            }
+
+            #[test]
+            fn an_integer_annotation_its_physical_type_cannot_carry_is_invalid() {
+                // The logical type alone reads as `int` where it fits.
+                for (physical, bits, value) in [
+                    (1, 32, (-7i32).to_le_bytes().to_vec()),
+                    (1, 8, (-7i32).to_le_bytes().to_vec()),
+                    (2, 64, (-7i64).to_le_bytes().to_vec()),
+                ] {
+                    let table = parse(&annotated(physical, bits, &value)).unwrap();
+                    assert_eq!(table.schema().columns()[0].kind, ColumnType::Int);
+                    assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Int(-7));
+                }
+                for (physical, bits, value) in [
+                    (1, 64, 7i32.to_le_bytes().to_vec()),
+                    (2, 32, 7i64.to_le_bytes().to_vec()),
+                    (2, 8, 7i64.to_le_bytes().to_vec()),
+                ] {
+                    assert!(
+                        matches!(
+                            parse(&annotated(physical, bits, &value)),
+                            Err(Error::Malformed)
+                        ),
+                        "{physical} {bits}"
+                    );
+                }
+            }
+
+            #[test]
+            fn a_stored_value_outside_its_declared_width_is_invalid() {
+                for (annotation, outside) in [
+                    ("INT_8", 128),
+                    ("INT_8", -129),
+                    ("INTEGER(8,true)", 255),
+                    ("INT_16", 32_768),
+                    ("INTEGER(16,true)", -32_769),
+                ] {
+                    let schema = format!("message schema {{ OPTIONAL INT32 F ({annotation}); }}");
+                    let bytes = write(&schema, &[vec![Some(0), None, Some(outside)]]);
+                    assert!(
+                        matches!(parse(&bytes), Err(Error::Malformed)),
+                        "{annotation} {outside}"
+                    );
+                }
+            }
         }
 
         mod schema_layouts {

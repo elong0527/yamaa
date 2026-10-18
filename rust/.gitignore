@@ -3,3 +3,12 @@
 # canonical lock; that lock and any build output there are not committed.
 /tests/embedder/Cargo.lock
 /tests/embedder/target/
+# The fuzz targets (fuzz/README.md) build from a copy of the canonical lock
+# too; that copy, the build output, seeds, corpora and failing inputs stay
+# local.
+/fuzz/Cargo.lock
+/fuzz/target/
+/fuzz/seeds/
+/fuzz/corpus/
+/fuzz/artifacts/
+/fuzz/coverage/

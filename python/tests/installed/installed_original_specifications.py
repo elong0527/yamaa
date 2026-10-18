@@ -230,6 +230,115 @@ class ParquetOriginalOutput(unittest.TestCase):
                 for name in fields:
                     self.assertEqual(result.output[name].to_list(), text, name)
 
+    def test_parquet_more_row_groups_than_one_footer_numbers_read_every_record(self):
+        # pyarrow and Polars with row_group_size=1 write one row group per
+        # record. Past 32,768 row groups, Polars stops writing row-group
+        # ordinals. Row-group sizing does not change the delivered records
+        # (REQ-1037), so every record reads in order (#2940).
+        import polars as pl
+        import pyarrow.parquet as pq
+
+        rows = 32_769
+        ids = list(range(rows))
+        values = [None if row % 7 == 6 else row for row in ids]
+        table = pa.table(
+            {"ID": pa.array(ids, pa.int64()), "V": pa.array(values, pa.int64())}
+        )
+        writers = {
+            "pyarrow": lambda path: pq.write_table(table, path, row_group_size=1),
+            "polars": lambda path: pl.from_arrow(table).write_parquet(
+                path, row_group_size=1
+            ),
+        }
+        for writer, write in writers.items():
+            with self.subTest(writer=writer):
+                path = self.root / (writer + ".parquet")
+                write(path)
+                self.assertEqual(pq.ParquetFile(path).metadata.num_row_groups, rows)
+                stored = pq.read_table(path)
+                self.assertEqual(stored["V"].to_pylist(), values)
+                source = {
+                    "schema_version": "1.0",
+                    "domain": "TEST",
+                    "input": {"SRC": path.name},
+                    "keys": ["ID"],
+                    "columns": [
+                        {"name": "ID", "type": "int", "derivation": "SRC.ID"},
+                        {"name": "V", "type": "int", "derivation": "SRC.V"},
+                    ],
+                    "output": {"path": "output.csv", "columns": ["ID", "V"]},
+                }
+                result = self.build(source, {})
+                self.assertTrue(result.issues.is_empty(), result.issues)
+                self.assertEqual(result.output["ID"].to_list(), ids)
+                self.assertEqual(result.output["V"].to_list(), values)
+
+    def test_parquet_signed_integer_fields_read_as_int(self):
+        # pyarrow and Polars store int8 and int16 columns as INT32 annotated
+        # Int(8 | 16, signed) and INT_8 | INT_16, and int32 columns as INT32
+        # without an annotation. A signed integer field whose width fits its
+        # physical type reads as int (REQ-1032, #2940).
+        import polars as pl
+        import pyarrow.parquet as pq
+
+        columns = {
+            "I8": ([-128, None, 127, 0], pa.int8(), "INT_8"),
+            "I16": ([-32768, None, 32767, 0], pa.int16(), "INT_16"),
+            "I32": ([-2147483648, None, 2147483647, 0], pa.int32(), "NONE"),
+        }
+        table = pa.table(
+            {
+                "ID": pa.array([1, 2, 3, 4], pa.int64()),
+                **{
+                    name: pa.array(values, kind)
+                    for name, (values, kind, _) in columns.items()
+                },
+            }
+        )
+        writers = {
+            "pyarrow": lambda path: pq.write_table(table, path),
+            "polars": lambda path: pl.from_arrow(table).write_parquet(path),
+        }
+        for writer, write in writers.items():
+            with self.subTest(writer=writer):
+                path = self.root / (writer + ".parquet")
+                write(path)
+                schema = pq.ParquetFile(path).schema
+                for name, (_, _, converted) in columns.items():
+                    column = schema.column(schema.names.index(name))
+                    self.assertEqual(column.physical_type, "INT32")
+                    self.assertEqual(column.converted_type, converted)
+                names = ["ID", *columns]
+                source = {
+                    "schema_version": "1.0",
+                    "domain": "TEST",
+                    "input": {"SRC": path.name},
+                    "keys": ["ID"],
+                    "columns": [
+                        {"name": name, "type": "int", "derivation": "SRC." + name}
+                        for name in names
+                    ],
+                    "output": {"path": "output.csv", "columns": names},
+                }
+                result = self.build(source, {})
+                self.assertTrue(result.issues.is_empty(), result.issues)
+                for name, (values, _, _) in columns.items():
+                    self.assertEqual(result.output[name].to_list(), values, name)
+        # The staged pyarrow int32 fixture, which 0.4.0 refused, holds 1.
+        source = {
+            "schema_version": "1.0",
+            "domain": "TEST",
+            "input": {"SRC": "input.parquet"},
+            "keys": ["FIELD"],
+            "columns": [{"name": "FIELD", "type": "int", "derivation": "SRC.FIELD"}],
+            "output": {"path": "output.csv", "columns": ["FIELD"]},
+        }
+        result = self.build(
+            source, {"input.parquet": ROOT / "pq" / "unsupported-int32.parquet"}
+        )
+        self.assertTrue(result.issues.is_empty(), result.issues)
+        self.assertEqual(result.output["FIELD"].to_list(), [1])
+
     def test_parquet_semantic_failures_collect_in_source_order(self):
         aliases = tuple(TRUTH["input_aliases"])
         # Every specification is pruned after composition: keep every input live
@@ -410,7 +519,6 @@ class ParquetOriginalOutput(unittest.TestCase):
                     {"field": "FIELD", "stored_type": stored},
                 )
                 for name, stored in (
-                    ("int32", "int32"),
                     ("uint64", "uint64"),
                     ("float32", "float"),
                     ("binary", "binary"),

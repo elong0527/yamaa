@@ -1113,6 +1113,12 @@ mod file {
                 .unwrap_or_else(|| panic!("{:?}", run.issues()));
             assert_eq!(refusal.condition, "value_not_permitted");
             assert_eq!(refusal.spec_paths, ["sdtm.specs[0].columns.VSDTM.type"]);
+            // The details of the specification's own refusal, beside the
+            // `detail` every composition finding carries.
+            assert_eq!(
+                refusal.context,
+                yamaa_adapters::json!({"detail": "VSDTM", "column": "VSDTM", "value": "datetime", "class": "FINDINGS", "permitted": ["str", "date"]})
+            );
             assert!(run.save().is_err());
             assert!(!temp.0.join("define.xml").exists());
         }

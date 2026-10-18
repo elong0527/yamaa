@@ -22,11 +22,32 @@ fn logical(stored: &ColumnDescriptor) -> core_profile::Logical {
 }
 fn converted(stored: &ColumnDescriptor) -> core_profile::Converted {
     use core_profile::Converted as C;
+    let integer = |bits, signed| C::Integer { bits, signed };
     match stored.converted_type() {
         ConvertedType::NONE => C::None,
         ConvertedType::UTF8 => C::Utf8,
         ConvertedType::DATE => C::Date,
+        ConvertedType::INT_8 => integer(8, true),
+        ConvertedType::INT_16 => integer(16, true),
+        ConvertedType::INT_32 => integer(32, true),
+        ConvertedType::INT_64 => integer(64, true),
+        ConvertedType::UINT_8 => integer(8, false),
+        ConvertedType::UINT_16 => integer(16, false),
+        ConvertedType::UINT_32 => integer(32, false),
+        ConvertedType::UINT_64 => integer(64, false),
         _ => C::Other,
+    }
+}
+/// The width a field's signed integer annotation declares, logical or legacy.
+/// Every stored value of an `INT32` field that reads as `int` must fit it
+/// (REQ-1032).
+pub(super) fn declared_width(stored: &ColumnDescriptor) -> Option<u8> {
+    use core_profile::{Converted as C, Logical as L};
+    match (logical(stored), converted(stored)) {
+        (L::Integer { bits, signed: true }, _) | (L::None, C::Integer { bits, signed: true }) => {
+            Some(bits)
+        }
+        _ => None,
     }
 }
 /// The embedded Arrow schema chooses a layout, never a type (REQ-1032): every
@@ -37,6 +58,9 @@ fn representation(arrow: &DataType) -> core_profile::Representation {
     match arrow {
         DataType::Utf8 | DataType::LargeUtf8 | DataType::Utf8View => R::Text,
         DataType::Dictionary(_, value) => representation(value),
+        DataType::Int8 => R::Int8,
+        DataType::Int16 => R::Int16,
+        DataType::Int32 => R::Int32,
         DataType::Int64 => R::Int64,
         DataType::Float64 => R::Float64,
         DataType::Date32 => R::Date32,
@@ -171,6 +195,13 @@ mod tests {
                 DataType::Timestamp(ArrowUnit::Microsecond, None),
                 ColumnType::DateTime,
             ),
+            (
+                Physical::INT32,
+                None,
+                ConvertedType::NONE,
+                DataType::Int32,
+                ColumnType::Int,
+            ),
         ] {
             let stored = descriptor(physical, logical, converted);
             assert_eq!(column_type(&stored.column(0), &arrow), Some(expected));
@@ -178,9 +209,33 @@ mod tests {
         for (physical, logical, converted, arrow) in [
             (
                 Physical::INT64,
+                Some(crate::storage_api::integer(64, false)),
+                ConvertedType::UINT_64,
+                DataType::UInt64,
+            ),
+            (
+                Physical::INT64,
+                None,
+                ConvertedType::UINT_64,
+                DataType::UInt64,
+            ),
+            (
+                Physical::INT32,
+                Some(crate::storage_api::integer(8, false)),
+                ConvertedType::UINT_8,
+                DataType::UInt8,
+            ),
+            (
+                Physical::INT32,
+                None,
+                ConvertedType::UINT_32,
+                DataType::UInt32,
+            ),
+            (
+                Physical::INT64,
                 Some(crate::storage_api::integer(64, true)),
                 ConvertedType::INT_64,
-                DataType::Int64,
+                DataType::Timestamp(ArrowUnit::Microsecond, None),
             ),
             (
                 Physical::INT64,
@@ -206,10 +261,44 @@ mod tests {
                 ConvertedType::NONE,
                 DataType::Binary,
             ),
-            (Physical::INT32, None, ConvertedType::NONE, DataType::Int32),
         ] {
             let stored = descriptor(physical, logical, converted);
             assert_eq!(column_type(&stored.column(0), &arrow), None);
+        }
+    }
+    #[test]
+    fn signed_integer_annotations_read_as_int_and_declare_their_width() {
+        for (physical, bits, converted, arrow) in [
+            (Physical::INT64, 64, ConvertedType::INT_64, DataType::Int64),
+            (Physical::INT32, 32, ConvertedType::INT_32, DataType::Int32),
+            (Physical::INT32, 16, ConvertedType::INT_16, DataType::Int16),
+            (Physical::INT32, 8, ConvertedType::INT_8, DataType::Int8),
+        ] {
+            // Both annotations, as pyarrow and Polars write them, and the
+            // converted type alone, as DuckDB writes it.
+            let logical = Some(crate::storage_api::integer(bits as i8, true));
+            for logical in [logical, None] {
+                let stored = descriptor(physical, logical.clone(), converted);
+                let column = stored.column(0);
+                assert_eq!(declared_width(&column), Some(bits), "{converted}");
+                let dictionary =
+                    DataType::Dictionary(Box::new(DataType::Int32), Box::new(arrow.clone()));
+                for arrow in [&arrow, &dictionary] {
+                    assert_eq!(
+                        column_type(&column, arrow),
+                        Some(ColumnType::Int),
+                        "{converted} {logical:?} {arrow}"
+                    );
+                }
+            }
+        }
+        for converted in [
+            ConvertedType::NONE,
+            ConvertedType::UINT_8,
+            ConvertedType::DATE,
+        ] {
+            let stored = descriptor(Physical::INT32, None, converted);
+            assert_eq!(declared_width(&stored.column(0)), None, "{converted}");
         }
     }
     #[test]
@@ -278,6 +367,13 @@ mod tests {
                 DataType::Timestamp(ArrowUnit::Microsecond, None),
                 ColumnType::DateTime,
             ),
+            (
+                Physical::INT32,
+                None,
+                ConvertedType::NONE,
+                DataType::Int32,
+                ColumnType::Int,
+            ),
         ] {
             let stored = descriptor(physical, logical, converted);
             let arrow = dictionary(DataType::Int32, value);
@@ -292,8 +388,8 @@ mod tests {
             (&binary, dictionary(DataType::Int32, DataType::Binary)),
             (&text, dictionary(DataType::Int32, DataType::Binary)),
             (
-                &descriptor(Physical::INT32, None, ConvertedType::NONE),
-                dictionary(DataType::Int32, DataType::Int32),
+                &descriptor(Physical::INT32, None, ConvertedType::UINT_8),
+                dictionary(DataType::Int32, DataType::UInt8),
             ),
             (
                 &descriptor(Physical::INT64, timestamp, ConvertedType::NONE),
