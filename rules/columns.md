@@ -409,14 +409,13 @@ reading column's `no_match` for a named intermediate
 evaluated is not a handler site: its absence gives missing, uncounted.
 
 A run registers every handler path before it reads any row, so a run reports
-a path even when it answers nothing. That covers each operation's `missing`,
-`absent` and declared handlers, each `unconvertible`, and each named
-intermediate read: its reading path's `no_match`, and its
-`multiple_matches` when the intermediate declares `keep`. A read that
-requires a match registers no `no_match` and no `absent`. When an
-intermediate's `between` value, or a current-record operand of its
-derivations, reads another intermediate, that read's handlers count at the
-same reading path.
+a path even when it answers nothing. That covers every declared handler, every
+default substitution counted like one, and each named intermediate read: its
+reading path's `no_match`, and its `multiple_matches` when the intermediate
+declares `keep`. A read that requires a match registers no `no_match` and no
+`absent`. When an intermediate's `between` value, or a current-record operand
+of its derivations, reads another intermediate, that read's handlers count at
+the same reading path.
 
 Handler rows come in registration order. First come the `unconvertible`
 paths of the output derivations, in declaration order with the row templates'

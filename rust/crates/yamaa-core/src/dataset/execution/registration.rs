@@ -8,11 +8,12 @@
 //! column phase's, then the intermediates' key expressions. Last, each
 //! intermediate's derivations, intermediate by intermediate, in declaration
 //! order, followed by the key expressions of the intermediates they read, as
-//! bound for the donor records. Each derivation lists its paths in expression order: an operation's
-//! own paths before those of the expressions it reads, which follow in
-//! written order. A read of a named intermediate registers its
-//! `multiple_matches` and `no_match` at the reading path. The resolved plan's
-//! handler table is checked against this walk on every bind.
+//! bound for the donor records. Each derivation lists its paths in expression
+//! order: an operation's own paths before those of the expressions it reads,
+//! which follow in the order the operation reads them. A read of a named
+//! intermediate registers its `multiple_matches` and `no_match` at the
+//! reading path. A path registers once, where the walk first reaches it. The
+//! resolved plan's handler table is checked against this walk on every bind.
 use super::*;
 use crate::bound_expression::Read;
 use crate::dataset::{read_handlers, ReadHandlers};
