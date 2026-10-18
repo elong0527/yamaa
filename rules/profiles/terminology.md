@@ -150,11 +150,11 @@ non-missing value of the column to equal one declared `value`, and a sponsor
 addition to an extensible list is declared as an item with `extended: true`.
 Missing values pass. The check runs where [Verification](../verification.md)
 runs a column verification, over the completed column, and fails the same way.
-A value-level binding decides the rows of its test code. Binding an `external`
+A value-level binding decides the rows its entry selects. Binding an `external`
 codelist enforces nothing.
 
 Fails: `allowed_values_failed`.
-Evidence: `negative-epoch-outside-extensible-list`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::per_value_codelists_inherit_origins_and_check_completed_discriminators`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::per_value_extensible_lists_are_enforced_on_their_rows_and_dictionaries_replace_the_default`, `rust/crates/yamaa-core/tests/project_execution.rs::owned_checked_environment_executes_fixed_codelists_before_later_cells_in_both_plan_forms`.
+Evidence: `negative-epoch-outside-extensible-list`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::per_value_codelists_inherit_origins_and_check_completed_where_columns`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::per_value_extensible_lists_are_enforced_on_their_rows_and_dictionaries_replace_the_default`, `rust/crates/yamaa-core/tests/project_execution.rs::owned_checked_environment_executes_fixed_codelists_before_later_cells_in_both_plan_forms`.
 Replaces: REQ-0937, REQ-0938, REQ-0939, REQ-0940, REQ-0957.
 
 Missing values pass exactly as [Verification](../verification.md)'s
@@ -170,9 +170,10 @@ fails like any other. The admitted values of an `external` codelist live in the
 dictionary, and this language does not read the dictionary.
 
 A value-level binding ([SUB-12](submission.md#sub-12)) replaces the column's
-binding on the rows whose completed `<DOMAIN>TESTCD` is its test code: those
-rows are checked against the value-level list alone, or against nothing when
-it is an `external` codelist, and every other row against the column's list.
+binding on the rows its entry's where clause selects: those rows are checked
+against the entry's list alone, or against nothing when it is an `external`
+codelist, and every row no entry declaring a codelist selects against the
+column's list.
 
 A non-missing value outside a bound list fails where
 [Verification](../verification.md) fails a column verification, reporting the
