@@ -2815,15 +2815,21 @@ S1,002,2024-06
                 format!("columns:\n  - {{name: USUBJID, type: str, derivation: SUBJ.USUBJID}}\n  - {{name: WINDOW, type: str, derivation: {derivation}}}\n")
             };
             // The base driver's rows name no REF record: read directly, through
-            // another intermediate's value, or from an aggregate's derive step.
+            // another intermediate's value, from an aggregate's derive step, or
+            // through an aggregate's range value.
             let direct = format!("{base}{WINDOW}{}", column("W.NAME"));
             let chained = WINDOW.replace("id: W\n", "id: W2\n")
                 + &WINDOW.replace("value: REF.REFDAY", "value: W2.LO");
             let chained = format!("{base}{chained}{}", column("W.NAME"));
-            let derive = "{aggregate: {key: [USUBJID], derive: [{name: DAY, type: int, derivation: EVT.EVDAY}, {name: LOW, type: int, derivation: W.LO}], expr: 'MAX(LOW)'}}";
-            let derived = format!("{base}{WINDOW}{}", column(derive)).replace(
-                "type: str, derivation: {aggregate",
-                "type: int, derivation: {aggregate",
+            let aggregated = |derivation: &str| {
+                format!("{base}{WINDOW}{}", column(derivation)).replace(
+                    "type: str, derivation: {aggregate",
+                    "type: int, derivation: {aggregate",
+                )
+            };
+            let derived = aggregated("{aggregate: {key: [USUBJID], derive: [{name: DAY, type: int, derivation: EVT.EVDAY}, {name: LOW, type: int, derivation: W.LO}], expr: 'MAX(LOW)'}}");
+            let ranged = aggregated(
+                "{aggregate: {between: {value: W.LO, lower: EVDAY}, expr: 'COUNT(EVT.EVDAY)'}}",
             );
             let refused = |intermediate: &str| {
                 Err(vec![yamaa_adapters::json!({
@@ -2835,6 +2841,7 @@ S1,002,2024-06
             assert_eq!(run(&direct), refused("W"));
             assert_eq!(run(&chained), refused("W2"));
             assert_eq!(run(&derived), refused("W"));
+            assert_eq!(run(&ranged), refused("W"));
             // A donor record of REF supplies the value under REQ-1263.
             let reader = "  - id: R\n    dataset: REF\n    key: [USUBJID]\n    derivations: {WINNAME: W.NAME}\n";
             assert_eq!(

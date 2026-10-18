@@ -262,8 +262,13 @@ pub(crate) fn visit(expression: &Expression, visitor: &mut impl FnMut(usize)) {
                 visit(&branch.assignment.expression, visitor);
             }
         }
-        // A derive binding reads a kept selection for the current row.
+        // A range value or a derive binding reads a selection for the current row.
         Expression::Aggregate(aggregate) => {
+            if let Some(CurrentRead::Intermediate { index, .. }) =
+                aggregate.range().map(|range| range.current().read)
+            {
+                visitor(index);
+            }
             for binding in aggregate.derivations() {
                 visit(&binding.assignment.expression, visitor);
             }
