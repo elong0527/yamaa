@@ -37,7 +37,11 @@ records; alone it leaves that deletion unmarked and is refused with cause
 `deleted_records`. With the flag, the count and byte 3764 set to 0x40, the
 second record is deleted and skipped. In `rle.sas7bdat`, byte 66840 set to 0x05
 marks the first compressed row deleted and byte 130620 set to 1 counts it; the
-other nine records equal the pandas truth.
+other nine records equal the pandas truth. No committed SAS dataset holds a
+record deleted in place: none has a page flagged `0x0080`, a pointer with code
+`0x05`, `0x09` or `0x0d`, or a nonzero deleted count. The bitmap layout is
+therefore checked against these edits and the test builders, not against a file
+that SAS wrote.
 
 Expected host CSV bytes and typed tables are literal authored truth. No golden
 file is written by the candidate parser. New dependency licenses travel with
