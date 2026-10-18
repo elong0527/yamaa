@@ -165,12 +165,12 @@ fn a_lookup_matching_on_a_column_phase_column_reports_its_phase_boundary() {
              ID: SRC.ID\n      VAL: SRC.VAL\n{row}"
         )
     };
-    let refused = |path: &str, intermediate: &str| {
+    let refused = |paths: &[&str], intermediate: &str| {
         vec![yamaa_adapters::json!({
             "phase": "validation",
             "condition": "phase_boundary",
             "requirement": "LOOKUP-2",
-            "spec_paths": [path],
+            "spec_paths": paths,
             "context": {
                 "identifier": "SEQ",
                 "intermediate": intermediate,
@@ -181,43 +181,61 @@ fn a_lookup_matching_on_a_column_phase_column_reports_its_phase_boundary() {
         })]
     };
     let window = "ONE,LO,HI,NAME\n1,1,1,FIRST\n1,2,9,LATER\n";
-    for (row, filter, path, intermediate) in [
+    for (row, filter, paths, intermediate) in [
         (
             "      VALUE: K.NAME\n",
             "",
-            "rows[0].derivations.VALUE.source",
+            vec!["rows[0].derivations.VALUE.source"],
             "K",
         ),
         (
             "      VALUE: W.NAME\n",
             "",
-            "rows[0].derivations.VALUE.source",
+            vec!["rows[0].derivations.VALUE.source"],
             "W",
         ),
+        // Reached through W's range value, the finding also names each
+        // value followed: W2's range value, then W's. K is unread, so the
+        // resolved specification holds W and W2 alone.
         (
             "      VALUE: W2.NAME\n",
             "",
-            "rows[0].derivations.VALUE.source",
+            vec![
+                "rows[0].derivations.VALUE.source",
+                "intermediates[1].between.value",
+                "intermediates[0].between.value",
+            ],
             "W2",
         ),
+        // One site that reads the lookup twice is reported once.
         (
             "      VALUE: {literal: x}\n",
-            "    filter: 'K.NAME IS NOT NULL'\n",
-            "rows[0].filter",
+            "    filter: 'K.NAME IS NOT NULL AND K.LO > 0'\n",
+            vec!["rows[0].filter"],
             "K",
         ),
         (
             "      VALUE: {literal: x}\n",
-            "    filter: 'W.NAME IS NOT NULL'\n",
-            "rows[0].filter",
+            "    filter: 'W.NAME IS NOT NULL AND W.HI > 0'\n",
+            vec!["rows[0].filter"],
             "W",
+        ),
+        (
+            "      VALUE: {compute: {expr: 'W2.LO + W2.HI'}}\n",
+            "",
+            vec![
+                "rows[0].derivations.VALUE.compute.expr",
+                "intermediates[1].between.value",
+                "intermediates[0].between.value",
+            ],
+            "W2",
         ),
     ] {
         let fixture = Fixture::new(&specification(row, filter, ""));
         fs::write(fixture.0.join("win.csv"), window).unwrap();
         assert_eq!(
             fixture.issues().iter().map(issue).collect::<Vec<_>>(),
-            refused(path, intermediate),
+            refused(&paths, intermediate),
             "{row}{filter}"
         );
     }
@@ -231,6 +249,45 @@ fn a_lookup_matching_on_a_column_phase_column_reports_its_phase_boundary() {
             fixture.output(),
             "ID,VAL,SEQ,VALUE\n1,3,2,LATER\n1,1,1,FIRST\n2,5,1,FIRST\n",
             "{read}"
+        );
+    }
+}
+
+#[test]
+fn a_chained_lookup_promotes_the_default_its_range_values_read() {
+    // POS is row-local, so a row template that reads a lookup matching on
+    // it derives it as a default (SPEC-6), whether the lookup reads it
+    // directly (W) or through another lookup's range value (W2).
+    let specification = |value: &str| {
+        format!(
+            "schema_version: '1.0'\ndomain: OUT\nkeys: [ID, VAL]\n\
+             input:\n  SRC: {{path: source.csv, types: {{ID: int, VAL: int}}}}\n  \
+             WIN: {{path: win.csv, types: {{ONE: int, LO: int, HI: int}}}}\n\
+             output: {{path: out.csv, columns: [ID, VAL, VALUE]}}\n\
+             intermediates:\n  - id: W\n    dataset: WIN\n    \
+             between: {{value: POS, lower: LO, upper: HI}}\n    key: {{ONE: {{literal: 1}}}}\n    \
+             no_match: null\n  - id: W2\n    dataset: WIN\n    key: {{ONE: {{literal: 1}}}}\n    \
+             between: {{value: W.LO, lower: LO, upper: HI}}\n    no_match: null\n\
+             columns:\n  - {{name: ID, type: int}}\n  - {{name: VAL, type: int}}\n\
+             \x20 - {{name: POS, type: int, derivation: SRC.VAL}}\n\
+             \x20 - {{name: VALUE, type: str}}\n\
+             rows:\n  - id: record\n    dataset: SRC\n    derivations:\n      \
+             ID: SRC.ID\n      VAL: SRC.VAL\n      VALUE: {value}\n"
+        )
+    };
+    // POS 3 and 5 fall in LATER (2 to 9), whose LO 2 falls in LATER again;
+    // POS 1 falls in FIRST (1 to 1), whose LO 1 falls in FIRST again.
+    for value in ["W.NAME", "W2.NAME"] {
+        let fixture = Fixture::new(&specification(value));
+        fs::write(
+            fixture.0.join("win.csv"),
+            "ONE,LO,HI,NAME\n1,1,1,FIRST\n1,2,9,LATER\n",
+        )
+        .unwrap();
+        assert_eq!(
+            fixture.output(),
+            "ID,VAL,VALUE\n1,3,LATER\n1,1,FIRST\n2,5,LATER\n",
+            "{value}"
         );
     }
 }
