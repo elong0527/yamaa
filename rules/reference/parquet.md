@@ -117,18 +117,17 @@ closed mapping of [PARQUET-7](#parquet-7).
 
 ### PARQUET-7. The embedded Parquet type supplies the field type through a closed mapping that inverts the write mapping and admits signed integers
 
-The embedded Parquet type supplies the
-[Inputs](../inputs.md) field type through the closed
-mapping below: the inverse of [PARQUET-1](#parquet-1), and an `INT32` or
-`INT64` field annotated as a signed integer whose width fits its physical
-type, which reads as `int`. The mapping is exact: a different physical type,
-logical type, integer sign, timestamp unit or timezone is not converted or
-inferred, and fails. Nullable and non-nullable fields are both admitted;
-nullability states whether this particular file can store a missing value and
-does not change the field's column type.
+The embedded Parquet type supplies the [Inputs](../inputs.md) field type
+through the closed mapping below: the inverse of [PARQUET-1](#parquet-1), and
+an `INT32` or `INT64` field, unannotated or annotated as a signed integer whose
+width fits its physical type, which reads as `int`. The mapping is exact: a
+different physical type, logical type, integer sign, timestamp unit or timezone
+is not converted or inferred, and fails. Nullable and non-nullable fields are
+both admitted; nullability states whether this particular file can store a
+missing value and does not change the field's column type.
 
 Fails: `source_field_type_unsupported`.
-Evidence: `adam-adsl-randomization`, `rust/crates/yamaa-adapters/src/parquet_source/profile.rs::only_the_closed_pairs_pass_including_legacy_string_date_and_large_offsets`, `rust/crates/yamaa-adapters/src/parquet_source/profile.rs::view_and_dictionary_layouts_read_as_their_value_type`, `rust/crates/yamaa-adapters/src/parquet_source/profile.rs::signed_integer_annotations_read_as_int_and_declare_their_width`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::signed_integer_annotations_that_fit_their_physical_type_read_as_int`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::unsupported_stored_types_retain_independent_arrow_type_spelling`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::dictionaries_of_the_other_admitted_types_read_as_their_value_type`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::duckdb_signed_integer_fields_read_as_int`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::logical_signed_integer_annotations_read_as_int`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::unsigned_annotations_and_an_unannotated_int32_stay_refused`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::a_stored_value_outside_its_declared_width_is_invalid`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::an_integer_annotation_its_physical_type_cannot_carry_is_invalid`.
+Evidence: `adam-adsl-randomization`, `rust/crates/yamaa-adapters/src/parquet_source/profile.rs::only_the_closed_pairs_pass_including_legacy_string_date_and_large_offsets`, `rust/crates/yamaa-adapters/src/parquet_source/profile.rs::view_and_dictionary_layouts_read_as_their_value_type`, `rust/crates/yamaa-adapters/src/parquet_source/profile.rs::signed_integer_annotations_read_as_int_and_declare_their_width`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::signed_integer_fields_that_fit_their_physical_type_read_as_int`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::unsupported_stored_types_retain_independent_arrow_type_spelling`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::the_pyarrow_int32_fixture_reads_as_int`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::dictionaries_of_the_other_admitted_types_read_as_their_value_type`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::duckdb_signed_integer_fields_read_as_int`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::unannotated_int32_fields_read_as_int`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::logical_signed_integer_annotations_read_as_int`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::unsigned_annotations_stay_refused`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::a_stored_value_outside_its_declared_width_is_invalid`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::an_integer_annotation_its_physical_type_cannot_carry_is_invalid`, `python/tests/installed/installed_original_specifications.py::test_parquet_signed_integer_fields_read_as_int`.
 Replaces: REQ-1032, REQ-1033, REQ-1040.
 
 | Parquet type | Column type |
@@ -136,6 +135,7 @@ Replaces: REQ-1032, REQ-1033, REQ-1040.
 | `BYTE_ARRAY` annotated `String` | `str` |
 | `INT64` with no logical type | `int` |
 | `INT64` annotated `Int(64, signed)` | `int` |
+| `INT32` with no logical type | `int` |
 | `INT32` annotated `Int(8, signed)`, `Int(16, signed)` or `Int(32, signed)` | `int` |
 | `DOUBLE` with no logical type | `float` |
 | `INT32` annotated `Date` | `date` |
@@ -143,8 +143,9 @@ Replaces: REQ-1032, REQ-1033, REQ-1040.
 
 A signed integer annotation is the logical type `Int(bitWidth, signed)` or, on
 a field without a logical type, the converted type of the same width: `INT_8`,
-`INT_16`, `INT_32` or `INT_64`. Either annotation, or both, reads as `int`, and
-an `INT32` value reads as the same 64-bit integer. An unsigned annotation,
+`INT_16`, `INT_32` or `INT_64`. Either annotation, or both, reads as `int`, as
+does an `INT32` or `INT64` field with no annotation, and an `INT32` value reads
+as the same 64-bit integer. An unsigned annotation,
 `Int(bitWidth, unsigned)` or `UINT_8` through `UINT_64`, falls outside the
 mapping. An integer annotation that its physical type cannot carry, such as
 `Int(64, signed)` on `INT32`, and a stored value outside the width its

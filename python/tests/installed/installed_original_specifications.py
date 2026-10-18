@@ -273,20 +273,26 @@ class ParquetOriginalOutput(unittest.TestCase):
                 self.assertEqual(result.output["ID"].to_list(), ids)
                 self.assertEqual(result.output["V"].to_list(), values)
 
-    def test_parquet_signed_int8_and_int16_fields_read_as_int(self):
+    def test_parquet_signed_integer_fields_read_as_int(self):
         # pyarrow and Polars store int8 and int16 columns as INT32 annotated
-        # Int(8 | 16, signed) and INT_8 | INT_16. A signed annotation whose
-        # width fits the physical type reads as int (REQ-1032, #2940).
+        # Int(8 | 16, signed) and INT_8 | INT_16, and int32 columns as INT32
+        # without an annotation. A signed integer field whose width fits its
+        # physical type reads as int (REQ-1032, #2940).
         import polars as pl
         import pyarrow.parquet as pq
 
-        small = [-128, None, 127, 0]
-        medium = [-32768, None, 32767, 0]
+        columns = {
+            "I8": ([-128, None, 127, 0], pa.int8(), "INT_8"),
+            "I16": ([-32768, None, 32767, 0], pa.int16(), "INT_16"),
+            "I32": ([-2147483648, None, 2147483647, 0], pa.int32(), "NONE"),
+        }
         table = pa.table(
             {
                 "ID": pa.array([1, 2, 3, 4], pa.int64()),
-                "I8": pa.array(small, pa.int8()),
-                "I16": pa.array(medium, pa.int16()),
+                **{
+                    name: pa.array(values, kind)
+                    for name, (values, kind, _) in columns.items()
+                },
             }
         )
         writers = {
@@ -298,10 +304,11 @@ class ParquetOriginalOutput(unittest.TestCase):
                 path = self.root / (writer + ".parquet")
                 write(path)
                 schema = pq.ParquetFile(path).schema
-                for name, bits in (("I8", 8), ("I16", 16)):
+                for name, (_, _, converted) in columns.items():
                     column = schema.column(schema.names.index(name))
                     self.assertEqual(column.physical_type, "INT32")
-                    self.assertEqual(column.converted_type, f"INT_{bits}")
+                    self.assertEqual(column.converted_type, converted)
+                names = ["ID", *columns]
                 source = {
                     "schema_version": "1.0",
                     "domain": "TEST",
@@ -309,14 +316,28 @@ class ParquetOriginalOutput(unittest.TestCase):
                     "keys": ["ID"],
                     "columns": [
                         {"name": name, "type": "int", "derivation": "SRC." + name}
-                        for name in ("ID", "I8", "I16")
+                        for name in names
                     ],
-                    "output": {"path": "output.csv", "columns": ["ID", "I8", "I16"]},
+                    "output": {"path": "output.csv", "columns": names},
                 }
                 result = self.build(source, {})
                 self.assertTrue(result.issues.is_empty(), result.issues)
-                self.assertEqual(result.output["I8"].to_list(), small)
-                self.assertEqual(result.output["I16"].to_list(), medium)
+                for name, (values, _, _) in columns.items():
+                    self.assertEqual(result.output[name].to_list(), values, name)
+        # The staged pyarrow int32 fixture, which 0.4.0 refused, holds 1.
+        source = {
+            "schema_version": "1.0",
+            "domain": "TEST",
+            "input": {"SRC": "input.parquet"},
+            "keys": ["FIELD"],
+            "columns": [{"name": "FIELD", "type": "int", "derivation": "SRC.FIELD"}],
+            "output": {"path": "output.csv", "columns": ["FIELD"]},
+        }
+        result = self.build(
+            source, {"input.parquet": ROOT / "pq" / "unsupported-int32.parquet"}
+        )
+        self.assertTrue(result.issues.is_empty(), result.issues)
+        self.assertEqual(result.output["FIELD"].to_list(), [1])
 
     def test_parquet_semantic_failures_collect_in_source_order(self):
         aliases = tuple(TRUTH["input_aliases"])
@@ -498,7 +519,6 @@ class ParquetOriginalOutput(unittest.TestCase):
                     {"field": "FIELD", "stored_type": stored},
                 )
                 for name, stored in (
-                    ("int32", "int32"),
                     ("uint64", "uint64"),
                     ("float32", "float"),
                     ("binary", "binary"),

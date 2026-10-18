@@ -380,7 +380,7 @@ cases <- list(
   c("mixed-empty","source_field_name_empty","REQ-1039",'"dataset":"SRC","field":1,"path":"input.parquet"'),
   c("mixed-duplicate","source_field_name_duplicate","REQ-1039",'"dataset":"SRC","field":"I","path":"input.parquet"')
 )
-unsupported_types <- c(int32="int32",uint64="uint64",float32="float",binary="binary",
+unsupported_types <- c(uint64="uint64",float32="float",binary="binary",
   milliseconds="timestamp[ms]",timezone="timestamp[us, tz=UTC]",list="list<element: int64>",
   "fixed-list"="fixed_size_list<element: int64>[2]",struct="struct<item: int64>",decimal="decimal128(10, 2)")
 for(name in names(unsupported_types)) cases[[length(cases)+1L]] <- c(
@@ -396,6 +396,14 @@ for (test in cases) {
     failed_save(result),
     !file.exists(file.path(directory,"output.csv")))
 }
+  # 0.4.0 refused this pyarrow int32 field. An unannotated INT32 is a signed
+  # 32-bit integer, so it reads as int (REQ-1032, #2940); R exchanges int as
+  # double.
+  stopifnot(file.copy(file.path(root,"pq","unsupported-int32.parquet"),file.path(directory,"input.parquet"),overwrite=TRUE))
+  int32 <- file.path(directory,"int32.yaml")
+  writeBin(charToRaw('{"schema_version":"1.0","domain":"TEST","input":{"SRC":"input.parquet"},"keys":["FIELD"],"columns":[{"name":"FIELD","type":"int","derivation":"SRC.FIELD"}],"output":{"path":"output.csv","columns":["FIELD"]}}'),int32)
+  result <- run_spec(int32)
+  stopifnot(nrow(result$issues)==0L,identical(result$output$FIELD,1))
   cat("public R Parquet closed types and exact complete refusal reports passed without Python\n")
 })
 
