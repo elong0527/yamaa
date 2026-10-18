@@ -1,9 +1,10 @@
 name: Optional format features
 
+# Scheduled on main with CI rather than after every merge.
 on:
   pull_request:
-  push:
-    branches: [main]
+  schedule:
+    - cron: '37 1-23/2 * * *'
   workflow_dispatch:
 
 permissions:
@@ -13,18 +14,32 @@ concurrency:
   group: format-features-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
+  # One job runs every selection in turn: they share the Rust build, and each
+  # needs only cargo and the standard-library check script.
   formats:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
-    strategy:
-      fail-fast: false
-      matrix:
-        selection: [none, yaml, parquet, readstat, all]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
+        with:
+          package: 'false'
       - name: Check fixtures, dependency edges and linked native symbols
-        run: uv run --project python --no-sync python -m tools.ci.format_features ${{ matrix.selection }}
+        run: |
+          failed=()
+          for selection in none yaml parquet readstat all; do
+            echo "::group::$selection"
+            python -m tools.ci.format_features "$selection" || failed+=("$selection")
+            echo "::endgroup::"
+          done
+          if [ "${#failed[@]}" -gt 0 ]; then
+            echo "::error::Failed format selections: ${failed[*]}"
+            exit 1
+          fi

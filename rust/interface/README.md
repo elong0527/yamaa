@@ -264,7 +264,7 @@ valid if a later call on the build is cancelled.
 
 Use the existing [host handoff](../README.md#arrow-host-handoff) implemented in
 [the shared bridge](../crates/yamaa-adapters/src/arrow_bridge.rs), with PyArrow
->=23.0.1, Polars >=1.43.2 and R nanoarrow >=0.8.0. The generated declarations
+>=23.0.1, Polars >=1.35.2 and R nanoarrow >=0.8.0. The generated declarations
 must preserve these shapes:
 
 | Transfer | Ownership transition |
