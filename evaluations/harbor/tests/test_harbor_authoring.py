@@ -120,6 +120,21 @@ def test_the_sources_hold_no_checks_prompts_or_solutions(tmp_path):
     assert _tree(out / "input") == _tree(task / "environment" / "input")
 
 
+def test_writing_the_sources_replaces_only_what_it_writes(tmp_path):
+    # `--out .` must not empty the directory: an earlier sources/ and input/
+    # are replaced, and a file next to them survives.
+    out = tmp_path / "work"
+    for stale in ("sources/stale.md", "input/stale.csv"):
+        (out / stale).parent.mkdir(parents=True, exist_ok=True)
+        (out / stale).write_text("an earlier run\n")
+    (out / "notes.md").write_text("the user's own file\n")
+    packet.write(DEATH, out)
+    assert (out / "notes.md").read_text() == "the user's own file\n"
+    fresh = packet.write(DEATH, tmp_path / "fresh")
+    for part in ("sources", "input"):
+        assert _tree(out / part) == _tree(fresh / part)
+
+
 def test_a_rule_that_names_records_may_say_them():
     unsaid = packet.unsaid(BENCHMARKS / "adam-adae-severity-override")
     # The specification corrects these two events by name; the third
