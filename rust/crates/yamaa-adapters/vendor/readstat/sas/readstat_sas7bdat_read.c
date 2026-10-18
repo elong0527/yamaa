@@ -65,9 +65,10 @@ typedef struct sas7bdat_ctx_s {
     uint64_t        page_size;
     char           *page;
     char           *row;
+    size_t          row_buffer_len;
 
     char           *moved_page;
-    int64_t         moved_page_index;
+    uint64_t        moved_bytes_left;
 
     uint64_t        page_header_size;
     uint64_t        subheader_signature_size;
@@ -265,6 +266,14 @@ static readstat_error_t sas7bdat_parse_row_size_subheader(const char *subheader,
         page_row_count = sas_read4(&subheader[60], ctx->bswap);
     }
 
+    /* Submitted columns fit the row length in force when they were submitted,
+     * and the compressed row buffer holds that many bytes. A later row-size
+     * subheader may repeat the row length but not change it. */
+    if (ctx->did_submit_columns && row_length != ctx->row_length) {
+        retval = READSTAT_ERROR_PARSE;
+        goto cleanup;
+    }
+
     sas_text_ref_t file_label_ref = sas7bdat_parse_text_ref(&subheader[len-130], ctx);
     if (file_label_ref.length) {
         if ((retval = sas7bdat_copy_text_ref(ctx->file_label, sizeof(ctx->file_label),
@@ -288,18 +297,23 @@ static readstat_error_t sas7bdat_parse_row_size_subheader(const char *subheader,
 
     if (!row_length || row_length > UINT32_MAX || page_row_count > UINT32_MAX)
         return READSTAT_ERROR_ROW_WIDTH_MISMATCH;
-    if (!yamaa_readstat_admit(total_row_count, ctx->column_count))
-        return READSTAT_ERROR_MALLOC;
     /* SAS keeps records deleted in place, counted here among the stored
-     * records, until the dataset is rewritten. The reader skips them. */
+     * records, until the dataset is rewritten. The reader skips them, so only
+     * the live records become table rows and are admitted as such. */
     if (deleted_row_count > total_row_count)
         return yamaa_readstat_deleted_records();
+    uint64_t live_row_count = total_row_count - deleted_row_count;
+    if (!yamaa_readstat_admit(live_row_count, ctx->column_count))
+        return READSTAT_ERROR_MALLOC;
+    /* The reader counts stored and deleted records in 32 bits, and the
+     * deleted count is at most the stored one. */
+    if (total_row_count > UINT32_MAX)
+        return READSTAT_ERROR_ROW_WIDTH_MISMATCH;
     ctx->total_row_count = total_row_count;
     ctx->deleted_row_count = deleted_row_count;
     ctx->row_length = row_length;
 
     ctx->page_row_count = page_row_count;
-    uint64_t live_row_count = total_row_count - deleted_row_count;
     uint64_t total_row_count_after_skipping = live_row_count;
     if (live_row_count > ctx->row_offset) {
         total_row_count_after_skipping -= ctx->row_offset;
@@ -317,10 +331,14 @@ cleanup:
 static readstat_error_t sas7bdat_parse_column_name_subheader(const char *subheader, size_t len, sas7bdat_ctx_t *ctx) {
     readstat_error_t retval = READSTAT_OK;
     size_t signature_len = ctx->subheader_signature_size;
+    /* The signature, remainder, reserved bytes and trailing padding take 28
+     * bytes of a 64-bit subheader and 20 of any other, and the entries fill
+     * the rest. The length is checked before the entry count is derived from
+     * it, so that count cannot wrap. */
+    if (len < (ctx->u64 ? 28 : 20)) return READSTAT_ERROR_PARSE;
     int cmax = ctx->u64 ? (len-28)/8 : (len-20)/8;
     int i;
     const char *cnp = &subheader[signature_len+8];
-    if (len < signature_len + 2) return READSTAT_ERROR_PARSE;
     uint16_t remainder = sas_read2(&subheader[signature_len], ctx->bswap);
 
     if (remainder != sas_subheader_remainder(len, signature_len)) {
@@ -346,10 +364,12 @@ cleanup:
 static readstat_error_t sas7bdat_parse_column_attributes_subheader(const char *subheader, size_t len, sas7bdat_ctx_t *ctx) {
     readstat_error_t retval = READSTAT_OK;
     size_t signature_len = ctx->subheader_signature_size;
+    /* The fixed part is 28 bytes of a 64-bit subheader and 20 of any other, as
+     * for column names, and is checked before the entry count is derived. */
+    if (len < (ctx->u64 ? 28 : 20)) return READSTAT_ERROR_PARSE;
     int cmax = ctx->u64 ? (len-28)/16 : (len-20)/12;
     int i;
     const char *cap = &subheader[signature_len+8];
-    if (len < signature_len + 2) return READSTAT_ERROR_PARSE;
     uint16_t remainder = sas_read2(&subheader[signature_len], ctx->bswap);
 
     if (remainder != sas_subheader_remainder(len, signature_len)) {
@@ -570,11 +590,18 @@ cleanup:
     return retval;
 }
 
+/* Each decompressor writes up to the row length into the row buffer, which
+ * records the length it was allocated for. Without a buffer, or one shorter
+ * than the row length, nothing is written. */
+static int sas7bdat_row_buffer_holds_row(const sas7bdat_ctx_t *ctx) {
+    return ctx->row != NULL && ctx->row_length <= ctx->row_buffer_len;
+}
+
 static readstat_error_t sas7bdat_parse_subheader_rdc(const char *subheader, size_t len, sas7bdat_ctx_t *ctx) {
     readstat_error_t retval = READSTAT_OK;
     const unsigned char *input = (const unsigned char *)subheader;
     char *buffer = ctx->row;
-    if (buffer == NULL) return READSTAT_ERROR_PARSE;
+    if (!sas7bdat_row_buffer_holds_row(ctx)) return READSTAT_ERROR_PARSE;
     char *output = buffer;
     while (input + 2 <= (const unsigned char *)subheader + len) {
         int i;
@@ -665,7 +692,7 @@ static readstat_error_t sas7bdat_parse_subheader_rle(const char *subheader, size
     if (ctx->row_limit == ctx->parsed_row_count)
         return READSTAT_OK;
     /* Without an output buffer the decompressor only counts bytes. */
-    if (ctx->row == NULL)
+    if (!sas7bdat_row_buffer_holds_row(ctx))
         return READSTAT_ERROR_PARSE;
 
     readstat_error_t retval = READSTAT_OK;
@@ -692,8 +719,10 @@ cleanup:
 static readstat_error_t sas7bdat_parse_subheader_compressed(const char *subheader, size_t len, sas7bdat_ctx_t *ctx) {
     /* Columns submitted for uncompressed rows allocated no row buffer. They
      * already fit the admitted row length, so allocate it on first use. */
-    if (ctx->row == NULL && ctx->row_length)
+    if (ctx->row == NULL && ctx->row_length) {
         READSTAT_RESIZE_OR_RETURN(ctx->row, ctx->row_length);
+        ctx->row_buffer_len = ctx->row_length;
+    }
     if (ctx->rdc_compression)
         return sas7bdat_parse_subheader_rdc(subheader, len, ctx);
 
@@ -887,6 +916,7 @@ static readstat_error_t sas7bdat_submit_columns(sas7bdat_ctx_t *ctx, int compres
     if (retval != READSTAT_OK) goto cleanup;
     if (compressed) {
         READSTAT_RESIZE_OR_CLEANUP(ctx->row, ctx->row_length);
+        ctx->row_buffer_len = ctx->row_length;
     }
 cleanup:
     return retval;
@@ -1106,6 +1136,28 @@ static readstat_error_t sas7bdat_parse_deleted_row_bitmap(const char *page, cons
     return READSTAT_OK;
 }
 
+/* Copies `len` bytes at `offset` in page `page_index` to the same offset of
+ * the moved-record page buffer. The caller keeps the range inside the page. */
+static readstat_error_t sas7bdat_read_moved_page_range(uint64_t page_index, uint64_t offset,
+        uint64_t len, sas7bdat_ctx_t *ctx) {
+    readstat_io_t *io = ctx->io;
+    if (io->seek(ctx->header_size + page_index * ctx->page_size + offset, READSTAT_SEEK_SET, io->io_ctx) == -1)
+        return READSTAT_ERROR_SEEK;
+    ssize_t bytes_read = io->read(ctx->moved_page + offset, len, io->io_ctx);
+    if (bytes_read < 0 || (uint64_t)bytes_read < len)
+        return READSTAT_ERROR_READ;
+    return READSTAT_OK;
+}
+
+/* A reference reads the page header, the subheader pointer and the stored
+ * bytes of the one record it reaches, never the whole page, so its work does
+ * not grow with the page size. A valid file reaches each moved record through
+ * one reference, and moved records do not overlap, so the stored bytes read
+ * through all references stay within the bytes of the file's pages. The reader
+ * admits no more: a file whose references would read more, such as one that
+ * reaches the same record again and again, is malformed. Each reference has a
+ * pointer of its own in the file, so the headers and pointers read are bounded
+ * by the file size too. */
 static readstat_error_t sas7bdat_parse_moved_row(uint64_t page_index, uint64_t subheader_index, sas7bdat_ctx_t *ctx) {
     readstat_error_t retval = READSTAT_OK;
     readstat_io_t *io = ctx->io;
@@ -1123,33 +1175,16 @@ static readstat_error_t sas7bdat_parse_moved_row(uint64_t page_index, uint64_t s
             retval = READSTAT_ERROR_MALLOC;
             goto cleanup;
         }
-        ctx->moved_page_index = -1;
     }
     char *page = ctx->moved_page;
 
-    if (ctx->moved_page_index != (int64_t)page_index) {
-        saved_pos = io->seek(0, READSTAT_SEEK_CUR, io->io_ctx);
-        if (saved_pos == -1) {
-            retval = READSTAT_ERROR_SEEK;
-            goto cleanup;
-        }
-        if (io->seek(ctx->header_size + page_index * page_size, READSTAT_SEEK_SET, io->io_ctx) == -1) {
-            retval = READSTAT_ERROR_SEEK;
-            if (ctx->handle.error) {
-                snprintf(ctx->error_buf, sizeof(ctx->error_buf), "ReadStat: Failed to seek to position %" PRId64
-                        " (= %" PRId64 " + %" PRId64 "*%" PRId64 ")",
-                        ctx->header_size + page_index * page_size, ctx->header_size, page_index, page_size);
-                ctx->handle.error(ctx->error_buf, ctx->user_ctx);
-            }
-            goto cleanup;
-        }
-        ssize_t bytes_read = io->read(page, page_size, io->io_ctx);
-        if (bytes_read < 0 || (uint64_t)bytes_read < page_size) {
-            retval = READSTAT_ERROR_READ;
-            goto cleanup;
-        }
-        ctx->moved_page_index = (int64_t)page_index;
+    saved_pos = io->seek(0, READSTAT_SEEK_CUR, io->io_ctx);
+    if (saved_pos == -1) {
+        retval = READSTAT_ERROR_SEEK;
+        goto cleanup;
     }
+    if ((retval = sas7bdat_read_moved_page_range(page_index, 0, ctx->page_header_size, ctx)) != READSTAT_OK)
+        goto cleanup;
 
     uint16_t page_type = sas_read2(&page[ctx->page_header_size - 8], ctx->bswap);
     if ((page_type & SAS_PAGE_TYPE_MASK) == SAS_PAGE_TYPE_DATA || page_type & SAS_PAGE_TYPE_COMP) {
@@ -1166,6 +1201,8 @@ static readstat_error_t sas7bdat_parse_moved_row(uint64_t page_index, uint64_t s
         retval = READSTAT_ERROR_READ;
         goto cleanup;
     }
+    if ((retval = sas7bdat_read_moved_page_range(page_index, shp_offset, ctx->subheader_pointer_size, ctx)) != READSTAT_OK)
+        goto cleanup;
 
     const char *shp = &page[shp_offset];
     subheader_pointer_t shp_info = { 0 };
@@ -1175,6 +1212,13 @@ static readstat_error_t sas7bdat_parse_moved_row(uint64_t page_index, uint64_t s
     if ((retval = sas7bdat_validate_subheader_pointer(&shp_info, page_size, subheader_count, ctx)) != READSTAT_OK) {
         goto cleanup;
     }
+    if (shp_info.len > ctx->moved_bytes_left) {
+        retval = READSTAT_ERROR_PARSE;
+        goto cleanup;
+    }
+    ctx->moved_bytes_left -= shp_info.len;
+    if ((retval = sas7bdat_read_moved_page_range(page_index, shp_info.offset, shp_info.len, ctx)) != READSTAT_OK)
+        goto cleanup;
     if ((retval = sas7bdat_submit_columns_if_needed(ctx, 1)) != READSTAT_OK) {
         goto cleanup;
     }
@@ -1246,9 +1290,14 @@ static readstat_error_t sas7bdat_parse_page_pass2(const char *page, size_t page_
             if ((retval = sas7bdat_parse_subheader_pointer(shp, page + page_size - shp, &shp_info, ctx)) != READSTAT_OK) {
                 goto cleanup;
             }
-            if (shp_info.len > 0 && shp_info.compression == SAS_COMPRESSION_REFERENCE) {
+            if (shp_info.compression == SAS_COMPRESSION_REFERENCE) {
                 /* The record moved to another page; read it in this position.
-                 * The pointer holds one-based page and subheader indices. */
+                 * The pointer holds one-based page and subheader indices, so
+                 * neither may be zero. */
+                if (shp_info.offset == 0 || shp_info.len == 0) {
+                    retval = READSTAT_ERROR_PARSE;
+                    goto cleanup;
+                }
                 uint64_t page_index = shp_info.offset - 1;
                 uint64_t subheader_index = shp_info.len - 1;
                 if ((retval = sas7bdat_parse_moved_row(page_index, subheader_index, ctx)) != READSTAT_OK) {
@@ -1517,7 +1566,6 @@ readstat_error_t readstat_parse_sas7bdat(readstat_parser_t *parser, const char *
     ctx->user_ctx = user_ctx;
     ctx->io = parser->io;
     ctx->row_limit = parser->row_limit;
-    ctx->moved_page_index = -1;
     if (parser->row_offset > 0)
         ctx->row_offset = parser->row_offset;
 
@@ -1563,6 +1611,9 @@ readstat_error_t readstat_parse_sas7bdat(readstat_parser_t *parser, const char *
     ctx->page_size = hinfo->page_size;
     ctx->page_header_size = hinfo->page_header_size;
     ctx->subheader_pointer_size = hinfo->subheader_pointer_size;
+    /* The pages fill the file after its header, as checked above. Moved
+     * records cannot add up to more bytes than they do. */
+    ctx->moved_bytes_left = hinfo->page_count * hinfo->page_size;
     ctx->subheader_signature_size = ctx->u64 ? 8 : 4;
     ctx->ctime = hinfo->creation_time;
     ctx->mtime = hinfo->modification_time;

@@ -126,19 +126,26 @@ static readstat_error_t xport_read_header_record(xport_ctx_t *ctx, xport_header_
     }
 
     /* V8 files store the observation count as a 15-character field
-     * immediately after the 48-character header prefix. Older writers
-     * may leave it blank or zero, in which case it stays unknown.
-     * strtoll keeps all fifteen digits where long has 32 bits. */
+     * immediately after the 48-character header prefix: decimal digits, which
+     * blanks may precede or follow. A zero count stays unknown. A sign or any
+     * other character is malformed, not an unknown count. Fifteen digits stay
+     * below 2^63, so the count cannot wrap. */
     if (strcmp(xrecord->name, "OBSV8") == 0) {
-        char obs_count[16];
-        memcpy(obs_count, &line[48], 15);
-        obs_count[15] = '\0';
-
-        char *end = NULL;
-        long long count = strtoll(obs_count, &end, 10);
-        if (end != obs_count && count > 0) {
-            ctx->obs_count = (uint64_t)count;
+        const char *field = &line[48];
+        int at = 0, digits = 0;
+        uint64_t count = 0;
+        while (at < 15 && field[at] == ' ')
+            at++;
+        while (at < 15 && field[at] >= '0' && field[at] <= '9') {
+            count = count * 10 + (uint64_t)(field[at] - '0');
+            digits++;
+            at++;
         }
+        while (at < 15 && field[at] == ' ')
+            at++;
+        if (digits == 0 || at != 15)
+            return READSTAT_ERROR_PARSE;
+        ctx->obs_count = count;
     }
 
     return READSTAT_OK;
@@ -735,21 +742,6 @@ static readstat_error_t xport_read_data(xport_ctx_t *ctx) {
 
         if (ctx->row_limit > 0 && ctx->parsed_row_count == ctx->row_limit)
             break;
-    }
-
-    /* Padding never fills a whole line, so blank rows at least a line
-     * wide are data rather than end-of-file padding */
-    if (ctx->row_length >= LINE_LEN) {
-        while (num_blank_rows) {
-            if (ctx->row_limit > 0 && ctx->parsed_row_count == ctx->row_limit)
-                break;
-
-            retval = xport_process_row(ctx, blank_row, ctx->row_length);
-            if (retval != READSTAT_OK)
-                goto cleanup;
-
-            num_blank_rows--;
-        }
     }
 
     /* A declared count must be met, and only blank padding may follow the

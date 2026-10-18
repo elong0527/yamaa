@@ -125,11 +125,119 @@ mod table {
                 ]
             );
         }
+        /// Where the record after a repeated row-size subheader is stored.
+        #[derive(Clone, Copy)]
+        enum Follow {
+            Nothing,
+            InPlace,
+            Moved,
+        }
+        /// A compressed dataset of `X` and `T` whose first record is stored for
+        /// a row length of 16. A second row-size subheader then gives `later`
+        /// as the row length, and the second record, stored for that length,
+        /// follows it compressed with RDC or RLE, in place or as a moved record.
+        fn restated_row_length(
+            layout: crate::support::sas7bdat::Layout,
+            rdc: bool,
+            later: u64,
+            follow: Follow,
+        ) -> Vec<u8> {
+            use crate::support::sas7bdat::{
+                rdc as rdc_bytes, rle, Cell, Dataset, Kind, Page, Pointer, META,
+            };
+            let mut dataset = Dataset::new(layout, &[("X", Kind::Num, 8), ("T", Kind::Chr, 8)]);
+            dataset.compression = Some(if rdc { *b"SASYZCR2" } else { *b"SASYZCRL" });
+            dataset.total = if matches!(follow, Follow::Nothing) {
+                1
+            } else {
+                2
+            };
+            let (_, compression, _) = dataset.text();
+            let compress = |row: &[u8]| if rdc { rdc_bytes(row) } else { rle(row) };
+            let mut pointers = dataset.metadata();
+            let first = dataset.row(&[Cell::Num(1.0), Cell::Text(b"one")]);
+            pointers.push(Pointer::coded(compress(&first), 4));
+            let restated = layout.row_size(later, dataset.total, 0, 0, compression);
+            pointers.push(Pointer::metadata(restated));
+            let mut second = dataset.row(&[Cell::Num(2.0), Cell::Text(b"two")]);
+            second.resize(later as usize, 0);
+            let mut moved = None;
+            match follow {
+                Follow::Nothing => {}
+                Follow::InPlace => pointers.push(Pointer::coded(compress(&second), 4)),
+                Follow::Moved => {
+                    pointers.push(Pointer::reference(1, 0));
+                    let stored = Pointer::coded(compress(&second), 0x06);
+                    moved = Some(Page::new(META, vec![stored], vec![]));
+                }
+            }
+            let mut pages = vec![Page::new(META, pointers, vec![])];
+            pages.extend(moved);
+            dataset.file(&pages)
+        }
+        #[test]
+        fn a_row_size_subheader_cannot_change_the_row_length_once_columns_are_submitted() {
+            // The submitted columns fit the row length in force at the first
+            // record, and the compressed row buffer holds that many bytes. A
+            // later row-size subheader may repeat the row length. One that
+            // changes it is refused even when no record follows, whether it
+            // shortens the row or lengthens it.
+            use crate::support::sas7bdat::Layout;
+            for layout in [Layout::LE32, Layout::LE64, Layout::BE32, Layout::BE64] {
+                for rdc in [false, true] {
+                    for follow in [Follow::InPlace, Follow::Moved] {
+                        let bytes = restated_row_length(layout, rdc, 16, follow);
+                        assert_eq!(
+                            cells(&read_built(&bytes).unwrap()),
+                            [
+                                [float(1.0), ValueRef::Str("one")],
+                                [float(2.0), ValueRef::Str("two")]
+                            ],
+                            "{layout:?} rdc {rdc}"
+                        );
+                    }
+                    for later in [8, 15, 17, 4096] {
+                        let bytes = restated_row_length(layout, rdc, later, Follow::Nothing);
+                        assert!(
+                            matches!(read_built(&bytes), Err(Error::Invalid("malformed"))),
+                            "{layout:?} rdc {rdc} later {later}"
+                        );
+                    }
+                }
+            }
+        }
+        #[test]
+        fn compressed_records_after_a_changed_row_length_are_refused_before_they_are_written() {
+            // A record stored for the longer row length would decompress past
+            // a buffer allocated for the first. Each way of storing a
+            // compressed record is refused: RLE and RDC, in place and moved.
+            use crate::support::sas7bdat::Layout;
+            for layout in [Layout::LE32, Layout::LE64, Layout::BE32, Layout::BE64] {
+                for rdc in [false, true] {
+                    for follow in [Follow::InPlace, Follow::Moved] {
+                        for later in [17, 32, 200] {
+                            let bytes = restated_row_length(layout, rdc, later, follow);
+                            assert!(
+                                matches!(read_built(&bytes), Err(Error::Invalid("malformed"))),
+                                "{layout:?} rdc {rdc} moved {} later {later}",
+                                matches!(follow, Follow::Moved)
+                            );
+                        }
+                    }
+                }
+            }
+        }
         #[test]
         fn release_field_without_a_terminator_still_parses() {
             // The header's 120-byte release block holds no NUL byte at all.
             // The reader copies the eight-byte release into a terminated
-            // buffer before scanning it.
+            // buffer before scanning it, so the scan ends at the eighth byte.
+            // Scanning the field in place would read on into the next field,
+            // which a sanitizer reports. Without one, the second file shows
+            // it: its release is "9.      ", whose number sits in the next
+            // field, "0401M6". The eight bytes name no minor version, so the
+            // file is malformed. A scan that passes the eighth byte skips the
+            // blanks, reads release 9.0401M6 and accepts it.
             use crate::support::sas7bdat::{Cell, Dataset, Kind, Layout, Page, MIX};
             let mut dataset = Dataset::new(Layout::LE32, &[("X", Kind::Num, 8)]);
             dataset.total = 1;
@@ -140,6 +248,38 @@ mod table {
             bytes[release + 8..release + 120].fill(b' ');
             assert!(!bytes[release..release + 120].contains(&0));
             assert_eq!(cells(&read_built(&bytes).unwrap()), [[float(7.0)]]);
+            bytes[release..release + 8].copy_from_slice(b"9.      ");
+            bytes[release + 8..release + 14].copy_from_slice(b"0401M6");
+            assert!(!bytes[release..release + 120].contains(&0));
+            assert!(matches!(
+                read_built(&bytes),
+                Err(Error::Invalid("malformed"))
+            ));
+        }
+        #[test]
+        fn a_page_count_with_its_high_bit_set_is_refused() {
+            // A 64-bit header holds its page count as an unsigned integer.
+            // ReadStat kept it in a signed field, so a count with its high bit
+            // set passed the upper bound, and the check that the pages fill
+            // the file multiplied it by the page size: a signed overflow.
+            // 0xff00000000000001 times 4096 wraps to 4096, the one page of
+            // this file, so that check passed on the wrapped value. Fuzzing
+            // found it. Only a sanitizer reports the overflow; its minimal
+            // input is a regression input of the sas7bdat fuzz target.
+            use crate::support::sas7bdat::{Cell, Dataset, Kind, Layout, Page, MIX};
+            let mut dataset = Dataset::new(Layout::LE64, &[("X", Kind::Num, 8)]);
+            dataset.total = 1;
+            dataset.mix_rows = 1;
+            let row = dataset.row(&[Cell::Num(7.0)]);
+            let mut bytes = dataset.file(&[Page::new(MIX, dataset.metadata(), vec![row])]);
+            assert_eq!(cells(&read_built(&bytes).unwrap()), [[float(7.0)]]);
+            // The page count follows the header and page sizes, at 208.
+            assert_eq!(&bytes[208..216], &1u64.to_le_bytes());
+            bytes[208..216].copy_from_slice(&0xff00_0000_0000_0001_u64.to_le_bytes());
+            assert!(matches!(
+                read_built(&bytes),
+                Err(Error::Invalid("malformed"))
+            ));
         }
         #[test]
         fn zero_width_character_column_reads_as_empty_text() {
@@ -229,6 +369,97 @@ mod table {
                     read_built(&bytes),
                     Err(Error::Invalid("malformed"))
                 ));
+            }
+        }
+        /// An entry-less column subheader, `empty`, shortened by `cut` bytes
+        /// with its remainder field set to agree with the shorter length.
+        fn shortened(
+            layout: crate::support::sas7bdat::Layout,
+            empty: &[u8],
+            cut: usize,
+        ) -> Vec<u8> {
+            let mut short = empty[..empty.len() - cut].to_vec();
+            let remainder = short.len() - 4 - 2 * layout.word();
+            layout.put(&mut short, layout.word(), remainder as u64, 2);
+            short
+        }
+        #[test]
+        fn column_subheaders_shorter_than_their_fixed_part_are_refused() {
+            // A column-name or column-attributes subheader holds a fixed part,
+            // 28 bytes in a 64-bit file and 20 in any other, then its
+            // entries. Below that fixed part the entry count would wrap, so
+            // the subheader is malformed even when its remainder field agrees
+            // with its length. One of exactly the fixed part holds no entries
+            // and is valid. Each short subheader is stored before the valid
+            // subheader of its kind.
+            use crate::support::sas7bdat::{Cell, Dataset, Kind, Layout, Page, Pointer, MIX};
+            for layout in [Layout::LE32, Layout::LE64, Layout::BE32, Layout::BE64] {
+                let mut dataset = Dataset::new(layout, &[("X", Kind::Num, 8)]);
+                dataset.total = 1;
+                dataset.mix_rows = 1;
+                let row = dataset.row(&[Cell::Num(7.0)]);
+                let file = |at: usize, extra: Vec<u8>| {
+                    let mut pointers = dataset.metadata();
+                    pointers.insert(at, Pointer::metadata(extra));
+                    dataset.file(&[Page::new(MIX, pointers, vec![row.clone()])])
+                };
+                // Names are the fourth subheader and attributes the fifth.
+                for (at, empty) in [(3, layout.column_name(&[])), (4, layout.column_attrs(&[]))] {
+                    let table = read_built(&file(at, empty.clone())).unwrap();
+                    assert_eq!(cells(&table), [[float(7.0)]], "{layout:?} {at}");
+                    for cut in 1..=8 {
+                        let bytes = file(at, shortened(layout, &empty, cut));
+                        assert!(
+                            matches!(read_built(&bytes), Err(Error::Invalid("malformed"))),
+                            "{layout:?} {at} {cut}"
+                        );
+                    }
+                }
+            }
+        }
+        #[test]
+        fn a_short_attributes_subheader_cannot_rewrite_a_column_after_the_first_record() {
+            // After the first record the two columns are submitted. A later
+            // attributes subheader describes a further slot, so it changes
+            // nothing the reader uses. A short one must not move the count of
+            // attribute slots back, which would let the next subheader
+            // overwrite Y's width and read the second record differently.
+            use crate::support::sas7bdat::{
+                Cell, Dataset, Field, Kind, Layout, Page, Pointer, META, MIX,
+            };
+            for layout in [Layout::LE32, Layout::LE64, Layout::BE32, Layout::BE64] {
+                let mut dataset = Dataset::new(layout, &[("X", Kind::Num, 8), ("Y", Kind::Num, 8)]);
+                dataset.total = 2;
+                dataset.mix_rows = 1;
+                let row = dataset.row(&[Cell::Num(1.0), Cell::Num(2.0)]);
+                let narrowed = Field {
+                    name: "Y".into(),
+                    kind: Kind::Num,
+                    offset: 8,
+                    width: 4,
+                };
+                let file = |short: Option<Vec<u8>>| {
+                    let mut later: Vec<Pointer> =
+                        short.into_iter().map(Pointer::metadata).collect();
+                    later.push(Pointer::metadata(
+                        layout.column_attrs(std::slice::from_ref(&narrowed)),
+                    ));
+                    later.push(Pointer::raw_row(row.clone()));
+                    dataset.file(&[
+                        Page::new(MIX, dataset.metadata(), vec![row.clone()]),
+                        Page::new(META, later, vec![]),
+                    ])
+                };
+                let table = read_built(&file(None)).unwrap();
+                assert_eq!(cells(&table), [[float(1.0), float(2.0)]; 2], "{layout:?}");
+                let empty = layout.column_attrs(&[]);
+                assert!(
+                    matches!(
+                        read_built(&file(Some(shortened(layout, &empty, 1)))),
+                        Err(Error::Invalid("malformed"))
+                    ),
+                    "{layout:?}"
+                );
             }
         }
         #[test]
@@ -497,6 +728,44 @@ mod table {
             assert_eq!(table.cell(2, 1).unwrap(), ValueRef::Str(""));
         }
         #[test]
+        fn version_8_observation_count_must_be_decimal_digits_between_blanks() {
+            // The count is fifteen characters from byte 48 of the OBSV8
+            // header. Blanks may precede or follow its digits. A sign, a
+            // letter, a point or a blank inside the digits makes the header
+            // malformed; reading such a count as unknown would instead let
+            // the trailing blank records pass as padding.
+            use crate::support::xport::transport;
+            let source = declaration("built.xpt");
+            for count in [
+                format!("{:15}", 3),
+                format!("{:<15}", 3),
+                format!("{:^15}", 3),
+                "000000000000003".to_string(),
+            ] {
+                let bytes = transport(8, &TEXT_FIELDS, &count, &trailing_blanks());
+                let table = sas_source::parse(&bytes, &source).unwrap();
+                assert_eq!(table.row_count(), 3, "{count:?}");
+            }
+            for count in [
+                "-00000000000003",
+                "+00000000000003",
+                "00000000000003x",
+                "0000000000000x3",
+                "000000.00000003",
+                "000000 00000003",
+                "               ",
+            ] {
+                let bytes = transport(8, &TEXT_FIELDS, count, &trailing_blanks());
+                assert!(
+                    matches!(
+                        sas_source::parse(&bytes, &source),
+                        Err(Error::Invalid("malformed"))
+                    ),
+                    "{count:?}"
+                );
+            }
+        }
+        #[test]
         fn transport_without_a_usable_count_treats_trailing_blank_records_as_padding() {
             // Version 5 carries no count, and a zero version 8 count is
             // unknown. Trailing blank records narrower than one 80-byte
@@ -513,15 +782,21 @@ mod table {
             }
         }
         #[test]
-        fn blank_records_at_least_one_record_wide_are_never_padding() {
-            // Blank padding fills the last 80-byte record, so it is always
-            // shorter than 80 bytes. Without a count, a trailing blank record
-            // 80 bytes or wider is data; a narrower one may be padding.
+        fn trailing_blank_records_of_any_width_are_padding_only_without_a_count() {
+            // Without a count, in version 5 and with a zero version 8 count,
+            // a trailing record made entirely of blanks may be padding at any
+            // width, including a whole 80-byte record or wider, so it is not
+            // data. A version 8 count keeps every record it counts.
             use crate::support::xport::{records, transport};
-            for (version, observations) in [(5, "0".repeat(30)), (8, "0".repeat(15))] {
-                let wide = [("A", 80)];
-                let data = records(&wide, &[&["x"], &[""], &[""]]);
-                let bytes = transport(version, &wide, &observations, &data);
+            for width in [40, 80, 120] {
+                let fields = [("A", width)];
+                let data = records(&fields, &[&["x"], &[""], &[""]]);
+                for (version, observations) in [(5, "0".repeat(30)), (8, "0".repeat(15))] {
+                    let bytes = transport(version, &fields, &observations, &data);
+                    let table = sas_source::parse(&bytes, &declaration("built.xpt")).unwrap();
+                    assert_eq!(cells(&table), [[ValueRef::Str("x")]], "{version} {width}");
+                }
+                let bytes = transport(8, &fields, &format!("{:15}", 3), &data);
                 let table = sas_source::parse(&bytes, &declaration("built.xpt")).unwrap();
                 assert_eq!(
                     cells(&table),
@@ -530,13 +805,8 @@ mod table {
                         [ValueRef::Missing],
                         [ValueRef::Missing]
                     ],
-                    "{version}"
+                    "8 {width}"
                 );
-                let narrow = [("A", 40)];
-                let data = records(&narrow, &[&["x"], &[""], &[""]]);
-                let bytes = transport(version, &narrow, &observations, &data);
-                let table = sas_source::parse(&bytes, &declaration("built.xpt")).unwrap();
-                assert_eq!(cells(&table), [[ValueRef::Str("x")]], "{version}");
             }
         }
         #[test]
@@ -807,6 +1077,25 @@ mod table {
             ));
         }
         #[test]
+        fn marks_on_pages_after_the_counts_are_met_are_not_read() {
+            // The check compares counts over the pages the reader reaches. It
+            // finds the live record and the one counted deletion on the first
+            // page, so it stops there and never reads the marks that a later
+            // page carries beyond the count.
+            use crate::support::sas7bdat::{Cell, Dataset, Kind, Layout, Page, DATA, MIX};
+            let mut dataset = Dataset::new(Layout::LE64, &[("X", Kind::Num, 8)]);
+            dataset.total = 2;
+            dataset.deleted = 1;
+            dataset.mix_rows = 2;
+            let row = |value| dataset.row(&[Cell::Num(value)]);
+            let mut first = Page::new(MIX, dataset.metadata(), vec![row(1.0), row(2.0)]);
+            first.deleted = Some(vec![false, true]);
+            let mut later = Page::new(DATA, vec![], vec![row(3.0), row(4.0)]);
+            later.deleted = Some(vec![true, true]);
+            let table = read_built(&dataset.file(&[first, later])).unwrap();
+            assert_eq!(cells(&table), [[float(1.0)]]);
+        }
+        #[test]
         fn deleted_compressed_rows_in_a_64_bit_file_are_skipped_and_counted() {
             use crate::support::sas7bdat::{rle, Cell, Dataset, Kind, Layout, Page, Pointer, META};
             let mut dataset = Dataset::new(Layout::LE64, &[("X", Kind::Num, 8)]);
@@ -865,6 +1154,56 @@ mod table {
             // looked for beyond them.
             refused(file(2, 1, 2, 5, &[false, false, true]));
         }
+        #[test]
+        fn the_row_limit_admits_live_records_not_stored_ones() {
+            // The row-size subheader counts stored records, deleted ones
+            // included, but only the live ones become rows, so SAS-6 admits
+            // those. The files hold no records: a count that passes admission
+            // goes on to fail its unmet deletions, and one that does not is a
+            // table-rows limit that names the live count.
+            use crate::support::sas7bdat::{Dataset, Kind, Layout, Page, META};
+            let file = |total: u64, deleted: u64| {
+                let mut dataset = Dataset::new(Layout::LE64, &[("X", Kind::Num, 8)]);
+                dataset.total = total;
+                dataset.deleted = deleted;
+                dataset.file(&[Page::new(META, dataset.metadata(), vec![])])
+            };
+            // 10,000,100 stored records leave 9,999,900 live ones, under the
+            // limit of 10,000,000 rows.
+            assert!(matches!(
+                read_built(&file(10_000_100, 200)),
+                Err(Error::Invalid("deleted_records"))
+            ));
+            // 10,000,050 live records are over it.
+            assert!(matches!(
+                read_built(&file(10_000_100, 50)),
+                Err(Error::Limit {
+                    resource: "table_rows",
+                    actual: Some(10_000_050),
+                    ..
+                })
+            ));
+        }
+        #[test]
+        fn stored_record_counts_beyond_32_bits_are_refused() {
+            // The reader counts stored and deleted records in 32 bits. The
+            // counts below leave five live records, so they pass admission,
+            // but truncated they would read as a dataset with no deletions.
+            use crate::support::sas7bdat::{Cell, Dataset, Kind, Layout, Page, MIX};
+            let file = |total: u64, deleted: u64| {
+                let mut dataset = Dataset::new(Layout::LE64, &[("X", Kind::Num, 8)]);
+                dataset.total = total;
+                dataset.deleted = deleted;
+                dataset.mix_rows = 5;
+                let rows = (0..5).map(|row| dataset.row(&[Cell::Num(f64::from(row))]));
+                dataset.file(&[Page::new(MIX, dataset.metadata(), rows.collect())])
+            };
+            assert_eq!(read_built(&file(5, 0)).unwrap().row_count(), 5);
+            assert!(matches!(
+                read_built(&file((1 << 40) + 5, 1 << 40)),
+                Err(Error::Invalid("malformed"))
+            ));
+        }
         /// A compressed dataset whose third record moved to subheader 1 of
         /// page 1, the record stored there by `moved`.
         fn moved_file(
@@ -918,6 +1257,76 @@ mod table {
                         ],
                         "{layout:?} {code:#04x}"
                     );
+                }
+            }
+        }
+        /// A compressed dataset of four records whose third moved. The moved
+        /// record, stored with `code`, comes before the reference to it: on
+        /// the page before the reference's page, or earlier on the same page.
+        fn moved_before_its_reference(
+            layout: crate::support::sas7bdat::Layout,
+            rdc: bool,
+            code: u8,
+            same_page: bool,
+        ) -> Vec<u8> {
+            use crate::support::sas7bdat::{
+                rdc as rdc_bytes, rle, Cell, Dataset, Kind, Page, Pointer, META,
+            };
+            let mut dataset = Dataset::new(layout, &[("X", Kind::Num, 8), ("T", Kind::Chr, 8)]);
+            dataset.compression = Some(if rdc { *b"SASYZCR2" } else { *b"SASYZCRL" });
+            dataset.total = 4;
+            let compress = |row: &[u8]| if rdc { rdc_bytes(row) } else { rle(row) };
+            let row =
+                |value: f64, label: &[u8]| dataset.row(&[Cell::Num(value), Cell::Text(label)]);
+            let three = row(3.0, b"three");
+            let moved = Pointer::coded(
+                if code == 0x02 {
+                    three
+                } else {
+                    compress(&three)
+                },
+                code,
+            );
+            let mut first = dataset.metadata();
+            first.push(Pointer::coded(compress(&row(1.0, b"one")), 4));
+            first.push(Pointer::coded(compress(&row(2.0, b"two")), 4));
+            let four = Pointer::coded(compress(&row(4.0, b"four")), 4);
+            let pages = if same_page {
+                let index = first.len() as u64;
+                first.extend([moved, Pointer::reference(0, index), four]);
+                vec![Page::new(META, first, vec![])]
+            } else {
+                vec![
+                    Page::new(META, first, vec![]),
+                    Page::new(META, vec![Pointer::truncated(), moved], vec![]),
+                    Page::new(META, vec![Pointer::reference(1, 1), four], vec![]),
+                ]
+            };
+            dataset.file(&pages)
+        }
+        #[test]
+        fn a_moved_record_stored_before_its_reference_is_skipped_and_read_at_the_reference() {
+            // The second pass meets the moved record first, where it skips
+            // it, and reads it when it reaches the reference. The records
+            // come out in the order of the references, with the moved one
+            // third. Codes 0x02 and 0x06 are stored uncompressed and
+            // compressed, and the compressed record is RLE or RDC.
+            use crate::support::sas7bdat::Layout;
+            for layout in [Layout::LE64, Layout::BE32] {
+                for (rdc, code) in [(false, 0x02), (false, 0x06), (true, 0x02), (true, 0x06)] {
+                    for same_page in [false, true] {
+                        let bytes = moved_before_its_reference(layout, rdc, code, same_page);
+                        assert_eq!(
+                            cells(&read_built(&bytes).unwrap()),
+                            [
+                                [float(1.0), ValueRef::Str("one")],
+                                [float(2.0), ValueRef::Str("two")],
+                                [float(3.0), ValueRef::Str("three")],
+                                [float(4.0), ValueRef::Str("four")]
+                            ],
+                            "{layout:?} rdc {rdc} {code:#04x} same page {same_page}"
+                        );
+                    }
                 }
             }
         }
@@ -1001,6 +1410,119 @@ mod table {
             assert!(matches!(
                 read_built(&bytes),
                 Err(Error::Invalid("compression"))
+            ));
+        }
+        #[test]
+        fn a_reference_with_a_zero_page_or_subheader_index_is_refused_not_skipped() {
+            // A reference holds one-based page and subheader indices, so a
+            // zero index names no record. The dataset below stores every
+            // record it declares in place, so skipping such a reference would
+            // read the file as valid.
+            use crate::support::sas7bdat::{Cell, Dataset, Kind, Layout, Page, Pointer, META};
+            let file = |reference: Option<Pointer>| {
+                let mut dataset = Dataset::new(Layout::LE64, &[("X", Kind::Num, 8)]);
+                dataset.compression = Some(*b"SASYZCRL");
+                dataset.total = 2;
+                let mut pointers = dataset.metadata();
+                pointers.push(Pointer::rle_row(&dataset.row(&[Cell::Num(1.0)])));
+                pointers.extend(reference);
+                pointers.push(Pointer::rle_row(&dataset.row(&[Cell::Num(2.0)])));
+                dataset.file(&[Page::new(META, pointers, vec![])])
+            };
+            assert_eq!(
+                cells(&read_built(&file(None)).unwrap()),
+                [[float(1.0)], [float(2.0)]]
+            );
+            for (offset, length) in [(1, 0), (0, 0), (0, 1)] {
+                let reference = Pointer::Raw {
+                    offset,
+                    length,
+                    compression: 3,
+                    data: true,
+                };
+                assert!(
+                    matches!(
+                        read_built(&file(Some(reference))),
+                        Err(Error::Invalid("malformed"))
+                    ),
+                    "{offset} {length}"
+                );
+            }
+        }
+        /// A compressed dataset of `X` and a 1,000-byte text column whose every
+        /// record moved. Page 0 holds one reference for each of `reached`,
+        /// naming a page and a subheader index. Pages 1 to `moved_pages` hold
+        /// `per_page` moved records each, of 1,071 stored bytes.
+        fn referenced_records(
+            layout: crate::support::sas7bdat::Layout,
+            page_len: usize,
+            moved_pages: u64,
+            per_page: u64,
+            reached: &[(u64, u64)],
+        ) -> Vec<u8> {
+            use crate::support::sas7bdat::{rle, Cell, Dataset, Kind, Page, Pointer, META};
+            let mut dataset = Dataset::new(layout, &[("X", Kind::Num, 8), ("T", Kind::Chr, 1000)]);
+            dataset.compression = Some(*b"SASYZCRL");
+            dataset.page_len = page_len;
+            dataset.total = reached.len() as u64;
+            let mut pointers = dataset.metadata();
+            pointers.extend(
+                reached
+                    .iter()
+                    .map(|&(page, index)| Pointer::reference(page, index)),
+            );
+            let mut pages = vec![Page::new(META, pointers, vec![])];
+            for page in 1..=moved_pages {
+                let records = (0..per_page)
+                    .map(|index| {
+                        let label = format!("page{page}index{index}");
+                        let number = (page * 100 + index) as f64;
+                        let row = dataset.row(&[Cell::Num(number), Cell::Text(label.as_bytes())]);
+                        Pointer::coded(rle(&row), 0x06)
+                    })
+                    .collect();
+                pages.push(Page::new(META, records, vec![]));
+            }
+            dataset.file(&pages)
+        }
+        #[test]
+        fn references_that_reach_each_moved_record_once_read_across_pages() {
+            // Five pages hold three moved records each. The references visit
+            // the pages in turn, so no two in a row reach the same page, and
+            // together reach every record once.
+            use crate::support::sas7bdat::Layout;
+            let reached: Vec<(u64, u64)> = (0..15).map(|at| (1 + at % 5, at / 5)).collect();
+            let labels: Vec<String> = reached
+                .iter()
+                .map(|&(page, index)| format!("page{page}index{index}"))
+                .collect();
+            let expected: Vec<Vec<ValueRef<'_>>> = reached
+                .iter()
+                .zip(&labels)
+                .map(|(&(page, index), label)| {
+                    vec![float((page * 100 + index) as f64), ValueRef::Str(label)]
+                })
+                .collect();
+            for layout in [Layout::LE32, Layout::LE64, Layout::BE32, Layout::BE64] {
+                let bytes = referenced_records(layout, 4096, 5, 3, &reached);
+                let table = read_built(&bytes).unwrap();
+                assert_eq!(cells(&table), expected, "{layout:?}");
+            }
+        }
+        #[test]
+        fn references_bouncing_between_pages_cannot_read_more_than_the_file_holds() {
+            // Each of 60,000 references reaches a valid moved record of 1,071
+            // stored bytes, alternating between the records on two 1 MiB pages.
+            // Together they would read about 64 MB from a file of 3 MiB. A
+            // reference reads only the record it reaches, and the stored bytes
+            // that references read may not exceed the bytes of the pages.
+            use crate::support::sas7bdat::Layout;
+            let reached: Vec<(u64, u64)> = (0..60_000).map(|at| (1 + at % 2, 0)).collect();
+            let bytes = referenced_records(Layout::LE32, 1 << 20, 2, 1, &reached);
+            assert_eq!(bytes.len(), 1024 + 3 * (1 << 20));
+            assert!(matches!(
+                read_built(&bytes),
+                Err(Error::Invalid("malformed"))
             ));
         }
         #[test]
