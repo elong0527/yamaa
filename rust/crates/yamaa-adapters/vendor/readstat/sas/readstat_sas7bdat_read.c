@@ -963,6 +963,17 @@ static readstat_error_t sas7bdat_parse_page_pass2(const char *page, size_t page_
 
     const char *data = NULL;
 
+    /* A flagged data or mix page keeps records deleted in place among its
+     * rows, marked only in a trailing bitmap that this reader does not read.
+     * Refuse the page before parsing any of its subheaders or rows, so no
+     * other failure on the page takes precedence over the refusal. */
+    if (((page_type & SAS_PAGE_TYPE_MASK) == SAS_PAGE_TYPE_DATA ||
+                (page_type & SAS_PAGE_TYPE_MASK) == SAS_PAGE_TYPE_MIX) &&
+            (page_type & SAS_PAGE_TYPE_DELETED_ROWS)) {
+        retval = yamaa_readstat_deleted_records();
+        goto cleanup;
+    }
+
     if ((page_type & SAS_PAGE_TYPE_MASK) == SAS_PAGE_TYPE_DATA) {
         ctx->page_row_count = sas_read2(&page[ctx->page_header_size-6], ctx->bswap);
         data = &page[ctx->page_header_size];
@@ -1043,13 +1054,6 @@ static readstat_error_t sas7bdat_parse_page_pass2(const char *page, size_t page_
         }
     }
     if (data) {
-        /* A flagged data or mix page keeps records deleted in place among its
-         * rows, marked only in a trailing bitmap that this reader does not
-         * read. Refuse the page rather than return deleted records as rows. */
-        if (page_type & SAS_PAGE_TYPE_DELETED_ROWS) {
-            retval = yamaa_readstat_deleted_records();
-            goto cleanup;
-        }
         if ((retval = sas7bdat_submit_columns_if_needed(ctx, 0)) != READSTAT_OK) {
             goto cleanup;
         }
