@@ -535,12 +535,12 @@ class PublicConformance(unittest.TestCase):
             {"columns": [["N", "float"]], "rows": [["0000000000000000"]]},
         )
 
-    def test_metadata_entries_and_host_environments_are_preserved(self):
+    def test_metadata_entries_and_explicit_projects_are_preserved(self):
         for name in ("spec_one.yaml", "spec_two.yaml"):
             (self.case / name).write_text(SPEC)
         for host in ("python", "r"):
             (self.case / host).mkdir()
-            (self.case / host / "environment.yaml").write_text("host fixture")
+            (self.case / host / "project.yaml").write_text("project fixture")
         judge.write_json(
             self.case / "benchmark.yaml",
             {
@@ -551,7 +551,7 @@ class PublicConformance(unittest.TestCase):
                     host: [
                         {
                             "specification": "spec_one.yaml",
-                            "environment": f"{host}/environment.yaml",
+                            "environment": f"{host}/project.yaml",
                         },
                         {"specification": "spec_two.yaml", "environment": None},
                     ]
@@ -565,23 +565,27 @@ class PublicConformance(unittest.TestCase):
             [
                 {
                     "specification": "spec_one.yaml",
-                    "environment": "python/environment.yaml",
+                    "environment": "python/project.yaml",
                 },
                 {"specification": "spec_two.yaml", "environment": None},
             ],
         )
-        self.assertEqual(entries["r"][0]["environment"], "r/environment.yaml")
+        self.assertEqual(entries["r"][0]["environment"], "r/project.yaml")
         (self.case / "benchmark.yaml").write_text(METADATA)
         with self.assertRaisesRegex(ValueError, "explicit entries"):
             judge.plan(self.fixtures)
 
-    def test_negative_host_environment_and_no_automatic_root_environment(self):
-        (self.case / "environment.yaml").write_text("define fixture")
+    def test_root_project_is_the_only_automatic_argument_for_both_hosts(self):
+        (self.case / "environment.yaml").write_text("retired root environment")
         (self.case / "python").mkdir()
         (self.case / "python/environment.yaml").write_text("host fixture")
         entries = judge.plan(self.fixtures)["examples"][0]["entries"]
-        self.assertEqual(entries["python"][0]["environment"], "python/environment.yaml")
+        self.assertIsNone(entries["python"][0]["environment"])
         self.assertIsNone(entries["r"][0]["environment"])
+        (self.case / "project.yaml").write_text("project fixture")
+        entries = judge.plan(self.fixtures)["examples"][0]["entries"]
+        self.assertEqual(entries["python"][0]["environment"], "project.yaml")
+        self.assertEqual(entries["r"][0]["environment"], "project.yaml")
 
     def child_variant(self, **overrides):
         variant = copy.deepcopy(self.build)
@@ -749,8 +753,12 @@ class PublicConformance(unittest.TestCase):
             names["schema-inheritance"]["entries"]["r"][0]["specification"],
             "spec_study.yaml",
         )
+        self.assertEqual(
+            names["sdtm-dm-metadata"]["entries"]["python"][0]["environment"],
+            "project.yaml",
+        )
         self.assertIsNone(
-            names["sdtm-dm-metadata"]["entries"]["python"][0]["environment"]
+            names["sdtm-lb-metadata"]["entries"]["python"][0]["environment"]
         )
         self.assertIsNone(names["schema-inheritance-project-root"]["excluded"])
         self.assertEqual(

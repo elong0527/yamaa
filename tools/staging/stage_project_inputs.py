@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import argparse
 import shutil
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+
+import yaml
 
 from tools.benchmark import entries
 from tools.paths import ROOT
@@ -19,14 +21,30 @@ CASES = (
 )
 
 
+def python_environment(case: Path, project: str) -> PurePosixPath | None:
+    """The Python environment file a project links, relative to the case."""
+    document = yaml.safe_load((case / project).read_text(encoding="utf-8"))
+    environments = document.get("environments") if isinstance(document, dict) else None
+    linked = environments.get("python") if isinstance(environments, dict) else None
+    if linked is None:
+        return None
+    # A project's own paths resolve from the project file.
+    return PurePosixPath(project).parent / linked
+
+
 def stage_case(source: Path, destination: Path, *, ignore=None) -> None:
     """Copy a study and supply the canonical packaging lock to Python entries."""
     shutil.copytree(source, destination, symlinks=True, ignore=ignore)
     for call in entries(source)["python"]:
-        if call["environment"] is not None:
-            lock = destination / Path(call["environment"]).parent / "uv.lock"
-            if not lock.exists():
-                shutil.copyfile(REPOSITORY / "python/uv.lock", lock)
+        if call["environment"] is None:
+            continue
+        environment = python_environment(source, call["environment"])
+        if environment is None:
+            continue
+        # The environment file's own lock path resolves from that file.
+        lock = destination / environment.parent / "uv.lock"
+        if not lock.exists():
+            shutil.copyfile(REPOSITORY / "python/uv.lock", lock)
 
 
 def stage(destination: Path) -> None:

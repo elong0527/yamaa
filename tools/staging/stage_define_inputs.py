@@ -1,4 +1,4 @@
-"""Copy original shared Define metadata and independent fixed-byte witnesses."""
+"""Copy original study projects and independent fixed-byte Define witnesses."""
 
 import argparse
 import shutil
@@ -29,13 +29,11 @@ def stage(destination: Path):
             shutil.copy2(
                 original / "submission-spec.yaml", target / "submission-spec.yaml"
             )
-            shutil.copy2(
-                original / "submission-environment.yaml", target / "environment.yaml"
-            )
+            shutil.copy2(original / "submission-project.yaml", target / "project.yaml")
             (target / "expected").mkdir()
             shutil.copy2(original / "expected/lb.csv", target / "expected/lb.csv")
         else:
-            shutil.copy2(original / "environment.yaml", target / "environment.yaml")
+            shutil.copy2(original / "project.yaml", target / "project.yaml")
         if name == "sdtm-dm-metadata":
             expected = target / "expected"
             expected.mkdir()
