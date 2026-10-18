@@ -239,7 +239,6 @@ fn select<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?Sized>(
                         plan,
                         row,
                         &assignment,
-                        relation_predicates::CurrentObservation::Operand,
                         state,
                     )
                 })

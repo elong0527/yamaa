@@ -26,7 +26,7 @@ pub(super) fn register(plan: &DatasetPlan, counter: &mut HandlerCounter) {
     }
     // Admission refuses a read of an intermediate declared later; such a
     // read registers nothing here.
-    let reads = read_handlers(plan.intermediates()).unwrap_or_default();
+    let reads = read_handlers(plan.intermediates());
     let mut walk = Walk {
         plan,
         reads: &reads,
@@ -53,7 +53,7 @@ pub(super) fn register(plan: &DatasetPlan, counter: &mut HandlerCounter) {
                 let path = &declaration.handler.spec_path;
                 walk.counter.register(path, HandlerKind::Unconvertible);
             }
-            let reads = read_handlers(donor.intermediates()).unwrap_or_default();
+            let reads = read_handlers(donor.intermediates());
             let mut donor_walk = Walk {
                 plan: donor,
                 reads: &reads,
@@ -90,19 +90,9 @@ impl Walk<'_> {
         }
     }
 
-    /// The handlers a read of a named intermediate counts at its reading path,
-    /// those of the intermediates it reads through included.
+    /// The handlers a read of a named intermediate counts at its reading path.
     fn named(&self, index: usize) -> ReadHandlers {
         self.reads.get(index).copied().unwrap_or_default()
-    }
-
-    /// The handlers a range value read from a named intermediate counts at the
-    /// range's reading path.
-    fn range(&self, range: Option<&RelationRange>) -> ReadHandlers {
-        match range.map(|range| range.current().read) {
-            Some(CurrentRead::Intermediate { index, .. }) => self.named(index),
-            _ => ReadHandlers::default(),
-        }
     }
 
     /// A lookup registers `multiple_matches` before its absence handler.
@@ -293,13 +283,14 @@ impl Walk<'_> {
             }
             Expression::SourceLookup {
                 lookup,
-                range,
                 selection,
                 absence,
                 ..
             } => {
-                let mut handlers = self.range(range.as_ref());
-                handlers.multiple_matches |= selection.is_some();
+                let handlers = ReadHandlers {
+                    multiple_matches: selection.is_some(),
+                    no_match: false,
+                };
                 self.lookup(path, handlers);
                 if let Some(absence) = absence {
                     let plan = self.plan;
@@ -308,13 +299,14 @@ impl Walk<'_> {
             }
             Expression::JoinedSource {
                 read,
-                range,
                 selection,
                 absence,
                 ..
             } => {
-                let mut handlers = self.range(range.as_ref());
-                handlers.multiple_matches |= selection.is_some();
+                let handlers = ReadHandlers {
+                    multiple_matches: selection.is_some(),
+                    no_match: false,
+                };
                 self.lookup(path, handlers);
                 if let Some(absence) = absence {
                     self.absent(absence, &read.name);
@@ -326,10 +318,6 @@ impl Walk<'_> {
                 self.lookup(path, handlers);
             }
             Expression::Aggregate(aggregate) => {
-                if let Some(range) = aggregate.range() {
-                    let handlers = self.range(Some(range));
-                    self.lookup(range.path(), handlers);
-                }
                 if let crate::dataset::AggregateRelation::Matched { keys, .. } =
                     aggregate.relation()
                 {

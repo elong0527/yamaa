@@ -18,11 +18,11 @@ pub(super) struct Donor<'a, E> {
     pub row: usize,
     pub owner: DonorOwner,
 }
-pub(super) enum CurrentObservation {
-    Predicate,
-    Operand,
-}
-/// Predicate and range operands share typed current reads and native failure owners.
+/// Predicate and range operands share typed current reads and native failure
+/// owners. A current-row read made for a lookup, its filter, `between` value or
+/// a derivation's current-record operand, is not a handler site: a named
+/// intermediate it reads answers as it would in a predicate, uncounted
+/// (COLUMN-14).
 #[allow(clippy::too_many_arguments)]
 pub(super) fn resolve_current<T: TableAccess + ?Sized>(
     field: &CurrentField,
@@ -32,7 +32,6 @@ pub(super) fn resolve_current<T: TableAccess + ?Sized>(
     plan: &DatasetPlan,
     row: usize,
     assignment: &Assignment,
-    observation: CurrentObservation,
     state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
     match field.read {
@@ -81,14 +80,9 @@ pub(super) fn resolve_current<T: TableAccess + ?Sized>(
             let value = &candidate.values[column];
             Ok(value.clone())
         }
-        CurrentRead::Intermediate { index, column } => match observation {
-            CurrentObservation::Predicate => intermediates::read_predicate(
-                index, column, assignment, candidate, plan, row, table, state,
-            ),
-            CurrentObservation::Operand => intermediates::read(
-                index, column, assignment, candidate, plan, row, table, state,
-            ),
-        },
+        CurrentRead::Intermediate { index, column } => intermediates::read_predicate(
+            index, column, assignment, candidate, plan, row, table, state,
+        ),
     }
 }
 #[allow(clippy::too_many_arguments)]
@@ -182,7 +176,6 @@ impl<T: TableAccess + ?Sized> Resolver for Context<'_, '_, T> {
                     self.plan,
                     self.row,
                     self.assignment,
-                    CurrentObservation::Predicate,
                     self.state,
                 )?
             }

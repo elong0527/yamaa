@@ -420,7 +420,11 @@ at `<operation>.missing` for `mapping`, `cut`, `str_extract`, `str_replace`,
 operand that makes the read ([LOOKUP-24](lookup.md#lookup-24)); and at the
 reading column's `no_match` for a named intermediate
 ([LOOKUP-14](lookup.md#lookup-14)). A lookup read made while a predicate is
-evaluated is not a handler site: its absence gives missing, uncounted.
+evaluated is not a handler site: its absence gives missing, uncounted. Nor is
+a read of a named intermediate that supplies another lookup's `between`
+value, filter field or derivation's current-record operand: it answers as in
+a predicate, uncounted, and only the lookup it feeds counts its own answer, so
+one record is never counted twice at one path.
 
 A run registers every handler path before it reads any row, so a run reports
 a path even when it answers nothing. That covers every declared handler and
@@ -428,9 +432,7 @@ every default substitution counted like one, a `partial` date and
 `not_after` included; the `multiple_matches` of each `keep`, on a source
 binding, a collected value or a named intermediate read; and each named
 intermediate read's `no_match` at its reading path. A read that requires a
-match registers no `no_match` and no `absent`. When an intermediate's
-`between` value, or a current-record operand of its derivations, reads another
-intermediate, that read's handlers count at the same reading path.
+match registers no `no_match` and no `absent`.
 
 Handler rows come in registration order. The dataset's own paths come first:
 the `unconvertible` paths of the output derivations, in declaration order with
