@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from lxml import html
 from mkdocs.commands.build import build
 from mkdocs.config import load_config
 from mkdocs.exceptions import Abort
@@ -103,7 +104,8 @@ class CanonicalPages(unittest.TestCase):
         ):
             self.assertIn(f'href="{url}"', rules)
         self.assertIn("[Code](values/types.md)", rules)
-        self.assertIn("[Sample](values/types.md)", rules)
+        code_text = html.fromstring(rules).xpath("string(//pre/code)")
+        self.assertEqual("[Sample](values/types.md)\n", code_text)
         self.assertIn('href="../"', ordinary)
         self.assertIn('href="../articles/rules/"', ordinary)
         # A docs page's links that leave docs/ name repository files on main.
