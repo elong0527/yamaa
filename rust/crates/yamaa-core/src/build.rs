@@ -186,10 +186,11 @@ pub fn select<P: PreparationPort>(
     }
 }
 
-/// Host ports move checked capabilities into their existing engine execution,
+/// Host ports lend checked capabilities to their existing engine execution,
 /// output and report services. Original host failures remain owned by the result.
 /// A build never accepts a publisher: publication uses only a completed result's
-/// explicit Save capability.
+/// explicit Save capability. Builds borrow the prepared value, so one preparation
+/// can serve many runs; each run's study state lives in that run alone.
 pub trait Ports {
     type Plain;
     type Project;
@@ -210,17 +211,17 @@ pub trait Ports {
     ) -> Result<Self::CheckResult, Self::Failure>;
     fn build_plain(
         &mut self,
-        prepared: Self::Plain,
+        prepared: &Self::Plain,
         scope: crate::application_observer::Scope<'_>,
     ) -> Result<Self::BuildResult, Self::Failure>;
     fn build_project(
         &mut self,
-        prepared: Self::Project,
+        prepared: &Self::Project,
         scope: crate::application_observer::Scope<'_>,
     ) -> Result<Self::BuildResult, Self::Failure>;
     fn build_producer(
         &mut self,
-        prepared: Self::Producer,
+        prepared: &Self::Producer,
         scope: crate::application_observer::Scope<'_>,
     ) -> Result<Self::BuildResult, Self::Failure>;
 }
@@ -256,7 +257,7 @@ pub fn domain<P: Ports>(
             // Close actual metadata preparation before entering the selected
             // runtime port.
             scope.phase(Phase::Build);
-            let result = match prepared {
+            let result = match &prepared {
                 Prepared::Plain(prepared) => port.build_plain(prepared, scope),
                 Prepared::Ordinary(prepared) => port.build_project(prepared, scope),
                 Prepared::Producer(prepared) => port.build_producer(prepared, scope),

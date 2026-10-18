@@ -159,7 +159,8 @@ fn interrupted_stage_leaves_no_provisional_output() {
         yamaa_adapters::file_preparation::FileSpecification::prepare(resources, "spec.yaml")
             .unwrap();
     let mut result = yamaa_adapters::file_application::plain(
-        prepared,
+        &prepared,
+        &mut prepared.run_scope(None),
         yamaa_adapters::specification_report::Identity {
             runtime: "rust",
             runtime_version: "test",
