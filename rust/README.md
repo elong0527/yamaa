@@ -68,15 +68,14 @@ malformed-source language findings. Capture and ingest boundary replies expose
 `sas_reader_unavailable`; unavailable Parquet compression retains its separate
 `parquet_codec_unavailable` code.
 
-The optional-format CI job runs no-default, each individual feature and all
-four features. Each lane exercises enabled-format fixtures and disabled
-capabilities, verifies the Cargo graph, and inspects the linked test binary for
-ReadStat and Zstd symbols. Run a lane locally from the repository root with
-`python -m tools.ci.format_features none` (or `yaml`, `parquet`, `readstat`,
-`odm`, `all`). YAML-dependent specification and project fixture suites run
-whenever `yaml` is selected; Arrow/CSV/IPC controls remain active without it.
-Ordinary Python/R checks and native wheel/source qualification retain the
-packaged default.
+CI's release Rust job adds two minimal facade builds: no optional formats and
+YAML + Parquet. Each runs the focused adapter capability tests, verifies the
+facade's Cargo graph, and inspects the linked test binary for ReadStat and Zstd
+symbols. The core's dependency isolation is checked once. Run both builds from
+the repository root with `python -m tools.ci.format_features`; CI uses the
+workspace's minimum Rust toolchain. Ordinary workspace tests cover all default
+formats, including the full specification and project fixture suites. Python/R
+checks and native wheel/source qualification retain the packaged default.
 
 Arrow/Parquet release-specific operations live in the adapter's
 `storage_api` module: fallible IPC schema conversion, C stream import,
@@ -450,8 +449,9 @@ not reopen it.
 ### Features
 
 The facade forwards the existing format features to `yamaa-adapters`:
-`yaml`, `parquet` and `readstat`, all on by default, and it builds with any
-combination of them, as adapters does today in the format-feature CI matrix.
+`yaml`, `parquet`, `readstat` and `odm`, all on by default, and it builds with any
+combination of them. Release Rust CI smoke-tests no optional formats and YAML +
+Parquet alongside the default-format workspace coverage.
 With no format feature, CSV and Arrow routes remain, exactly as described in
 the feature table above. A capability a build omits fails the same way it does
 today: the stable codes (`yaml_reader_unavailable`,
