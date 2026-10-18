@@ -119,6 +119,21 @@ impl Date {
         self.inner.fields()
     }
 
+    /// Return whole days since 1970-01-01, negative before it.
+    pub fn epoch_days(self) -> i32 {
+        yamaa_adapters::arrow_temporal::date_days(self.inner)
+    }
+
+    /// The date `days` whole days after 1970-01-01, when it lies within
+    /// the civil years 1 to 9999.
+    pub fn from_epoch_days(days: i64) -> Option<Self> {
+        yamaa_adapters::arrow_temporal::date_from_days(
+            days,
+            yamaa_core::temporal::DatePrecision::Day,
+        )
+        .map(Self::from_core)
+    }
+
     pub(crate) fn from_core(value: yamaa_core::temporal::Date) -> Self {
         Self { inner: value }
     }
@@ -154,6 +169,22 @@ impl DateTime {
     /// Return civil fields in most-significant-first chronological order.
     pub fn fields(self) -> (u16, u8, u8, u8, u8, u8) {
         self.inner.fields()
+    }
+
+    /// Return whole seconds since 1970-01-01T00:00:00, counting the civil
+    /// fields as zone-free time; negative before it.
+    pub fn epoch_seconds(self) -> i64 {
+        yamaa_adapters::arrow_temporal::datetime_seconds(self.inner)
+    }
+
+    /// The datetime `seconds` whole seconds after 1970-01-01T00:00:00, when
+    /// it lies within the civil years 1 to 9999.
+    pub fn from_epoch_seconds(seconds: i64) -> Option<Self> {
+        yamaa_adapters::arrow_temporal::datetime_from_seconds(
+            seconds,
+            yamaa_core::temporal::DateTimePrecision::Second,
+        )
+        .map(Self::from_core)
     }
 
     pub(crate) fn from_core(value: yamaa_core::temporal::DateTime) -> Self {
@@ -322,6 +353,48 @@ mod tests {
             DateTime::new(2024, 1, 1, 0, 0, 0).unwrap().fields(),
             (2024, 1, 1, 0, 0, 0)
         );
+    }
+
+    #[test]
+    fn temporal_values_round_trip_through_epoch_counts() {
+        let epoch = Date::new(1970, 1, 1).unwrap();
+        assert_eq!(epoch.epoch_days(), 0);
+        assert_eq!(Date::new(1969, 12, 31).unwrap().epoch_days(), -1);
+        assert_eq!(Date::new(2024, 2, 29).unwrap().epoch_days(), 19782);
+        for date in [
+            Date::new(1, 1, 1).unwrap(),
+            Date::new(1900, 3, 1).unwrap(),
+            Date::new(2024, 2, 29).unwrap(),
+            Date::new(9999, 12, 31).unwrap(),
+        ] {
+            assert_eq!(
+                Date::from_epoch_days(i64::from(date.epoch_days())),
+                Some(date)
+            );
+        }
+        assert_eq!(Date::new(1, 1, 1).unwrap().epoch_days(), -719_162);
+        assert!(Date::from_epoch_days(-719_163).is_none());
+        assert_eq!(Date::new(9999, 12, 31).unwrap().epoch_days(), 2_932_896);
+        assert!(Date::from_epoch_days(2_932_897).is_none());
+        assert!(Date::from_epoch_days(i64::MIN).is_none());
+        assert!(Date::from_epoch_days(i64::MAX).is_none());
+
+        let before = DateTime::new(1969, 12, 31, 23, 59, 59).unwrap();
+        assert_eq!(before.epoch_seconds(), -1);
+        assert_eq!(DateTime::from_epoch_seconds(-1), Some(before));
+        let leap = DateTime::new(2024, 2, 29, 12, 30, 45).unwrap();
+        assert_eq!(leap.epoch_seconds(), 19782 * 86400 + 45045);
+        assert_eq!(
+            DateTime::from_epoch_seconds(leap.epoch_seconds()),
+            Some(leap)
+        );
+        let last = DateTime::new(9999, 12, 31, 23, 59, 59).unwrap();
+        assert_eq!(
+            DateTime::from_epoch_seconds(last.epoch_seconds()),
+            Some(last)
+        );
+        assert!(DateTime::from_epoch_seconds(last.epoch_seconds() + 1).is_none());
+        assert!(DateTime::from_epoch_seconds(i64::MIN).is_none());
     }
 
     #[test]

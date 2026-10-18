@@ -20,6 +20,7 @@ yamaa::Build: pub use yamaa::engine::Build
 yamaa::CallError: pub use yamaa::functions::CallError
 yamaa::CallStage: pub use yamaa::observe::CallStage
 yamaa::CancellationToken: pub use yamaa::cancel::CancellationToken
+yamaa::ColumnType: pub use yamaa::functions::ColumnType
 yamaa::ContextValue: pub use yamaa::diagnostic::ContextValue
 yamaa::DataType: pub use yamaa::table::DataType
 yamaa::DatasetPhase: pub use yamaa::observe::DatasetPhase
@@ -320,6 +321,13 @@ yamaa::functions::CallError: pub enum CallError [derive(Clone, Debug)] [non_exha
 yamaa::functions::CallError::InvalidResult: InvalidResult(FunctionError)
 yamaa::functions::CallError::Raised: Raised(FunctionError)
 yamaa::functions::CallError::error: pub fn error(&self) -> &FunctionError
+yamaa::functions::ColumnType: impl ColumnType
+yamaa::functions::ColumnType: pub enum ColumnType [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::functions::ColumnType::Date: Date
+yamaa::functions::ColumnType::DateTime: DateTime
+yamaa::functions::ColumnType::Float: Float
+yamaa::functions::ColumnType::Int: Int
+yamaa::functions::ColumnType::Str: Str
 yamaa::functions::FunctionHandle: impl Clone for FunctionHandle
 yamaa::functions::FunctionHandle: impl FunctionHandle
 yamaa::functions::FunctionHandle: impl std::fmt::Debug for FunctionHandle
@@ -355,7 +363,9 @@ yamaa::functions::RenvLock::packages: pub packages: BTreeMap<String, String>
 yamaa::functions::RenvLock::runtime_version: pub runtime_version: String
 yamaa::functions::Signature: impl Signature
 yamaa::functions::Signature: pub struct Signature [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::functions::Signature::may_return_missing: pub may_return_missing: bool
 yamaa::functions::Signature::parameters: pub parameters: Vec<Parameter>
+yamaa::functions::Signature::returns: pub returns: ColumnType
 yamaa::functions::decode_renv_lock: pub fn decode_renv_lock(bytes: &[u8]) -> Result<RenvLock, LockSyntaxError>
 yamaa::observe::CallStage: impl CallStage
 yamaa::observe::CallStage: pub enum CallStage [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
@@ -454,11 +464,15 @@ yamaa::resolver::ResourceResolver: pub trait ResourceResolver: Send + Sync
 yamaa::resolver::ResourceResolver::request: fn request(&self, request: ResolverRequest<'_>) -> Result<ResolverReply, yamaa::error::ResolverFailure> [required]
 yamaa::scalar::Date: impl Date
 yamaa::scalar::Date: pub struct Date [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::scalar::Date::epoch_days: pub fn epoch_days(self) -> i32
 yamaa::scalar::Date::fields: pub fn fields(self) -> (u16, u8, u8)
+yamaa::scalar::Date::from_epoch_days: pub fn from_epoch_days(days: i64) -> Option<Self>
 yamaa::scalar::Date::new: pub fn new(year: u16, month: u8, day: u8) -> Option<Self>
 yamaa::scalar::DateTime: impl DateTime
 yamaa::scalar::DateTime: pub struct DateTime [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::scalar::DateTime::epoch_seconds: pub fn epoch_seconds(self) -> i64
 yamaa::scalar::DateTime::fields: pub fn fields(self) -> (u16, u8, u8, u8, u8, u8)
+yamaa::scalar::DateTime::from_epoch_seconds: pub fn from_epoch_seconds(seconds: i64) -> Option<Self>
 yamaa::scalar::DateTime::new: pub fn new(year: u16, month: u8, day: u8, hour: u8, minute: u8, second: u8) -> Option<Self>
 yamaa::scalar::EncodedScalar: impl EncodedScalar
 yamaa::scalar::EncodedScalar: pub struct EncodedScalar [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]

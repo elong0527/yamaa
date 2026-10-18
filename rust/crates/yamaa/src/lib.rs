@@ -50,8 +50,9 @@ pub use error::{
     ResolverFailure, TableError,
 };
 pub use functions::{
-    decode_renv_lock, Argument, BatchArgument, CallError, FunctionHandle, FunctionIdentity,
-    HostLanguage, LockContext, LockKind, Parameter, ProjectFunctions, RenvLock, Signature,
+    decode_renv_lock, Argument, BatchArgument, CallError, ColumnType, FunctionHandle,
+    FunctionIdentity, HostLanguage, LockContext, LockKind, Parameter, ProjectFunctions, RenvLock,
+    Signature,
 };
 pub use observe::{CallStage, DatasetPhase, Event, Node, Outcome, Phase, Progress, Refusal};
 pub use odm::{read_odm, OdmOptions, ODM_COLUMNS};
