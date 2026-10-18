@@ -124,6 +124,26 @@
       ]
     },
     {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/odm/odm13.xml",
+      "family": "odm",
+      "level": "component",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/odm_xml.rs",
+        "python/tests/installed/installed_read_odm.py",
+        "R/yamaa/tests/read_odm.R"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/odm/odm20.xml",
+      "family": "odm",
+      "level": "component",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/odm_xml.rs",
+        "python/tests/installed/installed_read_odm.py",
+        "R/yamaa/tests/read_odm.R"
+      ]
+    },
+    {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/text_template_reference.json",
       "family": "text",
       "level": "component",
@@ -1027,7 +1047,9 @@
         "R/yamaa/tests/public_contract.R",
         "python/tests/installed/installed_public_grammar.py",
         "R/yamaa/tests/public_grammar.R",
-        "R/yamaa/tests/public_file_resources.R"
+        "R/yamaa/tests/public_file_resources.R",
+        "python/tests/installed/installed_read_odm.py",
+        "R/yamaa/tests/read_odm.R"
       ]
     },
     {
@@ -1091,7 +1113,6 @@
   },
   "suite_ids": {
     "R/yamaa/tests/public_producers.R": "r/public-producer-builds",
-    "python/tests/installed/installed_odm_helpers.py": "python/retained-odm-helpers",
     "python/tests/installed/installed_project_functions.py": "python/project_functions",
     "python/tests/installed/installed_public_producers.py": "python/public-producer-builds"
   },

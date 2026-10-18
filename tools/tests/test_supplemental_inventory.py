@@ -36,6 +36,8 @@ class RepositoryCatalog(unittest.TestCase):
             "from yamaa import yamaa_domain",
             "from yamaa.resources import MemoryResolver",
             "from yamaa import resources",
+            "import yamaa._odm.readers as reader",
+            "import importlib\nimportlib.import_module('yamaa._odm')",
             "import yamaa.expressions.numeric as parser",
             "def lazy():\n    from yamaa.models import TypedColumn",
             "import importlib\nimportlib.import_module('yamaa.runtime')",
@@ -208,6 +210,29 @@ class RepositoryCatalog(unittest.TestCase):
                     "rust/tests/host-fixtures/sas-cases.json",
                     "host-fixtures/sas-cases.json",
                 ),
+                ("tools/conformance/host_fixtures.py", "host_fixtures.py"),
+            ],
+        )
+
+    def test_odm_reader_documents_stage_beside_the_shared_host_truth(self):
+        prefix = "rust/crates/yamaa-adapters/tests/fixtures/odm/"
+        catalog = {
+            "contracts": [
+                {"path": prefix + "odm13.xml"},
+                {"path": "rust/tests/host-fixtures/cases.json"},
+            ],
+            "support_files": [
+                {
+                    "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/x.parquet",
+                    "role": "input",
+                },
+            ],
+        }
+        self.assertEqual(
+            module.host_fixture_files(catalog),
+            [
+                (prefix + "odm13.xml", "host-fixtures/odm/odm13.xml"),
+                ("rust/tests/host-fixtures/cases.json", "host-fixtures/cases.json"),
                 ("tools/conformance/host_fixtures.py", "host_fixtures.py"),
             ],
         )

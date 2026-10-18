@@ -37,6 +37,7 @@ def require_native_consumer(source, name):
     """Reject reference semantic imports in retained installed Python suites."""
     prefixes = (
         "yamaa._reference_domain",
+        "yamaa._odm",
         "yamaa.resources",
         "yamaa.adapters",
         "yamaa.models",
@@ -534,6 +535,7 @@ def host_fixture_files(catalog):
     prefixes = (
         ("rust/tests/host-fixtures/", "host-fixtures/"),
         ("rust/crates/yamaa-adapters/tests/fixtures/sas/", "host-fixtures/sas/"),
+        ("rust/crates/yamaa-adapters/tests/fixtures/odm/", "host-fixtures/odm/"),
     )
     names = [contract["path"] for contract in catalog["contracts"]]
     names += [

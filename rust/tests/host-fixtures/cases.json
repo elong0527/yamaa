@@ -4568,6 +4568,262 @@
           ]
         }
       ]
+    },
+    "read-odm": {
+      "columns": [
+        "ODMVersion",
+        "FileOID",
+        "StudyOID",
+        "MetaDataVersionOID",
+        "SubjectKey",
+        "StudySubjectID",
+        "SubjectStatus",
+        "StudyEventOID",
+        "StudyEventRepeatKey",
+        "EventName",
+        "StartDate",
+        "EventStatus",
+        "EventWorkflowStatus",
+        "FormOID",
+        "FormRepeatKey",
+        "FormName",
+        "FormLayoutOID",
+        "FormStatus",
+        "FormWorkflowStatus",
+        "OpenQueries",
+        "ItemGroupOID",
+        "ItemGroupRepeatKey",
+        "ItemGroupName",
+        "TransactionType",
+        "ItemOID",
+        "ItemName",
+        "Value",
+        "ValuePresent",
+        "IsNull",
+        "SourceOrdinal"
+      ],
+      "integer_columns": [
+        "SourceOrdinal"
+      ],
+      "reads": [
+        {
+          "document": "odm13.xml",
+          "rows": [
+            {
+              "ODMVersion": "1.3",
+              "FileOID": "FILE.13",
+              "StudyOID": "S.13",
+              "MetaDataVersionOID": "M.13",
+              "SubjectKey": "SUBJECT-1",
+              "StudySubjectID": "DISPLAY-1",
+              "SubjectStatus": "Available",
+              "StudyEventOID": "E.13",
+              "StudyEventRepeatKey": null,
+              "EventName": "Screening",
+              "StartDate": "2026-01-02",
+              "EventStatus": null,
+              "EventWorkflowStatus": null,
+              "FormOID": "F.13",
+              "FormRepeatKey": null,
+              "FormName": "Demographics",
+              "FormLayoutOID": null,
+              "FormStatus": null,
+              "FormWorkflowStatus": null,
+              "OpenQueries": null,
+              "ItemGroupOID": "G.13",
+              "ItemGroupRepeatKey": "7",
+              "ItemGroupName": "Subject details",
+              "TransactionType": "Insert",
+              "ItemOID": "I.DATE",
+              "ItemName": "Collection date",
+              "Value": "2026-01-02",
+              "ValuePresent": "true",
+              "IsNull": "false",
+              "SourceOrdinal": "1"
+            },
+            {
+              "ODMVersion": "1.3",
+              "FileOID": "FILE.13",
+              "StudyOID": "S.13",
+              "MetaDataVersionOID": "M.13",
+              "SubjectKey": "SUBJECT-1",
+              "StudySubjectID": "DISPLAY-1",
+              "SubjectStatus": "Available",
+              "StudyEventOID": "E.13",
+              "StudyEventRepeatKey": null,
+              "EventName": "Screening",
+              "StartDate": "2026-01-02",
+              "EventStatus": null,
+              "EventWorkflowStatus": null,
+              "FormOID": "F.13",
+              "FormRepeatKey": null,
+              "FormName": "Demographics",
+              "FormLayoutOID": null,
+              "FormStatus": null,
+              "FormWorkflowStatus": null,
+              "OpenQueries": null,
+              "ItemGroupOID": "G.13",
+              "ItemGroupRepeatKey": "7",
+              "ItemGroupName": "Subject details",
+              "TransactionType": "Insert",
+              "ItemOID": "I.EMPTY",
+              "ItemName": "Collected empty",
+              "Value": "",
+              "ValuePresent": "true",
+              "IsNull": "false",
+              "SourceOrdinal": "2"
+            },
+            {
+              "ODMVersion": "1.3",
+              "FileOID": "FILE.13",
+              "StudyOID": "S.13",
+              "MetaDataVersionOID": "M.13",
+              "SubjectKey": "SUBJECT-1",
+              "StudySubjectID": "DISPLAY-1",
+              "SubjectStatus": "Available",
+              "StudyEventOID": "E.13",
+              "StudyEventRepeatKey": null,
+              "EventName": "Screening",
+              "StartDate": "2026-01-02",
+              "EventStatus": null,
+              "EventWorkflowStatus": null,
+              "FormOID": "F.13",
+              "FormRepeatKey": null,
+              "FormName": "Demographics",
+              "FormLayoutOID": null,
+              "FormStatus": null,
+              "FormWorkflowStatus": null,
+              "OpenQueries": null,
+              "ItemGroupOID": "G.13",
+              "ItemGroupRepeatKey": "7",
+              "ItemGroupName": "Subject details",
+              "TransactionType": "Insert",
+              "ItemOID": "I.NULL",
+              "ItemName": "Explicit null",
+              "Value": null,
+              "ValuePresent": "false",
+              "IsNull": "true",
+              "SourceOrdinal": "3"
+            }
+          ]
+        },
+        {
+          "document": "odm20.xml",
+          "rows": [
+            {
+              "ODMVersion": "2.0",
+              "FileOID": "FILE.20",
+              "StudyOID": "S.20",
+              "MetaDataVersionOID": "M.20",
+              "SubjectKey": "SUBJECT-20",
+              "StudySubjectID": null,
+              "SubjectStatus": null,
+              "StudyEventOID": "E.20",
+              "StudyEventRepeatKey": null,
+              "EventName": "Screening",
+              "StartDate": null,
+              "EventStatus": null,
+              "EventWorkflowStatus": null,
+              "FormOID": "FO.20",
+              "FormRepeatKey": "2",
+              "FormName": "Biomarker form",
+              "FormLayoutOID": null,
+              "FormStatus": null,
+              "FormWorkflowStatus": null,
+              "OpenQueries": null,
+              "ItemGroupOID": "IG.20",
+              "ItemGroupRepeatKey": "3",
+              "ItemGroupName": "Biomarker group",
+              "TransactionType": null,
+              "ItemOID": "I.TEST",
+              "ItemName": "Test name",
+              "Value": "PD-L1",
+              "ValuePresent": "true",
+              "IsNull": "false",
+              "SourceOrdinal": "1"
+            },
+            {
+              "ODMVersion": "2.0",
+              "FileOID": "FILE.20",
+              "StudyOID": "S.20",
+              "MetaDataVersionOID": "M.20",
+              "SubjectKey": "SUBJECT-20",
+              "StudySubjectID": null,
+              "SubjectStatus": null,
+              "StudyEventOID": "E.20",
+              "StudyEventRepeatKey": null,
+              "EventName": "Screening",
+              "StartDate": null,
+              "EventStatus": null,
+              "EventWorkflowStatus": null,
+              "FormOID": "FO.20",
+              "FormRepeatKey": "2",
+              "FormName": "Biomarker form",
+              "FormLayoutOID": null,
+              "FormStatus": null,
+              "FormWorkflowStatus": null,
+              "OpenQueries": null,
+              "ItemGroupOID": "IG.20",
+              "ItemGroupRepeatKey": "3",
+              "ItemGroupName": "Biomarker group",
+              "TransactionType": null,
+              "ItemOID": "I.RESULT",
+              "ItemName": "Test result",
+              "Value": "",
+              "ValuePresent": "true",
+              "IsNull": "false",
+              "SourceOrdinal": "2"
+            }
+          ]
+        }
+      ],
+      "archive": {
+        "name": "documents.tar",
+        "members": [
+          "odm13.xml",
+          "odm20.xml"
+        ],
+        "selected": "odm20.xml"
+      },
+      "refusals": [
+        {
+          "name": "depth-below-minimum",
+          "document": "odm13.xml",
+          "options": {
+            "max_xml_depth": "7"
+          },
+          "code": "invalid_option"
+        },
+        {
+          "name": "member-of-plain-xml",
+          "document": "odm13.xml",
+          "options": {
+            "archive_member": "odm13.xml"
+          },
+          "code": "archive_member"
+        },
+        {
+          "name": "absent-source",
+          "document": null,
+          "options": {},
+          "code": "not_found"
+        },
+        {
+          "name": "archive-without-member",
+          "document": "documents.tar",
+          "options": {},
+          "code": "archive_member"
+        },
+        {
+          "name": "archive-over-member-limit",
+          "document": "documents.tar",
+          "options": {
+            "archive_member": "odm20.xml",
+            "max_archive_members": "1"
+          },
+          "code": "limit"
+        }
+      ]
     }
   }
 }
