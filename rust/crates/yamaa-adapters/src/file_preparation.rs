@@ -126,7 +126,7 @@ impl FileSpecification {
             },
         )
         .map_err(Error::Compile)?;
-        let findings = crate::run_report::location_findings(&resources, &run);
+        let findings = crate::run_report::location_findings(&resources, &run, &links);
         if !findings.is_empty() {
             return Err(Error::Compile(crate::specification_run::Error::Prepare(
                 yamaa_core::specification::PrepareError::Invalid(findings),
@@ -151,7 +151,7 @@ impl FileSpecification {
             },
         )
         .and_then(|run| {
-            let findings = crate::run_report::location_findings(&resources, &run);
+            let findings = crate::run_report::location_findings(&resources, &run, &links);
             if findings.is_empty() {
                 Ok(run)
             } else {

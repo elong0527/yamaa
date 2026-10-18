@@ -404,8 +404,8 @@ dataset in declaration order; one `rows` row per row template, or one for root
 `base` without row templates; one `handler` row per handler path in execution
 order, zero counts included; one `column` row per output column in
 `output.columns` order, for a successful run only; and one `check` row per
-evaluated verification in execution order. A check a stopped run never reached
-has no row.
+evaluated column or dataset verification in execution order. An intermediate's
+verifications have no row, and a check a stopped run never reached has none.
 
 Evidence: `schema-verification-log`, `schema-row-count-fractions`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::failed_runs_report_the_prefix_they_reached_and_no_columns`.
 Replaces: REQ-0393, REQ-1175.
@@ -548,7 +548,8 @@ the one empty group `[{}]`. Empty remaining context is `{}`.
 
 The report is verified before any host sees it or any byte of it is written:
 its columns, types and order; one row per run, input dataset, row template,
-handler path, output column and evaluated check, each kind in order; a
+handler path, output column of a successful run, and evaluated column or
+dataset check, each kind in order; a
 non-missing `SPEC_PATH` unique within the report; each kind's outcome,
 severity and condition vocabularies; `KEYS` on exactly the violated checks;
 and `COUNT` no greater than `TOTAL` where both exist. A malformed report is an
@@ -559,6 +560,7 @@ Replaces: REQ-0395, REQ-1178.
 
 The rows correspond one to one with what the executor evaluated: the declared
 inputs, the row templates, the handler paths it counted, the declared output
-columns and the checks it evaluated. A run fails with a named condition only
+columns of a successful run, and the column and dataset checks it evaluated. A
+run fails with a named condition only
 under [CHECK-2](#check-2) and the other rules; a report that fails its own
 verification refuses the build, and no partial report is returned or written.

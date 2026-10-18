@@ -282,6 +282,92 @@ fn unknown_sections_are_refused_arguments() {
     );
 }
 
+/// Counts its calls and interrupts every one, as a user's Ctrl-C would.
+struct Interrupting(AtomicUsize);
+impl ProjectFunctions for Interrupting {
+    fn verify_lock(
+        &self,
+        _: &LockContext<'_>,
+        _: &[FunctionIdentity],
+    ) -> Result<(), FunctionError> {
+        Ok(())
+    }
+    fn bind(&self, _: &FunctionIdentity, _: &Signature) -> Result<FunctionHandle, FunctionError> {
+        Ok(FunctionHandle::new(()))
+    }
+    fn invoke(&self, _: &FunctionHandle, _: &[Argument<'_>]) -> Result<Scalar, CallError> {
+        self.0.fetch_add(1, Ordering::Relaxed);
+        Err(CallError::Raised(FunctionError::Interrupted {
+            payload: None,
+        }))
+    }
+}
+
+#[test]
+fn a_user_interrupt_stops_the_project_run() {
+    let study = Study::new();
+    study.write("raw.csv", "ID,V\n1,2\n");
+    study.write(
+        "environment.yaml",
+        "schema_version: '1.0'\nfunctions:\n  double:\n    function: pkg.double\n    description: Double the value.\n    params: [{name: x, type: int}]\n    returns: int\n    tests:\n      - {id: normal, covers: [normal], args: {x: 1}, result: 2}\n      - {id: zero, covers: [boundary], args: {x: 0}, result: 0}\n      - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n",
+    );
+    let spec = |domain: &str| {
+        format!(
+            "schema_version: '1.0'\ndomain: {domain}\nkeys: [ID]\ninput: {{RAW: {{path: raw.csv, types: {{ID: int, V: int}}}}}}\ncolumns:\n  - {{name: ID, type: int, label: Identifier, derivation: RAW.ID}}\n  - {{name: W, type: int, label: Doubled, derivation: {{function: {{name: double, args: {{x: RAW.V}}}}}}}}\noutput: {{path: {}.csv, columns: [ID, W]}}\n",
+            domain.to_lowercase()
+        )
+    };
+    study.write("one.yaml", spec("ONE"));
+    study.write("two.yaml", spec("TWO"));
+    study.write(
+        "project.yaml",
+        "schema_version: '1.0'\nenvironments: {python: environment.yaml}\nadam: {specs: [one.yaml, two.yaml]}\n",
+    );
+    let functions = Arc::new(Interrupting(AtomicUsize::new(0)));
+    let engine = Engine::new(
+        EngineOptions::new(HostLanguage::Python, "project-test".into(), "0".into())
+            .with_functions(functions.clone()),
+    );
+    let run = engine
+        .project_run(&study.project(), None, &CancellationToken::new())
+        .unwrap();
+    // TWO never builds, so no more project code runs after the interrupt.
+    assert_eq!(run.names(), ["ONE"]);
+    assert!(run.get("ONE").unwrap().build().interrupt().is_some());
+    assert_eq!(functions.0.load(Ordering::Relaxed), 1);
+}
+
+#[test]
+fn a_save_that_would_write_nothing_fails() {
+    let study = study();
+    let engine = engine();
+    let token = CancellationToken::new();
+    // The project declares no `send` section: the run builds nothing.
+    let mut send = engine
+        .project_run(&study.project(), Some("send"), &token)
+        .unwrap();
+    assert!(send.names().is_empty());
+    assert_eq!(send.issues().rows(), 0);
+    let failure = send.save().unwrap_err();
+    assert!(
+        failure.message.contains("nothing was saved"),
+        "{}",
+        failure.message
+    );
+    // No section names `define`: the submission composes nothing.
+    let mut submission = engine
+        .project_submission(&study.project(), None, None, "0.4.0", &token)
+        .unwrap();
+    assert_eq!(submission.issues().rows(), 0);
+    let failure = submission.save().unwrap_err();
+    assert!(
+        failure.message.contains("nothing was saved"),
+        "{}",
+        failure.message
+    );
+    assert_eq!(std::fs::read_dir(study.0.join("out")).unwrap().count(), 0);
+}
+
 #[test]
 fn project_check_reports_every_specification_and_the_project_findings() {
     let study = study();
@@ -432,6 +518,35 @@ fn a_producer_outside_the_scope_is_read_from_its_saved_artifact_and_checked() {
         .unwrap();
     assert!(adam.get("ADSL").unwrap().output().is_none());
     assert_eq!(conditions(&adam.issues()), ["producer_contract_mismatch"]);
+}
+
+#[test]
+fn a_specification_may_not_write_the_saved_artifact_it_reads() {
+    let study = study();
+    study.write("out/dm.csv", DM_CSV);
+    let engine = engine();
+    let token = CancellationToken::new();
+    for (field, path) in [
+        ("output.path", "../out/dm.csv"),
+        ("output.report", "../out/dm-report.csv"),
+    ] {
+        let target = if field == "output.path" {
+            "../out/adsl.csv"
+        } else {
+            "../out/adsl-report.csv"
+        };
+        study.write("adam/adsl.yaml", ADSL.replace(target, path));
+        let mut adam = engine
+            .project_run(&study.project(), Some("adam"), &token)
+            .unwrap();
+        assert!(adam.get("ADSL").unwrap().output().is_none());
+        let issues = rows(&adam.issues());
+        assert_eq!(issues.len(), 1, "{issues:?}");
+        assert_eq!(issues[0].condition, "artifact_path_collision");
+        assert_eq!(issues[0].spec_paths, [field, field]);
+        assert!(adam.save().is_err());
+        assert_eq!(study.read("out/dm.csv").unwrap(), DM_CSV);
+    }
 }
 
 #[test]
@@ -633,4 +748,41 @@ fn a_submission_without_a_section_composes_each_section_that_names_define_in_ord
     assert!(failure.message.contains("adam"), "{}", failure.message);
     assert!(study.exists("define.xml"));
     assert!(!study.exists("adam-define.xml"));
+}
+
+#[test]
+fn two_sections_that_write_one_file_save_neither() {
+    let study = define_study();
+    let engine = engine();
+    let token = CancellationToken::new();
+    let project = std::fs::read_to_string(study.0.join("project.yaml")).unwrap();
+    // ADaM copies SDTM's section metadata, its define target included.
+    let adam = project[project.find("sdtm:\n").unwrap()..]
+        .replacen("sdtm:", "adam:", 1)
+        .replace(
+            "name: SDTMIG\n    version: '3.4'",
+            "name: ADaMIG\n    version: '1.3'",
+        )
+        .replace("  specs:\n  - spec.yaml\n", "  specs: []\n")
+        .replace("  datasets: json\n", "");
+    study.write("project.yaml", format!("{project}{adam}"));
+    let mut submission = engine
+        .project_submission(
+            &study.project(),
+            None,
+            Some("2026-09-11T00:00:00"),
+            "0.4.0",
+            &token,
+        )
+        .unwrap();
+    assert_eq!(
+        submission.issues().rows(),
+        0,
+        "{:?}",
+        rows(&submission.issues())
+    );
+    let failure = submission.save().unwrap_err();
+    assert!(failure.message.contains("adam"), "{}", failure.message);
+    assert!(!study.exists("define.xml"));
+    assert!(!study.exists("dm.json"));
 }

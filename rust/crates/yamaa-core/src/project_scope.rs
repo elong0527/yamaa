@@ -176,7 +176,51 @@ pub fn order(dependencies: &[Vec<usize>]) -> Order {
             }
         }
     }
+    // A back edge finds only the producers still being traversed, so a
+    // specification whose cycle closes through a finished producer is listed
+    // by the shortest cycle through it.
+    let mut listed = vec![false; dependencies.len()];
+    for cycle in &cycles {
+        for &member in &cycle.members {
+            listed[member] = true;
+        }
+    }
+    for start in 0..dependencies.len() {
+        if listed[start] {
+            continue;
+        }
+        if let Some(members) = shortest_cycle(dependencies, start) {
+            for &member in &members {
+                listed[member] = true;
+            }
+            cycles.push(Cycle { members });
+        }
+    }
     Order { order, cycles }
+}
+
+/// The shortest dependency path from `start` back to itself, `start` first,
+/// taking producers in authored link order.
+fn shortest_cycle(dependencies: &[Vec<usize>], start: usize) -> Option<Vec<usize>> {
+    let mut previous = vec![None; dependencies.len()];
+    let mut queue = std::collections::VecDeque::from([start]);
+    while let Some(node) = queue.pop_front() {
+        for &producer in &dependencies[node] {
+            if producer == start {
+                let mut members = vec![node];
+                while let Some(before) = previous[*members.last().expect("nonempty path")] {
+                    members.push(before);
+                }
+                members.reverse();
+                return Some(members);
+            }
+            if previous[producer].is_none() {
+                previous[producer] = Some(node);
+                queue.push_back(producer);
+            }
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -216,6 +260,25 @@ mod tests {
                     members: vec![0, 1, 2]
                 },
                 Cycle { members: vec![3] }
+            ]
+        );
+    }
+
+    #[test]
+    fn a_cycle_closing_through_a_finished_producer_lists_every_member() {
+        // 0 reads 1 and 2, 1 reads 0, 2 reads 1: 2 is on 0 -> 2 -> 1 -> 0,
+        // whose link from 2 reaches 1 after 1 has finished.
+        let order = order(&[vec![1, 2], vec![0], vec![1]]);
+        assert_eq!(order.order, [1, 2, 0]);
+        assert_eq!(
+            order.cycles,
+            [
+                Cycle {
+                    members: vec![0, 1]
+                },
+                Cycle {
+                    members: vec![2, 1, 0]
+                }
             ]
         );
     }

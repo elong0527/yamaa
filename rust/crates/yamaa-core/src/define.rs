@@ -700,6 +700,12 @@ impl<P: Ports> Application<P> {
             .iter()
             .map(|a| (a.written.as_str(), a.bytes.as_slice(), a.state))
     }
+    /// Each artifact's target with its written path, in publication order.
+    pub fn targets(&self) -> impl ExactSizeIterator<Item = (&P::Target, &str)> {
+        self.artifacts
+            .iter()
+            .map(|a| (&a.target, a.written.as_str()))
+    }
     pub fn save(
         &mut self,
         ports: &mut P,

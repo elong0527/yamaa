@@ -159,6 +159,40 @@ mod file {
         }
 
         #[test]
+        fn a_consumer_may_not_write_a_file_of_the_producer_it_reads() {
+            let study = study("csv");
+            study.write("generated/producer.csv", "ID,VALUE\n1,7\n");
+            for (output, field) in [
+                ("path: ../generated/producer.csv", "output.path"),
+                (
+                    "path: ../generated/root.csv, report: ../generated/producer.csv",
+                    "output.report",
+                ),
+            ] {
+                study.write(
+                    "consumer/root.yaml",
+                    consumer("csv", "").replace("path: ../generated/root.csv", output),
+                );
+                // Refused while it is prepared, before any study read.
+                let path = study.path("consumer/root.yaml");
+                let issues = file_application::domain(
+                    yamaa_core::project_function::Language::Python,
+                    Request {
+                        specification: &path,
+                        environment: None,
+                    },
+                    identity(&path),
+                )
+                .err()
+                .expect("the collision refuses the build");
+                assert_eq!(issues.len(), 1, "{issues:?}");
+                assert_eq!(issues[0].condition, "artifact_path_collision");
+                assert_eq!(issues[0].spec_paths, ["output.path", field]);
+                assert_eq!(study.read("generated/producer.csv"), b"ID,VALUE\n1,7\n");
+            }
+        }
+
+        #[test]
         fn the_producing_specification_is_read_but_never_compiled_or_executed() {
             let study = Study::new();
             // The producer's derivation calls an unknown function and its source

@@ -251,13 +251,16 @@ report extension the mapping does not name fails validation as it does for
 `output.path`.
 
 Fails: `artifact_path_collision`, `unknown_artifact_profile`.
-Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs`, `rust/crates/yamaa-adapters/tests/project_scope.rs::unlinked_inputs_cycles_and_collisions_are_project_findings`.
+Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs`, `rust/crates/yamaa-adapters/tests/project_scope.rs::unlinked_inputs_cycles_and_collisions_are_project_findings`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::a_consumer_may_not_write_a_file_of_the_producer_it_reads`.
 Replaces: REQ-0756, REQ-1180.
 
 Two spellings that resolve to the same file collide as well; the comparison
 uses the resolved locations without requiring either file or its parent to
-exist. In a project run, no two of the `output.path` and `output.report`
-paths of the specifications in its run scope may name one file
+exist. A specification does not write the files it reads: neither path may
+name the `output.path` or `output.report` location of a producer an input links
+under [INPUT-10](inputs.md#input-10), reporting the producer's field and this
+specification's. In a project run, no two of the `output.path` and
+`output.report` paths of the specifications in its run scope may name one file
 ([PROJECT-12](profiles/project.md#project-12)).
 
 <a id="output-10"></a>

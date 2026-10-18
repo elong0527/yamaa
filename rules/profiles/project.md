@@ -198,9 +198,13 @@ the producer's saved artifact, and checks it against the producer's output
 contract under [INPUT-11](../inputs.md#input-11). An absent file fails as a
 missing input at `input.<dataset>.path`.
 
-Fails: `resource_path_missing`, `producer_contract_mismatch`.
-Evidence: `rust/crates/yamaa/tests/project_operations.rs::a_producer_outside_the_scope_is_read_from_its_saved_artifact_and_checked`, `rust/crates/yamaa-adapters/tests/project_scope.rs::saved_links_read_held_or_saved_artifacts_under_the_producer_contract`.
+Fails: `resource_path_missing`, `producer_contract_mismatch`, `artifact_path_collision`.
+Evidence: `rust/crates/yamaa/tests/project_operations.rs::a_producer_outside_the_scope_is_read_from_its_saved_artifact_and_checked`, `rust/crates/yamaa/tests/project_operations.rs::a_specification_may_not_write_the_saved_artifact_it_reads`, `rust/crates/yamaa-adapters/tests/project_scope.rs::saved_links_read_held_or_saved_artifacts_under_the_producer_contract`.
 Replaces: REQ-1343.
+
+The consumer may not write the files it reads: its `output.path` and
+`output.report` locations may not name the producer's, as
+[OUTPUT-9](../output.md#output-9) states for every linked producer.
 
 <a id="project-10"></a>
 
@@ -252,14 +256,15 @@ artifact: it replaces, in run order, the report file of every specification
 that ran and declares one, then fails with every run's findings.
 
 Fails: `artifact_path_collision`.
-Evidence: `rust/crates/yamaa/tests/project_operations.rs::every_target_is_validated_before_the_first_file_is_written`, `rust/crates/yamaa-adapters/tests/project_scope.rs::the_preflight_refuses_two_results_that_write_one_file`, `rust/crates/yamaa-adapters/tests/project_scope.rs::report_only_saves_write_the_report_file_and_no_primary_artifact`.
+Evidence: `rust/crates/yamaa/tests/project_operations.rs::every_target_is_validated_before_the_first_file_is_written`, `rust/crates/yamaa/tests/project_operations.rs::a_save_that_would_write_nothing_fails`, `rust/crates/yamaa-adapters/tests/project_scope.rs::the_preflight_refuses_two_results_that_write_one_file`, `rust/crates/yamaa-adapters/tests/project_scope.rs::report_only_saves_write_the_report_file_and_no_primary_artifact`.
 Replaces: REQ-1346.
 
 Locations compare as [OUTPUT-9](../output.md#output-9) compares the two
 paths of one specification, two spellings of one file included. Each
 specification orders its own files as [OUTPUT-10](../output.md#output-10)
 states. A failure while replacing one file stops the publication there: the
-files already replaced remain, and no later target is touched.
+files already replaced remain, and no later target is touched. A project run
+that built no specification has nothing to save, and saving it fails.
 
 ## Project submissions
 
@@ -274,8 +279,12 @@ that declares `datasets` ([JSON-1](dataset-json.md#json-1)). Its findings are
 those of its sections in that order. Saving publishes the sections in that
 order; the first section whose publication fails stops the save.
 
-Evidence: `rust/crates/yamaa/tests/project_operations.rs::a_submission_composes_the_selected_section`, `rust/crates/yamaa/tests/project_operations.rs::a_submission_without_a_section_composes_each_section_that_names_define_in_order`, `python/tests/installed/installed_public_define.py::test_every_declared_define_section_is_composed_without_a_section`.
+Evidence: `rust/crates/yamaa/tests/project_operations.rs::a_submission_composes_the_selected_section`, `rust/crates/yamaa/tests/project_operations.rs::a_submission_without_a_section_composes_each_section_that_names_define_in_order`, `rust/crates/yamaa/tests/project_operations.rs::two_sections_that_write_one_file_save_neither`, `rust/crates/yamaa/tests/project_operations.rs::a_save_that_would_write_nothing_fails`, `python/tests/installed/installed_public_define.py::test_every_declared_define_section_is_composed_without_a_section`.
 Replaces: REQ-1347.
 
-Each section publishes its transport files before its document under
-[JSON-14](dataset-json.md#json-14).
+Saving first compares the targets of every section: two sections that name
+one file fail the save before any file is written. A section whose own target
+cannot be admitted is left to its own publication, which reports and records
+that failure. A submission that composed no section has nothing to save, and
+saving it fails. Each section publishes its transport files before its
+document under [JSON-14](dataset-json.md#json-14).

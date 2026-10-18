@@ -126,8 +126,9 @@ pub(super) fn read_up_to(reader: &mut impl Read, buffer: &mut [u8]) -> io::Resul
     Ok(filled)
 }
 
-fn padded(size: u64) -> u64 {
-    size.div_ceil(BLOCK as u64) * BLOCK as u64
+/// `size` rounded up to whole blocks, or `None` beyond `u64`.
+fn padded(size: u64) -> Option<u64> {
+    size.checked_next_multiple_of(BLOCK as u64)
 }
 
 /// The bytes before the first NUL.
@@ -334,7 +335,8 @@ impl<'f> Tar<'f> {
         if read_up_to(&mut self.stream, &mut data)? != data.len() {
             return Err(Fault::Archive("truncated TAR metadata header").into_io());
         }
-        self.stream.skip(padded(size) - size)?;
+        self.stream
+            .skip(padded(size).expect("bounded metadata size") - size)?;
         Ok(data)
     }
 
@@ -436,7 +438,11 @@ impl<'f> Tar<'f> {
             // Links, devices, FIFOs and directories carry no data blocks
             // whatever their size field says; unknown types are skipped.
             let has_data = regular || !(directory || matches!(typeflag, b'1'..=b'6'));
-            self.pending = if has_data { padded(size) } else { 0 };
+            self.pending = if has_data {
+                padded(size).ok_or_else(|| Fault::Archive("invalid TAR member size").into_io())?
+            } else {
+                0
+            };
             return Ok(Some(Member {
                 name,
                 regular,

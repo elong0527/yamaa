@@ -105,6 +105,13 @@ class ProjectRun:
             _call(self._native.member_issues, name)  # raises the engine's refusal
         return MemberRun(self._native, name)
 
+    def __contains__(self, name: object) -> bool:
+        return name in self._native.names()
+
+    def __iter__(self):
+        """The names, as `names` lists them."""
+        return iter(self._native.names())
+
     @property
     def issues(self) -> _pl.DataFrame:
         return _pl.DataFrame(self._native.issues())

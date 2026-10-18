@@ -9,7 +9,8 @@ version = "0.5.0"
 description = "Python helpers for the yamaa clinical data specification"
 readme = "README.md"
 requires-python = ">=3.12"
-# The project is MIT; the wheels also link Apache-2.0 and BSD-3-Clause crates.
+# The project is MIT, with Unicode-3.0 data in its Unicode tables; the wheels
+# also link Apache-2.0 and BSD-3-Clause crates.
 # tools.packaging.generate_third_party_notices derives this expression.
 license = "MIT AND Apache-2.0 AND BSD-3-Clause AND Unicode-3.0"
 license-files = ["LICENSE.txt", "LICENSE-THIRD-PARTY.txt", "LICENSE-UNICODE.txt", "LICENSE-READSTAT.txt", "LICENSE-YAML.txt"]

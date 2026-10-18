@@ -85,7 +85,7 @@ impl FileProject {
             },
         )
         .and_then(|run| {
-            let findings = crate::run_report::location_findings(&resources, &run);
+            let findings = crate::run_report::location_findings(&resources, &run, &links);
             if findings.is_empty() {
                 Ok(run)
             } else {
@@ -151,7 +151,7 @@ impl FileProject {
             },
         )
         .map_err(Error::Compile)?;
-        let findings = crate::run_report::location_findings(&resources, &run);
+        let findings = crate::run_report::location_findings(&resources, &run, &links);
         if !findings.is_empty() {
             return Err(Error::Compile(run.reject(
                 yamaa_core::specification::PrepareError::Invalid(findings),

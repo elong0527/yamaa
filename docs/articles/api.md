@@ -236,7 +236,8 @@ with `producer_not_completed` and build nothing; the others still run.
 `save()` checks every target before it writes anything. When every
 specification succeeded, it writes each one's report and dataset in run order.
 When any failed, it writes no dataset, only the report files of the
-specifications that ran, and then raises with every run's issues.
+specifications that ran, and then raises with every run's issues. A run that
+built no specification has nothing to write, so its `save()` raises.
 
 ## Create define.xml and submission datasets
 
@@ -272,9 +273,10 @@ A submission is a snapshot like any result, so run and save the section
 before you call `submission()`. `created` sets the creation time define.xml
 records, a whole-second datetime; without it, the submission uses the current
 UTC time. The same files and the same `created` give the same bytes.
-`save()` writes the sections in the order `sdtm`, `adam`, `send`, each
-section's transport files before its define.xml, and raises when a section
-cannot be written.
+`save()` first checks that no two sections write one file, then writes the
+sections in the order `sdtm`, `adam`, `send`, each section's transport files
+before its define.xml, and raises when a section cannot be written or when no
+section was composed.
 
 ## What a result holds
 

@@ -46,8 +46,11 @@ from `rust/`, as `python -m tools.ci.toolchain --install` does in CI.
 The [source packaging guidance](docs/release.md#source-package-contents) links
 the vendored licenses and patch provenance.
 
-Every package ships the third-party notices generated from `rust/Cargo.lock`.
-After changing the lock, regenerate them and commit the results:
+Every package ships the third-party notices generated from `rust/Cargo.lock`
+and from the standard library notice of the toolchain that
+`rust/rust-toolchain.toml` pins. After changing the lock or the pinned
+toolchain, regenerate them and commit the results. The generator runs `rustc`
+in `rust/`, where rustup selects the pinned toolchain:
 
 ```sh
 uv run --project python --no-sync python -m tools.packaging.generate_third_party_notices --write

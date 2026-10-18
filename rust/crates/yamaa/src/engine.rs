@@ -873,6 +873,15 @@ impl DefineBuild {
         self.inner.capture_reads()
     }
 
+    /// Open, without writing, every file `save` would write, against the
+    /// files already admitted.
+    pub(crate) fn preflight(
+        &self,
+        preflight: &mut yamaa_adapters::project_scope::Preflight,
+    ) -> Result<(), Vec<yamaa_adapters::issue_rows::Issue>> {
+        preflight.admit_define(&self.inner)
+    }
+
     /// Publish all preflighted outputs. A failed composition cannot save.
     pub fn save(&mut self) -> Result<SaveOutcome, Error> {
         match self.inner.save() {
