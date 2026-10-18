@@ -82,7 +82,67 @@ dependency graph. Each derivation completes for all rows of the template
 before a dependent derivation starts, so a window may read a completed column
 derived from another window, directly or through scalar derivations. A
 dependency cycle still fails under [COLUMN-4](columns.md#column-4)
-and [COLUMN-6](columns.md#column-6).
+and [COLUMN-6](columns.md#column-6). A window in a column-level derivation
+partitions the rows of every row template, and
+[WINDOW-11](#window-11) limits the driver fields it reads.
+
+<a id="window-11"></a>
+
+### WINDOW-11. A column-level window reads a driver field only when every row template has that driver
+
+A window in a column-level derivation partitions and orders the rows of every
+row template, and reads a qualified field at the record that built each row.
+It may name a field of a driver only when every row template, grouped or not,
+has that driver, and [NAME-4](names.md#name-4) still decides what a grouped
+row holds. When the row templates do not all share one driver, a field of one
+of their drivers, or of the input a driver intermediate reads, fails.
+
+Fails: `unknown_field`.
+Evidence: `negative-window-other-driver`, `sdtm-fa-reactogenicity-diary`, `rust/crates/yamaa-adapters/tests/execution_column_window_drivers.rs`, `rust/crates/yamaa-adapters/tests/execution_grouped_driver_dataset.rs`, `rust/crates/yamaa-core/tests/support/diagnostic/binding.rs`.
+
+A column-level window is evaluated once over every constructed row, whichever
+row template built it; [SPEC-6](specification.md#spec-6) lets no row template
+derive its column. A qualified field it names is read from the record each row
+was built from: the driver record, or for a grouped row template the records of
+the row's group. A row built from another driver holds no such record, and a
+window reads no implicit join ([LOOKUP-1](lookup.md#lookup-1)), so for that
+row the field names nothing it holds. A driver intermediate's records are
+records of the input it reads, but a row it builds holds them as the
+intermediate's ([ROW-2](rows.md#row-2)), and a field of that input names
+nothing the row holds either.
+
+The read fails validation as `unknown_field` at the operand that names it: the
+operation's `source`, `date`, `reference_date`, `value` or `tie_break` entry,
+an entry of `window.group_by` or `window.order_by`, or `window.filter` for
+each qualified name the filter reads. A window in a `case` result
+([EXPR-3](expressions.md#expr-3)) and a named window
+([WINDOW-2](#window-2)) are checked where they are used. The finding names the
+field as `identifier`, the distinct drivers of the row templates in
+construction order as `drivers`, and the window operation as `operation`.
+
+Bring such a value onto every row as its own column, which each row completes
+in its own scope, and name the column. A column-level `source` reads the
+record of the row's own driver and joins another input on the output keys
+([LOOKUP-1](lookup.md#lookup-1)), and a row template may derive the column
+itself:
+
+```yaml
+columns:
+  - name: AGE
+    type: int
+    derivation: DM.AGE
+  - name: ORD
+    type: int
+    derivation:
+      row_number:
+        window:
+          order_by: [AGE]
+```
+
+When every row template has the driver, the window reads the field from the
+record that built each row. A grouped row template over that driver then
+holds only its group keys, and a read of another field of the driver fails as
+`ungrouped_driver_field` under [NAME-4](names.md#name-4).
 
 <a id="window-4"></a>
 
