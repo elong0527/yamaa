@@ -198,17 +198,7 @@ def main(argv=None):
         },
     )
 
-    def build(case, entry, specification):
-        # An entry's `environment` names the project file it runs with.
-        project = entry["environment"]
-        if project is None:
-            run = yamaa.spec(case / specification).run()
-        else:
-            stage_lock(case, project, args.python_lock)
-            # A project names a specification by its entry's own `domain`.
-            name = read_yaml(case / entry["specification"])["domain"]
-            listing = project_for(case, project, entry["specification"], specification)
-            run = yamaa.project(case / listing).spec(name).run()
+    def observe(run):
         tables = {"output": table(run.output), "report": table(run.report)}
         saved = False
         if not run.issues.height:
@@ -221,13 +211,38 @@ def main(argv=None):
         issues = run.issues.to_dicts()
         for issue in issues:
             issue["context"] = json.loads(issue["context"])
+        return {"issues": issues, "tables": tables, "saved": saved}
+
+    def files(case):
         return {
+            path: path.read_bytes()
+            for path in sorted(case.rglob("*"))
+            if path.is_file() and not path.is_symlink()
+        }
+
+    def build(case, entry, specification, repeat=False):
+        # An entry's `environment` names the project file it runs with.
+        project = entry["environment"]
+        if project is None:
+            spec = yamaa.spec(case / specification)
+        else:
+            stage_lock(case, project, args.python_lock)
+            # A project names a specification by its entry's own `domain`.
+            name = read_yaml(case / entry["specification"])["domain"]
+            listing = project_for(case, project, entry["specification"], specification)
+            spec = yamaa.project(case / listing).spec(name)
+        record = {
             "specification": specification,
             "environment": project,
-            "issues": issues,
-            "tables": tables,
-            "saved": saved,
+            **observe(spec.run()),
         }
+        if repeat:
+            # The repeat pass (#2821): a second run of the same object reuses
+            # what the first compiled and must equal it, saving the same bytes.
+            before = files(case)
+            again = observe(spec.run())
+            record["repeat"] = {**again, "same_files": files(case) == before}
+        return record
 
     for example in plan["examples"]:
         name = example["name"]
@@ -251,7 +266,9 @@ def main(argv=None):
                             target.parent.mkdir(parents=True, exist_ok=True)
                             shutil.copyfile(source, target)
                 for entry in example["entries"]["python"]:
-                    record["builds"].append(build(case, entry, entry["specification"]))
+                    record["builds"].append(
+                        build(case, entry, entry["specification"], repeat=True)
+                    )
                 variants = example.get("variants", {}).get("python", [])
                 if variants:
                     # Variants declare the same output paths as their entry, so

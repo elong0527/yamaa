@@ -631,6 +631,30 @@ pub(crate) fn run(
     }
 }
 
+/// Whether two engine configurations compile and run alike: the same host
+/// language, and no resolver or the same caller resolver.
+pub(crate) fn same_authority(left: &EngineShared, right: &EngineShared) -> bool {
+    left.language == right.language
+        && match (&left.resolver, &right.resolver) {
+            (None, None) => true,
+            (Some(left), Some(right)) => Arc::ptr_eq(&left.inner, &right.inner),
+            _ => false,
+        }
+}
+
+/// The run-start check outside a run: whether every file a compiled request
+/// holds still has the bytes it was compiled from. A refused compilation is
+/// never reused, so it reports `false`.
+pub(crate) fn unchanged(compiled: &Compiled) -> bool {
+    let Compiled::Ready(selected) = compiled else {
+        return false;
+    };
+    match selected.as_ref() {
+        yamaa_core::build::Prepared::Plain(prepared) => prepared.verify_metadata().is_ok(),
+        yamaa_core::build::Prepared::Ordinary(project) => project.verify_metadata().is_ok(),
+    }
+}
+
 pub(crate) fn outcome_accepted(outcome: &BuildOutcome) -> bool {
     match outcome {
         BuildOutcome::Plain { result } => result

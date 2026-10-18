@@ -542,6 +542,11 @@ impl Declarations {
         let range = item.range.as_ref()?;
         Some((range.value.as_str(), format!("{}.between.value", item.path)))
     }
+    /// The range of the selector at `index`, with the selector's id.
+    pub(super) fn range(&self, index: usize) -> Option<(&str, &lookup_range::Declaration)> {
+        let item = self.0.get(index)?;
+        Some((item.name.as_str(), item.range.as_ref()?))
+    }
 
     pub fn is_self(&self, index: usize) -> bool {
         self.0

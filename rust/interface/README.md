@@ -219,10 +219,15 @@ negotiation carry bootstrap facts and are mapped by the facade. A fatal process
 abort or allocation abort cannot be turned into a recoverable record.
 
 The imported plan record is inspection metadata, not execution authority.
-Reusable compile/run handles and their source/activation freshness policy belong
-to [#2592](https://github.com/elong0527/yamaa/issues/2592) and its split. Neither
-the resolved JSON artifact nor a previous accepted result authorizes another
-run. Adding a plan handle requires a declared operation and capability here.
+Neither the resolved JSON artifact nor a previous accepted result authorizes
+another run. Plan reuse ([#2821](https://github.com/elong0527/yamaa/issues/2821))
+is declared here as the `plans` operation and the optional `plan_reuse`
+capability. Each public spec or project object holds one opaque plans handle,
+which `spec_run` and `project_run` take as their last argument. A run reuses a
+kept plan only when every file it was compiled from is unchanged, and compiles
+again otherwise; it activates project functions afresh through the call's own
+capabilities. No handle method exists, and no plan or reuse is visible in any
+result.
 
 ## Ownership, threading and cancellation
 
@@ -231,6 +236,7 @@ run. Adding a plan handle requires a declared operation and capability here.
 | Input text/bytes | Borrow only during a synchronous call; clone into a retained Rust owner before returning or retaining for a callback. |
 | Diagnostic/result/plan metadata | Owned values independent of temporary interpreter buffers and of later calls. |
 | Run, project run or submission handle | Owning PyO3 object or rooted R external pointer; drop/finalize once, invalidate before dropping state. No caller dereferences a stale address. |
+| Plans handle | Frozen PyO3 object or registered R external pointer owned by one public spec or project object. A run only borrows it, so a run started from a project function shares it too; each run returns its own run handle, which outlives the plans. Kept plans hold the compiling call's project-function roots until the handle drops; R frees it on the R thread at finalization. |
 | Project function callback or host failure | Strong interpreter root held by the attempt that may call or inspect it; release on its owning interpreter thread. |
 | Arrow stream or emitted schema/array | Current holder of the moved standard header, with independent references to immutable buffers. |
 
