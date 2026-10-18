@@ -128,10 +128,18 @@ cells, retained values, page and row work, and header work are admitted before
 their corresponding allocations where the physical framing supplies those
 counts.
 
-Evidence: `rust/crates/yamaa-adapters/src/sas_source/native.rs::fixed_header_geometry_is_checked_before_retaining_any_columns_or_rows`, `rust/crates/yamaa-adapters/src/resource_diagnostics.rs::fixed_sas_boundary_keeps_its_bound_and_input_owner`, `python/tests/installed/installed_sas_sources.py::test_held_output_and_repeat_saves_survive_source_and_specification_mutation`.
+Evidence: `rust/crates/yamaa-adapters/src/sas_source/native.rs::fixed_header_geometry_is_checked_before_retaining_any_columns_or_rows`, `rust/crates/yamaa-adapters/src/resource_diagnostics.rs::fixed_sas_boundary_keeps_its_bound_and_input_owner`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::references_bouncing_between_pages_cannot_read_more_than_the_file_holds`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::the_row_limit_admits_live_records_not_stored_ones`, `python/tests/installed/installed_sas_sources.py::test_held_output_and_repeat_saves_survive_source_and_specification_mutation`.
 Replaces: REQ-1316.
 
 Resource refusal is separate from semantic source invalidity.
+
+The rows of a `sas7bdat` input are its live records ([SAS-8](#sas-8)), so
+admission counts them, not the records its header counts as deleted.
+
+The stored bytes that moved-record references read ([SAS-8](#sas-8)) are page
+work. Together they may not exceed the bytes of the file's pages, so following
+references costs no more than a multiple of the file's size. A file whose
+references would read more fails as `malformed` ([SAS-7](#sas-7)).
 
 <a id="sas-7"></a>
 
@@ -146,7 +154,7 @@ compression signatures, malformed compressed data, duplicate or empty field
 names and incomplete physical framing fail before derivation.
 
 Fails: `source_sas_invalid`.
-Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/sas.rs`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::unsupported_compression_has_a_specific_retained_cause`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::counted_deletions_without_marks_are_refused_with_a_rewrite_hint`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::version_8_observation_count_keeps_trailing_blank_records`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::transport_without_a_usable_count_treats_trailing_blank_records_as_padding`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::blank_records_at_least_one_record_wide_are_never_padding`, `python/tests/installed/installed_sas_sources.py::test_bad_sources_are_not_read_by_check_and_failed_saves_have_no_output`.
+Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/sas.rs`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::unsupported_compression_has_a_specific_retained_cause`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::counted_deletions_without_marks_are_refused_with_a_rewrite_hint`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::version_8_observation_count_keeps_trailing_blank_records`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::transport_without_a_usable_count_treats_trailing_blank_records_as_padding`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::trailing_blank_records_of_any_width_are_padding_only_without_a_count`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::a_row_size_subheader_cannot_change_the_row_length_once_columns_are_submitted`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::compressed_records_after_a_changed_row_length_are_refused_before_they_are_written`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::column_subheaders_shorter_than_their_fixed_part_are_refused`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::a_short_attributes_subheader_cannot_rewrite_a_column_after_the_first_record`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::stored_record_counts_beyond_32_bits_are_refused`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::version_8_observation_count_must_be_decimal_digits_between_blanks`, `python/tests/installed/installed_sas_sources.py::test_bad_sources_are_not_read_by_check_and_failed_saves_have_no_output`.
 Replaces: REQ-1317.
 
 Cause `deleted_records` reports records deleted in place that cannot be
@@ -154,36 +162,43 @@ reconciled with the dataset's count of them ([SAS-8](#sas-8)). That finding's
 context adds a `hint` to rewrite the dataset first, for example with PROC COPY
 or a DATA step.
 
+A `sas7bdat` input has one row length. A row-size subheader that follows the
+first record or data page may repeat it, and one that changes it fails as
+`malformed`. A column-name or column-attributes subheader shorter than its
+fixed part, 28 bytes in a 64-bit file and 20 otherwise, fails as `malformed`.
+So does a stored record count above 4,294,967,295.
+
 Transport member descriptor chains at 80-byte boundaries are structural
 records; multiple complete chains fail, including concatenated transport
 datasets. A character value resembling a MEMBER header alone remains text.
 
 A version 8 file whose `OBSV8` header record counts its observations, in the
 fifteen characters from byte 48, yields exactly that many records, including
-trailing records made entirely of blanks. The count is admitted under
-[SAS-6](#sas-6) before any record is read. Fewer complete records than
-counted, or anything but blank padding after them, fails as `malformed`.
+trailing records made entirely of blanks. The count is decimal digits, which
+blanks may precede or follow; a sign or any other character fails as
+`malformed`. The count is admitted under [SAS-6](#sas-6) before any record is
+read. Fewer complete records than counted, or anything but blank padding after
+them, fails as `malformed`.
 
 Version 5 framing, and a version 8 count of zero, carry no authoritative row
-count. A trailing record made entirely of blanks is data when it is at least
-80 bytes wide; a narrower one may be padding and is not data. Removing a
-complete terminal record that leaves a valid smaller dataset cannot be
-distinguished from that smaller dataset. Partial physical records and
-non-padding partial rows fail.
+count. Trailing records made entirely of blanks, whatever their width, may be
+padding and are not data, and removing a complete terminal record that leaves
+a valid smaller dataset cannot be distinguished from that smaller dataset.
+Partial physical records and non-padding partial rows fail.
 
 <a id="sas-8"></a>
 
-### SAS-8. A SAS dataset yields only its live records, each at its stored position
+### SAS-8. A SAS dataset yields only its live records, in stored order
 
 A `sas7bdat` input yields its live records in stored order. A record that SAS
 deleted in place, marked in its page's deleted-record bitmap or by a deletion
 code on its compressed row, is skipped. A compressed record that SAS moved to
-another page is read where the reference that replaced it stands. Each record
-that the dataset's header counts as deleted must be found marked deleted, and
-no more may be marked; otherwise ingestion fails with cause `deleted_records`.
+another page is read where the reference that replaced it stands. The number
+of records found marked deleted must equal the deleted count in the dataset's
+header; otherwise ingestion fails with cause `deleted_records`.
 
 Fails: `source_sas_invalid`.
-Evidence: `rust/crates/yamaa-adapters/tests/table_sas_source.rs::records_deleted_in_place_are_skipped_in_the_independent_haven_fixture`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::deleted_records_after_the_last_live_record_are_found_on_later_pages`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::deleted_record_counts_that_disagree_with_their_marks_are_refused`, `rust/tests/host-fixtures/sas-cases.json::deleted-record-skipped`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::moved_records_are_read_at_their_reference`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::moved_records_deleted_later_count_as_deleted`.
+Evidence: `rust/crates/yamaa-adapters/tests/table_sas_source.rs::records_deleted_in_place_are_skipped_in_the_independent_haven_fixture`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::deleted_records_after_the_last_live_record_are_found_on_later_pages`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::deleted_record_counts_that_disagree_with_their_marks_are_refused`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::marks_on_pages_after_the_counts_are_met_are_not_read`, `rust/tests/host-fixtures/sas-cases.json::deleted-record-skipped`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::moved_records_are_read_at_their_reference`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::a_moved_record_stored_before_its_reference_is_skipped_and_read_at_the_reference`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::references_that_reach_each_moved_record_once_read_across_pages`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::references_that_do_not_reach_a_moved_record_are_refused`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::a_reference_with_a_zero_page_or_subheader_index_is_refused_not_skipped`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::references_bouncing_between_pages_cannot_read_more_than_the_file_holds`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::moved_records_deleted_later_count_as_deleted`.
 
 SAS keeps a record deleted in place, for example by `PROC SQL DELETE` or a DATA
 step `MODIFY` with `REMOVE`, until the dataset is rewritten. The row-size
@@ -194,18 +209,25 @@ one bit per stored record, most significant bit first. A compressed row's
 subheader pointer marks a deleted record with code `0x05`, and a moved record
 deleted later with code `0x09` or `0x0d`.
 
-A reader reads past the last live record until it has found every counted
-deletion. A deleted count above the stored count, a mark beyond the count, a
-counted deletion never found, a bitmap that does not fit its page, or a page
-row beyond the records its bitmap covers fails with cause `deleted_records`
-([SAS-7](#sas-7)). The bitmap covers the page's records, and no more than the
-dataset stores.
+A reader reads past the last live record until it has found as many marks as
+the count says. It stops after the page on which it has found every live
+record and that many marks, but reads every page of a dataset with no live
+records. A mark beyond the count fails when the reader reaches it, and a mark
+on a page it does not reach is not read. The check compares counts: it does
+not tell which records the header meant to delete. A deleted count above the
+stored count, a mark beyond the count, a counted deletion never found, a
+bitmap that does not fit its page, or a page row beyond the records its bitmap
+covers fails with cause `deleted_records` ([SAS-7](#sas-7)). The bitmap covers
+the page's records, and no more than the dataset stores.
 
 In compressed storage SAS can move an updated record that no longer fits its
 slot to another page. The slot then holds a reference, code `0x03`, whose
 offset and length fields hold the one-based page and subheader indices of the
 moved record. That record carries code `0x02` when stored uncompressed and
 `0x06` when compressed, and is read only through its reference. A reference
-that does not reach such a record on a page with subheaders fails as
-`malformed`, or as `compression` when it reaches a subheader with another
-compression code.
+that does not reach such a record on a page with subheaders, including one
+whose page or subheader index is zero, fails as `malformed`, or as
+`compression` when it reaches a subheader with another compression code. The
+stored bytes that all references read may not exceed the bytes of the file's
+pages, which [SAS-6](#sas-6) counts as page work; a file whose references would
+read more fails as `malformed`.

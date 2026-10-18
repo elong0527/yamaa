@@ -281,7 +281,10 @@ readstat_error_t sas_read_header(readstat_io_t *io, sas_header_info_t *hinfo,
         }
         hinfo->page_count = bswap ? byteswap4(page_count) : page_count;
     }
-    if (hinfo->page_count > (1<<24)) {
+    /* The count is read as an unsigned integer into a signed field, so a
+     * count with its high bit set is negative here and would overflow when
+     * the reader checks that the pages fill the file. */
+    if (hinfo->page_count < 0 || hinfo->page_count > (1<<24)) {
         retval = READSTAT_ERROR_PARSE;
         goto cleanup;
     }

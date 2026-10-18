@@ -290,8 +290,7 @@ impl<'p> Builder<'p> {
                 *column = cx.column(column.index())?;
             }
         }
-        self.observed = crate::dataset::read_handlers(plan.intermediates())
-            .map_err(|child| unsupported("later intermediate read", child))?;
+        self.observed = crate::dataset::read_handlers(plan.intermediates());
         // Named intermediates keep their plan positions as relation slots.
         for index in 0..plan.intermediates().len() {
             let path = plan.intermediates()[index].path.as_str();
@@ -846,7 +845,6 @@ impl<'p> Builder<'p> {
                 node.kind = ExprKind::SourceLookup(relation);
                 node.reads
                     .push(Read::Relation(relation, field(lookup.column)?));
-                self.observed_range(&mut node, range.as_ref(), path)?;
                 let site = format!("{path}.multiple_matches");
                 let selected = selection.is_some();
                 self.site(&mut node, selected, site, H::MultipleMatches);
@@ -923,7 +921,6 @@ impl<'p> Builder<'p> {
                 node.kind = ExprKind::JoinedSource(relation);
                 node.reads
                     .push(Read::Relation(relation, field(read.column)?));
-                self.observed_range(&mut node, range.as_ref(), path)?;
                 let site = format!("{path}.multiple_matches");
                 let selected = selection.is_some();
                 self.site(&mut node, selected, site, H::MultipleMatches);
@@ -1062,9 +1059,8 @@ impl<'p> Builder<'p> {
         Ok(())
     }
 
-    /// A named read counts its `multiple_matches` and `no_match` at the
-    /// reading path, those of the earlier intermediates its range and donor
-    /// operands read through included.
+    /// A named read counts its own `multiple_matches` and `no_match` at the
+    /// reading path.
     fn observed(
         &mut self,
         node: &mut Node,
@@ -1083,23 +1079,6 @@ impl<'p> Builder<'p> {
         self.site(node, multiple, site, HandlerKind::MultipleMatches);
         let site = format!("{path}.no_match");
         self.site(node, handlers.no_match, site, HandlerKind::NoMatch);
-        Ok(())
-    }
-
-    /// An implicit join's range value that reads a named intermediate is that
-    /// intermediate's read for the row (LOOKUP-9). The join evaluates it with
-    /// its own assignment, so its handler sites are recorded at `path`.
-    fn observed_range(
-        &mut self,
-        node: &mut Node,
-        range: Option<&RelationRange>,
-        path: &str,
-    ) -> Result<(), ResolutionError> {
-        if let Some(CurrentRead::Intermediate { index, column }) =
-            range.map(|range| range.current().read)
-        {
-            self.observed(node, &BoundRead::Intermediate { index, column }, path)?;
-        }
         Ok(())
     }
 
@@ -1446,12 +1425,6 @@ impl<'p> Builder<'p> {
         }
         let relation_id = self.push_relation(relation_node)?;
         node.kind = ExprKind::Aggregate(relation_id);
-        if let Some(range) = bound.range() {
-            if let CurrentRead::Intermediate { index, column } = range.current().read {
-                let read = BoundRead::Intermediate { index, column };
-                self.observed(node, &read, range.path())?;
-            }
-        }
         if let Some(filter) = bound.filter() {
             let expr = self.donor_predicate(cx, relation_id, filter)?;
             self.out.relations[relation_id.index()].filter = Some(expr);

@@ -3,8 +3,9 @@
 //! The file header, page header, subheader pointers and the row-size,
 //! column-size, column-text, column-name and column-attributes subheaders are
 //! written from their published field offsets. Rows are written byte by byte,
-//! and compressed rows use plain RLE copy commands. Nothing here reads a file
-//! with yamaa or ReadStat, so expected values stay independent of the reader.
+//! and compressed rows use plain RLE copy commands or RDC literals and runs.
+//! Nothing here reads a file with yamaa or ReadStat, so expected values stay
+//! independent of the reader.
 
 pub const META: u16 = 0x0000;
 pub const DATA: u16 = 0x0100;
@@ -293,6 +294,14 @@ impl Pointer {
             data: true,
         }
     }
+    /// A row compressed with RDC literals and runs.
+    pub fn rdc_row(row: &[u8]) -> Self {
+        Self::Stored {
+            bytes: rdc(row),
+            compression: 4,
+            data: true,
+        }
+    }
     /// Stored bytes with an explicit compression code.
     pub fn coded(bytes: Vec<u8>, compression: u8) -> Self {
         Self::Stored {
@@ -327,6 +336,49 @@ pub fn rle(row: &[u8]) -> Vec<u8> {
     for chunk in row.chunks(16) {
         bytes.push(0x80 | (chunk.len() as u8 - 1));
         bytes.extend(chunk);
+    }
+    bytes
+}
+
+/// RDC with literal bytes and runs of three to eighteen equal bytes. A 16-bit
+/// control word, most significant bit first, describes the next sixteen items:
+/// a clear bit is one literal byte and a set bit is a run, stored as its length
+/// minus three and the repeated byte.
+pub fn rdc(row: &[u8]) -> Vec<u8> {
+    enum Item {
+        Literal(u8),
+        Run(u8, u8),
+    }
+    let mut items = Vec::new();
+    let mut at = 0;
+    while at < row.len() {
+        let run = row[at..]
+            .iter()
+            .take(18)
+            .take_while(|&&byte| byte == row[at])
+            .count();
+        if run >= 3 {
+            items.push(Item::Run(run as u8 - 3, row[at]));
+            at += run;
+        } else {
+            items.push(Item::Literal(row[at]));
+            at += 1;
+        }
+    }
+    let mut bytes = Vec::new();
+    for group in items.chunks(16) {
+        let (mut control, mut payload) = (0u16, Vec::new());
+        for (index, item) in group.iter().enumerate() {
+            match *item {
+                Item::Literal(byte) => payload.push(byte),
+                Item::Run(length, byte) => {
+                    control |= 0x8000 >> index;
+                    payload.extend([length, byte]);
+                }
+            }
+        }
+        bytes.extend(control.to_be_bytes());
+        bytes.extend(payload);
     }
     bytes
 }

@@ -221,7 +221,6 @@ fn materialize<E>(
             plan,
             row,
             assignment,
-            relation_predicates::CurrentObservation::Operand,
             state,
         )?);
     }
@@ -752,7 +751,6 @@ fn resolve_choice<T: TableAccess + ?Sized>(
                 plan,
                 row,
                 assignment,
-                relation_predicates::CurrentObservation::Operand,
                 state,
             )
         })
