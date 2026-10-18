@@ -451,16 +451,28 @@ save_failure <- function(failed) {
 qualified <- vapply(c("producer","consumer"),save_failure,logical(1))
 if(all(qualified)) cat("R actual producer/consumer publication failures preserve original Build, actual prefix and earlier writes\n")
 
-if(.Platform$OS.type=="windows") {
+# Two primary files of one graph that resolve to one location collide when
+# the graph is validated (REQ-0756): nothing is read, run or written.
+refused_at_validation <- function(target) {
   work <- study()
+  on.exit(unlink(work,recursive=TRUE))
   dir.create(file.path(work,"generated"))
-  write(work,"consumer/root.yaml",sub("../generated/root.csv","../generated/PRODUCER.csv",consumer,fixed=TRUE))
-  result <- build(work)
-  stopifnot(!is.null(result$output),accepted(result),refused_save(result),
-    length(list.files(file.path(work,"generated"),all.files=TRUE,no..=TRUE))==0L,
-    grepl('"entered":[]',observe(result),fixed=TRUE))
-  unlink(work,recursive=TRUE)
-  cat("R absent Windows case-alias targets refuse every write\n")
+  write(work,"consumer/root.yaml",sub("../generated/root.csv",target,consumer,fixed=TRUE))
+  failed <- build(work)
+  stopifnot(is.null(observations(failed)),is.null(failed$report),is.null(failed$output),
+    identical(failed$issues$condition,"artifact_path_collision"),
+    identical(failed$issues$requirement,"REQ-0756"),
+    identical(failed$issues$spec_paths,list(c("output.path","output.path"))),
+    failed_save(failed),
+    length(list.files(file.path(work,"generated"),all.files=TRUE,no..=TRUE))==0L)
+}
+refused_at_validation("../generated/dir/../producer.csv")
+cat("R graph primary files at one resolved location are refused at validation\n")
+# Ordinal case-insensitive names select one Windows target, so the consumer's
+# PRODUCER.csv names the producer's producer.csv.
+if(.Platform$OS.type=="windows") {
+  refused_at_validation("../generated/PRODUCER.csv")
+  cat("R absent Windows case-alias targets are refused at validation\n")
 }
 
 if(Sys.info()[["sysname"]]=="Darwin") {

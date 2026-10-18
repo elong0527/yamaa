@@ -653,22 +653,39 @@ output: {path: ../generated/root.csv, columns: [USUBJID, TRTEDT]}
             after.pop("publication")
             self.assertEqual(after, before)
 
-    @unittest.skipUnless(
-        os.name == "nt", "Windows uses ordinal case-insensitive targets"
-    )
-    def test_absent_windows_case_alias_targets_refuse_every_write(self):
+    def assert_refused_at_validation(self, target):
+        """Two primary files of one graph that resolve to one location collide
+        when the graph is validated (REQ-0756): nothing is read, run or written."""
         self.write(
-            "consumer/root.yaml",
-            CONSUMER.replace("../generated/root.csv", "../generated/PRODUCER.csv"),
+            "consumer/root.yaml", CONSUMER.replace("../generated/root.csv", target)
         )
         (self.root / "generated").mkdir()
         result = self.build()
-        self.assertIsNotNone(result.output)
-        with self.assertRaises(yamaa.Error):
+        self.assertIsNone(result._native.observations())
+        self.assertIsNone(result.report)
+        self.assertIsNone(result.output)
+        self.assertEqual(
+            [
+                (row["condition"], row["requirement"], row["spec_paths"])
+                for row in result.issues.to_dicts()
+            ],
+            [("artifact_path_collision", "REQ-0756", ["output.path", "output.path"])],
+        )
+        with self.assertRaises(yamaa.Error) as raised:
             result.save()
+        self.assertEqual(str(raised.exception), "cannot save a failed run; see issues")
         self.assertEqual(list((self.root / "generated").iterdir()), [])
-        self.assertEqual(self.observe(result)["publication"]["entered"], [])
-        self.assertEqual(self.observe(result)["outcome"], "success")
+
+    def test_primary_files_at_one_resolved_location_are_refused_at_validation(self):
+        self.assert_refused_at_validation("../generated/dir/../producer.csv")
+
+    @unittest.skipUnless(
+        os.name == "nt", "Windows uses ordinal case-insensitive targets"
+    )
+    def test_absent_windows_case_alias_targets_are_refused_at_validation(self):
+        # Ordinal case-insensitive names select one Windows target, so the
+        # consumer's PRODUCER.csv names the producer's producer.csv.
+        self.assert_refused_at_validation("../generated/PRODUCER.csv")
 
     @unittest.skipUnless(sys.platform == "darwin", "macOS native parent case policy")
     def test_macos_absent_case_aliases_and_unproven_unicode_targets_preflight(self):
