@@ -164,16 +164,17 @@ rows fail.
 
 <a id="sas-8"></a>
 
-### SAS-8. A SAS dataset yields only its live records, skipping each record deleted in place
+### SAS-8. A SAS dataset yields only its live records, each at its stored position
 
 A `sas7bdat` input yields its live records in stored order. A record that SAS
-deleted in place, marked in its page's deleted-record bitmap or by the
-deletion code of its compressed row, is skipped. Each record that the
-dataset's header counts as deleted must be found marked deleted, and no more
-may be marked; otherwise ingestion fails with cause `deleted_records`.
+deleted in place, marked in its page's deleted-record bitmap or by a deletion
+code on its compressed row, is skipped. A compressed record that SAS moved to
+another page is read where the reference that replaced it stands. Each record
+that the dataset's header counts as deleted must be found marked deleted, and
+no more may be marked; otherwise ingestion fails with cause `deleted_records`.
 
 Fails: `source_sas_invalid`.
-Evidence: `rust/crates/yamaa-adapters/tests/table_sas_source.rs::records_deleted_in_place_are_skipped_in_the_independent_haven_fixture`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::deleted_records_after_the_last_live_record_are_found_on_later_pages`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::deleted_record_counts_that_disagree_with_their_marks_are_refused`, `rust/tests/host-fixtures/sas-cases.json::deleted-record-skipped`.
+Evidence: `rust/crates/yamaa-adapters/tests/table_sas_source.rs::records_deleted_in_place_are_skipped_in_the_independent_haven_fixture`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::deleted_records_after_the_last_live_record_are_found_on_later_pages`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::deleted_record_counts_that_disagree_with_their_marks_are_refused`, `rust/tests/host-fixtures/sas-cases.json::deleted-record-skipped`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::moved_records_are_read_at_their_reference`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::moved_records_deleted_later_count_as_deleted`.
 
 SAS keeps a record deleted in place, for example by `PROC SQL DELETE` or a DATA
 step `MODIFY` with `REMOVE`, until the dataset is rewritten. The row-size
@@ -181,9 +182,19 @@ subheader counts the stored records, deleted ones included, and counts the
 deleted ones separately. A data or mix page that holds deleted records carries
 the page-type flag `0x0080` and, after its rows and free space, a bitmap with
 one bit per stored record, most significant bit first. A compressed row's
-subheader pointer marks a deleted record with code `0x05`.
+subheader pointer marks a deleted record with code `0x05`, and a moved record
+deleted later with code `0x09` or `0x0d`.
 
 A reader reads past the last live record until it has found every counted
 deletion. A deleted count above the stored count, a mark beyond the count, a
 counted deletion never found, or a bitmap that does not fit its page fails
 with cause `deleted_records` ([SAS-7](#sas-7)).
+
+In compressed storage SAS can move an updated record that no longer fits its
+slot to another page. The slot then holds a reference, code `0x03`, whose
+offset and length fields hold the one-based page and subheader indices of the
+moved record. That record carries code `0x02` when stored uncompressed and
+`0x06` when compressed, and is read only through its reference. A reference
+that does not reach such a record on a page with subheaders fails as
+`malformed`, or as `compression` when it reaches a subheader with another
+compression code.

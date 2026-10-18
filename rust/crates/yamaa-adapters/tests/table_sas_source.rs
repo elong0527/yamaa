@@ -742,6 +742,144 @@ mod table {
             // looked for beyond them.
             refused(file(2, 1, 2, 5, &[false, false, true]));
         }
+        /// A compressed dataset whose third record moved to subheader 1 of
+        /// page 1, the record stored there by `moved`.
+        fn moved_file(
+            layout: crate::support::sas7bdat::Layout,
+            deleted: u64,
+            reference: crate::support::sas7bdat::Pointer,
+            moved: impl Fn(&crate::support::sas7bdat::Dataset) -> crate::support::sas7bdat::Page,
+        ) -> Vec<u8> {
+            use crate::support::sas7bdat::{Cell, Dataset, Kind, Page, Pointer, META};
+            let mut dataset = Dataset::new(layout, &[("X", Kind::Num, 8), ("T", Kind::Chr, 8)]);
+            dataset.compression = Some(*b"SASYZCRL");
+            dataset.total = 4;
+            dataset.deleted = deleted;
+            let row =
+                |value: f64, label: &[u8]| dataset.row(&[Cell::Num(value), Cell::Text(label)]);
+            let mut first = dataset.metadata();
+            first.push(Pointer::rle_row(&row(1.0, b"one")));
+            first.push(Pointer::rle_row(&row(2.0, b"two")));
+            first.push(reference);
+            first.push(Pointer::rle_row(&row(4.0, b"four")));
+            dataset.file(&[Page::new(META, first, vec![]), moved(&dataset)])
+        }
+        #[test]
+        fn moved_records_are_read_at_their_reference() {
+            // SAS can move an updated compressed record that no longer fits
+            // its slot to another page. The slot keeps a reference (code
+            // 0x03) whose offset and length fields hold the one-based page
+            // and subheader indices of the moved record. That record carries
+            // code 0x02 stored uncompressed or 0x06 compressed, and is read
+            // only through its reference.
+            use crate::support::sas7bdat::{rle, Cell, Layout, Page, Pointer, META};
+            for layout in [Layout::LE64, Layout::BE32] {
+                for code in [0x02, 0x06] {
+                    let bytes = moved_file(layout, 0, Pointer::reference(1, 1), |dataset| {
+                        let row = dataset.row(&[Cell::Num(3.0), Cell::Text(b"three")]);
+                        let stored = if code == 0x02 { row } else { rle(&row) };
+                        Page::new(
+                            META,
+                            vec![Pointer::truncated(), Pointer::coded(stored, code)],
+                            vec![],
+                        )
+                    });
+                    let table = read_built(&bytes).unwrap();
+                    assert_eq!(
+                        cells(&table),
+                        [
+                            [float(1.0), ValueRef::Str("one")],
+                            [float(2.0), ValueRef::Str("two")],
+                            [float(3.0), ValueRef::Str("three")],
+                            [float(4.0), ValueRef::Str("four")]
+                        ],
+                        "{layout:?} {code:#04x}"
+                    );
+                }
+            }
+        }
+        #[test]
+        fn moved_records_deleted_later_count_as_deleted() {
+            // Deleting a moved record truncates its reference and gives the
+            // record code 0x09 (uncompressed) or 0x0d (compressed). No
+            // reference reaches it, and the dataset counts it as deleted.
+            use crate::support::sas7bdat::{rle, Cell, Layout, Page, Pointer, META};
+            for code in [0x09, 0x0d] {
+                let file = |deleted| {
+                    moved_file(Layout::LE64, deleted, Pointer::truncated(), |dataset| {
+                        let row = dataset.row(&[Cell::Num(3.0), Cell::Text(b"three")]);
+                        let stored = if code == 0x09 { row } else { rle(&row) };
+                        Page::new(META, vec![Pointer::coded(stored, code)], vec![])
+                    })
+                };
+                let table = read_built(&file(1)).unwrap();
+                assert_eq!(
+                    cells(&table),
+                    [
+                        [float(1.0), ValueRef::Str("one")],
+                        [float(2.0), ValueRef::Str("two")],
+                        [float(4.0), ValueRef::Str("four")]
+                    ],
+                    "{code:#04x}"
+                );
+                assert!(matches!(
+                    read_built(&file(0)),
+                    Err(Error::Invalid("deleted_records"))
+                ));
+            }
+        }
+        #[test]
+        fn references_that_do_not_reach_a_moved_record_are_refused() {
+            use crate::support::sas7bdat::{Cell, Layout, Page, Pointer, DATA, META};
+            let moved = |dataset: &crate::support::sas7bdat::Dataset| {
+                let row = dataset.row(&[Cell::Num(3.0), Cell::Text(b"three")]);
+                Page::new(META, vec![Pointer::coded(row, 0x02)], vec![])
+            };
+            // A page beyond the file, a page index of zero (stored as offset
+            // zero), and a subheader index beyond the page's pointers.
+            let zero = Pointer::Raw {
+                offset: 0,
+                length: 1,
+                compression: 3,
+                data: true,
+            };
+            for reference in [Pointer::reference(2, 0), zero, Pointer::reference(1, 1)] {
+                let result = read_built(&moved_file(Layout::LE64, 0, reference, moved));
+                assert!(matches!(result, Err(Error::Invalid("malformed"))));
+            }
+            // A data page holds no subheaders to reference.
+            let bytes = moved_file(Layout::LE64, 0, Pointer::reference(1, 0), |dataset| {
+                let row = dataset.row(&[Cell::Num(3.0), Cell::Text(b"three")]);
+                Page::new(DATA, vec![], vec![row])
+            });
+            assert!(matches!(
+                read_built(&bytes),
+                Err(Error::Invalid("malformed"))
+            ));
+            // A moved record stored uncompressed must be marked as row data.
+            let bytes = moved_file(Layout::LE64, 0, Pointer::reference(1, 0), |dataset| {
+                let row = dataset.row(&[Cell::Num(3.0), Cell::Text(b"three")]);
+                let pointer = Pointer::Stored {
+                    bytes: row,
+                    compression: 0x02,
+                    data: false,
+                };
+                Page::new(META, vec![pointer], vec![])
+            });
+            assert!(matches!(
+                read_built(&bytes),
+                Err(Error::Invalid("malformed"))
+            ));
+            // A record that was not moved there has another compression code.
+            let bytes = moved_file(Layout::LE64, 0, Pointer::reference(1, 0), |dataset| {
+                let row = dataset.row(&[Cell::Num(3.0), Cell::Text(b"three")]);
+                Page::new(META, vec![Pointer::rle_row(&row)], vec![])
+            });
+            assert!(matches!(
+                read_built(&bytes),
+                Err(Error::Invalid("compression"))
+            ));
+        }
         #[test]
         fn reject_multiple_members_in_both_transport_versions() {
             for name in ["multi-v5.xpt", "multi-v8.xpt"] {

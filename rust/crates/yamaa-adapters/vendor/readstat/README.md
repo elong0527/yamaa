@@ -80,6 +80,7 @@ by hand, inside the local changes above, or declined here with its reason.
 | `a0aa9f31` | RDC decompresses into the dataset's row buffer instead of allocating one per row. | Ported |
 | `a2fcaa91` | A dataset with no records reads every page, so column metadata on a later page is not lost. | Ported |
 | `d19f262e`, `634f40a8`, `5850fb57` (bitmap) | Records deleted in place are skipped: bitmap bits on flagged data and mix pages, and compression code `0x05`. The live count excludes them, including when a row offset applies, and the bitmap offset and the rows it covers are bounded. | Ported, with the deleted-record accounting above |
+| `0a1771f7` | A compressed record SAS moved to another page is read at its reference (code `0x03`), from its moved slot (code `0x02` or `0x06`); a moved record no reference reaches (code `0x09` or `0x0d`) is skipped. | Ported; locally, a record no reference reaches counts as deleted, so it must be counted by the row-size subheader |
 | `3c68974f` | Allocation failures are checked. | Already covered by the local checked allocations |
 | `4d3c7f77` | A zero-width character column is accepted; its values are empty text. | Ported |
 | `b2d5407d`, `bb29605a`, `95aee731` | The release field accepts revision tags `J` and `TK` for SAS 8 and 9, any tag for other majors such as SAS 7, and the alternative magic number whose first 28 bytes are zero. | Ported |
