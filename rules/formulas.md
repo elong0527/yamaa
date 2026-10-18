@@ -730,7 +730,7 @@ Replaces: REQ-0491, REQ-0492, REQ-0493, REQ-0495.
 
 | Group | Result |
 |---|---|
-| No record in the group after `filter` | missing, as the absent match of [LOOKUP-13](lookup.md#lookup-13) |
+| No record in the group after `filter` | missing, uncounted: an aggregate declares no handler ([COLUMN-11](columns.md#column-11)) |
 | Every value missing -- `SUM`, `MIN`, `MAX`, `MEAN` | missing, never zero |
 | Every value missing -- `COUNT(x)` | `0` |
 | No record in the group -- `COUNT(x)`, `COUNT(D.*)` | missing |

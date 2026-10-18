@@ -236,13 +236,14 @@ A malformed `case` fails as `invalid_field_type`, at the `case` when it has no
 
 `flag` evaluates its `condition` predicate: only `TRUE` selects `true_value`,
 which defaults to `"Y"`; `FALSE` returns `false_value`, or missing when it is
-absent; `UNKNOWN` returns `missing`, or missing when it is absent. An unknown
-condition never falls through to `false_value`. A `flag` that declares
-`false_value` also declares `missing`, which may repeat `false_value`, name
-another value, or be `{literal: null}` for missing.
+absent; `UNKNOWN` returns `missing`, or missing when it is absent, counted
+under `missing` either way. An unknown condition never falls through to
+`false_value`. A `flag` that declares `false_value` also declares `missing`,
+which may repeat `false_value`, name another value, or be `{literal: null}`
+for missing.
 
 Fails: `missing_value_required`.
-Evidence: `negative-flag-missing-value`, `negative-flag-condition`, `adam-adae-occurrence-flags`.
+Evidence: `negative-flag-missing-value`, `negative-flag-condition`, `adam-adae-occurrence-flags`, `rust/crates/yamaa-adapters/tests/fixtures/flag_reference.json`.
 Replaces: REQ-1256, REQ-1257, REQ-1258.
 
 `flag` is the shorthand for the common one-branch `case` that returns a flag
@@ -250,7 +251,11 @@ value. A bare predicate string is the condition with the default values:
 `true_value: "Y"`, and `false_value` and `missing` missing; the mapping form
 names `condition` beside the values it declares. The condition follows the
 three-valued logic [FORMULA-4](formulas.md#formula-4) gives `case`; unlike
-`case` with `otherwise`, `UNKNOWN` does not reach `false_value`.
+`case` with `otherwise`, `UNKNOWN` does not reach `false_value`. Each `UNKNOWN`
+condition is counted at the flag's `missing` path
+([COLUMN-14](columns.md#column-14)), so a missing value a flag gives for an
+unknown condition is reported even when `missing` is omitted; `FALSE` is a
+known answer and is not counted.
 
 A `flag` that declares `false_value` without `missing` fails as
 `missing_value_required` at `missing`. A `flag` whose payload is neither a
@@ -266,10 +271,15 @@ A mapping that holds only `condition` restates the bare predicate and fails as
 
 `first_available` tests its `sources` in order and returns the value of the
 first source that is not missing. When every source is missing, it returns the
-declared `missing`, or missing when none is declared.
+declared `missing`, or missing when none is declared, counted under `missing`
+either way.
 
 Evidence: `schema-expressions`, `adam-adsl-demographics`, `rust/crates/yamaa-adapters/tests/fixtures/first_available.json`.
 Replaces: REQ-1095.
+
+A source that is a binding reading through an implicit join answers its own
+absent record first ([LOOKUP-24](lookup.md#lookup-24)); the answer, missing by
+default, is what `first_available` then tests.
 
 <a id="expr-10"></a>
 
@@ -294,12 +304,12 @@ which source an equal extreme keeps; `int` and `float` compare exactly under
 
 `mapping` looks up a string `source` in `dict`, a source-value to result-value
 dictionary written inline or as the path of a YAML file holding it, and
-returns the matching entry's value. A missing source returns `missing`, and a
-present source with no dictionary entry returns `unmapped`; `missing` never
-answers an unmapped source. Without the applicable handler, the source fails
-([COLUMN-10](columns.md#column-10)).
+returns the matching entry's value. A missing source returns `missing`, or
+missing when it is omitted, counted under `missing`. A present source with no
+dictionary entry returns `unmapped`, and fails without it; `missing` never
+answers an unmapped source ([COLUMN-10](columns.md#column-10)).
 
-Evidence: `schema-text-mapping`, `schema-text-mapping-unmapped`, `negative-mapping-unmapped-value`.
+Evidence: `schema-text-mapping`, `schema-text-mapping-unmapped`, `negative-mapping-unmapped-value`, `schema-missing-input-default`.
 Replaces: REQ-0304, REQ-1110.
 
 A `mapping` requires a string source. The source may be a filtered source
@@ -338,14 +348,14 @@ occur in that sequence.
 `breaks` bound and returns that interval's label. `labels` holds one label per
 interval, exactly one more than `breaks`. With `right: true` the intervals are
 right-closed and left-open; with `right: false`, the default, they are
-left-closed and right-open. A missing source returns `missing`, and a
-non-numeric source fails.
+left-closed and right-open. A missing source returns `missing`, or missing
+when it is omitted, counted under `missing`, and a non-numeric source fails.
 
-Evidence: `schema-expressions`, `negative-cut-coded`, `negative-cut-missing-input`.
+Evidence: `schema-expressions`, `negative-cut-coded`, `schema-missing-input-default`.
 Replaces: REQ-0306, REQ-1118.
 
 The source may be a filtered source carrying the variable with its filter,
 selection or absent value ([LOOKUP-1](lookup.md#lookup-1)). Breaks compare
 mathematical values exactly under [VALUE-19](values.md#value-19).
-Without `missing`, a missing source fails under
+Without `missing`, a missing source gives missing, the default substitution of
 [COLUMN-10](columns.md#column-10).
