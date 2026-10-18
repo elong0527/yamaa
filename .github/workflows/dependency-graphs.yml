@@ -1,11 +1,26 @@
 name: Dependency graphs
 
+# Every graph is resolved and built from scratch, so main runs nightly and a
+# pull request runs only when it changes what the graphs resolve.
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths:
+      - 'rust/**/Cargo.toml'
+      - 'rust/Cargo.lock'
+      - 'rust/rust-toolchain.toml'
+      - 'rust/vendor/**'
+      - 'pyproject.toml'
+      - 'python/pyproject.toml'
+      - 'python/uv.lock'
+      - 'rust/tests/project-programs/python/pyproject.toml'
+      - 'rust/tests/project-programs/r/DESCRIPTION'
+      - 'R/yamaa/DESCRIPTION'
+      - 'tools/ci/dependency_graphs.py'
+      - 'tools/ci/toolchain.py'
+      - '.github/actions/setup/**'
+      - '.github/workflows/dependency-graphs.yml'
   schedule:
-    - cron: '23 6 * * 1'
+    - cron: '23 6 * * *'
   workflow_dispatch:
 
 permissions:

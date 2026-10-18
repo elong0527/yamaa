@@ -6,10 +6,11 @@
 //! and dropping either an unconsumed or a moved-from header is safe. Foreign
 //! streams must satisfy the Arrow C Data/Stream producer contract.
 use crate::arrow_table::{self, ArrowTable, TableError};
+use crate::storage_api::StreamReader;
 pub use arrow_array::ffi_stream::{ArrowArrayStreamReader, FFI_ArrowArrayStream};
 use arrow_array::{
     Array, ArrayRef, Date32Array, RecordBatch, RecordBatchIterator, RecordBatchOptions,
-    RecordBatchReader, StructArray, TimestampSecondArray, UInt8Array,
+    StructArray, TimestampSecondArray, UInt8Array,
 };
 use arrow_schema::{DataType, Field, Schema, SchemaRef, TimeUnit};
 use std::sync::Arc;
@@ -30,14 +31,14 @@ pub fn import_stream(
     stream: FFI_ArrowArrayStream,
     logical: TableSchema,
 ) -> Result<ArrowTable, TableError> {
-    let reader = ArrowArrayStreamReader::try_new(stream).map_err(TableError::Arrow)?;
+    let reader = StreamReader::try_new(stream).map_err(TableError::Arrow)?;
     read_stream(reader, logical)
 }
 
 /// Infer only the public logical types; other physical types require an
 /// explicit preserving conversion by the caller before exporting.
 pub fn import_public_stream(stream: FFI_ArrowArrayStream) -> Result<ArrowTable, TableError> {
-    let reader = ArrowArrayStreamReader::try_new(stream).map_err(TableError::Arrow)?;
+    let reader = StreamReader::try_new(stream).map_err(TableError::Arrow)?;
     let logical = yamaa_core::table::TableSchema::new(
         reader
             .schema()
@@ -64,10 +65,7 @@ pub fn import_public_stream(stream: FFI_ArrowArrayStream) -> Result<ArrowTable, 
     read_stream(reader, logical)
 }
 
-fn read_stream(
-    mut reader: ArrowArrayStreamReader,
-    logical: TableSchema,
-) -> Result<ArrowTable, TableError> {
+fn read_stream(mut reader: StreamReader, logical: TableSchema) -> Result<ArrowTable, TableError> {
     let schema = reader.schema();
     let mut batches = Vec::new();
     let mut rows = 0usize;

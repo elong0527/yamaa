@@ -2,9 +2,9 @@ Following CDISC ADaM standards, use the provided ADSL, QS, and DS datasets
 to create an ADTTE dataset for time to PRO deterioration, one record per
 subject.
 
-The ADTTE dataset should contain the following columns in this order:
+The output dataset should contain the following columns in this order:
 STUDYID, USUBJID, PARAMCD, PARAM, STARTDT, ADT, AVAL, CNSR, EVNTDESC,
-CNSDTDSC, SRCDOM, SRCVAR, SRCSEQ.
+CNSDTDSC, SRCDOM, SRCVAR, SRCSEQ
 
 Use PARAMCD "TTDGHS" and PARAM "Time to Deterioration in Global Health
 Status". STARTDT is the randomization date, the origin from which the time

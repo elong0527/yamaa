@@ -1,0 +1,71 @@
+name: Main health
+
+# Main is checked on schedules rather than after every merge, so a failing
+# main run is the only sign that main is broken. Keep one open issue per
+# workflow while its latest main run fails, and close it when one succeeds.
+on:
+  workflow_run:
+    workflows:
+      - CI
+      - Optional format features
+      - Native qualification
+      - R-CMD-check
+      - Harbor
+      - Coverage
+      - Dependency graphs
+      - Docs
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: main-health-${{ github.event.workflow_run.name }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  report:
+    # Cancelled and skipped runs say nothing about main.
+    if: >-
+      github.event.workflow_run.event != 'pull_request'
+      && contains(fromJSON('["success", "failure", "timed_out", "startup_failure"]'), github.event.workflow_run.conclusion)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      WORKFLOW: ${{ github.event.workflow_run.name }}
+      CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+      RUN_EVENT: ${{ github.event.workflow_run.event }}
+      RUN_URL: ${{ github.event.workflow_run.html_url }}
+      HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Open, update or close the workflow's issue
+        run: |
+          title="main is red: $WORKFLOW"
+          number="$(gh issue list --state open --label main-red --limit 100 --json number,title \
+            | jq -r --arg title "$title" '[.[] | select(.title == $title)][0].number // empty')"
+          body="The latest $RUN_EVENT run of $WORKFLOW on main ended in $CONCLUSION at $HEAD_SHA.
+
+          Latest failing run: $RUN_URL
+
+          This issue closes itself when a later main run of $WORKFLOW succeeds."
+          if [ "$CONCLUSION" = success ]; then
+            if [ -n "$number" ]; then
+              gh issue close "$number" --comment "Recovered in $RUN_URL at $HEAD_SHA."
+            fi
+          elif [ -n "$number" ]; then
+            # Editing instead of commenting keeps a two-hourly failure from
+            # notifying watchers on every run.
+            gh issue edit "$number" --body "$body"
+          else
+            gh label create main-red --color B60205 \
+              --description "A main-branch check is failing" --force
+            gh issue create --title "$title" --label main-red --body "$body"
+          fi

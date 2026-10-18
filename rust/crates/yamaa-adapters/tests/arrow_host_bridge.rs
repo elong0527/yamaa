@@ -387,3 +387,174 @@ fn public_temporals_preserve_existing_epoch_view_without_mutating_collected_prec
     };
     assert_eq!(value.collected_precision(), Precision::Day);
 }
+
+/// A raw C stream producer for inputs that arrow-rs's own producer cannot
+/// emit: arrays with under-aligned buffers, a NULL error message, and a
+/// stream that drops its `get_next` callback after reporting its schema.
+mod raw {
+    use arrow_array::{
+        ffi::{FFI_ArrowArray, FFI_ArrowSchema},
+        ffi_stream::FFI_ArrowArrayStream,
+    };
+    use arrow_schema::Schema;
+    use std::ffi::{c_char, c_int, c_void};
+
+    pub enum Behaviour {
+        Yield(Vec<FFI_ArrowArray>),
+        Fail,
+        DropNext,
+    }
+
+    struct Producer {
+        schema: Schema,
+        behaviour: Behaviour,
+    }
+
+    unsafe extern "C" fn get_schema(
+        stream: *mut FFI_ArrowArrayStream,
+        out: *mut FFI_ArrowSchema,
+    ) -> c_int {
+        let producer = unsafe { &*((*stream).private_data as *const Producer) };
+        let schema = FFI_ArrowSchema::try_from(&producer.schema).unwrap();
+        unsafe { std::ptr::write(out, schema) };
+        if matches!(producer.behaviour, Behaviour::DropNext) {
+            unsafe { (*stream).get_next = None };
+        }
+        0
+    }
+
+    unsafe extern "C" fn get_next(
+        stream: *mut FFI_ArrowArrayStream,
+        out: *mut FFI_ArrowArray,
+    ) -> c_int {
+        let producer = unsafe { &mut *((*stream).private_data as *mut Producer) };
+        let Behaviour::Yield(arrays) = &mut producer.behaviour else {
+            return 5;
+        };
+        let next = if arrays.is_empty() {
+            FFI_ArrowArray::empty()
+        } else {
+            arrays.remove(0)
+        };
+        unsafe { std::ptr::write(out, next) };
+        0
+    }
+
+    unsafe extern "C" fn no_message(_: *mut FFI_ArrowArrayStream) -> *const c_char {
+        std::ptr::null()
+    }
+
+    unsafe extern "C" fn release(stream: *mut FFI_ArrowArrayStream) {
+        drop(unsafe { Box::from_raw((*stream).private_data as *mut Producer) });
+        unsafe { (*stream).release = None };
+    }
+
+    pub fn stream(schema: Schema, behaviour: Behaviour) -> FFI_ArrowArrayStream {
+        let mut stream = FFI_ArrowArrayStream::empty();
+        stream.get_schema = Some(get_schema);
+        stream.get_next = Some(get_next);
+        stream.get_last_error = Some(no_message);
+        stream.release = Some(release);
+        stream.private_data =
+            Box::into_raw(Box::new(Producer { schema, behaviour })) as *mut c_void;
+        stream
+    }
+}
+
+/// Copy `bytes` to an address `offset` bytes past a 64-byte boundary.
+fn displaced(bytes: &[u8], offset: usize) -> arrow_buffer::Buffer {
+    let mut buffer = arrow_buffer::MutableBuffer::from_len_zeroed(offset + bytes.len());
+    assert_eq!(buffer.as_ptr().align_offset(64), 0);
+    buffer.as_slice_mut()[offset..].copy_from_slice(bytes);
+    arrow_buffer::Buffer::from(buffer).slice_with_length(offset, bytes.len())
+}
+
+#[test]
+fn under_aligned_producer_buffers_import_unchanged() {
+    // The C Data interface only recommends alignment. Int64 values one or four
+    // bytes past an 8-byte boundary, and string views eight bytes past a
+    // 16-byte boundary, import with their values intact.
+    let integers = Int64Array::from(vec![Some(i64::MIN), None, Some(-1), Some(i64::MAX)]);
+    let long = "a string view longer than twelve bytes";
+    let views = StringViewArray::from(vec![Some("short"), None, Some(long), Some("")]);
+    let fields = vec![
+        Field::new("I", DataType::Int64, true),
+        Field::new("S", DataType::Utf8View, true),
+    ];
+    for (integer_offset, view_offset) in [(1, 8), (4, 8), (0, 0)] {
+        let integers = integers.to_data();
+        let integers = unsafe {
+            integers
+                .clone()
+                .into_builder()
+                .buffers(vec![displaced(
+                    integers.buffers()[0].as_slice(),
+                    integer_offset,
+                )])
+                .build_unchecked()
+        };
+        let views = views.to_data();
+        let mut buffers = views.buffers().to_vec();
+        buffers[0] = displaced(views.buffers()[0].as_slice(), view_offset);
+        let views = unsafe {
+            views
+                .clone()
+                .into_builder()
+                .buffers(buffers)
+                .build_unchecked()
+        };
+        let parent = arrow_array::StructArray::from(vec![
+            (
+                Arc::new(fields[0].clone()),
+                Arc::new(Int64Array::from(vec![0; 4])) as ArrayRef,
+            ),
+            (
+                Arc::new(fields[1].clone()),
+                Arc::new(StringViewArray::from(vec![""; 4])) as ArrayRef,
+            ),
+        ])
+        .to_data();
+        let parent = unsafe {
+            parent
+                .into_builder()
+                .child_data(vec![integers, views])
+                .build_unchecked()
+        };
+        let source = raw::stream(
+            Schema::new(fields.clone()),
+            raw::Behaviour::Yield(vec![arrow_array::ffi::FFI_ArrowArray::new(&parent)]),
+        );
+        let table = arrow_bridge::import_public_stream(source).unwrap();
+        assert_eq!(table.row_count(), 4);
+        assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Int(i64::MIN));
+        assert_eq!(table.cell(1, 0).unwrap(), ValueRef::Missing);
+        assert_eq!(table.cell(2, 0).unwrap(), ValueRef::Int(-1));
+        assert_eq!(table.cell(3, 0).unwrap(), ValueRef::Int(i64::MAX));
+        assert_eq!(table.cell(0, 1).unwrap(), ValueRef::Str("short"));
+        assert_eq!(table.cell(1, 1).unwrap(), ValueRef::Missing);
+        assert_eq!(table.cell(2, 1).unwrap(), ValueRef::Str(long));
+        assert_eq!(table.cell(3, 1).unwrap(), ValueRef::Str(""));
+    }
+}
+
+#[test]
+fn a_producer_failure_with_a_null_message_is_an_error() {
+    let schema = Schema::new(vec![Field::new("I", DataType::Int64, true)]);
+    let error = arrow_bridge::import_public_stream(raw::stream(schema, raw::Behaviour::Fail))
+        .err()
+        .unwrap();
+    let text = format!("{error:?}");
+    assert!(text.contains("Error code: 5"), "{text}");
+}
+
+#[test]
+fn a_stream_that_drops_its_next_callback_is_an_error_not_an_end() {
+    // The callback disappears after the schema is reported, so the import
+    // must refuse the stream instead of reading it as empty.
+    let schema = Schema::new(vec![Field::new("I", DataType::Int64, true)]);
+    let error = arrow_bridge::import_public_stream(raw::stream(schema, raw::Behaviour::DropNext))
+        .err()
+        .unwrap();
+    let text = format!("{error:?}");
+    assert!(text.contains("lost its get_next callback"), "{text}");
+}

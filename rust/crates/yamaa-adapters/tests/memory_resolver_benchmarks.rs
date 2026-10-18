@@ -2346,7 +2346,7 @@ const REPRESENTATIVE: &[&str] = &[
     "adam-adsl-age-group",
     "adam-adlb-reported-precision",
     "adam-adsl-randomization",
-    "ars-ae-incidence-results",
+    "adam-results-ae-incidence",
     "adam-adae-exposure-adjusted-incidence",
     "sdtm-dm-race-ethnicity",
     "sdtm-dm-metadata",

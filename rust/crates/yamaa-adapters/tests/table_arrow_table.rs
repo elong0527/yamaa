@@ -1864,7 +1864,7 @@ mod table {
                 .map(Result::unwrap)
                 .collect::<Vec<_>>();
             assert_eq!(rows[0].get_string(0).unwrap(), "");
-            assert!(rows[1].is_null(0).unwrap());
+            assert_eq!(rows[1].get_column_iter().next().unwrap().1, &Field::Null);
             assert_eq!(rows[2].get_string(0).unwrap(), "a\u{e9}\n");
             assert_eq!(rows[0].get_long(1).unwrap(), i64::MIN);
             assert_eq!(rows[1].get_long(1).unwrap(), i64::MAX);
@@ -1891,7 +1891,8 @@ mod table {
                 rows[1].get_timestamp_micros(4).unwrap(),
                 253_402_300_799_000_000
             );
-            assert!(rows[2].is_null(3).unwrap() && rows[2].is_null(4).unwrap());
+            assert_eq!(rows[2].get_column_iter().nth(3).unwrap().1, &Field::Null);
+            assert_eq!(rows[2].get_column_iter().nth(4).unwrap().1, &Field::Null);
         }
 
         #[test]
@@ -2295,6 +2296,14 @@ mod table {
                     exact_cells(&extended(11, &map));
                 }
                 exact_cells(&extended(11, &[0])); // empty map has no type header
+            }
+
+            #[test]
+            fn unknown_uuid_values_preserve_all_fifteen_cells() {
+                exact_cells(&extended(13, &[7; 16]));
+                let mut list = vec![0x2d]; // list<uuid> with two elements
+                list.extend([7; 32]);
+                exact_cells(&extended(9, &list));
             }
 
             #[test]
