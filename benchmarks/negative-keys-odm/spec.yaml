@@ -1,0 +1,28 @@
+schema_version: "1.0"
+domain: DM
+keys: [STUDYID, USUBJID, SEX]
+input:
+  ODM: input/odm.csv
+
+output:
+  path: dm.csv
+  columns: [STUDYID, USUBJID, SEX]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ODM.StudyOID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: {str_template: "{ODM.StudyOID}-{ODM.SubjectKey}"}
+
+  # The sex is a collected item of its own, read from among the subject's
+  # items, but it is declared a key, which each collected item must supply
+  # by itself, so the specification is rejected before any data is read.
+  - name: SEX
+    type: str
+    label: Sex
+    derivation: {odm: ODM.IT.DM.SEX}

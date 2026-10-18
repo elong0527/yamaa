@@ -2379,7 +2379,7 @@ fn benchmark_cases() -> Vec<(String, PathBuf)> {
 /// an exempt case that starts passing fails the test as stale, and any
 /// non-exempt case that fails is reported with its findings.
 const EXEMPTIONS: &[(&str, &str)] = &[
-    // Project functions (5): the specification calls project functions,
+    // Project functions (7): the specification calls project functions,
     // which execute in a host language runtime. The Rust adapters route
     // embeds none, so these cannot run here at all; most fail earlier
     // still, because the case's project.yaml links python/environment.yaml
@@ -2396,6 +2396,14 @@ const EXEMPTIONS: &[(&str, &str)] = &[
     ),
     (
         "schema-functions",
+        "calls project functions; project preparation fails first (project_environment_invalid, REQ-0695 at lock) because the uv.lock its Python environment file declares is a host-side file absent from the benchmark directory",
+    ),
+    (
+        "schema-keys-record-reads",
+        "calls project functions; project preparation fails first (project_environment_invalid, REQ-0695 at lock) because the uv.lock its Python environment file declares is a host-side file absent from the benchmark directory",
+    ),
+    (
+        "schema-window-key-records",
         "calls project functions; project preparation fails first (project_environment_invalid, REQ-0695 at lock) because the uv.lock its Python environment file declares is a host-side file absent from the benchmark directory",
     ),
     (

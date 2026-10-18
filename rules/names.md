@@ -73,7 +73,9 @@ a field of an in-scope dataset. A field typed `variable` holds a qualified
 source variable or an unqualified constructed output column. The rule that owns
 a field may narrow the qualified variables it accepts: a `between` value
 qualified by an input dataset must name the current row's driver
-([LOOKUP-9](lookup.md#lookup-9)).
+([LOOKUP-9](lookup.md#lookup-9)), and a column-level window names a field
+only of a driver that every row template has
+([WINDOW-11](windows.md#window-11)).
 
 <a id="name-4"></a>
 
@@ -88,7 +90,7 @@ is scalar only when the exact variable appears in the enclosing
 source variable with a scalar `source` fails.
 
 Fails: `ungrouped_driver_field`.
-Evidence: `schema-rows-group-scope`, `rust/crates/yamaa-adapters/tests/fixtures/source_filter_scope.json`, `rust/crates/yamaa-adapters/tests/execution_grouped_driver_dataset.rs`, `rust/crates/yamaa-core/tests/support/diagnostic/binding.rs`.
+Evidence: `schema-rows-group-scope`, `rust/crates/yamaa-adapters/tests/fixtures/source_filter_scope.json`, `rust/crates/yamaa-adapters/tests/execution_grouped_driver_dataset.rs`, `rust/crates/yamaa-adapters/tests/execution_column_window_drivers.rs`, `rust/crates/yamaa-core/tests/support/diagnostic/binding.rs`.
 Replaces: REQ-0085, REQ-0086, REQ-0087, REQ-0107.
 
 The driver is an input dataset or an eligible named intermediate under
@@ -98,8 +100,10 @@ the row it reads fails. A column-level derivation reads every constructed row,
 so there a qualified reference to a row template's driver is scalar only when
 every grouped row template driven by that dataset has the exact variable in
 its `group_by`; otherwise it fails, naming the variable and that driver. A
-grouped row reduces non-key variables with an aggregate
-expression, as [Expressions](expressions.md) and
+column-level window spans the rows of every row template, so it also needs
+every row template, grouped or not, to have that driver
+([WINDOW-11](windows.md#window-11)). A grouped row reduces non-key variables
+with an aggregate expression, as [Expressions](expressions.md) and
 [Formulas](formulas.md) define.
 
 <a id="name-5"></a>
@@ -252,12 +256,13 @@ field treats missing as equal to missing. `ItemOID`, `Value` and every field
 outside the hierarchy never narrow a scope, so a row built for one item reads
 the other items of its own item group occurrence.
 
-Evidence: `schema-odm-item-sample`, `schema-odm-form-items`, `schema-odm-item-subject`.
+Evidence: `schema-odm-item-sample`, `schema-odm-form-items`, `schema-odm-item-subject`, `schema-window-key-odm-records`.
 Replaces: REQ-1269.
 
 | The row was built by | Its ODM scope |
 | --- | --- |
 | no `rows`, with the ODM input as the base | the records its key combination was derived from ([ROW-8](rows.md#row-8)) |
+| no `rows`, with the ODM input as the base and a key derived by a window | the records equal to the row's one record on all eight hierarchy fields ([ROW-8](rows.md#row-8)) |
 | a row template grouped over the ODM input | the records equal to the row on every hierarchy field in the template's `group_by` |
 | a record-driven row template over the ODM input | the records equal to the driver record on all eight hierarchy fields |
 

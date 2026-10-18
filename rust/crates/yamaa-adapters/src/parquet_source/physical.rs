@@ -1,12 +1,24 @@
 //! Opaque physical values: read every chunk before profile/text validation.
 use super::{reader::Error, shape};
+use crate::storage_api::contain_decode;
 use parquet::{
     column::reader::{ColumnReader, ColumnReaderImpl},
     data_type::{ByteArray, DataType},
+    errors::ParquetError,
     file::{metadata::ParquetMetaData, properties::ReaderProperties, reader::RowGroupReader},
     schema::types::ColumnDescriptor,
 };
 use std::sync::Arc;
+
+/// Make one call into the Parquet crate on admitted input. Its panic, like its
+/// error, reports a malformed page or page header. The code around each call
+/// stays outside `contain_decode`, so that a panic in it is not mistaken for
+/// malformed input.
+fn native<T>(call: impl FnOnce() -> Result<T, ParquetError>) -> Result<T, Error> {
+    contain_decode(call)
+        .ok_or(Error::Malformed)?
+        .map_err(|_| Error::Malformed)
+}
 
 #[derive(Debug)]
 pub(super) enum Column {
@@ -28,14 +40,14 @@ fn collect<T: DataType>(
     let mut shapes = shapes.to_vec();
     loop {
         let (mut definitions, mut repetitions, mut values) = (Vec::new(), Vec::new(), Vec::new());
-        let (records, non_null, count) = reader
-            .read_records(
+        let (records, non_null, count) = native(|| {
+            reader.read_records(
                 256,
                 Some(&mut definitions),
                 Some(&mut repetitions),
                 &mut values,
             )
-            .map_err(|_| Error::Malformed)?;
+        })?;
         if records == 0 && count == 0 && non_null == 0 {
             break;
         }
@@ -92,7 +104,8 @@ fn collect<T: DataType>(
 
 /// Read the file's pages through the native column readers. `source` is the
 /// held file with each page header presented as the footer is presented to
-/// the metadata decoder.
+/// the metadata decoder. Each call into the Parquet crate is contained on its
+/// own (`native`).
 pub(super) fn read(
     source: bytes::Bytes,
     metadata: &ParquetMetaData,
@@ -110,14 +123,15 @@ pub(super) fn read(
     }
     let mut result: Vec<_> = descriptors.iter().map(|_| Column::Discard).collect();
     for (index, group) in metadata.row_groups().iter().enumerate() {
-        let group = crate::storage_api::row_group_reader(
-            source.clone(),
-            group,
-            metadata,
-            index,
-            properties.clone(),
-        )
-        .map_err(|_| Error::Malformed)?;
+        let group = native(|| {
+            crate::storage_api::row_group_reader(
+                source.clone(),
+                group,
+                metadata,
+                index,
+                properties.clone(),
+            )
+        })?;
         let rows = usize::try_from(group.metadata().num_rows()).map_err(|_| Error::Malformed)?;
         if group.num_columns() != descriptors.len() {
             return Err(Error::Malformed);
@@ -125,9 +139,7 @@ pub(super) fn read(
         for (index, descriptor) in descriptors.iter().enumerate() {
             let levels = usize::try_from(group.metadata().column(index).num_values())
                 .map_err(|_| Error::Malformed)?;
-            let mut column = group
-                .get_column_reader(index)
-                .map_err(|_| Error::Malformed)?;
+            let mut column = native(|| group.get_column_reader(index))?;
             macro_rules! values {
                 ($reader:expr,$variant:ident) => {{
                     let mut next = collect(
@@ -189,6 +201,18 @@ mod tests {
     use arrow_schema::{DataType as ArrowType, Field, Schema};
     use parquet::arrow::ArrowWriter;
     use parquet::file::{reader::FileReader, serialized_reader::SerializedFileReader};
+
+    /// A panic inside the call into the Parquet crate reads as malformed
+    /// input, and a panic in the code around it reaches the caller.
+    #[test]
+    fn only_the_call_into_the_parquet_crate_is_contained() {
+        let inside = native::<()>(|| panic!("a panic inside the native call"));
+        assert_eq!(inside.unwrap_err(), Error::Malformed);
+        let around = std::panic::catch_unwind(|| {
+            native(|| Ok(())).map(|()| panic!("a panic around the native call"))
+        });
+        assert!(around.is_err());
+    }
 
     #[test]
     fn physical_values_are_decoded_in_order() {

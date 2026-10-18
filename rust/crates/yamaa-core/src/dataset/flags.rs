@@ -108,12 +108,9 @@ impl Flag {
         }
     }
     pub(super) fn key_expression(&self) -> bool {
-        self.bindings.iter().all(|b| {
-            !matches!(
-                b.read,
-                FlagRead::Read(Read::Intermediate { .. }) | FlagRead::Collect { .. }
-            )
-        })
+        self.bindings
+            .iter()
+            .all(|b| !matches!(b.read, FlagRead::Collect { .. }))
     }
     pub(super) fn validate(
         &self,

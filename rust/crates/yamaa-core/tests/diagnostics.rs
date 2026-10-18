@@ -309,6 +309,7 @@ mod diagnostics {
             reached.extend(preflight::intermediate_reached());
             reached.extend(preflight::namespace_reached());
             reached.extend(binding::intermediate_key_reached());
+            reached.extend(binding::key_record_reached());
             reached.extend(intermediate_ranges::reached());
             reached.extend(intermediate_ranges::match_phase_reached());
             reached.extend(producer::reached());
@@ -320,6 +321,7 @@ mod diagnostics {
             reached.extend(binding::reached());
             reached.extend(intermediate_scopes::reached());
             reached.extend(binding::window_reached());
+            reached.extend(binding::window_driver_reached());
             reached.extend(binding::lookup_reached());
             reached.extend(binding::source_filter_reached());
             reached.extend(binding::source_match_reached());

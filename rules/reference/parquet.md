@@ -133,14 +133,15 @@ Replaces: REQ-1032, REQ-1033, REQ-1040.
 | Parquet type | Column type |
 |---|---|
 | `BYTE_ARRAY` annotated `String` | `str` |
-| `INT64` with no logical type | `int` |
+| `INT64` with no annotation | `int` |
 | `INT64` annotated `Int(64, signed)` | `int` |
-| `INT32` with no logical type | `int` |
+| `INT32` with no annotation | `int` |
 | `INT32` annotated `Int(8, signed)`, `Int(16, signed)` or `Int(32, signed)` | `int` |
-| `DOUBLE` with no logical type | `float` |
+| `DOUBLE` with no annotation | `float` |
 | `INT32` annotated `Date` | `date` |
 | `INT64` annotated `Timestamp`, microseconds, no UTC adjustment | `datetime` |
 
+A field with no annotation has neither a logical type nor a converted type.
 A signed integer annotation is the logical type `Int(bitWidth, signed)` or, on
 a field without a logical type, the converted type of the same width: `INT_8`,
 `INT_16`, `INT_32` or `INT_64`. Either annotation, or both, reads as `int`, as
@@ -160,7 +161,7 @@ field annotated `String` reads as `str` whether that schema names it `string`,
 reads as it would if the schema named the dictionary's value type, whatever the
 index type: a `dictionary` of `string` values over a `BYTE_ARRAY` field
 annotated `String` reads as `str`, and a `dictionary` of `int64` values over an
-`INT64` field with no logical type reads as `int`. Only the layout differs: the
+`INT64` field with no annotation reads as `int`. Only the layout differs: the
 offset width, the string views or the dictionary indices. A field outside the
 mapping fails with `source_field_type_unsupported`, reporting the field and
 stored type.

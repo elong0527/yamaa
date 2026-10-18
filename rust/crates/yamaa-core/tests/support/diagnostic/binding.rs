@@ -543,6 +543,90 @@ pub(crate) fn window_reached() -> BTreeSet<ConditionCode> {
     reached
 }
 
+/// A column-level window spans the rows of every row template, so preparation
+/// refuses its read of a driver that not every template has (WINDOW-11), and
+/// the same window over templates sharing that driver prepares.
+pub(crate) fn window_driver_reached() -> BTreeSet<ConditionCode> {
+    use yamaa_core::specification::{PreflightFinding, PrepareError};
+    let prepare = |second: &str| {
+        let template = |id: &str, driver: &str| {
+            T::map(vec![
+                ("id", T::text(id)),
+                ("dataset", T::text(driver)),
+                (
+                    "derivations",
+                    T::map(vec![(
+                        "ID",
+                        op("source", "variable", &format!("{driver}.ID")),
+                    )]),
+                ),
+            ])
+        };
+        let window = T::map(vec![(
+            "value",
+            T::map(vec![(
+                "row_number",
+                T::map(vec![(
+                    "window",
+                    T::map(vec![("order_by", T::List(vec![T::text("DM.AGE")]))]),
+                )]),
+            )]),
+        )]);
+        let tree = T::map(vec![
+            ("schema_version", T::text("1.0")),
+            ("domain", T::text("TEST")),
+            (
+                "input",
+                T::map(vec![
+                    ("DM", T::map(vec![("path", T::text("dm.csv"))])),
+                    ("AE", T::map(vec![("path", T::text("ae.csv"))])),
+                ]),
+            ),
+            ("keys", T::List(vec![T::text("ID")])),
+            (
+                "columns",
+                T::List(vec![column("ID", None), column("VALUE", Some(window))]),
+            ),
+            (
+                "output",
+                T::map(vec![
+                    ("path", T::text("result.csv")),
+                    ("columns", T::List(vec![T::text("ID"), T::text("VALUE")])),
+                ]),
+            ),
+            (
+                "rows",
+                T::List(vec![template("subjects", "DM"), template("events", second)]),
+            ),
+        ]);
+        let mut nodes = vec![];
+        let root = tree.append(&mut nodes);
+        let model = SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+            .unwrap()
+            .unwrap();
+        PreparedSpecification::prepare(&model)
+    };
+    assert!(prepare("DM").is_ok(), "a shared driver prepares");
+    let Err(PrepareError::Invalid(mut findings)) = prepare("AE") else {
+        panic!("a driver the events template lacks is refused before binding")
+    };
+    assert_eq!(findings.len(), 1);
+    let PreflightFinding::Scalar(diagnostic) = findings.remove(0) else {
+        panic!("one scalar preparation finding")
+    };
+    BTreeSet::from([check(
+        diagnostic,
+        "unknown_field",
+        Some("WINDOW-11"),
+        &["columns.VALUE.derivation.row_number.window.order_by[0]"],
+        vec![
+            ("identifier", text("DM.AGE")),
+            ("drivers", V::Array(vec![text("DM"), text("AE")])),
+            ("operation", text("row_number")),
+        ],
+    )])
+}
+
 pub(crate) fn lookup_compile(
     value: &str,
     donor: &str,
@@ -1243,4 +1327,57 @@ pub(crate) fn intermediate_key_reached() -> BTreeSet<ConditionCode> {
         ],
     )]
     .into()
+}
+
+/// Without row templates, a key computed by an aggregate reads every record
+/// of a key combination that does not exist yet (COLUMN-7). Binding and the
+/// static check report the same finding.
+pub(crate) fn key_record_reached() -> BTreeSet<ConditionCode> {
+    let mut nodes = vec![];
+    let root = T::map(vec![
+        ("schema_version", T::text("1.0")),
+        ("domain", T::text("TEST")),
+        ("base", T::text("SRC")),
+        (
+            "input",
+            T::map(vec![("SRC", T::map(vec![("path", T::text("source.csv"))]))]),
+        ),
+        ("keys", T::List(vec![T::text("ID"), T::text("TOP")])),
+        (
+            "columns",
+            T::List(vec![
+                column("ID", Some(op("source", "variable", "SRC.ID"))),
+                column("TOP", Some(op("aggregate", "expr", "MAX(SRC.V)"))),
+            ]),
+        ),
+        (
+            "output",
+            T::map(vec![
+                ("path", T::text("result.csv")),
+                ("columns", T::List(vec![T::text("ID"), T::text("TOP")])),
+            ]),
+        ),
+    ])
+    .append(&mut nodes);
+    let model = SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+        .unwrap()
+        .unwrap();
+    let prepared = PreparedSpecification::prepare(&model).unwrap();
+    let expected = |d: Diagnostic| {
+        check(
+            d,
+            "key_dependency",
+            Some("COLUMN-7"),
+            &["columns.TOP.derivation.aggregate"],
+            vec![("column", text("TOP")), ("operation", text("aggregate"))],
+        )
+    };
+    let checked = prepared.check_declaration_diagnostics();
+    assert_eq!(checked.len(), 1);
+    expected(checked[0].clone());
+    let found = failures(&prepared);
+    assert_eq!(found.len(), 1);
+    let mut diagnostics = found[0].diagnostics(prepared.source()).unwrap();
+    assert_eq!(diagnostics.len(), 1);
+    BTreeSet::from([expected(diagnostics.remove(0))])
 }

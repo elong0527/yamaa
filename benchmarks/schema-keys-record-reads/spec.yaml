@@ -1,0 +1,49 @@
+schema_version: "1.0"
+domain: ADEX
+keys: [USUBJID, DOSE, ABOVEFL]
+input:
+  EX: {path: input/ex.csv, types: {EXSTDY: int, EXDOSE: float}}
+  PLAN: {path: input/plan.csv, types: {PLANDOSE: float}}
+base: EX
+
+output:
+  path: adex.csv
+  columns: [USUBJID, DOSE, ABOVEFL, PLANDOSE]
+
+intermediates:
+  # The subject's planned dose; every subject has one.
+  - id: PLANNED
+    dataset: PLAN
+    require_match: true
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: EX.USUBJID
+
+  # Each key is computed from one administration: its dose, as the
+  # project's routine returns it, and whether it exceeds the subject's
+  # planned dose.
+  - name: DOSE
+    type: float
+    label: Dose
+    derivation:
+      function:
+        name: project_value
+        args: {x: EX.EXDOSE}
+
+  - name: ABOVEFL
+    type: str
+    label: Dose Above Planned Flag
+    derivation:
+      flag:
+        condition: "EX.EXDOSE > PLANNED.PLANDOSE"
+        true_value: "Y"
+        false_value: "N"
+        missing: {literal: null}
+
+  - name: PLANDOSE
+    type: float
+    label: Planned Dose
+    derivation: PLANNED.PLANDOSE
