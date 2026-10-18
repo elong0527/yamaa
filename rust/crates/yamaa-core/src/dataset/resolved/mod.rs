@@ -26,9 +26,12 @@
 //!    the order of the executor's registration walk;
 //! 3. the schedule equals the structural mirror of the executor's loops.
 //!
-//! The current executor still runs every plan; nothing here changes an
-//! output. Evaluation payloads for the expression nodes arrive with the
-//! executor over this graph (#2841).
+//! Every node carries its evaluation payload, copied from the bound plan: an
+//! expression node its [`Op`], a named relation its intermediate, a check its
+//! declaration, a region its output schema and inputs. The plan is therefore
+//! self-contained, which the executor over this graph (#2841) and the
+//! compile-once plan handle (#2821) need. The current executor still runs
+//! every plan; nothing here changes an output.
 use crate::{
     numeric_lifecycle::HandlerKind,
     table::TableSchema,
@@ -46,12 +49,20 @@ mod verify;
 
 pub use reference::ReferenceStep;
 
-use super::{DatasetPlan, Keep, OdmTemplateScope, VerificationSeverity};
+use super::{
+    AggregateRowContext, BoundAggregate, BoundFunction, BoundNumeric, BoundOdm,
+    BoundProjectFunction, Check, ContextWindow, DatasetPlan, Flag, Imputation, Intermediate,
+    IntermediateUnique, JoinAbsence, JoinedRead, Keep, Lookup, OdmTemplateScope, RelationRange,
+    Rounding, RowLookup, SourceSelection, StringCase, StringExtract, StringPad, StringReplace,
+    StringTemplate, Temporal, VerificationSeverity, Window,
+};
+use crate::bound_expression::BoundPredicate;
+use crate::conversion::LiteralHandler;
 
 macro_rules! slot {
     ($(#[$meta:meta])* $name:ident) => {
         $(#[$meta])*
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
         pub struct $name(u32);
         impl $name {
             /// Position of this slot in its table.
@@ -158,6 +169,12 @@ pub struct Region {
     conversions: Vec<HandlerSiteId>,
     /// Column-phase columns in the compiler's order.
     column_order: Vec<ColumnId>,
+    /// The region's output schema, in declaration order.
+    pub output: TableSchema,
+    /// Inputs whose every implicit join must find a record (LOOKUP-24).
+    pub required_matches: std::collections::BTreeSet<String>,
+    /// The region's secondary inputs, in plan order.
+    pub secondary: Vec<super::SecondarySource>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -205,6 +222,9 @@ pub struct TemplateNode {
     pub filter: Option<TemplateFilter>,
     /// Authored row identity, when the bound plan retains it.
     pub row: Option<Arc<str>>,
+    /// The authored row identity and group fields of a grouped template,
+    /// for aggregate diagnostics.
+    pub row_context: Option<AggregateRowContext>,
     /// The template's row bindings, in resolved dependency order.
     row_bindings: Range<u32>,
 }
@@ -257,6 +277,8 @@ pub struct Binding {
     pub path: Arc<str>,
     /// The conversion handler site of the completed result.
     pub unconvertible: Option<HandlerSiteId>,
+    /// The declared replacement for an unconvertible result.
+    pub handler: Option<LiteralHandler>,
     pub origin: BindingOrigin,
 }
 
@@ -276,15 +298,173 @@ pub enum BindingOrigin {
     Column { assignment: u32 },
 }
 
-/// One expression node. Operands and reads are slots; the operation payload
-/// itself stays with the bound plan until the executor over this graph (#2841).
+/// One expression node. Operands and reads are slots; the operation and its
+/// authored facts are the node's [`Op`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct ExprNode {
     pub kind: ExprKind,
     pub path: Arc<str>,
+    pub op: Op,
     operands: Range<u32>,
     reads: Range<u32>,
     sites: Range<u32>,
+}
+
+/// What an expression node computes, copied from the bound plan so that the
+/// resolved plan is self-contained. Operands and reads stay slots on the
+/// node; the payload keeps the operation and the authored facts its
+/// diagnostics need. Payload coordinates are local to the node's region.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Op {
+    Literal(Value),
+    /// A plain read: its one read slot is the whole operation.
+    Read,
+    /// Operand `index` of a match expression, resolved for the current row
+    /// before the expression is evaluated.
+    MatchOperand {
+        index: usize,
+    },
+    /// Distinct present readings across the records feeding the row; a
+    /// filter operand narrows them first.
+    Collect {
+        identifier: String,
+        selection: Option<SourceSelection>,
+    },
+    Reduce {
+        identifier: Option<String>,
+        reducer: crate::reduction::NumericReducer,
+        text: String,
+    },
+    Count {
+        text: String,
+    },
+    /// Reads follow the bindings in order.
+    Compute(BoundNumeric),
+    /// Reads follow the bindings in order.
+    Flag(Flag),
+    /// Operands are the conditions and branches in authored order.
+    Case,
+    /// Reads follow the bindings in order.
+    Predicate(BoundPredicate),
+    /// A cut or mapping. A literal it selects through a handler is checked
+    /// against the column's type unless a conversion handler is declared at
+    /// the node's own path.
+    MappingCut {
+        operation: crate::mapping_cut::MappingCut,
+        column: usize,
+        handled: bool,
+    },
+    Round(Rounding),
+    Imputation(Imputation),
+    Temporal(Temporal),
+    Extreme {
+        largest: bool,
+    },
+    StrTemplate(StringTemplate),
+    StrExtract(StringExtract),
+    StrReplace(StringReplace),
+    StrCase(StringCase),
+    StrPad(StringPad),
+    SourceBinding {
+        absent: Option<Value>,
+        variable_absent: bool,
+        variable: String,
+        path: String,
+    },
+    /// Operands are the sources in authored order, each with its path.
+    FirstAvailable {
+        missing: Value,
+        missing_path: String,
+        sources: Vec<String>,
+    },
+    /// Reads follow the read and collected arguments in order.
+    Function(BoundFunction),
+    /// Reads follow the read and collected arguments in order.
+    ProjectFunction(BoundProjectFunction),
+    /// A window and the column of the assignment that reads it.
+    Window {
+        window: Window,
+        column: usize,
+    },
+    ContextWindow {
+        context: ContextWindow,
+        column: usize,
+    },
+    Intermediate {
+        column: usize,
+    },
+    Joined(JoinedRead),
+    JoinedSource {
+        read: JoinedRead,
+        range: Option<RelationRange>,
+        filter: Option<BoundPredicate>,
+        selection: Option<SourceSelection>,
+        absence: Option<JoinAbsence>,
+    },
+    SourceLookup {
+        lookup: Lookup,
+        range: Option<RelationRange>,
+        filter: Option<BoundPredicate>,
+        selection: Option<SourceSelection>,
+        absence: Option<JoinAbsence>,
+    },
+    Lookup(Lookup),
+    RowLookup(RowLookup),
+    /// Operands are the expression keys, then one wrapper per derivation.
+    Aggregate(Box<BoundAggregate>),
+    Odm(Box<BoundOdm>),
+    /// One aggregate derivation: its operand is the derived expression.
+    Derivation {
+        column: usize,
+        kind: ColumnType,
+        handler: Option<LiteralHandler>,
+    },
+}
+
+impl Op {
+    /// Whether this payload is the operation of a node of `kind`; the payload
+    /// of every resolved node is.
+    pub fn fits(&self, kind: ExprKind) -> bool {
+        use ExprKind as K;
+        matches!(
+            (kind, self),
+            (K::Literal, Op::Literal(_))
+                | (K::Source, Op::Read | Op::MatchOperand { .. })
+                | (K::Column, Op::Read)
+                | (K::Collect, Op::Collect { .. })
+                | (K::Reduce, Op::Reduce { .. })
+                | (K::Count, Op::Count { .. })
+                | (K::Compute, Op::Compute(_))
+                | (K::Flag, Op::Flag(_))
+                | (K::Case, Op::Case)
+                | (K::Predicate, Op::Predicate(_))
+                | (K::MappingCut, Op::MappingCut { .. })
+                | (K::Round, Op::Round(_))
+                | (K::Imputation, Op::Imputation(_))
+                | (K::Temporal, Op::Temporal(_))
+                | (K::Extreme, Op::Extreme { .. })
+                | (K::StrTemplate, Op::StrTemplate(_))
+                | (K::StrExtract, Op::StrExtract(_))
+                | (K::StrReplace, Op::StrReplace(_))
+                | (K::StrCase, Op::StrCase(_))
+                | (K::StrPad, Op::StrPad(_))
+                | (K::SourceBinding, Op::SourceBinding { .. })
+                | (K::FirstAvailable, Op::FirstAvailable { .. })
+                | (K::Function, Op::Function(_))
+                | (K::ProjectFunction, Op::ProjectFunction(_))
+                | (K::Window(_), Op::Window { .. })
+                | (K::ContextWindow(_), Op::ContextWindow { .. })
+                | (K::Intermediate(_), Op::Intermediate { .. })
+                | (K::Joined(_), Op::Joined(_))
+                | (K::JoinedSource(_), Op::JoinedSource { .. })
+                | (K::SourceLookup(_), Op::SourceLookup { .. })
+                | (K::Lookup(_), Op::Lookup(_))
+                | (K::RowLookup(_), Op::RowLookup(_))
+                | (K::Aggregate(_), Op::Aggregate(_))
+                | (K::Odm(_), Op::Odm(_))
+                | (K::Derivation, Op::Derivation { .. })
+        )
+    }
 }
 
 /// The operation family of one expression node.
@@ -400,6 +580,9 @@ pub struct RelationNode {
     pub windowed: bool,
     /// Output columns read across every candidate (output aggregates).
     pub scan: Vec<ColumnId>,
+    /// The bound declaration of a named intermediate; its donor plan, if
+    /// any, is the `derivations` region.
+    pub named: Option<Box<Intermediate>>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -520,6 +703,18 @@ pub struct CheckNode {
     pub predicates: Vec<ExprId>,
     /// Position within its column group, key list or dataset checks.
     position: u32,
+    pub payload: CheckPayload,
+}
+
+/// What a check evaluates, copied from the bound plan.
+#[derive(Clone, Debug, PartialEq)]
+pub enum CheckPayload {
+    /// An output key check; its reads are the keys.
+    Keys,
+    /// An intermediate's `unique` verification.
+    Unique(IntermediateUnique),
+    /// A declared column or dataset check.
+    Declared(Check),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -812,5 +1007,22 @@ impl ResolvedPlan {
     /// The conversion handler sites a region declares, in declared order.
     pub fn conversions(&self, id: RegionId) -> &[HandlerSiteId] {
         &self.region(id).conversions
+    }
+    /// A region's named intermediate `index`: named intermediates keep their
+    /// plan positions as the region's first relation slots.
+    /// Returns `None` when the index does not name an intermediate in that region.
+    pub fn named(&self, region: RegionId, index: usize) -> Option<RelationId> {
+        let relations = &self.region(region).relations;
+        let id = relations.start.checked_add(u32::try_from(index).ok()?)?;
+        (id < relations.end
+            && matches!(
+                self.relations[id as usize].kind,
+                RelationKind::Named { index: slot } if slot as usize == index
+            ))
+        .then_some(RelationId(id))
+    }
+    /// A region's column-phase columns, in the compiler's order.
+    pub fn column_order(&self, id: RegionId) -> &[ColumnId] {
+        &self.region(id).column_order
     }
 }

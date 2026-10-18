@@ -1571,6 +1571,10 @@ impl DatasetPlan {
     pub fn requires_match(&self, input: &str) -> bool {
         self.required_matches.contains(input)
     }
+    /// The inputs declaring `require_match: true`.
+    pub(crate) fn required_matches(&self) -> &std::collections::BTreeSet<String> {
+        &self.required_matches
+    }
     /// Severity belongs to admitted check declarations, never host issue rows.
     pub fn with_warning_verifications(mut self, paths: Vec<String>) -> Result<Self, PlanError> {
         let checks: std::collections::BTreeSet<_> = self

@@ -88,7 +88,7 @@ struct Template {
 fn deferred_odm_contexts(
     declarations: &[Template],
     templates: &[RowTemplate],
-) -> std::rc::Rc<[crate::dataset::OdmTemplateScope]> {
+) -> std::sync::Arc<[crate::dataset::OdmTemplateScope]> {
     declarations
         .iter()
         .zip(templates)
@@ -1945,7 +1945,7 @@ impl Rows {
                 declared.push(template);
             }
         }
-        let mut odm_contexts: Option<std::rc::Rc<[crate::dataset::OdmTemplateScope]>> = None;
+        let mut odm_contexts: Option<std::sync::Arc<[crate::dataset::OdmTemplateScope]>> = None;
         let mut columns = Vec::new();
         let mut dependencies = std::vec![None; output.columns().len()];
         for declaration in &self.columns {

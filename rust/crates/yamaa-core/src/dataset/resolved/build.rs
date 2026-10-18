@@ -70,6 +70,7 @@ pub(super) fn resolve(
 struct Node {
     kind: ExprKind,
     path: Arc<str>,
+    op: Op,
     operands: Vec<Operand>,
     reads: Vec<Read>,
     sites: Vec<NodeSite>,
@@ -204,6 +205,7 @@ fn relation(region: RegionId, kind: RelationKind, path: &str, donor: Donor) -> R
         derivations: None,
         windowed: false,
         scan: Vec::new(),
+        named: None,
     }
 }
 
@@ -221,6 +223,9 @@ impl<'p> Builder<'p> {
             cells: 0,
             conversions: Vec::new(),
             column_order: Vec::new(),
+            output: plan.output().clone(),
+            required_matches: plan.required_matches().clone(),
+            secondary: plan.secondary().to_vec(),
         });
         self.plans.push(plan);
         id
@@ -308,6 +313,7 @@ impl<'p> Builder<'p> {
                 driver,
                 filter: None,
                 row: None,
+                row_context: None,
                 row_bindings: 0..0,
             });
         }
@@ -380,6 +386,7 @@ impl<'p> Builder<'p> {
                 expr,
                 path: assignment.path.as_str().into(),
                 unconvertible: self.unconvertible(cx, assignment)?,
+                handler: self.handler(cx, assignment)?,
                 origin: BindingOrigin::Template {
                     template: field(index)?,
                     assignment: field(position)?,
@@ -393,6 +400,7 @@ impl<'p> Builder<'p> {
             .plan
             .row_context(index)
             .map(|context| context.row.as_str().into());
+        node.row_context = cx.plan.row_context(index).cloned();
         if let Some(filter) = &template.filter {
             let expr = self.predicate(cx, filter, Fields::Driver)?;
             let placement = if keyed {
@@ -429,6 +437,20 @@ impl<'p> Builder<'p> {
         }))
     }
 
+    /// The declared replacement of a completed result, under the same rule.
+    fn handler(
+        &self,
+        cx: &Cx<'_>,
+        assignment: &Assignment,
+    ) -> Result<Option<LiteralHandler>, ResolutionError> {
+        if let RegionKind::Donor { typed_columns, .. } = &self.out.regions[cx.region.index()].kind {
+            if !typed_columns.contains(&cx.column(assignment.column)?) {
+                return Ok(None);
+            }
+        }
+        Ok(cx.plan.conversion_handler(&assignment.path).cloned())
+    }
+
     /// One column-phase declaration, lowered once and bound for every template
     /// that still needs the column; templates with equal driver contexts share
     /// one binding (#2829).
@@ -441,6 +463,7 @@ impl<'p> Builder<'p> {
         let column = cx.column(assignment.column)?;
         let expr = self.lower(cx, assignment, Fields::Driver)?;
         let unconvertible = self.unconvertible(cx, assignment)?;
+        let handler = self.handler(cx, assignment)?;
         let odm = deferred_odm(&assignment.expression);
         let mut groups: Vec<(DriverContext, Vec<TemplateId>)> = Vec::new();
         for (index, template) in cx.plan.templates().iter().enumerate() {
@@ -480,6 +503,7 @@ impl<'p> Builder<'p> {
                 expr,
                 path: assignment.path.as_str().into(),
                 unconvertible,
+                handler: handler.clone(),
                 origin: BindingOrigin::Column {
                     assignment: field(position)?,
                 },
@@ -541,6 +565,7 @@ impl<'p> Builder<'p> {
         out.exprs.push(ExprNode {
             kind: node.kind,
             path: node.path,
+            op: node.op,
             operands,
             reads,
             sites,
@@ -604,6 +629,7 @@ impl<'p> Builder<'p> {
         let mut node = Node {
             kind: ExprKind::Literal,
             path: path.into(),
+            op: Op::Read,
             operands: Vec::new(),
             reads: Vec::new(),
             sites: Vec::new(),
@@ -612,10 +638,13 @@ impl<'p> Builder<'p> {
         let mut values: Vec<(&'p Assignment, OperandRole, Demand)> = Vec::new();
         let mut call = None;
         match &assignment.expression {
-            E::Literal(_) => (),
+            E::Literal(value) => node.op = Op::Literal(value.clone()),
             E::Source(column) => {
                 node.kind = ExprKind::Source;
                 node.reads.push(self.source_read(cx, fields, *column)?);
+                if let Fields::Match(_) = fields {
+                    node.op = Op::MatchOperand { index: *column };
+                }
             }
             E::Column(column) => {
                 node.kind = ExprKind::Column;
@@ -623,11 +652,15 @@ impl<'p> Builder<'p> {
             }
             E::Collect {
                 column,
+                identifier,
                 filter,
                 selection,
-                ..
             } => {
                 node.kind = ExprKind::Collect;
+                node.op = Op::Collect {
+                    identifier: identifier.clone(),
+                    selection: selection.clone(),
+                };
                 node.reads.push(self.source_read(cx, fields, *column)?);
                 if let Some(filter) = filter {
                     let expr = self.predicate(cx, filter, fields)?;
@@ -641,18 +674,30 @@ impl<'p> Builder<'p> {
                 let selected = selection.is_some();
                 self.site(&mut node, selected, site, H::MultipleMatches);
             }
-            E::Reduce { column, .. } => {
+            E::Reduce {
+                column,
+                identifier,
+                reducer,
+                text,
+            } => {
                 node.kind = ExprKind::Reduce;
+                node.op = Op::Reduce {
+                    identifier: identifier.clone(),
+                    reducer: *reducer,
+                    text: text.clone(),
+                };
                 node.reads.push(self.source_read(cx, fields, *column)?);
             }
-            E::Count { column, .. } => {
+            E::Count { column, text } => {
                 node.kind = ExprKind::Count;
+                node.op = Op::Count { text: text.clone() };
                 if let Some(column) = column {
                     node.reads.push(self.source_read(cx, fields, *column)?);
                 }
             }
             E::Compute(numeric) => {
                 node.kind = ExprKind::Compute;
+                node.op = Op::Compute(numeric.clone());
                 for binding in numeric.bindings() {
                     let read = self.bound_read(cx, fields, &binding.read, path)?;
                     node.reads.push(read);
@@ -667,6 +712,7 @@ impl<'p> Builder<'p> {
             }
             E::Flag(flag) => {
                 node.kind = ExprKind::Flag;
+                node.op = Op::Flag(flag.clone());
                 // A missing operand is counted whether or not `missing` is declared.
                 self.site(&mut node, true, flag.missing_path(), H::Missing);
                 for binding in flag.bindings() {
@@ -681,6 +727,7 @@ impl<'p> Builder<'p> {
             }
             E::Case(branches) => {
                 node.kind = ExprKind::Case;
+                node.op = Op::Case;
                 for (index, branch) in branches.iter().enumerate() {
                     if let Some(when) = &branch.when {
                         let expr = self.predicate(cx, when, fields)?;
@@ -701,6 +748,11 @@ impl<'p> Builder<'p> {
             }
             E::MappingCut { source, operation } => {
                 node.kind = ExprKind::MappingCut;
+                node.op = Op::MappingCut {
+                    operation: operation.clone(),
+                    column: assignment.column,
+                    handled: cx.plan.conversion_handler(path).is_some(),
+                };
                 let base = operation.path();
                 let unmapped = operation.unmapped().is_some();
                 // A missing source is counted whether or not `missing` is declared.
@@ -709,8 +761,9 @@ impl<'p> Builder<'p> {
                 self.site(&mut node, unmapped, site, H::Unmapped);
                 values.push((source, Value, Always));
             }
-            E::Round { source, .. } => {
+            E::Round { source, rounding } => {
                 node.kind = ExprKind::Round;
+                node.op = Op::Round(rounding.clone());
                 values.push((source, Value, Always));
             }
             E::Imputation {
@@ -718,6 +771,7 @@ impl<'p> Builder<'p> {
                 operation,
             } => {
                 node.kind = ExprKind::Imputation;
+                node.op = Op::Imputation(operation.clone());
                 let base = operation.path();
                 // A missing source is counted at `fallback` when one is declared.
                 let missing = if operation.fallback().is_some() {
@@ -747,6 +801,7 @@ impl<'p> Builder<'p> {
                 operation,
             } => {
                 node.kind = ExprKind::Temporal;
+                node.op = Op::Temporal(operation.clone());
                 let declared = operation.invalid_handler().is_some();
                 let site = format!("{}.invalid", operation.path());
                 self.site(&mut node, declared, site, H::Invalid);
@@ -757,8 +812,9 @@ impl<'p> Builder<'p> {
                     values.push((operand, Value, demand));
                 }
             }
-            E::Extreme { operands, .. } => {
+            E::Extreme { operands, largest } => {
                 node.kind = ExprKind::Extreme;
+                node.op = Op::Extreme { largest: *largest };
                 values.extend(operands.iter().map(|operand| (operand, Value, Always)));
             }
             E::StrTemplate {
@@ -766,6 +822,7 @@ impl<'p> Builder<'p> {
                 operation,
             } => {
                 node.kind = ExprKind::StrTemplate;
+                node.op = Op::StrTemplate(operation.clone());
                 let declared = operation.missing().is_some();
                 let site = format!("{}.missing", operation.path());
                 self.site(&mut node, declared, site, H::Missing);
@@ -773,6 +830,7 @@ impl<'p> Builder<'p> {
             }
             E::StrExtract { source, operation } => {
                 node.kind = ExprKind::StrExtract;
+                node.op = Op::StrExtract(operation.clone());
                 let site = format!("{}.missing", operation.path());
                 self.site(&mut node, true, site, H::Missing);
                 let declared = operation.handler("no_match").is_some();
@@ -782,28 +840,38 @@ impl<'p> Builder<'p> {
             }
             E::StrReplace { source, operation } => {
                 node.kind = ExprKind::StrReplace;
+                node.op = Op::StrReplace(operation.clone());
                 let site = format!("{}.missing", operation.path());
                 self.site(&mut node, true, site, H::Missing);
                 values.push((source, Value, Always));
             }
             E::StrCase { source, operation } => {
                 node.kind = ExprKind::StrCase;
+                node.op = Op::StrCase(operation.clone());
                 let site = format!("{}.missing", operation.path());
                 self.site(&mut node, true, site, H::Missing);
                 values.push((source, Value, Always));
             }
-            E::StrPad { source, .. } => {
+            E::StrPad { source, operation } => {
                 node.kind = ExprKind::StrPad;
+                node.op = Op::StrPad(operation.clone());
                 values.push((source, Value, Always));
             }
             E::SourceBinding {
                 source,
                 absent,
+                variable_absent,
                 selection_declared,
+                variable,
                 path: binding,
-                ..
             } => {
                 node.kind = ExprKind::SourceBinding;
+                node.op = Op::SourceBinding {
+                    absent: absent.clone(),
+                    variable_absent: *variable_absent,
+                    variable: variable.clone(),
+                    path: binding.clone(),
+                };
                 let site = format!("{binding}.absent");
                 self.site(&mut node, absent.is_some(), site, H::Absent);
                 let site = format!("{}.multiple_matches", source.path);
@@ -813,6 +881,15 @@ impl<'p> Builder<'p> {
             }
             E::FirstAvailable(selection) => {
                 node.kind = ExprKind::FirstAvailable;
+                node.op = Op::FirstAvailable {
+                    missing: selection.missing().clone(),
+                    missing_path: selection.missing_path(),
+                    sources: selection
+                        .sources()
+                        .iter()
+                        .map(|source| source.path.clone())
+                        .collect(),
+                };
                 let site = selection.missing_path();
                 self.site(&mut node, true, site, H::Missing);
                 self.first_available(cx, &mut node, selection, fields)?;
@@ -843,6 +920,13 @@ impl<'p> Builder<'p> {
                     selection.as_ref(),
                 )?;
                 node.kind = ExprKind::SourceLookup(relation);
+                node.op = Op::SourceLookup {
+                    lookup: lookup.clone(),
+                    range: range.clone(),
+                    filter: filter.clone(),
+                    selection: selection.clone(),
+                    absence: absence.clone(),
+                };
                 node.reads
                     .push(Read::Relation(relation, field(lookup.column)?));
                 let site = format!("{path}.multiple_matches");
@@ -874,6 +958,7 @@ impl<'p> Builder<'p> {
                     None,
                 )?;
                 node.kind = ExprKind::Lookup(relation);
+                node.op = Op::Lookup(lookup.clone());
                 node.reads
                     .push(Read::Relation(relation, field(lookup.column)?));
             }
@@ -893,12 +978,14 @@ impl<'p> Builder<'p> {
                     None,
                 )?;
                 node.kind = ExprKind::RowLookup(relation);
+                node.op = Op::RowLookup(lookup.clone());
                 node.reads
                     .push(Read::Relation(relation, field(lookup.column)?));
             }
             E::Joined(read) => {
                 let relation = self.joined(cx, path, read, None, None, None)?;
                 node.kind = ExprKind::Joined(relation);
+                node.op = Op::Joined(read.as_ref().clone());
                 node.reads
                     .push(Read::Relation(relation, field(read.column)?));
                 self.absent(cx, &mut node, &JoinAbsence::operand(path), &read.name);
@@ -919,6 +1006,13 @@ impl<'p> Builder<'p> {
                     selection.as_ref(),
                 )?;
                 node.kind = ExprKind::JoinedSource(relation);
+                node.op = Op::JoinedSource {
+                    read: read.as_ref().clone(),
+                    range: range.clone(),
+                    filter: filter.clone(),
+                    selection: selection.clone(),
+                    absence: absence.clone(),
+                };
                 node.reads
                     .push(Read::Relation(relation, field(read.column)?));
                 let site = format!("{path}.multiple_matches");
@@ -931,6 +1025,7 @@ impl<'p> Builder<'p> {
             E::Intermediate { index, column } => {
                 let relation = cx.named(*index)?;
                 node.kind = ExprKind::Intermediate(relation);
+                node.op = Op::Intermediate { column: *column };
                 node.reads.push(Read::Relation(relation, field(*column)?));
                 let read = BoundRead::Intermediate {
                     index: *index,
@@ -942,6 +1037,7 @@ impl<'p> Builder<'p> {
             E::Odm(bound) => self.odm(cx, &mut node, bound)?,
             E::Function(function) => {
                 node.kind = ExprKind::Function;
+                node.op = Op::Function(function.clone());
                 self.arguments(cx, &mut node, function.arguments(), fields, path)?;
                 self.joined_operands(cx, &mut node, path, argument_reads(function.arguments()));
                 let signature = FunctionSignature::Host(function.signature().clone());
@@ -949,19 +1045,28 @@ impl<'p> Builder<'p> {
             }
             E::ProjectFunction(function) => {
                 node.kind = ExprKind::ProjectFunction;
+                node.op = Op::ProjectFunction(function.clone());
                 self.arguments(cx, &mut node, function.arguments(), fields, path)?;
                 self.joined_operands(cx, &mut node, path, argument_reads(function.arguments()));
                 let signature = FunctionSignature::Project(function.signature().clone());
                 call = Some((function.slot(), signature));
             }
-            E::Window(window) => {
-                let window = self.window(cx, path, window, &[])?;
+            E::Window(payload) => {
+                let window = self.window(cx, path, payload, &[])?;
                 node.kind = ExprKind::Window(window);
+                node.op = Op::Window {
+                    window: payload.clone(),
+                    column: assignment.column,
+                };
                 node.reads.push(Read::Window(window));
             }
             E::ContextWindow(context) => {
                 let window = self.window(cx, path, &context.window, &context.sources)?;
                 node.kind = ExprKind::ContextWindow(window);
+                node.op = Op::ContextWindow {
+                    context: context.clone(),
+                    column: assignment.column,
+                };
                 node.reads.push(Read::Window(window));
             }
         }
@@ -994,6 +1099,7 @@ impl<'p> Builder<'p> {
             let leaf = |kind, read| Node {
                 kind,
                 path: operand.path.as_str().into(),
+                op: Op::Read,
                 operands: Vec::new(),
                 reads: vec![read],
                 sites: Vec::new(),
@@ -1008,9 +1114,17 @@ impl<'p> Builder<'p> {
                     let read = self.source_read(cx, fields, *column)?;
                     self.push(leaf(ExprKind::Source, read))?
                 }
-                SelectionRead::Collect { column, filter, .. } => {
+                SelectionRead::Collect {
+                    column,
+                    identifier,
+                    filter,
+                } => {
                     let mut collect =
                         leaf(ExprKind::Collect, self.source_read(cx, fields, *column)?);
+                    collect.op = Op::Collect {
+                        identifier: identifier.clone(),
+                        selection: None,
+                    };
                     if let Some(filter) = filter {
                         let expr = self.predicate(cx, filter, fields)?;
                         collect.operands.push(Operand {
@@ -1152,6 +1266,7 @@ impl<'p> Builder<'p> {
         self.push(Node {
             kind: ExprKind::Predicate,
             path: path.into(),
+            op: Op::Predicate(predicate.clone()),
             operands: Vec::new(),
             reads,
             sites: Vec::new(),
@@ -1309,6 +1424,7 @@ impl<'p> Builder<'p> {
         }
         node.selection = selection_shape(item.selection.as_ref())?;
         node.no_match = item.no_match.clone();
+        node.named = Some(Box::new(item.clone()));
         node.filter = item
             .filter
             .as_ref()
@@ -1347,6 +1463,7 @@ impl<'p> Builder<'p> {
         self.push(Node {
             kind: ExprKind::Predicate,
             path: path.into(),
+            op: Op::Predicate(filter.predicate().clone()),
             operands: Vec::new(),
             reads,
             sites: Vec::new(),
@@ -1425,6 +1542,7 @@ impl<'p> Builder<'p> {
         }
         let relation_id = self.push_relation(relation_node)?;
         node.kind = ExprKind::Aggregate(relation_id);
+        node.op = Op::Aggregate(Box::new(bound.clone()));
         if let Some(filter) = bound.filter() {
             let expr = self.donor_predicate(cx, relation_id, filter)?;
             self.out.relations[relation_id.index()].filter = Some(expr);
@@ -1439,6 +1557,11 @@ impl<'p> Builder<'p> {
             let mut wrapper = Node {
                 kind: ExprKind::Derivation,
                 path: derivation.path.as_str().into(),
+                op: Op::Derivation {
+                    column: derivation.assignment.column,
+                    kind: derivation.kind,
+                    handler: derivation.handler.clone(),
+                },
                 operands: vec![Operand {
                     expr: inner,
                     role: OperandRole::Value,
@@ -1500,6 +1623,7 @@ impl<'p> Builder<'p> {
             self.out.relations[relation_id.index()].filter = Some(expr);
         }
         node.kind = ExprKind::Odm(relation_id);
+        node.op = Op::Odm(Box::new(bound.clone()));
         node.reads.push(Read::Relation(relation_id, ODM_VALUE));
         Ok(())
     }
@@ -1576,6 +1700,7 @@ impl<'p> Builder<'p> {
                 Some(self.push(Node {
                     kind: ExprKind::Predicate,
                     path: path.into(),
+                    op: Op::Predicate(filter.clone()),
                     operands: Vec::new(),
                     reads,
                     sites: Vec::new(),
@@ -1606,6 +1731,7 @@ impl<'p> Builder<'p> {
         reads: &[Read],
         predicates: Vec<ExprId>,
         position: usize,
+        payload: CheckPayload,
     ) -> Result<(), ResolutionError> {
         let start = self.out.reads.len();
         self.out.reads.extend_from_slice(reads);
@@ -1620,6 +1746,7 @@ impl<'p> Builder<'p> {
             reads,
             predicates,
             position: field(position)?,
+            payload,
         });
         Ok(())
     }
@@ -1633,7 +1760,17 @@ impl<'p> Builder<'p> {
             let scope = CheckScope::Intermediate(cx.named(index)?);
             for (position, check) in item.unique.iter().enumerate() {
                 let family = CheckFamily::IntermediateUnique;
-                self.check(&check.path, scope, family, Error, &[], Vec::new(), position)?;
+                let payload = CheckPayload::Unique(check.clone());
+                self.check(
+                    &check.path,
+                    scope,
+                    family,
+                    Error,
+                    &[],
+                    Vec::new(),
+                    position,
+                    payload,
+                )?;
             }
         }
         for group in plan.column_verifications() {
@@ -1654,6 +1791,7 @@ impl<'p> Builder<'p> {
                     &reads,
                     Vec::new(),
                     position,
+                    CheckPayload::Declared(verification.check.clone()),
                 )?;
             }
         }
@@ -1671,6 +1809,7 @@ impl<'p> Builder<'p> {
                 &[read],
                 Vec::new(),
                 position,
+                CheckPayload::Keys,
             )?;
         }
         let family = CheckFamily::KeyDuplicates;
@@ -1682,6 +1821,7 @@ impl<'p> Builder<'p> {
             &keys,
             Vec::new(),
             0,
+            CheckPayload::Keys,
         )?;
         for (position, verification) in plan.verifications().iter().enumerate() {
             let mut reads = Vec::new();
@@ -1721,6 +1861,7 @@ impl<'p> Builder<'p> {
                 &reads,
                 predicates,
                 position,
+                CheckPayload::Declared(verification.check.clone()),
             )?;
         }
         Ok(())

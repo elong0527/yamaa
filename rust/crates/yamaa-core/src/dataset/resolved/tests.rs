@@ -930,3 +930,33 @@ fn callback_sites_follow_the_admission_order() {
     let info = resolved.schedule()[position(&resolved, Step::Row(BindingId(1)))];
     assert_eq!(info.effects, Effects::Callbacks);
 }
+
+#[test]
+fn every_node_carries_its_operation_and_every_relation_check_its_declaration() {
+    for plan in [records_plan(), handler_plan()] {
+        let resolved = plan.resolve().unwrap();
+        for node in resolved.exprs() {
+            assert!(
+                node.op.fits(node.kind),
+                "{:?} holds {:?}",
+                node.kind,
+                node.op
+            );
+        }
+        for relation in resolved.relations() {
+            assert_eq!(
+                relation.named.is_some(),
+                matches!(relation.kind, RelationKind::Named { .. })
+            );
+        }
+        for check in resolved.checks() {
+            let keys = check.scope == CheckScope::OutputKeys;
+            assert_eq!(matches!(check.payload, CheckPayload::Keys), keys);
+        }
+    }
+    // The handler plan's named read carries the bound intermediate.
+    let resolved = handler_plan().resolve().unwrap();
+    let named = resolved.relations()[0].named.as_deref().unwrap();
+    assert_eq!(named.identifier, "L");
+    assert_eq!(resolved.region(RegionId::DATASET).secondary[0].name, "LKP");
+}
