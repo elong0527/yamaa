@@ -1,0 +1,23 @@
+# Fixed creation time is supplied by the Define call in benchmark.yaml.
+schema_version: '1.0'
+study:
+  id: CATH
+  name: CATH
+  description: Example study submitting demographics in SAS transport
+  protocol_name: CATH-01
+sdtm:
+  standard:
+    name: SDTMIG
+    version: '3.4'
+    status: Final
+  specs:
+  - spec.yaml
+  define: dm-define.xml
+  transport: xpt
+  context: Submission
+  source_system_version: '1.0'
+  documents:
+  - id: acrf
+    kind: annotated_crf
+    link: acrf.pdf
+    title: Annotated Case Report Form

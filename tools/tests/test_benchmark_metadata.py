@@ -154,6 +154,30 @@ class BenchmarkMetadata(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     benchmark.entries(self.case)
 
+    def test_define_call_declares_its_environment_standard_and_created_time(self):
+        (self.case / "environment.yaml").write_text("schema_version: '1.0'\n")
+        define = {
+            "environment": "environment.yaml",
+            "standard": "adam",
+            "created": "2026-09-11T00:00:00",
+        }
+        self.write({**self.metadata, "define": define})
+        self.assertEqual(benchmark.load_metadata(self.case)["define"], define)
+        for mutation in [
+            None,
+            "environment.yaml",
+            {**define, "standard": "SDTM"},
+            {**define, "created": "2026-09-11"},
+            {**define, "environment": "missing.yaml"},
+            {**define, "environment": "../environment.yaml"},
+            {key: value for key, value in define.items() if key != "created"},
+            {**define, "host": "python"},
+        ]:
+            with self.subTest(define=mutation):
+                self.write({**self.metadata, "define": mutation})
+                with self.assertRaises(ValueError):
+                    benchmark.load_metadata(self.case)
+
     def test_duplicate_metadata_keys_and_calls_are_rejected(self):
         (self.case / "benchmark.yaml").write_text(
             "lifecycle: draft\nstandard: TEST\ndomain: TEST\ndomain: OTHER\n"

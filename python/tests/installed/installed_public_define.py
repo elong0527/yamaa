@@ -113,9 +113,10 @@ class PublicDefine(unittest.TestCase):
             item = xml.xpath(
                 "//o:ItemDef[@OID=$oid]", namespaces=ns, oid="IT." + identity
             )[0]
+            # Every unit of both test codes is `mg/dL`, five bytes (SUB-24).
             self.assertEqual(
                 (item.get("Name"), item.get("DataType"), item.get("Length")),
-                ("LBORRESU", "text", "8"),
+                ("LBORRESU", "text", "5"),
             )
             self.assertEqual(
                 item.xpath("o:CodeListRef/@CodeListOID", namespaces=ns),
@@ -311,7 +312,7 @@ class PublicDefine(unittest.TestCase):
                 environment = yaml.safe_load(
                     (directory / "environment.yaml").read_text()
                 )
-                environment["sdtm"]["dataset_json"] = False
+                del environment["sdtm"]["transport"]
                 (directory / "environment.yaml").write_text(
                     yaml.safe_dump(environment, sort_keys=False)
                 )
@@ -508,7 +509,7 @@ class PublicDefine(unittest.TestCase):
             result.save()
         environment = directory / "environment.yaml"
         environment.write_text(
-            environment.read_text().replace("dataset_json: true", "dataset_json: false")
+            environment.read_text().replace("  transport: dataset_json\n", "")
         )
         result = self.call(directory)
         self.assertEqual(result.issues.height, 0, result.issues)
@@ -682,11 +683,16 @@ class PublicDefine(unittest.TestCase):
         spec = directory / "spec.yaml"
         original = spec.read_text()
         spec.write_text(original.replace("path: dm.csv", "path: artifacts/dm.csv"))
+        shutil.copy2(directory / "expected/dm.csv", directory / "artifacts/dm.csv")
+        # The transport file sits beside the document wherever the artifact is.
         result = self.call(directory)
-        self.assertIn("REQ-1229", result.issues["requirement"].to_list())
-        with self.assertRaises(DefineError):
-            result.save()
-        self.assertFalse((directory / "define.xml").exists())
+        self.assertEqual(result.issues.height, 0, result.issues)
+        self.assertIn(b'xlink:href="dm.json"', result._native.artifacts()[1][1])
+        self.assertTrue(result.save())
+        self.assertTrue((directory / "dm.json").is_file())
+        self.assertFalse((directory / "artifacts/dm.json").exists())
+        (directory / "dm.json").unlink()
+        (directory / "define.xml").unlink()
         spec.write_text(original)
         csv = (directory / "expected/dm.csv").read_text()
         (directory / "dm.csv").write_text(
@@ -714,23 +720,23 @@ class PublicDefine(unittest.TestCase):
             result.save()
         self.assertFalse((directory / "dm.json").exists())
 
-    def test_physical_case_aliases_preserve_existing_publication_sentinel(self):
+    def test_transport_names_equal_after_lowercasing_preserve_publication_sentinel(
+        self,
+    ):
         directory = self.fixture("sdtm-dm-metadata", published=True)
         sentinel = directory / "dm.json"
         sentinel.write_bytes(b"original publication sentinel")
-        if not (directory / "DM.JSON").exists():
-            self.skipTest("This volume admits distinct case-sensitive target names")
         environment = directory / "environment.yaml"
         environment.write_text(
-            environment.read_text().replace(
-                "  - spec.yaml", "  - spec.yaml\n  - second.yaml"
-            )
+            environment.read_text()
+            .replace("  - spec.yaml", "  - spec.yaml\n  - second.yaml")
+            .replace("context: Submission", "context: Other")
         )
         (directory / "second.yaml").write_text(
             (directory / "spec.yaml")
             .read_text()
-            .replace("domain: DM", "domain: DM2")
-            .replace("path: dm.csv", "path: DM.csv")
+            .replace("domain: DM", "domain: dm")
+            .replace("path: dm.csv", "path: second.csv")
         )
         define_sentinel = directory / "define.xml"
         define_sentinel.write_bytes(b"original Define sentinel")
@@ -738,12 +744,11 @@ class PublicDefine(unittest.TestCase):
         result = self.call(directory)
         self.assertEqual(result.issues["phase"].to_list(), ["validation"])
         self.assertEqual(
-            result.issues["condition"].to_list(), ["dataset_json_path_collision"]
+            result.issues["condition"].to_list(), ["transport_path_collision"]
         )
         self.assertEqual(result.issues["requirement"].to_list(), ["REQ-1226"])
-        context = result.issues["context"][0]
-        self.assertIn("dm.json", context)
-        self.assertIn("DM.json", context)
+        self.assertEqual(result.issues["spec_paths"].to_list(), [["sdtm.specs[1]"]])
+        self.assertIn("dm.json", result.issues["context"][0])
         reads = result._native.capture_reads()
         with self.assertRaises(DefineError):
             result.save()
@@ -789,7 +794,7 @@ class PublicDefine(unittest.TestCase):
                         self.assertIn(before, text)
                         text = text.replace(before, after, 1)
                     if filename == "environment.yaml":
-                        text = text.replace("dataset_json: true", "dataset_json: false")
+                        text = text.replace("  transport: dataset_json\n", "")
                     path.write_text(text)
                 if case["inherit_specification"]:
                     (directory / "spec.yaml").rename(directory / "base.yaml")
@@ -818,6 +823,55 @@ class PublicDefine(unittest.TestCase):
                     self.assertEqual((directory / name).read_bytes(), content)
                 self.assertFalse((directory / "input").exists())
                 self.assertFalse((directory / "dm.csv").exists())
+
+    def test_define_benchmarks_match_their_independent_truth(self):
+        manifest = json.loads((ROOT / "benchmarks/manifest.json").read_bytes())
+        names = [case["name"] for case in manifest["cases"]]
+        for required in ["sdtm-dm-xpt", "adam-adsl-xpt", "sdtm-dm-metadata"]:
+            self.assertIn(required, names)
+        for case in manifest["cases"]:
+            with self.subTest(case=case["name"]):
+                source = ROOT / "benchmarks" / case["name"]
+                directory = Path(
+                    tempfile.mkdtemp(prefix=case["name"] + "-", dir=self.base)
+                )
+                for path in source.iterdir():
+                    if path.is_file():
+                        shutil.copy2(path, directory / path.name)
+                for name in case["published"]:
+                    shutil.copy2(source / "expected" / name, directory / name)
+                result = define(
+                    directory / case["environment"],
+                    case["standard"],
+                    created=case["created"],
+                )
+                if case["error"] is not None:
+                    first = result.issues.to_dicts()[0]
+                    first["context"] = json.loads(first["context"])
+                    want = case["error"]
+                    for key in ("phase", "condition", "spec_paths", "requirement"):
+                        self.assertEqual(first[key], want[key])
+                    for key, value in want.get("context", {}).items():
+                        self.assertEqual(first["context"][key], value, key)
+                    with self.assertRaises(DefineError):
+                        result.save()
+                    self.assertFalse((directory / "define.xml").exists())
+                    continue
+                self.assertEqual(result.issues.height, 0, result.issues)
+                held = result._native.artifacts()
+                self.assertEqual(
+                    sorted(name for name, _, _ in held), sorted(case["expected"])
+                )
+                for name, content, state in held:
+                    self.assertEqual(state, "Ready")
+                    self.assertEqual(
+                        content, (source / "expected" / name).read_bytes(), name
+                    )
+                    if name == "define.xml":
+                        self.validate_xml(content)
+                self.assertTrue(result.save())
+                for name, content, _ in held:
+                    self.assertEqual((directory / name).read_bytes(), content)
 
 
 if __name__ == "__main__":

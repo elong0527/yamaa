@@ -12,4 +12,5 @@ data frame and the diagnostics record list are built natively from the same
 findings, with the record shape described in \code{\link{yamaa_domain}}. A failed
 save signals \code{yamaa_define_error} carrying both views.}
 \description{Composes submission metadata and holds deterministic Define-XML and,
-when requested, Dataset-JSON bytes until Save. No specification is executed.}
+when the section requests a transport, SAS Transport version 5 or Dataset-JSON
+bytes until Save. No specification is executed.}

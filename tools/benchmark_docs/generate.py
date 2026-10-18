@@ -78,9 +78,7 @@ OUTCOMES = (
 # account of what the suite holds.
 GROUP_NOTES = {
     "schema": "Assess yamaa schema",
-    "adam": "Assess SDTM to ADaM derivations",
-    "ars": "Assess analysis datasets to analysis results",
-    "bimo": "Assess BIMO clinical site dataset derivations",
+    "adam": "Assess SDTM to ADaM and ADaM to results derivations",
     "sdtm": "Assess ODM to SDTM derivations",
     "negative": "Assess yamaa error handling",
 }
@@ -333,6 +331,9 @@ def render_files(paths, group, benchmark, derived, labels):
                 count = "raw CSV"
         if table is None:
             try:
+                # A SAS transport file can decode as ASCII; it is still binary.
+                if path.suffix.lower() == ".xpt":
+                    raise UnicodeError
                 table = f'<pre class="plain-file"><code>{escape(path.read_text(encoding="utf-8"))}</code></pre>'
             except UnicodeError:
                 table = '<p class="no-rows">Binary fixture; inspect it in the benchmark source.</p>'

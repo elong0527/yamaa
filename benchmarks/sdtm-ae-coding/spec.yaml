@@ -65,6 +65,9 @@ columns:
         type: Assigned
         source: Sponsor
 
+  # SDTMIG designates AETERM Req. This coding fixture keeps one blank reported
+  # term to show the NOT CODED fallback, which a required term would refuse,
+  # so it declares Exp; a study submitting AE declares Req.
   - name: AETERM
     type: str
     label: Reported Term for the Adverse Event
@@ -88,7 +91,7 @@ columns:
     label: Dictionary-Derived Term
     derivation: MEDDRA_CODING.PTNAME
     submission:
-      core: Exp
+      core: Req
       role: Record Qualifier
       length: 200
       codelist: MEDDRA

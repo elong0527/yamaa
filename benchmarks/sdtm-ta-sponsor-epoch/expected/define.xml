@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:def="http://www.cdisc.org/ns/def/v2.1" xmlns:xlink="http://www.w3.org/1999/xlink" ODMVersion="1.3.2" FileType="Snapshot" FileOID="STUDY02.sdtm.Define-XML_2.1" CreationDateTime="2026-09-11T00:00:00" SourceSystem="yamaa" SourceSystemVersion="1.0" def:Context="Submission">
+  <Study OID="STDY.STUDY02">
+    <GlobalVariables>
+      <StudyName>STUDY02</StudyName>
+      <StudyDescription>Example study submitting a sponsor-extended epoch</StudyDescription>
+      <ProtocolName>STUDY-02</ProtocolName>
+    </GlobalVariables>
+    <MetaDataVersion OID="MDV.STUDY02.sdtm" Name="STUDY02 sdtm metadata" def:DefineVersion="2.1.11">
+      <def:Standards>
+        <def:Standard OID="STD.SDTMIG" Name="SDTMIG" Type="IG" Version="3.4" Status="Final"/>
+        <def:Standard OID="STD.CT_SDTM" Name="CDISC/NCI" Type="CT" PublishingSet="SDTM" Version="2023-12-15" Status="Final"/>
+      </def:Standards>
+      <ItemGroupDef OID="IG.TA" Name="TA" Domain="TA" Purpose="Tabulation" SASDatasetName="TA" Repeating="No" IsReferenceData="Yes" def:Structure="One record per planned element per arm" def:ArchiveLocationID="LF.TA" def:StandardOID="STD.SDTMIG">
+        <Description>
+          <TranslatedText xml:lang="en">Trial Arms</TranslatedText>
+        </Description>
+        <ItemRef ItemOID="IT.TA.DOMAIN" OrderNumber="1" Mandatory="Yes" Role="Identifier"/>
+        <ItemRef ItemOID="IT.TA.STUDYID" OrderNumber="2" Mandatory="Yes" KeySequence="1" Role="Identifier"/>
+        <ItemRef ItemOID="IT.TA.ARMCD" OrderNumber="3" Mandatory="Yes" KeySequence="2" Role="Topic"/>
+        <ItemRef ItemOID="IT.TA.ARM" OrderNumber="4" Mandatory="Yes" Role="Synonym Qualifier"/>
+        <ItemRef ItemOID="IT.TA.TAETORD" OrderNumber="5" Mandatory="Yes" KeySequence="3" Role="Timing"/>
+        <ItemRef ItemOID="IT.TA.ETCD" OrderNumber="6" Mandatory="Yes" Role="Record Qualifier"/>
+        <ItemRef ItemOID="IT.TA.ELEMENT" OrderNumber="7" Mandatory="No" Role="Synonym Qualifier"/>
+        <ItemRef ItemOID="IT.TA.EPOCH" OrderNumber="8" Mandatory="Yes" Role="Timing"/>
+        <def:Class Name="TRIAL DESIGN"/>
+        <def:leaf ID="LF.TA" xlink:href="ta.csv">
+          <def:title>ta.csv</def:title>
+        </def:leaf>
+      </ItemGroupDef>
+      <ItemDef OID="IT.TA.DOMAIN" Name="DOMAIN" DataType="text" Length="2" SASFieldName="DOMAIN">
+        <Description>
+          <TranslatedText xml:lang="en">Domain Abbreviation</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.TA.STUDYID" Name="STUDYID" DataType="text" Length="12" SASFieldName="STUDYID">
+        <Description>
+          <TranslatedText xml:lang="en">Study Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Protocol" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.TA.ARMCD" Name="ARMCD" DataType="text" Length="8" SASFieldName="ARMCD">
+        <Description>
+          <TranslatedText xml:lang="en">Planned Arm Code</TranslatedText>
+        </Description>
+        <def:Origin Type="Protocol" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.TA.ARM" Name="ARM" DataType="text" Length="40" SASFieldName="ARM">
+        <Description>
+          <TranslatedText xml:lang="en">Description of Planned Arm</TranslatedText>
+        </Description>
+        <def:Origin Type="Protocol" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.TA.TAETORD" Name="TAETORD" DataType="integer" Length="8" SASFieldName="TAETORD">
+        <Description>
+          <TranslatedText xml:lang="en">Planned Order of Element within Arm</TranslatedText>
+        </Description>
+        <def:Origin Type="Protocol" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.TA.ETCD" Name="ETCD" DataType="text" Length="8" SASFieldName="ETCD">
+        <Description>
+          <TranslatedText xml:lang="en">Element Code</TranslatedText>
+        </Description>
+        <def:Origin Type="Protocol" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.TA.ELEMENT" Name="ELEMENT" DataType="text" Length="40" SASFieldName="ELEMENT">
+        <Description>
+          <TranslatedText xml:lang="en">Description of Element</TranslatedText>
+        </Description>
+        <def:Origin Type="Protocol" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.TA.EPOCH" Name="EPOCH" DataType="text" Length="20" SASFieldName="EPOCH">
+        <Description>
+          <TranslatedText xml:lang="en">Epoch</TranslatedText>
+        </Description>
+        <CodeListRef CodeListOID="CL.EPOCH"/>
+        <def:Origin Type="Protocol" Source="Sponsor"/>
+      </ItemDef>
+      <CodeList OID="CL.EPOCH" Name="Epoch" DataType="text" def:StandardOID="STD.CT_SDTM">
+        <EnumeratedItem CodedValue="SCREENING">
+          <Alias Context="nci:ExtCodeID" Name="C48262"/>
+        </EnumeratedItem>
+        <EnumeratedItem CodedValue="TREATMENT">
+          <Alias Context="nci:ExtCodeID" Name="C101526"/>
+        </EnumeratedItem>
+        <EnumeratedItem CodedValue="EXTENSION" def:ExtendedValue="Yes"/>
+        <Alias Context="nci:ExtCodeID" Name="C99079"/>
+      </CodeList>
+    </MetaDataVersion>
+  </Study>
+</ODM>

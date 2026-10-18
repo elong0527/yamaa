@@ -61,6 +61,23 @@ entries:
       environment: null
 ```
 
+A case whose study environment composes a submission section declares that
+Define call, so the fixed-time Define suites and `tools.benchmark` run it over
+the case's published tables and compare `expected/` byte for byte:
+
+```yaml
+define:
+  environment: environment.yaml
+  standard: sdtm
+  created: '2026-09-11T00:00:00'
+```
+
+`expected/` then holds the Define-XML document and each transport file
+(`.xpt` or `.json`) beside the published tables, or, for a negative case,
+`expected/error.yaml` with the Define call's first issue; its domain build
+must still succeed. `.xpt` goldens are written by
+`python -m tools.conformance.xpt_goldens` from the hand-authored tables there.
+
 `sdtm-dm-race-ethnicity` is the worked producer/consumer example. Each producer
 commits its own expected artifact beside the entry's. A `schema` link only types
 the stored artifact; a consumer never runs its producer. List each producer
@@ -401,7 +418,10 @@ uv run --project python --no-sync pytest evaluations/harbor/tests
    `reviewed`, write its full prompt,
    `../evaluations/harbor/prompts/<name>/full.md`, to the
    [benchmark prompt recipe](../evaluations/harbor/prompts/recipe.md), and its
-   `conventions.md`. The harness derives the brief prompt.
+   `conventions.md`. The prompt is written from the README, specification
+   and inputs, never `expected/`; the recipe's writing flow runs the writer
+   where the expected data does not exist. The harness derives the brief
+   prompt.
 4. Record any finding it exposes as a gap on the matching work item in the
    issue tracker, or add the benchmark's name to the gap that already states it.
 

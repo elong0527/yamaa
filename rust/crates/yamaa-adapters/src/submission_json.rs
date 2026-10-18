@@ -1,6 +1,6 @@
 //! Dataset-JSON byte writer over a held published table.
 //!
-//! yamaa-core owns semantic field/codelist admission (`submission_json::admit`)
+//! yamaa-core owns semantic field/codelist admission (`submission_transport::admit`)
 //! and the typed document composition (`submission_json::document`); this
 //! writer owns only the byte projection: quoted strings, streamed escaping
 //! and the output-byte boundary.
@@ -97,7 +97,7 @@ impl Writer<'_> {
 }
 
 /// Encode an admitted typed document over its held table. Callers run the
-/// core admission (`yamaa_core::submission_json::admit`) over the same table
+/// core admission (`yamaa_core::submission_transport::admit`) over the same table
 /// first; this writer repeats no semantic validation.
 pub fn render<T: TableAccess>(
     document: &DatasetJsonDocument,
@@ -135,6 +135,9 @@ pub fn render<T: TableAccess>(
             ("label", string(&column.label)),
             ("dataType", string(&column.data_type)),
         ];
+        if let Some(target) = &column.target_data_type {
+            values.push(("targetDataType", string(target)));
+        }
         if let Some(length) = &column.length {
             values.push(("length", length.clone()));
         }
