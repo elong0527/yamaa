@@ -604,7 +604,7 @@ mod execution {
         #[test]
         fn grouped_row_case_reads_group_keys_and_converted_reductions() {
             let columns = "  - {name: TOTAL, type: int}\n  - {name: TEXT, type: str}\n";
-            let rows="  - id: grouped\n    group_by: [SRC.ID]\n    derivations:\n      SECTION: {literal: grouped}\n      TEXT: {case: [{when: 'TOTAL > 5', then: {source: {variable: SRC.ID}}}, {otherwise: {literal: low}}]}\n      TOTAL: {aggregate: {expr: 'SUM(SRC.I)'}}\n";
+            let rows="  - id: grouped\n    group_by: [SRC.ID]\n    derivations:\n      SECTION: {literal: grouped}\n      TEXT: {case: [{when: 'TOTAL > 5', then: SRC.ID}, {otherwise: {literal: low}}]}\n      TOTAL: {aggregate: 'SUM(SRC.I)'}\n";
             let f = bespoke(
                 &specification(columns, rows, "[ID, SECTION, TOTAL, TEXT]"),
                 b"ID,I,D,R,TEXT\na,3,,,\nb,1,,,\na,4,,,\n",
@@ -619,7 +619,7 @@ mod execution {
         fn grouped_numeric_reducers_skip_missing_arguments_and_still_reject_present_text() {
             for reducer in ["SUM", "MEAN"] {
                 let source = format!(
-            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: {{path: input.csv, types: {{V: str}}}}}}\noutput: {{path: output.csv, columns: [ID, VALUE]}}\ncolumns: [{{name: ID, type: str}}, {{name: VALUE, type: float}}]\nrows:\n  - id: groups\n    group_by: [SRC.ID]\n    derivations:\n      ID: SRC.ID\n      VALUE: {{aggregate: {{expr: '{reducer}(SRC.V)'}}}}\n"
+            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: {{path: input.csv, types: {{V: str}}}}}}\noutput: {{path: output.csv, columns: [ID, VALUE]}}\ncolumns: [{{name: ID, type: str}}, {{name: VALUE, type: float}}]\nrows:\n  - id: groups\n    group_by: [SRC.ID]\n    derivations:\n      ID: SRC.ID\n      VALUE: {{aggregate: '{reducer}(SRC.V)'}}\n"
         );
                 for (input, expected) in [
                     (b"ID,V\na,\na,\n".as_slice(), b"ID,VALUE\na,\n".as_slice()),
@@ -686,14 +686,14 @@ mod execution {
         }
         #[test]
         fn intermediate_identity_keeps_column_key_windows_over_all_constructed_templates() {
-            let body = "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: input.csv, types: {VALUE: int}}\n  D: donor.csv\nintermediates: [{id: P, dataset: D, key: ID}]\noutput: {path: output.csv, columns: [ID, SEQ, VALUE, PICK]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: SRC.VALUE}\n  - {name: SEQ, type: int, derivation: {row_number: {window: {group_by: [ID], order_by: [VALUE]}}}}\n  - {name: PICK, type: str, derivation: P.PICK}\nrows:\n  - {id: first, dataset: SRC, filter: \"SRC.KIND = 'A'\", derivations: {}}\n  - {id: second, dataset: SRC, filter: \"SRC.KIND = 'B'\", derivations: {}}\n";
+            let body = "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: input.csv, types: {VALUE: int}}\n  D: donor.csv\nintermediates: [{id: P, dataset: D, key: [ID]}]\noutput: {path: output.csv, columns: [ID, SEQ, VALUE, PICK]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: SRC.VALUE}\n  - {name: SEQ, type: int, derivation: {row_number: {window: {group_by: [ID], order_by: [VALUE]}}}}\n  - {name: PICK, type: str, derivation: P.PICK}\nrows:\n  - {id: first, dataset: SRC, filter: \"SRC.KIND = 'A'\", derivations: {}}\n  - {id: second, dataset: SRC, filter: \"SRC.KIND = 'B'\", derivations: {}}\n";
             let f = bespoke(body, b"ID,KIND,VALUE\nx,A,4\nx,B,1\n");
             fs::write(f.0.join("donor.csv"), b"ID,PICK\nx,kept\n").unwrap();
             assert_eq!(saved(&f), b"ID,SEQ,VALUE,PICK\nx,2,4,kept\nx,1,1,kept\n");
         }
         #[test]
         fn grouped_row_column_defaults_use_the_shared_secondary_source_key_binding() {
-            let body = "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: input.csv, types: {VALUE: int}}\n  D: {path: donor.csv, types: {REFERENCE: int}}\noutput: {path: output.csv, columns: [ID, TOTAL, REFERENCE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: TOTAL, type: int}\n  - {name: REFERENCE, type: int, derivation: D.REFERENCE}\nrows:\n  - id: grouped\n    dataset: SRC\n    group_by: [SRC.ID]\n    derivations: {TOTAL: {aggregate: {expr: 'SUM(SRC.VALUE)'}}}\n";
+            let body = "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: input.csv, types: {VALUE: int}}\n  D: {path: donor.csv, types: {REFERENCE: int}}\noutput: {path: output.csv, columns: [ID, TOTAL, REFERENCE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: TOTAL, type: int}\n  - {name: REFERENCE, type: int, derivation: D.REFERENCE}\nrows:\n  - id: grouped\n    dataset: SRC\n    group_by: [SRC.ID]\n    derivations: {TOTAL: {aggregate: 'SUM(SRC.VALUE)'}}\n";
             let f = bespoke(body, b"ID,VALUE\na,4\na,1\nb,2\n");
             fs::write(f.0.join("donor.csv"), b"ID,REFERENCE\na,10\nb,20\n").unwrap();
             assert_eq!(saved(&f), b"ID,TOTAL,REFERENCE\na,5,10\nb,2,20\n");
@@ -718,7 +718,7 @@ mod execution {
 
         #[test]
         fn column_and_case_scopes_use_the_shared_dispatch_with_distinct_nested_values() {
-            let source="schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv}}\noutput: {path: output.csv, columns: [ID, VALUE, TEXT]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {compute: {expr: 'EXP(0) + LN(1) + POWER(3, 2)'}}}\n  - {name: PICK, type: str, derivation: {first_available: {sources: [ID], missing: fallback}}}\n  - name: TEXT\n    type: str\n    derivation:\n      case:\n        - when: VALUE = 10\n          then: {str_template: 'prefix:{PICK}'}\n        - otherwise: {literal: wrong}\n";
+            let source="schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, VALUE, TEXT]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {compute: {expr: 'EXP(0) + LN(1) + POWER(3, 2)'}}}\n  - {name: PICK, type: str, derivation: {first_available: {sources: [ID], missing: fallback}}}\n  - name: TEXT\n    type: str\n    derivation:\n      case:\n        - when: VALUE = 10\n          then: {str_template: 'prefix:{PICK}'}\n        - otherwise: {literal: wrong}\n";
             let f = bespoke(source, b"ID\na\n");
             assert_eq!(saved(&f), b"ID,VALUE,TEXT\na,10,prefix:a\n");
         }
@@ -754,7 +754,7 @@ rows:
     ID: BETA.OTHER
     SECTION: {literal: B}
     SEQ: {row_number: {window: {order_by: [{variable: ID, direction: desc}]}}}
-    TOTAL: {aggregate: {expr: 'SUM(BETA.AMOUNT)'}}
+    TOTAL: {aggregate: 'SUM(BETA.AMOUNT)'}
 "#;
             let fixture = bespoke(source, b"ID,S\n3,7\n1,8\n2,9\n");
             fs::write(
@@ -808,7 +808,7 @@ rows:
   filter: 'SEQ = 2 AND TOTAL = 7'
   derivations:
     ID: SRC.I
-    TOTAL: {aggregate: {expr: 'SUM(SRC.V)'}}
+    TOTAL: {aggregate: 'SUM(SRC.V)'}
     SEQ: {row_number: {window: {order_by: [{variable: ID, direction: desc}]}}}
 "#,
                 b"I,V\n3,8\n2,3\n1,5\n2,4\n",
@@ -874,7 +874,7 @@ rows:
                 for row_id in ["ordinary", "dot.id", "bracket[999]"] {
                     let study = Study::new();
                     let entry = study.0.join("spec.yaml");
-                    let text = format!("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: {{path: input.csv}}}}\noutput: {{path: result.csv, columns: [ID]}}\ncolumns: [{{name: ID, type: str}}]\nrows:\n  - {{id: clean, dataset: SRC, derivations: {{ID: SRC.ID}}}}\n  - {{id: '{row_id}', dataset: SRC, filter: 'ID >', derivations: {{ID: SRC.ID}}}}\n");
+                    let text = format!("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: input.csv}}\noutput: {{path: result.csv, columns: [ID]}}\ncolumns: [{{name: ID, type: str}}]\nrows:\n  - {{id: clean, dataset: SRC, derivations: {{ID: SRC.ID}}}}\n  - {{id: '{row_id}', dataset: SRC, filter: 'ID >', derivations: {{ID: SRC.ID}}}}\n");
                     let owner = if inherited {
                         study.0.join("parent/base.yaml")
                     } else {
@@ -1434,9 +1434,9 @@ verifications:
                 .unwrap();
                 let keys = if grouped { "G" } else { "I" };
                 let (group, derivations, expected) = if grouped {
-                    ("    group_by: [DRV.G]\n", "      I: {literal: 0}\n      G: DRV.G\n      V: {aggregate: {expr: 'SUM(DRV.V)'}}\n", "I,G,V\n0,B,50\n0,A,30\n")
+                    ("    group_by: [DRV.G]\n", "      I: {literal: 0}\n      G: DRV.G\n      V: {aggregate: 'SUM(DRV.V)'}\n", "I,G,V\n0,B,50\n0,A,30\n")
                 } else {
-                    ("", "      I: {source: {variable: DRV.I}}\n      G: {str_case: {source: DRV.G, to: lower}}\n      V: {source: {variable: DRV.V}}\n", "I,G,V\n1,b,10\n3,a,30\n4,b,40\n")
+                    ("", "      I: DRV.I\n      G: {str_case: {source: DRV.G, to: lower}}\n      V: DRV.V\n", "I,G,V\n1,b,10\n3,a,30\n4,b,40\n")
                 };
                 fs::write(study.0.join("spec.yaml"), format!("schema_version: '1.0'\ndomain: TEST\nkeys: [{keys}]\ninput: {{SRC: {{path: input.csv, types: {{I: int, V: int}}}}}}\nintermediates:\n  - {{id: DRV, dataset: SRC, filter: \"SRC.K = 'Y'\"}}\ncolumns:\n  - {{name: I, type: int}}\n  - {{name: G, type: str}}\n  - {{name: V, type: int}}\nrows:\n  - id: selected\n    dataset: DRV\n{group}    derivations:\n{derivations}output: {{path: out.csv, columns: [I, G, V]}}\n")).unwrap();
                 let mut result = study.build();
@@ -1456,11 +1456,7 @@ verifications:
         #[test]
         fn named_driver_column_projection_rejects_hidden_scalar_and_grouping_fields() {
             for (group, derive, expected_path) in [
-                (
-                    "",
-                    "I: {source: {variable: DRV.I}}",
-                    "rows[0].derivations.I.source",
-                ),
+                ("", "I: DRV.I", "rows[0].derivations.I.source"),
                 (
                     "    group_by: [DRV.I]\n",
                     "I: {literal: 1}",

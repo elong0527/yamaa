@@ -78,8 +78,8 @@ columns:
           then: {literal: NE}
         - otherwise: {literal: null}
     verifications:
-      allowed_values:
-        values: [CR, PR, SD, NON-CR/NON-PD, PD, NE]
+      - allowed_values:
+          values: [CR, PR, SD, NON-CR/NON-PD, PD, NE]
 
   - name: BORPRI
     type: int
@@ -96,7 +96,7 @@ columns:
           NE: 6
         missing: {literal: null}
     verifications:
-      range: {min: 1, max: 6}
+      - range: {min: 1, max: 6}
 
   # Best first: category priority, then the earlier date, then the lower
   # sequence number. A record with no category gets no number.

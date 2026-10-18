@@ -91,5 +91,4 @@ rows:
       PARAMCD: {literal: LOW}
       PARAM: {literal: Lowest Result of Visit}
       AVAL:
-        aggregate:
-          expr: "MIN(LB.LBSTRESN)"
+        aggregate: "MIN(LB.LBSTRESN)"

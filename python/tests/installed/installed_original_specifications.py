@@ -147,7 +147,7 @@ class ParquetOriginalOutput(unittest.TestCase):
             "schema_version": "1.0",
             "domain": "TEST",
             "base": "FIRST",
-            "input": {name: {"path": name + ".parquet"} for name in aliases},
+            "input": {name: name + ".parquet" for name in aliases},
             "keys": ["ID"],
             "columns": [
                 {
@@ -214,7 +214,7 @@ class ParquetOriginalOutput(unittest.TestCase):
             .read_bytes()
             .replace(
                 TRUTH["floating_input_override"].encode("utf-8"),
-                b"path: input/lb.parquet",
+                b"input/lb.parquet",
             )
         )
         result = self.build(
@@ -267,7 +267,7 @@ class ParquetOriginalOutput(unittest.TestCase):
             "schema_version": "1.0",
             "domain": "TEST",
             "base": "SRC",
-            "input": {"SRC": {"path": "input.parquet"}},
+            "input": {"SRC": "input.parquet"},
             "keys": ["ID"],
             "columns": [
                 {"name": "ID", "type": "int", "derivation": {"compute": {"expr": "1"}}}
@@ -565,7 +565,7 @@ class PublicDomains(unittest.TestCase):
                 elif variant == "unread_branch":
                     case["specification"] = case["specification"].replace(
                         "derivation: LOOK.VAL",
-                        "derivation: {case: [{when: 'FALSE', then: {source: LOOK.VAL}}, {otherwise: {literal: ok}}]}",
+                        "derivation: {case: [{when: 'FALSE', then: LOOK.VAL}, {otherwise: {literal: ok}}]}",
                     )
                 if variant == "boolean_missing":
                     case["specification"] = case["specification"].replace(
@@ -1872,7 +1872,7 @@ columns:
     def test_public_check_without_study_and_save_retry(self):
         import yamaa
 
-        source = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: absent/output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: {source: SRC.ID}}\n"
+        source = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: absent/output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n"
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             entry = root / "spec.yaml"
@@ -2028,11 +2028,7 @@ columns:
             )
             for name in tuple(TRUTH["section_case_files"]):
                 (root / name).unlink()
-            entry.write_text(
-                body.replace(
-                    "SECTION: {literal: first}", "SECTION: {source: {variable: P.K}}"
-                )
-            )
+            entry.write_text(body.replace("SECTION: {literal: first}", "SECTION: P.K"))
             for checked in (yamaa.check(entry), yamaa.domain(entry)):
                 records = checked.issues.to_dicts()
                 for record in records:

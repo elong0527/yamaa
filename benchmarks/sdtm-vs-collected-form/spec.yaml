@@ -18,7 +18,7 @@ output:
 intermediates:
   - id: TEST
     dataset: TESTS
-    key: VSTESTCD
+    key: [VSTESTCD]
     verifications:
       - unique: [VSTESTCD]
 

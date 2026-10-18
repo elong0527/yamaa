@@ -65,8 +65,8 @@ mod execution {
         const BODY: &str = r#"schema_version: "1.0"
 domain: TEST
 input:
-  SRC: {path: src.csv}
-  OTHER: {path: other.csv}
+  SRC: src.csv
+  OTHER: other.csv
 keys: [ID, SECTION]
 output: {path: result.csv, columns: [ID, SECTION, K, SEQ, V, FINAL, FIRST]}
 intermediates:
@@ -137,10 +137,7 @@ rows:
         #[test]
         fn first_template_read_preserves_full_phase_context_before_study_access() {
             let fixture = Fixture::new();
-            let body = BODY.replace(
-                "SECTION: {literal: first}",
-                "SECTION: {source: {variable: P.K}}",
-            );
+            let body = BODY.replace("SECTION: {literal: first}", "SECTION: P.K");
             assert_eq!(
                 issues(fixture.run(&body)),
                 vec![yamaa_adapters::json!({
@@ -192,10 +189,8 @@ rows:
         #[test]
         fn reserved_input_collision_and_missing_row_phase_are_refused_before_study_access() {
             let fixture = Fixture::new();
-            let collision = BODY.replace(
-                "  OTHER: {path: other.csv}",
-                "  OTHER: {path: other.csv}\n  SELF: {path: self.csv}",
-            );
+            let collision =
+                BODY.replace("  OTHER: other.csv", "  OTHER: other.csv\n  SELF: self.csv");
             assert_eq!(
                 issues(fixture.run(&collision)),
                 vec![
@@ -225,7 +220,7 @@ rows:
         #[test]
         fn hidden_first_template_alternative_preserves_its_authored_phase_path() {
             let fixture = Fixture::new();
-            let body = BODY.replace("SECTION: {literal: first}", "SECTION: {case: [{when: \"SRC.ID = 'absent'\", then: {source: {variable: P.K}}}, {otherwise: {literal: first}}]}");
+            let body = BODY.replace("SECTION: {literal: first}", "SECTION: {case: [{when: \"SRC.ID = 'absent'\", then: P.K}, {otherwise: {literal: first}}]}");
             assert_eq!(
                 issues(fixture.run(&body)),
                 vec![yamaa_adapters::json!({
@@ -240,17 +235,17 @@ rows:
         fn aggregate_first_template_proof_keeps_full_references_including_record_star() {
             for (replacement, identifier, path) in [
                 (
-                    "SECTION: {aggregate: {expr: 'SUM(P.V)'}}",
+                    "SECTION: {aggregate: 'SUM(P.V)'}",
                     "P.V",
                     "rows[0].derivations.SECTION.aggregate",
                 ),
                 (
-                    "SECTION: {aggregate: {expr: 'COUNT(P.*)'}}",
+                    "SECTION: {aggregate: 'COUNT(P.*)'}",
                     "P.*",
                     "rows[0].derivations.SECTION.aggregate",
                 ),
                 (
-                    "SECTION: {case: [{when: 'TRUE', then: {aggregate: {expr: 'COUNT(P.*)'}}}]}",
+                    "SECTION: {case: [{when: 'TRUE', then: {aggregate: 'COUNT(P.*)'}}]}",
                     "P.*",
                     "rows[0].derivations.SECTION.case[0].then.aggregate",
                 ),
@@ -291,7 +286,7 @@ rows:
     derivations: {ID: ALT.ID}
 columns:
   - {name: ID, type: int}
-  - {name: TOTAL, type: int, derivation: {aggregate: {expr: 'SUM(D.V)'}}}
+  - {name: TOTAL, type: int, derivation: {aggregate: 'SUM(D.V)'}}
 "#;
             let mut result = fixture.run(body).unwrap();
             assert!(result.issues().is_empty(), "{:?}", result.issues());
@@ -1169,8 +1164,8 @@ columns:
             }
         }
     }
-    mod inherited_key_shorthand {
-        //! Inherited key shorthand retains its internal current-row dependencies.
+    mod inherited_lookup_keys {
+        //! An inherited lookup key retains its internal current-row dependencies.
         use std::{
             fs,
             path::PathBuf,
@@ -1225,8 +1220,8 @@ columns:
             }
         }
         #[test]
-        fn lookup_and_aggregate_shorthands_survive_pruning_in_plain_case_and_row_derivations() {
-            for key in ["CODE", "[CODE]", "{CODE: CODE}"] {
+        fn lookup_and_aggregate_keys_survive_pruning_in_plain_case_and_row_derivations() {
+            for key in ["[CODE]", "{CODE: CODE}"] {
                 for shape in ["lookup", "case", "row", "aggregate"] {
                     let fixture = Fixture::new();
                     fs::write(fixture.0.join("obs.csv"), "ID,CODE\n1,A\n2,B\n").unwrap();
@@ -1370,10 +1365,10 @@ columns:
             (format!("  - {{name: N, type: int, derivation: {{literal: {written}}}}}"), "columns.N.derivation.literal"),
             (format!("  - {{name: N, type: float, derivation: {{literal: {written}}}}}"), "columns.N.derivation.literal"),
             (format!("  - {{name: N, type: str, derivation: {{literal: {written}}}}}"), "columns.N.derivation.literal"),
-            (format!("  - {{name: N, type: int, derivation: DM.AGE, verifications: {{allowed_values: {{values: [34, {written}]}}}}}}"), "columns.N.verifications[0].allowed_values.values[1]"),
-            (format!("  - {{name: N, type: int, derivation: DM.AGE, verifications: {{range: {{min: {written}}}}}}}"), "columns.N.verifications[0].range.min"),
-            (format!("  - {{name: N, type: int, derivation: DM.AGE, verifications: {{range: {{max: {written}}}}}}}"), "columns.N.verifications[0].range.max"),
-            (format!("  - {{name: N, type: str, derivation: DM.USUBJID, verifications: {{max_length: {{max: {written}}}}}}}"), "columns.N.verifications[0].max_length.max"),
+            (format!("  - {{name: N, type: int, derivation: DM.AGE, verifications: [{{allowed_values: {{values: [34, {written}]}}}}]}}"), "columns.N.verifications[0].allowed_values.values[1]"),
+            (format!("  - {{name: N, type: int, derivation: DM.AGE, verifications: [{{range: {{min: {written}}}}}]}}"), "columns.N.verifications[0].range.min"),
+            (format!("  - {{name: N, type: int, derivation: DM.AGE, verifications: [{{range: {{max: {written}}}}}]}}"), "columns.N.verifications[0].range.max"),
+            (format!("  - {{name: N, type: str, derivation: DM.USUBJID, verifications: [{{max_length: {{max: {written}}}}}]}}"), "columns.N.verifications[0].max_length.max"),
             (format!("  - {{name: N, type: int, derivation: {{value: {{source: DM.AGE}}, unconvertible: {written}}}}}"), "columns.N.derivation.unconvertible"),
         ];
                 for (column, path) in cases {
@@ -2492,7 +2487,7 @@ output: {path: out.csv, columns: [I, V]}
                 let input_source = if output.iter().any(|name| name == "VAL") {
                     json!({"path":"input.csv","types":{"VAL":"int"}})
                 } else {
-                    json!({"path":"input.csv"})
+                    json!("input.csv")
                 };
                 let document = json!({
                     "schema_version":"1.0", "domain":"OUT", "base":"SRC",

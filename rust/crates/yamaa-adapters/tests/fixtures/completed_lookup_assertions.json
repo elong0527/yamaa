@@ -2,7 +2,7 @@
   "authorship": "Independent REQ-0183/0185/0383/0384/0372 examples. Tables, findings and complete verification records are authored here; no candidate observation or retiring evaluator supplied expected truth.",
   "cases": {
     "lookup-when": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - assert: {id: selected, when: \"P.X = 2\", require: \"VALUE = 2\"}\n  - row_count: {min: 3, max: 3}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - assert: {id: selected, when: \"P.X = 2\", require: \"VALUE = 2\"}\n  - row_count: {min: 3, max: 3}\n",
       "inputs": {
         "src.csv": "ID\na\nb\nc\n",
         "donor.csv": "ID,SEQ,X,Z\na,1,2,\na,2,99,later\nb,1,2,\n"
@@ -65,7 +65,7 @@
       }
     },
     "lookup-require": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - assert: {id: selected, when: \"P.X IS NOT NULL\", require: \"P.X = VALUE\"}\n  - row_count: {min: 3, max: 3}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - assert: {id: selected, when: \"P.X IS NOT NULL\", require: \"P.X = VALUE\"}\n  - row_count: {min: 3, max: 3}\n",
       "inputs": {
         "src.csv": "ID\na\nb\nc\n",
         "donor.csv": "ID,SEQ,X,Z\na,1,2,\na,2,99,later\nb,1,2,\n"
@@ -128,7 +128,7 @@
       }
     },
     "same-selected-fields": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: P.X}\nverifications:\n  - assert: {id: selected, when: \"P.X IS NOT NULL\", require: \"P.X = VALUE AND P.Z IS NULL\"}\n  - row_count: {min: 3, max: 3}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: P.X}\nverifications:\n  - assert: {id: selected, when: \"P.X IS NOT NULL\", require: \"P.X = VALUE AND P.Z IS NULL\"}\n  - row_count: {min: 3, max: 3}\n",
       "inputs": {
         "src.csv": "ID\na\nb\nc\n",
         "donor.csv": "ID,SEQ,X,Z\na,1,2,\na,2,99,later\nb,1,2,\n"
@@ -202,7 +202,7 @@
       }
     },
     "record-lookup-require": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nrows: [{id: records, dataset: SRC, derivations: {}}]\nverifications:\n  - assert: {id: selected, when: \"P.X IS NOT NULL\", require: \"P.X = VALUE\"}\n  - row_count: {min: 3, max: 3}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nrows: [{id: records, dataset: SRC, derivations: {}}]\nverifications:\n  - assert: {id: selected, when: \"P.X IS NOT NULL\", require: \"P.X = VALUE\"}\n  - row_count: {min: 3, max: 3}\n",
       "inputs": {
         "src.csv": "ID\na\nb\nc\n",
         "donor.csv": "ID,SEQ,X,Z\na,1,2,\na,2,99,later\nb,1,2,\n"
@@ -265,7 +265,7 @@
       }
     },
     "group-lookup-require": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nrows: [{id: groups, dataset: SRC, group_by: [SRC.ID], derivations: {}}]\nverifications:\n  - assert: {id: selected, when: \"P.X IS NOT NULL\", require: \"P.X = VALUE\"}\n  - row_count: {min: 3, max: 3}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nrows: [{id: groups, dataset: SRC, group_by: [SRC.ID], derivations: {}}]\nverifications:\n  - assert: {id: selected, when: \"P.X IS NOT NULL\", require: \"P.X = VALUE\"}\n  - row_count: {min: 3, max: 3}\n",
       "inputs": {
         "src.csv": "ID\na\nb\nc\n",
         "donor.csv": "ID,SEQ,X,Z\na,1,2,\na,2,99,later\nb,1,2,\n"
@@ -328,7 +328,7 @@
       }
     },
     "valid-when-unknown-require": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - assert: {id: selected, when: \"P.X > 0\", require: \"UNKNOWN > 0\"}\n  - row_count: {min: 3, max: 3}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - assert: {id: selected, when: \"P.X > 0\", require: \"UNKNOWN > 0\"}\n  - row_count: {min: 3, max: 3}\n",
       "inputs": {
         "src.csv": "ID\na\nb\nc\n",
         "donor.csv": "ID,SEQ,X,Z\na,1,2,\na,2,99,later\nb,1,2,\n"
@@ -367,7 +367,7 @@
       ]
     },
     "missing-lookup-field": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - assert: {id: selected, require: \"P.ABSENT = 0\"}\n  - row_count: {min: 3, max: 3}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - assert: {id: selected, require: \"P.ABSENT = 0\"}\n  - row_count: {min: 3, max: 3}\n",
       "inputs": {
         "src.csv": "ID\na\nb\nc\n",
         "donor.csv": "ID,SEQ,X,Z\na,1,2,\na,2,99,later\nb,1,2,\n"
@@ -394,7 +394,7 @@
       ]
     },
     "when-type-before-require-name": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - assert: {id: selected, when: \"P.X = 'bad'\", require: \"UNKNOWN > 0\"}\n  - row_count: {min: 3, max: 3}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - assert: {id: selected, when: \"P.X = 'bad'\", require: \"UNKNOWN > 0\"}\n  - row_count: {min: 3, max: 3}\n",
       "inputs": {
         "src.csv": "ID\na\nb\nc\n",
         "donor.csv": "ID,SEQ,X,Z\na,1,2,\na,2,99,later\nb,1,2,\n"
@@ -435,7 +435,7 @@
       ]
     },
     "empty-type-admission": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - assert: {id: selected, require: \"P.X = 'bad'\"}\n  - row_count: {min: 3, max: 3}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - assert: {id: selected, require: \"P.X = 'bad'\"}\n  - row_count: {min: 3, max: 3}\n",
       "inputs": {
         "src.csv": "ID\n",
         "donor.csv": "ID,SEQ,X,Z\na,1,2,\na,2,99,later\nb,1,2,\n"
@@ -464,7 +464,7 @@
       ]
     },
     "unhandled-predicate-unknown": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - assert: {id: selected, require: \"P.X = 2\"}\n  - row_count: {min: 3, max: 3}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - assert: {id: selected, require: \"P.X = 2\"}\n  - row_count: {min: 3, max: 3}\n",
       "inputs": {
         "src.csv": "ID\na\nb\nc\n",
         "donor.csv": "ID,SEQ,X,Z\na,1,2,\na,2,99,later\nb,1,2,\n"
@@ -549,7 +549,7 @@
       ]
     },
     "no-match-literal": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: 3\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - assert: {id: selected, require: \"P.X = 3\"}\n  - row_count: {min: 1, max: 1}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: 3\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - assert: {id: selected, require: \"P.X = 3\"}\n  - row_count: {min: 1, max: 1}\n",
       "inputs": {
         "src.csv": "ID\nc\n",
         "donor.csv": "ID,SEQ,X,Z\n"
@@ -687,7 +687,7 @@
       }
     },
     "false-when-eager-require-no-match": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - assert: {id: selected, when: \"FALSE\", require: \"P.X > 0\"}\n  - row_count: {min: 1, max: 1}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - assert: {id: selected, when: \"FALSE\", require: \"P.X > 0\"}\n  - row_count: {min: 1, max: 1}\n",
       "inputs": {
         "src.csv": "ID\nc\n",
         "donor.csv": "ID,SEQ,X,Z\n"
@@ -726,7 +726,7 @@
       ]
     },
     "and-eager-operand-no-match": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - assert: {id: selected, when: \"FALSE AND P.X > 0\", require: \"TRUE\"}\n  - row_count: {min: 1, max: 1}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - assert: {id: selected, when: \"FALSE AND P.X > 0\", require: \"TRUE\"}\n  - row_count: {min: 1, max: 1}\n",
       "inputs": {
         "src.csv": "ID\nc\n",
         "donor.csv": "ID,SEQ,X,Z\n"
@@ -765,7 +765,7 @@
       ]
     },
     "or-eager-operand-no-match": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - assert: {id: selected, when: \"FALSE\", require: \"TRUE OR P.X > 0\"}\n  - row_count: {min: 1, max: 1}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - assert: {id: selected, when: \"FALSE\", require: \"TRUE OR P.X > 0\"}\n  - row_count: {min: 1, max: 1}\n",
       "inputs": {
         "src.csv": "ID\nc\n",
         "donor.csv": "ID,SEQ,X,Z\n"
@@ -804,7 +804,7 @@
       ]
     },
     "prior-failure-before-require-name": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - unique: {columns: [VALUE], id: prefix}\n  - assert: {id: selected, when: \"P.X > 0\", require: \"UNKNOWN > 0\"}\n  - row_count: {min: 3, max: 3}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - unique: {columns: [VALUE], id: prefix}\n  - assert: {id: selected, when: \"P.X > 0\", require: \"UNKNOWN > 0\"}\n  - row_count: {min: 3, max: 3}\n",
       "inputs": {
         "src.csv": "ID\na\nb\nc\n",
         "donor.csv": "ID,SEQ,X,Z\na,1,2,\na,2,99,later\nb,1,2,\n"
@@ -909,7 +909,7 @@
       ]
     },
     "selected-warning-retains-output": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, warning_log: warnings.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - assert: {id: selected, severity: warning, require: \"P.X = 3\"}\n  - row_count: {min: 3, max: 3}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, warning_log: warnings.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - assert: {id: selected, severity: warning, require: \"P.X = 3\"}\n  - row_count: {min: 3, max: 3}\n",
       "inputs": {
         "src.csv": "ID\na\nb\nc\n",
         "donor.csv": "ID,SEQ,X,Z\na,1,2,\na,2,99,later\nb,1,2,\n"
@@ -1021,7 +1021,7 @@
       }
     },
     "warning-missing-lookup-require": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, warning_log: warnings.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - assert: {id: selected, severity: warning, require: \"P.ABSENT = 0\"}\n  - row_count: {min: 3, max: 3}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, warning_log: warnings.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - assert: {id: selected, severity: warning, require: \"P.ABSENT = 0\"}\n  - row_count: {min: 3, max: 3}\n",
       "inputs": {
         "src.csv": "ID\na\nb\nc\n",
         "donor.csv": "ID,SEQ,X,Z\na,1,2,\na,2,99,later\nb,1,2,\n"
@@ -1048,7 +1048,7 @@
       ]
     },
     "warning-missing-lookup-require-rows": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, warning_log: warnings.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nrows:\n  - {id: observed, dataset: SRC, derivations: {ID: SRC.ID}}\nverifications:\n  - assert: {id: selected, severity: warning, require: \"P.ABSENT = 0\"}\n  - row_count: {min: 3, max: 3}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, warning_log: warnings.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nrows:\n  - {id: observed, dataset: SRC, derivations: {ID: SRC.ID}}\nverifications:\n  - assert: {id: selected, severity: warning, require: \"P.ABSENT = 0\"}\n  - row_count: {min: 3, max: 3}\n",
       "inputs": {
         "src.csv": "ID\na\nb\nc\n",
         "donor.csv": "ID,SEQ,X,Z\na,1,2,\na,2,99,later\nb,1,2,\n"
@@ -1075,7 +1075,7 @@
       ]
     },
     "warning-missing-lookup-when": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, warning_log: warnings.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - assert: {id: selected, severity: warning, when: \"P.ABSENT = 0\", require: \"P.X = 2\"}\n  - row_count: {min: 3, max: 3}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, warning_log: warnings.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - assert: {id: selected, severity: warning, when: \"P.ABSENT = 0\", require: \"P.X = 2\"}\n  - row_count: {min: 3, max: 3}\n",
       "inputs": {
         "src.csv": "ID\na\nb\nc\n",
         "donor.csv": "ID,SEQ,X,Z\na,1,2,\na,2,99,later\nb,1,2,\n"
@@ -1102,7 +1102,7 @@
       ]
     },
     "warning-missing-lookup-when-rows": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, warning_log: warnings.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nrows:\n  - {id: observed, dataset: SRC, derivations: {ID: SRC.ID}}\nverifications:\n  - assert: {id: selected, severity: warning, when: \"P.ABSENT = 0\", require: \"P.X = 2\"}\n  - row_count: {min: 3, max: 3}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, warning_log: warnings.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nrows:\n  - {id: observed, dataset: SRC, derivations: {ID: SRC.ID}}\nverifications:\n  - assert: {id: selected, severity: warning, when: \"P.ABSENT = 0\", require: \"P.X = 2\"}\n  - row_count: {min: 3, max: 3}\n",
       "inputs": {
         "src.csv": "ID\na\nb\nc\n",
         "donor.csv": "ID,SEQ,X,Z\na,1,2,\na,2,99,later\nb,1,2,\n"

@@ -61,7 +61,7 @@ columns:
         source: AETERM
         to: lower
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   - name: AERELLC
     type: str

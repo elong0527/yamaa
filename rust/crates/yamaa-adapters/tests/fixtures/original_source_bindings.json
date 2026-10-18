@@ -2176,7 +2176,7 @@
   },
   {
     "case": "duplicate_equal",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source: DONOR.V\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation: DONOR.V\n",
     "inputs": {
       "DONOR": "ID,V\na,10\na,10\n",
       "SRC": "ID\na\n"
@@ -2332,7 +2332,7 @@
   },
   {
     "case": "no_keys",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source: DONOR.V\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation: DONOR.V\n",
     "inputs": {
       "DONOR": "OTHER,V\na,10\n",
       "SRC": "ID\na\n"
@@ -2705,7 +2705,7 @@
   },
   {
     "case": "numeric_keys_exact",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {ID: int}}\n  DONOR: {path: donor.csv, types: {ID: float, V: int}}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: int, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source: DONOR.V\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {ID: int}}\n  DONOR: {path: donor.csv, types: {ID: float, V: int}}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: int, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation: DONOR.V\n",
     "inputs": {
       "DONOR": "ID,V\n1.0,10\n9007199254740992.0,20\n",
       "SRC": "ID\n1\n9007199254740993\n"

@@ -421,7 +421,7 @@ mod declaration {
                 bytes: text.as_bytes().to_vec(),
             }
         }
-        const VALID: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: {source: SRC.ID}}\n";
+        const VALID: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
 
         #[test]
         fn shipped_closure_retains_every_authoritative_byte_and_admits_without_a_directory() {
@@ -747,7 +747,10 @@ mod declaration {
                 json!({"status":"invalid","diagnostics":[{"phase":"validation","condition":"missing_required_field","requirement":"REQ-0285","spec_paths":["domain"],"context":{"field":"domain","class":"root_class"}}]})
             );
             let unknown = inherited_error(
-                &entry.replace("source: SRC.ID", "compute: {expr: UNKNOWN}"),
+                &entry.replace(
+                    "derivation: SRC.ID",
+                    "derivation: {compute: {expr: UNKNOWN}}",
+                ),
                 empty_parent,
             );
             let outcome: Value =
@@ -1082,7 +1085,7 @@ mod declaration {
                 ),
                 (
                     "",
-                    "{flag: {condition: 'DM.V != 1'}}",
+                    "{flag: 'DM.V != 1'}",
                     "invalid_expression",
                     "columns.V.derivation.flag.condition",
                 ),

@@ -23,24 +23,16 @@ pub(super) fn prepare(
     payload: usize,
     path: &str,
 ) -> Result<Declaration, PrepareError> {
-    let item = if matches!(d.nodes()[payload], N::Text(_)) {
-        text(d, payload)?
-    } else {
-        text(d, field(d, payload, "item")?)?
-    };
+    let item = text(d, field(d, payload, "item")?)?;
     let (dataset, item_oid) = item.split_once('.').ok_or(PrepareError::Internal)?;
     let selectors = ["event", "form", "item_group"].map(|name| {
         d.field(payload, name)
             .filter(|&node| !matches!(d.nodes()[node], N::Null))
             .map(|node| {
-                if let N::Text(text) = &d.nodes()[node] {
-                    Ok(vec![text.clone()])
-                } else {
-                    sequence(d, node)?
-                        .iter()
-                        .map(|&node| text(d, node).map(String::from))
-                        .collect()
-                }
+                sequence(d, node)?
+                    .iter()
+                    .map(|&node| text(d, node).map(String::from))
+                    .collect()
             })
             .transpose()
     });
@@ -323,11 +315,7 @@ pub(super) fn context_findings(
                     );
                 }
                 if let Some(payload) = d.field(node, "odm") {
-                    let item = if matches!(d.nodes()[payload], N::Text(_)) {
-                        text(d, payload)?
-                    } else {
-                        text(d, field(d, payload, "item")?)?
-                    };
+                    let item = text(d, field(d, payload, "item")?)?;
                     let (dataset, _) = item.split_once('.').ok_or(PrepareError::Internal)?;
                     sites.push(Site {
                         payload,
@@ -560,11 +548,7 @@ pub(super) fn inputs(d: &Document) -> Result<BTreeSet<&str>, PrepareError> {
         match &d.nodes()[node] {
             N::Mapping(fields) => {
                 if let Some(payload) = d.field(node, "odm") {
-                    let item = if matches!(d.nodes()[payload], N::Text(_)) {
-                        text(d, payload)?
-                    } else {
-                        text(d, field(d, payload, "item")?)?
-                    };
+                    let item = text(d, field(d, payload, "item")?)?;
                     if let Some((dataset, _)) = item.split_once('.') {
                         found.insert(dataset);
                     }

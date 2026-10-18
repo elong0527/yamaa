@@ -311,11 +311,7 @@ fn default_reads(
             }
         }
         "flag" => {
-            let condition = if matches!(d.nodes()[payload], N::Text(_)) {
-                payload
-            } else {
-                field(d, payload, "condition")?
-            };
+            let condition = field(d, payload, "condition")?;
             match compile(text(d, condition)?, ExpressionContext::Predicate, "") {
                 Ok(compiled) => {
                     for name in compiled.identifiers() {

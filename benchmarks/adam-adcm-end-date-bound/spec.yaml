@@ -81,8 +81,8 @@ columns:
         source: AENDT
         part: date
     verifications:
-      allowed_values:
-        values: ["D", "M"]
+      - allowed_values:
+          values: ["D", "M"]
 
 verifications:
   - row_count:

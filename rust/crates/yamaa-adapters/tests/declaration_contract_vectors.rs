@@ -1686,8 +1686,8 @@ mod declaration {
                 "output":{"path":"out.csv","columns":["ID","N"]},
                 "columns":[
                     {"name":"ID","type":"str","derivation":"DM.ID"},
-                    {"name":"N","type":"int","derivation":{"aggregate":{"expr":"COUNT(EX.*)"}}},
-                    {"name":"UNUSED","type":"int","derivation":{"aggregate":{"expr":"COUNT(DEAD.*)"}}}
+                    {"name":"N","type":"int","derivation":{"aggregate":"COUNT(EX.*)"}},
+                    {"name":"UNUSED","type":"int","derivation":{"aggregate":"COUNT(DEAD.*)"}}
                 ]
             });
             let mut host = new_host(yamaa_adapters::json_wire::encode(&authored).as_bytes());
@@ -2305,6 +2305,21 @@ mod declaration {
                 ]
             });
             assert!(study.check(intermediate).is_empty());
+            // A mapping holding only the columns restates the list (SCHEMA-15).
+            let issues = study.check(json!({
+                "id":"DS_EOS", "dataset":"DS",
+                "verifications":[{"unique":{"columns":["STUDYID"]}}]
+            }));
+            assert_eq!(issues.len(), 1, "{issues:?}");
+            assert_eq!(issues[0].condition, "redundant_long_form");
+            assert_eq!(
+                issues[0].spec_paths,
+                ["intermediates.DS_EOS.verifications[0].unique"]
+            );
+            assert_eq!(
+                issues[0].context,
+                json!({"field":"columns","shorthand":"[\"STUDYID\"]"})
+            );
         }
 
         #[test]

@@ -46,8 +46,8 @@ columns:
     type: str
     label: Parameter Code
     verifications:
-      allowed_values:
-        values: [QTAG, RRAG, QTCF]
+      - allowed_values:
+          values: [QTAG, RRAG, QTCF]
 
   - name: PARAM
     type: str
@@ -70,7 +70,7 @@ columns:
     type: float
     label: Analysis Value
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
 # One average record per subject, planned time point and parameter, over
 # the ECGs of that time point that have a value for the parameter. A
@@ -123,6 +123,5 @@ rows:
       ATPT: QT.EGTPT
       ATPTN: QT.EGTPTNUM
       AVAL:
-        aggregate:
-          expr: >-
+        aggregate: >-
             MEAN(QT.EGSTRESN / POWER(NULLIF(QT.RRPAIR, 0) / 1000, 1 / 3))

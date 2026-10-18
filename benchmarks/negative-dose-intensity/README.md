@@ -28,9 +28,8 @@ planned administration, total both actual and planned dose:
 
 ```yaml
 derivation:
-  aggregate:
-    expr: >-
-      100 * SUM(EX.EXDOSE) / NULLIF(SUM(EX.EXPLDOS), 0)
+  aggregate: >-
+    100 * SUM(EX.EXDOSE) / NULLIF(SUM(EX.EXPLDOS), 0)
 ```
 
 If the denominator is one treatment-level plan, store it once in the subject

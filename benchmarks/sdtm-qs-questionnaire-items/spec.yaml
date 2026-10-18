@@ -4,7 +4,7 @@ keys: [STUDYID, USUBJID, QSSEQ]
 input:
   ODM: {path: input/odm.csv, types: {Value: int}}
   VISITS: {path: input/visits.csv, types: {VISITNUM: int, VisitDate: date}}
-  NOTDONE: {path: input/notdone.csv}
+  NOTDONE: input/notdone.csv
   ITEMS: {path: input/items.csv, types: {ItemOrder: int}}
 
 output:
@@ -205,11 +205,9 @@ rows:
     filter: "ITEMCNT = 9"
     derivations:
       ITEMCNT:
-        aggregate:
-          expr: "COUNT(ODM.Value)"
+        aggregate: "COUNT(ODM.Value)"
       TOTALSCORE:
-        aggregate:
-          expr: "SUM(ODM.Value)"
+        aggregate: "SUM(ODM.Value)"
       STUDYID: ODM.StudyOID
       USUBJID: ODM.SubjectKey
       VISIT_SUBJECT: ODM.SubjectKey

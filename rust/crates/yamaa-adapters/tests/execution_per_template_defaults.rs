@@ -74,7 +74,7 @@ const HEAD: &str = "schema_version: \"1.0\"\n\
     domain: ADVS\n\
     input:\n\
     \x20 VS: {path: vs.csv, types: {VSSEQ: int, VSSTRESN: float}}\n\
-    \x20 DM: {path: dm.csv}\n\
+    \x20 DM: dm.csv\n\
     intermediates:\n\
     \x20 - id: LAST\n\
     \x20   dataset: VS\n\
@@ -110,7 +110,7 @@ const GROUPED: &str = "keys: [USUBJID, PARAMCD, SRCSEQ, ROWSRC]\n\
     \x20   derivations:\n\
     \x20     USUBJID: VS.USUBJID\n\
     \x20     PARAMCD: VS.VSTESTCD\n\
-    \x20     AVAL: {aggregate: {expr: \"MEAN(VS.VSSTRESN)\"}}\n\
+    \x20     AVAL: {aggregate: \"MEAN(VS.VSSTRESN)\"}\n\
     \x20     ROWSRC: {literal: B}\n";
 
 const UNGROUPED: &str = "keys: [USUBJID, VSSEQ, SRCSEQ, ROWSRC]\n\

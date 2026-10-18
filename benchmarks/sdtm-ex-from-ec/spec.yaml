@@ -251,8 +251,8 @@ columns:
           then: {literal: AUC}
         - otherwise: {literal: mg}
     verifications:
-      allowed_values:
-        values: [mg, AUC]
+      - allowed_values:
+          values: [mg, AUC]
 
   - name: EXSTDTC
     type: date

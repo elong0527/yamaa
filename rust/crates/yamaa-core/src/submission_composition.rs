@@ -272,9 +272,8 @@ fn verification(document: &Document, node: usize, operation: &str) -> Vec<usize>
     let Some(v) = document.field(node, "verifications") else {
         return Vec::new();
     };
-    let nodes = match &document.nodes()[v] {
-        N::Sequence(values) => values.as_slice(),
-        _ => std::slice::from_ref(&v),
+    let N::Sequence(nodes) = &document.nodes()[v] else {
+        return Vec::new();
     };
     nodes
         .iter()
@@ -1536,10 +1535,7 @@ fn compose_datasets(
                 let Some(payload) = doc.field(entry, "unique") else {
                     continue;
                 };
-                let columns = match &doc.nodes()[payload] {
-                    N::Sequence(values) => texts(doc, values),
-                    _ => strings(doc, payload, "columns"),
-                };
+                let columns = strings(doc, payload, "columns");
                 if !columns.is_empty() && columns.iter().collect::<BTreeSet<_>>() == key_set {
                     findings.push(redundant(
                         ConditionCode::VerificationUniqueRedundant,

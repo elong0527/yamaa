@@ -60,15 +60,13 @@ columns:
     type: date
     label: Latest Adverse Event Date
     derivation:
-      aggregate:
-        expr: "MAX(ADAE.AENDT)"
+      aggregate: "MAX(ADAE.AENDT)"
 
   - name: ADVS_LST
     type: date
     label: Latest Vital Signs Date
     derivation:
-      aggregate:
-        expr: "MAX(ADVS.ADATE)"
+      aggregate: "MAX(ADVS.ADATE)"
 
   # The latest of the four, passing over missing ones; empty only when all
   # four are missing.

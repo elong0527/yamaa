@@ -120,11 +120,9 @@ rows:
   derivations:
     OPERATIONID: {literal: COUNT}
     NSUBJ:
-      aggregate:
-        expr: SUM(SUBJECT.EVENTN)
+      aggregate: SUM(SUBJECT.EVENTN)
     DENOM:
-      aggregate:
-        expr: COUNT(SUBJECT.USUBJID)
+      aggregate: COUNT(SUBJECT.USUBJID)
 
 - id: percent
   dataset: SUBJECT
@@ -135,11 +133,9 @@ rows:
   derivations:
     OPERATIONID: {literal: PERCENT}
     NSUBJ:
-      aggregate:
-        expr: SUM(SUBJECT.EVENTN)
+      aggregate: SUM(SUBJECT.EVENTN)
     DENOM:
-      aggregate:
-        expr: COUNT(SUBJECT.USUBJID)
+      aggregate: COUNT(SUBJECT.USUBJID)
 
 verifications:
 - assert:

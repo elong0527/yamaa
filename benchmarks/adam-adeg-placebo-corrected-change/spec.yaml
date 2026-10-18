@@ -104,8 +104,8 @@ columns:
         - when: "TRTA = 'Placebo' AND ABLFL IS NULL"
           then: {literal: "Y"}
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
   # The key of the time-matched placebo group, on every record after
   # baseline, drug and placebo alike, also where the group has no record.

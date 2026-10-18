@@ -27,15 +27,17 @@ def write_case(tmp_path, *, columns, typed_fields=0, source_format="csv"):
     (tmp_path / "input.csv").write_text(
         ",".join(header) + "\n" + ",".join(["S-001", *["x"] * len(field_names)]) + "\n"
     )
-    source = {"path": "input.csv"}
-    if typed_fields:
-        source["types"] = {name: "str" for name in header}
+    path = "input.csv"
     if source_format == "parquet":
-        source["path"] = "input.parquet"
+        path = "input.parquet"
         pq.write_table(
             pa.table({name: ["S-001" if name == "ID" else "x"] for name in header}),
             tmp_path / "input.parquet",
         )
+    # A dataset is written as its bare path unless it also types fields.
+    source = path
+    if typed_fields:
+        source = {"path": path, "types": {name: "str" for name in header}}
     document = {
         "schema_version": "1.0",
         "domain": "TEST",
@@ -101,7 +103,8 @@ def test_source_width_admits_1024_and_refuses_1025(tmp_path, source_format):
             tmp_path, columns=1, typed_fields=width, source_format=source_format
         )
         document = yaml.safe_load(spec.read_text())
-        del document["input"]["SRC"]["types"]
+        # Without its types, the dataset is written as its bare path.
+        document["input"]["SRC"] = document["input"]["SRC"]["path"]
         spec.write_text(yaml.safe_dump(document))
         built = yamaa.domain(spec)
         if width == 1024:

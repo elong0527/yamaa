@@ -48,16 +48,16 @@ columns:
     label: Baseline Record Flag
     derivation: ADEG_RAW.ABLFL
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
   - name: ONTRTFL
     type: str
     label: On Treatment Record Flag
     derivation: ADEG_RAW.ONTRTFL
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
   - name: BASE
     type: float
@@ -93,8 +93,8 @@ columns:
           then: {literal: "Y"}
         - otherwise: {literal: "N"}
     verifications:
-      allowed_values:
-        values: [Y, N]
+      - allowed_values:
+          values: [Y, N]
 
   - name: CRIT2
     type: str
@@ -115,8 +115,8 @@ columns:
           then: {literal: "Y"}
         - otherwise: {literal: "N"}
     verifications:
-      allowed_values:
-        values: [Y, N]
+      - allowed_values:
+          values: [Y, N]
 
   - name: CRIT3
     type: str
@@ -137,8 +137,8 @@ columns:
           then: {literal: "Y"}
         - otherwise: {literal: "N"}
     verifications:
-      allowed_values:
-        values: [Y, N]
+      - allowed_values:
+          values: [Y, N]
 
   # A change criterion needs a change from baseline, so a record without a
   # baseline value is not assessed against it even when its own value is.
@@ -162,8 +162,8 @@ columns:
           then: {literal: "Y"}
         - otherwise: {literal: "N"}
     verifications:
-      allowed_values:
-        values: [Y, N]
+      - allowed_values:
+          values: [Y, N]
 
   - name: CRIT5
     type: str
@@ -184,8 +184,8 @@ columns:
           then: {literal: "Y"}
         - otherwise: {literal: "N"}
     verifications:
-      allowed_values:
-        values: [Y, N]
+      - allowed_values:
+          values: [Y, N]
 
 verifications:
   - row_count:

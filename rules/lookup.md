@@ -25,8 +25,7 @@ Evidence: `schema-lookup`, `schema-source-binding`, `sdtm-sv-subject-visits`.
 Replaces: REQ-0111, REQ-0150, REQ-0151, REQ-0152, REQ-1051, REQ-1052.
 
 ```yaml
-derivation:
-  source: ADSL.TRTSDTM
+derivation: ADSL.TRTSDTM
 ```
 
 The driver's qualifier reads the input or intermediate record that built the
@@ -181,12 +180,12 @@ output's `CMSEQ` is numeric but `CODING.CMSEQ` is stored as text, declare
 ### LOOKUP-5. A key pairs each lookup column with a comparable current-row match value
 
 `key` states the match as pairs, each a column of the lookup's dataset and the
-current-row match value it must equal. A column name, or a list of column
-names, pairs each column with the same-named current-row value; a mapping pairs
-each column, written as the mapping key, with a variable or expression written
-beside it. Pair order does not change the result. Every column must exist,
-every match value must read a known current-row value, and each pair must be
-mutually comparable, with no operand converted.
+current-row match value it must equal. A list of column names, even of one
+column, pairs each column with the same-named current-row value; a mapping
+pairs each column, written as the mapping key, with a variable or expression
+written beside it. Pair order does not change the result. Every column must
+exist, every match value must read a known current-row value, and each pair
+must be mutually comparable, with no operand converted.
 
 Fails: `invalid_field_type`, `missing_aggregate_keys`, `unknown_field`, `incompatible_input_type`.
 Evidence: `negative-lookup-mismatched`, `sdtm-lb-lab-specific-ranges`, `rust/crates/yamaa-adapters/tests/fixtures/intermediate_key_reference.json`.
@@ -702,7 +701,10 @@ Replaces: REQ-1245.
 
 The mapping form `unique: {columns: [STUDYID, USUBJID], id: donor-key}` names a
 check when an explicit ID is useful, and both forms test the same donor
-records. Each check may declare an optional `id`, governed by
+records; a mapping holding only `columns` restates the list and fails as
+`redundant_long_form` under
+[SCHEMA-15](reference/schema-language.md#schema-15). Each check may declare an
+optional `id`, governed by
 [CHECK-3](verification.md#check-3). [LOOKUP-10](#lookup-10) already rejects
 multiple surviving matches without a selection rule.
 

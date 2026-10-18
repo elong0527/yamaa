@@ -190,7 +190,7 @@ mod file {
         use yamaa_core::application_observer::Scope;
         use yamaa_core::domain_entry::Request;
         static NEXT: AtomicUsize = AtomicUsize::new(0);
-        const VALID: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: {source: SRC.ID}}\n";
+        const VALID: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
         struct Study(PathBuf);
         impl Study {
             fn new() -> Self {
@@ -317,10 +317,7 @@ mod file {
             assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0694"));
             fs::write(
                 study.0.join("spec.yaml"),
-                VALID.replace(
-                    "input: {SRC: input.csv}",
-                    "input: {SRC: {path: input.unknown}}",
-                ),
+                VALID.replace("input: {SRC: input.csv}", "input: {SRC: input.unknown}"),
             )
             .unwrap();
             let path = study.text("spec.yaml");
@@ -730,7 +727,7 @@ mod file {
                         body = body
                             .replace("input: {SRC: input.csv}", &format!("input: {{{inputs}}}"))
                             .replace(
-                                "derivation: {source: SRC.ID}",
+                                "derivation: SRC.ID",
                                 &format!(
                                     "derivation: {{first_available: {{sources: [{sources}]}}}}"
                                 ),
@@ -754,9 +751,9 @@ mod file {
                     }
                     "source_operands" => {
                         body = body.replace(
-                            "{source: SRC.ID}",
+                            "derivation: SRC.ID",
                             &format!(
-                                "{{first_available: {{sources: [{}]}}}}",
+                                "derivation: {{first_available: {{sources: [{}]}}}}",
                                 vec!["SRC.ID"; actual].join(", ")
                             ),
                         );
@@ -1096,7 +1093,7 @@ mod file {
         #[test]
         fn catastrophic_pattern_is_an_ordinary_verification_failure() {
             let study = Study::new();
-            fs::write(study.0.join("spec.yaml"), "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, TERM]}\ncolumns:\n  - {name: ID, type: int, derivation: {source: SRC.ID}}\n  - name: TERM\n    type: str\n    derivation: {source: SRC.TERM}\n    verifications: {matches: {pattern: '(a+)+b'}}\n").unwrap();
+            fs::write(study.0.join("spec.yaml"), "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, TERM]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: TERM\n    type: str\n    derivation: SRC.TERM\n    verifications: [{matches: {pattern: '(a+)+b'}}]\n").unwrap();
             fs::write(
                 study.0.join("input.csv"),
                 format!("ID,TERM\n1,{}\n", "a".repeat(32)),
@@ -1129,7 +1126,7 @@ mod file {
                 study.0.join("spec.yaml"),
                 format!(
                     "{}rows:\n  - id: selected\n    dataset: SRC\n    filter: SRC.A LIKE SRC.B\n    derivations: {{ID: SRC.ID}}\n",
-                    VALID.replace(", derivation: {source: SRC.ID}", "")
+                    VALID.replace(", derivation: SRC.ID", "")
                 ),
             )
             .unwrap();
@@ -1349,7 +1346,7 @@ mod file {
             // then the entry.
             study.write(
                 "origins/path.yaml",
-                &yaml("{P: {path: ../data/p.csv}}", "P", "root.csv").replacen(
+                &yaml("{P: ../data/p.csv}", "P", "root.csv").replacen(
                     "schema_version: '1.0'\n",
                     "schema_version: '1.0'\nparent: schema.yaml\n",
                     1,
@@ -1738,7 +1735,7 @@ mod file {
                 fs::remove_dir_all(&self.0).unwrap();
             }
         }
-        const VALID: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: {source: SRC.ID}}\n";
+        const VALID: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
         fn failure(study: &Study, source: &str) -> String {
             match study.prepare(source) {
                 Ok(_) => panic!("expected preparation failure"),

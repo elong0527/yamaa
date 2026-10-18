@@ -326,10 +326,15 @@ lifecycle could not complete. A failure involving several authored units names
 each one once, in specification order. Do not add a parent or an absent field
 merely because changing it would be another possible repair.
 
-When the [schema language](../rules/reference/schema-language.md) makes
-a scalar and a one-field class interchangeable shorthand, the
-path names the operation: it is the narrowest authored unit shared by both
-spellings, and normalization must not invent a deeper location.
+A [schema language](../rules/reference/schema-language.md) shorthand is the
+only spelling of the value its long form would merely restate, and it expands
+to its canonical class before the operation is prepared. A failure inside a
+written shorthand names the operation or the field of that class the operation
+reports: a bare string derivation fails at `derivation.source`, a lone
+aggregate formula at `aggregate` and a lone flag condition at
+`flag.condition`. Normalization never invents a location outside the expanded
+class, and a written long form that only restates its shorthand fails at its
+own path as `redundant_long_form`.
 
 Every validation-phase negative case declares `validation` in `benchmark.yaml`:
 `rule` plus exactly one `validator` family or open `blocked_by: "#N"` issue.
