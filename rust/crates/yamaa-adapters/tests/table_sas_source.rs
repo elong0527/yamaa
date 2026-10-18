@@ -500,6 +500,33 @@ mod table {
             }
         }
         #[test]
+        fn blank_records_at_least_one_record_wide_are_never_padding() {
+            // Blank padding fills the last 80-byte record, so it is always
+            // shorter than 80 bytes. Without a count, a trailing blank record
+            // 80 bytes or wider is data; a narrower one may be padding.
+            use crate::support::xport::{records, transport};
+            for (version, observations) in [(5, "0".repeat(30)), (8, "0".repeat(15))] {
+                let wide = [("A", 80)];
+                let data = records(&wide, &[&["x"], &[""], &[""]]);
+                let bytes = transport(version, &wide, &observations, &data);
+                let table = sas_source::parse(&bytes, &declaration("built.xpt")).unwrap();
+                assert_eq!(
+                    cells(&table),
+                    [
+                        [ValueRef::Str("x")],
+                        [ValueRef::Missing],
+                        [ValueRef::Missing]
+                    ],
+                    "{version}"
+                );
+                let narrow = [("A", 40)];
+                let data = records(&narrow, &[&["x"], &[""], &[""]]);
+                let bytes = transport(version, &narrow, &observations, &data);
+                let table = sas_source::parse(&bytes, &declaration("built.xpt")).unwrap();
+                assert_eq!(cells(&table), [[ValueRef::Str("x")]], "{version}");
+            }
+        }
+        #[test]
         fn version_8_count_that_disagrees_with_the_records_is_refused() {
             // Three text records fill 48 of 80 bytes; the blank padding holds
             // two more 16-byte records. A count of six exceeds every record
