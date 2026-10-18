@@ -47,7 +47,8 @@ install.packages("yamaa_0.4.0.tar.gz", repos = NULL, type = "source")
 
 Installation compiles the Rust engine, so it needs R 4.6.1, Rust 1.90 or later
 with Cargo, a C compiler and GNU make. Under rustup, the archive's
-`rust-toolchain.toml` selects the release toolchain, Rust 1.99.1. On Windows,
+`rust-toolchain.toml` selects the release toolchain, Rust 1.99.1, in rustup's
+minimal profile without Clippy or rustfmt. On Windows,
 also install Rtools45 and the `x86_64-pc-windows-gnu` target on that
 toolchain: `rustup toolchain install 1.99.1 --target x86_64-pc-windows-gnu`. A
 target added to another toolchain is not used. Cargo downloads the locked Rust

@@ -40,6 +40,9 @@ diagnostic/result records are imported from their shared adapter owner.
 
 Use the Rust toolchain selected by `rust/rust-toolchain.toml` and the unchanged
 canonical `rust/Cargo.lock`. Host source packages carry that workspace and lock.
+They carry the toolchain file too, so it names only what a build needs; add
+Clippy and rustfmt for repository checks with `rustup component add clippy rustfmt`
+from `rust/`, as `python -m tools.ci.toolchain --install` does in CI.
 The [source packaging guidance](docs/release.md#source-package-contents) links
 the vendored licenses and patch provenance.
 
@@ -284,7 +287,11 @@ dispatch or on a `qualification/issue-*` push. It checks public
 benchmark conformance, installed host suites, packaging, optimized Rust behavior
 and portable math. Passing ordinary CI does not qualify a release. The final
 merged revision needs complete native evidence, including strict R package
-checks with `Status: OK`.
+checks with `Status: OK`. A release tag publishes the native run that its
+`Qualified-Run` trailer names, and the `Release rehearsal` workflow, dispatched
+before tagging, runs the same selection against the latest successful main run
+without publishing;
+see [publication](docs/release.md#publication).
 
 Documentation deployment and Harbor evaluations have separate workflows.
 Harbor owns its task-build, oracle and changed-input checks; see its

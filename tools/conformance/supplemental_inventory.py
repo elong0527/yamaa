@@ -392,6 +392,19 @@ def require_native_consumer(source, name):
 
 SUITE_LEVELS = ("component", "compile", "shared_run")
 DOCUMENTATION_SUFFIXES = (".md", ".txt")
+SUPPORT_ROLES = ("input", "documentation", "license")
+
+
+def _default_role(name):
+    """Derive a support file's role from its name.
+
+    A LICENSE file covers the third-party fixtures beside it and is staged
+    with them; other prose documents ownership and stays behind.
+    """
+    path = Path(name)
+    if path.name.startswith("LICENSE"):
+        return "license"
+    return "documentation" if path.suffix in DOCUMENTATION_SUFFIXES else "input"
 
 
 def _derived_suite_id(runtime, path):
@@ -411,7 +424,7 @@ def load_catalog(root, catalog_path):
     derive: contract fixtures with their family, level and consumers; suite
     levels above the ``component`` default; suite identities that differ
     from the file-name derivation; and support-file roles that differ from
-    the suffix default. Suites and plain fixtures are discovered by glob,
+    the file-name default. Suites and plain fixtures are discovered by glob,
     so adding one needs no catalog edit.
     """
     catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
@@ -462,11 +475,8 @@ def load_catalog(root, catalog_path):
             raise ValueError(f"missing or duplicate contract consumers: {name}")
     support_files = []
     for name in sorted(discovered_fixtures - contracts):
-        role = catalog["support_roles"].get(
-            name,
-            "documentation" if Path(name).suffix in DOCUMENTATION_SUFFIXES else "input",
-        )
-        if role not in ("input", "documentation"):
+        role = catalog["support_roles"].get(name, _default_role(name))
+        if role not in SUPPORT_ROLES:
             raise ValueError(f"invalid support file role: {name}")
         support_files.append({"path": name, "role": role})
     for name in catalog["support_roles"]:
@@ -531,7 +541,11 @@ def load_catalog(root, catalog_path):
 
 
 def host_fixture_files(catalog):
-    """Return the shared installed-host inputs/codecs, excluding ownership docs."""
+    """Return the shared installed-host inputs/codecs and their fixture licenses.
+
+    Each third-party fixture keeps its license beside it wherever it is staged,
+    including the installed R package; ownership documents stay behind.
+    """
     prefixes = (
         ("rust/tests/host-fixtures/", "host-fixtures/"),
         ("rust/crates/yamaa-adapters/tests/fixtures/sas/", "host-fixtures/sas/"),
@@ -541,7 +555,7 @@ def host_fixture_files(catalog):
     names += [
         support["path"]
         for support in catalog["support_files"]
-        if support["role"] == "input"
+        if support["role"] in ("input", "license")
     ]
     files, staged = [], set()
     for name in names:

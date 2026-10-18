@@ -4,10 +4,12 @@ HELP = """yamaa repository commands (run from the repository root)
 
   setup             Build the installed dev-profile Python extension and locked tools.
                     Needs uv, the pinned Rust toolchain and a platform C compiler.
+                    Under rustup it also adds Clippy and rustfmt to that toolchain.
   quick             Before a push: check-lint without the R binding, then
                     check-repository. Runs no test suite and needs no R.
   check             Run the five PR checks below, in the same order locally.
   check-lint        Ruff, cargo fmt and workspace Clippy (requires R as well).
+                    Needs Clippy and rustfmt added to the pinned Rust toolchain.
   check-repository  Repository/rule/notice validation and a strict generated docs build.
   test-rust         cargo test --locked --workspace, including both host bindings.
                     Needs the selected Python interpreter and R 4.6.1.

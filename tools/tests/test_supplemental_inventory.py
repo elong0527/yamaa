@@ -188,13 +188,14 @@ class RepositoryCatalog(unittest.TestCase):
             "installed_control.py",
         )
 
-    def test_sas_canonical_inputs_and_truth_stage_without_ownership_documents(self):
+    def test_sas_inputs_truth_and_licenses_stage_without_ownership_documents(self):
         prefix = "rust/crates/yamaa-adapters/tests/fixtures/sas/"
         catalog = {
             "contracts": [{"path": prefix + "compressed-truth.csv"}],
             "support_files": [
+                {"path": prefix + "LICENSE-haven.txt", "role": "license"},
+                {"path": prefix + "README.md", "role": "documentation"},
                 {"path": prefix + "v5.xpt", "role": "input"},
-                {"path": prefix + "LICENSE-haven.txt", "role": "documentation"},
                 {"path": "rust/tests/host-fixtures/sas-cases.json", "role": "input"},
             ],
         }
@@ -205,6 +206,7 @@ class RepositoryCatalog(unittest.TestCase):
                     prefix + "compressed-truth.csv",
                     "host-fixtures/sas/compressed-truth.csv",
                 ),
+                (prefix + "LICENSE-haven.txt", "host-fixtures/sas/LICENSE-haven.txt"),
                 (prefix + "v5.xpt", "host-fixtures/sas/v5.xpt"),
                 (
                     "rust/tests/host-fixtures/sas-cases.json",
@@ -236,6 +238,26 @@ class RepositoryCatalog(unittest.TestCase):
                 ("tools/conformance/host_fixtures.py", "host_fixtures.py"),
             ],
         )
+
+    def test_third_party_fixture_licenses_stage_beside_their_fixtures(self):
+        root = Path(__file__).resolve().parents[2]
+        catalog = module.load_catalog(
+            root, root / "rust/qualification/supplemental.json"
+        )
+        prefix = "rust/crates/yamaa-adapters/tests/fixtures/sas/"
+        roles = {
+            support["path"]: support["role"] for support in catalog["support_files"]
+        }
+        staged = dict(module.host_fixture_files(catalog))
+        # haven's datetime.sas7bdat and pandas' compressed files and truth.
+        for owner in ("haven", "pandas"):
+            name = prefix + f"LICENSE-{owner}.txt"
+            self.assertEqual(roles[name], "license")
+            self.assertEqual(staged[name], f"host-fixtures/sas/LICENSE-{owner}.txt")
+        self.assertEqual(roles[prefix + "README.md"], "documentation")
+        self.assertNotIn(prefix + "README.md", staged)
+        for fixture in ("datetime.sas7bdat", "rle.sas7bdat", "rdc.sas7bdat"):
+            self.assertEqual(staged[prefix + fixture], "host-fixtures/sas/" + fixture)
 
     def test_sas_fixture_cannot_overwrite_an_existing_shared_host_input(self):
         catalog = {

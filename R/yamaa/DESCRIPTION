@@ -20,5 +20,6 @@ Encoding: UTF-8
 Depends: R (>= 4.6.1)
 Imports: utils
 Suggests: arrow (>= 23.0.1), jsonlite (>= 2.0.0)
-SystemRequirements: Cargo, rustc (>= 1.90.0), GNU make
+SystemRequirements: Cargo and rustc 1.99.1 (rustup selects it from the
+    bundled rust-toolchain.toml; without rustup, rustc >= 1.90.0), GNU make
 NeedsCompilation: yes
