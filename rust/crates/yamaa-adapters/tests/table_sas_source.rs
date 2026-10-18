@@ -1107,6 +1107,119 @@ mod table {
             ));
         }
         #[test]
+        fn a_reference_with_a_zero_page_or_subheader_index_is_refused_not_skipped() {
+            // A reference holds one-based page and subheader indices, so a
+            // zero index names no record. The dataset below stores every
+            // record it declares in place, so skipping such a reference would
+            // read the file as valid.
+            use crate::support::sas7bdat::{Cell, Dataset, Kind, Layout, Page, Pointer, META};
+            let file = |reference: Option<Pointer>| {
+                let mut dataset = Dataset::new(Layout::LE64, &[("X", Kind::Num, 8)]);
+                dataset.compression = Some(*b"SASYZCRL");
+                dataset.total = 2;
+                let mut pointers = dataset.metadata();
+                pointers.push(Pointer::rle_row(&dataset.row(&[Cell::Num(1.0)])));
+                pointers.extend(reference);
+                pointers.push(Pointer::rle_row(&dataset.row(&[Cell::Num(2.0)])));
+                dataset.file(&[Page::new(META, pointers, vec![])])
+            };
+            assert_eq!(
+                cells(&read_built(&file(None)).unwrap()),
+                [[float(1.0)], [float(2.0)]]
+            );
+            for (offset, length) in [(1, 0), (0, 0), (0, 1)] {
+                let reference = Pointer::Raw {
+                    offset,
+                    length,
+                    compression: 3,
+                    data: true,
+                };
+                assert!(
+                    matches!(
+                        read_built(&file(Some(reference))),
+                        Err(Error::Invalid("malformed"))
+                    ),
+                    "{offset} {length}"
+                );
+            }
+        }
+        /// A compressed dataset of `X` and a 1,000-byte text column whose every
+        /// record moved. Page 0 holds one reference for each of `reached`,
+        /// naming a page and a subheader index. Pages 1 to `moved_pages` hold
+        /// `per_page` moved records each, of 1,071 stored bytes.
+        fn referenced_records(
+            layout: crate::support::sas7bdat::Layout,
+            page_len: usize,
+            moved_pages: u64,
+            per_page: u64,
+            reached: &[(u64, u64)],
+        ) -> Vec<u8> {
+            use crate::support::sas7bdat::{rle, Cell, Dataset, Kind, Page, Pointer, META};
+            let mut dataset = Dataset::new(layout, &[("X", Kind::Num, 8), ("T", Kind::Chr, 1000)]);
+            dataset.compression = Some(*b"SASYZCRL");
+            dataset.page_len = page_len;
+            dataset.total = reached.len() as u64;
+            let mut pointers = dataset.metadata();
+            pointers.extend(
+                reached
+                    .iter()
+                    .map(|&(page, index)| Pointer::reference(page, index)),
+            );
+            let mut pages = vec![Page::new(META, pointers, vec![])];
+            for page in 1..=moved_pages {
+                let records = (0..per_page)
+                    .map(|index| {
+                        let label = format!("page{page}index{index}");
+                        let number = (page * 100 + index) as f64;
+                        let row = dataset.row(&[Cell::Num(number), Cell::Text(label.as_bytes())]);
+                        Pointer::coded(rle(&row), 0x06)
+                    })
+                    .collect();
+                pages.push(Page::new(META, records, vec![]));
+            }
+            dataset.file(&pages)
+        }
+        #[test]
+        fn references_that_reach_each_moved_record_once_read_across_pages() {
+            // Five pages hold three moved records each. The references visit
+            // the pages in turn, so no two in a row reach the same page, and
+            // together reach every record once.
+            use crate::support::sas7bdat::Layout;
+            let reached: Vec<(u64, u64)> = (0..15).map(|at| (1 + at % 5, at / 5)).collect();
+            let labels: Vec<String> = reached
+                .iter()
+                .map(|&(page, index)| format!("page{page}index{index}"))
+                .collect();
+            let expected: Vec<Vec<ValueRef<'_>>> = reached
+                .iter()
+                .zip(&labels)
+                .map(|(&(page, index), label)| {
+                    vec![float((page * 100 + index) as f64), ValueRef::Str(label)]
+                })
+                .collect();
+            for layout in [Layout::LE32, Layout::LE64, Layout::BE32, Layout::BE64] {
+                let bytes = referenced_records(layout, 4096, 5, 3, &reached);
+                let table = read_built(&bytes).unwrap();
+                assert_eq!(cells(&table), expected, "{layout:?}");
+            }
+        }
+        #[test]
+        fn references_bouncing_between_pages_cannot_read_more_than_the_file_holds() {
+            // Each of 60,000 references reaches a valid moved record of 1,071
+            // stored bytes, alternating between the records on two 1 MiB pages.
+            // Together they would read about 64 MB from a file of 3 MiB. A
+            // reference reads only the record it reaches, and the stored bytes
+            // that references read may not exceed the bytes of the pages.
+            use crate::support::sas7bdat::Layout;
+            let reached: Vec<(u64, u64)> = (0..60_000).map(|at| (1 + at % 2, 0)).collect();
+            let bytes = referenced_records(Layout::LE32, 1 << 20, 2, 1, &reached);
+            assert_eq!(bytes.len(), 1024 + 3 * (1 << 20));
+            assert!(matches!(
+                read_built(&bytes),
+                Err(Error::Invalid("malformed"))
+            ));
+        }
+        #[test]
         fn reject_multiple_members_in_both_transport_versions() {
             for name in ["multi-v5.xpt", "multi-v8.xpt"] {
                 assert!(matches!(

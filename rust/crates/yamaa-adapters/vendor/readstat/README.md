@@ -32,10 +32,10 @@ metadata pages, unsupported compression signature
 rejection, transport physical type/offset and partial-row validation, transport
 version 8 observation count admission, overlapping RDC back-reference
 propagation, accounting for records deleted in place, row length consistency
-once columns are submitted, and exact IBM numeric precision facts used by
-narrowing. The row text scratch buffer is sized from
-the validated submitted columns rather than from every column attribute slot.
-A transport member that declares no variables (or a negative count) reaches
+once columns are submitted, bounded work for moved-record references, and exact
+IBM numeric precision facts used by narrowing. The row text scratch buffer is
+sized from the validated submitted columns rather than from every column
+attribute slot. A transport member that declares no variables (or a negative count) reaches
 the metadata handler, as a SAS file without columns does, instead of failing
 as an empty allocation. SAS metadata still records the embedded encoding but
 does not override the explicit declaration. The bridge contains snapshot memory
@@ -57,6 +57,16 @@ goes through the bridge's `yamaa_readstat_deleted_records` hook, so it reports
 cause `deleted_records`. The bitmap extent is checked term by term against the
 rest of the page, so no 64-bit sum can wrap. The bridge never sets a row limit
 or offset, so the accounting covers every stored record.
+
+A reference to a moved record (code `0x03`) reads the moved record's page
+header, its subheader pointer and its stored bytes, not its whole page, so the
+work of a reference does not grow with the page size. The stored bytes read
+through all references may not exceed the bytes of the file's pages. A valid
+file stays within them, since it reaches each moved record once; a file that
+does not, such as one whose references reach the same record again and again,
+is malformed. Each reference has a pointer of its own, so the headers and
+pointers read stay within a multiple of the file size. A reference whose page
+or subheader index is zero is malformed, not skipped.
 
 Rust checks the fixed source-byte and table-shape boundaries from the shared
 `Limits` policy. The C readers admit declared row/column/cell geometry before
@@ -93,7 +103,7 @@ reviews the commits after the baseline and moves it.
 | --- | --- | --- |
 | `365c743e`, `78bb8a94` | A 64-bit subheader's eight-byte signature is compared in full, so a row stored uncompressed in a compressed dataset is not read as metadata when its first four bytes match a signature. Big-endian files keep their four-byte layout. | Ported |
 | `d19f262e`, `634f40a8`, `5850fb57` (bitmap) | Records deleted in place are skipped: bitmap bits on flagged data and mix pages, and compression code `0x05`. The live count excludes them, including when a row offset applies, and the bitmap offset and the rows it covers are bounded. | Ported, with the deleted-record accounting above |
-| `0a1771f7` | A compressed record SAS moved to another page is read at its reference (code `0x03`), from its moved slot (code `0x02` or `0x06`); a moved record no reference reaches (code `0x09` or `0x0d`) is skipped. | Ported; locally, a record no reference reaches counts as deleted, so the row-size subheader must count it |
+| `0a1771f7` | A compressed record SAS moved to another page is read at its reference (code `0x03`), from its moved slot (code `0x02` or `0x06`); a moved record no reference reaches (code `0x09` or `0x0d`) is skipped. | Ported; locally, a record no reference reaches counts as deleted, so the row-size subheader must count it, and a reference reads only the record it reaches, within the file's page bytes |
 | `39027f57`, `b05b6456` | A version 8 transport file reads exactly the observations its `OBSV8` header counts, so trailing all-blank records are data. A zero count stays unknown. | Ported; locally the count is parsed with `strtoll`, admitted before any record is read, must be met, and may be followed only by blank padding |
 | `0dc2aeee` | Without a count, a trailing all-blank record at least 80 bytes wide is data, since padding is always shorter than one 80-byte record. This applies to version 5 files too. | Declined for version 5, and for a version 8 count of zero: it contradicts SAS-7 (REQ-1317), under which a trailing all-blank record may be padding when no count is recorded, and XPT-10, which refuses to write a trailing all-blank observation because a reader drops it. With a count, `39027f57` keeps such records. |
 | `da9fcaa4` | A numeric value whose column width is outside 1 to 8 bytes fails instead of shifting by an undefined amount. | Ported. Every column has attributes when columns are submitted, and later attributes subheaders describe further slots, so a submitted width cannot change; the guard is defensive. |

@@ -128,10 +128,15 @@ cells, retained values, page and row work, and header work are admitted before
 their corresponding allocations where the physical framing supplies those
 counts.
 
-Evidence: `rust/crates/yamaa-adapters/src/sas_source/native.rs::fixed_header_geometry_is_checked_before_retaining_any_columns_or_rows`, `rust/crates/yamaa-adapters/src/resource_diagnostics.rs::fixed_sas_boundary_keeps_its_bound_and_input_owner`, `python/tests/installed/installed_sas_sources.py::test_held_output_and_repeat_saves_survive_source_and_specification_mutation`.
+Evidence: `rust/crates/yamaa-adapters/src/sas_source/native.rs::fixed_header_geometry_is_checked_before_retaining_any_columns_or_rows`, `rust/crates/yamaa-adapters/src/resource_diagnostics.rs::fixed_sas_boundary_keeps_its_bound_and_input_owner`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::references_bouncing_between_pages_cannot_read_more_than_the_file_holds`, `python/tests/installed/installed_sas_sources.py::test_held_output_and_repeat_saves_survive_source_and_specification_mutation`.
 Replaces: REQ-1316.
 
 Resource refusal is separate from semantic source invalidity.
+
+The stored bytes that moved-record references read ([SAS-8](#sas-8)) are page
+work. Together they may not exceed the bytes of the file's pages, so following
+references costs no more than a multiple of the file's size. A file whose
+references would read more fails as `malformed` ([SAS-7](#sas-7)).
 
 <a id="sas-7"></a>
 
@@ -186,7 +191,7 @@ that the dataset's header counts as deleted must be found marked deleted, and
 no more may be marked; otherwise ingestion fails with cause `deleted_records`.
 
 Fails: `source_sas_invalid`.
-Evidence: `rust/crates/yamaa-adapters/tests/table_sas_source.rs::records_deleted_in_place_are_skipped_in_the_independent_haven_fixture`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::deleted_records_after_the_last_live_record_are_found_on_later_pages`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::deleted_record_counts_that_disagree_with_their_marks_are_refused`, `rust/tests/host-fixtures/sas-cases.json::deleted-record-skipped`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::moved_records_are_read_at_their_reference`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::moved_records_deleted_later_count_as_deleted`.
+Evidence: `rust/crates/yamaa-adapters/tests/table_sas_source.rs::records_deleted_in_place_are_skipped_in_the_independent_haven_fixture`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::deleted_records_after_the_last_live_record_are_found_on_later_pages`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::deleted_record_counts_that_disagree_with_their_marks_are_refused`, `rust/tests/host-fixtures/sas-cases.json::deleted-record-skipped`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::moved_records_are_read_at_their_reference`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::references_that_reach_each_moved_record_once_read_across_pages`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::references_that_do_not_reach_a_moved_record_are_refused`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::a_reference_with_a_zero_page_or_subheader_index_is_refused_not_skipped`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::references_bouncing_between_pages_cannot_read_more_than_the_file_holds`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::moved_records_deleted_later_count_as_deleted`.
 
 SAS keeps a record deleted in place, for example by `PROC SQL DELETE` or a DATA
 step `MODIFY` with `REMOVE`, until the dataset is rewritten. The row-size
@@ -209,6 +214,9 @@ slot to another page. The slot then holds a reference, code `0x03`, whose
 offset and length fields hold the one-based page and subheader indices of the
 moved record. That record carries code `0x02` when stored uncompressed and
 `0x06` when compressed, and is read only through its reference. A reference
-that does not reach such a record on a page with subheaders fails as
-`malformed`, or as `compression` when it reaches a subheader with another
-compression code.
+that does not reach such a record on a page with subheaders, including one
+whose page or subheader index is zero, fails as `malformed`, or as
+`compression` when it reaches a subheader with another compression code. The
+stored bytes that all references read may not exceed the bytes of the file's
+pages, which [SAS-6](#sas-6) counts as page work; a file whose references would
+read more fails as `malformed`.
