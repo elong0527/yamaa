@@ -159,15 +159,16 @@ run_conformance <- function(args = commandArgs(trailingOnly = TRUE)) {
     issues <- issue_rows(built$issues)
     output <- built$output
     types <- if (is.null(output)) NULL else declared_types(spec, names(output))
-    tables <- list(output=public_table(output, types))
-    # The run report sits beside the dataset views: its check rows follow
-    # column declaration order (REQ-1175), so it is no metamorphic table.
-    report <- public_table(built$report, report_types)
+    # The run report is a compared table like the output, as in the Python
+    # runner. Its check rows follow column declaration order (REQ-1175), so a
+    # key-order variant compares them without their order.
+    tables <- list(output=public_table(output, types),
+      report=public_table(built$report, report_types))
     # A refused save signals yamaa_error; the record keeps the run's issues.
     saved <- if(length(issues)) FALSE else tryCatch({built$save(); TRUE}, yamaa_error=function(error) FALSE)
     issues <- issue_rows(built$issues)
     list(specification=specification, environment=environment, issues=issues, tables=tables,
-      report=report, saved=saved)
+      saved=saved)
   }
   for (name in unique(plan$example)) {
     all_rows <- plan[plan$example == name, , drop=FALSE]
