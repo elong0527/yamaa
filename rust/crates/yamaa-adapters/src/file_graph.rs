@@ -4,7 +4,7 @@ use crate::{
     file_preparation,
     file_resources::{Error as ResourceError, Resources},
     producer_admission::SuppliedProducer,
-    producer_graph::{self, PreparedGraph, SuppliedNode},
+    producer_graph::{self, SuppliedNode},
     project_source::{CapturedEnvironment, OwnedEnvironment},
     specification_source::{CapturedSchema, PreparedDocument},
 };
@@ -90,11 +90,11 @@ impl std::fmt::Debug for RejectedGraph {
     }
 }
 
+/// The sealed producer closure beside its build owner. Preparation hands over
+/// the whole graph; every run borrows the same owner through [`Self::build`].
 pub struct FileGraph {
-    graph: PreparedGraph,
-    entry: String,
-    environment: CapturedEnvironment,
-    resources: Resources,
+    nodes: Vec<SuppliedNode>,
+    build: crate::file_producer_build::FileBuild,
 }
 /// Constructed only by the approved original native capture boundary. Moving
 /// this whole owner never supplies an arbitrary document, plan or environment.
@@ -126,7 +126,7 @@ impl FileGraph {
     pub fn resolved_specification(
         &self,
     ) -> Result<crate::resolved_artifact::ResolvedArtifact, crate::resolved_artifact::Error> {
-        crate::resolved_artifact::graph(self, &self.resources)
+        crate::resolved_artifact::graph(self, self.build.resources())
     }
     /// Capture a canonical closure iteratively through the approved reader,
     /// then compile the whole graph once against the admitted environment.
@@ -239,12 +239,27 @@ impl FileGraph {
             producer_graph::prepare(root, nodes, environment).map_err(Error::Graph)
         });
         match result {
-            Ok(graph) => Ok(Self {
-                graph,
-                entry,
-                environment: captured,
-                resources,
-            }),
+            Ok(graph) => {
+                // Every snapshot held now is metadata; each build verifies
+                // this prefix before activation or any study request.
+                let metadata_snapshots = resources.snapshot_count();
+                let (nodes, build) = graph.into_build();
+                let documents = nodes
+                    .iter()
+                    .map(|node| Arc::clone(&node.document))
+                    .collect();
+                Ok(Self {
+                    nodes,
+                    build: crate::file_producer_build::FileBuild::new(
+                        build,
+                        documents,
+                        entry,
+                        captured,
+                        resources,
+                        metadata_snapshots,
+                    ),
+                })
+            }
             Err(error) => Err(Box::new(RejectedGraph {
                 error,
                 entry: Some(entry),
@@ -256,35 +271,31 @@ impl FileGraph {
             })),
         }
     }
-    pub fn graph(&self) -> &PreparedGraph {
-        &self.graph
+    /// The supplied nodes in canonical order, with their producer edges.
+    pub fn nodes(&self) -> &[SuppliedNode] {
+        &self.nodes
+    }
+    /// The sealed graph metadata of the same closure.
+    pub fn metadata(&self) -> &yamaa_core::producer_graph::PreparedGraph {
+        self.build.provenance().metadata()
     }
     pub fn entry(&self) -> &str {
-        &self.entry
+        self.build.provenance().entry()
     }
     pub fn environment(&self) -> &CapturedEnvironment {
-        &self.environment
+        self.build.provenance().environment()
     }
     pub fn captured_sources(&self) -> impl Iterator<Item = (String, &[u8])> {
-        self.resources.captured_sources()
+        self.build.resources().captured_sources()
     }
     pub fn capture_reads(&self) -> usize {
-        self.resources.capture_reads()
+        self.build.resources().capture_reads()
     }
 
-    /// Consume the complete native graph into the distinct build owner. Static
-    /// preparation never accepts ports or exposes a standalone producer plan.
-    pub fn into_build(self) -> crate::file_producer_build::FileBuild {
-        let metadata_snapshots = self.resources.snapshot_count();
-        let (documents, build) = self.graph.into_build();
-        crate::file_producer_build::FileBuild::new(
-            build,
-            documents,
-            self.entry,
-            self.environment,
-            self.resources,
-            metadata_snapshots,
-        )
+    /// Lend the distinct build owner. Static preparation never accepts ports
+    /// or exposes a standalone producer plan; each build uses its own scope.
+    pub fn build(&self) -> &crate::file_producer_build::FileBuild {
+        &self.build
     }
 }
 
