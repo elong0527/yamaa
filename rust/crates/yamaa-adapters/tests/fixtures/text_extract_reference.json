@@ -12,9 +12,19 @@
         "count": 3
       },
       {
+        "spec_path": "columns.AETERMLO.derivation.str_case.missing",
+        "handler": "missing",
+        "count": 0
+      },
+      {
         "spec_path": "columns.AERELLC.derivation.str_case.missing",
         "handler": "missing",
         "count": 2
+      },
+      {
+        "spec_path": "columns.AREL.derivation.str_case.missing",
+        "handler": "missing",
+        "count": 0
       }
     ],
     "csv": "STUDYID,USUBJID,AESEQ,AESPID,AEREFNUM,AETERM,AETERMLO,AERELLC,AREL\nCATH-01,CATH-01-001,1,AE-001,1,Headache,headache,related,RELATED\nCATH-01,CATH-01-001,2,,0,HEADACHE,headache,possibly related,POSSIBLY RELATED\nCATH-01,CATH-01-001,3,BAD-ID,-1,Nausea,nausea,not reported,NOT REPORTED\nCATH-01,CATH-01-002,1,AE-104,104,Fatigue,fatigue,not related,NOT RELATED\nCATH-01,CATH-01-002,2,,0,Dizziness,dizziness,not related,NOT RELATED\nCATH-01,CATH-01-002,3,AE-999,999,hEADACHE,headache,related,RELATED\nCATH-01,CATH-01-003,1,AE-000,0,Vomiting,vomiting,not related,NOT RELATED\nCATH-01,CATH-01-003,2,AE-1000,-1,Abdominal Pain,abdominal pain,possibly related,POSSIBLY RELATED\nCATH-01,CATH-01-003,3,ae-007,-1,Rash,rash,not reported,NOT REPORTED\nCATH-01,CATH-01-003,4,AE-007,7,Pruritus,pruritus,not related,NOT RELATED\n"
@@ -91,25 +101,15 @@
       ]
     },
     "input": "ID,TEXT\nrow1,\n",
-    "handler_counts": [],
-    "findings": [
+    "handler_counts": [
       {
-        "phase": "mapping",
-        "condition": "missing_input",
-        "spec_paths": [
-          "columns.RESULT.derivation.str_extract"
-        ],
-        "requirement": "REQ-0334",
-        "context": {
-          "variable": "TEXT",
-          "keys": [
-            {
-              "ID": "row1"
-            }
-          ]
-        }
+        "spec_path": "columns.RESULT.derivation.str_extract.missing",
+        "handler": "missing",
+        "count": 1
       }
-    ]
+    ],
+    "findings": [],
+    "csv": "ID,TEXT,RESULT\nrow1,,\n"
   },
   "no-match": {
     "specification": {
@@ -154,7 +154,13 @@
       ]
     },
     "input": "ID,TEXT\nrow1,abc\n",
-    "handler_counts": [],
+    "handler_counts": [
+      {
+        "spec_path": "columns.RESULT.derivation.str_extract.missing",
+        "handler": "missing",
+        "count": 0
+      }
+    ],
     "findings": [
       {
         "phase": "mapping",
@@ -460,6 +466,11 @@
     "input": "ID,TEXT\nrow1,b\n",
     "handler_counts": [
       {
+        "spec_path": "columns.RESULT.derivation.str_extract.missing",
+        "handler": "missing",
+        "count": 0
+      },
+      {
         "spec_path": "columns.RESULT.derivation.str_extract.no_match",
         "handler": "no_match",
         "count": 0
@@ -513,6 +524,11 @@
     "input": "ID,TEXT\nrow1,b\n",
     "handler_counts": [
       {
+        "spec_path": "columns.RESULT.derivation.str_extract.missing",
+        "handler": "missing",
+        "count": 0
+      },
+      {
         "spec_path": "columns.RESULT.derivation.str_extract.no_match",
         "handler": "no_match",
         "count": 0
@@ -565,6 +581,11 @@
     "input": "ID,TEXT\nrow1,abc\n",
     "handler_counts": [
       {
+        "spec_path": "columns.RESULT.derivation.str_extract.missing",
+        "handler": "missing",
+        "count": 0
+      },
+      {
         "spec_path": "columns.RESULT.derivation.str_extract.no_match",
         "handler": "no_match",
         "count": 0
@@ -615,7 +636,13 @@
       ]
     },
     "input": "ID,TEXT\nrow1,zab\n",
-    "handler_counts": [],
+    "handler_counts": [
+      {
+        "spec_path": "columns.RESULT.derivation.str_extract.missing",
+        "handler": "missing",
+        "count": 0
+      }
+    ],
     "csv": "ID,TEXT,RESULT\nrow1,zab,a\n"
   },
   "last-repeated-capture": {
@@ -661,7 +688,13 @@
       ]
     },
     "input": "ID,TEXT\nrow1,ab\n",
-    "handler_counts": [],
+    "handler_counts": [
+      {
+        "spec_path": "columns.RESULT.derivation.str_extract.missing",
+        "handler": "missing",
+        "count": 0
+      }
+    ],
     "csv": "ID,TEXT,RESULT\nrow1,ab,b\n"
   },
   "literal-null": {

@@ -781,6 +781,7 @@ pub(crate) fn named_item() -> yamaa_core::dataset::Intermediate {
             keep: Keep::Last,
         }),
         no_match: Some(Value::Missing),
+        require_match: false,
         unique: Vec::new(),
         derivations: None,
         pending_schema: None,

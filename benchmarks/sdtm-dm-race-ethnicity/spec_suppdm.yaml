@@ -21,6 +21,7 @@ intermediates:
   - id: DMREC
     dataset: DM
     key: {STUDYID: ODM.StudyOID, USUBJID: ODM.SubjectKey}
+    require_match: true
 
 columns:
   - name: STUDYID

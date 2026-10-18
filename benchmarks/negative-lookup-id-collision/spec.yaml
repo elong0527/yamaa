@@ -17,6 +17,7 @@ intermediates:
     dataset: EX
     order_by: [EX.EXSTDTC, EX.EXSEQ]
     keep: first
+    require_match: true
 
 columns:
   - name: STUDYID

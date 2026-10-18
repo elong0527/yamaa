@@ -320,6 +320,7 @@ mod diagnostics {
             reached.extend(binding::window_reached());
             reached.extend(binding::lookup_reached());
             reached.extend(binding::source_filter_reached());
+            reached.extend(binding::source_match_reached());
             reached.extend(binding::implicit_source_reached());
             reached.extend(binding::verification_reached());
             reached.extend(binding::verification_declarations_reached());

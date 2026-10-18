@@ -20,6 +20,7 @@ intermediates:
   - id: DMSEX
     dataset: DM
     key: [USUBJID]
+    require_match: true
 
   - id: REFRANGE
     dataset: LBRANGE

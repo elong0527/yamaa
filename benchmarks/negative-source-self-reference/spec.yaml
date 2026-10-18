@@ -13,6 +13,7 @@ intermediates:
   - id: ADLB_LOOKUP
     dataset: ADLB
     key: {USUBJID: USUBJID, ADT: ADT, PARAMCD: ASTCODE}
+    require_match: true
 
 columns:
   - name: STUDYID

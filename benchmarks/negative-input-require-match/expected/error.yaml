@@ -1,0 +1,16 @@
+phase: join
+condition: unmatched_key
+spec_paths:
+  - columns.TRTSDT.derivation.source
+requirement: LOOKUP-24
+context:
+  intermediate: intermediate(ADSL)
+  dataset: ADSL
+  key: [STUDYID, USUBJID]
+  intermediate_key:
+    STUDYID: YAMAA-01
+    USUBJID: YAMAA-01-104
+  keys:
+    - STUDYID: YAMAA-01
+      USUBJID: YAMAA-01-104
+      AESEQ: 1

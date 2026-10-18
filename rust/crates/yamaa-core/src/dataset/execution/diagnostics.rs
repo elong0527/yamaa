@@ -19,11 +19,13 @@ impl<E> ExecutionError<E> {
                 path,
                 dataset,
                 intermediate,
+                implicit_join,
                 ..
             } => F::UnmatchedKey {
                 path,
                 dataset,
                 intermediate,
+                implicit_join: *implicit_join,
             },
             Self::MultipleMatches {
                 path,

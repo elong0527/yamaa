@@ -18,12 +18,14 @@ intermediates:
   - id: COMP01
     dataset: COMPARE
     key: {COMPNO: {literal: 1}}
+    require_match: true
     verifications:
       - unique: [COMPNO]
 
   - id: COMP02
     dataset: COMPARE
     key: {COMPNO: {literal: 2}}
+    require_match: true
     verifications:
       - unique: [COMPNO]
 

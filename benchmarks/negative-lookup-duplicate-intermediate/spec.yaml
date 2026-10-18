@@ -18,6 +18,7 @@ intermediates:
   - id: DS_EOS
     dataset: DS
     filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSDECOD <> 'SCREEN FAILURE'"
+    require_match: true
     verifications:
       - unique: [STUDYID, USUBJID]
 

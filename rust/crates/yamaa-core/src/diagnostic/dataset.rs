@@ -19,6 +19,9 @@ pub enum DatasetFinding<'a> {
         path: &'a str,
         dataset: &'a str,
         intermediate: &'a str,
+        /// A read through an implicit join (LOOKUP-24), rather than a named
+        /// intermediate.
+        implicit_join: bool,
     },
     MultipleMatches {
         path: &'a str,
@@ -93,7 +96,18 @@ impl DatasetFinding<'_> {
                 }
                 (path, C::DatasetMultipleValues)
             }
-            Self::UnmatchedKey { path, .. } => (path, C::DatasetUnmatchedKey),
+            Self::UnmatchedKey {
+                path,
+                implicit_join,
+                ..
+            } => (
+                path,
+                if implicit_join {
+                    C::JoinUnmatchedKey
+                } else {
+                    C::DatasetUnmatchedKey
+                },
+            ),
             Self::MultipleMatches { path, count, .. } => {
                 if count < 2 {
                     return Err(ProjectionError::InvalidContext);

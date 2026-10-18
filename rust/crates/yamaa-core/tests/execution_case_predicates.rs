@@ -482,6 +482,7 @@ mod execution {
                     filter: None,
                     selection: None,
                     no_match: no_match.then_some(Value::Missing),
+                    require_match: !no_match,
                     unique: vec![],
                     derivations: derived,
                     pending_schema: None,
@@ -667,6 +668,7 @@ mod execution {
                 intermediate,
                 matched_key,
                 identity: Some(identity),
+                implicit_join: false,
             } = *attempt.result.unwrap_err()
             else {
                 panic!("native selected-record no-match condition")
@@ -941,6 +943,7 @@ mod execution {
                     keep: Keep::Last,
                 }),
                 no_match: Some(Value::Missing),
+                require_match: false,
                 unique: Vec::new(),
                 derivations: None,
                 pending_schema: None,
@@ -2443,6 +2446,15 @@ mod execution {
                         intermediate: "I".into(),
                         matched_key: observed(),
                         identity: identity(),
+                        implicit_join: false,
+                    },
+                    ExecutionError::UnmatchedKey {
+                        path: "columns.A.derivation.source".into(),
+                        dataset: "DM".into(),
+                        intermediate: "intermediate(DM)".into(),
+                        matched_key: observed(),
+                        identity: identity(),
+                        implicit_join: true,
                     },
                     ExecutionError::MultipleMatches {
                         path: "columns.A.source".into(),
@@ -2467,10 +2479,14 @@ mod execution {
                         actual: ValueType::Str,
                     },
                 ];
-                for (error, requirement) in faults
-                    .iter()
-                    .zip(["REQ-0075", "REQ-0124", "REQ-0127", "REQ-0322", "REQ-0510"])
-                {
+                for (error, requirement) in faults.iter().zip([
+                    "REQ-0075",
+                    "REQ-0124",
+                    "LOOKUP-24",
+                    "REQ-0127",
+                    "REQ-0322",
+                    "REQ-0510",
+                ]) {
                     let finding = error.diagnostic().unwrap().unwrap();
                     assert_eq!(finding.definition().requirement, Some(requirement));
                     assert_eq!(error.diagnostic(), Ok(Some(finding)));

@@ -35,5 +35,29 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         assert!(diagnostic.operand_route.is_none());
         reached.insert(diagnostic.code);
     }
+    // A template, unlike a single-input verb, still fails on a missing part.
+    let op = StringTemplate::new(
+        "{A}:{B}".into(),
+        "columns.RESULT.derivation.str_template".into(),
+        None,
+    )
+    .unwrap();
+    let diagnostic = op.missing_diagnostic(1).unwrap();
+    let def = diagnostic.definition();
+    assert_eq!(
+        (def.phase, def.condition, def.requirement),
+        ("mapping", "missing_input", Some("REQ-0334"))
+    );
+    assert_eq!(
+        diagnostic.spec_paths,
+        ["columns.RESULT.derivation.str_template"]
+    );
+    assert_eq!(
+        diagnostic.context,
+        std::collections::BTreeMap::from([("variable".into(), V::String("B".into()))])
+    );
+    assert!(diagnostic.source_span.is_none());
+    assert!(diagnostic.operand_route.is_none());
+    reached.insert(diagnostic.code);
     reached
 }

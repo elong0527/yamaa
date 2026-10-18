@@ -544,6 +544,7 @@ mod schema {
                         V::map(vec![
                             ("id", text("UNUSED_LOOKUP")),
                             ("dataset", text("DEAD")),
+                            ("require_match", V::boolean(true)),
                         ]),
                     ]),
                 ),

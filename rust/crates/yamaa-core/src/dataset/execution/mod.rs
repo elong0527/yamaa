@@ -233,6 +233,9 @@ pub enum ExecutionError<E> {
         intermediate: String,
         matched_key: Vec<(String, Value)>,
         identity: Option<RowIdentity>,
+        /// A read through an implicit join failed, rather than a named
+        /// intermediate.
+        implicit_join: bool,
     },
     SecondaryCell {
         path: String,
@@ -437,12 +440,22 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
         );
     }
     if let Expression::Joined(read) = &assignment.expression {
-        return joined::read(table, read, assignment, candidate, plan, row, state);
+        return joined::read(
+            table,
+            read,
+            lookup::JoinSite::Operand(&assignment.path),
+            assignment,
+            candidate,
+            plan,
+            row,
+            state,
+        );
     }
     if let Expression::JoinedSource {
         read,
         filter,
         selection,
+        absence,
     } = &assignment.expression
     {
         return joined::read_options(
@@ -450,6 +463,10 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
             read,
             filter.as_ref(),
             selection.as_ref(),
+            absence.as_ref().map_or(
+                lookup::JoinSite::Uncounted(&assignment.path),
+                lookup::JoinSite::Read,
+            ),
             assignment,
             candidate,
             plan,
@@ -684,7 +701,7 @@ impl DatasetPlan {
                     }),
             )
         {
-            scalar::register(assignment, &mut observations.handlers);
+            scalar::register(assignment, self, &mut observations.handlers);
             imputation::register(&assignment.expression, &mut observations.handlers);
             str_case::register(&assignment.expression, &mut observations.handlers);
             str_extract::register(&assignment.expression, &mut observations.handlers);
@@ -1888,8 +1905,8 @@ impl<E: std::fmt::Debug> std::fmt::Display for ExecutionError<E> {
 }
 impl<E: std::fmt::Debug> std::error::Error for ExecutionError<E> {}
 
-/// Return the first present operand of a first-available selection,
-/// or its declared missing value when every operand is missing.
+/// Return the first present operand of a first-available selection, or its
+/// declared missing value, missing by default, when every operand is missing.
 #[allow(clippy::too_many_arguments)]
 fn evaluate_first_available<T: TableAccess + ?Sized>(
     table: &T,
@@ -1960,6 +1977,11 @@ fn evaluate_first_available<T: TableAccess + ?Sized>(
             return Ok(value);
         }
     }
+    // Declared or by default, the answer for sources all missing is counted.
+    state
+        .handlers
+        .record(&selection.missing_path(), HandlerKind::Missing)
+        .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))?;
     Ok(selection.missing().clone())
 }
 
@@ -2100,11 +2122,13 @@ fn evaluate_leaf<T: TableAccess + ?Sized>(
             lookup: bound,
             filter,
             selection,
+            absence,
         } => lookup::read_source(
             secondary[bound.source],
             bound,
             filter.as_ref(),
             selection.as_ref(),
+            absence.as_ref(),
             &lookup::Context {
                 assignment,
                 candidate,

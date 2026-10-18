@@ -1,4 +1,6 @@
 //! Native mapping/cut selection with reached handlers and retained failure identity.
+//! A missing source is counted under `missing` whether its handler is declared
+//! or its default substitution gives missing.
 use super::*;
 use crate::mapping_cut::{MappingCut, SelectedValue};
 
@@ -25,6 +27,7 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
     let result = match selected.value {
         SelectedValue::Literal(value) => value.clone(),
         SelectedValue::Label(text) => Value::Str(text.into()),
+        SelectedValue::Missing => Value::Missing,
     };
     if let Some(handler) = selected.handler {
         let kind = match handler {

@@ -14,6 +14,7 @@ intermediates:
   - id: LBREF_LOOKUP
     dataset: LBREF
     key: {LBTESTCD: PARAMCD, SEX: SEX}
+    require_match: true
 
 columns:
   - name: STUDYID
@@ -41,8 +42,9 @@ columns:
     label: Analysis Value
     derivation: LB.LBSTRESN
 
-  # The upper limit for the parameter and sex. With no no_match answer, a
-  # result that finds no limit, including one with a blank sex, stops the run.
+  # The upper limit for the parameter and sex. The lookup requires a match,
+  # so a result that finds no limit, including one with a blank sex, stops
+  # the run.
   - name: ANRHI
     type: float
     label: Analysis Normal Range Upper Limit

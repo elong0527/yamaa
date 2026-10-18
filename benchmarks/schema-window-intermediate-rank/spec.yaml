@@ -19,6 +19,7 @@ intermediates:
   - id: RANKED_AE
     dataset: AE
     key: [STUDYID, USUBJID, AESEQ]
+    require_match: true
     derivations:
       # Numeric severity attached to each donor record before the
       # windows below partition them. The rank window reads it bare;

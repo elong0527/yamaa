@@ -1,0 +1,45 @@
+schema_version: "1.0"
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE: {path: input/ae.csv, types: {AESEQ: int, AESTDTC: date}}
+  # Every adverse event belongs to a subject of the analysis population, so
+  # each must find its subject-level record. Subject 104 has none.
+  ADSL: {path: input/adsl.csv, types: {TRTSDT: date}, require_match: true}
+base: AE
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, ASTDT, TRTSDT, TRTEMFL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+
+  - name: ASTDT
+    type: date
+    label: Analysis Start Date
+    derivation: AE.AESTDTC
+
+  - name: TRTSDT
+    type: date
+    label: Date of First Exposure to Treatment
+    derivation: ADSL.TRTSDT
+
+  - name: TRTEMFL
+    type: str
+    label: Treatment Emergent Analysis Flag
+    derivation:
+      flag: "ASTDT >= TRTSDT"

@@ -87,6 +87,7 @@ impl Fixture {
                 filter: None,
                 selection: None,
                 no_match: None,
+                require_match: true,
                 unique: vec![],
                 derivations: None,
                 pending_schema: None,

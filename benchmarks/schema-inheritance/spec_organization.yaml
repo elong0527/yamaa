@@ -9,6 +9,7 @@ intermediates:
     dataset: UNUSED
     key:
       - USUBJID
+    require_match: true
 
 columns:
   - name: USUBJID

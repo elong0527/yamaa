@@ -1,16 +1,15 @@
 //! Case substitution has one named read and one admitted byte-preserving copy.
+//! A missing source is counted under `missing`, declared or by default.
 use super::*;
 use crate::text_case::{Error, Step};
 
 pub(super) fn register(expression: &Expression, counter: &mut HandlerCounter) {
     match expression {
         Expression::StrCase { source, operation } => {
-            if operation.missing().is_some() {
-                counter.register(
-                    &std::format!("{}.missing", operation.path()),
-                    HandlerKind::Missing,
-                );
-            }
+            counter.register(
+                &std::format!("{}.missing", operation.path()),
+                HandlerKind::Missing,
+            );
             register(&source.expression, counter);
         }
         Expression::Case(branches) => {
@@ -48,7 +47,6 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
     match operation.apply(ValueRef::from(&source)) {
         Ok(Step::Value(value)) => Ok(value),
         Ok(Step::Recovered) => {
-            let value = operation.missing().expect("declared missing handler");
             state
                 .handlers
                 .record(
@@ -56,17 +54,11 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
                     HandlerKind::Missing,
                 )
                 .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))?;
-            Ok(value.clone())
+            Ok(operation.missing_substitute())
         }
+        // Only a source of another type fails, a validation finding without keys.
         Err(Error::Diagnostic(diagnostic)) => {
-            let retain_keys = diagnostic.definition().phase == "mapping";
-            Err(retained_diagnostic(
-                diagnostic,
-                retain_keys,
-                candidate,
-                plan,
-                row,
-            ))
+            Err(retained_diagnostic(diagnostic, false, candidate, plan, row))
         }
     }
 }

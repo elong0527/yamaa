@@ -14,6 +14,7 @@ intermediates:
   - id: MH_PARENT
     dataset: MH
     key: {USUBJID: MH_SUPP_RAW.USUBJID, MHTERM: MH_SUPP_RAW.MHTERM}
+    require_match: true
 
 columns:
   - name: STUDYID

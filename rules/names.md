@@ -140,7 +140,8 @@ The `source` expression also accepts a mapping holding `variable` and local
 binding or join behavior. `absent` and a source's `order_by` and `keep`
 selection are handlers, which [Column derivation](columns.md) defines.
 `filter` is not a handler: it states which records the source may read, and
-reading no record is an absent match rather than a handled condition.
+reading no record is an absent match, which `absent` answers
+([LOOKUP-24](lookup.md#lookup-24)).
 
 Evidence: `schema-handlers`, `rust/crates/yamaa-adapters/tests/fixtures/source_filters.json`.
 Replaces: REQ-0093, REQ-0094, REQ-0095.

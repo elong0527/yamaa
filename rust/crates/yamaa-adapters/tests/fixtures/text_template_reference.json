@@ -12,6 +12,11 @@
         "count": 4
       },
       {
+        "spec_path": "columns.SITEID.derivation.first_available.missing",
+        "handler": "missing",
+        "count": 1
+      },
+      {
         "spec_path": "columns.SUBJREF.derivation.str_template.missing",
         "handler": "missing",
         "count": 1

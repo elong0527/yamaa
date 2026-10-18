@@ -16,6 +16,7 @@ intermediates:
   - id: REFRANGE
     dataset: LBRANGE
     columns: [NRHI]
+    require_match: true
 
 columns:
   - name: STUDYID

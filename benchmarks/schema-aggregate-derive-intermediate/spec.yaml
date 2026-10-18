@@ -18,6 +18,7 @@ intermediates:
     key: [STUDYID, USUBJID]
     order_by: [DS.CAPDOSE]
     keep: first
+    require_match: true
 
 columns:
   - name: STUDYID

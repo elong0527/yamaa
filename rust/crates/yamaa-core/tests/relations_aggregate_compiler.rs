@@ -650,6 +650,7 @@ mod relations {
                 },
                 filter: None,
                 selection: None,
+                absence: None,
             };
             for mode in [RowMode::Records, RowMode::Groups(vec![0])] {
                 for completed in [true, false] {
@@ -816,6 +817,7 @@ mod relations {
             };
             let selection = |expression| {
                 Expression::FirstAvailable(Box::new(FirstAvailable::new(
+                    "columns.V.derivation.first_available".into(),
                     vec![SelectionSource {
                         path: "columns.V.derivation.first_available.sources[0]".into(),
                         read: SelectionRead::Expression(Box::new(assign(1, expression))),
@@ -1309,6 +1311,7 @@ mod relations {
                     vec![assign(
                         1,
                         Expression::FirstAvailable(Box::new(FirstAvailable::new(
+                            "columns.V.derivation.first_available".into(),
                             sources,
                             Value::Int(99),
                         ))),
@@ -1352,8 +1355,11 @@ mod relations {
                 }]),
                 Err(PlanError::EmptyPath)
             );
-            let selection =
-                Expression::FirstAvailable(Box::new(FirstAvailable::new(vec![], Value::Int(1))));
+            let selection = Expression::FirstAvailable(Box::new(FirstAvailable::new(
+                "columns.V.derivation.first_available".into(),
+                vec![],
+                Value::Int(1),
+            )));
             assert!(DatasetPlan::new(
                 source.clone(),
                 output.clone(),
@@ -2512,6 +2518,7 @@ mod relations {
                 filter: None,
                 selection: None,
                 no_match: Some(Value::Missing),
+                require_match: false,
                 unique: Vec::new(),
                 derivations: None,
                 pending_schema: None,

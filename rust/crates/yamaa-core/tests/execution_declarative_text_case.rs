@@ -5,11 +5,9 @@ mod execution {
     mod declarative_text_case {
         use crate::support::text_schema as schema;
         use std::{cell::RefCell, rc::Rc};
-        use yamaa_core::json::Value as JsonValue;
         use yamaa_core::{dataset::ExecutionError, numeric_lifecycle::HandlerKind};
         use yamaa_core::{
             dataset::{Assignment, DatasetPlan, Expression, RowMode, RowTemplate},
-            diagnostic::ConditionCode,
             table::{CellError, TableAccess, TableSchema, ValueRef},
             text_case::{Case, StringCase},
             value::Value,
@@ -138,72 +136,33 @@ mod execution {
             }
         }
         #[test]
-        fn semantic_missing_preserves_complete_core_facts_and_admitted_current_keys() {
+        fn semantic_missing_gives_missing_counted_as_the_default() {
+            // Without `missing`, a missing source gives missing and the default
+            // substitution is counted under `missing` (COLUMN-10, COLUMN-14).
             let table = make_table(Value::Missing);
-            let error = plan(Case::Upper, None)
-                .execute(
-                    &table,
-                    &[],
-                    &mut yamaa_core::function_invocation::NoFunctions::new(),
-                    None,
-                )
-                .result
-                .unwrap_err();
-            let ExecutionError::SemanticDiagnostic {
-                diagnostic,
-                identity,
-            } = *error
-            else {
-                panic!("semantic missing");
-            };
-            assert_eq!(diagnostic.code, ConditionCode::StrCaseMissing);
-            assert_eq!(diagnostic.spec_paths, ["columns.TEXT.derivation.str_case"]);
+            let attempt = plan(Case::Upper, None).execute(
+                &table,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None,
+            );
             assert_eq!(
-                diagnostic.context,
-                [("variable".into(), JsonValue::String("SRC.TEXT".into()))]
-                    .into_iter()
-                    .collect()
+                attempt.result.unwrap().dataset.rows(),
+                [vec![Value::Str("row1".into()), Value::Missing]]
             );
-            let identity = identity.unwrap();
-            assert_eq!(identity.position, 0);
-            assert_eq!(identity.values, [Value::Str("row1".into())]);
+            assert_eq!(
+                attempt
+                    .handler_counts
+                    .iter()
+                    .map(|count| (count.spec_path.as_str(), count.handler, count.count))
+                    .collect::<Vec<_>>(),
+                [(
+                    "columns.TEXT.derivation.str_case.missing",
+                    HandlerKind::Missing,
+                    1
+                )]
+            );
             assert_eq!(*table.reads.borrow(), [(0, 0), (0, 1)]);
-            let plan = DatasetPlan::new(
-                schema(),
-                schema(),
-                vec![RowTemplate {
-                    mode: RowMode::Records,
-                    assignments: vec![
-                        assignment(0, Case::Upper, None),
-                        Assignment {
-                            column: 1,
-                            path: "columns.TEXT.derivation".into(),
-                            expression: Expression::Literal(Value::Str("safe".into())),
-                        },
-                    ],
-                    filter: None,
-                }],
-                vec![],
-                vec![0],
-                vec![],
-            )
-            .unwrap();
-            let ExecutionError::SemanticDiagnostic { identity, .. } = *plan
-                .execute(
-                    &table,
-                    &[],
-                    &mut yamaa_core::function_invocation::NoFunctions::new(),
-                    None,
-                )
-                .result
-                .unwrap_err()
-            else {
-                panic!("key missing");
-            };
-            assert!(
-                identity.is_none(),
-                "unfinished keys have no fabricated identity"
-            );
         }
         #[test]
         fn nested_owned_case_operands_register_and_count_each_handler_once() {
@@ -283,11 +242,9 @@ mod execution {
     mod declarative_text_extract {
         use crate::support::text_schema as schema;
         use std::{cell::RefCell, rc::Rc};
-        use yamaa_core::json::Value as JsonValue;
         use yamaa_core::{dataset::ExecutionError, numeric_lifecycle::HandlerKind};
         use yamaa_core::{
             dataset::{Assignment, DatasetPlan, Expression, RowMode, RowTemplate},
-            diagnostic::ConditionCode,
             table::{CellError, TableAccess, TableSchema, ValueRef},
             text_extract::StringExtract,
             value::Value,
@@ -567,7 +524,9 @@ mod execution {
             }
         }
         #[test]
-        fn unhandled_mapping_failure_preserves_keys_and_context_admission() {
+        fn omitted_missing_handler_gives_missing_counted_as_the_default() {
+            // A missing source is never an extraction failure: without
+            // `missing` it gives missing, counted under `missing`.
             let table = make_table(Value::Missing);
             let attempt = plan("(a)", "1", None).execute(
                 &table,
@@ -575,19 +534,29 @@ mod execution {
                 &mut yamaa_core::function_invocation::NoFunctions::new(),
                 None,
             );
-            let ExecutionError::SemanticDiagnostic {
-                diagnostic,
-                identity,
-            } = *attempt.result.unwrap_err()
-            else {
-                panic!("mapping failure")
-            };
-            assert_eq!(diagnostic.code, ConditionCode::StrCaseMissing);
             assert_eq!(
-                diagnostic.context,
-                [("variable".into(), JsonValue::String("SRC.TEXT".into()))].into()
+                attempt.result.unwrap().dataset.rows(),
+                [vec![Value::Str("row1".into()), Value::Missing]]
             );
-            assert_eq!(identity.unwrap().values, [Value::Str("row1".into())]);
+            assert_eq!(
+                attempt
+                    .handler_counts
+                    .iter()
+                    .map(|count| (count.spec_path.as_str(), count.handler, count.count))
+                    .collect::<Vec<_>>(),
+                [
+                    (
+                        "columns.TEXT.derivation.str_extract.missing",
+                        HandlerKind::Missing,
+                        1
+                    ),
+                    (
+                        "columns.TEXT.derivation.str_extract.no_match",
+                        HandlerKind::NoMatch,
+                        0
+                    )
+                ]
+            );
         }
         #[test]
         fn catastrophic_pattern_reaches_no_match_and_small_matches_start_fresh() {
@@ -1155,7 +1124,7 @@ mod execution {
                     else {
                         panic!("missing cause")
                     };
-                    assert_eq!(diagnostic.code, ConditionCode::StrCaseMissing);
+                    assert_eq!(diagnostic.code, ConditionCode::TemplateMissing);
                     assert_eq!(diagnostic.spec_paths, [PATH]);
                     assert_eq!(
                         diagnostic.context,
@@ -1946,6 +1915,7 @@ mod execution {
                 selection: None,
                 columns: Some(vec![3]),
                 no_match: Some(Value::Missing),
+                require_match: false,
                 unique: Vec::new(),
                 derivations: None,
                 pending_schema: None,
@@ -2232,6 +2202,7 @@ mod execution {
                     filter: None,
                     selection: None,
                     no_match: None,
+                    require_match: true,
                     unique: vec![],
                     derivations: None,
                     pending_schema: None,
@@ -2252,6 +2223,7 @@ mod execution {
                         assign(
                             1,
                             Expression::FirstAvailable(Box::new(FirstAvailable::new(
+                                "columns.C1.first_available".into(),
                                 vec![
                                     SelectionSource {
                                         path: "columns.C1.first_available.sources[0]".into(),

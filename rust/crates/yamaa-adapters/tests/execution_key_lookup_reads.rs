@@ -2,9 +2,9 @@
 //! A named lookup is read only by rows that actually read it (REQ-1264).
 //! Listing the column whose derivation reads the lookup in `keys` must not
 //! make suppressed candidates read it: a candidate the row template's
-//! `filter` discards never becomes a row, so an intermediate without
-//! `no_match` must not fail `unmatched_key` for it (#2699). A kept row that
-//! does read the lookup still fails when nothing matches.
+//! `filter` discards never becomes a row, so an intermediate declaring
+//! `require_match: true` must not fail `unmatched_key` for it (#2699). A kept
+//! row that does read the lookup still fails when nothing matches.
 use std::{
     fs,
     path::PathBuf,
@@ -67,7 +67,8 @@ const VS: &str = "USUBJID,VSSEQ,VSTESTCD,VSDTC,VSSTRESN\n\
     S1,2,SYSBP,2025-01-02,124\n\
     S2,1,SYSBP,2025-01-01,\n";
 
-// LAST: the latest record with a result for the subject and test; no no_match.
+// LAST: the latest record with a result for the subject and test; a match
+// is required.
 const HEAD: &str = "schema_version: \"1.0\"\n\
     domain: ADVS\n\
     input:\n\
@@ -78,7 +79,8 @@ const HEAD: &str = "schema_version: \"1.0\"\n\
     \x20   key: {USUBJID: USUBJID, VSTESTCD: PARAMCD}\n\
     \x20   filter: \"VS.VSSTRESN IS NOT NULL\"\n\
     \x20   order_by: [VS.VSDTC]\n\
-    \x20   keep: last\n";
+    \x20   keep: last\n\
+    \x20   require_match: true\n";
 
 // One mean per subject and test; a group without a result is suppressed.
 const GROUPED: &str = "keys: KEYS\n\

@@ -373,6 +373,7 @@ mod execution {
                 .all(|(_, column)| *column == 0));
             let mut item = named_item();
             item.no_match = None;
+            item.require_match = true;
             let attempt = named_plan(&source, &secondary, item).unwrap().execute(
                 &source,
                 &[&secondary],
@@ -1338,6 +1339,7 @@ mod execution {
                     vec![assign(
                         1,
                         Expression::FirstAvailable(Box::new(FirstAvailable::new(
+                            "columns.V.derivation.first_available".into(),
                             columns
                                 .iter()
                                 .map(|&column| SelectionSource {

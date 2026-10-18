@@ -687,7 +687,7 @@
       }
     },
     "false-when-eager-require-no-match": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - assert: {id: selected, when: \"FALSE\", require: \"P.X > 0\"}\n  - row_count: {min: 1, max: 1}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    require_match: true\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - assert: {id: selected, when: \"FALSE\", require: \"P.X > 0\"}\n  - row_count: {min: 1, max: 1}\n",
       "inputs": {
         "src.csv": "ID\nc\n",
         "donor.csv": "ID,SEQ,X,Z\n"
@@ -726,7 +726,7 @@
       ]
     },
     "and-eager-operand-no-match": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - assert: {id: selected, when: \"FALSE AND P.X > 0\", require: \"TRUE\"}\n  - row_count: {min: 1, max: 1}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    require_match: true\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - assert: {id: selected, when: \"FALSE AND P.X > 0\", require: \"TRUE\"}\n  - row_count: {min: 1, max: 1}\n",
       "inputs": {
         "src.csv": "ID\nc\n",
         "donor.csv": "ID,SEQ,X,Z\n"
@@ -765,7 +765,7 @@
       ]
     },
     "or-eager-operand-no-match": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - assert: {id: selected, when: \"FALSE\", require: \"TRUE OR P.X > 0\"}\n  - row_count: {min: 1, max: 1}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    require_match: true\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - assert: {id: selected, when: \"FALSE\", require: \"TRUE OR P.X > 0\"}\n  - row_count: {min: 1, max: 1}\n",
       "inputs": {
         "src.csv": "ID\nc\n",
         "donor.csv": "ID,SEQ,X,Z\n"

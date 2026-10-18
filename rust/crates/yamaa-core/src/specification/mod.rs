@@ -382,6 +382,8 @@ pub struct PreparedSpecification {
     source_interpretations: Vec<SourceInterpretation>,
     /// The producing specification's output contract for each linked source.
     source_contracts: Vec<Option<crate::producer_contract::Contract>>,
+    /// Inputs declaring `require_match: true` (LOOKUP-24).
+    required_matches: Vec<String>,
     driver: usize,
     intermediates: intermediates::Declarations,
     output: TableSchema,
@@ -504,6 +506,12 @@ fn mapping(d: &Document, id: usize) -> Result<&[(usize, usize)], PrepareError> {
 fn present(d: &Document, id: usize, name: &str) -> bool {
     d.field(id, name)
         .is_some_and(|id| !matches!(d.nodes()[id], N::Null))
+}
+/// A lookup or structured source asserts a match only with `require_match:
+/// true`; omitted or false, a row without a record is answered (LOOKUP-13).
+pub(crate) fn requires_match(d: &Document, id: usize) -> bool {
+    d.field(id, "require_match")
+        .is_some_and(|id| matches!(d.nodes()[id], N::Boolean(true)))
 }
 /// Decode one admitted order term as `(variable, descending, nulls_first)`.
 /// Every `list[order_by_term]` field uses this one reading (VALUE-22): an
@@ -1445,6 +1453,12 @@ impl PreparedSpecification {
         }
         let (sources, source_interpretations, source_contracts) =
             build_sources(d, inputs, &odm_inputs, contracts)?;
+        // Every implicit join through these inputs must find a record.
+        let required_matches = inputs
+            .iter()
+            .filter(|&&(_, id)| requires_match(d, id))
+            .map(|&(name, _)| text(d, name).map(String::from))
+            .collect::<Result<Vec<_>, _>>()?;
         let PreparedOutputDeclarations {
             output_order,
             output_path,
@@ -1493,6 +1507,7 @@ impl PreparedSpecification {
                 sources,
                 source_interpretations,
                 source_contracts,
+                required_matches,
                 driver: driver_index,
                 intermediates,
                 output,
@@ -1531,6 +1546,7 @@ impl PreparedSpecification {
             sources,
             source_interpretations,
             source_contracts,
+            required_matches,
             driver: driver_index,
             intermediates,
             output,
@@ -1859,6 +1875,7 @@ impl PreparedSpecification {
             plan.with_column_verifications(self.column_verification_groups())
                 .and_then(|plan| plan.with_warning_verifications(self.warning_verification_paths()))
                 .and_then(|plan| plan.with_output_order(self.bound_output_order()))
+                .map(|plan| plan.with_required_matches(self.required_matches.iter().cloned()))
                 .map_err(BindError::InvalidPlan)
         })
     }
@@ -2281,7 +2298,11 @@ impl PreparedSpecification {
                 }
             }
             Some(Expression::FirstAvailable(std::boxed::Box::new(
-                crate::dataset::FirstAvailable::new(operands, selection.missing.clone()),
+                crate::dataset::FirstAvailable::new(
+                    path.into(),
+                    operands,
+                    selection.missing.clone(),
+                ),
             )))
         };
         Ok(expression)
@@ -2489,6 +2510,7 @@ impl PreparedSpecification {
         .and_then(|plan| plan.with_column_verifications(self.column_verification_groups()))
         .and_then(|plan| plan.with_warning_verifications(self.warning_verification_paths()))
         .and_then(|plan| plan.with_output_order(self.bound_output_order()))
+        .map(|plan| plan.with_required_matches(self.required_matches.iter().cloned()))
         .and_then(|plan| {
             plan.with_conversion_handlers(
                 self.declarations

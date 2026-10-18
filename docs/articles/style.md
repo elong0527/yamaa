@@ -173,16 +173,18 @@ default.
 
 A simple named intermediate equivalent to the implicit join is reported as
 `redundant_intermediate`. An intermediate with no `filter`, `between`,
-`order_by`, `keep`, `derivations`, `verifications` or `columns`, with
-`no_match: {literal: null}`, and with an explicit `key` that restates exactly
-the output `keys`, reads what `DATASET.COLUMN` already reads. The check reports
-the intermediate's `id` and suggests reading the input dataset directly. An
-omitted `key` with `no_match: {literal: null}` fails validation as
-`rename_only_intermediate` instead and is never a style finding. An
-intermediate without `no_match` requires a match the implicit join cannot
-state. Any other `no_match` literal, a custom key and a `SELF` intermediate all
-change behavior and are never reported. An unread intermediate is unused, not
-redundant, and is never reported.
+`order_by`, `keep`, `derivations`, `verifications`, `columns` or
+`require_match: true`, whose `no_match` is omitted or `{literal: null}`, and
+with an explicit `key` that restates exactly the output `keys`, reads what
+`DATASET.COLUMN` already reads. The check reports the intermediate's `id` and
+suggests reading the input dataset directly. An omitted `key` fails validation
+as `rename_only_intermediate` instead and is never a style finding.
+`require_match: true` requires a match the implicit join cannot state, and an
+input declaring `require_match: true` makes its implicit join fail where the
+intermediate answers, so neither is reported. Any other `no_match` literal, a
+custom key and a `SELF` intermediate all change behavior and are never
+reported. An unread intermediate is unused, not redundant, and is never
+reported.
 
 ```yaml
 keys: [STUDYID, USUBJID]

@@ -486,13 +486,41 @@ class LookupResolutionTests(unittest.TestCase):
         self.assertIn('"Y" when EOT_SEQ = 1', rule)
         self.assertIn("EOT_SEQ taken from the LB record", rule)
 
-    def test_absent_no_match_is_reported_as_an_error_not_a_blank(self):
+    def test_required_match_is_reported_as_an_error_not_a_blank(self):
         rule = method_column("adam-adcm-atc-classes")["ATC1CD"]
         self.assertIn("no match yields blank", rule)
         self.assertIn(
             "a row with no match is an error",
             method_column("adam-adlb-end-of-treatment")["ENDPOINT"],
         )
+
+    def test_a_required_implicit_join_is_reported_as_an_error(self):
+        ctx = mapping_doc.SpecContext(
+            {
+                "base": "AE",
+                "input": {
+                    "AE": "ae.csv",
+                    "ADSL": {"path": "adsl.csv", "require_match": True},
+                    "EX": "ex.csv",
+                },
+            }
+        )
+        self.assertEqual(
+            mapping_doc.describe_derivation("ADSL.TRTSDT", ctx),
+            "Copy value from ADSL.TRTSDT; a row with no matching record is an error.",
+        )
+        self.assertEqual(
+            mapping_doc.describe_derivation("EX.EXDOSE", ctx),
+            "Copy value from EX.EXDOSE.",
+        )
+        bound = {"source": {"variable": "EX.EXDOSE", "require_match": True}}
+        self.assertIn(
+            "a row with no matching record is an error",
+            mapping_doc.describe_derivation(bound, ctx),
+        )
+        # A declared answer replaces the input's requirement for its read.
+        answered = {"source": {"variable": "ADSL.TRTSDT", "absent": "NONE"}}
+        self.assertNotIn("error", mapping_doc.describe_derivation(answered, ctx))
 
     def test_value_read_through_a_lookup_is_assigned_not_collected(self):
         headers, rows = mapping_sheet("sdtm-ae-coding")

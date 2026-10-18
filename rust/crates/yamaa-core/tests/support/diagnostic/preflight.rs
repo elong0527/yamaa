@@ -1112,7 +1112,7 @@ pub(crate) fn intermediate_reached() -> BTreeSet<ConditionCode> {
             )],
         ));
     }
-    for variant in 0..3 {
+    for variant in 0..5 {
         let mut fields = base(
             "TEST",
             inputs(),
@@ -1121,11 +1121,9 @@ pub(crate) fn intermediate_reached() -> BTreeSet<ConditionCode> {
         );
         fields.push(("base", Tree::text("SRC")));
         let mut declaration = vec![("id", Tree::text("P")), ("dataset", Tree::text("SECOND"))];
+        let null = || Tree::map(vec![("literal", Tree::Scalar(N::Null))]);
         match variant {
-            0 => declaration.push((
-                "no_match",
-                Tree::map(vec![("literal", Tree::Scalar(N::Null))]),
-            )),
+            0 => declaration.push(("no_match", null())),
             1 => declaration.push((
                 "order_by",
                 Tree::List(vec![Tree::map(vec![
@@ -1134,15 +1132,31 @@ pub(crate) fn intermediate_reached() -> BTreeSet<ConditionCode> {
                     ("nulls", Tree::text("last")),
                 ])]),
             )),
-            _ => declaration.push(("keep", Tree::text("last"))),
+            2 => declaration.push(("keep", Tree::text("last"))),
+            // Omitted, the absence answer is missing, as the implicit join's is.
+            3 => (),
+            _ => {
+                declaration.push(("no_match", null()));
+                declaration.push(("require_match", Tree::boolean(true)));
+            }
         }
         fields.push(("intermediates", Tree::List(vec![Tree::map(declaration)])));
-        let expected = if variant == 0 {
+        let expected = if variant == 0 || variant == 3 {
             vec![(
                 "rename_only_intermediate",
                 Some("REQ-1248"),
                 vec!["intermediates[0]"],
                 vec![("intermediate", text("P")), ("dataset", text("SECOND"))],
+            )]
+        } else if variant == 4 {
+            vec![(
+                "conflicting_absence_policy",
+                Some("LOOKUP-13"),
+                vec![
+                    "intermediates[0].no_match",
+                    "intermediates[0].require_match",
+                ],
+                vec![("intermediate", text("P"))],
             )]
         } else {
             let (declared, missing) = if variant == 1 {
@@ -1203,6 +1217,7 @@ pub(crate) fn namespace_reached() -> BTreeSet<ConditionCode> {
                 Tree::List(vec![Tree::map(vec![
                     ("id", Tree::text("LOOK")),
                     ("dataset", Tree::text("ABSENT")),
+                    ("require_match", Tree::boolean(true)),
                 ])]),
             ));
             vec![(

@@ -32,11 +32,27 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 path: "columns.A.source",
                 dataset: "DM",
                 intermediate: "I",
+                implicit_join: false,
             },
             "join",
             "unmatched_key",
             "REQ-0124",
             vec![("dataset", text("DM")), ("intermediate", text("I"))],
+        ),
+        (
+            F::UnmatchedKey {
+                path: "columns.A.derivation.source",
+                dataset: "DM",
+                intermediate: "intermediate(DM)",
+                implicit_join: true,
+            },
+            "join",
+            "unmatched_key",
+            "LOOKUP-24",
+            vec![
+                ("dataset", text("DM")),
+                ("intermediate", text("intermediate(DM)")),
+            ],
         ),
         (
             F::MultipleMatches {

@@ -73,6 +73,7 @@ model!(
         optional!("schema", Text),
         field!("empty_string", Enum(&["missing", "present"])),
         optional!("ordinal", Ordinal),
+        optional!("require_match", Boolean),
     ]
 );
 model!(
@@ -155,6 +156,7 @@ model!(
         ),
         optional!("verifications", List(&Object(INTERMEDIATE_CHECK))),
         field!("no_match", Json),
+        optional!("require_match", Boolean),
     ]
 );
 model!(

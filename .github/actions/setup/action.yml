@@ -28,6 +28,9 @@ runs:
       with:
         version: '0.11.6'
         enable-cache: true
+        # A job that builds no package (formats) caches nothing; without this
+        # the post-job prune fails the job on a missing cache directory.
+        ignore-nothing-to-cache: true
         python-version: '3.14'
     - name: Read the workspace toolchain
       shell: bash

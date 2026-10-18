@@ -23,6 +23,7 @@ conditions:
   codelist_partial_item_field: {phases: [validation]}
   codelist_shape_invalid: {phases: [validation]}
   codelist_type_mismatch: {phases: [validation]}
+  conflicting_absence_policy: {phases: [validation]}
   conflicting_row_construction: {phases: [validation]}
   # REQ-1167
   conflicting_value_metadata: {phases: [validation]}
@@ -87,7 +88,7 @@ conditions:
   minimum_length: {phases: [validation]}
   missing_aggregate_keys: {phases: [validation]}
   missing_derivation: {phases: [validation]}
-  missing_input: {phases: [cut, mapping]}
+  missing_input: {phases: [mapping]}
   missing_key: {phases: [output]}
   missing_required_field: {phases: [validation]}
   missing_value_required: {phases: [validation]}

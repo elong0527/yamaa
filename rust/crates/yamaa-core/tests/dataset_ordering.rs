@@ -64,6 +64,7 @@ mod execution {
                         column: 1,
                         path: owner.into(),
                         expression: Expression::FirstAvailable(Box::new(FirstAvailable::new(
+                            owner.into(),
                             vec![
                                 SelectionSource {
                                     path: operand.into(),
@@ -112,11 +113,18 @@ mod execution {
             );
             assert_eq!(
                 attempt.handler_counts,
-                vec![yamaa_core::numeric_lifecycle::HandlerCount {
-                    spec_path: format!("{operand}.absent"),
-                    handler: yamaa_core::numeric_lifecycle::HandlerKind::Absent,
-                    count: 0,
-                }],
+                vec![
+                    yamaa_core::numeric_lifecycle::HandlerCount {
+                        spec_path: format!("{owner}.missing"),
+                        handler: yamaa_core::numeric_lifecycle::HandlerKind::Missing,
+                        count: 0,
+                    },
+                    yamaa_core::numeric_lifecycle::HandlerCount {
+                        spec_path: format!("{operand}.absent"),
+                        handler: yamaa_core::numeric_lifecycle::HandlerKind::Absent,
+                        count: 0,
+                    }
+                ],
             );
             assert!(source.reads.borrow().iter().all(|&(_, column)| column != 2));
 
@@ -143,16 +151,25 @@ mod execution {
                 attempt.result.unwrap().dataset.rows(),
                 &[vec![Value::Int(1), Value::Int(9)]]
             );
-            assert_eq!(attempt.handler_counts.len(), 1);
             assert_eq!(
-                attempt.handler_counts[0].spec_path,
-                format!("{operand}.absent")
+                attempt
+                    .handler_counts
+                    .iter()
+                    .map(|count| (count.spec_path.clone(), count.handler, count.count))
+                    .collect::<Vec<_>>(),
+                [
+                    (
+                        format!("{owner}.missing"),
+                        yamaa_core::numeric_lifecycle::HandlerKind::Missing,
+                        0
+                    ),
+                    (
+                        format!("{operand}.absent"),
+                        yamaa_core::numeric_lifecycle::HandlerKind::Absent,
+                        1
+                    )
+                ]
             );
-            assert_eq!(
-                attempt.handler_counts[0].handler,
-                yamaa_core::numeric_lifecycle::HandlerKind::Absent
-            );
-            assert_eq!(attempt.handler_counts[0].count, 1);
             assert!(source.reads.borrow().iter().all(|&(_, column)| column == 0));
         }
 
@@ -774,6 +791,7 @@ mod execution {
                 filter: Some(filter.into()),
                 selection: None,
                 no_match: None,
+                require_match: true,
                 range: None,
                 columns: None,
                 unique: Vec::new(),
