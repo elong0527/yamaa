@@ -1,6 +1,8 @@
 //! Complete held-container read, followed by closed-profile admission.
 //! No filesystem reads, semantic fallback, publication or host date conversion.
-use super::{compact, compression, framing, metadata, payload, physical, profile, schema};
+use super::{
+    compact, compression, framing, metadata, payload, physical, profile, row_groups, schema,
+};
 use crate::storage_api::contain_decode;
 use arrow_array::{
     ArrayRef, Date32Array, Float64Array, Int64Array, LargeStringArray, RecordBatch, StringArray,
@@ -9,7 +11,7 @@ use arrow_array::{
 use arrow_schema::DataType;
 use parquet::{
     arrow::arrow_reader::{ArrowReaderMetadata, ArrowReaderOptions},
-    file::metadata::{ParquetMetaData, ParquetMetaDataReader},
+    file::metadata::ParquetMetaData,
 };
 use std::{borrow::Cow, sync::Arc};
 use yamaa_core::{table::TableSchema, value::ColumnType};
@@ -159,12 +161,7 @@ fn native_pages(bytes: &[u8], frame: &framing::Framing<'_>) -> Result<bytes::Byt
 
 fn read_interpreted(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
     let frame = framing::admit(bytes)?;
-    let metadata = Arc::new({
-        let native = compact::native_metadata(frame.metadata)?;
-        contain_decode(|| ParquetMetaDataReader::decode_metadata(&native))
-            .ok_or(Error::Malformed)?
-            .map_err(|_| Error::Malformed)?
-    });
+    let metadata = Arc::new(row_groups::decode(frame.metadata, frame.row_groups)?);
     let hint = metadata::admit(metadata.file_metadata().key_value_metadata())?;
     let columns = metadata.file_metadata().schema_descr().columns();
     // ODM field admission uses metadata alone. Ordinary profile findings keep
@@ -312,6 +309,28 @@ fn read_interpreted(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
             }
             (ColumnType::Int, physical::Column::Int64(values)) => {
                 Arc::new(Int64Array::from(values))
+            }
+            // A signed annotation declares the width of every stored value.
+            // The format forbids writing a value outside it and leaves
+            // reading one to each reader, so such a value fails rather than
+            // reads as one of their answers.
+            (ColumnType::Int, physical::Column::Int32(values)) => {
+                let bits = columns
+                    .get(index)
+                    .and_then(|column| profile::declared_width(column))
+                    .filter(|bits| matches!(bits, 8 | 16 | 32))
+                    .ok_or(Error::Malformed)?;
+                let bound = 1i64 << (bits - 1);
+                if values
+                    .iter()
+                    .flatten()
+                    .any(|value| !(-bound..bound).contains(&i64::from(*value)))
+                {
+                    return Err(Error::Malformed);
+                }
+                Arc::new(Int64Array::from_iter(
+                    values.into_iter().map(|value| value.map(i64::from)),
+                ))
             }
             (ColumnType::Float, physical::Column::Double(values)) => {
                 Arc::new(Float64Array::from_iter(values.into_iter().map(|v| {
@@ -639,6 +658,7 @@ mod tests {
         let presented = [0x1a, 0x01, 0, 0xee];
         let frame = |headers| framing::Framing {
             metadata: &[],
+            row_groups: 0,
             pages: Vec::new(),
             headers,
         };

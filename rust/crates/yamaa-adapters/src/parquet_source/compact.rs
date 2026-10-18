@@ -110,6 +110,11 @@ impl<'a> Cursor<'a> {
         };
         Ok((header & 15, count))
     }
+
+    /// The offset of the next byte to read, from the start of the struct.
+    pub(super) fn position(&self) -> usize {
+        self.0.position
+    }
 }
 
 pub(super) struct Elements<'a> {

@@ -24,6 +24,8 @@ mod reader;
 #[cfg(feature = "parquet")]
 mod rle;
 #[cfg(feature = "parquet")]
+mod row_groups;
+#[cfg(feature = "parquet")]
 mod schema;
 #[cfg(feature = "parquet")]
 mod shape;
