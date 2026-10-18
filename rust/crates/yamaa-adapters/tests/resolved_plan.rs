@@ -5,10 +5,10 @@
 #[allow(dead_code)]
 mod support;
 use std::path::{Path, PathBuf};
-use support::specification_run::{prepare, schema};
+use support::specification_run::{prepare, schema, Source};
 use yamaa_core::{
     dataset::{
-        resolved::{ColumnPhase, Grain, RegionKind, Stage, Step},
+        resolved::{ColumnPhase, Grain, RegionId, RegionKind, Stage, Step},
         DatasetPlan,
     },
     specification::{PreparedSpecification, SourceInterpretation},
@@ -119,6 +119,33 @@ fn a_derived_intermediate_resolves_its_donor_plan_as_its_own_region() {
         .all(|binding| resolved.binding(binding).stage == Stage::Column));
 }
 
+#[test]
+fn named_relation_indices_cannot_select_an_aggregate_or_another_region() {
+    let resolved = bind("adam-adeg-replicate-qtc-average").resolve().unwrap();
+    let dataset = RegionId::DATASET;
+    let rr = resolved.named(dataset, 0).unwrap();
+    let qt = resolved.named(dataset, 1).unwrap();
+    let identifier = |id| &resolved.relation(id).named.as_ref().unwrap().identifier;
+    assert_eq!(identifier(rr), "RR");
+    assert_eq!(identifier(qt), "QT");
+    // The dataset's next relation is an aggregate, not a third intermediate.
+    assert_eq!(resolved.named(dataset, 2), None);
+    let donor = resolved.relation(qt).derivations.unwrap();
+    let donor_rr = resolved.named(donor, 0).unwrap();
+    assert_eq!(identifier(donor_rr), "RR");
+    assert_ne!(rr, donor_rr);
+    // A dataset-local index must not reach the donor's valid named relation.
+    assert_eq!(resolved.named(dataset, donor_rr.index()), None);
+    assert_eq!(resolved.named(donor, 1), None);
+    for region in [dataset, donor] {
+        assert_eq!(resolved.named(region, usize::MAX), None);
+        assert_eq!(resolved.named(region, u32::MAX as usize), None);
+        if let Ok(wrapped) = usize::try_from(u64::from(u32::MAX) + 1) {
+            assert_eq!(resolved.named(region, wrapped), None);
+        }
+    }
+}
+
 /// Every node of every benchmark that binds from its CSV or ODM inputs
 /// carries the operation of its kind.
 #[test]
@@ -155,7 +182,12 @@ fn try_bind(case: &str) -> Option<DatasetPlan> {
     let case = root.join("benchmarks").join(case);
     let bytes = std::fs::read(case.join("spec.yaml")).ok()?;
     let captured = schema(&root.join("yaml"));
-    let document = std::panic::catch_unwind(|| prepare(&captured, &bytes)).ok()?;
+    let document = captured
+        .prepare_standalone(Source {
+            identity: "spec.yaml".into(),
+            bytes,
+        })
+        .ok()?;
     let prepared = PreparedSpecification::prepare(document.model()).ok()?;
     let mut schemas = Vec::new();
     for (index, source) in prepared.sources().iter().enumerate() {
