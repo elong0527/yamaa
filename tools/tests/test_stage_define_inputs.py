@@ -49,6 +49,7 @@ class DefineStage(unittest.TestCase):
             cases = {case["name"]: case for case in manifest["cases"]}
             self.assertEqual(cases["sdtm-dm-xpt"]["expected"], ["define.xml", "dm.xpt"])
             self.assertEqual(cases["adam-adsl-xpt"]["standard"], "adam")
+            self.assertEqual(cases["adam-adsl-xpt"]["project"], "project.yaml")
             self.assertEqual(
                 cases["negative-transport-empty-string"]["published"], ["dm.parquet"]
             )

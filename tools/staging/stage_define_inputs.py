@@ -21,7 +21,7 @@ PUBLISHED = (".csv", ".parquet")
 def stage_benchmarks(destination: Path):
     """Stage every benchmark declaring a Define call, with a JSON manifest.
 
-    Each case keeps its specifications, its study environment and its
+    Each case keeps its specifications, its project file and its
     independent ``expected/`` truth; the published tables are the expected
     ones. The manifest carries the call and the expected error so hosts read
     no YAML.
@@ -43,7 +43,7 @@ def stage_benchmarks(destination: Path):
         cases.append(
             {
                 "name": case.name,
-                "environment": define["environment"],
+                "project": define["environment"],
                 "standard": define["standard"],
                 "created": define["created"],
                 "published": [name for name in expected if name.endswith(PUBLISHED)],
