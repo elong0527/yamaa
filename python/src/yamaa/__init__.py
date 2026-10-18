@@ -166,8 +166,12 @@ class Project:
         """Build every specification of one section, or of all sections."""
         return ProjectRun(_call(_native._project_run, self._path, section))
 
-    def submission(self, section: str | None = None, *, created: str | None = None) -> Submission:
-        return Submission(_call(_native._project_submission, self._path, section, created))
+    def submission(
+        self, section: str | None = None, *, created: str | None = None
+    ) -> Submission:
+        return Submission(
+            _call(_native._project_submission, self._path, section, created)
+        )
 
 
 def spec(path) -> Spec:
