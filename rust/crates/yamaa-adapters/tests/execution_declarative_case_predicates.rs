@@ -1843,7 +1843,7 @@ columns:
             assert_eq!(
                 findings,
                 [
-                    yamaa_adapters::json!({"phase":"validation","condition":"incomparable_range_types","requirement":"REQ-0121","spec_paths":["intermediates[0].between"],"context":{"intermediate":"EPOCHDEF","value_type":"date","lower_type":"int","upper_type":"int"}})
+                    yamaa_adapters::json!({"phase":"validation","condition":"incomparable_range_types","requirement":"LOOKUP-9","spec_paths":["intermediates[0].between"],"context":{"intermediate":"EPOCHDEF","value_type":"date","lower_type":"int","upper_type":"int"}})
                 ]
             );
             assert_eq!(

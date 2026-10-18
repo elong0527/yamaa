@@ -1088,11 +1088,12 @@ fn current_record_read(
                         .iter()
                         .flat_map(|key| key.value.reads())
                         .any(|read| matches!(read, MatchRead::Record { .. }))
-                        // Like a secondary key read, a row-phase current field
-                        // on a secondary port reads that input's own records.
+                        // Like a secondary key read, a current field on a
+                        // secondary port reads that input's own records, in
+                        // either phase; `validate_reads` admits only the port
+                        // of the template whose row reads it.
                         || item.current_fields().any(|field| {
-                            matches!(field.read, CurrentRead::Record { source, .. }
-                                if source == 0 || scope == RecordReadScope::All)
+                            matches!(field.read, CurrentRead::Record { source: 0, .. })
                         })
                 })
         }

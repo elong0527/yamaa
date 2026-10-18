@@ -175,8 +175,11 @@ mod execution {
         ("        derive: []\n        expr: SUM(V)\n","invalid_derive_step","REQ-1189"),
         ("        derive:\n          - {name: V, type: float, derivation: W}\n        expr: SUM(V)\n","unknown_derive_variable","REQ-1189"),
         ("        derive:\n          - {name: V, type: float, derivation: {literal: 1}}\n        expr: SUM(V)\n","invalid_derive_step","REQ-1191"),
-        ("        between: {value: CUT, lower: USE}\n        expr: SUM(B.N)\n","incomparable_range_types","REQ-0121"),
-        ("        between: {value: CUT, lower: ABSENT}\n        expr: SUM(B.N)\n","unknown_field","REQ-0121"),
+        ("        between: {value: CUT, lower: USE}\n        expr: SUM(B.N)\n","incomparable_range_types","LOOKUP-9"),
+        ("        between: {value: CUT, lower: ABSENT}\n        expr: SUM(B.N)\n","unknown_field","LOOKUP-9"),
+        // A range with neither bound narrows nothing (LOOKUP-9); 0.4.0 refused
+        // it as invalid_aggregate_context.
+        ("        between: {value: CUT}\n        expr: SUM(B.N)\n","invalid_field_type","LOOKUP-9"),
     ] {
         let fixture=Fixture::new();
         fs::write(fixture.0.join("a.csv"),b"ID,CUT\na,2\n").unwrap();
@@ -222,7 +225,7 @@ mod execution {
             };
             let refused = |identifier: &str| {
                 Err(vec![yamaa_adapters::json!({
-                    "phase": "validation", "condition": "unknown_field", "requirement": "REQ-0121",
+                    "phase": "validation", "condition": "unknown_field", "requirement": "LOOKUP-9",
                     "spec_paths": ["columns.TOTAL.derivation.aggregate.between.value"],
                     "context": {"identifier": identifier}
                 })])
@@ -2970,7 +2973,7 @@ S1,002,2024-06
             );
             let refused = |intermediate: &str| {
                 Err(vec![yamaa_adapters::json!({
-                    "phase": "validation", "condition": "unknown_field", "requirement": "REQ-0121",
+                    "phase": "validation", "condition": "unknown_field", "requirement": "LOOKUP-9",
                     "spec_paths": ["intermediates[0].between.value"],
                     "context": {"intermediate": intermediate, "identifier": "REF.REFDAY"}
                 })])
@@ -3069,7 +3072,7 @@ S1,002,2024-06
             };
             let refused_at = |path: &str, identifier: &str| {
                 vec![yamaa_adapters::json!({
-                    "phase": "validation", "condition": "unknown_field", "requirement": "REQ-0121",
+                    "phase": "validation", "condition": "unknown_field", "requirement": "LOOKUP-9",
                     "spec_paths": [path], "context": {"identifier": identifier}
                 })]
             };
@@ -3125,7 +3128,7 @@ S1,002,2024-06
             assert_eq!(
                 run(&format!("{WINDOW}{}", base(&count("W.LO")))).1,
                 Err(vec![yamaa_adapters::json!({
-                    "phase": "validation", "condition": "unknown_field", "requirement": "REQ-0121",
+                    "phase": "validation", "condition": "unknown_field", "requirement": "LOOKUP-9",
                     "spec_paths": ["intermediates[0].between.value"],
                     "context": {"intermediate": "W", "identifier": "REF.REFDAY"}
                 })])
