@@ -4855,6 +4855,25 @@
               "operand_route": null
             }
           ]
+        },
+        {
+          "name": "aggregate_range_reads_a_window_key",
+          "call": "run",
+          "specification_yaml": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID, SEQ, WT]\ninput: {SRC: {path: input.csv, types: {ID: int, VAL: int, LO: int, HI: int, W: int}}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: SEQ\n    type: int\n    derivation:\n      row_number:\n        window: {group_by: [ID], order_by: [SRC.VAL]}\n  - name: WT\n    type: int\n    derivation:\n      aggregate:\n        expr: 'SUM(SRC.W)'\n        between: {value: SEQ, lower: LO, upper: HI}\noutput: {path: output.csv, columns: [ID, SEQ, WT]}\n",
+          "input_csv": "ID,VAL,LO,HI,W\n1,3,1,1,10\n1,5,2,9,20\n2,4,1,9,30\n",
+          "issues": [
+            {
+              "phase": "planning",
+              "condition": "unsupported_operation",
+              "requirement": null,
+              "spec_paths": [
+                "columns.WT.derivation.aggregate.between.value"
+              ],
+              "context": "{\"operation\":\"aggregate_range_window_read\"}",
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
         }
       ]
     },

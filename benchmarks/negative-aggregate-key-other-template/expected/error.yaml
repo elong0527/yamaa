@@ -1,0 +1,7 @@
+phase: validation
+condition: unknown_field
+spec_paths:
+  - columns.NCAL.derivation.aggregate.key.DEVICEID
+requirement: LOOKUP-5
+context:
+  identifier: CLINIC.DEVICEID

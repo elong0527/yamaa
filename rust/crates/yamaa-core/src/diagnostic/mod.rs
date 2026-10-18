@@ -344,6 +344,7 @@ conditions! {
     AggregateDeriveDeclaration => ("validation", "invalid_derive_step", Some("REQ-1189")),
     AggregateDeriveRelation => ("validation", "invalid_derive_step", Some("REQ-1191")),
     AggregateDeriveIntermediate => ("validation", "invalid_derive_step", Some("REQ-1242")),
+    DonorFunctionIntermediate => ("validation", "invalid_derive_step", Some("LOOKUP-22")),
     AggregateDeriveVariable => ("validation", "unknown_derive_variable", Some("REQ-1189")),
     RowFilterPhaseBoundary => ("validation", "phase_boundary", Some("REQ-0068")),
     RootFilterPhaseBoundary => ("validation", "phase_boundary", Some("REQ-1170")),

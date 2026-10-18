@@ -1878,6 +1878,12 @@ impl PreparedSpecification {
                 source,
             )?
         };
+        // A plan the stage split cannot schedule is refused before resolution
+        // with the operation it does not support.
+        let unsupported = aggregates::late_ranges(&plan);
+        if !unsupported.is_empty() {
+            return Err(BindError::Invalid(unsupported));
+        }
         plan.resolve().map_err(BindError::Resolution)?;
         Ok(plan)
     }

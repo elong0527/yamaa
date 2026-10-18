@@ -1286,6 +1286,140 @@ pub(super) fn bind(
 /// A qualified aggregate's range (LOOKUP-9): bounds are fields of its
 /// relation and the value a value of the current row, admitted for every row
 /// the column is derived for ([`lookup_range::admit`]).
+/// Visit every qualified aggregate a row evaluates directly, through lazy and
+/// nested alternatives. A derive binding evaluates for a donor record instead.
+fn visit(expression: &Expression, visitor: &mut impl FnMut(&crate::dataset::BoundAggregate)) {
+    match expression {
+        Expression::Aggregate(aggregate) => visitor(aggregate),
+        Expression::SourceBinding { source, .. }
+        | Expression::MappingCut { source, .. }
+        | Expression::StrCase { source, .. }
+        | Expression::StrPad { source, .. }
+        | Expression::StrExtract { source, .. }
+        | Expression::StrReplace { source, .. }
+        | Expression::Round { source, .. } => visit(&source.expression, visitor),
+        Expression::FirstAvailable(selection) => {
+            for source in selection.sources() {
+                if let crate::dataset::SelectionRead::Expression(source) = &source.read {
+                    visit(&source.expression, visitor);
+                }
+            }
+        }
+        Expression::Extreme { operands, .. }
+        | Expression::StrTemplate { operands, .. }
+        | Expression::Temporal { operands, .. }
+        | Expression::Imputation { operands, .. } => {
+            for source in operands {
+                visit(&source.expression, visitor);
+            }
+        }
+        Expression::Case(branches) => {
+            for branch in branches {
+                visit(&branch.assignment.expression, visitor);
+            }
+        }
+        _ => (),
+    }
+}
+
+/// A matched aggregate's match value read from an input's record names the
+/// driver of every row that evaluates it (LOOKUP-5). Each context pairs the
+/// expressions a row evaluates with the record ports of the drivers of those
+/// rows, as for a range value (`lookup_range::admit`). A value read from
+/// another input's record names no value of those rows and fails as
+/// `unknown_field` at its key, once however many contexts read it.
+pub(super) fn admit_record_keys(
+    contexts: &[(Vec<&Expression>, Vec<usize>)],
+    findings: &mut Vec<BindFinding>,
+) {
+    let mut reported = BTreeSet::new();
+    for (expressions, drivers) in contexts {
+        for expression in expressions {
+            visit(expression, &mut |aggregate| {
+                let crate::dataset::AggregateRelation::Matched { keys, .. } = aggregate.relation()
+                else {
+                    return;
+                };
+                for key in keys {
+                    for read in key.value.reads() {
+                        let port = match read {
+                            crate::dataset::MatchRead::Record { .. } => 0,
+                            crate::dataset::MatchRead::SecondaryRecord { source, .. } => {
+                                source + 1
+                            }
+                            crate::dataset::MatchRead::Output { .. } => continue,
+                        };
+                        if drivers.iter().any(|&driver| driver != port)
+                            && reported.insert((key.path.clone(), read.identifier().to_owned()))
+                        {
+                            findings.push(BindFinding::Scalar(
+                                crate::diagnostic::lookup::match_value_reference(
+                                    &key.path,
+                                    crate::diagnostic::lookup::Owner::Unnamed,
+                                    read.identifier(),
+                                ),
+                            ));
+                        }
+                    }
+                }
+            });
+        }
+    }
+}
+
+/// A row template's derivation that reads a window result completes after
+/// the template's window pass (WINDOW-3), but the stage that evaluates a
+/// matched aggregate does not follow its `between` value. An aggregate a
+/// template evaluates whose range value reads such a result, which a key
+/// derived beside a window key can do, is not supported yet: it would read
+/// the value before the window completes it.
+pub(super) fn late_ranges(plan: &crate::dataset::DatasetPlan) -> Vec<BindFinding> {
+    let width = plan.output().columns().len();
+    let mut findings = Vec::new();
+    for template in plan.templates() {
+        let deferred =
+            crate::dataset::window_stages(&template.assignments, width, plan.intermediates());
+        for assignment in &template.assignments {
+            visit(&assignment.expression, &mut |aggregate| {
+                if !matches!(
+                    aggregate.relation(),
+                    crate::dataset::AggregateRelation::Matched { .. }
+                ) {
+                    return;
+                }
+                let Some(range) = aggregate.range() else {
+                    return;
+                };
+                let late = match range.current().read {
+                    crate::dataset::CurrentRead::Output(column) => {
+                        deferred.get(column).copied().unwrap_or(false)
+                    }
+                    crate::dataset::CurrentRead::Intermediate { index, column } => {
+                        crate::dataset::read_requires_window(
+                            &Read::Intermediate { index, column },
+                            &deferred,
+                            plan.intermediates(),
+                        )
+                    }
+                    crate::dataset::CurrentRead::Record { .. } => false,
+                };
+                let path = format!("{}.value", range.path());
+                if late
+                    && !findings.iter().any(|prior| {
+                        matches!(prior, BindFinding::Scalar(prior) if prior.spec_paths == [path.clone()])
+                    })
+                {
+                    findings.push(BindFinding::Scalar(crate::application_issue::unsupported(
+                        "aggregate_range_window_read",
+                        Some(&path),
+                    )));
+                }
+            });
+        }
+    }
+    findings
+}
+
 fn bind_range(
     declaration: &Declaration,
     catalog: &Catalog,

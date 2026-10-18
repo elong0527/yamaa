@@ -1333,10 +1333,14 @@ S1,002,2024-06
         /// finding is decided from. `domain` reaches each of them once it reads or
         /// binds the inputs. A case that `check` starts to report fails until it
         /// leaves this list.
-        const NOT_REPORTED_BY_CHECK: [(&str, &str); 33] = [
+        const NOT_REPORTED_BY_CHECK: [(&str, &str); 34] = [
             (
                 "negative-adlb-computed-param",
                 "a cycle through an aggregate and a case",
+            ),
+            (
+                "negative-aggregate-key-other-template",
+                "the driver of each row template that evaluates an aggregate key",
             ),
             ("negative-cut-coded", "the stored type of an input field"),
             (
@@ -1463,10 +1467,14 @@ S1,002,2024-06
         ];
 
         /// Validation negatives this harness does not run, with the reason.
-        const NOT_BUILT_HERE: [(&str, &str); 2] = [
+        const NOT_BUILT_HERE: [(&str, &str); 3] = [
             (
                 "negative-allowed-values-beside-codelist",
                 "the bound codelist's items come from its host environment, which this harness does not pass",
+            ),
+            (
+                "negative-donor-function-unkept",
+                "this harness passes no project file, so its project function is unknown",
             ),
             (
                 "negative-function-contract",

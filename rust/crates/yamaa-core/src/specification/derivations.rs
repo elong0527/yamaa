@@ -757,9 +757,24 @@ pub(super) fn bind_row(
             secondary,
             intermediates,
         ),
-        Operation::ProjectFunction { call, .. } => bind_row_project(
-            call, catalog, driver, row, phase, available, edges, findings, project,
-        ),
+        Operation::ProjectFunction { call, .. } => {
+            let bound = bind_row_project(
+                call, catalog, driver, row, phase, available, edges, findings, project,
+            )?;
+            // A donor record's derivation reads one value per donor record
+            // (LOOKUP-22).
+            if let (Some(Expression::ProjectFunction(function)), Some(_), Some(project)) =
+                (&bound, named.reader(), project)
+            {
+                let refused =
+                    functions::donor_keep_findings(project, *call, function, intermediates)?;
+                if !refused.is_empty() {
+                    findings.extend(refused);
+                    return Ok(None);
+                }
+            }
+            Ok(bound)
+        }
         Operation::Case(branches) => bind_row_case(
             branches,
             column,
