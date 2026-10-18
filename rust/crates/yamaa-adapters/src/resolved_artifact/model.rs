@@ -128,11 +128,7 @@ impl std::fmt::Display for Error {
 impl std::error::Error for Error {}
 
 impl ResolvedArtifact {
-    pub fn new(
-        entry: String,
-        project: Option<String>,
-        entries: Vec<Entry>,
-    ) -> Result<Self, Error> {
+    pub fn new(entry: String, project: Option<String>, entries: Vec<Entry>) -> Result<Self, Error> {
         let artifact = Self {
             format: FORMAT.into(),
             artifact_version: ARTIFACT_VERSION,

@@ -360,14 +360,21 @@ impl Submission {
             ));
         }
         for (section, define) in &mut self.sections {
-            if let Err(error) = define.save() {
-                return Err(Failure::from_error(
-                    &format!(
-                        "cannot save the {} submission",
-                        yamaa_core::project_scope::key(*section)
-                    ),
-                    &error,
-                ));
+            let key = yamaa_core::project_scope::key(*section);
+            match define.save() {
+                Ok(SaveOutcome::Saved) => {}
+                Ok(_) => {
+                    return Err(Failure::new(
+                        format!("nothing was saved for the {key} submission; see issues"),
+                        define.report(),
+                    ))
+                }
+                Err(error) => {
+                    return Err(Failure::from_error(
+                        &format!("cannot save the {key} submission"),
+                        &error,
+                    ))
+                }
             }
         }
         Ok(())

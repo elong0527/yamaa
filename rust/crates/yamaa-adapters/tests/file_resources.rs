@@ -922,7 +922,15 @@ mod file {
                 fs::read(temp.0.join("dm.json")).unwrap(),
                 fs::read(expected.join("dm.json")).unwrap()
             );
-            assert!(!run.save().unwrap());
+            // A repeated save rewrites the same held bytes without reading a
+            // source again, so a deleted document is restored unchanged.
+            fs::remove_file(temp.0.join("define.xml")).unwrap();
+            assert!(run.save().unwrap());
+            assert_eq!(reads, run.capture_reads());
+            assert_eq!(
+                fs::read(temp.0.join("define.xml")).unwrap(),
+                fs::read(expected.join("define.xml")).unwrap()
+            );
         }
 
         #[test]

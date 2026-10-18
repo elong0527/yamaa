@@ -102,7 +102,7 @@ for every area a change touches.
 - Benchmark authoring: `benchmarks/AGENTS.md`
 - Architecture, crate boundaries, and local verification: `CONTRIBUTING.md`
 - Rust workspace entry point: `rust/README.md`
-- Host usage: `docs/articles/python.md` and `R/yamaa/README.md`
+- Host usage: `docs/articles/api.md`
 - Site build and canonical pages: `CONTRIBUTING.md#documentation`
 - Benchmark factory: `automation/benchmark_factory/README.md`
 - Harbor evaluation: `evaluations/harbor/README.md`

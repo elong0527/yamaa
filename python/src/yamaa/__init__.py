@@ -95,7 +95,7 @@ class ProjectRun:
 
     @property
     def names(self) -> list[str]:
-        """The specifications that ran, in run order."""
+        """The specifications in the run scope, in run order."""
         return self._native.names()
 
     def __getitem__(self, name: str) -> MemberRun:

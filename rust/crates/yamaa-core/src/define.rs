@@ -201,7 +201,6 @@ pub struct Application<P: Ports> {
     specifications: Vec<P::Specification>,
     artifacts: Vec<Artifact<P::Target>>,
     failed: bool,
-    saved: bool,
 }
 pub struct Attempt<P: Ports> {
     pub application: Application<P>,
@@ -219,7 +218,6 @@ impl<P: Ports> Application<P> {
             specifications: Vec::new(),
             artifacts: Vec::new(),
             failed: false,
-            saved: false,
         };
         let outcome = application.prepare_inner(
             ports,
@@ -565,9 +563,6 @@ impl<P: Ports> Application<P> {
         if self.failed {
             return Err(SaveFailure::Refused);
         }
-        if self.saved {
-            return Ok(false);
-        }
         let mut publishers = match self.preflight(ports) {
             Ok(publishers) => publishers,
             Err(failure) => {
@@ -585,7 +580,6 @@ impl<P: Ports> Application<P> {
             }
             artifact.state = PublicationState::Published;
         }
-        self.saved = true;
         Ok(true)
     }
 }

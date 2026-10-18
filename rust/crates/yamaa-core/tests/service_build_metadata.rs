@@ -886,7 +886,7 @@ mod service {
             assert_eq!(attempt.application.artifacts().len(), 0);
         }
         #[test]
-        fn complete_metadata_and_rendering_precede_publication_and_save_is_one_shot() {
+        fn complete_metadata_and_rendering_precede_publication_and_save_rewrites_held_bytes() {
             let mut spy = Spy::new();
             let mut attempt = prepare(&mut spy, "sdtm", Some("2026-10-11T00:00:00"));
             assert!(attempt.outcome.is_ok());
@@ -904,15 +904,23 @@ mod service {
                 .contains("CreationDateTime=\"2026-10-11T00:00:00\""));
             let bytes = held.1.to_vec();
             assert!(attempt.application.save(&mut spy).ok().unwrap());
-            assert_eq!(spy.published, [("define.xml".into(), bytes)]);
+            assert_eq!(spy.published, [("define.xml".into(), bytes.clone())]);
             assert_eq!(
                 attempt.application.artifacts().next().unwrap().2,
                 PublicationState::Published
             );
-            let events = spy.events.clone();
-            assert!(!attempt.application.save(&mut spy).ok().unwrap());
-            assert_eq!(spy.events, events);
-            assert_eq!(spy.publishers, 2);
+            // A repeated save preflights again and rewrites the same held
+            // bytes, so a deleted target is restored; nothing is recomposed.
+            assert!(attempt.application.save(&mut spy).ok().unwrap());
+            assert_eq!(
+                spy.published,
+                [
+                    ("define.xml".into(), bytes.clone()),
+                    ("define.xml".into(), bytes)
+                ]
+            );
+            assert_eq!(spy.publishers, 3);
+            assert_eq!(spy.clock_calls.get(), 0);
         }
         #[test]
         fn verification_failure_retains_original_payload_and_never_acquires_a_publisher() {

@@ -250,8 +250,8 @@ yamaa::engine::Request::with_environment: pub fn with_environment(mut self, envi
 yamaa::engine::ResolvedSpecification: impl ResolvedSpecification
 yamaa::engine::ResolvedSpecification: pub struct ResolvedSpecification [derive(Clone, Debug)]
 yamaa::engine::ResolvedSpecification::entry: pub fn entry(&self) -> &str
-yamaa::engine::ResolvedSpecification::environment: pub fn environment(&self) -> Option<&str>
 yamaa::engine::ResolvedSpecification::from_json: pub fn from_json(text: &str) -> Result<Self, Error>
+yamaa::engine::ResolvedSpecification::project: pub fn project(&self) -> Option<&str>
 yamaa::engine::ResolvedSpecification::to_json: pub fn to_json(&self) -> Result<String, Error>
 yamaa::engine::SaveOutcome: pub enum SaveOutcome [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::engine::SaveOutcome::NothingToSave: NothingToSave
