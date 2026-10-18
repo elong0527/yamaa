@@ -32,7 +32,8 @@ stage_case <- function(root, case) {
     stopifnot(length(matched) == 1L, length(before) == length(after))
     payload[matched:(matched + length(before) - 1L)] <- after
   }
-  changes <- c(if (!is.null(mutation$set_byte)) list(mutation$set_byte), mutation$set_bytes)
+  # `[[` matches exactly; `$` would also match set_bytes for set_byte.
+  changes <- c(if (!is.null(mutation[["set_byte"]])) list(mutation[["set_byte"]]), mutation[["set_bytes"]])
   for (change in changes) payload[change[[1L]] + 1L] <- as.raw(change[[2L]])
   source <- file.path(directory, case$file)
   writeBin(payload, source)
