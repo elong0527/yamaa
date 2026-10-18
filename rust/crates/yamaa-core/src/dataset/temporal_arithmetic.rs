@@ -121,7 +121,13 @@ impl Temporal {
         })
     }
     fn apply_admitted_values(&self, values: &[Value]) -> Result<TemporalStep, Diagnostic> {
-        for (index, value) in values.iter().enumerate() {
+        // `dtc` reads no part after its first missing one, so checks none.
+        let missing = values.iter().position(|value| *value == Value::Missing);
+        let read = match missing {
+            Some(index) if self.kind.stops_at_missing() => index + 1,
+            _ => values.len(),
+        };
+        for (index, value) in values[..read].iter().enumerate() {
             self.validate_operand(index, value)
                 .expect("admitted operand index")?;
         }

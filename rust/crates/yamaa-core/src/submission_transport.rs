@@ -274,12 +274,28 @@ fn width(value: ValueRef<'_>) -> usize {
     }
 }
 
+/// Whether a value-level entry selects one held row: every where column's
+/// value is one of the values its clause lists.
+fn selects<T: TableAccess>(
+    dataset: &Dataset,
+    table: &T,
+    row: usize,
+    value: &crate::submission_composition::ValueDefinition,
+) -> Result<bool, Finding> {
+    value.selects(|column, listed| {
+        let cell = table
+            .cell(row, column)
+            .map_err(|_| artifact_mismatch(dataset, "held artifact where column access"))?;
+        Ok(matches!(cell, ValueRef::Str(text) if listed.iter().any(|value| value == text)))
+    })
+}
+
 /// SUB-24: measure every character column of the selected section from the
 /// held tables. A column's length is the longest value, in bytes and at least
 /// one, across the section's datasets carrying a column of that name; a SUPP--
 /// dataset is measured on its own. A value-level definition is measured over
-/// the rows its test code selects. `tables` holds one entry per dataset, absent
-/// for a dataset with no data.
+/// the rows its where clause selects. `tables` holds one entry per dataset,
+/// absent for a dataset with no data.
 pub fn measure<T: TableAccess>(study: &mut Study, tables: &[Option<&T>]) -> Result<(), Finding> {
     let mut groups = BTreeMap::<(Option<usize>, String), usize>::new();
     let mut values = Vec::new();
@@ -293,25 +309,18 @@ pub fn measure<T: TableAccess>(study: &mut Study, tables: &[Option<&T>]) -> Resu
                 continue;
             }
             let mut longest = 0;
-            let mut by_code = vec![0; column.values.len()];
+            let mut by_entry = vec![0; column.values.len()];
             if let Some(table) = table {
                 for row in 0..table.row_count() {
-                    let access = |column| {
+                    let size = width(
                         table
-                            .cell(row, column)
-                            .map_err(|_| artifact_mismatch(dataset, "held artifact access"))
-                    };
-                    let size = width(access(position)?);
+                            .cell(row, position)
+                            .map_err(|_| artifact_mismatch(dataset, "held artifact access"))?,
+                    );
                     longest = longest.max(size);
-                    if column.values.is_empty() {
-                        continue;
-                    }
-                    let code = access(dataset.discriminator.expect("admitted discriminator"))?;
-                    if let ValueRef::Str(code) = code {
-                        for (value, best) in column.values.iter().zip(&mut by_code) {
-                            if value.test_code == code {
-                                *best = (*best).max(size);
-                            }
+                    for (value, best) in column.values.iter().zip(&mut by_entry) {
+                        if selects(dataset, table, row, value)? {
+                            *best = (*best).max(size);
                         }
                     }
                 }
@@ -320,7 +329,7 @@ pub fn measure<T: TableAccess>(study: &mut Study, tables: &[Option<&T>]) -> Resu
                 .entry((scope, column.declaration.name.value.clone()))
                 .or_insert(0);
             *group = (*group).max(longest);
-            dataset_values.push(by_code);
+            dataset_values.push(by_entry);
         }
         values.push(dataset_values);
     }
@@ -379,33 +388,17 @@ fn validate_artifact<T: TableAccess>(
         .iter()
         .map(|list| (list.declaration.id.as_str(), &list.declaration))
         .collect();
-    let variants: BTreeMap<_, _> = dataset
-        .columns
-        .iter()
-        .enumerate()
-        .flat_map(|(index, column)| {
-            column
-                .values
-                .iter()
-                .map(move |value| ((index, value.test_code.as_str()), value))
-        })
-        .collect();
     for (index, base) in dataset.columns.iter().enumerate() {
         for row in 0..table.row_count() {
-            let variant = if base.values.is_empty() {
-                None
-            } else {
-                let discriminator = table
-                    .cell(
-                        row,
-                        dataset.discriminator.expect("admitted value discriminator"),
-                    )
-                    .map_err(|_| mismatch("held artifact discriminator access"))?;
-                match discriminator {
-                    ValueRef::Str(code) => variants.get(&(index, code)).copied(),
-                    _ => None,
+            // The build admitted at most one entry per row; the first entry
+            // whose where clause selects the row decides its metadata.
+            let mut variant = None;
+            for value in &base.values {
+                if selects(dataset, table, row, value)? {
+                    variant = Some(value);
+                    break;
                 }
-            };
+            }
             let column = variant.map_or(base, |value| &value.column);
             let meta = column
                 .declaration
@@ -472,10 +465,9 @@ fn validate_artifact<T: TableAccess>(
                     .context
                     .insert("value".into(), JsonValue::from(owned(value)));
                 if let Some(variant) = variant {
-                    finding.context.insert(
-                        "testcd".into(),
-                        JsonValue::String(variant.test_code.clone()),
-                    );
+                    finding
+                        .context
+                        .insert("entry".into(), JsonValue::String(variant.id.clone()));
                 }
                 if let Some(list) = list {
                     finding

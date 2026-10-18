@@ -1,0 +1,8 @@
+phase: validation
+condition: unknown_field
+spec_paths:
+  - intermediates[0].derivations.MEASDY.source
+requirement: REQ-1185
+context:
+  identifier: CLINIC.VSDY
+  intermediate: VISITWIN

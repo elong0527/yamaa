@@ -35,6 +35,7 @@ the held bytes.
 | public-grammar | Shared condition families; existing `grammar-original/cases.tsv` decisions |
 | diagnostic-parity | Refusal cases with their complete expected issue rows |
 | read-odm | The two reader documents (the adapters' `odm` fixtures), all 30 columns and cells, archive member selection and refusal codes |
+| parquet-containment | A Parquet file that makes the native decoder panic, its issue row, and a readable file with its saved CSV |
 | plan-reuse | One specification run A, B, A on one object with exact output CSV and issue rows; a changed specification's output; a changed function default's output |
 
 `plan-reuse` is the repeated-run truth for #2821. A spec object's first
@@ -74,6 +75,16 @@ expected cells were read from the documents by hand. `SourceOrdinal` is
 decimal text in the truth (an integer in Python, a double in R) and every
 other cell is text or null. Each refusal names the reader code that the
 yamaa.Error / yamaa_error message carries.
+
+`parquet-containment` pairs the installed Python and R containment suites.
+Both files were authored field by field. In the first, the column chunk of an
+INT96 column holds a 13-byte `min_value` statistic, which parquet 57.3.0's
+metadata decoder asserts is 12 bytes long. The engine contains that panic as
+one `source_parquet_invalid` issue, and the adapters' reader test checks that
+these bytes still reach the panic. The second file holds the INT64 values 1
+and 2, which a later run in the same process reads and saves. Each suite also
+runs both specifications in a fresh process and requires its stderr to be
+empty, so the R suite proves containment on the Windows GNU build too.
 
 The R grammar suite's conditional failure and original
 CSV preservation controls also remain. Exact float bit witnesses, NUL/invalid

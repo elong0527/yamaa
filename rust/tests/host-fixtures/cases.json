@@ -4758,6 +4758,29 @@
         }
       ]
     },
+    "parquet-containment": {
+      "specification_yaml": "schema_version: '1.0'\ndomain: TEST\nkeys: [V]\ninput: {SRC: input.parquet}\ncolumns:\n  - {name: V, type: int, derivation: SRC.V}\noutput: {path: output.csv, columns: [V]}\n",
+      "contained_panic_parquet": {
+        "hex": "504152311502192c4806736368656d6115020015062500180156001600191c191c26001c150619150019180156150016001600160026083c680d0102030405060708090a0b0c0d0000001600160000004c00000050415231"
+      },
+      "issues": [
+        {
+          "phase": "ingest",
+          "condition": "source_parquet_invalid",
+          "requirement": "REQ-1038",
+          "spec_paths": [
+            "input.SRC.path"
+          ],
+          "context": "{\"dataset\":\"SRC\",\"path\":\"input.parquet\"}",
+          "source_span": null,
+          "operand_route": null
+        }
+      ],
+      "readable_parquet": {
+        "hex": "504152311500152015202c15041500150615060000010000000000000002000000000000001502192c4806736368656d6115020015042500180156001604191c191c26001c1504191500191801561500160416421642260800001642160400003b00000050415231"
+      },
+      "readable_csv": "V\n1\n2\n"
+    },
     "plan-reuse": {
       "specification_yaml": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: str, VALUE: float, ZERO: float}}}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n  - {name: ZERO, type: float, derivation: SRC.ZERO}\n  - {name: RATIO, type: float, derivation: {compute: {expr: '1 + VALUE / ZERO'}}}\noutput: {path: output.csv, columns: [ID, VALUE, ZERO, RATIO]}\n",
       "studies": {

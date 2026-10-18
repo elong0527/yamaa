@@ -1,0 +1,32 @@
+{
+  "datasetJSONCreationDateTime": "2026-09-11T00:00:00",
+  "datasetJSONVersion": "1.1.0",
+  "fileOID": "CATH.sdtm.Define-XML_2.1.SUPPDM",
+  "sourceSystem": {"name": "yamaa", "version": "1.0"},
+  "studyOID": "STDY.CATH",
+  "metaDataVersionOID": "MDV.CATH.sdtm",
+  "metaDataRef": "define.xml",
+  "itemGroupOID": "IG.SUPPDM",
+  "records": 5,
+  "name": "SUPPDM",
+  "label": "Supplemental Qualifiers for DM",
+  "columns": [
+    {"itemOID": "IT.SUPPDM.STUDYID", "name": "STUDYID", "label": "Study Identifier", "dataType": "string", "length": 4, "keySequence": 1},
+    {"itemOID": "IT.SUPPDM.RDOMAIN", "name": "RDOMAIN", "label": "Related Domain Abbreviation", "dataType": "string", "length": 2},
+    {"itemOID": "IT.SUPPDM.USUBJID", "name": "USUBJID", "label": "Unique Subject Identifier", "dataType": "string", "length": 8, "keySequence": 2},
+    {"itemOID": "IT.SUPPDM.IDVAR", "name": "IDVAR", "label": "Identifying Variable", "dataType": "string", "length": 1},
+    {"itemOID": "IT.SUPPDM.IDVARVAL", "name": "IDVARVAL", "label": "Identifying Variable Value", "dataType": "string", "length": 1},
+    {"itemOID": "IT.SUPPDM.QNAM", "name": "QNAM", "label": "Qualifier Variable Name", "dataType": "string", "length": 7, "keySequence": 3},
+    {"itemOID": "IT.SUPPDM.QLABEL", "name": "QLABEL", "label": "Qualifier Variable Label", "dataType": "string", "length": 11},
+    {"itemOID": "IT.SUPPDM.QVAL", "name": "QVAL", "label": "Data Value", "dataType": "string", "length": 25},
+    {"itemOID": "IT.SUPPDM.QORIG", "name": "QORIG", "label": "Origin", "dataType": "string", "length": 9},
+    {"itemOID": "IT.SUPPDM.QEVAL", "name": "QEVAL", "label": "Evaluator", "dataType": "string", "length": 1}
+  ],
+  "rows": [
+    ["CATH", "DM", "CATH-001", null, null, "RACE1", "Race 1", "WHITE", "Collected", null],
+    ["CATH", "DM", "CATH-003", null, null, "RACE1", "Race 1", "BLACK OR AFRICAN AMERICAN", "Collected", null],
+    ["CATH", "DM", "CATH-001", null, null, "RACE2", "Race 2", "ASIAN", "Collected", null],
+    ["CATH", "DM", "CATH-003", null, null, "RACE2", "Race 2", "WHITE", "Collected", null],
+    ["CATH", "DM", "CATH-002", null, null, "RACEOTH", "Race, Other", "Samoan", "Collected", null]
+  ]
+}

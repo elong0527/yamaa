@@ -1,6 +1,8 @@
 //! Complete held-container read, followed by closed-profile admission.
 //! No filesystem reads, semantic fallback, publication or host date conversion.
-use super::{compact, compression, framing, metadata, payload, physical, profile, schema};
+use super::{
+    compact, compression, framing, metadata, payload, physical, profile, row_groups, schema,
+};
 use crate::storage_api::contain_decode;
 use arrow_array::{
     ArrayRef, Date32Array, Float64Array, Int64Array, LargeStringArray, RecordBatch, StringArray,
@@ -9,7 +11,7 @@ use arrow_array::{
 use arrow_schema::DataType;
 use parquet::{
     arrow::arrow_reader::{ArrowReaderMetadata, ArrowReaderOptions},
-    file::metadata::{ParquetMetaData, ParquetMetaDataReader},
+    file::metadata::ParquetMetaData,
 };
 use std::{borrow::Cow, sync::Arc};
 use yamaa_core::{table::TableSchema, value::ColumnType};
@@ -159,12 +161,7 @@ fn native_pages(bytes: &[u8], frame: &framing::Framing<'_>) -> Result<bytes::Byt
 
 fn read_interpreted(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
     let frame = framing::admit(bytes)?;
-    let metadata = Arc::new({
-        let native = compact::native_metadata(frame.metadata)?;
-        contain_decode(|| ParquetMetaDataReader::decode_metadata(&native))
-            .ok_or(Error::Malformed)?
-            .map_err(|_| Error::Malformed)?
-    });
+    let metadata = Arc::new(row_groups::decode(frame.metadata, frame.row_groups)?);
     let hint = metadata::admit(metadata.file_metadata().key_value_metadata())?;
     let columns = metadata.file_metadata().schema_descr().columns();
     // ODM field admission uses metadata alone. Ordinary profile findings keep
@@ -313,6 +310,28 @@ fn read_interpreted(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
             (ColumnType::Int, physical::Column::Int64(values)) => {
                 Arc::new(Int64Array::from(values))
             }
+            // A signed annotation declares the width of every stored value.
+            // The format forbids writing a value outside it and leaves
+            // reading one to each reader, so such a value fails rather than
+            // reads as one of their answers.
+            (ColumnType::Int, physical::Column::Int32(values)) => {
+                let bits = columns
+                    .get(index)
+                    .and_then(|column| profile::declared_width(column))
+                    .filter(|bits| matches!(bits, 8 | 16 | 32))
+                    .ok_or(Error::Malformed)?;
+                let bound = 1i64 << (bits - 1);
+                if values
+                    .iter()
+                    .flatten()
+                    .any(|value| !(-bound..bound).contains(&i64::from(*value)))
+                {
+                    return Err(Error::Malformed);
+                }
+                Arc::new(Int64Array::from_iter(
+                    values.into_iter().map(|value| value.map(i64::from)),
+                ))
+            }
             (ColumnType::Float, physical::Column::Double(values)) => {
                 Arc::new(Float64Array::from_iter(values.into_iter().map(|v| {
                     v.and_then(yamaa_core::value::FiniteFloat::new)
@@ -411,6 +430,7 @@ fn odm_decoded(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use parquet::file::metadata::ParquetMetaDataReader;
 
     fn unsigned(mut value: u64, output: &mut Vec<u8>) {
         while value >= 128 {
@@ -664,6 +684,7 @@ mod tests {
         let presented = [0x1a, 0x01, 0, 0xee];
         let frame = |headers| framing::Framing {
             metadata: &[],
+            row_groups: 0,
             pages: Vec::new(),
             headers,
         };
@@ -788,6 +809,118 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// The installed hosts' `parquet-containment` truth: a file whose INT96
+    /// column chunk has a 13-byte `min_value` statistic, which parquet
+    /// 57.3.0's metadata decoder asserts holds 12 bytes, and a readable file
+    /// holding the INT64 values 1 and 2.
+    fn host_containment() -> (Vec<u8>, Vec<u8>) {
+        let truth =
+            crate::json_wire::decode(include_str!("../../../../tests/host-fixtures/cases.json"))
+                .unwrap();
+        let family = &truth["families"]["parquet-containment"];
+        let bytes = |name: &str| -> Vec<u8> {
+            let hex = family[name]["hex"].as_str().unwrap();
+            (0..hex.len())
+                .step_by(2)
+                .map(|at| u8::from_str_radix(&hex[at..at + 2], 16).unwrap())
+                .collect()
+        };
+        (bytes("contained_panic_parquet"), bytes("readable_parquet"))
+    }
+
+    fn values(decoded: &Decoded) -> &[i64] {
+        let column = decoded.batches[0].column(0);
+        column
+            .as_any()
+            .downcast_ref::<Int64Array>()
+            .unwrap()
+            .values()
+    }
+
+    #[test]
+    fn the_host_containment_input_reaches_a_contained_decoder_panic() {
+        let (contained, readable) = host_containment();
+        // Admission passes it to the native decoder, which panics, so the
+        // host suites that read it exercise a contained panic.
+        let frame = framing::admit(&contained).unwrap();
+        let native = compact::native_metadata(frame.metadata).unwrap();
+        assert!(contain_decode(|| ParquetMetaDataReader::decode_metadata(&native)).is_none());
+        for _ in 0..2 {
+            assert_eq!(read(&contained).unwrap_err(), Error::Malformed);
+            assert_eq!(values(&read(&readable).unwrap()), [1, 2]);
+        }
+    }
+
+    /// Selects what `contained_panics_print_nothing_and_others_print_as_before`
+    /// does when it runs as a child process.
+    const PANIC_CHILD: &str = "YAMAA_CONTAINED_PANIC_CHILD";
+
+    /// A panic outside `contain_decode`, caught so the test goes on.
+    fn uncontained_panic() {
+        assert!(std::panic::catch_unwind(|| panic!("a panic outside contain_decode")).is_err());
+    }
+
+    /// Hook output without the thread id that follows the thread's name,
+    /// which differs between processes.
+    fn without_thread_id(text: &str) -> String {
+        let Some(start) = text.find("' (") else {
+            return text.to_owned();
+        };
+        let rest = &text[start + 3..];
+        match rest.find(')') {
+            Some(end) if rest[..end].bytes().all(|byte| byte.is_ascii_digit()) => {
+                format!("{}'{}", &text[..start], &rest[end + 1..])
+            }
+            _ => text.to_owned(),
+        }
+    }
+
+    #[test]
+    fn contained_panics_print_nothing_and_others_print_as_before() {
+        match std::env::var(PANIC_CHILD).as_deref() {
+            Ok("contained") => {
+                let (contained, readable) = host_containment();
+                assert_eq!(read(&contained).unwrap_err(), Error::Malformed);
+                assert_eq!(values(&read(&readable).unwrap()), [1, 2]);
+                return;
+            }
+            Ok("uncontained") => {
+                uncontained_panic();
+                return;
+            }
+            Ok("after-contained") => {
+                assert!(contain_decode::<()>(|| panic!("a contained panic")).is_none());
+                uncontained_panic();
+                return;
+            }
+            _ => {}
+        }
+        // Each child runs this test alone. Its output is not captured, so the
+        // panic hook writes to the child's stderr, as it does in a host.
+        let test = concat!(
+            module_path!(),
+            "::contained_panics_print_nothing_and_others_print_as_before"
+        );
+        let stderr = |role: &str| {
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", test.split_once("::").unwrap().1])
+                .args(["--nocapture", "--test-threads=1"])
+                .env(PANIC_CHILD, role)
+                .env_remove("RUST_BACKTRACE")
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "{role}: {output:?}");
+            String::from_utf8(output.stderr).unwrap()
+        };
+        assert_eq!(stderr("contained"), "");
+        let before = without_thread_id(&stderr("uncontained"));
+        assert!(
+            before.contains("a panic outside contain_decode"),
+            "{before}"
+        );
+        assert_eq!(without_thread_id(&stderr("after-contained")), before);
     }
 
     #[test]

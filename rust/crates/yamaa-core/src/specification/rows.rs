@@ -1335,6 +1335,21 @@ impl Rows {
             .iter()
             .map(|template| template.driver.as_str())
     }
+    /// Each grouped row template's driver with its `group_by`, in
+    /// construction order: the column phase checks a read of a driver
+    /// against the groups of that driver's templates (NAME-4).
+    fn column_groups(&self) -> Vec<(&str, Vec<&str>)> {
+        self.templates
+            .iter()
+            .filter_map(|template| {
+                let group = template.groups.as_ref()?;
+                Some((
+                    template.driver.as_str(),
+                    group.iter().map(String::as_str).collect(),
+                ))
+            })
+            .collect()
+    }
     pub(super) fn self_columns(&self) -> Vec<usize> {
         self.templates[0]
             .declarations
@@ -1636,14 +1651,7 @@ impl Rows {
             closed_fields(
                 d,
                 row,
-                &[
-                    "id",
-                    "dataset",
-                    "group_by",
-                    "derivations",
-                    "filter",
-                    "submission",
-                ],
+                &["id", "dataset", "group_by", "derivations", "filter"],
                 &path,
             )?;
             let row_driver = d
@@ -1864,14 +1872,14 @@ impl Rows {
             // template. Every stored source uses its captured port and output keys.
             catalog = row_drivers::extend_catalog(catalog, source, name, keys, &secondary, "")?;
         }
-        let groups = self
-            .templates
+        let groups = self.column_groups();
+        let column_groups = groups
             .iter()
-            .filter_map(|t| t.groups.as_ref())
-            .map(|g| g.iter().map(String::as_str).collect::<Vec<_>>())
+            .map(|(driver, group)| (*driver, group.as_slice()))
             .collect::<Vec<_>>();
-        let column_groups = groups.iter().map(Vec::as_slice).collect::<Vec<_>>();
         let mut templates = Vec::new();
+        // The declared template behind each bound one, by position.
+        let mut declared = Vec::new();
         for (index, template) in self.templates.iter().enumerate() {
             if let Some(bound) = bind_template(
                 template,
@@ -1887,6 +1895,7 @@ impl Rows {
                 &mut findings,
             )? {
                 templates.push(bound);
+                declared.push(template);
             }
         }
         let mut odm_contexts: Option<std::rc::Rc<[crate::dataset::OdmTemplateScope]>> = None;
@@ -2013,45 +2022,78 @@ impl Rows {
                 diagnostics: analyzed.diagnostics,
             });
         }
-        // A column derivation evaluates for the rows of every template, and a
-        // template's own derivations for its rows only.
+        // A column derivation and a dataset verification evaluate for the rows
+        // of every template; a template's own derivations and row filter for
+        // its rows only.
+        let verification_reads = relation_predicates::predicate_reads(
+            relation_predicates::verification_predicates(verifications),
+        );
+        let filter_reads = templates
+            .iter()
+            .map(|template| relation_predicates::predicate_reads(template.filter.as_ref()))
+            .collect::<Vec<_>>();
         lookup_range::admit(
             std::iter::once((
                 columns
                     .iter()
                     .map(|assignment| &assignment.expression)
+                    .chain(&verification_reads)
                     .collect(),
                 templates
                     .iter()
                     .map(|template| template.mode.source_index())
                     .collect(),
             ))
-            .chain(templates.iter().map(|template| {
-                (
-                    template
-                        .assignments
-                        .iter()
-                        .map(|assignment| &assignment.expression)
-                        .collect(),
-                    vec![template.mode.source_index()],
-                )
-            })),
+            .chain(
+                templates
+                    .iter()
+                    .zip(&filter_reads)
+                    .map(|(template, filter)| {
+                        (
+                            template
+                                .assignments
+                                .iter()
+                                .map(|assignment| &assignment.expression)
+                                .chain(filter)
+                                .collect(),
+                            vec![template.mode.source_index()],
+                        )
+                    }),
+            ),
             &intermediates,
             &mut findings,
         );
-        for template in &templates {
+        let mut admitted = Vec::new();
+        for ((template, declaration), filter) in templates.iter().zip(&declared).zip(&filter_reads)
+        {
+            let mut template_findings = Vec::new();
             relation_predicates::admit_reads(
                 template
                     .assignments
                     .iter()
                     .chain(&columns)
-                    .map(|assignment| &assignment.expression),
+                    .map(|assignment| &assignment.expression)
+                    .chain(filter)
+                    .chain(&verification_reads),
                 &intermediates,
+                named,
                 template.mode.source_index(),
                 &template.mode,
-                &mut findings,
+                Some((&declaration.id, &declaration.driver)),
+                &mut template_findings,
             );
+            // A read that several templates make the same way is one authored
+            // read: its failure is reported once.
+            for finding in template_findings {
+                if !admitted
+                    .iter()
+                    .any(|prior| relation_predicates::same_finding(prior, &finding))
+                {
+                    admitted.push(finding);
+                }
+            }
         }
+        findings.extend(admitted);
         if !findings.is_empty() {
             return Err(BindError::Invalid(findings));
         }
@@ -2173,13 +2215,11 @@ impl Rows {
         named: &intermediates::Declarations,
         findings: &mut Vec<BindFinding>,
     ) -> Result<(), BindError> {
-        let groups = self
-            .templates
+        let groups = self.column_groups();
+        let column_groups = groups
             .iter()
-            .filter_map(|template| template.groups.as_ref())
-            .map(|group| group.iter().map(String::as_str).collect::<Vec<_>>())
+            .map(|(driver, group)| (*driver, group.as_slice()))
             .collect::<Vec<_>>();
-        let column_groups = groups.iter().map(Vec::as_slice).collect::<Vec<_>>();
         // The input whose records drive each template's rows, when every
         // template names one, directly or through a named intermediate.
         let drivers = self

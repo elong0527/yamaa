@@ -1,0 +1,10 @@
+phase: validation
+condition: ungrouped_driver_field
+spec_paths:
+  - intermediates[0].between.value
+requirement: REQ-0067
+context:
+  identifier: EX.EXSTDY
+  intermediate: PERIOD
+  row: subject
+  dataset: EX

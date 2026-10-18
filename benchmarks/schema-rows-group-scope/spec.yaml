@@ -1,0 +1,56 @@
+schema_version: "1.0"
+domain: VS
+keys: [USUBJID, VSCAT, VSDY]
+input:
+  CLINIC: {path: input/clinic.csv, types: {VSDY: int, SYSBP: int}}
+  HOME: {path: input/home.csv, types: {VSDY: int, SYSBP: int}}
+
+output:
+  path: vs.csv
+  columns: [USUBJID, VSCAT, VSSTRESN, VSDRVFL, VISIT, VSDY]
+
+columns:
+  - {name: USUBJID, type: str, label: Unique Subject Identifier}
+  - {name: VSCAT, type: str, label: Category for Vital Signs}
+
+  - name: VSSTRESN
+    type: float
+    label: Numeric Result/Finding in Standard Units
+
+  - {name: VSDRVFL, type: str, label: Derived Flag}
+
+  # The visit of the clinic measurement, read from its own record. Only the
+  # clinic template completes it here; the home template states its own
+  # value, so the home readings grouped by day do not bear on this read.
+  - name: VISIT
+    type: str
+    label: Visit Name
+    derivation: CLINIC.VISIT
+
+  - {name: VSDY, type: int, label: Study Day of Vital Signs}
+
+rows:
+  # Each blood pressure measured at a clinic visit.
+  - id: clinic
+    dataset: CLINIC
+    derivations:
+      USUBJID: CLINIC.USUBJID
+      VSCAT: {literal: CLINIC}
+      VSSTRESN: CLINIC.SYSBP
+      VSDRVFL: {literal: null}
+      VSDY: CLINIC.VSDY
+
+  # One record per subject and day from the readings taken at home, holding
+  # the mean of the day's readings. A day of home readings belongs to no
+  # visit.
+  - id: home
+    dataset: HOME
+    group_by: [HOME.USUBJID, HOME.VSDY]
+    derivations:
+      USUBJID: HOME.USUBJID
+      VSCAT: {literal: HOME}
+      VSSTRESN:
+        aggregate: "MEAN(HOME.SYSBP)"
+      VSDRVFL: {literal: Y}
+      VISIT: {literal: null}
+      VSDY: HOME.VSDY

@@ -62,7 +62,6 @@
     "dataset",
     "group_by",
     "filter",
-    "derivations",
-    "submission"
+    "derivations"
   ]
 }

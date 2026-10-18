@@ -10,9 +10,10 @@ and the date of birth as ISO 8601 text, empty when it was not recorded.
 
 - `BRTHDTC` would be the collected date of birth, copied as text. It is
   described to reviewers as a complete date, a year, month and day, so a
-  birth date recorded to the month alone contradicts that description;
-  once the birth dates are complete the run is rejected and no artifact
-  is accepted. A birth date that was not recorded is left empty.
+  birth date recorded to the month alone contradicts that description.
+  Every birth date is checked against it once the variable is filled in,
+  and the one recorded to the month rejects the run, so no artifact is
+  accepted. A birth date that was not recorded is left empty.
 
 ## How to fix
 

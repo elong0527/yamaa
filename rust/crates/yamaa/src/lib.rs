@@ -22,6 +22,12 @@
 //! diagnostics or as [`Error::Unavailable`], and [`read_odm`] without `odm`
 //! returns `Error::Unavailable { feature: "odm" }`. The facade adds no native
 //! dependencies of its own.
+//!
+//! Malformed Parquet input can make the Parquet or Arrow crate panic. The
+//! engine contains each such panic as a finding and keeps it off stderr: its
+//! first native decode wraps the process's panic hook, once, and the wrapper
+//! prints nothing for a panic the engine contains and passes every other
+//! panic to the hook it wraps. A hook installed later replaces the wrapper.
 #![deny(unsafe_code)]
 
 pub mod api;
