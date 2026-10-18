@@ -1,0 +1,45 @@
+schema_version: "1.0"
+domain: SV
+keys: [USUBJID, VISITNUM]
+input:
+  PLAN: {path: input/plan.csv, types: {VISITNUM: int}}
+  VISITS: {path: input/visits.csv, types: {VISITNUM: int}}
+
+output:
+  path: sv.csv
+  columns: [USUBJID, VISITNUM, VISIT, SVOCCUR]
+
+intermediates:
+  # The subject's record of the visit, among the records built so far.
+  - id: RECORDED
+    dataset: SELF
+    key: [USUBJID, VISITNUM]
+    no_match: null
+
+columns:
+  - {name: USUBJID, type: str, label: Unique Subject Identifier}
+  - {name: VISITNUM, type: int, label: Visit Number}
+  - {name: VISIT, type: str, label: Visit Name}
+  - {name: SVOCCUR, type: str, label: Occurrence}
+
+rows:
+  # Each planned visit that has no record yet. These are the first records
+  # built, so no visit has a record yet when they are selected, and the
+  # specification is rejected before any data is read.
+  - id: missed
+    dataset: PLAN
+    filter: "RECORDED.VISIT IS NULL"
+    derivations:
+      USUBJID: PLAN.USUBJID
+      VISITNUM: PLAN.VISITNUM
+      VISIT: PLAN.VISIT
+      SVOCCUR: {literal: "N"}
+
+  # Each visit that took place.
+  - id: attended
+    dataset: VISITS
+    derivations:
+      USUBJID: VISITS.USUBJID
+      VISITNUM: VISITS.VISITNUM
+      VISIT: VISITS.VISIT
+      SVOCCUR: {literal: "Y"}
