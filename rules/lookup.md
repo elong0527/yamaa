@@ -599,6 +599,57 @@ intermediates:
     no_match: {literal: null}
 ```
 
+The `filter` drops every `SRC` record whose distance is missing. When the
+current input record's reference is missing, every distance is missing, no
+candidate survives, and the read takes `no_match` ([LOOKUP-13](#lookup-13)).
+
+To fall back to a candidate instead, leave the filter out and place missing
+distances last. Without `nulls`, a missing distance sorts first under `asc`
+([VALUE-22](values.md#value-22)), and a candidate without a distance is
+selected ahead of every measured one. Remaining ties break by record order
+([LOOKUP-10](#lookup-10)), which is not a business key
+([INPUT-2](inputs.md#input-2)), so the fallback names its tie-break:
+
+```yaml
+    order_by: [{variable: SRC.DIST, nulls: last}, SRC.SEQ]
+```
+
+A measured candidate is then selected ahead of every candidate without a
+distance. A selected record whose `DIST` is missing shows that no candidate had
+a distance and the tie-break chose it.
+
+When the reference is a `datetime`, such as `BASE.REFDTM`, `impute` completes
+each candidate's collected text ([TIME-8](temporal.md#time-8)), `diff` takes
+the elapsed difference ([TIME-4](temporal.md#time-4)), and `ABS` makes it a
+distance:
+
+```yaml
+    derivations:
+      ADTM: {impute: {type: datetime, source: DTC, minimum_source_precision: day, time: first}}
+      GAP: {diff: {type: datetime, start: ADTM, end: BASE.REFDTM, unit: hour}}
+      DIST: {compute: {expr: "ABS(GAP)"}}
+```
+
+`GAP`, and with it `DIST`, is missing when `ADTM` or the reference is missing.
+A candidate without a distance is dropped by the filter, or placed last by
+`nulls: last` when the filter is left out. For each candidate's `DTC`:
+
+- A missing `DTC` gives a missing `ADTM` without any handler
+  ([TIME-13](temporal.md#time-13)).
+- Partial collected text such as `2024-03` is valid
+  ([TIME-7](temporal.md#time-7)). Under `minimum_source_precision: day` it
+  gives a missing `ADTM`. A coarser minimum completes it from the rules that
+  minimum requires ([TIME-10](temporal.md#time-10)): with
+  `minimum_source_precision: month` and `day: first`, `2024-03` becomes
+  `2024-03-01T00:00:00`, and the distance is measured from that imputed value.
+- A complete date without a time, such as `2024-03-10`, takes its time from
+  `time`: `2024-03-10T00:00:00` under `time: first`.
+- Text that is not collected date text, such as `2024-03-10 09:00`, fails as
+  `invalid_date_text` at the derivation's path ([TIME-13](temporal.md#time-13)).
+  One such record in `SRC` stops the run, even when no current input record
+  matches its key, unless `invalid: {literal: null}` answers it with a missing
+  `ADTM` ([COLUMN-10](columns.md#column-10)).
+
 <a id="lookup-16"></a>
 
 ### LOOKUP-16. An intermediate derivation may read another intermediate's selection for its donor record
