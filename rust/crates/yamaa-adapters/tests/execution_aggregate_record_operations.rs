@@ -1327,7 +1327,7 @@ S1,002,2024-06
         /// finding is decided from. `domain` reaches each of them once it reads or
         /// binds the inputs. A case that `check` starts to report fails until it
         /// leaves this list.
-        const NOT_REPORTED_BY_CHECK: [(&str, &str); 25] = [
+        const NOT_REPORTED_BY_CHECK: [(&str, &str); 26] = [
             (
                 "negative-adlb-computed-param",
                 "a cycle through an aggregate and a case",
@@ -1397,6 +1397,10 @@ S1,002,2024-06
             (
                 "negative-row-value-self",
                 "a cycle through first_available and row_value",
+            ),
+            (
+                "negative-row-window-ungrouped",
+                "the group keys of a grouped row template's window",
             ),
             (
                 "negative-source-missing-field",
