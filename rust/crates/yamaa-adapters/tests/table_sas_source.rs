@@ -333,6 +333,95 @@ mod table {
                 ));
             }
         }
+        /// An entry-less column subheader, `empty`, shortened by `cut` bytes
+        /// with its remainder field set to agree with the shorter length.
+        fn shortened(
+            layout: crate::support::sas7bdat::Layout,
+            empty: &[u8],
+            cut: usize,
+        ) -> Vec<u8> {
+            let mut short = empty[..empty.len() - cut].to_vec();
+            let remainder = short.len() - 4 - 2 * layout.word();
+            layout.put(&mut short, layout.word(), remainder as u64, 2);
+            short
+        }
+        #[test]
+        fn column_subheaders_shorter_than_their_fixed_part_are_refused() {
+            // A column-name or column-attributes subheader holds a fixed part,
+            // 28 bytes in a 64-bit file and 20 in any other, then its
+            // entries. Below that fixed part the entry count would wrap, so
+            // the subheader is malformed even when its remainder field agrees
+            // with its length. One of exactly the fixed part holds no entries
+            // and is valid. Each short subheader is stored before the valid
+            // subheader of its kind.
+            use crate::support::sas7bdat::{Cell, Dataset, Kind, Layout, Page, Pointer, MIX};
+            for layout in [Layout::LE32, Layout::LE64, Layout::BE32, Layout::BE64] {
+                let mut dataset = Dataset::new(layout, &[("X", Kind::Num, 8)]);
+                dataset.total = 1;
+                dataset.mix_rows = 1;
+                let row = dataset.row(&[Cell::Num(7.0)]);
+                let file = |at: usize, extra: Vec<u8>| {
+                    let mut pointers = dataset.metadata();
+                    pointers.insert(at, Pointer::metadata(extra));
+                    dataset.file(&[Page::new(MIX, pointers, vec![row.clone()])])
+                };
+                // Names are the fourth subheader and attributes the fifth.
+                for (at, empty) in [(3, layout.column_name(&[])), (4, layout.column_attrs(&[]))] {
+                    let table = read_built(&file(at, empty.clone())).unwrap();
+                    assert_eq!(cells(&table), [[float(7.0)]], "{layout:?} {at}");
+                    for cut in 1..=8 {
+                        let bytes = file(at, shortened(layout, &empty, cut));
+                        assert!(
+                            matches!(read_built(&bytes), Err(Error::Invalid("malformed"))),
+                            "{layout:?} {at} {cut}"
+                        );
+                    }
+                }
+            }
+        }
+        #[test]
+        fn a_short_attributes_subheader_cannot_rewrite_a_column_after_the_first_record() {
+            // After the first record the two columns are submitted. A later
+            // attributes subheader describes a further slot, so it changes
+            // nothing the reader uses. A short one must not move the count of
+            // attribute slots back, which would let the next subheader
+            // overwrite Y's width and read the second record differently.
+            use crate::support::sas7bdat::{
+                Cell, Dataset, Field, Kind, Layout, Page, Pointer, META, MIX,
+            };
+            for layout in [Layout::LE32, Layout::LE64, Layout::BE32, Layout::BE64] {
+                let mut dataset = Dataset::new(layout, &[("X", Kind::Num, 8), ("Y", Kind::Num, 8)]);
+                dataset.total = 2;
+                dataset.mix_rows = 1;
+                let row = dataset.row(&[Cell::Num(1.0), Cell::Num(2.0)]);
+                let narrowed = Field {
+                    name: "Y".into(),
+                    kind: Kind::Num,
+                    offset: 8,
+                    width: 4,
+                };
+                let file = |short: Option<Vec<u8>>| {
+                    let mut later: Vec<Pointer> =
+                        short.into_iter().map(Pointer::metadata).collect();
+                    later.push(Pointer::metadata(layout.column_attrs(&[narrowed.clone()])));
+                    later.push(Pointer::raw_row(row.clone()));
+                    dataset.file(&[
+                        Page::new(MIX, dataset.metadata(), vec![row.clone()]),
+                        Page::new(META, later, vec![]),
+                    ])
+                };
+                let table = read_built(&file(None)).unwrap();
+                assert_eq!(cells(&table), [[float(1.0), float(2.0)]; 2], "{layout:?}");
+                let empty = layout.column_attrs(&[]);
+                assert!(
+                    matches!(
+                        read_built(&file(Some(shortened(layout, &empty, 1)))),
+                        Err(Error::Invalid("malformed"))
+                    ),
+                    "{layout:?}"
+                );
+            }
+        }
         #[test]
         fn empty_dataset_reads_column_metadata_from_every_page() {
             // No records, and the name and attributes of the second column

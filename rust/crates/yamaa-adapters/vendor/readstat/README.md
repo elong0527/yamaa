@@ -32,8 +32,9 @@ metadata pages, unsupported compression signature
 rejection, transport physical type/offset and partial-row validation, transport
 version 8 observation count admission, overlapping RDC back-reference
 propagation, accounting for records deleted in place, row length consistency
-once columns are submitted, bounded work for moved-record references, and exact
-IBM numeric precision facts used by narrowing. The row text scratch buffer is
+once columns are submitted, bounded work for moved-record references, column
+subheader length checks, and exact IBM numeric precision facts used by
+narrowing. The row text scratch buffer is
 sized from the validated submitted columns rather than from every column
 attribute slot. A transport member that declares no variables (or a negative count) reaches
 the metadata handler, as a SAS file without columns does, instead of failing
@@ -78,8 +79,11 @@ row. The buffer records its length. Once columns are submitted, a row-size
 subheader may repeat the row length but not change it, and each decompressor
 refuses a row length that its buffer does not hold. Columns are submitted only
 once every declared column has attributes and a name: a column without
-attributes would otherwise read as a zero-width character column. Snapshot
-reads and seeks validate their ranges against the held input.
+attributes would otherwise read as a zero-width character column. A
+column-name or column-attributes subheader shorter than its fixed part, 28
+bytes in a 64-bit file and 20 otherwise, is malformed, and its length is
+checked before its entry count is derived from it. Snapshot reads and seeks
+validate their ranges against the held input.
 The SAS header/page sizes are bounded by the captured snapshot framing, rather
 than a separate 16 MiB threshold. Their minimum framing sizes still apply.
 Text-blob count follows the 65,536 slots addressable by source uint16 references.
@@ -106,7 +110,7 @@ reviews the commits after the baseline and moves it.
 | `0a1771f7` | A compressed record SAS moved to another page is read at its reference (code `0x03`), from its moved slot (code `0x02` or `0x06`); a moved record no reference reaches (code `0x09` or `0x0d`) is skipped. | Ported; locally, a record no reference reaches counts as deleted, so the row-size subheader must count it, and a reference reads only the record it reaches, within the file's page bytes |
 | `39027f57`, `b05b6456` | A version 8 transport file reads exactly the observations its `OBSV8` header counts, so trailing all-blank records are data. A zero count stays unknown. | Ported; locally the count is parsed with `strtoll`, admitted before any record is read, must be met, and may be followed only by blank padding |
 | `0dc2aeee` | Without a count, a trailing all-blank record at least 80 bytes wide is data, since padding is always shorter than one 80-byte record. This applies to version 5 files too. | Declined for version 5, and for a version 8 count of zero: it contradicts SAS-7 (REQ-1317), under which a trailing all-blank record may be padding when no count is recorded, and XPT-10, which refuses to write a trailing all-blank observation because a reader drops it. With a count, `39027f57` keeps such records. |
-| `da9fcaa4` | A numeric value whose column width is outside 1 to 8 bytes fails instead of shifting by an undefined amount. | Ported. Every column has attributes when columns are submitted, and later attributes subheaders describe further slots, so a submitted width cannot change; the guard is defensive. |
+| `da9fcaa4` | A numeric value whose column width is outside 1 to 8 bytes fails instead of shifting by an undefined amount. | Ported. Every column has attributes when columns are submitted. An attributes subheader too short for its fixed part is refused before its entry count is derived, in both layouts, so the count of attribute slots never moves back and later subheaders describe further slots only. A submitted width cannot change, and the guard is defensive. |
 | `5850fb57` (release field) | The header's release field is copied into a terminated buffer before `sscanf` reads it. | Ported |
 | `3c68974f` | Allocation failures are checked. | Already covered by the local checked allocations |
 | `73a35397` | Transport label buffers keep their memory when `realloc` fails. | Already covered by the local checked reallocations |

@@ -326,10 +326,14 @@ cleanup:
 static readstat_error_t sas7bdat_parse_column_name_subheader(const char *subheader, size_t len, sas7bdat_ctx_t *ctx) {
     readstat_error_t retval = READSTAT_OK;
     size_t signature_len = ctx->subheader_signature_size;
+    /* The signature, remainder, reserved bytes and trailing padding take 28
+     * bytes of a 64-bit subheader and 20 of any other, and the entries fill
+     * the rest. The length is checked before the entry count is derived from
+     * it, so that count cannot wrap. */
+    if (len < (ctx->u64 ? 28 : 20)) return READSTAT_ERROR_PARSE;
     int cmax = ctx->u64 ? (len-28)/8 : (len-20)/8;
     int i;
     const char *cnp = &subheader[signature_len+8];
-    if (len < signature_len + 2) return READSTAT_ERROR_PARSE;
     uint16_t remainder = sas_read2(&subheader[signature_len], ctx->bswap);
 
     if (remainder != sas_subheader_remainder(len, signature_len)) {
@@ -355,10 +359,12 @@ cleanup:
 static readstat_error_t sas7bdat_parse_column_attributes_subheader(const char *subheader, size_t len, sas7bdat_ctx_t *ctx) {
     readstat_error_t retval = READSTAT_OK;
     size_t signature_len = ctx->subheader_signature_size;
+    /* The fixed part is 28 bytes of a 64-bit subheader and 20 of any other, as
+     * for column names, and is checked before the entry count is derived. */
+    if (len < (ctx->u64 ? 28 : 20)) return READSTAT_ERROR_PARSE;
     int cmax = ctx->u64 ? (len-28)/16 : (len-20)/12;
     int i;
     const char *cap = &subheader[signature_len+8];
-    if (len < signature_len + 2) return READSTAT_ERROR_PARSE;
     uint16_t remainder = sas_read2(&subheader[signature_len], ctx->bswap);
 
     if (remainder != sas_subheader_remainder(len, signature_len)) {
