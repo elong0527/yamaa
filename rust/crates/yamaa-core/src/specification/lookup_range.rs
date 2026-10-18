@@ -15,6 +15,7 @@ use crate::{
     },
     value::ValueType,
 };
+use std::collections::BTreeSet;
 
 #[derive(Clone, Debug)]
 pub(super) struct Declaration {
@@ -323,6 +324,240 @@ pub(super) fn admit<'a>(
                 if let CurrentRead::Intermediate { index, .. } = range.current().read {
                     named.push(index);
                 }
+            }
+        }
+    }
+}
+
+/// Report a refused range once, however many contexts read it.
+fn report(
+    path: &str,
+    diagnostic: Diagnostic,
+    seen: &mut BTreeSet<String>,
+    findings: &mut Vec<BindFinding>,
+) {
+    if seen.insert(path.to_string()) {
+        findings.push(BindFinding::Scalar(diagnostic));
+    }
+}
+
+/// The rows of one context of [`check`]: what each row evaluates, as the
+/// specification declares it, and the input whose records drive each of
+/// those rows.
+pub(super) struct Declared<'a> {
+    pub evaluated: Vec<Evaluated<'a>>,
+    pub drivers: Vec<&'a str>,
+}
+
+/// One thing a row evaluates, as declared.
+#[derive(Clone, Copy)]
+pub(super) enum Evaluated<'a> {
+    /// An operation, with the dataset whose qualifier reads the row's own
+    /// record there rather than joining it; with `None` every input joins.
+    Operation(&'a Operation, Option<&'a str>),
+    /// A name read outside an operation: a row derivation that copies a
+    /// qualified variable, or an identifier of a row template's filter.
+    Name(&'a str),
+    /// A project function call, by its index.
+    Call(usize),
+}
+
+/// `check` applies [`admit`] to the declarations alone. The rows of a context
+/// evaluate the range of each lookup their operations evaluate directly, and
+/// the range of each named intermediate they read: directly, from an
+/// aggregate's derive binding or through a range value, and onward through
+/// that intermediate's own range value. A range value qualified by an input
+/// that does not drive every one of those rows fails whether or not the input
+/// stores the field, because binding refuses an unknown value the same way
+/// (LOOKUP-9). Contexts are admitted in binding's order, and each refused
+/// range is reported once.
+pub(super) fn check<'a>(
+    contexts: impl IntoIterator<Item = Declared<'a>>,
+    named: &'a intermediates::Declarations,
+    inputs: &[SourceDeclaration],
+    project: Option<&'a crate::project_calls::ProjectCalls>,
+    findings: &mut Vec<BindFinding>,
+) {
+    let refused = |value: &str, drivers: &[&str]| {
+        value.split_once('.').is_some_and(|(qualifier, _)| {
+            inputs.iter().any(|input| input.name == qualifier)
+                && drivers.iter().any(|&driver| driver != qualifier)
+        })
+    };
+    let mut seen = BTreeSet::new();
+    for context in contexts {
+        let drivers = context.drivers.as_slice();
+        for evaluated in context.evaluated {
+            let mut reads = Reads::default();
+            reads.evaluated(evaluated, inputs, project);
+            for (range, owner) in reads.ranges {
+                if refused(&range.value, drivers) {
+                    report(
+                        range.path(),
+                        range.unknown_value(owner),
+                        &mut seen,
+                        findings,
+                    );
+                }
+            }
+            let mut stack = reads
+                .names
+                .into_iter()
+                .filter_map(|name| named.reference(name).map(|(index, _)| index))
+                .collect::<Vec<_>>();
+            let mut visited = BTreeSet::new();
+            while let Some(index) = stack.pop() {
+                if !visited.insert(index) {
+                    continue;
+                }
+                let Some((identifier, range)) = named.range(index) else {
+                    continue;
+                };
+                if refused(&range.value, drivers) {
+                    report(
+                        range.path(),
+                        range.unknown_value(Owner::Intermediate(identifier)),
+                        &mut seen,
+                        findings,
+                    );
+                }
+                if let Some((chained, _)) = named.reference(&range.value) {
+                    stack.push(chained);
+                }
+            }
+        }
+    }
+}
+
+/// What a row reads in one declared operation, as binding finds it in the
+/// bound expression: the range of each lookup the row evaluates directly,
+/// with its owner, and every name the row reads, a range value among them.
+#[derive(Default)]
+struct Reads<'a> {
+    ranges: Vec<(&'a Declaration, Owner<'a>)>,
+    names: Vec<&'a str>,
+}
+
+impl<'a> Reads<'a> {
+    fn evaluated(
+        &mut self,
+        evaluated: Evaluated<'a>,
+        inputs: &[SourceDeclaration],
+        project: Option<&'a crate::project_calls::ProjectCalls>,
+    ) {
+        match evaluated {
+            Evaluated::Operation(operation, own) => self.operation(operation, own, inputs, project),
+            Evaluated::Name(name) => self.names.push(name),
+            Evaluated::Call(call) => self.call(call, project),
+        }
+    }
+
+    fn operation(
+        &mut self,
+        operation: &'a Operation,
+        own: Option<&str>,
+        inputs: &[SourceDeclaration],
+        project: Option<&'a crate::project_calls::ProjectCalls>,
+    ) {
+        match operation {
+            Operation::Source(source) => self.source(source, own, inputs),
+            Operation::FirstAvailable(selection) => {
+                for source in &selection.sources {
+                    self.source(source, own, inputs);
+                }
+            }
+            Operation::MappingCut(mapping) => self.source(&mapping.source, own, inputs),
+            Operation::Aggregate(aggregate) => {
+                if let Some(range) = aggregate.current_range() {
+                    self.ranges.push((range, Owner::Unnamed));
+                    self.names.push(&range.value);
+                }
+                // A derive binding evaluates for each record of the relation,
+                // so only the names it reads for the row are the row's reads.
+                for operation in aggregate.derive_operations() {
+                    let mut derived = Reads::default();
+                    derived.operation(operation, own, inputs, project);
+                    self.names.extend(derived.names);
+                }
+            }
+            Operation::Case(branches) => {
+                for branch in branches {
+                    if let Some(Ok(predicate)) = branch.predicate() {
+                        self.names.extend(predicate.identifiers());
+                    }
+                    self.operation(&branch.operation, own, inputs, project);
+                }
+            }
+            Operation::Flag(flag) => {
+                if let Some(condition) = flag.condition() {
+                    self.names.extend(condition.identifiers());
+                }
+            }
+            Operation::Compute(compiled) => self.names.extend(compiled.identifiers()),
+            Operation::Scalar(extreme) => {
+                self.names
+                    .extend(extreme.sources().iter().map(String::as_str));
+            }
+            Operation::StrExtract(operation) => self.names.push(operation.source()),
+            Operation::StrReplace(operation) => self.names.push(operation.source()),
+            Operation::StrCase(operation) => self.names.push(operation.source()),
+            Operation::StrPad(operation) => self.names.push(operation.source()),
+            Operation::Round(operation) => self.names.push(operation.source()),
+            Operation::StrTemplate(operation) => {
+                self.names
+                    .extend(operation.identifiers().iter().map(String::as_str));
+            }
+            Operation::Temporal(operation) => {
+                self.names
+                    .extend(operation.sources().iter().map(String::as_str));
+            }
+            Operation::Imputation(operation) => {
+                self.names
+                    .extend(operation.operands().map(|(_, name)| name));
+            }
+            Operation::ProjectFunction { call, .. } => self.call(*call, project),
+            // A window reads the output rows of its partition and an ODM
+            // operation the items of the driver's record, never a lookup.
+            Operation::Odm(_)
+            | Operation::Literal(_)
+            | Operation::Window(_)
+            | Operation::InvalidNumeric { .. } => (),
+        }
+    }
+
+    /// A source binding reads its variable. Only an implicit join matches a
+    /// range, so its range is read only when the variable is qualified by an
+    /// input other than `own`; binding refuses `between` on any other read
+    /// before it reads the value (LOOKUP-9).
+    fn source(
+        &mut self,
+        source: &'a source_expressions::Declaration,
+        own: Option<&str>,
+        inputs: &[SourceDeclaration],
+    ) {
+        self.names.push(&source.variable);
+        let Some(range) = source.current_range() else {
+            return;
+        };
+        if source
+            .variable
+            .split_once('.')
+            .is_some_and(|(qualifier, _)| {
+                own != Some(qualifier) && inputs.iter().any(|input| input.name == qualifier)
+            })
+        {
+            self.ranges.push((range, Owner::Source(&source.variable)));
+            self.names.push(&range.value);
+        }
+    }
+
+    fn call(&mut self, call: usize, project: Option<&'a crate::project_calls::ProjectCalls>) {
+        let Some(call) = project.and_then(|project| project.calls().get(call)) else {
+            return;
+        };
+        for argument in &call.located.call.arguments {
+            if let crate::project_call_document::Input::Reference(name) = &argument.input {
+                self.names.push(name);
             }
         }
     }

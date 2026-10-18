@@ -75,6 +75,36 @@ impl Fixture {
             Err(issues) => issues[0].as_value(),
         }
     }
+    /// Every issue of the run, from validation or from the run itself.
+    fn issues(&self) -> Vec<Value> {
+        match self.run() {
+            Ok(domain) => domain.issues().iter().map(Issue::as_value).collect(),
+            Err(issues) => issues.iter().map(Issue::as_value).collect(),
+        }
+    }
+    /// Every issue `check` reports from the declarations alone.
+    fn checked(&self) -> Vec<Value> {
+        let specification = self.0.join("spec.yaml");
+        let specification = specification.to_str().unwrap();
+        file_application::check(
+            yamaa_core::project_function::Language::Python,
+            Request {
+                specification,
+                environment: None,
+            },
+            Identity {
+                runtime: "test",
+                runtime_version: "test",
+                engine_version: yamaa_core::VERSION,
+                example: "lookup-model",
+                specification,
+                base_directory: ".",
+            },
+        )
+        .iter()
+        .map(Issue::as_value)
+        .collect()
+    }
 }
 impl Drop for Fixture {
     fn drop(&mut self) {
@@ -912,12 +942,15 @@ fn a_column_lookup_reads_the_driver_of_the_templates_that_leave_the_column() {
     // A window that starts on the home day 12, for a key match on LO.
     let starts = "STUDYID,NAME,LO,HI\nS,EARLY,1,10\nS,LATE,12,50\n";
     let own = "      WINDOW: {literal: CLINIC}\n";
-    for (header, derivation, path, windows) in [
+    // `check` admits each range value against the same rows (LOOKUP-9); the
+    // filter and the key are admitted by binding alone.
+    for (header, derivation, path, windows, owner) in [
         (
             String::new(),
             window("HOME.DAY"),
             "columns.WINDOW.derivation.source.between.value",
             WINDOWS,
+            Some(("variable", "WINDOWS.NAME")),
         ),
         (
             "intermediates:\n\
@@ -929,6 +962,7 @@ fn a_column_lookup_reads_the_driver_of_the_templates_that_leave_the_column() {
             "W.NAME".to_owned(),
             "intermediates[0].between.value",
             WINDOWS,
+            Some(("intermediate", "W")),
         ),
         (
             "intermediates:\n\
@@ -940,6 +974,7 @@ fn a_column_lookup_reads_the_driver_of_the_templates_that_leave_the_column() {
             "W.NAME".to_owned(),
             "intermediates[0].filter",
             WINDOWS,
+            None,
         ),
         (
             "intermediates:\n\
@@ -950,6 +985,7 @@ fn a_column_lookup_reads_the_driver_of_the_templates_that_leave_the_column() {
             "W.NAME".to_owned(),
             "intermediates[0].key",
             starts,
+            None,
         ),
     ] {
         let inputs = [
@@ -958,6 +994,9 @@ fn a_column_lookup_reads_the_driver_of_the_templates_that_leave_the_column() {
             ("windows.csv", windows),
         ];
         let fixture = Fixture::new(&specification(&header, &derivation, own), &inputs);
+        if owner.is_some() {
+            assert_eq!(fixture.checked(), Vec::<Value>::new(), "{derivation}");
+        }
         let (csv, _) = fixture.saved();
         // Day 12 falls in LATE; day 99 in no window.
         assert_eq!(
@@ -968,9 +1007,300 @@ fn a_column_lookup_reads_the_driver_of_the_templates_that_leave_the_column() {
         // When the clinic template leaves WINDOW to the column too, a clinic
         // row has no home record.
         let fixture = Fixture::new(&specification(&header, &derivation, ""), &inputs);
+        if let Some(owner) = owner {
+            assert_eq!(
+                agreeing(&fixture),
+                [refusal(path, "HOME.DAY", owner)],
+                "{derivation}"
+            );
+        }
         let failure = fixture.failure();
         assert_eq!(failure["condition"], "unknown_field", "{derivation}");
         assert_eq!(failure["spec_paths"], yamaa_adapters::json!([path]));
         assert_eq!(failure["context"]["identifier"], "HOME.DAY");
+    }
+}
+
+/// Each subject's reference date in OTHER, an input that drives no event row.
+const OTHER: &str = "STUDYID,USUBJID,REFDT\nS,S-1,2025-01-05\nS,S-2,2025-03-10\n";
+
+fn with_other(specification: String) -> String {
+    specification.replace(
+        "input:\n",
+        "input:\n  OTHER: {path: other.csv, types: {REFDT: date}}\n",
+    )
+}
+
+/// The refusal of a range value that names no value of the rows that read
+/// the lookup (LOOKUP-9), at the range's `between.value`, naming the value and
+/// the lookup that declares it.
+fn refusal(path: &str, identifier: &str, (owner, name): (&str, &str)) -> Value {
+    yamaa_adapters::json!({
+        "phase": "validation",
+        "condition": "unknown_field",
+        "spec_paths": [path],
+        "context": {"identifier": identifier, (owner): name},
+    })
+}
+
+/// An issue's phase, condition, specification paths and context.
+fn finding(issue: &Value) -> Value {
+    let mut object = yamaa_core::json::Map::new();
+    for field in ["phase", "condition", "spec_paths", "context"] {
+        object.insert(field.into(), issue[field].clone());
+    }
+    Value::Object(object)
+}
+
+/// The findings `check` reports, after asserting that the run reports exactly
+/// the same issues, with the same requirement.
+#[track_caller]
+fn agreeing(fixture: &Fixture) -> Vec<Value> {
+    let checked = fixture.checked();
+    assert_eq!(checked, fixture.issues(), "check and domain");
+    checked.iter().map(finding).collect()
+}
+
+/// A named intermediate P whose range value is `value`, and Q, whose range
+/// value reads P's selection for the same row.
+fn named_ranges(value: &str) -> String {
+    format!(
+        "base: AE\n\
+         intermediates:\n\
+         \x20 - id: P\n\
+         \x20   dataset: PERIODS\n\
+         \x20   key: [STUDYID, USUBJID]\n\
+         \x20   between: {{value: {value}, lower: APERSDT, upper: APEREDT}}\n\
+         \x20   order_by: [PERIODS.APERIOD]\n\
+         \x20   keep: first\n\
+         \x20 - id: Q\n\
+         \x20   dataset: PERIODS\n\
+         \x20   key: [STUDYID, USUBJID]\n\
+         \x20   between: {{value: P.APERSDT, lower: APERSDT, upper: APEREDT}}\n\
+         \x20   order_by: [PERIODS.APERIOD]\n\
+         \x20   keep: first\n"
+    )
+}
+
+/// `check` reports a named intermediate's range value that names an input
+/// driving no row that reads the intermediate, wherever binding does, from
+/// the declarations alone (LOOKUP-9): whichever operation of a row reads the
+/// intermediate, through another intermediate's, an aggregate's or a source
+/// binding's range value, from an aggregate's derive binding, and from a
+/// dataset verification.
+#[test]
+fn check_reports_an_intermediate_range_value_of_another_input_wherever_binding_does() {
+    let inputs = [
+        ("ae.csv", AE),
+        ("periods.csv", PERIODS),
+        ("other.csv", OTHER),
+    ];
+    let refused = refusal(
+        "intermediates[0].between.value",
+        "OTHER.REFDT",
+        ("intermediate", "P"),
+    );
+    for read in [
+        "{name: READ, type: int, derivation: P.APERIOD}",
+        "{name: READ, type: int, derivation: {compute: {expr: 'P.APERIOD + 1'}}}",
+        "{name: READ, type: str, derivation: {flag: 'P.APERIOD > 1'}}",
+        "{name: READ, type: int, derivation: {case: [{when: 'P.APERIOD > 1', then: {literal: 1}}]}}",
+        "{name: READ, type: int, derivation: {case: [{when: 'AESEQ > 1', then: P.APERIOD}]}}",
+        "{name: READ, type: int, derivation: {first_available: {sources: [P.APERIOD, AESEQ]}}}",
+        "{name: READ, type: int, derivation: {greatest: {sources: [P.APERIOD, AESEQ]}}}",
+        "{name: READ, type: str, derivation: {str_template: 'period {P.APERIOD}'}}",
+        // Each of these runs P for the same row through a range value.
+        "{name: READ, type: int, derivation: Q.APERIOD}",
+        "{name: READ, type: int, derivation: {aggregate: {between: {value: P.APERSDT, upper: APEREDT}, expr: 'COUNT(PERIODS.*)'}}}",
+        "{name: READ, type: int, derivation: {source: {variable: PERIODS.APERIOD, between: {value: P.APERSDT, lower: APERSDT}, order_by: [PERIODS.APERIOD], keep: first}}}",
+        // A derive binding reads P's selection for the row.
+        "{name: READ, type: int, derivation: {aggregate: {derive: [{name: START, type: date, derivation: PERIODS.APERSDT}, {name: FIRST, type: date, derivation: P.APERSDT}], expr: 'COUNT(FIRST)'}}}",
+    ] {
+        let fixture = Fixture::new(
+            &with_other(specification(
+                &named_ranges("OTHER.REFDT"),
+                &format!("  - {read}\n"),
+                ", READ",
+            )),
+            &inputs,
+        );
+        assert_eq!(agreeing(&fixture), std::slice::from_ref(&refused), "{read}");
+    }
+    // A dataset verification reads P for every row.
+    let fixture = Fixture::new(
+        &with_other(specification(
+            &named_ranges("OTHER.REFDT"),
+            "  - {name: READ, type: int, derivation: {literal: 1}}\n\
+             verifications:\n\
+             \x20 - assert: {id: dated, require: 'P.APERIOD IS NOT NULL'}\n",
+            ", READ",
+        )),
+        &inputs,
+    );
+    assert_eq!(agreeing(&fixture), std::slice::from_ref(&refused));
+    // A range no row reads, and a value of the base driver's record, are
+    // admitted.
+    for (value, read) in [("OTHER.REFDT", "{literal: 1}"), ("AE.ASTDT", "P.APERIOD")] {
+        let fixture = Fixture::new(
+            &with_other(specification(
+                &named_ranges(value),
+                &format!("  - {{name: READ, type: int, derivation: {read}}}\n"),
+                ", READ",
+            )),
+            &inputs,
+        );
+        assert_eq!(fixture.checked(), Vec::<Value>::new(), "{value}: {read}");
+        fixture.saved();
+    }
+}
+
+/// `check` reports a source binding's or a qualified aggregate's range value
+/// that names an input driving no row, wherever binding does (LOOKUP-9): at
+/// the top of a derivation, in a case result, among a coalescing selection's
+/// sources and as a classified source.
+#[test]
+fn check_reports_a_join_or_aggregate_range_value_of_another_input_wherever_binding_does() {
+    let inputs = [
+        ("ae.csv", AE),
+        ("periods.csv", PERIODS),
+        ("other.csv", OTHER),
+    ];
+    let joined =
+        "{variable: PERIODS.APERIOD, between: {value: OTHER.REFDT, lower: APERSDT, upper: APEREDT}}";
+    let column = |kind: &str, derivation: &str| {
+        with_other(specification(
+            "base: AE\n",
+            &format!("  - {{name: READ, type: {kind}, derivation: {derivation}}}\n"),
+            ", READ",
+        ))
+    };
+    for (kind, derivation, path) in [
+        ("int", format!("{{source: {joined}}}"), "source"),
+        (
+            "int",
+            format!("{{case: [{{when: 'AESEQ > 0', then: {{source: {joined}}}}}]}}"),
+            "case[0].then.source",
+        ),
+        (
+            "int",
+            format!("{{first_available: {{sources: [{joined}, AESEQ]}}}}"),
+            "first_available.sources[0]",
+        ),
+        (
+            "str",
+            format!("{{cut: {{source: {joined}, breaks: [1.5], labels: [first, later]}}}}"),
+            "cut.source",
+        ),
+    ] {
+        let fixture = Fixture::new(&column(kind, &derivation), &inputs);
+        assert_eq!(
+            agreeing(&fixture),
+            [refusal(
+                &format!("columns.READ.derivation.{path}.between.value"),
+                "OTHER.REFDT",
+                ("variable", "PERIODS.APERIOD"),
+            )],
+            "{derivation}"
+        );
+    }
+    let counted =
+        "{aggregate: {between: {value: OTHER.REFDT, upper: APEREDT}, expr: 'COUNT(PERIODS.*)'}}";
+    for (derivation, path) in [
+        (counted.to_owned(), "aggregate"),
+        (
+            format!("{{case: [{{when: 'AESEQ > 0', then: {counted}}}]}}"),
+            "case[0].then.aggregate",
+        ),
+    ] {
+        let fixture = Fixture::new(&column("int", &derivation), &inputs);
+        let expected = yamaa_adapters::json!({
+            "phase": "validation",
+            "condition": "unknown_field",
+            "spec_paths": [format!("columns.READ.derivation.{path}.between.value")],
+            "context": {"identifier": "OTHER.REFDT"},
+        });
+        assert_eq!(agreeing(&fixture), [expected], "{derivation}");
+    }
+}
+
+/// With row templates, `check` admits a range value against the driver of
+/// every row that reads it, as binding does (LOOKUP-9): a column derivation's
+/// against the drivers of the templates that leave the column to it, a
+/// dataset verification's against the drivers of every template, and a
+/// template's derivations' and filter's against its own driver.
+#[test]
+fn check_admits_a_row_template_range_value_against_the_rows_that_read_it() {
+    let inputs = [
+        ("clinic.csv", CLINIC),
+        ("home.csv", HOME),
+        ("windows.csv", WINDOWS),
+    ];
+    let named = "intermediates:\n\
+        \x20 - id: W\n\
+        \x20   dataset: WINDOWS\n\
+        \x20   key: [STUDYID]\n\
+        \x20   between: {value: CLINIC.DAY, lower: LO, upper: HI}\n";
+    let column_phase = |derivation: &str, header: &str| {
+        measurements("NONE", "NONE", header)
+            .replace("      WINDOW: NONE\n", "")
+            .replace(
+                "  - {name: WINDOW, type: str}\n",
+                &format!("  - {{name: WINDOW, type: str, derivation: {derivation}}}\n"),
+            )
+    };
+    let refused = refusal(
+        "intermediates[0].between.value",
+        "CLINIC.DAY",
+        ("intermediate", "W"),
+    );
+    // A home row has no clinic record, however it reads W: through the column
+    // phase or a dataset verification, as every row does, or through the home
+    // template's derivations or filter.
+    for specification in [
+        column_phase("W.NAME", named),
+        measurements("{literal: x}", "{literal: y}", named)
+            + "verifications:\n  - assert: {id: windowed, require: 'W.NAME IS NOT NULL'}\n",
+        measurements("{literal: x}", "W.NAME", named),
+        measurements("{literal: x}", "{str_template: 'in {W.NAME}'}", named),
+        measurements("{literal: x}", "{literal: y}", named).replace(
+            "    dataset: HOME\n",
+            "    dataset: HOME\n    filter: \"W.NAME IS NOT NULL\"\n",
+        ),
+    ] {
+        let fixture = Fixture::new(&specification, &inputs);
+        assert_eq!(
+            agreeing(&fixture),
+            std::slice::from_ref(&refused),
+            "{specification}"
+        );
+    }
+    // Read by the clinic template alone, W reads each row's own record.
+    let fixture = Fixture::new(&measurements("W.NAME", "{literal: y}", named), &inputs);
+    assert_eq!(fixture.checked(), Vec::<Value>::new());
+    let (csv, _) = fixture.saved();
+    assert_eq!(
+        csv,
+        "STUDYID,USUBJID,SEQ,WINDOW\nS,S-1,1,EARLY\nS,S-1,2,LATE\nS,S-1,3,y\nS,S-1,4,y\n"
+    );
+    // A join's range in the home template, and one a column derives for the
+    // rows of both templates.
+    for (specification, path, value) in [
+        (
+            measurements("{literal: x}", &window("CLINIC.DAY"), ""),
+            "rows[1].derivations.WINDOW.source.between.value",
+            "CLINIC.DAY",
+        ),
+        (
+            column_phase(&window("HOME.DAY"), ""),
+            "columns.WINDOW.derivation.source.between.value",
+            "HOME.DAY",
+        ),
+    ] {
+        let fixture = Fixture::new(&specification, &inputs);
+        assert_eq!(
+            agreeing(&fixture),
+            [refusal(path, value, ("variable", "WINDOWS.NAME"))],
+            "{specification}"
+        );
     }
 }

@@ -2190,11 +2190,9 @@ impl Rows {
         &self,
         output: &TableSchema,
         input: &dyn Fn(&str) -> crate::result_type::ResultType,
-        sources: &[SourceDeclaration],
-        named: &intermediates::Declarations,
         findings: &mut Vec<BindFinding>,
     ) -> Result<(), BindError> {
-        self.declaration_findings(sources, named, findings)?;
+        self.declaration_findings(findings)?;
         // Static types in binding order: each template's derivations, then the
         // column-phase defaults, a shared default stating one derivation.
         for declaration in self
@@ -2231,20 +2229,19 @@ impl Rows {
         }
         Ok(())
     }
-    fn declaration_findings(
-        &self,
-        sources: &[SourceDeclaration],
+    /// The contexts whose rows read lookup ranges, in binding's order
+    /// ([`lookup_range::check`]): the column phase, whose derivations and
+    /// dataset verifications (`verified`) evaluate for the rows of every
+    /// template, then each template, whose derivations and filter evaluate
+    /// for its rows only. A row's driver is the input behind its template,
+    /// named directly or through a named intermediate.
+    pub(super) fn range_contexts<'a>(
+        &'a self,
+        sources: &'a [SourceDeclaration],
         named: &intermediates::Declarations,
-        findings: &mut Vec<BindFinding>,
-    ) -> Result<(), BindError> {
-        let groups = self.column_groups();
-        let column_groups = groups
-            .iter()
-            .map(|(driver, group)| (*driver, group.as_slice()))
-            .collect::<Vec<_>>();
-        // The input whose records drive each template's rows, when every
-        // template names one, directly or through a named intermediate.
-        let drivers = self
+        verified: impl Iterator<Item = lookup_range::Evaluated<'a>>,
+    ) -> Vec<lookup_range::Declared<'a>> {
+        let Some(drivers) = self
             .templates
             .iter()
             .map(|template| {
@@ -2257,7 +2254,85 @@ impl Rows {
                         .map(|source| source.name.as_str())
                 }
             })
-            .collect::<Option<Vec<_>>>();
+            .collect::<Option<Vec<_>>>()
+        else {
+            return Vec::new();
+        };
+        let evaluated =
+            |declaration: &'a RowDeclaration, own: Option<&'a str>| match &declaration.operation {
+                RowOperation::Shared(branch) => {
+                    Some(lookup_range::Evaluated::Operation(&branch.operation, own))
+                }
+                RowOperation::Source(name) => Some(lookup_range::Evaluated::Name(name)),
+                RowOperation::ProjectFunction { call, .. } => {
+                    Some(lookup_range::Evaluated::Call(*call))
+                }
+                RowOperation::Output(_) => None,
+            };
+        // A column derivation evaluates only for the rows of the templates that
+        // leave the column to this phase (LOOKUP-9), and binds against the
+        // driver they share; without one, every input joins.
+        let column_phase = self
+            .columns
+            .iter()
+            .filter_map(|declaration| {
+                let leaving = self
+                    .templates
+                    .iter()
+                    .zip(&drivers)
+                    .filter(|(template, _)| {
+                        !template
+                            .declarations
+                            .iter()
+                            .any(|derived| derived.column == declaration.column)
+                    })
+                    .collect::<Vec<_>>();
+                let own = leaving
+                    .first()
+                    .map(|(template, _)| template.driver.as_str())
+                    .filter(|&first| leaving.iter().all(|(template, _)| template.driver == first));
+                evaluated(declaration.as_ref(), own).map(|evaluated| lookup_range::Declared {
+                    evaluated: vec![evaluated],
+                    drivers: leaving.iter().map(|(_, driver)| **driver).collect(),
+                })
+            })
+            .collect::<Vec<_>>();
+        let templates = self
+            .templates
+            .iter()
+            .zip(&drivers)
+            .map(|(template, &driver)| {
+                let mut evaluated = template
+                    .declarations
+                    .iter()
+                    .filter_map(|declaration| {
+                        evaluated(declaration.as_ref(), Some(&template.driver))
+                    })
+                    .collect::<Vec<_>>();
+                if let Some((_, Ok(filter))) = &template.filter {
+                    evaluated.extend(filter.identifiers().map(lookup_range::Evaluated::Name));
+                }
+                lookup_range::Declared {
+                    evaluated,
+                    drivers: vec![driver],
+                }
+            });
+        // A dataset verification evaluates for the rows of every template.
+        column_phase
+            .into_iter()
+            .chain(std::iter::once(lookup_range::Declared {
+                evaluated: verified.collect(),
+                drivers: drivers.clone(),
+            }))
+            .chain(templates)
+            .collect()
+    }
+    fn declaration_findings(&self, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
+        let groups = self.column_groups();
+        let column_groups = groups
+            .iter()
+            .map(|(driver, group)| (*driver, group.as_slice()))
+            .collect::<Vec<_>>();
         for declaration in &self.columns {
             if let RowOperation::Shared(branch) = &declaration.operation {
                 static_checks::scoped_branch(
@@ -2270,10 +2345,6 @@ impl Rows {
                     )),
                     findings,
                 )?;
-                // A column-phase aggregate evaluates for the rows of every template.
-                if let Some(drivers) = &drivers {
-                    aggregates::check_ranges(&branch.operation, sources, drivers, findings);
-                }
             }
         }
         for (index, template) in self.templates.iter().enumerate() {
