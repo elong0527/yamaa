@@ -688,6 +688,39 @@ def judge_metamorphic(example, runtime, record, expectations):
     return outcome
 
 
+def judge_repeats(builds):
+    """Each entry's object runs twice; the second run equals the first.
+
+    A spec object's second run reuses the plan its first run compiled (#2821).
+    It must reproduce the first run's issues, typed public tables and save
+    outcome, and leave the saved files byte for byte as the first run saved
+    them, so the saved bytes judged against the authored truth below are both
+    runs' bytes.
+    """
+    findings = []
+    for build in builds:
+        repeat = build.get("repeat")
+        if not isinstance(repeat, dict):
+            findings.append(f"{build['specification']} was not run a second time")
+            continue
+        for field in ("issues", "tables", "saved"):
+            if repeat.get(field) != build.get(field):
+                findings.append(
+                    {
+                        "repeat": build["specification"],
+                        "differs_from_first_run": field,
+                    }
+                )
+        if repeat.get("same_files") is not True:
+            findings.append(
+                {
+                    "repeat": build["specification"],
+                    "differs_from_first_run": "saved files",
+                }
+            )
+    return findings
+
+
 def compare_example(example, runtime, record, fixtures, observed, expectations=None):
     if expectations is None:
         expectations = load_metamorphic_expectations(fixtures)
@@ -734,10 +767,16 @@ def compare_example(example, runtime, record, fixtures, observed, expectations=N
             "observed entry specifications/environments do not match the runner plan"
         )
         return result
+    repeats = judge_repeats(builds)
+    result["findings"].extend(repeats)
     metamorphic = judge_metamorphic(example, runtime, record, expectations)
     result["metamorphic"] = metamorphic
 
     def finish():
+        # A second run that differs from the first is a mismatch whatever the
+        # first run reported.
+        if repeats and result["verdict"] in ("pass", "unsupported"):
+            result["verdict"] = "mismatch"
         if (
             metamorphic["problems"]
             or metamorphic["differences"]
