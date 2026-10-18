@@ -62,6 +62,9 @@ unlink(file.path(root, c("spec.yaml", "project.yaml")))
 writeLines("changed after preparation", file.path(root, "dm.csv"))
 held <- saved(result, root, c("dm.json", "define.xml"))
 for (name in names(held)) stopifnot(identical(held[[name]], rawfile(file.path(fixtures, "sdtm-dm-metadata/expected", name))))
+# Every save rewrites the held bytes: deleted files come back unchanged.
+unlink(file.path(root, names(held)))
+stopifnot(identical(saved(result, root, c("dm.json", "define.xml")), held))
 unlink(root, recursive = TRUE)
 
 # Without a section every declared define section is composed; a section the

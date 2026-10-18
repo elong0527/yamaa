@@ -348,6 +348,8 @@ class PublicContract(unittest.TestCase):
         self.spec.unlink()
         (self.root / "input.csv").unlink()
         gc.collect()
+        # Every save rewrites the report, then raises: a deleted report comes
+        # back unchanged and the stale output is never touched.
         for _ in range(2):
             error = self.refusal(result.save)
             self.assertEqual(str(error), MESSAGES["failed_run_save"])
@@ -359,6 +361,7 @@ class PublicContract(unittest.TestCase):
                 (self.root / "checks.csv").read_bytes(),
                 TRUTH["failed_report_csv"].encode("utf-8"),
             )
+            (self.root / "checks.csv").unlink()
         held = result.report
         del result
         gc.collect()
@@ -560,6 +563,54 @@ class PublicContract(unittest.TestCase):
         self.assertFalse((case / "test.csv").exists())
         self.assertIsNone(runs.save())
         self.assertEqual((case / "test.csv").read_bytes(), b"ID,RESULT\n01,1.5\n")
+
+    def test_every_save_rewrites_what_the_result_holds_without_rereading(self):
+        def restored(directory, names, save):
+            """Save, delete what was written, save again: the same bytes return."""
+            self.assertIsNone(save())
+            held = {name: (directory / name).read_bytes() for name in names}
+            for name in names:
+                (directory / name).unlink()
+            self.assertIsNone(save())
+            for name in names:
+                self.assertEqual((directory / name).read_bytes(), held[name])
+            return held
+
+        # A run: its output and its declared report.
+        self.spec.write_text(
+            SPEC.replace(
+                "columns: [ID, VALUE]}", "columns: [ID, VALUE], report: report.csv}"
+            ),
+            encoding="utf-8",
+        )
+        run = yamaa.spec(self.spec).run()
+        self.assertTrue(self.issues(run).is_empty())
+        self.spec.unlink()
+        (self.root / "input.csv").unlink()
+        held = restored(self.root, ["output.csv", "report.csv"], run.save)
+        self.assertEqual(held["output.csv"], INPUT)
+        # A project run: each member's output.
+        project, case = self.function_study()
+        runs = project.run()
+        self.assertTrue(self.issues(runs).is_empty())
+        shutil.rmtree(case / "input")
+        (case / "spec.yaml").unlink()
+        held = restored(case, ["test.csv"], runs.save)
+        self.assertEqual(held["test.csv"], b"ID,RESULT\n01,1.5\n")
+        # A submission: its define.xml and Dataset-JSON.
+        fixture = Path(__file__).with_name("define-fixtures") / "sdtm-dm-metadata"
+        directory = self.root / "submission"
+        shutil.copytree(fixture, directory)
+        shutil.copy2(directory / "expected/dm.csv", directory / "dm.csv")
+        submission = yamaa.project(directory / "project.yaml").submission(
+            "sdtm", created=load_truth(__file__, "public-define")["created"]
+        )
+        self.assertTrue(self.issues(submission).is_empty())
+        for name in ("project.yaml", "spec.yaml", "dm.csv"):
+            (directory / name).unlink()
+        held = restored(directory, ["define.xml", "dm.json"], submission.save)
+        for name, content in held.items():
+            self.assertEqual(content, (fixture / "expected" / name).read_bytes())
 
     def test_callback_string_larger_than_one_mebibyte_is_owned_and_saved_exactly(self):
         _, case = self.function_study()

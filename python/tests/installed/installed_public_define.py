@@ -427,6 +427,12 @@ class PublicDefine(unittest.TestCase):
             self.assertEqual(content, (directory / "expected" / name).read_bytes())
         self.validate_xml(written["define.xml"])
         self.validate_json(written["dm.json"])
+        # Every save rewrites the held bytes: deleted files come back unchanged.
+        for name in written:
+            (directory / name).unlink()
+        self.assertEqual(
+            self.save(result, directory, ["dm.json", "define.xml"]), written
+        )
 
     def test_every_declared_define_section_is_composed_without_a_section(self):
         directory = self.fixture("sdtm-dm-metadata", published=True)

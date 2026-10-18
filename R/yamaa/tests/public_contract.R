@@ -209,12 +209,15 @@ run_contract <- function() {
     identical(checks$COUNT, c(1, 1)), identical(checks$TOTAL, c(3, 3)),
     identical(checks$RULE, c("REQ-0377", "REQ-0377")))
   unlink(path(c("spec.yaml", "input.csv"))); invisible(gc())
+  # Every save rewrites the report, then raises: a deleted report comes back
+  # unchanged and the stale output is never touched.
   for (attempt in 1:2) {
     error <- refusal(failed$save())
     stopifnot(identical(conditionMessage(error), messages[["failed_run_save"]]),
       identical(error$issues, issues), identical(failed$issues, issues), identical(failed$report, report),
       identical(rawfile("output.csv"), charToRaw("sentinel")),
       identical(rawfile("checks.csv"), charToRaw(host_truth[["failed_report_csv"]])))
+    unlink(path("checks.csv"))
   }
   rm(failed); invisible(gc())
   stopifnot(identical(checks$ID, c("warn", "fatal")))
@@ -370,6 +373,57 @@ qualify_project_run_members <- function() {
   cat("project run members hold each run and only the project run saves\n")
 }
 qualify_project_run_members()
+
+# Save, delete what was written, save again: the same held bytes return,
+# with every source already gone.
+restored <- function(directory, names, save) {
+  stopifnot(is.null(save()))
+  held <- lapply(file.path(directory, names), function(path) readBin(path, "raw", file.info(path)$size))
+  unlink(file.path(directory, names))
+  stopifnot(is.null(save()))
+  for (index in seq_along(names)) {
+    path <- file.path(directory, names[[index]])
+    stopifnot(identical(readBin(path, "raw", file.info(path)$size), held[[index]]))
+  }
+  setNames(held, names)
+}
+qualify_every_save_rewrites <- function() {
+  root <- tempfile("yamaa-every-save-"); dir.create(root)
+  on.exit(unlink(root, recursive = TRUE))
+  writeBin(charToRaw(sub("columns: [ID, VALUE]}", "columns: [ID, VALUE], report: report.csv}",
+    host_truth[["specification_yaml"]], fixed = TRUE)), file.path(root, "spec.yaml"))
+  writeBin(charToRaw(host_truth[["r_input_csv"]]), file.path(root, "input.csv"))
+  run <- yamaa_spec(file.path(root, "spec.yaml"))$run()
+  stopifnot(nrow(check_issues(run$issues)) == 0L)
+  unlink(file.path(root, c("spec.yaml", "input.csv")))
+  held <- restored(root, c("output.csv", "report.csv"), run$save)
+  stopifnot(identical(held[["output.csv"]], charToRaw(host_truth[["r_input_csv"]])))
+  original <- system.file("project-original", "negative-function-contract", package = "yamaa", mustWork = TRUE)
+  stopifnot(file.copy(original, root, recursive = TRUE))
+  case <- file.path(root, "negative-function-contract")
+  entry <- file.path(case, "spec.yaml")
+  writeLines(sub("args: {}", "args: {x: SOURCE.VALUE}", readLines(entry), fixed = TRUE), entry)
+  runs <- yamaa_project(file.path(case, "project.yaml"))$run()
+  stopifnot(nrow(check_issues(runs$issues)) == 0L)
+  unlink(file.path(case, "input"), recursive = TRUE); unlink(entry)
+  held <- restored(case, "test.csv", runs$save)
+  stopifnot(identical(held[["test.csv"]], charToRaw("ID,RESULT\n01,1.5\n")))
+  fixture <- system.file("define-fixtures", "sdtm-dm-metadata", package = "yamaa", mustWork = TRUE)
+  directory <- file.path(root, "submission"); dir.create(directory)
+  stopifnot(file.copy(file.path(fixture, c("project.yaml", "spec.yaml")), directory),
+    file.copy(file.path(fixture, "expected", "dm.csv"), directory))
+  created <- read_host_fixture(host_fixture_root, "public-define")[["created"]]
+  submission <- yamaa_project(file.path(directory, "project.yaml"))$submission("sdtm", created = created)
+  stopifnot(nrow(check_issues(submission$issues)) == 0L)
+  unlink(file.path(directory, c("project.yaml", "spec.yaml", "dm.csv")))
+  held <- restored(directory, c("define.xml", "dm.json"), submission$save)
+  for (name in names(held)) {
+    path <- file.path(fixture, "expected", name)
+    stopifnot(identical(held[[name]], readBin(path, "raw", file.info(path)$size)))
+  }
+  cat("every save rewrites what its run, project run or submission holds\n")
+}
+qualify_every_save_rewrites()
 
 qualify_public_large_text_callback <- function() {
   directory <- tempfile("public-large-text-callback-"); dir.create(directory)
