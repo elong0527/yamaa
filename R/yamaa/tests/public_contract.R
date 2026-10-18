@@ -343,6 +343,34 @@ qualify_callbacks <- function() {
 }
 qualify_callbacks()
 
+qualify_project_run_members <- function() {
+  root <- tempfile("yamaa-project-run-"); dir.create(root)
+  on.exit(unlink(root, recursive = TRUE))
+  original <- system.file("project-original", "negative-function-contract", package = "yamaa", mustWork = TRUE)
+  stopifnot(file.copy(original, root, recursive = TRUE))
+  case <- file.path(root, "negative-function-contract")
+  entry <- file.path(case, "spec.yaml")
+  writeLines(sub("args: {}", "args: {x: SOURCE.VALUE}", readLines(entry), fixed = TRUE), entry)
+  project <- yamaa_project(file.path(case, "project.yaml"))
+  runs <- project$run()
+  stopifnot(identical(runs$names, "TEST"), nrow(check_issues(runs$issues)) == 0L)
+  member <- runs[["TEST"]]
+  single <- project$spec("TEST")$run()
+  stopifnot(identical(members(member), expected_members("member_run")),
+    nrow(check_issues(member$issues)) == 0L, identical(member$output, single$output),
+    identical(member$report, single$report),
+    # The project report stacks its members' reports in run order.
+    identical(runs$report, member$report))
+  locked(member, c(fixture_strings(host_truth[["read_only_views"]][["member_run"]]), "save"))
+  error <- refusal(runs[["ADSL"]])
+  stopifnot(identical(conditionMessage(error), messages[["unknown_member"]]),
+    identical(project$run("adam")$names, "TEST"), identical(project$run("sdtm")$names, character()),
+    !file.exists(file.path(case, "test.csv")), is.null(runs$save()),
+    identical(readBin(file.path(case, "test.csv"), "raw", 100L), charToRaw("ID,RESULT\n01,1.5\n")))
+  cat("project run members hold each run and only the project run saves\n")
+}
+qualify_project_run_members()
+
 qualify_public_large_text_callback <- function() {
   directory <- tempfile("public-large-text-callback-"); dir.create(directory)
   on.exit(unlink(directory, recursive = TRUE))

@@ -538,6 +538,30 @@ class PublicContract(unittest.TestCase):
         self.assertNotIn("host_details_truncated", context)
         self.refusal(result.save)
 
+    def test_project_run_members_hold_each_run_and_only_the_project_run_saves(self):
+        project, case = self.function_study()
+        runs = project.run()
+        self.assertEqual(runs.names, ["TEST"])
+        self.assertTrue(self.issues(runs).is_empty())
+        member = runs["TEST"]
+        self.assertEqual(public_names(member), TRUTH["members"]["member_run"])
+        for name in TRUTH["read_only_views"]["member_run"]:
+            with self.subTest(name=name), self.assertRaises(AttributeError):
+                setattr(member, name, None)
+        single = project.spec("TEST").run()
+        self.assertTrue(self.issues(member).is_empty())
+        self.assertTrue(member.output.equals(single.output))
+        self.assertTrue(member.report.equals(single.report))
+        # The project report stacks its members' reports in run order.
+        self.assertTrue(runs.report.equals(member.report))
+        error = self.refusal(lambda: runs["ADSL"])
+        self.assertEqual(str(error), MESSAGES["unknown_member"])
+        self.assertEqual(project.run("adam").names, ["TEST"])
+        self.assertEqual(project.run("sdtm").names, [])
+        self.assertFalse((case / "test.csv").exists())
+        self.assertIsNone(runs.save())
+        self.assertEqual((case / "test.csv").read_bytes(), b"ID,RESULT\n01,1.5\n")
+
     def test_callback_string_larger_than_one_mebibyte_is_owned_and_saved_exactly(self):
         _, case = self.function_study()
         environment = case / "python/environment.yaml"

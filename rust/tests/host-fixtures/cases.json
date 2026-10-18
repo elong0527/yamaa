@@ -4337,7 +4337,8 @@
         "unknown_section_submission": "cannot compose the submission; see issues",
         "refused_project_run_save": "the project run was refused; see issues",
         "refused_submission_save": "the submission was refused; see issues",
-        "no_member_built": "the project run has no specification named \"ADSL\"; it built none"
+        "no_member_built": "the project run has no specification named \"ADSL\"; it built none",
+        "unknown_member": "the project run has no specification named \"ADSL\"; it has TEST"
       },
       "interrupt_message": "public contract activation interrupt",
       "report_output_yaml": "columns: [ID, VALUE], report: checks.csv}",
