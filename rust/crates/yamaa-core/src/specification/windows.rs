@@ -255,11 +255,86 @@ impl Declaration {
         edges: &mut Vec<usize>,
         findings: &mut Vec<BindFinding>,
     ) -> Result<Option<crate::dataset::Expression>, BindError> {
-        self.bind_available(catalog, None, edges, findings)
+        self.bind_available(catalog, None, None, edges, findings)
+    }
+    /// A driver field the window reads is a scalar source of each row it
+    /// partitions or orders. Under grouped construction it must be a group key
+    /// (REQ-0067 for a row template, REQ-0107 at column level). Returns whether
+    /// any such read was refused.
+    pub(super) fn group_findings(
+        &self,
+        catalog: &Catalog,
+        driver: &str,
+        row: Option<&str>,
+        phase: crate::reference_scope::Phase<'_>,
+        findings: &mut Vec<BindFinding>,
+    ) -> Result<bool, BindError> {
+        use crate::reference_scope::{self, Finding, Reach, Scope};
+        let mut reads = Vec::new();
+        match &self.kind {
+            Kind::RowValue { source, .. }
+            | Kind::PreviousNonMissing(source)
+            | Kind::Locf(source) => reads.push((source.as_str(), format!("{}.source", self.path))),
+            Kind::BaselineFlag {
+                date,
+                reference_date,
+            } => {
+                reads.push((date.as_str(), format!("{}.date", self.path)));
+                reads.push((
+                    reference_date.as_str(),
+                    format!("{}.reference_date", self.path),
+                ));
+            }
+            Kind::RowNumber | Kind::Competition | Kind::Dense => (),
+        }
+        for (index, name) in self.groups.iter().enumerate() {
+            reads.push((
+                name.as_str(),
+                format!("{}.window.group_by[{index}]", self.path),
+            ));
+        }
+        for (index, (name, ..)) in self.order.iter().enumerate() {
+            reads.push((
+                name.as_str(),
+                format!("{}.window.order_by[{index}]", self.path),
+            ));
+        }
+        let start = findings.len();
+        for (name, path) in reads {
+            if !name.contains('.') {
+                continue;
+            }
+            for finding in reference_scope::validate(
+                catalog,
+                name,
+                None,
+                Scope {
+                    drivers: &[driver],
+                    current_driver: false,
+                    reach: Reach::Scalar,
+                    joined: false,
+                    phase,
+                },
+            )
+            .map_err(BindError::Catalog)?
+            {
+                // Unknown and foreign fields keep the binder's own findings.
+                if matches!(finding, Finding::RowGroup | Finding::ColumnGroup) {
+                    findings.push(BindFinding::QualifiedReference {
+                        path: path.clone(),
+                        name: name.into(),
+                        row: row.map(String::from),
+                        finding,
+                    });
+                }
+            }
+        }
+        Ok(findings.len() != start)
     }
     pub(super) fn bind_available(
         &self,
         catalog: &Catalog,
+        row: Option<&str>,
         available: Option<&[usize]>,
         edges: &mut Vec<usize>,
         findings: &mut Vec<BindFinding>,
@@ -337,6 +412,7 @@ impl Declaration {
                 findings.push(BindFinding::OutputReference {
                     path,
                     name: name.into(),
+                    row: row.map(String::from),
                     finding,
                 });
                 return Ok(0);

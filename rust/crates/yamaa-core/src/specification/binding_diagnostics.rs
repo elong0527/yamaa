@@ -224,6 +224,7 @@ impl BindFinding {
             Self::OutputReference {
                 path,
                 name,
+                row,
                 finding,
             } => {
                 let (code, values) = match finding {
@@ -236,6 +237,17 @@ impl BindFinding {
                         context([
                             ("identifier", text(name)),
                             ("suggestion", text(&format!("{}.{name}", source.name))),
+                        ]),
+                    ),
+                    // A row derivation reads a column this template leaves to the
+                    // column phase (REQ-0069), as a bare row read reports it.
+                    reference_binding::Diagnostic::PhaseBoundary { .. } => (
+                        C::RowDependencyPhaseBoundary,
+                        context([
+                            ("identifier", text(name)),
+                            ("row", text(row.as_deref()?)),
+                            ("available_phase", text("column_derivation")),
+                            ("required_phase", text("row_construction")),
                         ]),
                     ),
                     _ => return None,

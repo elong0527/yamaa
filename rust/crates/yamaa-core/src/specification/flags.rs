@@ -146,10 +146,10 @@ fn output_binding(
             _ => findings.push(BindFinding::OutputReference {
                 path: path.into(),
                 name: name.into(),
+                row: row.map(String::from),
                 finding: cause,
             }),
         }
-        let _ = row;
         return Ok(None);
     }
     let Some(reference_binding::Binding::Output { column, .. }) = catalog.bind(name) else {

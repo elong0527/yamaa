@@ -326,9 +326,12 @@ pub(super) fn bind(
             .validate_output(name, None, available, &[0])
             .map_err(BindError::Catalog)?
         {
+            // A lookup's own dependency is a match value it reads (REQ-0126),
+            // not a read by this row derivation, so it is not projected as one.
             findings.push(BindFinding::OutputReference {
                 path: path.into(),
                 name: name.clone(),
+                row: None,
                 finding,
             });
         } else {

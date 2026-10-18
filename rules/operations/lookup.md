@@ -213,10 +213,14 @@ is reserved for this purpose and cannot also name an input. It contains rows
 from completed earlier templates during row construction, and all completed
 rows during column derivation. The current template's unfinished rows are
 never eligible. A read from the first template fails as `phase_boundary`.
-The donor fields are output columns derived in every row template; a column
-derived only in the later column phase is unavailable to `SELF`. The order of
-donors follows row construction order. `SELF` may be read only through a named
-intermediate, not as a directly qualified source.
+So does a first-template read of another named intermediate whose `between`
+value reads a `SELF` intermediate, directly or through the `between` values
+of further intermediates; the finding names the read, then each `between`
+value in the order followed. The donor fields are output columns derived in
+every row template; a column derived only in the later column phase is
+unavailable to `SELF`. The order of donors follows row construction order.
+`SELF` may be read only through a named intermediate, not as a directly
+qualified source.
 
 For `SELF`, `filter` and `order_by` may name its donor fields either bare or
 as `SELF.field`. Bare donor fields in `filter` are not correlated current-row

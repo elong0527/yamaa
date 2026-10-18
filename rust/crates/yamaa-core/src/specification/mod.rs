@@ -271,6 +271,8 @@ pub enum BindFinding {
     OutputReference {
         path: String,
         name: String,
+        /// The row template of a row-phase read; absent in the column phase.
+        row: Option<String>,
         finding: reference_binding::Diagnostic,
     },
     Dependencies {
@@ -2269,6 +2271,7 @@ impl PreparedSpecification {
                         findings.push(BindFinding::OutputReference {
                             path: reference_path.clone(),
                             name: name.into(),
+                            row: None,
                             finding,
                         });
                         return Ok(None);

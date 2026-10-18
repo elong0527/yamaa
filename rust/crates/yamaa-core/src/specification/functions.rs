@@ -534,6 +534,7 @@ pub(super) fn bind_findings(
                     BindFinding::OutputReference {
                         path,
                         name: name.clone(),
+                        row: row.map(String::from),
                         finding,
                     }
                 }
