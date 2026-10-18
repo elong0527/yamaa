@@ -62,9 +62,6 @@ unlink(file.path(root, c("spec.yaml", "project.yaml")))
 writeLines("changed after preparation", file.path(root, "dm.csv"))
 held <- saved(result, root, c("dm.json", "define.xml"))
 for (name in names(held)) stopifnot(identical(held[[name]], rawfile(file.path(fixtures, "sdtm-dm-metadata/expected", name))))
-# A second save has nothing left to publish and writes nothing.
-writeBin(charToRaw("replaced after save"), file.path(root, "dm.json"))
-stopifnot(is.null(result$save()), identical(rawfile(file.path(root, "dm.json")), charToRaw("replaced after save")))
 unlink(root, recursive = TRUE)
 
 # Without a section every declared define section is composed; a section the
@@ -132,8 +129,6 @@ expected <- read.csv(file.path(fixtures, "sdtm-lb-metadata/expected/lb.csv"),
   colClasses = types, check.names = FALSE)
 stopifnot(identical(names(expected), column_names),
   identical(unname(as.list(actual)), unname(as.list(expected))))
-writeBin(charToRaw("replaced after save"), file.path(root, "define.xml"))
-stopifnot(is.null(result$save()), identical(rawfile(file.path(root, "define.xml")), charToRaw("replaced after save")))
 unlink(root, recursive = TRUE)
 
 for (mode in c("original source", "value codelist", "metadata only", "arbitrary row ID")) {

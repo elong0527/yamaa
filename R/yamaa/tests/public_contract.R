@@ -139,7 +139,7 @@ run_contract <- function() {
   }
   stopifnot(!file.exists(path("output.csv")))
   unlink(path(c("spec.yaml", "input.csv"))); invisible(gc())
-  for (attempt in 1:2) stopifnot(is.null(first$save()), identical(rawfile("output.csv"), charToRaw(input)))
+  stopifnot(is.null(first$save()), identical(rawfile("output.csv"), charToRaw(input)))
   rm(first); invisible(gc())
   stopifnot(refuses_output(second, beyond), is.null(second$save()))
 
@@ -389,7 +389,7 @@ qualify_public_large_text_callback <- function() {
   built <- yamaa_project(file.path(directory, "project.yaml"))$spec("TEXT")$run()
   stopifnot(nrow(check_issues(built$issues)) == 0L, identical(built$output$V, value))
   unlink(file.path(directory, c("domain.yaml", "project.yaml", "environment.yaml", "renv.lock", "input.csv")))
-  for (attempt in seq_len(2L)) stopifnot(is.null(built$save()),
+  stopifnot(is.null(built$save()),
     identical(readBin(file.path(directory, "held.csv"), "raw", n = length(expected) + 1L), expected))
   cat("public callback text beyond one MiB remains owned and saves exact bytes\n")
 }

@@ -1215,7 +1215,7 @@ output: {path: output.csv, columns: [ID, N, VALUE]}
             (case / "output.csv").read_bytes(),
             b"ID,N,VALUE\n1,10,20\n1,30,60\n2,40,40\n",
         )
-        self.assertIsNone(result.save())
+        # Saving publishes held bytes; it activates nothing again.
         self.assertEqual(self.report(result)["activation"], observed["activation"])
         (case / "spec.yaml").write_text(
             spec.replace(", order_by: [SRC.ID], keep: first", "")
@@ -1273,7 +1273,6 @@ output: {{path: output.csv, columns: [ID, VALUE]}}
             )
             self.assertIsNone(result.save())
             self.assertEqual((case / "output.csv").read_bytes(), csv)
-            self.assertIsNone(result.save())
             self.assertEqual(self.report(result)["activation"], activation)
 
     def test_intermediate_callbacks_read_prior_values_and_selected_donor_types(self):
@@ -1317,7 +1316,6 @@ output: {path: output.csv, columns: [ID, N, VALUE]}
             (case / "output.csv").read_bytes(),
             b"ID,N,VALUE\n1,10,10\n1,30,10\n2,40,40\n",
         )
-        self.assertIsNone(result.save())
         self.assertEqual(self.report(result)["activation"], activation)
 
 

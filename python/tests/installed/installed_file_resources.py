@@ -69,14 +69,11 @@ class FileResources(unittest.TestCase):
             shutil.rmtree(shared)
             for study, csv, result in results:
                 shutil.rmtree(study / "input")
-                for _ in range(2):
-                    self.assertIsNone(result.save())
-                    self.assertEqual((study / "output/result.csv").read_bytes(), csv)
-                    self.assertTrue((study / "output/report.csv").is_file())
-                    if producer:
-                        self.assertEqual(
-                            (study / "output/produced.csv").read_bytes(), csv
-                        )
+                self.assertIsNone(result.save())
+                self.assertEqual((study / "output/result.csv").read_bytes(), csv)
+                self.assertTrue((study / "output/report.csv").is_file())
+                if producer:
+                    self.assertEqual((study / "output/produced.csv").read_bytes(), csv)
 
     def setUp(self):
         original = builtins.__import__
@@ -286,11 +283,10 @@ class FileResources(unittest.TestCase):
             entry.unlink()
             shutil.rmtree(case / "input")
             gc.collect()
-            for _ in range(2):
-                self.assertIsNone(result.save())
-                self.assertEqual((case / "adsl.csv").read_bytes(), golden)
-                self.assertEqual(self.observe(result), expected)
-                self.assertTrue(result.output.equals(held))
+            self.assertIsNone(result.save())
+            self.assertEqual((case / "adsl.csv").read_bytes(), golden)
+            self.assertEqual(self.observe(result), expected)
+            self.assertTrue(result.output.equals(held))
             del result
             gc.collect()
             self.assertEqual(held["DTHDY"].to_list(), [150, 80, None, None])

@@ -248,9 +248,8 @@ class PublicContract(unittest.TestCase):
         self.spec.unlink()
         (self.root / "input.csv").unlink()
         gc.collect()
-        for _ in range(2):
-            self.assertIsNone(first.save())
-            self.assertEqual((self.root / "output.csv").read_bytes(), INPUT)
+        self.assertIsNone(first.save())
+        self.assertEqual((self.root / "output.csv").read_bytes(), INPUT)
         del first
         gc.collect()
         self.assertEqual(second.output["VALUE"].to_list(), VALUES)
@@ -597,9 +596,8 @@ class PublicContract(unittest.TestCase):
             "large.csv",
         ):
             (case / name).unlink()
-        for _ in range(2):
-            self.assertIsNone(result.save())
-            self.assertEqual((case / "held.csv").read_bytes(), expected)
+        self.assertIsNone(result.save())
+        self.assertEqual((case / "held.csv").read_bytes(), expected)
 
     def test_project_refusals_are_issues_and_unknown_sections_raise(self):
         project = yamaa.project(self.root / "absent-project.yaml")

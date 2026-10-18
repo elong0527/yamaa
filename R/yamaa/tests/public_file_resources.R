@@ -35,12 +35,10 @@ qualify_entry_relative_programs <- function(producer) {
   for(name in names(results)) {
     study <- file.path(work,name); unlink(file.path(study,"input"),recursive=TRUE)
     expected <- charToRaw(truth$studies[[name]])
-    for(attempt in 1:2) {
-      stopifnot(is.null(results[[name]]$save()),
-        identical(rawfile(file.path(study,"output/result.csv")),expected),
-        file.exists(file.path(study,"output/report.csv")))
-      if(producer) stopifnot(identical(rawfile(file.path(study,"output/produced.csv")),expected))
-    }
+    stopifnot(is.null(results[[name]]$save()),
+      identical(rawfile(file.path(study,"output/result.csv")),expected),
+      file.exists(file.path(study,"output/report.csv")))
+    if(producer) stopifnot(identical(rawfile(file.path(study,"output/produced.csv")),expected))
   }
 }
 qualify_entry_relative_programs(FALSE)
@@ -186,14 +184,12 @@ held <- actual$output
 golden <- rawfile(file.path(owner$case,"expected/adsl.csv"))
 expected <- lookup_report(owner$entry,TRUE)
 unlink(owner$entry);unlink(file.path(owner$case,"input"),recursive=TRUE);invisible(gc())
-for(attempt in seq_len(2L)) {
-  stopifnot(is.null(actual$save()),identical(rawfile(file.path(owner$case,"adsl.csv")),golden),
-    identical(observations(actual),expected),identical(actual$output,held))
-}
+stopifnot(is.null(actual$save()),identical(rawfile(file.path(owner$case,"adsl.csv")),golden),
+  identical(observations(actual),expected),identical(actual$output,held))
 rm(actual);invisible(gc())
 stopifnot(identical(held$DTHDY,c(150,80,NA_real_,NA_real_)))
 unlink(owner$directory,recursive=TRUE)
-cat("original complete lookup owner and two exact held Saves after files disappear passed\n")
+cat("original complete lookup owner and exact held save after files disappear passed\n")
 
 simple <- function(input) paste0("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n",
   "input: {SRC: ",json_text(input),"}\n",

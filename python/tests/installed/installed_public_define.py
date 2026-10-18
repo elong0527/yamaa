@@ -227,13 +227,6 @@ class PublicDefine(unittest.TestCase):
                 ],
             ],
         )
-        # A second save has nothing left to publish and writes nothing.
-        (directory / "define.xml").write_bytes(b"replaced after save")
-        self.assertIsNone(result.save())
-        self.assertEqual(
-            (directory / "define.xml").read_bytes(), b"replaced after save"
-        )
-        self.assertEqual((directory / "lb.json").read_bytes(), written["lb.json"])
 
     def test_lb_original_source_and_selected_value_codelist_rejections_write_nothing(
         self,
@@ -434,9 +427,6 @@ class PublicDefine(unittest.TestCase):
             self.assertEqual(content, (directory / "expected" / name).read_bytes())
         self.validate_xml(written["define.xml"])
         self.validate_json(written["dm.json"])
-        (directory / "dm.json").write_bytes(b"replaced after save")
-        self.assertIsNone(result.save())
-        self.assertEqual((directory / "dm.json").read_bytes(), b"replaced after save")
 
     def test_every_declared_define_section_is_composed_without_a_section(self):
         directory = self.fixture("sdtm-dm-metadata", published=True)

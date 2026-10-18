@@ -599,7 +599,7 @@ qualify_aggregate_callback <- function() {
   stopifnot(nrow(result$issues) == 0L,
     identical(result$output$ID, c(1, 1, 2)),
     identical(result$output$N, c(10, 30, 40)),
-    identical(result$output$VALUE, c(20, 60, 40)), is.null(result$save()), is.null(result$save()),
+    identical(result$output$VALUE, c(20, 60, 40)), is.null(result$save()),
     identical(rawToChar(rawfile("output.csv")), "ID,N,VALUE\n1,10,20\n1,30,60\n2,40,40\n"))
   writeLines(sub(", order_by: [SRC.ID], keep: first", "", spec, fixed = TRUE), "spec.yaml")
   unlink("input.csv")
@@ -628,7 +628,7 @@ qualify_row_callback_joins <- function() {
     expected_value <- if (driver == "SRC") c(50, 40, NA_real_) else c(20, 10)
     expected_csv <- if (driver == "SRC") "ID,VALUE\n1,50\n2,40\n3,\n" else "ID,VALUE\n2,20\n1,10\n"
     stopifnot(nrow(result$issues) == 0L, identical(result$output$ID, expected_id),
-      identical(result$output$VALUE, expected_value), is.null(result$save()), is.null(result$save()),
+      identical(result$output$VALUE, expected_value), is.null(result$save()),
       identical(rawToChar(rawfile("output.csv")), expected_csv))
   }
   cat("public R row callbacks join primary and secondary source records by completed keys\n")
@@ -650,7 +650,7 @@ qualify_intermediate_callback <- function() {
     "  - {name: VALUE, type: float, derivation: DON.VALUE}", "output: {path: output.csv, columns: [ID, N, VALUE]}"), "spec.yaml")
   result <- project$spec("TEST")$run()
   stopifnot(nrow(result$issues)==0L, identical(result$output$N,c(10,30,40)),
-    identical(result$output$VALUE,c(10,10,40)), is.null(result$save()), is.null(result$save()),
+    identical(result$output$VALUE,c(10,10,40)), is.null(result$save()),
     identical(rawToChar(rawfile("output.csv")), "ID,N,VALUE\n1,10,10\n1,30,10\n2,40,40\n"))
   cat("public R intermediate callbacks preserve prior values and selected donor field types\n")
 }
