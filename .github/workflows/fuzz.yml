@@ -6,8 +6,8 @@ name: Fuzz
 # targets whose readers it changes: the paths below, narrowed per target by
 # `python -m tools.ci.fuzz select`; tools/tests/test_fuzz.py keeps the two in
 # step. The nightly schedule and a dispatch run every target for longer. A
-# crash, sanitizer report, escaped panic, timeout or memory blowup fails the
-# job, which keeps the reproducing input as an artifact.
+# crash, sanitizer report, panic, timeout or memory blowup fails the job,
+# which keeps the reproducing input as an artifact.
 on:
   pull_request:
     paths:

@@ -15,7 +15,6 @@ use yamaa_core::{
     typed_csv::{PreparedTypes, TypedRows},
     value::ColumnType,
 };
-use yamaa_fuzz::{contain_panics, run};
 
 /// A header as composition produces one; its column names are the
 /// artifact's own, so they cross the writer's escaping as well.
@@ -105,29 +104,33 @@ fn check(bytes: &[u8], table: &TypedRows) {
     }
 }
 
-fuzz_target!(init: contain_panics(), |data: &[u8]| {
-    run(|| {
-        let Ok(parsed) = csv_source::parse(data) else {
-            return;
+fuzz_target!(|data: &[u8]| {
+    let Ok(parsed) = csv_source::parse(data) else {
+        return;
+    };
+    for kind in [
+        None,
+        Some(ColumnType::Int),
+        Some(ColumnType::Float),
+        Some(ColumnType::Date),
+        Some(ColumnType::DateTime),
+    ] {
+        let declarations: Vec<(String, ColumnType)> = kind
+            .map(|kind| {
+                parsed
+                    .names
+                    .iter()
+                    .map(|name| (name.clone(), kind))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let Ok(table) =
+            PreparedTypes::new(&declarations).and_then(|types| types.convert(parsed.clone()))
+        else {
+            continue;
         };
-        for kind in [
-            None,
-            Some(ColumnType::Int),
-            Some(ColumnType::Float),
-            Some(ColumnType::Date),
-            Some(ColumnType::DateTime),
-        ] {
-            let declarations: Vec<(String, ColumnType)> = kind
-                .map(|kind| parsed.names.iter().map(|name| (name.clone(), kind)).collect())
-                .unwrap_or_default();
-            let Ok(table) =
-                PreparedTypes::new(&declarations).and_then(|types| types.convert(parsed.clone()))
-            else {
-                continue;
-            };
-            let bytes = yamaa_adapters::submission_json::render(&document(&table), &table)
-                .expect("an admitted table renders");
-            check(&bytes, &table);
-        }
-    })
+        let bytes = yamaa_adapters::submission_json::render(&document(&table), &table)
+            .expect("an admitted table renders");
+        check(&bytes, &table);
+    }
 });

@@ -2,10 +2,10 @@
 
 Each target in `rust/fuzz` feeds its input to an entry point the hosts use.
 `run` seeds a target from the committed fixtures and its text regression
-inputs, then fuzzes it for a fixed time; a crash, sanitizer report, escaped
-panic, timeout or memory blowup fails the run. CI runs the targets whose
-readers a pull request changes, as `select` reports them, and every target on
-a nightly schedule.
+inputs, then fuzzes it for a fixed time; a crash, sanitizer report, panic,
+timeout or memory blowup fails the run. CI runs the targets whose readers a
+pull request changes, as `select` reports them, and every target on a nightly
+schedule.
 """
 
 import argparse

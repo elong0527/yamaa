@@ -4,13 +4,11 @@
 
 use libfuzzer_sys::fuzz_target;
 use yamaa_core::specification::{SourceInterpretation, SourceProfile};
-use yamaa_fuzz::{contain_panics, decode, run, source};
+use yamaa_fuzz::{decode, source};
 
-fuzz_target!(init: contain_panics(), |data: &[u8]| {
-    run(|| {
-        let source = source(SourceProfile::Parquet, Vec::new(), None);
-        for interpretation in [SourceInterpretation::Ordinary, SourceInterpretation::Odm] {
-            let _ = decode(&source, data, interpretation);
-        }
-    })
+fuzz_target!(|data: &[u8]| {
+    let source = source(SourceProfile::Parquet, Vec::new(), None);
+    for interpretation in [SourceInterpretation::Ordinary, SourceInterpretation::Odm] {
+        let _ = decode(&source, data, interpretation);
+    }
 });

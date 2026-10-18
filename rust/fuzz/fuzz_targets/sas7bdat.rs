@@ -3,8 +3,5 @@
 
 use libfuzzer_sys::fuzz_target;
 use yamaa_core::specification::SourceProfile;
-use yamaa_fuzz::{contain_panics, run, sas};
 
-fuzz_target!(init: contain_panics(), |data: &[u8]| {
-    run(|| sas(SourceProfile::Sas7bdat, data))
-});
+fuzz_target!(|data: &[u8]| yamaa_fuzz::sas(SourceProfile::Sas7bdat, data));

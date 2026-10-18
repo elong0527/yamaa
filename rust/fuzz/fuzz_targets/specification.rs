@@ -20,7 +20,6 @@ use yamaa_adapters::{
     specification_source::{CapturedSchema, InheritancePort, Source},
 };
 use yamaa_core::inheritance::{Source as Location, SourceError};
-use yamaa_fuzz::{contain_panics, run};
 
 static SCHEMA: LazyLock<Arc<CapturedSchema>> =
     LazyLock::new(|| shipped_schema::capture().expect("the shipped schema closure admits"));
@@ -53,22 +52,19 @@ impl InheritancePort for EntryOnly {
 
 fuzz_target!(
     init: {
-        contain_panics();
         LazyLock::force(&SCHEMA);
     },
     |data: &[u8]| {
-        run(|| {
-            let source = Source {
-                identity: "spec.yaml".into(),
-                bytes: data.to_vec(),
-            };
-            let Ok(document) = SCHEMA.prepare_document(source, "spec.yaml".into(), &mut EntryOnly)
-            else {
-                return;
-            };
-            if let Ok(run) = PreparedRun::prepare(document) {
-                let _ = run.check_diagnostics();
-            }
-        })
+        let source = Source {
+            identity: "spec.yaml".into(),
+            bytes: data.to_vec(),
+        };
+        let Ok(document) = SCHEMA.prepare_document(source, "spec.yaml".into(), &mut EntryOnly)
+        else {
+            return;
+        };
+        if let Ok(run) = PreparedRun::prepare(document) {
+            let _ = run.check_diagnostics();
+        }
     }
 );

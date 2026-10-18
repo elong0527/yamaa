@@ -18,12 +18,12 @@ The shared source decode is the one both host routes call for held input bytes
 none, so the `dataset_json` target fuzzes the path where untrusted bytes reach
 that writer.
 
-A run fails on a crash, a sanitizer report, a panic that escapes the entry
-point, a timeout or a memory blowup. A panic the engine contains by design does
-not fail it: the Parquet reader turns a panic in the third-party decoder into a
-malformed source. The SAS targets also fail when the reader returns an internal
-error, which it does only when a Rust callback contained a panic or the C
-bridge reported an impossible status.
+A run fails on a crash, a sanitizer report, a panic, a timeout or a memory
+blowup. libFuzzer's panic hook aborts on every panic it sees. The Parquet
+reader contains a panic in the third-party decoder by design and keeps it from
+that hook, so such an input stays a malformed source, as the hosts report it.
+The SAS targets also fail when the reader returns an internal error for input
+bytes, and `dataset_json` when a written file does not read back.
 
 ## Running locally
 
