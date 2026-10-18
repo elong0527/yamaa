@@ -1,0 +1,51 @@
+schema_version: "1.0"
+domain: ADVS
+keys: [STUDYID, USUBJID, ADY]
+input:
+  VS: {path: input/vs.csv, types: {VSDY: int, VSSTRESN: float}}
+  PERIODS: {path: input/periods.csv, types: {FIRST: int, LAST: int}}
+
+output:
+  path: advs.csv
+  columns: [STUDYID, USUBJID, ADY, ASEQ, AVAL, APERIODC]
+
+intermediates:
+  # The period holding the record's position among the subject's records:
+  # the first record is the run-in, the next eight the treatment.
+  - id: PERIOD
+    dataset: PERIODS
+    key: [STUDYID]
+    between: {value: ASEQ, lower: FIRST, upper: LAST}
+    no_match: null
+
+columns:
+  - {name: STUDYID, type: str, label: Study Identifier}
+  - {name: USUBJID, type: str, label: Unique Subject Identifier}
+  - {name: ADY, type: int, label: Analysis Relative Day}
+
+  # The record's position among the subject's records, by study day. It is
+  # numbered once every record is built.
+  - name: ASEQ
+    type: int
+    label: Analysis Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [ADY]
+
+  - {name: AVAL, type: float, label: Analysis Value}
+  - {name: APERIODC, type: str, label: Period (C)}
+
+rows:
+  # Each collected measurement. Its period is found from its position, which
+  # is numbered only after the records are built, so the specification is
+  # rejected before any data is read.
+  - id: collected
+    dataset: VS
+    derivations:
+      STUDYID: VS.STUDYID
+      USUBJID: VS.USUBJID
+      ADY: VS.VSDY
+      AVAL: VS.VSSTRESN
+      APERIODC: PERIOD.APERIODC
