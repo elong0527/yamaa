@@ -900,7 +900,7 @@
       "level": "compile",
       "consumers": [
         "R/yamaa/tests/producer_logs.R",
-        "R/yamaa/tests/verification_logs.R",
+        "R/yamaa/tests/run_report.R",
         "rust/crates/yamaa-adapters/tests/scalar_language.rs",
         "python/tests/installed/installed_producer_logs.py",
         "python/tests/installed/installed_run_report.py"
@@ -1018,7 +1018,6 @@
         "R/yamaa/tests/producer_cohort.R",
         "R/yamaa/tests/public_environment.R",
         "python/tests/installed/installed_run_report.py",
-        "R/yamaa/tests/verification_logs.R",
         "python/tests/installed/installed_producer_logs.py",
         "R/yamaa/tests/producer_logs.R",
         "python/tests/installed/installed_public_define.py",
@@ -1087,7 +1086,7 @@
     "r/public-grammar": "shared_run",
     "r/sas-sources": "shared_run",
     "r/saved-readers": "shared_run",
-    "r/verification-logs": "shared_run",
+    "r/run-report": "shared_run",
     "python/host-resources": "shared_run",
     "r/host-resources": "shared_run"
   },

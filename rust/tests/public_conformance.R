@@ -55,33 +55,73 @@ move_inputs <- function(source, target) {
   if (dir.exists(source)) stop("could not move staged R inputs to execution work: ", source)
   invisible(TRUE)
 }
-public_table <- function(frame) {
+# R exchanges int and float as double, so a public table cannot tell them
+# apart by class. Each column's kind is its declared type: the
+# specification's for an output, REQ-0392's for the run report. A column's
+# R class must agree with its kind, and every cell must convert exactly.
+report_types <- c(ARTIFACT="str", KIND="str", SPEC_PATH="str", NAME="str", ID="str", TARGET="str",
+  RULE="str", SEVERITY="str", OUTCOME="str", CONDITION="str", COUNT="int", TOTAL="int", KEYS="str",
+  DETAILS="str")
+whole_text <- function(value, kind) {
+  # An int is a whole double within 2^53, never negative zero; a temporal
+  # value is a whole count of days or seconds.
+  limit <- if (identical(kind, "int")) 2^53 else Inf
+  if (!is.finite(value) || value != trunc(value) || abs(value) > limit || (value == 0 && 1 / value < 0))
+    stop("public ", kind, " cell is not an exact whole value: ", format(value, digits=17L))
+  sprintf("%.0f", value)
+}
+public_table <- function(frame, types) {
   if (is.null(frame)) return(NULL)
-  kinds <- vapply(frame, function(column) {
-    if (inherits(column, "yamaa_int64_vector")) "int"
-    else if (inherits(column, "Date")) "date"
-    else if (inherits(column, "POSIXct")) "datetime"
-    else if (is.character(column) || inherits(column, "yamaa_utf8_vector")) "str"
-    else if (is.double(column)) "float"
-    else stop("unexpected public column type: ", paste(class(column), collapse=","))
-  }, character(1L))
+  if (!is.data.frame(frame) || !identical(names(types), names(frame)))
+    stop("public table columns differ from their declared types")
+  for (index in seq_along(frame)) {
+    column <- frame[[index]]
+    admitted <- switch(types[[index]],
+      str=is.character(column) && is.null(attributes(column)),
+      int=, float=is.double(column) && is.null(attributes(column)),
+      date=identical(class(column), "Date"),
+      datetime=identical(class(column), c("POSIXct", "POSIXt")) && identical(attr(column, "tzone"), "UTC"),
+      stop("unknown declared column type: ", types[[index]]))
+    if (!admitted) stop("public column ", names(frame)[[index]], " is not a ", types[[index]], " column: ",
+      paste(class(column), collapse=","))
+  }
   cell <- function(column, index, kind) {
-    if (inherits(column, "yamaa_utf8_vector")) {
-      value <- unclass(column)[[index]]
-      return(if(is.null(value)) NULL else hex(value))
-    }
     value <- unclass(column)[[index]]
     if (is.na(value)) return(NULL)
-    switch(kind, str=hex(charToRaw(enc2utf8(value))), int=value,
+    switch(kind, str=hex(charToRaw(enc2utf8(value))), int=whole_text(value, kind),
       float=hex(writeBin(value, raw(), size=8L, endian="big")),
-      date=sprintf("%.0f", value), datetime=sprintf("%.0f", value))
+      date=whole_text(as.double(value), kind), datetime=whole_text(value, kind))
   }
-  list(columns=lapply(seq_along(frame), function(index) as.list(c(names(frame)[[index]], kinds[[index]]))),
-    rows=lapply(seq_len(nrow(frame)), function(row) lapply(seq_along(frame), function(column) cell(frame[[column]], row, kinds[[column]]))))
+  list(columns=lapply(seq_along(frame), function(index) as.list(c(names(frame)[[index]], types[[index]]))),
+    rows=lapply(seq_len(nrow(frame)), function(row) lapply(seq_along(frame), function(column) cell(frame[[column]], row, types[[column]]))))
+}
+# The declared types of the output columns, from the composed specification
+# the engine resolves for the entry: its own declarations and its parents'.
+declared_types <- function(spec, columns) {
+  resolved <- spec$resolve()
+  entry <- Filter(function(item) identical(item$entry, resolved$entry), resolved$entries)
+  if (length(entry) != 1L) stop("resolved specification lacks its entry")
+  declared <- entry[[1L]]$specification$columns
+  types <- setNames(vapply(declared, function(column) column$type, character(1L)),
+    vapply(declared, function(column) column$name, character(1L)))
+  missing <- setdiff(columns, names(types))
+  if (length(missing)) stop("output columns without a declared type: ", paste(missing, collapse=", "))
+  types[columns]
 }
 issue_rows <- function(frame) lapply(seq_len(nrow(frame)), function(index) list(
   phase=frame$phase[[index]], condition=frame$condition[[index]], requirement=frame$requirement[[index]],
   spec_paths=as.list(frame$spec_paths[[index]]), context=raw_json(frame$context[[index]])))
+# A planned build runs one specification, with the project the plan names in
+# its environment column. Generated metamorphic variants are not listed in
+# their project, so project builds use the package's spec-with-project
+# constructor, the one project$spec(name) returns for a listed specification.
+open_spec <- function(case, specification, project) {
+  path <- file.path(case, specification)
+  if (is.null(project)) return(yamaa_spec(path))
+  namespace <- asNamespace("yamaa")
+  text <- get(".text", envir=namespace)
+  get(".spec", envir=namespace)(text(path, "path"), text(file.path(case, project), "path"))
+}
 # Read every plan column as text. Otherwise read.delim() types a column that is
 # blank on every row as logical NA (blank fields are missing in logical and
 # numeric columns even with na.strings = character()), and nzchar(NA) is TRUE.
@@ -114,14 +154,20 @@ run_conformance <- function(args = commandArgs(trailingOnly = TRUE)) {
     evidence=paste0(Sys.getenv("GITHUB_SERVER_URL"), "/", Sys.getenv("GITHUB_REPOSITORY"), "/actions/runs/", Sys.getenv("GITHUB_RUN_ID")),
     table_encoding="str:utf8-hex,float:ieee754-be,int:decimal,date:epoch-days,datetime:epoch-seconds"))
   build_one <- function(case, specification, environment) {
-    built <- yamaa_domain(file.path(case, specification),
-      environment=if(is.null(environment)) NULL else file.path(case, environment))
+    spec <- open_spec(case, specification, environment)
+    built <- spec$run()
     issues <- issue_rows(built$issues)
-    tables <- list(output=public_table(built$output), verification_log=public_table(built$verification_log),
-      warning_log=public_table(built$warning_log))
-    saved <- if(length(issues)) FALSE else built$save()
+    output <- built$output
+    types <- if (is.null(output)) NULL else declared_types(spec, names(output))
+    tables <- list(output=public_table(output, types))
+    # The run report sits beside the dataset views: its check rows follow
+    # column declaration order (REQ-1175), so it is no metamorphic table.
+    report <- public_table(built$report, report_types)
+    # A refused save signals yamaa_error; the record keeps the run's issues.
+    saved <- if(length(issues)) FALSE else tryCatch({built$save(); TRUE}, yamaa_error=function(error) FALSE)
     issues <- issue_rows(built$issues)
-    list(specification=specification, environment=environment, issues=issues, tables=tables, saved=saved)
+    list(specification=specification, environment=environment, issues=issues, tables=tables,
+      report=report, saved=saved)
   }
   for (name in unique(plan$example)) {
     all_rows <- plan[plan$example == name, , drop=FALSE]

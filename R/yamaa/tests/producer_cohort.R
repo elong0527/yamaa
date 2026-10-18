@@ -17,8 +17,12 @@ work <- normalizePath(work,winslash="/",mustWork=TRUE)
 case <- file.path(work,name);dir.create(case)
 for(input in fixture_strings(host_truth[["source_files"]]))
   stopifnot(file.copy(file.path(root,name,input),file.path(case,input)))
+# The retired yamaa-project.yaml is never discovered; project.yaml lists the
+# case and links the R environment, whose lock resolves beside it.
 writeBin(fixture_bytes(host_truth[["project_yaml"]]),file.path(work,"yamaa-project.yaml"))
-writeBin(charToRaw("schema_version: '1.0'\nlanguage: r\nlock: renv.lock\nfunctions: {}\n"),file.path(work,"environment.yaml"))
+writeBin(charToRaw(paste0("schema_version: '1.0'\nenvironments: {r: environment.yaml}\n",
+  "adam: {specs: [",name,"/spec.yaml]}\n")),file.path(work,"project.yaml"))
+writeBin(charToRaw("schema_version: '1.0'\nlock: renv.lock\nfunctions: {}\n"),file.path(work,"environment.yaml"))
 stopifnot(file.copy(file.path(root,"schema-functions/r/renv.lock"),file.path(work,"renv.lock")))
 output <- Sys.getenv("YAMAA_PUBLIC_REPORT_DIR")
 evidence <- if(nzchar(output)) file.path(output,"producer-cohort/r",name) else file.path(work,"evidence")
@@ -27,8 +31,8 @@ writeBin(charToRaw(case),file.path(evidence,"case-directory.txt"))
 provenance <- Sys.getenv("YAMAA_SUPPLEMENTAL_EVIDENCE")
 if(nzchar(provenance)) writeBin(charToRaw(provenance),file.path(evidence,"provenance.json"))
 rawfile <- function(path) readBin(path,"raw",n=file.info(path)$size)
-observe <- get(".domain_observations",envir=asNamespace("yamaa"))
-result <- yamaa_domain(file.path(case,"spec.yaml"),environment=file.path(work,"environment.yaml"))
+observe <- function(result) charToRaw(yamaa:::.run_observations(result))
+result <- yamaa_project(file.path(work,"project.yaml"))$spec("OUT")$run()
 stopifnot(nrow(result$issues)==0L,identical(result$output$ID,"01"))
 before <- observe(result)
 writeBin(before,file.path(evidence,"before.json"))
@@ -37,7 +41,7 @@ inputs <- file.path(case,fixture_strings(host_truth[["source_files"]]))
 stopifnot(unlink(inputs)==0L,!any(file.exists(inputs)))
 saved <- NULL
 for(attempt in 1:2) {
-  stopifnot(isTRUE(result$save()),identical(result$output$ID,"01"))
+  stopifnot(is.null(result$save()),identical(result$output$ID,"01"))
   directory <- file.path(evidence,paste0("after-",attempt));dir.create(directory)
   writeBin(observe(result),file.path(directory,"report.json"))
   actual <- lapply(c("produced.parquet","out.csv"),function(target) {

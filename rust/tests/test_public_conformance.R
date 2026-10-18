@@ -2,17 +2,51 @@
 args <- commandArgs(trailingOnly=TRUE)
 stopifnot(length(args)==1L)
 source(args[[1L]])
+# R exchanges int and float as double: declared types name each column's
+# kind, so the same double column encodes exactly as either.
 frame <- structure(list(
-  I=structure(c("-9223372036854775808", "9223372036854775807", NA_character_), class="yamaa_int64_vector"),
-  S=structure(list(raw(), as.raw(c(97L,0L,98L)), NULL), class="yamaa_utf8_vector"),
+  I=c(-2^53, 2^53, NA_real_), S=c("", "a\u00e9", NA_character_),
   F=c(1.5,-0.0,NA_real_), D=structure(c(0,1,NA_real_),class="Date"),
   T=structure(c(0,1,NA_real_),class=c("POSIXct","POSIXt"),tzone="UTC")),
   class="data.frame",row.names=c(NA_integer_,-3L))
-actual <- public_table(frame)
+types <- c(I="int", S="str", F="float", D="date", T="datetime")
+actual <- public_table(frame, types)
 stopifnot(identical(actual$columns,list(list("I","int"),list("S","str"),list("F","float"),list("D","date"),list("T","datetime"))))
-stopifnot(identical(actual$rows[[1L]],list("-9223372036854775808","","3ff8000000000000","0","0")))
-stopifnot(identical(actual$rows[[2L]],list("9223372036854775807","610062","8000000000000000","1","1")))
+stopifnot(identical(actual$rows[[1L]],list("-9007199254740992","","3ff8000000000000","0","0")))
+stopifnot(identical(actual$rows[[2L]],list("9007199254740992","61c3a9","8000000000000000","1","1")))
 stopifnot(identical(actual$rows[[3L]],list(NULL,NULL,NULL,NULL,NULL)))
+stopifnot(identical(public_table(frame["I"], c(I="float"))$rows[[1L]], list("c340000000000000")),
+  is.null(public_table(NULL, NULL)))
+# Exactness: an int cell must be a whole double within 2^53 and never
+# negative zero; a column's R class must agree with its declared kind.
+refused <- function(expr) inherits(tryCatch(expr, error=identity), "error")
+stopifnot(refused(public_table(data.frame(I=2.5), c(I="int"))),
+  refused(public_table(data.frame(I=2^53+2), c(I="int"))),
+  refused(public_table(data.frame(I=-0.0), c(I="int"))),
+  refused(public_table(data.frame(I=Inf), c(I="int"))),
+  refused(public_table(data.frame(I="1"), c(I="int"))),
+  refused(public_table(data.frame(S=1), c(S="str"))),
+  refused(public_table(data.frame(D=0), c(D="date"))),
+  refused(public_table(data.frame(D=structure(0.5,class="Date")), c(D="date"))),
+  refused(public_table(frame["T"], c(T="date"))),
+  refused(public_table(data.frame(T=structure(0,class=c("POSIXct","POSIXt"),tzone="America/New_York")), c(T="datetime"))),
+  refused(public_table(data.frame(X=1), c(X="bool"))),
+  refused(public_table(frame, types[-1L])),
+  refused(public_table(frame, rev(types))))
+# The run report's fourteen columns: COUNT and TOTAL int, the rest str.
+stopifnot(identical(names(report_types), c("ARTIFACT","KIND","SPEC_PATH","NAME","ID","TARGET","RULE",
+  "SEVERITY","OUTCOME","CONDITION","COUNT","TOTAL","KEYS","DETAILS")),
+  identical(unname(report_types[report_types == "int"]), c("int","int")),
+  identical(names(report_types)[report_types == "int"], c("COUNT","TOTAL")))
+# Output types come from the resolved entry, never from a producer.
+resolved <- list(entry="/study/root.yaml", entries=list(
+  list(entry="/study/producer.yaml", specification=list(columns=list(list(name="ID", type="str")))),
+  list(entry="/study/root.yaml", specification=list(columns=list(
+    list(name="ID", type="int"), list(name="V", type="float"), list(name="X", type="date"))))))
+spec <- list(resolve=function() resolved)
+stopifnot(identical(declared_types(spec, c("V","ID")), c(V="float", ID="int")),
+  refused(declared_types(spec, c("ID","MISSING"))),
+  refused(declared_types(list(resolve=function() list(entry="/other.yaml", entries=resolved$entries)), "ID")))
 stopifnot(identical(json(list(issues=list(),paths=list("a"),context=raw_json('{"k":1}'))),'{"issues":[],"paths":["a"],"context":{"k":1}}'))
 stopifnot(identical(json_text("a\n\"\\"),'"a\\n\\\"\\\\"'))
 stopifnot(identical(hex(charToRaw(enc2utf8("\u00e9"))),"c3a9"))
@@ -75,6 +109,6 @@ plan <- read_plan(plan_root)
 stopifnot(all(vapply(plan, is.character, logical(1L))), identical(plan$entry, c("", "0")),
   identical(plan$variant, c("", "empty_child")), identical(plan$environment, rep("r/environment.yaml", 2L)))
 unlink(plan_root, recursive=TRUE, force=TRUE)
-cat("lossless R public tables, NUL text, signed int64, float bits, temporal values and issue JSON passed\n")
+cat("lossless R public tables typed by declaration, exact int and temporal cells, float bits and issue JSON passed\n")
 cat("move_inputs cross-filesystem copy-and-delete fallback passed\n")
 cat("read_plan keeps blank and filled plan columns as text passed\n")
