@@ -4,6 +4,8 @@ host_fixture_root <- if (file.exists("host-fixtures/sas-cases.json")) "host-fixt
   system.file("host-fixtures", package = "yamaa", mustWork = TRUE)
 truth <- jsonlite::fromJSON(file.path(host_fixture_root, "sas-cases.json"), simplifyVector = FALSE)
 stopifnot(identical(truth$version, "1"))
+check <- function(path) yamaa_spec(path)$check()
+run <- function(path) yamaa_spec(path)$run()
 
 read_bytes <- function(path) readBin(path, "raw", n = file.info(path)$size)
 hex_bytes <- function(value) {
@@ -66,8 +68,35 @@ table_rows <- function(output, fields) {
     lapply(columns, function(value) if (is.na(value[[i]])) NULL else unname(value[[i]]))
   })
 }
+# Decimal integer text beyond 2^53 in magnitude, compared as exact digits.
+beyond_double <- function(text) {
+  digits <- sub("^-", "", text)
+  nchar(digits) > 16L || (nchar(digits) == 16L && digits > "9007199254740992")
+}
+# The first authored int cell an R double cannot hold, column by column.
+unheld_integer <- function(case) {
+  if (is.null(case$rows)) return(NULL)
+  for (index in seq_along(case$fields)) if (case$fields[[index]]$type == "int") {
+    for (row in case$rows) {
+      cell <- row[[index]]
+      if (is.character(cell) && beyond_double(cell)) return(cell)
+    }
+  }
+  NULL
+}
 assert_output <- function(result, case) {
-  stopifnot(nrow(result$issues) == 0L, !is.null(result$output))
+  stopifnot(nrow(result$issues) == 0L)
+  unheld <- unheld_integer(case)
+  if (!is.null(unheld)) {
+    # R exchanges int as double: the successful run's output view refuses a
+    # value beyond 2^53 rather than change it. Its saved bytes stay exact.
+    failure <- tryCatch(result$output, error = identity)
+    stopifnot(inherits(failure, "yamaa_error"), identical(conditionMessage(failure),
+      paste0("integer ", unheld, " is beyond 2^53 and cannot be held exactly by an R double")),
+      nrow(result$issues) == 0L)
+    return(invisible())
+  }
+  stopifnot(!is.null(result$output))
   assert_types(result$output, case$fields)
   rows <- table_rows(result$output, case$fields)
   if (!is.null(case$rows)) {
@@ -95,7 +124,11 @@ assert_failed <- function(result, case, root) {
       identical(before$spec_paths[[1L]], "input.SRC.path"))
   }
   for (i in seq_len(2L)) {
-    stopifnot(inherits(tryCatch(result$save(), error = identity), "yamaa_domain_error"),
+    # A failed run saves nothing and signals the run's unchanged issues.
+    failure <- tryCatch(result$save(), error = identity)
+    stopifnot(inherits(failure, "yamaa_error"),
+      identical(conditionMessage(failure), "cannot save a failed run; see issues"),
+      identical(failure$issues, before),
       identical(result$issues, before), !file.exists(file.path(root, "result.csv")))
   }
 }
@@ -106,11 +139,11 @@ run_sas_sources <- function() {
   on.exit(unlink(root, recursive = TRUE))
   for (case in truth$accepted) {
     paths <- stage_case(root, case)
-    stopifnot(nrow(yamaa_check(paths$spec)$issues) == 0L,
+    stopifnot(nrow(check(paths$spec)$issues) == 0L,
       !file.exists(file.path(paths$root, "result.csv")))
-    result <- yamaa_domain(paths$spec)
+    result <- run(paths$spec)
     assert_output(result, case)
-    stopifnot(identical(result$save(), TRUE))
+    stopifnot(is.null(result$save()))
     if (!is.null(case$csv)) stopifnot(identical(read_bytes(file.path(paths$root, "result.csv")), charToRaw(enc2utf8(case$csv))))
   }
 
@@ -137,39 +170,39 @@ run_sas_sources <- function() {
       output = list(path = "result.csv", columns = as.list(field_names(fields))))
     case <- list(id = file, file = file, specification = document, fields = fields, rows = expected_rows)
     paths <- stage_case(root, case)
-    stopifnot(nrow(yamaa_check(paths$spec)$issues) == 0L)
-    result <- yamaa_domain(paths$spec)
+    stopifnot(nrow(check(paths$spec)$issues) == 0L)
+    result <- run(paths$spec)
     assert_output(result, case)
-    stopifnot(identical(result$save(), TRUE), file.exists(file.path(paths$root, "result.csv")))
+    stopifnot(is.null(result$save()), file.exists(file.path(paths$root, "result.csv")))
   }
 
   for (case in truth$static_refusals) {
     paths <- stage_case(root, case)
-    checked <- yamaa_check(paths$spec)
-    result <- yamaa_domain(paths$spec)
+    checked <- check(paths$spec)
+    result <- run(paths$spec)
     stopifnot(identical(checked$issues, result$issues))
     assert_failed(result, case, paths$root)
   }
   for (case in truth$refusals) {
     paths <- stage_case(root, case)
-    stopifnot(nrow(yamaa_check(paths$spec)$issues) == 0L,
+    stopifnot(nrow(check(paths$spec)$issues) == 0L,
       !file.exists(file.path(paths$root, "result.csv")))
-    assert_failed(yamaa_domain(paths$spec), case, paths$root)
+    assert_failed(run(paths$spec), case, paths$root)
   }
 
   case <- truth$accepted[[which(vapply(truth$accepted, `[[`, character(1L), "id") == truth$snapshot_case)]]
   case$id <- "held-snapshot"
   paths <- stage_case(root, case)
-  result <- yamaa_domain(paths$spec)
+  result <- run(paths$spec)
   assert_output(result, case)
   held <- result$output
   writeBin(charToRaw("changed source"), paths$source)
-  assert_failed(yamaa_domain(paths$spec),
+  assert_failed(run(paths$spec),
     list(condition = "source_sas_invalid", phase = "ingest", causes = list("framing")), paths$root)
   unlink(c(paths$source, paths$spec))
   gc()
   for (i in seq_len(2L)) {
-    stopifnot(identical(result$save(), TRUE), identical(result$output, held),
+    stopifnot(is.null(result$save()), identical(result$output, held),
       identical(read_bytes(file.path(paths$root, "result.csv")), charToRaw(enc2utf8(case$csv))))
   }
   rm(result)

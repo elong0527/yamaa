@@ -39,9 +39,14 @@ refused <- function(result, condition, requirement, reason) {
     identical(result$issues$phase, "derivation"),
     identical(result$issues$condition, condition),
     identical(result$issues$requirement, requirement),
-    identical(reasons(result$issues), reason),
-    inherits(tryCatch(result$save(), error = identity), "yamaa_domain_error"))
+    identical(reasons(result$issues), reason))
+  failure <- tryCatch(result$save(), error = identity)
+  stopifnot(inherits(failure, "yamaa_error"),
+    identical(conditionMessage(failure), "cannot save a failed run; see issues"),
+    identical(failure$issues, result$issues))
 }
+# The project's one specification, run with the project's functions.
+run <- function() yamaa_project("project.yaml")$spec("TEST")$run()
 
 work <- tempfile("function-values-"); dir.create(work)
 previous <- setwd(work)
@@ -106,7 +111,7 @@ record <- function(arguments) seen[[length(seen) + 1L]] <<- arguments
 received <- function(arguments) any(vapply(seen, identical, logical(1), arguments))
 for (attempt in 1:2) {
   seen <- list()
-  built <- with_resolve(wrapped(record), yamaa_domain("spec.yaml", environment = "project.yaml"))
+  built <- with_resolve(wrapped(record), run())
   stopifnot(nrow(built$issues) == 0L,
     identical(built$output$ID, c(1, 2, 3)),
     identical(built$output$I, c(7, 2^53, -2^53)),
@@ -131,7 +136,7 @@ for (attempt in 1:2) {
   stopifnot(identical(Encoding(text), "UTF-8"),
     identical(attributes(Filter(function(arguments) inherits(arguments$x, "POSIXct"), seen)[[1L]]$x),
       list(class = c("POSIXct", "POSIXt"), tzone = "UTC")))
-  stopifnot(isTRUE(built$save()), identical(rawfile("output.csv"), charToRaw(enc2utf8(paste0(
+  stopifnot(is.null(built$save()), identical(rawfile("output.csv"), charToRaw(enc2utf8(paste0(
     "ID,I,F,S,D,T,M,P\n",
     "1,7,2.5,\u00e9t\u00e9,2024-02-29,2024-02-29T12:30:45,5,62.5\n",
     "2,9007199254740992,-0.5,x,0001-01-01,9999-12-31T23:59:59,,-12.5\n",
@@ -152,13 +157,13 @@ column <- function(type, name, cells, resolve = capabilities$resolve) {
     if (is.raw(cells[[index]])) cells[[index]] else charToRaw(enc2utf8(cells[[index]])),
     charToRaw("\n")))
   writeBin(c(charToRaw("ID,X\n"), unlist(rows)), "input.csv")
-  with_resolve(resolve, yamaa_domain("spec.yaml", environment = "project.yaml"))
+  with_resolve(resolve, run())
 }
 
 # Text beyond one MiB crosses both ways whole and saves exact bytes.
 large <- paste0(strrep("\u00e9", 524289L), "complete")
 long <- column("str", "text_value", list(large))
-stopifnot(nrow(long$issues) == 0L, identical(long$output$X, large), isTRUE(long$save()),
+stopifnot(nrow(long$issues) == 0L, identical(long$output$X, large), is.null(long$save()),
   identical(rawfile("output.csv"), charToRaw(enc2utf8(paste0("ID,X\n1,", large, "\n")))))
 unlink("output.csv")
 

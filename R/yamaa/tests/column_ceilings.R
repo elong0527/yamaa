@@ -1,6 +1,38 @@
 # Installed 1,024/1,025 controls for every width route (#2299).
 library(yamaa)
-stopifnot(requireNamespace("arrow", quietly = TRUE))
+stopifnot(requireNamespace("arrow", quietly = TRUE), requireNamespace("jsonlite", quietly = TRUE))
+
+# Two routes reach one specification: alone, through yamaa_spec(), or as the
+# one specification a project lists, through the project's own check() and
+# run(). A listed specification that cannot be prepared has no domain name, so
+# the project route uses the whole-project operations, whose issues name the
+# listed specification as their entry and source.
+project_of <- function(spec) {
+  directory <- dirname(spec)
+  writeLines("schema_version: '1.0'", file.path(directory, "environment.yaml"))
+  project <- file.path(directory, "project.yaml")
+  writeLines(c("schema_version: '1.0'", "environments: {r: environment.yaml}",
+               paste0("adam: {specs: [", basename(spec), "]}")), project)
+  yamaa_project(project)
+}
+operations <- function(project) {
+  if (project) list(function(spec) project_of(spec)$check(), function(spec) project_of(spec)$run())
+  else list(function(spec) yamaa_spec(spec)$check(), function(spec) yamaa_spec(spec)$run())
+}
+# The issues without the project route's identification: `entry` names the
+# listed specification, and so does `source` unless the finding already names
+# its own source operand. A context without `entry` is unchanged text.
+route_issues <- function(issues, spec) {
+  issues$context <- vapply(issues$context, function(text) {
+    context <- jsonlite::fromJSON(text, simplifyVector = FALSE)
+    if (is.null(context$entry)) return(text)
+    stopifnot(endsWith(context$entry, paste0("/", basename(spec))), !is.null(context$source))
+    if (identical(context$source, context$entry)) context$source <- NULL
+    context$entry <- NULL
+    as.character(jsonlite::toJSON(context, auto_unbox = TRUE, digits = NA))
+  }, character(1L), USE.NAMES = FALSE)
+  issues
+}
 
 write_case <- function(root, columns = 1L, fields = 1L, typed = FALSE,
                        source_format = "csv", selected = NULL) {
@@ -37,9 +69,16 @@ write_case <- function(root, columns = 1L, fields = 1L, typed = FALSE,
   path
 }
 
-assert_build <- function(spec, width = 1L, environment = NULL) {
-  stopifnot(nrow(yamaa_check(spec, environment = environment)$issues) == 0L)
-  built <- yamaa_domain(spec, environment = environment)
+assert_build <- function(spec, width = 1L, project = FALSE) {
+  if (project) {
+    stopifnot(nrow(project_of(spec)$check()$issues) == 0L)
+    runs <- project_of(spec)$run()
+    stopifnot(identical(runs$names, "TEST"), nrow(runs$issues) == 0L)
+    built <- runs[["TEST"]]
+  } else {
+    stopifnot(nrow(yamaa_spec(spec)$check()$issues) == 0L)
+    built <- yamaa_spec(spec)$run()
+  }
   stopifnot(nrow(built$issues) == 0L, nrow(built$output) == 1L,
             ncol(built$output) == width, identical(built$output$ID, "S-001"))
   if (width > 1L) stopifnot(all(built$output[1L, -1L] == "x"))
@@ -49,9 +88,16 @@ assert_refusal <- function(result, compiler = FALSE) {
   issues <- result$issues
   stopifnot(nrow(issues) > 0L, any(issues$condition == "engine_rejected"))
   if (compiler) stopifnot(any(grepl('"code":"compiler_limit"', issues$context, fixed = TRUE)))
-  if (is.environment(result)) {
-    stopifnot(is.null(result$output),
-              inherits(tryCatch(result$save(), error = identity), "yamaa_domain_error"))
+  # A refused run has no output; its save signals the run's own issues.
+  if (inherits(result, "yamaa_run")) {
+    failure <- tryCatch(result$save(), error = identity)
+    stopifnot(is.null(result$output), inherits(failure, "yamaa_error"),
+              identical(conditionMessage(failure), "cannot save a failed run; see issues"),
+              identical(failure$issues, issues))
+  }
+  if (inherits(result, "yamaa_project_run")) {
+    failure <- tryCatch(result$save(), error = identity)
+    stopifnot(inherits(failure, "yamaa_error"), identical(failure$issues, issues))
   }
 }
 
@@ -83,14 +129,14 @@ assert_layered_cases <- function(root, width) {
     vapply(rows, paste, character(1L), collapse = ",")), collapse = "\n"), "\n"))
   for (file in c("parent.yaml", "explicit.yaml", "child.yaml", "grandchild.yaml")) {
     spec <- file.path(root, file)
-    stopifnot(nrow(yamaa_check(spec)$issues) == 0L)
-    built <- yamaa_domain(spec)
+    stopifnot(nrow(yamaa_spec(spec)$check()$issues) == 0L)
+    built <- yamaa_spec(spec)$run()
     stopifnot(nrow(built$issues) == 0L, identical(names(built$output), names),
               nrow(built$output) == 3L, ncol(built$output) == width)
     for (row in seq_along(rows)) {
       stopifnot(identical(unlist(built$output[row, ], use.names = FALSE), rows[[row]]))
     }
-    built$save()
+    stopifnot(is.null(built$save()))
     output <- file.path(root, "out.csv")
     stopifnot(identical(readBin(output, "raw", n = file.info(output)$size), expected))
   }
@@ -108,7 +154,7 @@ run_column_ceilings <- function() {
   child <- file.path(dirname(parent), "child.yaml")
   writeLines(c("schema_version: '1.0'",
                paste0("parents: [", paste(rep("spec.yaml", 8193L), collapse = ", "), "]")), child)
-  for (operation in list(yamaa_check, yamaa_domain)) {
+  for (operation in operations(FALSE)) {
     result <- operation(child)
     assert_refusal(result)
     stopifnot(nrow(result$issues) == 1L, identical(result$issues$context,
@@ -127,14 +173,12 @@ run_column_ceilings <- function() {
     "  - {name: C0001, type: int, derivation: {literal: 1}}"
   lines[grepl("name: C0002,", lines, fixed = TRUE)] <-
     "  - {name: C0002, type: str, derivation: {str_case: {source: C0001, to: upper}}}"
-  env <- file.path(case_root, "environment.yaml")
-  writeLines(c("schema_version: '1.0'", "language: r"), env)
-  for (environment in list(NULL, env)) {
+  for (project in c(FALSE, TRUE)) {
     writeLines(lines, spec)
-    for (operation in list(yamaa_check, yamaa_domain)) {
-      refused <- operation(spec, environment = environment)
+    for (operation in operations(project)) {
+      refused <- operation(spec)
       assert_refusal(refused, TRUE)
-      issue <- refused$issues
+      issue <- route_issues(refused$issues, spec)
       stopifnot(nrow(issue) == 1L, is.na(issue$requirement),
         !grepl("incomplete_checks_from", issue$context, fixed = TRUE),
         grepl('"actual":1025', issue$context, fixed = TRUE),
@@ -146,8 +190,8 @@ run_column_ceilings <- function() {
     # output reference instead of the remaining C0002 type error.
     repaired[startsWith(repaired, "output:")] <- gsub(", C1024\\]", "]", repaired[startsWith(repaired, "output:")])
     writeLines(repaired, spec)
-    for (operation in list(yamaa_check, yamaa_domain)) {
-      issue <- operation(spec, environment = environment)$issues
+    for (operation in operations(project)) {
+      issue <- route_issues(operation(spec)$issues, spec)
       stopifnot(nrow(issue) == 1L, identical(issue$condition, "incompatible_input_type"),
         identical(issue$requirement, "REQ-0308"),
         !grepl("incomplete_checks_from", issue$context, fixed = TRUE))
@@ -176,15 +220,13 @@ run_column_ceilings <- function() {
         "  - {name: ID, type: str, label: ID, derivation: {first_available: {sources: [%s]}}}", sources)
       writeLines(lines, spec)
     }
-    env <- file.path(case_root, "environment.yaml")
-    writeLines(c("schema_version: '1.0'", "language: r"), env)
     spec_path <- switch(resource, inputs = "input", source_fields = "input.SRC.types",
                         projected_columns = "output.columns", "columns")
     expected <- sprintf('{"actual":%s,"code":"compiler_limit","limit":%s,"resource":"%s","stage":"prepare"}',
                         actual, limit, resource)
-    for (environment in list(NULL, env)) {
-      for (operation in list(yamaa_check, yamaa_domain)) {
-        issue <- operation(spec, environment = environment)$issues
+    for (project in c(FALSE, TRUE)) {
+      for (operation in operations(project)) {
+        issue <- route_issues(operation(spec)$issues, spec)
         stopifnot(nrow(issue) == 1L, identical(issue$phase, "engine"),
           identical(issue$condition, "engine_rejected"), is.na(issue$requirement),
           identical(issue$spec_paths, list(spec_path)), identical(issue$context, expected))
@@ -202,9 +244,7 @@ run_column_ceilings <- function() {
                file.path(case_root, sprintf("layer-%s.yaml", index)))
   }
   writeLines(c("schema_version: '1.0'", "parents: [layer-0.yaml]"), spec)
-  env <- file.path(case_root, "environment.yaml")
-  writeLines(c("schema_version: '1.0'", "language: r"), env)
-  for (environment in list(NULL, env)) assert_build(spec, environment = environment)
+  for (project in c(FALSE, TRUE)) assert_build(spec, project = project)
 
   # A wide scalar within the file boundary reaches its language finding with exact digits.
   case_root <- path("preparation-numeric-digits")
@@ -212,11 +252,13 @@ run_column_ceilings <- function() {
   digits <- paste(rep("9", 4097L), collapse = "")
   writeLines(paste0("schema_version: ", digits), spec)
   expected <- sprintf('{"actual":%s,"expected":"1.0"}', digits)
-  env <- file.path(case_root, "environment.yaml")
-  writeLines(c("schema_version: '1.0'", "language: r"), env)
-  for (environment in list(NULL, env)) {
-    for (operation in list(yamaa_check, yamaa_domain)) {
-      issue <- operation(spec, environment = environment)$issues
+  for (project in c(FALSE, TRUE)) {
+    for (operation in operations(project)) {
+      issue <- operation(spec)$issues
+      # Keep the wide number as exact text: drop the project identification
+      # literally rather than through a JSON number codec.
+      issue$context <- sub(',"entry":"[^"]*","expected":"1.0","source":"[^"]*"}$',
+                           ',"expected":"1.0"}', issue$context)
       stopifnot(nrow(issue) == 1L, identical(issue$phase, "validation"),
         identical(issue$condition, "schema_version_mismatch"),
         identical(issue$requirement, "REQ-0281"),
@@ -229,23 +271,23 @@ run_column_ceilings <- function() {
   # 1,025-column output.
   assert_build(write_case(path("admit-columns"), 1024L, selected = "ID"))
   spec <- write_case(path("refuse-columns"), 1025L)
-  for (operation in list(yamaa_check, yamaa_domain)) assert_refusal(operation(spec), TRUE)
+  for (operation in operations(FALSE)) assert_refusal(operation(spec), TRUE)
 
   assert_build(write_case(path("admit-output"), 1024L), 1024L)
   names <- c("ID", sprintf("C%04d", seq_len(1023L)))
   # Keep declarations in range: projection count refuses before the repeated
   # output name is validated, independently of the declared-column cap.
   spec <- write_case(path("refuse-output"), 1024L, selected = c(names, "ID"))
-  for (operation in list(yamaa_check, yamaa_domain)) assert_refusal(operation(spec), TRUE)
+  for (operation in operations(FALSE)) assert_refusal(operation(spec), TRUE)
 
   assert_build(write_case(path("admit-types"), fields = 1024L, typed = TRUE))
   spec <- write_case(path("refuse-types"), fields = 1025L, typed = TRUE)
-  for (operation in list(yamaa_check, yamaa_domain)) assert_refusal(operation(spec), TRUE)
+  for (operation in operations(FALSE)) assert_refusal(operation(spec), TRUE)
 
   for (format in c("csv", "parquet")) {
     assert_build(write_case(path(paste0("admit-", format)), fields = 1024L, source_format = format))
     spec <- write_case(path(paste0("refuse-", format)), fields = 1025L, source_format = format)
-    assert_refusal(yamaa_domain(spec))
+    assert_refusal(yamaa_spec(spec)$run())
   }
 
   for (width in c(1024L, 1025L)) {
@@ -260,7 +302,7 @@ run_column_ceilings <- function() {
     if (width == 1024L) {
       assert_build(consumer)
     } else {
-      for (operation in list(yamaa_check, yamaa_domain)) assert_refusal(operation(consumer))
+      for (operation in operations(FALSE)) assert_refusal(operation(consumer))
     }
   }
 
@@ -275,8 +317,8 @@ run_column_ceilings <- function() {
       "  - {name: ID, type: str, label: ID, derivation: SRC.ID}",
       "output: {path: consumer.csv, columns: [ID]}"
     ), consumer)
-    stopifnot(nrow(yamaa_check(consumer)$issues) == 0L)
-    if (width == 1024L) assert_build(consumer) else assert_refusal(yamaa_domain(consumer))
+    stopifnot(nrow(yamaa_spec(consumer)$check()$issues) == 0L)
+    if (width == 1024L) assert_build(consumer) else assert_refusal(yamaa_spec(consumer)$run())
   }
 }
 

@@ -13,7 +13,7 @@ vectors <- read.delim(file.path(root, "cases.tsv"), sep = "\t", quote = "", comm
   stringsAsFactors = FALSE, check.names = FALSE, fileEncoding = "UTF-8", na.strings = character())
 grammar_conditions <- lapply(host_truth[["grammar_conditions"]],fixture_strings)
 for (i in seq_len(nrow(vectors))) {
-  issues <- yamaa_domain(file.path(root, vectors$specification[i]))$issues
+  issues <- yamaa_spec(file.path(root, vectors$specification[i]))$run()$issues
   observed <- if (vectors$parse[i] == "reject") issues$condition else
     issues$condition[issues$condition %in% grammar_conditions[[vectors$contract[i]]]]
   expected <- if (vectors$parse[i] == "reject") vectors$public_condition[i] else character()
@@ -39,13 +39,13 @@ csv_preservation <- function() {
     "  - {name: QUOTED, type: str, derivation: SRC.QUOTED}\n",
     "output: {path: output.csv, columns: [SUBJECT, SITE, BARE, QUOTED]}\n")
   writeBin(charToRaw(spec), file.path(root, "spec.yaml"))
-  result <- yamaa_domain(file.path(root, "spec.yaml"))
+  result <- yamaa_spec(file.path(root, "spec.yaml"))$run()
   stopifnot(nrow(result$issues) == 0L,
     identical(result$output$SUBJECT, c("001", "002")),
     identical(result$output$SITE, c("007", "008")),
     identical(result$output$BARE, c(NA_character_, NA_character_)),
     identical(result$output$QUOTED, c(NA_character_, NA_character_)),
-    identical(result$save(), TRUE))
+    is.null(result$save()))
   path <- file.path(root, "output.csv")
   stopifnot(identical(readBin(path, "raw", n = file.info(path)$size),
     charToRaw("SUBJECT,SITE,BARE,QUOTED\n001,007,,\n002,008,,\n")))
