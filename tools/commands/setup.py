@@ -2,9 +2,10 @@
 
 import argparse
 import os
+import shutil
 import subprocess
 
-from tools.ci.toolchain import channel
+from tools.ci.toolchain import channel, declaration, install_command
 from tools.paths import ROOT
 
 
@@ -12,6 +13,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--uv", default="uv")
     uv = parser.parse_args().uv
+    # The toolchain file names only what a build needs, so `make quick`'s lint
+    # needs Clippy and rustfmt added to the pinned toolchain where rustup runs.
+    if shutil.which("rustup"):
+        subprocess.run(install_command(declaration()), cwd=ROOT, check=True)
     environment = os.environ | {"RUSTUP_TOOLCHAIN": channel()}
     subprocess.run(
         [

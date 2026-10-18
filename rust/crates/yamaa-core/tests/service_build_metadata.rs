@@ -234,7 +234,10 @@ mod service {
                     log,
                 }
             }
-            fn run(&mut self, checked: CheckedOwnedProject) -> Result<PreparedOutput<()>, Failure> {
+            fn run(
+                &mut self,
+                checked: &CheckedOwnedProject,
+            ) -> Result<PreparedOutput<()>, Failure> {
                 let source = checked.compiled().source().clone();
                 self.source.inspections.push_back(InspectionStep {
                     source: source.clone(),
@@ -380,14 +383,14 @@ mod service {
             }
             fn build_plain(
                 &mut self,
-                _: Self::Plain,
+                _: &Self::Plain,
                 _: Scope<'_>,
             ) -> Result<PreparedOutput<()>, Failure> {
                 unreachable!()
             }
             fn build_project(
                 &mut self,
-                checked: Self::Project,
+                checked: &Self::Project,
                 _: Scope<'_>,
             ) -> Result<PreparedOutput<()>, Failure> {
                 self.run(checked)
@@ -1221,10 +1224,10 @@ mod service {
             fn check_project(&mut self, _: ()) -> Result<(), Original> {
                 self.enter("project check")
             }
-            fn build_plain(&mut self, _: (), _: Scope<'_>) -> Result<(), Original> {
+            fn build_plain(&mut self, _: &(), _: Scope<'_>) -> Result<(), Original> {
                 self.execute("plain build")
             }
-            fn build_project(&mut self, _: (), _: Scope<'_>) -> Result<(), Original> {
+            fn build_project(&mut self, _: &(), _: Scope<'_>) -> Result<(), Original> {
                 self.execute("project build")
             }
         }

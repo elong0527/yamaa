@@ -4,9 +4,16 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
+"""Create ADEG with placebo-corrected change columns from ADEG_RAW.
+
+Reads /app/input/adeg_raw.csv and writes /app/output/adeg.csv.
+"""
+
+import csv
 from pathlib import Path
 
-import polars as pl
+INPUT = Path("/app/input/adeg_raw.csv")
+OUTPUT = Path("/app/output/adeg.csv")
 
 COLUMNS = [
     "STUDYID", "USUBJID", "COHORT", "TRTA", "PARAMCD", "PARAM", "APERIOD",
@@ -14,58 +21,90 @@ COLUMNS = [
     "BASETYPE", "ACOMPFL", "COMP", "COMPBASE", "COMPCHG", "CCOMPCHG",
     "COMPTYPE",
 ]
-GROUP = ["PARAMCD", "ATPTN"]
 
-adeg = pl.read_csv(
-    "/app/input/adeg_raw.csv",
-    infer_schema=False,
-).with_columns(
-    pl.col("APERIOD").cast(pl.Int64),
-    pl.col("APERDAY").cast(pl.Int64),
-    pl.col("ATPTN").cast(pl.Float64),
-    pl.col("AVAL").cast(pl.Float64),
-    pl.col("BASE").cast(pl.Float64),
-    pl.col("CHG").cast(pl.Float64),
-)
 
-after_baseline = pl.col("ABLFL").is_null() | (pl.col("ABLFL") != "Y")
-adeg = adeg.with_columns(
-    ACOMPFL=pl.when(after_baseline & (pl.col("TRTA") == "Placebo"))
-    .then(pl.lit("Y")),
-)
+def to_float(text):
+    """Parse a CSV cell as a float, returning None for a blank cell."""
+    if text is None or text.strip() == "":
+        return None
+    return float(text)
 
-# The placebo group: every comparator record of the same parameter and
-# nominal time point, all cohorts together. Each mean skips missing values.
-placebo = (
-    adeg.filter(pl.col("ACOMPFL") == "Y")
-    .group_by(GROUP)
-    .agg(
-        COMP=pl.col("AVAL").mean(),
-        COMPBASE=pl.col("BASE").mean(),
-        COMPCHG=pl.col("CHG").mean(),
-    )
-)
 
-adeg = (
-    adeg.join(placebo, on=GROUP, how="left", maintain_order="left")
-    .with_columns(
-        # Baseline records carry no comparator; placebo records carry the
-        # group's means like every other record after baseline.
-        *[
-            pl.when(after_baseline).then(pl.col(c)).alias(c)
-            for c in ("COMP", "COMPBASE", "COMPCHG")
-        ],
-        COMPTYPE=pl.when(after_baseline).then(
-            pl.concat_str(pl.lit("Placebo group at "), pl.col("ATPT"))
-        ),
-    )
-    .with_columns(
-        # The double delta, on drug records only.
-        CCOMPCHG=pl.when(after_baseline & pl.col("ACOMPFL").is_null())
-        .then(pl.col("CHG") - pl.col("COMPCHG")),
-    )
-    .select(COLUMNS)
-)
+def fmt(value):
+    """Format a computed float without rounding; blank for None."""
+    if value is None:
+        return ""
+    return repr(value)
 
-Path("/app/output").mkdir(exist_ok=True)
-adeg.write_csv("/app/output/adeg.csv")
+
+def mean(values):
+    vals = [v for v in values if v is not None]
+    if not vals:
+        return None
+    return sum(vals) / len(vals)
+
+
+def main():
+    with INPUT.open(newline="") as fh:
+        rows = list(csv.DictReader(fh))
+
+    def is_placebo(row):
+        return row["TRTA"] == "Placebo"
+
+    def is_baseline(row):
+        return row["ABLFL"] == "Y"
+
+    # Placebo comparison groups: every placebo record after baseline with
+    # the same PARAMCD and the same ATPTN, from all cohorts together.
+    groups = {}
+    for row in rows:
+        if is_placebo(row) and not is_baseline(row):
+            key = (row["PARAMCD"], row["ATPTN"])
+            groups.setdefault(key, []).append(row)
+
+    stats = {}
+    for key, members in groups.items():
+        stats[key] = (
+            mean([to_float(r["AVAL"]) for r in members]),
+            mean([to_float(r["BASE"]) for r in members]),
+            mean([to_float(r["CHG"]) for r in members]),
+        )
+
+    out_rows = []
+    for row in rows:
+        out = {col: row.get(col, "") for col in COLUMNS[:16]}
+        baseline = is_baseline(row)
+        placebo = is_placebo(row)
+
+        acompfl = ""
+        comp = compbase = compchg = None
+        ccompchg = None
+        comptype = ""
+        if not baseline:
+            key = (row["PARAMCD"], row["ATPTN"])
+            comp, compbase, compchg = stats.get(key, (None, None, None))
+            comptype = "Placebo group at " + row["ATPT"]
+            if placebo:
+                acompfl = "Y"
+            else:
+                chg = to_float(row["CHG"])
+                if chg is not None and compchg is not None:
+                    ccompchg = chg - compchg
+
+        out["ACOMPFL"] = acompfl
+        out["COMP"] = fmt(comp)
+        out["COMPBASE"] = fmt(compbase)
+        out["COMPCHG"] = fmt(compchg)
+        out["CCOMPCHG"] = fmt(ccompchg)
+        out["COMPTYPE"] = comptype
+        out_rows.append(out)
+
+    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+    with OUTPUT.open("w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=COLUMNS)
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+
+if __name__ == "__main__":
+    main()

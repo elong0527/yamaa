@@ -34,11 +34,13 @@ columns:
 ```
 
 The driver's qualifier reads the input or intermediate record that built the
-row. An inferred key must compare equal on both sides, and
-[VALUE-2](values.md#value-2) performs no implicit conversion: an
-applicable key whose left and right types are not mutually comparable fails as
-`incompatible_input_type`, reporting both types. With no applicable key the
-intended match is unclear, and the read fails as `no_applicable_keys`. The
+row. A `between` value is not a scalar source and never joins: it reads the
+current row alone ([LOOKUP-9](#lookup-9)). An inferred key must compare equal
+on both sides, and [VALUE-2](values.md#value-2) performs no implicit
+conversion: an applicable key whose left and right types are not mutually
+comparable fails as `incompatible_input_type`, reporting both types. With no
+applicable key the intended match is unclear, and the read fails as
+`no_applicable_keys`. The
 author then states the match with a named intermediate declaring its `key`
 ([LOOKUP-5](#lookup-5)), the same explicit form that serves whenever the
 intended keys differ from the applicable keys.
@@ -268,7 +270,7 @@ exist, every match value must read a known current-row value, and each pair
 must be mutually comparable, with no operand converted.
 
 Fails: `invalid_field_type`, `missing_aggregate_keys`, `unknown_field`, `incompatible_input_type`.
-Evidence: `negative-lookup-mismatched`, `sdtm-lb-lab-specific-ranges`, `rust/crates/yamaa-adapters/tests/fixtures/intermediate_key_reference.json`.
+Evidence: `negative-lookup-mismatched`, `negative-lookup-repeated-key`, `sdtm-lb-lab-specific-ranges`, `rust/crates/yamaa-adapters/tests/fixtures/intermediate_key_reference.json`.
 Replaces: REQ-0115, REQ-0116, REQ-0117, REQ-0118, REQ-0305.
 
 ```yaml
@@ -285,7 +287,9 @@ value, and a match value may be an expression ([LOOKUP-6](#lookup-6)).
 
 A written `key` names at least one pair. An empty list or mapping names no
 match: a lookup fails as `invalid_field_type`, and an aggregate fails as
-`missing_aggregate_keys` ([LOOKUP-21](#lookup-21)).
+`missing_aggregate_keys` ([LOOKUP-21](#lookup-21)). A lookup's list names each
+column once; a column listed again fails as `invalid_field_type` at that entry,
+reporting the column.
 
 A `key` column the lookup's dataset does not have fails as `unknown_field`.
 Every match value must read a known current-row value: a variable must name
@@ -341,13 +345,16 @@ unfinished rows are never eligible, and a read from the first template fails.
 only through a named intermediate, never as a directly qualified source.
 
 Fails: `phase_boundary`.
-Evidence: `adam-adae-prior-serious-event`, `adam-advs-windows`, `rust/crates/yamaa-adapters/tests/execution_declarative_self.rs`.
+Evidence: `adam-adae-prior-serious-event`, `adam-advs-windows`, `negative-self-window-first-template`, `rust/crates/yamaa-adapters/tests/execution_declarative_self.rs`.
 Replaces: REQ-0120.
 
-A read from the first template fails as `phase_boundary`. The donor fields are
-output columns derived in every row template; a column derived only in the
-later column phase is unavailable to `SELF`. The order of donors follows row
-construction order.
+A read from the first template fails as `phase_boundary`. So does a
+first-template read of another named intermediate whose `between` value reads
+a `SELF` intermediate, directly or through the `between` values of further
+intermediates; the finding names the read, then each `between` value in the
+order followed. The donor fields are output columns derived in every row
+template; a column derived only in the later column phase is unavailable to
+`SELF`. The order of donors follows row construction order.
 
 For `SELF`, `filter` and `order_by` may name its donor fields either bare or as
 `SELF.field`. Bare donor fields in `filter` are not correlated current-row
@@ -456,7 +463,7 @@ leaves that side unbounded. Both endpoints are inclusive, and a record missing
 a stated bound is ineligible rather than open-ended.
 
 Fails: `unknown_field`, `incomparable_range_types`.
-Evidence: `negative-lookup-bad-range`, `sdtm-lb-lab-specific-ranges`, `adam-advs-window-table`.
+Evidence: `negative-lookup-bad-range`, `negative-lookup-range-other-input`, `schema-lookup-intermediate-range-driver`, `sdtm-lb-lab-specific-ranges`, `adam-advs-window-table`.
 Replaces: REQ-0121, REQ-0128, REQ-0134, REQ-1049.
 
 Bounds are bare donor-record field identifiers: stored fields or names the
@@ -471,6 +478,31 @@ fails as `incomparable_range_types` before any record is compared, reporting
 the runtime types of the value and the stated bounds. A derived bound has its
 derivation's declared or result type ([LOOKUP-15](#lookup-15)).
 
+A `value` qualified by an input dataset reads the record of the current row's
+driver ([NAME-4](names.md#name-4)), in the scope of a correlated `filter`
+field ([LOOKUP-8](#lookup-8)). That input must drive every row that reads the
+intermediate; during column derivation, every row template the read can
+evaluate on. A read in another intermediate's `derivations` takes the value
+from the reading intermediate's donor record instead
+([LOOKUP-16](#lookup-16)). For a row that another input dataset drives, the
+value names no current-row value and is never read through the implicit join
+([LOOKUP-1](#lookup-1)). It fails as `unknown_field`, also when the row reads
+the intermediate through another intermediate's `between.value` or an
+aggregate's `derive` step. Bring such a value onto the row as a column first,
+and name the column:
+
+```yaml
+columns:
+  - name: AGE
+    type: int
+    derivation: DM.AGE
+intermediates:
+  - id: REFRANGE
+    dataset: LBRANGE
+    key: [LBTESTCD]
+    between: {value: AGE, lower: AGELO, upper: AGEHI}
+```
+
 <a id="lookup-10"></a>
 
 ### LOOKUP-10. Several surviving records need order_by and keep, which choose the first or last
@@ -482,12 +514,14 @@ choose by is an unhandled multiple match and fails. During grouped row
 construction it fails at the join phase, before any column is derived.
 
 Fails: `unpaired_fields`, `multiple_matches`.
-Evidence: `negative-lookup-unordered`, `negative-lookup-unchosen`, `negative-source-duplicate-key`.
+Evidence: `negative-lookup-unordered`, `negative-lookup-empty-order`, `negative-lookup-unchosen`, `negative-source-duplicate-key`.
 Replaces: REQ-0119, REQ-0127, REQ-0135, REQ-0145.
 
 Declaring one of `order_by` and `keep` without the other fails as
 `unpaired_fields`, and an unhandled multiple match fails as
-`multiple_matches`.
+`multiple_matches`. An `order_by` that lists no term orders nothing: `keep`
+beside it fails as `unpaired_fields` the same way, reporting `order_by`
+missing.
 
 <a id="lookup-11"></a>
 
@@ -1040,8 +1074,18 @@ inclusive. A missing current-row value admits no right-side record, and a
 right-side record with a missing stated bound is ineligible. `between` is
 invalid on an unqualified or grouped-row aggregate.
 
-Evidence: `adam-adtr-nadir`, `adam-adsl-new-therapy`, `rust/crates/yamaa-adapters/tests/execution_aggregate_record_operations.rs`.
+Fails: `unknown_field`.
+Evidence: `adam-adtr-nadir`, `adam-adsl-new-therapy`, `negative-aggregate-range-other-input`, `schema-aggregate-range-driver`, `rust/crates/yamaa-adapters/tests/execution_aggregate_record_operations.rs`.
 Replaces: REQ-0330, REQ-0472, REQ-0473, REQ-0474, REQ-0509.
+
+The current row can read a constructed output column, a column of a named
+intermediate, or a field of its driver qualified by that driver's input
+dataset ([NAME-4](names.md#name-4)). The aggregate evaluates for every row its
+column derives, and a qualified field must belong to the driver of each of
+them: root `base` without row templates, and otherwise the driver of every row
+template. A value qualified by any other input dataset is never read through
+the implicit join ([LOOKUP-1](#lookup-1)) and fails as `unknown_field`, as
+under [LOOKUP-9](#lookup-9).
 
 The comparisons are `lower <= value` and `value <= upper`. Omitting one bound
 makes the match one-sided without excluding the stated endpoint. The value and
@@ -1052,5 +1096,5 @@ result is missing under the empty-group rule of
 unrestricted right side.
 
 A `between` on an unqualified or grouped-row aggregate fails, as does one
-declaring neither bound, naming a bound outside the qualified relation, or
-using incomparable operands.
+declaring neither bound, naming a bound outside the qualified relation, naming
+a `value` the current row cannot read, or using incomparable operands.

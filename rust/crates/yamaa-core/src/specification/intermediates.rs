@@ -357,7 +357,7 @@ fn bind_one(
             .columns()
             .iter()
             .position(|column| column.name == *field)
-            .and_then(&donor_kind)
+            .and_then(donor_kind)
         {
             let expected = declaration.result_type(&catalog);
             if !expected.comparable(donor.into()) {
@@ -533,6 +533,12 @@ impl Declarations {
     pub(super) fn reader(&self) -> Option<&str> {
         self.1.as_deref()
     }
+    /// The `between.value` of the selector at `index`, with its authored path.
+    pub(super) fn range_value(&self, index: usize) -> Option<(&str, String)> {
+        let item = self.0.get(index)?;
+        let range = item.range.as_ref()?;
+        Some((range.value.as_str(), format!("{}.between.value", item.path)))
+    }
 
     pub fn is_self(&self, index: usize) -> bool {
         self.0
@@ -581,6 +587,13 @@ impl Declarations {
     }
     pub fn contains(&self, name: &str) -> bool {
         self.0.iter().any(|item| item.name == name)
+    }
+    /// The input a named intermediate reads; a row it drives reads that input's records.
+    pub(super) fn input(&self, name: &str) -> Option<usize> {
+        match self.0.iter().find(|item| item.name == name)?.source {
+            self_relations::Relation::Input(index) => Some(index),
+            self_relations::Relation::SelfRows => None,
+        }
     }
     pub(super) fn kept(&self, name: &str) -> bool {
         self.0

@@ -21,3 +21,6 @@ num-bigint = { version = "0.5.1", default-features = false }
 # one-pass DFA and bounded backtracker are faster crate-internal engines with
 # the same leftmost-first results and no further dependencies.
 regex = { version = "1.13.1", default-features = false, features = ["std", "perf-dfa", "perf-onepass", "perf-backtrack"] }
+
+[lints]
+workspace = true

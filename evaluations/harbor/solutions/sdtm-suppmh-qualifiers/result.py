@@ -4,52 +4,70 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build the SUPPMH dataset from MH_RAW.
 
-import polars as pl
+One SUPPMH record per collected qualifier on each parent MH record.
+The two qualifiers are family history (MHFAMHX) and confirmation by
+medical records (MHCONF). A qualifier that was not collected on the
+parent record (empty value) gives no SUPPMH record.
+"""
 
-mh = pl.read_csv("/app/input/mh_raw.csv", infer_schema=False)
+import csv
+import os
 
-labels = {"MHFAMHX": "Family History", "MHCONF": "Confirmed by Medical Records"}
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-records = []
-for qnam in ("MHFAMHX", "MHCONF"):
-    collected = mh.filter(
-        pl.col(qnam).is_not_null() & (pl.col(qnam) != "")
-    ).select(
-        "STUDYID",
-        "USUBJID",
-        "MHSEQ",
-        QNAM=pl.lit(qnam),
-        QLABEL=pl.lit(labels[qnam]),
-        QVAL=pl.col(qnam),
-    )
-    records.append(collected)
+QUALIFIERS = [
+    ("MHFAMHX", "MHFAMHX", "Family History"),
+    ("MHCONF", "MHCONF", "Confirmed by Medical Records"),
+]
 
-suppmh = (
-    pl.concat(records)
-    .with_columns(
-        RDOMAIN=pl.lit("MH"),
-        IDVAR=pl.lit("MHSEQ"),
-        IDVARVAL=pl.col("MHSEQ"),
-        QORIG=pl.lit("Collected"),
-        QEVAL=pl.lit(None, dtype=pl.String),
-    )
-    .with_columns(pl.col("MHSEQ").cast(pl.Int64).alias("_seq"))
-    .sort(["USUBJID", "_seq", "QNAM"])
-    .select(
-        "STUDYID",
-        "RDOMAIN",
-        "USUBJID",
-        "IDVAR",
-        "IDVARVAL",
-        "QNAM",
-        "QLABEL",
-        "QVAL",
-        "QORIG",
-        "QEVAL",
-    )
-)
+COLUMNS = [
+    "STUDYID",
+    "RDOMAIN",
+    "USUBJID",
+    "IDVAR",
+    "IDVARVAL",
+    "QNAM",
+    "QLABEL",
+    "QVAL",
+    "QORIG",
+    "QEVAL",
+]
 
-Path("/app/output").mkdir(exist_ok=True)
-suppmh.write_csv("/app/output/suppmh.csv")
+
+def main():
+    with open(os.path.join(INPUT_DIR, "mh_raw.csv"), newline="") as f:
+        parents = list(csv.DictReader(f))
+
+    rows = []
+    for parent in parents:
+        for source_col, qnam, qlabel in QUALIFIERS:
+            qval = (parent.get(source_col) or "").strip()
+            if qval == "":
+                continue
+            rows.append(
+                {
+                    "STUDYID": parent["STUDYID"],
+                    "RDOMAIN": "MH",
+                    "USUBJID": parent["USUBJID"],
+                    "IDVAR": "MHSEQ",
+                    "IDVARVAL": str(parent["MHSEQ"]),
+                    "QNAM": qnam,
+                    "QLABEL": qlabel,
+                    "QVAL": qval,
+                    "QORIG": "Collected",
+                    "QEVAL": "",
+                }
+            )
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    with open(os.path.join(OUTPUT_DIR, "suppmh.csv"), "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=COLUMNS)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+if __name__ == "__main__":
+    main()

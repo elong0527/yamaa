@@ -50,17 +50,16 @@ impl CurrentField {
             CurrentRead::Output(column) if column >= output.columns().len() => {
                 return Err(PlanError::InvalidIntermediate)
             }
-            CurrentRead::Intermediate { index, column } => {
+            CurrentRead::Intermediate { index, column }
                 if index >= item_index
                     || !items.get(index).is_some_and(|item| {
                         item.admits_column(column)
                             && item
                                 .source_schema(secondary)
                                 .is_some_and(|schema| column < schema.columns().len())
-                    })
-                {
-                    return Err(PlanError::InvalidIntermediate);
-                }
+                    }) =>
+            {
+                return Err(PlanError::InvalidIntermediate);
             }
             _ => (),
         }
@@ -261,11 +260,74 @@ pub(crate) fn visit(expression: &Expression, visitor: &mut impl FnMut(usize)) {
                 visit(&branch.assignment.expression, visitor);
             }
         }
-        // The current aggregate relation/source/key IR has no named selector.
-        // Extend this visitor when aggregate derive or named relations are added.
+        // A range value or a derive binding reads a selection for the current row.
+        Expression::Aggregate(aggregate) => {
+            if let Some(CurrentRead::Intermediate { index, .. }) =
+                aggregate.range().map(|range| range.current().read)
+            {
+                visitor(index);
+            }
+            for binding in aggregate.derivations() {
+                visit(&binding.assignment.expression, visitor);
+            }
+        }
+        // The aggregate relation/source/key IR has no named selector.
+        // Extend this visitor when named relations are added.
         Expression::Joined(_)
         | Expression::JoinedSource { .. }
-        | Expression::Aggregate(_)
+        | Expression::Odm(_)
+        | Expression::Literal(_)
+        | Expression::Window(_)
+        | Expression::ContextWindow(_)
+        | Expression::Source(_)
+        | Expression::SourceLookup { .. }
+        | Expression::Lookup(_)
+        | Expression::RowLookup(_)
+        | Expression::Collect { .. }
+        | Expression::Column(_)
+        | Expression::Reduce { .. }
+        | Expression::Count { .. } => (),
+    }
+}
+/// Visit every aggregate evaluated for the current row, including lazy and
+/// nested alternatives. A derive binding evaluates for a donor record instead.
+pub(crate) fn visit_aggregates(expression: &Expression, visitor: &mut impl FnMut(&BoundAggregate)) {
+    match expression {
+        Expression::Aggregate(aggregate) => visitor(aggregate),
+        Expression::SourceBinding { source, .. }
+        | Expression::MappingCut { source, .. }
+        | Expression::StrCase { source, .. }
+        | Expression::StrPad { source, .. }
+        | Expression::StrExtract { source, .. }
+        | Expression::StrReplace { source, .. }
+        | Expression::Round { source, .. } => visit_aggregates(&source.expression, visitor),
+        Expression::FirstAvailable(selection) => {
+            for source in selection.sources() {
+                if let SelectionRead::Expression(source) = &source.read {
+                    visit_aggregates(&source.expression, visitor);
+                }
+            }
+        }
+        Expression::Extreme { operands, .. }
+        | Expression::StrTemplate { operands, .. }
+        | Expression::Temporal { operands, .. }
+        | Expression::Imputation { operands, .. } => {
+            for source in operands {
+                visit_aggregates(&source.expression, visitor);
+            }
+        }
+        Expression::Case(branches) => {
+            for branch in branches {
+                visit_aggregates(&branch.assignment.expression, visitor);
+            }
+        }
+        Expression::Intermediate { .. }
+        | Expression::Compute(_)
+        | Expression::Flag(_)
+        | Expression::Function(_)
+        | Expression::ProjectFunction(_)
+        | Expression::Joined(_)
+        | Expression::JoinedSource { .. }
         | Expression::Odm(_)
         | Expression::Literal(_)
         | Expression::Window(_)
@@ -291,6 +353,16 @@ pub(super) fn validate_reads(
     visit(expression, &mut |index| {
         if result.is_ok() {
             result = validate_named_read(index, items, source, mode, available, 0);
+        }
+    });
+    // An aggregate's range value reads the record of this row's own driver,
+    // never another input at the driver's record positions.
+    visit_aggregates(expression, &mut |aggregate| {
+        if result.is_ok()
+            && matches!(aggregate.range().map(|range| range.current().read),
+                Some(CurrentRead::Record { source: driver, .. }) if driver != source)
+        {
+            result = Err(PlanError::InvalidSource);
         }
     });
     result

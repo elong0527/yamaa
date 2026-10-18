@@ -1,5 +1,5 @@
-Following CDISC SDTM standards, use the provided ODM dataset to create
-an AE dataset with one record per reported adverse event.
+Following CDISC SDTM standards, use the provided ODM dataset to create an AE
+dataset with one record per reported event.
 
 The output dataset should contain the following columns in this order:
 DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AESTDTC, AEENDTC, AESEV, AESER

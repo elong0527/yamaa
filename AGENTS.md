@@ -1,8 +1,7 @@
 # yamaa agent guide
 
 This file is the single entry point for agents. It maps the repository,
-states the hard rules, and gives the command that proves each kind of
-change. Area guides (linked below) add detail; none of them overrides
+states the hard rules, and says what to run before a push. Area guides (linked below) add detail; none of them overrides
 this file. Release docs are not needed for normal changes: read
 `docs/release.md` only for a release, a supported-platform change, or a
 migration decision.
@@ -27,16 +26,24 @@ their prerequisites. Local targets and CI share the owned scripts under
 
 ## Hard rules
 
-- **1.0.0 is a fresh release.** Breaking changes are allowed. Remove obsolete
-  interfaces and callers together instead of adding compatibility aliases.
-  Work for 1.0.0 merges into `release/1.0.0` through reviewed PRs.
+- **Breaking a user-facing interface is a decision.** 0.4.0 has users. A
+  change that breaks the specification language, the Python or R API, saved
+  outputs or diagnostic identity needs an owner decision on its issue and a
+  migration note in the next release's notes under `docs/releases/`.
+  Internal interfaces, including the unpublished Rust crates, may change
+  freely. Remove obsolete interfaces and callers together instead of adding
+  compatibility aliases.
 - **Complete review before merging.** On the exact final PR head, require
   CodeRabbit's explicit completed review, or complete bounded reviews proved
   by the review gate, and resolve every actionable finding. Pending, missing,
   skipped alone or older-head reviews do not count. Run the fresh read-only
   review gate in `CONTRIBUTING.md` before every merge, alongside CI. When
   environment policy blocks GitHub CLI reads, approved authenticated connector
-  reads must prove the same predicates on fresh exact-head evidence.
+  reads must prove the same predicates on fresh exact-head evidence. When
+  CodeRabbit cannot review a PR (its free reviews are exhausted, or it skips
+  the PR), merging does not wait for it: the merging agent reviews the exact
+  diff itself, records that review on the PR, and still requires green CI on
+  that exact head.
 - **Expected data is truth.** Files under `benchmarks/**/expected/` are
   independently authored and define what an implementation must
   reproduce. Never regenerate them from the implementation, and never
@@ -67,34 +74,52 @@ their prerequisites. Local targets and CI share the owned scripts under
   files through `tools/docs/canonical_pages.py`; do not create
   `docs/index.md` or `docs/articles/rules.md`.
 
-## Change recipes
+## Pull requests
 
-Each recipe names the command that proves the change. Run the recipe
-for every area a change touches.
+- One issue per pull request, referenced with `Closes #N`. Branch from the
+  pull request's base: `main`, or the release integration branch
+  (`release/<version>`) while main is frozen for a release. The release's
+  planning issue says which.
+- Before merging, bring the branch up to date with its base and wait for
+  green CI on that exact head. A pull request that is green against an older
+  base can still fail to compile against the current one.
+- A decision recorded on a planning issue is not worked around. When one
+  turns out to be wrong in practice, say so on the child issue with the
+  evidence.
+- Evidence such as run ids and artifact names goes in issues, never in
+  committed files.
 
-- **Rule or schema change** (`rules/`, `yaml/`): follow the terminology
-  and requirement-allocation rules in `rules/README.md` and the
-  maintenance rules in `yaml/README.md`, then run
-  `make check-repository`.
-- **Rust change** (`rust/`): from `rust/`, run
-  `cargo test --locked -p <crate>` for each crate touched, then
-  `cargo clippy --locked --workspace --all-targets --all-features -- -D warnings` and
-  `cargo fmt --all --check`. Portable-math controls live in
+## Before a push
+
+Run `make setup` once, then `make quick` before each push. It runs the
+lint and repository checks CI runs, leaving out only the R binding's
+Clippy, and no test suite, so it needs no R. Pull request CI runs the
+complete `make check`, so there is no need to run it locally.
+
+While developing, run only the tests nearest the change:
+
+- **Rust** (`rust/`): from `rust/`, `cargo test --locked -p <crate>`
+  for each crate touched. Portable-math controls live in
   `CONTRIBUTING.md`.
-- **Python host change** (`python/`): run `make test-python` for package
-  tests and standalone installed-host checks.
-- **R host change** (`R/`): run `make test-r` for a fresh source build,
-  installation and strict package check.
-- **New or changed benchmark** (`benchmarks/`): follow
-  `benchmarks/AGENTS.md`. After `make setup` once, run one positive
-  benchmark from the root with
-  `uv run --project python --no-sync python -m tools.benchmark benchmarks/<name>`,
-  then `make check-repository`, which also checks negative benchmarks.
-- **Docs change** (`docs/`, `README.md`, `rules/README.md`): run
-  `make docs-test docs`.
-- **Anything else, or a cross-area change:** run `make check` for the
-  ordinary CI checks. Complete native release qualification is a
-  separate route described in `CONTRIBUTING.md`.
+- **Python host or tools** (`python/`, `tools/`): the touched test
+  files with `uv run --project python --no-sync python -m pytest <path>`.
+  After changing `rust/` or `python/src/`, run `make setup` again
+  first; the tests import the installed package.
+- **R host** (`R/`): `make test-r` when R 4.6.1 is installed;
+  otherwise CI's `r` job checks it.
+- **Benchmark** (`benchmarks/`): follow `benchmarks/AGENTS.md`, then
+  run the case from the root with
+  `uv run --project python --no-sync python -m tools.benchmark benchmarks/<name>`.
+- **Rules, schemas or docs** (`rules/`, `yaml/`, `docs/`, `README.md`):
+  `make quick` checks them and builds the strict site. Follow the
+  terminology and requirement-allocation rules in `rules/README.md` and
+  the maintenance rules in `yaml/README.md`.
+
+When a CI job fails, reproduce it with that job's own target from
+`make help` (`check-lint`, `check-repository`, `test-rust`,
+`test-python` or `test-r`) rather than all of `make check`. Complete
+native release qualification is a separate route described in
+`CONTRIBUTING.md`.
 
 ## Pointers
 
@@ -103,7 +128,7 @@ for every area a change touches.
 - Benchmark authoring: `benchmarks/AGENTS.md`
 - Architecture, crate boundaries, and local verification: `CONTRIBUTING.md`
 - Rust workspace entry point: `rust/README.md`
-- Host usage: `python/README.md` and `R/yamaa/README.md`
+- Host usage: `docs/articles/python.md` and `R/yamaa/README.md`
 - Site build and canonical pages: `CONTRIBUTING.md#documentation`
 - Benchmark factory: `automation/benchmark_factory/README.md`
 - Harbor evaluation: `evaluations/harbor/README.md`

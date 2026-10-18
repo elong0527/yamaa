@@ -845,15 +845,16 @@ impl RuntimePort for MemoryRuntime<'_> {
 
     fn plain(
         &mut self,
-        prepared: FileSpecification,
+        prepared: &FileSpecification,
         scope: Scope<'_>,
     ) -> Result<Built, file_application::Failure> {
-        file_application::plain(prepared, self.identity(), scope).map(Built)
+        let mut run_scope = prepared.run_scope(None);
+        file_application::plain(prepared, &mut run_scope, self.identity(), scope).map(Built)
     }
 
     fn project(
         &mut self,
-        _: Box<yamaa_adapters::file_project::FileProject>,
+        _: &yamaa_adapters::file_project::FileProject,
         _: Scope<'_>,
     ) -> Result<Built, file_application::Failure> {
         Err(file_application::unsupported(

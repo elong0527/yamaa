@@ -2,12 +2,12 @@ use super::*;
 #[path = "scalar.rs"]
 mod scalar;
 use crate::yaml_source::{scan_strict, LocatedEvent, ScanFailure, SourceEvent, SourceText};
-use saphyr_parser::ScalarStyle;
 use std::collections::{BTreeSet, VecDeque};
 use yamaa_core::limits::Limits;
 use yamaa_core::schema::{
     scalar_diagnostic_label, DocumentError, DocumentNode, DocumentResource, ScalarKey,
 };
+use yamaa_saphyr_parser::ScalarStyle;
 
 impl From<ScanFailure> for DecodeFailure {
     fn from(error: ScanFailure) -> Self {
@@ -99,16 +99,10 @@ fn build(events: Vec<LocatedEvent>) -> Result<(Vec<Node>, usize), DecodeFailure>
                     return Err(DecodeFailure::Internal);
                 }
                 let value = if frame.mapping {
-                    if frame.children.len() % 2 != 0 {
+                    let (pairs, []) = frame.children.as_chunks::<2>() else {
                         return Err(DecodeFailure::Internal);
-                    }
-                    Value::Mapping(
-                        frame
-                            .children
-                            .chunks_exact(2)
-                            .map(|pair| (pair[0], pair[1]))
-                            .collect(),
-                    )
+                    };
+                    Value::Mapping(pairs.iter().map(|&[key, value]| (key, value)).collect())
                 } else {
                     Value::Sequence(frame.children)
                 };

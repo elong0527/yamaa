@@ -24,6 +24,7 @@ mod file {
                 .unwrap();
                 let path = study.text(&format!("{name}/spec.yaml"));
                 let result = file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
                         environment: None,
@@ -79,7 +80,7 @@ mod file {
                 fs::write(study.0.join("entry/spec.yaml"), format!("schema_version: '1.0'\nparent: ../shared/base.yaml\ninput: {{SRC: {{relative_to: {mode}}}}}\n")).unwrap();
                 let (resources, entry) =
                     file_configuration::resources(&study.text("entry/spec.yaml")).unwrap();
-                let mut prepared = FileSpecification::prepare(resources, &entry).unwrap();
+                let prepared = FileSpecification::prepare(resources, &entry).unwrap();
                 assert_eq!(prepared.run().source().path, expected);
                 let origin = prepared
                     .run()
@@ -95,7 +96,10 @@ mod file {
                         "shared/base.yaml"
                     })
                 );
-                assert!(prepared.build(Scope::default()).result.is_ok());
+                assert!(prepared
+                    .build(&mut prepared.run_scope(None), Scope::default())
+                    .result
+                    .is_ok());
             }
         }
 
@@ -185,6 +189,7 @@ mod file {
                 drop(prepared);
 
                 let mut result = file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
                         environment: None,
@@ -245,6 +250,7 @@ mod file {
                 .unwrap();
                 let path = study.text("entry/spec.yaml");
                 let issues = file_application::check(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
                         environment: None,
@@ -303,8 +309,17 @@ mod file {
                         specification: &path,
                         base_directory: ".",
                     };
-                    let checked = file_application::check(request(), identity());
-                    let built = file_application::domain(request(), identity()).map_or_else(
+                    let checked = file_application::check(
+                        yamaa_core::project_function::Language::Python,
+                        request(),
+                        identity(),
+                    );
+                    let built = file_application::domain(
+                        yamaa_core::project_function::Language::Python,
+                        request(),
+                        identity(),
+                    )
+                    .map_or_else(
                         |issues| issues,
                         |result| {
                             assert!(result.output().is_none());
@@ -355,6 +370,7 @@ mod file {
                 fs::write(study.0.join("entry/spec.yaml"), spec).unwrap();
                 let path = study.text("entry/spec.yaml");
                 let issues = file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
                         environment: None,
@@ -406,7 +422,7 @@ mod file {
             let (resources, entry) =
                 file_configuration::resources(&study.text("entry/child.yaml")).unwrap();
             assert_eq!(resources.capture_reads(), 0);
-            let mut prepared = FileSpecification::prepare(resources, &entry).unwrap();
+            let prepared = FileSpecification::prepare(resources, &entry).unwrap();
             let origin = prepared.run().document().written_output_origin().unwrap();
             assert_eq!(origin.declaring_source, study.text("shared/base.yaml"));
             assert_eq!(origin.written, "../outputs/out.csv");
@@ -416,8 +432,12 @@ mod file {
                 "../outputs/out.csv"
             );
             assert_eq!(prepared.capture_reads(), 2);
-            assert!(prepared.build(Scope::default()).result.is_ok());
-            assert_eq!(prepared.capture_reads(), 3);
+            let mut run_scope = prepared.run_scope(None);
+            assert!(prepared
+                .build(&mut run_scope, Scope::default())
+                .result
+                .is_ok());
+            assert_eq!(run_scope.capture_reads(), 3);
             assert!(!study.0.join("outputs/out.csv").exists());
         }
 

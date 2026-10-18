@@ -309,6 +309,28 @@ local({
 })
 
 local({
+  # arrow writes a factor as a BYTE_ARRAY String field whose embedded Arrow
+  # schema names a dictionary. A layout is not a type (REQ-1032), so each
+  # field reads as its text (#2940).
+  stopifnot(requireNamespace("arrow", quietly = TRUE))
+  directory <- tempfile("public-parquet-factors-"); dir.create(directory)
+  on.exit(unlink(directory,recursive=TRUE))
+  text <- c("b",NA,"","a","b","\u03b2")
+  levels <- c("a","b","","\u03b2")
+  path <- file.path(directory,"input.parquet")
+  arrow::write_parquet(data.frame(ID=as.character(1:6),FACTOR=factor(text,levels=levels),
+    ORDERED=factor(text,levels=levels,ordered=TRUE),stringsAsFactors=FALSE),path)
+  stored <- arrow::read_parquet(path,as_data_frame=FALSE)$schema
+  stopifnot(inherits(stored$FACTOR$type,"DictionaryType"),inherits(stored$ORDERED$type,"DictionaryType"))
+  entry <- file.path(directory,"spec.yaml")
+  writeBin(charToRaw('{"schema_version":"1.0","domain":"TEST","input":{"SRC":{"path":"input.parquet","empty_string":"present"}},"keys":["ID"],"columns":[{"name":"ID","type":"str","derivation":"SRC.ID"},{"name":"FACTOR","type":"str","derivation":"SRC.FACTOR"},{"name":"ORDERED","type":"str","derivation":"SRC.ORDERED"}],"output":{"path":"output.csv","columns":["ID","FACTOR","ORDERED"]}}'),entry)
+  result <- yamaa_domain(entry)
+  stopifnot(nrow(result$issues)==0L,identical(result$output$ID,as.character(1:6)),
+    identical(result$output$FACTOR,text),identical(result$output$ORDERED,text))
+  cat("public R Parquet factor columns read as text passed without Python\n")
+})
+
+local({
   directory <- tempfile("public-rounding-");dir.create(directory)
   on.exit(unlink(directory,recursive=TRUE))
   case_name <- "schema-round-half-away-from-zero-ties"

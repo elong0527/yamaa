@@ -42,8 +42,8 @@ def minimum_cargo(requirement):
     return "=" + match[1]
 
 
-def pin_manifest(path, patched):
-    """Pin registry dependencies, retaining local paths and reviewed patches."""
+def pin_manifest(path):
+    """Pin registry dependencies, retaining local and vendored path dependencies."""
     document = tomllib.loads(path.read_text())
     replacements = {}
     target = document.get("target", {})
@@ -58,11 +58,7 @@ def pin_manifest(path, patched):
             if not isinstance(dependencies, dict):
                 raise ValueError(f"Cargo {key} in {path} must be a table")
             for name, dependency in dependencies.items():
-                if (
-                    name in patched
-                    or isinstance(dependency, dict)
-                    and "path" in dependency
-                ):
+                if isinstance(dependency, dict) and "path" in dependency:
                     continue
                 if isinstance(dependency, str):
                     version = dependency
@@ -90,6 +86,11 @@ def pin_manifest(path, patched):
 
 
 def minimum_python(requirement):
+    """Pin one requirement to its floor, keeping its extras and markers.
+
+    A package with marker-split floors keeps one pin per entry, so the resolver
+    gives each interpreter its own floor.
+    """
     if not isinstance(requirement, str):
         raise ValueError(
             f"Python requirement needs one explicit minimum: {requirement}"
@@ -138,9 +139,8 @@ def prepare(source, destination, graph):
     )
     workspace = tomllib.loads((destination / "rust/Cargo.toml").read_text())
     if graph == "minimum":
-        patched = set(workspace.get("patch", {}).get("crates-io", {}))
         for member in workspace["workspace"]["members"]:
-            pin_manifest(destination / "rust" / member / "Cargo.toml", patched)
+            pin_manifest(destination / "rust" / member / "Cargo.toml")
     (destination / "rust/Cargo.lock").unlink()
     python = tomllib.loads((destination / "python/pyproject.toml").read_text())
     requirements = (
@@ -170,27 +170,6 @@ def assert_msrv(metadata, msrv):
     ]
     if incompatible:
         raise ValueError(f"Graph exceeds Rust {msrv}: {', '.join(incompatible)}")
-
-
-def assert_patches(metadata, workspace):
-    patches = (
-        tomllib.loads((workspace / "Cargo.toml").read_text())
-        .get("patch", {})
-        .get("crates-io", {})
-    )
-    for name, patch in patches.items():
-        if "path" not in patch:
-            raise ValueError(f"Expected a reviewed local patch for {name}")
-        expected = (workspace / patch["path"] / "Cargo.toml").resolve()
-        selected = [
-            package for package in metadata["packages"] if package["name"] == name
-        ]
-        if (
-            len(selected) != 1
-            or Path(selected[0]["manifest_path"]).resolve() != expected
-            or selected[0]["source"] is not None
-        ):
-            raise ValueError(f"Graph did not select the reviewed local patch: {name}")
 
 
 def run_graph(source, destination, graph, python, prepare_only=False):
@@ -227,7 +206,6 @@ def run_graph(source, destination, graph, python, prepare_only=False):
             )
         )
         assert_msrv(metadata, msrv)
-        assert_patches(metadata, rust)
         (destination / "cargo-metadata.json").write_text(
             json.dumps(metadata, indent=2) + "\n"
         )

@@ -2268,6 +2268,7 @@ mod declaration {
                 .unwrap();
                 let entry = entry.to_str().unwrap();
                 let issues = file_application::check(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: entry,
                         environment: None,

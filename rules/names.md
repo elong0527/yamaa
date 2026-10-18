@@ -70,7 +70,10 @@ source: DM.SEX
 unresolved unqualified reference fails with `unknown_field`, or with
 `unresolvable_name` and the suggested qualified spelling when the bare name is
 a field of an in-scope dataset. A field typed `variable` holds a qualified
-source variable or an unqualified constructed output column.
+source variable or an unqualified constructed output column. The rule that owns
+a field may narrow the qualified variables it accepts: a `between` value
+qualified by an input dataset must name the current row's driver
+([LOOKUP-9](lookup.md#lookup-9), [LOOKUP-23](lookup.md#lookup-23)).
 
 <a id="name-4"></a>
 

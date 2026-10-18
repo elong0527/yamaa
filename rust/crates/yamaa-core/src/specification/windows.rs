@@ -46,6 +46,10 @@ pub enum WindowFinding {
         operation: String,
         forbidden: bool,
     },
+    RepeatedGroup {
+        path: String,
+        identifier: String,
+    },
 }
 impl WindowFinding {
     pub fn diagnostic_code(&self) -> crate::diagnostic::ConditionCode {
@@ -58,6 +62,7 @@ impl WindowFinding {
             Self::Order {
                 forbidden: true, ..
             } => C::WindowOrderForbidden,
+            Self::RepeatedGroup { .. } => C::WindowRepeatedGroup,
         }
     }
     pub fn definition(&self) -> crate::diagnostic::Definition {
@@ -76,6 +81,11 @@ impl WindowFinding {
                 "operation",
                 crate::value::Value::Str(operation.clone()),
             ),
+            Self::RepeatedGroup { path, identifier } => (
+                path,
+                "identifier",
+                crate::value::Value::Str(identifier.clone()),
+            ),
         };
         Diagnostic {
             code: self.diagnostic_code(),
@@ -87,6 +97,17 @@ impl WindowFinding {
     }
 }
 impl Declaration {
+    /// A partition names each variable once (REQ-0293); report every repeat.
+    fn repeated_groups(&self, findings: &mut Vec<BindFinding>) {
+        for (index, name) in self.groups.iter().enumerate() {
+            if self.groups[..index].contains(name) {
+                findings.push(BindFinding::Window(WindowFinding::RepeatedGroup {
+                    path: format!("{}.window.group_by[{index}]", self.path),
+                    identifier: name.clone(),
+                }));
+            }
+        }
+    }
     pub fn prepare(
         d: &Document,
         payload: usize,
@@ -256,11 +277,93 @@ impl Declaration {
         edges: &mut Vec<usize>,
         findings: &mut Vec<BindFinding>,
     ) -> Result<Option<crate::dataset::Expression>, BindError> {
-        self.bind_available(catalog, None, edges, findings)
+        self.bind_available(catalog, None, None, edges, findings)
+    }
+    /// A driver field the window reads is a scalar source of each row it
+    /// partitions or orders. Under grouped construction it must be a group key
+    /// (REQ-0067 for a row template, REQ-0107 at column level). Returns whether
+    /// any such read was refused.
+    pub(super) fn group_findings(
+        &self,
+        catalog: &Catalog,
+        driver: &str,
+        row: Option<&str>,
+        phase: crate::reference_scope::Phase<'_>,
+        findings: &mut Vec<BindFinding>,
+    ) -> Result<bool, BindError> {
+        use crate::reference_scope::{self, Finding, Reach, Scope};
+        let mut reads = Vec::new();
+        match &self.kind {
+            Kind::RowValue { source, .. } | Kind::Locf { source, .. } => {
+                reads.push((source.as_str(), format!("{}.source", self.path)))
+            }
+            Kind::BaselineFlag {
+                date,
+                reference_date,
+                value,
+                tie_break,
+                ..
+            } => {
+                reads.push((date.as_str(), format!("{}.date", self.path)));
+                reads.push((
+                    reference_date.as_str(),
+                    format!("{}.reference_date", self.path),
+                ));
+                reads.push((value.as_str(), format!("{}.value", self.path)));
+                for (index, (name, ..)) in tie_break.iter().enumerate() {
+                    reads.push((name.as_str(), format!("{}.tie_break[{index}]", self.path)));
+                }
+            }
+            Kind::RowNumber | Kind::Competition | Kind::Dense => (),
+        }
+        for (index, name) in self.groups.iter().enumerate() {
+            reads.push((
+                name.as_str(),
+                format!("{}.window.group_by[{index}]", self.path),
+            ));
+        }
+        for (index, (name, ..)) in self.order.iter().enumerate() {
+            reads.push((
+                name.as_str(),
+                format!("{}.window.order_by[{index}]", self.path),
+            ));
+        }
+        let start = findings.len();
+        for (name, path) in reads {
+            if !name.contains('.') {
+                continue;
+            }
+            for finding in reference_scope::validate(
+                catalog,
+                name,
+                None,
+                Scope {
+                    drivers: &[driver],
+                    current_driver: false,
+                    reach: Reach::Scalar,
+                    joined: false,
+                    phase,
+                },
+            )
+            .map_err(BindError::Catalog)?
+            {
+                // Unknown and foreign fields keep the binder's own findings.
+                if matches!(finding, Finding::RowGroup | Finding::ColumnGroup) {
+                    findings.push(BindFinding::QualifiedReference {
+                        path: path.clone(),
+                        name: name.into(),
+                        row: row.map(String::from),
+                        finding,
+                    });
+                }
+            }
+        }
+        Ok(findings.len() != start)
     }
     pub(super) fn bind_available(
         &self,
         catalog: &Catalog,
+        row: Option<&str>,
         available: Option<&[usize]>,
         edges: &mut Vec<usize>,
         findings: &mut Vec<BindFinding>,
@@ -283,6 +386,7 @@ impl Declaration {
                 forbidden: baseline,
             }));
         }
+        self.repeated_groups(findings);
         let filter = match &self.filter {
             Some((
                 text,
@@ -335,6 +439,7 @@ impl Declaration {
                 findings.push(BindFinding::OutputReference {
                     path,
                     name: name.into(),
+                    row: row.map(String::from),
                     finding,
                 });
                 return Ok(0);
@@ -576,6 +681,7 @@ impl Declaration {
                 forbidden: baseline,
             }));
         }
+        self.repeated_groups(findings);
         if let Some((expression, compiled)) = &self.filter {
             static_checks::predicate(
                 compiled,

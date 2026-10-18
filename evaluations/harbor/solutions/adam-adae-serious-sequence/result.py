@@ -4,31 +4,46 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
+import csv
 from pathlib import Path
 
-import polars as pl
+INPUT_DIR = Path("/app/input")
+OUTPUT_DIR = Path("/app/output")
 
-ae = pl.read_csv("/app/input/ae.csv", infer_schema=False).with_columns(
-    pl.col("AESEQ").cast(pl.Int64)
-)
 
-# Number the subject's serious events in onset order, so the earliest
-# carries 1. Events sharing one onset date follow collection order, and
-# a serious event with no onset date is numbered last. ISO dates sort
-# as text. Numbering restarts for each subject.
-numbered = (
-    ae.filter(pl.col("AESER") == "Y")
-    .with_columns(ASTDT=pl.col("AESTDTC"))
-    .sort(["USUBJID", "AESTDTC", "AESEQ"], nulls_last=True)
-    .with_columns(SERSEQ=pl.col("AESEQ").cum_count().over("USUBJID"))
-    .select("USUBJID", "AESEQ", "SERSEQ")
-)
+def main():
+    with open(INPUT_DIR / "ae.csv", newline="") as f:
+        rows = list(csv.DictReader(f))
 
-adae = (
-    ae.with_columns(ASTDT=pl.col("AESTDTC"))
-    .join(numbered, on=["USUBJID", "AESEQ"], how="left", maintain_order="left")
-    .select("STUDYID", "USUBJID", "AESEQ", "AESER", "ASTDT", "SERSEQ")
-)
+    # ASTDT is the start date collected in AESTDTC, blank when none.
+    for row in rows:
+        row["ASTDT"] = (row.get("AESTDTC") or "").strip()
+        row["SERSEQ"] = ""
 
-Path("/app/output").mkdir(exist_ok=True)
-adae.write_csv("/app/output/adae.csv")
+    # SERSEQ numbers each subject's serious events (AESER "Y") from 1,
+    # ordered by ASTDT with AESEQ breaking ties; serious events with no
+    # ASTDT come after every dated one, in AESEQ order among themselves.
+    serious = {}
+    for idx, row in enumerate(rows):
+        if (row.get("AESER") or "").strip() == "Y":
+            serious.setdefault(row["USUBJID"], []).append(idx)
+
+    for idxs in serious.values():
+        def sort_key(i):
+            r = rows[i]
+            return (0 if r["ASTDT"] else 1, r["ASTDT"], int(r["AESEQ"]))
+
+        for n, i in enumerate(sorted(idxs, key=sort_key), start=1):
+            rows[i]["SERSEQ"] = str(n)
+
+    fieldnames = ["STUDYID", "USUBJID", "AESEQ", "AESER", "ASTDT", "SERSEQ"]
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    with open(OUTPUT_DIR / "adae.csv", "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({k: row.get(k, "") for k in fieldnames})
+
+
+if __name__ == "__main__":
+    main()

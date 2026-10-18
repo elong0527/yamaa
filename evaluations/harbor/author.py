@@ -15,7 +15,8 @@ candidates which columns the solvers failed. From the repository root::
 
 Without Docker, `prepare` builds the same writer folders, and with
 `--solvers` the candidate solver folders, for agents without a sandbox, and
-`grade` grades the solver folders::
+`grade` grades the solver folders, rerunning each saved script in a clean
+copy of its folder::
 
     python -m evaluations.harbor.author prepare --benchmarks <name> --out <dir>
     python -m evaluations.harbor.author prepare --solvers --prompts <dir> --out <dir>
@@ -25,6 +26,13 @@ Without Docker, `prepare` builds the same writer folders, and with
 the committed ones, with the tier contract (`prompts/README.md`) as the
 instruction. These jobs run locally and are never uploaded to Harbor Hub.
 The output directory defaults to `~/.cache/yamaa-harbor/authoring`.
+
+A session that hands the folders to subagents follows the session rules in
+section 7 of the recipe: it proves its base provides `prepare` and `grade`
+before a round, records outside-folder reads without rejecting a candidate
+for the agent guides a runtime requires, checks that its Python provides
+the system prompt's packages before the solvers run, and counts two fresh
+sessions as its two solver attempts where its tool allows no model choice.
 """
 
 from __future__ import annotations
@@ -34,6 +42,7 @@ import asyncio
 import json
 import shutil
 import sys
+import tempfile
 import tomllib
 from collections import defaultdict
 from collections.abc import Iterable
@@ -54,6 +63,17 @@ INSTRUCTIONS = {
 WRITTEN = {"full": ("full.md", "trace.json"), "conventions": ("conventions.md",)}
 OPTIONAL = {"full": ("questions.md",), "conventions": ()}
 VERIFIED = "--reward /logs/verifier/reward.json"
+# What a solver folder's instruction says before the evaluated agent's, which
+# names `/app` paths: the folder stands for `/app`, and the script names its
+# paths relative to the folder and runs from it, as `grade_folders` reruns it
+# in a clean copy of the folder and Harbor's verifier reruns it from `/app`.
+LOCAL_PATHS = (
+    "This folder stands for `/app`: below, `/app/input` means `input/`\n"
+    "here and `/app/output` means `output/`. Read and write only inside\n"
+    "this folder. Name both paths relative to it in your script, which\n"
+    "runs from here and is graded by a rerun from a clean copy of this\n"
+    "folder, as `{runner} output/{script}`."
+)
 
 
 def writing_toml(benchmark: str, tier: str, commit: str) -> str:
@@ -206,21 +226,31 @@ def writer_folder(
     return folder
 
 
-def solver_folder(benchmark: Path, candidate: str, language: str, out: Path) -> Path:
-    """A candidate solver's folder for an agent without a sandbox,
-    `out/<benchmark>-candidate-<language>/`: the evaluated agent's
-    instruction and inputs and an empty `output/`, standing for `/app`. No
-    grading file or task page is in it."""
-    build.contract_for(benchmark, language)
-    folder = out / build.task_name(benchmark.name, language, candidate=True)
-    if folder.exists():
-        shutil.rmtree(folder)
+def _inputs(benchmark: Path, folder: Path) -> None:
+    """The benchmark's input data in `folder/input/`, as the evaluated agent
+    gets it: an input schema is yamaa's own description, not source data."""
     shutil.copytree(
         benchmark / "input",
         folder / "input",
         ignore=shutil.ignore_patterns("*.yaml", "*.yml"),
     )
-    (folder / "instruction.md").write_text(build.instruction(language, candidate))
+
+
+def solver_folder(benchmark: Path, candidate: str, language: str, out: Path) -> Path:
+    """A candidate solver's folder for an agent without a sandbox,
+    `out/<benchmark>-candidate-<language>/`, standing for `/app`: the
+    inputs, an empty `output/`, and an instruction that maps the `/app`
+    paths to the folder (`LOCAL_PATHS`), then gives the evaluated agent's
+    instruction verbatim. No grading file or task page is in it."""
+    build.contract_for(benchmark, language)
+    folder = out / build.task_name(benchmark.name, language, candidate=True)
+    if folder.exists():
+        shutil.rmtree(folder)
+    _inputs(benchmark, folder)
+    paths = LOCAL_PATHS.format(**build.LANGUAGES[language])
+    (folder / "instruction.md").write_text(
+        f"{paths}\n\n---\n\n{build.instruction(language, candidate)}"
+    )
     (folder / "output").mkdir()
     return folder
 
@@ -315,8 +345,8 @@ def collect(job: Path, into: Path) -> list[Path]:
 
 
 def _failures(grade: dict) -> set[str]:
-    """What a candidate solver's grade says failed, by output file and
-    column only: no value, key or row count."""
+    """What a candidate solver's grade says failed or left unchecked, by
+    output file and column only: no value, key or row count."""
     failed = set()
     for output in grade.get("outputs", []):
         name, problems = output["file"], output.get("problems", [])
@@ -342,8 +372,11 @@ def _failures(grade: dict) -> set[str]:
         }
     if not grade.get("script", {}).get("passed", True):
         failed.add("the required script was not saved")
-    if grade.get("rerun", {}).get("problems"):
+    rerun = grade.get("rerun", {})
+    if rerun.get("problems"):
         failed.add("the script does not reproduce its datasets from a clean state")
+    if rerun.get("file_only"):
+        failed.add(f"a file-only check, {rerun['file_only']}")
     network = grade.get("network", {})
     if network.get("violations") or network.get("language_violations"):
         failed.add("the solver broke the language or web-tool policy")
@@ -404,10 +437,37 @@ def report(jobs: list[Path]) -> dict[str, str]:
     return _summary(grades())
 
 
-def grade_folders(root: Path) -> dict[str, str]:
-    """Grade the datasets and script each solver folder (`solver_folder`)
-    wrote against the golden files, as `report` does for Harbor jobs. The
-    session that runs the solvers reads it; no writer receives it."""
+def _rerun(case: Path, contract: dict, output: Path, run: grader.RunScript) -> dict:
+    """Rerun a solver's saved script as Harbor's verifier does
+    (`grade.rerun_script`): from a clean copy of its folder, which holds the
+    benchmark's inputs and an output folder with only the script, by the
+    track's interpreter, within the verifier's timeout. Nothing runs where
+    that interpreter is not on PATH: the grade is then a file-only check."""
+    script = contract["script"]
+    interpreter = grader.INTERPRETERS[contract["language"]]
+    if shutil.which(interpreter) is None:
+        return {
+            "passed": False,
+            "problems": [],
+            "outputs": [],
+            "file_only": f"{script} not rerun without {interpreter}",
+        }
+    with tempfile.TemporaryDirectory(prefix="yamaa-solver-rerun-") as temporary:
+        clean = Path(temporary)
+        _inputs(case, clean)
+        (clean / "output").mkdir()
+        shutil.copyfile(output / script, clean / "output" / script)
+        return grader.rerun_script(contract, case / "expected", clean / "output", run)
+
+
+def grade_folders(
+    root: Path, run: grader.RunScript = grader.run_script
+) -> dict[str, str]:
+    """Grade each solver folder (`solver_folder`) as `report` grades a
+    Harbor job: the datasets it saved against the golden files, then its
+    script rerun from a clean copy of the folder (`_rerun`), whose datasets
+    must match the golden files too. A saved dataset alone is never a pass.
+    The session that runs the solvers reads it; no writer receives it."""
 
     def grades():
         for folder in sorted(p for p in root.iterdir() if "-candidate-" in p.name):
@@ -420,12 +480,20 @@ def grade_folders(root: Path) -> dict[str, str]:
                 for spec in contract["outputs"]
             ]
             script = grader.grade_script(contract, output)
+            rerun = (
+                _rerun(case, contract, output, run)
+                if script["passed"]
+                else {"passed": False, "problems": [], "outputs": []}
+            )
             yield (
                 benchmark,
                 {
-                    "passed": script["passed"] and all(o["passed"] for o in outputs),
+                    "passed": script["passed"]
+                    and rerun["passed"]
+                    and all(o["passed"] for o in outputs),
                     "outputs": outputs,
                     "script": script,
+                    "rerun": rerun,
                 },
             )
 

@@ -27,6 +27,7 @@ pub(super) fn retain_reference_owner(
                 path,
                 name,
                 finding: reference_binding::Diagnostic::UnknownField,
+                ..
             }
             | BindFinding::QualifiedReference {
                 path,
@@ -38,6 +39,7 @@ pub(super) fn retain_reference_owner(
                 path,
                 name,
                 finding: reference_binding::Diagnostic::UnresolvableName { dataset },
+                ..
             } => {
                 let owner = catalog.dataset_name(*dataset).ok_or(BindError::Internal)?;
                 let mut diagnostic = LookupFinding::new(

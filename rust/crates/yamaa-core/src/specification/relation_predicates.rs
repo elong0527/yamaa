@@ -148,6 +148,7 @@ pub(super) fn bind(
 }
 
 /// A globally declared filter is checked against each context that actually reads it.
+/// A chained `between` value runs the selector it names for the same row.
 pub(super) fn admit_reads<'a>(
     expressions: impl IntoIterator<Item = &'a Expression>,
     items: &[Option<Intermediate>],
@@ -157,7 +158,7 @@ pub(super) fn admit_reads<'a>(
 ) {
     let mut seen = std::collections::BTreeSet::new();
     for expression in expressions {
-        crate::dataset::relation_predicates::visit(expression, &mut |index| {
+        crate::dataset::relation_predicates::visit(expression, &mut |mut index| loop {
             if !seen.insert(index) {
                 return;
             }
@@ -193,28 +194,35 @@ pub(super) fn admit_reads<'a>(
                     }
                 }
             }
-            let Some(filter) = &item.filter else {
-                return;
-            };
-            for field in filter.current() {
-                if let CurrentRead::Record {
-                    source: driver,
-                    column,
-                } = field.read
-                {
-                    if driver != source
-                        || matches!(mode.local_mode(), RowMode::Groups(keys) if !keys.contains(&column))
+            if let Some(filter) = &item.filter {
+                for field in filter.current() {
+                    if let CurrentRead::Record {
+                        source: driver,
+                        column,
+                    } = field.read
                     {
-                        findings.push(BindFinding::Lookup(LookupFinding::reference(
-                            filter.plan().spec_path(),
-                            &field.identifier,
-                            Some(&item.identifier),
-                            ReferenceCause::Selection,
-                            None,
-                        )));
+                        if driver != source
+                            || matches!(mode.local_mode(), RowMode::Groups(keys) if !keys.contains(&column))
+                        {
+                            findings.push(BindFinding::Lookup(LookupFinding::reference(
+                                filter.plan().spec_path(),
+                                &field.identifier,
+                                Some(&item.identifier),
+                                ReferenceCause::Selection,
+                                None,
+                            )));
+                        }
                     }
                 }
             }
+            let Some(range) = &item.range else {
+                return;
+            };
+            intermediate_range::admit_read(range, &item.identifier, source, findings);
+            let CurrentRead::Intermediate { index: chained, .. } = range.current().read else {
+                return;
+            };
+            index = chained;
         });
     }
 }

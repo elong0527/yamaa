@@ -39,7 +39,7 @@ primary artifact ineligible for publication; the executor continues through
 later column checks, key validation, and dataset checks, collecting warning
 violations in that order.
 
-Evidence: `adam-adsl-age-quality`, `schema-verification-log`, `schema-row-count-fractions`.
+Evidence: `schema-adsl-age-quality`, `schema-verification-log`, `schema-row-count-fractions`.
 Replaces: REQ-0373, REQ-0389, REQ-0390, REQ-0406.
 
 An `error` stops the run at the stage of [COLUMN-1](columns.md#column-1) that
@@ -126,7 +126,7 @@ Replaces: REQ-0376.
 bound is required.
 
 Fails: `range_failed`.
-Evidence: `negative-implausible-age`, `adam-adsl-age-quality`, `schema-verification-log`.
+Evidence: `negative-implausible-age`, `schema-adsl-age-quality`, `schema-verification-log`.
 Replaces: REQ-0377.
 
 <a id="check-8"></a>
@@ -366,7 +366,7 @@ verifications and before publication, and a successful run produces it even
 when no warning is violated; the empty case is a header-only dataset.
 
 Fails: `missing_warning_log`.
-Evidence: `adam-adsl-age-quality`, `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs`.
+Evidence: `schema-adsl-age-quality`, `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs`.
 Replaces: REQ-0391, REQ-0396.
 
 Publication thus replaces a stale non-empty log from an earlier run. A
@@ -385,7 +385,7 @@ column declaration order first, then dataset-verification order.
 `FAILURE_COUNT` is positive, and `OFFENDING_KEYS` is the complete ordered
 sequence, not the bounded sample an error report may show.
 
-Evidence: `adam-adsl-age-quality`, `schema-verification-log`, `schema-row-count-fractions`.
+Evidence: `schema-adsl-age-quality`, `schema-verification-log`, `schema-row-count-fractions`.
 Replaces: REQ-0392, REQ-0393, REQ-0395.
 
 | Column | Type | Value |
@@ -428,7 +428,7 @@ numbers in [Values](values.md)'s `str` form, and strings
 escaped to ASCII by JSON's short escapes where one exists and lower-case `\\u`
 hexadecimal escapes otherwise.
 
-Evidence: `schema-verification-log`, `adam-adsl-age-quality`.
+Evidence: `schema-verification-log`, `schema-adsl-age-quality`.
 Replaces: REQ-0394.
 
 A scalar above `U+FFFF` is its JSON surrogate-pair escape. The empty key

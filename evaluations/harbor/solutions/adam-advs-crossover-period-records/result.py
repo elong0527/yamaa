@@ -1,80 +1,117 @@
-# Reference solution for the yamaa benchmark
-# adam-advs-crossover-period-records (Python track).
+# Reference solution for the yamaa benchmark adam-advs-crossover-period-records (Python track).
 #
 # Written from the benchmark's full prompt and its inputs alone, as an agent
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+import csv
+from datetime import datetime
 
-import polars as pl
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-vs = pl.read_csv("/app/input/vs.csv", infer_schema=False).with_columns(
-    pl.col("VSSEQ").cast(pl.Int64, strict=False),
-    pl.col("VSSTRESN").cast(pl.Float64, strict=False),
-    # The collection date is the date part of the collection datetime;
-    # the datetime itself exists only when a time was collected.
-    ADT=pl.col("VSDTC").str.slice(0, 10).str.to_date(strict=False),
-    ADTM=pl.when(pl.col("VSDTC").str.contains("T"))
-    .then(pl.col("VSDTC").str.to_datetime(strict=False))
-    .otherwise(None),
-)
-adsl = pl.read_csv("/app/input/adsl.csv", infer_schema=False).with_columns(
-    pl.col("AP01SDT", "AP02SDT").str.to_date(strict=False),
-    pl.col("AP01SDTM", "AP02SDTM").str.to_datetime(strict=False),
-)
 
-# The latest period whose start is at or before the record. A record
-# with a time is compared with the period start datetimes, a date-only
-# record with the period start dates; a missing start never matches,
-# so a subject who never started period 2 stays in period 1.
-timed2 = (
-    pl.col("ADTM").is_not_null()
-    & pl.col("AP02SDTM").is_not_null()
-    & (pl.col("ADTM") >= pl.col("AP02SDTM"))
-)
-dated2 = (
-    pl.col("ADTM").is_null()
-    & pl.col("ADT").is_not_null()
-    & pl.col("AP02SDT").is_not_null()
-    & (pl.col("ADT") >= pl.col("AP02SDT"))
-)
-timed1 = (
-    pl.col("ADTM").is_not_null()
-    & pl.col("AP01SDTM").is_not_null()
-    & (pl.col("ADTM") >= pl.col("AP01SDTM"))
-)
-dated1 = (
-    pl.col("ADTM").is_null()
-    & pl.col("ADT").is_not_null()
-    & pl.col("AP01SDT").is_not_null()
-    & (pl.col("ADT") >= pl.col("AP01SDT"))
-)
+def parse_date(text):
+    text = (text or "").strip()
+    if not text:
+        return None
+    return datetime.strptime(text, "%Y-%m-%d").date()
 
-advs = (
-    vs.join(adsl, on=["STUDYID", "USUBJID"], how="left", maintain_order="left")
-    .with_columns(
-        APERIOD=pl.when(timed2 | dated2)
-        .then(2)
-        .when(timed1 | dated1)
-        .then(1)
-        .otherwise(None)
-        .cast(pl.Int64)
-    )
-    .with_columns(
-        PARAMCD=pl.col("VSTESTCD"),
-        AVAL=pl.col("VSSTRESN"),
-        TRTA=pl.when(pl.col("APERIOD") == 1)
-        .then(pl.col("TRT01A"))
-        .when(pl.col("APERIOD") == 2)
-        .then(pl.col("TRT02A"))
-        .otherwise(None),
-    )
-    .select(
-        "STUDYID", "USUBJID", "VSSEQ", "PARAMCD", "AVAL", "ADT", "ADTM",
-        "APERIOD", "TRTA",
-    )
-)
 
-Path("/app/output").mkdir(parents=True, exist_ok=True)
-advs.write_csv("/app/output/advs.csv")
+def parse_dtc(text):
+    """Return (date, datetime or None) for an ISO 8601 collection value.
+
+    A date-only value yields a date with no datetime; a value carrying a
+    time yields both its date and its datetime.
+    """
+    text = (text or "").strip()
+    if not text:
+        return None, None
+    if "T" not in text:
+        return parse_date(text), None
+    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M"):
+        try:
+            moment = datetime.strptime(text, fmt)
+            return moment.date(), moment
+        except ValueError:
+            continue
+    raise ValueError("unrecognised datetime: %r" % text)
+
+
+def fmt_date(d):
+    return d.isoformat() if d is not None else ""
+
+
+def fmt_dtm(m):
+    return m.strftime("%Y-%m-%dT%H:%M:%S") if m is not None else ""
+
+
+def main():
+    with open(INPUT_DIR + "/adsl.csv", newline="") as f:
+        adsl = {row["USUBJID"]: row for row in csv.DictReader(f)}
+    with open(INPUT_DIR + "/vs.csv", newline="") as f:
+        vs_rows = list(csv.DictReader(f))
+
+    out_rows = []
+    for row in vs_rows:
+        subj = adsl[row["USUBJID"]]
+        # Periods the subject started, in order: (number, start date,
+        # start datetime, actual treatment).
+        periods = []
+        for num, sdt_key, sdtm_key, trt_key in (
+            (1, "AP01SDT", "AP01SDTM", "TRT01A"),
+            (2, "AP02SDT", "AP02SDTM", "TRT02A"),
+        ):
+            start_date = parse_date(subj.get(sdt_key))
+            if start_date is None:
+                continue
+            _, start_dtm = parse_dtc(subj.get(sdtm_key))
+            if start_dtm is None:
+                start_dtm = datetime.combine(start_date, datetime.min.time())
+            periods.append((num, start_date, start_dtm, subj.get(trt_key) or ""))
+
+        coll_date, coll_dtm = parse_dtc(row.get("VSDTC"))
+        aperiod = ""
+        trta = ""
+        if coll_date is not None:
+            for num, start_date, start_dtm, trt in periods:
+                if coll_dtm is not None:
+                    placed = start_dtm <= coll_dtm
+                else:
+                    placed = start_date <= coll_date
+                if placed:
+                    aperiod = num
+                    trta = trt
+        out_rows.append(
+            {
+                "STUDYID": row["STUDYID"],
+                "USUBJID": row["USUBJID"],
+                "VSSEQ": row["VSSEQ"],
+                "PARAMCD": row["VSTESTCD"],
+                "AVAL": row["VSSTRESN"],
+                "ADT": fmt_date(coll_date),
+                "ADTM": fmt_dtm(coll_dtm),
+                "APERIOD": aperiod,
+                "TRTA": trta,
+            }
+        )
+
+    fieldnames = [
+        "STUDYID",
+        "USUBJID",
+        "VSSEQ",
+        "PARAMCD",
+        "AVAL",
+        "ADT",
+        "ADTM",
+        "APERIOD",
+        "TRTA",
+    ]
+    with open(OUTPUT_DIR + "/advs.csv", "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+
+if __name__ == "__main__":
+    main()

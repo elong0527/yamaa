@@ -39,7 +39,7 @@ must read an `input` dataset and may not declare `key`, `between`, `order_by`,
 have one column type as its result type ([EXPR-14](expressions.md#expr-14)).
 
 Fails: `invalid_intermediate_driver`, `unknown_intermediate_driver_type`.
-Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/intermediate_scopes.rs`, `rust/crates/yamaa-adapters/tests/fixtures/row_intermediate_reference.json`, `rust/crates/yamaa-adapters/tests/project_environment.rs::callback_derived_fields_expose_their_declared_result_type_to_row_drivers`.
+Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/intermediate_scopes.rs`, `rust/crates/yamaa-adapters/tests/fixtures/row_intermediate_reference.json`, `rust/crates/yamaa-adapters/tests/project_environment.rs::callback_derived_fields_expose_their_declared_result_type_to_row_drivers`, `schema-intermediate-driver-columns`.
 Replaces: REQ-1262.
 
 The intermediate's `columns` list, when present, limits the fields the row
@@ -114,7 +114,7 @@ literals, earlier row-derived columns, or a record lookup with already-complete
 matching values, in dependency order.
 
 Fails: `ungrouped_driver_field`.
-Evidence: `rust/crates/yamaa-adapters/tests/fixtures/binding_diagnostics.tsv`, `rust/crates/yamaa-core/tests/support/diagnostic/binding.rs`.
+Evidence: `negative-row-window-ungrouped`, `rust/crates/yamaa-adapters/tests/fixtures/binding_diagnostics.tsv`, `rust/crates/yamaa-core/tests/support/diagnostic/binding.rs`.
 Replaces: REQ-0047, REQ-0067.
 
 The aggregate reduces the group under

@@ -1,0 +1,7 @@
+phase: validation
+condition: unknown_field
+spec_paths:
+  - columns.NTEAE.derivation.aggregate.between.value
+requirement: REQ-0121
+context:
+  identifier: EXF.TRTSDT

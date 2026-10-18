@@ -1,20 +1,19 @@
-Following CDISC SDTM standards, use the provided MH_RAW dataset to create
-a SUPPMH dataset with one supplemental record per collected qualifier.
+Following CDISC SDTM standards, use the provided MH_RAW dataset to create a
+SUPPMH dataset with one record per collected qualifier.
 
 The output dataset should contain the following columns in this order:
-STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM, QLABEL, QVAL, QORIG,
-QEVAL
+STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM, QLABEL, QVAL, QORIG, QEVAL
 
-RDOMAIN is MH and IDVAR is MHSEQ. IDVARVAL is the parent record sequence,
-written as text. QNAM is the qualifier name, MHFAMHX or MHCONF. QLABEL is
-Family History for MHFAMHX and Confirmed by Medical Records for MHCONF.
-QVAL is the collected qualifier value, Y or N. QORIG records the collected
-origin as Collected. QEVAL has no value, since a collected value is not an
-assessment.
-
-Each parent record contributes one supplemental record per qualifier
-actually collected, so a record with only one of the two collected
-contributes only one.
+RDOMAIN is "MH" on every record. IDVAR is "MHSEQ" on every record.
+IDVARVAL is the parent record's sequence number, written as text. A
+parent record gives one record for each of its two qualifiers that was
+collected, so a parent record with only one qualifier collected gives
+only one record. On a record for the family history qualifier, QNAM is
+"MHFAMHX" and QLABEL is "Family History". On a record for the medical
+record confirmation qualifier, QNAM is "MHCONF" and QLABEL is "Confirmed
+by Medical Records". QVAL is the qualifier value collected on the
+parent record, "Y" or "N". QORIG is "Collected" on every record. QEVAL
+has no value on any record, since a collected value is not an assessment.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/suppmh.csv.

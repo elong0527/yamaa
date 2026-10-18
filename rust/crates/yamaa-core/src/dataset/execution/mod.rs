@@ -669,45 +669,7 @@ impl DatasetPlan {
         };
         observer(ExecutionEvent::Phase(ExecutionPhase::Admission));
         let mut observations = AttemptObservations::default();
-        for declaration in self.conversion_handlers() {
-            observations
-                .handlers
-                .register(&declaration.handler.spec_path, HandlerKind::Unconvertible);
-        }
-        for intermediate in self.intermediates() {
-            if let Some(derived) = &intermediate.derivations {
-                for declaration in derived.plan.conversion_handlers() {
-                    observations
-                        .handlers
-                        .register(&declaration.handler.spec_path, HandlerKind::Unconvertible);
-                }
-            }
-        }
-        for assignment in self
-            .templates()
-            .iter()
-            .flat_map(|template| &template.assignments)
-            .chain(self.columns())
-            .chain(
-                self.intermediates()
-                    .iter()
-                    .flat_map(|item| &item.keys)
-                    .filter_map(|key| {
-                        if let MatchValue::Expression(expression) = &key.value {
-                            Some(&expression.assignment)
-                        } else {
-                            None
-                        }
-                    }),
-            )
-        {
-            scalar::register(assignment, self, &mut observations.handlers);
-            imputation::register(&assignment.expression, &mut observations.handlers);
-            str_case::register(&assignment.expression, &mut observations.handlers);
-            str_extract::register(&assignment.expression, &mut observations.handlers);
-            str_replace::register(&assignment.expression, &mut observations.handlers);
-            str_template::register(&assignment.expression, &mut observations.handlers);
-        }
+        self.register_handlers(&mut observations.handlers);
         let result = self.execute_inner(
             table,
             secondary,
@@ -755,6 +717,48 @@ impl DatasetPlan {
         };
         observer(ExecutionEvent::Phase(ExecutionPhase::Finished));
         attempt
+    }
+
+    /// Register every eagerly reported handler site at zero, in report order:
+    /// conversion handlers, each donor plan's conversion handlers, then the
+    /// sites of each walker for every assignment and key expression. The
+    /// resolved plan's handler table is checked against this walk on every bind.
+    pub(crate) fn register_handlers(&self, handlers: &mut HandlerCounter) {
+        for declaration in self.conversion_handlers() {
+            handlers.register(&declaration.handler.spec_path, HandlerKind::Unconvertible);
+        }
+        for intermediate in self.intermediates() {
+            if let Some(derived) = &intermediate.derivations {
+                for declaration in derived.plan.conversion_handlers() {
+                    handlers.register(&declaration.handler.spec_path, HandlerKind::Unconvertible);
+                }
+            }
+        }
+        for assignment in self
+            .templates()
+            .iter()
+            .flat_map(|template| &template.assignments)
+            .chain(self.columns())
+            .chain(
+                self.intermediates()
+                    .iter()
+                    .flat_map(|item| &item.keys)
+                    .filter_map(|key| {
+                        if let MatchValue::Expression(expression) = &key.value {
+                            Some(&expression.assignment)
+                        } else {
+                            None
+                        }
+                    }),
+            )
+        {
+            scalar::register(assignment, self, handlers);
+            imputation::register(&assignment.expression, handlers);
+            str_case::register(&assignment.expression, handlers);
+            str_extract::register(&assignment.expression, handlers);
+            str_replace::register(&assignment.expression, handlers);
+            str_template::register(&assignment.expression, handlers);
+        }
     }
 
     /// Share the retained semantic observations for this immutable plan attempt.
@@ -816,6 +820,8 @@ impl DatasetPlan {
         observer(ExecutionEvent::Phase(ExecutionPhase::Derivation));
         self.execute_admitted(table, secondary, functions, observations, observer)
     }
+    /// The resolved plan's reference order (`resolved/reference.rs`) mirrors
+    /// these loops step for step; keep both in step until #2843.
     #[allow(clippy::too_many_arguments)]
     fn execute_admitted<T: TableAccess + ?Sized>(
         &self,

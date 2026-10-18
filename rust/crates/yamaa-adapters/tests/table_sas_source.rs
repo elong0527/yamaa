@@ -238,6 +238,63 @@ mod table {
             ));
         }
         #[test]
+        fn records_deleted_in_place_are_refused_with_a_rewrite_hint() {
+            // Either signal alone refuses the independent haven fixture: the
+            // deleted-rows flag 0x0080 on its mix page (type 0x0200 at 1040), or
+            // a non-zero deleted count beside its four stored records (row-size
+            // subheader at 4640).
+            let source = declaration("datetime.sas7bdat");
+            let original = bytes(&source.path);
+            assert_eq!(&original[1040..1042], &0x0200u16.to_le_bytes());
+            assert_eq!(&original[4664..4672], &[4, 0, 0, 0, 0, 0, 0, 0]);
+            for (offset, byte) in [(1040, 0x80), (4668, 1)] {
+                let mut data = original.clone();
+                data[offset] = byte;
+                let error = sas_source::parse(&data, &source).unwrap_err();
+                assert!(
+                    matches!(error, Error::Invalid("deleted_records")),
+                    "{offset}"
+                );
+                let error = yamaa_adapters::specification_run::Error::SasSource(error);
+                assert_eq!(
+                    yamaa_adapters::specification_diagnostics::findings(&error, Some(&source))
+                        .unwrap()
+                        .unwrap(),
+                    [yamaa_adapters::json!({
+                        "phase": "ingest",
+                        "condition": "source_sas_invalid",
+                        "requirement": "REQ-1317",
+                        "spec_paths": ["input.SRC.path"],
+                        "context": {
+                            "dataset": "SRC",
+                            "path": "datetime.sas7bdat",
+                            "cause": "deleted_records",
+                            "hint": "rewrite the SAS dataset first, for example with PROC \
+                                     COPY or a DATA step, to remove the records deleted in place"
+                        }
+                    })],
+                    "{offset}"
+                );
+            }
+        }
+        #[test]
+        fn deleted_compressed_record_keeps_its_unsupported_compression_cause() {
+            // Independent pandas RLE layout: the row-size subheader at 130592
+            // counts 10 records, none deleted, and the first compressed-row
+            // pointer's compression byte is at 66840. SAS marks a deleted
+            // compressed row with code 0x05 and counts it as deleted.
+            let source = declaration("rle.sas7bdat");
+            let mut data = bytes(&source.path);
+            assert_eq!(&data[130616..130624], &[10, 0, 0, 0, 0, 0, 0, 0]);
+            assert_eq!(data[66840], 0x04);
+            data[66840] = 0x05;
+            data[130620] = 1;
+            assert!(matches!(
+                sas_source::parse(&data, &source),
+                Err(Error::Invalid("compression"))
+            ));
+        }
+        #[test]
         fn reject_multiple_members_in_both_transport_versions() {
             for name in ["multi-v5.xpt", "multi-v8.xpt"] {
                 assert!(matches!(
@@ -347,7 +404,9 @@ mod table {
 
         fn bytes(hex: &str) -> Vec<u8> {
             hex.as_bytes()
-                .chunks_exact(2)
+                .as_chunks::<2>()
+                .0
+                .iter()
                 .map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap())
                 .collect()
         }

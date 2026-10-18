@@ -1,25 +1,20 @@
-Following CDISC ADaM standards, use the provided ADRS_RAW and ADSL
-datasets to create an ADRS dataset with one record per subject per
-analysis visit.
+Following CDISC ADaM standards, use the provided ADRS_RAW and ADSL datasets to
+create an ADRS dataset with one record per subject and analysis visit.
 
 The output dataset should contain the following columns in this order:
-STUDYID, USUBJID, PARAMCD, PARAM, AVISIT, PCHG, SAEFL, DCSREAS, AVALC,
-ARSN, AVAL
+STUDYID, USUBJID, PARAMCD, PARAM, AVISIT, PCHG, SAEFL, DCSREAS, AVALC, ARSN,
+AVAL
 
-Use PARAMCD "RESP75" and PARAM "EASI-75 Response".
-
-The checks apply in a fixed order. A subject with a serious adverse
-event or any discontinuation reason is a non-responder whatever the
-efficacy value, even a missing one; otherwise a subject with no
-efficacy value is not evaluable, one with a percent change of -75 or
-less (a reduction of at least 75%) is a responder, and everyone else
-is a non-responder.
-
-AVALC is the responder status: RESPONDER, NON-RESPONDER, or NOT
-EVALUABLE. ARSN records which check assigned the status: SAFETY OR
-DISCONTINUATION RULE, COMPONENT MISSING, THRESHOLD MET, or THRESHOLD
-NOT MET. AVAL is 1 for a responder and 0 for a non-responder; it has
-no value when the subject is not evaluable.
+PARAMCD is "RESP75" and PARAM is "EASI-75 Response" on every record.
+AVALC is "NON-RESPONDER" and ARSN is "SAFETY OR DISCONTINUATION RULE"
+when the subject's SAEFL is "Y" or the subject's DCSREAS has a value,
+whatever the percent change, even when the percent change has no value.
+Otherwise AVALC is "NOT EVALUABLE" and ARSN is "COMPONENT MISSING" when
+the percent change has no value. Otherwise AVALC is "RESPONDER" and
+ARSN is "THRESHOLD MET" when the percent change is -75 or less.
+Otherwise AVALC is "NON-RESPONDER" and ARSN is "THRESHOLD NOT MET".
+AVAL is 1 when AVALC is "RESPONDER", 0 when AVALC is "NON-RESPONDER",
+and has no value when AVALC is "NOT EVALUABLE".
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/adrs.csv.

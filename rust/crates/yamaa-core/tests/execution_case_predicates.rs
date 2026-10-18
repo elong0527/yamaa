@@ -2399,6 +2399,121 @@ mod execution {
                 &[vec![Value::Int(1), Value::Int(5)]]
             );
         }
+
+        #[test]
+        fn a_range_value_reads_only_the_record_that_built_the_row() {
+            use yamaa_core::{dataset::PlanError, value::ValueType};
+            let primary = Table {
+                schema: schema(&["ID", "CUT"]),
+                rows: vec![
+                    vec![Value::Int(1), Value::Int(1)],
+                    vec![Value::Int(2), Value::Int(2)],
+                ],
+                reads: Default::default(),
+                fail: None,
+            };
+            let donor = table(vec![
+                vec![Value::Int(1), Value::Int(1)],
+                vec![Value::Int(1), Value::Int(2)],
+                vec![Value::Int(2), Value::Int(1)],
+                vec![Value::Int(2), Value::Int(2)],
+            ]);
+            // C keeps its records in another order, with a limit in the column
+            // where the primary keeps its cutoff.
+            let other = Table {
+                schema: schema(&["ID", "LIMIT"]),
+                rows: vec![
+                    vec![Value::Int(2), Value::Int(1)],
+                    vec![Value::Int(1), Value::Int(2)],
+                ],
+                reads: Default::default(),
+                fail: None,
+            };
+            let plan_for = |source: usize| {
+                let range = RelationRange::new(
+                    "aggregate.between".into(),
+                    CurrentField {
+                        read: CurrentRead::Record { source, column: 1 },
+                        identifier: "VALUE".into(),
+                    },
+                    Some(ValueType::Int),
+                    Some(RelationRangeBound {
+                        column: 1,
+                        identifier: "V".into(),
+                        kind: Some(ValueType::Int),
+                    }),
+                    None,
+                )
+                .unwrap();
+                let bound = BoundAggregate::new(
+                    compile("SUM(S.V)", Context::Aggregate, "aggregate").unwrap(),
+                    AggregateRelation::Matched {
+                        source: AggregateSource::Secondary(0),
+                        keys: vec![IntermediateKey {
+                            source_column: 0,
+                            path: "aggregate.key.ID".into(),
+                            value: MatchValue::Variable(MatchRead::Output {
+                                column: 0,
+                                identifier: "ID".into(),
+                            }),
+                        }],
+                        group_by: vec![],
+                    },
+                    vec![AggregateBinding {
+                        name: "S.V".into(),
+                        column: 1,
+                    }],
+                    None,
+                    AggregatePhase::Derivation,
+                    None,
+                    "aggregate",
+                )
+                .unwrap()
+                .with_record_operations(Some(range), vec![], None);
+                DatasetPlan::new_with_sources(
+                    primary.schema.clone(),
+                    vec![
+                        SecondarySource {
+                            name: "S".into(),
+                            schema: donor.schema.clone(),
+                        },
+                        SecondarySource {
+                            name: "C".into(),
+                            schema: other.schema.clone(),
+                        },
+                    ],
+                    schema(&["ID", "RESULT"]),
+                    vec![RowTemplate {
+                        mode: RowMode::Records,
+                        assignments: vec![assignment(0, Expression::Source(0))],
+                        filter: None,
+                    }],
+                    vec![assignment(1, Expression::Aggregate(Box::new(bound)))],
+                    vec![0],
+                    vec![],
+                )
+            };
+            // C has no record at a primary row's position.
+            assert_eq!(plan_for(2), Err(PlanError::InvalidSource));
+            // The primary record that built each row narrows that row's donors.
+            let plan = plan_for(0).unwrap();
+            assert_eq!(
+                plan.execute(
+                    &primary,
+                    &[&donor, &other],
+                    &mut yamaa_core::function_invocation::NoFunctions::new(),
+                    None
+                )
+                .result
+                .unwrap()
+                .dataset
+                .rows(),
+                &[
+                    vec![Value::Int(1), Value::Int(1)],
+                    vec![Value::Int(2), Value::Int(3)]
+                ]
+            );
+        }
     }
     mod dataset_diagnostic {
         mod borrowed {

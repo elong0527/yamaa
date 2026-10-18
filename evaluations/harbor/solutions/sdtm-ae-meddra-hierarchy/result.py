@@ -4,56 +4,92 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build the SDTM AE dataset from AE_RAW and MEDDRA_SYNTHETIC.
+
+One record per adverse event. The coded hierarchy for each record comes
+from the MEDDRA_SYNTHETIC row that holds the record's AELLTCD on the
+primary path (PRIMARY_SOC == "Y"); secondary paths are never used.
+"""
 
 import polars as pl
 
-ae_raw = pl.read_csv("/app/input/ae_raw.csv", infer_schema=False).with_columns(
-    pl.col("AESEQ").cast(pl.Int64)
-)
-meddra = pl.read_csv("/app/input/meddra_synthetic.csv", infer_schema=False)
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-# Every hierarchy field comes from the primary path for the coder-assigned
-# code; the extract marks it with PRIMARY_SOC Y. An unknown or absent code
-# leaves the hierarchy empty, but the assigned code stays in AELLTCD.
-primary = meddra.filter(pl.col("PRIMARY_SOC") == "Y")
+COLUMNS = [
+    "DOMAIN",
+    "STUDYID",
+    "USUBJID",
+    "AESEQ",
+    "AETERM",
+    "AELLT",
+    "AELLTCD",
+    "AEDECOD",
+    "AEPTCD",
+    "AEHLT",
+    "AEHLTCD",
+    "AEHLGT",
+    "AEHLGTCD",
+    "AEBODSYS",
+    "AEBODSCD",
+    "AESOC",
+    "AESOCCD",
+]
 
-ae = (
-    ae_raw.join(primary, left_on="AELLTCD", right_on="LLTCD", how="left")
-    .with_columns(
-        DOMAIN=pl.lit("AE"),
-        AELLT=pl.col("LLTNAME"),
-        AEDECOD=pl.col("PTNAME"),
-        AEPTCD=pl.col("PTCD"),
-        AEHLT=pl.col("HLTNAME"),
-        AEHLTCD=pl.col("HLTCD"),
-        AEHLGT=pl.col("HLGTNAME"),
-        AEHLGTCD=pl.col("HLGTCD"),
-        AEBODSYS=pl.col("SOCNAME"),
-        AEBODSCD=pl.col("SOCCD"),
-        AESOC=pl.col("SOCNAME"),
-        AESOCCD=pl.col("SOCCD"),
+
+def main() -> None:
+    ae_raw = pl.read_csv(f"{INPUT_DIR}/ae_raw.csv", infer_schema=False)
+    meddra = pl.read_csv(
+        f"{INPUT_DIR}/meddra_synthetic.csv", infer_schema=False
     )
-    .select(
-        "DOMAIN",
-        "STUDYID",
-        "USUBJID",
-        "AESEQ",
-        "AETERM",
-        "AELLT",
-        "AELLTCD",
-        "AEDECOD",
-        "AEPTCD",
-        "AEHLT",
-        "AEHLTCD",
-        "AEHLGT",
-        "AEHLGTCD",
-        "AEBODSYS",
-        "AEBODSCD",
-        "AESOC",
-        "AESOCCD",
-    )
-)
 
-Path("/app/output").mkdir(exist_ok=True)
-ae.write_csv("/app/output/ae.csv")
+    # Primary path only: one row per LLT code.
+    hierarchy = {}
+    for row in meddra.filter(pl.col("PRIMARY_SOC") == "Y").iter_rows(named=True):
+        hierarchy[row["LLTCD"]] = row
+
+    records = []
+    for ae in ae_raw.iter_rows(named=True):
+        lltcd = ae["AELLTCD"] or None
+        med = hierarchy.get(lltcd) if lltcd else None
+        if med is None:
+            # No assigned code, or no dictionary row: AELLT and every
+            # hierarchy column are blank; AELLTCD keeps the code as
+            # collected.
+            llt = pt = ptcd = hlt = hltcd = None
+            hlgt = hlgtcd = soc = soccd = None
+        else:
+            llt = med["LLTNAME"]
+            pt, ptcd = med["PTNAME"], med["PTCD"]
+            hlt, hltcd = med["HLTNAME"], med["HLTCD"]
+            hlgt, hlgtcd = med["HLGTNAME"], med["HLGTCD"]
+            soc, soccd = med["SOCNAME"], med["SOCCD"]
+        records.append(
+            {
+                "DOMAIN": "AE",
+                "STUDYID": ae["STUDYID"],
+                "USUBJID": ae["USUBJID"],
+                "AESEQ": ae["AESEQ"],
+                "AETERM": ae["AETERM"],
+                "AELLT": llt,
+                "AELLTCD": lltcd,
+                "AEDECOD": pt,
+                "AEPTCD": ptcd,
+                "AEHLT": hlt,
+                "AEHLTCD": hltcd,
+                "AEHLGT": hlgt,
+                "AEHLGTCD": hlgtcd,
+                "AEBODSYS": soc,
+                "AEBODSCD": soccd,
+                "AESOC": soc,
+                "AESOCCD": soccd,
+            }
+        )
+
+    pl.DataFrame(records, schema={c: pl.Utf8 for c in COLUMNS}).write_csv(
+        f"{OUTPUT_DIR}/ae.csv"
+    )
+
+
+if __name__ == "__main__":
+    main()

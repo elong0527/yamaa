@@ -257,7 +257,7 @@ def _line_width(document: Document, paths: Mapping[int, str]) -> Iterator[Depart
 def _mapping_nodes(document: Document) -> Iterator[yaml.MappingNode]:
     """Mappings `literal_form` visits: values and list items."""
 
-    def visit(node: yaml.Node) -> Iterator[yaml.MappingNode]:
+    def visit(node: yaml.MappingNode) -> Iterator[yaml.MappingNode]:
         yield node
         for _, value in node.value:
             if isinstance(value, yaml.MappingNode):

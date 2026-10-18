@@ -7,15 +7,43 @@ import tomllib
 import unittest
 from pathlib import Path
 
+from packaging.requirements import Requirement
+
 from tools.ci.dependency_graphs import (
     assert_msrv,
-    assert_patches,
     minimum_cargo,
     minimum_python,
     pin_manifest,
     prepare,
 )
 from tools.paths import ROOT
+
+# Floors by interpreter in python/pyproject.toml. lxml's floor is the same on
+# every interpreter; the others split at CPython 3.15.
+EARLIER_FLOORS = {
+    "lxml": "6.1.3",
+    "polars": "1.35.2",
+    "pyarrow": "23.0.1",
+    "pydantic": "2.12.4",
+}
+PYTHON_315_FLOORS = {
+    "lxml": "6.1.3",
+    "polars": "2.0.0",
+    "pyarrow": "26.0.0",
+    "pydantic": "2.14.0",
+}
+
+
+def applicable(requirements, python):
+    """Specifiers by package for the requirements that apply on one interpreter."""
+    selected = {}
+    for line in requirements:
+        requirement = Requirement(line)
+        if requirement.marker is None or requirement.marker.evaluate(
+            {"python_version": python}
+        ):
+            selected.setdefault(requirement.name, []).append(str(requirement.specifier))
+    return selected
 
 
 class DependencyGraphsTests(unittest.TestCase):
@@ -48,7 +76,7 @@ class DependencyGraphsTests(unittest.TestCase):
                 path = Path(td) / "Cargo.toml"
                 path.write_text(content)
                 with self.assertRaises(ValueError):
-                    pin_manifest(path, set())
+                    pin_manifest(path)
         for value in (123, None, b"1.2.3"):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 minimum_cargo(value)
@@ -61,14 +89,19 @@ class DependencyGraphsTests(unittest.TestCase):
             path.write_text(
                 '[dependencies]\nfoo = "1.2.3"\nbar = {version = ">=0.9.8, <2"}\n'
                 'local = {path = "../local"}\n'
+                'vendored = {version = ">=0.2.1, <0.3", path = "../../vendor/v"}\n'
                 '[target.x.dependencies]\nbaz = "=2.0.0"\n'
             )
-            pin_manifest(path, set())
+            pin_manifest(path)
             text = path.read_text()
             self.assertIn('foo = "=1.2.3"', text)
             self.assertIn('bar = {version = "=0.9.8"}', text)
             self.assertIn('baz = "=2.0.0"', text)
             self.assertIn('local = {path = "../local"}', text)
+            # A vendored crate is a path dependency: its requirement stays.
+            self.assertIn(
+                'vendored = {version = ">=0.2.1, <0.3", path = "../../vendor/v"}', text
+            )
 
     def test_python_minimum_preserves_markers_and_extras(self):
         self.assertEqual(
@@ -78,7 +111,22 @@ class DependencyGraphsTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             minimum_python("example>2")
 
-    def test_minimum_stage_keeps_patches_and_exact_policy_pins(self):
+    def test_python_minimum_keeps_one_pin_per_marker_split_floor(self):
+        pins = [
+            minimum_python("example>=1.2; python_version < '3.15'"),
+            minimum_python("example>=2.0; python_version >= '3.15'"),
+        ]
+        self.assertEqual(
+            pins,
+            [
+                'example==1.2; python_version < "3.15"',
+                'example==2.0; python_version >= "3.15"',
+            ],
+        )
+        self.assertEqual(applicable(pins, "3.14"), {"example": ["==1.2"]})
+        self.assertEqual(applicable(pins, "3.15"), {"example": ["==2.0"]})
+
+    def test_minimum_stage_keeps_the_vendored_parser_and_exact_policy_pins(self):
         locks = {
             name: (ROOT / name).read_bytes()
             for name in ("rust/Cargo.lock", "python/uv.lock")
@@ -102,7 +150,13 @@ class DependencyGraphsTests(unittest.TestCase):
             )["dependencies"]
             self.assertEqual(adapters["toml"]["version"], "=0.9.8")
             self.assertEqual(adapters["arrow-array"]["version"], "=57.3.0")
-            self.assertEqual(adapters["saphyr-parser"]["version"], ">=0.0.11")
+            parser = adapters["yamaa-saphyr-parser"]
+            self.assertEqual(parser["version"], "=0.2.1")
+            self.assertEqual(parser["path"], "../../vendor/saphyr-parser")
+            self.assertNotIn("saphyr-parser", adapters)
+            self.assertNotIn(
+                "patch", tomllib.loads((stage / "rust/Cargo.toml").read_text())
+            )
             core = tomllib.loads(
                 (stage / "rust/crates/yamaa-core/Cargo.toml").read_text()
             )["dependencies"]
@@ -112,9 +166,15 @@ class DependencyGraphsTests(unittest.TestCase):
                 (stage / "python/uv.lock").read_bytes(), locks["python/uv.lock"]
             )
             requirements = (stage / "requirements.in").read_text().splitlines()
-            self.assertIn("polars==1.35.2", requirements)
-            self.assertIn("pyarrow==23.0.1", requirements)
-            self.assertIn("pydantic==2.12.4", requirements)
+            for python, floors in (
+                ("3.12", EARLIER_FLOORS),
+                ("3.14", EARLIER_FLOORS),
+                ("3.15", PYTHON_315_FLOORS),
+            ):
+                selected = applicable(requirements, python)
+                for name, floor in floors.items():
+                    with self.subTest(python=python, package=name):
+                        self.assertEqual(selected[name], ["==" + floor])
         self.assertEqual(locks, {name: (ROOT / name).read_bytes() for name in locks})
 
     def test_newest_stage_retains_supported_ranges(self):
@@ -129,8 +189,14 @@ class DependencyGraphsTests(unittest.TestCase):
                     (stage / path).read_bytes(), (ROOT / path).read_bytes()
                 )
             requirements = (stage / "requirements.in").read_text().splitlines()
-            self.assertIn("polars>=1.35.2", requirements)
-            self.assertIn("pyarrow>=23.0.1", requirements)
+            for python, floors in (
+                ("3.14", EARLIER_FLOORS),
+                ("3.15", PYTHON_315_FLOORS),
+            ):
+                selected = applicable(requirements, python)
+                for name, floor in floors.items():
+                    with self.subTest(python=python, package=name):
+                        self.assertEqual(selected[name], [">=" + floor])
             self.assertFalse((stage / "rust/Cargo.lock").exists())
 
     def test_destination_cannot_change_source_or_overwrite_existing(self):
@@ -153,28 +219,6 @@ class DependencyGraphsTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "too-new 2.0"):
             assert_msrv(json.loads(json.dumps(metadata)), "1.90")
-
-    def test_registry_replacement_cannot_silently_replace_reviewed_parser(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            rust = Path(temporary)
-            (rust / "Cargo.toml").write_text(
-                '[patch.crates-io]\nsaphyr-parser = {path="vendor/parser"}\n'
-            )
-            metadata = {
-                "packages": [
-                    {
-                        "name": "saphyr-parser",
-                        "source": None,
-                        "manifest_path": str(rust / "vendor/parser/Cargo.toml"),
-                    }
-                ]
-            }
-            assert_patches(metadata, rust)
-            metadata["packages"][0]["source"] = (
-                "registry+https://github.com/rust-lang/crates.io-index"
-            )
-            with self.assertRaisesRegex(ValueError, "reviewed local patch"):
-                assert_patches(metadata, rust)
 
 
 if __name__ == "__main__":

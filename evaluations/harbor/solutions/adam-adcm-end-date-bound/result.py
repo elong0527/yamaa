@@ -4,76 +4,95 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
+"""Build ADCM from ADSL and CM, bounding partial end dates at death."""
+
 import calendar
+import csv
 from datetime import date
-from pathlib import Path
 
-import polars as pl
-
-cm = pl.read_csv("/app/input/cm.csv", infer_schema=False).with_columns(
-    pl.col("CMSEQ").cast(pl.Int64)
-)
-adsl = pl.read_csv("/app/input/adsl.csv", infer_schema=False)
-death = {row["USUBJID"]: row["DTHDT"] for row in adsl.iter_rows(named=True)}
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
 
-def end_date(collected: str | None, died: str | None) -> tuple[str | None, str | None]:
-    # A full date stands as collected; a year and month runs to its last
-    # day, a year alone to December 31, never past a date of death that
-    # falls inside the collected month or year.
-    if collected is None:
-        return None, None
-    if len(collected) == 10:
-        return collected, None
-    year = int(collected[:4])
-    if len(collected) == 7:
-        month = int(collected[5:7])
-        first = date(year, month, 1)
-        last = date(year, month, calendar.monthrange(year, month)[1])
+def read_csv(path):
+    with open(path, newline="") as handle:
+        return list(csv.DictReader(handle))
+
+
+def parse_full(text):
+    year, month, day = (int(part) for part in text.split("-"))
+    return date(year, month, day)
+
+
+def derive_end(cmendtc, dthdt):
+    """Return (aendt, aendtf) for one collected end date."""
+    if not cmendtc:
+        return "", ""
+    parts = cmendtc.split("-")
+    if len(parts) == 3:
+        # A full date is used exactly as collected, even after death.
+        return cmendtc, ""
+    if len(parts) == 2:
+        year, month = int(parts[0]), int(parts[1])
+        last_day = calendar.monthrange(year, month)[1]
+        completed = date(year, month, last_day)
         flag = "D"
+        period_start = date(year, month, 1)
+        period_end = completed
     else:
-        first = date(year, 1, 1)
-        last = date(year, 12, 31)
+        year = int(parts[0])
+        completed = date(year, 12, 31)
         flag = "M"
-    if died is not None:
-        bound = date.fromisoformat(died)
-        # When the whole collected month or year lies after death, the
-        # last day stands.
-        if bound >= first:
-            last = min(last, bound)
-    return last.isoformat(), flag
+        period_start = date(year, 1, 1)
+        period_end = completed
+    if dthdt and completed > dthdt and period_start <= dthdt <= period_end:
+        # The collected month or year also contains the death date;
+        # the flag still records what was supplied.
+        return dthdt.isoformat(), flag
+    # When the whole collected month or year begins after death, the last
+    # day stands.
+    return completed.isoformat(), flag
 
 
-rows = []
-for record in cm.iter_rows(named=True):
-    died = death.get(record["USUBJID"])
-    aendt, aendtf = end_date(record["CMENDTC"], died)
-    rows.append(
-        {
-            "STUDYID": record["STUDYID"],
-            "USUBJID": record["USUBJID"],
-            "CMSEQ": record["CMSEQ"],
-            "CMTRT": record["CMTRT"],
-            "CMENDTC": record["CMENDTC"],
-            "AENDT": aendt,
-            "AENDTF": aendtf,
-            "DTHDT": died,
-        }
-    )
+def main():
+    adsl = read_csv(f"{INPUT_DIR}/adsl.csv")
+    death = {}
+    for row in adsl:
+        death[row["USUBJID"]] = parse_full(row["DTHDT"]) if row["DTHDT"] else None
 
-adcm = pl.DataFrame(
-    rows,
-    schema={
-        "STUDYID": pl.String,
-        "USUBJID": pl.String,
-        "CMSEQ": pl.Int64,
-        "CMTRT": pl.String,
-        "CMENDTC": pl.String,
-        "AENDT": pl.String,
-        "AENDTF": pl.String,
-        "DTHDT": pl.String,
-    },
-)
+    cm = read_csv(f"{INPUT_DIR}/cm.csv")
+    out_rows = []
+    for row in cm:
+        dthdt = death.get(row["USUBJID"])
+        aendt, aendtf = derive_end(row["CMENDTC"], dthdt)
+        out_rows.append(
+            {
+                "STUDYID": row["STUDYID"],
+                "USUBJID": row["USUBJID"],
+                "CMSEQ": row["CMSEQ"],
+                "CMTRT": row["CMTRT"],
+                "CMENDTC": row["CMENDTC"],
+                "AENDT": aendt,
+                "AENDTF": aendtf,
+                "DTHDT": dthdt.isoformat() if dthdt else "",
+            }
+        )
 
-Path("/app/output").mkdir(exist_ok=True)
-adcm.write_csv("/app/output/adcm.csv")
+    fieldnames = [
+        "STUDYID",
+        "USUBJID",
+        "CMSEQ",
+        "CMTRT",
+        "CMENDTC",
+        "AENDT",
+        "AENDTF",
+        "DTHDT",
+    ]
+    with open(f"{OUTPUT_DIR}/adcm.csv", "w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+
+if __name__ == "__main__":
+    main()

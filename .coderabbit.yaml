@@ -19,6 +19,7 @@ reviews:
       - "main"
       - "^release/[0-9]+\\.[0-9]+\\.[0-9]+$" # release branches such as release/1.0.0
       - "^review/.*-base$"        # synthetic bases for bounded review-only PRs
+      - "^release/.*$"            # release integration branches while main is frozen
   path_filters:
     - "!**/uv.lock"              # generated lock diffs are noise
     - "!**/Cargo.lock"           # same: canonical lockfile, packaging-tool checksums only

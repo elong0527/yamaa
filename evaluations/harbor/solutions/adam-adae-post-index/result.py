@@ -4,44 +4,75 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Create ADAE from AE: flag records strictly after each subject's
+index event (first COVID-19 record by ASTDT, AESEQ breaking ties)."""
 
-import polars as pl
+import csv
+from datetime import date
 
-ae = pl.read_csv("/app/input/ae.csv", infer_schema=False).with_columns(
-    pl.col("AESEQ").cast(pl.Int64)
-)
+INPUT_AE = "/app/input/ae.csv"
+OUTPUT_ADAE = "/app/output/adae.csv"
 
-# Each subject's index event: the earliest start date, with the
-# higher sequence number ordered after on the same date. ISO dates sort
-# as text.
-first_index = (
-    ae.filter(
-        (pl.col("AEDECOD") == "COVID-19") & pl.col("AESTDTC").is_not_null()
-    )
-    .sort(["USUBJID", "AESTDTC", "AESEQ"], nulls_last=True)
-    .unique("USUBJID", keep="first", maintain_order=True)
-    .select("USUBJID", FIRST_DT="AESTDTC", FIRST_SEQ="AESEQ")
-)
+COLUMNS = ["STUDYID", "USUBJID", "AESEQ", "AEDECOD", "ASTDT", "AFTIDXFL"]
 
-adae = (
-    ae.join(first_index, on="USUBJID", how="left", maintain_order="left")
-    .with_columns(ASTDT=pl.col("AESTDTC"))
-    .with_columns(
-        AFTIDXFL=pl.when(
-            pl.col("ASTDT").is_not_null()
-            & pl.col("FIRST_DT").is_not_null()
-            & (
-                (pl.col("ASTDT") > pl.col("FIRST_DT"))
-                | (
-                    (pl.col("ASTDT") == pl.col("FIRST_DT"))
-                    & (pl.col("AESEQ") > pl.col("FIRST_SEQ"))
-                )
-            )
-        ).then(pl.lit("Y"))
-    )
-    .select("STUDYID", "USUBJID", "AESEQ", "AEDECOD", "ASTDT", "AFTIDXFL")
-)
 
-Path("/app/output").mkdir(exist_ok=True)
-adae.write_csv("/app/output/adae.csv")
+def parse_date(text):
+    text = (text or "").strip()
+    if not text:
+        return None
+    return date.fromisoformat(text)
+
+
+def main():
+    with open(INPUT_AE, newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+
+    for row in rows:
+        row["_astdt"] = parse_date(row["AESTDTC"])
+        row["_aeseq"] = int(row["AESEQ"])
+
+    # Index event per subject: first COVID-19 record ordered by ASTDT,
+    # AESEQ breaking ties; records with no start date order last.
+    index = {}
+    for row in rows:
+        if row["AEDECOD"] != "COVID-19":
+            continue
+        key = (
+            row["_astdt"] is None,
+            row["_astdt"] or date.min,
+            row["_aeseq"],
+        )
+        subject = row["USUBJID"]
+        if subject not in index or key < index[subject][0]:
+            index[subject] = (key, row)
+
+    out = []
+    for row in rows:
+        flag = ""
+        subject = row["USUBJID"]
+        if subject in index and row["_astdt"] is not None:
+            _, idx = index[subject]
+            if row["_astdt"] > idx["_astdt"] or (
+                row["_astdt"] == idx["_astdt"]
+                and row["_aeseq"] > idx["_aeseq"]
+            ):
+                flag = "Y"
+        out.append(
+            {
+                "STUDYID": row["STUDYID"],
+                "USUBJID": row["USUBJID"],
+                "AESEQ": row["AESEQ"],
+                "AEDECOD": row["AEDECOD"],
+                "ASTDT": row["_astdt"].isoformat() if row["_astdt"] else "",
+                "AFTIDXFL": flag,
+            }
+        )
+
+    with open(OUTPUT_ADAE, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=COLUMNS)
+        writer.writeheader()
+        writer.writerows(out)
+
+
+if __name__ == "__main__":
+    main()

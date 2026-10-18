@@ -4,6 +4,8 @@ use yamaa::{Engine, EngineOptions, HostLanguage, Request};
 
 type Reply<'py> = (Option<String>, Vec<crate::report_fields::IssueRow<'py>>);
 
+// `Python::version` builds on the PyO3 0.27.2 floor; 0.29 renamed it `version_str`.
+#[allow(deprecated)]
 fn engine(py: Python<'_>) -> Engine {
     Engine::new(EngineOptions::new(
         HostLanguage::Python,

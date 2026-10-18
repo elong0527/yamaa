@@ -1,12 +1,5 @@
 //! Build per-template stored-source metadata through the existing source-port ordering.
 use super::*;
-pub(super) fn catalog(
-    output: &TableSchema,
-    source: &TableSchema,
-    name: &str,
-) -> Result<Catalog, BindError> {
-    catalog_visible(output, source, name, None)
-}
 pub(super) fn catalog_visible(
     output: &TableSchema,
     source: &TableSchema,
@@ -51,25 +44,17 @@ pub(super) fn catalog_visible(
     )
     .map_err(BindError::Catalog)
 }
+/// The whole-dataset catalog: the primary record is current, and every other
+/// stored source joins through the output keys.
 pub(super) fn joined_catalog(
     output: &TableSchema,
     primary: &TableSchema,
     name: &str,
     keys: &[usize],
     secondary: &[crate::dataset::SecondarySource],
-    driver: &str,
 ) -> Result<Catalog, BindError> {
-    let selected = if name == driver {
-        primary
-    } else {
-        &secondary
-            .iter()
-            .find(|source| source.name == driver)
-            .ok_or(BindError::Internal)?
-            .schema
-    };
-    let catalog = catalog(output, selected, driver)?;
-    extend_catalog(catalog, primary, name, keys, secondary, driver)
+    let catalog = catalog_visible(output, primary, name, None)?;
+    extend_catalog(catalog, primary, name, keys, secondary, name)
 }
 pub(super) fn extend_catalog(
     catalog: Catalog,
@@ -147,6 +132,95 @@ pub(super) fn select<'a>(
         .find(|(_, item)| item.name == selected)
         .map(|(index, item)| (index + 1, &item.schema, None))
         .ok_or(BindError::Internal)
+}
+
+/// Whether a column completed only for rows the named intermediate `driver`
+/// builds reads a field of it that the column phase cannot address. That
+/// phase reads a driver record from the input behind the first row template's
+/// driver (`primary`), at the position of the record that built the row. An
+/// intermediate over another input, or a field it derives, has no record
+/// there, and a column holding a qualified aggregate keeps the whole-dataset
+/// scope in which the intermediate is no driver. Preparation refuses such a
+/// read before any data is read, so `check` and `domain` report it alike.
+pub(super) fn unaddressable(
+    d: &Document,
+    declaration: usize,
+    driver: &str,
+    primary: &str,
+    aggregate: bool,
+    project: Option<&functions::Prepared>,
+    templates: &str_template::Prepared,
+) -> Result<bool, PrepareError> {
+    /// The imputation bounds and fallback name variables the shared reference
+    /// scan skips.
+    fn bounds(
+        d: &Document,
+        value: usize,
+        names: &mut Vec<String>,
+        depth: usize,
+    ) -> Result<(), PrepareError> {
+        if depth > crate::limits::Limits::SEMANTIC_DEPTH {
+            return Err(PrepareError::limit(
+                "semantic_depth",
+                crate::limits::Limits::SEMANTIC_DEPTH,
+                Some(depth),
+                None,
+            ));
+        }
+        if let Some(payload) = d.field(value, "impute") {
+            for operand in ["not_before", "not_after", "fallback"] {
+                if let Some(N::Text(name)) = d.field(payload, operand).map(|id| &d.nodes()[id]) {
+                    names.push(name.clone());
+                }
+            }
+        }
+        if let Some(payload) = d.field(value, "case") {
+            for &branch in sequence(d, payload)? {
+                if let Some(child) = d
+                    .field(branch, "then")
+                    .or_else(|| d.field(branch, "otherwise"))
+                {
+                    bounds(d, child, names, depth + 1)?;
+                }
+            }
+        }
+        Ok(())
+    }
+    let Some(item) = d
+        .field(d.root(), "intermediates")
+        .filter(|&id| !matches!(d.nodes()[id], N::Null))
+        .map(|id| sequence(d, id))
+        .transpose()?
+        .and_then(|items| {
+            items.iter().copied().find(|&item| {
+                d.field(item, "id")
+                    .is_some_and(|id| text(d, id).is_ok_and(|id| id == driver))
+            })
+        })
+    else {
+        return Ok(false);
+    };
+    let over_primary = text(d, field(d, item, "dataset")?)? == primary;
+    let derived = match d
+        .field(item, "derivations")
+        .filter(|&id| !matches!(d.nodes()[id], N::Null))
+    {
+        Some(id) => mapping(d, id)?
+            .iter()
+            .map(|&(name, _)| text(d, name))
+            .collect::<Result<Vec<_>, _>>()?,
+        None => Vec::new(),
+    };
+    let value = field(d, declaration, "value")?;
+    let mut names = Vec::new();
+    derivations::current_references(d, value, project, &mut names, 0)?;
+    self_relations::template_references(d, value, templates, &mut names, 0)?;
+    bounds(d, value, &mut names, 0)?;
+    Ok(names.iter().any(|name| {
+        name.split_once('.').is_some_and(|(owner, field)| {
+            owner == driver && (aggregate || !over_primary || derived.contains(&field))
+        })
+    }))
 }
 
 /// Admit reference traversal before retaining every expanded row occurrence.

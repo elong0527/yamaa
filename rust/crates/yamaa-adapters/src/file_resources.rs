@@ -80,6 +80,7 @@ struct Opened {
     key: Segments,
     identity: Identity,
 }
+#[derive(Clone)]
 struct Snapshot {
     bytes: Arc<[u8]>,
     paths: Vec<(Segments, String, Segments)>,
@@ -88,13 +89,48 @@ struct Snapshot {
 pub struct Resources {
     host: Option<crate::host_resources::Resources>,
     host_sources: RetainedSources,
-    roots: Vec<Root>,
+    roots: Arc<[Root]>,
     local_paths: bool,
     base: Segments,
+    /// The canonical identity of the last selected entry: the declaring
+    /// identity a run resolver receives for that entry's study requests.
+    entry: Option<String>,
     snapshots: Vec<Snapshot>,
     by_path: BTreeMap<Segments, usize>,
     by_identity: BTreeMap<(i128, i128), usize>,
     reads: usize,
+}
+
+/// The study half of one run's resource authority. A prepared value keeps
+/// its compile-time [`Resources`] (the metadata snapshots, read during a run
+/// only to verify them); each run captures study inputs, retains host
+/// sources and resolves Save targets in its own scope, so nothing one run
+/// captured is visible to another.
+pub struct RunScope {
+    resources: Resources,
+    /// Compile evidence listed before a fresh scope's own captures, so the
+    /// retained sources of a run behind its own resolver still begin with
+    /// the metadata that compiled it. Empty when the scope inherits them.
+    compiled: RetainedSources,
+}
+impl RunScope {
+    /// Snapshots created so far in this scope, including those it inherited.
+    pub fn capture_reads(&self) -> usize {
+        self.resources.capture_reads()
+    }
+    /// Owned aliases of every held byte source: compile evidence first, then
+    /// this run's captures. This performs no resource access.
+    pub fn retained_sources(&self) -> RetainedSources {
+        let mut sources = self.compiled.clone();
+        sources.extend(self.resources.retain_sources());
+        sources
+    }
+    pub(crate) fn resources(&self) -> &Resources {
+        &self.resources
+    }
+    pub(crate) fn resources_mut(&mut self) -> &mut Resources {
+        &mut self.resources
+    }
 }
 
 pub type RetainedSources = Vec<(String, Arc<[u8]>)>;
@@ -103,13 +139,72 @@ impl Resources {
         Self {
             host_sources: vec![],
             host: Some(crate::host_resources::Resources::new(resolver, base.into())),
-            roots: vec![],
+            roots: Arc::new([]),
             local_paths: false,
             base: vec![],
+            entry: None,
             snapshots: vec![],
             by_path: BTreeMap::new(),
             by_identity: BTreeMap::new(),
             reads: 0,
+        }
+    }
+    /// Open one run's scope over this compile-time authority.
+    ///
+    /// Without a run resolver the scope reads where compile did and starts
+    /// from a copy of the compile snapshots, so its reads, aliases, created
+    /// snapshot counts and retained sources match a one-shot build exactly.
+    /// A run resolver starts an empty scope at the same entry identity: its
+    /// references never meet the compile resolver's. Either way the scope
+    /// shares the approved roots and holds nothing a previous run captured.
+    pub fn run_scope(
+        &self,
+        resolver: Option<Arc<dyn crate::host_resources::Resolver>>,
+    ) -> RunScope {
+        match resolver {
+            None => RunScope {
+                resources: Self {
+                    host: self
+                        .host
+                        .as_ref()
+                        .map(crate::host_resources::Resources::scope),
+                    host_sources: self.host_sources.clone(),
+                    roots: Arc::clone(&self.roots),
+                    local_paths: self.local_paths,
+                    base: self.base.clone(),
+                    entry: self.entry.clone(),
+                    snapshots: self.snapshots.clone(),
+                    by_path: self.by_path.clone(),
+                    by_identity: self.by_identity.clone(),
+                    reads: self.reads,
+                },
+                compiled: Vec::new(),
+            },
+            Some(resolver) => {
+                let entry = self
+                    .entry
+                    .clone()
+                    .or_else(|| self.host.as_ref().map(|host| host.base.clone()))
+                    .unwrap_or_else(|| "/".into());
+                RunScope {
+                    resources: Self {
+                        host: Some(crate::host_resources::Resources::at(
+                            resolver,
+                            entry.clone(),
+                        )),
+                        host_sources: vec![],
+                        roots: Arc::new([]),
+                        local_paths: false,
+                        base: vec![],
+                        entry: Some(entry),
+                        snapshots: vec![],
+                        by_path: BTreeMap::new(),
+                        by_identity: BTreeMap::new(),
+                        reads: 0,
+                    },
+                    compiled: self.retain_sources(),
+                }
+            }
         }
     }
 
@@ -136,9 +231,10 @@ impl Resources {
         Ok(Self {
             host: None,
             host_sources: vec![],
-            roots,
+            roots: roots.into(),
             local_paths: false,
             base,
+            entry: None,
             snapshots: Vec::new(),
             by_path: BTreeMap::new(),
             by_identity: BTreeMap::new(),
@@ -387,6 +483,7 @@ impl Resources {
     pub fn select_entry_base(&mut self, identity: &str) -> Result<(), Error> {
         if let Some(host) = &mut self.host {
             host.base = identity.into();
+            self.entry = Some(identity.into());
             return Ok(());
         }
         let base = file_base(identity)?;
@@ -405,6 +502,7 @@ impl Resources {
             WalkError::Failure(error) => error,
         })?;
         self.base = base;
+        self.entry = Some(identity.into());
         Ok(())
     }
     fn capture_at(
@@ -579,7 +677,7 @@ impl Resources {
             .iter()
             .map(|a| a.key.clone())
             .collect::<BTreeSet<_>>();
-        for root in &self.roots {
+        for root in self.roots.iter() {
             if let Ok(anchor) = self.relative_anchor(&root.canonical, written) {
                 if seen.insert(anchor.key.clone()) {
                     anchors.push(anchor);

@@ -32,6 +32,7 @@ impl Fixture {
         let specification = self.0.join("spec.yaml");
         let specification = specification.to_str().unwrap();
         file_application::domain(
+            yamaa_core::project_function::Language::Python,
             Request {
                 specification,
                 environment: None,

@@ -29,10 +29,14 @@ fn converted(stored: &ColumnDescriptor) -> core_profile::Converted {
         _ => C::Other,
     }
 }
+/// The embedded Arrow schema chooses a layout, never a type (REQ-1032): every
+/// string layout is text, and a dictionary reads as its value type whatever
+/// its index type.
 fn representation(arrow: &DataType) -> core_profile::Representation {
     use core_profile::{Representation as R, Unit};
     match arrow {
-        DataType::Utf8 | DataType::LargeUtf8 => R::Text,
+        DataType::Utf8 | DataType::LargeUtf8 | DataType::Utf8View => R::Text,
+        DataType::Dictionary(_, value) => representation(value),
         DataType::Int64 => R::Int64,
         DataType::Float64 => R::Float64,
         DataType::Date32 => R::Date32,
@@ -202,16 +206,104 @@ mod tests {
                 ConvertedType::NONE,
                 DataType::Binary,
             ),
-            (
-                Physical::BYTE_ARRAY,
-                Some(LogicalType::String),
-                ConvertedType::UTF8,
-                DataType::Dictionary(Box::new(DataType::Int32), Box::new(DataType::Utf8)),
-            ),
             (Physical::INT32, None, ConvertedType::NONE, DataType::Int32),
         ] {
             let stored = descriptor(physical, logical, converted);
             assert_eq!(column_type(&stored.column(0), &arrow), None);
+        }
+    }
+    #[test]
+    fn view_and_dictionary_layouts_read_as_their_value_type() {
+        fn dictionary(index: DataType, value: DataType) -> DataType {
+            DataType::Dictionary(Box::new(index), Box::new(value))
+        }
+        let text = descriptor(
+            Physical::BYTE_ARRAY,
+            Some(LogicalType::String),
+            ConvertedType::UTF8,
+        );
+        let legacy = descriptor(Physical::BYTE_ARRAY, None, ConvertedType::UTF8);
+        for stored in [&text, &legacy] {
+            assert_eq!(
+                column_type(&stored.column(0), &DataType::Utf8View),
+                Some(ColumnType::Str)
+            );
+            for index in [
+                DataType::Int8,
+                DataType::Int16,
+                DataType::Int32,
+                DataType::Int64,
+                DataType::UInt8,
+                DataType::UInt16,
+                DataType::UInt32,
+                DataType::UInt64,
+            ] {
+                for value in [DataType::Utf8, DataType::LargeUtf8, DataType::Utf8View] {
+                    let arrow = dictionary(index.clone(), value);
+                    assert_eq!(
+                        column_type(&stored.column(0), &arrow),
+                        Some(ColumnType::Str),
+                        "{arrow}"
+                    );
+                }
+            }
+        }
+        let timestamp = Some(crate::storage_api::timestamp_micros(false));
+        for (physical, logical, converted, value, expected) in [
+            (
+                Physical::INT64,
+                None,
+                ConvertedType::NONE,
+                DataType::Int64,
+                ColumnType::Int,
+            ),
+            (
+                Physical::DOUBLE,
+                None,
+                ConvertedType::NONE,
+                DataType::Float64,
+                ColumnType::Float,
+            ),
+            (
+                Physical::INT32,
+                Some(LogicalType::Date),
+                ConvertedType::DATE,
+                DataType::Date32,
+                ColumnType::Date,
+            ),
+            (
+                Physical::INT64,
+                timestamp.clone(),
+                ConvertedType::NONE,
+                DataType::Timestamp(ArrowUnit::Microsecond, None),
+                ColumnType::DateTime,
+            ),
+        ] {
+            let stored = descriptor(physical, logical, converted);
+            let arrow = dictionary(DataType::Int32, value);
+            assert_eq!(column_type(&stored.column(0), &arrow), Some(expected));
+        }
+        // A layout never supplies a type the stored pair lacks, and a refused
+        // value type stays refused inside a dictionary.
+        let binary = descriptor(Physical::BYTE_ARRAY, None, ConvertedType::NONE);
+        for (stored, arrow) in [
+            (&binary, DataType::Utf8View),
+            (&binary, dictionary(DataType::Int32, DataType::Utf8)),
+            (&binary, dictionary(DataType::Int32, DataType::Binary)),
+            (&text, dictionary(DataType::Int32, DataType::Binary)),
+            (
+                &descriptor(Physical::INT32, None, ConvertedType::NONE),
+                dictionary(DataType::Int32, DataType::Int32),
+            ),
+            (
+                &descriptor(Physical::INT64, timestamp, ConvertedType::NONE),
+                dictionary(
+                    DataType::Int32,
+                    DataType::Timestamp(ArrowUnit::Microsecond, Some("UTC".into())),
+                ),
+            ),
+        ] {
+            assert_eq!(column_type(&stored.column(0), &arrow), None, "{arrow}");
         }
     }
     #[test]

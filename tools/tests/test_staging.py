@@ -5,11 +5,13 @@ import csv
 import io
 import json
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 from unittest import mock
 
 from tools.staging import stage_r_package as staging
+from tools.staging import stage_specification_inputs as specification
 
 
 class StagingTests(unittest.TestCase):
@@ -33,15 +35,32 @@ class StagingTests(unittest.TestCase):
                     copied = embedded / source.relative_to(staging.WORKSPACE)
                     self.assertFalse(copied.is_symlink())
                     self.assertEqual(source.read_bytes(), copied.read_bytes())
-            self.assertTrue((embedded / "rust-toolchain.toml").is_file())
+            # The unchanged declaration names only what a build needs.
+            self.assertEqual(
+                (embedded / "rust-toolchain.toml").read_bytes(),
+                (staging.WORKSPACE / "rust-toolchain.toml").read_bytes(),
+            )
             for source in (staging.WORKSPACE / "vendor").rglob("*"):
                 if source.is_file():
                     copied = embedded / source.relative_to(staging.WORKSPACE)
                     self.assertFalse(copied.is_symlink())
                     self.assertEqual(source.read_bytes(), copied.read_bytes())
+            # The installed R package carries the Python package notices.
+            notices = tomllib.loads(
+                (staging.REPOSITORY / "python/pyproject.toml").read_text(
+                    encoding="utf-8"
+                )
+            )["project"]["license-files"]
+            self.assertIn("LICENSE.txt", notices)
+            self.assertIn("LICENSE-THIRD-PARTY.txt", notices)
+            for name in notices:
+                self.assertEqual(
+                    (destination / "inst" / name).read_bytes(),
+                    (staging.REPOSITORY / "python" / name).read_bytes(),
+                )
             self.assertEqual(
-                (destination / "inst/LICENSE-YAML.txt").read_bytes(),
-                (staging.REPOSITORY / "python/LICENSE-YAML.txt").read_bytes(),
+                (destination / "inst/LICENSE.txt").read_bytes(),
+                (staging.REPOSITORY / "LICENSE").read_bytes(),
             )
             for author in ("ChenYuheng", "Ethiraric"):
                 self.assertIn(
@@ -126,14 +145,42 @@ class StagingTests(unittest.TestCase):
                     json.loads(truth.read_text()),
                 )
 
-            # Both copies retain the fixture-owned facts and requirement citations.
+            # Installed inputs are what the installed R suites read, and each
+            # third-party fixture keeps its license beside it.
+            resources = destination / "inst"
+            for path in resources.rglob("*"):
+                if path.is_file():
+                    relative = path.relative_to(resources).as_posix()
+                    left_out = False
+                    for pattern in staging.UNREAD_BY_R_SUITES:
+                        if staging.matches(relative, pattern.removeprefix("!")):
+                            left_out = not pattern.startswith("!")
+                    self.assertFalse(left_out, relative)
+            self.assertFalse((resources / "host_fixtures.py").exists())
+            self.assertFalse((resources / "define-fixtures/schemas").exists())
+            self.assertEqual(
+                [path.relative_to(resources) for path in resources.rglob("uv.lock")],
+                [Path("project-original/negative-function-contract/python/uv.lock")],
+            )
+            self.assertEqual(list(original.glob("*.json")), [])
+            fixtures = staging.WORKSPACE / "crates/yamaa-adapters/tests/fixtures/sas"
+            for name in ("LICENSE-haven.txt", "LICENSE-pandas.txt"):
+                self.assertEqual(
+                    (resources / "host-fixtures/sas" / name).read_bytes(),
+                    (fixtures / name).read_bytes(),
+                )
+            self.assertFalse((resources / "host-fixtures/sas/README.md").exists())
+
+    def test_shared_specification_inputs_keep_both_preparation_copies(self):
+        """Both copies retain the fixture-owned facts and requirement citations."""
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / "specification-original"
+            specification.stage(destination)
             source_preparation = (
                 staging.WORKSPACE
                 / "crates/yamaa-adapters/tests/fixtures/inheritance_preparation.tsv"
             )
-            retained_preparation = (
-                destination / "inst/specification-original/inheritance-preparation.tsv"
-            )
+            retained_preparation = destination / "inheritance-preparation.tsv"
             self.assertEqual(
                 retained_preparation.read_bytes(), source_preparation.read_bytes()
             )
@@ -150,6 +197,48 @@ class StagingTests(unittest.TestCase):
                 for row in rows:
                     row["expected"] = json.loads(row["expected"])
             self.assertEqual(historical, normative)
+
+    def test_unread_inputs_follow_gitignore_order_and_refuse_stale_patterns(self):
+        with tempfile.TemporaryDirectory() as directory:
+            resources = Path(directory)
+            for name in (
+                "cases/kept/spec.yaml",
+                "cases/held/spec.yaml",
+                "cases/held/input/data.csv",
+                "pq/read.parquet",
+                "pq/unread.parquet",
+                "truth.json",
+                "deep/truth.json",
+            ):
+                (resources / name).parent.mkdir(parents=True, exist_ok=True)
+                (resources / name).write_text(name)
+            staging.leave_out_unread_inputs(
+                resources,
+                ("cases/held/**", "pq/*", "!pq/read.*", "*.json"),
+            )
+            self.assertEqual(
+                sorted(
+                    path.relative_to(resources).as_posix()
+                    for path in resources.rglob("*")
+                ),
+                [
+                    "cases",
+                    "cases/kept",
+                    "cases/kept/spec.yaml",
+                    "deep",
+                    "deep/truth.json",
+                    "pq",
+                    "pq/read.parquet",
+                ],
+            )
+            # A stale pattern is refused before any staged file is removed.
+            for stale in ("cases/held/**", "!pq/unread.parquet"):
+                with (
+                    self.subTest(stale=stale),
+                    self.assertRaisesRegex(ValueError, "matches no staged file"),
+                ):
+                    staging.leave_out_unread_inputs(resources, ("pq/*", stale))
+                self.assertTrue((resources / "pq/read.parquet").is_file())
 
     def test_missing_lock_refuses_before_staging(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -222,6 +222,9 @@ UNICODE_DATA_AND_NOTICES = {
     "rust/crates/yamaa-python/LICENSE-UNICODE.txt",
     "R/yamaa/inst/LICENSE-UNICODE.txt",
     "python/LICENSE-UNICODE.txt",
+    # Generated from the crates' own license, copyright and NOTICE files.
+    "R/yamaa/inst/LICENSE-THIRD-PARTY.txt",
+    "python/LICENSE-THIRD-PARTY.txt",
 }
 ASCII_SOURCE_IGNORED_PARTS = {
     ".git",

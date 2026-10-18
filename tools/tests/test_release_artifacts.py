@@ -1,8 +1,8 @@
 """Release only complete native qualification and its unchanged tested packages."""
 
+import contextlib
 import copy
 import io
-import itertools
 import os
 import stat
 import subprocess
@@ -14,14 +14,19 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
+import yaml
 from tools.ci import publish_release as publisher
 from tools.ci import select_release_artifacts as release
 from tools.paths import ROOT
+from tools.validation._repository_yaml import UniqueKeyLoader
 
 MATRIX = release.native
-VERSION = tomllib.loads((ROOT / "python/pyproject.toml").read_text(encoding="utf-8"))[
+PROJECT = tomllib.loads((ROOT / "python/pyproject.toml").read_text(encoding="utf-8"))[
     "project"
-]["version"]
+]
+VERSION = PROJECT["version"]
+# Every package carries the project license and these notices unchanged.
+NOTICES = PROJECT["license-files"]
 TAG = f"yamaa-v{VERSION}"
 OTHER_VERSION = (
     VERSION.rsplit(".", 1)[0] + "." + str(int(VERSION.rsplit(".", 1)[1]) + 1)
@@ -50,65 +55,52 @@ def native_run():
     }
 
 
-def native_jobs():
-    # Independent expected routes and critical step names, using the one owned
-    # platform/interpreter/form inventory rather than a second release matrix.
-    jobs = {
-        "portable-math-exact": ["Compare every candidate bit across the native matrix"],
-        "public-cohort-complete-runs": ["Compare complete installed host reports"],
-    }
-    for platform in MATRIX.PLATFORMS:
-        jobs[f"native-rust ({platform}, {MATRIX.BUILD_PYTHON})"] = [
-            "Test shared workspace"
-        ]
-        jobs[f"native-dist ({platform}, {MATRIX.BUILD_PYTHON})"] = [
-            "Build wheel and source archive",
-            "Check Python distribution contents",
-        ]
-        jobs[f"native-r ({platform})"] = [
-            "Build and install R outside checkout",
-            "Report installed R public benchmark conformance",
-            "Run installed R supplemental suites outside checkout",
-            "Check R source package outside checkout",
-        ]
-    for platform, python, form in itertools.product(
-        MATRIX.PLATFORMS, MATRIX.PYTHONS, MATRIX.FORMS
-    ):
-        jobs[f"native-qualify ({platform}, {python}, {form})"] = [
-            "Install the wheel"
-            if form == "wheel"
-            else "Rebuild and install from the source archive",
-            "Report installed Python public benchmark conformance",
-            "Qualify the installed package outside checkout",
-        ]
-    rows = [
-        {
-            "name": name,
-            "status": "completed",
-            "conclusion": "success",
-            "head_sha": REVISION,
-            "run_attempt": 2,
-            "steps": [
-                {"name": step, "status": "completed", "conclusion": "success"}
-                for step in steps
-            ],
-        }
-        for name, steps in jobs.items()
-    ]
+# Each attempt's job start, artifact upload and job completion. The run was
+# re-run an hour after attempt 1 completed; attempt 2 qualifies.
+ATTEMPTS = {
+    1: ("2026-01-01T01:00:00Z", "2026-01-01T01:15:00Z", "2026-01-01T01:30:00Z"),
+    2: ("2026-01-01T02:00:00Z", "2026-01-01T02:15:00Z", "2026-01-01T02:30:00Z"),
+}
+
+
+def native_jobs(carried_over=()):
+    """List the qualifying attempt's jobs as its jobs endpoint does.
+
+    The jobs and critical steps are the selector's own; the native.yml
+    contract test checks them against the workflow. "Re-run failed jobs"
+    lists a job it did not run again with attempt 1's execution times.
+    """
+    rows = []
+    for name, steps in release.required_jobs(MATRIX.coverage()).items():
+        started, _, completed = ATTEMPTS[1 if name in carried_over else 2]
+        rows.append(
+            {
+                "name": name,
+                "status": "completed",
+                "conclusion": "success",
+                "head_sha": REVISION,
+                "run_attempt": 2,
+                "started_at": started,
+                "completed_at": completed,
+                "steps": [
+                    {"name": step, "status": "completed", "conclusion": "success"}
+                    for step in steps
+                ],
+            }
+        )
     return rows
 
 
-def native_artifacts():
-    names = [
-        f"native-python-{platform}-{MATRIX.BUILD_PYTHON}"
-        for platform in MATRIX.PLATFORMS
-    ]
-    names.append("native-r-ubuntu-24.04")
+def native_artifacts(attempt=2):
+    """List the release artifacts one attempt's producing jobs uploaded."""
+    producers, _ = release.release_artifacts(MATRIX.coverage())
     return [
         {
-            "id": index + 10,
+            # Artifact IDs are unique across a run's attempts.
+            "id": index + (10 if attempt == 2 else 20),
             "name": name,
             "expired": False,
+            "created_at": ATTEMPTS[attempt][1],
             "workflow_run": {
                 "id": 7,
                 "head_sha": REVISION,
@@ -116,8 +108,32 @@ def native_artifacts():
                 "head_repository_id": REPOSITORY["id"],
             },
         }
-        for index, name in enumerate(names)
+        for index, name in enumerate(producers)
     ]
+
+
+def tagged_repository(root, messages):
+    """Commit once on main and tag that commit under each name.
+
+    A message makes an annotated tag; None makes a lightweight one.
+    """
+    for arguments in (
+        ("init", "-b", "main"),
+        ("config", "user.name", "release test"),
+        ("config", "user.email", "release-test@example.invalid"),
+        ("commit", "--allow-empty", "-m", "qualified"),
+        ("update-ref", "refs/remotes/origin/main", "HEAD"),
+        *(
+            ("tag", name) if message is None else ("tag", "-a", name, "-m", message)
+            for name, message in messages.items()
+        ),
+    ):
+        subprocess.run(
+            ["git", "-C", str(root), *arguments],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
 
 
 def tar(path, members):
@@ -129,9 +145,7 @@ def tar(path, members):
 
 
 def downloads(root):
-    licenses = {
-        path.name: path.read_bytes() for path in (ROOT / "python").glob("LICENSE-*.txt")
-    }
+    licenses = {name: (ROOT / "python" / name).read_bytes() for name in NOTICES}
     tags = ["manylinux_2_39_x86_64", "macosx_11_0_arm64", "win_amd64"]
     for platform, tag in zip(MATRIX.PLATFORMS, tags, strict=True):
         directory = root / f"native-python-{platform}-{MATRIX.BUILD_PYTHON}"
@@ -153,8 +167,10 @@ def downloads(root):
             {
                 f"yamaa-{VERSION}/PKG-INFO": metadata,
                 f"yamaa-{VERSION}/platform.txt": platform.encode(),
+                # Vendored sources keep their own, differently worded notices.
+                f"yamaa-{VERSION}/rust/vendor/saphyr-parser/LICENSE": b"vendored\n",
                 **{
-                    f"yamaa-{VERSION}/python/{name}": payload
+                    f"yamaa-{VERSION}/{name}": payload
                     for name, payload in licenses.items()
                 },
             },
@@ -165,6 +181,8 @@ def downloads(root):
         directory / f"yamaa_{VERSION}.tar.gz",
         {
             "yamaa/DESCRIPTION": f"Package: yamaa\nVersion: {VERSION}\n".encode(),
+            # R's MIT license stub, which the full text in inst/ accompanies.
+            "yamaa/LICENSE": b"YEAR: 2026\nCOPYRIGHT HOLDER: yamaa contributors\n",
             **{f"yamaa/inst/{name}": payload for name, payload in licenses.items()},
         },
     )
@@ -174,6 +192,12 @@ class QualificationSelection(unittest.TestCase):
     def setUp(self):
         self.run = native_run()
         self.coverage = MATRIX.coverage()
+        self.jobs = release.validate_jobs(native_jobs(), self.coverage, self.run)
+
+    def select(self, artifacts, jobs=None):
+        return release.select_artifacts(
+            artifacts, self.coverage, self.run, REPOSITORY, jobs or self.jobs
+        )
 
     def test_main_schedule_dispatch_and_same_repository_qualification_push_are_complete(
         self,
@@ -255,9 +279,7 @@ class QualificationSelection(unittest.TestCase):
     def test_artifacts_require_unique_unexpired_same_run_and_repository_identities(
         self,
     ):
-        selected, linux = release.select_artifacts(
-            native_artifacts(), self.coverage, self.run, REPOSITORY
-        )
+        selected, linux = self.select(native_artifacts())
         self.assertEqual(linux, "ubuntu-24.04")
         self.assertEqual(len(selected), 4)
         for index in range(len(selected)):
@@ -287,9 +309,57 @@ class QualificationSelection(unittest.TestCase):
                     self.subTest(index=index, defect=defect),
                     self.assertRaises(ValueError),
                 ):
-                    release.select_artifacts(
-                        artifacts, self.coverage, self.run, REPOSITORY
-                    )
+                    self.select(artifacts)
+
+    def test_a_full_rerun_selects_the_artifacts_its_qualifying_attempt_uploaded(self):
+        # "Re-run all jobs" keeps attempt 1's artifacts beside attempt 2's.
+        earlier, qualifying = native_artifacts(attempt=1), native_artifacts()
+        for artifacts in (earlier + qualifying, qualifying + earlier):
+            self.assertEqual(self.select(artifacts)[0], qualifying)
+
+    def test_a_failed_job_rerun_keeps_the_artifacts_of_the_producers_it_carried_over(
+        self,
+    ):
+        producers, _ = release.release_artifacts(self.coverage)
+        jobs = release.validate_jobs(
+            native_jobs(carried_over=producers.values()), self.coverage, self.run
+        )
+        earlier = native_artifacts(attempt=1)
+        self.assertEqual(self.select(earlier, jobs)[0], earlier)
+        # A producer that attempt 2 did not run uploaded nothing during it.
+        with self.assertRaisesRegex(ValueError, "missing or ambiguous"):
+            self.select(native_artifacts(), jobs)
+
+    def test_an_artifact_counts_only_if_created_while_its_producer_ran(self):
+        started, _, completed = ATTEMPTS[2]
+        for created in (started, completed):
+            artifacts = native_artifacts()
+            artifacts[0]["created_at"] = created
+            self.assertEqual(self.select(artifacts)[0], artifacts)
+        for created, error in [
+            ("2026-01-01T01:59:59Z", "missing or ambiguous"),
+            ("2026-01-01T02:30:01Z", "missing or ambiguous"),
+            (None, "malformed GitHub timestamp"),
+            ("2026-01-01 02:15:00", "malformed GitHub timestamp"),
+            ("2026-01-01T02:15:00+00:00", "malformed GitHub timestamp"),
+            ("2026-01-01T02:15:00.5Z", "malformed GitHub timestamp"),
+        ]:
+            artifacts = native_artifacts()
+            artifacts[0]["created_at"] = created
+            with (
+                self.subTest(created=created),
+                self.assertRaisesRegex(ValueError, error),
+            ):
+                self.select(artifacts)
+        producer = next(iter(release.release_artifacts(self.coverage)[0].values()))
+        for field in ("started_at", "completed_at"):
+            jobs = copy.deepcopy(self.jobs)
+            del jobs[producer][field]
+            with (
+                self.subTest(field=field),
+                self.assertRaisesRegex(ValueError, "malformed GitHub timestamp"),
+            ):
+                self.select(native_artifacts(), jobs)
 
     def test_paginated_jobs_artifacts_and_releases_keep_all_pages(self):
         for field in ("jobs", "artifacts", "workflow_runs", None):
@@ -379,7 +449,7 @@ class DownloadedPackages(unittest.TestCase):
                 for entry in source.infolist():
                     payload = source.read(entry.filename)
                     if defect == "missing-license" and entry.filename.endswith(
-                        "LICENSE-YAML.txt"
+                        "LICENSE-THIRD-PARTY.txt"
                     ):
                         continue
                     if entry.filename.endswith("/METADATA"):
@@ -392,7 +462,7 @@ class DownloadedPackages(unittest.TestCase):
                                 version_header, version_header + b"\n" + version_header
                             )
                     if defect == "changed-license" and entry.filename.endswith(
-                        "LICENSE-YAML.txt"
+                        "LICENSE-THIRD-PARTY.txt"
                     ):
                         payload = b"not the required notices"
                     target.writestr(entry, payload)
@@ -413,6 +483,46 @@ class DownloadedPackages(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "R DESCRIPTION"):
             self.select()
 
+    def test_source_archives_carry_each_notice_at_its_package_location(self):
+        """A copy elsewhere in an archive does not replace the package notice."""
+        sdist = next(self.directory.rglob(f"yamaa-{VERSION}.tar.gz"))
+        r_source = next((self.directory / "native-r-ubuntu-24.04").iterdir())
+        stub = b"YEAR: 2026\nCOPYRIGHT HOLDER: yamaa contributors\n"
+        for path, name, moved, changed in (
+            (
+                sdist,
+                f"yamaa-{VERSION}/LICENSE-THIRD-PARTY.txt",
+                f"yamaa-{VERSION}/python/LICENSE-THIRD-PARTY.txt",
+                None,
+            ),
+            (sdist, f"yamaa-{VERSION}/LICENSE.txt", None, None),
+            (r_source, "yamaa/inst/LICENSE-THIRD-PARTY.txt", None, None),
+            (r_source, "yamaa/inst/LICENSE.txt", "yamaa/LICENSE.txt", None),
+            (r_source, "yamaa/inst/LICENSE.txt", None, stub),
+        ):
+            original = path.read_bytes()
+            with tarfile.open(path) as source:
+                members = {
+                    entry.name: source.extractfile(entry).read()
+                    for entry in source
+                    if entry.isfile()
+                }
+            payload = members.pop(name)
+            if moved is not None:
+                members[moved] = payload
+            if changed is not None:
+                members[name] = changed
+            tar(path, members)
+            try:
+                with (
+                    self.subTest(archive=path.name, member=name, moved=moved),
+                    self.assertRaisesRegex(ValueError, "required notice"),
+                ):
+                    self.select()
+            finally:
+                path.write_bytes(original)
+        self.assertEqual(len(self.select()), 5)
+
     def test_symlinks_or_subdirectories_are_not_release_assets(self):
         extra = self.directory / self.selected[0]["name"] / "unexpected"
         extra.mkdir()
@@ -420,9 +530,59 @@ class DownloadedPackages(unittest.TestCase):
             self.select()
 
 
+class QualifiedRunTrailer(unittest.TestCase):
+    """The annotated release tag names the one native run it publishes."""
+
+    def runs(self, messages):
+        """Read the run each tag names, or the refusal, from one repository."""
+        with tempfile.TemporaryDirectory() as directory:
+            names = {f"tag-{index}": message for index, message in enumerate(messages)}
+            tagged_repository(Path(directory), names)
+            results = []
+            for name in names:
+                try:
+                    results.append(release.qualified_run(Path(directory), name))
+                except ValueError as error:
+                    results.append(str(error))
+            return results
+
+    def test_the_closing_trailer_paragraph_names_the_run(self):
+        messages = [
+            "yamaa 1.0.0\n\nQualified-Run: 7",
+            "yamaa 1.0.0\n\nqualified-run:7",
+            "yamaa 1.0.0\n\nReviewed.\n\nReviewed-by: release test\nQualified-Run: 7",
+        ]
+        self.assertEqual(self.runs(messages), [7] * len(messages))
+
+    def test_a_lightweight_tag_or_a_missing_or_malformed_trailer_is_refused(self):
+        cases = [
+            (None, "not an annotated tag"),
+            # The subject paragraph is never a trailer paragraph.
+            ("Qualified-Run: 7", "names no native run"),
+            ("yamaa 1.0.0\n\nReviewed.", "names no native run"),
+            ("yamaa 1.0.0\n\nReviewed-by: release test", "names no native run"),
+            ("yamaa 1.0.0\n\nQualified-Run: 7\n\nReviewed.", "names no native run"),
+            ("yamaa 1.0.0\n\nQualified-Run: 7\nreviewed", "names no native run"),
+            ("yamaa 1.0.0\n\nQualified-Run:", "not: ''"),
+            ("yamaa 1.0.0\n\nQualified-Run: 0", "not: '0'"),
+            ("yamaa 1.0.0\n\nQualified-Run: 07", "not: '07'"),
+            ("yamaa 1.0.0\n\nQualified-Run: -7", "not: '-7'"),
+            ("yamaa 1.0.0\n\nQualified-Run: 7 8", "not: '7 8'"),
+            ("yamaa 1.0.0\n\nQualified-Run: 7\nQualified-Run: 8", "not: '7', '8'"),
+            ("yamaa 1.0.0\n\nQualified-Run: 7\nQualified-Run: 7", "not: '7', '7'"),
+        ]
+        results = self.runs([message for message, _ in cases])
+        for (message, error), result in zip(cases, results, strict=True):
+            with self.subTest(message=message):
+                self.assertIsInstance(result, str)
+                self.assertIn(error, result)
+
+
 class PublicationBoundary(unittest.TestCase):
     def test_coordinated_version_and_committed_notes_are_required(self):
         self.assertEqual(release.release_version(ROOT, TAG), VERSION)
+        # A rehearsal names no tag.
+        self.assertEqual(release.release_version(ROOT, None), VERSION)
         for tag in (
             f"v{VERSION}",
             f"yamaa-v{OTHER_VERSION}",
@@ -458,13 +618,18 @@ class PublicationBoundary(unittest.TestCase):
             git("update-ref", "refs/remotes/origin/main", revision)
             git("tag", "-a", TAG, "-m", "qualified release")
             self.assertEqual(release.tagged_revision(root, TAG), revision)
+            # A rehearsal selects for the checkout, which must belong to main.
+            self.assertEqual(release.checked_out_revision(root), revision)
             (root / "file").write_text("unqualified")
             git("commit", "-am", "side branch")
             with self.assertRaisesRegex(ValueError, "peeled tag"):
                 release.tagged_revision(root, TAG)
-            git("tag", "-a", "yamaa-v0.5.0", "-m", "outside main")
             with self.assertRaisesRegex(ValueError, "main ancestry"):
-                release.tagged_revision(root, "yamaa-v0.5.0")
+                release.checked_out_revision(root)
+            outside = f"yamaa-v{OTHER_VERSION}"
+            git("tag", "-a", outside, "-m", "outside main")
+            with self.assertRaisesRegex(ValueError, "main ancestry"):
+                release.tagged_revision(root, outside)
 
     def test_publication_rechecks_the_remote_annotated_tag_before_creating_a_release(
         self,
@@ -545,78 +710,138 @@ class PublicationBoundary(unittest.TestCase):
     def test_real_selection_uses_paginated_attempt_jobs_and_never_rebuilds_or_publishes(
         self,
     ):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            source, destination = root / "source", root / "selected"
-            downloads(source)
-            requests, commands = [], []
+        producers = release.release_artifacts(MATRIX.coverage())[0].values()
+        for label, listed_jobs, listed_artifacts, expected in [
+            ("one attempt", native_jobs(), native_artifacts(), native_artifacts()),
+            (
+                "re-run all jobs",
+                native_jobs(),
+                native_artifacts(attempt=1) + native_artifacts(),
+                native_artifacts(),
+            ),
+            (
+                "re-run failed jobs",
+                native_jobs(carried_over=producers),
+                native_artifacts(attempt=1),
+                native_artifacts(attempt=1),
+            ),
+        ]:
+            # A release reads the run from its tag; a rehearsal is given it.
+            for tag in (TAG, None):
+                with (
+                    self.subTest(label, tag=tag),
+                    tempfile.TemporaryDirectory() as directory,
+                ):
+                    self.check_selection(
+                        Path(directory), listed_jobs, listed_artifacts, expected, tag
+                    )
 
-            def gh(*args):
-                requests.append(args)
-                endpoint = args[-1]
-                if endpoint == f"repos/{REPOSITORY['full_name']}":
-                    return dict(REPOSITORY)
-                if "/releases?" in endpoint:
-                    return [[], []]
-                if "/runs?" in endpoint:
-                    return [{"workflow_runs": []}, {"workflow_runs": [native_run()]}]
-                if "/attempts/2/jobs?" in endpoint:
-                    jobs = native_jobs()
-                    return [{"jobs": jobs[:10]}, {"jobs": jobs[10:]}]
-                if "/artifacts?" in endpoint:
-                    artifacts = native_artifacts()
-                    return [{"artifacts": artifacts[:2]}, {"artifacts": artifacts[2:]}]
-                self.fail(endpoint)
+    def check_selection(self, root, listed_jobs, listed_artifacts, expected, tag):
+        source, destination = root / "source", root / "selected"
+        downloads(source)
+        requests, commands = [], []
 
-            def download(command, **kwargs):
-                commands.append(command)
-                self.assertEqual(command[:2], ["gh", "api"])
-                self.assertTrue(kwargs["check"])
-                selected = next(
-                    artifact
-                    for artifact in native_artifacts()
-                    if command[2]
-                    == f"repos/{REPOSITORY['full_name']}/actions/artifacts/{artifact['id']}/zip"
-                )
-                with zipfile.ZipFile(kwargs["stdout"], "w") as archive:
-                    for path in (source / selected["name"]).iterdir():
-                        archive.writestr(path.name, path.read_bytes())
+        def gh(*args):
+            requests.append(args)
+            endpoint = args[-1]
+            if endpoint == f"repos/{REPOSITORY['full_name']}":
+                return dict(REPOSITORY)
+            if "/releases?" in endpoint:
+                return [[], []]
+            if endpoint == f"repos/{REPOSITORY['full_name']}/actions/runs/7":
+                return native_run()
+            if "/attempts/2/jobs?" in endpoint:
+                return [{"jobs": listed_jobs[:10]}, {"jobs": listed_jobs[10:]}]
+            if "/artifacts?" in endpoint:
+                return [
+                    {"artifacts": listed_artifacts[:2]},
+                    {"artifacts": listed_artifacts[2:]},
+                ]
+            self.fail(endpoint)
 
-            with (
-                patch.object(release, "tagged_revision", return_value=REVISION),
-                patch.object(release, "gh_json", side_effect=gh),
-                patch.object(release.subprocess, "run", side_effect=download),
-            ):
-                assets = release.select_release(
-                    ROOT, REPOSITORY["full_name"], TAG, destination
-                )
-            self.assertEqual(len(commands), 4)
+        def download(command, **kwargs):
+            commands.append(command)
+            self.assertEqual(command[:2], ["gh", "api"])
+            self.assertTrue(kwargs["check"])
+            selected = next(
+                artifact
+                for artifact in expected
+                if command[2]
+                == f"repos/{REPOSITORY['full_name']}/actions/artifacts/{artifact['id']}/zip"
+            )
+            with zipfile.ZipFile(kwargs["stdout"], "w") as archive:
+                for path in (source / selected["name"]).iterdir():
+                    archive.writestr(path.name, path.read_bytes())
+
+        with (
+            patch.object(release, "tagged_revision", return_value=REVISION) as tagged,
+            patch.object(release, "qualified_run", return_value=7) as named,
+            patch.object(
+                release, "checked_out_revision", return_value=REVISION
+            ) as checkout,
+            patch.object(release, "gh_json", side_effect=gh),
+            patch.object(release.subprocess, "run", side_effect=download),
+        ):
+            assets = release.select_release(
+                ROOT, REPOSITORY["full_name"], tag, destination, None if tag else 7
+            )
+        if tag is None:
+            checkout.assert_called_once_with(ROOT)
+            tagged.assert_not_called()
+            named.assert_not_called()
+        else:
+            tagged.assert_called_once_with(ROOT, TAG)
+            named.assert_called_once_with(ROOT, TAG)
+            checkout.assert_not_called()
+        endpoints = [request[-1] for request in requests]
+        # The named run alone is read, never a list a later run could win.
+        self.assertEqual(
+            [endpoint for endpoint in endpoints if "/runs" in endpoint.split("?")[0]],
+            [
+                f"repos/{REPOSITORY['full_name']}/actions/runs/7",
+                f"repos/{REPOSITORY['full_name']}/actions/runs/7/attempts/2/jobs?per_page=100",
+                f"repos/{REPOSITORY['full_name']}/actions/runs/7/artifacts?per_page=100",
+            ],
+        )
+        # Only a release looks for an existing one.
+        self.assertEqual(
+            any("/releases?" in endpoint for endpoint in endpoints), tag is not None
+        )
+        self.assertEqual(len(commands), 4)
+        self.assertEqual(
+            {command[2] for command in commands},
+            {
+                f"repos/{REPOSITORY['full_name']}/actions/artifacts/{artifact['id']}/zip"
+                for artifact in expected
+            },
+        )
+        self.assertTrue(any("/attempts/2/jobs?" in request[-1] for request in requests))
+        self.assertEqual(
+            (destination / "asset-paths.txt").read_text().splitlines(),
+            [str(path.resolve()) for path in assets],
+        )
+        # The evidence follows the committed notes as a section of its own.
+        attempt = "https://github.com/elong0527/yamaa/actions/runs/7/attempts/2"
+        self.assertEqual(
+            (destination / "release-notes.md").read_text(encoding="utf-8"),
+            (ROOT / f"docs/releases/{VERSION}.md")
+            .read_text(encoding="utf-8")
+            .rstrip("\n")
+            + "\n\n## Qualified native artifacts\n\n"
+            + f"Native qualification run: [{attempt}]({attempt}).\n\n"
+            + "".join(
+                f"- `{artifact['name']}` (artifact {artifact['id']})\n"
+                for artifact in expected
+            ),
+        )
+        self.assertEqual(
+            (destination / "source-revision.txt").read_text(), REVISION + "\n"
+        )
+        for path in assets:
             self.assertEqual(
-                {command[2] for command in commands},
-                {
-                    f"repos/{REPOSITORY['full_name']}/actions/artifacts/{artifact['id']}/zip"
-                    for artifact in native_artifacts()
-                },
+                path.read_bytes(),
+                (source / path.parent.name / path.name).read_bytes(),
             )
-            self.assertTrue(
-                any("/attempts/2/jobs?" in request[-1] for request in requests)
-            )
-            self.assertEqual(
-                (destination / "asset-paths.txt").read_text().splitlines(),
-                [str(path.resolve()) for path in assets],
-            )
-            self.assertIn(
-                "/actions/runs/7/attempts/2",
-                (destination / "release-notes.md").read_text(),
-            )
-            self.assertEqual(
-                (destination / "source-revision.txt").read_text(), REVISION + "\n"
-            )
-            for path in assets:
-                self.assertEqual(
-                    path.read_bytes(),
-                    (source / path.parent.name / path.name).read_bytes(),
-                )
 
     def test_existing_release_or_missing_qualification_never_downloads(self):
         for existing in (True, False):
@@ -625,10 +850,11 @@ class PublicationBoundary(unittest.TestCase):
                 replies = [
                     dict(REPOSITORY),
                     [[{"tag_name": TAG}]] if existing else [[]],
-                    [{"workflow_runs": []}],
+                    dict(native_run(), conclusion="failure"),
                 ]
                 with (
                     patch.object(release, "tagged_revision", return_value=REVISION),
+                    patch.object(release, "qualified_run", return_value=7),
                     patch.object(release, "gh_json", side_effect=replies),
                     patch.object(release.subprocess, "run") as download,
                     self.assertRaises(ValueError),
@@ -639,11 +865,171 @@ class PublicationBoundary(unittest.TestCase):
                 download.assert_not_called()
                 self.assertFalse(destination.exists())
 
+    def test_a_named_run_that_cannot_qualify_is_refused_before_its_artifacts(self):
+        name = REPOSITORY["full_name"]
+        for key, value in [
+            ("status", "in_progress"),
+            ("conclusion", "failure"),
+            ("head_sha", "b" * 40),
+            ("path", ".github/workflows/ci.yml"),
+            ("event", "pull_request"),
+            ("head_repository", dict(REPOSITORY, full_name="fork/yamaa")),
+            # GitHub answered for another run.
+            ("id", 8),
+        ]:
+            for tag in (TAG, None):
+                replies = {
+                    f"repos/{name}": dict(REPOSITORY),
+                    f"repos/{name}/releases?per_page=100": [[]],
+                    f"repos/{name}/actions/runs/7": dict(native_run(), **{key: value}),
+                }
+                with (
+                    self.subTest(key=key, tag=tag),
+                    tempfile.TemporaryDirectory() as directory,
+                ):
+                    destination = Path(directory) / "selected"
+                    with (
+                        patch.object(release, "tagged_revision", return_value=REVISION),
+                        patch.object(release, "qualified_run", return_value=7),
+                        patch.object(
+                            release, "checked_out_revision", return_value=REVISION
+                        ),
+                        # Any other request, such as the run's jobs or
+                        # artifacts, fails the test with a KeyError.
+                        patch.object(
+                            release,
+                            "gh_json",
+                            side_effect=lambda *args, replies=replies: replies[
+                                args[-1]
+                            ],
+                        ),
+                        patch.object(release.subprocess, "run") as download,
+                        self.assertRaisesRegex(ValueError, "native run 7 cannot"),
+                    ):
+                        release.select_release(
+                            ROOT, name, tag, destination, None if tag else 7
+                        )
+                    download.assert_not_called()
+                    self.assertFalse(destination.exists())
+
+    def test_a_tag_that_names_no_valid_run_is_refused_before_any_request(self):
+        for message, error in [
+            (None, "not an annotated tag"),
+            ("yamaa 1.0.0\n\nReviewed.", "names no native run"),
+            ("yamaa 1.0.0\n\nQualified-Run: 07", "one native run id"),
+        ]:
+            with (
+                self.subTest(message=message),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                checkout = Path(directory) / "checkout"
+                checkout.mkdir()
+                tagged_repository(checkout, {TAG: message})
+                destination = Path(directory) / "selected"
+                with (
+                    patch.object(release, "release_version", return_value=VERSION),
+                    patch.object(release, "gh_json") as gh,
+                    patch.object(release, "download_artifact") as download,
+                    self.assertRaisesRegex(ValueError, error),
+                ):
+                    release.select_release(
+                        checkout, REPOSITORY["full_name"], TAG, destination
+                    )
+                gh.assert_not_called()
+                download.assert_not_called()
+                self.assertFalse(destination.exists())
+
+    def test_the_tag_trailer_names_the_one_run_requested(self):
+        name = REPOSITORY["full_name"]
+        replies = {
+            f"repos/{name}": dict(REPOSITORY),
+            f"repos/{name}/releases?per_page=100": [[]],
+            f"repos/{name}/actions/runs/9": dict(
+                native_run(), id=9, conclusion="failure"
+            ),
+        }
+        requests = []
+
+        def gh(*args):
+            requests.append(args[-1])
+            return replies[args[-1]]
+
+        with tempfile.TemporaryDirectory() as directory:
+            checkout = Path(directory) / "checkout"
+            checkout.mkdir()
+            tagged_repository(checkout, {TAG: "yamaa 1.0.0\n\nQualified-Run: 9"})
+            with (
+                patch.object(release, "release_version", return_value=VERSION),
+                patch.object(release, "gh_json", side_effect=gh),
+                self.assertRaisesRegex(ValueError, "native run 9 cannot"),
+            ):
+                release.select_release(
+                    checkout, name, TAG, Path(directory) / "selected"
+                )
+        self.assertEqual(requests, list(replies))
+
+    def test_selection_takes_a_tag_or_a_positive_rehearsal_run_id(self):
+        for tag, run_id, error in [
+            (TAG, 7, "either"),
+            (None, None, "either"),
+            (None, 0, "positive"),
+            (None, True, "positive"),
+        ]:
+            with (
+                self.subTest(tag=tag, run_id=run_id),
+                tempfile.TemporaryDirectory() as directory,
+                patch.object(release, "gh_json") as gh,
+                self.assertRaisesRegex(ValueError, error),
+            ):
+                release.select_release(
+                    ROOT,
+                    REPOSITORY["full_name"],
+                    tag,
+                    Path(directory) / "selected",
+                    run_id,
+                )
+            gh.assert_not_called()
+
+    def test_the_command_takes_a_tag_or_a_rehearsal_run_id(self):
+        command = [
+            "select_release_artifacts",
+            "--repository",
+            REPOSITORY["full_name"],
+            "--destination",
+            "selected",
+        ]
+        for extra in ([], ["--tag", TAG, "--run-id", "7"], ["--run-id", "latest"]):
+            with (
+                self.subTest(extra=extra),
+                patch("sys.argv", command + extra),
+                patch.object(release, "select_release") as select,
+                contextlib.redirect_stderr(io.StringIO()),
+                self.assertRaises(SystemExit) as stop,
+            ):
+                release.main()
+            self.assertEqual(stop.exception.code, 2)
+            select.assert_not_called()
+        for extra, tag, run_id in [
+            (["--tag", TAG], TAG, None),
+            (["--run-id", "7"], None, 7),
+        ]:
+            with (
+                self.subTest(extra=extra),
+                patch("sys.argv", command + extra),
+                patch.object(release, "select_release", return_value=[]) as select,
+                contextlib.redirect_stdout(io.StringIO()),
+            ):
+                release.main()
+            select.assert_called_once_with(
+                ROOT, REPOSITORY["full_name"], tag, Path("selected"), run_id
+            )
+
     def test_wrong_default_branch_never_downloads(self):
         with tempfile.TemporaryDirectory() as directory:
             destination = Path(directory) / "selected"
             with (
                 patch.object(release, "tagged_revision", return_value=REVISION),
+                patch.object(release, "qualified_run", return_value=7),
                 patch.object(
                     release,
                     "gh_json",
@@ -655,6 +1041,29 @@ class PublicationBoundary(unittest.TestCase):
                 release.select_release(ROOT, REPOSITORY["full_name"], TAG, destination)
             download.assert_not_called()
             self.assertFalse(destination.exists())
+
+
+class ReleaseRehearsalWorkflow(unittest.TestCase):
+    def test_the_rehearsal_selects_with_its_read_only_token_and_never_publishes(self):
+        workflow = yaml.load(
+            (ROOT / ".github/workflows/release-rehearsal.yml").read_text(
+                encoding="utf-8"
+            ),
+            Loader=UniqueKeyLoader,
+        )
+        self.assertEqual(
+            workflow["permissions"], {"contents": "read", "actions": "read"}
+        )
+        scripts = []
+        for job in workflow["jobs"].values():
+            self.assertNotIn("permissions", job)
+            self.assertEqual(job["env"]["GH_TOKEN"], "${{ github.token }}")
+            scripts.extend(step.get("run", "") for step in job["steps"])
+        script = "\n".join(scripts)
+        self.assertIn("python -m tools.ci.select_release_artifacts", script)
+        self.assertIn("--run-id", script)
+        for publication in ("publish_release", "gh release"):
+            self.assertNotIn(publication, script)
 
 
 class ImmutableArtifactDownload(unittest.TestCase):

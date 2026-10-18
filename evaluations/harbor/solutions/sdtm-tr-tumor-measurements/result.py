@@ -4,100 +4,92 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build the SDTM TR dataset from TR_RAW.
 
-import polars as pl
+One record per collected tumor assessment. Diameter results are
+standardized to mm: a value collected in mm keeps its value, a value
+collected in cm is multiplied by 10, and a lesion too small to measure
+takes 5. Lesion states are kept as collected. A lesion that was not
+assessed carries TRSTAT "NOT DONE" and no standardized result.
+"""
+
+import csv
+import os
+
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
+
+TOO_SMALL = "TOO SMALL TO MEASURE"
+TOO_SMALL_MM = 5.0
+
+OUT_COLUMNS = [
+    "DOMAIN", "STUDYID", "USUBJID", "TRSEQ", "TRLNKID", "TRTESTCD",
+    "TRTEST", "TRORRES", "TRORRESU", "TRSTRESC", "TRSTRESN", "TRSTRESU",
+    "TRSTAT", "TRMETHOD", "TREVAL", "VISITNUM", "TRDTC",
+]
 
 
-def fmt_num(x: float | None) -> str | None:
-    import math
-
-    if x is None:
-        return None
-    if isinstance(x, float) and math.isnan(x):
-        return None
-    if float(x).is_integer():
-        return str(int(float(x)))
-    text = repr(float(x))
-    if "e" in text or "E" in text:
-        text = f"{float(x):.15f}".rstrip("0").rstrip(".")
-    else:
-        text = text.rstrip("0").rstrip(".") if "." in text else text
-    return text
+def fmt_number(value):
+    """Write a float without a trailing .0 or float artifacts."""
+    if value == int(value):
+        return str(int(value))
+    return repr(value)
 
 
-raw = pl.read_csv("/app/input/tr_raw.csv", infer_schema=False).with_columns(
-    pl.col("TRSEQ").cast(pl.Int64),
-    pl.col("VISITNUM").cast(pl.Int64),
-)
+def main():
+    with open(os.path.join(INPUT_DIR, "tr_raw.csv"), newline="") as fh:
+        rows = list(csv.DictReader(fh))
 
-is_diameter = pl.col("TRTESTCD") == "DIAMETER"
-is_too_small = pl.col("TRORRES") == "TOO SMALL TO MEASURE"
-is_missing = pl.col("TRORRES").is_null() | (pl.col("TRORRES") == "")
+    out_rows = []
+    for row in rows:
+        testcd = row["TRTESTCD"]
+        orres = row["TRORRES"]
+        orresu = row["TRORRESU"]
+        stat = row["TRSTAT"]
 
-orres_num = pl.col("TRORRES").cast(pl.Float64, strict=False)
-mm_value = (
-    pl.when(pl.col("TRORRESU") == "cm")
-    .then(orres_num * 10)
-    .otherwise(orres_num)
-)
+        stresn = ""
+        stresc = ""
+        if testcd == "DIAMETER":
+            if orres == TOO_SMALL:
+                stresn = fmt_number(TOO_SMALL_MM)
+                stresc = stresn
+            elif orres != "":
+                value = float(orres)
+                if orresu == "cm":
+                    value = value * 10
+                stresn = fmt_number(value)
+                stresc = stresn
+        elif testcd == "TUMSTATE":
+            stresc = orres
 
-stresn = (
-    pl.when(is_diameter & is_too_small)
-    .then(pl.lit(5.0))
-    .when(is_diameter & ~is_missing & ~is_too_small)
-    .then(mm_value)
-    .otherwise(pl.lit(None, dtype=pl.Float64))
-)
+        stresu = "mm" if stresn != "" else ""
 
-tr = raw.with_columns(TRSTRESN=stresn)
+        out_rows.append({
+            "DOMAIN": "TR",
+            "STUDYID": row["STUDYID"],
+            "USUBJID": row["USUBJID"],
+            "TRSEQ": row["TRSEQ"],
+            "TRLNKID": row["TRLNKID"],
+            "TRTESTCD": testcd,
+            "TRTEST": row["TRTEST"],
+            "TRORRES": orres,
+            "TRORRESU": orresu,
+            "TRSTRESC": stresc,
+            "TRSTRESN": stresn,
+            "TRSTRESU": stresu,
+            "TRSTAT": stat,
+            "TRMETHOD": row["TRMETHOD"],
+            "TREVAL": row["TREVAL"],
+            "VISITNUM": row["VISITNUM"],
+            "TRDTC": row["TRDTC"],
+        })
 
-# Standardized text: 5 for too small, the lesion state as collected, the
-# diameter in mm without a decimal point for whole numbers, else no value.
-rows = tr.to_dicts()
-for row in rows:
-    if row["TRTESTCD"] == "DIAMETER":
-        if row["TRORRES"] == "TOO SMALL TO MEASURE":
-            row["TRSTRESC"] = "5"
-        elif row["TRORRES"] is None or row["TRORRES"] == "":
-            row["TRSTRESC"] = None
-        else:
-            row["TRSTRESC"] = fmt_num(row["TRSTRESN"])
-    else:
-        if row["TRORRES"] is None or row["TRORRES"] == "":
-            row["TRSTRESC"] = None
-        else:
-            row["TRSTRESC"] = row["TRORRES"]
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    with open(os.path.join(OUTPUT_DIR, "tr.csv"), "w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=OUT_COLUMNS)
+        writer.writeheader()
+        writer.writerows(out_rows)
 
-tr = (
-    pl.DataFrame(rows)
-    .with_columns(
-        DOMAIN=pl.lit("TR"),
-        TRSTRESU=pl.when(pl.col("TRSTRESN").is_not_null())
-        .then(pl.lit("mm"))
-        .otherwise(pl.lit(None, dtype=pl.String)),
-    )
-    .select(
-        "DOMAIN",
-        "STUDYID",
-        "USUBJID",
-        "TRSEQ",
-        "TRLNKID",
-        "TRTESTCD",
-        "TRTEST",
-        "TRORRES",
-        "TRORRESU",
-        "TRSTRESC",
-        "TRSTRESN",
-        "TRSTRESU",
-        "TRSTAT",
-        "TRMETHOD",
-        "TREVAL",
-        "VISITNUM",
-        "TRDTC",
-    )
-    .sort(["USUBJID", "TRSEQ"])
-)
 
-Path("/app/output").mkdir(exist_ok=True)
-tr.write_csv("/app/output/tr.csv")
+if __name__ == "__main__":
+    main()

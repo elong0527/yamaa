@@ -4,37 +4,70 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build the SDTM EX dataset from EX_RAW.
 
-import polars as pl
+One record per administered combination component. EXSEQ numbers each
+subject's administrations from 1, ordered by start date and, on the same
+start date, by treatment name.
+"""
 
-ex_raw = pl.read_csv("/app/input/ex_raw.csv", infer_schema=False)
+import csv
+from collections import defaultdict
 
-ex = (
-    ex_raw.with_columns(
-        DOMAIN=pl.lit("EX"),
-        EXDOSE=pl.col("EXDOSE").cast(pl.Float64, strict=False),
-        EXSTDTC_DT=pl.col("EXSTDTC").str.to_date(strict=False),
-        EXADJ=pl.col("EXADJ").map_elements(
-            lambda v: None if v == "" or v is None else v, return_dtype=pl.String
-        ),
-    )
-    .sort(["STUDYID", "USUBJID", "EXSTDTC_DT", "EXTRT"])
-    .with_columns(EXSEQ=pl.col("USUBJID").cum_count().over(["STUDYID", "USUBJID"]))
-    .with_columns(EXSEQ=pl.col("EXSEQ").cast(pl.Int64))
-    .select(
-        "DOMAIN",
-        "STUDYID",
-        "USUBJID",
-        "EXSEQ",
-        "EXTRT",
-        "EXDOSE",
-        "EXDOSU",
-        "EXSTDTC",
-        "EXENDTC",
-        "EXADJ",
-    )
-)
+INPUT_PATH = "/app/input/ex_raw.csv"
+OUTPUT_PATH = "/app/output/ex.csv"
 
-Path("/app/output").mkdir(exist_ok=True)
-ex.write_csv("/app/output/ex.csv")
+COLUMNS = [
+    "DOMAIN",
+    "STUDYID",
+    "USUBJID",
+    "EXSEQ",
+    "EXTRT",
+    "EXDOSE",
+    "EXDOSU",
+    "EXSTDTC",
+    "EXENDTC",
+    "EXADJ",
+]
+
+
+def main():
+    with open(INPUT_PATH, newline="", encoding="utf-8") as f:
+        raw_rows = list(csv.DictReader(f))
+
+    by_subject = defaultdict(list)
+    for row in raw_rows:
+        by_subject[row["USUBJID"]].append(row)
+
+    out_rows = []
+    for usubjid in sorted(by_subject):
+        rows = sorted(
+            by_subject[usubjid],
+            key=lambda r: (r["EXSTDTC"] or "", r["EXTRT"] or ""),
+        )
+        for seq, row in enumerate(rows, start=1):
+            out_rows.append(
+                {
+                    "DOMAIN": "EX",
+                    "STUDYID": row["STUDYID"],
+                    "USUBJID": row["USUBJID"],
+                    "EXSEQ": seq,
+                    "EXTRT": row["EXTRT"],
+                    # A dose of 0 is an administered dose, not missing;
+                    # keep the collected value exactly as reported.
+                    "EXDOSE": row["EXDOSE"],
+                    "EXDOSU": row["EXDOSU"],
+                    "EXSTDTC": row["EXSTDTC"],
+                    "EXENDTC": row["EXENDTC"],
+                    "EXADJ": row["EXADJ"] or "",
+                }
+            )
+
+    with open(OUTPUT_PATH, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=COLUMNS)
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+
+if __name__ == "__main__":
+    main()

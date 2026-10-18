@@ -243,7 +243,7 @@ impl<T: Input + Clone> Clone for Parser<'_, T> {
 ///
 /// # Example
 /// ```
-/// # use saphyr_parser::{Event, EventReceiver, Parser};
+/// # use yamaa_saphyr_parser::{Event, EventReceiver, Parser};
 /// #
 /// /// Sink of events. Collects them into an array.
 /// struct EventSink<'input> {

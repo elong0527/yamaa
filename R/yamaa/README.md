@@ -33,9 +33,13 @@ The package is distributed as a source tarball attached to each
 install.packages("yamaa_0.4.0.tar.gz", repos = NULL, type = "source")
 ```
 
-Installation compiles the Rust engine, so it needs R 4.6.1, Rust 1.90.0 with
-Cargo, a C compiler and GNU make. On Windows, also install Rtools45 and the
-`x86_64-pc-windows-gnu` Rust target. Cargo downloads the locked Rust
+Installation compiles the Rust engine, so it needs R 4.6.1, Rust 1.90 or later
+with Cargo, a C compiler and GNU make. Under rustup, the archive's
+`rust-toolchain.toml` selects the release toolchain, Rust 1.99.1, in rustup's
+minimal profile without Clippy or rustfmt. On Windows,
+also install Rtools45 and the `x86_64-pc-windows-gnu` target on that
+toolchain: `rustup toolchain install 1.99.1 --target x86_64-pc-windows-gnu`. A
+target added to another toolchain is not used. Cargo downloads the locked Rust
 dependencies that are not already in its cache. The
 [release guidance](../../docs/release.md#supported-platforms) lists the
 supported platforms.
@@ -91,8 +95,8 @@ provide many more.
 - Package help: `?yamaa_domain`, `?yamaa_define`, `?yamaa_resource_resolver`,
   `?yamaa_resolve_specification` and `?int64_vector_conversions`.
 - Behavior shared with Python:
-  [host resources](../../python/README.md#host-resources),
-  [diagnostics](../../python/README.md#diagnostics),
+  [host resources](../../docs/articles/python.md#host-resources),
+  [diagnostics](../../docs/articles/python.md#diagnostics),
   [Arrow handoff](../../rust/README.md#arrow-host-handoff) and
   [resolved specification artifacts](../../rust/README.md#resolved-specification-artifact).
 - Language contracts: [resource paths](../../rules/reference/files.md),

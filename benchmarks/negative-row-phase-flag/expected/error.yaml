@@ -1,0 +1,10 @@
+phase: validation
+condition: phase_boundary
+spec_paths:
+  - rows[0].derivations.ABLFL.flag.condition
+requirement: REQ-0069
+context:
+  identifier: AVISITN
+  row: systolic
+  available_phase: column_derivation
+  required_phase: row_construction

@@ -100,9 +100,10 @@ are not one readable Parquet file fail with `source_parquet_invalid`.
 ### PARQUET-6. Every Parquet field has a non-empty unique name and a scalar type
 
 Every schema field name is non-empty and unique under
-[Values](../values.md) equality. A field is scalar: nested, repeated,
-dictionary and extension types are outside this profile. An empty or duplicate
-field name fails.
+[Values](../values.md) equality. A field is scalar: nested, repeated and
+extension types are outside this profile. A dictionary in the embedded Arrow
+schema is a layout of its value type, not a type of its own
+([PARQUET-7](#parquet-7)). An empty or duplicate field name fails.
 
 Fails: `source_field_name_empty`, `source_field_name_duplicate`.
 Evidence: `rust/crates/yamaa-adapters/tests/table_sas_source.rs::independently_authored_parquet_schemas_keep_exact_spelling_and_raw_value`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::nested_roots_name_their_own_field_after_flat_columns_and_preserve_name_precedence`, `rust/crates/yamaa-adapters/src/parquet_source/profile.rs::field_names_and_physical_alignment_have_stable_precedence`.
@@ -125,7 +126,7 @@ admitted; nullability states whether this particular file can store a missing
 value and does not change the field's column type.
 
 Fails: `source_field_type_unsupported`.
-Evidence: `adam-adsl-randomization`, `rust/crates/yamaa-adapters/src/parquet_source/profile.rs::only_the_closed_pairs_pass_including_legacy_string_date_and_large_offsets`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::unsupported_stored_types_retain_independent_arrow_type_spelling`.
+Evidence: `adam-adsl-randomization`, `rust/crates/yamaa-adapters/src/parquet_source/profile.rs::only_the_closed_pairs_pass_including_legacy_string_date_and_large_offsets`, `rust/crates/yamaa-adapters/src/parquet_source/profile.rs::view_and_dictionary_layouts_read_as_their_value_type`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::unsupported_stored_types_retain_independent_arrow_type_spelling`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::dictionaries_of_the_other_admitted_types_read_as_their_value_type`.
 Replaces: REQ-1032, REQ-1033, REQ-1040.
 
 | Parquet type | Column type |
@@ -136,11 +137,17 @@ Replaces: REQ-1032, REQ-1033, REQ-1040.
 | `INT32` annotated `Date` | `date` |
 | `INT64` annotated `Timestamp`, microseconds, no UTC adjustment | `datetime` |
 
-The two Arrow string widths are the same physical/logical pair. A
-`BYTE_ARRAY` field annotated `String` reads as `str` whether the file's
-embedded Arrow schema names it `string` or `large_string`; only the offset
-width differs. A field outside the mapping fails with
-`source_field_type_unsupported`, reporting the field and stored type.
+The file's embedded Arrow schema can name one physical/logical pair in several
+Arrow layouts, and the layout does not change the column type. A `BYTE_ARRAY`
+field annotated `String` reads as `str` whether that schema names it `string`,
+`large_string` or `string_view`. A field that schema names as a `dictionary`
+reads as it would if the schema named the dictionary's value type, whatever the
+index type: a `dictionary` of `string` values over a `BYTE_ARRAY` field
+annotated `String` reads as `str`, and a `dictionary` of `int64` values over an
+`INT64` field with no logical type reads as `int`. Only the layout differs: the
+offset width, the string views or the dictionary indices. A field outside the
+mapping fails with `source_field_type_unsupported`, reporting the field and
+stored type.
 
 <a id="parquet-8"></a>
 

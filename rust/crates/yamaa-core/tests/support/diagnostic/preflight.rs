@@ -1112,7 +1112,51 @@ pub(crate) fn intermediate_reached() -> BTreeSet<ConditionCode> {
             )],
         ));
     }
-    for variant in 0..5 {
+    // Every entry that repeats an earlier column is reported, at that entry.
+    let mut fields = base(
+        "TEST",
+        inputs(),
+        vec![column("ID", Some(source()))],
+        vec![Tree::text("ID")],
+    );
+    fields.push(("base", Tree::text("SRC")));
+    fields.push((
+        "intermediates",
+        Tree::List(vec![Tree::map(vec![
+            ("id", Tree::text("P")),
+            ("dataset", Tree::text("SECOND")),
+            (
+                "key",
+                Tree::List(vec![
+                    Tree::text("ID"),
+                    Tree::text("ID"),
+                    Tree::text("OTHER"),
+                    Tree::text("ID"),
+                ]),
+            ),
+        ])]),
+    ));
+    let repeated = |path| {
+        (
+            "invalid_field_type",
+            Some("REQ-0115"),
+            vec![path],
+            vec![
+                ("intermediate", text("P")),
+                ("dataset", text("SECOND")),
+                ("identifier", text("ID")),
+                ("expected", text("each column once")),
+            ],
+        )
+    };
+    reached.extend(check(
+        fields,
+        vec![
+            repeated("intermediates[0].key[1]"),
+            repeated("intermediates[0].key[3]"),
+        ],
+    ));
+    for variant in 0..6 {
         let mut fields = base(
             "TEST",
             inputs(),
@@ -1135,9 +1179,14 @@ pub(crate) fn intermediate_reached() -> BTreeSet<ConditionCode> {
             2 => declaration.push(("keep", Tree::text("last"))),
             // Omitted, the absence answer is missing, as the implicit join's is.
             3 => (),
-            _ => {
+            4 => {
                 declaration.push(("no_match", null()));
                 declaration.push(("require_match", Tree::boolean(true)));
+            }
+            // An order with no term gives `keep` nothing to choose by.
+            _ => {
+                declaration.push(("order_by", Tree::List(Vec::new())));
+                declaration.push(("keep", Tree::text("last")));
             }
         }
         fields.push(("intermediates", Tree::List(vec![Tree::map(declaration)])));

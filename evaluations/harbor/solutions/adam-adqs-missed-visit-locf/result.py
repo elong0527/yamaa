@@ -4,74 +4,88 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+import csv
+from collections import defaultdict
 
-import polars as pl
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-adsl = pl.read_csv("/app/input/adsl.csv", infer_schema=False)
-qs = pl.read_csv("/app/input/qs.csv", infer_schema=False).with_columns(
-    pl.col("AVISITN").cast(pl.Int64),
-    pl.col("AVAL").cast(pl.Float64),
-)
+SCHEDULED = [("Week 8", 8), ("Week 16", 16), ("Week 24", 24)]
 
-# Collected scores; an empty score is left out, so it counts as missed.
-collected = (
-    qs.filter(pl.col("PARAMCD") == "ACTOT", pl.col("AVAL").is_not_null())
-    .join(adsl.select("USUBJID", "EFFFL"), on="USUBJID", how="left")
-    .with_columns(DTYPE=pl.lit(None, dtype=pl.String))
-    .select(
-        "STUDYID", "USUBJID", "PARAMCD", "AVISIT", "AVISITN", "AVAL", "DTYPE", "EFFFL"
-    )
-)
 
-# The protocol schedules Weeks 8, 16, and 24 for the efficacy population.
-scheduled = pl.DataFrame(
-    {"AVISIT": ["Week 8", "Week 16", "Week 24"], "AVISITN": [8, 16, 24]}
-)
-eff_subjects = adsl.filter(pl.col("EFFFL") == "Y").select(
-    "STUDYID", "USUBJID", "EFFFL"
-)
-planned = eff_subjects.join(scheduled, how="cross")
-missed_keys = planned.join(
-    collected.select("USUBJID", "AVISITN"), on=["USUBJID", "AVISITN"], how="anti"
-)
+def main():
+    with open(f"{INPUT_DIR}/adsl.csv", newline="") as f:
+        adsl = list(csv.DictReader(f))
+    efffl = {(r["STUDYID"], r["USUBJID"]): r["EFFFL"] for r in adsl}
 
-# Each missed visit carries the closest earlier visit with a score, where
-# a collected zero carries forward and no earlier score leaves no value.
-earlier_by_subject: dict[str, list[tuple[int, float]]] = {}
-for row in collected.sort(["USUBJID", "AVISITN"]).iter_rows(named=True):
-    earlier_by_subject.setdefault(row["USUBJID"], []).append(
-        (row["AVISITN"], row["AVAL"])
-    )
+    with open(f"{INPUT_DIR}/qs.csv", newline="") as f:
+        qs = list(csv.DictReader(f))
 
-missed_rows = []
-for row in missed_keys.sort(["USUBJID", "AVISITN"]).iter_rows(named=True):
-    carried = None
-    for visitn, aval in earlier_by_subject.get(row["USUBJID"], []):
-        if visitn < row["AVISITN"]:
-            carried = aval
-        else:
-            break
-    missed_rows.append({**row, "PARAMCD": "ACTOT", "AVAL": carried, "DTYPE": "LOCF"})
+    # Collected records: a QS record with a non-empty score. A score of
+    # zero counts as a score.
+    collected = [r for r in qs if r["AVAL"].strip() != ""]
 
-missed = pl.DataFrame(
-    missed_rows,
-    schema={
-        "STUDYID": pl.String,
-        "USUBJID": pl.String,
-        "EFFFL": pl.String,
-        "AVISIT": pl.String,
-        "AVISITN": pl.Int64,
-        "PARAMCD": pl.String,
-        "AVAL": pl.Float64,
-        "DTYPE": pl.String,
-    },
-    strict=False,
-).select(
-    "STUDYID", "USUBJID", "PARAMCD", "AVISIT", "AVISITN", "AVAL", "DTYPE", "EFFFL"
-)
+    # Scores by subject and analysis visit number, for LOCF lookup.
+    scores = defaultdict(dict)
+    for r in collected:
+        scores[(r["STUDYID"], r["USUBJID"])][int(r["AVISITN"])] = r["AVAL"]
 
-adqs = pl.concat([collected, missed], how="diagonal").sort(["USUBJID", "AVISITN"])
+    rows = []
+    for r in collected:
+        rows.append(
+            {
+                "STUDYID": r["STUDYID"],
+                "USUBJID": r["USUBJID"],
+                "PARAMCD": r["PARAMCD"],
+                "AVISIT": r["AVISIT"],
+                "AVISITN": r["AVISITN"],
+                "AVAL": r["AVAL"],
+                "DTYPE": "",
+                "EFFFL": efffl.get((r["STUDYID"], r["USUBJID"]), ""),
+            }
+        )
 
-Path("/app/output").mkdir(exist_ok=True)
-adqs.write_csv("/app/output/adqs.csv")
+    # Added LOCF records for missed scheduled visits, efficacy
+    # population only.
+    for (studyid, usubjid), flag in efffl.items():
+        if flag != "Y":
+            continue
+        subject_scores = scores.get((studyid, usubjid), {})
+        for avisit, avisitn in SCHEDULED:
+            if avisitn in subject_scores:
+                continue
+            earlier = [n for n in subject_scores if n < avisitn]
+            aval = subject_scores[max(earlier)] if earlier else ""
+            rows.append(
+                {
+                    "STUDYID": studyid,
+                    "USUBJID": usubjid,
+                    "PARAMCD": "ACTOT",
+                    "AVISIT": avisit,
+                    "AVISITN": str(avisitn),
+                    "AVAL": aval,
+                    "DTYPE": "LOCF",
+                    "EFFFL": flag,
+                }
+            )
+
+    rows.sort(key=lambda r: (r["USUBJID"], int(r["AVISITN"])))
+
+    columns = [
+        "STUDYID",
+        "USUBJID",
+        "PARAMCD",
+        "AVISIT",
+        "AVISITN",
+        "AVAL",
+        "DTYPE",
+        "EFFFL",
+    ]
+    with open(f"{OUTPUT_DIR}/adqs.csv", "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=columns)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+if __name__ == "__main__":
+    main()

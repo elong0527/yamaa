@@ -12,6 +12,7 @@ use std::{
 use yamaa_core::application_observer::Scope;
 use yamaa_core::domain_entry::{self, Request};
 use yamaa_core::json::Value;
+use yamaa_core::project_function::Language;
 
 pub type Failure = Vec<Issue>;
 
@@ -281,15 +282,17 @@ fn publication_at(
 }
 impl Domain {
     /// Use the same owned output and anchored save gate for project reports.
+    /// Save targets resolve from the run's scope.
     pub fn from_project(
         result: BuildResult,
         project: &crate::file_project::FileProject,
+        run: &crate::file_resources::RunScope,
     ) -> Result<Self, Failure> {
         Self::from_build(result, |field| {
             if field == "path" {
-                project.publication_target()
+                project.publication_target(run)
             } else {
-                project.publication_field_target(field)
+                project.publication_field_target(run, field)
             }
         })
     }
@@ -506,6 +509,7 @@ struct Native<'a> {
 }
 /// The host provides activation and original-error conversion. All route
 /// preparation, static checks and dispatch stay behind the shared application.
+/// Each run borrows the prepared value and opens its own study scope.
 pub trait RuntimePort {
     type Result;
     type Error;
@@ -514,12 +518,12 @@ pub trait RuntimePort {
     }
     fn plain(
         &mut self,
-        prepared: FileSpecification,
+        prepared: &FileSpecification,
         scope: Scope<'_>,
     ) -> Result<Self::Result, Self::Error>;
     fn project(
         &mut self,
-        prepared: Box<crate::file_project::FileProject>,
+        prepared: &crate::file_project::FileProject,
         scope: Scope<'_>,
     ) -> Result<Self::Result, Self::Error>;
 }
@@ -528,7 +532,7 @@ pub enum ApplicationError<E> {
     Runtime(E),
 }
 pub struct Application<R> {
-    pub host: yamaa_core::project_function::Language,
+    pub host: Language,
     pub runtime: R,
 }
 impl<R: RuntimePort> yamaa_core::build::Ports for Application<R> {
@@ -559,7 +563,7 @@ impl<R: RuntimePort> yamaa_core::build::Ports for Application<R> {
     }
     fn build_plain(
         &mut self,
-        prepared: FileSpecification,
+        prepared: &FileSpecification,
         scope: Scope<'_>,
     ) -> Result<R::Result, Self::Failure> {
         self.runtime
@@ -568,7 +572,7 @@ impl<R: RuntimePort> yamaa_core::build::Ports for Application<R> {
     }
     fn build_project(
         &mut self,
-        prepared: Self::Project,
+        prepared: &Self::Project,
         scope: Scope<'_>,
     ) -> Result<R::Result, Self::Failure> {
         self.runtime
@@ -582,91 +586,81 @@ impl RuntimePort for Native<'_> {
     fn resolver(&self) -> Option<std::sync::Arc<dyn crate::host_resources::Resolver>> {
         self.resolver.clone()
     }
-    fn plain(
-        &mut self,
-        mut prepared: FileSpecification,
-        scope: Scope<'_>,
-    ) -> Result<Domain, Failure> {
-        let attempt = prepared.build(scope);
-        if let Some(error) = file_preparation::opaque_resource_failure(&attempt) {
-            return Err(resource_failure("capture", error));
-        }
-        scope.phase(yamaa_core::application_observer::Phase::Output);
-        let converted = (|| {
-            let result = specification_report::build_result(
-                prepared.run(),
-                &attempt,
-                Identity {
-                    runtime: self.identity.runtime,
-                    runtime_version: self.identity.runtime_version,
-                    engine_version: self.identity.engine_version,
-                    example: self.identity.example,
-                    specification: self.identity.specification,
-                    base_directory: self.identity.base_directory,
-                },
-            )
-            .map_err(|error| report_failure("build", "result_projection", &error))?;
-            Domain::from_build(result, |field| {
-                if field == "path" {
-                    prepared.publication_target()
-                } else {
-                    prepared.publication_field_target(field)
-                }
-            })
-        })();
-        scope.exit(
-            yamaa_core::application_observer::Phase::Output,
-            if converted.is_ok() {
-                yamaa_core::application_observer::Outcome::Succeeded
-            } else {
-                yamaa_core::application_observer::Outcome::Failed
-            },
-        );
-        converted
+    fn plain(&mut self, prepared: &FileSpecification, scope: Scope<'_>) -> Result<Domain, Failure> {
+        let identity = Identity {
+            runtime: self.identity.runtime,
+            runtime_version: self.identity.runtime_version,
+            engine_version: self.identity.engine_version,
+            example: self.identity.example,
+            specification: self.identity.specification,
+            base_directory: self.identity.base_directory,
+        };
+        plain(prepared, &mut prepared.run_scope(None), identity, scope)
     }
     fn project(
         &mut self,
-        _: Box<crate::file_project::FileProject>,
+        _: &crate::file_project::FileProject,
         _: Scope<'_>,
     ) -> Result<Domain, Failure> {
         Err(unsupported("environment", Some("environment")))
     }
 }
 
-/// Convert an already checked plain capability without recapturing metadata.
+/// Run an already checked plain capability in `run` without recapturing
+/// metadata. Inputs come from the scope and Save targets resolve there.
 pub fn plain(
-    prepared: FileSpecification,
+    prepared: &FileSpecification,
+    run: &mut crate::file_resources::RunScope,
     identity: Identity<'_>,
     scope: Scope<'_>,
 ) -> Result<Domain, Failure> {
-    Native {
-        identity,
-        resolver: None,
+    let attempt = prepared.build(run, scope);
+    if let Some(error) = file_preparation::opaque_resource_failure(&attempt) {
+        return Err(resource_failure("capture", error));
     }
-    .plain(prepared, scope)
-}
-fn native(identity: Identity<'_>) -> Application<Native<'_>> {
-    Application {
-        host: if identity.runtime == "r" {
-            yamaa_core::project_function::Language::R
+    scope.phase(yamaa_core::application_observer::Phase::Output);
+    let converted = (|| {
+        let result = specification_report::build_result(prepared.run(), &attempt, identity)
+            .map_err(|error| report_failure("build", "result_projection", &error))?;
+        Domain::from_build(result, |field| {
+            if field == "path" {
+                prepared.publication_target(run)
+            } else {
+                prepared.publication_field_target(run, field)
+            }
+        })
+    })();
+    scope.exit(
+        yamaa_core::application_observer::Phase::Output,
+        if converted.is_ok() {
+            yamaa_core::application_observer::Outcome::Succeeded
         } else {
-            yamaa_core::project_function::Language::Python
+            yamaa_core::application_observer::Outcome::Failed
         },
+    );
+    converted
+}
+/// The host language is configured by the caller, never derived from the
+/// runtime name: an embedder may name its runtime anything.
+fn native(host: Language, identity: Identity<'_>) -> Application<Native<'_>> {
+    Application {
+        host,
         runtime: Native {
             identity,
             resolver: None,
         },
     }
 }
-pub fn check(request: Request<'_>, identity: Identity<'_>) -> Failure {
-    check_with_resolver(request, identity, None)
+pub fn check(host: Language, request: Request<'_>, identity: Identity<'_>) -> Failure {
+    check_with_resolver(host, request, identity, None)
 }
 pub fn check_with_resolver(
+    host: Language,
     request: Request<'_>,
     identity: Identity<'_>,
     resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
 ) -> Failure {
-    let mut application = native(identity);
+    let mut application = native(host, identity);
     application.runtime.resolver = resolver;
     crate::issue_rows::collect(
         domain_entry::check(request, &mut application).unwrap_or_else(|error| match error {
@@ -677,8 +671,12 @@ pub fn check_with_resolver(
         }),
     )
 }
-pub fn domain(request: Request<'_>, identity: Identity<'_>) -> Result<Domain, Failure> {
-    let mut application = native(identity);
+pub fn domain(
+    host: Language,
+    request: Request<'_>,
+    identity: Identity<'_>,
+) -> Result<Domain, Failure> {
+    let mut application = native(host, identity);
     domain_entry::domain(request, &mut application, Scope::default())
         .map_err(|error| match error {
             ApplicationError::Preparation(error) => {
@@ -824,9 +822,9 @@ mod tests {
             specification: &entry,
             environment: None,
         };
-        let ordinary = domain(request(), identity()).unwrap();
+        let ordinary = domain(Language::Python, request(), identity()).unwrap();
         let result = if let Some(measurements) = measurements {
-            let mut application = native(identity());
+            let mut application = native(Language::Python, identity());
             let observed =
                 domain_entry::domain(request(), &mut application, Scope::new(measurements))
                     .unwrap_or_else(|_| panic!("observed fixture failed"));

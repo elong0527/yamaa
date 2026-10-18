@@ -140,14 +140,22 @@ Resource refusal is separate from semantic source invalidity.
 `source_sas_invalid` reports in the `ingest` phase at `input.<dataset>.path`,
 with the dataset, the path and a closed `cause`: `framing`, `members`,
 `version`, `encoding`, `compression`, `header`, `field_name`, `field_type`,
-`record_order`, `truncated` or `malformed`. Undecodable text fails without
-replacement characters. Unsupported versions, unsupported compression
-signatures, malformed compressed data, duplicate or empty field names and
-incomplete physical framing fail before derivation.
+`record_order`, `deleted_records`, `truncated` or `malformed`. Undecodable text
+fails without replacement characters. Unsupported versions, unsupported
+compression signatures, malformed compressed data, duplicate or empty field
+names and incomplete physical framing fail before derivation.
 
 Fails: `source_sas_invalid`.
-Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/sas.rs`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::unsupported_compression_has_a_specific_retained_cause`, `python/tests/installed/installed_sas_sources.py::test_bad_sources_are_not_read_by_check_and_failed_saves_have_no_output`.
+Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/sas.rs`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::unsupported_compression_has_a_specific_retained_cause`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::records_deleted_in_place_are_refused_with_a_rewrite_hint`, `python/tests/installed/installed_sas_sources.py::test_bad_sources_are_not_read_by_check_and_failed_saves_have_no_output`.
 Replaces: REQ-1317.
+
+A SAS dataset that retains records deleted in place fails with cause
+`deleted_records` when a data or mix page is flagged as holding deleted records
+or the row-size subheader records a non-zero deleted-record count; a reader
+never returns a deleted record. That finding's context adds a `hint` to rewrite
+the dataset first, for example with PROC COPY or a DATA step. In compressed
+storage a deleted record carries an unsupported compression code and fails as
+`compression` first.
 
 Transport member descriptor chains at 80-byte boundaries are structural
 records; multiple complete chains fail, including concatenated transport

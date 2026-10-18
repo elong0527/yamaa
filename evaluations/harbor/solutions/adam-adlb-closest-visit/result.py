@@ -4,76 +4,48 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+import csv
 
-import polars as pl
+INPUT = "/app/input/adlb_raw.csv"
+OUTPUT = "/app/output/adlb.csv"
 
-raw = pl.read_csv("/app/input/adlb_raw.csv", infer_schema=False).with_columns(
-    pl.col("LBSEQ").cast(pl.Int64),
-    pl.col("ADY").cast(pl.Int64, strict=False),
-    pl.col("AVAL").cast(pl.Float64, strict=False),
-)
+with open(INPUT, newline="") as f:
+    rows = list(csv.DictReader(f))
 
-# WEEK 2 for study days 8 through 22; target day 15 and distance travel
-# together, and records outside the window or with a missing day carry
-# none and are never flagged.
-based = raw.with_columns(
-    AVISIT=pl.when(
-        pl.col("ADY").is_not_null()
-        & (pl.col("ADY") >= 8)
-        & (pl.col("ADY") <= 22)
+for row in rows:
+    ady_raw = (row["ADY"] or "").strip()
+    ady = int(ady_raw) if ady_raw else None
+    row["_ady"] = ady
+    if ady is not None and 8 <= ady <= 22:
+        row["AVISIT"] = "WEEK 2"
+        row["AWTARGET"] = 15
+        row["ADIST"] = abs(ady - 15)
+    else:
+        row["AVISIT"] = ""
+        row["AWTARGET"] = ""
+        row["ADIST"] = ""
+    row["ANL01FL"] = ""
+
+groups = {}
+for i, row in enumerate(rows):
+    if row["AVISIT"]:
+        key = (row["USUBJID"], row["PARAMCD"], row["AVISIT"])
+        groups.setdefault(key, []).append(i)
+
+for idxs in groups.values():
+    best = min(
+        idxs,
+        key=lambda i: (rows[i]["ADIST"], -rows[i]["_ady"], int(rows[i]["LBSEQ"])),
     )
-    .then(pl.lit("WEEK 2"))
-    .otherwise(None),
-).with_columns(
-    AWTARGET=pl.when(pl.col("AVISIT").is_not_null())
-    .then(15)
-    .otherwise(None)
-    .cast(pl.Int64),
-).with_columns(
-    ADIST=(pl.col("ADY") - pl.col("AWTARGET")).abs().cast(pl.Float64),
-)
+    rows[best]["ANL01FL"] = "Y"
 
-# The record standing for its subject and parameter: the closest to the
-# target, the later study day when equally close, the lower sequence
-# number when they share the same day.
-winners = (
-    based.filter(pl.col("AVISIT").is_not_null())
-    .sort(
-        ["ADIST", "ADY", "LBSEQ"],
-        descending=[False, True, False],
-        nulls_last=True,
-    )
-    .unique(
-        ["STUDYID", "USUBJID", "PARAMCD", "AVISIT"],
-        keep="first",
-        maintain_order=True,
-    )
-    .select("STUDYID", "USUBJID", "PARAMCD", "AVISIT", "LBSEQ")
-    .with_columns(pl.lit("Y").alias("ANL01FL"))
-)
+columns = [
+    "STUDYID", "USUBJID", "PARAMCD", "LBSEQ", "ADT", "ADY", "AVAL",
+    "AVISIT", "AWTARGET", "ADIST", "ANL01FL",
+]
 
-adlb = (
-    based.join(
-        winners,
-        on=["STUDYID", "USUBJID", "PARAMCD", "AVISIT", "LBSEQ"],
-        how="left",
-        maintain_order="left",
-    )
-    .select(
-        "STUDYID",
-        "USUBJID",
-        "PARAMCD",
-        "LBSEQ",
-        "ADT",
-        "ADY",
-        "AVAL",
-        "AVISIT",
-        "AWTARGET",
-        "ADIST",
-        "ANL01FL",
-    )
-)
-
-Path("/app/output").mkdir(exist_ok=True)
-adlb.write_csv("/app/output/adlb.csv")
+with open(OUTPUT, "w", newline="") as f:
+    writer = csv.DictWriter(f, fieldnames=columns, extrasaction="ignore")
+    writer.writeheader()
+    for row in rows:
+        writer.writerow(row)

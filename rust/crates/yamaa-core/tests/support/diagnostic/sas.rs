@@ -10,7 +10,20 @@ fn text(value: &str) -> V {
 
 pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
-    for (path, cause) in [("source.xpt", "framing"), ("source.sas7bdat", "malformed")] {
+    // Only `deleted_records` carries a hint: its remedy is outside yamaa, by
+    // rewriting the dataset in SAS.
+    for (path, cause, hint) in [
+        ("source.xpt", "framing", None),
+        ("source.sas7bdat", "malformed", None),
+        (
+            "source.sas7bdat",
+            "deleted_records",
+            Some(
+                "rewrite the SAS dataset first, for example with PROC COPY or a DATA step, \
+                 to remove the records deleted in place",
+            ),
+        ),
+    ] {
         let diagnostic = SourceFinding::Sas {
             dataset: "SRC",
             path,
@@ -27,15 +40,15 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             ("ingest", "source_sas_invalid", Some("REQ-1317"))
         );
         assert_eq!(diagnostic.spec_paths, ["input.SRC.path"]);
-        assert_eq!(
-            diagnostic.context,
-            [
-                ("dataset".into(), text("SRC")),
-                ("path".into(), text(path)),
-                ("cause".into(), text(cause)),
-            ]
-            .into()
-        );
+        let mut context = std::collections::BTreeMap::from([
+            ("dataset".into(), text("SRC")),
+            ("path".into(), text(path)),
+            ("cause".into(), text(cause)),
+        ]);
+        if let Some(hint) = hint {
+            context.insert("hint".into(), text(hint));
+        }
+        assert_eq!(diagnostic.context, context);
         assert_eq!(diagnostic.source_span, None);
         assert_eq!(diagnostic.operand_route, None);
         reached.insert(diagnostic.code);

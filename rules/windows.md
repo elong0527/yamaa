@@ -65,12 +65,14 @@ it. Omitting `group_by` creates one partition. Within a declared group missing
 values equal other missing values, and rows with equal present values and equal
 missing group positions share one partition.
 
-Evidence: `schema-window-functions`, `schema-window-intermediate-rank`, `rust/crates/yamaa-adapters/tests/fixtures/specs/window-failures.json`.
+Fails: `invalid_field_type`.
+Evidence: `schema-window-functions`, `schema-window-intermediate-rank`, `negative-window-repeated-group`, `rust/crates/yamaa-adapters/tests/fixtures/specs/window-failures.json`.
 Replaces: REQ-0293, REQ-0326, REQ-1122, REQ-1129.
 
-A window partition is a group of rows, and `window.order_by` orders the rows
-within each partition under [Values](values.md). The
-intermediate-derivation context is the one of
+A `window.group_by` names each variable once; a variable listed again fails as
+`invalid_field_type` at that entry, reporting the variable. A window partition
+is a group of rows, and `window.order_by` orders the rows within each partition
+under [Values](values.md). The intermediate-derivation context is the one of
 [LOOKUP-15](lookup.md#lookup-15).
 
 A window expression used during row construction partitions the rows its

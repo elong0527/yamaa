@@ -1,15 +1,17 @@
-Following CDISC ADaM standards, use the provided AE dataset to create
-an ADAE dataset with one record per adverse event.
+Following CDISC ADaM standards, use the provided AE dataset to create an ADAE
+dataset with one record per adverse event.
 
 The output dataset should contain the following columns in this order:
 STUDYID, USUBJID, AESEQ, AESER, ASTDT, SERSEQ
 
-ASTDT is the onset date, and has no value when the onset was never
-collected. SERSEQ numbers the subject's serious events in onset order,
-so the earliest serious event carries 1. Events sharing one onset date
-follow collection sequence order, and a serious event with no onset
-date is numbered last. SERSEQ has no value for events that are not
-serious. Numbering restarts for each subject.
+SERSEQ is the running number of a subject's serious events, the records
+with AESER equal to "Y", ordered by ASTDT: a subject's earliest serious
+event is 1, and each later serious event takes the next number. Serious
+events that share one ASTDT follow the order of AESEQ. A serious event
+with no ASTDT is numbered after every serious event of that subject that
+has one, and serious events with no ASTDT follow the order of AESEQ among
+themselves. SERSEQ has no value for a record that is not serious, and a
+subject with no serious event has no numbered record.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/adae.csv.

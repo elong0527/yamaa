@@ -372,7 +372,7 @@ must name a declared column in `output.columns` that the row template or the
 column declaration derives.
 
 Fails: `value_metadata_requires_testcd`, `value_metadata_requires_literal_testcd`, `value_metadata_unknown_column`, `value_metadata_not_output_column`.
-Evidence: `sdtm-lb-metadata`, `rust/crates/yamaa-core/tests/schema_submission.rs::each_independent_value_admission_control_has_the_required_condition_and_row_path`, `rust/crates/yamaa-core/tests/schema_submission.rs::overrides_inherit_complete_metadata_and_preserve_written_occurrences`.
+Evidence: `sdtm-lb-metadata`, `negative-numeric-test-code`, `rust/crates/yamaa-core/tests/schema_submission.rs::each_independent_value_admission_control_has_the_required_condition_and_row_path`, `rust/crates/yamaa-core/tests/schema_submission.rs::overrides_inherit_complete_metadata_and_preserve_written_occurrences`.
 Replaces: REQ-1162, REQ-1163, REQ-1164, REQ-1165, REQ-1166.
 
 The column-level `submission` stays the shared declaration for the column, and
@@ -386,7 +386,12 @@ column has no discriminator to hang values on, and the declaration fails with
 until data arrives, and value-level metadata is validated without data
 ([SUB-23](#sub-23)), so a dynamic discriminator fails loudly, with
 `value_metadata_requires_literal_testcd`, rather than silently attaching
-metadata to an unknown value. A key naming anything other than a declared
+metadata to an unknown value. A check applied only to the rows of one code,
+such as a value-level `length` that differs from the column's, finds those rows
+by comparing the code with `<DOMAIN>TESTCD`. That column must then be declared
+`str`: a column of another type never equals a string code under
+[VALUE-19](../values.md#value-19), and the declaration fails the same way
+rather than checking no row. A key naming anything other than a declared
 column the row template or the column declaration derives fails with
 `value_metadata_unknown_column`; it is not an ignored declaration.
 [SUB-1](#sub-1) applies per value: metadata for an internal column fails with

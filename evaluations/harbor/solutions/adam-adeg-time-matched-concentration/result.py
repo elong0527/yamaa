@@ -4,54 +4,117 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build ADEG from ADEG_RAW and ADPC.
 
-import polars as pl
+Adds time-matched pharmacokinetic concentrations from the parent drug
+DRGX onto each ECG record. A DRGX sample matches an ECG record only at
+the same subject, analysis period, period day, and nominal time point.
+Values are carried through exactly as recorded.
+"""
 
-MATCH = ["STUDYID", "USUBJID", "APERIOD", "APERDAY", "ATPTN"]
-NUMBERS = {
-    "APERIOD": pl.Int64,
-    "APERDAY": pl.Int64,
-    "ATPTN": pl.Float64,
-    "AVAL": pl.Float64,
-}
+import csv
 
-adeg = pl.read_csv("/app/input/adeg_raw.csv", infer_schema=False).with_columns(
-    pl.col(name).cast(kind) for name, kind in {
-        **NUMBERS, "BASE": pl.Float64, "CHG": pl.Float64,
-    }.items()
-)
-adpc = pl.read_csv("/app/input/adpc.csv", infer_schema=False).with_columns(
-    pl.col(name).cast(kind) for name, kind in NUMBERS.items()
-)
-columns = adeg.columns + ["ECGPCFL", "PKCONC", "CQTANLFL"]
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-# The parent drug's sample at exactly the same subject, period, period day
-# and nominal time point; metabolite records are never used.
-parent = adpc.filter(pl.col("PARAMCD") == "DRGX").select(
-    *MATCH, pl.lit(True).alias("SAMPLED"), pl.col("AVAL").alias("PKAVAL")
-)
 
-adeg = (
-    adeg.join(parent, on=MATCH, how="left", validate="m:1",
-              maintain_order="left")
-    .with_columns(
-        # A sample whatever its result, also below the limit.
-        ECGPCFL=pl.when(pl.col("SAMPLED")).then(pl.lit("Y")),
-        # As recorded; nothing imputed, except 0 for placebo without a
-        # quantified result.
-        PKCONC=pl.when(pl.col("PKAVAL").is_not_null())
-        .then(pl.col("PKAVAL"))
-        .when(pl.col("TRTA") == "Placebo")
-        .then(pl.lit(0.0)),
+def read_rows(path):
+    with open(path, newline="") as handle:
+        return list(csv.DictReader(handle))
+
+
+adeg_rows = read_rows(f"{INPUT_DIR}/adeg_raw.csv")
+adpc_rows = read_rows(f"{INPUT_DIR}/adpc.csv")
+
+# Index the parent-drug samples by subject, period, period day, and
+# nominal time point. Metabolite results never match.
+pk_samples = {}
+for sample in adpc_rows:
+    if sample["PARAMCD"] != "DRGX":
+        continue
+    key = (
+        sample["USUBJID"],
+        sample["APERIOD"],
+        sample["APERDAY"],
+        sample["ATPTN"],
     )
-    .with_columns(
-        CQTANLFL=pl.when(
-            pl.col("CHG").is_not_null() & pl.col("PKCONC").is_not_null()
-        ).then(pl.lit("Y")),
-    )
-    .select(columns)
-)
+    pk_samples[key] = sample
 
-Path("/app/output").mkdir(exist_ok=True)
-adeg.write_csv("/app/output/adeg.csv")
+output_rows = []
+for record in adeg_rows:
+    key = (
+        record["USUBJID"],
+        record["APERIOD"],
+        record["APERDAY"],
+        record["ATPTN"],
+    )
+    sample = pk_samples.get(key)
+    if sample is None:
+        flag = ""
+        concentration = ""
+    else:
+        # A matched sample sets the flag even when its result is below
+        # the lower limit of quantification, but such a result gives
+        # no concentration.
+        flag = "Y"
+        if sample["LLOQFL"] == "Y" or sample["AVAL"] == "":
+            concentration = ""
+        else:
+            concentration = sample["AVAL"]
+    # On placebo records a missing concentration is zero, on the
+    # baseline day as on any other day. The record's own treatment
+    # decides whether it is a placebo record.
+    if concentration == "" and record["TRTA"] == "Placebo":
+        concentration = "0"
+    # The concentration-QTc analysis flag needs both a change from
+    # baseline and a concentration.
+    analysis_flag = (
+        "Y" if record["CHG"] != "" and concentration != "" else ""
+    )
+    output_rows.append(
+        {
+            "STUDYID": record["STUDYID"],
+            "USUBJID": record["USUBJID"],
+            "TRTA": record["TRTA"],
+            "PARAMCD": record["PARAMCD"],
+            "PARAM": record["PARAM"],
+            "APERIOD": record["APERIOD"],
+            "APERDAY": record["APERDAY"],
+            "ATPT": record["ATPT"],
+            "ATPTN": record["ATPTN"],
+            "AVAL": record["AVAL"],
+            "AVALU": record["AVALU"],
+            "ABLFL": record["ABLFL"],
+            "BASE": record["BASE"],
+            "CHG": record["CHG"],
+            "BASETYPE": record["BASETYPE"],
+            "ECGPCFL": flag,
+            "PKCONC": concentration,
+            "CQTANLFL": analysis_flag,
+        }
+    )
+
+columns = [
+    "STUDYID",
+    "USUBJID",
+    "TRTA",
+    "PARAMCD",
+    "PARAM",
+    "APERIOD",
+    "APERDAY",
+    "ATPT",
+    "ATPTN",
+    "AVAL",
+    "AVALU",
+    "ABLFL",
+    "BASE",
+    "CHG",
+    "BASETYPE",
+    "ECGPCFL",
+    "PKCONC",
+    "CQTANLFL",
+]
+with open(f"{OUTPUT_DIR}/adeg.csv", "w", newline="") as handle:
+    writer = csv.DictWriter(handle, fieldnames=columns)
+    writer.writeheader()
+    writer.writerows(output_rows)

@@ -4,99 +4,103 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
+"""Create ADEG with derived QTcB, QTcF, and RR-rederived records.
+
+Reads the collected ADEG dataset from /app/input, keeps every collected
+record, and adds one record per subject and analysis visit for each
+derived parameter whose source results are present:
+
+- QTCBR: QT / SQRT(RR / 1000)      (needs QT and RR)
+- QTCFR: QT / POWER(RR / 1000, 1/3) (needs QT and RR)
+- RRR:   60000 / heart rate       (needs heart rate present and nonzero)
+
+AVAL on the derived records is not rounded.
+"""
+
+import csv
 import math
-from pathlib import Path
+from collections import OrderedDict
 
-import polars as pl
+INPUT_PATH = "/app/input/adeg.csv"
+OUTPUT_PATH = "/app/output/adeg.csv"
+
+COLUMNS = ["STUDYID", "USUBJID", "PARAMCD", "PARAM", "AVISIT", "AVAL", "AVALU"]
+
+DERIVED_PARAMS = {
+    "QTCBR": "QTcB - Bazett's Correction Formula Rederived (ms)",
+    "QTCFR": "QTcF - Fridericia's Correction Formula Rederived (ms)",
+    "RRR": "RR Duration Rederived (ms)",
+}
 
 
-def format_number(value: float | None) -> str | None:
-    if value is None or not math.isfinite(value):
+def parse_number(text):
+    """Return the float value of a cell, or None when it is empty."""
+    if text is None:
         return None
-    if float(value).is_integer():
+    text = text.strip()
+    if text == "":
+        return None
+    return float(text)
+
+
+def format_number(value):
+    """Write a number without rounding; whole numbers without a fraction."""
+    if value == int(value) and abs(value) < 1e15:
         return str(int(value))
-    return repr(float(value))
+    return repr(value)
 
 
-base = pl.read_csv("/app/input/adeg.csv", infer_schema=False)
-numeric = base.with_columns(AVALNUM=pl.col("AVAL").cast(pl.Float64, strict=False))
+def main():
+    with open(INPUT_PATH, newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
 
-wide = numeric.group_by(["STUDYID", "USUBJID", "AVISIT"]).agg(
-    QT=pl.col("AVALNUM").filter(pl.col("PARAMCD") == "QT").first(),
-    RR=pl.col("AVALNUM").filter(pl.col("PARAMCD") == "RR").first(),
-    HR=pl.col("AVALNUM").filter(pl.col("PARAMCD") == "HR").first(),
-)
+    # Group collected records by subject and analysis visit, keeping the
+    # order in which each group first appears.
+    groups = OrderedDict()
+    for row in rows:
+        key = (row["STUDYID"], row["USUBJID"], row["AVISIT"])
+        groups.setdefault(key, []).append(row)
 
-collected = base.select(
-    "STUDYID", "USUBJID", "PARAMCD", "PARAM", "AVISIT", "AVAL", "AVALU"
-)
+    out_rows = []
+    for (studyid, usubjid, avisit), group in groups.items():
+        out_rows.extend(group)
 
-new_rows: list[dict] = []
-for record in wide.to_dicts():
-    studyid, usubjid, avisit = record["STUDYID"], record["USUBJID"], record["AVISIT"]
-    qt, rr, hr = record["QT"], record["RR"], record["HR"]
-    # A QTc record needs both QT and RR; RR in seconds is RR in ms over 1000.
-    if qt is not None and rr is not None:
-        rr_sec = rr / 1000
-        new_rows.append(
-            {
-                "STUDYID": studyid,
-                "USUBJID": usubjid,
-                "PARAMCD": "QTCBR",
-                "PARAM": "QTcB - Bazett's Correction Formula Rederived (ms)",
-                "AVISIT": avisit,
-                "AVAL": format_number(qt / math.sqrt(rr_sec)),
-                "AVALU": "ms",
-            }
-        )
-    if qt is not None and rr is not None:
-        rr_sec = rr / 1000
-        new_rows.append(
-            {
-                "STUDYID": studyid,
-                "USUBJID": usubjid,
-                "PARAMCD": "QTCFR",
-                "PARAM": "QTcF - Fridericia's Correction Formula Rederived (ms)",
-                "AVISIT": avisit,
-                "AVAL": format_number(qt / (rr_sec ** (1 / 3))),
-                "AVALU": "ms",
-            }
-        )
-    # An RRR record needs a present, nonzero heart rate.
-    if hr is not None and hr != 0:
-        new_rows.append(
-            {
-                "STUDYID": studyid,
-                "USUBJID": usubjid,
-                "PARAMCD": "RRR",
-                "PARAM": "RR Duration Rederived (ms)",
-                "AVISIT": avisit,
-                "AVAL": format_number(60000 / hr),
-                "AVALU": "ms",
-            }
-        )
+        # Source results for this subject and visit, by parameter.
+        values = {}
+        for row in group:
+            number = parse_number(row["AVAL"])
+            if number is not None:
+                values[row["PARAMCD"]] = number
 
-# Collected rows first, then QTCBR, QTCFR, and RRR per visit.
-order = {"QTCBR": 0, "QTCFR": 1, "RRR": 2}
-new_rows.sort(
-    key=lambda r: (order[r["PARAMCD"]], r["USUBJID"], r["AVISIT"])
-)
-derived = pl.DataFrame(
-    new_rows,
-    schema={
-        "STUDYID": pl.String,
-        "USUBJID": pl.String,
-        "PARAMCD": pl.String,
-        "PARAM": pl.String,
-        "AVISIT": pl.String,
-        "AVAL": pl.String,
-        "AVALU": pl.String,
-    },
-)
+        derived = []
+        qt = values.get("QT")
+        rr = values.get("RR")
+        if qt is not None and rr is not None:
+            rr_seconds = rr / 1000.0
+            derived.append(("QTCBR", qt / math.sqrt(rr_seconds)))
+            derived.append(("QTCFR", qt / (rr_seconds ** (1.0 / 3.0))))
+        hr = values.get("HR")
+        if hr is not None and hr != 0:
+            derived.append(("RRR", 60000.0 / hr))
 
-adeg = pl.concat([collected, derived], how="diagonal").select(
-    "STUDYID", "USUBJID", "PARAMCD", "PARAM", "AVISIT", "AVAL", "AVALU"
-)
+        for paramcd, aval in derived:
+            out_rows.append(
+                {
+                    "STUDYID": studyid,
+                    "USUBJID": usubjid,
+                    "PARAMCD": paramcd,
+                    "PARAM": DERIVED_PARAMS[paramcd],
+                    "AVISIT": avisit,
+                    "AVAL": format_number(aval),
+                    "AVALU": "ms",
+                }
+            )
 
-Path("/app/output").mkdir(exist_ok=True)
-adeg.write_csv("/app/output/adeg.csv")
+    with open(OUTPUT_PATH, "w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=COLUMNS)
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+
+if __name__ == "__main__":
+    main()

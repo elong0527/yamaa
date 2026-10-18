@@ -46,6 +46,7 @@ impl Study {
     fn build(&self, case: &str, entry: &str) -> Vec<u8> {
         let path = self.text(&format!("{case}/{entry}"));
         let mut result = file_application::domain(
+            yamaa_core::project_function::Language::Python,
             Request {
                 specification: &path,
                 environment: None,

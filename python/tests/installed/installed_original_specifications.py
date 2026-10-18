@@ -138,6 +138,94 @@ class ParquetOriginalOutput(unittest.TestCase):
                     self.assertTrue(result.save())
                     self.assertEqual((self.root / "output.csv").read_bytes(), expected)
 
+    def test_parquet_view_and_dictionary_layouts_read_as_text(self):
+        # pyarrow string views and dictionaries, Polars Categorical and Enum,
+        # and a Polars frame handed to pyarrow through the Arrow PyCapsule
+        # interface each store a BYTE_ARRAY String field whose embedded Arrow
+        # schema names a view or dictionary layout. A layout is not a type
+        # (REQ-1032), so every field reads as the text pyarrow reads (#2940).
+        import base64
+
+        import polars as pl
+        import pyarrow.parquet as pq
+
+        text = ["b", None, "", "a", "b", "\u03b2"]
+        ids = list(range(1, 7))
+        plain = pa.array(text, pa.string())
+        indices = (pa.int8(), pa.int16(), pa.int32(), pa.int64())
+        indices += (pa.uint8(), pa.uint16(), pa.uint32(), pa.uint64())
+        frame = pl.DataFrame(
+            {
+                "ID": ids,
+                "CATEGORICAL": pl.Series(text, dtype=pl.Categorical),
+                "ENUM": pl.Series(text, dtype=pl.Enum(["a", "b", "", "\u03b2"])),
+            }
+        )
+        writers = {
+            "pyarrow": lambda path: pq.write_table(
+                pa.table(
+                    {
+                        "ID": pa.array(ids, pa.int64()),
+                        "VIEW": pa.array(text, pa.string_view()),
+                        "LARGE": pa.array(text, pa.large_string()).dictionary_encode(),
+                        **{
+                            str(index).upper(): plain.dictionary_encode().cast(
+                                pa.dictionary(index, pa.string())
+                            )
+                            for index in indices
+                        },
+                    }
+                ),
+                path,
+            ),
+            "polars": frame.write_parquet,
+            "pycapsule": lambda path: pq.write_table(
+                pa.table(pl.DataFrame({"ID": ids, "VIEW": text})), path
+            ),
+        }
+        for writer, write in writers.items():
+            with self.subTest(writer=writer):
+                path = self.root / (writer + ".parquet")
+                write(path)
+                # Decode the hint as written, independent of how this pyarrow
+                # restores it on reading.
+                hint = pa.ipc.read_schema(
+                    pa.py_buffer(
+                        base64.b64decode(
+                            pq.ParquetFile(path).metadata.metadata[b"ARROW:schema"]
+                        )
+                    )
+                )
+                fields = hint.names[1:]
+                stored = pq.read_table(path)
+                for name in fields:
+                    layout = hint.field(name).type
+                    self.assertTrue(
+                        pa.types.is_string_view(layout)
+                        or pa.types.is_dictionary(layout),
+                        f"{name}: {layout}",
+                    )
+                    self.assertEqual(stored[name].to_pylist(), text, name)
+                source = {
+                    "schema_version": "1.0",
+                    "domain": "TEST",
+                    "input": {"SRC": {"path": path.name, "empty_string": "present"}},
+                    "keys": ["ID"],
+                    "columns": [
+                        {"name": "ID", "type": "int", "derivation": "SRC.ID"},
+                        *(
+                            {"name": name, "type": "str", "derivation": "SRC." + name}
+                            for name in fields
+                        ),
+                    ],
+                    "output": {"path": "output.csv", "columns": ["ID", *fields]},
+                }
+                result = self.build(source, {})
+                self.assertTrue(result.issues.is_empty(), result.issues)
+                self.assertEqual(result.output["ID"].to_list(), ids)
+                for name in fields:
+                    self.assertEqual(result.output[name].to_list(), text, name)
+
     def test_parquet_semantic_failures_collect_in_source_order(self):
         aliases = tuple(TRUTH["input_aliases"])
         # Every specification is pruned after composition: keep every input live

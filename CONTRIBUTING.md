@@ -4,8 +4,9 @@ Start with [AGENTS.md](AGENTS.md), the repository map and hard rules for people
 and coding agents. Language behavior belongs in [rules/](rules/README.md) and
 [yaml/](yaml/README.md). Independently authored benchmark expectations are the
 test oracle; reproduce a discrepancy independently before changing that truth.
-Breaking changes are allowed for 1.0.0. Remove obsolete interfaces and their
-callers together instead of keeping compatibility aliases.
+A change that breaks a user-facing interface needs an owner decision and a
+migration note (see AGENTS.md). Remove obsolete interfaces and their callers
+together instead of keeping compatibility aliases.
 
 ## Where changes belong
 
@@ -39,24 +40,53 @@ diagnostic/result records are imported from their shared adapter owner.
 
 Use the Rust toolchain selected by `rust/rust-toolchain.toml` and the unchanged
 canonical `rust/Cargo.lock`. Host source packages carry that workspace and lock.
+They carry the toolchain file too, so it names only what a build needs; add
+Clippy and rustfmt for repository checks with `rustup component add clippy rustfmt`
+from `rust/`, as `python -m tools.ci.toolchain --install` does in CI.
 The [source packaging guidance](docs/release.md#source-package-contents) links
 the vendored licenses and patch provenance.
+
+Every package ships the third-party notices generated from `rust/Cargo.lock`.
+After changing the lock, regenerate them and commit the results:
+
+```sh
+uv run --project python --no-sync python -m tools.packaging.generate_third_party_notices --write
+```
+
+`make check-repository` fails while a locked crate has no matching notice entry
+or the Python License-Expression misses a license that a linked crate is relied
+on under. The generator reads only the crate packages Cargo has unpacked. It
+stops instead of guessing when a crate needs a license outside its reviewed
+list or ships an unclassified license file; review the crate and extend the
+tables in `tools/packaging/generate_third_party_notices.py`.
 
 ## Develop and verify
 
 Run `make help` at the repository root for prerequisites, configuration variables
 and supported targets. Its inventory is the command reference. Set
 `CARGO_TARGET_DIR` when separate worktrees need independent Rust build output.
+After Rust changes, rerun `make setup`: it rebuilds the Python extension whenever
+a file listed under `tool.uv.cache-keys` in `python/pyproject.toml` changes.
+
+Before a push, run `make quick` and the tests nearest the change. It runs lint
+and the repository checks, leaving out only the R binding's Clippy, and no test
+suite, so it needs no R. Pull request CI runs the complete `make check`; when a
+job fails, reproduce it with that job's own target below. Run `make setup` again
+after changing `rust/` or `python/src/` before Python tests, which import the
+installed package.
 
 | Command | Purpose |
 | --- | --- |
 | `make setup` | Install the locked development environment. |
+| `make quick` | Run lint without the R binding and the repository checks, before a push. |
 | `make check` | Run the checks required by ordinary CI. |
 | `make check-lint` | Check formatting and lint across Python and Rust. |
 | `make check-repository` | Check authored specifications, layout, rules, references and the site. |
 | `make test-rust` | Run `cargo test --locked --workspace`, including both host bindings. |
 | `make test-python` | Run package/tool tests and standalone installed-host suites. |
 | `make test-r` | Build, install and strictly check a fresh R source package. |
+| `make check-equivalence` | Require unchanged results from fresh builds of both hosts (executor gate). |
+| `make probe-executor` | Time the executor probe on a release build; not part of CI. |
 | `make docs-test docs` | Test page ownership, generate dashboards and build the strict site. |
 
 For a focused Rust change, run `cargo test --locked -p <crate>` from `rust/`.
@@ -76,7 +106,9 @@ crate; do not import another crate's source into tests.
 Portable numerical behavior has independently authored controls in
 `rust/crates/yamaa-core/tests/fixtures/portable_math.tsv`.
 
-The Python and R READMEs describe user installation and APIs. Installed-host
+The Python and R READMEs describe user installation. The
+[Python package documentation](docs/articles/python.md) and the R README
+describe the host APIs. Installed-host
 [qualification](rust/qualification/README.md) owns distribution checks: tests
 run outside the checkout against an installed package, with independent inputs
 and expected bytes. A local source import does not establish package ownership
@@ -86,8 +118,8 @@ Repository orchestration imports the installed development tools package.
 Standalone installed suites use copied fixtures and readers; they must not
 import repository packages.
 
-For rule or schema changes, follow their area guides and run the corresponding
-AGENTS recipe. `make check-repository` runs `tools.rules.check`, which reads the
+For rule or schema changes, follow their area guides; `make quick` runs the
+repository checks. `make check-repository` runs `tools.rules.check`, which reads the
 rules once through `tools/rules/model.py` and checks cards, legacy requirements,
 every rule citation and markdown links. During the 1.0.0 conversion, run
 `python -m tools.rules.migrate statements --base origin/release/1.0.0` to list
@@ -109,30 +141,69 @@ path and context facts must match. Complete authored reports additionally pin
 all findings, exact values, logs, callbacks and artifact observations. Passing
 static repository validation does not establish engine release qualification.
 
+A change to the executor, such as rewrite 1 (#2785), must leave every result
+unchanged. Each such PR passes ordinary CI and `make check-equivalence` on its
+exact head, and says so in the PR. The gate builds the Python and R packages
+from the checkout and installs both outside it. On each host it runs public
+benchmark conformance: every active benchmark must reproduce its expected
+bytes, and every negative benchmark its first diagnostic's phase, condition,
+requirement and specification paths. On the same installs it then runs the
+installed Python suites and `R CMD check`, which carry the cross-host
+diagnostic parity truth and the host-fixture families. `make probe-executor`
+times one specification at 10,000, 100,000 and 1,000,000 rows, with and
+without one keyed intermediate lookup; `examples/executor_probe.rs` in the
+`yamaa` crate documents its shapes and arguments. Record its timings on an
+issue, never in the repository.
+
 ## CI and release qualification
 
 The ordinary CI workflow runs the same check targets listed above for each PR,
 every two hours on main, and on each push to a `release/**` branch. Merges to
 main do not start workflows other than the documentation site deployment; main
-is checked on those schedules instead. While a workflow's latest main run
-fails, the `Main health` workflow keeps a `main-red` issue open for it and
-closes the issue when a later main run succeeds. A PR that changes `.github/`
+is checked on those schedules instead. While the newest main run of CI or the
+documentation deployment fails, the `Main health` workflow keeps a `main-red`
+issue open for it and closes the issue when a later main run succeeds. A PR that changes `.github/`
 also runs actionlint over every workflow.
-
-PRs and the main schedule run only development checks: lint, repository
-checks, the Rust workspace, and the Python and R hosts on Linux. Release lanes
-check support claims and run on each `release/**` push and on dispatch: the
-minimum supported saved artifact readers in CI, the optional format feature
-selections and the macOS, Windows and R-devel package checks. Dependency
-graphs, native qualification, Harbor and coverage run on dispatch (native
-qualification also on a `qualification/issue-*` push). Dispatch any of them on
-a branch to check a change that needs them before merging.
 Keep workflow-specific setup in CI and reusable check logic in `tools/`.
 Pin external actions to complete commit IDs with exact release comments.
 
-`.github/workflows/dependency-graphs.yml` resolves minimum and newest
-compatible graphs on dispatch. Run a lane locally with R and the normal
-development prerequisites installed:
+PRs and the main schedule run only development checks: lint, repository
+checks, the Rust workspace, and the Python and R hosts on Linux. Release lanes
+check support claims and run on each `release/**` push and on dispatch: CI's
+minimum Rust toolchain, Python 3.15 and minimum saved artifact reader lanes,
+the optional format feature selections and the macOS, Windows and R-devel
+package checks. Dependency graphs and advisories, native qualification, Harbor
+and coverage run on dispatch (native qualification also on a
+`qualification/issue-*` push). Dispatch any of them on a branch with
+`gh workflow run <workflow> --ref <branch>` to check a change that needs them
+before merging.
+
+CI's `rust (minimum toolchain)` release lane checks and lints the workspace with its
+declared `rust-version`, Rust 1.90.0, instead of the pinned toolchain that every
+other job uses, because embedders build the facade with their own toolchains.
+Run it locally from `rust/`, with R installed:
+
+```sh
+rustup toolchain install 1.90.0 --profile minimal --component clippy
+RUSTFLAGS='-D warnings' cargo +1.90.0 check --locked --workspace --all-targets --all-features
+RUSTFLAGS='-D warnings' cargo +1.90.0 clippy --locked --workspace --all-targets --all-features -- -D warnings
+```
+
+The same job builds the facade from the outside workspace in
+`rust/tests/embedder`, as a project that depends on it by path does, and runs
+the vendored YAML parser's compact-flow controls directly and through the
+facade. Run it from the repository root; the copied lock keeps the run on the
+reviewed versions:
+
+```sh
+cp rust/Cargo.lock rust/tests/embedder/Cargo.lock
+RUSTFLAGS='-D warnings' cargo +1.90.0 test --manifest-path rust/tests/embedder/Cargo.toml --target-dir rust/target
+```
+
+`.github/workflows/dependency-graphs.yml` checks both locks against the
+advisory policy in `rust/deny.toml` and `osv-scanner.toml`, and resolves
+minimum and newest compatible graphs, on dispatch. Run a lane locally
+with R and the normal development prerequisites installed:
 
 ```sh
 uv run --project python --no-sync python -m tools.ci.dependency_graphs \
@@ -142,7 +213,7 @@ uv run --project python --no-sync python -m tools.ci.dependency_graphs \
 Use `--graph newest` for the upper lane. The destination must be new and outside
 the checkout. The minimum lane pins each workspace registry dependency to its
 declared lower bound and each Python runtime/test dependency to its floor.
-Reviewed local patches and exact policy pins remain in force. Transitive Cargo
+Vendored crates and exact policy pins remain in force. Transitive Cargo
 dependencies use the newest Rust-1.90-compatible selection, rather than claiming
 support for every historical transitive release. The newest lane starts without
 a Cargo lock and resolves all declared ranges with Cargo's MSRV fallback policy;
@@ -183,7 +254,8 @@ requires a fresh PR and head, even if the base was later changed back to main.
 PRs above 300 changed files require bounded coverage below, including when a
 shared head already has a successful status. Triage findings outside inline
 threads as well.
-The fresh manual check above remains mandatory before every merge.
+The fresh manual check above remains mandatory before every merge, except when
+CodeRabbit cannot review the PR; AGENTS.md states what replaces it then.
 An atomic change above CodeRabbit's 300-file review limit can use bounded
 review-only PRs. Each review PR must have a distinct head commit with the
 **complete target head tree**, a synthetic base in this repository, and at
@@ -223,7 +295,11 @@ dispatch or on a `qualification/issue-*` push. It checks public
 benchmark conformance, installed host suites, packaging, optimized Rust behavior
 and portable math. Passing ordinary CI does not qualify a release. The final
 merged revision needs complete native evidence, including strict R package
-checks with `Status: OK`.
+checks with `Status: OK`. A release tag publishes the native run that its
+`Qualified-Run` trailer names, and the `Release rehearsal` workflow, dispatched
+before tagging, runs the same selection against the latest successful main run
+without publishing;
+see [publication](docs/release.md#publication).
 
 Documentation deployment and Harbor evaluations have separate workflows.
 Harbor owns its task-build, oracle and changed-input checks; see its
@@ -239,7 +315,9 @@ Edit `README.md` for the site home and `rules/README.md` for the rules index.
 MkDocs reads those canonical files through its configured hook, resolves their
 repository-relative links and preserves their edit targets. Do not create
 copies under `docs/`. Other site pages live there; the navigation links directly
-to this contributor guide.
+to this contributor guide. A site page links a repository file outside `docs/`
+by relative path, such as `../rules/reference/csv.md`: the site points it at the
+file on main, and a copy read at a release tag names that tag's file.
 
 The requirement index, rules summary and schema-field references are generated
 from `rules/` and `yaml/` on every build. Edit the owning rule or schema, not a

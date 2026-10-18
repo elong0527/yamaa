@@ -191,13 +191,14 @@ mod file {
                 let path = path.replace('\\', "/");
                 path
             };
-            let mut project = study.prepare(&study.text(""), &[]).unwrap();
+            let project = study.prepare(&study.text(""), &[]).unwrap();
+            let mut run_scope = project.run_scope(None);
             let reads = project.capture_reads();
             let mut activation = Activation {
                 mismatch: true,
                 ..Default::default()
             };
-            let attempt = project.build(&mut activation, Scope::default());
+            let attempt = project.build(&mut run_scope, &mut activation, Scope::default());
             let run = project.retained_run();
             study.write("env/id.yaml", "changed after preparation");
             study.write("env/environment.yaml", "changed root after preparation");
@@ -248,14 +249,15 @@ mod file {
     );
             fs::remove_file(study.0.join("uv.lock")).unwrap();
             study.write("entry/input.csv", "ID\n1\n");
-            let mut project = study.prepare(&study.text(""), &[]).unwrap();
+            let project = study.prepare(&study.text(""), &[]).unwrap();
+            let mut run_scope = project.run_scope(None);
             assert!(project.run().environment().lock().is_none());
             assert!(project.run().captured_environment().lock().is_none());
             let mut activation = Activation {
                 reject: true,
                 ..Default::default()
             };
-            let attempt = project.build(&mut activation, Scope::default());
+            let attempt = project.build(&mut run_scope, &mut activation, Scope::default());
             assert!(attempt.boundary.is_ok());
             assert_eq!(attempt.activation.lock, LockObservation::NotRequested);
             assert_eq!(activation.trace, ["bind", "call", "call", "call"]);
@@ -280,7 +282,8 @@ mod file {
                 "schema_version: '1.0'\nlanguage: python\nfunctions: {id: id.yaml}\ncodelists: [ct.yaml]\n",
             );
             fs::remove_file(study.0.join("uv.lock")).unwrap();
-            let mut project = study.prepare(&study.text(""), &[]).unwrap();
+            let project = study.prepare(&study.text(""), &[]).unwrap();
+            let mut run_scope = project.run_scope(None);
             let reads = project.capture_reads();
             assert!(!study.0.join("entry/input.csv").exists());
             for reject_binding in [true, false] {
@@ -290,7 +293,7 @@ mod file {
                     mismatch: true,
                     ..Default::default()
                 };
-                let attempt = project.build(&mut activation, Scope::default());
+                let attempt = project.build(&mut run_scope, &mut activation, Scope::default());
                 if reject_binding {
                     assert!(matches!(
                         attempt.boundary,
@@ -307,14 +310,15 @@ mod file {
                 assert_eq!(attempt.activation.lock, LockObservation::NotRequested);
                 assert!(attempt.dataset.sources.is_empty());
                 assert!(matches!(attempt.dataset.result, Err(PortError::Incomplete)));
-                assert_eq!(project.capture_reads(), reads);
+                assert_eq!(run_scope.capture_reads(), reads);
             }
         }
 
         #[test]
         fn native_project_retains_metadata_and_reuses_exact_snapshots_with_fresh_activation() {
             let study = Study::new();
-            let mut project = study.prepare(&study.text(""), &[]).unwrap();
+            let project = study.prepare(&study.text(""), &[]).unwrap();
+            let mut run_scope = project.run_scope(None);
             assert_eq!(project.capture_reads(), 5);
             let captures = project.run().captured_environment();
             assert_eq!(
@@ -347,10 +351,10 @@ mod file {
             study.write("entry/domain.yaml", "[changed");
             study.write("entry/input.csv", "ID\n1\n");
             let mut activation = Activation::default();
-            let first = project.build(&mut activation, Scope::default());
+            let first = project.build(&mut run_scope, &mut activation, Scope::default());
             assert!(first.boundary.is_ok());
             assert_eq!(first.activation.lock, LockObservation::Verified);
-            assert_eq!(project.capture_reads(), 6);
+            assert_eq!(run_scope.capture_reads(), 6);
             assert_eq!(
                 first
                     .dataset
@@ -364,9 +368,9 @@ mod file {
                     .rows(),
                 &[vec![Value::Int(1), Value::Int(1)]]
             );
-            let second = project.build(&mut activation, Scope::default());
+            let second = project.build(&mut run_scope, &mut activation, Scope::default());
             assert!(second.boundary.is_ok());
-            assert_eq!(project.capture_reads(), 6);
+            assert_eq!(run_scope.capture_reads(), 6);
             assert_eq!(second.dataset.sources[0].read.snapshots_created, Some(0));
             assert!(std::sync::Arc::ptr_eq(
                 first.dataset.sources[0].snapshot.as_ref().unwrap(),
@@ -418,12 +422,13 @@ mod file {
         #[test]
         fn native_project_activation_rejection_precedes_even_a_missing_study_file() {
             let study = Study::new();
-            let mut project = study.prepare(&study.text(""), &[]).unwrap();
+            let project = study.prepare(&study.text(""), &[]).unwrap();
+            let mut run_scope = project.run_scope(None);
             let mut activation = Activation {
                 reject: true,
                 ..Default::default()
             };
-            let attempt = project.build(&mut activation, Scope::default());
+            let attempt = project.build(&mut run_scope, &mut activation, Scope::default());
             assert!(matches!(
                 attempt.boundary,
                 Err(BoundaryFailure::Activation(Failure::Lock(
@@ -432,7 +437,7 @@ mod file {
             ));
             assert!(attempt.dataset.sources.is_empty());
             assert!(matches!(attempt.dataset.result, Err(PortError::Incomplete)));
-            assert_eq!(project.capture_reads(), 5);
+            assert_eq!(run_scope.capture_reads(), 5);
             assert_eq!(activation.trace, ["lock"]);
         }
 
@@ -472,7 +477,8 @@ mod file {
                 }
             }
             let study = Study::new();
-            let mut project = study.prepare(&study.text(""), &[]).unwrap();
+            let project = study.prepare(&study.text(""), &[]).unwrap();
+            let mut run_scope = project.run_scope(None);
             let expected = project
                 .run()
                 .captured_environment()
@@ -485,6 +491,7 @@ mod file {
             let mut constructed = 0;
             for _ in 0..2 {
                 let attempt = project.build_with(
+                    &mut run_scope,
                     |run| {
                         constructed += 1;
                         Borrowed {
@@ -500,7 +507,7 @@ mod file {
                 assert!(attempt.dataset.result.unwrap().result.is_ok());
             }
             assert_eq!(constructed, 2);
-            assert_eq!(project.capture_reads(), 6);
+            assert_eq!(run_scope.capture_reads(), 6);
         }
 
         #[test]
@@ -513,11 +520,13 @@ mod file {
             else {
                 panic!("environment outside roots")
             };
-            let mut project = study
+            let project = study
                 .prepare(&study.text("entry"), &[study.text("")])
                 .unwrap();
+            let mut run_scope = project.run_scope(None);
             study.write("input.csv", "ID\n1\n");
-            let attempt = project.build(&mut Activation::default(), Scope::default());
+            let attempt =
+                project.build(&mut run_scope, &mut Activation::default(), Scope::default());
             assert!(attempt.boundary.is_ok());
             assert!(attempt.dataset.result.unwrap().result.is_ok());
             assert!(attempt.dataset.sources[0].read.source.path == "input.csv");
@@ -549,16 +558,18 @@ mod file {
                 "entry/domain.yaml",
                 "schema_version: '1.0'\nparent: ../parent/base.yaml\n",
             );
-            let mut project = study.prepare(&study.text(""), &[]).unwrap();
+            let project = study.prepare(&study.text(""), &[]).unwrap();
+            let mut run_scope = project.run_scope(None);
             assert_eq!(project.capture_reads(), 6);
             let document = project.run().document();
             assert_eq!(document.parents().len(), 1);
             assert_eq!(document.written_source_path("SRC"), Some("data.csv"));
             assert_eq!(project.run().compiled().source().path, "../parent/data.csv");
-            let attempt = project.build(&mut Activation::default(), Scope::default());
+            let attempt =
+                project.build(&mut run_scope, &mut Activation::default(), Scope::default());
             assert!(attempt.boundary.is_ok());
             assert!(attempt.dataset.result.unwrap().result.is_ok());
-            assert_eq!(project.capture_reads(), 7);
+            assert_eq!(run_scope.capture_reads(), 7);
         }
 
         #[test]
@@ -571,7 +582,7 @@ mod file {
                 "entry/domain.yaml",
                 "schema_version: '1.0'\nparent: ../parent/base.yaml\n",
             );
-            let Selected::Ordinary(mut project) = file_workflow::select_with_resources(
+            let Selected::Ordinary(project) = file_workflow::select_with_resources(
                 Resources::new(&study.text(""), &study.text("entry"), &[]).unwrap(),
                 "domain.yaml",
                 "../env/environment.yaml",
@@ -582,6 +593,7 @@ mod file {
             .unwrap() else {
                 panic!("ordinary capability");
             };
+            let mut run_scope = project.run_scope(None);
             assert_eq!(project.capture_reads(), 6);
             assert_eq!(project.run().compiled().source().path, "../parent/data.csv");
             // A fresh activation still refuses before the absent authored study source.
@@ -589,20 +601,20 @@ mod file {
                 reject: true,
                 ..Default::default()
             };
-            let rejection = project.build(&mut failed, Scope::default());
+            let rejection = project.build(&mut run_scope, &mut failed, Scope::default());
             assert_eq!(failed.trace, ["lock"]);
             assert!(rejection.dataset.sources.is_empty());
-            assert_eq!(project.capture_reads(), 6);
+            assert_eq!(run_scope.capture_reads(), 6);
             study.write("parent/data.csv", "ID\n1\n");
             let mut host = Activation::default();
-            let first = project.build(&mut host, Scope::default());
-            let second = project.build(&mut host, Scope::default());
+            let first = project.build(&mut run_scope, &mut host, Scope::default());
+            let second = project.build(&mut run_scope, &mut host, Scope::default());
             assert!(first.boundary.is_ok() && second.boundary.is_ok());
             assert_eq!(
                 host.trace,
                 ["lock", "bind", "call", "call", "call", "lock", "bind", "call", "call", "call"]
             );
-            assert_eq!(project.capture_reads(), 7);
+            assert_eq!(run_scope.capture_reads(), 7);
             assert!(std::sync::Arc::ptr_eq(
                 first.dataset.sources[0].snapshot.as_ref().unwrap(),
                 second.dataset.sources[0].snapshot.as_ref().unwrap()
@@ -2249,6 +2261,7 @@ mod file {
             };
             assert_eq!(
                 yamaa_adapters::file_application::check(
+                    yamaa_core::project_function::Language::Python,
                     yamaa_core::domain_entry::Request {
                         specification: &entry,
                         environment: None,
@@ -2259,6 +2272,7 @@ mod file {
             );
             assert_eq!(
                 yamaa_adapters::file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     yamaa_core::domain_entry::Request {
                         specification: &entry,
                         environment: None,
@@ -2747,7 +2761,7 @@ mod file {
                 "root.yaml",
                 &yaml("{RAW: never-read.csv}", "RAW", "root.csv", false),
             );
-            let Selected::Ordinary(mut selected) = study.select().unwrap() else {
+            let Selected::Ordinary(selected) = study.select().unwrap() else {
                 panic!("ordinary capability");
             };
             assert_eq!(selected.capture_reads(), 2);
@@ -2755,7 +2769,7 @@ mod file {
             assert!(!study.0.join("root.csv").exists());
             // An independent study source is first created and read after preparation.
             study.write("never-read.csv", "ID,VALUE\n1,alpha\n2,beta\n");
-            let mut ordinary = yamaa_adapters::file_project::FileProject::prepare(
+            let ordinary = yamaa_adapters::file_project::FileProject::prepare(
                 Resources::new(&study.path(""), &study.path(""), &[]).unwrap(),
                 "root.yaml",
                 "environment.yaml",
@@ -2764,9 +2778,15 @@ mod file {
                 shipped_schema::capture_environment().unwrap(),
             )
             .unwrap();
-            let selected_attempt = selected.build(&mut NoActivation, Scope::default());
-            let ordinary_attempt = ordinary.build(&mut NoActivation, Scope::default());
-            assert_eq!(selected.capture_reads(), 3);
+            let mut selected_scope = selected.run_scope(None);
+            let selected_attempt =
+                selected.build(&mut selected_scope, &mut NoActivation, Scope::default());
+            let ordinary_attempt = ordinary.build(
+                &mut ordinary.run_scope(None),
+                &mut NoActivation,
+                Scope::default(),
+            );
+            assert_eq!(selected_scope.capture_reads(), 3);
             let selected_result = yamaa_adapters::project_report::build_result(
                 selected.run(),
                 &selected_attempt,

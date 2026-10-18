@@ -1,12 +1,16 @@
 # Authoritative declaration input for the Python/R generators specified in README.md.
-# Both hosts' registrations and native declarations are generated from this file.
+# Both hosts' registrations and native declarations are generated from this file;
+# make check-repository and the native qualification lane compare the generated
+# files with it.
 format: yamaa.host-interface
 format_version: 1
 boundary: rust_generated_host_glue
 contract: README.md
 
-# Roles are imports, not declarations of a second record schema. Bind each role
-# to the actual public Rust path delivered by the owner before generating code.
+# Roles are imports, not declarations of a second record schema. The generator
+# resolves each role to its public symbol in yamaa_adapters::diagnostic_record
+# (BOUNDARY_VERSION, DiagnosticRecord, ResultRecord, PlanRecord); an unresolved
+# role is a generation error.
 imports:
   records:
     owner: https://github.com/elong0527/yamaa/issues/2674
@@ -42,7 +46,8 @@ handshake:
   result_record: records.result
 
 # Complete current registrations, in source order. Signatures describe the
-# current wire projections, not the future imported record fields. Type tokens
+# current wire projections, not the imported record types: the generator
+# resolves the record roles above but projects none of their fields. Type tokens
 # and per-host asymmetries are defined in README.md. Implicit interpreter/self
 # arguments are omitted. All returned values are owned unless marked otherwise.
 python:

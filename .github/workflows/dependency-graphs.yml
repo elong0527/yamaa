@@ -1,7 +1,8 @@
 name: Dependency graphs
 
-# Every graph is resolved and built from scratch. The declared ranges are a
-# release claim, so this release lane runs on dispatch before a release.
+# Every graph is resolved and built from scratch. The declared ranges and the
+# advisory policy in rust/deny.toml and osv-scanner.toml are release claims,
+# so this release lane runs on dispatch before a release.
 on:
   workflow_dispatch:
 
@@ -17,7 +18,44 @@ defaults:
     shell: bash
 
 jobs:
+  advisories:
+    name: advisories (Cargo.lock, uv.lock)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check the Rust lock against RustSec advisories
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1 (cargo-deny 0.20.2)
+        with:
+          manifest-path: rust/Cargo.toml
+          command: check advisories
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          version: '0.13.0'
+      - name: Check the Python lock against advisories
+        run: |
+          uv export --project python --frozen --all-extras --all-groups \
+            --no-emit-project --no-emit-local > "$RUNNER_TEMP/requirements.txt"
+          uvx --from pip-audit==2.10.1 pip-audit --strict --disable-pip \
+            --require-hashes -r "$RUNNER_TEMP/requirements.txt"
+      # OSV also carries GitHub's reviewed advisories, which RustSec and the
+      # PyPI database can lack. Its ignores live in osv-scanner.toml.
+      - name: Check both locks against OSV advisories
+        run: |
+          curl --fail --location --silent --show-error \
+            https://github.com/google/osv-scanner/releases/download/v2.7.0/osv-scanner_linux_amd64 \
+            --output "$RUNNER_TEMP/osv-scanner"
+          chmod +x "$RUNNER_TEMP/osv-scanner"
+          "$RUNNER_TEMP/osv-scanner" scan source --config osv-scanner.toml \
+            --lockfile rust/Cargo.lock --lockfile python/uv.lock
+
   graph:
+    # Rust 1.90 is the workspace rust-version that both graphs resolve
+    # against. They build with the pinned toolchain; the CI workflow checks
+    # the minimum toolchain. Branch rulesets require these check names, so
+    # moving the pin leaves them unchanged.
     name: ${{ matrix.graph }} (Python ${{ matrix.python }}, Rust 1.90, R 4.6.1)
     runs-on: ubuntu-24.04
     timeout-minutes: 90
@@ -25,7 +63,7 @@ jobs:
       fail-fast: false
       matrix:
         graph: [minimum, newest]
-        python: ['3.12', '3.14']
+        python: ['3.12', '3.14', '3.15']
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

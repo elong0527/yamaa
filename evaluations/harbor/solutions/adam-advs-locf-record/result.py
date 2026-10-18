@@ -4,73 +4,82 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build the ADVS LOCF dataset from PLAN and VS.
 
-import polars as pl
+One output record per planned visit (per subject and parameter). For each
+planned visit, AVAL is the latest non-missing result selected for analysis
+(ANL01FL = "Y") at or before the planned visit within the same subject and
+parameter; the latest observation is the one with the highest visit number,
+then the highest sequence number within that visit. ADT and QSSEQ are the
+date and source sequence number of that same observation. A result of zero
+counts as a collected result. With no such observation, AVAL, ADT, and
+QSSEQ are blank.
+"""
 
-plan = pl.read_csv("/app/input/plan.csv", infer_schema=False).with_columns(
-    pl.col("AVISITN").cast(pl.Int64, strict=False)
-)
-vs = pl.read_csv("/app/input/vs.csv", infer_schema=False).with_columns(
-    pl.col("AVISITN").cast(pl.Int64, strict=False),
-    pl.col("AVAL").cast(pl.Float64, strict=False),
-    pl.col("ADT").str.to_date(strict=False),
-    pl.col("QSSEQ").cast(pl.Int64, strict=False),
-)
+import csv
+import os
 
-# Only results selected for analysis can be carried.
-candidates = vs.filter(
-    (pl.col("ANL01FL") == "Y") & pl.col("AVAL").is_not_null()
-)
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-# The latest non-missing selected result at or before the planned visit:
-# the highest visit number, then the highest sequence number.
-rows = []
-for planned in plan.sort(["USUBJID", "PARAMCD", "AVISITN"]).iter_rows(named=True):
-    donor = (
-        candidates.filter(
-            (pl.col("USUBJID") == planned["USUBJID"])
-            & (pl.col("PARAMCD") == planned["PARAMCD"])
-            & (pl.col("AVISITN") <= planned["AVISITN"])
-        )
-        .sort(["AVISITN", "QSSEQ"])
-        .tail(1)
-    )
-    if donor.height:
-        record = donor.row(0, named=True)
-        rows.append(
+
+def read_rows(path):
+    with open(path, newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
+
+
+def main():
+    plan = read_rows(os.path.join(INPUT_DIR, "plan.csv"))
+    vs = read_rows(os.path.join(INPUT_DIR, "vs.csv"))
+
+    # Candidate observations: selected for analysis with a collected result.
+    candidates = {}
+    for row in vs:
+        if row["ANL01FL"] != "Y":
+            continue
+        if row["AVAL"] is None or row["AVAL"].strip() == "":
+            continue
+        key = (row["USUBJID"], row["PARAMCD"])
+        candidates.setdefault(key, []).append(row)
+
+    out_rows = []
+    for planned in plan:
+        key = (planned["USUBJID"], planned["PARAMCD"])
+        planned_visit = int(planned["AVISITN"])
+        eligible = [
+            row
+            for row in candidates.get(key, [])
+            if int(row["AVISITN"]) <= planned_visit
+        ]
+        aval = adt = qsseq = ""
+        if eligible:
+            latest = max(
+                eligible,
+                key=lambda row: (int(row["AVISITN"]), int(row["QSSEQ"])),
+            )
+            aval = latest["AVAL"]
+            adt = latest["ADT"]
+            qsseq = latest["QSSEQ"]
+        out_rows.append(
             {
                 "USUBJID": planned["USUBJID"],
                 "PARAMCD": planned["PARAMCD"],
                 "AVISITN": planned["AVISITN"],
-                "AVAL": record["AVAL"],
-                "ADT": record["ADT"],
-                "QSSEQ": record["QSSEQ"],
-            }
-        )
-    else:
-        rows.append(
-            {
-                "USUBJID": planned["USUBJID"],
-                "PARAMCD": planned["PARAMCD"],
-                "AVISITN": planned["AVISITN"],
-                "AVAL": None,
-                "ADT": None,
-                "QSSEQ": None,
+                "AVAL": aval,
+                "ADT": adt,
+                "QSSEQ": qsseq,
             }
         )
 
-advs = pl.DataFrame(
-    rows,
-    schema={
-        "USUBJID": pl.String,
-        "PARAMCD": pl.String,
-        "AVISITN": pl.Int64,
-        "AVAL": pl.Float64,
-        "ADT": pl.Date,
-        "QSSEQ": pl.Int64,
-    },
-).sort(["USUBJID", "PARAMCD", "AVISITN"])
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    fieldnames = ["USUBJID", "PARAMCD", "AVISITN", "AVAL", "ADT", "QSSEQ"]
+    with open(
+        os.path.join(OUTPUT_DIR, "advs.csv"), "w", newline="", encoding="utf-8"
+    ) as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(out_rows)
 
-Path("/app/output").mkdir(parents=True, exist_ok=True)
-advs.write_csv("/app/output/advs.csv")
+
+if __name__ == "__main__":
+    main()

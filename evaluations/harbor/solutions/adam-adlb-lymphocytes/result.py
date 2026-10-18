@@ -4,62 +4,100 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Create ADLB from LB: collected records plus calculated absolute
+differential counts (WBC count times the matching differential fraction)
+where the absolute parameter is not already present."""
 
-import polars as pl
+import csv
+import os
 
-raw = (
-    pl.read_csv("/app/input/lb.csv", infer_schema=False)
-    .with_columns(pl.col("LBSTRESN").cast(pl.Float64, strict=False))
-    .rename({"LBTESTCD": "PARAMCD", "LBSTRESN": "AVAL", "LBTEST": "PARAM"})
-)
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-# Keep every collected record unchanged, with DTYPE empty.
-collected = raw.select("USUBJID", "PARAMCD", "AVAL", "PARAM", "VISIT").with_columns(
-    DTYPE=pl.lit(None, dtype=pl.String)
-)
+# differential fraction test code -> (absolute parameter code, PARAM name)
+DIFFERENTIALS = [
+    ("LYMLE", "LYMPH", "Lymphocytes Abs (10^9/L)"),
+    ("NEUTLE", "NEUT", "Neutrophils Abs (10^9/L)"),
+    ("MONOLE", "MONO", "Monocytes Abs (10^9/L)"),
+    ("EOSLE", "EOS", "Eosinophils Abs (10^9/L)"),
+    ("BASOLE", "BASO", "Basophils Abs (10^9/L)"),
+]
 
-# Differential fraction code -> (absolute code, absolute parameter name).
-differentials = {
-    "LYMLE": ("LYMPH", "Lymphocytes Abs (10^9/L)"),
-    "NEUTLE": ("NEUT", "Neutrophils Abs (10^9/L)"),
-    "MONOLE": ("MONO", "Monocytes Abs (10^9/L)"),
-    "EOSLE": ("EOS", "Eosinophils Abs (10^9/L)"),
-    "BASOLE": ("BASO", "Basophils Abs (10^9/L)"),
-}
 
-wbc = raw.filter(pl.col("PARAMCD") == "WBC").select("USUBJID", "VISIT", WBCVAL="AVAL")
+def format_number(value):
+    text = f"{value:.10f}".rstrip("0").rstrip(".")
+    return text if text not in ("", "-0") else "0"
 
-frames = []
-for frac_code, (abs_code, abs_param) in differentials.items():
-    frac = (
-        raw.filter(pl.col("PARAMCD") == frac_code)
-        .select("USUBJID", "VISIT", FRACVAL="AVAL")
-    )
-    existing = (
-        raw.filter(pl.col("PARAMCD") == abs_code)
-        .select("USUBJID", "VISIT")
-        .with_columns(pl.lit(True).alias("HAS_ABS"))
-    )
-    calc = (
-        wbc.join(frac, on=["USUBJID", "VISIT"], how="inner")
-        .join(existing, on=["USUBJID", "VISIT"], how="left")
-        .filter(
-            pl.col("WBCVAL").is_not_null()
-            & pl.col("FRACVAL").is_not_null()
-            & pl.col("HAS_ABS").is_null()
+
+def main():
+    with open(os.path.join(INPUT_DIR, "lb.csv"), newline="") as handle:
+        lb_rows = list(csv.DictReader(handle))
+
+    collected = []
+    wbc = {}        # (subject, visit) -> WBC count (float)
+    fractions = {}  # (subject, visit, fraction code) -> fraction (float)
+    existing = set()  # (subject, visit, paramcd) among collected records
+    group_order = []  # (subject, visit) in first-appearance order
+
+    for row in lb_rows:
+        subject = row["USUBJID"]
+        visit = row["VISIT"]
+        testcd = row["LBTESTCD"]
+        key = (subject, visit)
+        if key not in group_order:
+            group_order.append(key)
+        value_text = row["LBSTRESN"].strip()
+        value = float(value_text) if value_text else None
+
+        collected.append(
+            {
+                "USUBJID": subject,
+                "PARAMCD": testcd,
+                "AVAL": value_text,
+                "PARAM": row["LBTEST"],
+                "VISIT": visit,
+                "DTYPE": "",
+            }
         )
-        .with_columns(
-            PARAMCD=pl.lit(abs_code),
-            AVAL=pl.col("WBCVAL") * pl.col("FRACVAL"),
-            PARAM=pl.lit(abs_param),
-            DTYPE=pl.lit("CALCULATION"),
-        )
-        .select("USUBJID", "PARAMCD", "AVAL", "PARAM", "VISIT", "DTYPE")
-    )
-    frames.append(calc)
+        existing.add((subject, visit, testcd))
+        if value is None:
+            continue
+        if testcd == "WBC":
+            wbc.setdefault(key, value)
+        elif any(testcd == frac for frac, _, _ in DIFFERENTIALS):
+            fractions.setdefault((subject, visit, testcd), value)
 
-adlb = pl.concat([collected, *frames], how="diagonal")
+    added = []
+    for subject, visit in group_order:
+        key = (subject, visit)
+        if key not in wbc:
+            continue
+        for frac_code, abs_code, abs_name in DIFFERENTIALS:
+            frac_key = (subject, visit, frac_code)
+            if frac_key not in fractions:
+                continue
+            if (subject, visit, abs_code) in existing:
+                continue
+            added.append(
+                {
+                    "USUBJID": subject,
+                    "PARAMCD": abs_code,
+                    "AVAL": format_number(wbc[key] * fractions[frac_key]),
+                    "PARAM": abs_name,
+                    "VISIT": visit,
+                    "DTYPE": "CALCULATION",
+                }
+            )
 
-Path("/app/output").mkdir(exist_ok=True)
-adlb.write_csv("/app/output/adlb.csv")
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    fieldnames = ["USUBJID", "PARAMCD", "AVAL", "PARAM", "VISIT", "DTYPE"]
+    with open(
+        os.path.join(OUTPUT_DIR, "adlb.csv"), "w", newline=""
+    ) as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(collected + added)
+
+
+if __name__ == "__main__":
+    main()

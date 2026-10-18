@@ -46,7 +46,7 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
-          version: '0.11.6'
+          version: '0.13.0'
           enable-cache: true
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -112,11 +112,13 @@ jobs:
           if-no-files-found: error
       - name: Preserve Python 3.12 numerical assessment coverage
         # The native build matrix uses 3.14, but portable-math-exact still
-        # requires independent observations from all three supported interpreters.
+        # requires independent observations from every supported interpreter.
         # Reuse the Rust probe; this stdlib-only assessment needs no wheel build.
         run: uv run --no-project --python 3.12 python -m tools.numeric.assess_math --output "${RUNNER_TEMP}/math-assessment-3.12/math-assessment.json"
       - name: Preserve Python 3.13 numerical assessment coverage
         run: uv run --no-project --python 3.13 python -m tools.numeric.assess_math --output "${RUNNER_TEMP}/math-assessment-3.13/math-assessment.json"
+      - name: Preserve Python 3.15 numerical assessment coverage
+        run: uv run --no-project --python 3.15 python -m tools.numeric.assess_math --output "${RUNNER_TEMP}/math-assessment-3.15/math-assessment.json"
       - name: Preserve candidate math assessment (not parity qualification)
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
@@ -137,6 +139,13 @@ jobs:
         with:
           name: math-assessment-${{ matrix.os }}-3.13
           path: ${{ runner.temp }}/math-assessment-3.13/math-assessment.json
+          if-no-files-found: error
+      - name: Preserve Python 3.15 candidate math assessment
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: math-assessment-${{ matrix.os }}-3.15
+          path: ${{ runner.temp }}/math-assessment-3.15/math-assessment.json
           if-no-files-found: error
   dist:
     name: native-dist (${{ matrix.os }}, ${{ matrix.python }})
@@ -159,7 +168,7 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
-          version: '0.11.6'
+          version: '0.13.0'
           enable-cache: true
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -204,6 +213,8 @@ jobs:
         run: |
           python -m tools.packaging.check_python_package_hygiene "${RUNNER_TEMP}/native-dist"
           python -m tools.packaging.check_cargo_lock --output-dir "${RUNNER_TEMP}/rust-dependencies" "${RUNNER_TEMP}"/native-dist/*.tar.gz
+          python -m tools.packaging.generate_third_party_notices
+          python -m tools.packaging.check_package_notices "${RUNNER_TEMP}"/native-dist/*.whl "${RUNNER_TEMP}"/native-dist/*.tar.gz
       - name: Preserve the reference host wheel
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
@@ -239,8 +250,12 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04, macos-15, windows-latest]
-        python: ['3.12', '3.13', '3.14']
+        python: ['3.12', '3.13', '3.14', '3.15']
         form: [wheel, source]
+    env:
+      # A wheel lane installs its own host's wheel. Every source lane installs
+      # the Linux-built source archive, the one a release publishes.
+      ARCHIVE_HOST: ${{ matrix.form == 'source' && 'ubuntu-24.04' || matrix.os }}
     steps:
       - name: Preserve fixture bytes and symlinks on Windows
         if: runner.os == 'Windows'
@@ -252,7 +267,7 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
-          version: '0.11.6'
+          version: '0.13.0'
           enable-cache: true
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -271,7 +286,7 @@ jobs:
       # report identify exactly what was installed.
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: native-python-${{ matrix.os }}-${{ env.NATIVE_BUILD_PYTHON }}
+          name: native-python-${{ env.ARCHIVE_HOST }}-${{ env.NATIVE_BUILD_PYTHON }}
           path: ${{ runner.temp }}/native-dist
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -302,7 +317,14 @@ jobs:
           python -m pip install --no-cache-dir --no-deps native-dist/*.tar.gz project-dist/*.whl
       - name: Install the minimum supported Python saved artifact readers
         working-directory: ${{ runner.temp }}
-        run: python -m pip install polars==1.35.2 pyarrow==23.0.1 lxml==6.1.0
+        # CPython 3.15 has its own floors in python/pyproject.toml, the oldest
+        # releases that work there.
+        run: |
+          if [ "${{ matrix.python }}" = 3.15 ]; then
+            python -m pip install polars==2.0.0 pyarrow==26.0.0 lxml==6.1.3
+          else
+            python -m pip install polars==1.35.2 pyarrow==23.0.1 lxml==6.1.3
+          fi
       - name: Report installed Python public benchmark conformance
         working-directory: ${{ runner.temp }}
         run: |
@@ -334,7 +356,7 @@ jobs:
           YAMAA_PUBLIC_REPORT_DIR="${RUNNER_TEMP}/qualification/${FORM}/public-reports" python -I -m tools.commands.installed run \
             --output "qualification/${FORM}/supplemental" --runtime python --staged-root "${RUNNER_TEMP}" \
             --source-revision "${QUALIFICATION_SOURCE_REVISION}" --package-form "${FORM}" \
-            --artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-python-${{ matrix.os }}-${{ env.NATIVE_BUILD_PYTHON }}/$(basename "${archives[0]}")" \
+            --artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-python-${{ env.ARCHIVE_HOST }}-${{ env.NATIVE_BUILD_PYTHON }}/$(basename "${archives[0]}")" \
             --host-artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-reference-${{ matrix.os }}-${{ env.NATIVE_BUILD_PYTHON }}/$(basename reference-dist/*.whl)" \
             --evidence "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
       - name: Preserve native qualification reports
@@ -356,7 +378,7 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
-          version: '0.11.6'
+          version: '0.13.0'
           enable-cache: true
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -372,9 +394,52 @@ jobs:
       - name: Compare every candidate bit across the native matrix
         run: python -m tools.numeric.check_math_portability math-assessments
 
+  r-dist:
+    name: native-r-dist (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        # A release publishes the R source archive built here, and every
+        # native-r lane installs these same bytes.
+        os: [ubuntu-24.04]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install repository tools
+        run: |
+          python -m pip install --no-deps -e .
+          python -m tools.ci.toolchain
+      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+        with:
+          r-version: '4.6.1'
+          use-public-rspm: true
+      - name: Install Rust
+        run: python -m tools.ci.toolchain --install
+      - name: Install the shared grammar and benchmark metadata codecs
+        run: python -m pip install py-yaml12==0.2.0 pyyaml==6.0.3
+      - name: Stage standalone R package
+        run: python -m tools.staging.stage_r_package "${RUNNER_TEMP}/native-stage/yamaa"
+      - name: Build R source package
+        working-directory: ${{ runner.temp }}
+        run: |
+          R CMD build --no-build-vignettes --no-manual native-stage/yamaa
+          python -m tools.packaging.check_cargo_lock yamaa_0.5.0.tar.gz
+      - name: Preserve source archive
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: native-r-${{ matrix.os }}
+          path: ${{ runner.temp }}/yamaa_0.5.0.tar.gz
+          if-no-files-found: error
+
   r:
 
     name: native-r (${{ matrix.os }})
+    needs: r-dist
     runs-on: ${{ matrix.os }}
     timeout-minutes: ${{ matrix.os == 'windows-latest' && 40 || 20 }}
     strategy:
@@ -392,7 +457,7 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
-          version: '0.11.6'
+          version: '0.13.0'
           enable-cache: true
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -439,17 +504,22 @@ jobs:
         run: cargo clippy --locked --target x86_64-pc-windows-gnu -p yamaa-r -- -D warnings
       - name: Install the shared grammar and benchmark metadata codecs
         run: python -m pip install py-yaml12==0.2.0 pyyaml==6.0.3
-      - name: Stage standalone R package
-        run: python -m tools.staging.stage_r_package "${RUNNER_TEMP}/native-stage/yamaa"
-      - name: Build and install R outside checkout
+      # Every lane installs the Linux-built archive that a release publishes,
+      # not one built on its own host.
+      - name: Download the published R source archive
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: native-r-ubuntu-24.04
+          path: ${{ runner.temp }}
+      - name: Install R outside checkout
         id: r_install
         working-directory: ${{ runner.temp }}
         run: |
           mkdir -p native-r-library
-          R CMD build --no-build-vignettes --no-manual native-stage/yamaa
-          python -m tools.packaging.check_cargo_lock --output-dir "${RUNNER_TEMP}/rust-dependencies" yamaa_0.4.0.tar.gz
+          python -m tools.packaging.check_cargo_lock --output-dir "${RUNNER_TEMP}/rust-dependencies" yamaa_0.5.0.tar.gz
+          python -m tools.packaging.check_package_notices yamaa_0.5.0.tar.gz
           R CMD INSTALL --library="${RUNNER_TEMP}/native-r-library" "${GITHUB_WORKSPACE}/rust/tests/project-programs/r"
-          R CMD INSTALL --library="${RUNNER_TEMP}/native-r-library" yamaa_0.4.0.tar.gz
+          R CMD INSTALL --library="${RUNNER_TEMP}/native-r-library" yamaa_0.5.0.tar.gz
           if [ "${{ runner.os }}" = Windows ]; then
             python -c 'from pathlib import Path; import shutil; dlls = list(Path("native-r-library/yamaa/libs").rglob("yamaa.dll")); assert len(dlls) == 1, "installed R DLL is missing or ambiguous"; shutil.copy2(dlls[0], "windows-r-toolchain/yamaa.dll")'
           fi
@@ -508,7 +578,7 @@ jobs:
           YAMAA_PUBLIC_REPORT_DIR="${RUNNER_TEMP}/qualification/r-source/public-reports" R_LIBS="${RUNNER_TEMP}/native-r-library" python -I -m tools.commands.installed run \
             --output qualification/r-source --runtime r --staged-root "${RUNNER_TEMP}" \
             --source-revision "$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD)" --package-form source \
-            --artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-r-${{ matrix.os }}/yamaa_0.4.0.tar.gz" \
+            --artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-r-ubuntu-24.04/yamaa_0.5.0.tar.gz" \
             --evidence "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
       - name: Check R source package outside checkout
         id: r_package_check
@@ -518,7 +588,7 @@ jobs:
           R_LIBS: ${{ runner.temp }}/native-r-library
         run: |
           python -m tools.commands.check_r \
-            --archive "${RUNNER_TEMP}/yamaa_0.4.0.tar.gz" --work-dir "${RUNNER_TEMP}/native-r-check"
+            --archive "${RUNNER_TEMP}/yamaa_0.5.0.tar.gz" --work-dir "${RUNNER_TEMP}/native-r-check"
       - name: Preserve R package check
         if: ${{ always() && (steps.r_package_check.outcome == 'success' || steps.r_package_check.outcome == 'failure') }}
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
@@ -551,11 +621,6 @@ jobs:
           name: rust-dependencies-r-${{ matrix.os }}
           path: ${{ runner.temp }}/rust-dependencies
           if-no-files-found: error
-      - name: Preserve source archive
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
-        with:
-          name: native-r-${{ matrix.os }}
-          path: ${{ runner.temp }}/yamaa_0.4.0.tar.gz
 
   public-cohort:
     name: public-cohort-complete-runs
@@ -573,7 +638,7 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
-          version: '0.11.6'
+          version: '0.13.0'
           enable-cache: true
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:

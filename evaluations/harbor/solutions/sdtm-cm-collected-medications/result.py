@@ -4,89 +4,87 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
+"""Build the SDTM CM dataset from the long-format ODM extract.
+
+One record per medication: a medication is one ItemGroupRepeatKey group
+within a subject. Reads /app/input/odm.csv and writes /app/output/cm.csv.
+"""
+
+import csv
 import re
-from pathlib import Path
+from collections import OrderedDict
 
-import polars as pl
+INPUT = "/app/input/odm.csv"
+OUTPUT = "/app/output/cm.csv"
 
-odm = pl.read_csv("/app/input/odm.csv", infer_schema=False)
+COLUMNS = [
+    "DOMAIN", "STUDYID", "USUBJID", "CMSEQ", "CMTRT", "CMINDC", "CMDOSE",
+    "CMDOSTXT", "CMDOSU", "CMDOSFRQ", "CMROUTE", "CMSTDTC", "CMENDTC",
+    "CMSTRTPT", "CMSTTPT", "CMENRTPT", "CMENTPT",
+]
 
-wide = odm.filter(pl.col("ItemGroupOID") == "IG.CM").pivot(
-    index=["StudyOID", "SubjectKey", "ItemGroupRepeatKey"],
-    on="ItemOID",
-    values="Value",
-    aggregate_function="first",
-)
+FREQ_MAP = {"Once daily": "QD", "Twice daily": "BID"}
+ROUTE_MAP = {"By mouth": "ORAL"}
 
-# A plain number carries the dose; anything else (like a range 50-75) stays
-# as text. Frequency and route labels map to controlled terminology.
-def is_plain_number(value: str | None) -> bool:
-    return value is not None and re.fullmatch(r"\d+(\.\d+)?", value.strip() or "") is not None
+PLAIN_NUMBER = re.compile(r"^[+-]?(\d+(\.\d*)?|\.\d+)$")
 
 
-rows = []
-for record in wide.to_dicts():
-    dose_raw = (record.get("IT.CM.CMDSTXT") or "").strip() or None
-    if dose_raw is not None and is_plain_number(dose_raw):
-        dose, dosetxt = float(dose_raw), None
-    else:
-        dose, dosetxt = None, dose_raw
-    freq_raw = record.get("IT.CM.CMDOSFRQ")
-    freq = {"Once daily": "QD", "Twice daily": "BID"}.get(freq_raw, freq_raw) or None
-    route_raw = record.get("IT.CM.CMROUTE")
-    route = {"By mouth": "ORAL"}.get(route_raw, route_raw) or None
-    prior = record.get("IT.CM.CMPRIOR")
-    ongo = record.get("IT.CM.CMONGO")
-    # BEFORE/SCREENING when the taken-before-study box is checked; ONGOING/
-    # END OF STUDY when the ongoing box is checked. An ongoing medication
-    # has no end date.
-    endtc = record.get("IT.CM.CMENDTC") or None
-    if ongo == "Y":
-        endtc = None
-    rows.append(
-        {
+def dose_fields(text):
+    """Split collected dose text into (CMDOSE, CMDOSTXT)."""
+    if text is None or text == "":
+        return "", ""
+    if PLAIN_NUMBER.match(text.strip()):
+        value = float(text)
+        number = str(int(value)) if value == int(value) else repr(value)
+        return number, ""
+    return "", text
+
+
+def main():
+    with open(INPUT, newline="", encoding="utf-8") as fh:
+        rows = list(csv.DictReader(fh))
+
+    # Group item rows into medication records, preserving collected order.
+    records = OrderedDict()
+    for row in rows:
+        key = (row["StudyOID"], row["SubjectKey"], row["ItemGroupRepeatKey"])
+        record = records.setdefault(key, {})
+        record[row["ItemOID"]] = row["Value"]
+
+    out_rows = []
+    for (study_oid, subject_key, repeat), items in records.items():
+        cmdose, cmdostxt = dose_fields(items.get("IT.CM.CMDSTXT"))
+
+        prior = items.get("IT.CM.CMPRIOR") == "Y"
+        ongoing = items.get("IT.CM.CMONGO") == "Y"
+
+        out_rows.append({
             "DOMAIN": "CM",
-            "STUDYID": record["StudyOID"],
-            "USUBJID": record["SubjectKey"],
-            "CMSEQ": int(record["ItemGroupRepeatKey"]),
-            "CMTRT": record.get("IT.CM.CMTRT") or None,
-            "CMINDC": record.get("IT.CM.CMINDC") or None,
-            "CMDOSE": dose,
-            "CMDOSTXT": dosetxt,
-            "CMDOSU": record.get("IT.CM.CMDOSU") or None,
-            "CMDOSFRQ": freq,
-            "CMROUTE": route,
-            "CMSTDTC": record.get("IT.CM.CMSTDTC") or None,
-            "CMENDTC": endtc,
-            "CMSTRTPT": "BEFORE" if prior == "Y" else None,
-            "CMSTTPT": "SCREENING" if prior == "Y" else None,
-            "CMENRTPT": "ONGOING" if ongo == "Y" else None,
-            "CMENTPT": "END OF STUDY" if ongo == "Y" else None,
-        }
-    )
+            "STUDYID": study_oid,
+            "USUBJID": subject_key,
+            "CMSEQ": repeat,
+            "CMTRT": items.get("IT.CM.CMTRT", ""),
+            "CMINDC": items.get("IT.CM.CMINDC", ""),
+            "CMDOSE": cmdose,
+            "CMDOSTXT": cmdostxt,
+            "CMDOSU": items.get("IT.CM.CMDOSU", ""),
+            "CMDOSFRQ": FREQ_MAP.get(items.get("IT.CM.CMDOSFRQ", ""),
+                                     items.get("IT.CM.CMDOSFRQ", "")),
+            "CMROUTE": ROUTE_MAP.get(items.get("IT.CM.CMROUTE", ""),
+                                     items.get("IT.CM.CMROUTE", "")),
+            "CMSTDTC": items.get("IT.CM.CMSTDTC", ""),
+            "CMENDTC": items.get("IT.CM.CMENDTC", ""),
+            "CMSTRTPT": "BEFORE" if prior else "",
+            "CMSTTPT": "SCREENING" if prior else "",
+            "CMENRTPT": "ONGOING" if ongoing else "",
+            "CMENTPT": "END OF STUDY" if ongoing else "",
+        })
 
-cm = pl.DataFrame(
-    rows,
-    schema={
-        "DOMAIN": pl.String,
-        "STUDYID": pl.String,
-        "USUBJID": pl.String,
-        "CMSEQ": pl.Int64,
-        "CMTRT": pl.String,
-        "CMINDC": pl.String,
-        "CMDOSE": pl.Float64,
-        "CMDOSTXT": pl.String,
-        "CMDOSU": pl.String,
-        "CMDOSFRQ": pl.String,
-        "CMROUTE": pl.String,
-        "CMSTDTC": pl.String,
-        "CMENDTC": pl.String,
-        "CMSTRTPT": pl.String,
-        "CMSTTPT": pl.String,
-        "CMENRTPT": pl.String,
-        "CMENTPT": pl.String,
-    },
-).sort(["USUBJID", "CMSEQ"])
+    with open(OUTPUT, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=COLUMNS)
+        writer.writeheader()
+        writer.writerows(out_rows)
 
-Path("/app/output").mkdir(exist_ok=True)
-cm.write_csv("/app/output/cm.csv")
+
+if __name__ == "__main__":
+    main()

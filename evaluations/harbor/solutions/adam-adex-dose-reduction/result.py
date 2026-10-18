@@ -4,41 +4,59 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Create ADEX from EX: flag administrations whose dose is lower than the
+dose of the subject's immediately preceding administration."""
 
-import polars as pl
+import csv
 
-ex = pl.read_csv("/app/input/ex.csv", infer_schema=False).with_columns(
-    pl.col("EXSEQ").cast(pl.Int64)
-)
+INPUT = "/app/input/ex.csv"
+OUTPUT = "/app/output/adex.csv"
 
-adex = (
-    ex.with_columns(
-        EXSTDTM=pl.when(pl.col("EXSTDTM").str.len_chars() == 16)
-        .then(pl.col("EXSTDTM") + ":00")
-        .otherwise(pl.col("EXSTDTM")),
-        EXDOSE=pl.col("EXDOSE").cast(pl.Float64, strict=False),
+COLUMNS = ["STUDYID", "USUBJID", "EXSEQ", "EXSTDTM", "EXDOSE", "DOSREDFL"]
+
+
+def parse_dose(text):
+    """Return the numeric dose, or None when the value is missing."""
+    if text is None or text.strip() == "":
+        return None
+    return float(text)
+
+
+def main():
+    with open(INPUT, newline="") as f:
+        rows = list(csv.DictReader(f))
+
+    # Order administrations within each subject by start date/time,
+    # breaking ties by sequence number.
+    ordered = sorted(
+        rows,
+        key=lambda r: (r["USUBJID"], r["EXSTDTM"], int(r["EXSEQ"])),
     )
-    # Chronological treatment-start order within each subject, breaking
-    # timestamp ties by sequence number. ISO datetimes sort as text.
-    .sort(["USUBJID", "EXSTDTM", "EXSEQ"])
-    .with_columns(PREVDOSE=pl.col("EXDOSE").shift(1).over("USUBJID"))
-    # Y when the current dose is lower than the previous one; no value for
-    # the first record and whenever either dose is zero or missing. The
-    # previous dose is always the administration just before.
-    .with_columns(
-        DOSREDFL=pl.when(
-            pl.col("EXDOSE").is_not_null()
-            & (pl.col("EXDOSE") != 0)
-            & pl.col("PREVDOSE").is_not_null()
-            & (pl.col("PREVDOSE") != 0)
-            & (pl.col("EXDOSE") < pl.col("PREVDOSE"))
-        )
-        .then(pl.lit("Y"))
-        .otherwise(None)
-    )
-    .select("STUDYID", "USUBJID", "EXSEQ", "EXSTDTM", "EXDOSE", "DOSREDFL")
-)
 
-Path("/app/output").mkdir(exist_ok=True)
-adex.write_csv("/app/output/adex.csv")
+    previous = {}  # subject -> numeric dose of the preceding administration
+    for row in ordered:
+        subject = row["USUBJID"]
+        current = parse_dose(row["EXDOSE"])
+        flag = ""
+        if subject in previous:
+            prev = previous[subject]
+            if (
+                current is not None
+                and prev is not None
+                and current != 0
+                and prev != 0
+                and current < prev
+            ):
+                flag = "Y"
+        row["DOSREDFL"] = flag
+        previous[subject] = current
+
+    with open(OUTPUT, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=COLUMNS)
+        writer.writeheader()
+        for row in ordered:
+            writer.writerow({col: row[col] for col in COLUMNS})
+
+
+if __name__ == "__main__":
+    main()

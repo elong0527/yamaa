@@ -33,6 +33,7 @@ mod execution {
                 fs::write(&path, body).unwrap();
                 let specification = path.to_str().unwrap();
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification,
                         environment: None,
@@ -488,6 +489,7 @@ columns:
                 fs::write(&specification, body).unwrap();
                 let specification = specification.to_str().unwrap();
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification,
                         environment: None,
@@ -721,6 +723,7 @@ columns:
             {
                 let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,
                         environment: None,
@@ -923,6 +926,7 @@ columns:
                 fs::write(&specification, body).unwrap();
                 let specification = specification.to_str().unwrap();
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification,
                         environment: None,
@@ -1132,6 +1136,7 @@ columns:
                 .unwrap();
                 let path = path.to_str().unwrap();
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: path,
                         environment: None,
@@ -1221,6 +1226,7 @@ columns:
                     base_directory: ".",
                 };
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,
                         environment: None,
@@ -1232,6 +1238,7 @@ columns:
             fn check(&self) -> Vec<yamaa_adapters::issue_rows::Issue> {
                 let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
                 file_application::check(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,
                         environment: None,
@@ -1504,6 +1511,7 @@ columns:
                 fs::write(&path, body).unwrap();
                 let path = path.to_str().unwrap();
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: path,
                         environment: None,
@@ -1889,6 +1897,7 @@ columns:
             fn run(&self) -> Result<file_application::Domain, Vec<Issue>> {
                 let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,
                         environment: None,
@@ -2323,6 +2332,7 @@ columns:
                 fs::write(&specification, body).unwrap();
                 let specification = specification.to_str().unwrap();
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification,
                         environment: None,
@@ -2486,6 +2496,7 @@ columns:
                     base_directory: ".",
                 };
                 let built = file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,
                         environment: None,

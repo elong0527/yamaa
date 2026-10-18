@@ -1,0 +1,74 @@
+schema_version: "1.0"
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE: {path: input/ae.csv, types: {AESEQ: int}}
+  ADSL: input/adsl.csv
+  CQTERM: input/cqterm.csv
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AEDECOD, TRTA, CQ01NAM, SRCDOM]
+
+intermediates:
+  # The serious events, kept in collected order. The row template below
+  # reads these records as its driver, so a non-serious event, or one
+  # whose seriousness was never recorded, builds no row.
+  - id: SERIOUS_AE
+    dataset: AE
+    filter: "AE.AESER = 'Y'"
+
+  # The sponsor's customized query, matched on the row's dictionary
+  # term. A term the query does not collect leaves the name blank.
+  - id: QUERY
+    dataset: CQTERM
+    key: [AEDECOD]
+    no_match: null
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+
+  # The columns below are stated once, at column level, and complete every
+  # row the template builds. The driver qualifier reads the serious event
+  # that built the row.
+  - name: AEDECOD
+    type: str
+    label: Dictionary-Derived Term
+    derivation: SERIOUS_AE.AEDECOD
+
+  # ADSL is not the driver: it joins on the output keys it carries,
+  # STUDYID and USUBJID.
+  - name: TRTA
+    type: str
+    label: Actual Treatment
+    derivation: ADSL.TRT01A
+
+  # Matched on AEDECOD, which is complete before this column.
+  - name: CQ01NAM
+    type: str
+    label: Customized Query 01 Name
+    derivation: QUERY.CQNAM
+
+  - name: SRCDOM
+    type: str
+    label: Source Data
+    derivation: {literal: AE}
+
+rows:
+  # One row per serious event. The template states only the keys.
+  - id: serious
+    dataset: SERIOUS_AE
+    derivations:
+      STUDYID: SERIOUS_AE.STUDYID
+      USUBJID: SERIOUS_AE.USUBJID
+      AESEQ: SERIOUS_AE.AESEQ

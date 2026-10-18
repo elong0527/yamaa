@@ -4,43 +4,66 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build ADAE from AE with approved severity corrections.
 
-import polars as pl
+Reads /app/input/ae.csv and writes /app/output/adae.csv with columns
+STUDYID, USUBJID, AESEQ, ASEV, ASEVN.
+"""
 
-ae = pl.read_csv("/app/input/ae.csv", infer_schema=False).with_columns(
-    pl.col("AESEQ").cast(pl.Int64)
-)
+import csv
+import os
 
-asev = pl.col("AESEV").str.to_uppercase()
-# Approved corrections reassign two events to SEVERE, including one whose
-# severity was unreported.
-asev = (
-    pl.when(
-        ((pl.col("USUBJID") == "CATH-01-001") & (pl.col("AESEQ") == 2))
-        | ((pl.col("USUBJID") == "CATH-01-003") & (pl.col("AESEQ") == 1))
-    )
-    .then(pl.lit("SEVERE"))
-    .otherwise(asev)
-)
-asevn = (
-    pl.when(pl.col("ASEV") == "MILD")
-    .then(1)
-    .when(pl.col("ASEV") == "MODERATE")
-    .then(2)
-    .when(pl.col("ASEV") == "SEVERE")
-    .then(3)
-    .when(pl.col("ASEV") == "LIFE-THREATENING")
-    .then(4)
-    .otherwise(None)
-    .cast(pl.Int64)
-)
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-adae = (
-    ae.with_columns(ASEV=asev)
-    .with_columns(ASEVN=asevn)
-    .select("STUDYID", "USUBJID", "AESEQ", "ASEV", "ASEVN")
-)
+# Approved severity corrections, keyed by (USUBJID, AESEQ).
+CORRECTIONS = {
+    ("CATH-01-001", 2): "SEVERE",
+    ("CATH-01-003", 1): "SEVERE",
+}
 
-Path("/app/output").mkdir(exist_ok=True)
-adae.write_csv("/app/output/adae.csv")
+RANKS = {
+    "MILD": 1,
+    "MODERATE": 2,
+    "SEVERE": 3,
+    "LIFE-THREATENING": 4,
+}
+
+
+def main():
+    with open(os.path.join(INPUT_DIR, "ae.csv"), newline="") as f:
+        rows = list(csv.DictReader(f))
+
+    out_rows = []
+    for row in rows:
+        aeseq = int(row["AESEQ"])
+        key = (row["USUBJID"], aeseq)
+        reported = (row["AESEV"] or "").strip()
+        if key in CORRECTIONS:
+            asev = CORRECTIONS[key]
+        elif reported:
+            asev = reported.upper()
+        else:
+            asev = ""
+        asevn = RANKS[asev] if asev else ""
+        out_rows.append(
+            {
+                "STUDYID": row["STUDYID"],
+                "USUBJID": row["USUBJID"],
+                "AESEQ": row["AESEQ"],
+                "ASEV": asev,
+                "ASEVN": asevn,
+            }
+        )
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    with open(os.path.join(OUTPUT_DIR, "adae.csv"), "w", newline="") as f:
+        writer = csv.DictWriter(
+            f, fieldnames=["STUDYID", "USUBJID", "AESEQ", "ASEV", "ASEVN"]
+        )
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+
+if __name__ == "__main__":
+    main()

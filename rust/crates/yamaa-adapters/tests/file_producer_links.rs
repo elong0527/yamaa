@@ -49,6 +49,7 @@ mod file {
             fn build(&self, entry: &str) -> Domain {
                 let path = self.path(entry);
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
                         environment: None,
@@ -60,6 +61,7 @@ mod file {
             fn check(&self, entry: &str) -> Vec<Issue> {
                 let path = self.path(entry);
                 file_application::check(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
                         environment: None,

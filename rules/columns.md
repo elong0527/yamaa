@@ -98,7 +98,7 @@ derived by that row template. The grouped `filter` is not a derivation: it adds
 no graph edge between columns and runs only after all columns have completed.
 
 Fails: `phase_boundary`.
-Evidence: `rust/crates/yamaa-core/tests/project_specification.rs::row_reads_of_nonlocal_columns_return_complete_phase_findings_before_lowering`.
+Evidence: `negative-row-phase-flag`, `rust/crates/yamaa-core/tests/project_specification.rs::row_reads_of_nonlocal_columns_return_complete_phase_findings_before_lowering`.
 Replaces: REQ-0059, REQ-0069.
 
 A row dependency on a later-phase value fails as `phase_boundary`.
@@ -113,7 +113,7 @@ order. Composition orders the resolved columns only when a specification
 declares a `parent`; otherwise declaration order is the resolved order.
 
 Fails: `unknown_reference`, `forward_reference`.
-Evidence: `negative-forward-reference`, `rust/crates/yamaa-core/tests/schema_references.rs::unknown_dependencies_are_lexical_and_precede_cycle_reporting`.
+Evidence: `negative-forward-reference`, `negative-forward-key-reference`, `rust/crates/yamaa-core/tests/schema_references.rs::unknown_dependencies_are_lexical_and_precede_cycle_reporting`.
 Replaces: REQ-0060, REQ-0070, REQ-0071.
 
 [Inheritance](inheritance.md) composes and prunes every specification before

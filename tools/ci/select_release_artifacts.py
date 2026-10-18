@@ -12,9 +12,11 @@ import subprocess
 import tarfile
 import tomllib
 import zipfile
+from datetime import datetime
 from pathlib import Path, PurePosixPath
 
 from tools.ci import native
+from tools.packaging import check_package_notices
 from tools.packaging.check_shared_release_versions import violations
 from tools.paths import ROOT
 
@@ -28,7 +30,20 @@ def positive_integer(value):
     return type(value) is int and value > 0
 
 
+def github_time(value, subject):
+    """Parse a GitHub API timestamp, which is UTC to the second."""
+    require(
+        isinstance(value, str)
+        and re.fullmatch(
+            r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z", value
+        ),
+        f"{subject}: missing or malformed GitHub timestamp",
+    )
+    return datetime.fromisoformat(value)
+
+
 def release_version(root, tag):
+    """Return the coordinated version, which `tag` must name unless it is None."""
     errors = violations(root)
     require(not errors, "incoherent release versions: " + "; ".join(errors))
     version = tomllib.loads((root / "python/pyproject.toml").read_text())["project"][
@@ -37,8 +52,11 @@ def release_version(root, tag):
     require(
         re.fullmatch(
             r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)", version
-        )
-        and tag == f"yamaa-v{version}",
+        ),
+        "release requires a coordinated stable Python/R/Cargo version",
+    )
+    require(
+        tag is None or tag == f"yamaa-v{version}",
         "tag must name the coordinated stable Python/R/Cargo version",
     )
     require(
@@ -47,17 +65,13 @@ def release_version(root, tag):
     return version
 
 
-def tagged_revision(root, tag):
-    def git(*arguments):
-        return subprocess.check_output(
-            ["git", "-C", str(root), *arguments], text=True
-        ).strip()
+def git(root, *arguments):
+    return subprocess.check_output(
+        ["git", "-C", str(root), *arguments], text=True
+    ).strip()
 
-    revision = git("rev-parse", "--verify", f"refs/tags/{tag}^{{commit}}")
-    require(re.fullmatch(r"[0-9a-f]{40}", revision), "tag has no commit identity")
-    require(
-        git("rev-parse", "HEAD") == revision, "checkout is not the peeled tag commit"
-    )
+
+def require_main_ancestry(root, revision, subject):
     require(
         subprocess.run(
             [
@@ -72,9 +86,70 @@ def tagged_revision(root, tag):
             check=False,
         ).returncode
         == 0,
-        "tag commit must belong to current main ancestry",
+        f"{subject} must belong to current main ancestry",
     )
+
+
+def tagged_revision(root, tag):
+    revision = git(root, "rev-parse", "--verify", f"refs/tags/{tag}^{{commit}}")
+    require(re.fullmatch(r"[0-9a-f]{40}", revision), "tag has no commit identity")
+    require(
+        git(root, "rev-parse", "HEAD") == revision,
+        "checkout is not the peeled tag commit",
+    )
+    require_main_ancestry(root, revision, "tag commit")
     return revision
+
+
+def checked_out_revision(root):
+    """Return the commit a rehearsal selects for: the checkout, on main."""
+    revision = git(root, "rev-parse", "--verify", "HEAD^{commit}")
+    require_main_ancestry(root, revision, "checked-out commit")
+    return revision
+
+
+TRAILER = re.compile(r"([A-Za-z0-9][A-Za-z0-9-]*)[ \t]*:(.*)")
+
+
+def qualified_run(root, tag):
+    """Return the native run id that the release tag's message names.
+
+    The tag is annotated, and its message ends with a trailer paragraph:
+    after a blank line, only `Key: value` lines, with exactly one
+    `Qualified-Run: <run id>`. Keys compare without case, as in Git.
+    """
+    kind, _, body = git(
+        root,
+        "for-each-ref",
+        "--format=%(objecttype)%0a%(contents:body)",
+        f"refs/tags/{tag}",
+    ).partition("\n")
+    require(
+        kind == "tag",
+        f"{tag} is not an annotated tag; a release tag names its native run "
+        "in a Qualified-Run: <run id> trailer",
+    )
+    # The body follows the subject paragraph and leaves out any signature.
+    lines = body.splitlines()
+    blanks = [index for index, line in enumerate(lines) if not line.strip()]
+    start = blanks[-1] + 1 if blanks else 0
+    trailers = [TRAILER.fullmatch(line) for line in lines[start:]]
+    values = [
+        match[2].strip()
+        for match in trailers
+        if match and match[1].lower() == "qualified-run"
+    ]
+    require(
+        trailers and all(trailers) and values,
+        f"{tag} names no native run; end its message with a trailer paragraph "
+        "holding Qualified-Run: <run id>",
+    )
+    require(
+        len(values) == 1 and re.fullmatch(r"[1-9][0-9]*", values[0]),
+        f"{tag} must name one native run id in its Qualified-Run trailer, not: "
+        + ", ".join(repr(value) for value in values),
+    )
+    return int(values[0])
 
 
 def run_coverage(run, repository, revision):
@@ -114,6 +189,11 @@ def run_coverage(run, repository, revision):
 
 
 def required_jobs(coverage):
+    """Map each native job a release requires to the steps it must complete.
+
+    These names, and the artifacts in `release_artifacts`, are the only copy:
+    `tools/tests/test_native_workflow.py` checks them against native.yml.
+    """
     jobs = {
         "portable-math-exact": (
             "Compare every candidate bit across the native matrix",
@@ -135,14 +215,41 @@ def required_jobs(coverage):
             "Report installed Python public benchmark conformance",
             "Qualify the installed package outside checkout",
         )
+    # The Linux host builds the R source archive once; every R lane installs it.
+    jobs[f"native-r-dist ({source_platform(coverage)})"] = ("Build R source package",)
     for platform in coverage["r"]["os"]:
         jobs[f"native-r ({platform})"] = (
-            "Build and install R outside checkout",
+            "Install R outside checkout",
             "Report installed R public benchmark conformance",
             "Run installed R supplemental suites outside checkout",
             "Check R source package outside checkout",
         )
     return jobs
+
+
+def source_platform(coverage):
+    """The Linux platform whose source archives every source lane installs."""
+    linux = [
+        platform for platform in coverage["r"]["os"] if platform.startswith("ubuntu-")
+    ]
+    require(len(linux) == 1, "canonical Linux source platform is ambiguous")
+    return linux[0]
+
+
+def release_artifacts(coverage):
+    """Map each release artifact to the required job that uploads it.
+
+    Also return the Linux platform whose source archives are published.
+    """
+    linux = source_platform(coverage)
+    producers = {
+        f"native-python-{lane['os']}-{lane['python']}": (
+            f"native-dist ({lane['os']}, {lane['python']})"
+        )
+        for lane in coverage["build"]["include"]
+    }
+    producers[f"native-r-{linux}"] = f"native-r-dist ({linux})"
+    return producers, linux
 
 
 def validate_jobs(jobs, coverage, run):
@@ -178,21 +285,32 @@ def validate_jobs(jobs, coverage, run):
                 and matches[0].get("conclusion") == "success",
                 f"{name}: required step did not succeed: {required}",
             )
+    return by_name
 
 
-def select_artifacts(artifacts, coverage, run, repository):
-    names = [
-        f"native-python-{lane['os']}-{lane['python']}"
-        for lane in coverage["build"]["include"]
-    ]
-    linux = [
-        platform for platform in coverage["r"]["os"] if platform.startswith("ubuntu-")
-    ]
-    require(len(linux) == 1, "canonical Linux source platform is ambiguous")
-    names.append(f"native-r-{linux[0]}")
+def select_artifacts(artifacts, coverage, run, repository, jobs):
+    """Select the artifact each producing job uploaded for the qualifying attempt.
+
+    `jobs` maps names to the qualifying attempt's jobs. Artifacts carry no
+    attempt number, and a re-run keeps every earlier attempt's artifacts on
+    the run, so a name can appear once per attempt. The qualifying attempt
+    lists each job with the start and completion of the execution it counts:
+    the job's own re-run, or the earlier execution it carried over. A run is
+    re-run only after it completes, so executions of one job never overlap,
+    and the artifact created while its producer ran is the one that attempt
+    qualified.
+    """
+    producers, linux = release_artifacts(coverage)
     selected = []
-    for name in names:
-        matches = [artifact for artifact in artifacts if artifact.get("name") == name]
+    for name, producer in producers.items():
+        started = github_time(jobs[producer].get("started_at"), producer)
+        completed = github_time(jobs[producer].get("completed_at"), producer)
+        matches = [
+            artifact
+            for artifact in artifacts
+            if artifact.get("name") == name
+            and started <= github_time(artifact.get("created_at"), name) <= completed
+        ]
         require(len(matches) == 1, f"missing or ambiguous native artifact: {name}")
         artifact = matches[0]
         owner = artifact.get("workflow_run", {})
@@ -210,7 +328,7 @@ def select_artifacts(artifacts, coverage, run, repository):
         len({artifact["id"] for artifact in selected}) == len(selected),
         "artifact IDs are ambiguous",
     )
-    return selected, linux[0]
+    return selected, linux
 
 
 def package_version(payload, version):
@@ -222,8 +340,8 @@ def package_version(payload, version):
     )
 
 
-def archive_payloads(path, license_names):
-    wanted = {"METADATA", "PKG-INFO", "DESCRIPTION", *license_names}
+def archive_payloads(path):
+    wanted = {"METADATA", "PKG-INFO", "DESCRIPTION"}
     if path.suffix == ".whl":
         with zipfile.ZipFile(path) as archive:
             names = archive.namelist()
@@ -248,9 +366,6 @@ def archive_payloads(path, license_names):
 
 def downloaded_assets(destination, selected, linux, version, root):
     assets = []
-    python_project = tomllib.loads((root / "python/pyproject.toml").read_text())[
-        "project"
-    ]
     for artifact in selected:
         directory = destination / artifact["name"]
         paths = list(directory.iterdir())
@@ -300,7 +415,7 @@ def downloaded_assets(destination, selected, linux, version, root):
             )
             assets.append(paths[0])
         for path in paths:
-            payloads = archive_payloads(path, python_project["license-files"])
+            payloads = archive_payloads(path)
             if is_python:
                 metadata = [
                     payload
@@ -319,20 +434,9 @@ def downloaded_assets(destination, selected, linux, version, root):
                     and re.findall(r"(?m)^Version: (.+)$", description) == [version],
                     "R DESCRIPTION name/version differs",
                 )
-            for license_name in python_project["license-files"]:
-                copies = [
-                    payload
-                    for name, payload in payloads.items()
-                    if PurePosixPath(name).name == license_name
-                ]
-                require(
-                    copies
-                    and all(
-                        payload == (root / "python" / license_name).read_bytes()
-                        for payload in copies
-                    ),
-                    f"{path.name}: required license differs or is missing: {license_name}",
-                )
+            # Each package carries the project license and every notice at its
+            # own location, unchanged from the checkout.
+            check_package_notices.check_archive(path, root)
     require(
         len(assets) == len(native.PLATFORMS) + 2
         and len({path.name for path in assets}) == len(assets),
@@ -400,13 +504,28 @@ def download_artifact(repository, artifact, destination):
         archive_path.unlink(missing_ok=True)
 
 
-def select_release(root, repository_name, tag, destination):
+def select_release(root, repository_name, tag, destination, run_id=None):
+    """Select, download and check the release assets of one native run.
+
+    A release passes its tag, whose Qualified-Run trailer names the run. A
+    rehearsal passes no tag and the run id instead: it selects for the
+    checkout and does not look for an existing release. Neither publishes.
+    """
+    require(
+        (tag is None) != (run_id is None),
+        "name either a release tag or a rehearsal run id",
+    )
     require(
         re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository_name),
         "invalid release repository",
     )
     version = release_version(root, tag)
-    revision = tagged_revision(root, tag)
+    if tag is None:
+        require(positive_integer(run_id), "rehearsal run id must be positive")
+        revision = checked_out_revision(root)
+    else:
+        revision = tagged_revision(root, tag)
+        run_id = qualified_run(root, tag)
     repository = gh_json("api", f"repos/{repository_name}")
     require(
         repository.get("full_name") == repository_name
@@ -414,41 +533,33 @@ def select_release(root, repository_name, tag, destination):
         and repository.get("default_branch") == "main",
         "release repository identity or main default branch differs",
     )
-    releases = paginated(repository_name, "releases?per_page=100")
-    require(
-        not any(release.get("tag_name") == tag for release in releases),
-        "release already exists; existing assets must not be overwritten",
-    )
-    runs = paginated(
-        repository_name,
-        f"actions/workflows/native.yml/runs?head_sha={revision}&status=success&per_page=100",
-        "workflow_runs",
-    )
-    eligible = []
-    for run in runs:
-        try:
-            coverage = run_coverage(run, repository, revision)
-        except ValueError:
-            continue
-        eligible.append((run, coverage))
-    require(
-        eligible, "no completed successful full native run qualifies this tag commit"
-    )
-    require(
-        len({run["id"] for run, _ in eligible}) == len(eligible),
-        "native run identity is ambiguous",
-    )
-    run, coverage = max(eligible, key=lambda pair: pair[0]["id"])
+    if tag is not None:
+        releases = paginated(repository_name, "releases?per_page=100")
+        require(
+            not any(release.get("tag_name") == tag for release in releases),
+            "release already exists; existing assets must not be overwritten",
+        )
+    # Only the named run counts, so a later run of the same commit cannot
+    # replace the one the release was reviewed against.
+    run = gh_json("api", f"repos/{repository_name}/actions/runs/{run_id}")
+    try:
+        require(
+            isinstance(run, dict) and run.get("id") == run_id,
+            "GitHub returned a different run",
+        )
+        coverage = run_coverage(run, repository, revision)
+    except ValueError as error:
+        raise ValueError(f"native run {run_id} cannot qualify: {error}") from None
     jobs = paginated(
         repository_name,
         f"actions/runs/{run['id']}/attempts/{run['run_attempt']}/jobs?per_page=100",
         "jobs",
     )
-    validate_jobs(jobs, coverage, run)
+    jobs = validate_jobs(jobs, coverage, run)
     artifacts = paginated(
         repository_name, f"actions/runs/{run['id']}/artifacts?per_page=100", "artifacts"
     )
-    selected, linux = select_artifacts(artifacts, coverage, run, repository)
+    selected, linux = select_artifacts(artifacts, coverage, run, repository, jobs)
     destination.mkdir(parents=True, exist_ok=False)
     for artifact in selected:
         download_artifact(repository_name, artifact, destination)
@@ -457,14 +568,14 @@ def select_release(root, repository_name, tag, destination):
     (destination / "asset-paths.txt").write_text(
         "".join(f"{path.resolve()}\n" for path in assets), encoding="utf-8"
     )
+    attempt = f"{run['html_url']}/attempts/{run['run_attempt']}"
     notes = (root / f"docs/releases/{version}.md").read_text(encoding="utf-8")
-    notes += f"\nQualified native artifacts: [{run['html_url']}/attempts/{run['run_attempt']}]({run['html_url']}/attempts/{run['run_attempt']}).\n"
-    notes += (
-        "\n".join(
-            f"- `{artifact['name']}` (artifact {artifact['id']})"
-            for artifact in selected
-        )
-        + "\n"
+    # A section of its own, so the evidence does not read as part of the
+    # committed notes' last section.
+    notes = notes.rstrip("\n") + "\n\n## Qualified native artifacts\n\n"
+    notes += f"Native qualification run: [{attempt}]({attempt}).\n\n"
+    notes += "".join(
+        f"- `{artifact['name']}` (artifact {artifact['id']})\n" for artifact in selected
     )
     (destination / "release-notes.md").write_text(notes, encoding="utf-8")
     return assets
@@ -474,11 +585,21 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=ROOT)
     parser.add_argument("--repository", required=True)
-    parser.add_argument("--tag", required=True)
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument(
+        "--tag", help="release tag, whose Qualified-Run trailer names the native run"
+    )
+    source.add_argument(
+        "--run-id",
+        type=int,
+        help="rehearse a release of the checkout from this native run, without a tag",
+    )
     parser.add_argument("--destination", type=Path, required=True)
     args = parser.parse_args()
     try:
-        assets = select_release(args.root, args.repository, args.tag, args.destination)
+        assets = select_release(
+            args.root, args.repository, args.tag, args.destination, args.run_id
+        )
     except (
         ValueError,
         OSError,

@@ -4,87 +4,59 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build a RELREC dataset from AE and CM link identifiers.
 
-import polars as pl
+Each AE or CM record contributes one RELREC row per distinct link
+identifier it carries (AELNKID1/AELNKID2 for AE, CMLNKID1/CMLNKID2 for
+CM). Records with no link identifier contribute no row. RELTYPE is
+blank on every row because each row points at a single record.
+"""
 
+import csv
+import os
 
-def _present(value) -> bool:
-    return value is not None and str(value).strip() != ""
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-
-def _link(value) -> str | None:
-    """A collected link number as text without a decimal point."""
-    if not _present(value):
-        return None
-    text = str(value).strip()
-    try:
-        number = float(text)
-        if number.is_integer():
-            return str(int(number))
-        return str(number)
-    except ValueError:
-        return text
+COLUMNS = ["STUDYID", "USUBJID", "RDOMAIN", "IDVAR", "IDVARVAL",
+           "RELTYPE", "RELID"]
 
 
-ae = pl.read_csv("/app/input/ae.csv", infer_schema=False)
-cm = pl.read_csv("/app/input/cm.csv", infer_schema=False)
+def rows_for(domain, seqvar, linkvars, path):
+    """Yield one RELREC row per record/participating link identifier."""
+    with open(path, newline="", encoding="utf-8") as handle:
+        for record in csv.DictReader(handle):
+            seen = []
+            for var in linkvars:
+                link = (record.get(var) or "").strip()
+                if link and link not in seen:
+                    seen.append(link)
+            for link in seen:
+                yield {
+                    "STUDYID": record["STUDYID"],
+                    "USUBJID": record["USUBJID"],
+                    "RDOMAIN": domain,
+                    "IDVAR": seqvar,
+                    "IDVARVAL": str(record[seqvar]).strip(),
+                    "RELTYPE": "",
+                    "RELID": link,
+                }
 
-rows = []
-for row in ae.to_dicts():
-    for link_col in ("AELNKID1", "AELNKID2"):
-        relid = _link(row.get(link_col))
-        # A record with no link identifier contributes no row.
-        if relid is None:
-            continue
-        rows.append(
-            {
-                "STUDYID": row["STUDYID"],
-                "USUBJID": row["USUBJID"],
-                "RDOMAIN": "AE",
-                "IDVAR": "AESEQ",
-                "IDVARVAL": str(row["AESEQ"]).strip(),
-                "RELTYPE": None,
-                "RELID": relid,
-            }
-        )
-for row in cm.to_dicts():
-    for link_col in ("CMLNKID1", "CMLNKID2"):
-        relid = _link(row.get(link_col))
-        if relid is None:
-            continue
-        rows.append(
-            {
-                "STUDYID": row["STUDYID"],
-                "USUBJID": row["USUBJID"],
-                "RDOMAIN": "CM",
-                "IDVAR": "CMSEQ",
-                "IDVARVAL": str(row["CMSEQ"]).strip(),
-                "RELTYPE": None,
-                "RELID": relid,
-            }
-        )
 
-relrec = (
-    pl.DataFrame(
-        rows,
-        schema={
-            "STUDYID": pl.String,
-            "USUBJID": pl.String,
-            "RDOMAIN": pl.String,
-            "IDVAR": pl.String,
-            "IDVARVAL": pl.String,
-            "RELTYPE": pl.String,
-            "RELID": pl.String,
-        },
-    )
-    .with_columns(
-        pl.col("IDVARVAL").cast(pl.Int64).alias("_seq"),
-        pl.col("RELID").cast(pl.Int64).alias("_rel"),
-    )
-    .sort(["USUBJID", "_rel", "RDOMAIN", "_seq"])
-    .select("STUDYID", "USUBJID", "RDOMAIN", "IDVAR", "IDVARVAL", "RELTYPE", "RELID")
-)
+def main():
+    rows = []
+    rows.extend(rows_for("AE", "AESEQ", ["AELNKID1", "AELNKID2"],
+                         os.path.join(INPUT_DIR, "ae.csv")))
+    rows.extend(rows_for("CM", "CMSEQ", ["CMLNKID1", "CMLNKID2"],
+                         os.path.join(INPUT_DIR, "cm.csv")))
 
-Path("/app/output").mkdir(exist_ok=True)
-relrec.write_csv("/app/output/relrec.csv")
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    out_path = os.path.join(OUTPUT_DIR, "relrec.csv")
+    with open(out_path, "w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=COLUMNS)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+if __name__ == "__main__":
+    main()
