@@ -423,8 +423,11 @@ reading column's `no_match` for a named intermediate
 evaluated is not a handler site: its absence gives missing, uncounted. Nor is
 a read of a named intermediate that supplies another lookup's `between`
 value, filter field or derivation's current-record operand: it answers as in
-a predicate, uncounted, and only the lookup it feeds counts its own answer, so
-one record is never counted twice at one path.
+a predicate, uncounted, and only the lookup it feeds counts its own answer.
+So one record is never counted twice at one path, a read made while a
+predicate is evaluated counts nothing at any path, including the lookups it
+reads through, and a count does not depend on which read of an intermediate
+first selected a record for the row.
 
 A run registers every handler path before it reads any row, so a run reports
 a path even when it answers nothing. That covers every declared handler and
