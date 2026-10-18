@@ -40,8 +40,8 @@ the bundled ReadStat C build, so it reads no SAS input:
 yamaa = { path = "<yamaa checkout>/rust/crates/yamaa", default-features = false, features = ["yaml", "parquet"] }
 ```
 
-[Distribution](#distribution) shows the git form and the `saphyr-parser` patch
-that an embedder with `yaml` adds.
+[Distribution](#distribution) shows the dependency; the `yaml` feature needs no
+other configuration.
 
 | Feature | Dependency edge and capability |
 | --- | --- |
