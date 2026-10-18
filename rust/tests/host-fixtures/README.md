@@ -3,8 +3,8 @@
 `saved-readers.json` independently owns the saved-format reader controls:
 invented source records, declarations, exact CSV text, logical values, i64
 decimal strings, IEEE 754 float bits and temporal epoch counts. The Python and
-R `saved_readers` suites consume this same truth through installed public Build
-and Save APIs. Both nonempty and header-only sources are qualified for CSV,
+R `saved_readers` suites consume this same truth through installed public run
+and save APIs. Both nonempty and header-only sources are qualified for CSV,
 Parquet and their generated Dataset-JSON and Define-XML documents. No benchmark
 input or expected artifact is regenerated.
 
@@ -15,45 +15,55 @@ expected values. Integer boundaries remain decimal strings; each host constructs
 its original integer type. Text is UTF-8, and CSV comparisons retain all bytes,
 including quoting, trailing zeros and final newlines.
 
-The R assertions share `context.R` to compare decoded diagnostic objects with
-key order ignored at every level. Array order and scalar types remain exact.
+The R assertions share `context.R` to compare decoded JSON contexts with key
+order ignored at every level. Array order and scalar types remain exact.
 
 The public producer suites share the `producer-graph` section. The
 function contract has an explicit `HOST_CALLABLE` slot because the installed
-Python and R programs have different callable names. Environment languages,
-locks, ABI handles and callbacks remain host-owned. Public-contract data retains
-the different Python and R i64 vectors, including R's value beyond 2^53.
+Python and R programs have different callable names. Each host's environments
+entry, lock, ABI handles and callbacks remain host-owned. Public-contract data
+retains the different Python and R i64 vectors: R's plain doubles refuse the
+values beyond 2^53, while both hosts save the held bytes.
 
 | Paired family | Shared data and existing owners |
 | --- | --- |
 | public-producer-builds | Producer/consumer YAML, function cases, exact rounded CSV, aliases, retained sources and refusal variants |
 | producer-cohort | `project-original/shared-producer-parquet`, source filenames and exact output CSV |
 | original-specifications | Original case selection, lookup/ordering/casing inputs and exact CSV; existing independent TSV/JSON reports |
-| file-resources | Named lookup paths, issue schema and exact alias context; existing inspection/capture reports |
-| public-environment | Original case selection, graph references, quota/version inputs and exact callback CSV |
+| file-resources | Named lookup paths, issue columns, exact alias context and entry-relative programs that declare `output.report`; existing inspection/capture reports |
+| public-environment | Original case selection, graph references, quota/version inputs, exact callback CSV and the project-relative inherited and codelist files |
 | verification-logs | `specification-original/schema-verification-log`, artifact names, evaluated counts and fatal outcomes |
 | producer-logs | Decimal i64 keys, aliased/diamond inputs and complete verification/warning CSV goldens |
-| public-define | Existing Define input/XML/JSON owners, creation time, column schemas and numeric metadata variants |
-| public-contract | Shared YAML, issue/argument/view names, empty/fatal log variants; distinct host i64 vectors |
+| public-define | Existing Define input/XML/JSON owners, creation time, issue columns, column schemas, numeric metadata variants and spec/project text mutations |
+| public-contract | Shared YAML, issue and report columns, argument/member/read-only view names and defaults, shared messages, typed plain values and the failed run's report bytes; distinct host i64 vectors |
 | public-grammar | Shared condition families; existing `grammar-original/cases.tsv` decisions |
-| diagnostic-parity | Refusal cases with their complete expected diagnostic records |
+| diagnostic-parity | Refusal cases with their complete expected issue rows |
+| read-odm | The two reader documents (the adapters' `odm` fixtures), all 30 columns and cells, archive member selection and refusal codes |
 
-`diagnostic-parity` is the cross-host diagnostic parity truth. Each case holds a
-specification, its input and every record the public `check` or `domain` call
-returns, in order: phase, condition, requirement, specification paths,
-context, source span and operand route. Both public contract suites require
-their records to equal this truth field for field, so the two hosts equal each
-other. Together the cases cover every value shape a host converts: integers at
-and beyond 2^53, the signed 64-bit bounds and a wider literal, fractional and
-whole floats, null, non-ASCII text, text holding NUL, nested and empty objects
-and arrays, absent and present geometry, an empty route, an absent
-requirement, empty specification paths and several records. A zero-width span
-is not reachable from a specification, because spans come only from expression
-nodes; the adapter record tests own it. Context numbers are tagged
-(`{"integer": "<decimal>"}` or `{"float": "<decimal>"}`) and text holding NUL
-is `{"hex": "<UTF-8 bytes>"}`, so no JSON reader chooses a host number type.
-Each host then applies its documented representation; R keeps an integer
-wider than 2^53 as its exact decimal text.
+`diagnostic-parity` is the cross-host issue parity truth. Each case holds a
+specification, its input, the call (`check` or `run`) and every row of the
+issues table that call returns, in order: phase, condition, requirement,
+specification paths, context, source span and operand route. Both public
+contract suites require their rows to equal this truth field for field, so the
+two hosts equal each other. The context is the canonical JSON text both hosts
+return (sorted keys, no whitespace, exact integer tokens), compared as text, so
+no JSON reader chooses a host number type. Together the cases cover every
+value shape a context holds: integers at and beyond 2^53, the signed 64-bit
+bounds and a wider literal, fractional and whole floats, null, non-ASCII text,
+text holding NUL (escaped), nested and empty objects and arrays, absent and
+present geometry, an empty route, an absent requirement, empty specification
+paths and several rows. A zero-width span is not reachable from a
+specification, because spans come only from expression nodes; the adapter
+record tests own it. Spans are integer pairs, doubles in R, and both geometry
+fields are null (`None`, `NULL`) when nothing was recorded.
+
+`read-odm` pairs the installed Python and R `read_odm` suites. Its documents
+are the reader suite's own `odm13.xml` and `odm20.xml`, staged from
+`rust/crates/yamaa-adapters/tests/fixtures/odm` as `host-fixtures/odm`; the
+expected cells were read from the documents by hand. `SourceOrdinal` is
+decimal text in the truth (an integer in Python, a double in R) and every
+other cell is text or null. Each refusal names the reader code that the
+yamaa.Error / yamaa_error message carries.
 
 The R grammar suite's conditional failure and original
 CSV preservation controls also remain. Exact float bit witnesses, NUL/invalid
@@ -106,14 +116,14 @@ owners while adding host or private lifecycle assertions:
 - `shared-producer-parquet` is an additional installed ownership/publication
   control, rather than an active public-conformance benchmark name.
 
-Unpaired scalar, project-function and ODM helpers retain their existing owners.
+Unpaired scalar and project-function controls retain their existing owners.
 
 ## Staging and qualification
 
-The supplemental catalog declares both readers and the shared JSON owner.
-`tools.commands.installed` stages their exact bytes outside the checkout for both
-hosts, refuses overwrites, and the installed runner checks them before starting
-any suite. The standalone R source package carries the same files in
+The supplemental catalog declares both readers, the shared JSON owner and the
+ODM reader documents. `tools.commands.installed` stages their exact bytes
+outside the checkout for both hosts, refuses overwrites, and the installed
+runner checks them before starting any suite. The standalone R source package carries the same files in
 `inst/host-fixtures`, so `R CMD check` and separately staged installed tests use
 the same owned truth. The readers select the staged files or installed package
 resources, with no checkout fallback.
