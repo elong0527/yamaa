@@ -2086,46 +2086,45 @@ impl Rows {
             .iter()
             .map(|template| relation_predicates::predicate_reads(template.filter.as_ref()))
             .collect::<Vec<_>>();
-        lookup_range::admit(
-            columns
-                .iter()
-                .map(|assignment| {
-                    (
-                        vec![&assignment.expression],
-                        templates
-                            .iter()
-                            .zip(&declared)
-                            .filter(|(_, declaration)| leaves(declaration, assignment.column))
-                            .map(|(template, _)| template.mode.source_index())
-                            .collect(),
-                    )
-                })
-                .chain(std::iter::once((
-                    verification_reads.iter().collect(),
+        let contexts = columns
+            .iter()
+            .map(|assignment| {
+                (
+                    vec![&assignment.expression],
                     templates
                         .iter()
-                        .map(|template| template.mode.source_index())
+                        .zip(&declared)
+                        .filter(|(_, declaration)| leaves(declaration, assignment.column))
+                        .map(|(template, _)| template.mode.source_index())
                         .collect(),
-                )))
-                .chain(
-                    templates
-                        .iter()
-                        .zip(&filter_reads)
-                        .map(|(template, filter)| {
-                            (
-                                template
-                                    .assignments
-                                    .iter()
-                                    .map(|assignment| &assignment.expression)
-                                    .chain(filter)
-                                    .collect(),
-                                vec![template.mode.source_index()],
-                            )
-                        }),
-                ),
-            &intermediates,
-            &mut findings,
-        );
+                )
+            })
+            .chain(std::iter::once((
+                verification_reads.iter().collect(),
+                templates
+                    .iter()
+                    .map(|template| template.mode.source_index())
+                    .collect(),
+            )))
+            .chain(
+                templates
+                    .iter()
+                    .zip(&filter_reads)
+                    .map(|(template, filter)| {
+                        (
+                            template
+                                .assignments
+                                .iter()
+                                .map(|assignment| &assignment.expression)
+                                .chain(filter)
+                                .collect(),
+                            vec![template.mode.source_index()],
+                        )
+                    }),
+            )
+            .collect::<Vec<(Vec<&Expression>, Vec<usize>)>>();
+        lookup_range::admit(contexts.iter().cloned(), &intermediates, &mut findings);
+        aggregates::admit_record_keys(&contexts, &mut findings);
         let mut admitted = Vec::new();
         for ((template, declaration), filter) in templates.iter().zip(&declared).zip(&filter_reads)
         {

@@ -16,6 +16,32 @@ pub(super) struct Context<'a> {
     pub secondary: &'a [crate::dataset::SecondarySource],
     pub intermediates: &'a [Option<crate::dataset::Intermediate>],
 }
+/// A read of the catalog's own record. A column derivation that only the rows
+/// of one row template's input evaluate binds against a catalog whose own
+/// record is that input (`Rows::bind`), so a read qualified by a secondary
+/// input keeps that input's record port, as a range value's does
+/// (`lookup_range`). Elsewhere the catalog's own record is the primary input.
+fn record_read(
+    name: &str,
+    column: usize,
+    secondary: &[crate::dataset::SecondarySource],
+) -> MatchRead {
+    match name
+        .split_once('.')
+        .and_then(|(qualifier, _)| secondary.iter().position(|input| input.name == qualifier))
+    {
+        Some(source) => MatchRead::SecondaryRecord {
+            source,
+            column,
+            identifier: name.into(),
+        },
+        None => MatchRead::Record {
+            column,
+            identifier: name.into(),
+        },
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(super) enum Declaration {
     Variable(String),
@@ -253,13 +279,7 @@ impl Declaration {
                         dataset: 0,
                         field,
                         column_type,
-                    } => (
-                        MatchRead::Record {
-                            column: field,
-                            identifier: name.clone(),
-                        },
-                        column_type,
-                    ),
+                    } => (record_read(name, field, context.secondary), column_type),
                     reference_binding::Binding::Dataset {
                         dataset,
                         field,
@@ -339,10 +359,7 @@ impl Declaration {
             },
             Some(reference_binding::Binding::Dataset {
                 dataset: 0, field, ..
-            }) => MatchRead::Record {
-                column: field,
-                identifier: name.into(),
-            },
+            }) => record_read(name, field, context.secondary),
             Some(reference_binding::Binding::Dataset { dataset, field, .. }) => {
                 MatchRead::SecondaryRecord {
                     source: dataset - 1,
