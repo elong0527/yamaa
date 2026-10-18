@@ -1,0 +1,10 @@
+phase: validation
+condition: phase_boundary
+spec_paths:
+  - rows[0].derivations.VISIT.source
+  - intermediates[1].between.value
+requirement: REQ-0120
+context:
+  identifier: LATEST.VSDY
+  available_phase: completed_prior_row_template
+  required_phase: row_construction
