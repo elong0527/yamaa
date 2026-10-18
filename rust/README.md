@@ -17,8 +17,10 @@ schema-owner controls are described in the [contributor guide](../CONTRIBUTING.m
 [Installed package checks](qualification/README.md) compare actual Python and R
 results with authored expected data. The workflow recipes in
 [.github/workflows/](../.github/workflows/) define the platform matrix and
-packaging checks. Host usage and installation commands live in
-[python/README.md](../python/README.md) and [R/yamaa/README.md](../R/yamaa/README.md).
+packaging checks. Python usage lives in the
+[Python package documentation](../docs/articles/python.md) and its installation
+commands in [python/README.md](../python/README.md);
+[R/yamaa/README.md](../R/yamaa/README.md) covers both for R.
 
 Expected benchmark data and Parquet fixtures are authored truth. Preserve their
 bytes when changing implementation or repository structure.
@@ -26,14 +28,20 @@ bytes when changing implementation or repository structure.
 Layer composition and null handling follow the
 [composition contract](../rules/specification/composition.md).
 
-The adapter enables independent `yaml`, `parquet` and `readstat` Cargo features
-by default. Python wheels, Python source installations and R source packages use
-that default and retain every supported format. Rust embedders can select only
-the physical formats they need:
+The `yamaa` facade crate forwards the adapter's independent `yaml`, `parquet`
+and `readstat` Cargo features, all enabled by default. Python wheels, Python
+source installations and R source packages use that default and retain every
+supported format. Rust embedders depend on the facade, never on
+`yamaa-adapters`, and can select only the physical formats they need. This
+selection admits YAML specifications and reads CSV and Parquet, and it omits
+the bundled ReadStat C build, so it reads no SAS input:
 
 ```toml
-yamaa-adapters = { path = "rust/crates/yamaa-adapters", default-features = false, features = ["yaml"] }
+yamaa = { path = "<yamaa checkout>/rust/crates/yamaa", default-features = false, features = ["yaml", "parquet"] }
 ```
+
+[Distribution](#distribution) shows the git form and the `saphyr-parser` patch
+that an embedder with `yaml` adds.
 
 | Feature | Dependency edge and capability |
 | --- | --- |
@@ -181,8 +189,8 @@ The supported API lives in one new crate, `rust/crates/yamaa` (package name
 `yamaa`), a small facade over `yamaa-adapters` and `yamaa-core`. The owner
 decided this on 2026-10-16: a separate facade crate, not a module inside
 `yamaa-adapters`. Host crates depend only on the facade (plus their language
-runtime), so the compiler enforces the boundary: the 64 `pub mod`s of
-`yamaa-adapters` and the 103 of `yamaa-core` stay internal and cannot be
+runtime), so the compiler enforces the boundary: the 66 `pub mod`s of
+`yamaa-adapters` and the 104 of `yamaa-core` stay internal and cannot be
 reached past the facade. The facade re-exports no adapters or core type; every
 public type below is facade-owned, and adapters/core types are converted at
 the boundary. Core keeps its current boundary (no I/O, no `unsafe`, no Arrow).
@@ -493,12 +501,15 @@ git/path is the distribution route.
 
 ### Host-usage mapping
 
-Every adapters or core module the two host crates use today (28 adapters
-modules, 11 core modules, counted from the host sources on 2026-10-16) maps to
-a facade item or is marked internal. Any module not listed here is internal by
+Every adapters or core module the two host crates used before they moved onto
+the facade (28 adapters modules and 11 core modules, counted from the host
+sources on 2026-10-16) maps to a facade item or is marked internal. The host
+crates now depend only on the facade and use none of these modules directly;
+the facade itself uses 29 adapters modules and 14 core modules, counted from
+`crates/yamaa/src` on 2026-10-18. Any module not listed here is internal by
 default.
 
-| Module used today | Facade disposition |
+| Module the hosts used | Facade disposition |
 | --- | --- |
 | `application_measurements` | Internal -- a host-side timing helper; the facade `Report` carries no measurements in the first surface. |
 | `arrow_bridge` | Facade -- `Table::stream` and stream import on `Table`; the FFI types themselves are not re-exported. |

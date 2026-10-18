@@ -15,6 +15,7 @@ LINT_PATHS = [
 ]
 CHECKS = (
     "tools.packaging.check_shared_release_versions",
+    "tools.packaging.generate_third_party_notices",
     "tools.packaging.generate_style_orders",
     "tools.packaging.generate_shipped_schema",
     "tools.packaging.generate_facade_api",
@@ -37,8 +38,15 @@ def run(*arguments, cwd=ROOT):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("lint", "check"))
-    command = parser.parse_args().command
-    if command == "lint":
+    parser.add_argument(
+        "--without-r",
+        action="store_true",
+        help="leave the R binding, which needs R to build, out of Clippy",
+    )
+    args = parser.parse_args()
+    if args.without_r and args.command != "lint":
+        parser.error("--without-r is supported only for lint")
+    if args.command == "lint":
         for arguments in (("format", "--check"), ("check",)):
             run(sys.executable, "-m", "ruff", *arguments, *LINT_PATHS)
         # Type-check the package with the configuration in python/pyproject.toml.
@@ -53,6 +61,7 @@ def main():
             "clippy",
             "--locked",
             "--workspace",
+            *(("--exclude", "yamaa-r") if args.without_r else ()),
             "--all-targets",
             "--all-features",
             "--",

@@ -1,0 +1,11 @@
+phase: validation
+condition: unpaired_fields
+spec_paths:
+  - intermediates[0]
+requirement: REQ-0119
+context:
+  intermediate: LASTDOSE
+  declared:
+    - keep
+  missing:
+    - order_by

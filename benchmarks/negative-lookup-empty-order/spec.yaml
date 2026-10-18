@@ -1,0 +1,37 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+  EX: {path: input/ex.csv, types: {EXENDTC: date}}
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, TRTEDT]
+
+intermediates:
+  # Each subject's last exposure record, but the order that would say which
+  # record is last lists no field, so the specification is rejected before
+  # any data is read.
+  - id: LASTDOSE
+    dataset: EX
+    order_by: []
+    keep: last
+    no_match: null
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  - name: TRTEDT
+    type: date
+    label: Date of Last Exposure to Treatment
+    derivation: LASTDOSE.EXENDTC

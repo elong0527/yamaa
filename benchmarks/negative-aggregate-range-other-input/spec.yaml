@@ -2,19 +2,18 @@ schema_version: "1.0"
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
-  DM:
-    path: input/dm.csv
-  EX:
-    path: input/ex.csv
-    types: {EXSEQ: int, EXSTDTC: date}
+  DM: input/dm.csv
+  EXF:
+    path: input/exfirst.csv
+    types: {TRTSDT: date}
   AE:
     path: input/ae.csv
-    types: {AESEQ: int, AESTDTC: date}
+    types: {AESEQ: int, AESTDT: date}
 base: DM
 
 output:
   path: adsl.csv
-  columns: [STUDYID, USUBJID, TEAENUM]
+  columns: [STUDYID, USUBJID, TRTSDT, NTEAE]
 
 columns:
   - name: STUDYID
@@ -27,14 +26,19 @@ columns:
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
-  # The subject's adverse events that start on or after the dose date.
-  # EX.EXSTDTC names an exposure record, and a subject row is built from a
-  # demographics record, so the specification is rejected before any data
-  # is read.
-  - name: TEAENUM
+  - name: TRTSDT
+    type: date
+    label: Date of First Exposure to Treatment
+    derivation: EXF.TRTSDT
+
+  # The subject's adverse events that start on or after the first treatment
+  # date. EXF.TRTSDT names a first-exposure record, and a subject row is
+  # built from a demographics record, so the specification is rejected
+  # before any data is read.
+  - name: NTEAE
     type: int
     label: Number of Treatment-Emergent Adverse Events
     derivation:
       aggregate:
-        between: {value: EX.EXSTDTC, upper: AESTDTC}
-        expr: "COUNT(AE.AESEQ)"
+        between: {value: EXF.TRTSDT, upper: AESTDT}
+        expr: "COUNT(AE.*)"

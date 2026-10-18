@@ -11,6 +11,7 @@
 #include "../readstat_convert.h"
 #include "../readstat_malloc.h"
 extern int yamaa_readstat_admit(size_t, size_t);
+extern readstat_error_t yamaa_readstat_deleted_records(void);
 
 typedef struct col_info_s {
     sas_text_ref_t  name_ref;
@@ -235,7 +236,7 @@ cleanup:
 static readstat_error_t sas7bdat_parse_row_size_subheader(const char *subheader, size_t len, sas7bdat_ctx_t *ctx) {
     readstat_error_t retval = READSTAT_OK;
     uint64_t total_row_count;
-    uint64_t row_length, page_row_count;
+    uint64_t row_length, deleted_row_count, page_row_count;
 
     if (len < (ctx->u64 ? 250: 190)) {
         retval = READSTAT_ERROR_PARSE;
@@ -245,10 +246,12 @@ static readstat_error_t sas7bdat_parse_row_size_subheader(const char *subheader,
     if (ctx->u64) {
         row_length = sas_read8(&subheader[40], ctx->bswap);
         total_row_count = sas_read8(&subheader[48], ctx->bswap);
+        deleted_row_count = sas_read8(&subheader[56], ctx->bswap);
         page_row_count = sas_read8(&subheader[120], ctx->bswap);
     } else {
         row_length = sas_read4(&subheader[20], ctx->bswap);
         total_row_count = sas_read4(&subheader[24], ctx->bswap);
+        deleted_row_count = sas_read4(&subheader[28], ctx->bswap);
         page_row_count = sas_read4(&subheader[60], ctx->bswap);
     }
 
@@ -272,6 +275,11 @@ static readstat_error_t sas7bdat_parse_row_size_subheader(const char *subheader,
             return READSTAT_ERROR_UNSUPPORTED_COMPRESSION;
         ctx->rdc_compression = (memcmp(compression, SAS_COMPRESSION_SIGNATURE_RDC, 8) == 0);
     }
+
+    /* SAS keeps records deleted in place, counted here, until the dataset is
+     * rewritten. This reader cannot skip them, so it refuses the dataset. */
+    if (deleted_row_count)
+        return yamaa_readstat_deleted_records();
 
     if (!row_length || row_length > UINT32_MAX || page_row_count > UINT32_MAX)
         return READSTAT_ERROR_ROW_WIDTH_MISMATCH;
@@ -954,6 +962,17 @@ static readstat_error_t sas7bdat_parse_page_pass2(const char *page, size_t page_
     page_type = sas_read2(&page[ctx->page_header_size-8], ctx->bswap);
 
     const char *data = NULL;
+
+    /* A flagged data or mix page keeps records deleted in place among its
+     * rows, marked only in a trailing bitmap that this reader does not read.
+     * Refuse the page before parsing any of its subheaders or rows, so no
+     * other failure on the page takes precedence over the refusal. */
+    if (((page_type & SAS_PAGE_TYPE_MASK) == SAS_PAGE_TYPE_DATA ||
+                (page_type & SAS_PAGE_TYPE_MASK) == SAS_PAGE_TYPE_MIX) &&
+            (page_type & SAS_PAGE_TYPE_DELETED_ROWS)) {
+        retval = yamaa_readstat_deleted_records();
+        goto cleanup;
+    }
 
     if ((page_type & SAS_PAGE_TYPE_MASK) == SAS_PAGE_TYPE_DATA) {
         ctx->page_row_count = sas_read2(&page[ctx->page_header_size-6], ctx->bswap);
