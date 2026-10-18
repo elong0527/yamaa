@@ -1,9 +1,9 @@
 # Dates and times
 
 These operations compute with the `date` and `datetime` values of
-[VALUE-13](values.md#value-13): differences and study days, completion of
-collected dates and times, collected precision and imputation flags, and
-civil arithmetic with fixed-length durations.
+[VALUE-13](values.md#value-13): differences, study days and times of day,
+assembly and completion of collected dates and times, collected precision and
+imputation flags, and civil arithmetic with fixed-length durations.
 
 ## Operations
 
@@ -39,6 +39,8 @@ Replaces: REQ-0309, REQ-0337, REQ-0590, REQ-0591, REQ-0606, REQ-0611.
 | `shift`, `type: date` | `source` is `date`; `days` is `int` |
 | `shift`, `type: datetime` | `source` is `datetime`; a numeric `amount` and an elapsed `unit` |
 | `duration_value` | `source` is duration text; an elapsed `unit` |
+| `dtc` | `year`, `month`, `day`, `hour`, `minute` and `second` are `str` or `int` |
+| `time_of_day` | `source` is `datetime` |
 
 Collected date text is defined by [TIME-7](#time-7), and
 [VALUE-13](values.md#value-13) to [VALUE-21](values.md#value-21) define the
@@ -57,21 +59,26 @@ as an operand in a `compute` expression fails under
 
 `to_date` returns a `date`. From a `datetime` it copies the calendar fields and
 keeps the collected precision, capped at `day`; the truncation is never a
-timezone conversion. From collected date text ([TIME-7](#time-7)) carrying a
-complete date it returns that date, collected precision `day`, whatever time
-follows. Year or year-month text is partial: the result is missing and counted
-as `partial`, and nothing fails. A missing source gives missing, and other text
-fails as invalid date text.
+timezone conversion. From collected date text ([TIME-7](#time-7)) whose prefix
+carries a complete date it returns that date, collected precision `day`,
+whatever follows. A shorter prefix is partial: the result is missing and
+counted as `partial`, and nothing fails. A missing source gives missing, an
+interval or duration fails as [TIME-13](#time-13) states, and other text fails
+as invalid date text.
 
-Fails: `incompatible_input_type`, `invalid_date_text`.
-Evidence: `negative-date-conversion`, `schema-to-date-partial`, `adam-adae-post-dose-window`, `schema-birth-date`.
+Fails: `incompatible_input_type`, `invalid_date_text`, `interval_or_duration_text`.
+Evidence: `negative-date-conversion`, `schema-to-date-partial`, `adam-adae-post-dose-window`, `schema-birth-date`, `rust/crates/yamaa-core/tests/temporal_date_text.rs`.
 Replaces: REQ-0593, REQ-0607, REQ-1107.
 
-`2025-03-04T08` gives `2025-03-04`, and `2025-03` gives missing. A `datetime`
+`2025-03-04T08` gives `2025-03-04`, and `2025-03` gives missing. A known date
+before an unknown time gives that date, so `2025-03-04T-:30` gives
+`2025-03-04`, while `2025---04` and `--03-04` are partial. A `datetime`
 completed from `2025-03` keeps collected precision `month`, while one parsed
 from complete text gives `day`. A `date` source is an incompatible input. The
 partial count is reported at the operation's `partial` path, zero included,
-like a handler count under [COLUMN-14](columns.md#column-14).
+like a handler count under [COLUMN-14](columns.md#column-14). An interval or
+duration fails with `interval_or_duration_text` and other text with
+`invalid_date_text`; `to_date` declares no handler for either.
 
 A `datetime` is produced by converting datetime text, by `impute` with
 `type: datetime` ([TIME-8](#time-8)) and by `shift` ([TIME-14](#time-14)). It
@@ -96,6 +103,30 @@ Replaces: REQ-1187, REQ-1188.
 
 A per-record derivation converts dates once, and aggregates reduce the
 resulting integers; date logic never enters reduction.
+
+<a id="time-20"></a>
+
+### TIME-20. time_of_day returns a datetime's time of day as whole seconds since midnight
+
+`time_of_day` returns the time of day of a `datetime` as an `int` count of
+seconds since midnight, from 0 to 86399: the hour times 3600, plus the minute
+times 60, plus the second. A missing source gives missing. Collected precision
+takes no part, so a time that `impute` supplied counts as the time it names.
+A source of another type is an incompatible input.
+
+Fails: `incompatible_input_type`.
+Evidence: `adam-adae-analysis-time`, `negative-time-of-day-text`, `rust/crates/yamaa-core/tests/temporal_date_text.rs`.
+
+`2025-03-04T08:30:15` gives `30615` and `2025-03-04T00:00:00` gives `0`. The
+result is the ADaM `*TM` analysis time, which a SAS time value holds as the
+same count of seconds. An `int` column holding it may declare a `TIMEw.`
+display format such as `TIME8.`, which a transport file writes and a document
+describes like any other numeric display format
+([SUB-9](profiles/submission.md#sub-9), [XPT-9](profiles/xpt.md#xpt-9)). The
+time carries no collected precision: the `*TMF` flag of a supplied time is
+read from the `datetime` it came from ([TIME-18](#time-18)). A `str` or `date`
+source fails as an incompatible input where the specification is read, as
+[TIME-1](#time-1) states.
 
 ## Differences
 
@@ -172,21 +203,24 @@ Replaces: REQ-1108.
 
 <a id="time-7"></a>
 
-### TIME-7. Collected date text is right-truncated ISO 8601, and precision reports how much of the declared type a source carries
+### TIME-7. Collected date text is ISO 8601 read up to its first unknown field, and precision reports how much of the declared type a source carries
 
 Collected date text is a year, `YYYY`, optionally followed in order by `-MM`,
 `-DD`, `Thh`, `:mm` and `:ss`, each field with the width and range of
-[VALUE-15](values.md#value-15); it stays `str` until an operation reads it.
-`precision` returns how much of its declared `type` a source carries, as a word
-of the collected-precision ladder of [VALUE-16](values.md#value-16): for text,
-the finest field it carries, at most `day` with `type: date`; for a value of
-the declared type, its collected precision.
+[VALUE-15](values.md#value-15), or `-` when unknown, and at least one field
+known; it stays `str` until read, and a reader takes its prefix before the
+first unknown field. `precision` returns a word of the ladder of
+[VALUE-16](values.md#value-16): for text, the finest field that prefix
+carries, at most `day` with `type: date`; for a value of the declared type,
+its collected precision.
 
-Evidence: `sdtm-ae-partial-dates`, `sdtm-dm-age`, `schema-birth-date`, `adam-adpc-relative-times`, `rust/crates/yamaa-adapters/tests/fixtures/temporal_imputation_reference.json`.
+Evidence: `sdtm-ae-partial-dates`, `sdtm-dm-age`, `schema-birth-date`, `adam-adpc-relative-times`, `rust/crates/yamaa-adapters/tests/fixtures/temporal_imputation_reference.json`, `rust/crates/yamaa-core/tests/fixtures/collected_date_text.tsv`.
 Replaces: REQ-0578, REQ-0580, REQ-0581, REQ-0582, REQ-1106, REQ-1183, REQ-1326, REQ-1327, REQ-1329.
 
 ```text
-collected := YYYY [ "-" MM [ "-" DD [ "T" hh [ ":" mm [ ":" ss ] ] ] ] ]
+collected := Y [ "-" M [ "-" D [ "T" h [ ":" m [ ":" s ] ] ] ] ]
+Y := YYYY | "-"    M := MM | "-"    D := DD | "-"
+h := hh | "-"      m := mm | "-"    s := ss | "-"
 ```
 
 `2025` is `year`, `2025-03` is `month`, `2025-03-04` is `day`,
@@ -194,8 +228,20 @@ collected := YYYY [ "-" MM [ "-" DD [ "T" hh [ ":" mm [ ":" ss ] ] ] ] ]
 `2025-03-04T08:30:15` is `second`; with `type: date` the last three are `day`.
 Any other text is not collected date text, including a zone, an offset, a
 fractional second, hour 24, a leap second, a field of one digit, a space before
-the time, and a known day in an unknown month such as `2025---15`, which has no
-representation.
+the time and text whose every field is unknown.
+
+An unknown field is the SDTM placeholder for a component missing inside the
+text. The prefix a reader takes ends before it, and every field after it is
+not read, so `2025---15`, a year and a day in an unknown month, reads as
+`2025`, collected precision `year`, and `2025-03-15T-:30` reads as
+`2025-03-15`, `day`. A known field after an unknown one still has its width
+and range; a day whose month is unknown lies from `01` to `31`, and to `29` in
+a February of an unknown year. Text whose year is unknown, such as `--03-15`,
+leaves a prefix carrying no field: `precision` gives `none`, `impute` gives
+missing as below every minimum precision ([TIME-8](#time-8)), and `to_date`
+counts it as partial ([TIME-2](#time-2)). An ISO 8601 interval or duration,
+such as `2025-01-01/2025-01-10` or `P3D`, names no single date and is not
+collected date text; [TIME-13](#time-13) gives it its own condition.
 
 Reading collected text is not converting it. Text converted to a temporal
 column, or ingested as one, follows [VALUE-15](values.md#value-15): there
@@ -205,6 +251,44 @@ was collected keeps the text as `str` and reads it with `impute` or
 `precision`. A `datetime` source to `precision` with `type: date`, and a `date`
 source with `type: datetime`, are incompatible inputs ([TIME-1](#time-1)). A
 missing source and invalid text follow [TIME-13](#time-13).
+
+<a id="time-19"></a>
+
+### TIME-19. dtc writes collected date parts as collected date text that stops before the first missing part
+
+`dtc` writes the collected date text of [TIME-7](#time-7) from separate
+`year`, `month`, `day`, `hour`, `minute` and `second` sources, of which only
+`year` is required and each declared part needs every coarser one. A `str`
+part holds its field's digits at the field's width, and an `int` part is
+written zero-padded, within the range of [VALUE-15](values.md#value-15). The
+text stops before the first missing part, so a missing day gives `YYYY-MM`
+and a missing year gives missing. Nothing is counted.
+
+Fails: `incompatible_input_type`, `missing_required_field`, `invalid_date_text`.
+Evidence: `sdtm-ae-partial-dates`, `sdtm-mh-ongoing-conditions`, `negative-dtc-month-digits`, `rust/crates/yamaa-core/tests/temporal_date_text.rs`.
+
+The parts are read in order from `year`, and reading stops at the first
+missing part: the parts after it are not read, and the result is the
+right-truncated text, never a placeholder form. A year `2025`, a missing month
+and a day `15` give `2025`; a year, month and day give `2025-03-15`, and with
+an hour and minute `2025-03-15T08:30`. A truncated result is the collected
+precision rather than a substitution, so no handler fires and no count is
+reported for it.
+
+An `int` part is written as its decimal digits padded with leading zeros to
+the field's width: a month `3` writes `03` and a year `2025` writes `2025`. A
+part the text reads that is not its field's digits at the field's width, such
+as a month `3` or `MAR` held as text, or that lies outside its range, such as a
+day `30` in February of the year and month read, fails with
+`invalid_date_text` on the `impute` stage, reporting the operation, the part,
+its source and its value, unless `invalid` declares a literal substitute; a
+declared handler is counted only when reached. A part of another type is an
+incompatible input under [TIME-1](#time-1).
+
+A part declared without every coarser part, such as `day` without `month`,
+could never be written, and fails with `missing_required_field` at the absent
+part where the specification is read. The text is an assembly of collected
+values, which [SUB-19](profiles/submission.md#sub-19) admits as `Collected`.
 
 <a id="time-8"></a>
 
@@ -245,6 +329,12 @@ With `type: date`, `month: 6` and `day: first`, `1975` completes to
 `2025-03-04T08:00:00` with `hour`; under `time: last` the last completes to
 `2025-03-04T08:59:59`. Text carrying seconds, and a value of the declared type,
 are returned unchanged.
+
+The text completed is the prefix [TIME-7](#time-7) reads, so an unknown field
+and every field after it are completed as if not collected: `2025---15`
+completes as `2025` does, and with `type: datetime` and `time: first`,
+`2025-03-15T-:30` completes to `2025-03-15T00:00:00` with `day`. Text whose
+year is unknown gives missing, as a source coarser than the minimum does.
 
 The parameters apply in this order: a missing source, then invalid text, then
 the minimum precision, then completion from `month`, `day` and `time`, then
@@ -318,11 +408,12 @@ a default substitution at the operation's `missing` path. `impute`'s optional
 `fallback`, a column of the declared type, answers a missing source instead:
 the result is its value with collected precision `none`, counted at
 `fallback`, and missing when the fallback is missing. Text that is not
-collected date text ([TIME-7](#time-7)) fails with `invalid_date_text` unless
-`invalid` declares a literal substitute.
+collected date text ([TIME-7](#time-7)) fails with `interval_or_duration_text`
+when it is an ISO 8601 interval or duration and with `invalid_date_text`
+otherwise, unless `invalid` declares a literal substitute.
 
-Fails: `invalid_date_text`.
-Evidence: `schema-impute-fallback`, `negative-impute-bad-source`, `negative-precision-bad-source`, `negative-impute-datetime-text`, `negative-precision-datetime-text`.
+Fails: `invalid_date_text`, `interval_or_duration_text`.
+Evidence: `schema-impute-fallback`, `negative-impute-bad-source`, `negative-precision-bad-source`, `negative-impute-datetime-text`, `negative-precision-datetime-text`, `negative-impute-interval`, `rust/crates/yamaa-core/tests/fixtures/collected_date_text.tsv`.
 Replaces: REQ-0588.
 
 Both counts are reported like handler counts under
@@ -334,6 +425,18 @@ and one handler stage serves both operations; `invalid` fires only when the
 source is present ([COLUMN-11](columns.md#column-11)). A fallback value is
 whole: the bounds of [TIME-9](#time-9) do not move it, and
 [TIME-18](#time-18) reports it as wholly supplied.
+
+An ISO 8601 duration is `P`, optionally after `-`, followed by components
+that are each a number and a designator: `nW` alone, or `nY`, `nM` and `nD`
+and, after `T`, `nH`, `nM` and `nS`, each at most once and in that order, at
+least one, the last alone with a decimal fraction. An interval is two parts
+joined by one `/`, each a right-truncated date and time, which may carry a
+fraction of a second and a zone, or a duration, not both durations. `P3D`,
+`-PT15M` and `2025-01-01/2025-01-10` name a length of time or a period, not one
+date, so no reader completes or measures them, and the failure names that
+cause; `2025/03/04` is neither and fails as invalid date text. One `invalid`
+handler answers both conditions, and the failure reports the operation, the
+source and the value.
 
 ## Civil arithmetic
 

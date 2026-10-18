@@ -31,6 +31,7 @@ conditions:
   core_mandatory_conflict: {phases: [validation]}
   correlated_derivation_with_unique_verification: {phases: [validation]}
   correlated_filter_with_unique_verification: {phases: [validation]}
+  data_type_failed: {phases: [verification]}
   day_not_permitted: {phases: [validation]}
   day_required: {phases: [validation]}
   decimals_not_applicable: {phases: [validation]}
@@ -59,6 +60,7 @@ conditions:
   inheritance_cycle: {phases: [validation]}
   integer_overflow: {phases: [derivation, validation]}
   internal_column_in_keys: {phases: [validation]}
+  interval_or_duration_text: {phases: [impute, validation]}
   invalid_aggregate_context: {phases: [validation]}
   invalid_calendar_date: {phases: [impute]}
   invalid_clear: {phases: [validation]}

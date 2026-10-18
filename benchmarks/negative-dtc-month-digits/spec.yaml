@@ -1,0 +1,42 @@
+schema_version: "1.0"
+domain: AE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE_RAW: {path: input/ae_raw.csv, types: {AESEQ: int}}
+
+output:
+  path: ae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AETERM, AESTDTC]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE_RAW.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE_RAW.AESEQ
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation: AE_RAW.AETERM
+
+  # The collected start parts written as ISO 8601 text, stopping before the
+  # first part that was not collected. A month written as one digit is not
+  # a month part, and no outcome is declared for it, so it stops the run.
+  - name: AESTDTC
+    type: str
+    label: Start Date/Time of Adverse Event
+    derivation:
+      dtc:
+        year: AE_RAW.AESTYR
+        month: AE_RAW.AESTMO
+        day: AE_RAW.AESTDY

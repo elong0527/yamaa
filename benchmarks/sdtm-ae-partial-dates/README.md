@@ -21,10 +21,11 @@ subject has no usable reference date.
 
 - `AESTDTC` / `AEENDTC` are the collected dates written as ISO 8601
   text at the precision collected: a full date (`2026-03-15`), a
-  year and month (`2026-03`), or a year alone (`2026`). Nothing is
-  imputed, and a date with no part collected stays empty. A day
-  collected without its month, or a month without its year, stops
-  the run.
+  year and month (`2026-03`), or a year alone (`2026`). The text
+  stops before the first part that was not collected, so a day
+  collected without its month keeps the year alone, and a date
+  without a collected year stays empty. Nothing is imputed, and a
+  part that is not written as its digits stops the run.
 - `AESTDY` / `AEENDY` are the study days counted from `RFSTDTC`: day
   1 is the reference start date, the day before it is -1, and there
   is no day zero. Only a complete date gets a study day: a partial

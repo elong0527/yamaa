@@ -39,7 +39,16 @@ pub enum TemporalKind {
     DurationValue {
         unit: ElapsedUnit,
     },
+    /// `dtc`: collected date text from the year and the `depth - 1` finer
+    /// parts declared after it, in [`DATE_PARTS`] order.
+    DateText {
+        depth: u8,
+    },
+    /// `time_of_day`: a datetime's whole seconds since midnight.
+    TimeOfDay,
 }
+/// The parts `dtc` assembles, coarsest first.
+pub static DATE_PARTS: [&str; 6] = ["year", "month", "day", "hour", "minute", "second"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ElapsedUnit {
     Second,
@@ -78,6 +87,7 @@ impl Temporal {
     ) -> Result<Self, InvalidTemporal> {
         if path.is_empty()
             || sources.iter().any(String::is_empty)
+            || matches!(kind, TemporalKind::DateText { depth } if !(1..=6).contains(&depth))
             || sources.len() != kind.fields().len()
         {
             return Err(InvalidTemporal::Shape);
@@ -167,6 +177,20 @@ impl Temporal {
             operand_route: None,
         }
     }
+    /// A `dtc` part declared without a coarser part, which it would never
+    /// follow in the assembled text.
+    pub(crate) fn date_part_gap_diagnostic(path: &str, field: &str, finer: &str) -> Diagnostic {
+        Diagnostic {
+            code: ConditionCode::DateTextGap,
+            spec_paths: vec![format!("{path}.{field}")],
+            context: [("field", field), ("finer", finer)]
+                .into_iter()
+                .map(|(key, value)| (key.into(), JsonValue::String(value.into())))
+                .collect(),
+            source_span: None,
+            operand_route: None,
+        }
+    }
     pub(crate) fn bounds_diagnostic(path: &str, value: &str) -> Diagnostic {
         Diagnostic {
             code: ConditionCode::TemporalBounds,
@@ -245,7 +269,8 @@ impl TemporalKind {
             Self::StudyDay => &["date", "reference"],
             Self::DateShift => &["source", "days"],
             Self::DateTimeShift { .. } => &["source", "amount"],
-            Self::EpochDay | Self::DurationValue { .. } => &["source"],
+            Self::EpochDay | Self::DurationValue { .. } | Self::TimeOfDay => &["source"],
+            Self::DateText { depth } => &DATE_PARTS[..usize::from(depth)],
         }
     }
 }

@@ -96,41 +96,31 @@ columns:
     label: Subject Reference Start Date/Time
     derivation: DM.RFSTDTC
 
-  # The most precise collected part sets the form: a day gives YYYY-MM-DD,
-  # a month YYYY-MM, a year alone YYYY, and nothing collected gives no date.
-  # The templates have no fallback, so a day without its month, or a month
-  # without its year, stops the run.
+  # The collected parts in order, stopping before the first part that was
+  # not collected: a day gives YYYY-MM-DD, a month YYYY-MM, a year alone
+  # YYYY, and no year gives no date. A day without its month keeps the year
+  # alone. A part that is not its field's digits stops the run.
   - name: AESTDTC
     type: str
     label: Start Date/Time of Adverse Event
     derivation:
-      case:
-        - when: "AEST_DY IS NOT NULL"
-          then:
-            str_template: "{AEST_YR}-{AEST_MO}-{AEST_DY}"
-        - when: "AEST_MO IS NOT NULL"
-          then:
-            str_template: "{AEST_YR}-{AEST_MO}"
-        - when: "AEST_YR IS NOT NULL"
-          then: AEST_YR
+      dtc:
+        year: AEST_YR
+        month: AEST_MO
+        day: AEST_DY
 
-  # Same ladder for the end date.
+  # Same assembly for the end date.
   - name: AEENDTC
     type: str
     label: End Date/Time of Adverse Event
     derivation:
-      case:
-        - when: "AEEN_DY IS NOT NULL"
-          then:
-            str_template: "{AEEN_YR}-{AEEN_MO}-{AEEN_DY}"
-        - when: "AEEN_MO IS NOT NULL"
-          then:
-            str_template: "{AEEN_YR}-{AEEN_MO}"
-        - when: "AEEN_YR IS NOT NULL"
-          then: AEEN_YR
+      dtc:
+        year: AEEN_YR
+        month: AEEN_MO
+        day: AEEN_DY
 
   # Collected precision: year, month or day; missing when nothing was
-  # collected or the text is not a date.
+  # collected.
   - name: AESTPR
     type: str
     label: Collected Precision of Adverse Event Start
@@ -138,7 +128,6 @@ columns:
       precision:
         type: date
         source: AESTDTC
-        invalid: {literal: null}
 
   - name: AEENPR
     type: str
@@ -147,7 +136,6 @@ columns:
       precision:
         type: date
         source: AEENDTC
-        invalid: {literal: null}
 
   # Only a complete date (precision day) becomes a date, so a partial date
   # gets no study day.
