@@ -1,0 +1,57 @@
+schema_version: "1.0"
+domain: ADEX
+keys: [STUDYID, USUBJID, ASEQ]
+input:
+  EX:
+    path: input/ex.csv
+    types: {EXSEQ: int, EXDOSE: float, EXSTDT: date}
+  PERIODS:
+    path: input/periods.csv
+    types: {APERIOD: int, APERSDT: date, APEREDT: date}
+
+output:
+  path: adex.csv
+  columns: [STUDYID, USUBJID, ASEQ, APERIOD]
+
+intermediates:
+  # The exposure records that gave study drug. The row template below reads
+  # these records as its driver, so a record without a dose builds no row.
+  - id: DOSED
+    dataset: EX
+    filter: "EX.EXDOSE > 0"
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: ASEQ
+    type: int
+    label: Analysis Sequence Number
+
+  - name: APERIOD
+    type: int
+    label: Period
+
+rows:
+  # One row per dose. The period is the subject's period whose first and
+  # last days, both inclusive, hold the dose's start date. DOSED.EXSTDT reads
+  # the dosed record that builds the row, not a lookup of DOSED by the output
+  # keys, so each of a subject's doses takes its own period and no column
+  # carries the date. A dose outside every period finds no record; with no
+  # `absent` declared, the period is missing and the row is counted under
+  # `absent`.
+  - id: dosed
+    dataset: DOSED
+    derivations:
+      STUDYID: DOSED.STUDYID
+      USUBJID: DOSED.USUBJID
+      ASEQ: DOSED.EXSEQ
+      APERIOD:
+        source:
+          variable: PERIODS.APERIOD
+          between: {value: DOSED.EXSTDT, lower: APERSDT, upper: APEREDT}

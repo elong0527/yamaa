@@ -56,7 +56,7 @@ pub(super) fn bind(
     };
     let name = declaration.value.as_str();
     let current = declaration
-        .current_value(catalog, secondary, previous, None, &mut Vec::new())?
+        .current_value(catalog, secondary, previous, None, None, &mut Vec::new())?
         .or_else(|| {
             // A bare name that no output column takes is a donor record field.
             (!name.contains('.'))

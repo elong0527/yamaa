@@ -162,6 +162,7 @@ pub(in crate::specification) fn bind(
                             secondary,
                             intermediates,
                             row,
+                            Some(driver),
                             available,
                             edges,
                             findings,

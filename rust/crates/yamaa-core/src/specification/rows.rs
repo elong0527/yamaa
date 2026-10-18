@@ -1885,6 +1885,9 @@ impl Rows {
             .map(|(driver, group)| (*driver, group.as_slice()))
             .collect::<Vec<_>>();
         let mut templates = Vec::new();
+        // The declaration of each bound template, which names the columns it
+        // derives itself.
+        let mut declarations = Vec::new();
         for (index, template) in self.templates.iter().enumerate() {
             if let Some(bound) = bind_template(
                 template,
@@ -1900,6 +1903,7 @@ impl Rows {
                 &mut findings,
             )? {
                 templates.push(bound);
+                declarations.push(template);
             }
         }
         let mut odm_contexts: Option<std::rc::Rc<[crate::dataset::OdmTemplateScope]>> = None;
@@ -2026,38 +2030,52 @@ impl Rows {
                 diagnostics: analyzed.diagnostics,
             });
         }
-        // A column derivation evaluates for the rows of every template, and a
-        // template's own derivations for its rows only.
+        // A column derivation evaluates only for the rows of the templates that
+        // leave the column to the column phase, and a template's own
+        // derivations for its rows only (LOOKUP-8, LOOKUP-9).
+        let leaves = |template: &Template, column: usize| {
+            !template
+                .declarations
+                .iter()
+                .any(|declaration| declaration.column == column)
+        };
         lookup_range::admit(
-            std::iter::once((
-                columns
-                    .iter()
-                    .map(|assignment| &assignment.expression)
-                    .collect(),
-                templates
-                    .iter()
-                    .map(|template| template.mode.source_index())
-                    .collect(),
-            ))
-            .chain(templates.iter().map(|template| {
-                (
-                    template
-                        .assignments
-                        .iter()
-                        .map(|assignment| &assignment.expression)
-                        .collect(),
-                    vec![template.mode.source_index()],
-                )
-            })),
+            columns
+                .iter()
+                .map(|assignment| {
+                    (
+                        vec![&assignment.expression],
+                        templates
+                            .iter()
+                            .zip(&declarations)
+                            .filter(|(_, declaration)| leaves(declaration, assignment.column))
+                            .map(|(template, _)| template.mode.source_index())
+                            .collect(),
+                    )
+                })
+                .chain(templates.iter().map(|template| {
+                    (
+                        template
+                            .assignments
+                            .iter()
+                            .map(|assignment| &assignment.expression)
+                            .collect(),
+                        vec![template.mode.source_index()],
+                    )
+                })),
             &intermediates,
             &mut findings,
         );
-        for template in &templates {
+        for (template, declaration) in templates.iter().zip(&declarations) {
             relation_predicates::admit_reads(
                 template
                     .assignments
                     .iter()
-                    .chain(&columns)
+                    .chain(
+                        columns
+                            .iter()
+                            .filter(|assignment| leaves(declaration, assignment.column)),
+                    )
                     .map(|assignment| &assignment.expression),
                 &intermediates,
                 template.mode.source_index(),

@@ -39,7 +39,10 @@ narrowed only after it matches, and selection or reduction sees only the
 narrowed records. A key value whose type cannot compare therefore fails even
 on a record the filter would remove ([LOOKUP-9](#lookup-9)), and a filter that
 would fail on a record no row matches is never asked about it
-([LOOKUP-8](#lookup-8)).
+([LOOKUP-8](#lookup-8)). A named intermediate that verifies a unique
+combination ([LOOKUP-17](#lookup-17)) or drives a row template
+([ROW-2](rows.md#row-2)) reads every record its filter keeps, so there its
+filter is asked about every record.
 
 The current row's match values and range value are evaluated before any
 record is read, so a failure there is reported before any record is matched
@@ -68,7 +71,7 @@ no record, and a record missing a key or a stated bound does not match.
 `between` names a current-row value and at least one bound field.
 
 Fails: `incompatible_input_type`, `incomparable_range_types`, `invalid_field_type`, `prohibited_construct`, `unknown_field`.
-Evidence: `negative-lookup-bad-range`, `negative-lookup-range-other-input`, `negative-aggregate-range-other-input`, `schema-lookup-source-range`, `schema-lookup-intermediate-range-driver`, `schema-aggregate-range-driver`, `sdtm-lb-lab-specific-ranges`, `adam-advs-window-table`, `adam-adtr-nadir`, `adam-adsl-new-therapy`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`.
+Evidence: `negative-lookup-bad-range`, `negative-lookup-range-other-input`, `negative-aggregate-range-other-input`, `schema-lookup-source-range`, `schema-lookup-source-range-driver`, `schema-lookup-intermediate-range-driver`, `schema-aggregate-range-driver`, `sdtm-lb-lab-specific-ranges`, `adam-advs-window-table`, `adam-adtr-nadir`, `adam-adsl-new-therapy`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`.
 Replaces: REQ-0121, REQ-0128, REQ-0134, REQ-0330, REQ-0472, REQ-0473, REQ-0474,
 REQ-0509, REQ-1049.
 
@@ -199,8 +202,11 @@ record gives one answer for a record whichever row matched it, and that answer
 may be reused; a correlated result is never reused for another row. Normal
 predicate typing and missing-value rules apply without coercion. The filter is
 asked only about matched records, so a filter that would fail on a record no
-row matches never runs. A `filter` on a construct with no records to select
-among (an output column, a chosen lookup record, a group key) fails as
+row matches never runs as a lookup. A named intermediate's unique verification
+([LOOKUP-17](#lookup-17)) and a row template it drives
+([ROW-2](rows.md#row-2)) read every record the filter keeps, so they ask it
+about every record. A `filter` on a construct with no records to select among
+(an output column, a chosen lookup record, a group key) fails as
 `prohibited_construct`.
 
 An aggregate's `filter` narrows the relation it reduces: for a qualified
@@ -464,7 +470,7 @@ current row's same-named value. A structured `source:` binding adds its
 join ([LOOKUP-25](#lookup-25)). The join gives one value per current row and
 preserves the row. The qualifier of the row template's driver is not a join.
 
-Evidence: `schema-lookup`, `schema-source-binding`, `schema-lookup-source-range`, `sdtm-sv-subject-visits`, `negative-input-require-match`.
+Evidence: `schema-lookup`, `schema-source-binding`, `schema-lookup-source-range`, `schema-lookup-source-range-driver`, `sdtm-sv-subject-visits`, `negative-input-require-match`.
 Replaces: REQ-0111, REQ-0150, REQ-0151, REQ-0152, REQ-1051, REQ-1052.
 
 ```yaml
@@ -522,7 +528,7 @@ match value must be available in the row phase; one available only in a later
 phase fails.
 
 Fails: `ungrouped_driver_field`, `unknown_field`, `phase_boundary`.
-Evidence: `rust/crates/yamaa-core/tests/relations_reference_scope.rs`, `adam-adlb-supplb-padded-key`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`.
+Evidence: `rust/crates/yamaa-core/tests/relations_reference_scope.rs`, `adam-adlb-supplb-padded-key`, `schema-lookup-source-range-driver`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`.
 Replaces: REQ-0126, REQ-0156, REQ-0157.
 
 In ungrouped row construction each retained input record builds one candidate

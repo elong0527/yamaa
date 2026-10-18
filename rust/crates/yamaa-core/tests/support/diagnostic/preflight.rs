@@ -1139,7 +1139,7 @@ pub(crate) fn intermediate_reached() -> BTreeSet<ConditionCode> {
     let repeated = |path| {
         (
             "invalid_field_type",
-            Some("REQ-0115"),
+            Some("LOOKUP-5"),
             vec![path],
             vec![
                 ("intermediate", text("P")),

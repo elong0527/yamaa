@@ -737,14 +737,7 @@ mod relations {
 
         #[test]
         fn secondary_driver_column_phase_rejects_bound_record_reads_and_reductions() {
-            let relation = item(Some(filter(
-                "DVR.V",
-                CurrentRead::Record {
-                    source: 1,
-                    column: 1,
-                },
-            )));
-            let column_plan = |expression: Expression| {
+            let column_plan = |source: usize, expression: Expression| {
                 DatasetPlan::new_with_intermediates(
                     SourceSchemas {
                         primary: schema(&["ID", "V"]),
@@ -753,7 +746,10 @@ mod relations {
                             schema: schema(&["ID", "V"]),
                         }],
                     },
-                    vec![relation.clone()],
+                    vec![item(Some(filter(
+                        "DVR.V",
+                        CurrentRead::Record { source, column: 1 },
+                    )))],
                     schema(&["ID", "CURRENT", "A"]),
                     vec![RowTemplate {
                         mode: RowMode::Driver {
@@ -771,19 +767,35 @@ mod relations {
                     vec![],
                 )
             };
+            let direct = || Expression::Intermediate {
+                index: 0,
+                column: 1,
+            };
             // Column assignments execute against the primary table, so a bound
-            // intermediate read of a record coordinate is rejected in the column
-            // phase (`RecordReadScope::All`) just like the direct form.
+            // intermediate read of a primary record coordinate is rejected in
+            // the column phase just like the direct form.
             for expression in [
-                Expression::Intermediate {
-                    index: 0,
-                    column: 1,
-                },
+                direct(),
                 bound_intermediate_compute(),
                 bound_intermediate_flag(),
             ] {
-                assert_eq!(column_plan(expression), Err(PlanError::InvalidKeyMode));
+                assert_eq!(
+                    column_plan(0, expression),
+                    Err(PlanError::InvalidIntermediate)
+                );
             }
+            // A current field on the template driver's own port reads that
+            // driver's record by its port, in the column phase as in row
+            // construction (LOOKUP-8). A flag reads an input-backed selection
+            // only at the key grain, whatever its current fields read.
+            for expression in [direct(), bound_intermediate_compute()] {
+                let plan = column_plan(1, expression);
+                assert!(plan.is_ok(), "{plan:?}");
+            }
+            assert_eq!(
+                column_plan(1, bound_intermediate_flag()),
+                Err(PlanError::InvalidIntermediate)
+            );
             // PR #2030 Minor, adjudicated with #2430: column-phase Reduce/Count read
             // the primary table with the secondary driver's row indices, so they
             // are current record reads in `RecordReadScope::All` as well.
@@ -1344,7 +1356,7 @@ mod relations {
                     diagnostic.definition().condition,
                     diagnostic.definition().requirement
                 ),
-                ("validation", "incomparable_range_types", Some("REQ-0121"))
+                ("validation", "incomparable_range_types", Some("LOOKUP-9"))
             );
             assert_eq!(diagnostic.spec_paths, ["columns.V.aggregate.between"]);
             assert_eq!(

@@ -1297,7 +1297,8 @@ fn bind_range(
     let Some(bounds) = bounds else {
         return Ok(None);
     };
-    let Some((read, kind)) = range.current_value(catalog, secondary, intermediates, None, edges)?
+    let Some((read, kind)) =
+        range.current_value(catalog, secondary, intermediates, None, None, edges)?
     else {
         findings.push(BindFinding::AggregateDiagnostic(
             range.unknown_value(Owner::Unnamed),

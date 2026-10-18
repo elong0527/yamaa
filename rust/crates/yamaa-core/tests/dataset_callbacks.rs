@@ -413,7 +413,8 @@ mod execution {
             assert_eq!(attempt.handler_counts[0].count, 1);
         }
 
-        /// Filtering is lazy globally, finishes before matching and never executes for empty output.
+        /// Filtering is lazy: it runs after matching, only on matched records, and
+        /// never executes for empty output (LOOKUP-25).
         #[test]
         fn named_intermediate_filter_scope_and_handlers_are_attempt_local() {
             let mut source = table(&[("ID", ColumnType::Int)], vec![vec![Value::Int(99)]]);
