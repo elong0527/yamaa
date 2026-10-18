@@ -3,8 +3,5 @@
 extendr_module! {
     mod yamaa;
     fn core_version;
-    use domain_entry;
-    use define_entry;
-    use resolved_artifact;
     use api_entry;
 }

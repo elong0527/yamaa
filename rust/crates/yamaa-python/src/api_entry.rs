@@ -121,7 +121,7 @@ pub fn _spec_resolve<'py>(
     let value = engine(py)
         .spec_resolve(specification, project)
         .map_err(|failure| raise(py, failure))?;
-    crate::report_fields::context_value(py, &value)
+    crate::context_values::context_value(py, &value)
 }
 
 #[pyfunction]
@@ -146,4 +146,135 @@ pub fn _read_odm(
     yamaa::read_odm(std::path::Path::new(source), &options)
         .map(|table| ArrowTable::from(&table))
         .map_err(|error| raise_error(py, "cannot read ODM", error))
+}
+
+fn project_poisoned() -> PyErr {
+    pyo3::exceptions::PyRuntimeError::new_err("project handle is in use or poisoned")
+}
+
+#[pyclass(frozen, module = "yamaa._native", name = "_ProjectRun")]
+pub struct ProjectRun {
+    inner: Arc<Mutex<yamaa::ProjectRun>>,
+}
+
+#[pymethods]
+impl ProjectRun {
+    fn names(&self) -> PyResult<Vec<String>> {
+        Ok(self
+            .inner
+            .try_lock()
+            .map_err(|_| project_poisoned())?
+            .names())
+    }
+    fn output(&self, py: Python<'_>, name: &str) -> PyResult<Option<ArrowTable>> {
+        let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
+        let run = guard.member(name).map_err(|failure| raise(py, failure))?;
+        Ok(run.output().map(ArrowTable::from))
+    }
+    fn member_issues(&self, py: Python<'_>, name: &str) -> PyResult<ArrowTable> {
+        let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
+        let run = guard.member(name).map_err(|failure| raise(py, failure))?;
+        Ok(ArrowTable::from(&run.issues()))
+    }
+    fn member_report(&self, py: Python<'_>, name: &str) -> PyResult<Option<ArrowTable>> {
+        let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
+        let run = guard.member(name).map_err(|failure| raise(py, failure))?;
+        Ok(run.report().map(ArrowTable::from))
+    }
+    fn issues(&self) -> PyResult<ArrowTable> {
+        let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
+        Ok(ArrowTable::from(&guard.issues()))
+    }
+    fn report(&self) -> PyResult<ArrowTable> {
+        let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
+        Ok(ArrowTable::from(&guard.report()))
+    }
+    fn save(&self, py: Python<'_>) -> PyResult<()> {
+        let saved = self
+            .inner
+            .try_lock()
+            .map_err(|_| project_poisoned())?
+            .save();
+        saved.map_err(|failure| raise(py, failure))
+    }
+}
+
+#[pyclass(frozen, module = "yamaa._native", name = "_Submission")]
+pub struct Submission {
+    inner: Arc<Mutex<yamaa::Submission>>,
+}
+
+#[pymethods]
+impl Submission {
+    fn issues(&self) -> PyResult<ArrowTable> {
+        let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
+        Ok(ArrowTable::from(&guard.issues()))
+    }
+    fn save(&self, py: Python<'_>) -> PyResult<()> {
+        let saved = self
+            .inner
+            .try_lock()
+            .map_err(|_| project_poisoned())?
+            .save();
+        saved.map_err(|failure| raise(py, failure))
+    }
+}
+
+#[pyfunction]
+pub fn _project_spec(py: Python<'_>, project: &str, name: &str) -> PyResult<String> {
+    engine(py)
+        .project_spec(project, name)
+        .map_err(|failure| raise(py, failure))
+}
+
+#[pyfunction]
+pub fn _project_check(py: Python<'_>, project: &str) -> ArrowTable {
+    ArrowTable::from(&engine(py).project_check(project, &CancellationToken::new()))
+}
+
+#[pyfunction]
+#[pyo3(signature=(project, section=None))]
+pub fn _project_run(py: Python<'_>, project: &str, section: Option<&str>) -> PyResult<ProjectRun> {
+    let runs = engine(py)
+        .project_run(project, section, &CancellationToken::new())
+        .map_err(|error| raise_error(py, "cannot run the project", error))?;
+    // A project interrupt in any specification fails the call with its own
+    // object, as a single run does.
+    for name in runs.names() {
+        if let Some(run) = runs.get(&name) {
+            let build = run.build();
+            let interrupt = build
+                .project_interrupt()
+                .or_else(|| build.producer_interrupt())
+                .and_then(|error| crate::function_callback::payload(py, error));
+            if let Some(error) = interrupt {
+                return Err(crate::function_callback::raise(py, error));
+            }
+        }
+    }
+    Ok(ProjectRun {
+        inner: Arc::new(Mutex::new(runs)),
+    })
+}
+
+#[pyfunction]
+#[pyo3(signature=(project, section=None, created=None))]
+pub fn _project_submission(
+    py: Python<'_>,
+    project: &str,
+    section: Option<&str>,
+    created: Option<&str>,
+) -> PyResult<Submission> {
+    let submission = engine(py)
+        .project_submission(
+            project,
+            section,
+            created,
+            yamaa::VERSION,
+            &CancellationToken::new(),
+        )
+        .map_err(|error| raise_error(py, "cannot compose the submission", error))?;
+    Ok(Submission {
+        inner: Arc::new(Mutex::new(submission)),
+    })
 }

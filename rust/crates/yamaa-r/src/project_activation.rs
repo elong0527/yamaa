@@ -7,8 +7,8 @@ use extendr_api::prelude::*;
 use std::sync::Mutex;
 use yamaa::{
     Argument, CallError, ColumnType, FunctionError, FunctionHandle, FunctionIdentity, HostLanguage,
-    HostPayload, LockContext, LockFinding, LockKind, LockReason, LockSyntaxError, ProjectFunctions,
-    Scalar, Signature,
+    HostPayload, LockContext, LockFinding, LockKind, LockReason, ProjectFunctions, Scalar,
+    Signature,
 };
 
 /// Installed capabilities: lock verification, binding resolution and host
@@ -389,100 +389,5 @@ impl ProjectFunctions for RegistryPort {
                 })
             })?;
         plain_result(&value, returns)
-    }
-}
-
-/// Mechanical SDK facts, distinct from projected semantic issues. Original
-/// R conditions remain rooted objects; no host condition is stringified.
-pub(crate) fn facts(error: &FunctionError) -> Robj {
-    let condition = |payload: &Option<HostPayload>| {
-        payload
-            .as_ref()
-            .and_then(|payload| {
-                // Best-effort evidence: a payload created on another thread
-                // cannot be touched here, so it reports as absent.
-                payload
-                    .with::<crate::thread_bound::ThreadBound<Robj>, _>(|condition| {
-                        condition.get().cloned().ok()
-                    })
-                    .flatten()
-            })
-            .unwrap_or_else(|| NULL.into_robj())
-    };
-    match error {
-        FunctionError::Exception { payload, .. } => {
-            list!(kind = "host", condition = condition(payload)).into_robj()
-        }
-        FunctionError::Representation { payload, .. } => {
-            list!(kind = "representation", condition = condition(payload)).into_robj()
-        }
-        FunctionError::Scalar { reason } => {
-            list!(kind = "scalar", reason = Raw::from_bytes(reason.as_bytes())).into_robj()
-        }
-        FunctionError::Lock(findings) => list!(
-            kind = "lock",
-            findings = List::from_values(findings.iter().map(|finding| {
-                list!(
-                    package = Raw::from_bytes(finding.package.as_bytes()),
-                    reason = finding.reason.as_str(),
-                    expected = List::from_values(
-                        finding
-                            .expected
-                            .iter()
-                            .map(|value| Raw::from_bytes(value.as_bytes()))
-                    ),
-                    actual = finding
-                        .actual
-                        .as_ref()
-                        .map(|value| Raw::from_bytes(value.as_bytes()))
-                )
-            }))
-        )
-        .into_robj(),
-        FunctionError::LockSyntax(error) => match error {
-            LockSyntaxError::Limit {
-                resource,
-                limit,
-                actual,
-            } => list!(
-                kind = "lock_limit",
-                resource = *resource,
-                limit = *limit as f64,
-                actual = actual.map(|value| value as f64)
-            )
-            .into_robj(),
-            LockSyntaxError::Shape { field } => {
-                list!(kind = "lock_shape", field = *field).into_robj()
-            }
-            LockSyntaxError::Json { line, column } => list!(
-                kind = "lock_json",
-                line = *line as f64,
-                column = *column as f64
-            )
-            .into_robj(),
-            LockSyntaxError::Document { resource_refusal } => {
-                list!(kind = "lock_document", resource_refusal = *resource_refusal).into_robj()
-            }
-            _ => list!(kind = "unclassified").into_robj(),
-        },
-        FunctionError::Interrupted { payload } => {
-            list!(kind = "interrupt", condition = condition(payload)).into_robj()
-        }
-        FunctionError::SdkBoundary { payload } => {
-            list!(kind = "sdk_boundary", condition = condition(payload)).into_robj()
-        }
-        FunctionError::Protocol => list!(kind = "protocol").into_robj(),
-        FunctionError::MissingBinding(call) => list!(
-            kind = "missing_binding",
-            call = Raw::from_bytes(call.as_bytes())
-        )
-        .into_robj(),
-        FunctionError::Rejected { reason, .. } => list!(
-            kind = "rejected",
-            reason = Raw::from_bytes(reason.as_bytes())
-        )
-        .into_robj(),
-        FunctionError::Internal { code } => list!(kind = "internal", code = *code).into_robj(),
-        _ => list!(kind = "unclassified").into_robj(),
     }
 }

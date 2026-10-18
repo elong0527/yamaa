@@ -1,14 +1,5 @@
 useDynLib(yamaa, .registration = TRUE)
-export(yamaa_domain)
-export(yamaa_check)
-export(yamaa_resolve_specification)
-export(yamaa_read_resolved_specification)
-S3method(as.character,yamaa_resolved_specification)
-
-export(yamaa_define)
-
-export(yamaa_resource_result)
-export(yamaa_resource_failure)
-export(yamaa_resource_resolver)
-export(yamaa_memory_resolver)
-export(yamaa_synthetic_remote_resolver)
+export(yamaa_spec)
+export(yamaa_project)
+export(yamaa_read_odm)
+S3method("[[", yamaa_project_run)

@@ -1,53 +1,15 @@
-//! Python issue-row conversion: one native row per diagnostic.
+//! Convert owned Rust structured values to Python objects.
 //!
-//! A row carries the five frame fields (context as the canonical JSON text),
-//! the structured context tree as Python objects, and the optional geometry.
-//! The facade projects both the issues frame and the named records from the
-//! same rows, so the two views can never disagree. Absent geometry is `None`,
-//! distinct from a present zero-width span or empty route.
+//! Integer tokens become `int` (unbounded, so a token wider than 64 bits
+//! keeps its exact value), other number tokens `float`, objects `dict` and
+//! arrays `list`.
 use pyo3::{
     exceptions::PyRuntimeError,
     prelude::*,
     types::{PyDict, PyFloat, PyInt, PyList},
     IntoPyObjectExt,
 };
-use yamaa::{ContextValue, Diagnostic};
-
-pub(super) type IssueRow<'py> = (
-    String,
-    String,
-    Option<String>,
-    Vec<String>,
-    String,
-    Bound<'py, PyDict>,
-    Option<(usize, usize)>,
-    Option<Vec<String>>,
-);
-
-pub(super) fn issue_rows<'py>(
-    py: Python<'py>,
-    diagnostics: &[Diagnostic],
-) -> PyResult<Vec<IssueRow<'py>>> {
-    diagnostics
-        .iter()
-        .map(|diagnostic| {
-            let context = PyDict::new(py);
-            for (key, value) in diagnostic.context.iter() {
-                context.set_item(key, context_value(py, value)?)?;
-            }
-            Ok((
-                diagnostic.phase.clone(),
-                diagnostic.code.clone(),
-                diagnostic.requirement.clone(),
-                diagnostic.spec_path.clone(),
-                diagnostic.context.to_json().to_owned(),
-                context,
-                diagnostic.source_span.map(|span| (span.start, span.end)),
-                diagnostic.operand_route.clone(),
-            ))
-        })
-        .collect()
-}
+use yamaa::ContextValue;
 
 /// Build the owned Python value tree: integer tokens become `int` (unbounded,
 /// so a token wider than 64 bits parses its exact spelling), other number

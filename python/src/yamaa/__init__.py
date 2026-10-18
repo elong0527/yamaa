@@ -67,14 +67,41 @@ class Run:
         _call(self._native.save)
 
 
+class MemberRun:
+    """One specification's run inside a project run; save the project run."""
+
+    def __init__(self, native, name: str):
+        self._native = native
+        self._name = name
+
+    @property
+    def output(self) -> _pl.DataFrame | None:
+        return _frame(_call(self._native.output, self._name))
+
+    @property
+    def issues(self) -> _pl.DataFrame:
+        return _pl.DataFrame(_call(self._native.member_issues, self._name))
+
+    @property
+    def report(self) -> _pl.DataFrame | None:
+        return _frame(_call(self._native.member_report, self._name))
+
+
 class ProjectRun:
     """Every specification a project run built, by `domain` name."""
 
     def __init__(self, native):
         self._native = native
 
-    def __getitem__(self, name: str) -> Run:
-        return Run(_call(self._native.get, name))
+    @property
+    def names(self) -> list[str]:
+        """The specifications that ran, in run order."""
+        return self._native.names()
+
+    def __getitem__(self, name: str) -> MemberRun:
+        if name not in self._native.names():
+            _call(self._native.member_issues, name)  # raises the engine's refusal
+        return MemberRun(self._native, name)
 
     @property
     def issues(self) -> _pl.DataFrame:

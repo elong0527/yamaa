@@ -12,4 +12,18 @@ extendr_module! {
     fn run_save;
     fn run_observations;
     fn run_interrupt;
+    fn project_spec;
+    fn project_check;
+    fn project_run;
+    fn project_run_names;
+    fn project_run_output;
+    fn project_run_member_issues;
+    fn project_run_member_report;
+    fn project_run_issues;
+    fn project_run_report;
+    fn project_run_save;
+    fn project_run_interrupt;
+    fn project_submission;
+    fn submission_issues;
+    fn submission_save;
 }

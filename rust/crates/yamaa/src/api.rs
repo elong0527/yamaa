@@ -229,6 +229,25 @@ impl ProjectRun {
             .map(|step| &step.run)
     }
 
+    /// The run of the specification named `name`, or the refusal every host
+    /// reports for a name the run does not have.
+    pub fn member(&self, name: &str) -> Result<&Run, Failure> {
+        self.get(name).ok_or_else(|| {
+            let names = self.names();
+            Failure::new(
+                if names.is_empty() {
+                    format!("the project run has no specification named {name:?}; it built none")
+                } else {
+                    format!(
+                        "the project run has no specification named {name:?}; it has {}",
+                        names.join(", ")
+                    )
+                },
+                &Report::default(),
+            )
+        })
+    }
+
     /// Every run's issues in run order, after any project finding that
     /// refused the run. Each names its specification as its `entry`.
     pub fn issues(&self) -> Table {
