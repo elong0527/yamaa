@@ -313,20 +313,19 @@ fn read_interpreted(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
             // A signed annotation declares the width of every stored value.
             // The format forbids writing a value outside it and leaves
             // reading one to each reader, so such a value fails rather than
-            // reads as one of their answers.
+            // reads as one of their answers. Every stored value fits 32 bits,
+            // with or without an annotation that says so.
             (ColumnType::Int, physical::Column::Int32(values)) => {
-                let bits = columns
-                    .get(index)
-                    .and_then(|column| profile::declared_width(column))
-                    .filter(|bits| matches!(bits, 8 | 16 | 32))
-                    .ok_or(Error::Malformed)?;
-                let bound = 1i64 << (bits - 1);
-                if values
-                    .iter()
-                    .flatten()
-                    .any(|value| !(-bound..bound).contains(&i64::from(*value)))
-                {
-                    return Err(Error::Malformed);
+                let declared = columns.get(index).and_then(|c| profile::declared_width(c));
+                if let Some(bits @ (8 | 16)) = declared {
+                    let bound = 1i64 << (bits - 1);
+                    if values
+                        .iter()
+                        .flatten()
+                        .any(|value| !(-bound..bound).contains(&i64::from(*value)))
+                    {
+                        return Err(Error::Malformed);
+                    }
                 }
                 Arc::new(Int64Array::from_iter(
                     values.into_iter().map(|value| value.map(i64::from)),

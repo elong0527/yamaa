@@ -1,0 +1,50 @@
+schema_version: "1.0"
+domain: ADEX
+keys: [STUDYID, USUBJID, ASTDY]
+input:
+  EX: {path: input/ex.csv, types: {EXSTDY: int, EXDOSE: float}}
+  SCHEDULE: {path: input/schedule.csv, types: {DOSENUM: int, PLANDOSE: float}}
+
+output:
+  path: adex.csv
+  columns: [STUDYID, USUBJID, ASTDY, ADOSENUM, AVAL, PLANDOSE]
+
+intermediates:
+  # The scheduled dose of the administration's number among the subject's
+  # administrations.
+  - id: PLANNED
+    dataset: SCHEDULE
+    key: {DOSENUM: ADOSENUM}
+    no_match: null
+
+columns:
+  - {name: STUDYID, type: str, label: Study Identifier}
+  - {name: USUBJID, type: str, label: Unique Subject Identifier}
+  - {name: ASTDY, type: int, label: Analysis Start Relative Day}
+
+  # The administration's number among the subject's administrations, by
+  # study day. It is numbered once every record is built.
+  - name: ADOSENUM
+    type: int
+    label: Administration Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [ASTDY]
+
+  - {name: AVAL, type: float, label: Analysis Value}
+  - {name: PLANDOSE, type: float, label: Planned Dose}
+
+rows:
+  # Each administration. Its planned dose is found from its number, which is
+  # numbered only after the records are built, so the specification is
+  # rejected before any data is read.
+  - id: administered
+    dataset: EX
+    derivations:
+      STUDYID: EX.STUDYID
+      USUBJID: EX.USUBJID
+      ASTDY: EX.EXSTDY
+      AVAL: EX.EXDOSE
+      PLANDOSE: PLANNED.PLANDOSE
