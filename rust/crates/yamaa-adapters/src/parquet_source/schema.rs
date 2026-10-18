@@ -57,6 +57,13 @@ fn normalize_field(field: &Field, hint: Option<&Field>) -> Field {
                 _ => unreachable!(),
             }
         }
+        // A dictionary is a layout of its value type (REQ-1032): its values
+        // normalize as a field of that type does, so a dictionary of date64
+        // reads as a date, as a plain date64 hint does.
+        DataType::Dictionary(index, value) => {
+            let value = normalize_field(&Field::new(field.name(), *value.clone(), true), None);
+            DataType::Dictionary(index.clone(), Box::new(value.data_type().clone()))
+        }
         DataType::Map(child, sorted) => {
             let child_hint = match hint.map(Field::data_type) {
                 Some(DataType::Map(child, _)) => Some(child.as_ref()),
@@ -96,6 +103,15 @@ mod tests {
         assert_eq!(
             actual.field(1).data_type(),
             &DataType::Timestamp(TimeUnit::Millisecond, Some("America/New_York".into()))
+        );
+        let dictionary = Schema::new(vec![Field::new(
+            "D",
+            DataType::Dictionary(Box::new(DataType::Int32), Box::new(DataType::Date64)),
+            true,
+        )]);
+        assert_eq!(
+            normalize(&dictionary, None).field(0).data_type(),
+            &DataType::Dictionary(Box::new(DataType::Int32), Box::new(DataType::Date32))
         );
         let unrelated = Schema::new(vec![hint.field(1).clone(), hint.field(0).clone()]);
         assert_eq!(
