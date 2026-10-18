@@ -20,6 +20,10 @@ add no output format; publication remains CSV or Parquet.
 Evidence: `negative-output-transport`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::rle_and_rdc_compression_equal_independent_upstream_csv_truth`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::reject_multiple_members_in_both_transport_versions`.
 Replaces: REQ-1310.
 
+A study document's submission section writes version 5 transport files from
+published artifacts under [SAS Transport](../profiles/xpt.md); that is not an
+artifact profile, and this reader reads those files like any other.
+
 <a id="sas-2"></a>
 
 ### SAS-2. Every SAS or Transport input declares the encoding of its text

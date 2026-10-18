@@ -922,6 +922,14 @@ fn sj(value: &Json) -> Sj {
     serde_json::from_str(&yamaa_adapters::json_wire::encode(value)).unwrap_or(Sj::Null)
 }
 
+/// Whether the case's benchmark.yaml declares a Define call.
+fn declares_define(case: &Path) -> bool {
+    fs::read(case.join("benchmark.yaml"))
+        .ok()
+        .and_then(|bytes| sj(&yaml_json(&bytes)).get("define").cloned())
+        .is_some_and(|define| !define.is_null())
+}
+
 /// The authored reason a case is excluded from the file route's own
 /// conformance plan (benchmark.yaml `conformance.excluded`), if any.
 fn conformance_exclusion(case: &Path) -> Option<String> {
@@ -2171,7 +2179,9 @@ fn check_case(name: &str, case: &Path) -> CaseOutcome {
         findings.push(format!("{name}: no entries planned"));
         return CaseOutcome::Findings(findings);
     }
-    let expected = expected_error(case);
+    // A Define benchmark's expected failure belongs to its Define call, as in
+    // compare_example; its domain builds are compared as a positive case.
+    let expected = expected_error(case).filter(|_| !declares_define(case));
     let identities = spec_identities(&case_files(case));
     let mut runs = Vec::new();
     for call in entries {
@@ -2336,7 +2346,7 @@ const REPRESENTATIVE: &[&str] = &[
     "adam-adsl-age-group",
     "adam-adlb-reported-precision",
     "adam-adsl-randomization",
-    "ars-ae-incidence-results",
+    "adam-results-ae-incidence",
     "adam-adae-exposure-adjusted-incidence",
     "sdtm-dm-race-ethnicity",
     "sdtm-dm-metadata",

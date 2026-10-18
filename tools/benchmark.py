@@ -10,6 +10,8 @@ import yaml
 
 HOSTS = ("python", "r")
 LIFECYCLES = {"draft": "lightgrey", "reviewed": "yellow", "finalized": "brightgreen"}
+DEFINE_STANDARDS = ("sdtm", "adam", "send")
+CREATED = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}")
 
 
 class MetadataLoader(yaml.SafeLoader):
@@ -56,6 +58,7 @@ def load_metadata(case):
                 "covers",
                 "conformance",
                 "harbor",
+                "define",
             }
         ),
         f"{label}: unknown metadata field",
@@ -115,6 +118,17 @@ def load_metadata(case):
                 and (not declaration.get("permanent") or "reason" in declaration),
                 f"{label}: malformed metamorphic declaration: {check}",
             )
+    if "define" in metadata:
+        define = metadata["define"]
+        require(
+            isinstance(define, dict)
+            and set(define) == {"environment", "standard", "created"}
+            and define["standard"] in DEFINE_STANDARDS
+            and isinstance(define["created"], str)
+            and CREATED.fullmatch(define["created"]),
+            f"{label}: define declares its environment, standard and created time",
+        )
+        relative_file(case, define["environment"], "define environment")
     if "harbor" in metadata:
         harbor = metadata["harbor"]
         require(
@@ -195,12 +209,69 @@ def entries(case, metadata=None):
     return result
 
 
+def compare_define(case, staged, define):
+    """Run the declared Define call over saved artifacts and compare it.
+
+    A positive case compares every held document and transport file with
+    ``expected/`` byte for byte; a negative case compares its first issue with
+    the partial assertion of ``expected/error.yaml``. Returns the problems.
+    """
+    import json
+
+    from yamaa import define as compose
+
+    result = compose(
+        staged / define["environment"], define["standard"], created=define["created"]
+    )
+    issues = result.issues.to_dicts()
+    for issue in issues:
+        issue["context"] = json.loads(issue["context"])
+    negative = case / "expected" / "error.yaml"
+    if negative.exists():
+        want = yaml.safe_load(negative.read_text(encoding="utf-8"))
+        first = issues[0] if issues else None
+        print(f"define first issue: {first}")
+
+        def subset(expected, actual):
+            if isinstance(expected, dict):
+                return isinstance(actual, dict) and all(
+                    key in actual and subset(value, actual[key])
+                    for key, value in expected.items()
+                )
+            return expected == actual
+
+        keys = ("phase", "condition", "spec_paths", "requirement")
+        if first is None or any(
+            want.get(key) != first.get(key) for key in keys if key in want
+        ):
+            return [f"define first issue differs from expected/error.yaml: {first}"]
+        if not subset(want.get("context", {}), first.get("context")):
+            return [f"define issue context differs from expected/error.yaml: {first}"]
+        return []
+    if issues:
+        return [f"define issues: {issues}"]
+    problems = []
+    for name, content, _ in result._native.artifacts():
+        truth = case / "expected" / Path(name).name
+        verdict = (
+            "matches"
+            if truth.is_file() and truth.read_bytes() == content
+            else "DIFFERS"
+        )
+        print(f"define {name}: {len(content)} bytes, {verdict} expected/{truth.name}")
+        if verdict != "matches":
+            problems.append(f"{name} differs from expected/{truth.name}")
+    return problems
+
+
 def main():
     """Build a case's declared Python entries in order inside a staged copy.
 
     Each entry is saved in the staged copy before the next entry is built, so a
     later entry reads an earlier entry's artifact at its own declared path, as
-    a `schema` link requires. Nothing is published into the checkout.
+    a `schema` link requires. A case declaring ``define`` then runs that Define
+    call over the saved artifacts and compares it with ``expected/``. Nothing
+    is published into the checkout.
     """
     parser = argparse.ArgumentParser(description=main.__doc__)
     parser.add_argument("case", type=Path, help="benchmark directory")
@@ -209,7 +280,9 @@ def main():
 
     from tools.staging.stage_project_inputs import stage_case
 
-    calls = entries(case)["python"]
+    metadata = load_metadata(case)
+    calls = entries(case, metadata)["python"]
+    define = metadata.get("define")
     with tempfile.TemporaryDirectory(prefix="yamaa-benchmark-") as temporary:
         staged = Path(temporary) / case.name
         stage_case(
@@ -228,6 +301,10 @@ def main():
                 parser.exit(1, f"{call['specification']}: {result.issues}\n")
             result.save()
             print(output)
+        if define is not None:
+            problems = compare_define(case, staged, define)
+            if problems:
+                parser.exit(1, "\n".join(problems) + "\n")
 
 
 if __name__ == "__main__":

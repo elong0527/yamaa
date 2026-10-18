@@ -1646,10 +1646,12 @@ submission_section_class:
 - documents:
     type: list[document_class]
     description: Supporting document IDs, kinds, literal links and titles (DEFINE-13).
-- dataset_json:
-    type: bool
-    default: false
-    description: Whether to read already published datasets and render adjacent JSON files (JSON-1).
+- transport:
+    type: str
+    values:
+    - xpt
+    - dataset_json
+    description: Optional transport file written for each composed dataset in the document's directory, read from its published artifact; omission writes only the Define-XML document (JSON-1, XPT-1).
 - context:
     type: str
     default: Submission

@@ -159,10 +159,11 @@ fn copy_failure(
     d: &Document,
     derivations: &[usize],
     predecessor: &origin::Predecessor<'_>,
+    reads: &Reads,
 ) -> Option<origin::CopyFailure> {
     derivations
         .iter()
-        .find_map(|&node| origin::copies(d, node, predecessor).err())
+        .find_map(|&node| origin::copies(d, node, predecessor, reads).err())
 }
 // Normalized metadata is compared directly, including defaulted fields; arena
 // indices and mapping order cannot invent a different declaration identity.
@@ -262,7 +263,10 @@ fn admit_value_fields(
         }
     }
     if present_field(d, d.root(), "submission").is_some() {
-        let length_type = ["text", "integer", "float"].contains(&resolved);
+        // SUB-7: a date or datetime never declares a length, whatever type it
+        // is submitted as.
+        let length_type = !["date", "datetime"].contains(&kind)
+            && ["text", "integer", "float"].contains(&resolved);
         if length_type && length.is_none() && maxima.is_empty() {
             result.push(finding(
                 C::SubmissionLengthMissing,
@@ -435,7 +439,7 @@ fn admit_value_declarations(
                 let copy = declaration
                     .predecessor()
                     .filter(|_| !refuted)
-                    .and_then(|predecessor| copy_failure(d, &[effective], &predecessor));
+                    .and_then(|predecessor| copy_failure(d, &[effective], &predecessor, reads));
                 if refuted || copy.is_some() {
                     let mut context = vec![
                         ("column", s(name)),
@@ -721,7 +725,10 @@ pub(super) fn admit(
             }
         }
         if has_root.is_some() {
-            let length_type = ["text", "integer", "float"].contains(&resolved);
+            // SUB-7: a date or datetime never declares a length, whatever
+            // type it is submitted as.
+            let length_type = !["date", "datetime"].contains(&kind)
+                && ["text", "integer", "float"].contains(&resolved);
             if length_type && length.is_none() && maxima.is_empty() {
                 result.push(finding(
                     C::SubmissionLengthMissing,
@@ -808,7 +815,7 @@ pub(super) fn admit(
                 ));
             } else if let Some((predecessor, failure)) =
                 origin.predecessor().and_then(|predecessor| {
-                    copy_failure(d, &derivations, &predecessor)
+                    copy_failure(d, &derivations, &predecessor, &reads)
                         .map(|failure| (predecessor.name(), failure))
                 })
             {

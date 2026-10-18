@@ -132,12 +132,22 @@ class SavedReaders(unittest.TestCase):
         document = yamaa.define(
             root / "environment.yaml", "sdtm", created=TRUTH["created"]
         )
+        if empty:
+            # A transported dataset without rows must declare it has no data.
+            self.assertEqual(
+                document.issues["condition"].to_list(), ["transport_dataset_empty"]
+            )
+            with self.assertRaises(yamaa.DefineError):
+                document.save()
+            self.assertFalse((root / "test.json").exists())
+            self.assertFalse((root / "define.xml").exists())
+            return
         self.assertTrue(document.issues.is_empty(), document.issues)
         for name in ("spec.yaml", "environment.yaml", f"output.{profile}"):
             (root / name).unlink()
         self.assertTrue(document.save())
         self.assertFalse(document.save())
-        saved = (root / "output.json").read_bytes()
+        saved = (root / "test.json").read_bytes()
         # Preserve JSON's signed -0 before applying its declared float type.
         data = json.loads(
             saved, parse_int=lambda text: -0.0 if text == "-0" else int(text)
@@ -190,7 +200,7 @@ class SavedReaders(unittest.TestCase):
         )
         self.assertEqual(
             xml.xpath("//d:leaf/@*[local-name()='href']", namespaces=ns),
-            ["output.json"],
+            ["test.json"],
         )
 
     def test_public_held_saves_cover_every_type_and_empty_table(self):

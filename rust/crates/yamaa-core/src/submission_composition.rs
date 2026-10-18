@@ -32,19 +32,26 @@ pub struct Input<'a> {
     pub document: &'a Document,
     pub source: &'a str,
     pub artifact: &'a str,
-    /// Relative publication-package reference already admitted by the file adapter.
-    pub href: &'a str,
+    /// Relative publication-package reference already admitted by the file
+    /// adapter; absent for a dataset with no data and no transport file.
+    pub href: Option<&'a str>,
 }
 #[derive(Clone, Debug)]
 pub struct Column {
     pub(crate) declaration: spec::Column,
     pub(crate) data_type: spec::DataType,
+    /// The document's `Length`: declared, fixed by the family, or measured
+    /// from the published values when a transport is requested (SUB-24).
     pub(crate) length: Option<String>,
+    /// Declared, or fixed for an ADaM numeric date (SUB-25).
+    pub(crate) display_format: Option<String>,
     pub(crate) mandatory: bool,
     pub(crate) source: Option<spec::OriginSource>,
     pub(crate) documents: Vec<spec::DocumentReference>,
     pub(crate) key_sequence: Option<usize>,
     pub(crate) values: Vec<ValueDefinition>,
+    /// The width a transport file gives a character column (SUB-24).
+    pub(crate) transport_length: Option<usize>,
 }
 #[derive(Clone, Debug)]
 pub struct ValueDefinition {
@@ -58,7 +65,7 @@ pub struct Dataset {
     pub(crate) domain: String,
     pub(crate) metadata: spec::Dataset,
     pub(crate) columns: Vec<Column>,
-    pub(crate) href: String,
+    pub(crate) href: Option<String>,
     pub(crate) artifact: String,
     pub(crate) discriminator: Option<usize>,
 }
@@ -105,6 +112,10 @@ impl Study {
     pub fn codelists(&self) -> &[Codelist] {
         &self.codelists
     }
+    /// The transport file the selected section requests, if any.
+    pub fn transport(&self) -> Option<env::Transport> {
+        self.section.transport.as_ref().map(|field| field.value)
+    }
 }
 impl Dataset {
     pub fn id(&self) -> &str {
@@ -112,6 +123,14 @@ impl Dataset {
     }
     pub fn columns(&self) -> &[Column] {
         &self.columns
+    }
+    /// A dataset declared to have no data is never written as a transport file.
+    pub fn has_no_data(&self) -> bool {
+        self.metadata.has_no_data.value
+    }
+    /// A SUPP-- dataset's transport lengths are measured on its own (SUB-24).
+    pub fn supplemental(&self) -> bool {
+        self.id.starts_with("SUPP")
     }
 }
 impl Column {
@@ -147,13 +166,83 @@ pub fn family_name(family: Submission) -> &'static str {
         Submission::Send => "send",
     }
 }
-pub fn sas_name(name: &str) -> bool {
-    let mut chars = name.bytes();
+/// A dataset name `SASDatasetName` and a transport member carry:
+/// `^[A-Z][A-Z0-9]{0,7}$` (DEFINE-22).
+pub fn dataset_name(name: &str) -> bool {
+    let mut bytes = name.bytes();
     name.len() <= 8
-        && chars
+        && bytes.next().is_some_and(|b| b.is_ascii_uppercase())
+        && bytes.all(|b| b.is_ascii_uppercase() || b.is_ascii_digit())
+}
+/// A column name `SASFieldName` and a transport variable carry:
+/// `^[A-Z][A-Z0-9_]{0,7}$` (DEFINE-22).
+pub fn column_name(name: &str) -> bool {
+    let mut bytes = name.bytes();
+    name.len() <= 8
+        && bytes.next().is_some_and(|b| b.is_ascii_uppercase())
+        && bytes.all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'_')
+}
+/// Printable ASCII, `0x20` through `0x7E`, the only text a transport carries.
+pub fn printable_ascii(text: &str) -> bool {
+    text.bytes().all(|b| (0x20..=0x7e).contains(&b))
+}
+/// Why a dataset or column label cannot travel in a transport file (XPT-5).
+pub fn label_cause(label: &str) -> Option<&'static str> {
+    if !printable_ascii(label) {
+        Some("ascii")
+    } else if label.len() > 40 {
+        Some("length")
+    } else {
+        None
+    }
+}
+/// A SAS display format a transport variable carries (XPT-9).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SasFormat {
+    pub name: String,
+    pub width: u16,
+    pub decimals: u16,
+}
+/// Parse `name`, optional width, `.`, optional decimals. The name is at most
+/// eight upper-case letters, digits and underscores, begins with a letter or
+/// underscore and ends with one, and is empty only when a width is written.
+/// Width and decimals are decimal integers without a leading zero.
+pub fn sas_format(text: &str) -> Option<SasFormat> {
+    let (head, decimals) = text.split_once('.')?;
+    let number = |digits: &str, zero: bool| -> Option<u16> {
+        let valid = !digits.is_empty()
+            && digits.bytes().all(|b| b.is_ascii_digit())
+            && (digits == "0" && zero || !digits.starts_with('0'));
+        valid
+            .then(|| digits.parse::<u16>().ok())
+            .flatten()
+            .filter(|value| *value <= 32_767)
+    };
+    let split = head.len() - head.bytes().rev().take_while(u8::is_ascii_digit).count();
+    let (name, width) = head.split_at(split);
+    let mut bytes = name.bytes();
+    let name_valid = name.len() <= 8
+        && bytes
             .next()
-            .is_some_and(|c| c.is_ascii_alphabetic() || c == b'_')
-        && chars.all(|c| c.is_ascii_alphanumeric() || c == b'_')
+            .is_none_or(|b| b.is_ascii_uppercase() || b == b'_')
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'_');
+    let width = if width.is_empty() {
+        0
+    } else {
+        number(width, false)?
+    };
+    let decimals = if decimals.is_empty() {
+        0
+    } else {
+        number(decimals, true)?
+    };
+    (name_valid && (!name.is_empty() || width > 0)).then(|| SasFormat {
+        name: name.into(),
+        width,
+        decimals,
+    })
 }
 pub fn text(document: &Document, node: usize, field: &str) -> Option<String> {
     match document.nodes().get(document.field(node, field)?)? {
@@ -267,10 +356,11 @@ fn copy_failure(
     document: &Document,
     derivations: &[usize],
     predecessor: &origin::Predecessor<'_>,
+    reads: &Reads,
 ) -> Option<origin::CopyFailure> {
     derivations
         .iter()
-        .find_map(|&node| origin::copies(document, node, predecessor).err())
+        .find_map(|&node| origin::copies(document, node, predecessor, reads).err())
 }
 fn reserved_metadata(
     document: &Document,
@@ -295,6 +385,49 @@ fn reserved_metadata(
             }
         }
     }
+}
+const DATASET_NAME: &str = "^[A-Z][A-Z0-9]{0,7}$";
+const COLUMN_NAME: &str = "^[A-Z][A-Z0-9_]{0,7}$";
+/// Names and labels meet the transport limits under `Submission`, and under
+/// `xpt` in every context (DEFINE-4, DEFINE-22, XPT-5).
+fn transport_limits(section: &env::Section) -> bool {
+    section.context.value == env::Context::Submission
+        || section
+            .transport
+            .as_ref()
+            .is_some_and(|field| field.value == env::Transport::Xpt)
+}
+fn name_finding(path: &str, name: &str, pattern: &str) -> Finding {
+    let mut finding = Finding::cause(ConditionCode::SubmissionSasName, path, name);
+    for (key, value) in [("name", name), ("pattern", pattern)] {
+        finding
+            .context
+            .insert(key.into(), crate::json::Value::String(value.into()));
+    }
+    finding
+}
+fn label_finding(
+    path: &str,
+    dataset: &str,
+    column: Option<&str>,
+    label: &str,
+    cause: &str,
+) -> Finding {
+    let detail = if cause == "ascii" {
+        "label is not printable ASCII"
+    } else {
+        "label is longer than 40 characters"
+    };
+    let mut finding = Finding::cause(ConditionCode::SubmissionLabelInvalid, path, detail);
+    let mut facts = vec![("dataset", dataset)];
+    facts.extend(column.map(|column| ("column", column)));
+    facts.extend([("label", label), ("cause", cause)]);
+    for (key, value) in facts {
+        finding
+            .context
+            .insert(key.into(), crate::json::Value::String(value.into()));
+    }
+    finding
 }
 /// A redundant declaration: the path declares a fact `stated_by` already states.
 fn redundant(code: ConditionCode, path: &str, detail: &str, stated_by: &str) -> Finding {
@@ -335,6 +468,8 @@ enum Level {
 /// Admit the complete inherited column metadata for a base or per-value item.
 struct ColumnAdmission<'a> {
     doc: &'a Document,
+    /// The dataset name, reported with transport findings.
+    dataset: &'a str,
     section: &'a env::Section,
     catalogue: &'a ct::Catalogue,
     known: &'a BTreeSet<&'a str>,
@@ -400,12 +535,26 @@ impl ColumnAdmission<'_> {
                 "label",
             ));
         }
-        if section.context.value == env::Context::Submission && !sas_name(name) {
-            findings.push(Finding::cause(
-                ConditionCode::SubmissionSasName,
-                column_path,
-                name,
-            ));
+        // A name and label a regulator's transport cannot carry fail under
+        // Submission, and under xpt whatever the context (DEFINE-22, XPT-5).
+        if level == Level::Column && transport_limits(section) {
+            if !column_name(name) {
+                findings.push(name_finding(column_path, name, COLUMN_NAME));
+            }
+            if let Some(label) = &column.label {
+                if let Some(cause) = label_cause(&label.value) {
+                    let label_path = column_path
+                        .strip_suffix(".submission")
+                        .map_or_else(|| format!("{column_path}.label"), |p| format!("{p}.label"));
+                    findings.push(label_finding(
+                        &label_path,
+                        self.dataset,
+                        Some(name),
+                        &label.value,
+                        cause,
+                    ));
+                }
+            }
         }
         let core = metadata.core.as_ref().map(|c| c.value);
         let mandatory = self.mandatory(name, metadata);
@@ -478,7 +627,7 @@ impl ColumnAdmission<'_> {
             findings.push(Finding::cause(refutation, column_path, name));
         } else if let Some(failure) = predecessor
             .as_ref()
-            .and_then(|predecessor| copy_failure(doc, derivations, predecessor))
+            .and_then(|predecessor| copy_failure(doc, derivations, predecessor, reads))
         {
             // SUB-20: a Predecessor is a bare `source` of the column it names.
             let mut finding = Finding::cause(refutation, column_path, name);
@@ -548,16 +697,72 @@ impl ColumnAdmission<'_> {
             known,
             &format!("{column_path}.comment"),
         );
+        // SUB-6 and SUB-25: the family decides how a date or datetime travels.
+        let adam = section.family == Submission::Adam;
+        let column_type = column.column_type.value;
         let data_type = metadata
             .data_type
             .as_ref()
-            .map_or(column.column_type.value.default_data_type(), |d| d.value);
-        if !column.column_type.value.admits_data_type(data_type) {
+            .map_or(column_type.family_data_type(adam), |d| d.value);
+        if !column_type.admits_family_data_type(data_type, adam) {
             findings.push(Finding::cause(
                 ConditionCode::SubmissionDataType,
                 column_path,
                 name,
             ));
+        }
+        let display_format = match column_type.numeric_date_format(adam) {
+            Some(fixed) => {
+                if metadata
+                    .display_format
+                    .as_ref()
+                    .is_some_and(|declared| declared.value != fixed)
+                {
+                    let mut finding = Finding::cause(
+                        ConditionCode::SubmissionDisplayFormatConflict,
+                        &format!("{column_path}.display_format"),
+                        fixed,
+                    );
+                    finding
+                        .context
+                        .insert("column".into(), crate::json::Value::String(name.clone()));
+                    findings.push(finding);
+                }
+                Some(fixed.to_string())
+            }
+            None => metadata.display_format.as_ref().map(|d| d.value.clone()),
+        };
+        // XPT-9: a numeric variable's declared display format must be a SAS
+        // format the transport can carry; only the column's own one is written.
+        if level == Level::Column
+            && section
+                .transport
+                .as_ref()
+                .is_some_and(|field| field.value == env::Transport::Xpt)
+            && matches!(
+                column_type,
+                spec::ColumnType::Integer | spec::ColumnType::Float
+            )
+        {
+            if let Some(declared) = &metadata.display_format {
+                if sas_format(&declared.value).is_none() {
+                    let mut finding = Finding::cause(
+                        ConditionCode::XptDisplayFormatInvalid,
+                        &format!("{column_path}.display_format"),
+                        &declared.value,
+                    );
+                    for (key, value) in [
+                        ("dataset", self.dataset),
+                        ("column", name.as_str()),
+                        ("display_format", declared.value.as_str()),
+                    ] {
+                        finding
+                            .context
+                            .insert(key.into(), crate::json::Value::String(value.into()));
+                    }
+                    findings.push(finding);
+                }
+            }
         }
         let length = self.admit_length(column, metadata, data_type, column_path, name, findings);
         self.admit_codelist(column, metadata, column_path, level, findings, bound);
@@ -565,6 +770,7 @@ impl ColumnAdmission<'_> {
             declaration: column.clone(),
             data_type,
             length,
+            display_format,
             mandatory,
             source: if section.family == Submission::Adam
                 && origin.kind.value != spec::OriginType::Predecessor
@@ -576,6 +782,7 @@ impl ColumnAdmission<'_> {
             documents: refs,
             key_sequence: keys.iter().position(|key| key == name).map(|k| k + 1),
             values: Vec::new(),
+            transport_length: None,
         })
     }
     /// Admit length and significant-digit declarations; return the effective length.
@@ -596,12 +803,34 @@ impl ColumnAdmission<'_> {
                 _ => None,
             })
             .collect();
+        // SUB-7: a date or datetime column never declares a length; under
+        // `adam` it travels as an eight-byte SAS numeric date (SUB-25).
+        let column_type = column.column_type.value;
+        if column_type.temporal() {
+            if metadata.length.is_some() {
+                findings.push(Finding::cause(
+                    ConditionCode::SubmissionLengthNotApplicable,
+                    column_path,
+                    name,
+                ));
+            }
+            if metadata.significant_digits.is_some() {
+                findings.push(Finding::cause(
+                    ConditionCode::SubmissionLengthNotApplicable,
+                    column_path,
+                    "significant_digits",
+                ));
+            }
+            return column_type
+                .numeric_date_format(self.section.family == Submission::Adam)
+                .map(|_| "8".into());
+        }
         let length = metadata
             .length
             .as_ref()
             .map(|v| v.value.clone())
             .or_else(|| {
-                if column.column_type.value == spec::ColumnType::String {
+                if column_type == spec::ColumnType::String {
                     maxima.first().cloned()
                 } else {
                     None
@@ -1120,6 +1349,37 @@ fn compose_datasets(
                 &id,
             ));
         }
+        // JSON-5: a transport re-reads the published artifact, so display digits
+        // the csv profile writes would become the submitted values.
+        if section.transport.is_some() {
+            if let Some(decimals) = doc
+                .field(doc.root(), "output")
+                .and_then(|output| doc.field(output, "decimals"))
+            {
+                let mut finding = Finding::cause(
+                    ConditionCode::SubmissionTransportDecimals,
+                    &format!("{path}.output.decimals"),
+                    "display precision would become the submitted values",
+                );
+                finding
+                    .context
+                    .insert("dataset".into(), crate::json::Value::String(id.clone()));
+                if let Some(written) = section.specs.value.get(index) {
+                    finding.context.insert(
+                        "specification".into(),
+                        crate::json::Value::String(written.value.clone()),
+                    );
+                }
+                if let N::Integer(value) = &doc.nodes()[decimals] {
+                    if let Ok(number) = value.parse() {
+                        finding
+                            .context
+                            .insert("decimals".into(), crate::json::Value::Number(number));
+                    }
+                }
+                findings.push(finding);
+            }
+        }
         let declarations = match spec::decode(doc, doc.root()) {
             Ok(value) => value,
             Err(_) => {
@@ -1147,8 +1407,19 @@ fn compose_datasets(
             ));
             continue;
         };
-        if section.context.value == env::Context::Submission && !sas_name(&id) {
-            findings.push(Finding::cause(ConditionCode::SubmissionSasName, &path, &id));
+        if transport_limits(section) {
+            if !dataset_name(&id) {
+                findings.push(name_finding(&path, &id, DATASET_NAME));
+            }
+            if let Some(cause) = label_cause(&dataset.label.value) {
+                findings.push(label_finding(
+                    &format!("{path}.submission.label"),
+                    &id,
+                    None,
+                    &dataset.label.value,
+                    cause,
+                ));
+            }
         }
         if dataset.reference_data.value && dataset.repeating.value {
             findings.push(Finding::cause(
@@ -1178,13 +1449,6 @@ fn compose_datasets(
             findings.push(Finding::cause(
                 ConditionCode::SubmissionNoDataComment,
                 &format!("{path}.submission.comment"),
-                &id,
-            ));
-        }
-        if dataset.has_no_data.value && section.dataset_json.value {
-            findings.push(Finding::cause(
-                ConditionCode::SubmissionDatasetJsonNoData,
-                &path,
                 &id,
             ));
         }
@@ -1245,6 +1509,7 @@ fn compose_datasets(
         }
         let admission = ColumnAdmission {
             doc,
+            dataset: &id,
             section,
             catalogue,
             known,
@@ -1328,7 +1593,7 @@ fn compose_datasets(
             metadata: dataset.clone(),
             columns: selected,
             artifact: input.artifact.into(),
-            href: input.href.into(),
+            href: input.href.map(String::from),
             discriminator,
         });
     }
@@ -1388,6 +1653,15 @@ pub fn compose(
             ConditionCode::SubmissionDefineExtension,
             "define",
             "expected .xml extension",
+        );
+    } else if section.transport.is_some()
+        && section.define.value.rsplit('/').next() != Some("define.xml")
+    {
+        // DEFINE-2: the transport files sit beside a document named define.xml.
+        fail(
+            ConditionCode::SubmissionDefineName,
+            "define",
+            "a transport requires the document file name define.xml",
         );
     }
     let source_version = match section.source_versions(installed) {
@@ -1480,13 +1754,15 @@ pub fn compose(
             if !bound.contains(&list.id) {
                 continue;
             }
+            // DEFINE-4: a sponsor-extended item has no NCI code, so only the
+            // published items carry one (CT-6 refuses an alias on the others).
             if section.context.value == env::Context::Submission
                 && source
                     .standard
                     .as_ref()
                     .is_some_and(|s| s.name == "CDISC/NCI")
                 && list.items.as_ref().is_some_and(|items| {
-                    list.alias.is_none() || items.iter().any(|i| i.alias.is_none())
+                    list.alias.is_none() || items.iter().any(|i| !i.extended && i.alias.is_none())
                 })
             {
                 findings.push(Finding::cause(
@@ -1534,4 +1810,74 @@ pub fn compose(
         codelists,
         inventory,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn transport_names_are_upper_case_and_at_most_eight_characters() {
+        for (name, dataset, column) in [
+            ("DM", true, true),
+            ("SUPPDM", true, true),
+            ("ADSL", true, true),
+            ("ETHNIC", true, true),
+            ("LBORRES_", false, true),
+            ("A1234567", true, true),
+            ("ETHNICITY", false, false),
+            ("dm", false, false),
+            ("_DM", false, false),
+            ("1DM", false, false),
+            ("", false, false),
+        ] {
+            assert_eq!(dataset_name(name), dataset, "{name}");
+            assert_eq!(column_name(name), column, "{name}");
+        }
+    }
+
+    #[test]
+    fn labels_are_printable_ascii_of_at_most_forty_characters() {
+        assert_eq!(label_cause("Demographics"), None);
+        assert_eq!(label_cause(&"L".repeat(40)), None);
+        assert_eq!(label_cause(&"L".repeat(41)), Some("length"));
+        assert_eq!(label_cause("Na\u{ef}ve"), Some("ascii"));
+        assert_eq!(label_cause(&format!("{}\t", "L".repeat(45))), Some("ascii"));
+    }
+
+    #[test]
+    fn sas_formats_have_a_name_an_optional_width_and_optional_decimals() {
+        let format = |name: &str, width, decimals| {
+            Some(SasFormat {
+                name: name.into(),
+                width,
+                decimals,
+            })
+        };
+        assert_eq!(sas_format("8.2"), format("", 8, 2));
+        assert_eq!(sas_format("3."), format("", 3, 0));
+        assert_eq!(sas_format("DATE9."), format("DATE", 9, 0));
+        assert_eq!(sas_format("DATETIME20."), format("DATETIME", 20, 0));
+        assert_eq!(sas_format("BEST."), format("BEST", 0, 0));
+        assert_eq!(sas_format("E8601DA10."), format("E8601DA", 10, 0));
+        assert_eq!(sas_format("COMMA10.0"), format("COMMA", 10, 0));
+        assert_eq!(sas_format("_X5.1"), format("_X", 5, 1));
+        for refused in [
+            "",
+            ".",
+            ".2",
+            "8",
+            "8,2",
+            "best12.",
+            "DATE09.",
+            "8.02",
+            "TOOLONGNAME9.",
+            "1A.",
+            "8.2.1",
+            "32768.",
+            "8.-1",
+        ] {
+            assert_eq!(sas_format(refused), None, "{refused}");
+        }
+    }
 }

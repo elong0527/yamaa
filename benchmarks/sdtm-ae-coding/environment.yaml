@@ -21,7 +21,6 @@ sdtm:
   specs:
   - spec.yaml
   define: define.xml
-  dataset_json: false
   context: Submission
   xml_lang: en
   file_oid: www.example.org/YAMAA-01/1/Define-XML_2.1

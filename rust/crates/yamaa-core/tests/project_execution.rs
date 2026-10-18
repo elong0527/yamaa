@@ -1645,6 +1645,26 @@ mod project {
             }
         }
         #[test]
+        fn extended_items_carry_no_published_alias() {
+            // A sponsor addition has no published code: the published item
+            // keeps its alias and the extended one may declare none.
+            let mut list = list();
+            list.extensible = true;
+            list.alias = Some("C66731".into());
+            let items = list.items.as_mut().unwrap();
+            items[0].alias = Some("C16576".into());
+            items[1].extended = true;
+            assert!(validate(&[published(source(list.clone()))]).is_empty());
+            list.items.as_mut().unwrap()[1].alias = Some("C20197".into());
+            assert_eq!(
+                validate(&[published(source(list))])
+                    .iter()
+                    .map(|f| &f.fault)
+                    .collect::<Vec<_>>(),
+                vec![&Fault::ExtendedAlias { item: 1 }]
+            );
+        }
+        #[test]
         fn numeric_equality_is_exact_at_i64_and_binary64_boundaries() {
             let mut list = list();
             list.data_type = DataType::Float;

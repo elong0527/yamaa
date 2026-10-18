@@ -269,9 +269,11 @@ submission_section_class:
     required: true
 - documents:
     type: list[document_class]
-- dataset_json:
-    type: bool
-    default: false
+- transport:
+    type: str
+    values:
+    - xpt
+    - dataset_json
 - context:
     type: str
     default: Submission

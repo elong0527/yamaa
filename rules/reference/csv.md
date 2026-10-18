@@ -136,8 +136,15 @@ digits after the decimal point, and with a decimal point only when `n` is
 greater than zero. A value keeps its declared width whether or not its digits
 require it: at `n` of 4, an integral 25 is written `25.0000`.
 
-Evidence: `adam-adlb-reported-precision`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::ties_and_near_ties_round_away_from_zero_with_independent_text`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::large_precision_uses_the_exact_fraction_and_retains_all_declared_zeros`.
+Evidence: `adam-adlb-reported-precision`, `negative-transport-display-decimals`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::ties_and_near_ties_round_away_from_zero_with_independent_text`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::large_precision_uses_the_exact_fraction_and_retains_all_declared_zeros`.
 Replaces: REQ-0745.
+
+The fixed-point text is the artifact's presentation, and nothing the
+specification computes sees it ([CSV-8](#csv-8)); a reader of the artifact
+receives the rounded value. A submission section that requests a transport
+reads the published artifact back, so a specification it composes declares no
+`output.decimals` ([JSON-5](../profiles/dataset-json.md#json-5)), and the
+submitted display is the column's `submission.display_format`.
 
 <a id="csv-8"></a>
 

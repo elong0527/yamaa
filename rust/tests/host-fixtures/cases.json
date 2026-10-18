@@ -3976,7 +3976,12 @@
               "label: \"bad\\tlabel\""
             ]
           ],
-          "environment_mutations": [],
+          "environment_mutations": [
+            [
+              "context: Submission",
+              "context: Other"
+            ]
+          ],
           "inherit_specification": false,
           "issues": [
             {
@@ -3988,6 +3993,35 @@
               ],
               "context": {
                 "detail": "forbidden XML whitespace"
+              }
+            }
+          ],
+          "xml_fragments": []
+        },
+        {
+          "name": "submission-column-label",
+          "specification_mutations": [
+            [
+              "label: Domain Abbreviation",
+              "label: \"bad\\tlabel\""
+            ]
+          ],
+          "environment_mutations": [],
+          "inherit_specification": false,
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "transport_label_invalid",
+              "requirement": "XPT-5",
+              "spec_paths": [
+                "sdtm.specs[0].columns.DOMAIN.label"
+              ],
+              "context": {
+                "cause": "ascii",
+                "column": "DOMAIN",
+                "dataset": "DM",
+                "detail": "label is not printable ASCII",
+                "label": "bad\tlabel"
               }
             }
           ],
@@ -4026,7 +4060,12 @@
               "label: \"bad\\tlabel\""
             ]
           ],
-          "environment_mutations": [],
+          "environment_mutations": [
+            [
+              "context: Submission",
+              "context: Other"
+            ]
+          ],
           "inherit_specification": true,
           "issues": [
             {
@@ -4055,6 +4094,10 @@
             [
               "title: Annotated Case Report Form",
               "title: \"bad\\ttitle\""
+            ],
+            [
+              "context: Submission",
+              "context: Other"
             ]
           ],
           "inherit_specification": false,
@@ -4085,6 +4128,10 @@
             [
               "title: Annotated Case Report Form",
               "title: \"third\\nfourth\""
+            ],
+            [
+              "context: Submission",
+              "context: Other"
             ]
           ],
           "inherit_specification": false,

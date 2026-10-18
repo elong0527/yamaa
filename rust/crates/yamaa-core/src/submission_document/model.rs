@@ -17,7 +17,7 @@ pub enum FieldName {
     Specs,
     Define,
     Documents,
-    DatasetJson,
+    Transport,
     Context,
     XmlLang,
     FileOid,
@@ -46,7 +46,7 @@ impl FieldName {
             Self::Specs => "specs",
             Self::Define => "define",
             Self::Documents => "documents",
-            Self::DatasetJson => "dataset_json",
+            Self::Transport => "transport",
             Self::Context => "context",
             Self::XmlLang => "xml_lang",
             Self::FileOid => "file_oid",
@@ -97,7 +97,6 @@ pub enum Kind {
     ExpectedMapping,
     ExpectedSequence,
     ExpectedText,
-    ExpectedBoolean,
     NonTextKey,
     UnknownField,
     EmptyText,
@@ -184,6 +183,21 @@ pub enum Context {
     Submission,
     Other,
 }
+/// The one transport file a section writes for each composed dataset.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Transport {
+    Xpt,
+    DatasetJson,
+}
+impl Transport {
+    /// The transport file's extension, after the lower-case dataset name.
+    pub fn extension(self) -> &'static str {
+        match self {
+            Self::Xpt => "xpt",
+            Self::DatasetJson => "json",
+        }
+    }
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DocumentKind {
     AnnotatedCrf,
@@ -228,7 +242,8 @@ pub struct Section {
     pub specs: Field<Vec<Field<String>>>,
     pub define: Field<String>,
     pub documents: Field<Vec<DocumentReference>>,
-    pub dataset_json: Field<bool>,
+    /// Omission writes only the Define-XML document.
+    pub transport: Option<Field<Transport>>,
     pub context: Field<Context>,
     pub xml_lang: Field<String>,
     pub file_oid: Option<Field<String>>,

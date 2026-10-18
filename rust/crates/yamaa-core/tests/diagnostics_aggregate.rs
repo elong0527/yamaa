@@ -1078,7 +1078,7 @@ mod diagnostics {
             }
             #[test]
 
-            fn dataset_json_refuses_oversized_geometry_before_reading_cells() {
+            fn transport_refuses_oversized_geometry_before_reading_cells() {
                 use yamaa_core::limits::Limits;
                 struct Oversized(TableSchema);
                 impl TableAccess for Oversized {
@@ -1107,9 +1107,9 @@ mod diagnostics {
                     .unwrap(),
                 );
                 let finding =
-                    submission_json::admit(&study, &study.datasets()[0], &table).unwrap_err();
+                    submission_transport::admit(&study, &study.datasets()[0], &table).unwrap_err();
                 assert_eq!(finding.code, ConditionCode::ApplicationRejected);
-                assert_eq!(finding.path, "datasets.D0.dataset_json");
+                assert_eq!(finding.path, "datasets.D0.transport");
                 let detail = finding.context["detail"].as_str().unwrap();
                 assert!(detail.contains("table_rows"));
                 assert!(detail.contains("10000001"));
