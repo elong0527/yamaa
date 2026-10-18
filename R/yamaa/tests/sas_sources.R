@@ -32,9 +32,9 @@ stage_case <- function(root, case) {
     stopifnot(length(matched) == 1L, length(before) == length(after))
     payload[matched:(matched + length(before) - 1L)] <- after
   }
-  if (!is.null(mutation$set_byte)) {
-    payload[mutation$set_byte[[1L]] + 1L] <- as.raw(mutation$set_byte[[2L]])
-  }
+  # `[[` matches exactly; `$` would also match set_bytes for set_byte.
+  changes <- c(if (!is.null(mutation[["set_byte"]])) list(mutation[["set_byte"]]), mutation[["set_bytes"]])
+  for (change in changes) payload[change[[1L]] + 1L] <- as.raw(change[[2L]])
   source <- file.path(directory, case$file)
   writeBin(payload, source)
   spec <- file.path(directory, "spec.yaml")

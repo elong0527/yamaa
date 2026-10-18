@@ -1040,7 +1040,10 @@
         "R/yamaa/tests/public_grammar.R",
         "R/yamaa/tests/public_file_resources.R",
         "python/tests/installed/installed_read_odm.py",
-        "R/yamaa/tests/read_odm.R"
+        "R/yamaa/tests/read_odm.R",
+        "rust/crates/yamaa-adapters/src/parquet_source/reader.rs",
+        "python/tests/installed/installed_parquet_containment.py",
+        "R/yamaa/tests/parquet_containment.R"
       ]
     },
     {

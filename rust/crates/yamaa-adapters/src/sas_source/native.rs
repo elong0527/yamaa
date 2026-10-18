@@ -873,6 +873,79 @@ mod tests {
     }
 
     #[test]
+    fn sas_encoding_codes_name_their_charsets_in_recorded_metadata() {
+        // Header byte 70 of the independent haven fixture holds the SAS
+        // encoding code: 62 is wlatin1, 136 is ms-932 and 38 is latin6. The
+        // reader only records the name; the declared encoding decodes text.
+        let fixture = include_bytes!("../../tests/fixtures/sas/datetime.sas7bdat");
+        assert_eq!(fixture[70], 62);
+        unsafe extern "C" fn meta(
+            _rows: i64,
+            _columns: c_int,
+            _version: c_int,
+            encoding: *const c_char,
+            opaque: *mut c_void,
+        ) -> c_int {
+            // SAFETY: `opaque` is the `String` this test passes to the parse,
+            // and a non-null `encoding` is a NUL-terminated static name.
+            let seen = unsafe { &mut *opaque.cast::<String>() };
+            if !encoding.is_null() {
+                *seen = unsafe { CStr::from_ptr(encoding) }
+                    .to_string_lossy()
+                    .into_owned();
+            }
+            1
+        }
+        unsafe extern "C" fn field(
+            _column: c_int,
+            _name: *const c_char,
+            _width: usize,
+            _text: c_int,
+            _opaque: *mut c_void,
+        ) -> c_int {
+            1
+        }
+        unsafe extern "C" fn cell(
+            _row: c_int,
+            _column: c_int,
+            _text: *const c_char,
+            _number: f64,
+            _missing: c_int,
+            _exact: c_int,
+            _opaque: *mut c_void,
+        ) -> c_int {
+            1
+        }
+        for (code, name) in [(62, "WINDOWS-1252"), (136, "CP932"), (38, "ISO-8859-10")] {
+            let mut bytes = fixture.to_vec();
+            bytes[70] = code;
+            let mut seen = String::new();
+            let (mut resource, mut limit, mut actual, mut known) = (0, 0, 0, 0);
+            // SAFETY: the callbacks above only touch `seen`, which outlives
+            // the parse, and every pointer argument is valid for its call.
+            unsafe {
+                yamaa_readstat_parse(
+                    bytes.as_ptr(),
+                    bytes.len(),
+                    0,
+                    Limits::TABLE_ROWS,
+                    Limits::COLUMNS,
+                    Limits::TABLE_CELLS,
+                    meta,
+                    field,
+                    cell,
+                    (&mut seen as *mut String).cast(),
+                    &mut resource,
+                    &mut limit,
+                    &mut actual,
+                    &mut known,
+                );
+            }
+            assert_eq!(seen, name, "code {code}");
+        }
+    }
+
+    #[test]
     fn semantic_and_encoding_refusals_keep_their_exact_causes() {
         let bytes = include_bytes!("../../tests/fixtures/sas/fractional.xpt");
         let mut source = source();
