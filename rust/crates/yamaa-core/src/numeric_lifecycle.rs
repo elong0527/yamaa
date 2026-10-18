@@ -89,9 +89,9 @@ impl HandlerCounter {
     }
 
     /// Move every nested observation into `target`, including before a donor
-    /// failure.
+    /// failure. An entry already moved holds zero and is skipped.
     pub(crate) fn transfer(&mut self, target: &mut Self) -> Result<(), HandlerCountOverflow> {
-        for entry in &mut self.counts {
+        for entry in self.counts.iter_mut().filter(|entry| entry.count != 0) {
             target.register(&entry.spec_path, entry.handler);
             let destination = target
                 .counts

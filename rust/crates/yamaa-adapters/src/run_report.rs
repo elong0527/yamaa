@@ -299,7 +299,8 @@ fn checks(run: &dyn RunView, report: &Value) -> Result<Vec<core::Check>, Error> 
         .collect()
 }
 
-/// Every declared handler path the attempt counted, in execution order.
+/// Every handler path the attempt registered, in registration order
+/// (COLUMN-14), zero counts included.
 fn handlers(report: &Value) -> Result<Vec<core::Handler>, Error> {
     report["handler_counts"]
         .as_array()

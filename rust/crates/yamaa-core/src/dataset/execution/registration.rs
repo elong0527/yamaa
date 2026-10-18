@@ -1,19 +1,20 @@
 //! Every handler path a run counts, registered at zero before any row is read
 //! (COLUMN-14), so a path that answers nothing still reports its zero.
 //!
-//! Registration order is report order. First every `unconvertible`: those of
-//! the plan's derivations in declared order, then those of each
-//! intermediate's typed derivations. Then each derivation in evaluation
-//! order: the row templates' derivations, template by template, then the
-//! column phase's, then the intermediates' key expressions. Last, each
-//! intermediate's derivations, intermediate by intermediate, in declaration
-//! order, followed by the key expressions of the intermediates they read, as
-//! bound for the donor records. Each derivation lists its paths in expression
-//! order: an operation's own paths before those of the expressions it reads,
-//! which follow in the order the operation reads them. A read of a named
-//! intermediate registers its `multiple_matches` and `no_match` at the
-//! reading path. A path registers once, where the walk first reaches it. The
-//! resolved plan's handler table is checked against this walk on every bind.
+//! Registration order is report order. The dataset's own paths come first:
+//! every `unconvertible` of its derivations in declared order, then each
+//! derivation in evaluation order (the row templates' derivations, template
+//! by template, then the column phase's), then the intermediates' key
+//! expressions. Then each intermediate with derivations in turn, its paths in
+//! the same order: the `unconvertible` of its typed derivations, then each
+//! derivation in declaration order, then the key expressions of the
+//! intermediates they read, as bound for the donor records. Each derivation
+//! lists its paths in expression order: an operation's own paths before those
+//! of the expressions it reads, which follow in the order the operation reads
+//! them. A read of a named intermediate registers its `multiple_matches` and
+//! `no_match` at the reading path. A path registers once, where the walk
+//! first reaches it. The resolved plan's handler table is checked against
+//! this walk on every bind.
 use super::*;
 use crate::bound_expression::Read;
 use crate::dataset::{read_handlers, ReadHandlers};
@@ -22,13 +23,6 @@ use crate::dataset::{read_handlers, ReadHandlers};
 pub(super) fn register(plan: &DatasetPlan, counter: &mut HandlerCounter) {
     for declaration in plan.conversion_handlers() {
         counter.register(&declaration.handler.spec_path, HandlerKind::Unconvertible);
-    }
-    for intermediate in plan.intermediates() {
-        if let Some(derived) = &intermediate.derivations {
-            for declaration in derived.plan.conversion_handlers() {
-                counter.register(&declaration.handler.spec_path, HandlerKind::Unconvertible);
-            }
-        }
     }
     // Admission refuses a read of an intermediate declared later; such a
     // read registers nothing here.
@@ -47,13 +41,18 @@ pub(super) fn register(plan: &DatasetPlan, counter: &mut HandlerCounter) {
         walk.assignment(assignment);
     }
     walk.keys();
-    // Each intermediate's derivations, in declaration order, at their own
-    // paths, then the key expressions of the intermediates they read, as
-    // bound for the donor records. A nested donor plan is an earlier
+    // Each intermediate's derivations in its turn, at their own paths and in
+    // the dataset's order: their `unconvertible`, each derivation in
+    // declaration order, then the key expressions of the intermediates they
+    // read, as bound for the donor records. A nested donor plan is an earlier
     // intermediate's, walked in its turn.
     for item in plan.intermediates() {
         if let Some(derived) = &item.derivations {
             let donor = &derived.plan;
+            for declaration in donor.conversion_handlers() {
+                let path = &declaration.handler.spec_path;
+                walk.counter.register(path, HandlerKind::Unconvertible);
+            }
             let reads = read_handlers(donor.intermediates()).unwrap_or_default();
             let mut donor_walk = Walk {
                 plan: donor,
