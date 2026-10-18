@@ -372,8 +372,6 @@ static readstat_error_t sas7bdat_parse_column_attributes_subheader(const char *s
             off=8;
 
         ctx->col_info[i].width = sas_read4(&cap[off], ctx->bswap);
-        if (ctx->col_info[i].width > ctx->max_col_width)
-            ctx->max_col_width = ctx->col_info[i].width;
 
         if (cap[off+6] == SAS_COLUMN_TYPE_NUM) {
             ctx->col_info[i].type = READSTAT_TYPE_DOUBLE;
@@ -817,6 +815,10 @@ static readstat_error_t sas7bdat_submit_columns(sas7bdat_ctx_t *ctx, int compres
      * and a name before any is submitted. */
     if (ctx->col_attrs_count < ctx->column_count || ctx->col_names_count < ctx->column_count)
         return READSTAT_ERROR_PARSE;
+    /* Rows convert the text of these columns alone, so only their validated
+     * widths size the row scratch buffer. A column attribute slot beyond the
+     * column count never reaches a row and must not size an allocation. */
+    ctx->max_col_width = 0;
     for (uint32_t i = 0; i < ctx->column_count; i++) {
         col_info_t *column = &ctx->col_info[i];
         if ((retval = sas7bdat_validate_column(column)) != READSTAT_OK)
@@ -824,6 +826,8 @@ static readstat_error_t sas7bdat_submit_columns(sas7bdat_ctx_t *ctx, int compres
         if (column->offset > ctx->row_length ||
                 column->width > ctx->row_length - column->offset)
             return READSTAT_ERROR_PARSE;
+        if (column->width > ctx->max_col_width)
+            ctx->max_col_width = column->width;
     }
     if (ctx->handle.metadata) {
         readstat_metadata_t metadata = {

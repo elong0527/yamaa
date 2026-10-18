@@ -653,6 +653,26 @@ mod tests {
     }
 
     #[test]
+    fn xport_member_without_variables_is_an_invalid_header() {
+        // The independent fractional fixture declares one variable in its
+        // NAMESTR header (bytes 613..618). A zero count used to reach an empty
+        // allocation and fail as an internal error (found by fuzzing, #2928),
+        // and a negative count read as a column limit.
+        let fixture = include_bytes!("../../tests/fixtures/sas/fractional.xpt");
+        let source = source();
+        assert!(parse(fixture, &source).is_ok());
+        for count in [b"00000", b"-0001"] {
+            let mut bytes = fixture.to_vec();
+            bytes[613..618].copy_from_slice(count);
+            assert!(
+                matches!(parse(&bytes, &source), Err(Error::Invalid("header"))),
+                "{}",
+                String::from_utf8_lossy(count)
+            );
+        }
+    }
+
+    #[test]
     fn malformed_sas_dimensions_precede_large_row_or_page_allocation() {
         // This independent haven fixture is a 32-bit little-endian SAS file:
         // header/page sizes at 196/200, row-size subheader at 4640, and column

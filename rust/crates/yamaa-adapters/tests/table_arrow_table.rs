@@ -2581,7 +2581,6 @@ mod table {
         #[test]
         fn unsupported_stored_types_retain_independent_arrow_type_spelling() {
             for (name, expected) in [
-                ("int32", "int32"),
                 ("uint64", "uint64"),
                 ("float32", "float"),
                 ("binary", "binary"),
@@ -2598,6 +2597,21 @@ mod table {
                     "{name}"
                 );
             }
+        }
+
+        #[test]
+        fn the_pyarrow_int32_fixture_reads_as_int() {
+            // An unannotated INT32, as pyarrow writes an int32 column, is a
+            // signed 32-bit integer (REQ-1032). The fixture keeps the name it
+            // had while 0.4.0 refused it.
+            let table = parse(&content("unsupported-int32")).unwrap();
+            let column = &table.schema().columns()[0];
+            assert_eq!(
+                (column.name.as_str(), column.kind),
+                ("FIELD", ColumnType::Int)
+            );
+            assert_eq!(table.row_count(), 1);
+            assert_eq!(table.cell(0, 0).unwrap(), ValueRef::Int(1));
         }
 
         #[test]
@@ -2880,11 +2894,12 @@ mod table {
             //! pyarrow and Polars write (#2940), written here by the parquet
             //! crate's writers. A textual schema names a converted type alone,
             //! or a logical type with its converted type. A signed annotation
-            //! whose width fits the physical type reads as `int`; an unsigned
-            //! one stays refused. Expected cells are the values the test
-            //! writes, never read back from a candidate reader.
+            //! whose width fits the physical type reads as `int`, as does an
+            //! INT32 without an annotation; an unsigned one stays refused.
+            //! Expected cells are the values the test writes, never read back
+            //! from a candidate reader.
             use super::authored::{zigzag, Fields};
-            use arrow_array::{ArrayRef, Int16Array, Int8Array, RecordBatch};
+            use arrow_array::{ArrayRef, Int16Array, Int32Array, Int8Array, RecordBatch};
             use parquet::{
                 arrow::ArrowWriter, basic::Repetition, column::writer::ColumnWriter,
                 file::writer::SerializedFileWriter, schema::parser::parse_message_type,
@@ -2974,6 +2989,33 @@ mod table {
             }
 
             #[test]
+            fn unannotated_int32_fields_read_as_int() {
+                // pyarrow and Polars write int32 columns without an annotation.
+                let schema = "message schema {
+                    OPTIONAL INT32 P;
+                    REQUIRED INT32 Q;
+                }";
+                let columns = [
+                    extremes(32),
+                    vec![Some(i64::from(i32::MIN)), Some(-1), Some(0), Some(1)],
+                ];
+                assert_int_cells(&parse(&write(schema, &columns)).unwrap(), &columns);
+                // The Arrow writer stores an int32 array the same way, under an
+                // Arrow schema hint naming int32.
+                let int32: ArrayRef = Arc::new(Int32Array::from_iter(
+                    columns[0]
+                        .iter()
+                        .map(|v| v.map(|v| i32::try_from(v).unwrap())),
+                ));
+                let batch = RecordBatch::try_from_iter([("P", int32)]).unwrap();
+                let mut bytes = Vec::new();
+                let mut writer = ArrowWriter::try_new(&mut bytes, batch.schema(), None).unwrap();
+                writer.write(&batch).unwrap();
+                writer.close().unwrap();
+                assert_int_cells(&parse(&bytes).unwrap(), &columns[..1]);
+            }
+
+            #[test]
             fn logical_signed_integer_annotations_read_as_int() {
                 // `Int(64, signed)` with `INT_64` is the DuckDB BIGINT field as
                 // pyarrow reports it. A REQUIRED field reads the same.
@@ -3009,11 +3051,10 @@ mod table {
             }
 
             #[test]
-            fn unsigned_annotations_and_an_unannotated_int32_stay_refused() {
+            fn unsigned_annotations_stay_refused() {
                 // DuckDB writes UBIGINT through UTINYINT with the unsigned
                 // converted types alone; pyarrow and Polars add the logical
-                // type. An INT32 without an annotation stays outside the
-                // mapping.
+                // type.
                 for (field, expected) in [
                     ("OPTIONAL INT64 F (UINT_64);", "uint64"),
                     ("OPTIONAL INT32 F (UINT_32);", "uint32"),
@@ -3021,7 +3062,6 @@ mod table {
                     ("OPTIONAL INT32 F (UINT_8);", "uint8"),
                     ("OPTIONAL INT64 F (INTEGER(64,false));", "uint64"),
                     ("OPTIONAL INT32 F (INTEGER(8,false));", "uint8"),
-                    ("OPTIONAL INT32 F;", "int32"),
                 ] {
                     let bytes = write(&format!("message schema {{ {field} }}"), &[vec![Some(1)]]);
                     assert!(

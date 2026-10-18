@@ -1600,9 +1600,20 @@ mod source {
             }
         }
         #[test]
-        fn signed_integer_annotations_that_fit_their_physical_type_read_as_int() {
+        fn signed_integer_fields_that_fit_their_physical_type_read_as_int() {
             let signed = |bits| Logical::Integer { bits, signed: true };
             let legacy = |bits| Converted::Integer { bits, signed: true };
+            // An unannotated INT32 or INT64 is a signed integer of its width.
+            for (physical, representation) in [
+                (Physical::Int32, Representation::Int32),
+                (Physical::Int64, Representation::Int64),
+            ] {
+                assert_eq!(
+                    parquet::column_type(physical, Logical::None, Converted::None, representation),
+                    Some(ColumnType::Int),
+                    "{physical:?}"
+                );
+            }
             for (physical, bits, representation) in [
                 (Physical::Int64, 64, Representation::Int64),
                 (Physical::Int32, 32, Representation::Int32),
@@ -1642,8 +1653,8 @@ mod source {
                     );
                 }
             }
-            // A width the physical type does not hold, a layout of another
-            // width or type, and an unannotated INT32 stay refused.
+            // A width the physical type does not hold, and a layout of another
+            // width or type, stay refused.
             let microseconds = Representation::Timestamp {
                 unit: parquet::Unit::Microsecond,
                 timezone: false,
@@ -1673,7 +1684,7 @@ mod source {
                     Physical::Int32,
                     Logical::None,
                     Converted::None,
-                    Representation::Int32,
+                    Representation::Int16,
                 ),
             ] {
                 assert_eq!(
