@@ -792,7 +792,12 @@ pub(super) fn bind_row(
             secondary,
             intermediates,
         ),
-        Operation::Window(window) => window.bind_available(catalog, available, edges, findings),
+        Operation::Window(window) => {
+            if window.group_findings(catalog, driver, row, phase, findings)? {
+                return Ok(None);
+            }
+            window.bind_available(catalog, available, edges, findings)
+        }
         Operation::FirstAvailable(selection) => bind_selection(
             selection,
             path,
