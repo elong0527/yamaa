@@ -76,7 +76,9 @@ crate; do not import another crate's source into tests.
 Portable numerical behavior has independently authored controls in
 `rust/crates/yamaa-core/tests/fixtures/portable_math.tsv`.
 
-The Python and R READMEs describe user installation and APIs. Installed-host
+The Python and R READMEs describe user installation. The
+[Python package documentation](docs/articles/python.md) and the R README
+describe the host APIs. Installed-host
 [qualification](rust/qualification/README.md) owns distribution checks: tests
 run outside the checkout against an installed package, with independent inputs
 and expected bytes. A local source import does not establish package ownership

@@ -210,9 +210,12 @@ owns decoding behavior.
 - Distribute 0.4.0 as GitHub release assets only; `release.yml` has no PyPI
   step.
 
-Host behavior and source installation commands live in the
-[Python](https://github.com/elong0527/yamaa/blob/main/python/README.md) and
-[R](https://github.com/elong0527/yamaa/blob/main/R/yamaa/README.md) guides.
+The [Python package documentation](articles/python.md) describes Python host
+behavior, and the
+[Python README](https://github.com/elong0527/yamaa/blob/main/python/README.md#installation)
+its installation commands. The
+[R guide](https://github.com/elong0527/yamaa/blob/main/R/yamaa/README.md)
+covers both for R.
 
 ## Resource refusals
 
