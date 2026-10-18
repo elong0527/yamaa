@@ -7,7 +7,9 @@ open gates live in GitHub issues and pull requests, not here.
 ## Supported platforms
 
 - CPython 3.12, 3.13, 3.14 and 3.15 wheels and source builds on Linux
-  x86_64, macOS arm64 and Windows x64.
+  x86_64, macOS arm64 and Windows x64. The Linux wheel is `manylinux_2_34`
+  and needs glibc 2.34 or later, for example RHEL 9, Ubuntu 22.04 or
+  Debian 12; older systems build from the Python source archive.
 - R 4.6.1 source builds on the same three hosts, each passing strict
   `R CMD check` with **Status: OK**.
 - Other runtimes and architectures, free-threaded Python, musl and R binary
@@ -33,7 +35,7 @@ The minimum supported independent readers are:
 | R arrow | 23.0.1 | CSV text and Parquet |
 | Python standard library | Supported CPython above | Dataset-JSON 1.1 |
 | R jsonlite | 2.0.0 | Dataset-JSON 1.1, with `bigint_as_char = TRUE` |
-| Python lxml | 6.1.0 (6.1.2 on CPython 3.15) | Define-XML 2.1 |
+| Python lxml | 6.1.3 | Define-XML 2.1 |
 
 Python package dependencies and R package `Suggests` declare these floors.
 The R readers are optional: public Build and Save use the shared native codecs.
@@ -83,9 +85,20 @@ reviewed local saphyr-parser patch remains part of every graph. The Python
 binding builds with PyO3 0.27.2 through 0.30; the lock selects 0.30.1, and the
 minimum dependency graph tests 0.27.2.
 
+The engine deliberately links two versions of four crates, because yamaa's
+direct floors differ from Parquet 57.3.0's: lz4_flex 0.13 beside Parquet's
+0.12, zstd 0.14 beside 0.13, base64 0.23 beside 0.22, and num-bigint 0.5
+beside the 0.4 that Parquet and arrow-buffer use. Aligning them would lower
+yamaa's floors or move Parquet off its exact pin; Parquet 57.3.1 requires the
+same versions as 57.3.0. Both zstd copies, through zstd-safe 7 and 8, build
+one `zstd-sys`, so the engine links a single zstd library. The other duplicate
+versions that `cargo tree -d` lists add no second linked copy: syn serves
+procedural macros, and the extra getrandom and r-efi versions serve build
+tools or other targets.
+
 Python supports CPython 3.12 through 3.15 with the runtime ranges in
 `python/pyproject.toml`. On CPython 3.12 to 3.14, their declared floors are
-lxml 6.1.0, Polars 1.35.2, py-yaml12 0.2, PyArrow 23.0.1, Pydantic 2.12.4,
+lxml 6.1.3, Polars 1.35.2, py-yaml12 0.2, PyArrow 23.0.1, Pydantic 2.12.4,
 packaging 25 and PyYAML 6.0.3.
 The Parquet 57.3.0 writer records only type-defined column orders, which
 Polars 1.35.2 reads; the IEEE 754 total-order form that later writers record
@@ -93,18 +106,20 @@ for floating-point columns needs Polars 1.43.2. R uses R 4.6.1 and the shared
 Rust graph; its host qualification readers are the `Suggests` dependencies in
 `R/yamaa/DESCRIPTION`.
 
-Four of these floors do not work on CPython 3.15, so on 3.15 the declared
-floors are the oldest releases that do: Polars 2.0.0, PyArrow 26.0.0, lxml
-6.1.2 and Pydantic 2.14.0. Environment markers split these four requirements by
+Three of these floors do not work on CPython 3.15, so on 3.15 the declared
+floors are the oldest releases that do: Polars 2.0.0, PyArrow 26.0.0 and
+Pydantic 2.14.0. Environment markers split these three requirements by
 interpreter, and CPython 3.12 to 3.14 keep the floors that embedders hold.
 Polars before 2.0.0 installs, but its Series methods that forward to
 expressions, such as `implode`, return `None`: 3.15 no longer stores a
 function's implicit `None` return in `co_consts`, which those releases use to
-find the methods. PyArrow 23.0.1, lxml 6.1.0 and pydantic-core 2.41.5, which
-Pydantic 2.12.4 requires, publish no 3.15 wheels, and their source builds need
-Arrow C++, the libxml2 and libxslt headers, or a PyO3 release that accepts
-3.15. PyYAML publishes no 3.15 wheels either, but builds from its source
-archive, so its floor is the same on every interpreter.
+find the methods. PyArrow 23.0.1 and pydantic-core 2.41.5, which Pydantic
+2.12.4 requires, publish no 3.15 wheels, and their source builds need Arrow C++
+or a PyO3 release that accepts 3.15. PyYAML publishes no 3.15 wheels either,
+but builds from its source archive, so its floor is the same on every
+interpreter. So is lxml's: 6.1.3 is the first release that loads no external
+parameter entities by default, and 6.1.1 patched the libxslt that its Linux
+wheels bundle.
 
 The continuous [dependency graph lanes](https://github.com/elong0527/yamaa/blob/main/CONTRIBUTING.md#ci-and-release-qualification)
 test declared direct minima and newest compatible selections on Linux with
@@ -116,14 +131,47 @@ Python transitives are resolved compatibly. These isolated graphs do not change
 `rust/Cargo.lock` or `python/uv.lock`. The full native matrix separately qualifies
 the locked release across supported platforms and Python versions.
 
-The same workflow checks both locks against security advisories:
-`cargo deny check advisories` reads `rust/Cargo.lock` with `rust/deny.toml`,
-and `pip-audit` reads every package locked in `python/uv.lock`. An ignored Rust
-advisory names its id, a reason and a review date in `rust/deny.toml`. The
-scanners do not cover vendored source: the ReadStat C sources under
-`rust/crates/yamaa-adapters/vendor/readstat` are reviewed against upstream
-releases when they are updated, and the vendored `saphyr-parser` patch is
-replaced by a published release under #2583.
+The same workflow checks both locks against security advisories.
+`cargo deny check advisories` reads `rust/Cargo.lock` against RustSec with
+`rust/deny.toml`, `pip-audit` reads every package locked in `python/uv.lock`
+against the PyPI advisory database, and OSV-Scanner reads both locks against
+OSV with `osv-scanner.toml`. OSV also carries GitHub's reviewed advisories,
+which the other two databases can lack. An ignored advisory names its id, a
+reason and a review date in the file of each scanner that reports it. An
+OSV-Scanner ignore lapses on its review date, so the check fails again until
+the advisory is reviewed.
+
+### Components outside the advisory scanners
+
+The scanners match locked registry packages by name and version, so they do
+not cover vendored source or native libraries bundled inside a package. These
+components are tracked by hand:
+
+- `saphyr-parser` 0.2.1 with the reviewed compact-flow patch, a path
+  dependency in `rust/vendor/saphyr-parser`. #2583 replaces it with a
+  published release.
+- The ReadStat 1.1.9 SAS reader subset in
+  `rust/crates/yamaa-adapters/vendor/readstat`. #2927 tracks the upstream
+  fixes since 1.1.9.
+- zstd 1.5.7, the C library that `zstd-sys` bundles into the engine.
+- libxml2 and libxslt, bundled in the `lxml` wheels. The lxml 6.1.3 Windows
+  wheels bundle libxml2 2.11.9, an end-of-life branch that lxml describes as
+  security-patched.
+
+## Release checklist
+
+Before pushing the release tag, confirm on the final commit:
+
+1. Its complete native qualification passed.
+2. Its Dependency graphs run passed, including the three advisory checks.
+3. Every ignored advisory in `rust/deny.toml` and `osv-scanner.toml` still
+   matches a locked package, and its reason still holds. Remove any ignore
+   that fails either test.
+4. Every [component outside the advisory scanners](#components-outside-the-advisory-scanners)
+   was compared with its upstream releases and security advisories since the
+   previous release, and each fix that applies is taken or has an issue.
+
+Record the outcome on the release's planning issue.
 
 ## Publication
 
@@ -139,8 +187,12 @@ The workflow downloads the qualified artifacts and publishes their unchanged
 bytes: one wheel per supported OS, the tested Linux Python sdist and the tested
 Linux R source tarball. Other native source lanes qualify their own host-built
 archives. Missing, expired or ambiguous artifacts fail publication; an existing
-release is never overwritten. The release includes committed notes from
-`docs/releases/<version>.md` and identifies the native run and selected artifacts.
+release is never overwritten. Re-running failed jobs or all jobs keeps a run
+eligible: earlier attempts' artifacts stay on the run, and the workflow takes
+only the copy that its uploading job created during the execution the run's
+final attempt lists. The release body is the committed notes from
+`docs/releases/<version>.md`, then a "Qualified native artifacts" section that
+links the native run attempt and lists the selected artifacts.
 This route uses the workflow's GitHub token and needs no package-index
 credentials. The workflow has no PyPI step: 0.4.0 is distributed as GitHub
 release assets only, and those assets do not establish PyPI publication. PyPI
