@@ -276,6 +276,31 @@ class LockedClosure(unittest.TestCase):
             },
         )
 
+    def test_zstd_sys_carries_the_bundled_library_text_it_is_relied_on_under(self):
+        # zstd-sys compiles the bundled zstd library, offered under BSD-3-Clause
+        # or GPL-2.0-only: the BSD text below the crate root must be rendered,
+        # and the GPL text it is not relied on under must not.
+        graph = Graph(self.root / "zstd")
+        python = graph.crate("yamaa-python", "0.4.0", "MIT", member=True)
+        graph.crate("yamaa-r", "0.4.0", "MIT", member=True)
+        library = BSD.replace("Example, Inc.", "Meta Platforms, Inc.")
+        zstd = graph.crate(
+            "zstd-sys",
+            "2.1.1+zstd.1.5.7",
+            "BSD-3-Clause",
+            {
+                "zstd/LICENSE": library,
+                "zstd/COPYING": "GNU GENERAL PUBLIC LICENSE\nVersion 2, June 1991\n",
+            },
+        )
+        graph.depend(python, zstd)
+        (notice,) = notices.notices_for(graph.metadata())
+        self.assertEqual(notice.relied, ("BSD-3-Clause",))
+        self.assertEqual([name for name, _ in notice.texts], ["zstd/LICENSE"])
+        rendered = notices.render([notice])
+        self.assertIn("Copyright (c) 2016 Meta Platforms, Inc.", rendered)
+        self.assertNotIn("GNU GENERAL PUBLIC LICENSE", rendered)
+
     def test_unclassified_mislabelled_or_missing_notices_stop_generation(self):
         package = self.graph.packages["pyo3@0.27.2"]
         directory = Path(package["manifest_path"]).parent
