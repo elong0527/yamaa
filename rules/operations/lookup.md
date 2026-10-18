@@ -16,7 +16,9 @@ status: normative
 the implicit join: one value per current row, matched on the applicable
 keys ([REQ-0150](lookup.md#req-0150)), answering absence as a missing
 result. The qualifier for this row template's driver is not a join. That
-qualifier reads the input or intermediate record that built the row.
+qualifier reads the input or intermediate record that built the row. A
+`between` value is not a scalar source and never joins: it reads the
+current row alone ([REQ-0121](lookup.md#req-0121)).
 
 ```yaml
 derivation:
@@ -199,7 +201,9 @@ subject to run-time comparability when it is used as a match operand.
 <a id="req-0119"></a>
 
 **REQ-0119.** `order_by` and `keep` are declared together or not at all.
-Declaring one without the other fails as `unpaired_fields`.
+Declaring one without the other fails as `unpaired_fields`. An `order_by`
+that lists no term orders nothing, so `keep` beside it fails the same way,
+with `order_by` reported missing.
 
 <a id="req-0120"></a>
 
@@ -296,6 +300,32 @@ compare exactly under [REQ-0005](../values/types.md#req-0005), and every other r
 must match exactly, with no operand converted. A mismatch fails as
 `incomparable_range_types` before any record is compared, reporting the
 runtime types of the value and the stated bounds.
+
+A `value` qualified by an input dataset reads the record of the current
+row's driver ([REQ-0085](../specification/binding.md#req-0085)), in the
+scope of a correlated `filter` field ([REQ-0120](lookup.md#req-0120)). That
+input must drive every row that reads the intermediate; during column
+derivation, every row template the read can evaluate on. A read in another
+intermediate's `derivations` takes the value from the reading intermediate's
+donor record instead ([REQ-1263](lookup.md#req-1263)). For a row that
+another input dataset drives, the value names no current-row value, and it
+is never read through the implicit join ([REQ-0111](lookup.md#req-0111)).
+It fails as `unknown_field`, also when the row reads the intermediate
+through another intermediate's `between.value` or an aggregate's `derive`
+step. Bring such a value onto the row as a column first, and name the
+column:
+
+```yaml
+columns:
+  - name: AGE
+    type: int
+    derivation: DM.AGE
+intermediates:
+  - id: REFRANGE
+    dataset: LBRANGE
+    key: [LBTESTCD]
+    between: {value: AGE, lower: AGELO, upper: AGEHI}
+```
 
 <a id="req-0122"></a>
 
@@ -809,7 +839,7 @@ paired key column to have the same comparable type.
 
 | Field | Meaning |
 | --- | --- |
-| `record_between_class.value` | Value read from the current row. |
+| `record_between_class.value` | Value read from the current row ([REQ-0121](lookup.md#req-0121)). |
 | `record_between_class.lower` | Donor-record field whose value is an inclusive lower bound; omit for no lower bound. |
 | `record_between_class.upper` | Donor-record field whose value is an inclusive upper bound; omit for no upper bound. |
 

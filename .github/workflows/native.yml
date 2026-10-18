@@ -1,10 +1,9 @@
 name: Native qualification
 
+# Release qualification, not a development check: dispatch it on main for a
+# release candidate, or push a qualification/issue-* branch.
 on:
   workflow_dispatch:
-  schedule:
-    # Full qualification nightly; dispatch it for a release candidate.
-    - cron: '17 5 * * *'
   push:
     branches: ['qualification/issue-*']
 
@@ -215,6 +214,8 @@ jobs:
         run: |
           python -m tools.packaging.check_python_package_hygiene "${RUNNER_TEMP}/native-dist"
           python -m tools.packaging.check_cargo_lock --output-dir "${RUNNER_TEMP}/rust-dependencies" "${RUNNER_TEMP}"/native-dist/*.tar.gz
+          python -m tools.packaging.generate_third_party_notices
+          python -m tools.packaging.check_package_notices "${RUNNER_TEMP}"/native-dist/*.whl "${RUNNER_TEMP}"/native-dist/*.tar.gz
       - name: Preserve the reference host wheel
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
@@ -466,6 +467,7 @@ jobs:
           mkdir -p native-r-library
           R CMD build --no-build-vignettes --no-manual native-stage/yamaa
           python -m tools.packaging.check_cargo_lock --output-dir "${RUNNER_TEMP}/rust-dependencies" yamaa_0.5.0.tar.gz
+          python -m tools.packaging.check_package_notices yamaa_0.5.0.tar.gz
           R CMD INSTALL --library="${RUNNER_TEMP}/native-r-library" "${GITHUB_WORKSPACE}/rust/tests/project-programs/r"
           R CMD INSTALL --library="${RUNNER_TEMP}/native-r-library" yamaa_0.5.0.tar.gz
           if [ "${{ runner.os }}" = Windows ]; then

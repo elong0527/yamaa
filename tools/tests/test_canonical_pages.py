@@ -37,7 +37,14 @@ class CanonicalPages(unittest.TestCase):
             encoding="utf-8",
         )
         (self.root / "docs/ordinary.md").write_text(
-            "# Ordinary\n\n[Home](index.md) [Rules](articles/rules.md)\n",
+            "# Ordinary\n\n[Home](index.md) [Rules](articles/rules.md)\n\n"
+            "[Contract](../rules/README.md#rules) [Guide](../CONTRIBUTING.md)\n\n"
+            "![Logo](../rules/logo.svg)\n",
+            encoding="utf-8",
+        )
+        (self.root / "docs/articles").mkdir()
+        (self.root / "docs/articles/nested.md").write_text(
+            "# Nested\n\n[Up](../ordinary.md) [Contract](../../rules/README.md)\n",
             encoding="utf-8",
         )
         repository_config = yaml.safe_load((ROOT / "mkdocs.yml").read_text())
@@ -57,6 +64,7 @@ class CanonicalPages(unittest.TestCase):
                 repository_config["nav"][0],
                 {"Rules": repository_config["nav"][2]["Reference"][2]["Rules"]},
                 {"Ordinary": "ordinary.md"},
+                {"Nested": "articles/nested.md"},
             ],
         }
         self.config_path = self.root / "mkdocs.yml"
@@ -98,6 +106,13 @@ class CanonicalPages(unittest.TestCase):
         self.assertIn("[Sample](values/types.md)", rules)
         self.assertIn('href="../"', ordinary)
         self.assertIn('href="../articles/rules/"', ordinary)
+        # A docs page's links that leave docs/ name repository files on main.
+        self.assertIn(f'href="{repository}/blob/main/rules/README.md#rules"', ordinary)
+        self.assertIn(f'href="{repository}/blob/main/CONTRIBUTING.md"', ordinary)
+        self.assertIn(f'src="{repository}/raw/main/rules/logo.svg"', ordinary)
+        nested = self.page("articles/nested/index.html")
+        self.assertIn('href="../../ordinary/"', nested)
+        self.assertIn(f'href="{repository}/blob/main/rules/README.md"', nested)
         self.assertFalse((self.root / "docs/index.md").exists())
         self.assertFalse((self.root / "docs/articles/rules.md").exists())
 

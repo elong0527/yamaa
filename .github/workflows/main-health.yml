@@ -2,23 +2,21 @@ name: Main health
 
 # Main is checked on schedules rather than after every merge, so a failing
 # main run is the only sign that main is broken. Keep one open issue per
-# workflow while its latest main run fails, and close it when one succeeds.
+# workflow while its newest main run fails, and close it when one succeeds.
+# Only CI, on its schedule, and Docs, on each merge, run on main without a
+# person starting them; whoever dispatches a release lane sees its result.
 on:
   workflow_run:
     workflows:
       - CI
-      - Optional format features
-      - Native qualification
-      - R-CMD-check
-      - Harbor
-      - Coverage
-      - Dependency graphs
       - Docs
       - Release rehearsal
     types: [completed]
     branches: [main]
 
 permissions:
+  # Read the other main runs of the reported workflow.
+  actions: read
   contents: read
   issues: write
 
@@ -32,7 +30,8 @@ defaults:
 
 jobs:
   report:
-    # Cancelled and skipped runs say nothing about main.
+    # Cancelled and skipped runs say nothing about main. The step ignores the
+    # same conclusions among the newer runs it compares.
     if: >-
       github.event.workflow_run.event != 'pull_request'
       && contains(fromJSON('["success", "failure", "timed_out", "startup_failure"]'), github.event.workflow_run.conclusion)
@@ -42,6 +41,8 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       WORKFLOW: ${{ github.event.workflow_run.name }}
+      WORKFLOW_ID: ${{ github.event.workflow_run.workflow_id }}
+      RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
       CONCLUSION: ${{ github.event.workflow_run.conclusion }}
       RUN_EVENT: ${{ github.event.workflow_run.event }}
       RUN_URL: ${{ github.event.workflow_run.html_url }}
@@ -49,6 +50,17 @@ jobs:
     steps:
       - name: Open, update or close the workflow's issue
         run: |
+          # A re-run of an older run can finish after a newer run. A re-run
+          # keeps its run number, so only the run with the highest number
+          # among the reported main runs decides the issue.
+          newest="$(gh api "repos/$GH_REPO/actions/workflows/$WORKFLOW_ID/runs?branch=main&status=completed&per_page=100" \
+            --jq '[.workflow_runs[] | select(.event != "pull_request")
+              | select(.conclusion == "success" or .conclusion == "failure"
+                or .conclusion == "timed_out" or .conclusion == "startup_failure")][0].run_number // empty')"
+          if [ -n "$newest" ] && [ "$newest" -gt "$RUN_NUMBER" ]; then
+            echo "$WORKFLOW run $RUN_NUMBER was overtaken by run $newest; the issue is unchanged."
+            exit 0
+          fi
           title="main is red: $WORKFLOW"
           number="$(gh issue list --state open --label main-red --limit 100 --json number,title \
             | jq -r --arg title "$title" '[.[] | select(.title == $title)][0].number // empty')"

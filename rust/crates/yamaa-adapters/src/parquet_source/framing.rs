@@ -1,6 +1,7 @@
 //! Admission of held Parquet framing before the general codec sees metadata.
 //! No decompression or semantic type decisions occur here.
 use super::compact::{self, Sequence, Value};
+use super::wire::{self, Shape};
 
 #[derive(Debug)]
 pub(super) enum Error {
@@ -65,6 +66,9 @@ pub(super) enum Payload {
 pub(super) struct Framing<'a> {
     pub metadata: &'a [u8],
     pub pages: Vec<Page<'a>>,
+    /// Each page header's byte range in the held file and the end of the
+    /// page's body, in page order.
+    pub headers: Vec<(std::ops::Range<usize>, usize)>,
 }
 
 fn integer(value: Option<Value<'_>>) -> Result<i64, Error> {
@@ -143,6 +147,8 @@ pub(super) fn admit(bytes: &[u8]) -> Result<Framing<'_>, Error> {
         .ok_or(Error::Malformed)?;
     let metadata = &bytes[start..footer];
     let (root, _) = compact::parse(metadata)?;
+    // The native decoder reads every known field by its declared type.
+    wire::check(root, Shape::FileMetaData)?;
     let declared_rows = count(root.field(3)?)?;
     let groups = sequence(root.field(4)?)?;
     let schema = sequence(root.field(2)?)?;
@@ -151,6 +157,7 @@ pub(super) fn admit(bytes: &[u8]) -> Result<Framing<'_>, Error> {
     let mut result = Framing {
         metadata,
         pages: Vec::new(),
+        headers: Vec::new(),
     };
     let mut rows = 0usize;
     for (row_group, group) in groups.into_iter().enumerate() {
@@ -180,6 +187,7 @@ pub(super) fn admit(bytes: &[u8]) -> Result<Framing<'_>, Error> {
             }
             while offset < end {
                 let (header, used) = compact::parse(&bytes[offset..end])?;
+                wire::check(header, Shape::PageHeader)?;
                 let uncompressed = count(header.field(2)?)?;
                 let compressed = count(header.field(3)?)?;
                 let payload = match integer(header.field(1)?)? {
@@ -234,11 +242,13 @@ pub(super) fn admit(bytes: &[u8]) -> Result<Framing<'_>, Error> {
                     }
                     None => (0, true),
                 };
+                let header = offset;
                 let body_start = offset.checked_add(used).ok_or(Error::Malformed)?;
                 offset = body_start
                     .checked_add(compressed)
                     .filter(|end_body| *end_body <= end)
                     .ok_or(Error::Malformed)?;
+                result.headers.push((header..body_start, offset));
                 result.pages.push(Page {
                     codec,
                     body: &bytes[body_start..offset],
