@@ -40,8 +40,9 @@ impl Study {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, contents).unwrap();
     }
+    /// A file's path as the engine reports it, with forward slashes.
     fn path(&self, name: &str) -> String {
-        self.0.join(name).to_str().unwrap().to_owned()
+        self.0.join(name).to_str().unwrap().replace('\\', "/")
     }
 }
 impl Drop for Study {
