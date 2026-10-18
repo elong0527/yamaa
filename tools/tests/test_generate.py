@@ -805,7 +805,7 @@ class DashboardTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "benchmark.yaml"):
                 generate.render_benchmark(benchmark)
 
-    def test_generated_calls_preserve_multifile_order_and_host_environment(self):
+    def test_generated_calls_preserve_multifile_order_and_project(self):
         snippets = dict(
             generate.benchmark_code(generate.BENCHMARKS / "sdtm-dm-race-ethnicity")
         )
@@ -816,8 +816,8 @@ class DashboardTests(unittest.TestCase):
         snippets = dict(
             generate.benchmark_code(generate.BENCHMARKS / "schema-functions")
         )
-        self.assertIn('environment="python/environment.yaml"', snippets["Python"])
-        self.assertIn('environment="r/environment.yaml"', snippets["R"])
+        self.assertIn('environment="project.yaml"', snippets["Python"])
+        self.assertIn('environment="project.yaml"', snippets["R"])
 
     def test_dashboard_renders_lifecycle_badge_beside_summary(self):
         finalized = generate.render_benchmark(

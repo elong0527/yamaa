@@ -135,7 +135,7 @@ specification contains one declaration for each identifier.
 <a id="req-0705"></a>
 
 **REQ-0705.** Language source is ASCII. Schema documents, specifications,
-inheritance layers, project environments, conformance documents, rules,
+inheritance layers, project and environment files, conformance documents, rules,
 documentation, and implementation source contain only bytes from `0x00`
 through `0x7F`. Names and examples in source use forms such as `U+00E9`
 rather than embedding the character. A format's ASCII escape notation may

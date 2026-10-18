@@ -218,7 +218,7 @@ impl ProjectCapturePort for Reader<'_> {
                     .map_err(|_| ResourceError::InvalidLock)?,
                 source,
             },
-            Kind::Function | Kind::Codelist => Reply::Document(source),
+            Kind::Environment | Kind::Function | Kind::Codelist => Reply::Document(source),
         })
     }
 }

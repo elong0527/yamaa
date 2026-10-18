@@ -51,7 +51,10 @@ pub struct LockFinding {
 }
 #[derive(Clone, Copy, Debug)]
 pub struct LockOrigins<'a> {
+    /// The environment file that declares the lock.
     pub source: &'a str,
+    /// The caller-supplied project file that links that environment file.
+    pub entry: &'a str,
     pub lock_source: &'a str,
     /// Authored spelling from the retained raw root, not a resolved executable path.
     pub written: &'a str,
@@ -95,7 +98,7 @@ pub fn lock_diagnostics(
             application_issue::lock_mismatch(
                 [
                     ("source".into(), scalar(origins.source)),
-                    ("entry".into(), scalar(origins.source)),
+                    ("entry".into(), scalar(origins.entry)),
                     ("lock_source".into(), scalar(origins.lock_source)),
                     ("lock".into(), scalar(origins.written)),
                     ("package".into(), scalar(&finding.package)),

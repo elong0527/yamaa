@@ -702,7 +702,7 @@ pub fn check_with_resolver(
     crate::issue_rows::collect(
         domain_entry::check(request, &mut application).unwrap_or_else(|error| match error {
             ApplicationError::Preparation(error) => {
-                crate::project_application::selection_failure(&error, application.host)
+                crate::project_application::selection_failure(&error)
             }
             ApplicationError::Runtime(issues) => issues,
         }),
@@ -713,7 +713,7 @@ pub fn domain(request: Request<'_>, identity: Identity<'_>) -> Result<Domain, Fa
     domain_entry::domain(request, &mut application, Scope::default())
         .map_err(|error| match error {
             ApplicationError::Preparation(error) => {
-                crate::project_application::selection_failure(&error, application.host)
+                crate::project_application::selection_failure(&error)
             }
             ApplicationError::Runtime(issues) => issues,
         })

@@ -1,14 +1,14 @@
 {
   "format": "yamaa-native-source-fixtures/1",
   "files": [
-    "benchmarks/sdtm-dm-metadata/environment.yaml",
+    "benchmarks/sdtm-dm-metadata/project.yaml",
     "benchmarks/sdtm-dm-metadata/spec.yaml",
     "benchmarks/sdtm-dm-metadata/expected/dm.csv",
     "benchmarks/sdtm-dm-metadata/expected/dm.json",
     "benchmarks/sdtm-dm-metadata/expected/define.xml",
-    "benchmarks/sdtm-ae-coding/environment.yaml",
+    "benchmarks/sdtm-ae-coding/project.yaml",
     "benchmarks/sdtm-ae-coding/spec.yaml",
-    "benchmarks/sdtm-vs-epoch-from-subject-elements/environment.yaml",
+    "benchmarks/sdtm-vs-epoch-from-subject-elements/project.yaml",
     "benchmarks/sdtm-vs-epoch-from-subject-elements/spec.yaml",
     "benchmarks/schema-verification-log/spec.yaml",
     "benchmarks/schema-verification-log/input/dm.csv",
@@ -22,7 +22,7 @@
     "benchmarks/adam-adlb-ordered-sum/expected/adlb.csv",
     "benchmarks/sdtm-lb-metadata/spec.yaml",
     "benchmarks/sdtm-lb-metadata/submission-spec.yaml",
-    "benchmarks/sdtm-lb-metadata/submission-environment.yaml",
+    "benchmarks/sdtm-lb-metadata/submission-project.yaml",
     "benchmarks/sdtm-lb-metadata/expected/lb.csv"
   ]
 }

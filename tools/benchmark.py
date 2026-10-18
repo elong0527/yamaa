@@ -9,6 +9,7 @@ from pathlib import Path, PurePosixPath
 import yaml
 
 HOSTS = ("python", "r")
+PROJECT = "project.yaml"
 LIFECYCLES = {"draft": "lightgrey", "reviewed": "yellow", "finalized": "brightgreen"}
 
 
@@ -170,7 +171,12 @@ def relative_file(case, value, field):
 
 
 def entries(case, metadata=None):
-    """Preserve authored call order and explicit per-host environments."""
+    """Preserve authored call order and the explicit project each call passes.
+
+    A case's root `project.yaml` is the default for every call in both hosts;
+    its `environments` key links each host's environment file. The project
+    still travels as the `environment` argument of the public calls.
+    """
     metadata = load_metadata(case) if metadata is None else metadata
     declared = metadata.get("entries")
     if "entries" not in metadata:
@@ -191,8 +197,7 @@ def entries(case, metadata=None):
             f"{case}: {host} entries must be a nonempty list",
         )
         result[host] = []
-        default = f"{host}/environment.yaml"
-        default = default if (case / default).is_file() else None
+        default = PROJECT if (case / PROJECT).is_file() else None
         for call in calls:
             require(
                 isinstance(call, dict)

@@ -4083,7 +4083,7 @@
               "label: \"bad\\tlabel\""
             ]
           ],
-          "environment_mutations": [],
+          "project_mutations": [],
           "inherit_specification": false,
           "issues": [
             {
@@ -4103,7 +4103,7 @@
         {
           "name": "document-title",
           "specification_mutations": [],
-          "environment_mutations": [
+          "project_mutations": [
             [
               "title: Annotated Case Report Form",
               "title: \"bad\\ttitle\""
@@ -4133,7 +4133,7 @@
               "label: \"bad\\tlabel\""
             ]
           ],
-          "environment_mutations": [],
+          "project_mutations": [],
           "inherit_specification": true,
           "issues": [
             {
@@ -4158,7 +4158,7 @@
               "label: \"bad\\tlabel\""
             ]
           ],
-          "environment_mutations": [
+          "project_mutations": [
             [
               "title: Annotated Case Report Form",
               "title: \"bad\\ttitle\""
@@ -4188,7 +4188,7 @@
               "label: \"first\\nsecond\""
             ]
           ],
-          "environment_mutations": [
+          "project_mutations": [
             [
               "title: Annotated Case Report Form",
               "title: \"third\\nfourth\""

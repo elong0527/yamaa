@@ -567,8 +567,7 @@ pub(crate) fn run_build(
     ) {
         Ok(outcome) => Ok(outcome),
         Err(yamaa_adapters::file_application::ApplicationError::Preparation(error)) => {
-            let issues =
-                yamaa_adapters::project_application::selection_failure(&error, shared.language);
+            let issues = yamaa_adapters::project_application::selection_failure(&error);
             let sources = error.retained_sources();
             Ok(BuildOutcome::SelectionFailed { issues, sources })
         }

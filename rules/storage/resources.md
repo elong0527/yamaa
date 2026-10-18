@@ -12,14 +12,17 @@ status: normative
 
 <a id="req-0772"></a>
 
-**REQ-0772.** The caller explicitly supplies the entry file and any implementation
-environment file. These caller arguments follow ordinary host path resolution.
-By default, every document-declared relative path resolves from the file that
-writes it, including an inherited layer or a producing specification.
+**REQ-0772.** The caller explicitly supplies the entry file and any
+[project file](../specification/project.md#req-1331); the project file links the
+implementation environment file of each host language. These caller arguments
+follow ordinary host path resolution. By default, every document-declared
+relative path resolves from the file that writes it, including an inherited
+layer, a producing specification, a project file and an environment file.
 A dataset or output declaration may explicitly select its entry file with
 `relative_to: entry` under [REQ-0780](resources.md#req-0780). Composition retains
 the original declaring file and written spelling. No project configuration is
-discovered or read to select resource locations.
+discovered, and a project file does not select a specification's resource
+locations.
 
 ### The written form
 
@@ -107,8 +110,8 @@ native traversal rules on every supported platform.
 `input/dm.csv` names the file beside that shared layer. If that file is absent,
 a study's own `input/dm.csv` is not substituted. A shared input with
 `relative_to: entry` explicitly names each study entry's own `input/dm.csv`.
-`yamaa-project.yaml` and old project/data-root settings do not affect either
-selection. Missing-file diagnostics retain the original declaring field and
+A project file, `yamaa-project.yaml` and old project/data-root settings do not
+affect either selection. Missing-file diagnostics retain the original declaring field and
 written path.
 
 <a id="req-1247"></a>

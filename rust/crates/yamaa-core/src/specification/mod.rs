@@ -1232,7 +1232,7 @@ impl PreparedSpecification {
     /// Reject unsupported declarations before requesting any source bytes. Effective
     /// source empty-string behavior is missing unless explicitly declared otherwise.
     pub fn prepare(spec: &SpecificationDocument) -> Result<Self, PrepareError> {
-        Self::prepare_implementation(spec, None, None, None, None)
+        Self::prepare_implementation(spec, None, None, None, None, None)
     }
     /// Prepare calls against statically admitted environment definitions. No
     /// project imports, lock verification, test invocation or study reads occur.
@@ -1240,7 +1240,7 @@ impl PreparedSpecification {
         spec: &SpecificationDocument,
         functions: &[crate::project_function::Function],
     ) -> Result<Self, PrepareError> {
-        Self::prepare_implementation(spec, Some(functions), None, None, None)
+        Self::prepare_implementation(spec, Some(functions), None, None, None, None)
     }
     /// Compile project calls and fixed terminology against the same admitted metadata.
     pub fn prepare_with_environment(
@@ -1253,6 +1253,7 @@ impl PreparedSpecification {
             Some(environment.catalogue()),
             None,
             Some(environment.inventory()),
+            environment.undeclared_language(),
         )
     }
     /// This representation stays inside the sealed producer metadata result.
@@ -1267,6 +1268,7 @@ impl PreparedSpecification {
             environment.map(|e| e.catalogue()),
             Some(producers),
             environment.map(|e| e.inventory()),
+            environment.and_then(|e| e.undeclared_language()),
         )
     }
     fn prepare_implementation(
@@ -1275,6 +1277,7 @@ impl PreparedSpecification {
         catalogue: Option<&crate::project_terminology::Catalogue>,
         producers: Option<&[crate::producer_admission::Declaration]>,
         inventory: Option<&crate::submission_inventory::Inventory>,
+        undeclared: Option<crate::project_function::Language>,
     ) -> Result<Self, PrepareError> {
         let d = spec.document();
         let root = d.root();
@@ -1312,8 +1315,9 @@ impl PreparedSpecification {
         .map_err(PrepareError::OutputSchema)?;
         // Absence supplies no callable definitions. It does not invent an
         // environment document, and unknown calls retain ordinary static causes.
+        // A project without an environment for the host names that cause instead.
         let functions = functions.unwrap_or(&[]);
-        let project = match functions::prepare(d, columns, functions) {
+        let project = match functions::prepare(d, columns, functions, undeclared) {
             Ok(project) => Some(project),
             Err(PrepareError::Invalid(errors)) => {
                 findings.extend(errors);

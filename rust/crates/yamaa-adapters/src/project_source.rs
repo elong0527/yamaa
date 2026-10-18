@@ -13,10 +13,20 @@ pub type SourceFailure<E> = application::SourceFailure<E, CapturedDocument, Erro
 pub type DocumentCapture = application::DocumentCapture<CapturedDocument>;
 pub type RejectedEnvironment<E> = application::RejectedEnvironment<E, CapturedDocument, Error>;
 
+/// The two separately versioned roots one project preparation decodes: the
+/// project file with its codelist sources, and the environment file a project
+/// links with its function definitions.
+#[derive(Clone, Debug)]
+pub struct ProjectSchemas {
+    pub project: Arc<CapturedSchema>,
+    pub environment: Arc<CapturedSchema>,
+}
+
 #[derive(Debug)]
 pub struct PreparedEnvironment {
     pub origins: SourceOrigins,
     pub root: CapturedDocument,
+    pub environment_file: Option<CapturedDocument>,
     pub captures: Vec<DocumentCapture>,
     pub lock: Option<LockCapture>,
     pub environment: Environment,
@@ -27,6 +37,7 @@ pub struct PreparedEnvironment {
 pub struct OwnedEnvironment {
     origins: SourceOrigins,
     root: Option<CapturedDocument>,
+    environment_file: Option<CapturedDocument>,
     captures: Vec<DocumentCapture>,
     lock: Option<LockCapture>,
     environment: yamaa_core::project_environment::ExecutionEnvironment,
@@ -41,6 +52,7 @@ pub struct CapturedEnvironment {
     inventory_captured: bool,
     origins: SourceOrigins,
     root: Option<CapturedDocument>,
+    environment_file: Option<CapturedDocument>,
     captures: Vec<DocumentCapture>,
     lock: Option<LockCapture>,
 }
@@ -61,11 +73,17 @@ impl CapturedEnvironment {
     pub fn origins(&self) -> &SourceOrigins {
         &self.origins
     }
+    /// The caller-supplied project file.
     pub fn root(&self) -> &CapturedDocument {
-        self.root.as_ref().expect("explicit environment source")
+        self.root.as_ref().expect("explicit project source")
     }
     pub fn root_optional(&self) -> Option<&CapturedDocument> {
         self.root.as_ref()
+    }
+    /// The environment file the project links for the host language. It
+    /// declares the lock and functions; their paths resolve from it.
+    pub fn environment_file(&self) -> Option<&CapturedDocument> {
+        self.environment_file.as_ref()
     }
     pub fn captures(&self) -> &[DocumentCapture] {
         &self.captures
@@ -79,6 +97,7 @@ impl PreparedEnvironment {
         OwnedEnvironment {
             origins: self.origins,
             root: Some(self.root),
+            environment_file: self.environment_file,
             captures: self.captures,
             lock: self.lock,
             environment: self.environment.into_execution(),
@@ -95,6 +114,7 @@ impl OwnedEnvironment {
                 codelists: Vec::new(),
             },
             root: None,
+            environment_file: None,
             captures: Vec::new(),
             lock: None,
             environment: yamaa_core::build::without_environment(host),
@@ -129,6 +149,7 @@ impl OwnedEnvironment {
                 inventory_captured: self.inventory_captured,
                 origins: self.origins,
                 root: self.root,
+                environment_file: self.environment_file,
                 captures: self.captures,
                 lock: self.lock,
             },
@@ -137,11 +158,16 @@ impl OwnedEnvironment {
     pub fn origins(&self) -> &SourceOrigins {
         &self.origins
     }
+    /// The caller-supplied project file.
     pub fn root(&self) -> &CapturedDocument {
-        self.root.as_ref().expect("explicit environment source")
+        self.root.as_ref().expect("explicit project source")
     }
     pub fn root_optional(&self) -> Option<&CapturedDocument> {
         self.root.as_ref()
+    }
+    /// The environment file the project links for the host language.
+    pub fn environment_file(&self) -> Option<&CapturedDocument> {
+        self.environment_file.as_ref()
     }
     pub fn captures(&self) -> &[DocumentCapture] {
         &self.captures
@@ -168,17 +194,22 @@ pub enum Failure<E> {
     Rejected(Box<RejectedEnvironment<E>>),
 }
 
-pub(crate) struct Decoder(pub(crate) Arc<CapturedSchema>);
+pub(crate) struct Decoder(pub(crate) ProjectSchemas);
 impl application::ProjectDecodePort for Decoder {
     type Error = Error;
     type Document = CapturedDocument;
     fn decode(&mut self, source: Source, target: DecodeTarget) -> Result<CapturedDocument, Error> {
         match target {
-            DecodeTarget::Environment => self.0.prepare_structural(source),
+            DecodeTarget::Project => self.0.project.prepare_structural(source),
+            DecodeTarget::Environment => self.0.environment.prepare_structural(source),
             DecodeTarget::Function => self
                 .0
+                .environment
                 .prepare_named_class(source, "function_definition_class"),
-            DecodeTarget::Codelist => self.0.prepare_named_class(source, "codelist_source_class"),
+            DecodeTarget::Codelist => self
+                .0
+                .project
+                .prepare_named_class(source, "codelist_source_class"),
         }
     }
     fn document(document: &CapturedDocument) -> &yamaa_core::schema::Document {
@@ -189,15 +220,15 @@ impl application::ProjectDecodePort for Decoder {
     }
 }
 
-/// Decode through the captured schema codec; the engine owns ordering and admission.
+/// Decode through the captured schema codecs; the engine owns ordering and admission.
 pub fn prepare<P: ProjectCapturePort>(
-    schema: Arc<CapturedSchema>,
+    schemas: ProjectSchemas,
     source: Source,
     host: Language,
     port: &mut P,
 ) -> Result<PreparedEnvironment, Failure<P::Error>> {
     adapt_preparation(application::prepare(
-        &mut Decoder(schema),
+        &mut Decoder(schemas),
         source,
         host,
         port,
@@ -212,6 +243,7 @@ pub(crate) fn adapt_preparation<E>(
         Ok(prepared) => Ok(PreparedEnvironment {
             origins: prepared.origins,
             root: prepared.root,
+            environment_file: prepared.environment_file,
             captures: prepared.captures,
             lock: prepared.lock,
             environment: prepared.environment,

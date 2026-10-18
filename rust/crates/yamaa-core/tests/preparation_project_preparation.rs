@@ -57,9 +57,31 @@ mod preparation {
                 ])]),
             )])
         }
-        fn environment(language: Tree, inline_result: &str) -> Tree {
+        /// The caller-supplied project file links one environment file per host
+        /// language and declares its own codelists, study and sections.
+        fn project(inline_value: Tree) -> Tree {
             Tree::map(vec![
-                ("language", language),
+                (
+                    "environments",
+                    Tree::map(vec![
+                        ("python", Tree::text("python/environment.yaml")),
+                        ("r", Tree::text("r/environment.yaml")),
+                    ]),
+                ),
+                (
+                    "codelists",
+                    Tree::List(vec![
+                        codelist("INLINE", inline_value),
+                        Tree::text("ct.yaml"),
+                    ]),
+                ),
+                ("study", Tree::Scalar(N::Null)),
+                ("adam", Tree::Scalar(N::Null)),
+            ])
+        }
+        /// A linked environment file holds only installed code: a lock and functions.
+        fn environment(inline_result: &str) -> Tree {
+            Tree::map(vec![
                 ("lock", Tree::text("lockfile")),
                 (
                     "functions",
@@ -69,15 +91,6 @@ mod preparation {
                         ("last", Tree::text("last.yaml")),
                     ]),
                 ),
-                (
-                    "codelists",
-                    Tree::List(vec![
-                        codelist("INLINE", Tree::text("F")),
-                        Tree::text("ct.yaml"),
-                    ]),
-                ),
-                ("study", Tree::Scalar(N::Null)),
-                ("adam", Tree::Scalar(N::Null)),
             ])
         }
         fn source(identity: &str, bytes: &[u8]) -> Source {
@@ -93,8 +106,13 @@ mod preparation {
             Failure<Opaque, MetadataDocument, Opaque>,
         >;
         struct Fixture {
+            host: Language,
             source: Source,
             root: Document,
+            environment: Document,
+            /// The linked environment file fails admission of its own
+            /// declarations, so none of its paths are requested.
+            environment_rejected: bool,
             log: EventLog,
             port: ScriptedMetadata<Opaque>,
             decoder: ScriptedMetadataDecoder<Opaque>,
@@ -103,13 +121,34 @@ mod preparation {
             fn new() -> Self {
                 let log = EventLog::default();
                 Self {
-                    source: source("/author/env.yaml", b"held root bytes"),
-                    root: environment(Tree::text("python"), "7").document(),
+                    host: Language::Python,
+                    source: source("/author/project.yaml", b"held root bytes"),
+                    root: project(Tree::text("F")).document(),
+                    environment: environment("7").document(),
+                    environment_rejected: false,
                     port: ScriptedMetadata::new(log.clone()),
                     decoder: ScriptedMetadataDecoder::new(log.clone()),
                     log,
                 }
             }
+            /// The authored link and held identity of the host's environment file.
+            fn linked(&self) -> (&'static str, &'static str) {
+                match self.host {
+                    Language::Python => {
+                        ("python/environment.yaml", "/held/python/environment.yaml")
+                    }
+                    Language::R => ("r/environment.yaml", "/held/r/environment.yaml"),
+                }
+            }
+            /// Link an environment file whose inline function fails scalar admission.
+            fn reject_environment(&mut self) {
+                self.environment = environment("9223372036854775808").document();
+                self.environment_rejected = true;
+            }
+            /// Script the root decode and every capture in request order: the
+            /// linked environment file (0), its lock (1) and function files (2, 3),
+            /// then the project codelist file (4). Lock and function paths resolve
+            /// from the environment file and are requested only after it admits.
             fn script(
                 &mut self,
                 failing: &[usize],
@@ -119,30 +158,60 @@ mod preparation {
             ) -> Vec<usize> {
                 self.decoder.steps.push_back(MetadataDecodeStep {
                     source: self.source.clone(),
-                    target: DecodeTarget::Environment,
+                    target: DecodeTarget::Project,
                     outcome: Ok(self.root.clone()),
                 });
                 self.port.interrupt_if = |error| error.0.as_ref() == "interrupt";
+                let project = self.source.identity.clone();
+                let (linked, held) = self.linked();
+                let unlinked = self.environment_rejected
+                    || failing.contains(&0)
+                    || decoding == Some(0)
+                    || malformed == Some(0);
                 let mut payloads = vec![];
-                for (index, (kind, written, identity, raw)) in [
-                    (Kind::Lock, "lockfile", "/held/uv.lock", b"uv".as_slice()),
+                for (index, (kind, declaring, written, identity, raw)) in [
+                    (
+                        Kind::Environment,
+                        project.as_str(),
+                        linked,
+                        held,
+                        b"environment".as_slice(),
+                    ),
+                    (
+                        Kind::Lock,
+                        held,
+                        "lockfile",
+                        "/held/uv.lock",
+                        b"uv".as_slice(),
+                    ),
                     (
                         Kind::Function,
+                        held,
                         "first.yaml",
                         "/held/first.yaml",
                         b"first".as_slice(),
                     ),
                     (
                         Kind::Function,
+                        held,
                         "last.yaml",
                         "/held/last.yaml",
                         b"last".as_slice(),
                     ),
-                    (Kind::Codelist, "ct.yaml", "/held/ct.yaml", b"ct".as_slice()),
+                    (
+                        Kind::Codelist,
+                        project.as_str(),
+                        "ct.yaml",
+                        "/held/ct.yaml",
+                        b"ct".as_slice(),
+                    ),
                 ]
                 .into_iter()
                 .enumerate()
                 {
+                    if unlinked && (1..=3).contains(&index) {
+                        continue;
+                    }
                     let failed = failing.contains(&index) || interrupt == Some(index);
                     let outcome = if failed {
                         let error = Opaque(
@@ -168,27 +237,27 @@ mod preparation {
                     };
                     self.port.steps.push_back(MetadataCaptureStep {
                         kind,
-                        declaring_source: self.source.identity.clone(),
+                        declaring_source: declaring.into(),
                         written: written.into(),
                         outcome,
                     });
                     if kind != Kind::Lock && !failed && malformed != Some(index) {
-                        let target = if kind == Kind::Function {
-                            DecodeTarget::Function
-                        } else {
-                            DecodeTarget::Codelist
+                        let (target, document) = match kind {
+                            Kind::Environment => {
+                                (DecodeTarget::Environment, self.environment.clone())
+                            }
+                            Kind::Function => (DecodeTarget::Function, function("7").document()),
+                            _ => (
+                                DecodeTarget::Codelist,
+                                codelist("SEX", Tree::text("F")).document(),
+                            ),
                         };
                         let outcome = if decoding == Some(index) {
                             let error = Opaque(written.into());
                             payloads.push(error.0.as_ptr() as usize);
                             Err(error)
                         } else {
-                            Ok(if kind == Kind::Function {
-                                function("7")
-                            } else {
-                                codelist("SEX", Tree::text("F"))
-                            }
-                            .document())
+                            Ok(document)
                         };
                         self.decoder.steps.push_back(MetadataDecodeStep {
                             source: source(identity, raw),
@@ -201,12 +270,13 @@ mod preparation {
             }
             fn run(self) -> Outcome {
                 let Self {
+                    host,
                     source,
                     mut decoder,
                     mut port,
                     ..
                 } = self;
-                prepare(&mut decoder, source, Language::Python, &mut port)
+                prepare(&mut decoder, source, host, &mut port)
             }
         }
         fn effects(log: &EventLog) -> Vec<String> {
@@ -223,7 +293,9 @@ mod preparation {
         }
         fn full_effects() -> Vec<String> {
             [
-                "decode Environment /author/env.yaml",
+                "decode Project /author/project.yaml",
+                "capture python/environment.yaml",
+                "decode Environment /held/python/environment.yaml",
                 "capture lockfile",
                 "capture first.yaml",
                 "decode Function /held/first.yaml",
@@ -248,14 +320,25 @@ mod preparation {
                     .unwrap()
                     .nodes()
                     .as_ptr();
-                let function_nodes = fixture.decoder.steps[1]
+                let environment_nodes = fixture.decoder.steps[1]
                     .outcome
                     .as_ref()
                     .unwrap()
                     .nodes()
                     .as_ptr();
+                let function_nodes = fixture.decoder.steps[2]
+                    .outcome
+                    .as_ref()
+                    .unwrap()
+                    .nodes()
+                    .as_ptr();
+                let Reply::Document(linked) = fixture.port.steps[0].outcome.as_ref().unwrap()
+                else {
+                    panic!()
+                };
+                let environment_bytes = linked.bytes.as_ptr();
                 let Reply::Lock { source: lock, .. } =
-                    fixture.port.steps[0].outcome.as_ref().unwrap()
+                    fixture.port.steps[1].outcome.as_ref().unwrap()
                 else {
                     panic!()
                 };
@@ -265,6 +348,11 @@ mod preparation {
                 assert_eq!(effects(&log), full_effects());
                 assert_eq!(prepared.root.source.bytes.as_ptr(), root_bytes);
                 assert_eq!(prepared.root.document.nodes().as_ptr(), root_nodes);
+                // The linked environment file is retained beside, not among, the captures.
+                let linked = prepared.environment_file.as_ref().unwrap();
+                assert_eq!(linked.source.identity, "/held/python/environment.yaml");
+                assert_eq!(linked.source.bytes.as_ptr(), environment_bytes);
+                assert_eq!(linked.document.nodes().as_ptr(), environment_nodes);
                 assert_eq!(
                     prepared.captures[0].document.document.nodes().as_ptr(),
                     function_nodes
@@ -287,14 +375,19 @@ mod preparation {
                         &Origin::Codelist(1)
                     ]
                 );
+                // The `environments` key states the environment file's language.
+                let draft = prepared.environment.draft();
+                assert_eq!(draft.language, Some(Language::Python));
+                assert_eq!(draft.lock.as_ref().unwrap().written, "lockfile");
+                assert_eq!(draft.lock.as_ref().unwrap().kind, LockKind::Uv);
                 assert_eq!(
-                    prepared.environment.draft().functions.as_ref().unwrap()[0].tests[0].result,
+                    draft.functions.as_ref().unwrap()[0].tests[0].result,
                     Value::Int(7)
                 );
-                let cases = prepared.environment.draft().functions.as_ref().unwrap()[0]
-                    .tests
-                    .as_ptr();
+                let cases = draft.functions.as_ref().unwrap()[0].tests.as_ptr();
                 let execution = prepared.environment.into_execution();
+                assert_eq!(execution.language(), Some(Language::Python));
+                assert_eq!(execution.undeclared_language(), None);
                 assert_eq!(execution.functions()[0].definition().tests.as_ptr(), cases);
                 assert_eq!(
                     execution
@@ -307,6 +400,60 @@ mod preparation {
                         .value,
                     Value::Str("F".into())
                 );
+                assert!(execution.catalogue().get("INLINE").is_some());
+            }
+        }
+
+        #[test]
+        fn lock_and_function_paths_resolve_from_the_environment_file_and_codelists_from_the_project(
+        ) {
+            for (host, linked, held) in [
+                (
+                    Language::Python,
+                    "python/environment.yaml",
+                    "/held/python/environment.yaml",
+                ),
+                (
+                    Language::R,
+                    "r/environment.yaml",
+                    "/held/r/environment.yaml",
+                ),
+            ] {
+                let mut fixture = Fixture::new();
+                fixture.host = host;
+                fixture.script(&[], None, None, None);
+                let log = fixture.log.clone();
+                // The shared fixture's uv lock and callables admit only under
+                // Python; either outcome resolves each path from the same file.
+                assert_eq!(fixture.run().is_ok(), host == Language::Python);
+                let requests = log
+                    .events()
+                    .iter()
+                    .filter_map(|event| match event {
+                        Event::MetadataCapture {
+                            kind,
+                            declaring_source,
+                            written,
+                        } => Some((*kind, declaring_source.clone(), written.clone())),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>();
+                let project = "/author/project.yaml";
+                assert_eq!(
+                    requests,
+                    [
+                        (Kind::Environment, project, linked),
+                        (Kind::Lock, held, "lockfile"),
+                        (Kind::Function, held, "first.yaml"),
+                        (Kind::Function, held, "last.yaml"),
+                        (Kind::Codelist, project, "ct.yaml"),
+                    ]
+                    .map(|(kind, declaring, written)| (
+                        kind,
+                        declaring.to_string(),
+                        written.to_string()
+                    ))
+                );
             }
         }
 
@@ -317,7 +464,7 @@ mod preparation {
             let address = error.0.as_ptr();
             fixture.decoder.steps.push_back(MetadataDecodeStep {
                 source: fixture.source.clone(),
-                target: DecodeTarget::Environment,
+                target: DecodeTarget::Project,
                 outcome: Err(error),
             });
             let log = fixture.log.clone();
@@ -325,13 +472,16 @@ mod preparation {
                 panic!()
             };
             assert_eq!(error.0.as_ptr(), address);
-            assert_eq!(effects(&log), ["decode Environment /author/env.yaml"]);
+            assert_eq!(effects(&log), ["decode Project /author/project.yaml"]);
         }
 
         #[test]
         fn root_scalar_failures_keep_the_exact_context_arena_and_precede_all_dependencies() {
             let mut fixture = Fixture::new();
-            fixture.root = environment(Tree::boolean(true), "7").document();
+            let mut root = project(Tree::text("F"));
+            root.set(&["environments", "python"], Tree::boolean(true));
+            root.set(&["environments", "r"], Tree::boolean(false));
+            fixture.root = root.document();
             fixture.script(&[], None, None, None);
             let nodes = fixture.decoder.steps[0]
                 .outcome
@@ -346,46 +496,113 @@ mod preparation {
             };
             assert_eq!(root.document.nodes().as_ptr(), nodes);
             assert_eq!(root.source.bytes.as_ptr(), bytes);
-            assert_eq!(findings.len(), 2);
-            assert!(findings
-                .iter()
-                .all(|finding| finding.path == "language"
-                    && finding.kind == ScalarKind::NormalizedShape));
-            assert_eq!(findings[0].path, "language");
-            assert_eq!(findings[0].kind, ScalarKind::NormalizedShape);
+            // The whole project decodes, although each host reads only its own key.
+            assert_eq!(
+                findings
+                    .iter()
+                    .map(|finding| (finding.path.as_str(), finding.kind))
+                    .collect::<Vec<_>>(),
+                [
+                    ("environments.python", ScalarKind::NormalizedShape),
+                    ("environments.r", ScalarKind::NormalizedShape)
+                ]
+            );
             assert_eq!(root.document.nodes()[findings[0].node], N::Boolean(true));
-            assert_eq!(effects(&log), ["decode Environment /author/env.yaml"]);
+            assert_eq!(root.document.nodes()[findings[1].node], N::Boolean(false));
+            assert_eq!(effects(&log), ["decode Project /author/project.yaml"]);
         }
 
         #[test]
-        fn invalid_inline_function_scalar_precedes_every_capture() {
+        fn invalid_inline_codelist_scalar_precedes_every_capture() {
             let mut fixture = Fixture::new();
-            fixture.root = environment(Tree::text("python"), "9223372036854775808").document();
+            fixture.root = project(Tree::integer("9223372036854775808")).document();
             fixture.script(&[], None, None, None);
             let log = fixture.log.clone();
             let Err(Failure::RootScalar { root, findings }) = fixture.run() else {
                 panic!()
             };
             assert_eq!(findings.len(), 1);
-            assert_eq!(findings[0].path, "functions.inline.tests[0].result");
+            assert_eq!(findings[0].path, "codelists[0].codelists[0].items[0].value");
             assert_eq!(findings[0].kind, ScalarKind::IntegerRange);
             assert_eq!(
                 root.document.nodes()[findings[0].node],
                 N::Integer("9223372036854775808".into())
             );
-            assert_eq!(effects(&log), ["decode Environment /author/env.yaml"]);
+            assert_eq!(effects(&log), ["decode Project /author/project.yaml"]);
+        }
+
+        #[test]
+        fn invalid_inline_function_scalar_rejects_its_environment_file_before_its_lock_and_functions(
+        ) {
+            let mut fixture = Fixture::new();
+            fixture.reject_environment();
+            fixture.script(&[], None, None, None);
+            let nodes = fixture.decoder.steps[1]
+                .outcome
+                .as_ref()
+                .unwrap()
+                .nodes()
+                .as_ptr();
+            let log = fixture.log.clone();
+            let Err(Failure::Rejected(rejected)) = fixture.run() else {
+                panic!()
+            };
+            assert_eq!(
+                effects(&log),
+                [
+                    "decode Project /author/project.yaml",
+                    "capture python/environment.yaml",
+                    "decode Environment /held/python/environment.yaml",
+                    "capture ct.yaml",
+                    "decode Codelist /held/ct.yaml",
+                ]
+            );
+            assert_eq!(rejected.sources.len(), 1);
+            let failure = &rejected.sources[0];
+            assert_eq!(failure.origin, Origin::Environment(Language::Python));
+            assert_eq!(failure.written, "python/environment.yaml");
+            let CaptureFailure::Scalar { document, findings } = &failure.error else {
+                panic!()
+            };
+            assert_eq!(document.source.identity, "/held/python/environment.yaml");
+            assert_eq!(document.document.nodes().as_ptr(), nodes);
+            assert_eq!(findings.len(), 1);
+            assert_eq!(findings[0].path, "functions.inline.tests[0].result");
+            assert_eq!(findings[0].kind, ScalarKind::IntegerRange);
+            assert_eq!(
+                document.document.nodes()[findings[0].node],
+                N::Integer("9223372036854775808".into())
+            );
+            assert!(rejected.environment_file.is_none());
+            assert!(rejected.lock.is_none());
+            assert_eq!(
+                rejected
+                    .captures
+                    .iter()
+                    .map(|c| &c.origin)
+                    .collect::<Vec<_>>(),
+                [&Origin::Codelist(1)]
+            );
+            assert_eq!(rejected.draft.language, Some(Language::Python));
+            assert!(rejected.draft.lock.is_none() && rejected.draft.functions.is_none());
+            assert!(rejected.origins.functions.is_empty());
+            assert!(rejected.admission.is_none());
         }
 
         #[test]
         fn independent_capture_failures_collect_in_declaration_order_without_relabeling() {
             let mut fixture = Fixture::new();
-            let addresses = fixture.script(&[0, 1, 2, 3], None, None, None);
+            let addresses = fixture.script(&[1, 2, 3, 4], None, None, None);
             let root_bytes = fixture.source.bytes.as_ptr();
             let log = fixture.log.clone();
             let Err(Failure::Rejected(rejected)) = fixture.run() else {
                 panic!()
             };
             assert_eq!(rejected.root.source.bytes.as_ptr(), root_bytes);
+            assert_eq!(
+                rejected.environment_file.as_ref().unwrap().source.identity,
+                "/held/python/environment.yaml"
+            );
             assert_eq!(
                 rejected
                     .sources
@@ -419,7 +636,9 @@ mod preparation {
             assert_eq!(
                 effects(&log),
                 [
-                    "decode Environment /author/env.yaml",
+                    "decode Project /author/project.yaml",
+                    "capture python/environment.yaml",
+                    "decode Environment /held/python/environment.yaml",
                     "capture lockfile",
                     "capture first.yaml",
                     "capture last.yaml",
@@ -429,12 +648,65 @@ mod preparation {
         }
 
         #[test]
+        fn environment_file_capture_failure_keeps_its_origin_and_skips_only_its_own_paths() {
+            let mut fixture = Fixture::new();
+            let addresses = fixture.script(&[0, 4], None, None, None);
+            let log = fixture.log.clone();
+            let Err(Failure::Rejected(rejected)) = fixture.run() else {
+                panic!()
+            };
+            assert_eq!(
+                rejected
+                    .sources
+                    .iter()
+                    .map(|f| (f.origin.clone(), f.written.as_str()))
+                    .collect::<Vec<_>>(),
+                [
+                    (
+                        Origin::Environment(Language::Python),
+                        "python/environment.yaml"
+                    ),
+                    (Origin::Codelist(1), "ct.yaml")
+                ]
+            );
+            for (failure, address) in rejected.sources.iter().zip(addresses) {
+                let CaptureFailure::Port(error) = &failure.error else {
+                    panic!()
+                };
+                assert_eq!(error.0.as_ptr() as usize, address);
+            }
+            assert!(rejected.environment_file.is_none());
+            assert!(rejected.lock.is_none());
+            assert!(rejected.captures.is_empty());
+            // The key still states the language although no code was read.
+            assert_eq!(rejected.draft.language, Some(Language::Python));
+            assert!(rejected.draft.lock.is_none() && rejected.draft.functions.is_none());
+            assert_eq!(rejected.draft.codelists.len(), 1);
+            assert!(rejected.origins.functions.is_empty());
+            assert_eq!(rejected.origins.codelists, [0]);
+            assert!(rejected.admission.is_none());
+            assert_eq!(
+                effects(&log),
+                [
+                    "decode Project /author/project.yaml",
+                    "capture python/environment.yaml",
+                    "capture ct.yaml"
+                ]
+            );
+        }
+
+        #[test]
         fn every_capture_interrupt_keeps_original_payload_and_aborts_the_later_authority() {
             for (index, expected_origin, written) in [
-                (0, Origin::Lock, "lockfile"),
-                (1, Origin::Function("first".into()), "first.yaml"),
-                (2, Origin::Function("last".into()), "last.yaml"),
-                (3, Origin::Codelist(1), "ct.yaml"),
+                (
+                    0,
+                    Origin::Environment(Language::Python),
+                    "python/environment.yaml",
+                ),
+                (1, Origin::Lock, "lockfile"),
+                (2, Origin::Function("first".into()), "first.yaml"),
+                (3, Origin::Function("last".into()), "last.yaml"),
+                (4, Origin::Codelist(1), "ct.yaml"),
             ] {
                 let mut fixture = Fixture::new();
                 let address = fixture.script(&[], Some(index), None, None)[0];
@@ -461,30 +733,44 @@ mod preparation {
 
         #[test]
         fn dependency_decoder_errors_preserve_original_payload_and_later_independent_sources() {
-            for index in 1..4 {
+            for (index, origin, captures) in [
+                (0, Origin::Environment(Language::Python), 1),
+                (2, Origin::Function("first".into()), 2),
+                (3, Origin::Function("last".into()), 2),
+                (4, Origin::Codelist(1), 2),
+            ] {
                 let mut fixture = Fixture::new();
                 let address = fixture.script(&[], None, Some(index), None)[0];
                 let log = fixture.log.clone();
                 let Err(Failure::Rejected(rejected)) = fixture.run() else {
                     panic!()
                 };
-                assert_eq!(effects(&log), full_effects());
+                let mut expected = full_effects();
+                if index == 0 {
+                    // A rejected environment file requests none of its own paths.
+                    expected.drain(3..8);
+                }
+                assert_eq!(effects(&log), expected);
                 assert_eq!(rejected.sources.len(), 1);
+                assert_eq!(rejected.sources[0].origin, origin);
                 let CaptureFailure::Structural(error) = &rejected.sources[0].error else {
                     panic!()
                 };
                 assert_eq!(error.0.as_ptr() as usize, address);
-                assert_eq!(rejected.captures.len(), 2);
+                assert_eq!(rejected.captures.len(), captures);
                 assert!(rejected.admission.is_none());
             }
         }
 
         #[test]
         fn dependency_scalar_failures_retain_exact_document_and_qualify_later_sources() {
-            for index in [1, 3] {
+            for (index, origin) in [
+                (2, Origin::Function("first".into())),
+                (4, Origin::Codelist(1)),
+            ] {
                 let mut fixture = Fixture::new();
                 fixture.script(&[], None, None, None);
-                fixture.decoder.steps[index].outcome = Ok(if index == 1 {
+                fixture.decoder.steps[index].outcome = Ok(if index == 2 {
                     function("9223372036854775808")
                 } else {
                     codelist("SEX", Tree::integer("9223372036854775808"))
@@ -501,6 +787,7 @@ mod preparation {
                     panic!()
                 };
                 assert_eq!(effects(&log), full_effects());
+                assert_eq!(rejected.sources[0].origin, origin);
                 let CaptureFailure::Scalar { document, findings } = &rejected.sources[0].error
                 else {
                     panic!()
@@ -510,7 +797,7 @@ mod preparation {
                 assert_eq!(findings[0].kind, ScalarKind::IntegerRange);
                 assert_eq!(
                     findings[0].path,
-                    if index == 1 {
+                    if index == 2 {
                         "tests[0].result"
                     } else {
                         "codelists[0].items[0].value"
@@ -527,7 +814,7 @@ mod preparation {
 
         #[test]
         fn native_reply_kind_refusals_collect_without_decoding_the_wrong_kind() {
-            for index in 0..4 {
+            for index in 0..5 {
                 let mut fixture = Fixture::new();
                 fixture.script(&[], None, None, Some(index));
                 let log = fixture.log.clone();
@@ -541,31 +828,45 @@ mod preparation {
                 ));
                 assert!(rejected.admission.is_none());
                 let mut expected = full_effects();
-                if index > 0 {
-                    expected.remove([0, 3, 5, 7][index]);
+                match index {
+                    // Neither the environment file nor its own paths are read.
+                    0 => {
+                        expected.drain(2..8);
+                    }
+                    // A lock reply has no document decode to skip.
+                    1 => {}
+                    _ => {
+                        expected.remove([5, 7, 9][index - 2]);
+                    }
                 }
                 assert_eq!(effects(&log), expected);
             }
         }
 
         #[test]
-        fn language_and_lock_kind_findings_are_core_owned_after_capture_without_code_authority() {
+        fn lock_kind_and_function_findings_are_core_owned_after_capture_without_code_authority() {
             let mut fixture = Fixture::new();
-            fixture.root = environment(Tree::text("r"), "7").document();
+            fixture.host = Language::R;
             fixture.script(&[], None, None, None);
             let log = fixture.log.clone();
             let Err(Failure::Rejected(rejected)) = fixture.run() else {
                 panic!()
             };
-            assert_eq!(effects(&log), full_effects());
-            // The shared Python fixture's three callables are also invalid under R.
+            // Only the host's own `environments` key is read.
+            let mut expected = full_effects();
+            expected[1] = "capture r/environment.yaml".into();
+            expected[2] = "decode Environment /held/r/environment.yaml".into();
+            assert_eq!(effects(&log), expected);
+            assert_eq!(rejected.host, Language::R);
+            assert_eq!(
+                rejected.environment_file.as_ref().unwrap().source.identity,
+                "/held/r/environment.yaml"
+            );
+            assert_eq!(rejected.draft.language, Some(Language::R));
+            // The shared Python fixture's uv lock and three callables are invalid under R.
             assert_eq!(
                 rejected.admission,
                 Some(vec![
-                    Finding::LanguageMismatch {
-                        declared: Language::R,
-                        host: Language::Python,
-                    },
                     Finding::LockKindMismatch {
                         language: Language::R,
                         actual: LockKind::Uv,
@@ -587,42 +888,112 @@ mod preparation {
         }
 
         #[test]
-        fn empty_environment_has_only_root_decode_and_no_dependency_or_activation_authority() {
+        fn empty_project_has_only_root_decode_and_no_dependency_or_activation_authority() {
             let log = EventLog::default();
             let root = source("empty.yaml", b"{}");
             let mut decoder = ScriptedMetadataDecoder::<Opaque>::new(log.clone());
             decoder.steps.push_back(MetadataDecodeStep {
                 source: root.clone(),
-                target: DecodeTarget::Environment,
+                target: DecodeTarget::Project,
                 outcome: Ok(Tree::map(vec![]).document()),
             });
             let mut port = ScriptedMetadata::<Opaque>::new(log.clone());
             let prepared = prepare(&mut decoder, root, Language::Python, &mut port).unwrap();
-            assert_eq!(effects(&log), ["decode Environment empty.yaml"]);
+            assert_eq!(effects(&log), ["decode Project empty.yaml"]);
+            assert!(prepared.environment_file.is_none());
+            assert_eq!(prepared.environment.draft().language, None);
             assert!(prepared.environment.draft().functions.is_none());
             assert!(prepared.captures.is_empty());
             assert!(prepared.lock.is_none());
+            assert_eq!(
+                prepared.environment.into_execution().undeclared_language(),
+                Some(Language::Python)
+            );
         }
 
         #[test]
-        fn explicitly_empty_functions_keep_presence_and_original_independent_root_findings() {
+        fn a_project_without_an_environment_for_the_host_leaves_other_languages_unread() {
+            for (host, other) in [(Language::Python, "r"), (Language::R, "python")] {
+                let log = EventLog::default();
+                let root = source("project.yaml", b"held project");
+                let mut decoder = ScriptedMetadataDecoder::<Opaque>::new(log.clone());
+                decoder.steps.push_back(MetadataDecodeStep {
+                    source: root.clone(),
+                    target: DecodeTarget::Project,
+                    outcome: Ok(Tree::map(vec![
+                        (
+                            "environments",
+                            Tree::map(vec![(other, Tree::text("other/environment.yaml"))]),
+                        ),
+                        (
+                            "codelists",
+                            Tree::List(vec![codelist("SEX", Tree::text("F"))]),
+                        ),
+                    ])
+                    .document()),
+                });
+                let mut port = ScriptedMetadata::<Opaque>::new(log.clone());
+                let prepared = prepare(&mut decoder, root, host, &mut port).unwrap();
+                assert_eq!(effects(&log), ["decode Project project.yaml"]);
+                assert!(prepared.environment_file.is_none());
+                assert!(prepared.captures.is_empty() && prepared.lock.is_none());
+                let draft = prepared.environment.draft();
+                assert_eq!(draft.language, None);
+                assert!(draft.lock.is_none() && draft.functions.is_none());
+                assert_eq!(draft.codelists.len(), 1);
+                assert_eq!(prepared.origins.codelists, [0]);
+                let execution = prepared.environment.into_execution();
+                assert_eq!(execution.host(), host);
+                assert_eq!(execution.undeclared_language(), Some(host));
+                assert!(execution.catalogue().get("SEX").is_some());
+            }
+        }
+
+        #[test]
+        fn explicitly_empty_functions_keep_presence_without_a_lock() {
             let log = EventLog::default();
-            let root = source("empty.yaml", b"functions: {}");
+            let root = source("project.yaml", b"environments: {python: environment.yaml}");
+            let linked = source("/held/environment.yaml", b"functions: {}");
             let mut decoder = ScriptedMetadataDecoder::<Opaque>::new(log.clone());
             decoder.steps.push_back(MetadataDecodeStep {
                 source: root.clone(),
+                target: DecodeTarget::Project,
+                outcome: Ok(Tree::map(vec![(
+                    "environments",
+                    Tree::map(vec![("python", Tree::text("environment.yaml"))]),
+                )])
+                .document()),
+            });
+            decoder.steps.push_back(MetadataDecodeStep {
+                source: linked.clone(),
                 target: DecodeTarget::Environment,
                 outcome: Ok(Tree::map(vec![("functions", Tree::map(vec![]))]).document()),
             });
             let mut port = ScriptedMetadata::<Opaque>::new(log.clone());
-            let Err(Failure::Rejected(rejected)) =
-                prepare(&mut decoder, root, Language::Python, &mut port)
-            else {
-                panic!()
-            };
-            assert_eq!(effects(&log), ["decode Environment empty.yaml"]);
-            assert_eq!(rejected.draft.functions, Some(vec![]));
-            assert_eq!(rejected.admission, Some(vec![Finding::MissingLanguage]));
+            port.steps.push_back(MetadataCaptureStep {
+                kind: Kind::Environment,
+                declaring_source: "project.yaml".into(),
+                written: "environment.yaml".into(),
+                outcome: Ok(Reply::Document(linked)),
+            });
+            let prepared = prepare(&mut decoder, root, Language::Python, &mut port).unwrap();
+            assert_eq!(
+                effects(&log),
+                [
+                    "decode Project project.yaml",
+                    "capture environment.yaml",
+                    "decode Environment /held/environment.yaml"
+                ]
+            );
+            assert_eq!(prepared.environment.draft().functions, Some(vec![]));
+            assert_eq!(
+                prepared.environment.draft().language,
+                Some(Language::Python)
+            );
+            assert!(prepared.lock.is_none());
+            let execution = prepared.environment.into_execution();
+            assert!(execution.functions_present());
+            assert_eq!(execution.undeclared_language(), None);
         }
 
         #[test]
@@ -656,7 +1027,7 @@ mod preparation {
         {
             let mut fixture = Fixture::new();
             fixture.script(&[], None, None, None);
-            fixture.port.steps[0].outcome = Ok(Reply::Lock {
+            fixture.port.steps[1].outcome = Ok(Reply::Lock {
                 source: source("/held/uv.lock", &vec![b' '; Limits::SPEC_BYTES + 1]),
                 kind: LockKind::Uv,
             });
@@ -667,6 +1038,7 @@ mod preparation {
             assert_eq!(effects(&log), full_effects());
             assert!(rejected.lock.is_none());
             assert_eq!(rejected.sources.len(), 1);
+            assert_eq!(rejected.sources[0].origin, Origin::Lock);
             let CaptureFailure::Limit(limit) = &rejected.sources[0].error else {
                 panic!("the dependency failure must retain the fixed size boundary")
             };
@@ -1710,7 +2082,7 @@ mod preparation {
                             "environment_class",
                             V::List(vec![
                                 field("schema_version", "str", true),
-                                field("language", "str", false),
+                                field("lock", "str", false),
                             ]),
                         ),
                         (
@@ -2042,7 +2414,7 @@ mod preparation {
             let schema = schema(false);
             let raw = document(V::map(vec![
                 ("schema_version", V::text("1.0")),
-                ("language", V::text("python")),
+                ("lock", V::text("uv.lock")),
             ]));
             let expected = raw.clone();
             let pointer = raw.nodes().as_ptr();

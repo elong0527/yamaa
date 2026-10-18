@@ -1357,126 +1357,41 @@ verification_severity:
 "#),
 ];
 #[rustfmt::skip]
-pub(super) const ENVIRONMENT_MODULES: &[(&str, &str)] = &[
-    ("schema_environment.yaml", r#"version: '1.0'
+pub(super) const PROJECT_MODULES: &[(&str, &str)] = &[
+    ("schema_project.yaml", r#"version: '1.0'
+# See REQ-1331.
 includes:
 - schema_shared.yaml
-environment_class:
+project_class:
 - schema_version:
     type: str
     required: true
-    description: See REQ-1080.
-- language:
-    type: str
-    values:
-    - python
-    - r
-    description: See REQ-1080.
-- lock:
-    type: project_path
-    description: See REQ-1080.
-- functions:
-    type: dict[identifier, function_definition]
-    description: See REQ-1080.
+    description: See REQ-1335.
+- environments:
+    type: environments_class
+    description: See REQ-1335.
 - codelists:
     type: list[codelist_source]
-    description: See REQ-1080.
+    description: See REQ-1335.
 - study:
     type: study_class
-    description: See REQ-1080.
+    description: See REQ-1335.
 - sdtm:
     type: submission_section_class
-    description: See REQ-1080.
+    description: See REQ-1335.
 - adam:
     type: submission_section_class
-    description: See REQ-1080.
+    description: See REQ-1335.
 - send:
     type: submission_section_class
-    description: See REQ-1080.
-function_definition:
-  type:
-  - project_path
-  - function_definition_class
-  description: See REQ-1083.
-function_definition_class:
-- function:
-    type: qualified_callable
-    required: true
-    description: See REQ-1083.
-- description:
-    type: str
-    required: true
-    min_length: 1
-    description: See REQ-1083.
-- params:
-    type: list[function_parameter_class]
-    required: true
-    description: See REQ-1083.
-- returns:
-    type: column_type
-    required: true
-    description: See REQ-1083.
-- may_return_missing:
-    type: bool
-    default: false
-    description: See REQ-1083.
-- comparison_decimals:
-    type: int
-    default: 4
-    description: See REQ-1083.
-- tests:
-    type: list[function_test_class]
-    required: true
-    description: See REQ-1083.
-function_parameter_class:
-- name:
-    type: identifier
-    required: true
-    description: See REQ-1083.
-- type:
-    type: function_param_type
-    required: true
-    description: See REQ-1083.
-- required:
-    type: bool
-    default: true
-    description: See REQ-1083.
-- default:
-    type: function_value
-    description: See REQ-1083.
-- accepts_missing:
-    type: bool
-    default: false
-    description: See REQ-1083.
-qualified_callable:
-  type: str
-  min_length: 1
-  description: See REQ-0669.
-function_case_id:
-  type: str
-  pattern: ^[a-z][a-z0-9-]*$
-  description: See REQ-1083.
-function_coverage:
-  type: str
-  pattern: ^(normal|boundary|nullable-output|numeric-comparison|(default|accepted-missing|short-circuit-missing|boolean-true|boolean-false):[A-Za-z_][A-Za-z0-9_]*)$
-  description: See REQ-1083.
-function_test_class:
-- id:
-    type: function_case_id
-    required: true
-    description: See REQ-1083.
-- covers:
-    type: list[function_coverage]
-    required: true
-    description: See REQ-1083.
-- args:
-    type: dict[identifier, function_value]
-    required: true
-    description: See REQ-1083.
-- result:
-    type: function_value
-    required: true
-    description: See REQ-1083.
+    description: See REQ-1335.
+environments_class:
+- python:
+    type: project_path
+    description: See REQ-1336.
+- r:
+    type: project_path
+    description: See REQ-1336.
 codelist_source:
   type:
   - project_path
@@ -1653,20 +1568,19 @@ standard_name:
   - SENDIG-GENETOX
   description: See REQ-1074.
 submission_section_class:
-- standard:
-    type: implementation_guide_class
-    required: true
 - specs:
     type: list[path]
     required: true
+- standard:
+    type: implementation_guide_class
 - define:
     type: path
-    required: true
 - documents:
     type: list[document_class]
-- dataset_json:
-    type: bool
-    default: false
+- datasets:
+    type: str
+    values:
+    - json
 - context:
     type: str
     default: Submission
@@ -1725,6 +1639,160 @@ document_class:
     required: true
     min_length: 1
     description: See REQ-1065.
+"#),
+    ("schema_shared.yaml", r#"version: "1.0"
+
+# See REQ-1150.
+
+column_type:
+    type: str
+    values: [str, int, float, date, datetime]
+
+literal_value:
+    type: [str, int, float, bool, "null"]
+    description: See REQ-1149.
+
+path:
+    type: str
+    min_length: 1
+
+project_path:
+    type: str
+    min_length: 1
+    description: See REQ-1151.
+
+path_base:
+    type: str
+    values: [declaring, entry]
+    description: See REQ-0780.
+
+identifier:
+    type: str
+    pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
+    description: See REQ-1046.
+
+
+function_param_type:
+    type: str
+    values: [str, int, float, bool, date, datetime]
+
+function_string_literal_class:
+    - literal: {type: str, required: true}
+
+function_date_literal_class:
+    - date: {type: str, required: true}
+
+function_datetime_literal_class:
+    - datetime: {type: str, required: true}
+
+function_value:
+    type:
+        - literal_value
+        - function_date_literal_class
+        - function_datetime_literal_class
+
+"#),
+];
+#[rustfmt::skip]
+pub(super) const ENVIRONMENT_MODULES: &[(&str, &str)] = &[
+    ("schema_environment.yaml", r#"version: '1.0'
+includes:
+- schema_shared.yaml
+environment_class:
+- schema_version:
+    type: str
+    required: true
+    description: See REQ-1080.
+- lock:
+    type: project_path
+    description: See REQ-1080.
+- functions:
+    type: dict[identifier, function_definition]
+    description: See REQ-1080.
+function_definition:
+  type:
+  - project_path
+  - function_definition_class
+  description: See REQ-1083.
+function_definition_class:
+- function:
+    type: qualified_callable
+    required: true
+    description: See REQ-1083.
+- description:
+    type: str
+    required: true
+    min_length: 1
+    description: See REQ-1083.
+- params:
+    type: list[function_parameter_class]
+    required: true
+    description: See REQ-1083.
+- returns:
+    type: column_type
+    required: true
+    description: See REQ-1083.
+- may_return_missing:
+    type: bool
+    default: false
+    description: See REQ-1083.
+- comparison_decimals:
+    type: int
+    default: 4
+    description: See REQ-1083.
+- tests:
+    type: list[function_test_class]
+    required: true
+    description: See REQ-1083.
+function_parameter_class:
+- name:
+    type: identifier
+    required: true
+    description: See REQ-1083.
+- type:
+    type: function_param_type
+    required: true
+    description: See REQ-1083.
+- required:
+    type: bool
+    default: true
+    description: See REQ-1083.
+- default:
+    type: function_value
+    description: See REQ-1083.
+- accepts_missing:
+    type: bool
+    default: false
+    description: See REQ-1083.
+qualified_callable:
+  type: str
+  min_length: 1
+  description: See REQ-0669.
+function_case_id:
+  type: str
+  pattern: ^[a-z][a-z0-9-]*$
+  description: See REQ-1083.
+function_coverage:
+  type: str
+  pattern: ^(normal|boundary|nullable-output|numeric-comparison|(default|accepted-missing|short-circuit-missing|boolean-true|boolean-false):[A-Za-z_][A-Za-z0-9_]*)$
+  description: See REQ-1083.
+function_test_class:
+- id:
+    type: function_case_id
+    required: true
+    description: See REQ-1083.
+- covers:
+    type: list[function_coverage]
+    required: true
+    description: See REQ-1083.
+- args:
+    type: dict[identifier, function_value]
+    required: true
+    description: See REQ-1083.
+- result:
+    type: function_value
+    required: true
+    description: See REQ-1083.
 "#),
     ("schema_shared.yaml", r#"version: "1.0"
 

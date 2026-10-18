@@ -11,6 +11,7 @@ pub(crate) fn text(value: &str) -> V {
 pub(crate) fn origins() -> LockOrigins<'static> {
     LockOrigins {
         source: "study/environment.yaml",
+        entry: "study/project.yaml",
         lock_source: "held/uv.lock",
         written: "../uv.lock",
     }
@@ -87,7 +88,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             diagnostic.context,
             [
                 ("source".into(), text("study/environment.yaml")),
-                ("entry".into(), text("study/environment.yaml")),
+                ("entry".into(), text("study/project.yaml")),
                 ("lock_source".into(), text("held/uv.lock")),
                 ("lock".into(), text("../uv.lock")),
                 ("package".into(), text("program")),

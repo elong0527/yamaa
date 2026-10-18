@@ -37,7 +37,7 @@ pub fn resolve(
         },
         host,
     )
-    .map_err(|error| crate::project_application::selection_failure(&error, host))?;
+    .map_err(|error| crate::project_application::selection_failure(&error))?;
     let artifact = match selected {
         yamaa_core::build::Prepared::Plain(prepared) => prepared.resolved_specification(),
         yamaa_core::build::Prepared::Ordinary(prepared) => prepared.resolved_specification(),

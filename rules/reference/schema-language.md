@@ -12,11 +12,13 @@ status: normative
 
 <a id="req-0242"></a>
 
-**REQ-0242.** `schema.yaml` is the specification-bundle entry point, and
-`schema_environment.yaml` is [Project functions](../operations/functions.md)'s independent project-environment-bundle
+**REQ-0242.** `schema.yaml` is the specification-bundle entry point,
+`schema_project.yaml` is the [Project file](../specification/project.md)'s
+independent project-bundle entry point, and `schema_environment.yaml` is
+[Project functions](../operations/functions.md)'s independent environment-bundle
 entry point. Every schema document is a YAML 1.2 mapping containing
 `version`, an optional `includes`, and declarations. A document may be
-included by both entry points; declaration uniqueness applies within each
+included by several entry points; declaration uniqueness applies within each
 loaded bundle.
 
 <a id="req-0243"></a>
@@ -35,8 +37,8 @@ in the bundle.
 
 <a id="req-0245"></a>
 
-**REQ-0245.** A specification or project environment declares its entry-point
-bundle version in `schema_version`. The declared version must equal the bundle
+**REQ-0245.** A specification, project file or environment file declares its
+entry-point bundle version in `schema_version`. The declared version must equal the bundle
 version. Any other version is an error, and the document is not validated
 against the bundle.
 

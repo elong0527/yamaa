@@ -107,8 +107,6 @@ pub fn environment(extensible: bool) -> ExecutionEnvironment {
             language: None,
             lock: None,
             functions: None,
-            has_study: false,
-            submissions: vec![],
             codelists: vec![Source {
                 standard: None,
                 codelists: vec![Codelist {

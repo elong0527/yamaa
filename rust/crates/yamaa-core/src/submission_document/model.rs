@@ -17,7 +17,7 @@ pub enum FieldName {
     Specs,
     Define,
     Documents,
-    DatasetJson,
+    Datasets,
     Context,
     XmlLang,
     FileOid,
@@ -46,7 +46,7 @@ impl FieldName {
             Self::Specs => "specs",
             Self::Define => "define",
             Self::Documents => "documents",
-            Self::DatasetJson => "dataset_json",
+            Self::Datasets => "datasets",
             Self::Context => "context",
             Self::XmlLang => "xml_lang",
             Self::FileOid => "file_oid",
@@ -97,7 +97,6 @@ pub enum Kind {
     ExpectedMapping,
     ExpectedSequence,
     ExpectedText,
-    ExpectedBoolean,
     NonTextKey,
     UnknownField,
     EmptyText,
@@ -185,6 +184,10 @@ pub enum Context {
     Other,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DatasetFormat {
+    Json,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DocumentKind {
     AnnotatedCrf,
     Supplemental,
@@ -224,11 +227,15 @@ pub struct DocumentReference {
 pub struct Section {
     pub family: Submission,
     pub origin: Origin,
-    pub standard: ImplementationGuide,
     pub specs: Field<Vec<Field<String>>>,
-    pub define: Field<String>,
+    /// Required only when Define-XML composes the section.
+    pub standard: Option<ImplementationGuide>,
+    /// Required only when Define-XML composes the section.
+    pub define: Option<Field<String>>,
     pub documents: Field<Vec<DocumentReference>>,
-    pub dataset_json: Field<bool>,
+    /// The dataset container a submission writes beside Define-XML; absent
+    /// writes only the Define-XML document.
+    pub datasets: Option<Field<DatasetFormat>>,
     pub context: Field<Context>,
     pub xml_lang: Field<String>,
     pub file_oid: Option<Field<String>>,
@@ -268,6 +275,12 @@ pub enum VersionError {
     EmptyOverride,
 }
 impl Section {
+    /// Whether the submission writes one Dataset-JSON file per specification.
+    pub fn dataset_json(&self) -> bool {
+        self.datasets
+            .as_ref()
+            .is_some_and(|datasets| datasets.value == DatasetFormat::Json)
+    }
     /// The calling package supplies its actual installed version. Core's own
     /// crate version is never a substitute for the Python or R generator.
     pub fn source_versions<'a>(

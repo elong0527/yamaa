@@ -23,6 +23,6 @@ sdtm:
   standard: {name: SDTMIG, version: '3.4', status: Final}
   specs: [submission-spec.yaml]
   define: define.xml
-  dataset_json: true
+  datasets: json
   context: Other
   source_system_version: '1.0'
