@@ -133,7 +133,11 @@ Its sources must exist and validate. Its derivations
 must be complete. Its `schema` links are validated recursively. The dependency
 graph must be acyclic. The producer completes before the consumer reads the
 artifact named by `path`. A link cannot name the consuming specification or one
-already above it in the workflow.
+already above it in the workflow. A project run builds each specification of
+its run scope once instead: a producer in the run scope runs before its
+consumers under [REQ-1342](../specification/project.md#req-1342), and a
+producer outside it is not executed, its saved artifact being read under
+[REQ-1343](../specification/project.md#req-1343).
 
 <a id="req-0522"></a>
 
