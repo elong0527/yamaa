@@ -247,56 +247,6 @@ impl std::fmt::Display for ScalarDecodeError {
 
 impl std::error::Error for ScalarDecodeError {}
 
-/// Convert an integer to binary64 only when the value is exactly retained.
-pub fn exact_float(value: &Scalar) -> Result<Scalar, ScalarDecodeError> {
-    let core = value.clone().into_core();
-    let converted = yamaa_adapters::scalar_bytes::exact_float(&core)
-        .map_err(|reason| ScalarDecodeError { reason })?;
-    Ok(Scalar::from_core(converted))
-}
-
-/// Admit a closed infix/unary spelling before host operands are converted.
-pub fn scalar_operator_code(name: &str, unary: bool) -> Option<i32> {
-    yamaa_adapters::scalar_bytes::operator_code(name, unary)
-}
-
-/// Apply a closed scalar operator using shared numeric comparison semantics.
-/// Codes: 1 +, 2 -, 3 *, 4 /, 5 MOD; 6 unary+, 7 unary-; 8 ==, 9 !=,
-/// 10 <, 11 <=, 12 >, 13 >=. No vector recycling or implicit conversion.
-pub fn apply_scalar_operator(
-    code: i32,
-    left: &Scalar,
-    right: Option<&Scalar>,
-) -> Result<Scalar, ScalarOperatorError> {
-    let left = left.clone().into_core();
-    let right = right.map(|value| value.clone().into_core());
-    let applied = yamaa_adapters::scalar_bytes::operate(code, &left, right.as_ref())
-        .map_err(|message| ScalarOperatorError { message })?;
-    Ok(Scalar::from_core(applied))
-}
-
-/// A scalar operator failure, carrying its owned diagnostic message.
-#[non_exhaustive]
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ScalarOperatorError {
-    message: String,
-}
-
-impl ScalarOperatorError {
-    /// Return the owned operator failure message.
-    pub fn message(&self) -> &str {
-        &self.message
-    }
-}
-
-impl std::fmt::Display for ScalarOperatorError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.message)
-    }
-}
-
-impl std::error::Error for ScalarOperatorError {}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -439,22 +389,5 @@ mod tests {
             EncodedScalar::decode(2, &f64::NAN.to_le_bytes()).unwrap(),
             Scalar::Missing
         );
-    }
-
-    #[test]
-    fn scalar_operators_match_shared_semantics() {
-        assert_eq!(scalar_operator_code("+", false), Some(1));
-        assert_eq!(scalar_operator_code("-", true), Some(7));
-        assert_eq!(scalar_operator_code("%", false), None);
-        let one = Scalar::Int(1);
-        let two = Scalar::Int(2);
-        assert_eq!(
-            apply_scalar_operator(1, &one, Some(&two)).unwrap(),
-            Scalar::Int(3)
-        );
-        assert!(apply_scalar_operator(6, &one, Some(&two)).is_err());
-        assert_eq!(exact_float(&Scalar::Int(3)).unwrap(), Scalar::Float(3.0));
-        assert!(exact_float(&Scalar::Int(i64::MAX)).is_err());
-        assert!(exact_float(&Scalar::Str("3".into())).is_err());
     }
 }

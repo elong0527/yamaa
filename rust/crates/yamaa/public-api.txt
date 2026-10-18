@@ -82,7 +82,6 @@ yamaa::Run: pub use yamaa::api::Run
 yamaa::SaveOutcome: pub use yamaa::engine::SaveOutcome
 yamaa::Scalar: pub use yamaa::scalar::Scalar
 yamaa::ScalarDecodeError: pub use yamaa::scalar::ScalarDecodeError
-yamaa::ScalarOperatorError: pub use yamaa::scalar::ScalarOperatorError
 yamaa::ScalarRef: pub use yamaa::scalar::ScalarRef
 yamaa::SchemaRef: pub use yamaa::table::SchemaRef
 yamaa::Severity: pub use yamaa::diagnostic::Severity
@@ -115,7 +114,6 @@ yamaa::api::Run::issues: pub fn issues(&self) -> Table
 yamaa::api::Run::output: pub fn output(&self) -> Option<&Table>
 yamaa::api::Run::report: pub fn report(&self) -> Option<&Table>
 yamaa::api::Run::save: pub fn save(&mut self) -> Result<(), Failure>
-yamaa::apply_scalar_operator: pub use yamaa::scalar::apply_scalar_operator
 yamaa::cancel::CancellationToken: impl CancellationToken
 yamaa::cancel::CancellationToken: pub struct CancellationToken [derive(Clone, Debug, Default)] [non_exhaustive]
 yamaa::cancel::CancellationToken::cancel: pub fn cancel(&self)
@@ -309,7 +307,6 @@ yamaa::error::TableError: impl TableError
 yamaa::error::TableError: pub struct TableError [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::error::TableError::code: pub fn code(&self) -> &'static str
 yamaa::error::TableError::message: pub fn message(&self) -> &str
-yamaa::exact_float: pub use yamaa::scalar::exact_float
 yamaa::functions::Argument: pub struct Argument<'a> [derive(Clone, Copy, Debug, PartialEq)] [non_exhaustive]
 yamaa::functions::Argument::name: pub name: &'a str
 yamaa::functions::Argument::value: pub value: ScalarRef<'a>
@@ -495,11 +492,6 @@ yamaa::scalar::ScalarDecodeError: impl std::error::Error for ScalarDecodeError
 yamaa::scalar::ScalarDecodeError: impl std::fmt::Display for ScalarDecodeError
 yamaa::scalar::ScalarDecodeError: pub struct ScalarDecodeError [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::scalar::ScalarDecodeError::reason: pub fn reason(self) -> &'static str
-yamaa::scalar::ScalarOperatorError: impl ScalarOperatorError
-yamaa::scalar::ScalarOperatorError: impl std::error::Error for ScalarOperatorError
-yamaa::scalar::ScalarOperatorError: impl std::fmt::Display for ScalarOperatorError
-yamaa::scalar::ScalarOperatorError: pub struct ScalarOperatorError [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::scalar::ScalarOperatorError::message: pub fn message(&self) -> &str
 yamaa::scalar::ScalarRef: impl<'a> ScalarRef<'a>
 yamaa::scalar::ScalarRef: pub enum ScalarRef<'a> [derive(Clone, Copy, Debug, PartialEq)] [non_exhaustive]
 yamaa::scalar::ScalarRef::Bool: Bool(bool)
@@ -510,10 +502,6 @@ yamaa::scalar::ScalarRef::Int: Int(i64)
 yamaa::scalar::ScalarRef::Missing: Missing
 yamaa::scalar::ScalarRef::Str: Str(&'a str)
 yamaa::scalar::ScalarRef::from_owned: pub fn from_owned(value: &'a Scalar) -> Self
-yamaa::scalar::apply_scalar_operator: pub fn apply_scalar_operator(code: i32, left: &Scalar, right: Option<&Scalar>) -> Result<Scalar, ScalarOperatorError>
-yamaa::scalar::exact_float: pub fn exact_float(value: &Scalar) -> Result<Scalar, ScalarDecodeError>
-yamaa::scalar::scalar_operator_code: pub fn scalar_operator_code(name: &str, unary: bool) -> Option<i32>
-yamaa::scalar_operator_code: pub use yamaa::scalar::scalar_operator_code
 yamaa::style_same_value: pub fn style_same_value(before: &[u8], after: &[u8]) -> bool
 yamaa::table::Array: pub use arrow_array::Array
 yamaa::table::DataType: pub use arrow_schema::DataType
