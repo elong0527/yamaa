@@ -758,7 +758,7 @@
           "spec_paths": [
             "columns.F.derivation.flag.condition"
           ],
-          "requirement": "REQ-0190",
+          "requirement": "REQ-1244",
           "context": {
             "expected": "str",
             "actual": "int"

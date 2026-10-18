@@ -1,4 +1,5 @@
-//! ISO 8601 fixed-length durations. Decimal components retain exact whole seconds.
+//! ISO 8601 fixed-length durations. Decimal components combine exactly before
+//! the one conversion to binary64.
 use super::ElapsedUnit;
 use crate::value::Value;
 use num_bigint::BigUint;
@@ -83,18 +84,10 @@ fn parse(text: &str) -> Option<(bool, BigUint, usize)> {
     (components > 0 && (!time || time_components > 0)).then_some((negative, total, places))
 }
 
+/// The duration as a `float` in `unit` for every unit (EXPR-14): the exact
+/// seconds rounded once to binary64, then divided by the unit's seconds.
 pub(super) fn read(text: &str, unit: ElapsedUnit) -> Option<Value> {
     let (negative, numerator, places) = parse(text)?;
-    let denominator = BigUint::from(10u32).pow(u32::try_from(places).ok()?);
-    if unit == ElapsedUnit::Second && &numerator % &denominator == BigUint::from(0u32) {
-        let magnitude = &numerator / &denominator;
-        let text = if negative {
-            format!("-{magnitude}")
-        } else {
-            magnitude.to_string()
-        };
-        return text.parse::<i64>().ok().map(Value::Int);
-    }
     let seconds = format!("{}{numerator}e-{places}", if negative { "-" } else { "" })
         .parse::<f64>()
         .ok()?;

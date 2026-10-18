@@ -232,37 +232,21 @@ A match value in a `key` mapping may be an expression instead of a variable.
 It is evaluated against the current row, its value is the match operand for
 that position, and a missing result matches nothing, as a missing variable
 does. The pair's comparison ([LOOKUP-5](#lookup-5)) uses the expression's
-static result type, read from the table below: the operation's ordinary
-non-missing result, before any local `missing`, `invalid` or `no_match`
-replacement. An operation the table omits is judged at run time.
+result type ([EXPR-14](expressions.md#expr-14)) before any record is matched;
+a result type decided per value is compared when each value is matched.
 
-Evidence: `adam-adlb-supplb-padded-key`, `adam-adlb-end-of-treatment`.
+Evidence: `adam-adlb-supplb-padded-key`, `adam-adlb-end-of-treatment`, `rust/crates/yamaa-core/tests/relations_aggregate_compiler.rs::key_expressions_compare_by_their_one_result_type_before_matching`.
 Replaces: REQ-1259.
 
-The table is the complete set of operations with a static type for this
-comparison. The operation rules define those results; the table fixes which of
-them are checked before matching.
-
-| Static comparison type | Operations |
-| --- | --- |
-| Referenced variable's type | `source` |
-| Declared YAML scalar's type (`str`, `int`, `float`, or `bool`); a missing literal has no static type | `literal` |
-| `date` | `impute` with `type: date`, `to_date` |
-| `datetime` | `impute` with `type: datetime` |
-| `int` | `diff` with `type: date`, `rank`, `row_number`, `study_day`, `to_epoch_day` |
-| `float` | `round_half_away_from_zero` |
-| `str` | `baseline_flag`, `cut`, `imputation_flag`, `precision`, `str_case`, `str_extract`, `str_pad`, `str_replace`, `str_template` |
-| Numeric (`int` or `float`) | `compute` |
-
-For `compute`, either possible result type compares with `int` and `float`
-under [VALUE-19](values.md#value-19); `float` represents that numeric
-comparison class in a validation diagnostic, without changing the computed
-value. Every other expression operation states no static type for this check,
-even when a particular invocation's inputs could reveal one. For example,
-`mapping`, `case`, `greatest` and `least` select values whose types depend on
-their inputs, and such pairs are judged by whether their match values compare
-at run time. A non-missing local replacement is likewise subject to run-time
-comparability when it is used as a match operand.
+The result type is the expression's ordinary non-missing result: a local
+`missing`, `invalid` or `no_match` replacement takes no part, and a non-missing
+replacement is compared when it is used as a match operand. A pair fails
+before matching only when none of the types the result can take compares with
+the key column's type under [VALUE-19](values.md#value-19), and the failure
+names that result type. `N + 1` over an `int` `N` is an `int`, a `mapping` to
+integer values an `int`, and `greatest` over an `int` and a `float` a number of
+either type, which compares with a numeric key column and with no text one.
+`{literal: null}` is always missing and compares with every column.
 
 <a id="lookup-7"></a>
 
@@ -404,7 +388,8 @@ The value and every stated bound must be mutually comparable: `int` and
 `float` compare exactly under [VALUE-19](values.md#value-19), and every
 other runtime type must match exactly, with no operand converted. A mismatch
 fails as `incomparable_range_types` before any record is compared, reporting
-the runtime types of the value and the stated bounds.
+the runtime types of the value and the stated bounds. A derived bound has its
+derivation's declared or result type ([LOOKUP-15](#lookup-15)).
 
 <a id="lookup-10"></a>
 
@@ -517,9 +502,10 @@ the expression language of row-template `derivations:`, evaluated in
 declaration order over the dataset's stored fields and the derivations
 declared before each one. A typed entry converts each result to its declared
 type before anything later reads it, and an untyped entry keeps its raw
-result. The derived values augment each donor record before `filter`,
-matching, `order_by` selection and `columns` projection, and behave there like
-stored fields.
+result, its field taking the expression's result type
+([EXPR-14](expressions.md#expr-14)). The derived values augment each donor
+record before `filter`, matching, `order_by` selection and `columns`
+projection, and behave there like stored fields.
 
 Fails: `unknown_field`, `duplicate_derivation`.
 Evidence: `schema-lookup-intermediate-derived-filter`, `schema-lookup-intermediate-correlated-derive`, `schema-window-intermediate-rank`.
@@ -548,8 +534,9 @@ derivations:
 
 `WEEK 02` thus yields the integer `2` before numeric matching. `check` reports
 incompatible key types under [VALUE-2](values.md#value-2) when the
-declared source types and derivation result types establish the mismatch
-without reading data.
+declared source types and the derivations' result types establish the
+mismatch without reading data, and a typed entry whose result type can never
+convert to its declared type fails under [VALUE-24](values.md#value-24).
 
 A bare name reads the dataset's stored field or an earlier derived name. A
 qualified name may read the intermediate's dataset, the current input record
@@ -852,7 +839,9 @@ through the binding's declared `type`, and a date becomes an integer only
 through an operation such as `to_epoch_day` in the binding's own derivation;
 an `aggregate` or `compute` expression never parses text or dates itself. Each
 binding's evaluated value converts to its declared `type` under
-[VALUE-3](values.md#value-3). Text that is not convertible to the
+[VALUE-3](values.md#value-3), and a binding whose result type
+([EXPR-14](expressions.md#expr-14)) can never convert to it fails validation
+under [VALUE-24](values.md#value-24). Text that is not convertible to the
 declared numeric type fails as a conversion failure under
 [VALUE-3](values.md#value-3), answered by a declared `unconvertible`
 handler and fatal otherwise. A missing value stays missing without attempting

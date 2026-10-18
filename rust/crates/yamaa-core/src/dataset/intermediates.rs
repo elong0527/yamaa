@@ -71,11 +71,13 @@ pub struct IntermediateDerivations {
     pub plan: std::rc::Rc<DatasetPlan>,
     pub current: Vec<CurrentField>,
     pub stored_columns: usize,
-    pub driver_kinds: Vec<Option<ColumnType>>,
     /// Explicitly typed results convert before completing their donor slot.
     pub typed_columns: Vec<usize>,
 }
 impl IntermediateDerivations {
+    /// A field's type: a stored field's, a typed derivation's declared type,
+    /// or an untyped derivation's one result type (EXPR-14), and none for a
+    /// result type decided per value.
     pub fn column_kind(&self, column: usize) -> Option<ColumnType> {
         self.plan.output_kind(column)
     }

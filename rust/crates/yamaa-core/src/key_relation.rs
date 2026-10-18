@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 
 use crate::{
     reference_binding::{Catalog, Error, Field},
+    result_type::ResultType,
     value::ColumnType,
 };
 
@@ -22,31 +23,6 @@ pub enum Inference {
     Keys {
         keys: Vec<usize>,
     },
-}
-
-/// A known expression type can be boolean even though declared columns cannot.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ComparableType {
-    Column(ColumnType),
-    Boolean,
-}
-
-impl From<ColumnType> for ComparableType {
-    /// Keep the closed declared-column vocabulary separate from expression booleans.
-    fn from(value: ColumnType) -> Self {
-        Self::Column(value)
-    }
-}
-
-/// REQ-0005 permits exact types or the int/float family, never boolean/numeric coercion.
-pub fn comparable(left: ComparableType, right: ComparableType) -> bool {
-    use ColumnType::{Float, Int};
-    use ComparableType::Column;
-    left == right
-        || matches!(
-            (left, right),
-            (Column(Int), Column(Float)) | (Column(Float), Column(Int))
-        )
 }
 
 /// Infer REQ-0150 keys in output order and report the first REQ-0151 type mismatch.
@@ -93,7 +69,7 @@ pub(crate) fn infer_partial(
     for (key, (name, expected)) in keys.iter().zip(output_types).enumerate() {
         if let Some(&actual) = right.get(name) {
             if let (Some(expected), Some(actual)) = (expected, actual) {
-                if !comparable(expected.into(), actual.into()) {
+                if !ResultType::from(expected).comparable(actual.into()) {
                     return Ok(Inference::Incompatible {
                         key,
                         expected,
@@ -126,16 +102,19 @@ mod tests {
             [false, false, false, true, false],
             [false, false, false, false, true],
         ];
+        let comparable =
+            |left: ResultType, right: ResultType| left.comparable(right) && right.comparable(left);
         for (i, left) in kinds.iter().enumerate() {
             for (j, right) in kinds.iter().enumerate() {
                 assert_eq!(comparable((*left).into(), (*right).into()), expected[i][j]);
             }
         }
+        let boolean = ResultType::of(crate::value::ValueType::Bool);
         for kind in kinds {
-            assert!(!comparable(ComparableType::Boolean, kind.into()));
-            assert!(!comparable(kind.into(), ComparableType::Boolean));
+            assert!(!comparable(boolean, kind.into()));
+            assert!(!comparable(kind.into(), boolean));
         }
-        assert!(comparable(ComparableType::Boolean, ComparableType::Boolean));
+        assert!(comparable(boolean, boolean));
     }
 
     fn catalog() -> Catalog {

@@ -395,7 +395,7 @@ fn scalar_key_snapshots_read_current_once_and_apply_only_the_authored_missing_ha
                 identifier: "BASE.K".into(),
             }],
             schema(&[("BASE.K", ColumnType::Str)]),
-            Some(ColumnType::Str.into()),
+            crate::result_type::ResultType::STR,
         )
         .unwrap(),
     ))));

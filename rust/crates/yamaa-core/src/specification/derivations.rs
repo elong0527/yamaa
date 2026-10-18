@@ -80,11 +80,16 @@ pub(super) fn prepare_value_with_driver(
         )?)),
         "flag" => Operation::Flag(flags::prepare(d, payload, &result_path)?),
         "literal" => Operation::Literal(literal(d, payload, &result_path)?),
-        "function" => Operation::ProjectFunction(
-            *project
-                .and_then(|p| p.nodes.get(&payload))
-                .ok_or(PrepareError::Internal)?,
-        ),
+        "function" => {
+            let project = project.ok_or(PrepareError::Internal)?;
+            Operation::ProjectFunction {
+                call: *project.nodes.get(&payload).ok_or(PrepareError::Internal)?,
+                returns: *project
+                    .returns
+                    .get(&payload)
+                    .ok_or(PrepareError::Internal)?,
+            }
+        }
         "case" => Operation::Case(cases::prepare(
             d,
             payload,
@@ -335,7 +340,13 @@ fn bind_row_compute(
         findings,
     )?;
     (findings.len() == before)
-        .then(|| BoundNumeric::new(compiled.clone(), bindings).map(Expression::Compute))
+        .then(|| {
+            BoundNumeric::new(
+                static_types::typed(compiled, named, catalog, secondary, intermediates),
+                bindings,
+            )
+            .map(Expression::Compute)
+        })
         .transpose()
         .map_err(BindError::InvalidNumericBinding)
 }
@@ -471,8 +482,12 @@ fn bind_row_case(
                 }
                 if findings.len() == before {
                     Some(
-                        BoundPredicate::new_contextual(plan.clone(), bindings, Vec::new())
-                            .map_err(BindError::InvalidPredicateBinding)?,
+                        BoundPredicate::new_contextual(
+                            static_types::typed(plan, named, catalog, secondary, intermediates),
+                            bindings,
+                            Vec::new(),
+                        )
+                        .map_err(BindError::InvalidPredicateBinding)?,
                     )
                 } else {
                     None
@@ -741,7 +756,7 @@ pub(super) fn bind_row(
             secondary,
             intermediates,
         ),
-        Operation::ProjectFunction(call) => bind_row_project(
+        Operation::ProjectFunction { call, .. } => bind_row_project(
             call, catalog, driver, row, phase, available, edges, findings, project,
         ),
         Operation::Case(branches) => bind_row_case(
@@ -902,7 +917,7 @@ pub(super) fn bind_selection(
 
 pub(super) fn calls(operation: &Operation, result: &mut Vec<usize>) {
     match operation {
-        Operation::ProjectFunction(call) => result.push(*call),
+        Operation::ProjectFunction { call, .. } => result.push(*call),
         Operation::Aggregate(operation) => operation.calls(result),
         Operation::Case(branches) => {
             for branch in branches {

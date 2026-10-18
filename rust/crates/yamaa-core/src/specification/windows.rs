@@ -237,6 +237,19 @@ impl Declaration {
             filter,
         })
     }
+    /// EXPR-14: ranks and row numbers are `int` and a baseline flag `str`;
+    /// a neighbor or carried value has its source's type.
+    pub(super) fn result_type(
+        &self,
+        input: &dyn Fn(&str) -> crate::result_type::ResultType,
+    ) -> crate::result_type::ResultType {
+        use crate::result_type::ResultType;
+        match &self.kind {
+            Kind::RowNumber | Kind::Competition | Kind::Dense => ResultType::INT,
+            Kind::RowValue { source, .. } | Kind::Locf { source, .. } => input(source),
+            Kind::BaselineFlag { .. } => ResultType::STR,
+        }
+    }
     pub fn bind(
         &self,
         catalog: &Catalog,
@@ -421,7 +434,11 @@ impl Declaration {
             }
         }
         let filter = filter
-            .map(|plan| BoundPredicate::new(plan.clone(), bindings))
+            .map(|plan| {
+                let typed = plan
+                    .typed(|name| crate::result_type::ResultType::declared(catalog.type_of(name)));
+                BoundPredicate::new(typed, bindings)
+            })
             .transpose()
             .map_err(BindError::InvalidPredicateBinding)?;
         let window = Window {

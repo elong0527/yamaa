@@ -303,11 +303,27 @@
           "name": "duration_value_integer_boundaries",
           "spec": "schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECONDS\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: SECONDS\n  type: int\n  label: SECONDS\n  derivation:\n    duration_value:\n      source: RAW.TEXT\n      unit: second\n",
           "inputs": {
-            "input.csv": "ID,TEXT\n1,P106751991167300DT15H30M7S\n2,-P106751991167300DT15H30M8S\n3,P104249991374DT7H36M33S\n"
+            "input.csv": "ID,TEXT\n2,-P106751991167300DT15H30M8S\n3,P104249991374DT7H36M33S\n"
           },
-          "csv": "ID,SECONDS\n1,9223372036854775807\n2,-9223372036854775808\n3,9007199254740993\n",
+          "csv": "ID,SECONDS\n2,-9223372036854775808\n3,9007199254740992\n",
           "check_issue": null,
           "run_issue": null,
+          "invalid_count": 0
+        },
+        {
+          "name": "duration_value_integer_overflow",
+          "spec": "schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - SECONDS\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: SECONDS\n  type: int\n  label: SECONDS\n  derivation:\n    duration_value:\n      source: RAW.TEXT\n      unit: second\n",
+          "inputs": {
+            "input.csv": "ID,TEXT\n1,P106751991167300DT15H30M7S\n"
+          },
+          "csv": null,
+          "check_issue": null,
+          "run_issue": {
+            "phase": "convert",
+            "condition": "conversion_failed",
+            "requirement": "REQ-0021",
+            "spec_path": "columns.SECONDS"
+          },
           "invalid_count": 0
         },
         {
