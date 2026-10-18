@@ -15,9 +15,11 @@ pub mod predicate_syntax;
 pub mod project_call_compiler;
 pub mod project_codelist_compiler;
 pub mod project_schemas;
+pub mod sas7bdat;
 pub mod schema_declaration;
 pub mod string_template_syntax;
 pub mod syntax_spans;
+pub mod xport;
 
 /// Construct an ordered schema independently of plan compilation.
 pub fn table_schema(columns: &[(&str, ColumnType)]) -> TableSchema {

@@ -285,13 +285,17 @@ mod tests {
         let mut bytes = b"PAR1".to_vec();
         bytes.extend(page);
         // Framing-only metadata: one row group, one column chunk, one row.
-        // Required Parquet schema details are deliberately the next decoder's
-        // responsibility; this fixture exercises framing, never a valid table.
+        // The one schema element holds only an empty name, the shortest
+        // element the native decoder accepts. Other required Parquet schema
+        // details are deliberately the next decoder's responsibility; this
+        // fixture exercises framing, never a valid table.
         let footer = [
             0x15,
             2,
             0x19,
             0x1c,
+            0x48,
+            0,
             0,
             0x16,
             2,
@@ -532,7 +536,7 @@ mod tests {
         assert_eq!(page.decoded_bytes, 4);
         assert_eq!(page.uncompressed_prefix, 0);
         assert!(page.compressed);
-        assert_eq!(admitted.metadata.len(), 26);
+        assert_eq!(admitted.metadata.len(), 28);
     }
 
     #[test]
@@ -564,7 +568,7 @@ mod tests {
     #[test]
     fn declared_row_boundary_is_checked_before_decoding_page_values() {
         let fixture = container(&page());
-        let footer_start = fixture.len() - 8 - 26;
+        let footer_start = fixture.len() - 8 - 28;
         for rows in [
             yamaa_core::limits::Limits::TABLE_ROWS - 1,
             yamaa_core::limits::Limits::TABLE_ROWS + 1,
@@ -576,10 +580,10 @@ mod tests {
                 value >>= 7;
             }
             encoded.push(value as u8);
-            let mut bytes = fixture[..footer_start + 6].to_vec();
+            let mut bytes = fixture[..footer_start + 8].to_vec();
             bytes.extend(&encoded);
-            bytes.extend(&fixture[footer_start + 7..fixture.len() - 8]);
-            bytes.extend((25u32 + encoded.len() as u32).to_le_bytes());
+            bytes.extend(&fixture[footer_start + 9..fixture.len() - 8]);
+            bytes.extend((27u32 + encoded.len() as u32).to_le_bytes());
             bytes.extend(b"PAR1");
             if rows <= yamaa_core::limits::Limits::TABLE_ROWS {
                 admit(&bytes).unwrap();

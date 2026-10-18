@@ -37,8 +37,10 @@ class SasSources(unittest.TestCase):
             before, after = map(bytes.fromhex, mutation["replace_hex"])
             self.assertEqual(payload.count(before), 1)
             payload = payload.replace(before, after, 1)
+        changes = mutation.get("set_bytes", [])
         if "set_byte" in mutation:
-            offset, value = mutation["set_byte"]
+            changes = [mutation["set_byte"], *changes]
+        for offset, value in changes:
             payload = payload[:offset] + bytes([value]) + payload[offset + 1 :]
         source.write_bytes(payload)
         spec = root / "spec.yaml"

@@ -27,13 +27,17 @@ from pandas-dev/pandas commit `d1a2fa7edf06aaf1e914b3202af25923c77e3a24`, paths
 truth for these two compression variants. `test_sas7bdat.py` identifies the
 RLE/RDC corruption offsets used in the test, independently of this reader.
 
-The deleted-record controls set either signal alone on `datetime.sas7bdat`.
-Byte 1040 set to 0x80 adds the deleted-rows flag to its mix page (type 0x0200).
-Byte 4668 set to 1 records one deleted record in its row-size subheader at
-offset 4640, beside its four stored records. Each is refused with cause
-`deleted_records`. In `rle.sas7bdat`, byte 66840 set to 0x05 marks the first
-compressed row deleted and byte 130620 set to 1 counts it; that file still fails
-as compression.
+The deleted-record controls edit `datetime.sas7bdat`. Byte 1040 set to 0x80
+adds the deleted-rows flag to its mix page (type 0x0200). That page's bitmap
+starts at byte 3764: page offset 184 for the first record, four 40-byte
+records, then the 2396 bytes of free space recorded at byte 1036. The bitmap
+holds zeros, so the flag alone deletes nothing. Byte 4668 set to 1 counts one
+deleted record in its row-size subheader at offset 4640, beside its four stored
+records; alone it leaves that deletion unmarked and is refused with cause
+`deleted_records`. With the flag, the count and byte 3764 set to 0x40, the
+second record is deleted and skipped. In `rle.sas7bdat`, byte 66840 set to 0x05
+marks the first compressed row deleted and byte 130620 set to 1 counts it; the
+other nine records equal the pandas truth.
 
 Expected host CSV bytes and typed tables are literal authored truth. No golden
 file is written by the candidate parser. New dependency licenses travel with

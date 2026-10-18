@@ -281,8 +281,13 @@ impl Declaration {
     }
     /// A driver field the window reads is a scalar source of each row it
     /// partitions or orders. Under grouped construction it must be a group key
-    /// (REQ-0067 for a row template, REQ-0107 at column level). Returns whether
-    /// any such read was refused.
+    /// (REQ-0067 for a row template, REQ-0107 at column level). A column-level
+    /// window spans every constructed row and reads the field by the position
+    /// of the record that built the row, in the input behind the first row
+    /// template. For a row grouped over another driver that position counts
+    /// the other driver's records, so the window keeps every grouped
+    /// template's `group_by` in scope there, not only those of the field's
+    /// own dataset. Returns whether any such read was refused.
     pub(super) fn group_findings(
         &self,
         catalog: &Catalog,
@@ -291,7 +296,20 @@ impl Declaration {
         phase: crate::reference_scope::Phase<'_>,
         findings: &mut Vec<BindFinding>,
     ) -> Result<bool, BindError> {
-        use crate::reference_scope::{self, Finding, Reach, Scope};
+        use crate::reference_scope::{self, Finding, Phase, Reach, Scope};
+        // The column phase checks groups only for a read of the window's
+        // driver, so attributing every group to it keeps them all in scope.
+        let spanned;
+        let phase = match phase {
+            Phase::Column { groups } => {
+                spanned = groups
+                    .iter()
+                    .map(|&(_, group)| (driver, group))
+                    .collect::<Vec<_>>();
+                Phase::Column { groups: &spanned }
+            }
+            phase => phase,
+        };
         let mut reads = Vec::new();
         match &self.kind {
             Kind::RowValue { source, .. } | Kind::Locf { source, .. } => {
