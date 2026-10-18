@@ -1345,9 +1345,7 @@ pub(super) fn admit_record_keys(
                     for read in key.value.reads() {
                         let port = match read {
                             crate::dataset::MatchRead::Record { .. } => 0,
-                            crate::dataset::MatchRead::SecondaryRecord { source, .. } => {
-                                source + 1
-                            }
+                            crate::dataset::MatchRead::SecondaryRecord { source, .. } => source + 1,
                             crate::dataset::MatchRead::Output { .. } => continue,
                         };
                         if drivers.iter().any(|&driver| driver != port)

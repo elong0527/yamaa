@@ -124,7 +124,10 @@ fn an_aggregate_key_reads_the_driver_of_every_row_that_evaluates_it() {
     // Home rows have no clinic record to read the device from.
     assert_eq!(
         run(specification(&column("CLINIC.DEVICE"), "", Some(""))),
-        refused("columns.NCAL.derivation.aggregate.key.DEVICE", "CLINIC.DEVICE")
+        refused(
+            "columns.NCAL.derivation.aggregate.key.DEVICE",
+            "CLINIC.DEVICE"
+        )
     );
     assert_eq!(
         run(specification(&nested("CLINIC.DEVICE"), "", Some(""))),
@@ -196,5 +199,8 @@ fn an_aggregate_range_read_before_its_window_completes_is_unsupported() {
     // 4..9 (20); ID 2's VAL 4 falls in its own 4..4 (30), and ID 1's 4..9
     // is not read for it.
     let fixture = Fixture::new(&specification("SRC.VAL"), &files);
-    assert_eq!(fixture.run(), Ok("ID,SEQ,WT\n1,1,10\n1,2,20\n2,1,30\n".into()));
+    assert_eq!(
+        fixture.run(),
+        Ok("ID,SEQ,WT\n1,1,10\n1,2,20\n2,1,30\n".into())
+    );
 }

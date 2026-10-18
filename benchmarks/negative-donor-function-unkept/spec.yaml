@@ -26,6 +26,8 @@ intermediates:
   - id: FIRSTBMI
     dataset: HEIGHT
     key: [USUBJID]
+    order_by: [HEIGHT.VSDY]
+    keep: first
     derivations:
       BMI:
         function:
@@ -33,8 +35,6 @@ intermediates:
           args:
             weight_kg: SCREENWT.WEIGHTKG
             height_cm: HEIGHT.HEIGHTCM
-    order_by: [HEIGHT.VSDY]
-    keep: first
 
 columns:
   - name: STUDYID
