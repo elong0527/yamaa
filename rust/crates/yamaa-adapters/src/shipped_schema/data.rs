@@ -528,7 +528,7 @@ expressions:
         - source:
             type: variable
             required: true
-            description: Right-truncated ISO 8601 date or datetime text, or a value of the declared type (TIME-7).
+            description: Collected ISO 8601 date or datetime text, read up to its first unknown field, or a value of the declared type (TIME-7).
         - month:
             type: int
             description: Month supplied to a source carrying only a year, 1 to 12; declared exactly when minimum_source_precision is year (TIME-10).
@@ -554,7 +554,7 @@ expressions:
             description: Value of the declared type returned, with collected precision none, when the source is missing (TIME-13).
         - invalid:
             type: substitute_value
-            description: Result when the source is text that is not a right-truncated ISO 8601 date or datetime (TIME-13).
+            description: Result when the source is text that cannot be read as collected date text, such as an ISO 8601 interval or duration (TIME-13).
     precision: # See REQ-1106.
         - type:
             type: temporal_type
@@ -563,10 +563,10 @@ expressions:
         - source:
             type: variable
             required: true
-            description: Right-truncated ISO 8601 date or datetime text, or a value of the declared type (TIME-7).
+            description: Collected ISO 8601 date or datetime text, read up to its first unknown field, or a value of the declared type (TIME-7).
         - invalid:
             type: substitute_value
-            description: Result when the source is text that is not a right-truncated ISO 8601 date or datetime (TIME-13).
+            description: Result when the source is text that cannot be read as collected date text, such as an ISO 8601 interval or duration (TIME-13).
     imputation_flag:
         - source:
             type: variable
