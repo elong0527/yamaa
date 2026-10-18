@@ -102,7 +102,7 @@
         "spec_paths": [
           "intermediates[0].key.K"
         ],
-        "requirement": "REQ-0117",
+        "requirement": "LOOKUP-5",
         "context": {
           "intermediate": "LOOK",
           "identifier": "SRC.ABSENT"
@@ -194,7 +194,7 @@
         "spec_paths": [
           "intermediates[0].key"
         ],
-        "requirement": "REQ-0323",
+        "requirement": "LOOKUP-9",
         "context": {
           "intermediate": "LOOK",
           "source": "key[KINT]",
@@ -219,7 +219,7 @@
         "spec_paths": [
           "intermediates[0].key.KINT"
         ],
-        "requirement": "REQ-0117",
+        "requirement": "LOOKUP-5",
         "context": {
           "intermediate": "LOOK",
           "identifier": "SRC.ABSENT"
@@ -311,7 +311,7 @@
         "spec_paths": [
           "intermediates[0].key"
         ],
-        "requirement": "REQ-0116",
+        "requirement": "LOOKUP-5",
         "context": {
           "intermediate": "LOOK",
           "identifier": "TAB.ABSENT"
@@ -334,7 +334,7 @@
         "spec_paths": [
           "intermediates[0].key.ABSENT"
         ],
-        "requirement": "REQ-0117",
+        "requirement": "LOOKUP-5",
         "context": {
           "intermediate": "LOOK",
           "identifier": "SRC.ABSENT"
@@ -408,7 +408,7 @@
         "spec_paths": [
           "intermediates[0].key.K"
         ],
-        "requirement": "REQ-0117",
+        "requirement": "LOOKUP-5",
         "context": {
           "intermediate": "LOOK",
           "identifier": "SELF.N",
@@ -762,7 +762,7 @@
         "spec_paths": [
           "intermediates[0].key"
         ],
-        "requirement": "REQ-0323",
+        "requirement": "LOOKUP-9",
         "context": {
           "intermediate": "LOOK",
           "source": "key[KINT]",
@@ -776,7 +776,7 @@
         "spec_paths": [
           "intermediates[0].key"
         ],
-        "requirement": "REQ-0323",
+        "requirement": "LOOKUP-9",
         "context": {
           "intermediate": "LOOK",
           "source": "key[K]",
@@ -801,7 +801,7 @@
         "spec_paths": [
           "intermediates[0].key.KINT"
         ],
-        "requirement": "REQ-0117",
+        "requirement": "LOOKUP-5",
         "context": {
           "intermediate": "LOOK",
           "identifier": "SRC.ABSENT"

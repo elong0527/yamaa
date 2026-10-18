@@ -329,6 +329,13 @@ pub(super) fn operand_references(
     }
     if let Some(payload) = d.field(value, "source") {
         names.push(text(d, field(d, payload, "variable")?)?.into());
+        // An implicit join's range reads its value from the current row.
+        if let Some(range) = d
+            .field(payload, "between")
+            .filter(|&range| !matches!(d.nodes()[range], N::Null))
+        {
+            names.push(text(d, field(d, range, "value")?)?.into());
+        }
     }
     for op in ["mapping", "cut"] {
         if let Some(payload) = d.field(value, op) {

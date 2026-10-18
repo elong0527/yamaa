@@ -4,8 +4,7 @@ pub(crate) use yamaa_core::json::Value as V;
 pub(crate) use yamaa_core::{
     dataset::AggregatePhase,
     diagnostic::{
-        AggregateContextCause as Cause, AggregateEmptyKey, AggregateFinding as Finding,
-        ConditionCode, ProjectionError,
+        AggregateContextCause as Cause, AggregateFinding as Finding, ConditionCode, ProjectionError,
     },
     result_type::ResultType,
     value::{ColumnType, Value, ValueType},
@@ -23,32 +22,32 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     let types = [ValueType::Str, ValueType::Int, ValueType::Str];
     let keys = vec!["ID".into(), "PARAM".into()];
     let mut reached = BTreeSet::new();
-    for (key, empty) in [
-        (AggregateEmptyKey::Mapping, V::Object(Default::default())),
-        (AggregateEmptyKey::List, V::Array(vec![])),
-    ] {
-        let diagnostic = Finding::MissingKeys {
-            path: "aggregate",
-            dataset: "D",
-            key,
-        }
-        .diagnostic()
-        .unwrap();
-        assert_eq!(
-            (
-                diagnostic.definition().phase,
-                diagnostic.definition().condition,
-                diagnostic.definition().requirement
-            ),
-            ("validation", "missing_aggregate_keys", Some("REQ-0140"))
-        );
-        assert_eq!(
-            diagnostic.context,
-            [("dataset".into(), text("D")), ("key".into(), empty)].into()
-        );
-        assert_eq!(diagnostic.spec_paths, ["aggregate"]);
-        reached.insert(diagnostic.code);
+    // A written key naming no pair is the one empty-key cause of every
+    // lookup (LOOKUP-5).
+    let diagnostic = Finding::MissingKeys {
+        path: "aggregate",
+        dataset: "D",
     }
+    .diagnostic()
+    .unwrap();
+    assert_eq!(
+        (
+            diagnostic.definition().phase,
+            diagnostic.definition().condition,
+            diagnostic.definition().requirement
+        ),
+        ("validation", "invalid_field_type", Some("LOOKUP-5"))
+    );
+    assert_eq!(
+        diagnostic.context,
+        [
+            ("dataset".into(), text("D")),
+            ("expected".into(), text("at least one match pair")),
+        ]
+        .into()
+    );
+    assert_eq!(diagnostic.spec_paths, ["aggregate"]);
+    reached.insert(diagnostic.code);
     for (phase, row, expected) in [
         (AggregatePhase::Derivation, None, "derivation"),
         (
@@ -202,29 +201,22 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             ],
         ),
         (
-            Finding::KeyReference {
+            Finding::DonorKeyReference {
                 path: "aggregate.expr",
                 identifier: "D.ABSENT",
             },
             "unknown_field",
-            "REQ-0141",
+            "LOOKUP-5",
             vec![("identifier", text("D.ABSENT"))],
         ),
         (
-            Finding::KeyType {
+            Finding::MatchValueReference {
                 path: "aggregate.expr",
-                source: "ID",
-                expected: ResultType::STR,
-                actual: ColumnType::Int,
-                inferred: false,
+                identifier: "ABSENT",
             },
-            "incompatible_input_type",
-            "REQ-0004",
-            vec![
-                ("source", text("ID")),
-                ("expected", text("str")),
-                ("actual", text("int")),
-            ],
+            "unknown_field",
+            "LOOKUP-5",
+            vec![("identifier", text("ABSENT"))],
         ),
         (
             Finding::KeyType {
@@ -232,10 +224,9 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 source: "ID",
                 expected: ResultType::STR,
                 actual: ColumnType::Int,
-                inferred: true,
             },
             "incompatible_input_type",
-            "REQ-0151",
+            "LOOKUP-9",
             vec![
                 ("source", text("ID")),
                 ("expected", text("str")),
@@ -249,14 +240,11 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 keys: &keys,
             },
             "no_applicable_keys",
-            "REQ-0152",
+            "LOOKUP-5",
             vec![
                 ("dataset", text("D")),
                 ("keys", V::Array(vec![text("ID"), text("PARAM")])),
-                (
-                    "hint",
-                    text("declare an explicit `intermediate:` with `source`/`key` pairs"),
-                ),
+                ("hint", text("declare the `key` explicitly")),
             ],
         ),
     ];

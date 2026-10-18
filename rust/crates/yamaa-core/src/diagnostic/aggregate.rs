@@ -12,7 +12,6 @@ pub enum AggregateFinding<'a> {
     MissingKeys {
         path: &'a str,
         dataset: &'a str,
-        key: AggregateEmptyKey,
     },
     MultipleRecords {
         path: &'a str,
@@ -44,7 +43,13 @@ pub enum AggregateFinding<'a> {
         expression: &'a str,
         relations: &'a [String],
     },
-    KeyReference {
+    /// A declared `key` column the relation does not have.
+    DonorKeyReference {
+        path: &'a str,
+        identifier: &'a str,
+    },
+    /// A match value that reads no known current-row value.
+    MatchValueReference {
         path: &'a str,
         identifier: &'a str,
     },
@@ -53,18 +58,12 @@ pub enum AggregateFinding<'a> {
         source: &'a str,
         expected: ResultType,
         actual: ColumnType,
-        inferred: bool,
     },
     NoApplicableKeys {
         path: &'a str,
         dataset: &'a str,
         keys: &'a [String],
     },
-}
-#[derive(Clone, Copy, Debug)]
-pub enum AggregateEmptyKey {
-    Mapping,
-    List,
 }
 #[derive(Clone, Copy, Debug)]
 pub enum AggregateContextCause {
@@ -120,78 +119,50 @@ fn type_name(value: ValueType) -> &'static str {
 }
 impl AggregateFinding<'_> {
     pub fn diagnostic(self) -> Result<Diagnostic, ProjectionError> {
-        let key = match self {
-            Self::MissingKeys { path, dataset, key } => Some((
-                path,
-                C::AggregateMissingKeys,
-                [
-                    ("dataset".into(), text(dataset)),
-                    (
-                        "key".into(),
-                        match key {
-                            AggregateEmptyKey::Mapping => V::Object(Default::default()),
-                            AggregateEmptyKey::List => V::Array(vec![]),
-                        },
-                    ),
-                ]
-                .into(),
-            )),
-            Self::KeyReference { path, identifier } => Some((
-                path,
-                C::AggregateKeyReference,
-                [("identifier".into(), text(identifier))].into(),
-            )),
+        // A qualified aggregate's match shares its causes with every other
+        // lookup (LOOKUP-25).
+        use super::lookup::{self, Owner};
+        match self {
+            Self::MissingKeys { path, dataset } => {
+                return Ok(lookup::empty_key(path, Owner::Unnamed, dataset))
+            }
+            Self::DonorKeyReference { path, identifier } => {
+                return Ok(lookup::donor_key_reference(
+                    path,
+                    Owner::Unnamed,
+                    identifier,
+                ))
+            }
+            Self::MatchValueReference { path, identifier } => {
+                return Ok(lookup::match_value_reference(
+                    path,
+                    Owner::Unnamed,
+                    identifier,
+                ))
+            }
             Self::KeyType {
                 path,
                 source,
                 expected,
                 actual,
-                inferred,
-            } => Some((
-                path,
-                if inferred {
-                    C::ImplicitSourceKeyType
-                } else {
-                    C::AggregateKeyType
-                },
-                [
-                    ("source".into(), text(source)),
-                    ("expected".into(), text(&expected.name())),
-                    ("actual".into(), text(actual.name())),
-                ]
-                .into(),
-            )),
+            } => {
+                return Ok(lookup::key_type(
+                    path,
+                    Owner::Unnamed,
+                    source,
+                    expected,
+                    actual.into(),
+                ))
+            }
             Self::NoApplicableKeys {
                 path,
                 dataset,
                 keys,
             } => {
-                let hint = "declare an explicit `intermediate:` with `source`/`key` pairs";
-
-                Some((
-                    path,
-                    C::ImplicitSourceNoApplicableKeys,
-                    [
-                        ("dataset".into(), text(dataset)),
-                        ("hint".into(), text(hint)),
-                        (
-                            "keys".into(),
-                            V::Array(keys.iter().map(|key| text(key)).collect()),
-                        ),
-                    ]
-                    .into(),
-                ))
+                let keys = keys.iter().map(String::as_str).collect::<Vec<_>>();
+                return Ok(lookup::no_applicable_keys(path, dataset, &keys, true));
             }
-            _ => None,
-        };
-        if let Some((path, code, context)) = key {
-            return Ok(Diagnostic {
-                code,
-                spec_paths: vec![path.into()],
-                context,
-                source_span: None,
-                operand_route: None,
-            });
+            _ => {}
         }
         let (path, expression) = match self {
             Self::MultipleRecords {
@@ -244,7 +215,8 @@ impl AggregateFinding<'_> {
                 path, expression, ..
             } => (path, expression),
             Self::MissingKeys { .. }
-            | Self::KeyReference { .. }
+            | Self::DonorKeyReference { .. }
+            | Self::MatchValueReference { .. }
             | Self::KeyType { .. }
             | Self::NoApplicableKeys { .. } => {
                 unreachable!("key causes projected above")
@@ -313,7 +285,8 @@ impl AggregateFinding<'_> {
                 C::AggregateMixedRelations
             }
             Self::MissingKeys { .. }
-            | Self::KeyReference { .. }
+            | Self::DonorKeyReference { .. }
+            | Self::MatchValueReference { .. }
             | Self::KeyType { .. }
             | Self::NoApplicableKeys { .. } => {
                 unreachable!("key causes projected above")

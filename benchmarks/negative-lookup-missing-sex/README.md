@@ -33,5 +33,5 @@ intermediates:
 ```
 
 An incomplete key and a complete key the table does not contain share one
-absence policy (LOOKUP-13): both yield nothing, and `require_match` or
+absence policy (LOOKUP-24): both yield nothing, and `require_match` or
 `no_match` decides whether that fails or answers with a value.
