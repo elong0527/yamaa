@@ -1,8 +1,10 @@
 phase: validation
-condition: value_metadata_requires_literal_testcd
+condition: value_level_where_invalid
 spec_paths:
-  - rows.glucose.submission
-requirement: REQ-1164
+  - columns.LBORRES.submission.value_level.GLUC.where.LBTESTCD
+requirement: SUB-12
 context:
-  discriminator: LBTESTCD
-  declared_type: int
+  column: LBORRES
+  entry: GLUC
+  reason: not_str
+  where_column: LBTESTCD
