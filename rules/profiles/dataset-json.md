@@ -105,18 +105,19 @@ document.
 
 <a id="json-5"></a>
 
-### JSON-5. The rows are the published artifact's rows, read the way a consumer reads a producer's artifact
+### JSON-5. The rows are the published artifact's rows, read the way a consumer reads a producer's artifact, and no display precision reaches them
 
 A transport file's rows are the rows of the artifact the entry's specification
-published at its `output.path`, read exactly as a consuming specification reads
-a producer's artifact; the artifact must already be published, and generation
-never runs the specification. Composition does not re-derive, re-order, filter
-or round: column order is `output.columns`, row order is the artifact's, and a
-value is the value the artifact carries. An artifact that is unpublished or
-does not match its producing specification fails.
+published at its `output.path`, read exactly as a consuming specification
+reads a producer's artifact; generation never runs the specification.
+Composition does not re-derive, re-order, filter or round: column order is
+`output.columns`, row order is the artifact's, and a value is the value the
+artifact carries, so a composed specification declares no `output.decimals`.
+An unpublished artifact, one that does not match its producing specification,
+or a composed `output.decimals` fails.
 
-Fails: `producer_contract_mismatch`.
-Evidence: `sdtm-dm-metadata`, `sdtm-dm-xpt`, `rust/crates/yamaa-adapters/tests/file_resources.rs::mutual_references_and_published_contract_fail_before_any_publication`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
+Fails: `producer_contract_mismatch`, `decimals_not_applicable`.
+Evidence: `sdtm-dm-metadata`, `sdtm-dm-xpt`, `negative-transport-display-decimals`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionTransportDecimals`, `rust/crates/yamaa-adapters/tests/file_resources.rs::mutual_references_and_published_contract_fail_before_any_publication`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
 Replaces: REQ-1199, REQ-1200, REQ-1230.
 
 The artifact is read:
@@ -128,9 +129,19 @@ The artifact is read:
 - with the typed values [INPUT-11](../inputs.md#input-11)
   delivers.
 
-`output.decimals` is a `csv` display precision under
-[CSV-6](../reference/csv.md#csv-6) and does not reach this file, exactly as it
-does not reach `parquet` under [PARQUET-3](../reference/parquet.md#parquet-3).
+A `csv` artifact carries the display precision
+[CSV-7](../reference/csv.md#csv-7) writes: under `output.decimals` each float
+is fixed-point text rounded once, and read back it is that rounded value, which
+would become the submitted value. A specification that a section requesting a
+transport composes therefore declares no `output.decimals`. One that does
+fails validation with `decimals_not_applicable` at
+`<family>.specs[<n>].output.decimals`, reporting the dataset, the
+specification as the section's `specs` writes it and the declared digits,
+before any artifact is read. The submitted display is the column's
+`submission.display_format` ([SUB-9](submission.md#sub-9)), which changes no
+value, and a value the analysis rounds is rounded by its derivation. A
+`parquet` artifact carries no display precision
+([PARQUET-3](../reference/parquet.md#parquet-3)).
 
 An artifact that has not been published, or whose fields, order or types do not
 match the producing specification's output contract, fails under

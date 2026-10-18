@@ -23,7 +23,12 @@ dataset's leaf names the file under [DEFINE-16](define-xml.md#define-16), and
 the files publish before the document under
 [JSON-14](dataset-json.md#json-14).
 
-Evidence: `sdtm-dm-xpt`, `adam-adsl-xpt`, `rust/crates/yamaa-adapters/tests/submission_transport.rs::every_define_benchmark_matches_its_independent_truth_in_both_hosts`.
+Evidence: `sdtm-dm-xpt`, `adam-adsl-xpt`, `negative-transport-display-decimals`, `rust/crates/yamaa-adapters/tests/submission_transport.rs::every_define_benchmark_matches_its_independent_truth_in_both_hosts`.
+
+Read as [JSON-5](dataset-json.md#json-5) reads them, the rows carry no display
+precision: a composed specification declares no `output.decimals`, whose
+rounded text the file would otherwise carry as the submitted numbers, and a
+numeric variable's display is its format under [XPT-9](#xpt-9).
 
 Every refusal this profile states is a named validation or output failure. It
 reports the dataset, and the column and row where they are known. Nothing is

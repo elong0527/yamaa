@@ -89,14 +89,17 @@ verifications:
   - unique: {columns: [USUBJID, EXTRT, ASTDT, AENDT], id: sponsor-keys}
 ```
 
-[Ordering](values.md#value-22) places missing values last by
-default. [CHECK-10](verification.md#check-10) treats missing values
-as values in the uniqueness check, so two rows with the same subject,
-treatment, start date and missing end date fail that check. The missing end
-date remains missing. Submission key metadata describes the identity in
-`keys`, as [DEFINE-18](profiles/define-xml.md#define-18) and
-[JSON-9](profiles/dataset-json.md#json-9) require; neither ordering nor
-the separate uniqueness check changes it.
+[Ordering](values.md#value-22) sorts a missing value lowest unless the term
+declares `nulls`: under the ascending terms above, a missing `AENDT` sorts
+before every present end date of the same subject, treatment and start date,
+and `{variable: AENDT, nulls: last}` places it after them instead.
+[CHECK-10](verification.md#check-10) treats missing values as values in the
+uniqueness check, so two rows with the same subject, treatment, start date and
+missing end date fail that check. The missing end date remains missing.
+Submission key metadata describes the identity in `keys`, as
+[DEFINE-18](profiles/define-xml.md#define-18) and
+[JSON-9](profiles/dataset-json.md#json-9) require; neither ordering nor the
+separate uniqueness check changes it.
 
 ## Profiles
 

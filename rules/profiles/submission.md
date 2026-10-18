@@ -246,7 +246,10 @@ A numeric column's `display_format` is also its SAS format in a transport file
 study that wants different artifact digits declares `output.decimals`, which
 the [CSV profile](../reference/csv.md) owns. The two settings are independent,
 and this profile does not reconcile them: one is a display a document reports
-and the other is a display an artifact carries. Each implementation guide
+and the other is a display an artifact carries. A transport carries the
+artifact's values, so a specification that a section requesting one composes
+declares no `output.decimals` ([JSON-5](dataset-json.md#json-5)) and keeps its
+display in `display_format`. Each implementation guide
 publishes and versions its own role vocabulary. The `adam` family defines no
 role vocabulary, so a role in that family would name nothing.
 
@@ -539,42 +542,55 @@ algorithm attached is not traceable.
 
 ### SUB-19. A declared origin the column's derivation contradicts is rejected, and an origin is never inferred
 
-The [Column derivation](../columns.md) graph proves some facts about a
-column value, and a declared origin that contradicts one is rejected; an
-origin is never inferred. A bare `source` or `odm` refutes no type, a bare
-`literal` refutes `Derived` and `Predecessor`, a copy, recode, reformat or
-assembly of collected values refutes `Protocol` and `Predecessor`, and any
-other derivation refutes `Collected`, `Protocol` and `Predecessor`. A
-row-derived column keeps only the types all its `rows` entries admit, and no
-shared type fails.
+A declared origin that the [Column derivation](../columns.md) graph
+contradicts is rejected, and an origin is never inferred. A bare read refutes
+no type: a `source`, an `odm` read or an `aggregate` whose `expr` is exactly
+`ONLY` of one variable, read directly or through a plain lookup. A bare
+`literal` refutes `Derived` and `Predecessor`, a recode of collected values
+`Protocol` and `Predecessor`, and any other derivation `Collected`, `Protocol`
+and `Predecessor`. A row-derived column keeps only the types all its `rows`
+entries admit, and no shared type fails.
 
 Fails: `origin_contradicts_derivation`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::independent_metadata_refutations_preserve_shared_conditions_and_zero_writes`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::recodes_literals_and_stored_values_admit_their_published_origins`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::computed_values_and_case_reads_of_derived_columns_refute_collected`, `rust/crates/yamaa-core/src/submission_origin.rs::every_derivation_row_refutes_exactly_its_published_types`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionOriginRefuted`.
+Evidence: `sdtm-dm-metadata`, `sdtm-lb-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::independent_metadata_refutations_preserve_shared_conditions_and_zero_writes`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::recodes_literals_and_stored_values_admit_their_published_origins`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::computed_values_and_case_reads_of_derived_columns_refute_collected`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::pivots_and_plain_lookups_are_bare_reads_that_admit_collected`, `rust/crates/yamaa-core/src/submission_origin.rs::every_derivation_row_refutes_exactly_its_published_types`, `rust/crates/yamaa-core/src/submission_origin.rs::only_the_reduction_of_one_variable_to_its_one_value_is_a_pivot`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionOriginRefuted`.
 Replaces: REQ-0896, REQ-0897, REQ-0898, REQ-0899, REQ-0900, REQ-0922.
 
 | Derivation | Admitted `origin.type` | Refuted |
 |---|---|---|
-| a bare `source` or a bare `odm` | every type | none |
+| a bare read: a `source`, an `odm` read or an `ONLY` pivot, directly or through a plain lookup | every type | none |
 | a bare `literal` | `Assigned`, `Protocol`, `Collected`, `Other`, `Not Available` | `Derived`, `Predecessor` |
-| a recode: `mapping`, `case`, `first_available`, `str_case`, `str_pad`, `str_replace`, `str_extract`, `str_template` or `to_date`, reading only as the next paragraph states | `Collected`, `Derived`, `Assigned`, `Other`, `Not Available` | `Protocol`, `Predecessor` |
+| a recode: `mapping`, `case`, `first_available`, `str_case`, `str_pad`, `str_replace`, `str_extract`, `str_template` or `to_date`, reading only as the paragraphs below state | `Collected`, `Derived`, `Assigned`, `Other`, `Not Available` | `Protocol`, `Predecessor` |
 | anything else | `Derived`, `Assigned`, `Other`, `Not Available` | `Collected`, `Protocol`, `Predecessor` |
 
+An `ONLY` pivot is an `aggregate` whose `expr` is exactly `ONLY(<variable>)`,
+with no arithmetic around or inside the reduction, and which declares no
+`derive` binding. It turns long records, such as one ODM record per collected
+item, into the one value its group or relation holds
+([FORMULA-18](../formulas.md#formula-18)): its `filter`, `key` and `between`
+choose the record, and the value is the variable as stored. A plain lookup is
+a named intermediate that reads a dataset `input` declares and declares no
+`derivations`: its `key`, `between`, `filter` and selection choose a record,
+and every field read through it is that record's stored value. Either is a
+bare read wherever this rule reads one.
+
 A recode copies, recodes, reformats or assembles collected values. Each
-variable it names is a bare read, one that looks no record up through a named
-intermediate, and each expression it nests in a `case` result
-([EXPR-3](../expressions.md#expr-3)) is a literal, a bare `source` or `odm`
-read, or a recode. Every condition and result of a `case`
-reads only declared input values or literals: each identifier of a `when`
-predicate, and each variable a result reads, is qualified by a dataset `input`
-declares, or is an `odm` read. A recode that reads otherwise, through a named
+variable it names is a bare read, never one through a named intermediate other
+than a plain lookup, and each expression it nests in a `case` result
+([EXPR-3](../expressions.md#expr-3)) is a literal, a bare read, or a recode.
+Every condition and result of a `case` reads only declared input values or
+literals: each identifier of a `when` predicate, and each variable a result
+reads, is qualified by a dataset `input` declares or by a plain lookup of one,
+or is an `odm` read. A recode that reads otherwise, through another named
 intermediate or, in a `case`, from an output column, is anything else.
 
 Anything else computes its value: arithmetic and rounding (`compute`,
-`round_half_away_from_zero`), aggregation, windows, temporal computation (the
-date and datetime operations other than `to_date`), `flag`, `cut`, `greatest`
-and `least`, `function`, and every read through a named intermediate,
-including a `source` that looks a record up. Each type it refutes asserts the
-value arrived as it stands, and the specification shows it did not.
+`round_half_away_from_zero`), every aggregation but an `ONLY` pivot, windows,
+temporal computation (the date and datetime operations other than `to_date`),
+`flag`, `cut`, `greatest` and `least`, `function`, and every read through a
+named intermediate that is not a plain lookup: one that declares
+`derivations`, whose fields it computes, or one over `SELF`, the completed
+output rows. Each type it refutes asserts the value arrived as it stands, and
+the specification shows it did not.
 
 The graph cannot tell an investigator-recorded value from a vendor-transmitted
 or protocol-fixed value, and it refutes only what the derivation proves. An
@@ -585,16 +601,20 @@ printed on the case report form, such as a unit or a test name, is written as
 a bare `literal` and admits `Collected`; a bare `literal` reads no input, so it
 refutes `Derived`. A vendor- or EDC-computed value read as stored, such as an
 eGFR or a BMI, is a bare `source` and admits `Derived`, with the method
-[SUB-18](#sub-18) requires. `Not Available` claims nothing a derivation can
-contradict, so every derivation admits it.
+[SUB-18](#sub-18) requires. A laboratory result pivoted with `ONLY` from long
+ODM records admits `Collected`, as the same result read from a wide record
+would. `Not Available` claims nothing a derivation can contradict, so every
+derivation admits it.
 
 A column derived by a bare `source` copies one value of one declared dataset,
-and a column derived by a bare `odm` copies the `Value` of the one ODM record it
-identifies ([NAME-13](../names.md#name-13)): nothing was
-computed. Whether that stored value was collected, assigned, fixed by the
-protocol, computed upstream or copied from a predecessor dataset is a fact
-about the source and not about this specification; [SUB-20](#sub-20) checks
-the copy a `Predecessor` claims.
+a bare `odm` read copies the `Value` of the one ODM record it identifies
+([NAME-13](../names.md#name-13)), an `ONLY` pivot copies the one value its
+group or relation holds, and a read through a plain lookup copies a stored
+field of the record the lookup selects: nothing was computed. Whether that
+stored value was collected, assigned, fixed by the protocol, computed upstream
+or copied from a predecessor dataset is a fact about the source and not about
+this specification; [SUB-20](#sub-20) checks the copy a `Predecessor` claims,
+which only a bare `source` of the predecessor's input dataset makes.
 
 When the entries of a row-derived column disagree, no shared type is an error,
 not a silently admitted origin. A refuted origin fails with
@@ -614,7 +634,7 @@ section of the study environment lists declares that column, their labels must
 be equal; a renamed column keeps its own label.
 
 Fails: `origin_contradicts_derivation`, `refuted_value_origin`, `predecessor_label_mismatch`.
-Evidence: `negative-mandatory-arm-missing`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::predecessor_columns_copy_the_column_their_description_names`, `rust/crates/yamaa-adapters/tests/file_resources.rs::predecessor_labels_and_the_dataset_inventory_span_every_section`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionPredecessorLabel`.
+Evidence: `negative-mandatory-arm-missing`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::predecessor_columns_copy_the_column_their_description_names`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::pivots_and_plain_lookups_are_bare_reads_that_admit_collected`, `rust/crates/yamaa-adapters/tests/file_resources.rs::predecessor_labels_and_the_dataset_inventory_span_every_section`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionPredecessorLabel`.
 Replaces: REQ-1157.
 
 The `source` reads the predecessor through the input dataset declared under the
@@ -623,10 +643,12 @@ predecessor's name: `origin.description: DM.AGE` requires `source: DM.AGE`, and
 `SUPPDM.QVAL` that declares a `filter`. No rule compares the filter with the
 written condition. Any other derivation computes rather than copies, and the
 refutation of [SUB-19](#sub-19) already rejects a computed column that claims
-otherwise. A bare `source` of another dataset or column, or one without the
-`filter` a written condition requires, fails with
-`origin_contradicts_derivation`, reporting the column, the predecessor and the
-reason. A value-level `Predecessor` entry is checked against its row
+otherwise. An `ONLY` pivot and a read through a plain lookup are bare reads
+under [SUB-19](#sub-19), but neither is a `source` of the predecessor's input
+dataset. A bare `source` of another dataset or column, such a pivot or lookup
+read, or a `source` without the `filter` a written condition requires, fails
+with `origin_contradicts_derivation`, reporting the column, the predecessor and
+the reason. A value-level `Predecessor` entry is checked against its row
 template's derivation and fails with `refuted_value_origin`, as
 [SUB-13](#sub-13) states.
 

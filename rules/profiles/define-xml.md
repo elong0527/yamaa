@@ -79,7 +79,7 @@ requirement unmet under `Submission` fails, reporting the requirement and the
 position.
 
 Fails: `missing_required_field`, `sas_name_too_long`, `transport_label_invalid`, `transport_text_invalid`.
-Evidence: `sdtm-dm-metadata`, `sdtm-vs-epoch-from-subject-elements`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionCdiscAliasMissing`, `rust/tests/host-fixtures/cases.json::submission-column-label`, `rust/crates/yamaa-adapters/tests/file_resources.rs::collected_origins_name_their_form_page_under_submission`.
+Evidence: `sdtm-dm-metadata`, `sdtm-ta-sponsor-epoch`, `sdtm-vs-epoch-from-subject-elements`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionCdiscAliasMissing`, `rust/tests/host-fixtures/cases.json::submission-column-label`, `rust/crates/yamaa-adapters/tests/file_resources.rs::collected_origins_name_their_form_page_under_submission`.
 Replaces: REQ-0963, REQ-1003, REQ-1004, REQ-1024.
 
 Nothing in this profile is relaxed by `Other`; that context only omits the
@@ -106,12 +106,16 @@ requirements a regulator imposes. Under `Submission`:
   `documents` with at least one `pages` reference into the annotated case
   report form, which [SUB-17](submission.md#sub-17) requires; and
 - every codelist that declares `items` and is drawn from a standard whose name
-  is `CDISC/NCI` declares `alias`, and so does every one of its items. An
-  external codelist is excluded: it represents its dictionary rather than CDISC
-  controlled terminology, and has no items to identify.
+  is `CDISC/NCI` declares `alias`, and so does every one of its items except
+  one declared `extended: true`, which has no NCI code and declares no alias
+  ([CT-6](terminology.md#ct-6)). An external codelist is excluded: it
+  represents its dictionary rather than CDISC controlled terminology, and has
+  no items to identify.
 
-A codelist or item `alias` missing under `Submission` fails with
-`missing_required_field`. A collected origin without a page reference fails as
+A codelist `alias`, or the `alias` of a published item, missing under
+`Submission` fails with `missing_required_field`; a sponsor's extension of an
+extensible list, such as an added epoch, unit or test code, needs none. A
+collected origin without a page reference fails as
 [SUB-17](submission.md#sub-17) states. A name, label or text value outside
 these limits fails as [XPT-5](xpt.md#xpt-5) and [XPT-7](xpt.md#xpt-7) state;
 under `context: Other`, a SAS Transport file still refuses what it cannot
@@ -550,7 +554,7 @@ produces `CodeListItem` children when its items declare `decode` and
 `EnumeratedItem` children when they do not. A codelist declaring `external`
 carries one `ExternalCodeList` child and no items.
 
-Evidence: `sdtm-dm-metadata`, `sdtm-ae-coding`, `python/tests/installed/installed_public_define.py::test_ae_vs_independent_fixed_time_schema_and_structure`.
+Evidence: `sdtm-dm-metadata`, `sdtm-ae-coding`, `sdtm-ta-sponsor-epoch`, `python/tests/installed/installed_public_define.py::test_ae_vs_independent_fixed_time_schema_and_structure`.
 Replaces: REQ-0995, REQ-0996, REQ-0997, REQ-0998.
 
 A codelist declaring `items` therefore always carries exactly one of
@@ -563,7 +567,8 @@ within a codelist, so the element is determined rather than chosen per item.
 Each item carries `CodedValue` from `value`, `Rank` when declared, and
 `def:ExtendedValue="Yes"` when `extended`. A `CodeListItem` carries a `Decode`
 child holding the decode text, and either element carries an `Alias` child with
-`Context="nci:ExtCodeID"` when the item declares `alias`. Items keep the
+`Context="nci:ExtCodeID"` when the item declares `alias`, which an extended
+item never does ([CT-6](terminology.md#ct-6)). Items keep the
 codelist's declaration order, and `OrderNumber` is not written: the document
 order already presents them in it, and a second ordering could disagree.
 
