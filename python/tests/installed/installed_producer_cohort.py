@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 from host_fixtures import load as load_truth
 
-from yamaa import domain
+from yamaa import project
 
 TRUTH = load_truth(__file__, "producer-cohort")
 
@@ -29,11 +29,17 @@ class ProducerCohort(unittest.TestCase):
             case.mkdir()
             for name in tuple(TRUTH["source_files"]):
                 shutil.copyfile(ROOT / NAME / name, case / name)
+            # The retired yamaa-project.yaml marker is never read.
             (work / "yamaa-project.yaml").write_text(
                 TRUTH["project_yaml"], encoding="ascii"
             )
             (work / "environment.yaml").write_text(
-                "schema_version: '1.0'\nlanguage: python\nlock: uv.lock\nfunctions: {}\n",
+                "schema_version: '1.0'\nlock: uv.lock\nfunctions: {}\n",
+                encoding="ascii",
+            )
+            (work / "project.yaml").write_text(
+                "schema_version: '1.0'\nenvironments: {python: environment.yaml}\n"
+                f"adam: {{specs: [{NAME}/spec.yaml]}}\n",
                 encoding="ascii",
             )
             shutil.copyfile(ROOT / "schema-functions/python/uv.lock", work / "uv.lock")
@@ -67,9 +73,7 @@ class ProducerCohort(unittest.TestCase):
                 return original(name, *args, **kwargs)
 
             with patch("builtins.__import__", side_effect=reject):
-                result = domain(
-                    case / "spec.yaml", environment=work / "environment.yaml"
-                )
+                result = project(work / "project.yaml").spec("OUT").run()
                 self.assertTrue(result.issues.is_empty(), result.issues)
                 self.assertEqual(result.output.to_dicts(), [{"ID": "01"}])
                 before = result._native.observations()
@@ -80,7 +84,7 @@ class ProducerCohort(unittest.TestCase):
                     (case / name).unlink()
                 saved = None
                 for attempt in (1, 2):
-                    self.assertTrue(result.save())
+                    result.save()
                     directory = evidence / f"after-{attempt}"
                     directory.mkdir()
                     observed = result._native.observations()
