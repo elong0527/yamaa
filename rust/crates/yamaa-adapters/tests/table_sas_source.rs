@@ -688,6 +688,44 @@ mod table {
             assert_eq!(table.cell(2, 1).unwrap(), ValueRef::Str(""));
         }
         #[test]
+        fn version_8_observation_count_must_be_decimal_digits_between_blanks() {
+            // The count is fifteen characters from byte 48 of the OBSV8
+            // header. Blanks may precede or follow its digits. A sign, a
+            // letter, a point or a blank inside the digits makes the header
+            // malformed; reading such a count as unknown would instead let
+            // the trailing blank records pass as padding.
+            use crate::support::xport::transport;
+            let source = declaration("built.xpt");
+            for count in [
+                format!("{:15}", 3),
+                format!("{:<15}", 3),
+                format!("{:^15}", 3),
+                "000000000000003".to_string(),
+            ] {
+                let bytes = transport(8, &TEXT_FIELDS, &count, &trailing_blanks());
+                let table = sas_source::parse(&bytes, &source).unwrap();
+                assert_eq!(table.row_count(), 3, "{count:?}");
+            }
+            for count in [
+                "-00000000000003",
+                "+00000000000003",
+                "00000000000003x",
+                "0000000000000x3",
+                "000000.00000003",
+                "000000 00000003",
+                "               ",
+            ] {
+                let bytes = transport(8, &TEXT_FIELDS, count, &trailing_blanks());
+                assert!(
+                    matches!(
+                        sas_source::parse(&bytes, &source),
+                        Err(Error::Invalid("malformed"))
+                    ),
+                    "{count:?}"
+                );
+            }
+        }
+        #[test]
         fn transport_without_a_usable_count_treats_trailing_blank_records_as_padding() {
             // Version 5 carries no count, and a zero version 8 count is
             // unknown. Trailing blank records narrower than one 80-byte
@@ -1056,6 +1094,56 @@ mod table {
             // two: its bitmap covers two, and the unmarked deletion is not
             // looked for beyond them.
             refused(file(2, 1, 2, 5, &[false, false, true]));
+        }
+        #[test]
+        fn the_row_limit_admits_live_records_not_stored_ones() {
+            // The row-size subheader counts stored records, deleted ones
+            // included, but only the live ones become rows, so SAS-6 admits
+            // those. The files hold no records: a count that passes admission
+            // goes on to fail its unmet deletions, and one that does not is a
+            // table-rows limit that names the live count.
+            use crate::support::sas7bdat::{Dataset, Kind, Layout, Page, META};
+            let file = |total: u64, deleted: u64| {
+                let mut dataset = Dataset::new(Layout::LE64, &[("X", Kind::Num, 8)]);
+                dataset.total = total;
+                dataset.deleted = deleted;
+                dataset.file(&[Page::new(META, dataset.metadata(), vec![])])
+            };
+            // 10,000,100 stored records leave 9,999,900 live ones, under the
+            // limit of 10,000,000 rows.
+            assert!(matches!(
+                read_built(&file(10_000_100, 200)),
+                Err(Error::Invalid("deleted_records"))
+            ));
+            // 10,000,050 live records are over it.
+            assert!(matches!(
+                read_built(&file(10_000_100, 50)),
+                Err(Error::Limit {
+                    resource: "table_rows",
+                    actual: Some(10_000_050),
+                    ..
+                })
+            ));
+        }
+        #[test]
+        fn stored_record_counts_beyond_32_bits_are_refused() {
+            // The reader counts stored and deleted records in 32 bits. The
+            // counts below leave five live records, so they pass admission,
+            // but truncated they would read as a dataset with no deletions.
+            use crate::support::sas7bdat::{Cell, Dataset, Kind, Layout, Page, MIX};
+            let file = |total: u64, deleted: u64| {
+                let mut dataset = Dataset::new(Layout::LE64, &[("X", Kind::Num, 8)]);
+                dataset.total = total;
+                dataset.deleted = deleted;
+                dataset.mix_rows = 5;
+                let rows = (0..5).map(|row| dataset.row(&[Cell::Num(f64::from(row))]));
+                dataset.file(&[Page::new(MIX, dataset.metadata(), rows.collect())])
+            };
+            assert_eq!(read_built(&file(5, 0)).unwrap().row_count(), 5);
+            assert!(matches!(
+                read_built(&file((1 << 40) + 5, 1 << 40)),
+                Err(Error::Invalid("malformed"))
+            ));
         }
         /// A compressed dataset whose third record moved to subheader 1 of
         /// page 1, the record stored there by `moved`.

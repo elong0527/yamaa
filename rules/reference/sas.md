@@ -128,10 +128,13 @@ cells, retained values, page and row work, and header work are admitted before
 their corresponding allocations where the physical framing supplies those
 counts.
 
-Evidence: `rust/crates/yamaa-adapters/src/sas_source/native.rs::fixed_header_geometry_is_checked_before_retaining_any_columns_or_rows`, `rust/crates/yamaa-adapters/src/resource_diagnostics.rs::fixed_sas_boundary_keeps_its_bound_and_input_owner`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::references_bouncing_between_pages_cannot_read_more_than_the_file_holds`, `python/tests/installed/installed_sas_sources.py::test_held_output_and_repeat_saves_survive_source_and_specification_mutation`.
+Evidence: `rust/crates/yamaa-adapters/src/sas_source/native.rs::fixed_header_geometry_is_checked_before_retaining_any_columns_or_rows`, `rust/crates/yamaa-adapters/src/resource_diagnostics.rs::fixed_sas_boundary_keeps_its_bound_and_input_owner`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::references_bouncing_between_pages_cannot_read_more_than_the_file_holds`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::the_row_limit_admits_live_records_not_stored_ones`, `python/tests/installed/installed_sas_sources.py::test_held_output_and_repeat_saves_survive_source_and_specification_mutation`.
 Replaces: REQ-1316.
 
 Resource refusal is separate from semantic source invalidity.
+
+The rows of a `sas7bdat` input are its live records ([SAS-8](#sas-8)), so
+admission counts them, not the records its header counts as deleted.
 
 The stored bytes that moved-record references read ([SAS-8](#sas-8)) are page
 work. Together they may not exceed the bytes of the file's pages, so following
@@ -151,7 +154,7 @@ compression signatures, malformed compressed data, duplicate or empty field
 names and incomplete physical framing fail before derivation.
 
 Fails: `source_sas_invalid`.
-Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/sas.rs`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::unsupported_compression_has_a_specific_retained_cause`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::counted_deletions_without_marks_are_refused_with_a_rewrite_hint`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::version_8_observation_count_keeps_trailing_blank_records`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::transport_without_a_usable_count_treats_trailing_blank_records_as_padding`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::trailing_blank_records_of_any_width_are_padding_only_without_a_count`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::a_row_size_subheader_cannot_change_the_row_length_once_columns_are_submitted`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::compressed_records_after_a_changed_row_length_are_refused_before_they_are_written`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::column_subheaders_shorter_than_their_fixed_part_are_refused`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::a_short_attributes_subheader_cannot_rewrite_a_column_after_the_first_record`, `python/tests/installed/installed_sas_sources.py::test_bad_sources_are_not_read_by_check_and_failed_saves_have_no_output`.
+Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/sas.rs`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::unsupported_compression_has_a_specific_retained_cause`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::counted_deletions_without_marks_are_refused_with_a_rewrite_hint`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::version_8_observation_count_keeps_trailing_blank_records`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::transport_without_a_usable_count_treats_trailing_blank_records_as_padding`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::trailing_blank_records_of_any_width_are_padding_only_without_a_count`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::a_row_size_subheader_cannot_change_the_row_length_once_columns_are_submitted`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::compressed_records_after_a_changed_row_length_are_refused_before_they_are_written`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::column_subheaders_shorter_than_their_fixed_part_are_refused`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::a_short_attributes_subheader_cannot_rewrite_a_column_after_the_first_record`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::stored_record_counts_beyond_32_bits_are_refused`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::version_8_observation_count_must_be_decimal_digits_between_blanks`, `python/tests/installed/installed_sas_sources.py::test_bad_sources_are_not_read_by_check_and_failed_saves_have_no_output`.
 Replaces: REQ-1317.
 
 Cause `deleted_records` reports records deleted in place that cannot be
@@ -163,6 +166,7 @@ A `sas7bdat` input has one row length. A row-size subheader that follows the
 first record or data page may repeat it, and one that changes it fails as
 `malformed`. A column-name or column-attributes subheader shorter than its
 fixed part, 28 bytes in a 64-bit file and 20 otherwise, fails as `malformed`.
+So does a stored record count above 4,294,967,295.
 
 Transport member descriptor chains at 80-byte boundaries are structural
 records; multiple complete chains fail, including concatenated transport
@@ -170,9 +174,11 @@ datasets. A character value resembling a MEMBER header alone remains text.
 
 A version 8 file whose `OBSV8` header record counts its observations, in the
 fifteen characters from byte 48, yields exactly that many records, including
-trailing records made entirely of blanks. The count is admitted under
-[SAS-6](#sas-6) before any record is read. Fewer complete records than
-counted, or anything but blank padding after them, fails as `malformed`.
+trailing records made entirely of blanks. The count is decimal digits, which
+blanks may precede or follow; a sign or any other character fails as
+`malformed`. The count is admitted under [SAS-6](#sas-6) before any record is
+read. Fewer complete records than counted, or anything but blank padding after
+them, fails as `malformed`.
 
 Version 5 framing, and a version 8 count of zero, carry no authoritative row
 count. Trailing records made entirely of blanks, whatever their width, may be

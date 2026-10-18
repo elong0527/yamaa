@@ -297,18 +297,23 @@ static readstat_error_t sas7bdat_parse_row_size_subheader(const char *subheader,
 
     if (!row_length || row_length > UINT32_MAX || page_row_count > UINT32_MAX)
         return READSTAT_ERROR_ROW_WIDTH_MISMATCH;
-    if (!yamaa_readstat_admit(total_row_count, ctx->column_count))
-        return READSTAT_ERROR_MALLOC;
     /* SAS keeps records deleted in place, counted here among the stored
-     * records, until the dataset is rewritten. The reader skips them. */
+     * records, until the dataset is rewritten. The reader skips them, so only
+     * the live records become table rows and are admitted as such. */
     if (deleted_row_count > total_row_count)
         return yamaa_readstat_deleted_records();
+    uint64_t live_row_count = total_row_count - deleted_row_count;
+    if (!yamaa_readstat_admit(live_row_count, ctx->column_count))
+        return READSTAT_ERROR_MALLOC;
+    /* The reader counts stored and deleted records in 32 bits, and the
+     * deleted count is at most the stored one. */
+    if (total_row_count > UINT32_MAX)
+        return READSTAT_ERROR_ROW_WIDTH_MISMATCH;
     ctx->total_row_count = total_row_count;
     ctx->deleted_row_count = deleted_row_count;
     ctx->row_length = row_length;
 
     ctx->page_row_count = page_row_count;
-    uint64_t live_row_count = total_row_count - deleted_row_count;
     uint64_t total_row_count_after_skipping = live_row_count;
     if (live_row_count > ctx->row_offset) {
         total_row_count_after_skipping -= ctx->row_offset;
