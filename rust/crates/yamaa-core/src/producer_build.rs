@@ -48,14 +48,9 @@ pub trait CodecPort {
     ) -> Result<Vec<u8>, Self::Error>;
 }
 /// Prepare observations from the retained attempt without granting publication.
+/// Each node's run report is built later from the retained attempt, so no
+/// report port is entered before output preparation.
 pub trait ReportPort: OutputReport {
-    fn prepare_diagnostics<C, D, T: TableAccess>(
-        &mut self,
-        _node: &Node,
-        _attempt: &CapturedAttempt<C, D, T>,
-    ) -> Result<(), Self::Error> {
-        Ok(())
-    }
     fn select<C, D, T: TableAccess>(
         &mut self,
         node: &Node,
@@ -254,11 +249,6 @@ impl PreparedBuild {
             );
             node_scope.phase(crate::application_observer::Phase::Output);
             let output_result = (|| {
-                if let Err(error) = ports.report.prepare_diagnostics(node, &entered.dataset) {
-                    entered.output = Err(output::CompleteError::Report(error));
-                    attempt.outcome = Err(Failure::Node { node: index });
-                    return Err("producer_build_failed");
-                }
                 let execution = entered
                     .dataset
                     .result

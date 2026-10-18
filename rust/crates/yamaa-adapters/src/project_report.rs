@@ -704,7 +704,15 @@ pub fn build_result<'a, C, E>(
     report::set_diagnostics(&mut result, diagnostics);
     result["verifications"] = json!(verifications);
     result["activation"] = activation;
-    Ok(report::prepare_result(run, execution, id, result)?)
+    let facts = crate::run_report::RunFacts::captured(
+        &attempt.dataset.sources,
+        attempt
+            .dataset
+            .result
+            .as_ref()
+            .map_or(&[], |dataset| dataset.template_rows.as_slice()),
+    );
+    Ok(report::prepare_result(run, execution, id, result, &facts)?)
 }
 
 #[cfg(test)]

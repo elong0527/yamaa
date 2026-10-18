@@ -40,7 +40,7 @@ impl PreflightFinding {
                     ("maximum", V::from(i64::MAX)),
                 ]),
             ),
-            Self::Log(finding) => return finding.diagnostic(),
+            Self::Report(finding) => return finding.diagnostic(),
             Self::Odm(diagnostic)
             | Self::Imputation(diagnostic)
             | Self::TextCase(diagnostic)

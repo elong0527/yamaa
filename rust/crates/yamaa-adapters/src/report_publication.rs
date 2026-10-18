@@ -98,7 +98,7 @@ mod tests {
         let locations = [Location {
             key: 0,
             node: 0,
-            field: Some("verification_log"),
+            field: Some("report"),
             path: Some("é\n\"out.csv"),
         }];
         let mut candidate = report();
@@ -122,7 +122,7 @@ mod tests {
         );
         assert_eq!(
             candidate["publication"]["error"],
-            json!({"stage":"publication","code":publication_code,"node":0,"field":"verification_log","path":"é\n\"out.csv"})
+            json!({"stage":"publication","code":publication_code,"node":0,"field":"report","path":"é\n\"out.csv"})
         );
     }
     #[test]
@@ -131,7 +131,7 @@ mod tests {
             Location {
                 key: 3,
                 node: 19,
-                field: Some("verification_log"),
+                field: Some("report"),
                 path: Some("first.csv"),
             },
             Location {

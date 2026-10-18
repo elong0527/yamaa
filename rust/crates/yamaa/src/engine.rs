@@ -233,8 +233,8 @@ impl Engine {
     }
 
     /// Prepare, bind, execute and retain one build. Every adjudicated outcome
-    /// returns an owned build carrying its outputs, logs, observations and
-    /// diagnostics; only cancellation fails the call itself.
+    /// returns an owned build carrying its output, run report, observations
+    /// and diagnostics; only cancellation fails the call itself.
     ///
     /// # Example
     ///
@@ -413,15 +413,14 @@ impl Engine {
 /// Named retained byte sources: capture names with their original bytes.
 pub type SourceBytes = Vec<(String, Arc<[u8]>)>;
 
-/// An owned build: one attempt with its outputs, logs and observations.
+/// An owned build: one attempt with its output, run report and observations.
 /// `save` is the only mutating operation and publishes through the resolver.
 pub struct Build {
     state: BuildOutcome,
     measurements: Arc<yamaa_adapters::application_measurements::Measurements>,
     report: Report,
     output: Option<Table>,
-    verification: Option<Table>,
-    warning: Option<Table>,
+    run_report: Option<Table>,
     project_failures: Option<Vec<AttemptFailure>>,
     producer_failures: Option<Vec<AttemptFailure>>,
     producer_accepted: Option<bool>,
@@ -444,8 +443,7 @@ impl Build {
                 diagnostics: Vec::new(),
             },
             output: None,
-            verification: None,
-            warning: None,
+            run_report: None,
             project_failures: None,
             producer_failures: None,
             producer_accepted: None,
@@ -461,10 +459,9 @@ impl Build {
 
     fn refresh(&mut self) {
         self.report = outcome_report(&self.state);
-        let (output, verification, warning) = tables_of(&self.state);
+        let (output, run_report) = tables_of(&self.state);
         self.output = output;
-        self.verification = verification;
-        self.warning = warning;
+        self.run_report = run_report;
     }
 
     fn capture_evidence(&mut self, shared: &EngineShared) {
@@ -537,31 +534,26 @@ impl Build {
         }
     }
 
-    /// Borrow the verification (`warning == false`) or warning log table.
-    pub fn log(&self, warning: bool) -> Option<&Table> {
-        if warning {
-            self.warning.as_ref()
-        } else {
-            self.verification.as_ref()
-        }
+    /// Borrow the run report table, which every executed build holds,
+    /// success or failure. A build that never reached execution has none. A
+    /// producer graph returns its entry specification's report, which a graph
+    /// stopped before the entry ran does not have.
+    pub fn run_report(&self) -> Option<&Table> {
+        self.run_report.as_ref()
     }
 
-    /// Borrow the verification or warning log bytes.
-    pub fn log_bytes(&self, warning: bool) -> Option<&[u8]> {
+    /// Borrow the run report's Arrow IPC bytes.
+    pub fn run_report_bytes(&self) -> Option<&[u8]> {
         match &self.state {
-            BuildOutcome::Plain { result: Ok(domain) } => domain_logs(domain, warning),
+            BuildOutcome::Plain { result: Ok(domain) } => Some(domain.run_report()),
             BuildOutcome::Project {
                 result: Ok(domain), ..
-            } => domain_logs(domain, warning),
-            BuildOutcome::Producer { projection, .. } => {
-                projection.result.as_ref().ok().and_then(|root| {
-                    if warning {
-                        root.warning_log()
-                    } else {
-                        root.verification_log()
-                    }
-                })
-            }
+            } => Some(domain.run_report()),
+            BuildOutcome::Producer { projection, .. } => projection
+                .result
+                .as_ref()
+                .ok()
+                .and_then(|root| root.run_report()),
             _ => None,
         }
     }
@@ -571,7 +563,8 @@ impl Build {
         &self.report
     }
 
-    /// Publish held logs and output. A failed build cannot save.
+    /// Publish the held report file and output. A failed build publishes only
+    /// its declared report file and still reports a failed save.
     ///
     /// # Example
     ///
@@ -744,46 +737,27 @@ impl Build {
     }
 }
 
-fn tables_of(state: &BuildOutcome) -> (Option<Table>, Option<Table>, Option<Table>) {
-    let tables = |output: Option<&yamaa_adapters::public_table::PublicTable>,
-                  verification: Option<&yamaa_adapters::public_table::PublicTable>,
-                  warning: Option<&yamaa_adapters::public_table::PublicTable>| {
+fn tables_of(state: &BuildOutcome) -> (Option<Table>, Option<Table>) {
+    let tables = |domain: &yamaa_adapters::file_application::Domain| {
         (
-            output.map(Table::from_adapter),
-            verification.map(Table::from_adapter),
-            warning.map(Table::from_adapter),
+            domain.output_table().map(Table::from_adapter),
+            Some(Table::from_adapter(domain.report_table())),
         )
     };
     match state {
-        BuildOutcome::Plain { result: Ok(domain) } => tables(
-            domain.output_table(),
-            domain.log_table(false),
-            domain.log_table(true),
-        ),
+        BuildOutcome::Plain { result: Ok(domain) } => tables(domain),
         BuildOutcome::Project {
             result: Ok(domain), ..
-        } => tables(
-            domain.output_table(),
-            domain.log_table(false),
-            domain.log_table(true),
-        ),
+        } => tables(domain),
+        // A producer graph returns its entry specification's run report.
         BuildOutcome::Producer { projection, .. } => match &projection.result {
-            Ok(root) => tables(
-                root.output_table(),
-                root.log_table(false),
-                root.log_table(true),
+            Ok(root) => (
+                root.output_table().map(Table::from_adapter),
+                root.report_table().map(Table::from_adapter),
             ),
-            Err(_) => (None, None, None),
+            Err(_) => (None, None),
         },
-        _ => (None, None, None),
-    }
-}
-
-fn domain_logs(domain: &yamaa_adapters::file_application::Domain, warning: bool) -> Option<&[u8]> {
-    if warning {
-        domain.warning_log()
-    } else {
-        domain.verification_log()
+        _ => (None, None),
     }
 }
 
@@ -984,6 +958,7 @@ mod tests {
         assert!(!report.is_empty());
         let build = engine.build(&request, &token).unwrap();
         assert!(build.output().is_none());
+        assert!(build.run_report().is_none());
         assert!(!build.report().is_empty());
         assert!(build.observations(false).is_none());
         assert!(build.preparation_sources().is_empty());
@@ -1086,7 +1061,10 @@ mod plain_build_tests {
         let output = build.output().unwrap();
         assert_eq!(output.rows(), 2);
         assert!(build.output_bytes().is_some());
-        assert!(build.log(false).is_none());
+        // One run, input, base and two column rows; no handler or check.
+        let report = build.run_report().unwrap();
+        assert_eq!(report.rows(), 5);
+        assert!(build.run_report_bytes().is_some());
         assert!(build.observations(false).is_some());
         assert!(build.observations(true).is_some());
         assert_eq!(build.save().unwrap(), SaveOutcome::Saved);

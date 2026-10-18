@@ -182,6 +182,21 @@ mod file {
                 }
             }
         }
+        /// Prepare a graph whose metadata admission must refuse it.
+        fn refused_graph(
+            study: &Study,
+            language: Language,
+        ) -> Box<yamaa_adapters::file_graph::RejectedGraph> {
+            match FileGraph::prepare(
+                Resources::new(&study.path(""), &study.path(""), &[]).unwrap(),
+                "consumer/root.yaml",
+                environment(language),
+                shipped_schema::capture().unwrap(),
+            ) {
+                Err(rejected) => rejected,
+                Ok(_) => panic!("graph admission must refuse colliding targets"),
+            }
+        }
         const PRODUCER: &str = "schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys: [ID]\ninput: {RAW: {path: ../../raw/raw.csv, types: {ID: int, VALUE: float}}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - {name: VALUE, type: float, label: Reported value, derivation: {function: {name: id_float, args: {x: RAW.VALUE}}}}\noutput: {path: ../../generated/producer.csv, columns: [ID, VALUE], decimals: 2}\n";
         const CONSUMER: &str = "schema_version: '1.0'\ndomain: TEST\nbase: FIRST\nkeys: [ID]\ninput:\n  FIRST: {path: ../generated/producer.csv, schema: ../producer/p.yaml}\n  SECOND: {path: ../generated/producer.csv, schema: ../producer/./p.yaml}\nintermediates: [{id: SECOND_REFERENCE, dataset: SECOND, key: [ID], no_match: null}]\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: FIRST.ID}\n  - {name: FIRST_VALUE, type: float, label: First value, derivation: FIRST.VALUE}\n  - {name: SECOND_VALUE, type: float, label: Second value, derivation: SECOND_REFERENCE.VALUE}\n  - {name: VALUE, type: float, label: Reported value, derivation: {compute: {expr: 'FIRST_VALUE + SECOND_VALUE'}}}\noutput: {path: ../generated/root.csv, columns: [ID, VALUE], decimals: 2}\n";
 
@@ -439,7 +454,7 @@ columns:
             assert!(prepare_owned_classified(&failed, report_id(), &[]).is_err());
         }
         #[test]
-        fn whole_set_invalid_target_and_duplicate_normalized_alias_refuse_every_write() {
+        fn invalid_target_refuses_every_write_and_duplicate_alias_is_refused_at_validation() {
             use yamaa_adapters::producer_result::prepare_owned_classified;
             for duplicate in [false, true] {
                 let study = Study::new();
@@ -451,9 +466,20 @@ columns:
                         CONSUMER
                             .replace("../generated/root.csv", "../generated/dir/../producer.csv"),
                     );
-                } else {
-                    fs::create_dir(study.0.join("generated/root.csv")).unwrap();
+                    // Two primary files at one resolved location are refused
+                    // at validation, before any study read, build or Save.
+                    let rejected = refused_graph(&study, Language::Python);
+                    let error = format!("{:?}", rejected.error());
+                    assert!(
+                        error.contains(
+                            r#"GraphCollision { left: "output.path", right: "output.path""#
+                        ),
+                        "{error}"
+                    );
+                    assert_eq!(fs::read_dir(study.0.join("generated")).unwrap().count(), 0);
+                    continue;
                 }
+                fs::create_dir(study.0.join("generated/root.csv")).unwrap();
                 let mut build = study.build(Language::Python);
                 let mut activation = Activation::new(&study, Mode::Pass);
                 let owned = build.build_owned_reported(&mut activation, report_id(), scope());
@@ -478,8 +504,7 @@ columns:
 
         #[cfg(windows)]
         #[test]
-        fn absent_windows_case_alias_targets_refuse_before_every_write() {
-            use yamaa_adapters::producer_result::prepare_owned_classified;
+        fn absent_windows_case_alias_targets_are_refused_at_validation() {
             let study = Study::new();
             study.rounded();
             study.write(
@@ -487,24 +512,15 @@ columns:
                 CONSUMER.replace("../generated/root.csv", "../generated/PRODUCER.csv"),
             );
             fs::create_dir(study.0.join("generated")).unwrap();
-            let mut build = study.build(Language::Python);
-            let mut activation = Activation::new(&study, Mode::Pass);
-            let owned = build.build_owned_reported(&mut activation, report_id(), scope());
-            assert!(owned.accepted());
-            let mut result = prepare_owned_classified(&owned, report_id(), &[]).unwrap();
-            assert!(!result.save().unwrap());
-            assert_eq!(
-                result.observations()["publication"]["error"]["code"],
-                "target_admission"
+            // Ordinal case-insensitive names select one Windows target, so the
+            // two primary files collide before any study read or Save.
+            let rejected = refused_graph(&study, Language::Python);
+            let error = format!("{:?}", rejected.error());
+            assert!(
+                error.contains(r#"GraphCollision { left: "output.path", right: "output.path""#),
+                "{error}"
             );
-            assert!(result
-                .publication_attempt()
-                .unwrap()
-                .entered
-                .entered
-                .is_empty());
             assert_eq!(fs::read_dir(study.0.join("generated")).unwrap().count(), 0);
-            assert!(result.output().is_some());
         }
         #[cfg(target_os = "macos")]
         #[test]
@@ -2735,11 +2751,11 @@ columns:
         }
 
         #[test]
-        fn key_failures_retain_the_verification_log_and_report_as_output_findings() {
+        fn key_failures_report_as_output_findings_beside_the_checks_that_held() {
             use yamaa_adapters::producer_result::prepare_owned_classified;
-            // Key failures are output findings, not verification checks: feeding
-            // them to the verification-phase projection used to fail
-            // `prepare_diagnostics`, dropping this node's verification log.
+            // Key failures are output findings, not verification checks: the
+            // failed node's report keeps the verification prefix that held and
+            // fails with the key condition.
             for (csv, condition) in [
                 ("ID,GRP,VALUE\n1,a,10\n1,b,20\n", "duplicate_key"),
                 ("ID,GRP,VALUE\n,a,10\n1,b,20\n", "missing_key"),
@@ -2749,7 +2765,7 @@ columns:
                 study.write("input.csv", csv);
                 study.write(
             "root.yaml",
-            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int, GRP: str, VALUE: int}}}\nrows:\n  - id: grouped\n    dataset: SRC\n    group_by: [SRC.GRP]\n    derivations: {ID: {aggregate: 'MAX(SRC.ID)'}, GRP: SRC.GRP, VALUE: {aggregate: 'MAX(SRC.VALUE)'}}\ncolumns:\n  - {name: ID, type: int, label: Identifier}\n  - {name: GRP, type: str, label: Group}\n  - name: VALUE\n    type: int\n    label: Value\n    verifications: [{not_missing: {id: value-present}}]\noutput: {path: generated/root.csv, columns: [ID, GRP, VALUE], verification_log: generated/root-checks.csv, warning_log: generated/root-warnings.csv}\n",
+            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int, GRP: str, VALUE: int}}}\nrows:\n  - id: grouped\n    dataset: SRC\n    group_by: [SRC.GRP]\n    derivations: {ID: {aggregate: 'MAX(SRC.ID)'}, GRP: SRC.GRP, VALUE: {aggregate: 'MAX(SRC.VALUE)'}}\ncolumns:\n  - {name: ID, type: int, label: Identifier}\n  - {name: GRP, type: str, label: Group}\n  - name: VALUE\n    type: int\n    label: Value\n    verifications: [{not_missing: {id: value-present}}]\noutput: {path: generated/root.csv, columns: [ID, GRP, VALUE], report: generated/root-report.csv}\n",
         );
                 let environment = project_source::prepare(
                     shipped_schema::capture_environment().unwrap(),
@@ -2779,9 +2795,10 @@ columns:
                 assert!(activation.trace.is_empty(), "{condition}");
                 let mut result = prepare_owned_classified(&owned, report_id(), &[]).unwrap();
                 assert!(result.output().is_none(), "{condition}");
-                assert!(result.verification_log().is_some(), "{condition}");
-                let table = result.log_table(false).unwrap();
-                assert_eq!(table.rows(), 1, "{condition}");
+                // The run, its input and row template, and the held check; a
+                // failed run has no column rows.
+                let table = result.report_table().unwrap();
+                assert_eq!(table.rows(), 4, "{condition}");
                 assert!(
                     result.issues().iter().any(|issue| issue.phase == "output"
                         && issue.condition == condition
@@ -2789,31 +2806,35 @@ columns:
                     "{condition}: {:?}",
                     result.issues()
                 );
-                // The retained log is the completed verification prefix, so a
-                // diagnostic save publishes exactly that one artifact.
-                for name in ["root.csv", "root-warnings.csv"] {
-                    study.write(&format!("generated/{name}"), b"held sentinel");
-                }
+                // A failed graph's save publishes exactly the report of the node
+                // that ran and no primary artifact.
+                study.write("generated/root.csv", b"held sentinel");
                 assert!(result.save().is_err(), "{condition}");
                 assert_eq!(
                     result.observations()["artifacts"].as_array().unwrap().len(),
                     1,
-                    "{condition}: exactly the retained verification log is published"
+                    "{condition}: exactly the report is published"
                 );
                 assert_eq!(
                     fs::read(study.0.join("generated").join("root.csv")).unwrap(),
                     b"held sentinel"
                 );
-                assert_eq!(
-                    fs::read(study.0.join("generated").join("root-warnings.csv")).unwrap(),
-                    b"held sentinel"
-                );
-                let checks = String::from_utf8(
-                    fs::read(study.0.join("generated").join("root-checks.csv")).unwrap(),
+                let report = String::from_utf8(
+                    fs::read(study.0.join("generated").join("root-report.csv")).unwrap(),
                 )
                 .unwrap();
-                assert!(checks.contains("value-present"), "{condition}: {checks}");
-                assert!(checks.contains("not_missing"), "{condition}: {checks}");
+                assert!(
+                    report.contains(&format!(
+                        "\ngenerated/root.csv,run,output,,,,,,failed,{condition},,,,{{}}\n"
+                    )),
+                    "{condition}: {report}"
+                );
+                assert!(
+                    report.contains(
+                        ",check,columns.VALUE.verifications[0].not_missing,not_missing,value-present,VALUE,"
+                    ),
+                    "{condition}: {report}"
+                );
             }
         }
     }

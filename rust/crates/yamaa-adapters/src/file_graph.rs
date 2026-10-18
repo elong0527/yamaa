@@ -234,7 +234,7 @@ impl FileGraph {
                 &documents[0].source().identity,
             )
             .map_err(Error::Document)?;
-            crate::producer_log_publication::admit_locations(&documents, &resources)?;
+            crate::producer_report_publication::admit_locations(&documents, &resources)?;
             let root = documents[0].source().identity.as_str();
             producer_graph::prepare(root, nodes, environment).map_err(Error::Graph)
         });

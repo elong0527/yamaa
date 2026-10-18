@@ -1,10 +1,10 @@
-//! Diagnostic and primary publication sealed beside one actual native build.
-//! Failed graphs retain verification-only authority; public attempts grant none.
+//! Report and primary publication sealed beside one actual native build.
+//! Failed graphs retain report-only authority; public attempts grant none.
 use crate::{
     file_producer_build::Provenance,
     file_resources::{Error as ResourceError, Resources},
     producer_publication::{same_location, AdmissionFailure},
-    producer_report::{NativeAttempt, NodeLogs},
+    producer_report::{NativeAttempt, NodeRunReport},
     report_storage::StoredReport,
     resource_publication::{AnchoredTarget, Publisher},
     specification_report::Error as ReportError,
@@ -18,26 +18,19 @@ use std::{
 use yamaa_core::json::Value;
 use yamaa_core::producer_publication::PreparedPublication;
 
-/// Lexical collisions across the complete authored graph are metadata facts.
-/// Existing-parent/physical alias checks remain at Save's whole-set preflight.
+/// Every output file of the complete authored graph names its own location:
+/// two primary files, two reports, or a report and a primary file of any nodes
+/// that resolve to one location are metadata facts, refused before any study
+/// read whether or not a node declares a report. The comparison needs neither
+/// file nor parent to exist; physical alias checks remain at Save's whole-set
+/// preflight.
 pub(crate) fn admit_locations(
     documents: &[Arc<crate::specification_source::PreparedDocument>],
     resources: &Resources,
 ) -> Result<(), crate::file_graph::Error> {
     use crate::file_graph::Error;
-    use yamaa_core::specification::{LogFinding, PreflightFinding, PrepareError};
-    let fields = [
-        ("path", "output.path"),
-        ("verification_log", "output.verification_log"),
-        ("warning_log", "output.warning_log"),
-    ];
-    if !documents.iter().any(|document| {
-        fields[1..]
-            .iter()
-            .any(|(field, _)| document.written_output_field_origin(field).is_some())
-    }) {
-        return Ok(());
-    }
+    use yamaa_core::specification::{PreflightFinding, PrepareError, ReportFinding};
+    let fields = [("path", "output.path"), ("report", "output.report")];
     let count = documents
         .iter()
         .map(|document| {
@@ -61,7 +54,7 @@ pub(crate) fn admit_locations(
                     .iter()
                     .find(|(_, prior)| same_location(prior, &location))
                 {
-                    let finding = PreflightFinding::Log(LogFinding::Collision {
+                    let finding = PreflightFinding::Report(ReportFinding::GraphCollision {
                         left,
                         right,
                         path: origin.written.into(),
@@ -83,22 +76,25 @@ pub(crate) fn admit_locations(
 #[derive(Clone, Copy)]
 enum Source {
     Primary(usize),
-    Verification(usize),
-    Warning(usize),
+    /// The report of the request's node, held by the result.
+    Report,
 }
 pub(crate) struct Request {
     source: Source,
     pub(crate) node: usize,
     pub(crate) field: &'static str,
     pub(crate) path: String,
-    pub(crate) observation: Value,
+    specification: String,
+    /// A primary artifact's complete observation. A report's observation is
+    /// held with its rendered bytes by the result that built the report.
+    observation: Option<Value>,
 }
 struct Borrowed<'a> {
     source: Source,
     node: usize,
     field: &'static str,
     path: &'a str,
-    observation: &'a Value,
+    observation: Option<&'a Value>,
     specification: &'a str,
 }
 struct Target {
@@ -129,10 +125,9 @@ impl Admission {
 }
 pub(crate) struct Publication {
     primary: Option<PreparedPublication>,
-    logs: Arc<[NodeLogs]>,
     requests: Vec<Request>,
     full: Result<Targets, Admission>,
-    // A rejected warning/primary target cannot consume a retained V capability.
+    // A rejected primary target cannot consume a retained report capability.
     // This second set exists only after full admission failed and dropped its
     // target prefix. A successful full set is borrowed for diagnostic Save.
     diagnostic: Option<Result<Targets, Admission>>,
@@ -171,39 +166,36 @@ impl Default for Attempt {
     }
 }
 
+/// Visit the graph's files in node order: each node that ran and declares
+/// `output.report` publishes its report immediately before its own primary
+/// artifact, and an accepted graph publishes every primary artifact.
 fn each<E>(
     attempt: &NativeAttempt<E>,
     primary: Option<&PreparedPublication>,
-    logs: &[NodeLogs],
     mut visit: impl FnMut(Borrowed<'_>) -> Result<(), AdmissionFailure>,
 ) -> Result<(), AdmissionFailure> {
     for &node in attempt.provenance.metadata().order() {
         let specification = attempt.provenance.metadata().nodes()[node].identity();
-        if let Some((index, held)) = logs.iter().enumerate().find(|(_, held)| held.node == node) {
-            if let Some(log) = &held.logs.verification {
-                visit(Borrowed {
-                    source: Source::Verification(index),
-                    node,
-                    field: "verification_log",
-                    path: log.path(),
-
-                    observation: log.observation(),
-                    specification,
-                })?;
-            }
-            if primary.is_some() {
-                if let Some(log) = &held.logs.warning {
-                    visit(Borrowed {
-                        source: Source::Warning(index),
-                        node,
-                        field: "warning_log",
-                        path: log.path(),
-
-                        observation: log.observation(),
-                        specification,
-                    })?;
-                }
-            }
+        let view = attempt
+            .provenance
+            .report_views()
+            .nth(node)
+            .ok_or(AdmissionFailure::Incomplete)?;
+        // A node that never ran built no report.
+        let ran = attempt
+            .graph
+            .nodes
+            .iter()
+            .any(|entered| entered.node == node);
+        if let Some(path) = view.compiled().output_report().filter(|_| ran) {
+            visit(Borrowed {
+                source: Source::Report,
+                node,
+                field: "report",
+                path,
+                observation: None,
+                specification,
+            })?;
         }
         if let Some(primary) = primary {
             let (index, artifact) = primary
@@ -229,7 +221,7 @@ fn each<E>(
                 field: "path",
                 path: artifact.path(),
 
-                observation,
+                observation: Some(observation),
                 specification,
             })?;
         }
@@ -237,12 +229,13 @@ fn each<E>(
     Ok(())
 }
 impl Publication {
-    /// The caller is FileBuild's private actual-build boundary. Paths, bytes,
-    /// tables and observations are selected only from its immutable owners.
+    /// The caller is FileBuild's private actual-build boundary. Paths, primary
+    /// bytes and observations are selected only from its immutable owners; the
+    /// reports are built, rendered and verified with the result that holds
+    /// them, before any Save.
     pub(crate) fn from_build<E>(
         attempt: &NativeAttempt<E>,
         prepared: Result<PreparedPublication, &'static str>,
-        logs: Arc<[NodeLogs]>,
         resources: &Resources,
     ) -> Self {
         let (primary, refusal) = if attempt.accepted() {
@@ -253,7 +246,7 @@ impl Publication {
         } else {
             (None, None)
         };
-        let requests = Self::collect_requests(attempt, primary.as_ref(), &logs);
+        let requests = Self::collect_requests(attempt, primary.as_ref());
         let (requests, full, diagnostic) = match requests {
             Err(error) => (Vec::new(), Err(Admission::unlocated(error)), None),
             Ok(requests) => {
@@ -270,7 +263,6 @@ impl Publication {
         };
         Self {
             primary,
-            logs,
             requests,
             full,
             diagnostic,
@@ -279,39 +271,39 @@ impl Publication {
     fn collect_requests<E>(
         attempt: &NativeAttempt<E>,
         primary: Option<&PreparedPublication>,
-        logs: &[NodeLogs],
     ) -> Result<Vec<Request>, AdmissionFailure> {
-        let nodes = attempt.provenance.metadata().nodes().len();
-        if nodes == 0 || logs.len() > nodes {
+        if attempt.provenance.metadata().nodes().is_empty() {
             return Err(AdmissionFailure::Incomplete);
         }
-        for (index, held) in logs.iter().enumerate() {
-            if held.node >= nodes || logs[..index].iter().any(|prior| prior.node == held.node) {
-                return Err(AdmissionFailure::Incomplete);
-            }
-        }
         let mut count = 0usize;
-        each(attempt, primary, logs, |_| {
+        each(attempt, primary, |_| {
             count += 1;
             Ok(())
         })?;
         if count == 0 {
             return Err(AdmissionFailure::Incomplete);
         }
-        // Cumulative path, byte, traversal and observation admission precedes
+        // Cumulative path, traversal and primary observation admission precedes
         // all new requests. Exact held byte owners are reused, never reencoded.
         let mut requests = Vec::with_capacity(count);
-        each(attempt, primary, logs, |request| {
-            let mut observation = request.observation.clone();
-            if !observation.is_object() {
-                return Err(AdmissionFailure::Incomplete);
-            }
-            observation["specification"] = Value::String(request.specification.into());
+        each(attempt, primary, |request| {
+            let observation = request
+                .observation
+                .map(|observation| {
+                    let mut observation = observation.clone();
+                    if !observation.is_object() {
+                        return Err(AdmissionFailure::Incomplete);
+                    }
+                    observation["specification"] = Value::String(request.specification.into());
+                    Ok(observation)
+                })
+                .transpose()?;
             requests.push(Request {
                 source: request.source,
                 node: request.node,
                 field: request.field,
                 path: request.path.into(),
+                specification: request.specification.into(),
                 observation,
             });
             Ok(())
@@ -324,7 +316,7 @@ impl Publication {
         provenance: &Provenance,
         resources: &Resources,
     ) -> Result<Targets, Admission> {
-        let selected = |request: &&Request| !diagnostic || request.field == "verification_log";
+        let selected = |request: &&Request| !diagnostic || request.field == "report";
         let count = requests.iter().filter(selected).count();
         if count == 0 {
             return Err(Admission::unlocated(AdmissionFailure::Incomplete));
@@ -345,7 +337,7 @@ impl Publication {
         }
         let mut targets = Vec::with_capacity(count);
         for (index, request) in requests.iter().enumerate() {
-            if diagnostic && request.field != "verification_log" {
+            if diagnostic && request.field != "report" {
                 continue;
             }
             let view = provenance.report_views().nth(request.node).unwrap();
@@ -386,18 +378,46 @@ impl Publication {
         self.requests
             .iter()
             .enumerate()
-            .filter(move |(_, request)| !diagnostic || request.field == "verification_log")
+            .filter(move |(_, request)| !diagnostic || request.field == "report")
     }
     pub(crate) fn request(&self, index: usize) -> &Request {
         &self.requests[index]
     }
-    fn bytes(&self, request: &Request) -> &[u8] {
+    /// The rendered report file the result holds for a report request.
+    fn held<'a>(request: &Request, reports: &'a [NodeRunReport]) -> Option<(&'a [u8], &'a Value)> {
+        reports
+            .iter()
+            .find(|held| held.node == request.node)
+            .and_then(|held| held.report.file())
+            .filter(|(path, _, _)| *path == request.path)
+            .map(|(_, bytes, observation)| (bytes, observation))
+    }
+    fn bytes<'a>(&'a self, request: &Request, reports: &'a [NodeRunReport]) -> Option<&'a [u8]> {
         match request.source {
-            Source::Primary(index) => self.primary.as_ref().unwrap().artifacts()[index].bytes(),
-            Source::Verification(index) => {
-                self.logs[index].logs.verification.as_ref().unwrap().bytes()
+            Source::Primary(index) => self
+                .primary
+                .as_ref()
+                .and_then(|primary| primary.artifacts().get(index))
+                .map(|artifact| artifact.bytes()),
+            Source::Report => Self::held(request, reports).map(|(bytes, _)| bytes),
+        }
+    }
+    fn observation(request: &Request, reports: &[NodeRunReport]) -> Result<Value, ReportError> {
+        match request.source {
+            Source::Primary(_) => request
+                .observation
+                .clone()
+                .ok_or(ReportError::InvalidObservation),
+            Source::Report => {
+                let (_, observation) =
+                    Self::held(request, reports).ok_or(ReportError::InvalidObservation)?;
+                let mut observation = observation.clone();
+                if !observation.is_object() {
+                    return Err(ReportError::InvalidObservation);
+                }
+                observation["specification"] = Value::String(request.specification.clone());
+                Ok(observation)
             }
-            Source::Warning(index) => self.logs[index].logs.warning.as_ref().unwrap().bytes(),
         }
     }
     fn targets_for(&self, diagnostic: bool) -> Result<&Targets, &Admission> {
@@ -414,6 +434,7 @@ impl Publication {
     pub(crate) fn prefix_report(
         &self,
         original: &StoredReport,
+        reports: &[NodeRunReport],
         diagnostic: bool,
         entered: usize,
         completed: usize,
@@ -427,8 +448,8 @@ impl Publication {
         result["artifacts"] = Value::Array(
             self.requests(diagnostic)
                 .take(completed)
-                .map(|(_, request)| request.observation.clone())
-                .collect(),
+                .map(|(_, request)| Self::observation(request, reports))
+                .collect::<Result<_, _>>()?,
         );
         result["publication"] = crate::json!({
             "status":"failure", "mode":if diagnostic {"diagnostic"} else {"complete"},
@@ -442,6 +463,7 @@ impl Publication {
     pub(crate) fn save_into(
         &self,
         diagnostic: bool,
+        reports: &[NodeRunReport],
         attempt: &mut Attempt,
         mut publish: impl FnMut(
             &mut Publisher,
@@ -457,6 +479,15 @@ impl Publication {
                 return;
             }
         };
+        // Save writes only bytes the result already holds: every selected
+        // file is owned before the first publisher opens.
+        if self
+            .requests(diagnostic)
+            .any(|(_, request)| self.bytes(request, reports).is_none())
+        {
+            attempt.outcome = Err(Failure::Incomplete);
+            return;
+        }
         let count = self.requests(diagnostic).count();
         // Retain all potential entry text before opening any publisher. The
         // actual ledger receives only entries moved before crossing the port.
@@ -497,7 +528,10 @@ impl Publication {
                 attempt
                     .entered
                     .push(entries.pop_front().expect("admitted entry"));
-                publish(publisher, &request.path, self.bytes(request)).map_err(|error| {
+                let bytes = self
+                    .bytes(request, reports)
+                    .expect("held before publication");
+                publish(publisher, &request.path, bytes).map_err(|error| {
                     Failure::Publish(TargetFailure {
                         request: index,
                         error,

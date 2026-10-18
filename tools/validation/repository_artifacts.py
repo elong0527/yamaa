@@ -122,7 +122,7 @@ def validate_examples_csv(root: Path):
             output = document.get("output")
             if not isinstance(output, dict):
                 continue
-            for key in ("path", "warning_log", "verification_log"):
+            for key in ("path", "report"):
                 name = output.get(key)
                 if isinstance(name, str):
                     declarations[PurePosixPath(name).name] = (

@@ -118,7 +118,7 @@ impl FileSpecification {
                 crate::source_profile_inspection::inspect(document, &resources, dataset, path)
             })
             .map_err(Error::Compile)?;
-        let findings = crate::verification_logs::location_findings(&resources, &run);
+        let findings = crate::run_report::location_findings(&resources, &run);
         if !findings.is_empty() {
             return Err(Error::Compile(crate::specification_run::Error::Prepare(
                 yamaa_core::specification::PrepareError::Invalid(findings),
@@ -135,7 +135,7 @@ impl FileSpecification {
                 crate::source_profile_inspection::inspect(document, &resources, dataset, path)
             })
             .and_then(|run| {
-                let findings = crate::verification_logs::location_findings(&resources, &run);
+                let findings = crate::run_report::location_findings(&resources, &run);
                 if findings.is_empty() {
                     Ok(run)
                 } else {

@@ -69,6 +69,8 @@ pub struct DatasetResponse {
         yamaa_core::verification_diagnostics::Phase,
         Vec<CheckRecord>,
     )>,
+    // Row templates the attempt completed, for the run report.
+    pub(crate) template_rows: Vec<dataset::TemplateRows>,
 }
 
 #[derive(Serialize)]
@@ -670,6 +672,7 @@ pub(crate) fn specification_response(
         },
         _ => Vec::new(),
     };
+    let template_rows = attempt.template_rows;
     let (table, outcome, execution, failed_verifications) = match attempt.result {
         Ok(result) => {
             let table = Some(encode_dataset(&result.dataset).map_err(Error::Table)?);
@@ -704,5 +707,6 @@ pub(crate) fn specification_response(
         retained_verifications: attempt.retained_verifications,
         intermediate_diagnostics,
         failed_verifications,
+        template_rows,
     })
 }

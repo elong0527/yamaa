@@ -522,15 +522,12 @@ mod project {
         }
 
         #[test]
-        fn multiple_value_codelist_records_keep_the_shared_path_in_success_and_failure_logs() {
+        fn value_codelist_checks_report_one_row_per_declaring_path_in_success_and_failure() {
             for fail in [false, true] {
                 let study = Study::new();
                 fs::write(
                     study.0.join("spec.yaml"),
-                    ROW_CT.replace(
-                        "path: output.csv",
-                        "path: output.csv, verification_log: checks.csv",
-                    ),
+                    ROW_CT.replace("path: output.csv", "path: output.csv, report: checks.csv"),
                 )
                 .unwrap();
                 let environment = if fail {
@@ -545,15 +542,19 @@ mod project {
                 let environment = study.0.join("environment.yaml");
                 let mut run = project_domain(path, environment.to_str().unwrap());
                 assert_eq!(run.issues().len(), usize::from(fail));
-                assert_eq!(run.log_table(false).unwrap().rows(), 2);
+                // The run, its input, both row templates and one check row per
+                // bound codelist; a successful run adds its three columns.
+                assert_eq!(run.report_table().rows(), if fail { 6 } else { 9 });
                 assert!(!study.0.join("checks.csv").exists());
                 let saved = run.save();
                 assert_eq!(saved.is_ok(), !fail);
                 let checks = fs::read_to_string(study.0.join("checks.csv")).unwrap();
-                assert_eq!(
-                    checks.matches("columns.RESULT.submission.codelist").count(),
-                    2
-                );
+                for path in [
+                    ",check,columns.RESULT.submission.codelist,allowed_values,,RESULT,REQ-0957,error,",
+                    ",check,rows.glucose.submission.RESULT.codelist,allowed_values,,RESULT,REQ-0957,error,",
+                ] {
+                    assert_eq!(checks.matches(path).count(), 1, "{checks}");
+                }
                 assert_eq!(checks.matches("REQ-0957").count(), 2);
                 assert_eq!(study.0.join("output.csv").exists(), !fail);
             }
@@ -619,10 +620,8 @@ mod project {
                 let study = Study::new();
                 fs::write(
                     study.0.join("spec.yaml"),
-                    value_length_spec(length).replace(
-                        "path: output.csv",
-                        "path: output.csv, verification_log: checks.csv",
-                    ),
+                    value_length_spec(length)
+                        .replace("path: output.csv", "path: output.csv, report: checks.csv"),
                 )
                 .unwrap();
                 fs::write(study.0.join("input.csv"), "ID,VALUE\n1,é字😀\n2,\n").unwrap();
@@ -637,10 +636,9 @@ mod project {
                 )
                 .unwrap();
                 assert!(run.issues().is_empty(), "{:?}", run.issues());
-                assert_eq!(
-                    run.log_table(false).unwrap().rows(),
-                    if length == "3" { 1 } else { 2 }
-                );
+                // The run, its input, two row templates and three columns,
+                // then one shared check or one check per bound.
+                assert_eq!(run.report_table().rows(), if length == "3" { 8 } else { 9 });
                 assert!(run.save().unwrap());
                 assert_eq!(
                     fs::read_to_string(study.0.join("output.csv")).unwrap(),

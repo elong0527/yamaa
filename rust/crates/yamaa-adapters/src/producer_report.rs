@@ -100,42 +100,10 @@ fn successful_observations<C, D, T: TableAccess>(
     Ok(value)
 }
 
-fn log_observations<C, D, T: TableAccess>(
-    view: &NodeReport<'_>,
-    attempt: &CapturedAttempt<C, D, T>,
-    id: &Identity<'_>,
-) -> Result<Value, Error> {
-    use yamaa_core::dataset::ExecutionError;
-    let mut checks = Vec::new();
-    if let Ok(entered) = &attempt.result {
-        let tail: &[CheckRecord] = match &entered.result {
-            Ok(success) => &success.verifications,
-            Err(error) => match error.as_ref() {
-                ExecutionError::VerificationFailures(records)
-                | ExecutionError::VerificationDiagnostic { records, .. }
-                | ExecutionError::VerificationDeclaration { records, .. } => records,
-                // Key failures are excluded: they are output findings, not
-                // verification checks (the main report projects them with
-                // phase "output"), and feeding them here with phase
-                // "verification" would fail projection and drop this node's
-                // verification log.
-                _ => &[],
-            },
-        };
-        for actual in [&entered.retained_verifications[..], tail] {
-            records(actual)?;
-            let (observed, _) = project_report::checked_records(view, actual, "verification", id)?;
-            checks.extend(observed);
-        }
-    }
-    Ok(json!({"verifications":checks}))
-}
-
-/// Only the actual entered report port fills these private diagnostic slots.
-/// Publication remains sealed separately beside FileBuild's retained attempt.
-pub(crate) struct NodeLogs {
+/// One node's verified run report, built from the node's own retained run.
+pub(crate) struct NodeRunReport {
     pub(crate) node: usize,
-    pub(crate) logs: crate::verification_logs::PreparedLogs,
+    pub(crate) report: crate::run_report::HeldReport,
 }
 
 /// Native successful node reports are completed inside the build, before the
@@ -145,7 +113,6 @@ pub struct NativeReport<'a, 'i> {
     id: Identity<'i>,
     selected: Option<usize>,
     value: Option<StoredReport>,
-    logs: Vec<NodeLogs>,
 }
 impl<'a, 'i> NativeReport<'a, 'i> {
     pub fn new(provenance: &'a Provenance, id: Identity<'i>) -> Self {
@@ -154,7 +121,6 @@ impl<'a, 'i> NativeReport<'a, 'i> {
             id,
             selected: None,
             value: None,
-            logs: Vec::new(),
         }
     }
     fn view(&self) -> Result<NodeReport<'a>, Error> {
@@ -163,55 +129,8 @@ impl<'a, 'i> NativeReport<'a, 'i> {
             .nth(self.selected.ok_or(Error::InvalidObservation)?)
             .ok_or(Error::InvalidObservation)
     }
-    pub(crate) fn take_logs(&mut self) -> Vec<NodeLogs> {
-        std::mem::take(&mut self.logs)
-    }
 }
 impl ReportPort for NativeReport<'_, '_> {
-    fn prepare_diagnostics<C, D, T: TableAccess>(
-        &mut self,
-        node: &Node,
-        attempt: &CapturedAttempt<C, D, T>,
-    ) -> Result<(), Error> {
-        use crate::verification_logs as logs;
-        let count = self.provenance.metadata().nodes().len();
-        let index = self
-            .provenance
-            .metadata()
-            .nodes()
-            .iter()
-            .position(|held| std::ptr::eq(held, node))
-            .ok_or(Error::InvalidObservation)?;
-        let view = self
-            .provenance
-            .report_views()
-            .nth(index)
-            .ok_or(Error::InvalidObservation)?;
-        let declarations = view.compiled().output_logs();
-        if !declarations.declared() {
-            return Ok(());
-        }
-
-        if self.logs.len() >= count || self.logs.iter().any(|held| held.node == index) {
-            return Err(Error::InvalidObservation);
-        }
-        let value = log_observations(&view, attempt, &identity(&view, &self.id))?;
-        let success = attempt
-            .result
-            .as_ref()
-            .is_ok_and(|entered| entered.result.is_ok())
-            && view.compiled().output_findings().is_empty();
-        self.logs.push(NodeLogs {
-            node: index,
-            logs: Default::default(),
-        });
-        let retained = &mut self.logs.last_mut().expect("entered diagnostic slot").logs;
-        logs::prepare_into(&view, &value, success, retained)?;
-        if let Some(error) = retained.failure.take() {
-            return Err(error);
-        }
-        Ok(())
-    }
     fn select<C, D, T: TableAccess>(
         &mut self,
         node: &Node,
@@ -941,6 +860,116 @@ pub fn attempt_report_classified<'a, E>(
             observations: result,
         })
     }
+}
+
+/// A second borrow of the caller's report identity.
+pub(crate) fn reborrow<'a>(id: &'a Identity<'_>) -> Identity<'a> {
+    Identity {
+        runtime: id.runtime,
+        runtime_version: id.runtime_version,
+        engine_version: id.engine_version,
+        example: id.example,
+        specification: id.specification,
+        base_directory: id.base_directory,
+    }
+}
+
+/// Build the run report of every node that ran, in node order, exactly as a
+/// single run of its specification builds it once its outcome is final: from
+/// the node's own observations, the sources it captured (a producer's held
+/// artifact counts that artifact's encoded bytes), the row templates it
+/// completed and, for a node whose artifact was prepared, its execution. The
+/// node that stopped the graph is a failed run with its first diagnostic's
+/// condition; `root_failure` is the condition that refused the entry's host
+/// view after its artifact was prepared. A node that never ran has no report.
+/// Reporting reads the retained attempt only: it captures, decodes, executes
+/// and publishes nothing.
+pub(crate) fn node_reports<'a, E>(
+    attempt: &'a NativeAttempt<E>,
+    id: &Identity<'_>,
+    facts: &[project_report::Classified<'a, E>],
+    root_failure: Option<&str>,
+) -> Result<Vec<NodeRunReport>, Error> {
+    let facts = crate::producer_diagnostics::Facts::admit(attempt, facts)?;
+    let metadata = attempt.provenance.metadata();
+    let prefixes = link_prefixes(metadata);
+    let entry = &attempt
+        .provenance
+        .documents()
+        .first()
+        .ok_or(Error::InvalidObservation)?
+        .source()
+        .identity;
+    let entered = &attempt.graph.nodes;
+    let mut reports = Vec::with_capacity(entered.len());
+    for (position, node) in entered.iter().enumerate() {
+        let view = attempt
+            .provenance
+            .report_views()
+            .nth(node.node)
+            .ok_or(Error::InvalidObservation)?;
+        let dataset = node.dataset.result.as_ref().ok();
+        let observed = crate::run_report::RunFacts::captured(
+            &node.dataset.sources,
+            dataset.map_or(&[], |dataset| dataset.template_rows.as_slice()),
+        );
+        let complete = node
+            .output
+            .as_ref()
+            .ok()
+            .and_then(Option::as_ref)
+            .filter(|output| output.artifact().is_some());
+        let report = if let Some(output) = complete {
+            let execution = dataset
+                .and_then(|dataset| dataset.result.as_ref().ok())
+                .ok_or(Error::InvalidObservation)?;
+            let condition = root_failure.filter(|_| node.node == metadata.root());
+            crate::run_report::prepare(
+                &view,
+                output.prepared_report(),
+                &observed,
+                condition,
+                Some(execution),
+            )?
+        } else {
+            // Only the node that stopped the graph lacks its artifact.
+            if position + 1 != entered.len() {
+                return Err(Error::InvalidObservation);
+            }
+            let (value, _) = failed_observations(
+                &view,
+                &attempt.graph,
+                position,
+                &identity(&view, id),
+                &facts,
+                entry,
+                &prefixes[node.node],
+            )?;
+            // A failure no portable diagnostic describes is the rejected build
+            // the host result reports in its place.
+            let condition = value["diagnostics"]
+                .as_array()
+                .ok_or(Error::InvalidObservation)?
+                .first()
+                .map(|diagnostic| {
+                    diagnostic["condition"]
+                        .as_str()
+                        .ok_or(Error::InvalidObservation)
+                })
+                .transpose()?
+                .unwrap_or(
+                    yamaa_core::diagnostic::ConditionCode::ApplicationRejected
+                        .definition()
+                        .condition,
+                );
+            crate::run_report::prepare(&view, &value, &observed, Some(condition), None)?
+        };
+        reports.push(NodeRunReport {
+            node: node.node,
+            report,
+        });
+    }
+    Ok(reports)
 }
 
 #[cfg(all(test, feature = "yaml"))]

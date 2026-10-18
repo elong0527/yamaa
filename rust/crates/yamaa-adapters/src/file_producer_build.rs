@@ -127,8 +127,7 @@ impl<E, R, RE> Attempt<E, R, RE> {
 /// build. Arbitrary public Attempt records cannot be promoted to this owner.
 pub struct OwnedAttempt<E> {
     attempt: crate::producer_report::NativeAttempt<E>,
-    logs: Arc<[crate::producer_report::NodeLogs]>,
-    log_publication: Option<Arc<crate::producer_log_publication::Publication>>,
+    report_publication: Option<Arc<crate::producer_report_publication::Publication>>,
     publication: Option<Arc<crate::producer_publication::Publication>>,
     publication_refusal: Option<&'static str>,
 }
@@ -139,13 +138,12 @@ impl<E> std::ops::Deref for OwnedAttempt<E> {
     }
 }
 impl<E> OwnedAttempt<E> {
-    pub(crate) fn log_publication(
+    /// Report and primary authority, sealed when any node declares
+    /// `output.report`.
+    pub(crate) fn report_publication(
         &self,
-    ) -> Option<&Arc<crate::producer_log_publication::Publication>> {
-        self.log_publication.as_ref()
-    }
-    pub(crate) fn logs(&self) -> &Arc<[crate::producer_report::NodeLogs]> {
-        &self.logs
+    ) -> Option<&Arc<crate::producer_report_publication::Publication>> {
+        self.report_publication.as_ref()
     }
     pub(crate) fn publication(&self) -> Option<&Arc<crate::producer_publication::Publication>> {
         self.publication.as_ref()
@@ -196,7 +194,8 @@ impl FileBuild {
         self.build(activation, &mut report, scope)
     }
     /// Seal only the actual boundary. Failed graphs retain their original
-    /// evidence and any completed V capability, with primary/W authority revoked.
+    /// evidence and the report authority of every node that ran, with primary
+    /// authority revoked.
     pub fn build_owned_reported<A: ActivationPort>(
         &mut self,
         activation: &mut A,
@@ -206,18 +205,16 @@ impl FileBuild {
         let provenance = Arc::clone(&self.provenance);
         let mut report = crate::producer_report::NativeReport::new(&provenance, id);
         let (attempt, publication) = self.build_actual(activation, &mut report, scope);
-        let logs: Arc<[crate::producer_report::NodeLogs]> = report.take_logs().into();
-        let logged = self
+        let reported = self
             .provenance
             .report_views()
-            .any(|view| view.compiled().output_logs().declared());
-        let (log_publication, publication, publication_refusal) = if logged {
+            .any(|view| view.compiled().output_report().is_some());
+        let (report_publication, publication, publication_refusal) = if reported {
             (
                 Some(Arc::new(
-                    crate::producer_log_publication::Publication::from_build(
+                    crate::producer_report_publication::Publication::from_build(
                         &attempt,
                         publication,
-                        Arc::clone(&logs),
                         &self.resources,
                     ),
                 )),
@@ -244,8 +241,7 @@ impl FileBuild {
         };
         OwnedAttempt {
             attempt,
-            logs,
-            log_publication,
+            report_publication,
             publication,
             publication_refusal,
         }

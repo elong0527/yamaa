@@ -4,7 +4,7 @@
 //! requirement, spec paths, structured context and optional geometry).
 //! Severity is error for every record the portable shape carries today: only
 //! error-severity findings become issue rows, while warning-severity findings
-//! surface as log tables. Context numbers keep their exact identity: an
+//! surface as rows of the run report. Context numbers keep their exact identity: an
 //! integer token wider than both 64-bit machine types keeps its decimal
 //! spelling instead of passing through binary64. The original context text is
 //! retained privately so host data-frame conversion stays byte-identical; the
