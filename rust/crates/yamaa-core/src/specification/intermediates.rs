@@ -583,6 +583,13 @@ impl Declarations {
     pub fn contains(&self, name: &str) -> bool {
         self.0.iter().any(|item| item.name == name)
     }
+    /// The input a named intermediate reads; a row it drives reads that input's records.
+    pub(super) fn input(&self, name: &str) -> Option<usize> {
+        match self.0.iter().find(|item| item.name == name)?.source {
+            self_relations::Relation::Input(index) => Some(index),
+            self_relations::Relation::SelfRows => None,
+        }
+    }
     pub(super) fn kept(&self, name: &str) -> bool {
         self.0
             .iter()
