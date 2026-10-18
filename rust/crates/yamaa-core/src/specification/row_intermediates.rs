@@ -76,29 +76,59 @@ pub(super) fn common_driver<'a>(
 }
 
 /// Borrow references from admitted key occurrences, without lowering them again.
-/// Named reads in every expression promote their matching output defaults.
+/// Named reads in every expression promote their matching output defaults,
+/// through the `between` values of further intermediates too, as binding
+/// follows them ([`dependencies`]).
 pub(super) fn default_dependencies(
     d: &Document,
     reference: &str,
     output: &TableSchema,
     templates: &str_template::Prepared,
 ) -> Result<Vec<usize>, PrepareError> {
+    let mut dependencies = Vec::new();
+    let mut followed = Vec::new();
+    match_dependencies(
+        d,
+        reference,
+        output,
+        templates,
+        &mut followed,
+        &mut dependencies,
+    )?;
+    Ok(dependencies)
+}
+
+/// The output columns the lookup `reference` names matches on, following a
+/// `between` value that reads another intermediate. A lookup already
+/// followed is not followed again; binding reports such a cycle.
+fn match_dependencies<'a>(
+    d: &'a Document,
+    reference: &str,
+    output: &TableSchema,
+    templates: &str_template::Prepared,
+    followed: &mut Vec<&'a str>,
+    dependencies: &mut Vec<usize>,
+) -> Result<(), PrepareError> {
     let Some((name, _)) = reference.split_once('.') else {
-        return Ok(Vec::new());
+        return Ok(());
     };
     let Some(items) = d
         .field(d.root(), "intermediates")
         .filter(|&id| !matches!(d.nodes()[id], N::Null))
     else {
-        return Ok(Vec::new());
+        return Ok(());
     };
     let Some(&item) = sequence(d, items)?.iter().find(|&&item| {
         d.field(item, "id")
             .is_some_and(|id| text(d, id).is_ok_and(|id| id == name))
     }) else {
-        return Ok(Vec::new());
+        return Ok(());
     };
-    let mut dependencies = Vec::new();
+    let name = text(d, field(d, item, "id")?)?;
+    if followed.contains(&name) {
+        return Ok(());
+    }
+    followed.push(name);
     let mut register = |name: &str| {
         if !name.contains('.') {
             if let Some(column) = output
@@ -144,9 +174,57 @@ pub(super) fn default_dependencies(
         .field(item, "between")
         .filter(|&id| !matches!(d.nodes()[id], N::Null))
     {
-        register(text(d, field(d, range, "value")?)?);
+        let value = text(d, field(d, range, "value")?)?;
+        if value.contains('.') {
+            match_dependencies(d, value, output, templates, followed, dependencies)?;
+        } else {
+            register(value);
+        }
     }
-    Ok(dependencies)
+    Ok(())
+}
+
+/// The value sites through which the intermediate at `index` matches on
+/// output column `column`: each `between` value followed into a further
+/// intermediate, then the value that reads the column.
+fn match_sites(
+    index: usize,
+    column: usize,
+    items: &[Option<crate::dataset::Intermediate>],
+    depth: usize,
+) -> Option<Vec<String>> {
+    use crate::dataset::{CurrentRead, MatchRead};
+    if depth > crate::limits::Limits::SEMANTIC_DEPTH {
+        return None;
+    }
+    let item = items.get(index).and_then(Option::as_ref)?;
+    if let Some(key) = item.keys.iter().find(|key| {
+        key.value
+            .reads()
+            .any(|read| matches!(read, MatchRead::Output { column: read, .. } if *read == column))
+    }) {
+        return Some(vec![key.path.clone()]);
+    }
+    let range = item.range.as_ref()?;
+    let value = format!("{}.value", range.path());
+    match range.current().read {
+        CurrentRead::Output(read) if read == column => Some(vec![value]),
+        CurrentRead::Intermediate { index: child, .. } if child < index => {
+            let mut sites = vec![value];
+            sites.extend(match_sites(child, column, items, depth + 1)?);
+            Some(sites)
+        }
+        _ => None,
+    }
+}
+
+/// Whether `findings` already holds this lookup finding: a template reads
+/// one intermediate through several identifiers of one site.
+fn reported(findings: &[BindFinding], finding: &BindFinding) -> bool {
+    findings.iter().any(|prior| {
+        matches!((prior, finding), (BindFinding::Lookup(prior), BindFinding::Lookup(finding))
+            if prior.diagnostic() == finding.diagnostic())
+    })
 }
 
 pub(super) fn dependencies(
@@ -251,6 +329,8 @@ pub(super) fn bind(
         }
     };
     let before = findings.len();
+    // A phase refusal that this site already reported still refuses the read.
+    let mut phase_refused = false;
     for key in &item.keys {
         if let crate::dataset::MatchValue::Contextual(declaration) = &key.value {
             findings.push(missing_dependency(declaration.identifier(), &key.path));
@@ -260,17 +340,15 @@ pub(super) fn bind(
             if let crate::dataset::MatchRead::Output { column, identifier } = read {
                 if available.is_some_and(|available| !available.contains(column)) {
                     // A row template's read of a lookup matching on a column
-                    // it leaves to the column phase (LOOKUP-2), once per column.
+                    // it leaves to the column phase (LOOKUP-2), once per site.
                     match row.filter(|_| declarations.reader().is_none()) {
                         Some(row) => {
                             let finding =
                                 match_phase_boundary(path, identifier, &item.identifier, row);
-                            if !findings[before..].iter().any(|prior| {
-                                matches!((prior, &finding), (BindFinding::Lookup(prior), BindFinding::Lookup(finding))
-                                    if prior.diagnostic() == finding.diagnostic())
-                            }) {
+                            if !reported(findings, &finding) {
                                 findings.push(finding);
                             }
+                            phase_refused = true;
                         }
                         None => findings.push(missing_dependency(identifier, &key.path)),
                     }
@@ -287,7 +365,7 @@ pub(super) fn bind(
             }
         }
     }
-    if findings.len() != before {
+    if findings.len() != before || phase_refused {
         return Ok(None);
     }
     let donor = item.source_schema(secondary).ok_or(BindError::Internal)?;
@@ -367,11 +445,26 @@ pub(super) fn bind(
         {
             // A lookup's own dependency is a match value it reads, not a read
             // by this row derivation: one the row template leaves to the
-            // column phase fails at the template's read (LOOKUP-2).
+            // column phase fails at the template's read (LOOKUP-2), naming
+            // each value followed when a `between` value leads to it.
             if let (Some(row), crate::reference_binding::Diagnostic::PhaseBoundary { .. }) =
                 (row, &finding)
             {
-                findings.push(match_phase_boundary(path, name, &item.identifier, row));
+                let BindFinding::Lookup(mut finding) =
+                    match_phase_boundary(path, name, &item.identifier, row)
+                else {
+                    return Err(BindError::Internal);
+                };
+                if let Some(sites) =
+                    match_sites(index, dependency, items, 0).filter(|sites| sites.len() > 1)
+                {
+                    finding.extend_paths(sites);
+                }
+                let finding = BindFinding::Lookup(finding);
+                if !reported(findings, &finding) {
+                    findings.push(finding);
+                }
+                phase_refused = true;
                 continue;
             }
             findings.push(BindFinding::OutputReference {
@@ -384,5 +477,6 @@ pub(super) fn bind(
             edges.push(dependency);
         }
     }
-    Ok((findings.len() == before).then_some(Expression::Intermediate { index, column }))
+    Ok((findings.len() == before && !phase_refused)
+        .then_some(Expression::Intermediate { index, column }))
 }
