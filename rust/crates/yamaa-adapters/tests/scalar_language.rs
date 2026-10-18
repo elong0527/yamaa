@@ -1126,6 +1126,52 @@ rows:
         }
 
         #[test]
+        fn a_grouped_row_count_names_every_offending_count_even_for_one_group() {
+            let study = Study::new();
+            fs::write(study.0.join("input/input.csv"), "ID,ARM\n1,A\n2,A\n3,B\n").unwrap();
+            let mut result = study.build(
+                r#"schema_version: '1.0'
+domain: TEST
+keys: [ID]
+input: {SRC: {path: input/input.csv, types: {ID: int}}}
+output: {path: out.csv, columns: [ID, ARM], report: report.csv}
+columns:
+  - {name: ID, type: int, derivation: SRC.ID}
+  - {name: ARM, type: str, derivation: SRC.ARM}
+verifications:
+  - row_count: {group_by: [ARM], max: 1, severity: warning}
+  - row_count: {max: 2, severity: warning}
+  - row_count: {filter: "ARM = 'A'", max_fraction: 0.5, severity: warning}
+"#,
+            );
+            assert!(result.issues().is_empty(), "{:?}", result.issues());
+            assert!(result.save().unwrap());
+            let report = saved_report(&study, "report.csv");
+            // Arm A's two rows exceed the per-arm maximum while arm B holds:
+            // one offending group, still reported as a sequence of counts.
+            assert!(
+                report.contains(
+                    "out.csv,check,verifications[0].row_count,row_count,,,REQ-0385,warning,violated,row_count_failed,1,2,\"[{\"\"ARM\"\":\"\"A\"\"}]\",\"{\"\"counts\"\":[2]}\"\n"
+                ),
+                "{report}"
+            );
+            // An ungrouped check names its one count; only a fraction bound
+            // adds the denominator.
+            assert!(
+                report.contains(
+                    "out.csv,check,verifications[1].row_count,row_count,,,REQ-0385,warning,violated,row_count_failed,1,1,[{}],\"{\"\"count\"\":3}\"\n"
+                ),
+                "{report}"
+            );
+            assert!(
+                report.contains(
+                    "out.csv,check,verifications[2].row_count,row_count,,,REQ-0385,warning,violated,row_count_failed,1,1,[{}],\"{\"\"count\"\":2,\"\"denominator\"\":3}\"\n"
+                ),
+                "{report}"
+            );
+        }
+
+        #[test]
         fn temporal_handlers_cite_the_condition_they_answer() {
             let study = Study::new();
             fs::write(

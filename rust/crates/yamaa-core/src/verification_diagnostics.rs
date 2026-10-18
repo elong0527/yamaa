@@ -93,8 +93,19 @@ fn base_context<'a>(
                 {
                     return Err(Error::InvalidObservation);
                 }
+                // An ungrouped check bounds the one whole-artifact group and
+                // names its single count; a grouped check names every offending
+                // group's count, even when exactly one group offends.
+                let grouped = matches!(
+                    compiled
+                        .verifications()
+                        .iter()
+                        .find(|check| check.path == record.path.as_str())
+                        .map(|check| &check.check),
+                    Some(Check::ScopedRowCount(check)) if check.group_by.is_some()
+                );
                 let mut context: Context<'a> = [("failure_count", failed)].into();
-                if observation.counts.len() == 1 {
+                if !grouped && observation.counts.len() == 1 {
                     context.insert("count", Fact::Unsigned(observation.counts[0]));
                     if let Some(d) = observation.denominators.as_deref() {
                         context.insert("denominator", Fact::Unsigned(d[0]));
