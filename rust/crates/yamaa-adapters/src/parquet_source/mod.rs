@@ -31,6 +31,8 @@ mod shape;
 mod table;
 #[cfg(feature = "parquet")]
 mod type_name;
+#[cfg(feature = "parquet")]
+mod wire;
 
 #[cfg(feature = "parquet")]
 use crate::arrow_table::UTF8_OFFSETS;

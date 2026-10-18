@@ -5,6 +5,7 @@ import csv
 import io
 import json
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -39,9 +40,22 @@ class StagingTests(unittest.TestCase):
                     copied = embedded / source.relative_to(staging.WORKSPACE)
                     self.assertFalse(copied.is_symlink())
                     self.assertEqual(source.read_bytes(), copied.read_bytes())
+            # The installed R package carries the Python package notices.
+            notices = tomllib.loads(
+                (staging.REPOSITORY / "python/pyproject.toml").read_text(
+                    encoding="utf-8"
+                )
+            )["project"]["license-files"]
+            self.assertIn("LICENSE.txt", notices)
+            self.assertIn("LICENSE-THIRD-PARTY.txt", notices)
+            for name in notices:
+                self.assertEqual(
+                    (destination / "inst" / name).read_bytes(),
+                    (staging.REPOSITORY / "python" / name).read_bytes(),
+                )
             self.assertEqual(
-                (destination / "inst/LICENSE-YAML.txt").read_bytes(),
-                (staging.REPOSITORY / "python/LICENSE-YAML.txt").read_bytes(),
+                (destination / "inst/LICENSE.txt").read_bytes(),
+                (staging.REPOSITORY / "LICENSE").read_bytes(),
             )
             for author in ("ChenYuheng", "Ethiraric"):
                 self.assertIn(

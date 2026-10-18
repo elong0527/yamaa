@@ -2040,6 +2040,16 @@ impl Rows {
                 diagnostics: analyzed.diagnostics,
             });
         }
+        // A column that uses an aggregate is not row-local (REQ-1260): no template
+        // derives it, so its aggregates evaluate for the rows of every template.
+        aggregates::admit_ranges(
+            columns.iter().map(|assignment| &assignment.expression),
+            &templates
+                .iter()
+                .map(|template| template.mode.source_index())
+                .collect::<Vec<_>>(),
+            &mut findings,
+        );
         for template in &templates {
             relation_predicates::admit_reads(
                 template
@@ -2123,7 +2133,12 @@ impl Rows {
 }
 
 impl Rows {
-    pub(super) fn check_findings(&self, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
+    pub(super) fn check_findings(
+        &self,
+        sources: &[SourceDeclaration],
+        named: &intermediates::Declarations,
+        findings: &mut Vec<BindFinding>,
+    ) -> Result<(), BindError> {
         let groups = self
             .templates
             .iter()
@@ -2131,6 +2146,22 @@ impl Rows {
             .map(|group| group.iter().map(String::as_str).collect::<Vec<_>>())
             .collect::<Vec<_>>();
         let column_groups = groups.iter().map(Vec::as_slice).collect::<Vec<_>>();
+        // The input whose records drive each template's rows, when every
+        // template names one, directly or through a named intermediate.
+        let drivers = self
+            .templates
+            .iter()
+            .map(|template| {
+                if sources.iter().any(|source| source.name == template.driver) {
+                    Some(template.driver.as_str())
+                } else {
+                    named
+                        .input(&template.driver)
+                        .and_then(|index| sources.get(index))
+                        .map(|source| source.name.as_str())
+                }
+            })
+            .collect::<Option<Vec<_>>>();
         for declaration in &self.columns {
             if let RowOperation::Shared(branch) = &declaration.operation {
                 static_checks::scoped_branch(
@@ -2143,6 +2174,10 @@ impl Rows {
                     )),
                     findings,
                 )?;
+                // A column-phase aggregate evaluates for the rows of every template.
+                if let Some(drivers) = &drivers {
+                    aggregates::check_ranges(&branch.operation, sources, drivers, findings);
+                }
             }
         }
         for (index, template) in self.templates.iter().enumerate() {
