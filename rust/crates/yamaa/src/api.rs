@@ -302,11 +302,7 @@ impl ProjectRun {
             }
         }
         if failed {
-            let issues = self
-                .steps
-                .iter()
-                .flat_map(step_issues)
-                .collect::<Vec<_>>();
+            let issues = self.steps.iter().flat_map(step_issues).collect::<Vec<_>>();
             return Err(Failure::from_issues(
                 "a specification failed, so no primary artifact was saved; see issues",
                 &issues,
@@ -423,7 +419,10 @@ impl Engine {
     /// Build every listed specification of `section` ("sdtm", "adam", "send"),
     /// or of all sections in that order. Each builds once, producer first; a
     /// producer in the run scope hands its artifact to its consumers in
-    /// memory, and one outside it is read from its saved artifact file.
+    /// memory, and one outside it is read from its saved artifact file. A
+    /// failed specification stops only its consumers. Project problems come
+    /// back as issues of a run that built nothing; only an unknown section
+    /// (`Error::Rejected`) and cancellation fail the call.
     pub fn project_run(
         &self,
         project: &str,
@@ -478,7 +477,10 @@ impl Engine {
     }
 
     /// One define.xml per section, selected or all declared, plus
-    /// Dataset-JSON where the section sets `datasets: json`.
+    /// Dataset-JSON where the section sets `datasets: json`. Without a
+    /// section, every declared section that names `define` is composed.
+    /// Project problems come back as issues; only an unknown section
+    /// (`Error::Rejected`) and cancellation fail the call.
     pub fn project_submission(
         &self,
         project: &str,
