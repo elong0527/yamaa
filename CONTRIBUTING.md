@@ -126,18 +126,20 @@ is checked on those schedules instead. While a workflow's latest main run
 fails, the `Main health` workflow keeps a `main-red` issue open for it and
 closes the issue when a later main run succeeds. A PR that changes `.github/`
 also runs actionlint over every workflow.
-To keep PR feedback short, some lanes run on those main schedules and on a PR
-only when it changes what they cover: the optional format feature selections
-when it changes the adapters crate or the Cargo graph, and the macOS and
-Windows R package checks when it changes how the R package builds natively.
-The minimum saved artifact reader lane runs only on schedules and `release/**`
-pushes. Dispatch any of these workflows on a branch to run them before merging.
+
+PRs and the main schedule run only development checks: lint, repository
+checks, the Rust workspace, and the Python and R hosts on Linux. Release lanes
+check support claims and run on each `release/**` push and on dispatch: the
+minimum supported saved artifact readers in CI, the optional format feature
+selections and the macOS, Windows and R-devel package checks. Dependency
+graphs, native qualification, Harbor and coverage run on dispatch (native
+qualification also on a `qualification/issue-*` push). Dispatch any of them on
+a branch to check a change that needs them before merging.
 Keep workflow-specific setup in CI and reusable check logic in `tools/`.
 Pin external actions to complete commit IDs with exact release comments.
 
-`.github/workflows/dependency-graphs.yml` also resolves minimum and newest
-compatible graphs nightly, on dispatch, and on each PR that changes a
-dependency manifest or lock. Run a lane locally with R and the normal
+`.github/workflows/dependency-graphs.yml` resolves minimum and newest
+compatible graphs on dispatch. Run a lane locally with R and the normal
 development prerequisites installed:
 
 ```sh
@@ -223,8 +225,8 @@ new matching batch heads and fresh completed reviews. Batch metadata belongs
 in the PR body, not a committed evidence ledger.
 
 Native qualification is separate: `.github/workflows/native.yml` builds and
-installs the supported Python wheel/source and R source combinations every two
-hours on main, on dispatch, or on a `qualification/issue-*` push. It checks public
+installs the supported Python wheel/source and R source combinations on
+dispatch or on a `qualification/issue-*` push. It checks public
 benchmark conformance, installed host suites, packaging, optimized Rust behavior
 and portable math. Passing ordinary CI does not qualify a release. The final
 merged revision needs complete native evidence, including strict R package

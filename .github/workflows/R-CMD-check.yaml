@@ -9,35 +9,14 @@
 #    rustc >= 1.90), so dplyr's oldrel-* matrix entries cannot run here;
 #    the matrix keeps release on all three operating systems plus devel
 #    on Ubuntu, and installs the pinned Rust toolchain before checking.
-# 3. Like the existing native qualification in native.yml, this runs as
-#    a regular build every two hours (offset to :47 so it does not pile
-#    onto the native run at :17) instead of after every merge to main.
-#    Pull requests check only macOS and Windows, and only when they change
-#    how the package builds natively: the R binding crate, the package's
-#    native sources and DESCRIPTION, dependencies, the toolchain or staging.
-#    CI's `r` job runs the same strict check on Ubuntu for every pull request.
+# 3. Platform checks are release lanes, not development checks: they run
+#    on each release branch push and on dispatch. CI's `r` job runs the
+#    same strict check on Ubuntu for every pull request.
 
 on:
-  schedule:
-    - cron: '47 */2 * * *'
+  push:
+    branches: ['release/**']
   workflow_dispatch:
-  pull_request:
-    paths:
-      - 'R/yamaa/DESCRIPTION'
-      - 'R/yamaa/src/**'
-      - 'rust/crates/yamaa-r/**'
-      - 'rust/crates/yamaa-adapters/build.rs'
-      - 'rust/crates/yamaa-adapters/vendor/**'
-      - 'rust/**/Cargo.toml'
-      - 'rust/Cargo.lock'
-      - 'rust/rust-toolchain.toml'
-      - 'rust/vendor/**'
-      - 'tools/staging/**'
-      - 'tools/paths.py'
-      - 'tools/conformance/supplemental_inventory.py'
-      - 'tools/conformance/host_fixtures.py'
-      - 'tools/ci/toolchain.py'
-      - '.github/workflows/R-CMD-check.yaml'
 
 name: R-CMD-check
 
@@ -46,8 +25,7 @@ permissions:
 
 concurrency:
   group: r-cmd-check-${{ github.ref }}
-  # Cancel stale pull-request feedback; scheduled main runs finish.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: false
 
 defaults:
   run:
@@ -64,12 +42,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Pull requests: macOS and Windows release. Scheduled and manual runs
-        # add Ubuntu with R-devel and the release R.
-        config: >-
-          ${{ fromJSON(github.event_name == 'pull_request'
-          && '[{"os":"macos-15","r":"release"},{"os":"windows-latest","r":"release"}]'
-          || '[{"os":"macos-15","r":"release"},{"os":"windows-latest","r":"release"},{"os":"ubuntu-24.04","r":"devel","http-user-agent":"release"},{"os":"ubuntu-24.04","r":"release"}]') }}
+        config:
+          - {os: macos-15, r: release}
+          - {os: windows-latest, r: release}
+          - {os: ubuntu-24.04, r: devel, http-user-agent: release}
+          - {os: ubuntu-24.04, r: release}
 
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}

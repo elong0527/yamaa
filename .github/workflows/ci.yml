@@ -2,12 +2,11 @@ name: CI
 
 # Pull requests are the gate. Main is checked on a schedule rather than after
 # every merge; the scheduled runs also save the Rust caches that pull requests
-# restore. Odd hours keep clear of the even-hour native and R CMD check runs.
-# Schedules only check main, so release branches are checked on each push.
-# Pull requests run only the lanes most changes can break. The minimum Python
-# readers run on the main schedule; the optional format selections and the
-# macOS and Windows R checks run there too, and on a pull request that changes
-# what they cover.
+# restore. Schedules only check main, so release branches are checked on each
+# push. Pull requests and the schedule run the development lanes: lint,
+# repository checks, the Rust workspace and the Linux Python and R hosts. The
+# minimum supported saved artifact readers are release lanes: they run on
+# release branch pushes and on dispatch, with the other release workflows.
 on:
   pull_request:
   push:
@@ -63,10 +62,8 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
       - run: make test-python
-  # The minimum saved artifact readers change only with their pins, so pull
-  # requests leave this lane to the main schedule and release branches.
   python-minimum:
-    if: github.event_name != 'pull_request'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -88,8 +85,10 @@ jobs:
         with:
           r: check
       - name: Install the minimum supported R saved artifact readers
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         run: Rscript --vanilla tools/ci/install_minimum_r_readers.R
       - name: Install the oldest supported R Arrow bridge
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         run: |
           curl --fail --location --silent --show-error \
             https://github.com/apache/arrow-nanoarrow/archive/refs/tags/apache-arrow-nanoarrow-0.8.0.tar.gz \
