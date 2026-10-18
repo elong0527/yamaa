@@ -262,7 +262,7 @@ columns:
             run = yamaa.spec(entry).run()
             self.assertTrue(run.issues.is_empty())
             warning = run.report.filter(pl.col("KIND") == "check")
-            self.assertEqual(warning["ID"].to_list(), ["é\U0001d11e"])
+            self.assertEqual(warning["ID"].to_list(), ["\u00e9\U0001d11e"])
             self.assertEqual(warning["SEVERITY"].to_list(), ["warning"])
             self.assertEqual(warning["OUTCOME"].to_list(), ["violated"])
             self.assertEqual(warning["COUNT"].to_list(), [8])
