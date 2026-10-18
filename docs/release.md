@@ -172,8 +172,8 @@ components are tracked by hand:
   `yamaa-saphyr-parser`, a path dependency in `rust/vendor/saphyr-parser`.
   #2583 replaces it with a published release.
 - The ReadStat 1.1.9 SAS reader subset in
-  `rust/crates/yamaa-adapters/vendor/readstat`. #2927 tracks the upstream
-  fixes since 1.1.9.
+  `rust/crates/yamaa-adapters/vendor/readstat`, with the later upstream fixes
+  that its README lists through the review baseline it records.
 - zstd 1.5.7, the C library that `zstd-sys` bundles into the engine.
 - libxml2 and libxslt, bundled in the `lxml` wheels. The lxml 6.1.3 Windows
   wheels bundle libxml2 2.11.9, an end-of-life branch that lxml describes as
@@ -191,7 +191,14 @@ Before pushing the release tag, confirm on the final commit:
 4. Every [component outside the advisory scanners](#components-outside-the-advisory-scanners)
    was compared with its upstream releases and security advisories since the
    previous release, and each fix that applies is taken or has an issue.
-5. A [release rehearsal](#publication) passed against a native run of that
+5. The vendored ReadStat was compared with upstream `dev` commit by commit.
+   Each commit after the review baseline that its
+   [README](../rust/crates/yamaa-adapters/vendor/readstat/README.md#upstream-changes-after-119)
+   records, and that changes a vendored file, is ported or listed there as not
+   ported with its reason, and the README records the new baseline. In a
+   ReadStat checkout, `git log <baseline>..origin/dev -- <vendored files>`
+   lists them, with each vendored file named by its path under `src/`.
+6. A [release rehearsal](#publication) passed against a native run of that
    commit; the tag names that run.
 
 Record the outcome on the release's planning issue.
