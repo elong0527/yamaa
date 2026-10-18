@@ -17,6 +17,7 @@ mod joined;
 mod key_grain;
 mod lookup;
 mod mapping_cut;
+mod matching;
 mod numeric;
 mod odm;
 mod ordering;
@@ -227,15 +228,13 @@ pub enum ExecutionError<E> {
         matched_key: Vec<(String, Value)>,
         identity: Option<RowIdentity>,
     },
+    /// A lookup found no record under `require_match` (LOOKUP-24).
     UnmatchedKey {
         path: String,
         dataset: String,
         intermediate: String,
         matched_key: Vec<(String, Value)>,
         identity: Option<RowIdentity>,
-        /// A read through an implicit join failed, rather than a named
-        /// intermediate.
-        implicit_join: bool,
     },
     SecondaryCell {
         path: String,
@@ -453,6 +452,7 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
     }
     if let Expression::JoinedSource {
         read,
+        range,
         filter,
         selection,
         absence,
@@ -461,6 +461,7 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
         return joined::read_options(
             table,
             read,
+            range.as_ref(),
             filter.as_ref(),
             selection.as_ref(),
             absence.as_ref().map_or(
@@ -472,6 +473,39 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
             plan,
             row,
             state,
+        );
+    }
+    if let Expression::SourceLookup {
+        lookup: bound,
+        range,
+        filter,
+        selection,
+        absence,
+    } = &assignment.expression
+    {
+        let range = lookup::range_value(
+            range.as_ref(),
+            table,
+            candidate,
+            plan,
+            row,
+            assignment,
+            state,
+        )?;
+        return lookup::read_source(
+            state.secondary[bound.source],
+            bound,
+            range,
+            filter.as_ref(),
+            selection.as_ref(),
+            absence.as_ref(),
+            &lookup::Context {
+                assignment,
+                candidate,
+                plan,
+                row,
+            },
+            state.handlers,
         );
     }
     if let Expression::Intermediate { index, column } = assignment.expression {
@@ -2118,25 +2152,9 @@ fn evaluate_leaf<T: TableAccess + ?Sized>(
         Expression::FirstAvailable(_) | Expression::SourceBinding { .. } => {
             unreachable!("source recursion is handled above")
         }
-        Expression::SourceLookup {
-            lookup: bound,
-            filter,
-            selection,
-            absence,
-        } => lookup::read_source(
-            secondary[bound.source],
-            bound,
-            filter.as_ref(),
-            selection.as_ref(),
-            absence.as_ref(),
-            &lookup::Context {
-                assignment,
-                candidate,
-                plan,
-                row,
-            },
-            handlers,
-        )?,
+        Expression::SourceLookup { .. } => {
+            unreachable!("implicit joins execute through run state")
+        }
         Expression::Collect { .. } => {
             key_grain::collect(table, assignment, candidate, plan, row, handlers)?
         }

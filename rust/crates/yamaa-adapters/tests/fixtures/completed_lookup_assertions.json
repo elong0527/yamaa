@@ -696,7 +696,7 @@
         {
           "phase": "join",
           "condition": "unmatched_key",
-          "requirement": "REQ-0124",
+          "requirement": "LOOKUP-24",
           "spec_paths": [
             "intermediates[0]"
           ],
@@ -735,7 +735,7 @@
         {
           "phase": "join",
           "condition": "unmatched_key",
-          "requirement": "REQ-0124",
+          "requirement": "LOOKUP-24",
           "spec_paths": [
             "intermediates[0]"
           ],
@@ -774,7 +774,7 @@
         {
           "phase": "join",
           "condition": "unmatched_key",
-          "requirement": "REQ-0124",
+          "requirement": "LOOKUP-24",
           "spec_paths": [
             "intermediates[0]"
           ],

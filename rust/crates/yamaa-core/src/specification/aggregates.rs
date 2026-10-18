@@ -6,7 +6,7 @@ use crate::{
         AggregateBinding, AggregatePhase, AggregateRelation, AggregateRowContext, AggregateSource,
         BoundAggregate, IntermediateKey, SecondarySource,
     },
-    diagnostic::{AggregateContextCause as Cause, AggregateEmptyKey, AggregateFinding as Finding},
+    diagnostic::{AggregateContextCause as Cause, AggregateFinding as Finding},
     reference_scope::Phase,
 };
 use std::collections::BTreeSet;
@@ -19,13 +19,14 @@ pub(super) struct Declaration {
     compiled: Result<CompiledExpression, CompileError>,
     groups: Vec<String>,
     keys: Option<Vec<(String, match_values::Declaration)>>,
-    empty_key: Option<AggregateEmptyKey>,
+    /// A written `key` that names no pair (LOOKUP-5).
+    empty_key: bool,
     output_keys: Vec<String>,
     filter: Option<(String, Result<CompiledExpression, CompileError>)>,
     derive: Option<Vec<DeriveDeclaration>>,
     derive_relations: Vec<String>,
     derive_references: Vec<String>,
-    between: Option<RangeDeclaration>,
+    between: Option<lookup_range::Declaration>,
 }
 #[derive(Clone, Debug)]
 struct DeriveDeclaration {
@@ -35,12 +36,6 @@ struct DeriveDeclaration {
     handler: Option<crate::conversion::LiteralHandler>,
     path: String,
     intermediate_names: Vec<String>,
-}
-#[derive(Clone, Debug)]
-struct RangeDeclaration {
-    value: String,
-    lower: Option<String>,
-    upper: Option<String>,
 }
 impl Declaration {
     pub(super) fn calls(&self, result: &mut Vec<usize>) {
@@ -349,23 +344,7 @@ pub(super) fn prepare(
             Ok(bindings)
         })
         .transpose()?;
-    let between = d
-        .field(payload, "between")
-        .filter(|&id| !matches!(d.nodes()[id], N::Null))
-        .map(|id| {
-            let bound = |name| {
-                d.field(id, name)
-                    .filter(|&id| !matches!(d.nodes()[id], N::Null))
-                    .map(|id| text(d, id).map(String::from))
-                    .transpose()
-            };
-            Ok::<_, PrepareError>(RangeDeclaration {
-                value: text(d, field(d, id, "value")?)?.into(),
-                lower: bound("lower")?,
-                upper: bound("upper")?,
-            })
-        })
-        .transpose()?;
+    let between = lookup_range::Declaration::prepare(d, payload, path)?;
     let groups = d
         .field(payload, "group_by")
         .filter(|&id| !matches!(d.nodes()[id], N::Null))
@@ -382,20 +361,7 @@ pub(super) fn prepare(
         .map(|&id| Ok(text(d, id)?.into()))
         .collect::<Result<_, PrepareError>>()?;
     let keys = prepare_keys(d, payload, path, project, extraction, templates, &mut extra)?;
-    let empty_key = if keys.as_ref().is_some_and(Vec::is_empty) {
-        Some(
-            if matches!(
-                d.nodes()[d.field(payload, "key").expect("retained key declaration")],
-                N::Sequence(_)
-            ) {
-                AggregateEmptyKey::List
-            } else {
-                AggregateEmptyKey::Mapping
-            },
-        )
-    } else {
-        None
-    };
+    let empty_key = keys.as_ref().is_some_and(Vec::is_empty);
     let filter = d
         .field(payload, "filter")
         .filter(|&id| !matches!(d.nodes()[id], N::Null))
@@ -922,7 +888,6 @@ fn bound_relation(
                         plan.spec_path()
                     })
             };
-            let inferred = declaration.keys.is_none();
             let defaults = declaration
                 .output_keys
                 .iter()
@@ -946,12 +911,11 @@ fn bound_relation(
                 .collect::<Vec<_>>();
             let pairs = declaration.keys.as_ref().unwrap_or(&defaults);
             if pairs.is_empty() {
-                if let Some(key) = declaration.empty_key {
+                if declaration.empty_key {
                     finding(
                         Finding::MissingKeys {
                             path: &declaration.path,
                             dataset: relation,
-                            key,
                         },
                         findings,
                     )?;
@@ -987,7 +951,7 @@ fn bound_relation(
                 };
                 let Some((source_column, actual)) = donor_field else {
                     finding(
-                        Finding::KeyReference {
+                        Finding::DonorKeyReference {
                             path: key_path,
                             identifier: &written,
                         },
@@ -1003,7 +967,6 @@ fn bound_relation(
                             source: &value.display_name(field),
                             expected,
                             actual,
-                            inferred,
                         },
                         findings,
                     )?;
@@ -1012,7 +975,7 @@ fn bound_relation(
                 for reference in value.references() {
                     if catalog.bind(reference).is_none() {
                         finding(
-                            Finding::KeyReference {
+                            Finding::MatchValueReference {
                                 path: key_path,
                                 identifier: reference,
                             },
@@ -1249,7 +1212,6 @@ pub(super) fn bind(
     };
     let range = bind_range(
         declaration,
-        relation,
         catalog,
         &donor_schema,
         secondary,
@@ -1299,10 +1261,11 @@ pub(super) fn bind(
     Ok(Some(Expression::Aggregate(std::boxed::Box::new(bound))))
 }
 
-#[allow(clippy::too_many_arguments)]
+/// A qualified aggregate's range (LOOKUP-9): bounds are fields of its
+/// relation and the value a value of the current row, admitted for every row
+/// the column is derived for ([`lookup_range::admit`]).
 fn bind_range(
     declaration: &Declaration,
-    relation: Option<&str>,
     catalog: &Catalog,
     donor: &TableSchema,
     secondary: &[SecondarySource],
@@ -1310,130 +1273,44 @@ fn bind_range(
     edges: &mut Vec<usize>,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<crate::dataset::RelationRange>, BindError> {
-    use crate::dataset::{
-        CurrentField, CurrentRead, RelationRange, RelationRangeBound, RelationRangeError,
-    };
-    use crate::diagnostic::ConditionCode as C;
+    use crate::diagnostic::lookup::Owner;
     let Some(range) = &declaration.between else {
         return Ok(None);
     };
-    let path = format!("{}.between", declaration.path);
-    if range.lower.is_none() && range.upper.is_none() {
-        findings.push(BindFinding::AggregateDiagnostic(diagnostic(
-            C::AggregateDriverScope,
-            &path,
-            &[
-                ("expr", &declaration.expression),
-                ("reason", "between declares at least one bound"),
-            ],
-        )));
+    if let Some(finding) = range.bounds_finding(Owner::Unnamed) {
+        findings.push(BindFinding::AggregateDiagnostic(finding));
         return Ok(None);
     }
-    let before = findings.len();
-    let mut bound = |name: &Option<String>| {
-        name.as_ref().and_then(|name| {
-            donor
-                .columns()
-                .iter()
-                .enumerate()
-                .find(|(_, column)| column.name == *name)
-                .map(|(column, field)| RelationRangeBound {
-                    column,
-                    identifier: field.name.clone(),
-                    kind: Some(field.kind.into()),
-                })
-                .or_else(|| {
-                    findings.push(BindFinding::AggregateDiagnostic(diagnostic(
-                        C::IntermediateRangeReference,
-                        &path,
-                        &[("identifier", name)],
-                    )));
-                    None
-                })
-        })
+    let mut diagnostics = Vec::new();
+    let bounds = range.bind_bounds(
+        Owner::Unnamed,
+        donor,
+        &|column| donor.columns().get(column).map(|field| field.kind),
+        &|_| true,
+        &mut diagnostics,
+    );
+    findings.extend(
+        diagnostics
+            .into_iter()
+            .map(BindFinding::AggregateDiagnostic),
+    );
+    let Some(bounds) = bounds else {
+        return Ok(None);
     };
-    let lower = bound(&range.lower);
-    let upper = bound(&range.upper);
-    if findings.len() != before {
+    let Some((read, kind)) = range.current_value(catalog, secondary, intermediates, None, edges)?
+    else {
+        findings.push(BindFinding::AggregateDiagnostic(
+            range.unknown_value(Owner::Unnamed),
+        ));
         return Ok(None);
-    }
-    let current = match catalog.bind(&range.value) {
-        Some(reference_binding::Binding::Output { column, .. }) => {
-            edges.push(column);
-            Some((CurrentRead::Output(column), catalog.type_of(&range.value)))
+    };
+    Ok(match range.finish(read, kind, bounds, None)? {
+        Ok(range) => Some(range),
+        Err(diagnostic) => {
+            findings.push(BindFinding::AggregateDiagnostic(diagnostic));
+            None
         }
-        Some(reference_binding::Binding::Dataset { field, .. }) => Some((
-            CurrentRead::Record {
-                source: 0,
-                column: field,
-            },
-            catalog.type_of(&range.value),
-        )),
-        None => range.value.split_once('.').and_then(|(name, field)| {
-            secondary
-                .iter()
-                .enumerate()
-                .find(|(_, source)| source.name == name)
-                .and_then(|(source, item)| {
-                    item.schema
-                        .columns()
-                        .iter()
-                        .enumerate()
-                        .find(|(_, column)| column.name == field)
-                        .map(|(column, field)| {
-                            (
-                                CurrentRead::Record {
-                                    source: source + 1,
-                                    column,
-                                },
-                                Some(field.kind),
-                            )
-                        })
-                })
-                .or_else(|| {
-                    intermediates.iter().enumerate().find_map(|(index, item)| {
-                        let item = item.as_ref()?;
-                        if item.identifier != name {
-                            return None;
-                        }
-                        let column = item.source_column(secondary, field)?;
-                        edges.extend(row_intermediates::dependencies(index, intermediates).ok()?);
-                        Some((
-                            CurrentRead::Intermediate { index, column },
-                            item.source_kind(secondary, column),
-                        ))
-                    })
-                })
-        }),
-    };
-    let Some((read, kind)) = current else {
-        findings.push(BindFinding::AggregateDiagnostic(diagnostic(
-            C::IntermediateRangeReference,
-            &format!("{path}.value"),
-            &[("identifier", &range.value)],
-        )));
-        return Ok(None);
-    };
-    let _ = relation;
-    match RelationRange::new(
-        path.clone(),
-        CurrentField {
-            read,
-            identifier: range.value.clone(),
-        },
-        kind.map(Into::into),
-        lower,
-        upper,
-    ) {
-        Ok(range) => Ok(Some(range)),
-        Err(RelationRangeError::Incomparable(types)) => {
-            findings.push(BindFinding::AggregateDiagnostic(
-                types.diagnostic_for(&path, None),
-            ));
-            Ok(None)
-        }
-        Err(_) => Err(BindError::Internal),
-    }
+    })
 }
 #[allow(clippy::too_many_arguments)]
 fn bind_derivations(

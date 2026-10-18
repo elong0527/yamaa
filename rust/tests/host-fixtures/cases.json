@@ -1444,7 +1444,7 @@
             {
               "phase": "validation",
               "condition": "no_applicable_keys",
-              "requirement": "REQ-0153",
+              "requirement": "LOOKUP-5",
               "spec_paths": [
                 "intermediates[0]"
               ],
@@ -1658,7 +1658,7 @@
             {
               "phase": "validation",
               "condition": "incompatible_input_type",
-              "requirement": "REQ-0004",
+              "requirement": "LOOKUP-9",
               "spec_paths": [
                 "columns.V.derivation.aggregate.filter"
               ],
@@ -1934,7 +1934,7 @@
             {
               "phase": "join",
               "condition": "unmatched_key",
-              "requirement": "REQ-0124",
+              "requirement": "LOOKUP-24",
               "spec_paths": [
                 "intermediates[0]"
               ],
@@ -3034,7 +3034,7 @@
             {
               "phase": "validation",
               "condition": "invalid_field_type",
-              "requirement": "REQ-0115",
+              "requirement": "LOOKUP-5",
               "spec_paths": [
                 "intermediates[0].key"
               ],
@@ -3049,7 +3049,7 @@
             {
               "phase": "validation",
               "condition": "invalid_field_type",
-              "requirement": "REQ-0115",
+              "requirement": "LOOKUP-5",
               "spec_paths": [
                 "intermediates[0].key"
               ],
@@ -3073,7 +3073,7 @@
             {
               "phase": "validation",
               "condition": "invalid_field_type",
-              "requirement": "REQ-0115",
+              "requirement": "LOOKUP-5",
               "spec_paths": [
                 "intermediates[0].key"
               ],
@@ -3088,7 +3088,7 @@
             {
               "phase": "validation",
               "condition": "invalid_field_type",
-              "requirement": "REQ-0115",
+              "requirement": "LOOKUP-5",
               "spec_paths": [
                 "intermediates[0].key"
               ],
@@ -4281,14 +4281,14 @@
           "records": [
             {
               "phase": "validation",
-              "condition": "missing_aggregate_keys",
-              "requirement": "REQ-0140",
+              "condition": "invalid_field_type",
+              "requirement": "LOOKUP-5",
               "spec_paths": [
                 "columns.V.derivation.aggregate"
               ],
               "context": {
                 "dataset": "SRC",
-                "key": {}
+                "expected": "at least one match pair"
               },
               "source_span": null,
               "operand_route": null
@@ -4303,14 +4303,14 @@
           "records": [
             {
               "phase": "validation",
-              "condition": "missing_aggregate_keys",
-              "requirement": "REQ-0140",
+              "condition": "invalid_field_type",
+              "requirement": "LOOKUP-5",
               "spec_paths": [
                 "columns.V.derivation.aggregate"
               ],
               "context": {
                 "dataset": "SRC",
-                "key": []
+                "expected": "at least one match pair"
               },
               "source_span": null,
               "operand_route": null

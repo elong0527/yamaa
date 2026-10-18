@@ -2141,7 +2141,7 @@ columns:
                         "condition": condition,
                         "requirement": "REQ-1248"
                         if condition == "rename_only_intermediate"
-                        else "REQ-0119",
+                        else "LOOKUP-10",
                         "spec_paths": ["intermediates[0]"],
                         "context": context,
                     }

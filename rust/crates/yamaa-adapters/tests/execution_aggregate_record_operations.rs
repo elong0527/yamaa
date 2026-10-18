@@ -309,7 +309,7 @@ mod execution {
                         complete_aggregate_issues(&fixture),
                         vec![yamaa_adapters::json!({
                             "phase": "validation", "condition": "incompatible_input_type",
-                            "requirement": "REQ-0004", "spec_paths": ["columns.V.derivation.aggregate.expr"],
+                            "requirement": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.expr"],
                             "context": {"source": "key[N]", "expected": kind, "actual": "int"}
                         })],
                         "{expression}, {literal}"
@@ -333,7 +333,7 @@ mod execution {
                     complete_aggregate_issues(&fixture),
                     vec![yamaa_adapters::json!({
                         "phase": "validation", "condition": "incompatible_input_type",
-                        "requirement": "REQ-0004", "spec_paths": [path],
+                        "requirement": "LOOKUP-9", "spec_paths": [path],
                         "context": {"source": "key[N]", "expected": "bool", "actual": "int"}
                     })],
                     "{expression}"
@@ -344,8 +344,8 @@ mod execution {
         #[test]
         fn original_fieldless_reduction_unknown_names_do_not_invent_join_findings() {
             for (expression, key, identifier, requirement) in [
-                ("COUNT(OTHER.*)", "{ABSENT: K}", "OTHER.ABSENT", "REQ-0141"),
-                ("COUNT(OTHER.*)", "{N: ABSENT}", "ABSENT", "REQ-0141"),
+                ("COUNT(OTHER.*)", "{ABSENT: K}", "OTHER.ABSENT", "LOOKUP-5"),
+                ("COUNT(OTHER.*)", "{N: ABSENT}", "ABSENT", "LOOKUP-5"),
                 ("COUNT(ABSENT.*)", "{N: K}", "ABSENT.*", "REQ-0103"),
             ] {
                 let fixture =
@@ -399,7 +399,7 @@ mod execution {
                             complete_aggregate_issues(&fixture),
                             vec![yamaa_adapters::json!({
                                 "phase": "validation", "condition": "incompatible_input_type",
-                                "requirement": "REQ-0004", "spec_paths": ["columns.V.derivation.aggregate.filter"],
+                                "requirement": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.filter"],
                                 "context": {"source": "key[N]", "expected": "bool", "actual": "int"}
                             })],
                             "{expression}"
@@ -1218,10 +1218,14 @@ S1,002,2024-06
         /// finding is decided from. `domain` reaches each of them once it reads or
         /// binds the inputs. A case that `check` starts to report fails until it
         /// leaves this list.
-        const NOT_REPORTED_BY_CHECK: [(&str, &str); 21] = [
+        const NOT_REPORTED_BY_CHECK: [(&str, &str); 23] = [
             (
                 "negative-adlb-computed-param",
                 "a cycle through an aggregate and a case",
+            ),
+            (
+                "negative-aggregate-range-other-input",
+                "the drivers of the rows that read a lookup range",
             ),
             ("negative-cut-coded", "the stored type of an input field"),
             (
@@ -1243,6 +1247,10 @@ S1,002,2024-06
             (
                 "negative-lookup-mismatched",
                 "the fields stored in the current input",
+            ),
+            (
+                "negative-lookup-range-other-input",
+                "the drivers of the rows that read a lookup range",
             ),
             (
                 "negative-lookup-unknown-key",
@@ -2388,7 +2396,7 @@ S1,002,2024-06
             assert_eq!(
                 result.issues().iter().map(issue).collect::<Vec<_>>(),
                 vec![
-                    yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0117","spec_paths":["intermediates[0].key"],"context":{"identifier":"DONOR.KEY","intermediate":"P"}})
+                    yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","requirement":"LOOKUP-5","spec_paths":["intermediates[0].key"],"context":{"identifier":"DONOR.KEY","intermediate":"P"}})
                 ]
             );
             assert!(result.save().is_err());
@@ -2462,7 +2470,7 @@ S1,002,2024-06
                 ),
                 (
                     base.replace("NEWKEY: KEY", "NEWKEY: {literal: wrong-type}"),
-                    yamaa_adapters::json!({"phase":"validation","condition":"incompatible_input_type","requirement":"REQ-0323","spec_paths":["intermediates[0].key"],"context":{"intermediate":"EARLIER","source":"DONOR.NEWKEY","expected":"str","actual":"int"}}),
+                    yamaa_adapters::json!({"phase":"validation","condition":"incompatible_input_type","requirement":"LOOKUP-9","spec_paths":["intermediates[0].key"],"context":{"intermediate":"EARLIER","source":"DONOR.NEWKEY","expected":"str","actual":"int"}}),
                 ),
             ] {
                 let (fixture, result) = independent(&spec, "ID,VAL\n1,100\n", Some("KEY\n2\n"));

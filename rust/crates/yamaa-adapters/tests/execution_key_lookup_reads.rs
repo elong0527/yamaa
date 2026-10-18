@@ -175,7 +175,7 @@ fn assert_unmatched_key(fixture: &Fixture) {
     assert!(
         domain.issues().iter().any(|issue| {
             let value = issue.as_value();
-            value["condition"] == "unmatched_key" && value["requirement"] == "REQ-0124"
+            value["condition"] == "unmatched_key" && value["requirement"] == "LOOKUP-24"
         }),
         "{:?}",
         domain.issues()

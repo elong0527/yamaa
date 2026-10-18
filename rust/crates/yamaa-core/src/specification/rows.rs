@@ -1915,6 +1915,32 @@ impl Rows {
                 diagnostics: analyzed.diagnostics,
             });
         }
+        // A column derivation evaluates for the rows of every template, and a
+        // template's own derivations for its rows only.
+        lookup_range::admit(
+            std::iter::once((
+                columns
+                    .iter()
+                    .map(|assignment| &assignment.expression)
+                    .collect(),
+                templates
+                    .iter()
+                    .map(|template| template.mode.source_index())
+                    .collect(),
+            ))
+            .chain(templates.iter().map(|template| {
+                (
+                    template
+                        .assignments
+                        .iter()
+                        .map(|assignment| &assignment.expression)
+                        .collect(),
+                    vec![template.mode.source_index()],
+                )
+            })),
+            &intermediates,
+            &mut findings,
+        );
         for template in &templates {
             relation_predicates::admit_reads(
                 template

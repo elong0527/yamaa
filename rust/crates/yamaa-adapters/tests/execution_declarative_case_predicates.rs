@@ -376,8 +376,7 @@ columns:
                 !result.issues().is_empty(),
                 "require must be evaluated on exempt rows"
             );
-            let definition =
-                yamaa_core::diagnostic::ConditionCode::DatasetUnmatchedKey.definition();
+            let definition = yamaa_core::diagnostic::ConditionCode::LookupUnmatchedKey.definition();
             assert_eq!(result.issues().len(), 1);
             assert_eq!(result.issues()[0].phase, definition.phase);
             assert_eq!(result.issues()[0].condition, definition.condition);
@@ -1047,7 +1046,7 @@ columns:
                 assert_eq!(
                     issues(fixture.run(&BODY.replace(line, ""))),
                     vec![
-                        yamaa_adapters::json!({"phase":"validation", "condition":"unpaired_fields", "requirement":"REQ-0119", "spec_paths":["intermediates[0]"], "context":{"intermediate":"P", "declared":[declared], "missing":[missing]}})
+                        yamaa_adapters::json!({"phase":"validation", "condition":"unpaired_fields", "requirement":"LOOKUP-10", "spec_paths":["intermediates[0]"], "context":{"intermediate":"P", "declared":[declared], "missing":[missing]}})
                     ]
                 );
             }
@@ -1068,7 +1067,7 @@ columns:
             assert_eq!(
                 issues(fixture.run(&unused)),
                 vec![
-                    yamaa_adapters::json!({"phase":"validation", "condition":"no_applicable_keys", "requirement":"REQ-0153", "spec_paths":["intermediates[0]"], "context":{"dataset":"DONOR", "keys":["ID","PARAM"], "hint":"declare the `key` explicitly"}}),
+                    yamaa_adapters::json!({"phase":"validation", "condition":"no_applicable_keys", "requirement":"LOOKUP-5", "spec_paths":["intermediates[0]"], "context":{"dataset":"DONOR", "keys":["ID","PARAM"], "hint":"declare the `key` explicitly"}}),
                     yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0103","spec_paths":["columns.A.derivation.source"],"context":{"identifier":"P.A"}})
                 ]
             );
@@ -1077,7 +1076,7 @@ columns:
             assert_eq!(
                 issues(fixture.run(&mismatched)),
                 vec![
-                    yamaa_adapters::json!({"phase":"validation", "condition":"incompatible_input_type", "requirement":"REQ-0151", "spec_paths":["intermediates[0]"], "context":{"source":"ID", "expected":"int", "actual":"str"}}),
+                    yamaa_adapters::json!({"phase":"validation", "condition":"incompatible_input_type", "requirement":"LOOKUP-9", "spec_paths":["intermediates[0]"], "context":{"intermediate":"P", "source":"ID", "expected":"int", "actual":"str"}}),
                     yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0103","spec_paths":["columns.A.derivation.source"],"context":{"identifier":"P.A"}})
                 ]
             );

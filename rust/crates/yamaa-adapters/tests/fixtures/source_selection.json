@@ -2,7 +2,7 @@
   "authorship": "Independently authored normative finite cases, complete diagnostics, declared handler counts, exact CSV and typed public cells. Candidate/reference execution never generated these expectations.",
   "requirements": [
     "REQ-0074",
-    "REQ-0119",
+    "LOOKUP-10",
     "REQ-0138",
     "REQ-0148",
     "REQ-0240",
@@ -538,7 +538,7 @@
         {
           "phase": "validation",
           "condition": "unpaired_fields",
-          "requirement": "REQ-0119",
+          "requirement": "LOOKUP-10",
           "spec_paths": [
             "columns.VALUE.derivation.source"
           ],
@@ -557,7 +557,7 @@
         {
           "phase": "validation",
           "condition": "unpaired_fields",
-          "requirement": "REQ-0119",
+          "requirement": "LOOKUP-10",
           "spec_paths": [
             "columns.VALUE.derivation.source"
           ],
@@ -586,7 +586,7 @@
         {
           "phase": "validation",
           "condition": "unpaired_fields",
-          "requirement": "REQ-0119",
+          "requirement": "LOOKUP-10",
           "spec_paths": [
             "columns.VALUE.derivation.source"
           ],
@@ -605,7 +605,7 @@
         {
           "phase": "validation",
           "condition": "unpaired_fields",
-          "requirement": "REQ-0119",
+          "requirement": "LOOKUP-10",
           "spec_paths": [
             "columns.VALUE.derivation.source"
           ],
@@ -634,7 +634,7 @@
         {
           "phase": "validation",
           "condition": "unpaired_fields",
-          "requirement": "REQ-0119",
+          "requirement": "LOOKUP-10",
           "spec_paths": [
             "rows[0].derivations.VALUE.case[0].then.source"
           ],
@@ -653,7 +653,7 @@
         {
           "phase": "validation",
           "condition": "unpaired_fields",
-          "requirement": "REQ-0119",
+          "requirement": "LOOKUP-10",
           "spec_paths": [
             "rows[0].derivations.VALUE.case[0].then.source"
           ],
@@ -694,7 +694,7 @@
         {
           "phase": "validation",
           "condition": "unpaired_fields",
-          "requirement": "REQ-0119",
+          "requirement": "LOOKUP-10",
           "spec_paths": [
             "columns.VALUE.derivation.source"
           ],

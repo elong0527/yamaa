@@ -25,7 +25,8 @@ pub enum Inference {
     },
 }
 
-/// Infer REQ-0150 keys in output order and report the first REQ-0151 type mismatch.
+/// Infer the applicable keys (LOOKUP-5) in output order and report the first key
+/// pair whose types cannot compare (LOOKUP-9).
 /// Right fields are normalized schema metadata (including SELF/derived fields), not values.
 /// Validate every submitted name before semantic early exits; invalid output identity
 /// is explicit so hosts can retain their earlier REQ-0220 declaration diagnostic.

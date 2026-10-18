@@ -1,6 +1,5 @@
 //! Bound many-to-one secondary-source reads over immutable normalized snapshots.
 use super::*;
-use std::cmp::Ordering;
 
 /// Count all matching records before reading a value or applying output conversion.
 pub(super) fn read<E>(
@@ -51,9 +50,13 @@ pub(super) enum JoinSite<'a> {
     Uncounted(&'a str),
 }
 
+/// An implicit join's range and the current row's value for it (LOOKUP-9).
+pub(super) type BoundRange<'a> = (&'a RelationRange, Value);
+
 /// A source binding's options on its implicit join; an operand that is not a
 /// source binding has only its site.
 struct Options<'a> {
+    range: Option<BoundRange<'a>>,
     filter: Option<&'a crate::bound_expression::BoundPredicate>,
     selection: Option<&'a SourceSelection>,
     site: JoinSite<'a>,
@@ -62,12 +65,43 @@ struct Options<'a> {
 impl<'a> Options<'a> {
     fn uncounted(path: &'a str) -> Self {
         Self {
+            range: None,
             filter: None,
             selection: None,
             site: JoinSite::Uncounted(path),
             donor_name: None,
         }
     }
+}
+
+/// The current row's value for an implicit join's range, read before any
+/// record is matched (LOOKUP-9).
+#[allow(clippy::too_many_arguments)]
+pub(super) fn range_value<'a, T: TableAccess + ?Sized>(
+    range: Option<&'a RelationRange>,
+    table: &T,
+    candidate: &Candidate,
+    plan: &DatasetPlan,
+    row: usize,
+    assignment: &Assignment,
+    state: &mut EvaluationState<'_, T::Error>,
+) -> Result<Option<BoundRange<'a>>, Box<ExecutionError<T::Error>>> {
+    range
+        .map(|range| {
+            relation_predicates::resolve_current(
+                range.current(),
+                range.path(),
+                table,
+                candidate,
+                plan,
+                row,
+                assignment,
+                relation_predicates::CurrentObservation::Operand,
+                state,
+            )
+            .map(|value| (range, value))
+        })
+        .transpose()
 }
 
 /// Keep assignment provenance and optional completed output identity independent of match keys.
@@ -149,7 +183,6 @@ fn absent_record<E>(
                 })
                 .collect(),
             identity: failure_identity(context.candidate, context.plan.keys(), context.row)?,
-            implicit_join: true,
         }));
     }
     if let (true, Some(counter)) = (counted, handlers) {
@@ -160,7 +193,16 @@ fn absent_record<E>(
     Ok(answer.cloned().unwrap_or(Value::Missing))
 }
 
-/// Count all matching records before donor access, preserving raw match-key evidence.
+/// The read's path, owning its key-type and `unmatched_key` failures.
+fn site_path<'a>(site: &JoinSite<'a>) -> &'a str {
+    match *site {
+        JoinSite::Read(absence) => &absence.path,
+        JoinSite::Operand(path) | JoinSite::Uncounted(path) => path,
+    }
+}
+
+/// Match, narrow and select on the implicit join (LOOKUP-25), preserving raw
+/// match-key evidence.
 fn read_matching<E>(
     table: &dyn TableAccess<Error = E>,
     source: usize,
@@ -171,76 +213,80 @@ fn read_matching<E>(
     mut handlers: Option<&mut HandlerCounter>,
 ) -> Result<Value, Box<ExecutionError<E>>> {
     let Options {
+        ref range,
         filter,
         selection,
         donor_name,
         ..
     } = options;
-    // Complete the authored eligibility expression before inspecting match keys.
-    let mut eligible = Vec::new();
-    if let Some(filter) = filter {
-        eligible
-            .try_reserve_exact(table.row_count())
-            .map_err(|_| Box::new(ExecutionError::Allocation))?;
-        for source_row in 0..table.row_count() {
-            let truth =
-                crate::dataset::execution::predicates::evaluate(filter, table, source_row, &[])
-                    .map_err(|error| {
-                        Box::new(ExecutionError::Predicate {
-                            source_row,
-                            error: *error,
-                        })
-                    })?;
-            if truth == crate::expression::Truth::True {
-                eligible.push(source_row);
-            }
-        }
-    }
-    if keys
+    let kinds = keys
         .iter()
-        .any(|(_, value)| matches!(value, ValueRef::Missing))
-    {
+        .map(|&(column, _)| {
+            table
+                .schema()
+                .columns()
+                .get(column)
+                .map(|field| field.kind.into())
+        })
+        .collect::<Vec<_>>();
+    let probe = matching::Probe {
+        keys,
+        kinds: &kinds,
+        range: range
+            .as_ref()
+            .map(|(range, value)| (*range, ValueRef::from(value))),
+    };
+    if probe.incomplete() {
         return absent_record(table, source, keys, context, &options, handlers);
     }
-    let mut count = 0_usize;
-    let mut matching = Vec::new();
-    let mut chosen = 0;
-    let all_rows = 0..table.row_count();
-    let rows: &mut dyn Iterator<Item = usize> = if filter.is_some() {
-        &mut eligible.into_iter()
-    } else {
-        &mut all_rows.into_iter()
-    };
-    for source_row in rows {
-        let mut matches = true;
-        for (column, current) in keys {
-            let value = cell(table, source, context.assignment, source_row, *column)?;
-            if crate::value::compare_present_refs(value, *current) != Ok(Ordering::Equal) {
-                matches = false;
-                break;
+    let found = matching::candidates(
+        0..table.row_count(),
+        0,
+        &probe,
+        |row, field| cell(table, source, context.assignment, row, field),
+        |row| match filter {
+            None => Ok(true),
+            Some(filter) => {
+                crate::dataset::execution::predicates::evaluate(filter, table, row, &[])
+                    .map(|truth| truth == crate::expression::Truth::True)
+                    .map_err(|error| {
+                        Box::new(ExecutionError::Predicate {
+                            source_row: row,
+                            error: *error,
+                        })
+                    })
             }
-        }
-        if matches {
-            count += 1;
-            chosen = source_row;
-            if selection.is_some() {
-                matching
-                    .try_reserve(1)
-                    .map_err(|_| Box::new(ExecutionError::Allocation))?;
-                matching.push(source_row);
-            }
-        }
-    }
+        },
+    )
+    .map_err(|refusal| match refusal {
+        matching::Refusal::Failed(error) => error,
+        matching::Refusal::Key {
+            index,
+            current,
+            donor,
+        } => Box::new(ExecutionError::ScalarDiagnostic(
+            crate::diagnostic::lookup::key_type(
+                site_path(&options.site),
+                crate::diagnostic::lookup::Owner::Unnamed,
+                &table.schema().columns()[keys[index].0].name,
+                crate::result_type::ResultType::known(current),
+                crate::result_type::ResultType::known(donor),
+            ),
+        )),
+        matching::Refusal::Range(types) => Box::new(ExecutionError::ScalarDiagnostic(
+            types.diagnostic_for(range.as_ref().map_or("", |(range, _)| range.path()), None),
+        )),
+    })?;
+    let count = found.rows.len();
+    let mut chosen = found.rows.first().copied().unwrap_or_default();
     if count == 0 {
         return absent_record(table, source, keys, context, &options, handlers);
     }
     if count > 1 && selection.is_some() {
-        chosen = select(
-            table,
-            source,
-            context.assignment,
-            &matching,
+        chosen = matching::select(
+            &found.rows,
             selection.expect("declared source choice"),
+            |row, field| cell(table, source, context.assignment, row, field),
         )?;
         if let Some(counter) = handlers.as_mut() {
             counter
@@ -303,11 +349,12 @@ fn cell<'a, E>(
     })
 }
 
-/// Source eligibility precedes cardinality and ordered selection on the implicit join.
+/// A source binding's implicit join: match, narrow, then select (LOOKUP-25).
 #[allow(clippy::too_many_arguments)]
 pub(super) fn read_source<E>(
     table: &dyn TableAccess<Error = E>,
     lookup: &Lookup,
+    range: Option<BoundRange<'_>>,
     filter: Option<&crate::bound_expression::BoundPredicate>,
     selection: Option<&SourceSelection>,
     absence: Option<&crate::dataset::JoinAbsence>,
@@ -331,6 +378,7 @@ pub(super) fn read_source<E>(
         &keys,
         context,
         Options {
+            range,
             filter,
             selection,
             site: absence.map_or(
@@ -343,37 +391,6 @@ pub(super) fn read_source<E>(
     )
 }
 
-/// Select the stable donor extremum without losing secondary-source coordinates.
-fn select<E>(
-    table: &dyn TableAccess<Error = E>,
-    source: usize,
-    assignment: &Assignment,
-    matching: &[usize],
-    selection: &SourceSelection,
-) -> Result<usize, Box<ExecutionError<E>>> {
-    let mut best = matching[0];
-    for &row in &matching[1..] {
-        let mut order = Ordering::Equal;
-        for term in &selection.order_by {
-            let read = |row| -> Result<ValueRef<'_>, Box<ExecutionError<E>>> {
-                let value = cell(table, source, assignment, row, term.column)?;
-                Ok(value)
-            };
-            order = windows::compare(read(row)?, read(best)?, term);
-            if order != Ordering::Equal {
-                break;
-            }
-        }
-        order = order.then_with(|| row.cmp(&best));
-        if (selection.keep == Keep::First && order == Ordering::Less)
-            || (selection.keep == Keep::Last && order == Ordering::Greater)
-        {
-            best = row;
-        }
-    }
-    Ok(best)
-}
-
 #[allow(clippy::too_many_arguments)]
 pub(super) fn read_joined<T: TableAccess + ?Sized>(
     current: &T,
@@ -384,6 +401,7 @@ pub(super) fn read_joined<T: TableAccess + ?Sized>(
     candidate: &Candidate,
     plan: &DatasetPlan,
     row: usize,
+    range: Option<BoundRange<'_>>,
     filter: Option<&crate::bound_expression::BoundPredicate>,
     selection: Option<&SourceSelection>,
     site: JoinSite<'_>,
@@ -418,6 +436,7 @@ pub(super) fn read_joined<T: TableAccess + ?Sized>(
             row,
         },
         Options {
+            range,
             filter,
             selection,
             site,

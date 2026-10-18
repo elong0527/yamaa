@@ -116,37 +116,82 @@ pub(in crate::specification) fn bind(
             variable_absent = true;
             Some(Expression::Literal(Value::Missing))
         } else {
-            rounding::bind_row_operand(
+            match rounding::bind_row_operand(
                 name, path, catalog, driver, row, phase, available, edges, findings,
-            )?
-            .map(|expression| match expression {
-                // A source binding keeps its options and absence answer on the
-                // implicit join (LOOKUP-24).
-                Expression::Joined(read) => Expression::JoinedSource {
-                    read,
-                    filter,
-                    selection,
-                    absence: Some(declaration.absence(path)),
-                },
-                Expression::Source(column) if filter.is_some() || selection.is_some() => {
-                    Expression::Collect {
+            )? {
+                // A source binding keeps its range, options and absence answer
+                // on the implicit join (LOOKUP-25).
+                Some(Expression::Joined(read)) => {
+                    // A range value naming the row's driver reads a single value
+                    // of its record, a group key in a grouped row.
+                    if let Some(value) = declaration.range_value().filter(|value| {
+                        value
+                            .split_once('.')
+                            .is_some_and(|(owner, _)| owner == driver)
+                    }) {
+                        use crate::reference_scope::{self, Reach, Scope};
+                        findings.extend(
+                            reference_scope::validate(
+                                catalog,
+                                value,
+                                None,
+                                Scope {
+                                    drivers: &[driver],
+                                    current_driver: false,
+                                    reach: Reach::Scalar,
+                                    joined: false,
+                                    phase,
+                                },
+                            )
+                            .map_err(BindError::Catalog)?
+                            .into_iter()
+                            .map(|finding| {
+                                BindFinding::QualifiedReference {
+                                    path: format!("{path}.between.value"),
+                                    name: value.into(),
+                                    row: row.map(String::from),
+                                    finding,
+                                }
+                            }),
+                        );
+                    }
+                    declaration
+                        .bind_range(
+                            &read.schema,
+                            catalog,
+                            secondary,
+                            intermediates,
+                            available,
+                            edges,
+                            findings,
+                        )?
+                        .map(|range| Expression::JoinedSource {
+                            read,
+                            range,
+                            filter,
+                            selection,
+                            absence: Some(declaration.absence(path)),
+                        })
+                }
+                Some(Expression::Source(column)) if filter.is_some() || selection.is_some() => {
+                    Some(Expression::Collect {
                         column,
                         identifier: name.clone(),
                         filter,
                         selection,
-                    }
+                    })
                 }
                 expression => expression,
-            })
+            }
         }
     };
     if findings.len() != before {
         return Ok(None);
     }
-    if expression
-        .as_ref()
-        .is_some_and(|expression| declaration.refuse_require_match(path, expression, findings))
-    {
+    if expression.as_ref().is_some_and(|expression| {
+        declaration.refuse_require_match(path, expression, findings)
+            | declaration.refuse_range(path, expression, findings)
+    }) {
         return Ok(None);
     }
     Ok(expression.map(|expression| declaration.wrap(expression, column, path, variable_absent)))

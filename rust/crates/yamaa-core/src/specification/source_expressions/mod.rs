@@ -3,7 +3,10 @@ use super::*;
 use crate::json::Value as JsonValue;
 use crate::{
     bound_expression::BoundPredicate,
-    diagnostic::{ConditionCode as C, Diagnostic},
+    diagnostic::{
+        lookup::{self, Owner},
+        ConditionCode as C, Diagnostic,
+    },
     value::Value,
 };
 mod row_sources;
@@ -12,6 +15,8 @@ pub(super) use row_sources::bind as bind_row;
 #[derive(Clone, Debug)]
 pub(super) struct Declaration {
     pub variable: String,
+    /// The range an implicit join matches besides its keys (LOOKUP-9).
+    range: Option<lookup_range::Declaration>,
     filter: Option<Filter>,
     order: Vec<(String, bool, bool)>,
     keep: Option<crate::dataset::Keep>,
@@ -28,11 +33,8 @@ struct Filter {
 #[derive(Debug)]
 pub struct SourceFinding(Diagnostic);
 impl SourceFinding {
-    pub(super) fn texts(&mut self, name: &str, values: Vec<String>) {
-        self.0.context.insert(
-            name.into(),
-            JsonValue::Array(values.into_iter().map(JsonValue::String).collect()),
-        );
+    pub(super) fn from_diagnostic(diagnostic: Diagnostic) -> Self {
+        Self(diagnostic)
     }
     pub fn diagnostic(&self) -> Diagnostic {
         self.0.clone()
@@ -116,6 +118,7 @@ impl Declaration {
         if let N::Text(variable) = &d.nodes()[payload] {
             return Ok(Self {
                 variable: variable.clone(),
+                range: None,
                 filter: None,
                 order: Vec::new(),
                 keep: None,
@@ -128,6 +131,7 @@ impl Declaration {
             let name = text(d, name)?;
             if ![
                 "variable",
+                "between",
                 "filter",
                 "order_by",
                 "keep",
@@ -140,6 +144,7 @@ impl Declaration {
             }
         }
         let variable: String = text(d, field(d, payload, "variable")?)?.into();
+        let range = lookup_range::Declaration::prepare(d, payload, path)?;
         let filter = if let Some(id) = d
             .field(payload, "filter")
             .filter(|&id| !matches!(d.nodes()[id], N::Null))
@@ -193,30 +198,18 @@ impl Declaration {
             }
         }
         let mut declaration_findings = Vec::new();
+        declaration_findings.extend(
+            range
+                .as_ref()
+                .and_then(|range| range.bounds_finding(Owner::Source(&variable))),
+        );
         declaration_findings.extend((order.is_empty() != keep.is_none()).then(|| {
             let (declared, missing) = if keep.is_some() {
                 ("keep", "order_by")
             } else {
                 ("order_by", "keep")
             };
-            Diagnostic {
-                code: C::SourceSelectionUnpaired,
-                spec_paths: vec![path.into()],
-                context: [
-                    ("operation".into(), JsonValue::String("source".into())),
-                    (
-                        "declared".into(),
-                        JsonValue::Array(vec![JsonValue::String(declared.into())]),
-                    ),
-                    (
-                        "missing".into(),
-                        JsonValue::Array(vec![JsonValue::String(missing.into())]),
-                    ),
-                ]
-                .into(),
-                source_span: None,
-                operand_route: None,
-            }
+            lookup::selection_unpaired(path, Owner::Source(&variable), declared, missing)
         }));
         let absent = d
             .field(payload, "absent")
@@ -225,16 +218,15 @@ impl Declaration {
         let require_match = requires_match(d, payload);
         // Asserting a match and answering its absence are two absence policies.
         if require_match && absent.is_some() {
-            declaration_findings.push(Diagnostic {
-                code: C::SourceAbsenceConflict,
-                spec_paths: vec![format!("{path}.absent"), format!("{path}.require_match")],
-                context: [("variable".into(), JsonValue::String(variable.clone()))].into(),
-                source_span: None,
-                operand_route: None,
-            });
+            declaration_findings.push(lookup::absence_conflict(
+                format!("{path}.absent"),
+                format!("{path}.require_match"),
+                Owner::Source(&variable),
+            ));
         }
         Ok(Self {
             variable,
+            range,
             filter,
             order,
             keep,
@@ -512,6 +504,94 @@ impl Declaration {
         }
         refused
     }
+    /// `between` narrows what an implicit join matches; on a read of the
+    /// driver, an output column or a named intermediate there is nothing to
+    /// match, and it is refused (LOOKUP-9). True when refused.
+    fn refuse_range(
+        &self,
+        path: &str,
+        expression: &Expression,
+        findings: &mut Vec<BindFinding>,
+    ) -> bool {
+        let refused = self.range.is_some()
+            && !matches!(
+                expression,
+                Expression::SourceLookup { .. } | Expression::JoinedSource { .. }
+            );
+        if refused {
+            findings.push(BindFinding::Source(SourceFinding::new(
+                C::SourceRangeScope,
+                &format!("{path}.between"),
+                &[("identifier", &self.variable)],
+            )));
+        }
+        refused
+    }
+    /// Bind the range of this binding's implicit join over the joined
+    /// relation (LOOKUP-9): `Some(None)` without a range, and `None` when a
+    /// finding refuses it. Whether a record read names the driver of every row
+    /// that reads the join is admitted per context ([`lookup_range::admit`]).
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn bind_range(
+        &self,
+        donor: &TableSchema,
+        catalog: &Catalog,
+        secondary: &[crate::dataset::SecondarySource],
+        intermediates: &[Option<crate::dataset::Intermediate>],
+        available: Option<&[usize]>,
+        edges: &mut Vec<usize>,
+        findings: &mut Vec<BindFinding>,
+    ) -> Result<Option<Option<crate::dataset::RelationRange>>, BindError> {
+        let Some(range) = &self.range else {
+            return Ok(Some(None));
+        };
+        let owner = Owner::Source(&self.variable);
+        let wrap = |diagnostic| BindFinding::Source(SourceFinding(diagnostic));
+        let mut diagnostics = Vec::new();
+        let bounds = range.bind_bounds(
+            owner,
+            donor,
+            &|column| donor.columns().get(column).map(|field| field.kind),
+            &|_| true,
+            &mut diagnostics,
+        );
+        findings.extend(diagnostics.into_iter().map(wrap));
+        let Some(bounds) = bounds else {
+            return Ok(None);
+        };
+        // A column only the column phase derives is not yet a value of a row
+        // under construction.
+        if !range.value.contains('.') {
+            if let Some(finding @ reference_binding::Diagnostic::PhaseBoundary { .. }) = catalog
+                .validate_output(&range.value, None, available, &[0])
+                .map_err(BindError::Catalog)?
+            {
+                findings.push(BindFinding::OutputReference {
+                    path: format!("{}.value", range.path()),
+                    name: range.value.clone(),
+                    finding,
+                });
+                return Ok(None);
+            }
+        }
+        let Some((read, kind)) =
+            range.current_value(catalog, secondary, intermediates, available, edges)?
+        else {
+            findings.push(wrap(range.unknown_value(owner)));
+            return Ok(None);
+        };
+        Ok(match range.finish(read, kind, bounds, None)? {
+            Ok(range) => Some(Some(range)),
+            Err(diagnostic) => {
+                findings.push(wrap(diagnostic));
+                None
+            }
+        })
+    }
+    /// The authored range value, when the binding declares a range.
+    pub(super) fn range_value(&self) -> Option<&str> {
+        self.range.as_ref().map(|range| range.value.as_str())
+    }
     fn wrap(
         &self,
         expression: Expression,
@@ -688,39 +768,32 @@ pub(super) fn bind(
                                 }
                             })
                             .collect();
-                        Some(Expression::SourceLookup {
-                            lookup: crate::dataset::Lookup {
-                                source: source_index,
-                                column: source_column,
-                                keys,
-                            },
-                            filter,
-                            selection,
-                            absence: Some(declaration.absence(path)),
-                        })
+                        declaration
+                            .bind_range(
+                                &source.schema,
+                                catalog,
+                                secondary,
+                                intermediates,
+                                None,
+                                edges,
+                                findings,
+                            )?
+                            .map(|range| Expression::SourceLookup {
+                                lookup: crate::dataset::Lookup {
+                                    source: source_index,
+                                    column: source_column,
+                                    keys,
+                                },
+                                range,
+                                filter,
+                                selection,
+                                absence: Some(declaration.absence(path)),
+                            })
                     }
                     crate::key_relation::Inference::NoApplicableKeys => {
-                        let mut finding = SourceFinding::new(
-                            C::ImplicitSourceNoApplicableKeys,
-                            path,
-                            &[
-                                ("dataset", dataset),
-                                (
-                                    "hint",
-                                    "declare an explicit `intermediate:` with `source`/`key` pairs",
-                                ),
-                            ],
-                        );
-                        finding.0.context.insert(
-                            "keys".into(),
-                            JsonValue::Array(
-                                key_names
-                                    .iter()
-                                    .map(|name| JsonValue::String((*name).into()))
-                                    .collect(),
-                            ),
-                        );
-                        findings.push(BindFinding::Source(finding));
+                        findings.push(BindFinding::Source(SourceFinding(
+                            lookup::no_applicable_keys(path, dataset, &key_names, false),
+                        )));
                         None
                     }
                     crate::key_relation::Inference::Incompatible {
@@ -728,15 +801,13 @@ pub(super) fn bind(
                         expected,
                         actual,
                     } => {
-                        findings.push(BindFinding::Source(SourceFinding::new(
-                            C::ImplicitSourceKeyType,
+                        findings.push(BindFinding::Source(SourceFinding(lookup::key_type(
                             path,
-                            &[
-                                ("source", key_names[key]),
-                                ("expected", type_name(expected)),
-                                ("actual", type_name(actual)),
-                            ],
-                        )));
+                            Owner::Unnamed,
+                            key_names[key],
+                            expected.into(),
+                            actual.into(),
+                        ))));
                         None
                     }
                     crate::key_relation::Inference::UndeclaredOutput { .. } => {
@@ -826,24 +897,13 @@ pub(super) fn bind(
             None
         }
     };
-    if expression
-        .as_ref()
-        .is_some_and(|expression| declaration.refuse_require_match(path, expression, findings))
-    {
+    if expression.as_ref().is_some_and(|expression| {
+        declaration.refuse_require_match(path, expression, findings)
+            | declaration.refuse_range(path, expression, findings)
+    }) {
         return Ok(None);
     }
     Ok(expression.map(|expression| declaration.wrap(expression, column, path, variable_absent)))
-}
-
-fn type_name(kind: crate::value::ColumnType) -> &'static str {
-    use crate::value::ColumnType::*;
-    match kind {
-        Str => "str",
-        Int => "int",
-        Float => "float",
-        Date => "date",
-        DateTime => "datetime",
-    }
 }
 
 /// Scalar expression operands use the same inferred output-key join as a bare
@@ -915,33 +975,16 @@ pub(super) fn bind_implicit(
                     column,
                     keys: bound,
                 },
+                range: None,
                 filter: None,
                 selection: None,
                 absence: Some(crate::dataset::JoinAbsence::operand(path)),
             }))
         }
         crate::key_relation::Inference::NoApplicableKeys => {
-            let mut finding = SourceFinding::new(
-                C::ImplicitSourceNoApplicableKeys,
-                path,
-                &[
-                    ("dataset", dataset),
-                    (
-                        "hint",
-                        "declare an explicit `intermediate:` with `source`/`key` pairs",
-                    ),
-                ],
-            );
-            finding.0.context.insert(
-                "keys".into(),
-                JsonValue::Array(
-                    key_names
-                        .iter()
-                        .map(|name| JsonValue::String((*name).into()))
-                        .collect(),
-                ),
-            );
-            findings.push(BindFinding::Source(finding));
+            findings.push(BindFinding::Source(SourceFinding(
+                lookup::no_applicable_keys(path, dataset, &key_names, false),
+            )));
             Ok(None)
         }
         crate::key_relation::Inference::Incompatible {
@@ -949,15 +992,13 @@ pub(super) fn bind_implicit(
             expected,
             actual,
         } => {
-            findings.push(BindFinding::Source(SourceFinding::new(
-                C::ImplicitSourceKeyType,
+            findings.push(BindFinding::Source(SourceFinding(lookup::key_type(
                 path,
-                &[
-                    ("source", key_names[key]),
-                    ("expected", type_name(expected)),
-                    ("actual", type_name(actual)),
-                ],
-            )));
+                Owner::Unnamed,
+                key_names[key],
+                expected.into(),
+                actual.into(),
+            ))));
             Ok(None)
         }
         crate::key_relation::Inference::UndeclaredOutput { .. } => Err(BindError::Internal),
@@ -1022,29 +1063,18 @@ pub(super) fn bind_catalog_join(
                     source,
                     expected,
                     actual,
-                } => BindFinding::Source(SourceFinding::new(
-                    C::ImplicitSourceKeyType,
+                } => BindFinding::Source(SourceFinding(lookup::key_type(
                     path,
-                    &[
-                        ("source", &source),
-                        ("expected", type_name(expected)),
-                        ("actual", type_name(actual)),
-                    ],
-                )),
+                    Owner::Unnamed,
+                    &source,
+                    expected.into(),
+                    actual.into(),
+                ))),
                 JoinedFinding::NoApplicableKeys { dataset, keys } => {
-                    let mut finding = SourceFinding::new(
-                        C::ImplicitSourceNoApplicableKeys,
-                        path,
-                        &[
-                            ("dataset", &dataset),
-                            (
-                                "hint",
-                                "declare an explicit `intermediate:` with `source`/`key` pairs",
-                            ),
-                        ],
-                    );
-                    finding.texts("keys", keys);
-                    BindFinding::Source(finding)
+                    let keys = keys.iter().map(String::as_str).collect::<Vec<_>>();
+                    BindFinding::Source(SourceFinding(lookup::no_applicable_keys(
+                        path, &dataset, &keys, false,
+                    )))
                 }
             };
             findings.push(finding);

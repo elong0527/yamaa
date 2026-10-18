@@ -24,6 +24,7 @@ mod intermediate_derivations;
 mod intermediate_range;
 mod intermediates;
 mod lookup_diagnostics;
+mod lookup_range;
 mod match_values;
 mod relation_predicates;
 mod result_types;
@@ -508,7 +509,7 @@ fn present(d: &Document, id: usize, name: &str) -> bool {
         .is_some_and(|id| !matches!(d.nodes()[id], N::Null))
 }
 /// A lookup or structured source asserts a match only with `require_match:
-/// true`; omitted or false, a row without a record is answered (LOOKUP-13).
+/// true`; omitted or false, a row without a record is answered (LOOKUP-24).
 pub(crate) fn requires_match(d: &Document, id: usize) -> bool {
     d.field(id, "require_match")
         .is_some_and(|id| matches!(d.nodes()[id], N::Boolean(true)))
@@ -2458,6 +2459,18 @@ impl PreparedSpecification {
             .map(|filter| filter.bind(&self.source().name, source, &mut findings))
             .transpose()?
             .flatten();
+        // Every row is built from the base driver, the primary port.
+        lookup_range::admit(
+            [(
+                assignments
+                    .values()
+                    .map(|assignment| &assignment.expression)
+                    .collect(),
+                vec![0],
+            )],
+            &intermediates,
+            &mut findings,
+        );
         relation_predicates::admit_reads(
             assignments
                 .values()

@@ -907,8 +907,8 @@ local({
   unlink(c(file.path(directory,"src.csv"),file.path(directory,"donor.csv"),file.path(directory,"result.csv")))
   cases <- list(
     list(remove=host_truth[["lookup_first_clause"]],condition="rename_only_intermediate",requirement="REQ-1248",context='{"dataset":"DONOR","intermediate":"P"}'),
-    list(remove="    keep: first\n",condition="unpaired_fields",requirement="REQ-0119",context='{"declared":["order_by"],"intermediate":"P","missing":["keep"]}'),
-    list(remove="    order_by: [DONOR.SEQ]\n",condition="unpaired_fields",requirement="REQ-0119",context='{"declared":["keep"],"intermediate":"P","missing":["order_by"]}'))
+    list(remove="    keep: first\n",condition="unpaired_fields",requirement="LOOKUP-10",context='{"declared":["order_by"],"intermediate":"P","missing":["keep"]}'),
+    list(remove="    order_by: [DONOR.SEQ]\n",condition="unpaired_fields",requirement="LOOKUP-10",context='{"declared":["keep"],"intermediate":"P","missing":["order_by"]}'))
   for(case in cases) {
     writeBin(charToRaw(sub(case$remove,"",body,fixed=TRUE)),entry)
     expected <- list(phase="validation",condition=case$condition,requirement=case$requirement,

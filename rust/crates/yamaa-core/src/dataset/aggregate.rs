@@ -299,44 +299,20 @@ impl BoundAggregate {
             if !matches!(self.relation, AggregateRelation::Matched { .. }) {
                 return Err(PlanError::InvalidSource);
             }
-            range
-                .validate_source(schema, &|column| {
+            range.validate_lookup(
+                schema,
+                &|column| {
                     schema
                         .columns()
                         .get(column)
                         .map(|column| column.kind.into())
-                })
-                .map_err(|_| PlanError::InvalidSource)?;
-            if let CurrentRead::Output(column) = range.current().read {
-                if !available.get(column).copied().unwrap_or(false) {
-                    return Err(PlanError::UnavailableColumn);
-                }
-            }
-            let current_kind = match range.current().read {
-                CurrentRead::Output(column) => {
-                    output.columns().get(column).map(|field| Some(field.kind))
-                }
-                CurrentRead::Record { source: 0, column } => {
-                    primary.columns().get(column).map(|field| Some(field.kind))
-                }
-                CurrentRead::Record { source, column } => secondary
-                    .get(source - 1)
-                    .and_then(|source| source.schema.columns().get(column))
-                    .map(|field| Some(field.kind)),
-                CurrentRead::Intermediate { index, column } => {
-                    intermediates.get(index).and_then(|item| {
-                        item.source_schema(secondary)?.columns().get(column)?;
-                        Some(item.source_kind(secondary, column))
-                    })
-                }
-            }
-            .ok_or(PlanError::InvalidSource)?;
-            if range
-                .value_kind()
-                .is_some_and(|kind| current_kind.is_some_and(|current| kind != current.into()))
-            {
-                return Err(PlanError::InvalidSource);
-            }
+                },
+                primary,
+                secondary,
+                intermediates,
+                output,
+                available,
+            )?;
         }
         let evaluation_schema = self.derived_schema.as_ref().unwrap_or(schema);
         if self.derived_schema.is_some()
