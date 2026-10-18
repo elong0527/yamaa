@@ -1,5 +1,5 @@
-# Ordinary installed project calculations. Integer and text inputs retain the
-# lossless SDK scalar classes until their explicit host conversion here.
+# Ordinary installed project calculations over plain R values: an int
+# argument arrives as a double and a str argument as character.
 bmi <- function(weight_kg, height_cm, cm_per_m = 100L) {
   weight_kg / (height_cm / as.integer(cm_per_m)) ^ 2
 }

@@ -119,6 +119,21 @@ impl Date {
         self.inner.fields()
     }
 
+    /// Return whole days since 1970-01-01, negative before it.
+    pub fn epoch_days(self) -> i32 {
+        yamaa_adapters::arrow_temporal::date_days(self.inner)
+    }
+
+    /// The date `days` whole days after 1970-01-01, when it lies within
+    /// the civil years 1 to 9999.
+    pub fn from_epoch_days(days: i64) -> Option<Self> {
+        yamaa_adapters::arrow_temporal::date_from_days(
+            days,
+            yamaa_core::temporal::DatePrecision::Day,
+        )
+        .map(Self::from_core)
+    }
+
     pub(crate) fn from_core(value: yamaa_core::temporal::Date) -> Self {
         Self { inner: value }
     }
@@ -154,6 +169,22 @@ impl DateTime {
     /// Return civil fields in most-significant-first chronological order.
     pub fn fields(self) -> (u16, u8, u8, u8, u8, u8) {
         self.inner.fields()
+    }
+
+    /// Return whole seconds since 1970-01-01T00:00:00, counting the civil
+    /// fields as zone-free time; negative before it.
+    pub fn epoch_seconds(self) -> i64 {
+        yamaa_adapters::arrow_temporal::datetime_seconds(self.inner)
+    }
+
+    /// The datetime `seconds` whole seconds after 1970-01-01T00:00:00, when
+    /// it lies within the civil years 1 to 9999.
+    pub fn from_epoch_seconds(seconds: i64) -> Option<Self> {
+        yamaa_adapters::arrow_temporal::datetime_from_seconds(
+            seconds,
+            yamaa_core::temporal::DateTimePrecision::Second,
+        )
+        .map(Self::from_core)
     }
 
     pub(crate) fn from_core(value: yamaa_core::temporal::DateTime) -> Self {
@@ -216,56 +247,6 @@ impl std::fmt::Display for ScalarDecodeError {
 
 impl std::error::Error for ScalarDecodeError {}
 
-/// Convert an integer to binary64 only when the value is exactly retained.
-pub fn exact_float(value: &Scalar) -> Result<Scalar, ScalarDecodeError> {
-    let core = value.clone().into_core();
-    let converted = yamaa_adapters::scalar_bytes::exact_float(&core)
-        .map_err(|reason| ScalarDecodeError { reason })?;
-    Ok(Scalar::from_core(converted))
-}
-
-/// Admit a closed infix/unary spelling before host operands are converted.
-pub fn scalar_operator_code(name: &str, unary: bool) -> Option<i32> {
-    yamaa_adapters::scalar_bytes::operator_code(name, unary)
-}
-
-/// Apply a closed scalar operator using shared numeric comparison semantics.
-/// Codes: 1 +, 2 -, 3 *, 4 /, 5 MOD; 6 unary+, 7 unary-; 8 ==, 9 !=,
-/// 10 <, 11 <=, 12 >, 13 >=. No vector recycling or implicit conversion.
-pub fn apply_scalar_operator(
-    code: i32,
-    left: &Scalar,
-    right: Option<&Scalar>,
-) -> Result<Scalar, ScalarOperatorError> {
-    let left = left.clone().into_core();
-    let right = right.map(|value| value.clone().into_core());
-    let applied = yamaa_adapters::scalar_bytes::operate(code, &left, right.as_ref())
-        .map_err(|message| ScalarOperatorError { message })?;
-    Ok(Scalar::from_core(applied))
-}
-
-/// A scalar operator failure, carrying its owned diagnostic message.
-#[non_exhaustive]
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ScalarOperatorError {
-    message: String,
-}
-
-impl ScalarOperatorError {
-    /// Return the owned operator failure message.
-    pub fn message(&self) -> &str {
-        &self.message
-    }
-}
-
-impl std::fmt::Display for ScalarOperatorError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.message)
-    }
-}
-
-impl std::error::Error for ScalarOperatorError {}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -325,6 +306,48 @@ mod tests {
     }
 
     #[test]
+    fn temporal_values_round_trip_through_epoch_counts() {
+        let epoch = Date::new(1970, 1, 1).unwrap();
+        assert_eq!(epoch.epoch_days(), 0);
+        assert_eq!(Date::new(1969, 12, 31).unwrap().epoch_days(), -1);
+        assert_eq!(Date::new(2024, 2, 29).unwrap().epoch_days(), 19782);
+        for date in [
+            Date::new(1, 1, 1).unwrap(),
+            Date::new(1900, 3, 1).unwrap(),
+            Date::new(2024, 2, 29).unwrap(),
+            Date::new(9999, 12, 31).unwrap(),
+        ] {
+            assert_eq!(
+                Date::from_epoch_days(i64::from(date.epoch_days())),
+                Some(date)
+            );
+        }
+        assert_eq!(Date::new(1, 1, 1).unwrap().epoch_days(), -719_162);
+        assert!(Date::from_epoch_days(-719_163).is_none());
+        assert_eq!(Date::new(9999, 12, 31).unwrap().epoch_days(), 2_932_896);
+        assert!(Date::from_epoch_days(2_932_897).is_none());
+        assert!(Date::from_epoch_days(i64::MIN).is_none());
+        assert!(Date::from_epoch_days(i64::MAX).is_none());
+
+        let before = DateTime::new(1969, 12, 31, 23, 59, 59).unwrap();
+        assert_eq!(before.epoch_seconds(), -1);
+        assert_eq!(DateTime::from_epoch_seconds(-1), Some(before));
+        let leap = DateTime::new(2024, 2, 29, 12, 30, 45).unwrap();
+        assert_eq!(leap.epoch_seconds(), 19782 * 86400 + 45045);
+        assert_eq!(
+            DateTime::from_epoch_seconds(leap.epoch_seconds()),
+            Some(leap)
+        );
+        let last = DateTime::new(9999, 12, 31, 23, 59, 59).unwrap();
+        assert_eq!(
+            DateTime::from_epoch_seconds(last.epoch_seconds()),
+            Some(last)
+        );
+        assert!(DateTime::from_epoch_seconds(last.epoch_seconds() + 1).is_none());
+        assert!(DateTime::from_epoch_seconds(i64::MIN).is_none());
+    }
+
+    #[test]
     fn encoded_scalars_round_trip() {
         let values = vec![
             Scalar::Missing,
@@ -366,22 +389,5 @@ mod tests {
             EncodedScalar::decode(2, &f64::NAN.to_le_bytes()).unwrap(),
             Scalar::Missing
         );
-    }
-
-    #[test]
-    fn scalar_operators_match_shared_semantics() {
-        assert_eq!(scalar_operator_code("+", false), Some(1));
-        assert_eq!(scalar_operator_code("-", true), Some(7));
-        assert_eq!(scalar_operator_code("%", false), None);
-        let one = Scalar::Int(1);
-        let two = Scalar::Int(2);
-        assert_eq!(
-            apply_scalar_operator(1, &one, Some(&two)).unwrap(),
-            Scalar::Int(3)
-        );
-        assert!(apply_scalar_operator(6, &one, Some(&two)).is_err());
-        assert_eq!(exact_float(&Scalar::Int(3)).unwrap(), Scalar::Float(3.0));
-        assert!(exact_float(&Scalar::Int(i64::MAX)).is_err());
-        assert!(exact_float(&Scalar::Str("3".into())).is_err());
     }
 }

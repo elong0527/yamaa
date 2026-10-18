@@ -9,8 +9,8 @@ Authors@R: c(
     person("Jingwei", "Xiong", role = "ctb"))
 Description: Builds clinical data specifications, checks declarations, and
     renders submission metadata through the shared Rust engine. Returns owned
-    data frames and structured diagnostics, with explicit publication of
-    retained outputs and lossless signed 64-bit integer and UTF-8 values.
+    data frames of plain R values and structured diagnostics, with explicit
+    publication of retained outputs.
 License: MIT + file LICENSE
 Copyright: The yamaa contributors, and the holders named in
     inst/LICENSE-THIRD-PARTY.txt, inst/LICENSE-READSTAT.txt,

@@ -20,6 +20,7 @@ yamaa::Build: pub use yamaa::engine::Build
 yamaa::CallError: pub use yamaa::functions::CallError
 yamaa::CallStage: pub use yamaa::observe::CallStage
 yamaa::CancellationToken: pub use yamaa::cancel::CancellationToken
+yamaa::ColumnType: pub use yamaa::functions::ColumnType
 yamaa::ContextValue: pub use yamaa::diagnostic::ContextValue
 yamaa::DataType: pub use yamaa::table::DataType
 yamaa::DatasetPhase: pub use yamaa::observe::DatasetPhase
@@ -82,7 +83,6 @@ yamaa::Run: pub use yamaa::api::Run
 yamaa::SaveOutcome: pub use yamaa::engine::SaveOutcome
 yamaa::Scalar: pub use yamaa::scalar::Scalar
 yamaa::ScalarDecodeError: pub use yamaa::scalar::ScalarDecodeError
-yamaa::ScalarOperatorError: pub use yamaa::scalar::ScalarOperatorError
 yamaa::ScalarRef: pub use yamaa::scalar::ScalarRef
 yamaa::SchemaRef: pub use yamaa::table::SchemaRef
 yamaa::Severity: pub use yamaa::diagnostic::Severity
@@ -132,7 +132,6 @@ yamaa::api::Submission: impl Submission
 yamaa::api::Submission: pub struct Submission
 yamaa::api::Submission::issues: pub fn issues(&self) -> Table
 yamaa::api::Submission::save: pub fn save(&mut self) -> Result<(), Failure>
-yamaa::apply_scalar_operator: pub use yamaa::scalar::apply_scalar_operator
 yamaa::cancel::CancellationToken: impl CancellationToken
 yamaa::cancel::CancellationToken: pub struct CancellationToken [derive(Clone, Debug, Default)] [non_exhaustive]
 yamaa::cancel::CancellationToken::cancel: pub fn cancel(&self)
@@ -326,7 +325,6 @@ yamaa::error::TableError: impl TableError
 yamaa::error::TableError: pub struct TableError [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::error::TableError::code: pub fn code(&self) -> &'static str
 yamaa::error::TableError::message: pub fn message(&self) -> &str
-yamaa::exact_float: pub use yamaa::scalar::exact_float
 yamaa::functions::Argument: pub struct Argument<'a> [derive(Clone, Copy, Debug, PartialEq)] [non_exhaustive]
 yamaa::functions::Argument::name: pub name: &'a str
 yamaa::functions::Argument::value: pub value: ScalarRef<'a>
@@ -338,6 +336,13 @@ yamaa::functions::CallError: pub enum CallError [derive(Clone, Debug)] [non_exha
 yamaa::functions::CallError::InvalidResult: InvalidResult(FunctionError)
 yamaa::functions::CallError::Raised: Raised(FunctionError)
 yamaa::functions::CallError::error: pub fn error(&self) -> &FunctionError
+yamaa::functions::ColumnType: impl ColumnType
+yamaa::functions::ColumnType: pub enum ColumnType [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::functions::ColumnType::Date: Date
+yamaa::functions::ColumnType::DateTime: DateTime
+yamaa::functions::ColumnType::Float: Float
+yamaa::functions::ColumnType::Int: Int
+yamaa::functions::ColumnType::Str: Str
 yamaa::functions::FunctionHandle: impl Clone for FunctionHandle
 yamaa::functions::FunctionHandle: impl FunctionHandle
 yamaa::functions::FunctionHandle: impl std::fmt::Debug for FunctionHandle
@@ -373,7 +378,9 @@ yamaa::functions::RenvLock::packages: pub packages: BTreeMap<String, String>
 yamaa::functions::RenvLock::runtime_version: pub runtime_version: String
 yamaa::functions::Signature: impl Signature
 yamaa::functions::Signature: pub struct Signature [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::functions::Signature::may_return_missing: pub may_return_missing: bool
 yamaa::functions::Signature::parameters: pub parameters: Vec<Parameter>
+yamaa::functions::Signature::returns: pub returns: ColumnType
 yamaa::functions::decode_renv_lock: pub fn decode_renv_lock(bytes: &[u8]) -> Result<RenvLock, LockSyntaxError>
 yamaa::observe::CallStage: impl CallStage
 yamaa::observe::CallStage: pub enum CallStage [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
@@ -472,11 +479,15 @@ yamaa::resolver::ResourceResolver: pub trait ResourceResolver: Send + Sync
 yamaa::resolver::ResourceResolver::request: fn request(&self, request: ResolverRequest<'_>) -> Result<ResolverReply, yamaa::error::ResolverFailure> [required]
 yamaa::scalar::Date: impl Date
 yamaa::scalar::Date: pub struct Date [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::scalar::Date::epoch_days: pub fn epoch_days(self) -> i32
 yamaa::scalar::Date::fields: pub fn fields(self) -> (u16, u8, u8)
+yamaa::scalar::Date::from_epoch_days: pub fn from_epoch_days(days: i64) -> Option<Self>
 yamaa::scalar::Date::new: pub fn new(year: u16, month: u8, day: u8) -> Option<Self>
 yamaa::scalar::DateTime: impl DateTime
 yamaa::scalar::DateTime: pub struct DateTime [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::scalar::DateTime::epoch_seconds: pub fn epoch_seconds(self) -> i64
 yamaa::scalar::DateTime::fields: pub fn fields(self) -> (u16, u8, u8, u8, u8, u8)
+yamaa::scalar::DateTime::from_epoch_seconds: pub fn from_epoch_seconds(seconds: i64) -> Option<Self>
 yamaa::scalar::DateTime::new: pub fn new(year: u16, month: u8, day: u8, hour: u8, minute: u8, second: u8) -> Option<Self>
 yamaa::scalar::EncodedScalar: impl EncodedScalar
 yamaa::scalar::EncodedScalar: pub struct EncodedScalar [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
@@ -499,11 +510,6 @@ yamaa::scalar::ScalarDecodeError: impl std::error::Error for ScalarDecodeError
 yamaa::scalar::ScalarDecodeError: impl std::fmt::Display for ScalarDecodeError
 yamaa::scalar::ScalarDecodeError: pub struct ScalarDecodeError [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::scalar::ScalarDecodeError::reason: pub fn reason(self) -> &'static str
-yamaa::scalar::ScalarOperatorError: impl ScalarOperatorError
-yamaa::scalar::ScalarOperatorError: impl std::error::Error for ScalarOperatorError
-yamaa::scalar::ScalarOperatorError: impl std::fmt::Display for ScalarOperatorError
-yamaa::scalar::ScalarOperatorError: pub struct ScalarOperatorError [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::scalar::ScalarOperatorError::message: pub fn message(&self) -> &str
 yamaa::scalar::ScalarRef: impl<'a> ScalarRef<'a>
 yamaa::scalar::ScalarRef: pub enum ScalarRef<'a> [derive(Clone, Copy, Debug, PartialEq)] [non_exhaustive]
 yamaa::scalar::ScalarRef::Bool: Bool(bool)
@@ -514,10 +520,6 @@ yamaa::scalar::ScalarRef::Int: Int(i64)
 yamaa::scalar::ScalarRef::Missing: Missing
 yamaa::scalar::ScalarRef::Str: Str(&'a str)
 yamaa::scalar::ScalarRef::from_owned: pub fn from_owned(value: &'a Scalar) -> Self
-yamaa::scalar::apply_scalar_operator: pub fn apply_scalar_operator(code: i32, left: &Scalar, right: Option<&Scalar>) -> Result<Scalar, ScalarOperatorError>
-yamaa::scalar::exact_float: pub fn exact_float(value: &Scalar) -> Result<Scalar, ScalarDecodeError>
-yamaa::scalar::scalar_operator_code: pub fn scalar_operator_code(name: &str, unary: bool) -> Option<i32>
-yamaa::scalar_operator_code: pub use yamaa::scalar::scalar_operator_code
 yamaa::style_same_value: pub fn style_same_value(before: &[u8], after: &[u8]) -> bool
 yamaa::table::Array: pub use arrow_array::Array
 yamaa::table::DataType: pub use arrow_schema::DataType

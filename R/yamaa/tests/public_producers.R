@@ -92,11 +92,11 @@ resolve <- function(call, parameters) {
   resolved <- capabilities$resolve(call,parameters)
   if(resolved[[1L]] != 0L) return(resolved)
   invoke <- resolved[[2L]]
-  list(0L,function(encoded) {
-    x <- private(".scalar_unpack")(encoded[[1L]])
+  list(0L,function(arguments) {
+    x <- arguments[[1L]]
     events <<- c(events,paste0("invoke:",x))
     if(x==0) write(work,"raw/raw.csv",raw)
-    invoke(encoded)
+    invoke(arguments)
   })
 }
 results <- with_caps(verify,resolve,lapply(1:2,function(index) build(work)))
@@ -209,10 +209,10 @@ for(interrupted in c(FALSE,TRUE)) {
     resolved <- capabilities$resolve(call,parameters)
     if(resolved[[1L]] != 0L) return(resolved)
     invoke <- resolved[[2L]]
-    list(0L,function(encoded) {
-      x <- private(".scalar_unpack")(encoded[[1L]])
+    list(0L,function(arguments) {
+      x <- arguments[[1L]]
       if(x==1.234) return(list(if(interrupted) 3L else 1L,failure))
-      invoke(encoded)
+      invoke(arguments)
     })
   }
   # Native public result ownership is available independently of propagation.
@@ -238,9 +238,9 @@ resolve_oversized <- function(call,parameters) {
   resolved <- capabilities$resolve(call,parameters)
   if(resolved[[1L]] != 0L) return(resolved)
   invoke <- resolved[[2L]]
-  list(0L,function(encoded) {
-    if(private(".scalar_unpack")(encoded[[1L]])==1.234) return(list(1L,oversized))
-    invoke(encoded)
+  list(0L,function(arguments) {
+    if(identical(arguments[[1L]],1.234)) return(list(1L,oversized))
+    invoke(arguments)
   })
 }
 failed <- with_caps(capabilities$verify,resolve_oversized,build(work))
@@ -371,7 +371,7 @@ save_failure <- function(failed) {
     events <<- c(events,"bind");bound <- capabilities$resolve(call,parameters)
     if(bound[[1L]]!=0L) return(bound)
     invoke <- bound[[2L]]
-    list(0L,function(encoded) {events <<- c(events,"invoke");invoke(encoded)})
+    list(0L,function(arguments) {events <<- c(events,"invoke");invoke(arguments)})
   }
   result <- with_caps(versions,binding,build(work));before <- observe(result);built <- evidence(result);calls <- events
   target <- file.path(work,if(failed=="producer") "generated/producer.csv" else "published/root.csv")

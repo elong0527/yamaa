@@ -136,7 +136,6 @@ _R_TYPES = {
     "index": {"usize"},
     "unit": {"()"},
     "r_reply": {"List"},
-    "r_scalar_reply": {"List"},
 }
 
 

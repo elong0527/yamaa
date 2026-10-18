@@ -144,16 +144,18 @@ immediately after the host scalar is returned and before these result checks.
 The normalized missing result therefore still requires `may_return_missing:
 true`.
 
-A designated lossless host scalar is a representation of an existing logical
-type, not an arbitrary object wrapper. The R adapter uses `yamaa_int64` (one
-canonical signed-i64 decimal string) for `int` arguments and `yamaa_utf8` (one
-validated UTF-8 byte sequence, including NUL) for `str` arguments. It validates
-the exact class, storage, shape and payload; subclasses and extra attributes
-are not admitted. Results may use those same representations or an unclassed
-R integer/character scalar of the corresponding exact logical type. Double and
-logical scalars remain `float` and `bool`; there is no numeric or text coercion.
-R `date` and `datetime` use the Date and explicitly UTC POSIXct representations
-fixed by [Temporal values](../values/temporal.md#req-0563). This host mapping adds no logical type.
+The R adapter passes plain R values. A missing argument is `NA`, `str` is a
+character string, `int` and `float` are doubles and `bool` is a logical.
+`date` and `datetime` use the Date and explicitly UTC POSIXct representations
+fixed by [Temporal values](../values/temporal.md#req-0563). An `int` beyond
+2^53 in magnitude or text containing NUL has no exact R value, so the call
+fails rather than pass a changed value. The adapter converts a result by the
+declared type. `NULL` or a length-one `NA` is missing. Otherwise `str` needs
+one character string, `int` one whole number of magnitude at most 2^53,
+`float` one number, `date` one Date of whole days and `datetime` one UTC
+POSIXct of whole seconds; a number may have integer or double storage. Any
+other value, including a logical, a classed number or a vector, is an invalid
+result. This host mapping adds no logical type.
 
 ### Activation conformance
 

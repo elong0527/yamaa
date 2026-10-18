@@ -492,12 +492,12 @@ default.
 | `yamaa_core::domain_entry` | Internal -- entry dispatch behind `Engine`. |
 | `yamaa_core::function_batch` | Facade -- `ProjectFunctions` batch invocation with facade scalar arguments; `BatchFunctionPort` stays internal. |
 | `yamaa_core::function_invocation` | Facade -- `FunctionError` is its public form; `HostError` stays internal. |
-| `yamaa_core::function_signature` | Facade -- `FunctionIdentity` and `Signature`/`Parameter` are the public activation types; `LogicalSignature` stays internal. |
+| `yamaa_core::function_signature` | Facade -- `FunctionIdentity` and `Signature`/`Parameter` are the public activation types, and `ColumnType` is the declared result type; `LogicalSignature` stays internal. |
 | `yamaa_core::project_activation::ActivationPort` | Facade -- the `ProjectFunctions` trait; the core port stays internal. |
 | `yamaa_core::project_environment` | Facade -- `LockKind` and `LockContext`; environment admission stays internal. |
 | `yamaa_core::project_function` | Facade -- `HostLanguage` and the facade `Scalar` value type; the core `Language` enum stays internal. |
 | `yamaa_core::table::ValueRef` | Facade -- `ScalarRef`; the core table stays internal. |
-| `yamaa_core::temporal` | Facade -- `Date` and `DateTime`; collected precision is dropped at the boundary. |
+| `yamaa_core::temporal` | Facade -- `Date` and `DateTime`, with civil fields and epoch day or second counts; collected precision is dropped at the boundary. |
 | `yamaa_core::value::Value` | Facade -- `Scalar`. |
 | `yamaa_core::VERSION` (crate root) | Facade -- re-exported as `yamaa::VERSION` with the same value. |
 

@@ -46,7 +46,10 @@ fn refused(error: Refusal) -> List {
         ),
         Err(conversion) => list!(
             value = NULL,
-            error = list!(message = format!("{}; {conversion}", failure.message), issues = NULL)
+            error = list!(
+                message = format!("{}; {conversion}", failure.message),
+                issues = NULL
+            )
         ),
     }
 }

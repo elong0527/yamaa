@@ -12,7 +12,6 @@ mod project_activation;
 mod public_table;
 mod resolved_artifact;
 mod resource_resolver;
-mod scalars;
 mod thread_bound;
 
 #[extendr]

@@ -15,7 +15,7 @@
   if (identical(Encoding(value), "bytes")) {
     .domain_argument_error("byte-marked R text has no declared Unicode encoding")
   }
-  .scalar_text_bytes(value)
+  .utf8_raw(value)
 }
 .domain_arguments <- function(specification, environment) {
   list(.domain_path_bytes(specification),
@@ -113,40 +113,3 @@ yamaa_check <- function(specification, environment = NULL, resolver = NULL) {
   }
   list(issues = reply$issues, diagnostics = reply$diagnostics)
 }
-
-#' Copy lossless signed 64-bit output values as canonical text
-#' @param x A yamaa integer output vector.
-#' @param ... Unused.
-#' @export
-as.character.yamaa_int64_vector <- function(x, ...) unclass(x)
-
-#' Convert lossless UTF-8 output to character only when every value is exact
-#' @param x A yamaa UTF-8 output vector.
-#' @param ... Unused.
-#' @export
-as.character.yamaa_utf8_vector <- function(x, ...) {
-  if (!identical(class(x), "yamaa_utf8_vector")) {
-    stop("invalid UTF-8 output vector class", call. = FALSE)
-  }
-  values <- unclass(x)
-  if (!is.list(values) || any(!(names(attributes(values)) %in% "names"))) {
-    stop("invalid UTF-8 output vector storage", call. = FALSE)
-  }
-  vapply(values, function(value) {
-    if (is.null(value)) return(NA_character_)
-    if (!is.raw(value) || !is.null(attributes(value))) {
-      stop("invalid UTF-8 output value storage", call. = FALSE)
-    }
-    # Reuse strict scalar admission and its preserve-or-error R conversion.
-    as.character(.scalar_unpack(.scalar_native(3L, value)))
-  }, character(1L))
-}
-
-#' @export
-`[.yamaa_int64_vector` <- function(x, ...) structure(unclass(x)[...], class = "yamaa_int64_vector")
-
-#' @export
-is.na.yamaa_utf8_vector <- function(x) vapply(unclass(x), is.null, logical(1))
-
-#' @export
-`[.yamaa_utf8_vector` <- function(x, ...) structure(unclass(x)[...], class = "yamaa_utf8_vector")

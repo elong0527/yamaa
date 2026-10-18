@@ -161,7 +161,7 @@ fn finish(column: Column) -> std::result::Result<Robj, String> {
     })
 }
 
-fn exact_double(value: i64) -> std::result::Result<f64, String> {
+pub(crate) fn exact_double(value: i64) -> std::result::Result<f64, String> {
     if value.unsigned_abs() <= EXACT_DOUBLE_MAGNITUDE {
         Ok(value as f64)
     } else {

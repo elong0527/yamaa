@@ -8,7 +8,7 @@ pub mod application_measurements;
 pub mod arrow_batch;
 pub mod arrow_bridge;
 pub mod arrow_table;
-mod arrow_temporal;
+pub mod arrow_temporal;
 pub mod file_define;
 pub mod json_wire;
 pub mod public_table;

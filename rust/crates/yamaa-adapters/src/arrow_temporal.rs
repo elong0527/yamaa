@@ -1,4 +1,5 @@
-//! Civil/epoch conversion for the private precision-bearing Arrow representation.
+//! Civil/epoch conversion for the precision-bearing Arrow representation and
+//! the facade's epoch day and second accessors.
 
 use yamaa_core::temporal::{Date, DatePrecision, DateTime, DateTimePrecision};
 
@@ -13,7 +14,7 @@ fn before_year(year: i64) -> i64 {
 }
 
 /// Convert already validated civil fields to an exact Arrow Date32 day.
-pub(crate) fn date_days(date: Date) -> i32 {
+pub fn date_days(date: Date) -> i32 {
     let (year, month, day) = date.fields();
     let mut ordinal = before_year(i64::from(year));
     for prior in 1..month {
@@ -35,7 +36,7 @@ fn month_days(year: u16, month: u8) -> i64 {
 }
 
 /// Decode a bounded epoch day without timezone, float arithmetic or host dates.
-pub(crate) fn date_from_days(days: i64, precision: DatePrecision) -> Option<Date> {
+pub fn date_from_days(days: i64, precision: DatePrecision) -> Option<Date> {
     let ordinal = days.checked_add(EPOCH_ORDINAL)?;
     if !(0..=MAX_ORDINAL).contains(&ordinal) {
         return None;
@@ -60,7 +61,7 @@ pub(crate) fn date_from_days(days: i64, precision: DatePrecision) -> Option<Date
 }
 
 /// Convert complete civil time to integral seconds without timezone adjustment.
-pub(crate) fn datetime_seconds(value: DateTime) -> i64 {
+pub fn datetime_seconds(value: DateTime) -> i64 {
     let (year, month, day, hour, minute, second) = value.fields();
     let date = Date::new(year, month, day, DatePrecision::Day).expect("validated datetime");
     i64::from(date_days(date)) * 86400
@@ -70,10 +71,7 @@ pub(crate) fn datetime_seconds(value: DateTime) -> i64 {
 }
 
 /// Floor negative epochs into their civil day before extracting time of day.
-pub(crate) fn datetime_from_seconds(
-    seconds: i64,
-    precision: DateTimePrecision,
-) -> Option<DateTime> {
+pub fn datetime_from_seconds(seconds: i64, precision: DateTimePrecision) -> Option<DateTime> {
     let date = date_from_days(seconds.div_euclid(86400), DatePrecision::Day)?;
     let time = seconds.rem_euclid(86400);
     DateTime::new(

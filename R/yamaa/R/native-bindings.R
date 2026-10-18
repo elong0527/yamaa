@@ -85,22 +85,6 @@
   .Call(wrap__define_save, handle)
 }
 
-.native_scalar_bytes <- function(tag, payload) {
-  .Call(wrap__scalar_bytes, tag, payload)
-}
-
-.native_scalar_exact_double <- function(tag, payload) {
-  .Call(wrap__scalar_exact_double, tag, payload)
-}
-
-.native_scalar_operator_code <- function(name, unary) {
-  .Call(wrap__scalar_operator_code, name, unary)
-}
-
-.native_scalar_operator <- function(code, left_tag, left, right_tag, right, unary) {
-  .Call(wrap__scalar_operator, code, left_tag, left, right_tag, right, unary)
-}
-
 .native_resolve_specification_file <- function(specification, environment) {
   .Call(wrap__resolve_specification_file, specification, environment)
 }

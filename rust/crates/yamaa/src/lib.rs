@@ -50,8 +50,9 @@ pub use error::{
     ResolverFailure, TableError,
 };
 pub use functions::{
-    decode_renv_lock, Argument, BatchArgument, CallError, FunctionHandle, FunctionIdentity,
-    HostLanguage, LockContext, LockKind, Parameter, ProjectFunctions, RenvLock, Signature,
+    decode_renv_lock, Argument, BatchArgument, CallError, ColumnType, FunctionHandle,
+    FunctionIdentity, HostLanguage, LockContext, LockKind, Parameter, ProjectFunctions, RenvLock,
+    Signature,
 };
 pub use observe::{CallStage, DatasetPhase, Event, Node, Outcome, Phase, Progress, Refusal};
 pub use odm::{read_odm, OdmOptions, ODM_COLUMNS};
@@ -59,10 +60,7 @@ pub use resolver::{
     MemoryResolver, ResolverKind, ResolverOperation, ResolverReply, ResolverRequest,
     ResourceResolver,
 };
-pub use scalar::{
-    apply_scalar_operator, exact_float, scalar_operator_code, Date, DateTime, EncodedScalar,
-    Scalar, ScalarDecodeError, ScalarOperatorError, ScalarRef,
-};
+pub use scalar::{Date, DateTime, EncodedScalar, Scalar, ScalarDecodeError, ScalarRef};
 pub use table::{
     Array, DataType, Date32Array, FFI_ArrowArrayStream, Field, Fields, Float64Array, InputFrame,
     Int64Array, LargeStringArray, ListArray, RecordBatch, SchemaRef, StringArray, StringViewArray,
