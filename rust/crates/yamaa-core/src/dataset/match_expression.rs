@@ -1,13 +1,14 @@
 //! Lookup scalar expressions reuse the ordinary bound IR on resolved operands.
 use super::*;
-use crate::key_relation::ComparableType;
+use crate::result_type::ResultType;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct MatchExpression {
     pub assignment: Assignment,
     pub reads: Vec<MatchRead>,
     pub schema: TableSchema,
-    pub result_type: Option<ComparableType>,
+    /// The expression's result type (EXPR-14), compared with the key column.
+    pub result_type: ResultType,
     /// A relation window retains its original completed-row coordinates.
     pub windowed: bool,
 }
@@ -16,7 +17,7 @@ impl MatchExpression {
         mut assignment: Assignment,
         reads: Vec<MatchRead>,
         schema: TableSchema,
-        result_type: Option<ComparableType>,
+        result_type: ResultType,
     ) -> Result<Self, PlanError> {
         let windowed = contains_window(&assignment.expression, 0)?;
         if !windowed {

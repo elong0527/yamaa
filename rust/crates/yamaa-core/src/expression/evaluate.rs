@@ -522,7 +522,14 @@ impl<'a, R: Resolver> Evaluator<'a, R> {
                     }
                     Function::NullIf => {
                         let (left, right) = self.pair(arguments[0], arguments[1])?;
-                        return Ok(numeric::null_if(left, right));
+                        let value = numeric::null_if(left, right);
+                        // EXPR-14: the bound site's result type, also when
+                        // the `float` argument is missing.
+                        return Ok(if compiled.widened.binary_search(&id).is_ok() {
+                            value.widened()
+                        } else {
+                            value
+                        });
                     }
                     Function::StrContains => unreachable!("a truth value is not a number"),
                 }

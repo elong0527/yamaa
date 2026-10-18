@@ -39,10 +39,8 @@ fn validate_at(
             .ok_or(PlanError::InvalidLookup)?;
         if !available.get(key.output_column).copied().unwrap_or(false)
             || if numeric_keys {
-                !crate::key_relation::comparable(
-                    field.kind.into(),
-                    output.columns()[key.output_column].kind.into(),
-                )
+                !crate::result_type::ResultType::from(field.kind)
+                    .comparable(output.columns()[key.output_column].kind.into())
             } else {
                 field.kind != output.columns()[key.output_column].kind
             }

@@ -1,7 +1,45 @@
 //! Retained declaration findings share the compiled operations used by build.
 //! Checking never obtains source schemas, activates functions, or executes a plan.
 use super::*;
-use crate::diagnostic::Diagnostic;
+use crate::{diagnostic::Diagnostic, result_type::ResultType};
+
+/// The static types of one derivation over the types `input` declares, as
+/// binding checks them: each flag condition and case predicate (FORMULA-5,
+/// FORMULA-12), and each aggregate derive binding's conversion (VALUE-24).
+pub(super) fn derivation_types(
+    operation: &Operation,
+    input: &dyn Fn(&str) -> ResultType,
+    findings: &mut Vec<BindFinding>,
+) {
+    fn check(
+        plan: &CompiledExpression,
+        input: &dyn Fn(&str) -> ResultType,
+        findings: &mut Vec<BindFinding>,
+    ) {
+        findings.extend(
+            static_types::predicate_kinds(plan, |name| input(name).single())
+                .into_iter()
+                .map(BindFinding::Predicate),
+        );
+    }
+    match operation {
+        Operation::Flag(flag) => {
+            if let Some(condition) = flag.condition() {
+                check(condition, input, findings);
+            }
+        }
+        Operation::Case(branches) => {
+            for branch in branches {
+                if let Some(Ok(plan)) = branch.predicate() {
+                    check(plan, input, findings);
+                }
+                derivation_types(&branch.operation, input, findings);
+            }
+        }
+        Operation::Aggregate(aggregate) => aggregate.derive_conversion_findings(input, findings),
+        _ => (),
+    }
+}
 
 pub(super) fn predicate(
     compiled: &Result<CompiledExpression, CompileError>,
@@ -127,6 +165,26 @@ fn filters(
 }
 
 impl PreparedSpecification {
+    /// A name's type before any schema is captured: a column's or a stored
+    /// field's declared type. Anything else is not known until binding.
+    pub(super) fn declared_input(&self, name: &str) -> ResultType {
+        match name.split_once('.') {
+            Some((owner, field)) => ResultType::declared(
+                self.sources
+                    .iter()
+                    .find(|source| source.name == owner)
+                    .and_then(|source| source.declared_type(field)),
+            ),
+            None => ResultType::declared(
+                self.output
+                    .columns()
+                    .iter()
+                    .find(|column| column.name == name)
+                    .map(|column| column.kind),
+            ),
+        }
+    }
+
     pub(super) fn finish_checks(mut self) -> Result<Self, PrepareError> {
         let mut findings = Vec::new();
         let collect = |findings: &mut Vec<BindFinding>| -> Result<(), BindError> {
@@ -143,8 +201,10 @@ impl PreparedSpecification {
                     .map(|(index, column)| (column.name.as_str(), index))
                     .collect::<BTreeMap<_, _>>()
             });
+            let input = |name: &str| self.declared_input(name);
             let mut dependencies = Vec::new();
-            for declaration in &self.declarations {
+            for (column, declaration) in self.declarations.iter().enumerate() {
+                let start = findings.len();
                 operation(
                     &declaration.operation,
                     &declaration.path,
@@ -154,12 +214,19 @@ impl PreparedSpecification {
                 if let Some(outputs) = &outputs {
                     dependencies.push(Some(self.formula_reads(declaration, outputs, findings)));
                 }
+                derivation_types(&declaration.operation, &input, findings);
+                if findings.len() == start && declaration.handler.is_none() {
+                    findings.extend(
+                        self.conversion_finding(column, declaration.operation.result_type(&input))
+                            .map(BindFinding::Scalar),
+                    );
+                }
             }
             if outputs.is_some() {
                 self.formula_dependencies(&dependencies, findings)?;
             }
             if let Some(rows) = &self.rows {
-                rows.check_findings(findings)?;
+                rows.check_findings(&self.output, &input, findings)?;
             }
             Ok(())
         };

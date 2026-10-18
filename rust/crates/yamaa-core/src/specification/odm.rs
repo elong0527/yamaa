@@ -151,10 +151,9 @@ pub(super) fn bind(
             }
         }
         if findings.len() == before {
-            Some(
-                BoundPredicate::new(plan.clone(), bindings)
-                    .map_err(BindError::InvalidPredicateBinding)?,
-            )
+            let typed =
+                plan.typed(|name| crate::result_type::ResultType::declared(catalog.type_of(name)));
+            Some(BoundPredicate::new(typed, bindings).map_err(BindError::InvalidPredicateBinding)?)
         } else {
             None
         }

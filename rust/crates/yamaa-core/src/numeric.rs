@@ -18,6 +18,14 @@ impl Number {
         FiniteFloat::new(value).map_or(Self::Missing, Self::Float)
     }
 
+    /// VALUE-8: an `int` widened to the nearest binary64 `float`.
+    pub fn widened(self) -> Self {
+        match self {
+            Self::Int(value) => Self::float(value as f64),
+            other => other,
+        }
+    }
+
     /// Promote a present number to binary64, retaining missing as None.
     fn as_float(self) -> Option<f64> {
         match self {
@@ -198,7 +206,9 @@ pub fn unary(
 
 /// Return missing for equal arguments. A mixed pair compares by exact value,
 /// like every other comparison; zero signs are equal. A present unmatched left
-/// operand has the promoted pair type.
+/// operand has the promoted pair type. A missing right operand has no value
+/// to promote by; the bound site widens the result when its declared type is
+/// `float` (EXPR-14).
 pub fn null_if(left: Number, right: Number) -> Number {
     if left == Number::Missing {
         return Number::Missing;

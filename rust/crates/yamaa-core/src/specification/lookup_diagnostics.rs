@@ -82,13 +82,9 @@ impl LookupFinding {
         path: &str,
         intermediate: &str,
         source: &str,
-        expected: crate::key_relation::ComparableType,
+        expected: crate::result_type::ResultType,
         actual: ColumnType,
     ) -> Self {
-        let expected = match expected {
-            crate::key_relation::ComparableType::Boolean => crate::value::ValueType::Bool,
-            crate::key_relation::ComparableType::Column(kind) => kind.into(),
-        };
         Self(crate::diagnostic::lookup_key_type(
             path,
             intermediate,

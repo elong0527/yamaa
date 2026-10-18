@@ -207,6 +207,7 @@ conditions! {
     ConversionInput => ("convert", "conversion_failed", Some("REQ-0013")),
     ConversionInteger => ("convert", "conversion_failed", Some("REQ-0021")),
     ConversionTemporal => ("convert", "conversion_failed", Some("REQ-0601")),
+    ConversionResultType => ("validation", "conversion_failed", Some("VALUE-24")),
     ResourceMissing => ("validation", "resource_path_missing", Some("REQ-0785")),
     ResourceNotRegularFile => ("validation", "resource_path_not_regular_file", Some("REQ-0785")),
     ResourceUriScheme => ("validation", "resource_path_uri_scheme", Some("REQ-0775")),

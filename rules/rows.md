@@ -35,11 +35,11 @@ filtered records, in source order, after its ordered `derivations` have
 completed. The row template reads them through the intermediate's qualifier as
 its current driver record, not through a keyed lookup. A driver intermediate
 must read an `input` dataset and may not declare `key`, `between`, `order_by`,
-`keep` or `no_match`, and every derived field it exposes must have a
-determinable type.
+`keep` or `no_match`, and every derived field it exposes must have one column
+type as its result type ([EXPR-14](expressions.md#expr-14)).
 
 Fails: `invalid_intermediate_driver`, `unknown_intermediate_driver_type`.
-Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/intermediate_scopes.rs`, `rust/crates/yamaa-adapters/tests/fixtures/row_intermediate_reference.json`.
+Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/intermediate_scopes.rs`, `rust/crates/yamaa-adapters/tests/fixtures/row_intermediate_reference.json`, `rust/crates/yamaa-adapters/tests/project_environment.rs::callback_derived_fields_expose_their_declared_result_type_to_row_drivers`.
 Replaces: REQ-1262.
 
 The intermediate's `columns` list, when present, limits the fields the row
@@ -50,17 +50,13 @@ donor under [LOOKUP-16](lookup.md#lookup-16). Neither its filter nor
 its derivations may reference a current row. An ineligible intermediate fails
 as `invalid_intermediate_driver` at the row template's `dataset` field.
 
-An exposed derived field has a determinable type when it is one of:
-
-- `source`, which keeps its source type, including a read of another
-  intermediate's column under [LOOKUP-16](lookup.md#lookup-16);
-- a string, integer or float `literal`, which has that type;
-- `row_number` or `rank`, which is integer;
-- `str_case`, which is string.
-
-A `case` has a type only when all its nonmissing branches have the same
-determinable type. Any other exposed derived field fails row-driver validation
-as `unknown_intermediate_driver_type`.
+An exposed derived field has a column type when it is typed, or when its
+expression's result type under [EXPR-14](expressions.md#expr-14) is one
+column type; a `source` reading another intermediate's column under
+[LOOKUP-16](lookup.md#lookup-16) has that column's type. A `case` selecting an
+`int` or a `str` and a Boolean `literal` have none, and an exposed derived
+field without one fails row-driver validation as
+`unknown_intermediate_driver_type`.
 
 <a id="row-3"></a>
 

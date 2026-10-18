@@ -1952,6 +1952,91 @@ mod relations {
                 )]
             );
         }
+        /// LOOKUP-6 compares each key expression's result type (EXPR-14) with
+        /// its key column before matching: a fixed, parameter or input type
+        /// alike, and a type decided per value at run time.
+        #[test]
+        fn key_expressions_compare_by_their_one_result_type_before_matching() {
+            let compute = |expr: &str| {
+                Tree::map(vec![(
+                    "compute",
+                    Tree::map(vec![("expr", Tree::text(expr))]),
+                )])
+            };
+            let mapping = |entries: Vec<(&str, Tree)>| {
+                Tree::map(vec![(
+                    "mapping",
+                    Tree::map(vec![
+                        ("source", Tree::text("SRC.ID")),
+                        ("dict", Tree::map(entries)),
+                    ]),
+                )])
+            };
+            let greatest = |sources: &[&str]| {
+                Tree::map(vec![(
+                    "greatest",
+                    Tree::map(vec![(
+                        "sources",
+                        Tree::List(sources.iter().map(Tree::text).collect()),
+                    )]),
+                )])
+            };
+            let refused = |field: &str, value: Tree| {
+                let prepared =
+                    PreparedSpecification::prepare(&doc(Tree::map(vec![(field, value)]))).unwrap();
+                let (src, tab) = schemas();
+                let Err(BindError::Invalid(findings)) = prepared.bind_sources(&[&src, &tab]) else {
+                    panic!("{field}: a key whose type cannot compare is refused")
+                };
+                let diagnostic = findings
+                    .iter()
+                    .flat_map(|f| f.diagnostics(prepared.source()).unwrap())
+                    .next()
+                    .unwrap();
+                (
+                    diagnostic.definition().condition,
+                    diagnostic.spec_paths,
+                    diagnostic.context["expected"].clone(),
+                    diagnostic.context["actual"].clone(),
+                )
+            };
+            let text = |value: &str| yamaa_core::json::Value::String(value.into());
+            for (field, value, expected) in [
+                ("K", compute("N + 1"), "int"),
+                ("K", compute("N / 2"), "float"),
+                ("K", mapping(vec![("one", Tree::integer(1))]), "int"),
+                ("K", greatest(&["N", "SRC.N"]), "int"),
+                ("KINT", mapping(vec![("one", Tree::text("1"))]), "str"),
+            ] {
+                assert_eq!(
+                    refused(field, value),
+                    (
+                        "incompatible_input_type",
+                        vec!["intermediates[0].key".to_string()],
+                        text(expected),
+                        text(if field == "K" { "str" } else { "int" }),
+                    ),
+                    "{field}"
+                );
+            }
+            for (field, value) in [
+                ("KINT", compute("N + 1")),
+                ("KNUM", compute("N + 1")),
+                ("KNUM", greatest(&["N", "SRC.N"])),
+                // An int or a string, decided per value: compared when matched.
+                (
+                    "KINT",
+                    mapping(vec![("one", Tree::integer(1)), ("two", Tree::text("2"))]),
+                ),
+            ] {
+                let prepared =
+                    PreparedSpecification::prepare(&doc(Tree::map(vec![(field, value)]))).unwrap();
+                let (src, tab) = schemas();
+                prepared
+                    .bind_sources(&[&src, &tab])
+                    .unwrap_or_else(|error| panic!("{field}: {error:?}"));
+            }
+        }
         #[test]
         fn literal_text_is_not_a_reference_and_boolean_family_is_not_coerced() {
             let prepared = PreparedSpecification::prepare(&doc(Tree::map(vec![(
@@ -2107,9 +2192,10 @@ mod relations {
                 expression.assignment.path,
                 "intermediates[0].key.KINT.greatest"
             );
-            assert!(
-                expression.result_type.is_none(),
-                "greatest retains runtime comparability"
+            assert_eq!(
+                expression.result_type,
+                yamaa_core::result_type::ResultType::INT,
+                "greatest returns the type its sources share (EXPR-14)"
             );
             assert!(!expression.windowed);
         }
@@ -2386,84 +2472,6 @@ mod relations {
             };
             assert_eq!(validate_read(&catalog, read), vec![]);
             assert_eq!(validate_field(&catalog, "é", target), None);
-        }
-    }
-    mod match_value {
-        use yamaa_core::{
-            key_relation::ComparableType,
-            match_value::{result_type, Expression, LiteralKind},
-            reference_binding::{Catalog, Field},
-            value::ColumnType,
-        };
-
-        /// Unknown names defer comparison without changing the immutable catalog's known types.
-        #[test]
-        fn unknown_results_do_not_poison_catalog() {
-            let catalog = Catalog::compile(
-                &[Field {
-                    name: "A",
-                    column_type: ColumnType::Int,
-                }],
-                &[],
-            )
-            .unwrap();
-            assert_eq!(result_type(&catalog, Expression::Source("éé")), None);
-            assert_eq!(result_type(&catalog, Expression::Source("xxx")), None);
-            assert_eq!(
-                result_type(&catalog, Expression::Source("A")),
-                Some(ColumnType::Int.into())
-            );
-            assert_eq!(
-                result_type(&catalog, Expression::Literal(LiteralKind::Bool)),
-                Some(ComparableType::Boolean)
-            );
-            assert_eq!(
-                result_type(&catalog, Expression::Literal(LiteralKind::Missing)),
-                None
-            );
-        }
-
-        #[test]
-        fn operations_outside_the_complete_req1259_table_defer_comparison() {
-            let catalog = Catalog::compile(&[], &[]).unwrap();
-            for (name, target) in [
-                ("shift", Some(ColumnType::Date)),
-                ("shift", Some(ColumnType::DateTime)),
-                ("diff", Some(ColumnType::DateTime)),
-                ("duration_value", None),
-                ("row_value", None),
-                ("locf", None),
-                ("mapping", None),
-                ("case", None),
-                ("greatest", None),
-                ("least", None),
-            ] {
-                assert_eq!(
-                    result_type(&catalog, Expression::Operation { name, target }),
-                    None,
-                    "{name}"
-                );
-            }
-        }
-
-        #[test]
-        fn a_declared_temporal_type_selects_the_static_result_type() {
-            let catalog = Catalog::compile(&[], &[]).unwrap();
-            for (name, target, expected) in [
-                ("impute", Some(ColumnType::Date), ColumnType::Date),
-                ("impute", Some(ColumnType::DateTime), ColumnType::DateTime),
-                ("diff", Some(ColumnType::Date), ColumnType::Int),
-                ("precision", Some(ColumnType::Date), ColumnType::Str),
-                ("precision", Some(ColumnType::DateTime), ColumnType::Str),
-                ("imputation_flag", None, ColumnType::Str),
-                ("to_date", None, ColumnType::Date),
-            ] {
-                assert_eq!(
-                    result_type(&catalog, Expression::Operation { name, target }),
-                    Some(expected.into()),
-                    "{name}"
-                );
-            }
         }
     }
     mod primary_intermediates {

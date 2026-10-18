@@ -147,20 +147,56 @@ fn compute_and_reduction_reject_known_text_without_evaluation() {
     );
 }
 
+/// EXPR-14: `compute` and `aggregate` take their type from their operands by
+/// VALUE-10 and FORMULA-23, int while every operator and operand keeps int.
 #[test]
-fn numeric_and_aggregate_result_kinds_are_native_metadata() {
+fn numeric_and_aggregate_result_types_follow_their_operands() {
     use crate::expression::{compile, Context};
-    let numeric = compile("A + POWER(B, 2) / -3", Context::Compute, "result").unwrap();
-    assert_eq!(numeric.numeric_result_type(), Some(ColumnType::Float));
-    let aggregate = compile(
-        "SUM(EX.DOSE) / NULLIF(EX.PLANDOSE, 0)",
-        Context::Aggregate,
-        "result",
-    )
-    .unwrap();
-    assert_eq!(aggregate.numeric_result_type(), Some(ColumnType::Float));
-    let bare = compile("MIN(EX.TERM)", Context::Aggregate, "result").unwrap();
-    assert_eq!(bare.numeric_result_type(), None);
+    use crate::result_type::ResultType;
+    let kinds = |name: &str| match name {
+        "A" | "EX.COUNT" => ResultType::INT,
+        "B" | "EX.DOSE" => ResultType::FLOAT,
+        "EX.TERM" => ResultType::STR,
+        _ => ResultType::UNKNOWN,
+    };
+    let result = |text: &str, context| compile(text, context, "result").unwrap().result_type(kinds);
+    assert_eq!(result("A + 1", Context::Compute), ResultType::INT);
+    assert_eq!(
+        result("ABS(A) * MOD(A, 3)", Context::Compute),
+        ResultType::INT
+    );
+    assert_eq!(result("A + B", Context::Compute), ResultType::FLOAT);
+    assert_eq!(result("A / 1", Context::Compute), ResultType::FLOAT);
+    assert_eq!(result("FLOOR(A)", Context::Compute), ResultType::FLOAT);
+    assert_eq!(
+        result("A + POWER(B, 2) / -3", Context::Compute),
+        ResultType::FLOAT
+    );
+    assert_eq!(result("NULLIF(A, 0)", Context::Compute), ResultType::INT);
+    assert_eq!(result("NULLIF(A, B)", Context::Compute), ResultType::FLOAT);
+    assert_eq!(result("NULLIF(B, A)", Context::Compute), ResultType::FLOAT);
+    assert_eq!(result("NULLIF(A, NULL)", Context::Compute), ResultType::INT);
+    assert_eq!(result("A + NULL", Context::Compute), ResultType::MISSING);
+    assert_eq!(result("UNTYPED + 1", Context::Compute), ResultType::NUMBER);
+    assert_eq!(result("SUM(EX.COUNT)", Context::Aggregate), ResultType::INT);
+    assert_eq!(result("COUNT(EX.*)", Context::Aggregate), ResultType::INT);
+    assert_eq!(
+        result("MEAN(EX.COUNT)", Context::Aggregate),
+        ResultType::FLOAT
+    );
+    assert_eq!(result("MIN(EX.TERM)", Context::Aggregate), ResultType::STR);
+    assert_eq!(
+        result("ONLY(EX.DOSE)", Context::Aggregate),
+        ResultType::FLOAT
+    );
+    assert_eq!(
+        result("SUM(EX.DOSE) / NULLIF(EX.COUNT, 0)", Context::Aggregate),
+        ResultType::FLOAT
+    );
+    assert_eq!(
+        result("SUM(EX.COUNT) - COUNT(EX.*)", Context::Aggregate),
+        ResultType::INT
+    );
 }
 
 #[test]

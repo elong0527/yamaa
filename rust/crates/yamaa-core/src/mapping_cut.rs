@@ -334,4 +334,18 @@ impl MappingCut {
             ),
         }
     }
+    /// EXPR-14: a mapping returns the type its dictionary values share and a
+    /// cut its text labels, before any `missing` or `unmapped` replacement.
+    pub fn result_type(&self) -> crate::result_type::ResultType {
+        use crate::result_type::ResultType;
+        match self {
+            Self::Mapping(item) => item
+                .entries
+                .iter()
+                .fold(ResultType::MISSING, |kind, (_, value)| {
+                    kind.or(ResultType::of_value(value))
+                }),
+            Self::Cut(_) => ResultType::STR,
+        }
+    }
 }

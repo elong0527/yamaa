@@ -32,12 +32,22 @@ pub(super) fn prepare(
         path: path.into(),
     })
 }
+impl Declaration {
+    /// EXPR-14: the type the sources share.
+    pub(super) fn result_type(
+        &self,
+        input: &dyn Fn(&str) -> crate::result_type::ResultType,
+    ) -> crate::result_type::ResultType {
+        self.sources
+            .iter()
+            .fold(crate::result_type::ResultType::MISSING, |kind, source| {
+                kind.or(input(source))
+            })
+    }
+}
+/// VALUE-19's comparability of two declared operand types.
 fn comparable(a: ColumnType, b: ColumnType) -> bool {
-    a == b
-        || matches!(
-            (a, b),
-            (ColumnType::Int, ColumnType::Float) | (ColumnType::Float, ColumnType::Int)
-        )
+    crate::result_type::ResultType::from(a).comparable(b.into())
 }
 /// Known declared types reject incompatible extremes before source activation.
 pub(super) fn declaration_findings(

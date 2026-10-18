@@ -18,7 +18,7 @@ use crate::{
 #[derive(Debug)]
 enum RowOperation {
     Shared(cases::Branch),
-    ProjectFunction(usize),
+    ProjectFunction { call: usize, returns: ColumnType },
     Output(String),
     Source(String),
 }
@@ -26,11 +26,25 @@ impl RowOperation {
     fn calls(&self) -> Vec<usize> {
         let mut calls = Vec::new();
         match self {
-            Self::ProjectFunction(call) => calls.push(*call),
+            Self::ProjectFunction { call, .. } => calls.push(*call),
             Self::Shared(branch) => derivations::calls(&branch.operation, &mut calls),
             _ => (),
         }
         calls
+    }
+    /// EXPR-14: the row derivation's result type; a bare source has its
+    /// variable's type.
+    fn result_type(
+        &self,
+        input: &dyn Fn(&str) -> crate::result_type::ResultType,
+    ) -> crate::result_type::ResultType {
+        match self {
+            Self::Shared(branch) => branch.operation.result_type(input),
+            &Self::ProjectFunction { call, returns } => {
+                Operation::ProjectFunction { call, returns }.result_type(input)
+            }
+            Self::Output(name) | Self::Source(name) => input(name),
+        }
     }
 }
 #[derive(Debug)]
@@ -124,13 +138,16 @@ fn declaration(
     let op = text(d, op)?;
     let path = format!("{prefix}.{op}");
     let operation = match op {
-        "function" if project.is_some() => RowOperation::ProjectFunction(
-            *project
-                .unwrap()
-                .nodes
-                .get(&payload)
-                .ok_or(PrepareError::Internal)?,
-        ),
+        "function" if project.is_some() => {
+            let project = project.unwrap();
+            RowOperation::ProjectFunction {
+                call: *project.nodes.get(&payload).ok_or(PrepareError::Internal)?,
+                returns: *project
+                    .returns
+                    .get(&payload)
+                    .ok_or(PrepareError::Internal)?,
+            }
+        }
         "function" if project.is_none() => return Err(unsupported("function", &path)),
         "source" if mapping(d, payload)?.len() == 1 => {
             closed_fields(d, payload, &["variable"], &path)?;
@@ -538,7 +555,7 @@ fn validate_row_phases(
                     output,
                     &mut sites,
                 ),
-                RowOperation::ProjectFunction(call) => {
+                RowOperation::ProjectFunction { call, .. } => {
                     let call = &project
                         .ok_or(PrepareError::Internal)?
                         .calls
@@ -631,8 +648,9 @@ fn bind_assignment(
     secondary: &[crate::dataset::SecondarySource],
     intermediates: &[Option<crate::dataset::Intermediate>],
 ) -> Result<Option<Assignment>, BindError> {
+    let start = findings.len();
     let expression = match &declaration.operation {
-        RowOperation::ProjectFunction(call) => {
+        RowOperation::ProjectFunction { call, .. } => {
             let project = project.ok_or(BindError::Internal)?;
             match crate::project_call_binding::bind(
                 project,
@@ -766,6 +784,25 @@ fn bind_assignment(
             }
         }
     };
+    // VALUE-24 once per column: a default shared by several templates states
+    // one derivation.
+    if expression.is_some() && findings.len() == start && declaration.handler.is_none() {
+        let input =
+            |name: &str| static_types::result_type(name, named, catalog, secondary, intermediates);
+        let column = &output.columns()[declaration.column];
+        if let Some(finding) = result_types::conversion_finding(
+            &format!("columns.{}", column.name),
+            declaration.operation.result_type(&input),
+            column.kind,
+        ) {
+            if !findings
+                .iter()
+                .any(|prior| matches!(prior, BindFinding::Scalar(prior) if *prior == finding))
+            {
+                findings.push(BindFinding::Scalar(finding));
+            }
+        }
+    }
     Ok(expression.map(|expression| Assignment {
         column: declaration.column,
         expression,
@@ -889,7 +926,13 @@ fn bind_template_filter(
         None
     } else {
         predicate
-            .map(|plan| BoundPredicate::new_contextual(plan.clone(), bindings, Vec::new()))
+            .map(|plan| {
+                BoundPredicate::new_contextual(
+                    static_types::typed(plan, named, row_catalog, secondary, intermediates),
+                    bindings,
+                    Vec::new(),
+                )
+            })
             .transpose()
             .map_err(BindError::InvalidPredicateBinding)?
     };
@@ -1948,7 +1991,50 @@ impl Rows {
 }
 
 impl Rows {
-    pub(super) fn check_findings(&self, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
+    pub(super) fn check_findings(
+        &self,
+        output: &TableSchema,
+        input: &dyn Fn(&str) -> crate::result_type::ResultType,
+        findings: &mut Vec<BindFinding>,
+    ) -> Result<(), BindError> {
+        self.declaration_findings(findings)?;
+        // Static types in binding order: each template's derivations, then the
+        // column-phase defaults, a shared default stating one derivation.
+        for declaration in self
+            .templates
+            .iter()
+            .flat_map(|template| &template.declarations)
+            .chain(&self.columns)
+        {
+            let start = findings.len();
+            if let RowOperation::Shared(branch) = &declaration.operation {
+                static_checks::derivation_types(&branch.operation, input, findings);
+            }
+            let column = &output.columns()[declaration.column];
+            if let Some(finding) = declaration
+                .handler
+                .is_none()
+                .then(|| {
+                    result_types::conversion_finding(
+                        &format!("columns.{}", column.name),
+                        declaration.operation.result_type(input),
+                        column.kind,
+                    )
+                })
+                .flatten()
+                .filter(|_| findings.len() == start)
+            {
+                if !findings
+                    .iter()
+                    .any(|prior| matches!(prior, BindFinding::Scalar(prior) if *prior == finding))
+                {
+                    findings.push(BindFinding::Scalar(finding));
+                }
+            }
+        }
+        Ok(())
+    }
+    fn declaration_findings(&self, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
         let groups = self
             .templates
             .iter()

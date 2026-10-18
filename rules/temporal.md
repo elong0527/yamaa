@@ -9,34 +9,36 @@ civil arithmetic with fixed-length durations.
 
 <a id="time-1"></a>
 
-### TIME-1. Each temporal operation has fixed input and result types, and a type-dispatched one declares its type
+### TIME-1. Each temporal operation has fixed input types, and a type-dispatched one declares its type
 
-The temporal operations take and return the types below, under the input
-contracts of these rules; [Expressions](expressions.md) registers, orders and
-nests them. `diff`, `shift`, `impute` and `precision` declare a `type`, `date`
-or `datetime`, that fixes their input and result types; it is never inferred
-from data. A field the declared type requires must be present, and one it does
-not take must be absent. An input of another type fails rather than
-converting, and a temporal value never enters `compute` arithmetic.
+The temporal operations take the input types below, under the input contracts
+of these rules, and return the result types
+[EXPR-14](expressions.md#expr-14) gives them; [Expressions](expressions.md)
+registers, orders and nests them. `diff`, `shift`, `impute` and `precision`
+declare a `type`, `date` or `datetime`, that fixes their input types and so
+their results; it is never inferred from data. A field the declared type
+requires must be present, and one it does not take must be absent. An input of
+another type fails rather than converting, and a temporal value never enters
+`compute` arithmetic.
 
 Fails: `incompatible_input_type`, `missing_required_field`, `unknown_field`.
 Evidence: `negative-study-day-datetime`, `negative-date-diff-endpoints`, `negative-epoch-day-non-date`, `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs::temporal_reached`.
 Replaces: REQ-0309, REQ-0337, REQ-0590, REQ-0591, REQ-0606, REQ-0611.
 
-| Operation | Inputs | Result |
-|---|---|---|
-| `diff`, `type: date` | `start` and `end` are `date`; a calendar `unit` | `int` |
-| `diff`, `type: datetime` | `start` and `end` are `datetime`; an elapsed `unit` | `int` seconds or `float` minutes, hours or days |
-| `study_day` | `date` and `reference` are `date` | `int`, never zero |
-| `impute`, `type: date` | `source` is collected date text or a `date`; `not_before`, `not_after` and `fallback` are `date` | `date` |
-| `impute`, `type: datetime` | `source` is collected date text or a `datetime`; `not_before`, `not_after` and `fallback` are `datetime` | `datetime` |
-| `precision` | `source` is collected date text or a value of the declared type | `str` |
-| `imputation_flag` | `source` is a `date` or a `datetime`, and a `datetime` with `part: time` | `str` |
-| `to_date` | `source` is a `datetime` or collected date text | `date` |
-| `to_epoch_day` | `source` is `date` | `int` days since 1970-01-01 |
-| `shift`, `type: date` | `source` is `date`; `days` is `int` | `date` |
-| `shift`, `type: datetime` | `source` is `datetime`; a numeric `amount` and an elapsed `unit` | `datetime` |
-| `duration_value` | `source` is duration text; an elapsed `unit` | `int` whole seconds or `float` |
+| Operation | Inputs |
+|---|---|
+| `diff`, `type: date` | `start` and `end` are `date`; a calendar `unit` |
+| `diff`, `type: datetime` | `start` and `end` are `datetime`; an elapsed `unit` |
+| `study_day` | `date` and `reference` are `date` |
+| `impute`, `type: date` | `source` is collected date text or a `date`; `not_before`, `not_after` and `fallback` are `date` |
+| `impute`, `type: datetime` | `source` is collected date text or a `datetime`; `not_before`, `not_after` and `fallback` are `datetime` |
+| `precision` | `source` is collected date text or a value of the declared type |
+| `imputation_flag` | `source` is a `date` or a `datetime`, and a `datetime` with `part: time` |
+| `to_date` | `source` is a `datetime` or collected date text |
+| `to_epoch_day` | `source` is `date` |
+| `shift`, `type: date` | `source` is `date`; `days` is `int` |
+| `shift`, `type: datetime` | `source` is `datetime`; a numeric `amount` and an elapsed `unit` |
+| `duration_value` | `source` is duration text; an elapsed `unit` |
 
 Collected date text is defined by [TIME-7](#time-7), and
 [VALUE-13](values.md#value-13) to [VALUE-21](values.md#value-21) define the
@@ -370,7 +372,7 @@ the arithmetic overflow.
 ### TIME-17. duration_value reads ISO 8601 fixed-length duration text as a number in a declared unit
 
 `duration_value` reads ISO 8601 fixed-length duration text `[-]PnW` or
-`[-]P[nD][T[nH][nM][nS]]` into a number in the declared elapsed unit. At least
+`[-]P[nD][T[nH][nM][nS]]` into a `float` in the declared elapsed unit. At least
 one component is required, components appear once in the stated order, `T`
 requires a time component, and weeks cannot combine with other components.
 Only the last written component may carry a decimal fraction, with a dot or a
@@ -378,7 +380,7 @@ comma. Whitespace, a leading plus sign, component signs, exponent notation,
 years and calendar months are invalid.
 
 Fails: `incompatible_input_type`, `invalid_duration_text`.
-Evidence: `adam-adex-infusion-duration`, `rust/crates/yamaa-core/tests/support/diagnostic/temporal_arithmetic.rs`, `rust/tests/host-fixtures/cases.json`.
+Evidence: `adam-adex-infusion-duration`, `rust/crates/yamaa-core/tests/support/diagnostic/temporal_arithmetic.rs`, `rust/crates/yamaa-core/tests/scalar_sqrt.rs::duration_value_reads_signed_fractional_and_week_forms_exactly`, `rust/tests/host-fixtures/cases.json`.
 Replaces: REQ-1301.
 
 `PT1M` is one minute; `P1M` is a calendar month and is invalid. A week is seven
@@ -386,12 +388,16 @@ days and a day is 86400 seconds. A missing source returns missing without
 invoking `invalid`. A non-text source fails validation as
 `incompatible_input_type`.
 
-Decimal components are combined exactly before conversion. In `second`, a
-whole-second duration returns an `int` and a fractional-second duration a
-`float`. In other units, the seconds are converted to binary64 and divided by
-60, 3600 or 86400 under [Formulas](formulas.md). Text
-outside the resulting numeric range is invalid: whole seconds must fit the
-signed integer range, and float results must be finite.
+Decimal components are combined exactly before conversion. In every unit,
+whole-second durations included, the exact seconds are converted once to
+binary64 and divided by 1, 60, 3600 or 86400 under [Formulas](formulas.md), so
+the result is a `float` ([EXPR-14](expressions.md#expr-14)). Whole seconds
+beyond `2^53` take the nearest binary64 value: `PT9007199254740993S` in
+`second` is `9007199254740992.0`, and an `int` column converts it to
+`9007199254740992`. `PT9223372036854775807S` rounds to `2^63`, beyond the
+signed integer range, so an `int` column fails to convert it as
+`conversion_failed` ([VALUE-7](values.md#value-7)). Text whose result is not
+finite is invalid.
 
 Invalid text returns the literal `invalid` handler, and
 `invalid: {literal: null}` gives missing; without the handler, the condition

@@ -324,8 +324,17 @@ fn bind_compute_operation(
     )?;
     Ok(if findings.len() == start {
         Some(Expression::Compute(
-            BoundNumeric::new(compiled.clone(), bindings)
-                .map_err(BindError::InvalidNumericBinding)?,
+            BoundNumeric::new(
+                static_types::typed(
+                    compiled,
+                    &spec.intermediates,
+                    catalog,
+                    secondary,
+                    intermediates,
+                ),
+                bindings,
+            )
+            .map_err(BindError::InvalidNumericBinding)?,
         ))
     } else {
         None
@@ -384,7 +393,7 @@ fn bind_operation(
             findings,
             declarations_reported,
         )?,
-        Operation::ProjectFunction(call) => {
+        Operation::ProjectFunction { call, .. } => {
             bind_project_operation(spec, call, column, catalog, edges, findings)?
         }
         Operation::StrTemplate(operation) => str_template::bind(

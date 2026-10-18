@@ -66,8 +66,8 @@ pub(crate) fn lookup_key_type(
     path: &str,
     intermediate: &str,
     source: &str,
-    expected: ValueType,
-    actual: ValueType,
+    expected: crate::result_type::ResultType,
+    actual: crate::result_type::ResultType,
 ) -> Diagnostic {
     Diagnostic {
         code: C::LookupKeyType,
@@ -75,8 +75,8 @@ pub(crate) fn lookup_key_type(
         context: [
             ("intermediate".into(), text(intermediate)),
             ("source".into(), text(source)),
-            ("expected".into(), text(type_name(expected))),
-            ("actual".into(), text(type_name(actual))),
+            ("expected".into(), text(&expected.name())),
+            ("actual".into(), text(&actual.name())),
         ]
         .into(),
         source_span: None,
