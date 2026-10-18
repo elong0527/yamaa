@@ -14,7 +14,7 @@ from markdown_it import MarkdownIt
 
 import yaml
 from evaluations.harbor.brief import brief
-from tools.benchmark import LIFECYCLES, load_metadata
+from tools.benchmark import LIFECYCLES, load_metadata, specification_name
 from tools.benchmark import entries as benchmark_entries
 from tools.benchmark_docs import mapping_doc
 from tools.conformance.public_conformance import plan
@@ -577,16 +577,22 @@ def benchmark_code(benchmark):
         return []
     entries = benchmark_entries(benchmark)
     result = []
-    for host, title, opening, function, output in (
-        ("r", "R", "library(yamaa)", "yamaa_domain", "$output"),
-        ("python", "Python", "import yamaa", "yamaa.domain", ".output"),
+    for host, title, opening, spec, project, member in (
+        ("r", "R", "library(yamaa)", "yamaa_spec", "yamaa_project", "$"),
+        ("python", "Python", "import yamaa", "yamaa.spec", "yamaa.project", "."),
     ):
         calls = []
         for entry in entries[host]:
-            arguments = json.dumps(entry["specification"])
-            if entry["environment"] is not None:
-                arguments += ", environment=" + json.dumps(entry["environment"])
-            calls.append(f"{function}({arguments}){output}")
+            if entry["environment"] is None:
+                opened = f"{spec}({json.dumps(entry['specification'])})"
+            else:
+                # A project opens its listed specification by its domain name.
+                name = specification_name(benchmark / entry["specification"])
+                opened = (
+                    f"{project}({json.dumps(entry['environment'])})"
+                    f"{member}spec({json.dumps(name)})"
+                )
+            calls.append(f"{opened}{member}run(){member}output")
         result.append((title, opening + "\n\n" + "\n".join(calls) + "\n"))
     return result
 

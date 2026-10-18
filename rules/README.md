@@ -19,6 +19,7 @@ owns the sequence of a run.
 | [Specification composition](specification/composition.md) | normative | Resolve inherited layers into one minimal, ordered specification. |
 | [Name binding](specification/binding.md) | normative | Resolve input datasets, constructed output columns, and ODM item reads. |
 | [Specification style](specification/style.md) | normative | Fix one written form of a specification and report departures without changing its meaning. |
+| [Project file](specification/project.md) | normative | Link each host's environment, declare a study's terminology and submission sections once, and check, run and package the specifications its sections list. |
 
 ## Values
 
@@ -37,7 +38,7 @@ owns the sequence of a run.
 | [Row construction](execution/rows.md) | normative | Construct output rows from declared input records or groups. |
 | [Ordering](execution/ordering.md) | normative | Apply ordering terms, missing placement, stable ties, and final artifact order. |
 | [Local handlers](execution/handlers.md) | normative | Handle conditions at their expression or conversion site and report substitutions. |
-| [Verification](execution/verification.md) | normative | Apply assertions, severity, and grouped counts to completed values, and record what ran in the warning log and the verification log. |
+| [Verification](execution/verification.md) | normative | Apply assertions, severity, and grouped counts to completed values, and record what each run read, counted and checked in one run report. |
 
 ## Operations
 
@@ -86,6 +87,10 @@ One term per concept across all rules, schema comments, and messages
 
 - **specification** -- the YAML file under review. `study` and `document` stay
   project-level (resources and submission contracts), never names for the YAML.
+- **project file** -- the one study-level YAML a caller passes: it links each
+  host language's **environment file**, which declares only that host's lock
+  and project functions, and it declares the study's terminology and
+  submission sections ([Project file](specification/project.md)).
 - **input dataset** / **output dataset** -- state the role whenever it matters.
   Bare `dataset` appears only as a key name. `table` means a documentation
   table, never data.

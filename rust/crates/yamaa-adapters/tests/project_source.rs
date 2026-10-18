@@ -4,46 +4,45 @@
 mod support;
 mod project {
     mod project_source {
+        use crate::support::project_schemas::candidate_schemas;
         use std::sync::Arc;
         use yamaa_adapters::{
             project_source::{
                 self, CaptureFailure, Failure, Kind, Origin, ProjectCapturePort, Reply, Request,
             },
-            specification_source::{CapturedSchema, Error, Source},
+            specification_source::{Error, Source},
         };
         use yamaa_core::{
             project_environment::{Finding, LockKind},
             project_function::Language,
             value::Value,
         };
+        /// The caller-supplied project file; it declares the environment links and codelists.
+        const PROJECT: &str = "study/project.yaml";
+        /// The Python environment file the project links; it declares the lock and functions.
+        const PYTHON: &str = "study/python/environment.yaml";
         fn source(identity: &str, bytes: &str) -> Source {
             Source {
                 identity: identity.into(),
                 bytes: bytes.as_bytes().to_vec(),
             }
         }
-        fn schema() -> Arc<CapturedSchema> {
-            CapturedSchema::admit_root(
-                vec![
-                    source(
-                        "schema_environment.yaml",
-                        include_str!("fixtures/environment-candidate/schema_environment.yaml"),
-                    ),
-                    source(
-                        "schema_shared.yaml",
-                        include_str!("fixtures/environment-candidate/schema_shared.yaml"),
-                    ),
-                ],
-                0,
-                "environment_class",
-            )
-            .unwrap()
+        /// One linked environment file whose lock and function paths resolve from it.
+        fn environment_file(call: &str) -> String {
+            format!("schema_version: '1.0'\nlock: project.lock\nfunctions:\n  first: functions/constant.yaml\n  inline: {{function: {call}, description: Constant, params: [], returns: int, tests: [{{id: ordinary, covers: [normal, boundary], args: {{}}, result: 7}}]}}\n")
         }
         #[derive(Debug, PartialEq)]
         struct Payload(Box<str>);
         struct Port {
             trace: Vec<(Kind, String, String)>,
+            /// Bytes of every linked environment file; its identity follows the link.
+            environment: String,
+            /// Callable spelling of the external function file.
+            call: &'static str,
+            /// Fail every dependency the environment file and project declare.
             fail: bool,
+            /// Fail the linked environment file itself.
+            fail_environment: bool,
             wide: bool,
             lock_kind: LockKind,
             interrupt_at: Option<String>,
@@ -53,7 +52,10 @@ mod project {
             fn new() -> Self {
                 Self {
                     trace: vec![],
+                    environment: environment_file("project.constant"),
+                    call: "project.constant",
                     fail: false,
+                    fail_environment: false,
                     wide: false,
                     lock_kind: LockKind::Uv,
                     interrupt_at: None,
@@ -77,21 +79,30 @@ mod project {
                     self.interrupt_address = payload.0.as_ptr() as usize;
                     return Err(payload);
                 }
-                if self.fail {
+                let fail = if request.kind == Kind::Environment {
+                    self.fail_environment
+                } else {
+                    self.fail
+                };
+                if fail {
                     return Err(Payload(request.written.into()));
                 }
                 match request.kind {
+                    Kind::Environment => Ok(Reply::Document(source(
+                        &format!("study/{}", request.written),
+                        &self.environment,
+                    ))),
                     Kind::Lock => Ok(Reply::Lock {
                         source: source("held/project.lock", "version = 1\n"),
                         kind: self.lock_kind,
                     }),
                     Kind::Function => Ok(Reply::Document(source(
                         "held/function.yaml",
-                        if self.wide {
-                            "function: project.constant\ndescription: Constant\nparams: []\nreturns: int\ntests: [{id: ordinary, covers: [normal, boundary], args: {}, result: 9223372036854775808}]\n"
-                        } else {
-                            "function: project.constant\ndescription: Constant\nparams: []\nreturns: int\ntests: [{id: ordinary, covers: [normal, boundary], args: {}, result: 7}]\n"
-                        },
+                        &format!(
+                            "function: {}\ndescription: Constant\nparams: []\nreturns: int\ntests: [{{id: ordinary, covers: [normal, boundary], args: {{}}, result: {}}}]\n",
+                            self.call,
+                            if self.wide { "9223372036854775808" } else { "7" }
+                        ),
                     ))),
                     Kind::Codelist => Ok(Reply::Document(source(
                         "held/terminology.yaml",
@@ -101,14 +112,22 @@ mod project {
             }
         }
         fn root() -> Source {
-            source("study/environment.yaml","schema_version: '1.0'\nlanguage: python\nlock: project.lock\nfunctions:\n  first: functions/constant.yaml\n  inline: {function: project.constant, description: Constant, params: [], returns: int, tests: [{id: ordinary, covers: [normal, boundary], args: {}, result: 7}]}\ncodelists: [ct/sex.yaml]\nstudy: {id: Study, name: Study, description: Study, protocol_name: Protocol}\nadam: {standard: {name: ADaMIG, version: '1.3', status: Final}, specs: [specs/adsl.yaml], define: data/define.xml, documents: [{id: guide, kind: supplemental, link: docs/adrg.pdf, title: Guide}]}\n")
+            source(PROJECT, "schema_version: '1.0'\nenvironments: {python: python/environment.yaml, r: r/environment.yaml}\ncodelists: [ct/sex.yaml]\nstudy: {id: Study, name: Study, description: Study, protocol_name: Protocol}\nadam: {standard: {name: ADaMIG, version: '1.3', status: Final}, specs: [specs/adsl.yaml], define: data/define.xml, documents: [{id: guide, kind: supplemental, link: docs/adrg.pdf, title: Guide}]}\n")
         }
         #[test]
         fn owned_environment_parts_preserve_original_allocations_and_capture_evidence() {
             let mut port = Port::new();
             let prepared =
-                project_source::prepare(schema(), root(), Language::Python, &mut port).unwrap();
+                project_source::prepare(candidate_schemas(), root(), Language::Python, &mut port)
+                    .unwrap();
             let root_bytes = prepared.root.source().bytes.as_ptr();
+            let environment_bytes = prepared
+                .environment_file
+                .as_ref()
+                .unwrap()
+                .source()
+                .bytes
+                .as_ptr();
             let lock_bytes = prepared.lock.as_ref().unwrap().source.bytes.as_ptr();
             let cases = prepared.environment.draft().functions.as_ref().unwrap()[0]
                 .tests
@@ -117,6 +136,15 @@ mod project {
             let count = port.trace.len();
             let (environment, provenance) = prepared.into_owned().into_parts();
             assert_eq!(provenance.root().source().bytes.as_ptr(), root_bytes);
+            assert_eq!(
+                provenance
+                    .environment_file()
+                    .unwrap()
+                    .source()
+                    .bytes
+                    .as_ptr(),
+                environment_bytes
+            );
             assert_eq!(provenance.lock().unwrap().source.bytes.as_ptr(), lock_bytes);
             assert_eq!(
                 environment.functions()[0].definition().tests.as_ptr(),
@@ -140,18 +168,17 @@ mod project {
         }
         #[test]
         fn held_dependency_capture_is_ordered_typed_and_repeated_without_study_or_code_ports() {
-            let schema = schema();
+            let schemas = candidate_schemas();
             let mut port = Port::new();
             for _ in 0..2 {
-                let prepared = project_source::prepare(
-                    Arc::clone(&schema),
-                    root(),
-                    Language::Python,
-                    &mut port,
-                )
-                .unwrap();
-                assert!(Arc::ptr_eq(prepared.root.schema(), &schema));
+                let prepared =
+                    project_source::prepare(schemas.clone(), root(), Language::Python, &mut port)
+                        .unwrap();
+                assert!(Arc::ptr_eq(prepared.root.schema(), &schemas.project));
                 assert_eq!(prepared.root.source().bytes, root().bytes);
+                let environment = prepared.environment_file.as_ref().unwrap();
+                assert!(Arc::ptr_eq(environment.schema(), &schemas.environment));
+                assert_eq!(environment.source().identity, PYTHON);
                 assert_eq!(
                     prepared
                         .environment
@@ -177,13 +204,29 @@ mod project {
                     prepared.captures[0].document.class_name(),
                     "function_definition_class"
                 );
+                assert!(Arc::ptr_eq(
+                    prepared.captures[0].document.schema(),
+                    &schemas.environment
+                ));
                 assert_eq!(prepared.captures[1].origin, Origin::Codelist(0));
+                assert_eq!(
+                    prepared.captures[1].document.class_name(),
+                    "codelist_source_class"
+                );
+                assert!(Arc::ptr_eq(
+                    prepared.captures[1].document.schema(),
+                    &schemas.project
+                ));
                 assert_eq!(
                     prepared.lock.as_ref().unwrap().source.bytes,
                     b"version = 1\n"
                 );
-                assert!(prepared.environment.draft().has_study);
+                // Study and section metadata stay in the retained project document.
+                let document = &prepared.root.normalized().document;
+                assert!(document.field(document.root(), "study").is_some());
+                assert!(document.field(document.root(), "adam").is_some());
                 let root_bytes = prepared.root.source().bytes.as_ptr();
+                let environment_bytes = environment.source().bytes.as_ptr();
                 let lock_bytes = prepared.lock.as_ref().unwrap().source.bytes.as_ptr();
                 let cases = prepared.environment.draft().functions.as_ref().unwrap()[0]
                     .tests
@@ -196,6 +239,10 @@ mod project {
                 let captured = port.trace.len();
                 let owned = prepared.into_owned();
                 assert_eq!(owned.root().source().bytes.as_ptr(), root_bytes);
+                assert_eq!(
+                    owned.environment_file().unwrap().source().bytes.as_ptr(),
+                    environment_bytes
+                );
                 assert_eq!(owned.lock().unwrap().source.bytes.as_ptr(), lock_bytes);
                 assert_eq!(
                     owned.environment().functions()[0]
@@ -217,65 +264,198 @@ mod project {
                 assert_eq!(owned.captures().len(), 2);
                 assert_eq!(owned.environment().host(), Language::Python);
                 assert_eq!(owned.environment().language(), Some(Language::Python));
-                assert!(owned.environment().has_study());
+                assert_eq!(owned.environment().undeclared_language(), None);
                 assert_eq!(port.trace.len(), captured);
             }
+            // The environment file declares the lock and functions; the project
+            // declares its environment link and codelists. The R link stays unread.
             let one = [
-                (Kind::Lock, "project.lock"),
-                (Kind::Function, "functions/constant.yaml"),
-                (Kind::Codelist, "ct/sex.yaml"),
+                (Kind::Environment, PROJECT, "python/environment.yaml"),
+                (Kind::Lock, PYTHON, "project.lock"),
+                (Kind::Function, PYTHON, "functions/constant.yaml"),
+                (Kind::Codelist, PROJECT, "ct/sex.yaml"),
             ];
             assert_eq!(
                 port.trace
                     .iter()
-                    .map(|(kind, declaring, written)| {
-                        assert_eq!(declaring, "study/environment.yaml");
-                        (*kind, written.as_str())
-                    })
+                    .map(|(kind, declaring, written)| (*kind, declaring.as_str(), written.as_str()))
                     .collect::<Vec<_>>(),
                 one.into_iter().chain(one).collect::<Vec<_>>()
             );
         }
         #[test]
+        fn each_host_reads_only_the_environment_file_its_own_key_names() {
+            for (host, written, call, lock_kind) in [
+                (
+                    Language::Python,
+                    "python/environment.yaml",
+                    "project.constant",
+                    LockKind::Uv,
+                ),
+                (
+                    Language::R,
+                    "r/environment.yaml",
+                    "project::constant",
+                    LockKind::Renv,
+                ),
+            ] {
+                let mut port = Port::new();
+                port.environment = environment_file(call);
+                port.call = call;
+                port.lock_kind = lock_kind;
+                let prepared =
+                    project_source::prepare(candidate_schemas(), root(), host, &mut port)
+                        .unwrap_or_else(|_| panic!("{host:?} environment admits"));
+                let declaring = format!("study/{written}");
+                assert_eq!(
+                    prepared
+                        .environment_file
+                        .as_ref()
+                        .unwrap()
+                        .source()
+                        .identity,
+                    declaring
+                );
+                assert_eq!(
+                    port.trace,
+                    [
+                        (Kind::Environment, PROJECT.into(), written.into()),
+                        (Kind::Lock, declaring.clone(), "project.lock".into()),
+                        (
+                            Kind::Function,
+                            declaring.clone(),
+                            "functions/constant.yaml".into()
+                        ),
+                        (Kind::Codelist, PROJECT.into(), "ct/sex.yaml".into()),
+                    ]
+                );
+                assert_eq!(prepared.environment.draft().language, Some(host));
+                assert_eq!(
+                    prepared.environment.draft().lock.as_ref().unwrap().kind,
+                    lock_kind
+                );
+                let owned = prepared.into_owned();
+                assert_eq!(owned.environment().host(), host);
+                for function in owned.environment().functions() {
+                    assert_eq!(function.definition().function, call);
+                }
+            }
+        }
+        #[test]
+        fn project_without_the_host_environment_captures_no_code_and_admits_without_language() {
+            for project in [
+                "schema_version: '1.0'\nenvironments: {r: r/environment.yaml}\ncodelists: [ct/sex.yaml]\n",
+                "schema_version: '1.0'\ncodelists: [ct/sex.yaml]\n",
+            ] {
+                let mut port = Port::new();
+                let prepared = project_source::prepare(
+                    candidate_schemas(),
+                    source(PROJECT, project),
+                    Language::Python,
+                    &mut port,
+                )
+                .unwrap_or_else(|_| panic!("a project without code admits"));
+                assert_eq!(
+                    port.trace,
+                    [(Kind::Codelist, PROJECT.into(), "ct/sex.yaml".into())]
+                );
+                assert!(prepared.environment_file.is_none());
+                assert!(prepared.lock.is_none());
+                assert_eq!(prepared.captures.len(), 1);
+                let draft = prepared.environment.draft();
+                assert_eq!(draft.language, None);
+                assert!(draft.lock.is_none());
+                assert!(draft.functions.is_none());
+                assert_eq!(draft.codelists[0].codelists[0].id, "SEX");
+                let owned = prepared.into_owned();
+                assert!(owned.environment_file().is_none());
+                assert_eq!(owned.environment().language(), None);
+                // A call to a project function now names the absent environment.
+                assert_eq!(
+                    owned.environment().undeclared_language(),
+                    Some(Language::Python)
+                );
+            }
+        }
+        #[test]
+        fn sections_that_list_only_specifications_admit_without_study() {
+            let mut port = Port::new();
+            let text = "schema_version: '1.0'\nsdtm: {specs: [sdtm/dm.yaml]}\nadam: {specs: [adam/adsl.yaml], datasets: json}\n";
+            let prepared = project_source::prepare(
+                candidate_schemas(),
+                source(PROJECT, text),
+                Language::Python,
+                &mut port,
+            )
+            .unwrap_or_else(|_| panic!("submission metadata is not an admission obligation"));
+            assert!(port.trace.is_empty());
+            let document = &prepared.root.normalized().document;
+            assert!(document.field(document.root(), "study").is_none());
+            let adam = document.field(document.root(), "adam").unwrap();
+            assert!(document.field(adam, "standard").is_none());
+            assert!(document.field(adam, "define").is_none());
+            assert_eq!(prepared.root.source().bytes, text.as_bytes());
+        }
+        #[test]
         fn invalid_root_and_inline_scalars_fail_before_every_dependency_capture() {
             let mut port = Port::new();
+            // Installed code belongs to the linked environment file, not the project.
             let invalid = source(
-                "environment.yaml",
-                "schema_version: '1.0'\nruntime: {language: python}\nlock: project.lock\n",
+                "project.yaml",
+                "schema_version: '1.0'\nenvironments: {python: environment.yaml}\nruntime: {language: python}\nlock: project.lock\n",
             );
-            assert!(matches!(
-                project_source::prepare(schema(), invalid, Language::Python, &mut port),
-                Err(Failure::Root(Error::Findings(_)))
-            ));
-            let invalid=source("environment.yaml","schema_version: '1.0'\nlock: project.lock\nfunctions: {wide: {function: project.constant, description: Constant, params: [], returns: int, tests: [{id: wide, covers: [normal], args: {}, result: 9223372036854775808}]}}\n");
+            let Err(Failure::Root(Error::Findings(captured))) =
+                project_source::prepare(candidate_schemas(), invalid, Language::Python, &mut port)
+            else {
+                panic!("project structural failure")
+            };
+            assert_eq!(
+                captured
+                    .findings()
+                    .iter()
+                    .map(|finding| (finding.path.as_str(), finding.definition().condition))
+                    .collect::<Vec<_>>(),
+                [("runtime", "unknown_field"), ("lock", "unknown_field")]
+            );
+            let invalid=source("project.yaml","schema_version: '1.0'\nenvironments: {python: environment.yaml}\ncodelists: [{codelists: [{id: WIDE, name: Wide, data_type: integer, items: [{value: 9223372036854775808}]}]}]\n");
             let Err(Failure::RootScalar { root, findings }) =
-                project_source::prepare(schema(), invalid, Language::Python, &mut port)
+                project_source::prepare(candidate_schemas(), invalid, Language::Python, &mut port)
             else {
                 panic!("owned scalar failure")
             };
-            assert_eq!(root.source().identity, "environment.yaml");
-            assert_eq!(findings[0].path, "functions.wide.tests[0].result");
+            assert_eq!(root.source().identity, "project.yaml");
+            assert_eq!(findings.len(), 1);
+            assert_eq!(findings[0].path, "codelists[0].codelists[0].items[0].value");
             assert!(port.trace.is_empty());
         }
         #[test]
         fn every_capture_failure_retains_original_opaque_payload_and_declaration_context() {
             let mut port = Port::new();
             port.fail = true;
-            let root=source("study/environment.yaml","schema_version: '1.0'\nlanguage: python\nlock: project.lock\nfunctions: {a: a.yaml, b: b.yaml}\ncodelists: [one.yaml, two.yaml]\n");
+            port.environment =
+                "schema_version: '1.0'\nlock: project.lock\nfunctions: {a: a.yaml, b: b.yaml}\n"
+                    .into();
+            let root = source(PROJECT, "schema_version: '1.0'\nenvironments: {python: python/environment.yaml}\ncodelists: [one.yaml, two.yaml]\n");
             let Err(Failure::Rejected(rejected)) =
-                project_source::prepare(schema(), root, Language::Python, &mut port)
+                project_source::prepare(candidate_schemas(), root, Language::Python, &mut port)
             else {
                 panic!("all source failures")
             };
-            assert_eq!(port.trace.len(), 5);
+            assert_eq!(port.trace.len(), 6);
             assert_eq!(rejected.sources.len(), 5);
             assert_eq!(
                 rejected
                     .sources
                     .iter()
-                    .map(|f| f.written.as_str())
+                    .map(|f| (f.origin.clone(), f.written.as_str()))
                     .collect::<Vec<_>>(),
-                ["project.lock", "a.yaml", "b.yaml", "one.yaml", "two.yaml"]
+                [
+                    (Origin::Lock, "project.lock"),
+                    (Origin::Function("a".into()), "a.yaml"),
+                    (Origin::Function("b".into()), "b.yaml"),
+                    (Origin::Codelist(0), "one.yaml"),
+                    (Origin::Codelist(1), "two.yaml")
+                ]
             );
             for failure in &rejected.sources {
                 let CaptureFailure::Port(Payload(original)) = &failure.error else {
@@ -283,7 +463,16 @@ mod project {
                 };
                 assert_eq!(&**original, failure.written);
             }
-            assert_eq!(rejected.root.source().identity, "study/environment.yaml");
+            assert_eq!(rejected.root.source().identity, PROJECT);
+            assert_eq!(
+                rejected
+                    .environment_file
+                    .as_ref()
+                    .unwrap()
+                    .source()
+                    .identity,
+                PYTHON
+            );
             assert!(rejected.captures.is_empty());
             assert_eq!(rejected.host, Language::Python);
             assert_eq!(rejected.draft.language, Some(Language::Python));
@@ -291,19 +480,100 @@ mod project {
             assert_eq!(rejected.draft.functions.as_deref(), Some([].as_slice()));
             assert!(rejected.draft.codelists.is_empty());
         }
+        #[test]
+        fn environment_file_capture_failure_keeps_its_link_and_requests_no_lock_or_functions() {
+            let mut port = Port::new();
+            port.fail_environment = true;
+            let Err(Failure::Rejected(rejected)) =
+                project_source::prepare(candidate_schemas(), root(), Language::Python, &mut port)
+            else {
+                panic!("environment file failure")
+            };
+            assert_eq!(
+                port.trace,
+                [
+                    (
+                        Kind::Environment,
+                        PROJECT.into(),
+                        "python/environment.yaml".into()
+                    ),
+                    (Kind::Codelist, PROJECT.into(), "ct/sex.yaml".into()),
+                ]
+            );
+            assert_eq!(rejected.sources.len(), 1);
+            assert_eq!(
+                rejected.sources[0].origin,
+                Origin::Environment(Language::Python)
+            );
+            assert_eq!(rejected.sources[0].written, "python/environment.yaml");
+            let CaptureFailure::Port(Payload(original)) = &rejected.sources[0].error else {
+                panic!("opaque environment error preserved")
+            };
+            assert_eq!(&**original, "python/environment.yaml");
+            assert!(rejected.environment_file.is_none());
+            assert!(rejected.lock.is_none());
+            assert_eq!(rejected.captures.len(), 1);
+            assert_eq!(rejected.captures[0].origin, Origin::Codelist(0));
+            // The key still states the language; no environment supplied code.
+            assert_eq!(rejected.draft.language, Some(Language::Python));
+            assert!(rejected.draft.lock.is_none());
+            assert!(rejected.draft.functions.is_none());
+            assert_eq!(rejected.draft.codelists[0].codelists[0].id, "SEX");
+            assert!(rejected.admission.is_none());
+        }
+        #[test]
+        fn environment_file_inline_scalars_are_a_retained_failure_of_its_link() {
+            let schemas = candidate_schemas();
+            let mut port = Port::new();
+            port.environment = "schema_version: '1.0'\nlock: project.lock\nfunctions: {wide: {function: project.constant, description: Constant, params: [], returns: int, tests: [{id: wide, covers: [normal], args: {}, result: 9223372036854775808}]}}\n".into();
+            let Err(Failure::Rejected(rejected)) =
+                project_source::prepare(schemas.clone(), root(), Language::Python, &mut port)
+            else {
+                panic!("environment file scalar failure")
+            };
+            assert_eq!(
+                port.trace
+                    .iter()
+                    .map(|(kind, _, written)| (*kind, written.as_str()))
+                    .collect::<Vec<_>>(),
+                [
+                    (Kind::Environment, "python/environment.yaml"),
+                    (Kind::Codelist, "ct/sex.yaml")
+                ]
+            );
+            assert_eq!(rejected.sources.len(), 1);
+            assert_eq!(
+                rejected.sources[0].origin,
+                Origin::Environment(Language::Python)
+            );
+            assert_eq!(rejected.sources[0].written, "python/environment.yaml");
+            let CaptureFailure::Scalar { document, findings } = &rejected.sources[0].error else {
+                panic!("owned environment context")
+            };
+            assert_eq!(document.source().identity, PYTHON);
+            assert_eq!(document.class_name(), "environment_class");
+            assert!(Arc::ptr_eq(document.schema(), &schemas.environment));
+            assert_eq!(findings.len(), 1);
+            assert_eq!(findings[0].path, "functions.wide.tests[0].result");
+            assert!(findings[0].node < document.normalized().document.nodes().len());
+            assert!(rejected.environment_file.is_none());
+            assert!(rejected.lock.is_none());
+            assert!(rejected.draft.functions.is_none());
+        }
 
         #[test]
         fn dependency_scalar_failure_keeps_the_original_owned_document_and_other_sources() {
             let mut port = Port::new();
             port.wide = true;
             let Err(Failure::Rejected(rejected)) =
-                project_source::prepare(schema(), root(), Language::Python, &mut port)
+                project_source::prepare(candidate_schemas(), root(), Language::Python, &mut port)
             else {
                 panic!("scalar failure")
             };
-            assert_eq!(port.trace.len(), 3);
+            assert_eq!(port.trace.len(), 4);
             assert_eq!(rejected.sources.len(), 1);
             assert_eq!(rejected.captures.len(), 1);
+            assert_eq!(rejected.sources[0].origin, Origin::Function("first".into()));
             let CaptureFailure::Scalar { document, findings } = &rejected.sources[0].error else {
                 panic!("owned context")
             };
@@ -319,11 +589,11 @@ mod project {
             let mut port = Port::new();
             port.lock_kind = LockKind::Renv;
             let Err(Failure::Rejected(rejected)) =
-                project_source::prepare(schema(), root(), Language::Python, &mut port)
+                project_source::prepare(candidate_schemas(), root(), Language::Python, &mut port)
             else {
                 panic!("lock kind mismatch")
             };
-            assert_eq!(port.trace.len(), 3);
+            assert_eq!(port.trace.len(), 4);
             assert_eq!(
                 rejected.admission,
                 Some(vec![Finding::LockKindMismatch {
@@ -350,24 +620,37 @@ mod project {
             assert_eq!(functions[0].tests[0].result, Value::Int(7));
             assert_eq!(functions[1].tests[0].result, Value::Int(7));
             assert_eq!(rejected.draft.codelists[0].codelists[0].id, "SEX");
-            assert!(rejected.draft.has_study);
             assert_eq!(
-                rejected.draft.submissions,
-                [yamaa_core::project_environment::Submission::Adam]
+                rejected
+                    .environment_file
+                    .as_ref()
+                    .unwrap()
+                    .source()
+                    .identity,
+                PYTHON
             );
+            // Submission metadata stays in the retained project document.
+            let document = &rejected.root.normalized().document;
+            assert!(document.field(document.root(), "study").is_some());
+            assert!(document.field(document.root(), "adam").is_some());
         }
 
         #[test]
         fn interrupts_at_every_dependency_boundary_preserve_original_payload_and_abort_later_reads()
         {
             for (written, origin, observed) in [
-                ("project.lock", Origin::Lock, 1),
+                (
+                    "python/environment.yaml",
+                    Origin::Environment(Language::Python),
+                    1,
+                ),
+                ("project.lock", Origin::Lock, 2),
                 (
                     "functions/constant.yaml",
                     Origin::Function("first".into()),
-                    2,
+                    3,
                 ),
-                ("ct/sex.yaml", Origin::Codelist(0), 3),
+                ("ct/sex.yaml", Origin::Codelist(0), 4),
             ] {
                 let mut port = Port::new();
                 port.interrupt_at = Some(written.into());
@@ -375,7 +658,12 @@ mod project {
                     origin: actual_origin,
                     written: actual_written,
                     error,
-                }) = project_source::prepare(schema(), root(), Language::Python, &mut port)
+                }) = project_source::prepare(
+                    candidate_schemas(),
+                    root(),
+                    Language::Python,
+                    &mut port,
+                )
                 else {
                     panic!("interrupt must bypass collected static findings");
                 };
@@ -839,8 +1127,6 @@ mod project {
                         support::function("id").definition().clone(),
                     ]),
                     codelists: vec![],
-                    has_study: false,
-                    submissions: vec![],
                 },
             )
             .unwrap()

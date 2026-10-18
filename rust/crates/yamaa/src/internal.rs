@@ -415,6 +415,11 @@ pub(crate) enum BuildOutcome {
     Unsupported {
         issues: Vec<yamaa_adapters::issue_rows::Issue>,
     },
+    /// A project-run specification that did not build: a project finding
+    /// failed it, or a producer it reads failed or did not run.
+    Refused {
+        issues: Vec<yamaa_adapters::issue_rows::Issue>,
+    },
 }
 
 /// Compilation reads through the engine's resolver. Each run opens its own
@@ -424,6 +429,9 @@ struct EngineRuntime<'a> {
     shared: &'a EngineShared,
     specification: &'a str,
     run_resolver: Option<Arc<dyn yamaa_adapters::host_resources::Resolver>>,
+    /// Artifacts a project run already built; their presence selects the
+    /// saved-link producer route for this one specification.
+    held: Option<Arc<yamaa_adapters::file_producer_build::HeldArtifacts>>,
 }
 
 impl yamaa_adapters::file_application::RuntimePort for EngineRuntime<'_> {
@@ -432,6 +440,14 @@ impl yamaa_adapters::file_application::RuntimePort for EngineRuntime<'_> {
 
     fn resolver(&self) -> Option<Arc<dyn yamaa_adapters::host_resources::Resolver>> {
         resolver_bridge(self.shared)
+    }
+
+    fn producers(&self) -> yamaa_adapters::file_workflow::Producers {
+        if self.held.is_some() {
+            yamaa_adapters::file_workflow::Producers::Saved
+        } else {
+            yamaa_adapters::file_workflow::Producers::Built
+        }
     }
 
     fn plain(
@@ -504,6 +520,9 @@ impl yamaa_adapters::file_application::RuntimePort for EngineRuntime<'_> {
         };
         let build = graph.build();
         let mut run_scope = build.run_scope(self.run_resolver.clone());
+        if let Some(held) = &self.held {
+            run_scope.hold(Arc::clone(held));
+        }
         let provenance = Arc::clone(build.provenance());
         let lock_bytes = provenance
             .environment()
@@ -582,20 +601,23 @@ pub(crate) enum Compiled {
 
 fn selection_failed(
     error: &yamaa_adapters::file_workflow::SelectionError,
-    shared: &EngineShared,
 ) -> (Vec<yamaa_adapters::issue_rows::Issue>, RetainedSources) {
     (
-        yamaa_adapters::project_application::selection_failure(error, shared.language),
+        yamaa_adapters::project_application::selection_failure(error),
         error.retained_sources(),
     )
 }
 
 /// The Preparation half of a build: capture metadata through the engine's
-/// resolver, admit and compile. No study input is captured or read.
+/// resolver, admit and compile. No study input is captured or read. `held`
+/// selects the project-run route: producer links are not built, and each
+/// reads the held artifact of a producer the run already built, or the saved
+/// file its path names.
 pub(crate) fn compile(
     shared: &EngineShared,
     specification: &str,
     environment: Option<&str>,
+    held: Option<Arc<yamaa_adapters::file_producer_build::HeldArtifacts>>,
     scope: yamaa_core::application_observer::Scope<'_>,
 ) -> Compiled {
     let mut application = yamaa_adapters::file_application::Application {
@@ -604,6 +626,7 @@ pub(crate) fn compile(
             shared,
             specification,
             run_resolver: None,
+            held,
         },
     };
     match yamaa_core::domain_entry::compile(
@@ -616,7 +639,7 @@ pub(crate) fn compile(
     ) {
         Ok(selected) => Compiled::Ready(Box::new(selected)),
         Err(yamaa_adapters::file_application::ApplicationError::Preparation(error)) => {
-            let (issues, sources) = selection_failed(&error, shared);
+            let (issues, sources) = selection_failed(&error);
             Compiled::Refused { issues, sources }
         }
         Err(yamaa_adapters::file_application::ApplicationError::Runtime(never)) => match never {},
@@ -625,12 +648,14 @@ pub(crate) fn compile(
 
 /// The Build and Finished half: one run of a compiled request in its own
 /// resource scope. A refused compilation's run returns its held refusal and
-/// performs no resource, activation or study work.
+/// performs no resource, activation or study work. A project run offers its
+/// `held` artifacts to the saved producer links its compilation selected.
 pub(crate) fn run(
     shared: &EngineShared,
     specification: &str,
     compiled: &Compiled,
     run_resolver: Option<Arc<dyn yamaa_adapters::host_resources::Resolver>>,
+    held: Option<Arc<yamaa_adapters::file_producer_build::HeldArtifacts>>,
     scope: yamaa_core::application_observer::Scope<'_>,
 ) -> BuildOutcome {
     let selected = match compiled {
@@ -649,13 +674,14 @@ pub(crate) fn run(
             shared,
             specification,
             run_resolver,
+            held,
         },
     };
     match yamaa_core::domain_entry::run(selected, &mut application, scope) {
         Ok(outcome) => outcome,
         // A run selects nothing; keep any selection refusal typed regardless.
         Err(yamaa_adapters::file_application::ApplicationError::Preparation(error)) => {
-            let (issues, sources) = selection_failed(&error, shared);
+            let (issues, sources) = selection_failed(&error);
             BuildOutcome::SelectionFailed { issues, sources }
         }
         Err(yamaa_adapters::file_application::ApplicationError::Runtime(never)) => match never {},
@@ -674,27 +700,30 @@ pub(crate) fn outcome_accepted(outcome: &BuildOutcome) -> bool {
             .result
             .as_ref()
             .is_ok_and(|root| root.output().is_some()),
-        BuildOutcome::SelectionFailed { .. } | BuildOutcome::Unsupported { .. } => false,
+        BuildOutcome::SelectionFailed { .. }
+        | BuildOutcome::Unsupported { .. }
+        | BuildOutcome::Refused { .. } => false,
+    }
+}
+
+/// The issue rows of one outcome, live from its current state.
+pub(crate) fn outcome_issues(outcome: &BuildOutcome) -> Vec<yamaa_adapters::issue_rows::Issue> {
+    match outcome {
+        BuildOutcome::Plain { result } | BuildOutcome::Project { result, .. } => match result {
+            Ok(domain) => domain.issues(),
+            Err(issues) => issues.clone(),
+        },
+        BuildOutcome::Producer { projection, .. } => match &projection.result {
+            Ok(root) => root.issues().to_vec(),
+            Err(refusal) => refusal.issues(),
+        },
+        BuildOutcome::SelectionFailed { issues, .. }
+        | BuildOutcome::Unsupported { issues }
+        | BuildOutcome::Refused { issues } => issues.clone(),
     }
 }
 
 /// Build the public report for one outcome, live from its current state.
 pub(crate) fn outcome_report(outcome: &BuildOutcome) -> Report {
-    match outcome {
-        BuildOutcome::Plain { result } => match result {
-            Ok(domain) => Report::from_issues(&domain.issues()),
-            Err(issues) => Report::from_issues(issues),
-        },
-        BuildOutcome::Project { result, .. } => match result {
-            Ok(domain) => Report::from_issues(&domain.issues()),
-            Err(issues) => Report::from_issues(issues),
-        },
-        BuildOutcome::Producer { projection, .. } => match &projection.result {
-            Ok(root) => Report::from_issues(root.issues()),
-            Err(refusal) => Report::from_issues(&refusal.issues()),
-        },
-        BuildOutcome::SelectionFailed { issues, .. } | BuildOutcome::Unsupported { issues } => {
-            Report::from_issues(issues)
-        }
-    }
+    Report::from_issues(&outcome_issues(outcome))
 }

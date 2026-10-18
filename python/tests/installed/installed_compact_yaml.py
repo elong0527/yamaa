@@ -50,13 +50,13 @@ class CompactYaml(unittest.TestCase):
             for verification in variants:
                 with self.subTest(prior_mapping=prior, verification=verification):
                     self.write(verification, prior_mapping=prior)
-                    self.assertEqual(yamaa.check(self.spec).issues.height, 0)
-                    built = yamaa.domain(self.spec)
+                    self.assertEqual(yamaa.spec(self.spec).check().issues.height, 0)
+                    built = yamaa.spec(self.spec).run()
                     self.assertEqual(built.issues.height, 0)
                     self.assertEqual(
                         built.output.to_dict(as_series=False), {"ID": ["a", "b", "c"]}
                     )
-                    self.assertTrue(built.save())
+                    built.save()
                     self.assertEqual(
                         (self.root / "out.csv").read_bytes(), b"ID\na\nb\nc\n"
                     )
@@ -65,8 +65,8 @@ class CompactYaml(unittest.TestCase):
         for bounds in ("min: 0, max: 2", "min: 4, max: 10"):
             with self.subTest(bounds=bounds):
                 self.write("verifications: [row_count: {" + bounds + "}]")
-                self.assertEqual(yamaa.check(self.spec).issues.height, 0)
-                built = yamaa.domain(self.spec)
+                self.assertEqual(yamaa.spec(self.spec).check().issues.height, 0)
+                built = yamaa.spec(self.spec).run()
                 self.assertIsNone(built.output)
                 self.assertEqual(
                     built.issues["condition"].to_list(), ["row_count_failed"]
@@ -78,13 +78,14 @@ class CompactYaml(unittest.TestCase):
             "verifications: [row_count: {min: 3, max: 3}}]",
         ):
             self.write(verification)
-            for operation in (yamaa.check, yamaa.domain):
-                with self.subTest(
-                    verification=verification, operation=operation.__name__
-                ):
+            specification = yamaa.spec(self.spec)
+            for operation, result in (
+                ("check", specification.check()),
+                ("run", specification.run()),
+            ):
+                with self.subTest(verification=verification, operation=operation):
                     self.assertEqual(
-                        operation(self.spec).issues["condition"].to_list(),
-                        ["invalid_yaml"],
+                        result.issues["condition"].to_list(), ["invalid_yaml"]
                     )
 
 

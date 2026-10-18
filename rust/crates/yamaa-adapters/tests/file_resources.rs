@@ -9,7 +9,7 @@ mod file {
             use yamaa_adapters::{file_application, specification_report::Identity};
             use yamaa_core::domain_entry::Request;
             let study = Study::new();
-            fs::write(study.0.join("shared/base.yaml"), "schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {SRC: {path: input/data.csv, relative_to: entry, types: {ID: int}}}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\noutput: {path: output/result.csv, relative_to: entry, columns: [ID], warning_log: output/warnings.csv, verification_log: output/verifications.csv}\n").unwrap();
+            fs::write(study.0.join("shared/base.yaml"), "schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {SRC: {path: input/data.csv, relative_to: entry, types: {ID: int}}}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\noutput: {path: output/result.csv, relative_to: entry, columns: [ID], report: output/report.csv}\n").unwrap();
             fs::create_dir(study.0.join("shared/input")).unwrap();
             fs::write(study.0.join("shared/input/data.csv"), b"ID\n999\n").unwrap();
             let mut results = Vec::new();
@@ -55,12 +55,7 @@ mod file {
                         fs::read(study.0.join(*name).join("output/result.csv")).unwrap(),
                         *bytes
                     );
-                    assert!(study.0.join(*name).join("output/warnings.csv").is_file());
-                    assert!(study
-                        .0
-                        .join(*name)
-                        .join("output/verifications.csv")
-                        .is_file());
+                    assert!(study.0.join(*name).join("output/report.csv").is_file());
                 }
             }
             assert!(!study.0.join("shared/output").exists());
@@ -144,14 +139,14 @@ mod file {
         }
 
         #[test]
-        fn complete_output_replacement_resets_the_base_for_primary_and_both_sidecars() {
+        fn complete_output_replacement_resets_the_base_for_primary_and_report_files() {
             use yamaa_adapters::{file_application, specification_report::Identity};
             use yamaa_core::{domain_entry::Request, schema::DocumentNode};
 
             for inherited_base in ["", "relative_to: entry, "] {
                 let study = Study::new();
-                fs::write(study.0.join("shared/base.yaml"), format!("schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {{SRC: {{path: data.csv, types: {{ID: int}}}}}}\ncolumns: [{{name: ID, type: int, derivation: SRC.ID}}]\noutput: {{path: ignored.csv, {inherited_base}columns: [ID], warning_log: ignored-warning.csv, verification_log: ignored-verification.csv}}\n")).unwrap();
-                fs::write(study.0.join("shared/replacement.yaml"), "schema_version: '1.0'\nparents: base.yaml\noutput: {path: result.csv, columns: [ID], warning_log: warnings.csv, verification_log: verifications.csv}\n").unwrap();
+                fs::write(study.0.join("shared/base.yaml"), format!("schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {{SRC: {{path: data.csv, types: {{ID: int}}}}}}\ncolumns: [{{name: ID, type: int, derivation: SRC.ID}}]\noutput: {{path: ignored.csv, {inherited_base}columns: [ID], report: ignored-report.csv}}\n")).unwrap();
+                fs::write(study.0.join("shared/replacement.yaml"), "schema_version: '1.0'\nparents: base.yaml\noutput: {path: result.csv, columns: [ID], report: report.csv}\n").unwrap();
                 fs::write(
                     study.0.join("entry/spec.yaml"),
                     "schema_version: '1.0'\nparents: ../shared/replacement.yaml\n",
@@ -163,11 +158,7 @@ mod file {
                 let prepared = FileSpecification::prepare(resources, &entry).unwrap();
                 let document = prepared.run().document().model().document();
                 let output = document.field(document.root(), "output").unwrap();
-                for (field, written) in [
-                    ("path", "result.csv"),
-                    ("warning_log", "warnings.csv"),
-                    ("verification_log", "verifications.csv"),
-                ] {
+                for (field, written) in [("path", "result.csv"), ("report", "report.csv")] {
                     let node = document.field(output, field).unwrap();
                     assert_eq!(
                         document.nodes()[node],
@@ -211,16 +202,12 @@ mod file {
                     fs::read(study.0.join("shared/result.csv")).unwrap(),
                     b"ID\n7\n"
                 );
-                for written in ["result.csv", "warnings.csv", "verifications.csv"] {
+                for written in ["result.csv", "report.csv"] {
                     assert!(study.0.join("shared").join(written).is_file());
                     assert!(!study.0.join("entry").join(written).exists());
                 }
                 for directory in ["shared", "entry"] {
-                    for written in [
-                        "ignored.csv",
-                        "ignored-warning.csv",
-                        "ignored-verification.csv",
-                    ] {
+                    for written in ["ignored.csv", "ignored-report.csv"] {
                         assert!(!study.0.join(directory).join(written).exists());
                     }
                 }
@@ -233,7 +220,7 @@ mod file {
             use yamaa_core::domain_entry::Request;
 
             let study = Study::new();
-            fs::write(study.0.join("shared/base.yaml"), "schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {SRC: data.csv}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\noutput: {path: result.csv, relative_to: entry, columns: [ID], warning_log: warnings.csv, verification_log: verifications.csv}\n").unwrap();
+            fs::write(study.0.join("shared/base.yaml"), "schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {SRC: data.csv}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\noutput: {path: result.csv, relative_to: entry, columns: [ID], report: report.csv}\n").unwrap();
             for (output, expected) in [
                 (
                     "{relative_to: declaring}",
@@ -641,14 +628,14 @@ mod file {
                 "schema_version: '1.0'\nparents: ../parents/base.yaml\n",
             )
             .unwrap();
-            let environment = fs::read_to_string(temp.0.join("environment.yaml"))
+            let project = fs::read_to_string(temp.0.join("project.yaml"))
                 .unwrap()
                 .replace("  - spec.yaml", "  - children/spec.yaml")
                 .replace(
                     "define: define.xml",
                     "define: children/artifacts/define.xml",
                 );
-            fs::write(temp.0.join("environment.yaml"), environment).unwrap();
+            fs::write(temp.0.join("project.yaml"), project).unwrap();
             fs::copy(
                 root().join("benchmarks/sdtm-dm-metadata/expected/dm.csv"),
                 temp.0.join("children/artifacts/dm.csv"),
@@ -694,28 +681,34 @@ mod file {
                     )
                     .unwrap();
                     fs::copy(
-                        original.join("submission-environment.yaml"),
-                        this.0.join("environment.yaml"),
+                        original.join("submission-project.yaml"),
+                        this.0.join("project.yaml"),
                     )
                     .unwrap();
                     if published {
                         fs::copy(original.join("expected/lb.csv"), this.0.join("lb.csv")).unwrap();
                     }
                 } else {
-                    fs::copy(
-                        original.join("environment.yaml"),
-                        this.0.join("environment.yaml"),
-                    )
-                    .unwrap();
+                    fs::copy(original.join("project.yaml"), this.0.join("project.yaml")).unwrap();
                 }
                 if published && name != "sdtm-lb-metadata" {
                     fs::copy(original.join("expected/dm.csv"), this.0.join("dm.csv")).unwrap();
                 }
                 this
             }
+            /// Rewrite the copied project file; every replaced text must exist.
+            fn edit_project(&self, changes: &[(&str, &str)]) {
+                let path = self.0.join("project.yaml");
+                let mut text = fs::read_to_string(&path).unwrap();
+                for (before, after) in changes {
+                    assert!(text.contains(before), "{before:?}");
+                    text = text.replacen(before, after, 1);
+                }
+                fs::write(path, text).unwrap();
+            }
             fn run(&self, created: &str) -> Define {
                 Define::prepare(
-                    self.0.join("environment.yaml").to_str().unwrap(),
+                    self.0.join("project.yaml").to_str().unwrap(),
                     "sdtm",
                     Some(created),
                     "0.3.0",
@@ -758,7 +751,7 @@ mod file {
             }
             assert!(!temp.0.join("input").exists());
             let reads = run.capture_reads();
-            for file in ["spec.yaml", "submission-spec.yaml", "environment.yaml"] {
+            for file in ["spec.yaml", "submission-spec.yaml", "project.yaml"] {
                 fs::remove_file(temp.0.join(file)).unwrap();
             }
             fs::write(temp.0.join("lb.csv"), b"changed after preparation").unwrap();
@@ -823,6 +816,85 @@ mod file {
                 let _ = fs::remove_dir_all(&self.0);
             }
         }
+        /// Drop one YAML mapping entry: its header line and every following
+        /// line indented deeper than the header.
+        fn without_entry(text: &str, header: &str) -> String {
+            let depth = |line: &str| line.len() - line.trim_start().len();
+            let mut kept = String::new();
+            let mut found = false;
+            let mut inside = false;
+            for line in text.split_inclusive('\n') {
+                if line.trim_end() == header {
+                    (found, inside) = (true, true);
+                    continue;
+                }
+                if inside && (line.trim().is_empty() || depth(line) > depth(header)) {
+                    continue;
+                }
+                inside = false;
+                kept.push_str(line);
+            }
+            assert!(found, "{header:?}");
+            kept
+        }
+        #[test]
+        fn define_reports_every_missing_study_section_guide_and_target_before_reading_specifications(
+        ) {
+            // A run needs only a section's specs; Define requires the study, the
+            // selected section and that section's standard and define (REQ-1337).
+            for (removed, expected) in [
+                (
+                    &["study:", "  standard:", "  define: define.xml"][..],
+                    &[
+                        ("study", "study"),
+                        ("sdtm.standard", "standard"),
+                        ("sdtm.define", "define"),
+                    ][..],
+                ),
+                (
+                    &["  define: define.xml"][..],
+                    &[("sdtm.define", "define")][..],
+                ),
+                (&["sdtm:"][..], &[("sdtm", "sdtm")][..]),
+            ] {
+                let temp = Temp::fixture("sdtm-dm-metadata", true);
+                let path = temp.0.join("project.yaml");
+                let mut project = fs::read_to_string(&path).unwrap();
+                for header in removed {
+                    project = without_entry(&project, header);
+                }
+                fs::write(&path, project).unwrap();
+                // The declarations are refused before any specification is read.
+                fs::remove_file(temp.0.join("spec.yaml")).unwrap();
+                let mut run = temp.run("2026-09-11T00:00:00");
+                let actual: Vec<_> = run
+                    .issues()
+                    .iter()
+                    .map(|issue| {
+                        yamaa_adapters::json!({
+                            "phase": issue.phase, "condition": issue.condition,
+                            "requirement": issue.requirement, "spec_paths": issue.spec_paths,
+                            "context": issue.context.clone()
+                        })
+                    })
+                    .collect();
+                let wanted: Vec<_> = expected
+                    .iter()
+                    .map(|(field, detail)| {
+                        yamaa_adapters::json!({
+                            "phase": "validation", "condition": "missing_required_field",
+                            "requirement": "REQ-1337", "spec_paths": [field],
+                            "context": {"detail": detail}
+                        })
+                    })
+                    .collect();
+                assert_eq!(actual, wanted, "{removed:?}");
+                assert_eq!(run.artifacts().len(), 0);
+                assert!(run.save().is_err());
+                assert!(!temp.0.join("define.xml").exists());
+                assert!(!temp.0.join("dm.json").exists());
+            }
+        }
         fn root() -> PathBuf {
             Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("../../..")
@@ -858,7 +930,7 @@ mod file {
             assert!(!temp.0.join("dm.json").exists());
             let reads = run.capture_reads();
             fs::remove_file(temp.0.join("spec.yaml")).unwrap();
-            fs::remove_file(temp.0.join("environment.yaml")).unwrap();
+            fs::remove_file(temp.0.join("project.yaml")).unwrap();
             fs::write(temp.0.join("dm.csv"), b"changed after preparation").unwrap();
             assert!(run.save().is_ok());
             assert_eq!(reads, run.capture_reads());
@@ -870,7 +942,15 @@ mod file {
                 fs::read(temp.0.join("dm.json")).unwrap(),
                 fs::read(expected.join("dm.json")).unwrap()
             );
-            assert!(!run.save().unwrap());
+            // A repeated save rewrites the same held bytes without reading a
+            // source again, so a deleted document is restored unchanged.
+            fs::remove_file(temp.0.join("define.xml")).unwrap();
+            assert!(run.save().unwrap());
+            assert_eq!(reads, run.capture_reads());
+            assert_eq!(
+                fs::read(temp.0.join("define.xml")).unwrap(),
+                fs::read(expected.join("define.xml")).unwrap()
+            );
         }
 
         #[test]
@@ -885,9 +965,11 @@ mod file {
             {
                 for host in [Language::Python, Language::R] {
                     let temp = Temp::fixture("sdtm-dm-metadata", false);
+                    // Only Define-XML is generated: the section omits `datasets`.
+                    temp.edit_project(&[("  datasets: json\n", "")]);
                     for (filename, changes) in [
                         ("spec.yaml", "specification_mutations"),
-                        ("environment.yaml", "environment_mutations"),
+                        ("project.yaml", "project_mutations"),
                     ] {
                         let path = temp.0.join(filename);
                         let mut text = fs::read_to_string(&path).unwrap();
@@ -895,9 +977,6 @@ mod file {
                             let before = change[0].as_str().unwrap();
                             assert!(text.contains(before));
                             text = text.replacen(before, change[1].as_str().unwrap(), 1);
-                        }
-                        if filename == "environment.yaml" {
-                            text = text.replace("dataset_json: true", "dataset_json: false");
                         }
                         fs::write(path, text).unwrap();
                     }
@@ -910,7 +989,7 @@ mod file {
                         .unwrap();
                     }
                     let mut run = Define::prepare(
-                        temp.0.join("environment.yaml").to_str().unwrap(),
+                        temp.0.join("project.yaml").to_str().unwrap(),
                         "sdtm",
                         Some("2026-09-11T00:00:00"),
                         "0.3.0",
@@ -1029,10 +1108,10 @@ mod file {
                 // names on case-sensitive volumes are distinct publication targets.
                 return;
             }
-            let environment = temp.0.join("environment.yaml");
+            let project = temp.0.join("project.yaml");
             fs::write(
-                &environment,
-                fs::read_to_string(&environment)
+                &project,
+                fs::read_to_string(&project)
                     .unwrap()
                     .replace("  - spec.yaml", "  - spec.yaml\n  - second.yaml"),
             )
@@ -1091,7 +1170,7 @@ mod file {
             let run = temp.run("2026-09-11");
             assert!(run.issues().iter().any(|i| i.spec_paths == ["created"]));
             let run = Define::prepare(
-                temp.0.join("environment.yaml").to_str().unwrap(),
+                temp.0.join("project.yaml").to_str().unwrap(),
                 "SDTM",
                 None,
                 "0.3.0",
@@ -1114,11 +1193,11 @@ mod file {
                 "schema_version: '1.0'\nparents: ../parents/base.yaml\n",
             )
             .unwrap();
-            let environment = fs::read_to_string(temp.0.join("environment.yaml"))
+            let project = fs::read_to_string(temp.0.join("project.yaml"))
                 .unwrap()
                 .replace("  - spec.yaml", "  - children/spec.yaml")
                 .replace("define: define.xml", "define: artifacts/define.xml");
-            fs::write(temp.0.join("environment.yaml"), environment).unwrap();
+            fs::write(temp.0.join("project.yaml"), project).unwrap();
             fs::copy(
                 root().join("benchmarks/sdtm-dm-metadata/expected/dm.csv"),
                 temp.0.join("artifacts/dm.csv"),
@@ -1211,8 +1290,8 @@ mod file {
             "core: Exp\n      role: Record Qualifier\n      length: 3\n      significant_digits: 3\n      codelist: AGE_VALUES",
         );
             fs::write(temp.0.join("spec.yaml"), spec).unwrap();
-            let environment = fs::read_to_string(temp.0.join("environment.yaml")).unwrap().replace("sdtm:\n", "- codelists:\n  - id: AGE_VALUES\n    name: Ages\n    data_type: float\n    items: [{value: 34}, {value: 67}, {value: 52}]\nsdtm:\n");
-            fs::write(temp.0.join("environment.yaml"), environment).unwrap();
+            let project = fs::read_to_string(temp.0.join("project.yaml")).unwrap().replace("sdtm:\n", "- codelists:\n  - id: AGE_VALUES\n    name: Ages\n    data_type: float\n    items: [{value: 34}, {value: 67}, {value: 52}]\nsdtm:\n");
+            fs::write(temp.0.join("project.yaml"), project).unwrap();
             let result = temp.run("2026-09-11T00:00:00");
             assert!(result.issues().is_empty(), "{:?}", result.issues());
             let data: yamaa_core::json::Value =
@@ -1224,8 +1303,10 @@ mod file {
         #[test]
         fn unused_terminology_is_omitted_and_missing_document_links_do_not_read_study_files() {
             let temp = Temp::fixture("sdtm-dm-metadata", false);
-            let environment = fs::read_to_string(temp.0.join("environment.yaml")).unwrap().replace("dataset_json: true", "dataset_json: false").replace("sdtm:\n", "- codelists:\n  - id: UNUSED\n    name: Used only in another submission\n    data_type: text\n    items: [{value: OTHER}]\nsdtm:\n");
-            fs::write(temp.0.join("environment.yaml"), environment).unwrap();
+            temp.edit_project(&[
+                ("  datasets: json\n", ""),
+                ("sdtm:\n", "- codelists:\n  - id: UNUSED\n    name: Used only in another submission\n    data_type: text\n    items: [{value: OTHER}]\nsdtm:\n"),
+            ]);
             let result = temp.run("2026-09-11T00:00:00");
             assert!(result.issues().is_empty(), "{:?}", result.issues());
             let xml = std::str::from_utf8(result.artifacts().next().unwrap().1).unwrap();

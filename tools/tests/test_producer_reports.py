@@ -61,7 +61,7 @@ class OriginalProducerCohort(unittest.TestCase):
             example="domain",
             entry="spec.yaml",
             environment={
-                "source": "/unit-unqualified/environment.yaml",
+                "source": "/unit-unqualified/project.yaml",
                 "lock_source": "/unit-unqualified/uv.lock",
             },
             activation={"lock": "not_requested", "bindings": [], "tests": []},
@@ -97,7 +97,7 @@ class OriginalProducerCohort(unittest.TestCase):
         case = "C:/Users/runner/AppData/Local/Temp/original"
         raw = json.loads(json.dumps(self.raw).replace(self.case, case))
         raw["environment"] = {
-            "source": "C:/Users/runner/AppData/Local/Temp/environment.yaml",
+            "source": "C:/Users/runner/AppData/Local/Temp/project.yaml",
             "lock_source": "C:/Users/runner/AppData/Local/Temp/uv.lock",
         }
         self.assertTrue(

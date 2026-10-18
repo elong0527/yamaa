@@ -10,6 +10,15 @@ pub enum Language {
     Python,
     R,
 }
+impl Language {
+    /// The project `environments` key that names this host language.
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Python => "python",
+            Self::R => "r",
+        }
+    }
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Parameter {

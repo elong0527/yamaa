@@ -17,10 +17,10 @@ schema-owner controls are described in the [contributor guide](../CONTRIBUTING.m
 [Installed package checks](qualification/README.md) compare actual Python and R
 results with authored expected data. The workflow recipes in
 [.github/workflows/](../.github/workflows/) define the platform matrix and
-packaging checks. Python usage lives in the
-[Python package documentation](../docs/articles/python.md) and its installation
-commands in [python/README.md](../python/README.md);
-[R/yamaa/README.md](../R/yamaa/README.md) covers both for R.
+packaging checks. Python and R usage lives in the
+[R and Python API](../docs/articles/api.md) page, and the installation commands
+in [python/README.md](../python/README.md) and
+[R/yamaa/README.md](../R/yamaa/README.md).
 
 Expected benchmark data and Parquet fixtures are authored truth. Preserve their
 bytes when changing implementation or repository structure.
@@ -28,10 +28,10 @@ bytes when changing implementation or repository structure.
 Layer composition and null handling follow the
 [composition contract](../rules/specification/composition.md).
 
-The `yamaa` facade crate forwards the adapter's independent `yaml`, `parquet`
-and `readstat` Cargo features, all enabled by default. Python wheels, Python
-source installations and R source packages use that default and retain every
-supported format. Rust embedders depend on the facade, never on
+The `yamaa` facade crate forwards the adapter's independent `yaml`, `parquet`,
+`readstat` and `odm` Cargo features, all enabled by default. Python wheels,
+Python source installations and R source packages use that default and retain
+every supported format. Rust embedders depend on the facade, never on
 `yamaa-adapters`, and can select only the physical formats they need. This
 selection admits YAML specifications and reads CSV and Parquet, and it omits
 the bundled ReadStat C build, so it reads no SAS input:
@@ -48,7 +48,8 @@ other configuration.
 | `yaml` | Saphyr parser and adapter scalar decoding; admits specification, schema, environment, project-lock and style YAML bytes. |
 | `parquet` | Parquet source and artifact encoding, schema metadata, and Brotli, Gzip, LZ4, Snappy and Zstd codecs. Zstd builds native C through `zstd-sys` and `cc`. |
 | `readstat` | Bundled read-only C backend and direct `cc` build dependency for `.sas7bdat` and `.xpt` input. |
-| No format features | CSV and Arrow table/IPC representation remain available, including supplied Arrow batches. No YAML parser, Parquet codec, ReadStat or native compression build is selected. |
+| `odm` | The `quick-xml` tokenizer and the pure-Rust Gzip codec; reads CDISC ODM 1.3 and 2.0 XML clinical items from plain XML or plain/Gzip TAR files into the fixed clinical-item table. |
+| No format features | CSV and Arrow table/IPC representation remain available, including supplied Arrow batches. No YAML parser, Parquet codec, ODM XML reader, ReadStat or native compression build is selected. |
 
 Arrow arrays, buffers, schemas, IPC and FlatBuffers are representation and host
 transfer dependencies shared by every configuration. They do not enable a
@@ -59,21 +60,23 @@ plans and tables to its ports without a physical reader.
 Format APIs and their public error types remain available with features omitted.
 YAML admission returns `yaml_decode::DecodeFailure::Unavailable`, Parquet input
 returns `parquet_source::Error::ReaderUnavailable`, Parquet output returns
-`parquet_artifact::Error::Unavailable`, and SAS input returns
-`sas_source::Error::Unavailable`. These capability failures do not become
+`parquet_artifact::Error::Unavailable`, SAS input returns
+`sas_source::Error::Unavailable`, and ODM XML input returns
+`odm_xml::Error::Unavailable`. These capability failures do not become
 malformed-source language findings. Capture and ingest boundary replies expose
 `yaml_reader_unavailable`, `parquet_reader_unavailable` and
 `sas_reader_unavailable`; unavailable Parquet compression retains its separate
 `parquet_codec_unavailable` code.
 
 The optional-format CI job runs no-default, each individual feature and all
-three features. Each lane exercises enabled-format fixtures and disabled
+four features. Each lane exercises enabled-format fixtures and disabled
 capabilities, verifies the Cargo graph, and inspects the linked test binary for
 ReadStat and Zstd symbols. Run a lane locally from the repository root with
 `python -m tools.ci.format_features none` (or `yaml`, `parquet`, `readstat`,
-`all`). YAML-dependent specification and project fixture suites run whenever
-`yaml` is selected; Arrow/CSV/IPC controls remain active without it. Ordinary
-Python/R checks and native wheel/source qualification retain the packaged default.
+`odm`, `all`). YAML-dependent specification and project fixture suites run
+whenever `yaml` is selected; Arrow/CSV/IPC controls remain active without it.
+Ordinary Python/R checks and native wheel/source qualification retain the
+packaged default.
 
 Arrow/Parquet release-specific operations live in the adapter's
 `storage_api` module: fallible IPC schema conversion, C stream import,
@@ -84,9 +87,11 @@ that dependency graph. Keep malformed-schema rejection and the closed output
 profile when adapting the boundary.
 ## Arrow host handoff
 
-The host bridge uses Arrow-rs 57.3.0 C Data/Stream callbacks, PyArrow >=23.0.1
-and R nanoarrow >=0.8.0. An exported stream owns a reader with an independent
-cursor and shared immutable Arrow array references. Each emitted C Data array
+The Python bridge uses Arrow-rs 57.3.0 C Data/Stream callbacks and PyArrow
+>=23.0.1. The R binding instead copies each table into plain R vectors in Rust,
+so no Arrow stream crosses the R boundary. An exported stream owns a reader
+with an independent cursor and shared immutable Arrow array references. Each
+emitted C Data array
 owns its own buffer references. Dropping the build, stream or exporter cannot
 invalidate arrays already imported by the consumer. Releasing a stream early
 drops unread batches; imported batches retain their buffers. Moving a header
@@ -95,19 +100,15 @@ once, and destruction of moved-from headers only frees the shell.
 
 Python uses a named `arrow_array_stream` PyCapsule. PyO3 owns its header shell;
 capsule destruction releases an unconsumed stream, or frees an already consumed
-shell. R fills a fresh `nanoarrow_allocate_array_stream()` header. Nanoarrow
-owns that allocation and invokes the Arrow-rs release callback on explicit
-release or garbage collection, including after a failed conversion. Low-level
-consumers should use an exit handler to release a stream they stop consuming.
-No callback calls back into
-Python or R, so buffer destruction requires neither interpreter nor build
-handle. Native consumers/exporters must obey the Arrow ABI; forged pointers
-are outside this memory-safety contract.
+shell. Low-level consumers should use an exit handler to release a stream they
+stop consuming. No callback calls back into Python or R, so buffer destruction
+requires neither interpreter nor build handle. Native consumers/exporters must
+obey the Arrow ABI; forged pointers are outside this memory-safety contract.
 
 The zero-copy promise covers retained public Arrow buffers through standard
 stream import/export, including sliced and chunked arrays. Build result
-materialization, Polars conversion and the established R data-frame views can
-copy. Public dates project Date32 days and zone-free datetimes project whole
+materialization, Polars conversion and R data-frame conversion can copy.
+Public dates project Date32 days and zone-free datetimes project whole
 TimestampSecond values, preserving existing public semantics; collected
 precision remains private to execution. Import accepts UTF-8 (including large
 and view arrays), Int64, Float64, Date32 and zone-free TimestampSecond. Other
@@ -115,9 +116,10 @@ types, fractional units and timezones require an explicit preserving conversion
 before import. Nonfinite floats become missing under the existing engine rule.
 Imported public temporals share their value buffers and allocate only a complete
 precision child; public exports share the value buffer and parent validity.
-R's exact i64 text and NUL raw-list views remain explicit copying conversions;
-conversion to an incapable R vector preserves the value or raises an error.
-Requested Python schema conversion is refused rather than silently narrowed.
+R's data-frame conversion holds integers as doubles and text as character, and
+raises an error for an integer beyond 2^53 or text containing NUL rather than
+change the value. Requested Python schema conversion is refused rather than
+silently narrowed.
 
 ## Resolved specification artifact
 
@@ -132,7 +134,7 @@ Version 1 serializes as compact UTF-8 JSON with these envelope fields:
 | `model_kind` | `normalized_with_named_dictionary_references`. |
 | `replay` | `inspection_only`. |
 | `entry` | Canonical identity of the requested specification entry. |
-| `environment` | Explicit environment identity, or null when absent. |
+| `project` | Explicit project identity, or null when absent. |
 | `entries` | Root first, then linked producer entries in preparation order. |
 
 Each entry contains `schema_version`, its complete composed normalized
@@ -153,7 +155,7 @@ origins identify the retained schema module. `mapping_order` uses the same
 pointers to retain every mapping's original key order; JSON object keys alone
 cannot retain semantic iteration order. Arrays retain their normal order.
 
-Resources include final input data and producer links, output and both logs,
+Resources include final input data and producer links, output and the report file,
 named dictionaries and every inherited-parent reference. Each record contains
 `spec_path`, `role`, `owning_entry`, `declaring_source`, `relative_to`,
 `base_source`, `written`, and `location: {kind: local, path: ...}`. The composed
@@ -189,8 +191,8 @@ The supported API lives in one new crate, `rust/crates/yamaa` (package name
 `yamaa`), a small facade over `yamaa-adapters` and `yamaa-core`. The owner
 decided this on 2026-10-16: a separate facade crate, not a module inside
 `yamaa-adapters`. Host crates depend only on the facade (plus their language
-runtime), so the compiler enforces the boundary: the 66 `pub mod`s of
-`yamaa-adapters` and the 104 of `yamaa-core` stay internal and cannot be
+runtime), so the compiler enforces the boundary: the 69 `pub mod`s of
+`yamaa-adapters` and the 107 of `yamaa-core` stay internal and cannot be
 reached past the facade. The facade re-exports no adapters or core type; every
 public type below is facade-owned, and adapters/core types are converted at
 the boundary. Core keeps its current boundary (no I/O, no `unsafe`, no Arrow).
@@ -293,8 +295,8 @@ pub struct Build { /* owned attempt state */ }
 impl Build {
     pub fn output(&self) -> Option<&Table>;
     pub fn output_bytes(&self) -> Option<&[u8]>;
-    pub fn log(&self, warning: bool) -> Option<&Table>;
-    pub fn log_bytes(&self, warning: bool) -> Option<&[u8]>;
+    pub fn run_report(&self) -> Option<&Table>;
+    pub fn run_report_bytes(&self) -> Option<&[u8]>;
     pub fn report(&self) -> &Report;
     pub fn save(&mut self) -> Result<SaveOutcome, Error>;
 }
@@ -316,8 +318,8 @@ pub enum SaveOutcome { Saved, NothingToSave }  // #[non_exhaustive]
   admission and preparation failures come back as diagnostics in the returned
   `Report`, never as a second error channel.
 - `build` mirrors today's `Result<Domain, Failure>`: a rejected build returns
-  `Error::Rejected(Report)`; a successful `Build` carries the same outputs,
-  logs and observations as today's `Domain`.
+  `Error::Rejected(Report)`; a successful `Build` carries the same output,
+  run report and observations as today's `Domain`.
 - `save` is a method on the build handle, as `Domain::save` is today; it is
   the only mutating operation and publishes through the resolver.
 - `define` mirrors `file_define::Define::prepare` plus its save step.
@@ -505,7 +507,7 @@ Every adapters or core module the two host crates used before they moved onto
 the facade (28 adapters modules and 11 core modules, counted from the host
 sources on 2026-10-16) maps to a facade item or is marked internal. The host
 crates now depend only on the facade and use none of these modules directly;
-the facade itself uses 29 adapters modules and 14 core modules, counted from
+the facade itself uses 33 adapters modules and 17 core modules, counted from
 `crates/yamaa/src` on 2026-10-18. Any module not listed here is internal by
 default.
 
@@ -543,12 +545,12 @@ default.
 | `yamaa_core::domain_entry` | Internal -- entry dispatch behind `Engine`. |
 | `yamaa_core::function_batch` | Facade -- `ProjectFunctions` batch invocation with facade scalar arguments; `BatchFunctionPort` stays internal. |
 | `yamaa_core::function_invocation` | Facade -- `FunctionError` is its public form; `HostError` stays internal. |
-| `yamaa_core::function_signature` | Facade -- `FunctionIdentity` and `Signature`/`Parameter` are the public activation types; `LogicalSignature` stays internal. |
+| `yamaa_core::function_signature` | Facade -- `FunctionIdentity` and `Signature`/`Parameter` are the public activation types, and `ColumnType` is the declared result type; `LogicalSignature` stays internal. |
 | `yamaa_core::project_activation::ActivationPort` | Facade -- the `ProjectFunctions` trait; the core port stays internal. |
 | `yamaa_core::project_environment` | Facade -- `LockKind` and `LockContext`; environment admission stays internal. |
 | `yamaa_core::project_function` | Facade -- `HostLanguage` and the facade `Scalar` value type; the core `Language` enum stays internal. |
 | `yamaa_core::table::ValueRef` | Facade -- `ScalarRef`; the core table stays internal. |
-| `yamaa_core::temporal` | Facade -- `Date` and `DateTime`; collected precision is dropped at the boundary. |
+| `yamaa_core::temporal` | Facade -- `Date` and `DateTime`, with civil fields and epoch day or second counts; collected precision is dropped at the boundary. |
 | `yamaa_core::value::Value` | Facade -- `Scalar`. |
 | `yamaa_core::VERSION` (crate root) | Facade -- re-exported as `yamaa::VERSION` with the same value. |
 
@@ -769,12 +771,16 @@ empty partitions $r_i = 0$ and single-row partitions $r_i = 1$):
      diagnostic before publishing any output rather than computing
      partition-local approximations.
 
-4. **Retained observations (`handler_counts` and `verifications`)**:
+4. **Retained observations (`handler_counts`, `template_rows` and `verifications`)**:
    - `ExecutionAttempt.handler_counts`: Handler sites are registered in
      deterministic plan order during `Admission`; per-site counts sum across
      partitions via checked addition in `HandlerCounter` (raising
      `ExecutionError::HandlerAccounting` on overflow) and match the whole-table
      snapshot on both success and failure at the same checkpoint.
+   - `ExecutionAttempt.template_rows`: Each completed row template's emitted
+     rows and driver records read, in construction order, feed the run
+     report's `rows` rows. Partition counts sum per template, and a failed
+     attempt retains exactly the templates completed before the failure.
    - `Execution.verifications` and `ExecutionAttempt.retained_verifications`:
      Every emitted `CheckRecord` equals the whole-table `CheckRecord` in `path`,
      `code`, `evaluated_count`, `failed_count`, `output_rows` (total dataset

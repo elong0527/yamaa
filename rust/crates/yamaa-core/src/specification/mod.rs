@@ -37,13 +37,13 @@ mod root_filter;
 mod source_expressions;
 pub use source_expressions::SourceFinding;
 mod column_checks;
-mod logs;
+mod report;
 mod row_drivers;
 mod row_intermediates;
 mod rows;
 mod self_relations;
 mod verifications;
-pub use logs::{LogFinding, OutputLogs};
+pub use report::ReportFinding;
 mod windows;
 pub use windows::WindowFinding;
 mod functions;
@@ -100,7 +100,7 @@ pub enum PreflightFinding {
     TextExtract(crate::diagnostic::Diagnostic),
     TextTemplate(crate::diagnostic::Diagnostic),
     TextCase(crate::diagnostic::Diagnostic),
-    Log(LogFinding),
+    Report(ReportFinding),
     Imputation(crate::diagnostic::Diagnostic),
     RoundingInput {
         path: String,
@@ -378,7 +378,7 @@ pub struct PreparedSpecification {
     output: TableSchema,
     projection: Vec<String>,
     output_path: String,
-    output_logs: OutputLogs,
+    output_report: Option<String>,
     output_decimals: Option<String>,
     output_order: Vec<(String, bool, bool)>,
     root_filter: Option<root_filter::RootFilter>,
@@ -1022,7 +1022,7 @@ struct PreparedOutputDeclarations {
     projection: Vec<String>,
     keys: Vec<usize>,
     verifications: verifications::Verifications,
-    output_logs: OutputLogs,
+    output_report: Option<String>,
     intermediates: intermediates::Declarations,
 }
 
@@ -1101,12 +1101,12 @@ fn prepare_output_declarations(
         .chain(&verifications.declared_warning_paths)
         .cloned()
         .collect::<Vec<_>>();
-    let (output_logs, log_findings) = OutputLogs::prepare(d, output_id, &output_path, warnings)?;
-    if !log_findings.is_empty() {
+    let (output_report, report_findings) = report::prepare(d, output_id, &output_path, warnings)?;
+    if !report_findings.is_empty() {
         return Err(PrepareError::Invalid(
-            log_findings
+            report_findings
                 .into_iter()
-                .map(PreflightFinding::Log)
+                .map(PreflightFinding::Report)
                 .collect(),
         ));
     }
@@ -1128,7 +1128,7 @@ fn prepare_output_declarations(
         projection,
         keys,
         verifications,
-        output_logs,
+        output_report,
         intermediates,
     })
 }
@@ -1237,7 +1237,7 @@ impl PreparedSpecification {
     /// Reject unsupported declarations before requesting any source bytes. Effective
     /// source empty-string behavior is missing unless explicitly declared otherwise.
     pub fn prepare(spec: &SpecificationDocument) -> Result<Self, PrepareError> {
-        Self::prepare_implementation(spec, None, None, None, None)
+        Self::prepare_implementation(spec, None, None, None, None, None)
     }
     /// Prepare calls against statically admitted environment definitions. No
     /// project imports, lock verification, test invocation or study reads occur.
@@ -1245,7 +1245,7 @@ impl PreparedSpecification {
         spec: &SpecificationDocument,
         functions: &[crate::project_function::Function],
     ) -> Result<Self, PrepareError> {
-        Self::prepare_implementation(spec, Some(functions), None, None, None)
+        Self::prepare_implementation(spec, Some(functions), None, None, None, None)
     }
     /// Compile project calls and fixed terminology against the same admitted metadata.
     pub fn prepare_with_environment(
@@ -1258,6 +1258,7 @@ impl PreparedSpecification {
             Some(environment.catalogue()),
             None,
             Some(environment.inventory()),
+            environment.undeclared_language(),
         )
     }
     /// This representation stays inside the sealed producer metadata result.
@@ -1272,6 +1273,7 @@ impl PreparedSpecification {
             environment.map(|e| e.catalogue()),
             Some(producers),
             environment.map(|e| e.inventory()),
+            environment.and_then(|e| e.undeclared_language()),
         )
     }
     fn prepare_implementation(
@@ -1280,6 +1282,7 @@ impl PreparedSpecification {
         catalogue: Option<&crate::project_terminology::Catalogue>,
         producers: Option<&[crate::producer_admission::Declaration]>,
         inventory: Option<&crate::submission_inventory::Inventory>,
+        undeclared: Option<crate::project_function::Language>,
     ) -> Result<Self, PrepareError> {
         let d = spec.document();
         let root = d.root();
@@ -1317,8 +1320,9 @@ impl PreparedSpecification {
         .map_err(PrepareError::OutputSchema)?;
         // Absence supplies no callable definitions. It does not invent an
         // environment document, and unknown calls retain ordinary static causes.
+        // A project without an environment for the host names that cause instead.
         let functions = functions.unwrap_or(&[]);
-        let project = match functions::prepare(d, columns, functions) {
+        let project = match functions::prepare(d, columns, functions, undeclared) {
             Ok(project) => Some(project),
             Err(PrepareError::Invalid(errors)) => {
                 findings.extend(errors);
@@ -1399,7 +1403,7 @@ impl PreparedSpecification {
             projection,
             keys,
             verifications,
-            output_logs,
+            output_report,
             intermediates,
         } = prepare_output_declarations(
             d,
@@ -1444,7 +1448,7 @@ impl PreparedSpecification {
                 output,
                 projection,
                 output_path,
-                output_logs,
+                output_report,
                 output_decimals,
                 output_order,
                 root_filter,
@@ -1481,7 +1485,7 @@ impl PreparedSpecification {
             output,
             projection,
             output_path,
-            output_logs,
+            output_report,
             output_decimals,
             output_order,
             root_filter,
@@ -1617,8 +1621,21 @@ impl PreparedSpecification {
     pub fn output_path(&self) -> &str {
         &self.output_path
     }
-    pub fn output_logs(&self) -> &OutputLogs {
-        &self.output_logs
+    /// The file the run report is written to, when the specification names one.
+    pub fn output_report(&self) -> Option<&str> {
+        self.output_report.as_deref()
+    }
+    /// Each row template's stable path and driver name in construction order,
+    /// or root `base` and the driver when no row templates are declared.
+    pub fn row_constructions(&self) -> Vec<(String, &str)> {
+        match &self.rows {
+            Some(rows) => rows
+                .drivers()
+                .enumerate()
+                .map(|(index, driver)| (std::format!("rows[{index}]"), driver))
+                .collect(),
+            None => vec![("base".into(), self.source().name.as_str())],
+        }
     }
     pub fn output_profile(&self) -> Option<&'static str> {
         output_profile(&self.output_path)

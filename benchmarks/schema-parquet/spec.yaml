@@ -8,7 +8,7 @@ input:
 output:
   path: adsl.parquet
   columns: [STUDYID, USUBJID, AGE]
-  warning_log: adsl-violations.parquet
+  report: adsl-violations.parquet
 
 columns:
   - name: STUDYID
@@ -25,8 +25,8 @@ columns:
     type: int
     label: Age
     derivation: DM.AGE
-    # A warning, not a failure: an age outside 18-100 stays in the output
-    # and is listed in the warning log.
+    # A warning, not an error: an age outside 18 to 100 stays in the output
+    # and its subject is listed in the run report instead of stopping the run.
     verifications:
       - range:
           min: 18

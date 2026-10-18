@@ -9,8 +9,8 @@ Authors@R: c(
     person("Jingwei", "Xiong", role = "ctb"))
 Description: Builds clinical data specifications, checks declarations, and
     renders submission metadata through the shared Rust engine. Returns owned
-    data frames and structured diagnostics, with explicit publication of
-    retained outputs and lossless signed 64-bit integer and UTF-8 values.
+    data frames of plain R values and structured diagnostics, with explicit
+    publication of retained outputs.
 License: MIT + file LICENSE
 Copyright: The yamaa contributors, and the holders named in
     inst/LICENSE-THIRD-PARTY.txt, inst/LICENSE-READSTAT.txt,
@@ -19,7 +19,7 @@ Copyright: The yamaa contributors, and the holders named in
 Encoding: UTF-8
 Depends: R (>= 4.6.1)
 Imports: utils
-Suggests: arrow (>= 23.0.1), jsonlite (>= 2.0.0), nanoarrow (>= 0.8.0)
+Suggests: arrow (>= 23.0.1), jsonlite (>= 2.0.0)
 SystemRequirements: Cargo and rustc 1.99.1 (rustup selects it from the
     bundled rust-toolchain.toml; without rustup, rustc >= 1.90.0), GNU make
 NeedsCompilation: yes

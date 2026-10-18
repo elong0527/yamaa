@@ -23,8 +23,21 @@ pub fn capture() -> Result<Arc<CapturedSchema>, Error> {
 
 /// Admit the separately versioned environment root with its exact shared module.
 pub fn capture_environment() -> Result<Arc<CapturedSchema>, Error> {
+    admit_root(data::ENVIRONMENT_MODULES, "environment_class")
+}
+
+/// Admit both separately versioned project roots: the project file with its
+/// codelist sources, and the environment file it links with its functions.
+pub fn capture_project() -> Result<crate::project_source::ProjectSchemas, Error> {
+    Ok(crate::project_source::ProjectSchemas {
+        project: admit_root(data::PROJECT_MODULES, "project_class")?,
+        environment: capture_environment()?,
+    })
+}
+
+fn admit_root(modules: &[(&str, &str)], root_class: &str) -> Result<Arc<CapturedSchema>, Error> {
     CapturedSchema::admit_root(
-        data::ENVIRONMENT_MODULES
+        modules
             .iter()
             .map(|(name, source)| Source {
                 identity: (*name).into(),
@@ -32,7 +45,7 @@ pub fn capture_environment() -> Result<Arc<CapturedSchema>, Error> {
             })
             .collect(),
         0,
-        "environment_class",
+        root_class,
     )
 }
 

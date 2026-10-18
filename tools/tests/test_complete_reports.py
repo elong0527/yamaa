@@ -55,7 +55,7 @@ class CompletePublicTruth(unittest.TestCase):
                     }
                     for suffix in (
                         "original-specifications",
-                        "verification-logs",
+                        "run-report",
                         "producer-cohort",
                     )
                 ],
@@ -99,7 +99,7 @@ class CompletePublicTruth(unittest.TestCase):
             entry="spec.yaml",
             activation={"lock": "not_requested", "bindings": [], "tests": []},
             environment={
-                "source": f"/unit-unqualified/{host}/environment.yaml",
+                "source": f"/unit-unqualified/{host}/project.yaml",
                 "lock_source": f"/unit-unqualified/{host}/"
                 + ("uv.lock" if host == "python" else "renv.lock"),
             },
@@ -477,6 +477,27 @@ assert observed.to_dict(as_series=False) == {"VALUE": [1, 2, None]}
                         raw, self.revision, (*cohort.COHORT, cohort.PRODUCER)
                     )
 
+    def test_retired_verification_log_suite_cannot_stand_in_for_the_run_report(self):
+        for host in ("python", "r"):
+            with self.subTest(host=host):
+                root = self.evidence / host
+                path = (root / "supplemental" if host == "python" else root) / (
+                    "supplemental.json"
+                )
+                original = path.read_bytes()
+                record = cohort.read(path)
+                for suite in record["suites"]:
+                    if suite["id"] == host + "/run-report":
+                        suite["id"] = host + "/verification-logs"
+                cohort.write(path, record)
+                try:
+                    with self.assertRaisesRegex(
+                        ValueError, f"suite is missing: {host}/run-report"
+                    ):
+                        cohort.installed_owner(root, host, self.revision)
+                finally:
+                    path.write_bytes(original)
+
     def test_incomplete_producer_owner_and_altered_saved_bytes_are_refused(self):
         owner = (
             self.evidence
@@ -493,6 +514,12 @@ assert observed.to_dict(as_series=False) == {"VALUE": [1, 2, None]}
                     cohort.project_report(
                         raw, (owner / "case-directory.txt").read_text()
                     )
+        # The owner passes a project file; an environment file passed in its
+        # place is the retired call and is not the retained owner.
+        retired = copy.deepcopy(before)
+        retired["environment"]["source"] = "/unit-unqualified/python/environment.yaml"
+        with self.assertRaisesRegex(ValueError, "project or lock"):
+            cohort.project_report(retired, (owner / "case-directory.txt").read_text())
         (owner / "after-2/out.csv").write_bytes(b"ID\n02\n")
         with self.assertRaisesRegex(ValueError, "CSV bytes"):
             self.compare()

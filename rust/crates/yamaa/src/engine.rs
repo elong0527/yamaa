@@ -284,6 +284,7 @@ impl Engine {
             &self.shared,
             request.specification,
             request.environment,
+            None,
             yamaa_core::application_observer::Scope::new(&bridge),
         );
         Plan::new(
@@ -296,8 +297,8 @@ impl Engine {
     /// Prepare, bind, execute and retain one build: exactly one
     /// [`Engine::compile`] followed by one [`Plan::run`], with the same
     /// events. Every adjudicated outcome returns an owned build carrying its
-    /// outputs, logs, observations and diagnostics; only cancellation fails
-    /// the call itself.
+    /// output, run report, observations and diagnostics; only cancellation
+    /// fails the call itself.
     ///
     /// # Example
     ///
@@ -365,6 +366,50 @@ impl Engine {
         let outcome = plan.run_observed(None, &measurements, progress);
         measurements.complete(outcome_accepted(&outcome));
         Ok(Build::from_outcome(outcome, measurements, &self.shared))
+    }
+
+    /// Build one project-run specification: its producer links read held or
+    /// saved artifacts instead of building their producers.
+    pub(crate) fn build_in_project(
+        &self,
+        request: &Request<'_>,
+        held: Arc<yamaa_adapters::file_producer_build::HeldArtifacts>,
+        token: &CancellationToken,
+    ) -> Result<Build, Error> {
+        if token.is_cancelled() {
+            return Err(Error::Cancelled);
+        }
+        let measurements = Arc::new(yamaa_adapters::application_measurements::Measurements::new());
+        let bridge = ObserverBridge::new(&measurements, self.shared.observer.as_deref());
+        let compiled = crate::internal::compile(
+            &self.shared,
+            request.specification,
+            request.environment,
+            Some(Arc::clone(&held)),
+            yamaa_core::application_observer::Scope::new(&bridge),
+        );
+        let outcome = crate::internal::run(
+            &self.shared,
+            request.specification,
+            &compiled,
+            None,
+            Some(held),
+            yamaa_core::application_observer::Scope::new(&bridge),
+        );
+        measurements.complete(outcome_accepted(&outcome));
+        Ok(Build::from_outcome(outcome, measurements, &self.shared))
+    }
+
+    /// A project-run specification that did not build, with the findings
+    /// that explain why.
+    pub(crate) fn refused_build(&self, issues: Vec<yamaa_adapters::issue_rows::Issue>) -> Build {
+        let measurements = Arc::new(yamaa_adapters::application_measurements::Measurements::new());
+        measurements.complete(false);
+        Build::from_outcome(BuildOutcome::Refused { issues }, measurements, &self.shared)
+    }
+
+    pub(crate) fn shared(&self) -> &EngineShared {
+        &self.shared
     }
 
     /// Compose submission metadata without running a specification.
@@ -452,7 +497,7 @@ impl Engine {
     ///         .resolve_specification(&Request::new(entry.to_str().unwrap()))
     ///         .unwrap();
     ///     assert!(resolved.entry().ends_with("spec.yaml"));
-    ///     assert_eq!(resolved.environment(), None);
+    ///     assert_eq!(resolved.project(), None);
     ///     let roundtrip =
     ///         ResolvedSpecification::from_json(&resolved.to_json().unwrap()).unwrap();
     ///     assert_eq!(roundtrip.entry(), resolved.entry());
@@ -477,15 +522,14 @@ impl Engine {
 /// Named retained byte sources: capture names with their original bytes.
 pub type SourceBytes = Vec<(String, Arc<[u8]>)>;
 
-/// An owned build: one attempt with its outputs, logs and observations.
+/// An owned build: one attempt with its output, run report and observations.
 /// `save` is the only mutating operation and publishes through the resolver.
 pub struct Build {
     state: BuildOutcome,
     measurements: Arc<yamaa_adapters::application_measurements::Measurements>,
     report: Report,
     output: Option<Table>,
-    verification: Option<Table>,
-    warning: Option<Table>,
+    run_report: Option<Table>,
     project_failures: Option<Vec<AttemptFailure>>,
     producer_failures: Option<Vec<AttemptFailure>>,
     producer_accepted: Option<bool>,
@@ -508,8 +552,7 @@ impl Build {
                 diagnostics: Vec::new(),
             },
             output: None,
-            verification: None,
-            warning: None,
+            run_report: None,
             project_failures: None,
             producer_failures: None,
             producer_accepted: None,
@@ -525,10 +568,9 @@ impl Build {
 
     fn refresh(&mut self) {
         self.report = outcome_report(&self.state);
-        let (output, verification, warning) = tables_of(&self.state);
+        let (output, run_report) = tables_of(&self.state);
         self.output = output;
-        self.verification = verification;
-        self.warning = warning;
+        self.run_report = run_report;
     }
 
     fn capture_evidence(&mut self, shared: &EngineShared) {
@@ -601,31 +643,26 @@ impl Build {
         }
     }
 
-    /// Borrow the verification (`warning == false`) or warning log table.
-    pub fn log(&self, warning: bool) -> Option<&Table> {
-        if warning {
-            self.warning.as_ref()
-        } else {
-            self.verification.as_ref()
-        }
+    /// Borrow the run report table, which every executed build holds,
+    /// success or failure. A build that never reached execution has none. A
+    /// producer graph returns its entry specification's report, which a graph
+    /// stopped before the entry ran does not have.
+    pub fn run_report(&self) -> Option<&Table> {
+        self.run_report.as_ref()
     }
 
-    /// Borrow the verification or warning log bytes.
-    pub fn log_bytes(&self, warning: bool) -> Option<&[u8]> {
+    /// Borrow the run report's Arrow IPC bytes.
+    pub fn run_report_bytes(&self) -> Option<&[u8]> {
         match &self.state {
-            BuildOutcome::Plain { result: Ok(domain) } => domain_logs(domain, warning),
+            BuildOutcome::Plain { result: Ok(domain) } => Some(domain.run_report()),
             BuildOutcome::Project {
                 result: Ok(domain), ..
-            } => domain_logs(domain, warning),
-            BuildOutcome::Producer { projection, .. } => {
-                projection.result.as_ref().ok().and_then(|root| {
-                    if warning {
-                        root.warning_log()
-                    } else {
-                        root.verification_log()
-                    }
-                })
-            }
+            } => Some(domain.run_report()),
+            BuildOutcome::Producer { projection, .. } => projection
+                .result
+                .as_ref()
+                .ok()
+                .and_then(|root| root.run_report()),
             _ => None,
         }
     }
@@ -635,7 +672,87 @@ impl Build {
         &self.report
     }
 
-    /// Publish held logs and output. A failed build cannot save.
+    /// The build's issue rows, live from its current state.
+    pub(crate) fn issue_rows(&self) -> Vec<yamaa_adapters::issue_rows::Issue> {
+        crate::internal::outcome_issues(&self.state)
+    }
+
+    /// The accepted primary artifact's serialized bytes, shared, for the
+    /// consumers a project run builds later.
+    pub(crate) fn artifact(&self) -> Option<Arc<[u8]>> {
+        match &self.state {
+            BuildOutcome::Plain { result: Ok(domain) }
+            | BuildOutcome::Project {
+                result: Ok(domain), ..
+            } => domain.artifact(),
+            BuildOutcome::Producer {
+                attempt,
+                projection,
+            } => {
+                projection.result.as_ref().ok()?.output()?;
+                let root = attempt.provenance.metadata().root();
+                attempt
+                    .graph
+                    .nodes
+                    .iter()
+                    .find(|entered| entered.node == root)
+                    .and_then(|entered| entered.output.as_ref().ok())
+                    .and_then(Option::as_ref)
+                    .and_then(|output| output.artifact())
+                    .map(|artifact| artifact.retained_bytes())
+            }
+            _ => None,
+        }
+    }
+
+    /// Open, without writing, every file `save` would write, or only the
+    /// report file with `report_only`, against the files already admitted.
+    pub(crate) fn preflight(
+        &self,
+        preflight: &mut yamaa_adapters::project_scope::Preflight,
+        report_only: bool,
+    ) -> Result<(), Vec<yamaa_adapters::issue_rows::Issue>> {
+        match &self.state {
+            BuildOutcome::Plain { result: Ok(domain) }
+            | BuildOutcome::Project {
+                result: Ok(domain), ..
+            } => preflight.admit_domain(domain, report_only),
+            BuildOutcome::Producer { projection, .. } => match &projection.result {
+                Ok(root) => preflight.admit_root(root, report_only),
+                Err(_) => Ok(()),
+            },
+            _ => Ok(()),
+        }
+    }
+
+    /// Publish only the declared report file, as a failed build saves.
+    /// `Ok(true)` published it, `Ok(false)` refused the publication with
+    /// issues, and `Err` means the build holds no report file to write.
+    pub(crate) fn save_report(&mut self) -> Result<bool, ()> {
+        let saved = match &mut self.state {
+            BuildOutcome::Plain { result: Ok(domain) }
+            | BuildOutcome::Project {
+                result: Ok(domain), ..
+            } => domain.save_report().map_err(drop),
+            BuildOutcome::Producer { projection, .. } => match &mut projection.result {
+                Ok(root) => root.save_report().map_err(drop),
+                Err(_) => Err(()),
+            },
+            _ => Err(()),
+        };
+        if saved.is_ok() {
+            self.measurements.save_entered();
+            self.measurements.save_completed(match saved {
+                Ok(true) => "succeeded",
+                _ => "refused",
+            });
+        }
+        self.refresh();
+        saved
+    }
+
+    /// Publish the held report file and output. A failed build publishes only
+    /// its declared report file and still reports a failed save.
     ///
     /// # Example
     ///
@@ -808,46 +925,27 @@ impl Build {
     }
 }
 
-fn tables_of(state: &BuildOutcome) -> (Option<Table>, Option<Table>, Option<Table>) {
-    let tables = |output: Option<&yamaa_adapters::public_table::PublicTable>,
-                  verification: Option<&yamaa_adapters::public_table::PublicTable>,
-                  warning: Option<&yamaa_adapters::public_table::PublicTable>| {
+fn tables_of(state: &BuildOutcome) -> (Option<Table>, Option<Table>) {
+    let tables = |domain: &yamaa_adapters::file_application::Domain| {
         (
-            output.map(Table::from_adapter),
-            verification.map(Table::from_adapter),
-            warning.map(Table::from_adapter),
+            domain.output_table().map(Table::from_adapter),
+            Some(Table::from_adapter(domain.report_table())),
         )
     };
     match state {
-        BuildOutcome::Plain { result: Ok(domain) } => tables(
-            domain.output_table(),
-            domain.log_table(false),
-            domain.log_table(true),
-        ),
+        BuildOutcome::Plain { result: Ok(domain) } => tables(domain),
         BuildOutcome::Project {
             result: Ok(domain), ..
-        } => tables(
-            domain.output_table(),
-            domain.log_table(false),
-            domain.log_table(true),
-        ),
+        } => tables(domain),
+        // A producer graph returns its entry specification's run report.
         BuildOutcome::Producer { projection, .. } => match &projection.result {
-            Ok(root) => tables(
-                root.output_table(),
-                root.log_table(false),
-                root.log_table(true),
+            Ok(root) => (
+                root.output_table().map(Table::from_adapter),
+                root.report_table().map(Table::from_adapter),
             ),
-            Err(_) => (None, None, None),
+            Err(_) => (None, None),
         },
-        _ => (None, None, None),
-    }
-}
-
-fn domain_logs(domain: &yamaa_adapters::file_application::Domain, warning: bool) -> Option<&[u8]> {
-    if warning {
-        domain.warning_log()
-    } else {
-        domain.verification_log()
+        _ => (None, None),
     }
 }
 
@@ -977,9 +1075,9 @@ impl ResolvedSpecification {
         self.inner.entry()
     }
 
-    /// Borrow the explicit environment identity, when present.
-    pub fn environment(&self) -> Option<&str> {
-        self.inner.environment()
+    /// Borrow the explicit project identity, when present.
+    pub fn project(&self) -> Option<&str> {
+        self.inner.project()
     }
 }
 
@@ -1048,6 +1146,7 @@ mod tests {
         assert!(!report.is_empty());
         let build = engine.build(&request, &token).unwrap();
         assert!(build.output().is_none());
+        assert!(build.run_report().is_none());
         assert!(!build.report().is_empty());
         assert!(build.observations(false).is_none());
         assert!(build.preparation_sources().is_empty());
@@ -1150,7 +1249,10 @@ mod plain_build_tests {
         let output = build.output().unwrap();
         assert_eq!(output.rows(), 2);
         assert!(build.output_bytes().is_some());
-        assert!(build.log(false).is_none());
+        // One run, input, base and two column rows; no handler or check.
+        let report = build.run_report().unwrap();
+        assert_eq!(report.rows(), 5);
+        assert!(build.run_report_bytes().is_some());
         assert!(build.observations(false).is_some());
         assert!(build.observations(true).is_some());
         assert_eq!(build.save().unwrap(), SaveOutcome::Saved);

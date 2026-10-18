@@ -3,7 +3,9 @@
 use crate::{
     issue_rows::Issue,
     project_source::{CaptureFailure, Origin, RejectedEnvironment},
-    specification_source::{CapturedDocument, CapturedFindings, Error as SourceError},
+    specification_source::{
+        CapturedDocument, CapturedFindings, CapturedSchema, Error as SourceError,
+    },
 };
 use yamaa_core::{
     diagnostic::Diagnostic,
@@ -37,30 +39,46 @@ fn issues(diagnostics: Vec<Diagnostic>) -> Result<Vec<Issue>, Error> {
         .collect::<Result<Vec<_>, _>>()?;
     Ok(issues)
 }
-/// Resolve failed inline scalars from the exact held root, preserving full paths.
+/// Resolve failed inline scalars from the exact held project root, preserving
+/// full paths.
 pub fn scalar_root(
     root_document: &CapturedDocument,
     findings: &[yamaa_core::project_function_document::Finding],
 ) -> Result<Vec<Issue>, Error> {
-    root_scalars(root_document, findings, None)
-}
-/// Complete independent root obligations before projecting failed inline scalars.
-/// Host selection is explicit; authored lock syntax still requires capture.
-pub fn scalar_root_with_host(
-    root_document: &CapturedDocument,
-    findings: &[yamaa_core::project_function_document::Finding],
-    host: yamaa_core::project_function::Language,
-) -> Result<Vec<Issue>, Error> {
-    root_scalars(root_document, findings, Some(host))
-}
-fn root_scalars(
-    root_document: &CapturedDocument,
-    findings: &[yamaa_core::project_function_document::Finding],
-    host: Option<yamaa_core::project_function::Language>,
-) -> Result<Vec<Issue>, Error> {
-    let report = projection::admit_root_scalars(root(root_document), findings, host)
-        .map_err(projection_error)?;
+    let report =
+        projection::admit_root_scalars(root(root_document), findings).map_err(projection_error)?;
     issues(report.diagnostics().map_err(projection_error)?)
+}
+/// The projection origin of one captured dependency. A lock carries no document.
+fn origin(origin: &Origin) -> Option<projection::Origin<'_>> {
+    match origin {
+        Origin::Environment(language) => Some(projection::Origin::Environment(language.key())),
+        Origin::Function(name) => Some(projection::Origin::Function(name)),
+        Origin::Codelist(index) => Some(projection::Origin::Codelist(*index)),
+        Origin::Lock => None,
+    }
+}
+/// Codelist sources share the project schema; the environment file and its
+/// function files share the environment schema.
+fn same_schema<E>(
+    rejected: &RejectedEnvironment<E>,
+    origin: &Origin,
+    schema: &CapturedSchema,
+) -> bool {
+    match origin {
+        Origin::Codelist(_) => std::ptr::eq(schema, rejected.root.schema().as_ref()),
+        Origin::Function(_) => rejected
+            .environment_file
+            .as_ref()
+            .is_some_and(|environment| std::ptr::eq(schema, environment.schema().as_ref())),
+        // A failed environment file has no retained sibling to compare, so its
+        // captured schema must at least be an environment root.
+        Origin::Environment(_) => {
+            schema.structure().root_class().name == "environment_class"
+                && rejected.environment_file.is_none()
+        }
+        Origin::Lock => false,
+    }
 }
 /// Independent failed external scalars retain their own captured arenas. Other
 /// capture failures remain available to their typed boundary projections.
@@ -69,9 +87,7 @@ pub fn scalar_sources<E>(rejected: &RejectedEnvironment<E>) -> Result<Vec<Issue>
         let CaptureFailure::Scalar { document, .. } = &source.error else {
             continue;
         };
-        if !std::sync::Arc::ptr_eq(document.schema(), rejected.root.schema())
-            || matches!(source.origin, Origin::Lock)
-        {
+        if !same_schema(rejected, &source.origin, document.schema()) {
             return Err(Error::InvalidOrigin);
         }
     }
@@ -79,22 +95,21 @@ pub fn scalar_sources<E>(rejected: &RejectedEnvironment<E>) -> Result<Vec<Issue>
         let CaptureFailure::Scalar { document, findings } = &source.error else {
             return None;
         };
-        let origin = match &source.origin {
-            Origin::Function(name) => projection::Origin::Function(name),
-            Origin::Codelist(index) => projection::Origin::Codelist(*index),
-            Origin::Lock => return None,
-        };
         Some(projection::ScalarSource {
             capture: projection::Capture {
-                origin,
+                origin: origin(&source.origin)?,
                 document: &document.normalized().document,
                 identity: &document.source().identity,
             },
             findings,
         })
     });
-    let report = projection::admit_scalar_sources(root(&rejected.root), sources)
-        .map_err(projection_error)?;
+    let report = projection::admit_scalar_sources(
+        root(&rejected.root),
+        rejected.environment_file.as_ref().map(root),
+        sources,
+    )
+    .map_err(projection_error)?;
     issues(report.diagnostics().map_err(projection_error)?)
 }
 
@@ -136,16 +151,10 @@ pub fn schema_sources<E>(rejected: &RejectedEnvironment<E>) -> Result<Vec<Issue>
         let CaptureFailure::Structural(SourceError::Findings(captured)) = &source.error else {
             continue;
         };
-        if !std::ptr::eq(captured.schema(), rejected.root.schema().as_ref()) {
+        if !same_schema(rejected, &source.origin, captured.schema()) {
             return Err(Error::InvalidOrigin);
         }
-        let declaration = match &source.origin {
-            Origin::Function(name) => {
-                format!("functions.{name}")
-            }
-            Origin::Codelist(index) => format!("codelists[{index}]"),
-            Origin::Lock => return Err(Error::InvalidOrigin),
-        };
+        let declaration = metadata_path(&source.origin);
         schema_issues(
             captured,
             &rejected.root.source().identity,
@@ -157,6 +166,7 @@ pub fn schema_sources<E>(rejected: &RejectedEnvironment<E>) -> Result<Vec<Issue>
 }
 fn metadata_path(origin: &Origin) -> String {
     match origin {
+        Origin::Environment(language) => format!("environments.{}", language.key()),
         Origin::Lock => "lock".into(),
         Origin::Function(name) => format!("functions.{name}"),
         Origin::Codelist(index) => format!("codelists[{index}]"),
@@ -351,20 +361,15 @@ pub fn admission<E>(rejected: &RejectedEnvironment<E>) -> Result<Vec<Issue>, Err
         return Ok(vec![]);
     };
     for capture in &rejected.captures {
-        if matches!(capture.origin, Origin::Lock)
-            || !std::sync::Arc::ptr_eq(capture.document.schema(), rejected.root.schema())
+        if matches!(capture.origin, Origin::Lock | Origin::Environment(_))
+            || !same_schema(rejected, &capture.origin, capture.document.schema())
         {
             return Err(Error::InvalidOrigin);
         }
     }
     let captures = rejected.captures.iter().filter_map(|capture| {
-        let origin = match &capture.origin {
-            Origin::Function(name) => projection::Origin::Function(name),
-            Origin::Codelist(index) => projection::Origin::Codelist(*index),
-            Origin::Lock => return None,
-        };
         Some(projection::Capture {
-            origin,
+            origin: origin(&capture.origin)?,
             document: &capture.document.normalized().document,
             identity: &capture.document.source().identity,
         })
@@ -372,6 +377,7 @@ pub fn admission<E>(rejected: &RejectedEnvironment<E>) -> Result<Vec<Issue>, Err
     let report = projection::admit_admission(
         projection::Admission {
             root: root(&rejected.root),
+            environment: rejected.environment_file.as_ref().map(root),
             draft: &rejected.draft,
             function_origins: &rejected.origins.functions,
             codelist_origins: &rejected.origins.codelists,
@@ -403,9 +409,9 @@ mod tests {
     #[test]
     fn retained_structural_and_preparation_limits_refuse_the_complete_metadata_projection() {
         let project_source::Failure::Rejected(mut rejected) = project_source::prepare(
-            crate::shipped_schema::capture_environment().unwrap(),
+            crate::shipped_schema::capture_project().unwrap(),
             Source {
-                identity: "held/environment.yaml".into(),
+                identity: "held/project.yaml".into(),
                 bytes: b"schema_version: '1.0'\ncodelists: [missing.yaml, ct.yaml]\n".to_vec(),
             },
             Language::Python,

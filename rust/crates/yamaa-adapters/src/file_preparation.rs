@@ -119,7 +119,7 @@ impl FileSpecification {
                 crate::source_profile_inspection::inspect(document, &resources, dataset, path)
             })
             .map_err(Error::Compile)?;
-        let findings = crate::verification_logs::location_findings(&resources, &run);
+        let findings = crate::run_report::location_findings(&resources, &run);
         if !findings.is_empty() {
             return Err(Error::Compile(crate::specification_run::Error::Prepare(
                 yamaa_core::specification::PrepareError::Invalid(findings),
@@ -136,7 +136,7 @@ impl FileSpecification {
                 crate::source_profile_inspection::inspect(document, &resources, dataset, path)
             })
             .and_then(|run| {
-                let findings = crate::verification_logs::location_findings(&resources, &run);
+                let findings = crate::run_report::location_findings(&resources, &run);
                 if findings.is_empty() {
                     Ok(run)
                 } else {
@@ -738,10 +738,7 @@ mod inventory_rejection_tests {
             resources: Resources::for_entry(&base).unwrap(),
         }));
         assert_eq!(
-            crate::project_application::selection_failure(
-                &rejected,
-                yamaa_core::project_function::Language::Python,
-            ),
+            crate::project_application::selection_failure(&rejected),
             crate::file_application::preparation_failure(error().into_message())
         );
     }

@@ -201,7 +201,6 @@ pub struct Application<P: Ports> {
     specifications: Vec<P::Specification>,
     artifacts: Vec<Artifact<P::Target>>,
     failed: bool,
-    saved: bool,
 }
 pub struct Attempt<P: Ports> {
     pub application: Application<P>,
@@ -219,7 +218,6 @@ impl<P: Ports> Application<P> {
             specifications: Vec::new(),
             artifacts: Vec::new(),
             failed: false,
-            saved: false,
         };
         let outcome = application.prepare_inner(
             ports,
@@ -259,27 +257,26 @@ impl<P: Ports> Application<P> {
             Failure::Metadata(vec![Finding::cause(
                 ConditionCode::SubmissionMetadataMissing,
                 standard,
-                "invalid closed environment submission declarations",
+                "invalid closed project submission declarations",
             )])
         })?;
-        let study = crate::define_diagnostics::required(declarations.study(), "study", "study")
-            .map_err(|finding| Failure::Metadata(vec![finding]))?;
-        let section = crate::define_diagnostics::required(
+        // A run needs only a section's specifications. Submission composition
+        // additionally requires the study, the selected section and its guide
+        // and target, and reports every one that is missing together.
+        let required = composition::Required::admit(
+            declarations.study(),
             declarations
                 .sections()
                 .iter()
                 .find(|section| section.family == family),
-            standard,
-            standard,
+            family,
         )
-        .map_err(|finding| Failure::Metadata(vec![finding]))?;
+        .map_err(Failure::Metadata)?;
+        let section = required.section;
+        let define = required.define;
         let identity = environment.source;
         let define_location = ports
-            .location(
-                &format!("{standard}.define"),
-                identity,
-                &section.define.value,
-            )
+            .location(&format!("{standard}.define"), identity, &define.value)
             .map_err(Failure::Port)?;
         let mut locations = Vec::new();
         let mut hrefs = Vec::new();
@@ -306,7 +303,7 @@ impl<P: Ports> Application<P> {
                 )
                 .map_err(Failure::Port)?;
             let written_json = ports.json_written(origin.written);
-            let reference = if section.dataset_json.value {
+            let reference = if section.dataset_json() {
                 ports
                     .location(
                         &format!("{path}.dataset_json"),
@@ -317,7 +314,7 @@ impl<P: Ports> Application<P> {
             } else {
                 artifact.clone()
             };
-            if section.dataset_json.value && !ports.same_parent(&reference, &define_location) {
+            if section.dataset_json() && !ports.same_parent(&reference, &define_location) {
                 return Err(Failure::Metadata(vec![crate::define_diagnostics::admit_relation(
                     crate::define_diagnostics::TargetRelation::DatasetJsonOutsidePackage,
                     &path, &format!("Dataset-JSON {reference} and Define {define_location} require parent traversal in their mutual references"),
@@ -333,7 +330,7 @@ impl<P: Ports> Application<P> {
                     .unwrap_err(),
                 ]));
             }
-            if section.dataset_json.value {
+            if section.dataset_json() {
                 if let Some(conflict) = targets
                     .iter()
                     .find(|target| ports.same_location(target, &reference))
@@ -353,7 +350,7 @@ impl<P: Ports> Application<P> {
                     ]));
                 }
             }
-            if section.dataset_json.value {
+            if section.dataset_json() {
                 targets.push(reference.clone());
             }
             let href = ports
@@ -401,8 +398,7 @@ impl<P: Ports> Application<P> {
             })
             .collect();
         let composed = composition::compose(
-            study,
-            section,
+            required,
             environment.catalogue,
             &inputs,
             installed,
@@ -414,7 +410,7 @@ impl<P: Ports> Application<P> {
         ports
             .verify_metadata(standard, identity)
             .map_err(Failure::Port)?;
-        if section.dataset_json.value {
+        if section.dataset_json() {
             for ((dataset, (declaring, written, json)), location) in
                 composed.datasets().iter().zip(&outputs).zip(&locations)
             {
@@ -496,14 +492,10 @@ impl<P: Ports> Application<P> {
             }
         }
         let target = ports
-            .target(
-                &format!("{standard}.define"),
-                identity,
-                &section.define.value,
-            )
+            .target(&format!("{standard}.define"), identity, &define.value)
             .map_err(Failure::Port)?;
         self.artifacts.push(Artifact {
-            written: section.define.value.clone(),
+            written: define.value.clone(),
             target,
             bytes: xml,
             state: PublicationState::Ready,
@@ -571,9 +563,6 @@ impl<P: Ports> Application<P> {
         if self.failed {
             return Err(SaveFailure::Refused);
         }
-        if self.saved {
-            return Ok(false);
-        }
         let mut publishers = match self.preflight(ports) {
             Ok(publishers) => publishers,
             Err(failure) => {
@@ -591,7 +580,6 @@ impl<P: Ports> Application<P> {
             }
             artifact.state = PublicationState::Published;
         }
-        self.saved = true;
         Ok(true)
     }
 }

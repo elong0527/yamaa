@@ -1,4 +1,4 @@
-"""Installed metadata, native project results and original failure retention."""
+"""Installed metadata, native project results and original failure facts."""
 
 import json
 import tempfile
@@ -27,23 +27,21 @@ class InstalledLockedHostCapabilities(unittest.TestCase):
             side_effect=AssertionError("lock verification must not import called code"),
         ):
             for _ in range(2):
-                self.assertEqual(host.verify_versions(raw, ["yamaa.domain"]), ())
+                self.assertEqual(host.verify_versions(raw, ["yamaa.spec"]), ())
             wrong = raw.replace(
                 f'version = "{installed_version}"'.encode(),
                 b'version = "999999.0"',
             )
             self.assertEqual(
-                host.verify_versions(wrong, ["yamaa.domain"]),
+                host.verify_versions(wrong, ["yamaa.spec"]),
                 (
                     host.Finding(
                         "yamaa", "version_mismatch", ("999999.0",), installed_version
                     ),
                 ),
             )
-        bound = host.resolve_callable(
-            "yamaa.domain", ["specification", "environment", "resolver"]
-        )
-        self.assertIs(bound, __import__("yamaa").domain)
+        bound = host.resolve_callable("yamaa.spec", ["path"])
+        self.assertIs(bound, __import__("yamaa").spec)
 
     def test_normally_installed_project_wheel_is_checked_before_import_and_binding(
         self,
@@ -190,7 +188,7 @@ class InstalledLockedHostCapabilities(unittest.TestCase):
                 self.assertEqual(sys.modules[module].calls, [(1, 100)])
                 (root / "uv.lock").write_bytes(raw)
                 (root / "environment.yaml").write_text(
-                    "schema_version: '1.0'\nlanguage: python\nlock: uv.lock\nfunctions:\n"
+                    "schema_version: '1.0'\nlock: uv.lock\nfunctions:\n"
                     "  add:\n    function: yamaa_lock_witness_programs.calculate\n"
                     "    description: Add a declared default.\n"
                     "    params: [{name: x, type: int}, {name: y, type: int, required: false, default: 100}]\n"
@@ -209,18 +207,29 @@ class InstalledLockedHostCapabilities(unittest.TestCase):
                     "output: {path: result.csv, columns: [x, V]}\n",
                     encoding="ascii",
                 )
+                (root / "project.yaml").write_text(
+                    "schema_version: '1.0'\nenvironments: {python: environment.yaml}\n"
+                    "adam: {specs: [domain.yaml]}\n",
+                    encoding="ascii",
+                )
                 (root / "input.csv").write_bytes(b"x\n1\n")
                 sys.modules.pop(module)
                 marker.unlink()
-                specification, environment = (
+                specification, environment, project = (
                     root / "domain.yaml",
                     root / "environment.yaml",
+                    root / "project.yaml",
                 )
-                checked = yamaa.check(specification, environment=environment)
+
+                def listed():
+                    return yamaa.project(project).spec("TEST")
+
+                checked = listed().check()
                 self.assertTrue(checked.issues.is_empty(), checked.issues)
                 self.assertNotIn(module, sys.modules)
                 self.assertFalse(marker.exists())
-                first = yamaa.domain(specification, environment=environment)
+                first = listed().run()
+                # No project failure: the run has no issues at all.
                 self.assertTrue(first.issues.is_empty(), first.issues)
                 self.assertEqual(
                     first.output.to_dict(as_series=False), {"x": [1], "V": [101]}
@@ -237,19 +246,18 @@ class InstalledLockedHostCapabilities(unittest.TestCase):
                 )
                 self.assertEqual(evidence["tests"][2]["actual"], {"missing": None})
                 self.assertFalse(evidence["tests"][2]["invoked"])
-                self.assertEqual(first._native.project_failures(), [])
                 self.assertEqual(
                     sys.modules[module].calls,
                     [(1, 100), (-9223372036854775808, 100), (1, 100)],
                 )
                 self.assertFalse((root / "result.csv").exists())
                 for _ in range(2):
-                    self.assertTrue(first.save())
+                    first.save()
                     self.assertEqual(
                         (root / "result.csv").read_bytes(), b"x,V\n1,101\n"
                     )
                 self.assertEqual(len(sys.modules[module].calls), 3)
-                second = yamaa.domain(specification, environment=environment)
+                second = listed().run()
                 self.assertTrue(second.issues.is_empty(), second.issues)
                 self.assertEqual(
                     second.output.to_dict(as_series=False), {"x": [1], "V": [101]}
@@ -259,7 +267,7 @@ class InstalledLockedHostCapabilities(unittest.TestCase):
                     json.loads(first._native.observations())["activation"], evidence
                 )
                 (root / "uv.lock").write_bytes(bad)
-                rejected = yamaa.domain(specification, environment=environment)
+                rejected = listed().run()
                 self.assertIsNone(rejected.output)
                 self.assertEqual(
                     rejected.issues["condition"].to_list(),
@@ -278,16 +286,8 @@ class InstalledLockedHostCapabilities(unittest.TestCase):
                     with self.subTest(stage=stage):
                         package.calls.clear()
                         package.failure, package.failure_after = original, after
-                        failed = yamaa.domain(specification, environment=environment)
+                        failed = listed().run()
                         self.assertIsNone(failed.output)
-                        failures = failed._native.project_failures()
-                        self.assertTrue(failures)
-                        self.assertTrue(
-                            all(
-                                held_stage == stage and held is original
-                                for held_stage, held in failures
-                            )
-                        )
                         report = json.loads(failed._native.observations())
                         issues = failed.issues.to_dicts()
                         self.assertTrue(issues)
@@ -310,27 +310,25 @@ class InstalledLockedHostCapabilities(unittest.TestCase):
                                 ["passed"] * 4,
                             )
                             self.assertEqual(len(report["source_reads"]), 1)
+                        # The original host exception's class and message
+                        # survive as the failure's facts.
                         self.assertEqual(context["host_error"], "ValueError")
                         self.assertEqual(context["host_message"], str(original))
                         gc.collect()
-                        self.assertTrue(
-                            all(
-                                held is original
-                                for _, held in failed._native.project_failures()
-                            )
-                        )
-                        with self.assertRaises(yamaa.DomainError):
+                        self.assertEqual(failed.issues.to_dicts(), issues)
+                        with self.assertRaises(yamaa.Error):
                             failed.save()
                 package.failure = None
                 specification.unlink()
                 environment.unlink()
+                project.unlink()
                 (root / "input.csv").unlink()
                 gc.collect()
                 for result in (first, second):
                     self.assertEqual(
                         result.output.to_dict(as_series=False), {"x": [1], "V": [101]}
                     )
-                    self.assertTrue(result.save())
+                    result.save()
                     self.assertEqual(
                         (root / "result.csv").read_bytes(), b"x,V\n1,101\n"
                     )
@@ -338,7 +336,7 @@ class InstalledLockedHostCapabilities(unittest.TestCase):
                     json.loads(first._native.observations())["activation"], evidence
                 )
                 print(
-                    "normally installed project wheel preserves public lock/import/default/i64/missing/callback identity and held saves"
+                    "normally installed project wheel preserves public lock/import/default/i64/missing/callback failure facts and held saves"
                 )
             finally:
                 sys.modules.pop(module, None)

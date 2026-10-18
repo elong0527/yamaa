@@ -123,6 +123,25 @@ fn parquet_source_and_artifact_share_one_capability() {
 }
 
 #[test]
+fn odm_reader_is_an_independent_capability() {
+    let path = std::env::temp_dir().join(format!("yamaa-format-odm-{}.xml", std::process::id()));
+    std::fs::write(&path, r#"<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3"/>"#).unwrap();
+    let result = yamaa_adapters::odm_xml::read(&path, &yamaa_core::odm_items::Options::default());
+    std::fs::remove_file(&path).unwrap();
+    #[cfg(feature = "odm")]
+    {
+        let table = result.unwrap();
+        assert_eq!(table.rows(), 0);
+        assert_eq!(table.columns().len(), yamaa_core::odm_items::COLUMNS.len());
+    }
+    #[cfg(not(feature = "odm"))]
+    assert!(matches!(
+        result,
+        Err(yamaa_adapters::odm_xml::Error::Unavailable)
+    ));
+}
+
+#[test]
 fn sas_reader_remains_independent_of_yaml_and_parquet() {
     let declaration = source(SourceProfile::Xport);
     let bytes = include_bytes!("fixtures/sas/fractional.xpt");

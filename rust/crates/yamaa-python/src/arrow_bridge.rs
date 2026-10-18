@@ -1,17 +1,6 @@
 //! Python Arrow PyCapsule protocol; no IPC serialization at the host boundary.
 use pyo3::{prelude::*, types::PyCapsule};
-use yamaa::{FFI_ArrowArrayStream, Table};
-
-/// A compliant Arrow PyCapsule exporter is a native-code trust boundary. Check
-/// the capsule's type and name before moving its owned standard stream header.
-pub(crate) fn take_stream(value: &Bound<'_, PyAny>) -> PyResult<FFI_ArrowArrayStream> {
-    let exported = value.call_method0("__arrow_c_stream__")?;
-    let capsule = exported.cast::<PyCapsule>()?;
-    let pointer = capsule.pointer_checked(Some(c"arrow_array_stream"))?;
-    // SAFETY: the standard native exporter supplies an aligned stream header;
-    // moving clears release before the still-live capsule can destroy it.
-    Ok(unsafe { FFI_ArrowArrayStream::from_raw(pointer.as_ptr().cast()) })
-}
+use yamaa::Table;
 
 #[pyclass(frozen, module = "yamaa._native", name = "_ArrowTable")]
 pub struct ArrowTable {

@@ -39,12 +39,6 @@ def stage(runtime, destination):
     ]
     directories = [destination / "host-fixtures"]
     if runtime == "python":
-        copies += [
-            (
-                ROOT / "python/tests/odm/_odm_documents.py",
-                destination / "odm_documents.py",
-            ),
-        ]
         directories += [
             destination / name
             for name in (

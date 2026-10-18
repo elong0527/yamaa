@@ -306,6 +306,10 @@ pub(crate) fn activation_origins(
         return Err(report::Error::InvalidObservation);
     }
     let entry = captured.root().source().identity.as_str();
+    // Inline functions are declared by the linked environment file.
+    let declaring = captured
+        .environment_file()
+        .map_or(entry, |file| file.source().identity.as_str());
     let external = captured
         .captures()
         .iter()
@@ -336,7 +340,7 @@ pub(crate) fn activation_origins(
             .get(selected)
             .ok_or(report::Error::InvalidObservation)?;
         let external = external.get(name.as_str()).copied();
-        let source = external.unwrap_or(entry);
+        let source = external.unwrap_or(declaring);
         metadata.push((source, declaration, external.is_some()));
     }
     issues
@@ -704,7 +708,15 @@ pub fn build_result<'a, C, E>(
     report::set_diagnostics(&mut result, diagnostics);
     result["verifications"] = json!(verifications);
     result["activation"] = activation;
-    Ok(report::prepare_result(run, execution, id, result)?)
+    let facts = crate::run_report::RunFacts::captured(
+        &attempt.dataset.sources,
+        attempt
+            .dataset
+            .result
+            .as_ref()
+            .map_or(&[], |dataset| dataset.template_rows.as_slice()),
+    );
+    Ok(report::prepare_result(run, execution, id, result, &facts)?)
 }
 
 #[cfg(test)]

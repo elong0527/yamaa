@@ -39,15 +39,12 @@ engine, and benchmark.
 
 ## From ODM XML to SDTM and ADaM
 
-The Python package's `read_odm` helper reads ODM XML extracted from the EDC
-system into one long-form clinical-item table, and `write_odm_parquet` saves
-that table as Parquet. Each row represents one recorded item and retains the
-item's study, event, form, and item-group context. A yamaa specification, run
-from either package, reads the transformed data
+The engine reads ODM XML extracted from the EDC system and transforms it into
+one long-form clinical-item table. Each row represents one recorded item and
+retains the item's study, event, form, and item-group context. A yamaa
+specification, run from either package, reads the transformed data
 ([example](https://elong0527.github.io/yamaa/benchmark/sdtm-dm-basic.html))
-and derives SDTM and ADaM datasets. The R package has no ODM XML reader in
-0.4.0: convert ODM with Python's `write_odm_parquet`, then read the Parquet
-file in R ([#2933](https://github.com/elong0527/yamaa/issues/2933)).
+and derives SDTM and ADaM datasets.
 
 ## Inheritance
 
@@ -116,10 +113,11 @@ R is distributed as a standalone source tarball attached to its
 ```r
 install.packages("yamaa_0.4.0.tar.gz", repos = NULL, type = "source")
 library(yamaa)
-result <- yamaa_domain("spec.yaml")
-result$output
-yamaa_check("spec.yaml")$issues
-result$save()
+spec <- yamaa_spec("spec.yaml")
+spec$check()$issues    # check the specification without reading data
+run <- spec$run()      # build the dataset in memory
+run$output
+run$save()             # write adsl.csv
 ```
 
 Source installation requires R 4.6.1, Rust 1.90 or later with Cargo, and platform build tools.
@@ -131,6 +129,7 @@ publication are later distribution work.
 ## Where to go next
 
 - New here? [Introduction](https://elong0527.github.io/yamaa/articles/intro/) explains the model in five minutes.
+- Running specifications? [R and Python API](https://elong0527.github.io/yamaa/articles/api/) shows every call in both languages.
 - Coming from Excel specs? [Excel to yamaa](https://elong0527.github.io/yamaa/articles/excel/) translates what you already know.
 - Looking for worked examples? [Benchmarks](https://elong0527.github.io/yamaa/benchmark/) illustrate the ideas.
 - Developing the engine? [Contributing](CONTRIBUTING.md) describes the shared architecture and checks; [release guidance](docs/release.md) records supported platforms and migration notes.

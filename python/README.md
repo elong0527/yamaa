@@ -11,9 +11,22 @@ standardization.
 
 Runs yamaa specifications that transform ODM XML data into SDTM and ADaM
 datasets, and generates define.xml, with the same Rust engine as the
-[R package](https://github.com/elong0527/yamaa/tree/yamaa-v0.4.0/R/yamaa). See the
-[Python package documentation](https://github.com/elong0527/yamaa/blob/yamaa-v0.4.0/docs/articles/python.md)
-for usage.
+[R package](https://github.com/elong0527/yamaa/tree/yamaa-v0.4.0/R/yamaa):
+
+```python
+import yamaa
+
+project = yamaa.project("project.yaml")
+run = project.spec("DM").run()      # one dataset, built in memory
+run.output, run.issues, run.report
+run.save()                          # write the dataset and its run report
+project.run("adam").save()          # every ADaM dataset
+```
+
+The [R and Python API](https://elong0527.github.io/yamaa/articles/api/) page
+describes every call, and the
+[introduction](https://elong0527.github.io/yamaa/articles/intro/) explains the
+specification language.
 
 ## Installation
 

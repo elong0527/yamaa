@@ -19,7 +19,7 @@ pub struct PublicTable {
     rows: usize,
 }
 impl PublicTable {
-    /// Materialize the checked output/log projection once into sanitized Arrow
+    /// Materialize the checked output/report projection once into sanitized Arrow
     /// arrays. No IPC byte encoding or decoding is part of this host handoff.
     pub(crate) fn from_table<T: TableAccess<Error = std::convert::Infallible>>(
         table: &T,
@@ -43,6 +43,37 @@ impl PublicTable {
             ipc_table::table_batches(table, Some(projection))?.collect::<Result<Vec<_>, _>>()?;
         let snapshot = ArrowTable::try_new(logical, batches).map_err(|_| Error::InvalidTable)?;
         Self::from_snapshot(&snapshot)
+    }
+    /// Construct an engine-built auxiliary table, such as the ODM clinical-item
+    /// table or an issues table, from batches the engine assembled itself.
+    /// Specification outputs keep `from_table`/`from_snapshot`, which admit only
+    /// the five column types of the language profile; this constructor accepts
+    /// any Arrow column type, including lists. Every batch must carry exactly
+    /// `schema`, and the table geometry stays within the fixed engine limits.
+    pub fn from_batches(schema: SchemaRef, batches: Vec<RecordBatch>) -> Result<Self, Error> {
+        let mut rows = 0_usize;
+        for batch in &batches {
+            if batch.schema().as_ref() != schema.as_ref() {
+                return Err(Error::InvalidTable);
+            }
+            rows = rows.checked_add(batch.num_rows()).ok_or(Error::Limit {
+                resource: "table_rows",
+                limit: yamaa_core::limits::Limits::TABLE_ROWS,
+                required: None,
+            })?;
+        }
+        yamaa_core::limits::Limits::table(rows, schema.fields().len()).map_err(|error| {
+            Error::Limit {
+                resource: error.resource,
+                limit: error.limit,
+                required: error.actual,
+            }
+        })?;
+        Ok(Self {
+            schema,
+            batches,
+            rows,
+        })
     }
     pub fn columns(&self) -> &arrow_schema::Fields {
         self.schema.fields()
@@ -154,5 +185,87 @@ impl PublicTable {
         writer.finish().map_err(|_| Error::Internal)?;
         drop(writer);
         Ok(bytes)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use arrow_array::builder::{Int64Builder, ListBuilder, StringBuilder};
+
+    fn issues_schema() -> SchemaRef {
+        Arc::new(Schema::new(vec![
+            Field::new(
+                "spec_paths",
+                DataType::List(Arc::new(Field::new_list_field(DataType::Utf8, true))),
+                true,
+            ),
+            Field::new(
+                "operand_route",
+                DataType::List(Arc::new(Field::new_list_field(DataType::Int64, true))),
+                true,
+            ),
+        ]))
+    }
+
+    fn issues_batch(schema: &SchemaRef, rows: usize) -> RecordBatch {
+        let mut paths = ListBuilder::new(StringBuilder::new());
+        let mut route = ListBuilder::new(Int64Builder::new());
+        for row in 0..rows {
+            paths.values().append_value(format!("columns[{row}]"));
+            paths.append(true);
+            route.values().append_value(row as i64);
+            route.values().append_value(-1);
+            route.append(true);
+        }
+        RecordBatch::try_new(
+            schema.clone(),
+            vec![Arc::new(paths.finish()), Arc::new(route.finish())],
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn engine_built_tables_admit_list_columns_and_count_rows_across_batches() {
+        let schema = issues_schema();
+        let table = PublicTable::from_batches(
+            schema.clone(),
+            vec![
+                issues_batch(&schema, 2),
+                issues_batch(&schema, 0),
+                issues_batch(&schema, 3),
+            ],
+        )
+        .unwrap();
+        assert_eq!(table.rows(), 5);
+        assert_eq!(table.batches().len(), 3);
+        assert_eq!(table.schema(), &schema);
+        assert!(matches!(
+            table.columns()[0].data_type(),
+            DataType::List(field) if field.data_type() == &DataType::Utf8
+        ));
+        let decoded =
+            arrow_ipc::reader::StreamReader::try_new(table.ipc().unwrap().as_slice(), None)
+                .unwrap()
+                .map(|batch| batch.unwrap().num_rows())
+                .sum::<usize>();
+        assert_eq!(decoded, 5);
+        let empty = PublicTable::from_batches(schema, Vec::new()).unwrap();
+        assert_eq!(empty.rows(), 0);
+    }
+
+    #[test]
+    fn engine_built_tables_refuse_a_batch_with_another_schema() {
+        let schema = issues_schema();
+        let other = Arc::new(Schema::new(vec![Field::new("ID", DataType::Utf8, true)]));
+        let batch = RecordBatch::try_new(
+            other,
+            vec![Arc::new(arrow_array::StringArray::from(vec![Some("x")]))],
+        )
+        .unwrap();
+        assert!(matches!(
+            PublicTable::from_batches(schema.clone(), vec![issues_batch(&schema, 1), batch]),
+            Err(Error::InvalidTable)
+        ));
     }
 }

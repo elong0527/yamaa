@@ -63,11 +63,15 @@ check_csv <- function(saved, empty) {
 }
 
 check_submission <- function(directory, profile, empty) {
-  document <- yamaa_define(file.path(directory, "environment.yaml"), "sdtm", created = truth$created)
+  document <- yamaa_project(file.path(directory, "project.yaml"))$submission("sdtm", created = truth$created)
   stopifnot(nrow(document$issues) == 0L)
-  unlink(file.path(directory, c("spec.yaml", "environment.yaml", paste0("output.", profile))))
-  stopifnot(identical(document$save(), TRUE), identical(document$save(), FALSE))
+  unlink(file.path(directory, c("spec.yaml", "project.yaml", paste0("output.", profile))))
+  stopifnot(is.null(document$save()))
   saved <- rawfile(file.path(directory, "output.json"))
+  # A repeated save rewrites the held bytes, so a changed file is restored.
+  writeBin(charToRaw("sentinel"), file.path(directory, "output.json"))
+  stopifnot(is.null(document$save()),
+            identical(rawfile(file.path(directory, "output.json")), saved))
   # bigint_as_char is required: R doubles cannot carry every signed-i64 value.
   data <- jsonlite::fromJSON(rawToChar(saved), simplifyVector = FALSE, bigint_as_char = TRUE)
   row_lines <- grep("^    \\[", strsplit(rawToChar(saved), "\n", fixed = TRUE)[[1L]], value = TRUE)
@@ -124,20 +128,21 @@ run_saved_readers <- function() {
     spec$output$path <- paste0("output.", profile)
     entry <- file.path(directory, "spec.yaml")
     writeLines(jsonlite::toJSON(spec, auto_unbox = TRUE, null = "null"), entry, useBytes = TRUE)
-    writeLines(jsonlite::toJSON(truth$environment, auto_unbox = TRUE), file.path(directory, "environment.yaml"), useBytes = TRUE)
+    # The fixture's study, codelists and sdtm section form the project file.
+    writeLines(jsonlite::toJSON(truth$environment, auto_unbox = TRUE), file.path(directory, "project.yaml"), useBytes = TRUE)
     input <- if (empty) paste0(strsplit(truth$input, "\n", fixed = TRUE)[[1L]][[1L]], "\n") else truth$input
     writeBin(charToRaw(enc2utf8(input)), file.path(directory, "input.csv"))
-    built <- yamaa_domain(entry)
+    built <- yamaa_spec(entry)$run()
     stopifnot(nrow(built$issues) == 0L)
     output <- file.path(directory, paste0("output.", profile))
     stopifnot(!file.exists(output))
     original <- rawfile(entry)
     unlink(file.path(directory, c("spec.yaml", "input.csv")))
-    stopifnot(identical(built$save(), TRUE))
+    stopifnot(is.null(built$save()))
     saved <- rawfile(output)
     for (attempt in 1:2) {
       if (profile == "csv") check_csv(saved, empty) else check_parquet(saved, empty)
-      stopifnot(identical(built$save(), TRUE), identical(rawfile(output), saved))
+      stopifnot(is.null(built$save()), identical(rawfile(output), saved))
     }
     writeBin(original, entry)
     check_submission(directory, profile, empty)

@@ -5,8 +5,7 @@ host_fixture_root <- if(file.exists("host-fixtures/reader.R")) "host-fixtures" e
 source(file.path(host_fixture_root,"reader.R"),local=TRUE)
 host_truth <- read_host_fixture(host_fixture_root,"file-resources")
 root <- system.file("specification-original", package="yamaa", mustWork=TRUE)
-source(file.path(root,"public-output-truth.R"),local=TRUE)
-observations <- get(".domain_observations",envir=asNamespace("yamaa"))
+observations <- function(run) yamaa:::.run_observations(run)
 rawfile <- function(path) readBin(path,"raw",n=file.info(path)$size)
 
 qualify_entry_relative_programs <- function(producer) {
@@ -27,8 +26,8 @@ qualify_entry_relative_programs <- function(producer) {
     program <- if(producer) "consumer" else "ordinary"
     writeLines(c("schema_version: '1.0'",paste0("parents: ../shared/",program,".yaml")),entry)
     writeBin(charToRaw(truth$producer_entry),file.path(study,"producer.yaml"))
-    stopifnot(nrow(yamaa_check(entry)$issues)==0L)
-    result <- yamaa_domain(entry)
+    stopifnot(nrow(yamaa_spec(entry)$check()$issues)==0L)
+    result <- yamaa_spec(entry)$run()
     stopifnot(nrow(result$issues)==0L,!file.exists(file.path(study,"output/result.csv")))
     results[[name]] <- result
   }
@@ -36,13 +35,10 @@ qualify_entry_relative_programs <- function(producer) {
   for(name in names(results)) {
     study <- file.path(work,name); unlink(file.path(study,"input"),recursive=TRUE)
     expected <- charToRaw(truth$studies[[name]])
-    for(attempt in 1:2) {
-      stopifnot(isTRUE(results[[name]]$save()),
-        identical(rawfile(file.path(study,"output/result.csv")),expected),
-        file.exists(file.path(study,"output/warnings.csv")),
-        file.exists(file.path(study,"output/verifications.csv")))
-      if(producer) stopifnot(identical(rawfile(file.path(study,"output/produced.csv")),expected))
-    }
+    stopifnot(is.null(results[[name]]$save()),
+      identical(rawfile(file.path(study,"output/result.csv")),expected),
+      file.exists(file.path(study,"output/report.csv")))
+    if(producer) stopifnot(identical(rawfile(file.path(study,"output/produced.csv")),expected))
   }
 }
 qualify_entry_relative_programs(FALSE)
@@ -103,14 +99,16 @@ fail_files <- function(case,failures) {
   }
 }
 failed <- function(actual,expected,case) {
-  stopifnot(identical(rawToChar(observations(actual)),expected),is.null(actual$output),
+  stopifnot(identical(observations(actual),expected),is.null(actual$output),
     identical(names(actual$issues),fixture_strings(host_truth[["issue_columns"]])),
-    is.character(actual$issues$context))
+    is.character(actual$issues$context),
+    all(vapply(actual$issues$source_span,is.null,logical(1))),
+    all(vapply(actual$issues$operand_route,is.null,logical(1))))
   invisible(gc())
   for(attempt in seq_len(2L)) {
     refusal <- tryCatch(actual$save(),error=identity)
-    stopifnot(inherits(refusal,"yamaa_domain_error"),
-      identical(rawToChar(observations(actual)),expected),!file.exists(file.path(case,"adsl.csv")))
+    stopifnot(inherits(refusal,"yamaa_error"),identical(refusal$issues,actual$issues),
+      identical(observations(actual),expected),!file.exists(file.path(case,"adsl.csv")))
   }
 }
 
@@ -123,7 +121,7 @@ for(i in seq_len(nrow(capture))) {
   owner <- new_case()
   fail_files(owner$case,causes[[name]])
   expected <- expected_report(inspection$expected[[match(name,inspection$case)]],owner$entry)
-  for(attempt in seq_len(2L)) failed(yamaa_domain(owner$entry),expected,owner$case)
+  for(attempt in seq_len(2L)) failed(yamaa_spec(owner$entry)$run(),expected,owner$case)
   unlink(owner$directory,recursive=TRUE)
 }
 cat("eight original physical capture configurations have complete public zero-read failures\n")
@@ -136,29 +134,31 @@ for(i in seq_len(nrow(inspection))) {
   # metadata condition and its order must survive before any byte capture.
   for(name in setdiff(names(paths),names(failures)))
     writeBin(as.raw(255L),file.path(owner$case,paths[[name]]))
-  stopifnot(nrow(yamaa_check(owner$entry)$issues)==0L)
+  stopifnot(nrow(yamaa_spec(owner$entry)$check()$issues)==0L)
   expected <- expected_report(inspection$expected[[i]],owner$entry)
-  for(attempt in seq_len(2L)) failed(yamaa_domain(owner$entry),expected,owner$case)
+  for(attempt in seq_len(2L)) failed(yamaa_spec(owner$entry)$run(),expected,owner$case)
   unlink(owner$directory,recursive=TRUE)
 }
 cat("seven complete physical metadata failures repeated before every study read passed\n")
 
 owner <- new_case()
-first <- yamaa_domain(owner$entry)
+spec <- yamaa_spec(owner$entry)
+first <- spec$run()
 expected <- lookup_report(owner$entry)
-stopifnot(identical(rawToChar(observations(first)),expected))
+stopifnot(identical(observations(first),expected))
 content <- rawfile(file.path(owner$case,paths[["DM"]]))
 unlink(file.path(owner$case,paths[["DM"]]))
 missing <- expected_report(inspection$expected[[match("missing_first",inspection$case)]],owner$entry)
-failed(yamaa_domain(owner$entry),missing,owner$case)
-stopifnot(identical(rawToChar(observations(first)),expected))
+failed(spec$run(),missing,owner$case)
+stopifnot(identical(observations(first),expected))
 writeBin(content,file.path(owner$case,paths[["DM"]]))
-stopifnot(identical(rawToChar(observations(yamaa_domain(owner$entry))),expected))
+stopifnot(identical(observations(spec$run()),expected))
 unlink(owner$directory,recursive=TRUE)
-cat("fresh public builds inspect current physical files and preserve previous owners passed\n")
+cat("fresh public runs inspect current physical files and preserve previous owners passed\n")
 
 owner <- new_case()
-first <- yamaa_domain(owner$entry)
+spec <- yamaa_spec(owner$entry)
+first <- spec$run()
 expected <- lookup_report(owner$entry)
 source <- file.path(owner$case,paths[["AE"]])
 content <- rawToChar(rawfile(source))
@@ -166,31 +166,30 @@ old <- "MYOCARDIAL INFARCTION,FATAL,150\n"
 stopifnot(length(gregexpr(old,content,fixed=TRUE)[[1L]])==1L,
   gregexpr(old,content,fixed=TRUE)[[1L]][[1L]]>0L)
 writeBin(charToRaw(sub(old,"MYOCARDIAL INFARCTION,FATAL,151\n",content,fixed=TRUE)),source)
-second <- yamaa_domain(owner$entry)
+second <- spec$run()
 stopifnot(nrow(second$issues)==0L,
-  identical(as.character(first$output$DTHDY),c("150","80",NA_character_,NA_character_)),
-  identical(as.character(second$output$DTHDY),c("151","80",NA_character_,NA_character_)),
-  identical(rawToChar(observations(first)),expected),identical(first$save(),TRUE),
+  identical(first$output$DTHDY,c(150,80,NA_real_,NA_real_)),
+  identical(second$output$DTHDY,c(151,80,NA_real_,NA_real_)),
+  identical(observations(first),expected),is.null(first$save()),
   identical(rawfile(file.path(owner$case,"adsl.csv")),rawfile(file.path(owner$case,"expected/adsl.csv"))))
 unlink(owner$directory,recursive=TRUE)
-cat("changed physical bytes affect fresh builds while prior output remains owned passed\n")
+cat("changed physical bytes affect fresh runs while prior output remains owned passed\n")
 
 owner <- new_case()
-actual <- yamaa_domain(owner$entry)
-stopifnot(identical(rawToChar(observations(actual)),lookup_report(owner$entry)),
-  identical(as.list(actual$output),public_output_truth[["schema-lookup"]]))
+actual <- yamaa_spec(owner$entry)$run()
+stopifnot(identical(observations(actual),lookup_report(owner$entry)),
+  identical(actual$output$USUBJID,c("01","02","03","04")),
+  identical(actual$output$DTHDY,c(150,80,NA_real_,NA_real_)))
 held <- actual$output
 golden <- rawfile(file.path(owner$case,"expected/adsl.csv"))
 expected <- lookup_report(owner$entry,TRUE)
 unlink(owner$entry);unlink(file.path(owner$case,"input"),recursive=TRUE);invisible(gc())
-for(attempt in seq_len(2L)) {
-  stopifnot(identical(actual$save(),TRUE),identical(rawfile(file.path(owner$case,"adsl.csv")),golden),
-    identical(rawToChar(observations(actual)),expected),identical(actual$output,held))
-}
+stopifnot(is.null(actual$save()),identical(rawfile(file.path(owner$case,"adsl.csv")),golden),
+  identical(observations(actual),expected),identical(actual$output,held))
 rm(actual);invisible(gc())
-stopifnot(identical(as.list(held),public_output_truth[["schema-lookup"]]))
+stopifnot(identical(held$DTHDY,c(150,80,NA_real_,NA_real_)))
 unlink(owner$directory,recursive=TRUE)
-cat("original complete lookup owner and two exact held Saves after files disappear passed\n")
+cat("original complete lookup owner and exact held save after files disappear passed\n")
 
 simple <- function(input) paste0("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n",
   "input: {SRC: ",json_text(input),"}\n",
@@ -203,9 +202,9 @@ writeBin(charToRaw("ID\n7\n"),source)
 entry <- file.path(case,"spec.yaml")
 for(written in c("../outside.csv",normalizePath(source,winslash="/"))) {
   writeBin(charToRaw(simple(written)),entry)
-  actual <- yamaa_domain(entry)
-  stopifnot(nrow(actual$issues)==0L,identical(as.character(actual$output$ID),"7"),
-    identical(actual$save(),TRUE),identical(rawfile(file.path(case,"result.csv")),charToRaw("ID\n7\n")))
+  actual <- yamaa_spec(entry)$run()
+  stopifnot(nrow(actual$issues)==0L,identical(actual$output$ID,7),
+    is.null(actual$save()),identical(rawfile(file.path(case,"result.csv")),charToRaw("ID\n7\n")))
 }
 unlink(directory,recursive=TRUE)
 cat("approved parent-relative and absolute public source paths passed\n")
@@ -216,13 +215,14 @@ linked <- suppressWarnings(file.symlink(file.path(directory,"source.csv"),file.p
 if(linked) {
   entry <- file.path(directory,"spec.yaml")
   writeBin(charToRaw(simple("alias.csv")),entry)
-  actual <- yamaa_domain(entry)
+  actual <- yamaa_spec(entry)$run()
   stopifnot(is.null(actual$output),identical(actual$issues$phase,"validation"),
     identical(actual$issues$condition,"resource_path_symlink"),
     identical(actual$issues$requirement,"REQ-0783"),
     identical(actual$issues$spec_paths,list("input.SRC.path")),
     identical(actual$issues$context,host_truth[["alias_context_json"]]),
-    inherits(tryCatch(actual$save(),error=identity),"yamaa_domain_error"),
+    is.null(actual$issues$source_span[[1L]]),is.null(actual$issues$operand_route[[1L]]),
+    inherits(tryCatch(actual$save(),error=identity),"yamaa_error"),
     !file.exists(file.path(directory,"result.csv")))
   cat("physical public symlink refusal retains complete native condition passed\n")
 } else cat("SKIP: host cannot create physical public symlink control\n")

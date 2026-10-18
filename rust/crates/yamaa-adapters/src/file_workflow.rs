@@ -4,6 +4,7 @@ use crate::{
     file_graph::{FileGraph, RejectedGraph},
     file_project::{self, FileProject, RejectedOrdinary},
     file_resources::Resources,
+    project_source::ProjectSchemas,
     specification_source::CapturedSchema,
 };
 use std::sync::Arc;
@@ -37,7 +38,7 @@ pub struct RejectedEnvironment {
     entry: Option<String>,
     environment: Option<String>,
     specification_schema: Arc<CapturedSchema>,
-    environment_schema: Arc<CapturedSchema>,
+    project_schemas: ProjectSchemas,
     resources: Resources,
 }
 impl RejectedEnvironment {
@@ -53,8 +54,8 @@ impl RejectedEnvironment {
     pub fn specification_schema(&self) -> &Arc<CapturedSchema> {
         &self.specification_schema
     }
-    pub fn environment_schema(&self) -> &Arc<CapturedSchema> {
-        &self.environment_schema
+    pub fn project_schemas(&self) -> &ProjectSchemas {
+        &self.project_schemas
     }
     pub fn captured_sources(&self) -> impl Iterator<Item = (String, &[u8])> {
         self.resources.captured_sources()
@@ -92,15 +93,15 @@ struct Configured {
     entry: String,
     environment: Option<String>,
     specification_schema: Arc<CapturedSchema>,
-    environment_schema: Arc<CapturedSchema>,
+    project_schemas: ProjectSchemas,
 }
 fn configure(specification: &str, environment: Option<&str>) -> Result<Configured, Error> {
-    let (resources, entry) =
+    let (mut resources, entry) =
         crate::file_configuration::resources(specification).map_err(Error::Configuration)?;
     // Public caller paths retain the established absolute-path policy. This is
     // a lexical fact; the first environment file is opened only after admission.
     let specification_schema = crate::shipped_schema::capture().map_err(Error::Schema)?;
-    let environment_schema = crate::shipped_schema::capture_environment().map_err(Error::Schema)?;
+    let project_schemas = crate::shipped_schema::capture_project().map_err(Error::Schema)?;
     let environment = match environment
         .map(crate::project_application::environment_path)
         .transpose()
@@ -112,17 +113,48 @@ fn configure(specification: &str, environment: Option<&str>) -> Result<Configure
                 entry: None,
                 environment: None,
                 specification_schema,
-                environment_schema,
+                project_schemas,
                 resources,
             })))
         }
     };
+    if let Some(environment) = environment.as_deref() {
+        resources.select_caller_parent(environment);
+    }
     Ok(Configured {
         resources,
         entry,
         environment,
         specification_schema,
-        environment_schema,
+        project_schemas,
+    })
+}
+
+/// One project file captured for project operations: the resources that read
+/// it, its admitted project and environment documents, and the specification
+/// schema that prepares the specifications its sections list.
+pub struct CapturedProject {
+    pub(crate) resources: Resources,
+    pub(crate) environment: crate::project_source::OwnedEnvironment,
+    pub(crate) schema: Arc<CapturedSchema>,
+}
+
+/// Capture a project file with the path policy, schemas and environment
+/// admission that a specification build applies to the same project file.
+pub fn capture_project(project: &str, host: Language) -> Result<CapturedProject, Error> {
+    let request = configure(project, Some(project))?;
+    let (resources, environment) = capture_environment(
+        request.resources,
+        &request.entry,
+        request.environment.as_deref(),
+        host,
+        Arc::clone(&request.specification_schema),
+        request.project_schemas,
+    )?;
+    Ok(CapturedProject {
+        resources,
+        environment,
+        schema: request.specification_schema,
     })
 }
 
@@ -137,7 +169,7 @@ pub fn prepare(specification: &str, environment: &str, host: Language) -> Result
             .expect("explicit environment"),
         host,
         request.specification_schema,
-        request.environment_schema,
+        request.project_schemas,
     )
 }
 
@@ -147,7 +179,7 @@ pub fn prepare_with_resources(
     environment: &str,
     host: Language,
     specification_schema: Arc<CapturedSchema>,
-    environment_schema: Arc<CapturedSchema>,
+    project_schemas: ProjectSchemas,
 ) -> Result<FileGraph, Error> {
     let (resources, environment) = capture_environment(
         resources,
@@ -155,7 +187,7 @@ pub fn prepare_with_resources(
         Some(environment),
         host,
         Arc::clone(&specification_schema),
-        environment_schema,
+        project_schemas,
     )?;
     FileGraph::capture_entry(resources, entry, environment, specification_schema)
         .and_then(FileGraph::prepare_captured)
@@ -208,7 +240,27 @@ pub fn select_request(
     request: yamaa_core::build::Request<'_>,
     host: Language,
 ) -> Result<Selected, SelectionError> {
-    yamaa_core::build::prepare(request, &mut Metadata { host })
+    select_request_mode(request, host, Producers::Built)
+}
+
+/// How a selected producer workflow treats its `schema` links.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Producers {
+    /// The graph builds every producer the links reach, entry last.
+    Built,
+    /// The graph builds the entry alone; each link reads a held or saved
+    /// artifact checked against its producer's contract, as a project run
+    /// builds each specification of its run scope.
+    Saved,
+}
+
+/// Select with an explicit producer mode; [`select_request`] builds them.
+pub fn select_request_mode(
+    request: yamaa_core::build::Request<'_>,
+    host: Language,
+    producers: Producers,
+) -> Result<Selected, SelectionError> {
+    yamaa_core::build::prepare(request, &mut Metadata { host, producers })
 }
 
 /// Host authority replaces physical lookup while all metadata preparation and
@@ -218,22 +270,34 @@ pub fn select_with_resolver(
     host: Language,
     resolver: Arc<dyn crate::host_resources::Resolver>,
 ) -> Result<Selected, SelectionError> {
+    select_with_resolver_mode(request, host, resolver, Producers::Built)
+}
+
+/// Select through a host resolver with an explicit producer mode.
+pub fn select_with_resolver_mode(
+    request: yamaa_core::build::Request<'_>,
+    host: Language,
+    resolver: Arc<dyn crate::host_resources::Resolver>,
+    producers: Producers,
+) -> Result<Selected, SelectionError> {
     let specification_schema = crate::shipped_schema::capture()
         .map_err(|error| SelectionError::Preparation(Error::Schema(error)))?;
-    let environment_schema = crate::shipped_schema::capture_environment()
+    let project_schemas = crate::shipped_schema::capture_project()
         .map_err(|error| SelectionError::Preparation(Error::Schema(error)))?;
-    select_with_optional_resources(
+    select_with_optional_resources_mode(
         Resources::with_resolver(resolver, request.specification),
         request.specification,
         request.environment,
         host,
         specification_schema,
-        environment_schema,
+        project_schemas,
+        producers,
     )
 }
 
 struct Metadata {
     host: Language,
+    producers: Producers,
 }
 impl yamaa_core::build::PreparationPort for Metadata {
     type Entry = crate::file_graph::CapturedEntry;
@@ -253,7 +317,7 @@ impl yamaa_core::build::PreparationPort for Metadata {
             request.environment.as_deref(),
             self.host,
             Arc::clone(&request.specification_schema),
-            request.environment_schema,
+            request.project_schemas,
         )
         .map_err(SelectionError::Preparation)?;
         FileGraph::capture_entry(
@@ -277,9 +341,12 @@ impl yamaa_core::build::PreparationPort for Metadata {
             .map_err(SelectionError::Ordinary)
     }
     fn producer(&mut self, entry: Self::Entry) -> Result<Self::Producer, SelectionError> {
-        FileGraph::prepare_captured(entry)
-            .map(Box::new)
-            .map_err(|error| SelectionError::Preparation(Error::Graph(error)))
+        match self.producers {
+            Producers::Built => FileGraph::prepare_captured(entry),
+            Producers::Saved => FileGraph::prepare_captured_saved(entry),
+        }
+        .map(Box::new)
+        .map_err(|error| SelectionError::Preparation(Error::Graph(error)))
     }
 }
 
@@ -289,7 +356,7 @@ pub fn select_with_resources(
     environment: &str,
     host: Language,
     specification_schema: Arc<CapturedSchema>,
-    environment_schema: Arc<CapturedSchema>,
+    project_schemas: ProjectSchemas,
 ) -> Result<Selected, SelectionError> {
     select_with_optional_resources(
         resources,
@@ -297,7 +364,7 @@ pub fn select_with_resources(
         Some(environment),
         host,
         specification_schema,
-        environment_schema,
+        project_schemas,
     )
 }
 
@@ -307,7 +374,27 @@ pub fn select_with_optional_resources(
     environment: Option<&str>,
     host: Language,
     specification_schema: Arc<CapturedSchema>,
-    environment_schema: Arc<CapturedSchema>,
+    project_schemas: ProjectSchemas,
+) -> Result<Selected, SelectionError> {
+    select_with_optional_resources_mode(
+        resources,
+        entry,
+        environment,
+        host,
+        specification_schema,
+        project_schemas,
+        Producers::Built,
+    )
+}
+
+fn select_with_optional_resources_mode(
+    resources: Resources,
+    entry: &str,
+    environment: Option<&str>,
+    host: Language,
+    specification_schema: Arc<CapturedSchema>,
+    project_schemas: ProjectSchemas,
+    producers: Producers,
 ) -> Result<Selected, SelectionError> {
     let has_environment = environment.is_some();
     let (resources, environment) = capture_environment(
@@ -316,12 +403,12 @@ pub fn select_with_optional_resources(
         environment,
         host,
         Arc::clone(&specification_schema),
-        environment_schema,
+        project_schemas,
     )
     .map_err(SelectionError::Preparation)?;
     let entry = FileGraph::capture_entry(resources, entry, environment, specification_schema)
         .map_err(|error| SelectionError::Preparation(Error::Graph(error)))?;
-    yamaa_core::build::select(entry, has_environment, &mut Metadata { host })
+    yamaa_core::build::select(entry, has_environment, &mut Metadata { host, producers })
 }
 
 fn capture_environment(
@@ -330,7 +417,7 @@ fn capture_environment(
     environment: Option<&str>,
     host: Language,
     specification_schema: Arc<CapturedSchema>,
-    environment_schema: Arc<CapturedSchema>,
+    project_schemas: ProjectSchemas,
 ) -> Result<(Resources, crate::project_source::OwnedEnvironment), Error> {
     let owned_entry = entry.to_owned();
     let owned_environment = environment.map(str::to_owned);
@@ -344,7 +431,7 @@ fn capture_environment(
         &mut resources,
         environment,
         host,
-        Arc::clone(&environment_schema),
+        project_schemas.clone(),
     ) {
         Ok(environment) => Ok((resources, environment)),
         Err(error) => Err(Error::Environment(Box::new(RejectedEnvironment {
@@ -352,7 +439,7 @@ fn capture_environment(
             entry: Some(owned_entry),
             environment: owned_environment,
             specification_schema,
-            environment_schema,
+            project_schemas,
             resources,
         }))),
     }
@@ -385,14 +472,14 @@ mod root_read_tests {
             entry: Some(configured.entry),
             environment: configured.environment,
             specification_schema: configured.specification_schema,
-            environment_schema: configured.environment_schema,
+            project_schemas: configured.project_schemas,
             resources: configured.resources,
         }));
         let Error::Environment(owner) = &rejection else {
             unreachable!()
         };
         let original = owner.error() as *const file_project::Error;
-        let issues = crate::producer_check::rejected(&rejection, Language::Python).unwrap();
+        let issues = crate::producer_check::rejected(&rejection).unwrap();
         assert_eq!(issues.len(), 1);
         let definition =
             yamaa_core::diagnostic::ConditionCode::ProjectEnvironmentMissing.definition();

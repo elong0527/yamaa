@@ -100,6 +100,30 @@ impl Publication {
     pub fn admission_failure(&self) -> Option<&AdmissionFailure> {
         self.targets.as_ref().err()
     }
+    /// Open the publisher of every artifact, without writing; the caller
+    /// checks them against other results' files before any save.
+    pub(crate) fn publishers(&self) -> Result<Vec<Publisher>, Vec<crate::issue_rows::Issue>> {
+        let targets = self.targets.as_ref().map_err(|failure| match failure {
+            AdmissionFailure::Resource { error, .. } => {
+                crate::file_application::resource_failure("output", error)
+            }
+            AdmissionFailure::Rejected(code) => crate::file_application::rejected("output", code),
+            AdmissionFailure::Incomplete => {
+                crate::file_application::rejected("output", "publication_incomplete")
+            }
+        })?;
+        self.prepared
+            .artifacts()
+            .iter()
+            .zip(targets)
+            .map(|(artifact, target)| {
+                target
+                    .target
+                    .publisher(artifact.path())
+                    .map_err(|error| crate::file_application::publication_failure(&error))
+            })
+            .collect()
+    }
     pub fn save_into(&self, attempt: &mut Attempt) {
         *attempt = Default::default();
         let Ok(targets) = &self.targets else {

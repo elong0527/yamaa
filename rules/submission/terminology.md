@@ -12,14 +12,14 @@ status: normative
 
 <a id="req-0926"></a>
 
-**REQ-0926.** A domain-build codelist is declared once in an environment codelist source
+**REQ-0926.** A domain-build codelist is declared once in a project codelist source
 and carries an `id` that is unique across all captured sources. A column names that `id` through `submission.codelist`. Columns share
 one codelist statement.
 
 <a id="req-0927"></a>
 
 **REQ-0927.** `name` is the codelist's human-readable name and is unique across
-all environment codelist sources. `id` and `name` are separate. `id` is what a
+all project codelist sources. `id` and `name` are separate. `id` is what a
 specification writes, and `name` is what a reader sees.
 
 <a id="req-0928"></a>
@@ -142,7 +142,7 @@ terminology.
 
 <a id="req-0946"></a>
 
-**REQ-0946.** Each generated document includes exactly the environment
+**REQ-0946.** Each generated document includes exactly the project
 codelists bound by its represented output columns, in their declaration order,
 and the controlled-terminology standards cited by those sources. Unbound
 codelists may serve another submission section and are omitted without an
@@ -168,9 +168,9 @@ values name the source SDTM domain or ADaM dataset, binds this vocabulary.
 ### Interface behavior
 
 The retained `define_class` format below remains available until #1758
-qualifies its replacement. Environment codelists use the same list and item
+qualifies its replacement. Project codelists use the same list and item
 fields except `standard`: that field belongs to the source under
-[REQ-0928](terminology.md#req-0928), and is absent from an environment list.
+[REQ-0928](terminology.md#req-0928), and is absent from a project list.
 
 <a id="req-1076"></a>
 

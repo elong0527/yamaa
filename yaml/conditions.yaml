@@ -44,6 +44,8 @@ conditions:
   duplicate_intermediate_records: {phases: [verification]}
   duplicate_key: {phases: [output]}
   duplicate_order_term: {phases: [validation]}
+  # REQ-1338
+  duplicate_specification_name: {phases: [validation]}
   empty_string_present_unsupported: {phases: [validation]}
   engine_rejected: {phases: [engine]}
   field_parse_failed: {phases: [ingest]}
@@ -96,9 +98,9 @@ conditions:
   missing_derivation: {phases: [validation]}
   missing_input: {phases: [cut, impute, mapping]}
   missing_key: {phases: [output]}
+  missing_report: {phases: [validation]}
   missing_required_field: {phases: [validation]}
   missing_value_required: {phases: [validation]}
-  missing_warning_log: {phases: [validation]}
   # REQ-0504; also emitted by the retained aggregate reference validator.
   mixed_relations: {phases: [validation]}
   model_contract_mismatch: {phases: [validation]}
@@ -126,6 +128,7 @@ conditions:
   pattern_mismatch: {phases: [validation]}
   phase_boundary: {phases: [validation]}
   producer_contract_mismatch: {phases: [validation]}
+  # REQ-1345
   producer_not_completed: {phases: [validation]}
   producer_output_path_mismatch: {phases: [validation]}
   producer_workflow_cycle: {phases: [validation]}
@@ -153,7 +156,6 @@ conditions:
   resource_path_uri_scheme: {phases: [validation]}
   row_count_changed: {phases: [derivation]}
   row_count_failed: {phases: [verification]}
-  runner_language_mismatch: {phases: [validation]}
   runtime_artifact_mismatch: {phases: [validation]}
   sas_name_too_long: {phases: [validation]}
   schema_version_mismatch: {phases: [validation]}
@@ -193,9 +195,13 @@ conditions:
   unknown_operation: {phases: [validation]}
   unknown_project_function: {phases: [validation]}
   unknown_reference: {phases: [validation]}
+  # REQ-1339
+  unknown_specification_name: {phases: [validation]}
   unknown_standard: {phases: [validation]}
   unknown_standard_family: {phases: [validation]}
   unknown_window: {phases: [validation]}
+  # REQ-1344
+  unlinked_producer: {phases: [validation]}
   unmapped_key: {phases: [mapping]}
   unmapped_value: {phases: [mapping]}
   unmatched_key: {phases: [join]}

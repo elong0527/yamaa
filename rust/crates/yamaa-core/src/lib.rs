@@ -28,6 +28,7 @@ pub mod match_value;
 pub mod numeric;
 pub mod numeric_compiler;
 pub mod numeric_parser;
+pub mod odm_items;
 pub mod odm_source;
 pub mod parquet_source;
 pub mod predicate;
@@ -36,9 +37,11 @@ pub mod predicate_parser;
 pub mod producer_admission;
 pub mod producer_contract;
 pub mod producer_graph;
+pub mod project_scope;
 pub mod reference_binding;
 pub mod reference_scope;
 pub mod resource;
+pub mod run_report;
 pub mod scalar_language;
 pub mod schema;
 pub mod source_ordinal;
@@ -56,7 +59,6 @@ pub mod text_replace;
 pub mod text_template;
 pub mod typed_csv;
 pub mod value;
-pub mod verification_logs;
 
 /// Version of the shared core compiled into a native installation.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -70,6 +72,7 @@ pub mod text_pad;
 pub mod project_call_binding;
 pub mod project_call_document;
 pub mod project_calls;
+pub mod project_document;
 pub mod project_environment;
 
 pub mod project_environment_document;

@@ -24,9 +24,15 @@ mod file {
                     NEXT.fetch_add(1, Ordering::Relaxed)
                 ));
                 fs::create_dir_all(directory.join("parent")).unwrap();
+                // A minimal project linking a Python environment file.
+                fs::write(
+                    directory.join("project.yaml"),
+                    "schema_version: '1.0'\nenvironments: {python: environment.yaml}\n",
+                )
+                .unwrap();
                 fs::write(
                     directory.join("environment.yaml"),
-                    "schema_version: '1.0'\nlanguage: python\n",
+                    "schema_version: '1.0'\n",
                 )
                 .unwrap();
                 Self(yamaa_adapters::canonical_path::canonicalize(directory).unwrap())
@@ -61,7 +67,7 @@ mod file {
                     None,
                     Language::Python,
                     shipped_schema::capture().unwrap(),
-                    shipped_schema::capture_environment().unwrap(),
+                    shipped_schema::capture_project().unwrap(),
                 )
                 .unwrap();
                 let Prepared::Plain(prepared) = &owner else {
@@ -108,7 +114,7 @@ mod file {
                 assert_eq!(
                     yamaa_adapters::project_application::check(
                         &study.identity("spec.yaml"),
-                        &study.identity("environment.yaml"),
+                        &study.identity("project.yaml"),
                         Language::Python,
                     ),
                     issues
@@ -135,7 +141,7 @@ mod file {
                 None,
                 Language::Python,
                 shipped_schema::capture().unwrap(),
-                shipped_schema::capture_environment().unwrap(),
+                shipped_schema::capture_project().unwrap(),
             )
             .unwrap();
             let Prepared::Plain(prepared) = &owner else {
@@ -165,7 +171,7 @@ mod file {
             assert_eq!(
                 yamaa_adapters::project_application::check(
                     &study.identity("spec.yaml"),
-                    &study.identity("environment.yaml"),
+                    &study.identity("project.yaml"),
                     Language::Python,
                 ),
                 issues
@@ -207,6 +213,17 @@ mod file {
                 #[cfg(windows)]
                 let path = path.replace('\\', "/");
                 path
+            }
+            /// Write a minimal project that links a functionless Python
+            /// environment file, and return the project path a caller passes.
+            fn project(&self) -> String {
+                fs::write(
+                    self.0.join("project.yaml"),
+                    "schema_version: '1.0'\nenvironments: {python: environment.yaml}\n",
+                )
+                .unwrap();
+                fs::write(self.0.join("environment.yaml"), "schema_version: '1.0'\n").unwrap();
+                self.text("project.yaml")
             }
             fn build(&self) -> file_application::Domain {
                 let path = self.text("spec.yaml");
@@ -298,12 +315,12 @@ mod file {
         fn environment_and_invalid_source_profile_precede_entry_and_study_reads() {
             let study = Study::new();
             let path = study.text("absent.yaml");
-            let environment = study.text("absent-environment.yaml");
+            let project = study.text("absent-project.yaml");
             let issues = file_application::check(
                 yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &path,
-                    environment: Some(&environment),
+                    environment: Some(&project),
                 },
                 identity(&path),
             );
@@ -313,7 +330,7 @@ mod file {
             assert_eq!(
                 issues[0].context,
                 yamaa_adapters::json!({
-                    "cause": "missing", "path": environment,
+                    "cause": "missing", "path": project,
                 })
             );
             assert_eq!(issues[0].spec_paths, ["environment"]);
@@ -788,14 +805,9 @@ mod file {
                     _ => unreachable!(),
                 }
                 fs::write(study.0.join("spec.yaml"), &body).unwrap();
-                fs::write(
-                    study.0.join("environment.yaml"),
-                    "schema_version: '1.0'\nlanguage: python\n",
-                )
-                .unwrap();
                 let spec = study.text("spec.yaml");
-                let environment = study.text("environment.yaml");
-                for environment in [None, Some(environment.as_str())] {
+                let project = study.project();
+                for environment in [None, Some(project.as_str())] {
                     let request = || Request {
                         specification: &spec,
                         environment,
@@ -835,7 +847,7 @@ mod file {
                     );
                     fs::write(study.0.join("spec.yaml"), admitted).unwrap();
                     fs::write(study.0.join("input.csv"), "ID\n1\n").unwrap();
-                    for environment in [None, Some(environment.as_str())] {
+                    for environment in [None, Some(project.as_str())] {
                         assert!(file_application::check(
                             yamaa_core::project_function::Language::Python,
                             Request {
@@ -872,12 +884,7 @@ mod file {
             };
             let study = Study::new();
             let spec = study.text("spec.yaml");
-            let environment = study.text("environment.yaml");
-            fs::write(
-                study.0.join("environment.yaml"),
-                "schema_version: '1.0'\nlanguage: python\n",
-            )
-            .unwrap();
+            let project_file = study.project();
             // At the cardinality boundary ordinary group validation still wins
             // over the deferred invalid filter; one more group is refused above.
             fs::write(
@@ -888,7 +895,7 @@ mod file {
                 ),
             )
             .unwrap();
-            for environment in [None, Some(environment.as_str())] {
+            for environment in [None, Some(project_file.as_str())] {
                 let request = || Request {
                     specification: &spec,
                     environment,
@@ -949,7 +956,7 @@ mod file {
             .unwrap();
             // Both templates independently reach 64 group keys and 1024 row
             // derivations. Their combined counts are not planner quotas.
-            for environment in [None, Some(environment.as_str())] {
+            for environment in [None, Some(project_file.as_str())] {
                 let request = || Request {
                     specification: &spec,
                     environment,
@@ -1007,7 +1014,7 @@ mod file {
             }
             let project = yamaa_adapters::project_application::prepare(
                 &spec,
-                &environment,
+                &project_file,
                 yamaa_core::project_function::Language::Python,
             )
             .unwrap();
@@ -1069,14 +1076,9 @@ mod file {
                 "schema_version: '1.0'\nparents: [layer-0.yaml]\n",
             )
             .unwrap();
-            fs::write(
-                study.0.join("environment.yaml"),
-                "schema_version: '1.0'\nlanguage: python\n",
-            )
-            .unwrap();
             let spec = study.text("spec.yaml");
-            let environment = study.text("environment.yaml");
-            for environment in [None, Some(environment.as_str())] {
+            let project = study.project();
+            for environment in [None, Some(project.as_str())] {
                 assert!(file_application::check(
                     yamaa_core::project_function::Language::Python,
                     Request {
@@ -1111,14 +1113,9 @@ mod file {
                 format!("schema_version: {digits}\n"),
             )
             .unwrap();
-            fs::write(
-                study.0.join("environment.yaml"),
-                "schema_version: '1.0'\nlanguage: python\n",
-            )
-            .unwrap();
             let spec = study.text("spec.yaml");
-            let environment = study.text("environment.yaml");
-            for environment in [None, Some(environment.as_str())] {
+            let project = study.project();
+            for environment in [None, Some(project.as_str())] {
                 let request = || Request {
                     specification: &spec,
                     environment,
@@ -1270,14 +1267,15 @@ mod file {
         impl ProjectCapturePort for NoMetadata {
             type Error = ();
             fn capture(&mut self, _: Request<'_>) -> Result<Reply, ()> {
-                panic!("no environment dependency declared");
+                panic!("no project dependency declared");
             }
         }
+        /// A held project that links no environment file and declares nothing.
         fn environment() -> OwnedEnvironment {
             project_source::prepare(
-                shipped_schema::capture_environment().unwrap(),
+                shipped_schema::capture_project().unwrap(),
                 Source {
-                    identity: "held-environment.yaml".into(),
+                    identity: "held-project.yaml".into(),
                     bytes: b"schema_version: '1.0'\n".to_vec(),
                 },
                 Language::Python,

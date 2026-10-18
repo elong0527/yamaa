@@ -12,11 +12,11 @@ status: normative
 
 <a id="req-1193"></a>
 
-**REQ-1193.** The selected environment submission section's `dataset_json`
-boolean requests one Dataset-JSON file for each specification in its ordered
-`specs`. Each target is beside that specification's already published
-`output.path`, with the same basename and a `.json` extension. Omission or
-false produces only the Define-XML document. Package references use `/`
+**REQ-1193.** The selected project section's `datasets: json` requests one
+Dataset-JSON file for each specification in its ordered `specs`. Each target
+is beside that specification's already published `output.path`, with the same
+basename and a `.json` extension. Omitting `datasets` produces only the
+Define-XML document. Package references use `/`
 separators and satisfy [REQ-1206](dataset-json.md#req-1206) and
 [REQ-1229](dataset-json.md#req-1229). The retained reference document's
 per-dataset path declarations remain qualification history until transition.
@@ -149,7 +149,7 @@ travels together: the file names the document its `itemOID`s point into, and
 **REQ-1207.** `sourceSystem` is one object carrying `name` and `version`,
 in that order. Its name is `yamaa`; its version is the selected section's
 explicit `source_system_version`, or the actual installed yamaa version when
-omitted, under [REQ-1080](../operations/functions.md#req-1080). The same selected
+omitted, under [REQ-0979](define-xml.md#req-0979). The same selected
 version is used in Define-XML and Dataset-JSON. The retained reference
 `define_class` source-system pair remains qualification history until
 transition.
@@ -258,7 +258,7 @@ present empty string. A `csv` artifact's empty field arrives as missing under
 
 <a id="req-1215"></a>
 
-**REQ-1215.** When the selected section requests `dataset_json`, each
+**REQ-1215.** When the selected section requests `datasets: json`, each
 dataset's `def:leaf` names that dataset's JSON target: its `xlink:href` and
 `def:title` use the JSON file rather than the published CSV or Parquet path.
 When Dataset-JSON is not requested, the leaf names the specification's
@@ -330,7 +330,7 @@ file that is not there yet, which is [REQ-0757](../storage/publication.md#req-07
 **REQ-1222.** A failure at any point publishes nothing further and leaves
 every untouched target as it was. Atomic replacement is guaranteed per file
 and not across the package, exactly as [REQ-0758](../storage/publication.md#req-0758) states for a primary artifact
-and its log.
+and its report file.
 
 ### Reading
 
@@ -369,14 +369,14 @@ dataset submission metadata declares `has_no_data`: fail validation with
 
 **REQ-1228.** In the retained reference `define_class` format, a declared
 `source_system` without `source_system_version` on a document requesting
-Dataset-JSON fails validation with `source_system_incomplete`. Environment
+Dataset-JSON fails validation with `source_system_incomplete`. Project
 submission sections derive both values under
 [REQ-1207](dataset-json.md#req-1207); omission of their version override selects
 the actual installed version.
 
 <a id="req-1229"></a>
 
-**REQ-1229.** A `dataset_json` path, or a `metaDataRef` computed from it, that
+**REQ-1229.** A Dataset-JSON target, or a `metaDataRef` computed from it, that
 cannot be expressed relative to its directory without a parent traversal:
 fail with `artifact_outside_document`. The failure reports the dataset and
 both paths, as [REQ-1021](define-xml.md#req-1021) does for the artifact a

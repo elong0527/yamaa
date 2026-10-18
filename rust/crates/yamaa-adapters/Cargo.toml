@@ -8,13 +8,15 @@ authors.workspace = true
 publish.workspace = true
 
 [features]
-default = ["yaml", "parquet", "readstat"]
+default = ["yaml", "parquet", "readstat", "odm"]
 # Document syntax admission; owned core documents do not require this parser.
 yaml = ["dep:yamaa-saphyr-parser", "dep:num-bigint"]
 # Source and artifact codecs share one edge, including native Zstd compression.
 parquet = ["dep:parquet", "dep:bytes", "dep:base64", "dep:brotli", "dep:flate2", "dep:lz4_flex", "dep:zstd", "dep:snap"]
 # SAS binary input only; disabling this feature omits the bundled ReadStat build.
 readstat = ["dep:cc"]
+# ODM XML clinical items from plain XML or plain/gzip TAR input; pure Rust.
+odm = ["dep:quick-xml", "dep:flate2"]
 
 [dependencies]
 yamaa-core = { path = "../yamaa-core" }
@@ -46,6 +48,9 @@ flate2 = { version = "1.1.10", default-features = false, features = ["rust_backe
 lz4_flex = { version = "0.13.1", optional = true }
 zstd = { version = "0.14.0", default-features = false, optional = true }
 snap = { version = "1.1.2", optional = true }
+# ODM XML tokenizing only; the adapter adds namespace, reference and
+# well-formedness checks. Default features off: no encoding_rs or serde.
+quick-xml = { version = "0.42.0", default-features = false, optional = true }
 
 # Safe descriptor-relative filesystem IO for the native R resource transport.
 [target.'cfg(unix)'.dependencies]

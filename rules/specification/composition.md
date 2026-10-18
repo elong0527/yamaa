@@ -154,8 +154,8 @@ with
 it. For example, later root `metadata`, `keys`, `output`, and `verifications`
 replace their complete inherited values. An entry that inherits `output`
 therefore publishes at the location its inherited `relative_to` setting selects.
-Its `path`, `warning_log`, and `verification_log` keep the declaring layer's
-provenance under [REQ-0635](composition.md#req-0635). An entry can inherit
+Its `path` and `report` keep the declaring layer's provenance under
+[REQ-0635](composition.md#req-0635). An entry can inherit
 `relative_to: entry` to publish in its own directory, or replace its complete
 `output`.
 

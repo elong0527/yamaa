@@ -254,30 +254,9 @@ mod project {
             trace: Trace,
             node: String,
             failure: bool,
-            diagnostics: bool,
-            diagnostic_failure: bool,
-            diagnostic_unwind: Option<Arc<()>>,
+            unwind: Option<Arc<()>>,
         }
         impl ReportPort for Report {
-            fn prepare_diagnostics<C, D, T: TableAccess>(
-                &mut self,
-                node: &Node,
-                _attempt: &yamaa_core::specification_run::CapturedAttempt<C, D, T>,
-            ) -> Result<(), Self::Error> {
-                if !self.diagnostics {
-                    return Ok(());
-                }
-                self.trace
-                    .borrow_mut()
-                    .push(format!("diagnostics:{}", node.identity()));
-                if let Some(payload) = &self.diagnostic_unwind {
-                    std::panic::panic_any(Arc::clone(payload));
-                }
-                if self.diagnostic_failure {
-                    return Err("original diagnostic refusal");
-                }
-                Ok(())
-            }
             fn select<C, D, T: TableAccess>(
                 &mut self,
                 node: &Node,
@@ -286,6 +265,9 @@ mod project {
                 self.trace
                     .borrow_mut()
                     .push(format!("report:{}", node.identity()));
+                if let Some(payload) = &self.unwind {
+                    std::panic::panic_any(Arc::clone(payload));
+                }
                 if self.failure {
                     return Err("original report refusal");
                 }
@@ -380,9 +362,7 @@ mod project {
                         trace: Rc::clone(&trace),
                         node: String::new(),
                         failure: false,
-                        diagnostics: false,
-                        diagnostic_failure: false,
-                        diagnostic_unwind: None,
+                        unwind: None,
                     },
                     codec: Codec {
                         trace,
@@ -801,12 +781,11 @@ mod project {
             fn source_and_output_exits_use_actual_refusals_and_leave_unwound_output_unmatched() {
                 for failure in ["source", "report", "unwind"] {
                     let mut ports = Ports::new();
-                    ports.report.diagnostics = true;
                     let original = Arc::new(());
                     match failure {
                         "source" => ports.study.failure = true,
-                        "report" => ports.report.diagnostic_failure = true,
-                        "unwind" => ports.report.diagnostic_unwind = Some(Arc::clone(&original)),
+                        "report" => ports.report.failure = true,
+                        "unwind" => ports.report.unwind = Some(Arc::clone(&original)),
                         _ => unreachable!(),
                     }
                     let observer = recorder(&ports);
@@ -846,7 +825,7 @@ mod project {
                             );
                             assert!(matches!(
                                 attempt.nodes[0].output,
-                                Err(CompleteError::Report("original diagnostic refusal"))
+                                Err(CompleteError::Report("original report refusal"))
                             ));
                         }
                         "unwind" => {
@@ -919,9 +898,8 @@ mod project {
         }
 
         #[test]
-        fn diagnostic_preparation_precedes_primary_encoding_and_dependent_entry() {
+        fn report_selection_precedes_primary_encoding_and_dependent_entry() {
             let mut ports = Ports::new();
-            ports.report.diagnostics = true;
             let mut attempt = Attempt::default();
             assert!(prepared()
                 .build_into(
@@ -936,24 +914,20 @@ mod project {
             assert_eq!(ports.study.reads, 1);
             let events = ports.activation.trace.borrow();
             let at = |event: &str| events.iter().position(|e| e == event).unwrap();
-            assert!(at("diagnostics:/p") < at("encode:RAW"));
+            assert!(at("report:/p") < at("encode:RAW"));
             assert!(at("encode:RAW") < at("decode:FIRST"));
-            assert!(at("decode:SECOND") < at("diagnostics:/root"));
-            assert!(at("diagnostics:/root") < at("encode:FIRST"));
+            assert!(at("decode:SECOND") < at("report:/root"));
+            assert!(at("report:/root") < at("encode:FIRST"));
             assert_eq!(
-                events
-                    .iter()
-                    .filter(|e| e.starts_with("diagnostics:"))
-                    .count(),
+                events.iter().filter(|e| e.starts_with("report:")).count(),
                 2
             );
         }
 
         #[test]
-        fn diagnostic_refusal_stops_primary_encoding_and_every_dependent_source() {
+        fn report_refusal_stops_primary_encoding_and_every_dependent_source() {
             let mut ports = Ports::new();
-            ports.report.diagnostics = true;
-            ports.report.diagnostic_failure = true;
+            ports.report.failure = true;
             let mut attempt = Attempt::default();
             assert!(prepared()
                 .build_into(
@@ -975,7 +949,7 @@ mod project {
                 .is_ok());
             assert!(matches!(
                 attempt.nodes[0].output,
-                Err(CompleteError::Report("original diagnostic refusal"))
+                Err(CompleteError::Report("original report refusal"))
             ));
             assert!(!ports
                 .activation
@@ -986,11 +960,10 @@ mod project {
         }
 
         #[test]
-        fn failed_execution_diagnostic_refusal_retains_the_original_live_payload() {
+        fn failed_execution_enters_no_report_port_and_retains_the_original_live_payload() {
             let mut ports = Ports::new();
             ports.activation.mode = Mode::Producer;
-            ports.report.diagnostics = true;
-            ports.report.diagnostic_failure = true;
+            ports.report.failure = true;
             let mut attempt = Attempt::default();
             let _ = prepared().build_into(
                 ports.borrow(),
@@ -1016,22 +989,20 @@ mod project {
                 panic!("original live error")
             };
             assert!(Rc::ptr_eq(&error.original, &ports.activation.original));
-            assert!(matches!(
-                entered.output,
-                Err(CompleteError::Report("original diagnostic refusal"))
-            ));
+            // The failed node's run report is built later from this retained
+            // attempt; output preparation was never entered.
+            assert!(matches!(entered.output, Ok(None)));
             let events = ports.activation.trace.borrow();
-            assert!(events.iter().any(|e| e == "diagnostics:/p"));
+            assert!(!events.iter().any(|e| e.starts_with("report:")));
             assert!(!events.iter().any(|e| e.starts_with("encode:")));
             assert_eq!(events.iter().filter(|e| *e == "invoke:beta:1").count(), 1);
         }
 
         #[test]
-        fn diagnostic_unwind_preserves_entered_execution_and_original_payload() {
+        fn report_unwind_preserves_entered_execution_and_original_payload() {
             let mut ports = Ports::new();
-            ports.report.diagnostics = true;
             let original = Arc::new(());
-            ports.report.diagnostic_unwind = Some(Arc::clone(&original));
+            ports.report.unwind = Some(Arc::clone(&original));
             let mut attempt = Attempt::default();
             let error = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 let _ = prepared().build_into(
@@ -2731,8 +2702,6 @@ mod project {
                     lock: environment(&[]).lock().cloned(),
                     functions: Some(vec![definition]),
                     codelists: vec![],
-                    has_study: false,
-                    submissions: vec![],
                 },
             )
             .unwrap()

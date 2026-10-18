@@ -537,9 +537,11 @@ fn merge_sources(into: &mut BTreeMap<String, SourceInfo>, from: BTreeMap<String,
 }
 
 /// One planned benchmark entry, following `tools/benchmark.py` for the
-/// Python host: explicit entries win; the environment defaults to
-/// `python/environment.yaml` when an entry does not name one and that
-/// file exists; a case without entries has exactly one specification.
+/// Python host: explicit entries win; an entry that does not name a
+/// project passes the case's root `project.yaml` when that file exists,
+/// and an explicit null passes none; a case without entries has exactly
+/// one specification. The project travels as the request's `environment`
+/// argument, and its `environments` key links the Python environment file.
 #[derive(Debug, Clone)]
 struct EntryCall {
     specification: String,
@@ -548,9 +550,9 @@ struct EntryCall {
 
 fn plan_entries(case: &Path) -> Vec<EntryCall> {
     let default_environment = case
-        .join("python/environment.yaml")
+        .join("project.yaml")
         .is_file()
-        .then(|| "python/environment.yaml".to_string());
+        .then(|| "project.yaml".to_string());
     let benchmark = case.join("benchmark.yaml");
     if let Ok(bytes) = fs::read(&benchmark) {
         let doc = yaml_json(&bytes);
@@ -738,7 +740,15 @@ fn odm_datasets(case: &Path, files: &[(String, PathBuf)]) -> std::collections::B
 /// always carry identical content or the capture fails as `Changed`).
 /// Frame construction failures are reported, not hidden: the affected
 /// input keeps its byte reply so the run can proceed and be classified.
-fn backend_for(case: &Path) -> (Arc<MemoryResolver>, BTreeMap<String, String>) {
+/// The memory resolver for one case, the inputs that could not become
+/// frames, and the input paths served as frames.
+fn backend_for(
+    case: &Path,
+) -> (
+    Arc<MemoryResolver>,
+    BTreeMap<String, String>,
+    std::collections::BTreeSet<String>,
+) {
     let backend = Arc::new(MemoryResolver::default());
     let files = case_files(case);
     let identities = spec_identities(&files);
@@ -767,6 +777,7 @@ fn backend_for(case: &Path) -> (Arc<MemoryResolver>, BTreeMap<String, String>) {
         }
     }
     let mut frame_failures = BTreeMap::new();
+    let mut served = std::collections::BTreeSet::new();
     for (name, info) in &sources {
         if info.schema.is_some() || info.path.is_empty() || odm.contains(name) {
             continue;
@@ -799,18 +810,74 @@ fn backend_for(case: &Path) -> (Arc<MemoryResolver>, BTreeMap<String, String>) {
                         backend.insert_frame(declaring, &spelling, &reference, Arc::clone(&frame));
                     }
                 }
+                served.insert(info.path.clone());
             }
             Err(error) => {
                 frame_failures.insert(info.path.clone(), error);
             }
         }
     }
-    (backend, frame_failures)
+    (backend, frame_failures, served)
+}
+
+/// A host table is not a file: an input served as a frame reports no file
+/// byte length. Rewrite the expected report's `bytes` for those inputs to the
+/// `null` the frame route reports; every other cell is compared unchanged.
+fn frame_report_text(text: &str, served: &std::collections::BTreeSet<String>) -> String {
+    let mut text = text.to_owned();
+    for (quote, path) in served
+        .iter()
+        .flat_map(|path| [("\"\"", path), ("\"", path)])
+    {
+        let suffix = format!(",{quote}path{quote}:{quote}{path}{quote}");
+        let marker = format!("{quote}bytes{quote}:");
+        let mut rewritten = String::new();
+        let mut rest = text.as_str();
+        while let Some(start) = rest.find(&marker) {
+            let digits_start = start + marker.len();
+            let digits = rest[digits_start..]
+                .bytes()
+                .take_while(u8::is_ascii_digit)
+                .count();
+            let end = digits_start + digits;
+            if digits > 0 && rest[end..].starts_with(&suffix) {
+                rewritten.push_str(&rest[..digits_start]);
+                rewritten.push_str("null");
+            } else {
+                rewritten.push_str(&rest[..end]);
+            }
+            rest = &rest[end..];
+        }
+        rewritten.push_str(rest);
+        text = rewritten;
+    }
+    text
+}
+
+impl TypedTable {
+    /// Apply [`frame_report_text`] to the scalar-encoded DETAILS cells.
+    fn frame_inputs(&mut self, served: &std::collections::BTreeSet<String>) {
+        let Some(details) = self.columns.iter().position(|(name, _)| name == "DETAILS") else {
+            return;
+        };
+        for row in &mut self.rows {
+            let Some(Some(cell)) = row.get_mut(details) else {
+                continue;
+            };
+            let bytes = (0..cell.len())
+                .step_by(2)
+                .map(|index| u8::from_str_radix(&cell[index..index + 2], 16).unwrap())
+                .collect::<Vec<_>>();
+            let text = frame_report_text(&String::from_utf8(bytes).unwrap(), served);
+            *cell = text.bytes().map(|byte| format!("{byte:02x}")).collect();
+        }
+    }
 }
 
 /// Project functions execute in a host language runtime; the adapters
-/// test embeds none, so activation is refused if it is ever reached.
-/// Producer graphs of pure engine derivations never invoke it.
+/// test embeds none, so an invocation is refused if it is ever reached.
+/// Producer graphs of pure engine derivations never invoke it, and a
+/// project run that calls no project function never enters the port.
 struct NoActivation;
 
 impl ActivationPort for NoActivation {
@@ -845,51 +912,53 @@ impl ActivationPort for NoActivation {
     }
 }
 
-/// A built entry, whichever route the application selected.
+/// A built entry, whichever route the application selected. Plain and
+/// project builds share the public domain result.
 enum Built {
-    Plain(Domain),
+    Domain(Domain),
     Producer(RootResult),
 }
 
 impl Built {
     fn issues(&self) -> Vec<Issue> {
         match self {
-            Built::Plain(domain) => domain.issues(),
+            Built::Domain(domain) => domain.issues(),
             Built::Producer(result) => result.issues().to_vec(),
         }
     }
 
     fn output_present(&self) -> bool {
         match self {
-            Built::Plain(domain) => domain.output_table().is_some(),
+            Built::Domain(domain) => domain.output_table().is_some(),
             Built::Producer(result) => result.output_table().is_some(),
         }
     }
 
-    /// The host tables as Arrow IPC bytes, one per declared slot.
+    /// The host tables as Arrow IPC bytes: the output when the build has
+    /// one, and the run report every build holds.
     fn table_ipc(&self, slot: &str) -> Option<&[u8]> {
         match (self, slot) {
-            (Built::Plain(domain), "output") => domain.output(),
-            (Built::Plain(domain), "verification_log") => domain.verification_log(),
-            (Built::Plain(domain), "warning_log") => domain.warning_log(),
+            (Built::Domain(domain), "output") => domain.output(),
+            (Built::Domain(domain), "report") => Some(domain.run_report()),
             (Built::Producer(result), "output") => result.output(),
-            (Built::Producer(result), "verification_log") => result.verification_log(),
-            (Built::Producer(result), "warning_log") => result.warning_log(),
+            (Built::Producer(result), "report") => result.run_report(),
             _ => None,
         }
     }
 
     fn save(&mut self) -> Result<bool, file_application::FailedBuild> {
         match self {
-            Built::Plain(domain) => domain.save(),
+            Built::Domain(domain) => domain.save(),
             Built::Producer(result) => result.save(),
         }
     }
 }
 
 /// The runtime port for this route: plain and producer builds run in
-/// process; project builds refuse, exactly like the adapters' native
-/// port, because project functions need a host language runtime.
+/// process, and so does a project build whose run calls no project
+/// function, because the engine then never enters the activation port.
+/// A project build that calls one refuses, exactly like the adapters'
+/// native port, because project functions need a host language runtime.
 struct MemoryRuntime<'a> {
     identity: Identity<'a>,
     resolver: Arc<MemoryResolver>,
@@ -922,18 +991,30 @@ impl RuntimePort for MemoryRuntime<'_> {
         scope: Scope<'_>,
     ) -> Result<Built, file_application::Failure> {
         let mut run_scope = prepared.run_scope(None);
-        file_application::plain(prepared, &mut run_scope, self.identity(), scope).map(Built::Plain)
+        file_application::plain(prepared, &mut run_scope, self.identity(), scope).map(Built::Domain)
     }
 
     fn project(
         &mut self,
-        _: &yamaa_adapters::file_project::FileProject,
-        _: Scope<'_>,
+        project: &yamaa_adapters::file_project::FileProject,
+        scope: Scope<'_>,
     ) -> Result<Built, file_application::Failure> {
-        Err(file_application::unsupported(
-            "environment",
-            Some("environment"),
-        ))
+        if !project.run().compiled().called_functions().is_empty() {
+            return Err(file_application::unsupported(
+                "environment",
+                Some("environment"),
+            ));
+        }
+        let mut run_scope = project.run_scope(None);
+        let attempt = project.build(&mut run_scope, &mut NoActivation, scope);
+        let result = yamaa_adapters::project_report::build_result(
+            project.run(),
+            &attempt,
+            self.identity(),
+            &[],
+        )
+        .map_err(|error| error.refusal().issues())?;
+        Domain::from_project(result, project, &run_scope).map(Built::Domain)
     }
 
     fn producer(
@@ -996,7 +1077,7 @@ fn run_entry(case: &Path, call: &EntryCall, backend: &Arc<MemoryResolver>) -> Ou
     match domain_entry::domain(request, &mut application, Scope::default()) {
         Ok(built) => Outcome::Built(Box::new(built)),
         Err(file_application::ApplicationError::Preparation(error)) => Outcome::Failed(
-            yamaa_adapters::project_application::selection_failure(&error, Language::Python),
+            yamaa_adapters::project_application::selection_failure(&error),
         ),
         Err(file_application::ApplicationError::Runtime(issues)) => Outcome::Failed(issues),
     }
@@ -1037,8 +1118,7 @@ fn conformance_exclusion(case: &Path) -> Option<String> {
 
 struct OutputDecl {
     path: Option<String>,
-    verification_log: Option<String>,
-    warning_log: Option<String>,
+    report: Option<String>,
     decimals: Option<u32>,
 }
 
@@ -1065,8 +1145,7 @@ fn declarations_for(
         let mut types = BTreeMap::new();
         let mut output = OutputDecl {
             path: None,
-            verification_log: None,
-            warning_log: None,
+            report: None,
             decimals: None,
         };
         let parents: Vec<String> = match doc.get("parents") {
@@ -1087,11 +1166,8 @@ fn declarations_for(
             if inherited_output.path.is_some() {
                 output.path = inherited_output.path;
             }
-            if inherited_output.verification_log.is_some() {
-                output.verification_log = inherited_output.verification_log;
-            }
-            if inherited_output.warning_log.is_some() {
-                output.warning_log = inherited_output.warning_log;
+            if inherited_output.report.is_some() {
+                output.report = inherited_output.report;
             }
             if inherited_output.decimals.is_some() {
                 output.decimals = inherited_output.decimals;
@@ -1112,11 +1188,8 @@ fn declarations_for(
             if let Some(value) = text("path") {
                 output.path = Some(value);
             }
-            if let Some(value) = text("verification_log") {
-                output.verification_log = Some(value);
-            }
-            if let Some(value) = text("warning_log") {
-                output.warning_log = Some(value);
+            if let Some(value) = text("report") {
+                output.report = Some(value);
             }
             if let Some(Sj::Number(number)) = out.get("decimals") {
                 output.decimals = number.as_u64().map(|value| value as u32);
@@ -1767,7 +1840,7 @@ fn parquet_column_names(_bytes: &[u8]) -> Result<Vec<String>, String> {
 
 /// The kinds the runner assigns a log artifact's columns: integers for
 /// the two count columns, text for everything else.
-fn log_types(case: &Path, truth_name: &str) -> Result<BTreeMap<String, String>, String> {
+fn report_types(case: &Path, truth_name: &str) -> Result<BTreeMap<String, String>, String> {
     let truth = case.join("expected").join(truth_name);
     let names: Vec<String> = if truth_name.ends_with(".parquet") {
         let bytes = fs::read(&truth).map_err(|error| format!("{truth_name}: {error}"))?;
@@ -1777,7 +1850,7 @@ fn log_types(case: &Path, truth_name: &str) -> Result<BTreeMap<String, String>, 
         let text = std::str::from_utf8(&bytes).map_err(|error| format!("not UTF-8: {error}"))?;
         csv_cells(text)
             .first()
-            .ok_or_else(|| "empty log CSV".to_string())?
+            .ok_or_else(|| "empty report CSV".to_string())?
             .iter()
             .map(|cell| cell.clone().unwrap_or_default())
             .collect()
@@ -1785,7 +1858,7 @@ fn log_types(case: &Path, truth_name: &str) -> Result<BTreeMap<String, String>, 
     Ok(names
         .into_iter()
         .map(|name| {
-            let kind = if name == "EVALUATED_COUNT" || name == "FAILURE_COUNT" {
+            let kind = if name == "COUNT" || name == "TOTAL" {
                 "int"
             } else {
                 "str"
@@ -2002,6 +2075,7 @@ fn check_positive(
     name: &str,
     case: &Path,
     backend: &Arc<MemoryResolver>,
+    served: &std::collections::BTreeSet<String>,
     runs: Vec<EntryRun>,
     findings: &mut Vec<String>,
 ) {
@@ -2029,10 +2103,9 @@ fn check_positive(
                 continue;
             }
         };
-        let host_ipc: [Option<Vec<u8>>; 3] = [
+        let host_ipc: [Option<Vec<u8>>; 2] = [
             built.table_ipc("output").map(<[u8]>::to_vec),
-            built.table_ipc("verification_log").map(<[u8]>::to_vec),
-            built.table_ipc("warning_log").map(<[u8]>::to_vec),
+            built.table_ipc("report").map(<[u8]>::to_vec),
         ];
         let issues = built.issues();
         if !issues.is_empty() {
@@ -2041,10 +2114,7 @@ fn check_positive(
                 issues.len(),
                 brief_issue(&issues[0])
             ));
-            for declared in [&output.path, &output.verification_log, &output.warning_log]
-                .into_iter()
-                .flatten()
-            {
+            for declared in [&output.path, &output.report].into_iter().flatten() {
                 compared.insert(basename(declared));
             }
             continue;
@@ -2054,12 +2124,13 @@ fn check_positive(
         }
         let slots = [
             ("output", &output.path, &host_ipc[0]),
-            ("verification_log", &output.verification_log, &host_ipc[1]),
-            ("warning_log", &output.warning_log, &host_ipc[2]),
+            ("report", &output.report, &host_ipc[1]),
         ];
         for (slot, declared, host) in &slots {
+            // Every build holds its run report; only a declared file has an
+            // independent expected artifact to compare.
             let Some(declared) = declared else {
-                if host.is_some() {
+                if *slot == "output" && host.is_some() {
                     findings.push(format!(
                         "{name}: entry {spec} produced an undeclared {slot} table"
                     ));
@@ -2075,7 +2146,11 @@ fn check_positive(
                 ));
                 continue;
             }
-            let truth_bytes = fs::read(&truth_path).unwrap();
+            let mut truth_bytes = fs::read(&truth_path).unwrap();
+            if *slot == "report" && artifact.ends_with(".csv") {
+                truth_bytes = frame_report_text(std::str::from_utf8(&truth_bytes).unwrap(), served)
+                    .into_bytes();
+            }
             let published = backend.published(&format!("memory:/{declared}"));
             match &published {
                 None => findings.push(format!(
@@ -2092,10 +2167,10 @@ fn check_positive(
             let slot_types = if *slot == "output" {
                 types.clone()
             } else {
-                match log_types(case, &artifact) {
+                match report_types(case, &artifact) {
                     Ok(map) => map,
                     Err(error) => {
-                        findings.push(format!("{name}: log types for {artifact}: {error}"));
+                        findings.push(format!("{name}: report types for {artifact}: {error}"));
                         continue;
                     }
                 }
@@ -2131,7 +2206,15 @@ fn check_positive(
                         }
                         (_, None) => {}
                     }
-                    let expected_typed = typed_from_parquet(&truth_bytes, &slot_types);
+                    let frame = |table: Result<TypedTable, String>| {
+                        table.map(|mut table| {
+                            if *slot == "report" {
+                                table.frame_inputs(served);
+                            }
+                            table
+                        })
+                    };
+                    let expected_typed = frame(typed_from_parquet(&truth_bytes, &slot_types));
                     let actual_typed = published
                         .as_deref()
                         .map(|bytes| typed_from_parquet(bytes, &slot_types));
@@ -2156,7 +2239,8 @@ fn check_positive(
                     if let Some(ipc) = host {
                         match typed_from_ipc(ipc, None) {
                             Ok(actual) => {
-                                if let Ok(expected) = typed_from_parquet(&truth_bytes, &slot_types)
+                                if let Ok(expected) =
+                                    frame(typed_from_parquet(&truth_bytes, &slot_types))
                                 {
                                     if actual != expected {
                                         findings.push(format!(
@@ -2267,7 +2351,7 @@ fn check_case(name: &str, case: &Path) -> CaseOutcome {
         ));
         return CaseOutcome::Findings(findings);
     }
-    let (backend, frame_failures) = backend_for(case);
+    let (backend, frame_failures, served) = backend_for(case);
     for (path, error) in &frame_failures {
         findings.push(format!(
             "{name}: input {path} could not be built as an in-memory frame: {error}"
@@ -2287,7 +2371,7 @@ fn check_case(name: &str, case: &Path) -> CaseOutcome {
         .collect();
     match expected_error(case) {
         Some(want) => check_negative(name, &sj(&want), runs, &mut findings),
-        None => check_positive(name, case, &backend, runs, &mut findings),
+        None => check_positive(name, case, &backend, &served, runs, &mut findings),
     }
     if findings.is_empty() {
         CaseOutcome::Pass
@@ -2318,32 +2402,32 @@ fn benchmark_cases() -> Vec<(String, PathBuf)> {
 /// an exempt case that starts passing fails the test as stale, and any
 /// non-exempt case that fails is reported with its findings.
 const EXEMPTIONS: &[(&str, &str)] = &[
-    // Project environments (5): the specification calls project
-    // functions, which execute in a host language runtime. The Rust
-    // adapters route embeds none, so these cannot run here at all;
-    // most fail earlier still, because environment preparation looks
-    // for the environment's packaging lock (python/uv.lock), a
-    // host-side file the file route's hosts stage beside the
-    // environment and that exists in no benchmark directory.
+    // Project functions (5): the specification calls project functions,
+    // which execute in a host language runtime. The Rust adapters route
+    // embeds none, so these cannot run here at all; most fail earlier
+    // still, because the case's project.yaml links python/environment.yaml
+    // and that file's `lock: uv.lock` resolves from it to python/uv.lock,
+    // a host-side packaging file the file route's hosts stage beside the
+    // environment file and that exists in no benchmark directory.
     (
         "adam-adsl-bmi",
-        "calls project functions; the build reaches the environment and is refused (unsupported_operation: environment) because project functions need a host language runtime this route does not embed",
+        "calls project functions; its Python environment file declares no lock, so preparation succeeds and the project build is refused (unsupported_operation: environment) because project functions need a host language runtime this route does not embed",
     ),
     (
         "adam-advs-percentiles",
-        "calls project functions; environment preparation fails first (project_environment_invalid, REQ-0695) because the environment's uv.lock is a host-side file absent from the benchmark directory",
+        "calls project functions; project preparation fails first (project_environment_invalid, REQ-0695 at lock) because the uv.lock its Python environment file declares is a host-side file absent from the benchmark directory",
     ),
     (
         "schema-functions",
-        "calls project functions; environment preparation fails first (project_environment_invalid, REQ-0695) because the environment's uv.lock is a host-side file absent from the benchmark directory",
+        "calls project functions; project preparation fails first (project_environment_invalid, REQ-0695 at lock) because the uv.lock its Python environment file declares is a host-side file absent from the benchmark directory",
     ),
     (
         "schema-non-finite",
-        "calls project functions; environment preparation fails first (project_environment_invalid, REQ-0695) because the environment's uv.lock is a host-side file absent from the benchmark directory",
+        "calls project functions; project preparation fails first (project_environment_invalid, REQ-0695 at lock) because the uv.lock its Python environment file declares is a host-side file absent from the benchmark directory",
     ),
     (
         "negative-function-contract",
-        "calls project functions; environment preparation fails first (project_environment_invalid, REQ-0695 on the absent uv.lock), masking the expected invalid_function_argument finding (REQ-0700)",
+        "calls project functions; project preparation fails first (project_environment_invalid, REQ-0695 at lock: its Python environment file's uv.lock is absent), masking the expected invalid_function_argument finding (REQ-0700)",
     ),
     // File-ingest diagnostics (7): the expected diagnostic has phase
     // `ingest` — it is produced by decoding the input file's text. An
@@ -2442,6 +2526,30 @@ fn memory_resolver_benchmarks_representative() {
         "the in-memory route disagrees with the file route:\n{}",
         failures.join("\n")
     );
+}
+
+/// The plan passes a case's root project to every call, so the study-level
+/// cases build on the project route with their codelists, and a case with
+/// only another project file passes none.
+#[test]
+fn memory_resolver_plan_passes_the_root_project() {
+    let cases = benchmark_cases();
+    for (name, project) in [
+        ("sdtm-ae-coding", Some("project.yaml")),
+        ("sdtm-dm-metadata", Some("project.yaml")),
+        ("sdtm-vs-epoch-from-subject-elements", Some("project.yaml")),
+        ("schema-functions", Some("project.yaml")),
+        ("sdtm-lb-metadata", None),
+    ] {
+        let (_, case) = cases
+            .iter()
+            .find(|(case_name, _)| case_name == name)
+            .unwrap_or_else(|| panic!("planned case {name} not found"));
+        let calls = plan_entries(case);
+        assert_eq!(calls.len(), 1, "{name}");
+        assert_eq!(calls[0].specification, "spec.yaml", "{name}");
+        assert_eq!(calls[0].environment.as_deref(), project, "{name}");
+    }
 }
 
 #[test]

@@ -539,27 +539,23 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             )],
         ));
     }
-    for (warning, verification, condition, requirement, paths) in [
+    for (report, condition, requirement, paths, context) in [
         (
-            Some("result.csv"),
-            None,
+            "result.csv",
             "artifact_path_collision",
             "REQ-0756",
-            vec!["output.path", "output.warning_log"],
+            vec!["output.path", "output.report"],
+            vec![("path", text("result.csv"))],
         ),
         (
-            None,
-            Some("result.csv"),
-            "artifact_path_collision",
-            "REQ-1180",
-            vec!["output.path", "output.verification_log"],
-        ),
-        (
-            Some("same.csv"),
-            Some("same.csv"),
-            "artifact_path_collision",
-            "REQ-1180",
-            vec!["output.warning_log", "output.verification_log"],
+            "report.arrow",
+            "unknown_artifact_profile",
+            "REQ-0760",
+            vec!["output.report"],
+            vec![
+                ("path", text("report.arrow")),
+                ("permitted", texts(&[".csv", ".parquet"])),
+            ],
         ),
     ] {
         let mut fields = base(
@@ -571,16 +567,11 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             vec![column("ID", Some(source()))],
             vec![Tree::text("ID")],
         );
-        let mut output = vec![
+        let output = vec![
             ("path", Tree::text("result.csv")),
             ("columns", Tree::List(vec![Tree::text("ID")])),
+            ("report", Tree::text(report)),
         ];
-        if let Some(path) = warning {
-            output.push(("warning_log", Tree::text(path)));
-        }
-        if let Some(path) = verification {
-            output.push(("verification_log", Tree::text(path)));
-        }
         fields
             .iter_mut()
             .find(|(name, _)| *name == "output")
@@ -588,12 +579,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             .1 = Tree::map(output);
         log_codes.extend(check(
             fields,
-            vec![(
-                condition,
-                Some(requirement),
-                paths,
-                vec![("path", text(verification.unwrap_or("result.csv")))],
-            )],
+            vec![(condition, Some(requirement), paths, context)],
         ));
     }
     let mut fields = base(
@@ -618,9 +604,9 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     log_codes.extend(check(
         fields,
         vec![(
-            "missing_warning_log",
+            "missing_report",
             Some("REQ-0391"),
-            vec!["output.warning_log"],
+            vec!["output.report"],
             vec![("warnings", texts(&["verifications[0].row_count"]))],
         )],
     ));

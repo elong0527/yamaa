@@ -391,6 +391,9 @@ pub struct ValueCodelist {
     pub values: Vec<Value>,
     pub codes: Vec<String>,
     pub default: bool,
+    /// The authored path of the first declaration binding this codelist: the
+    /// column's own `submission.codelist` or a row template's per-value one.
+    pub path: String,
 }
 
 impl Check {
@@ -1654,7 +1657,7 @@ mod verification_predicates;
 mod execution;
 pub use execution::{
     CheckRecord, CodelistObservation, Dataset, Execution, ExecutionAttempt, ExecutionError,
-    ExecutionEvent, ExecutionPhase, Resource, RowCountObservation, RowIdentity,
+    ExecutionEvent, ExecutionPhase, Resource, RowCountObservation, RowIdentity, TemplateRows,
 };
 
 /// Validate expressions built from nested operand assignments:

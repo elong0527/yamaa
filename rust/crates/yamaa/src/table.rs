@@ -18,8 +18,8 @@ use crate::error::TableError;
 
 pub use arrow_array::ffi_stream::FFI_ArrowArrayStream;
 pub use arrow_array::{
-    Array, Date32Array, Float64Array, Int64Array, LargeStringArray, RecordBatch, StringArray,
-    StringViewArray, TimestampSecondArray,
+    Array, Date32Array, Float64Array, Int64Array, LargeStringArray, ListArray, RecordBatch,
+    StringArray, StringViewArray, TimestampSecondArray,
 };
 pub use arrow_schema::{DataType, Field, Fields, SchemaRef, TimeUnit};
 
@@ -35,6 +35,14 @@ impl Table {
         Self {
             inner: table.clone(),
         }
+    }
+
+    pub(crate) fn from_public(table: yamaa_adapters::public_table::PublicTable) -> Self {
+        Self { inner: table }
+    }
+
+    pub(crate) fn public(&self) -> &yamaa_adapters::public_table::PublicTable {
+        &self.inner
     }
 
     /// Borrow the public Arrow fields in declaration order.

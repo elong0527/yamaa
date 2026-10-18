@@ -323,11 +323,7 @@ impl Domain {
         >,
     ) -> Result<Self, Failure> {
         let fields = [
-            ("verification_log", result.verification_log().is_some()),
-            (
-                "warning_log",
-                result.warning_log().is_some() && result.output().is_some(),
-            ),
+            ("report", result.report_file()),
             ("path", result.output().is_some()),
         ];
         let targets = fields
@@ -353,14 +349,12 @@ impl Domain {
     pub fn output_table(&self) -> Option<&crate::public_table::PublicTable> {
         self.result.output_table()
     }
-    pub fn verification_log(&self) -> Option<&[u8]> {
-        self.result.verification_log()
+    /// The run report's owned Arrow IPC view; every build holds one.
+    pub fn run_report(&self) -> &[u8] {
+        self.result.run_report()
     }
-    pub fn warning_log(&self) -> Option<&[u8]> {
-        self.result.warning_log()
-    }
-    pub fn log_table(&self, warning: bool) -> Option<&crate::public_table::PublicTable> {
-        self.result.log_table(warning)
+    pub fn report_table(&self) -> &crate::public_table::PublicTable {
+        self.result.report_table()
     }
     pub fn issues(&self) -> Failure {
         crate::issue_rows::collect(
@@ -385,14 +379,72 @@ impl Domain {
             |report| report.observations_json(false),
         )
     }
-    /// Preflight the complete target set before writing held log/primary bytes.
-    /// Failed builds may publish their diagnostic log on explicit Save and still
-    /// raise the original failed-build result. Build itself never writes.
+    /// The accepted primary artifact's serialized bytes; a project run hands
+    /// them to the consumers it builds later. Absent when the build failed.
+    pub fn artifact(&self) -> Option<std::sync::Arc<[u8]>> {
+        self.result.artifact()
+    }
+    /// Open the publisher of every file a save would write, the report file
+    /// alone with `report_only`, without writing any of them.
+    pub(crate) fn publishers(
+        &self,
+        report_only: bool,
+    ) -> Result<Vec<crate::resource_publication::Publisher>, Failure> {
+        let diagnostic = report_only || self.result.output().is_none();
+        let mut items = self.result.publication_items();
+        if diagnostic {
+            items.truncate(usize::from(self.result.report_file()));
+        }
+        let Some(targets) = self.targets.as_ref() else {
+            return Err(self.publication_issues.clone());
+        };
+        targets
+            .iter()
+            .zip(&items)
+            .map(|(target, (path, _, _))| {
+                target
+                    .publisher(path)
+                    .map_err(|error| publication_failure(&error))
+            })
+            .collect()
+    }
+    /// Preflight the complete target set before writing held report/primary
+    /// bytes. Failed builds may publish their declared report file on explicit
+    /// Save and still raise the original failed-build result. Build itself
+    /// never writes.
     pub fn save(&mut self) -> Result<bool, FailedBuild> {
         self.save_with(|publisher, path, bytes| publisher.publish(path, bytes))
     }
+    /// Publish the declared report file alone, as a failed build saves, even
+    /// when the build succeeded. `Err` means there is no report file to write.
+    pub fn save_report(&mut self) -> Result<bool, FailedBuild> {
+        if !self.result.report_file() {
+            return Err(FailedBuild);
+        }
+        let failed = self.result.output().is_none();
+        match self.save_mode(true, |publisher, path, bytes| {
+            publisher.publish(path, bytes)
+        }) {
+            // A failed build reports its failure after the report was written.
+            Err(FailedBuild) if failed => Ok(self.publication_attempt.failure.is_none()
+                && self.publication_attempt.unwind.is_none()
+                && self.publication_issues.is_empty()),
+            outcome => outcome,
+        }
+    }
     fn save_with(
         &mut self,
+        publish: impl FnMut(
+            &mut crate::resource_publication::Publisher,
+            &str,
+            &[u8],
+        ) -> Result<(), crate::file_publication::Error>,
+    ) -> Result<bool, FailedBuild> {
+        self.save_mode(false, publish)
+    }
+    fn save_mode(
+        &mut self,
+        report_only: bool,
         mut publish: impl FnMut(
             &mut crate::resource_publication::Publisher,
             &str,
@@ -400,16 +452,21 @@ impl Domain {
         ) -> Result<(), crate::file_publication::Error>,
     ) -> Result<bool, FailedBuild> {
         let failed = self.result.output().is_none();
-        if failed && self.result.verification_log().is_none() {
-            return Err(FailedBuild);
+        let diagnostic = failed || report_only;
+        if diagnostic && !self.result.report_file() {
+            return if failed { Err(FailedBuild) } else { Ok(false) };
         }
         self.published = None;
         self.publication_attempt = Default::default();
         let Some(targets) = self.targets.as_ref() else {
             return if failed { Err(FailedBuild) } else { Ok(false) };
         };
-        let items = self.result.publication_items();
-        // Own one complete report and all at-most-three artifact entries before
+        let mut items = self.result.publication_items();
+        if diagnostic {
+            // The report file comes first; a diagnostic save writes it alone.
+            items.truncate(1);
+        }
+        // Own one complete report and both at-most-two artifact entries before
         // publication. Every prefix fits the admitted complete encoded report;
         // its artifact slots are reserved before the first publisher. Later
         // success only moves an already-owned entry into an admitted slot.
@@ -432,17 +489,10 @@ impl Domain {
                 return if failed { Err(FailedBuild) } else { Ok(false) };
             }
         };
-        let fields = [
-            ("verification_log", self.result.verification_log().is_some()),
-            (
-                "warning_log",
-                self.result.warning_log().is_some() && !failed,
-            ),
-            ("path", !failed),
-        ]
-        .into_iter()
-        .filter_map(|(field, present)| present.then_some(field))
-        .collect::<Vec<_>>();
+        let fields = [("report", self.result.report_file()), ("path", !diagnostic)]
+            .into_iter()
+            .filter_map(|(field, present)| present.then_some(field))
+            .collect::<Vec<_>>();
         let publishers = targets
             .iter()
             .zip(&items)
@@ -533,6 +583,11 @@ pub trait RuntimePort {
     fn resolver(&self) -> Option<std::sync::Arc<dyn crate::host_resources::Resolver>> {
         None
     }
+    /// How a selected producer workflow treats its links: a project run
+    /// builds each specification alone and reads its producers' artifacts.
+    fn producers(&self) -> crate::file_workflow::Producers {
+        crate::file_workflow::Producers::Built
+    }
     fn plain(
         &mut self,
         prepared: &FileSpecification,
@@ -568,11 +623,12 @@ impl<R: RuntimePort> yamaa_core::build::Ports for Application<R> {
         &mut self,
         request: Request<'_>,
     ) -> Result<crate::file_workflow::Selected, Self::Failure> {
+        let producers = self.runtime.producers();
         match self.runtime.resolver() {
-            Some(resolver) => {
-                crate::file_workflow::select_with_resolver(request, self.host, resolver)
-            }
-            None => crate::file_workflow::select_request(request, self.host),
+            Some(resolver) => crate::file_workflow::select_with_resolver_mode(
+                request, self.host, resolver, producers,
+            ),
+            None => crate::file_workflow::select_request_mode(request, self.host, producers),
         }
         .map_err(ApplicationError::Preparation)
     }
@@ -708,7 +764,7 @@ pub fn check_with_resolver(
     crate::issue_rows::collect(
         domain_entry::check(request, &mut application).unwrap_or_else(|error| match error {
             ApplicationError::Preparation(error) => {
-                crate::project_application::selection_failure(&error, application.host)
+                crate::project_application::selection_failure(&error)
             }
             ApplicationError::Runtime(issues) => issues,
         }),
@@ -723,7 +779,7 @@ pub fn domain(
     domain_entry::domain(request, &mut application, Scope::default())
         .map_err(|error| match error {
             ApplicationError::Preparation(error) => {
-                crate::project_application::selection_failure(&error, application.host)
+                crate::project_application::selection_failure(&error)
             }
             ApplicationError::Runtime(issues) => issues,
         })
@@ -744,15 +800,16 @@ mod tests {
     };
     static NEXT: AtomicUsize = AtomicUsize::new(0);
     #[test]
-    fn primary_above_the_former_eight_megabyte_quota_retains_logs_and_saves_held_bytes() {
+    fn primary_above_the_former_eight_megabyte_quota_retains_the_report_and_saves_held_bytes() {
         let root = std::env::temp_dir().join(format!(
-            "yamaa-output-log-cap-{}-{}",
+            "yamaa-output-report-cap-{}-{}",
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
         fs::create_dir_all(root.join("input")).unwrap();
         let study = Study(crate::canonical_path::canonicalize(root).unwrap());
-        const VERIFICATION_HEADER: &str = "REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,DETAILS\n";
+        const REPORT_HEADER: &str =
+            "ARTIFACT,KIND,SPEC_PATH,NAME,ID,TARGET,RULE,SEVERITY,OUTCOME,CONDITION,COUNT,TOTAL,KEYS,DETAILS\n";
         // The output preserves declared precision: each large
         // finite float needs 309 whole digits plus the declared 18 fractional digits.
         let mut input = String::from("ID,VALUE\n");
@@ -761,7 +818,7 @@ mod tests {
         }
         fs::write(study.0.join("input/input.csv"), input).unwrap();
         let entry = study.0.join("spec.yaml");
-        fs::write(&entry, "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input/input.csv, types: {VALUE: float}}}\noutput: {path: out.csv, columns: [ID, VALUE], decimals: 18, warning_log: warnings.csv, verification_log: checks.csv}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: VALUE\n    type: float\n    derivation: SRC.VALUE\n    verifications:\n      - not_missing: {}\n      - range: {max: 0, severity: warning}\n").unwrap();
+        fs::write(&entry, "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input/input.csv, types: {VALUE: float}}}\noutput: {path: out.csv, columns: [ID, VALUE], decimals: 18, report: checks.csv}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: VALUE\n    type: float\n    derivation: SRC.VALUE\n    verifications:\n      - not_missing: {}\n      - range: {max: 0, severity: warning}\n").unwrap();
         let written = entry.to_str().unwrap();
         let (mut resources, entry) = file_configuration::resources(written).unwrap();
         let document =
@@ -775,7 +832,7 @@ mod tests {
                 runtime: "test",
                 runtime_version: "test",
                 engine_version: yamaa_core::VERSION,
-                example: "logs",
+                example: "report",
                 specification: written,
                 base_directory: ".",
             },
@@ -791,8 +848,8 @@ mod tests {
         .unwrap();
         assert!(result.output().is_some());
         assert!(result.result.publication_items().last().unwrap().1.len() > 8 * 1024 * 1024);
-        assert!(result.warning_log().is_some());
-        assert_eq!(result.log_table(false).unwrap().rows(), 2);
+        // One run, input and base row, two column rows and two check rows.
+        assert_eq!(result.report_table().rows(), 7);
         assert!(result.issues().is_empty());
         fs::remove_file(study.0.join("input/input.csv")).unwrap();
         fs::remove_file(study.0.join("spec.yaml")).unwrap();
@@ -801,14 +858,18 @@ mod tests {
             let bytes = fs::read(study.0.join("out.csv")).unwrap();
             assert!(bytes.len() > 8 * 1024 * 1024);
             assert!(bytes.starts_with(b"ID,VALUE\n1,"));
-            assert!(study.0.join("warnings.csv").exists());
             let checks = fs::read_to_string(study.0.join("checks.csv")).unwrap();
-            assert!(checks.starts_with(VERIFICATION_HEADER));
-            assert!(checks.contains("not_missing,VALUE,REQ-0375,error,held"));
-            assert!(checks.contains("range,VALUE,REQ-0377,warning,violated,range_failed"));
+            assert!(checks.starts_with(REPORT_HEADER));
+            assert!(checks.contains("\nout.csv,run,output,,,,,,succeeded,,26000,,,{}\n"));
+            assert!(checks.contains(
+                "check,columns.VALUE.verifications[0].not_missing,not_missing,,VALUE,REQ-0375,error,held,,0,26000,,{}\n"
+            ));
+            assert!(checks.contains(
+                "check,columns.VALUE.verifications[1].range,range,,VALUE,REQ-0377,warning,violated,range_failed,26000,26000,\"[{\"\"ID\"\":1},"
+            ));
             assert_eq!(
                 result.observations()["artifacts"].as_array().unwrap().len(),
-                3
+                2
             );
             assert!(result.issues().is_empty());
         }
@@ -832,7 +893,7 @@ mod tests {
         measurements: Option<&crate::application_measurements::Measurements>,
     ) -> (Study, Domain) {
         let root = std::env::temp_dir().join(format!(
-            "yamaa-save-log-attempt-{}-{}",
+            "yamaa-save-report-attempt-{}-{}",
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
@@ -847,7 +908,7 @@ mod tests {
         }
         if nested {
             fs::create_dir(root.join("nested")).unwrap();
-            for name in ["adsl-checks.csv", "adsl-warnings.csv", "adsl.csv"] {
+            for name in ["adsl-checks.csv", "adsl.csv"] {
                 specification = specification.replace(name, &format!("nested/{name}"));
             }
         }
@@ -857,7 +918,7 @@ mod tests {
             runtime: "test",
             runtime_version: "test",
             engine_version: yamaa_core::VERSION,
-            example: "logs",
+            example: "report",
             specification: &entry,
             base_directory: ".",
         };
@@ -874,8 +935,7 @@ mod tests {
             measurements.complete(observed.output().is_some());
             assert_eq!(observed.observations_json(), ordinary.observations_json());
             assert_eq!(observed.output(), ordinary.output());
-            assert_eq!(observed.verification_log(), ordinary.verification_log());
-            assert_eq!(observed.warning_log(), ordinary.warning_log());
+            assert_eq!(observed.run_report(), ordinary.run_report());
             assert_eq!(
                 observed
                     .issues()
@@ -905,7 +965,7 @@ mod tests {
     }
     impl std::error::Error for Marker {}
     #[test]
-    fn actual_observed_owner_preserves_report_log_bytes_original_save_failure_and_retry() {
+    fn actual_observed_owner_preserves_run_report_bytes_original_save_failure_and_retry() {
         use crate::application_measurements::Measurements;
         let measurements = Measurements::new();
         let (study, mut result) = built_observed(false, false, Some(&measurements));
@@ -971,7 +1031,7 @@ mod tests {
         assert_eq!(after["saves"][2]["outcome"], "succeeded");
         assert_eq!(
             result.observations()["artifacts"].as_array().unwrap().len(),
-            3
+            2
         );
         assert!(study.0.join("adsl.csv").exists());
         let failed = Measurements::new();
@@ -985,7 +1045,7 @@ mod tests {
     }
     #[test]
     fn actual_late_failures_retain_original_error_entered_prefix_and_retry() {
-        for fail_at in 0..3 {
+        for fail_at in 0..2 {
             let (study, mut result) = built();
             let mut expected = result.observations();
             assert_eq!(
@@ -1036,19 +1096,13 @@ mod tests {
                 result.observations_json(),
                 crate::json_wire::encode(&expected)
             );
-            for (index, name) in ["adsl-checks.csv", "adsl-warnings.csv", "adsl.csv"]
-                .iter()
-                .enumerate()
-            {
+            for (index, name) in ["adsl-checks.csv", "adsl.csv"].iter().enumerate() {
                 assert_eq!(study.0.join(name).exists(), index < fail_at);
             }
             let issue = result.issues().pop().unwrap();
             assert_eq!(
                 issue.spec_paths,
-                [format!(
-                    "output.{}",
-                    ["verification_log", "warning_log", "path"][fail_at]
-                )]
+                [format!("output.{}", ["report", "path"][fail_at])]
             );
             let context: Value = issue.context.clone();
             assert_eq!(context["entered"], fail_at + 1);
@@ -1058,7 +1112,7 @@ mod tests {
             assert!(result.issues().is_empty());
             assert_eq!(
                 result.observations()["artifacts"].as_array().unwrap().len(),
-                3
+                2
             );
             assert_eq!(
                 result.observations_json(),
@@ -1067,10 +1121,11 @@ mod tests {
         }
     }
     #[test]
-    fn failed_build_ancillary_log_keeps_original_failure_and_fresh_retry_prefix() {
+    fn failed_build_report_keeps_original_failure_and_fresh_retry_prefix() {
         let (study, mut result) = built_with(true, false);
         assert!(result.output().is_none());
-        assert!(result.verification_log().is_some());
+        assert!(result.result.report_file());
+        assert!(!result.run_report().is_empty());
         let original = result.observations();
         let marker = Arc::new(());
         assert!(result
@@ -1096,7 +1151,6 @@ mod tests {
         assert_eq!(result.publication_attempt.completed, 1);
         assert!(result.publication_attempt.failure.is_none());
         assert!(study.0.join("adsl-checks.csv").exists());
-        assert!(!study.0.join("adsl-warnings.csv").exists());
         assert!(!study.0.join("adsl.csv").exists());
         let mut expected = original;
         expected["artifacts"] = Value::Array(
@@ -1135,10 +1189,10 @@ mod tests {
         fs::remove_file(study.0.join("nested")).unwrap();
         fs::create_dir(study.0.join("nested")).unwrap();
         assert!(result.save().unwrap());
-        assert_eq!(result.publication_attempt.completed, 3);
+        assert_eq!(result.publication_attempt.completed, 2);
         assert_eq!(
             result.observations()["artifacts"].as_array().unwrap().len(),
-            3
+            2
         );
     }
     #[test]
@@ -1172,7 +1226,6 @@ mod tests {
             1
         );
         assert!(study.0.join("adsl-checks.csv").exists());
-        assert!(!study.0.join("adsl-warnings.csv").exists());
         assert!(!study.0.join("adsl.csv").exists());
         assert!(result.save().unwrap());
         assert!(result.publication_attempt.unwind.is_none());
@@ -1201,7 +1254,7 @@ mod tests {
             let mut raw = format!(
                 "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: input.csv}}\noutput: {{path: out.csv, columns: [{}]{} }}\ncolumns:\n",
                 columns.join(", "),
-                if verification { ", verification_log: checks.csv" } else { "" }
+                if verification { ", report: checks.csv" } else { "" }
             );
             for name in columns {
                 raw.push_str(&format!(
@@ -1251,7 +1304,9 @@ mod tests {
             let mut domain = domain.unwrap();
             assert!(domain.output().is_some());
             assert!(domain.issues().is_empty());
-            assert_eq!(domain.log_table(false).is_some(), verification);
+            assert_eq!(domain.result.report_file(), verification);
+            // One run, input and base row and one row for each of the 40 columns.
+            assert_eq!(domain.report_table().rows(), 43);
             fs::remove_file(study.0.join("input.csv")).unwrap();
             fs::remove_file(study.0.join("spec.yaml")).unwrap();
             assert!(domain.save().unwrap());
@@ -1260,8 +1315,13 @@ mod tests {
             assert!(domain.save().unwrap());
             assert_eq!(fs::read(study.0.join("out.csv")).unwrap(), held);
             if verification {
-                assert_eq!(fs::read_to_string(study.0.join("checks.csv")).unwrap(),
-                        "REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,DETAILS\n");
+                let report = fs::read_to_string(study.0.join("checks.csv")).unwrap();
+                assert!(report.starts_with(
+                    "ARTIFACT,KIND,SPEC_PATH,NAME,ID,TARGET,RULE,SEVERITY,OUTCOME,CONDITION,COUNT,TOTAL,KEYS,DETAILS\nout.csv,run,output,,,,,,succeeded,,1,,,{}\n"
+                ));
+                assert_eq!(report.lines().count(), 44);
+            } else {
+                assert!(!study.0.join("checks.csv").exists());
             }
         }
     }

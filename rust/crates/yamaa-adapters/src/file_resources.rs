@@ -89,7 +89,7 @@ struct Snapshot {
 pub struct Resources {
     host: Option<crate::host_resources::Resources>,
     host_sources: RetainedSources,
-    roots: Arc<[Root]>,
+    roots: Arc<Vec<Root>>,
     local_paths: bool,
     base: Segments,
     /// The canonical identity of the last selected entry: the declaring
@@ -112,8 +112,19 @@ pub struct RunScope {
     /// retained sources of a run behind its own resolver still begin with
     /// the metadata that compiled it. Empty when the scope inherits them.
     compiled: RetainedSources,
+    /// Artifacts a project run already built, offered to this run's saved
+    /// producer links.
+    held: Option<Arc<crate::file_producer_build::HeldArtifacts>>,
 }
 impl RunScope {
+    /// Offer artifacts the caller already built to this run's saved links.
+    /// Links without a held artifact read the saved file their path names.
+    pub fn hold(&mut self, held: Arc<crate::file_producer_build::HeldArtifacts>) {
+        self.held = Some(held);
+    }
+    pub(crate) fn held(&self) -> Option<Arc<crate::file_producer_build::HeldArtifacts>> {
+        self.held.clone()
+    }
     /// Snapshots created so far in this scope, including those it inherited.
     pub fn capture_reads(&self) -> usize {
         self.resources.capture_reads()
@@ -139,7 +150,7 @@ impl Resources {
         Self {
             host_sources: vec![],
             host: Some(crate::host_resources::Resources::new(resolver, base.into())),
-            roots: Arc::new([]),
+            roots: Arc::new(Vec::new()),
             local_paths: false,
             base: vec![],
             entry: None,
@@ -179,6 +190,7 @@ impl Resources {
                     reads: self.reads,
                 },
                 compiled: Vec::new(),
+                held: None,
             },
             Some(resolver) => {
                 let entry = self
@@ -193,7 +205,7 @@ impl Resources {
                             entry.clone(),
                         )),
                         host_sources: vec![],
-                        roots: Arc::new([]),
+                        roots: Arc::new(Vec::new()),
                         local_paths: false,
                         base: vec![],
                         entry: Some(entry),
@@ -203,6 +215,7 @@ impl Resources {
                         reads: 0,
                     },
                     compiled: self.retain_sources(),
+                    held: None,
                 }
             }
         }
@@ -216,6 +229,37 @@ impl Resources {
         let mut resources = Self::new(base, base, &[])?;
         resources.local_paths = true;
         Ok(resources)
+    }
+    /// The project file a caller passes is a caller path like the entry
+    /// (REQ-1331): its existing parent is selected once, and the caller's own
+    /// spelling of that directory keeps its authority (REQ-0781). A project
+    /// operation names each listed specification by its canonical identity,
+    /// so without this root the caller's spelling of the project file, such
+    /// as the macOS `/var` alias of `/private/var`, lies outside the entry
+    /// parent and is walked from its filesystem root and refused as a link.
+    /// A parent that cannot be selected adds no root: reading the project
+    /// file then reports its own failure. Configuration calls this before any
+    /// run scope shares the roots.
+    pub(crate) fn select_caller_parent(&mut self, path: &str) {
+        if self.host.is_some() || !self.local_paths {
+            return;
+        }
+        let Some(parent) = Path::new(path).parent().and_then(Path::to_str) else {
+            return;
+        };
+        let Ok(root) = selected_root(parent) else {
+            return;
+        };
+        // An entry beside its project file already holds every spelling.
+        if !self.roots.iter().any(|known| {
+            root.spellings
+                .iter()
+                .all(|spelling| known.spellings.contains(spelling))
+        }) {
+            if let Some(roots) = Arc::get_mut(&mut self.roots) {
+                roots.push(root);
+            }
+        }
     }
     /// The first root is the project root; later roots retain fallback order.
     pub fn new(root: &str, base: &str, data_roots: &[String]) -> Result<Self, Error> {
@@ -231,7 +275,7 @@ impl Resources {
         Ok(Self {
             host: None,
             host_sources: vec![],
-            roots: roots.into(),
+            roots: Arc::new(roots),
             local_paths: false,
             base,
             entry: None,

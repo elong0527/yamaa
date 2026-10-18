@@ -1118,7 +1118,7 @@ mod execution {
         }
 
         #[test]
-        fn deferred_column_findings_keep_vocabulary_and_warning_log_admission() {
+        fn deferred_column_findings_keep_vocabulary_and_report_admission() {
             use yamaa_adapters::specification_run::{Error, PreparedRun};
             use yamaa_core::specification::PrepareError;
             let schema = yamaa_adapters::shipped_schema::capture().unwrap();
@@ -1133,13 +1133,11 @@ mod execution {
                 let document = prepare(&schema, raw(first, "warning").as_bytes());
                 assert!(matches!(PreparedRun::prepare(document),
             Err(Error::Prepare(PrepareError::Invalid(items)))
-                if items.iter().any(|item| item.diagnostic().definition().condition == "missing_warning_log")));
-                let with_log = raw(first, "warning").replace(
-                    "columns: [ID, V]}",
-                    "columns: [ID, V], warning_log: warnings.csv}",
-                );
-                PreparedRun::prepare(prepare(&schema, with_log.as_bytes()))
-                    .expect("the earlier finding remains deferred with a declared warning log");
+                if items.iter().any(|item| item.diagnostic().definition().condition == "missing_report")));
+                let with_report = raw(first, "warning")
+                    .replace("columns: [ID, V]}", "columns: [ID, V], report: report.csv}");
+                PreparedRun::prepare(prepare(&schema, with_report.as_bytes()))
+                    .expect("the earlier finding remains deferred with a declared report file");
             }
         }
 

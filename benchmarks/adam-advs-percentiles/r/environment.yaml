@@ -1,5 +1,4 @@
 schema_version: '1.0'
-language: r
 lock: renv.lock
 functions:
   normal_cdf:

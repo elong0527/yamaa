@@ -24,23 +24,19 @@ pub enum Submission {
 }
 
 /// Closed classes and required fields have already passed shared schema admission.
-/// Retained submission metadata stays with the captured normalized document.
+/// Study and section metadata stay with the captured project document; only
+/// submission composition requires them.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Draft {
+    /// The `environments` key the project links for the host. Absent when the
+    /// project names no environment file for the host language.
     pub language: Option<Language>,
     pub lock: Option<LockReference>,
     pub functions: Option<Vec<Definition>>,
     pub codelists: Vec<Source>,
-    pub has_study: bool,
-    pub submissions: Vec<Submission>,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Finding {
-    MissingLanguage,
-    LanguageMismatch {
-        declared: Language,
-        host: Language,
-    },
     LockKindMismatch {
         language: Language,
         actual: LockKind,
@@ -53,7 +49,6 @@ pub enum Finding {
         finding: project_function::Finding,
     },
     Codelist(project_terminology::Finding),
-    MissingStudy,
 }
 
 /// Retain the original typed input for diagnostic projection after rejection.
@@ -80,16 +75,34 @@ pub struct ExecutionEnvironment {
     lock: Option<LockReference>,
     functions: Option<Vec<project_function::Function>>,
     catalogue: project_terminology::Catalogue,
-    has_study: bool,
-    submissions: Vec<Submission>,
     inventory: crate::submission_inventory::Inventory,
+    /// False only for a build that supplied no project file at all.
+    project: bool,
 }
 impl ExecutionEnvironment {
+    /// A build without a project has no environment, terminology or inventory.
+    /// It does not manufacture a project file or a discovery location.
+    pub fn without_project(host: Language) -> Self {
+        Self {
+            host,
+            language: None,
+            lock: None,
+            functions: None,
+            catalogue: project_terminology::Catalogue::from_admitted(Vec::new()),
+            inventory: Default::default(),
+            project: false,
+        }
+    }
     pub fn host(&self) -> Language {
         self.host
     }
     pub fn language(&self) -> Option<Language> {
         self.language
+    }
+    /// The host language when a supplied project links no environment for it.
+    /// A specification that calls a project function cannot execute then.
+    pub fn undeclared_language(&self) -> Option<Language> {
+        (self.project && self.language.is_none()).then_some(self.host)
     }
     pub fn lock(&self) -> Option<&LockReference> {
         self.lock.as_ref()
@@ -102,12 +115,6 @@ impl ExecutionEnvironment {
     }
     pub fn catalogue(&self) -> &project_terminology::Catalogue {
         &self.catalogue
-    }
-    pub fn has_study(&self) -> bool {
-        self.has_study
-    }
-    pub fn submissions(&self) -> &[Submission] {
-        &self.submissions
     }
     pub fn inventory(&self) -> &crate::submission_inventory::Inventory {
         &self.inventory
@@ -148,8 +155,6 @@ impl Environment {
             lock,
             functions,
             codelists,
-            has_study,
-            submissions,
         } = self.draft;
         ExecutionEnvironment {
             host: self.host,
@@ -164,35 +169,25 @@ impl Environment {
                     .collect()
             }),
             catalogue: project_terminology::Catalogue::from_admitted(codelists),
-            has_study,
-            submissions,
             inventory: Default::default(),
+            project: true,
         }
     }
 }
 
 pub fn validate(host: Language, draft: &Draft) -> Vec<Finding> {
     let mut findings = Vec::new();
-    if draft.functions.is_some() && draft.language.is_none() {
-        findings.push(Finding::MissingLanguage);
-    }
-    if let Some(language) = draft.language {
-        if language != host {
-            findings.push(Finding::LanguageMismatch {
-                declared: language,
-                host,
+    // The project key states the environment's language; only its lock format
+    // can still disagree with it.
+    if let (Some(language), Some(lock)) = (draft.language, &draft.lock) {
+        if !matches!(
+            (language, lock.kind),
+            (Language::Python, LockKind::Uv) | (Language::R, LockKind::Renv)
+        ) {
+            findings.push(Finding::LockKindMismatch {
+                language,
+                actual: lock.kind,
             });
-        }
-        if let Some(lock) = &draft.lock {
-            if !matches!(
-                (language, lock.kind),
-                (Language::Python, LockKind::Uv) | (Language::R, LockKind::Renv)
-            ) {
-                findings.push(Finding::LockKindMismatch {
-                    language,
-                    actual: lock.kind,
-                });
-            }
         }
     }
     if let Some(functions) = &draft.functions {
@@ -201,8 +196,6 @@ pub fn validate(host: Language, draft: &Draft) -> Vec<Finding> {
             if !names.insert(&definition.name) {
                 findings.push(Finding::DuplicateFunction { function });
             }
-            // The selected host gives useful callable findings even when language
-            // is absent; absence itself remains an independent root finding.
             for finding in project_function::validate(draft.language.unwrap_or(host), definition) {
                 findings.push(Finding::Function { function, finding });
             }
@@ -213,8 +206,5 @@ pub fn validate(host: Language, draft: &Draft) -> Vec<Finding> {
             .into_iter()
             .map(Finding::Codelist),
     );
-    if !draft.submissions.is_empty() && !draft.has_study {
-        findings.push(Finding::MissingStudy);
-    }
     findings
 }

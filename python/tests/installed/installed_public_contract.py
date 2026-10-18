@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-import dataclasses
+import datetime
 import gc
+import importlib.util
 import inspect
 import json
+import math
 import shutil
 import tempfile
 import unittest
@@ -20,12 +22,45 @@ import yamaa
 from yamaa import _locked_functions as host
 
 TRUTH = load_truth(__file__, "public-contract")
+PARITY = load_truth(__file__, "diagnostic-parity")
 
 SPEC = TRUTH["specification_yaml"]
 INPUT = TRUTH["python_input_csv"].encode("utf-8")
 VALUES = [
     None if value is None else int(value) for value in TRUTH["python_values_decimal"]
 ]
+MESSAGES = TRUTH["messages"]
+ISSUE_TYPES = [
+    pl.String,
+    pl.String,
+    pl.String,
+    pl.List(pl.String),
+    pl.String,
+    pl.List(pl.Int64),
+    pl.List(pl.String),
+]
+REMOVED = (
+    "domain",
+    "check",
+    "define",
+    "resolve_specification",
+    "write_odm_parquet",
+    "ResolvedSpecification",
+    "Diagnostic",
+    "SourceSpan",
+    "DomainError",
+    "DefineError",
+    "ResolvedSpecificationError",
+    "resources",
+)
+
+
+def public_names(value):
+    return sorted(name for name in dir(value) if not name.startswith("_"))
+
+
+def arguments(function):
+    return list(inspect.signature(function).parameters)
 
 
 class PublicContract(unittest.TestCase):
@@ -38,171 +73,174 @@ class PublicContract(unittest.TestCase):
         (self.root / "input.csv").write_bytes(INPUT)
 
     def issues(self, result):
+        """The one findings view: seven typed columns, context as JSON text."""
         frame = result.issues
-        self.assertEqual(
-            frame.columns,
-            TRUTH["issue_columns"],
-        )
-        self.assertEqual(
-            frame.dtypes,
-            [pl.String, pl.String, pl.String, pl.List(pl.String), pl.String],
-        )
-        records = result.diagnostics
-        self.assertIsInstance(records, list)
-        self.assertEqual(len(records), frame.height)
-        for row, record in zip(frame.to_dicts(), records, strict=True):
-            self.assertIsInstance(json.loads(row["context"]), dict)
+        self.assertIsInstance(frame, pl.DataFrame)
+        self.assertEqual(frame.columns, TRUTH["issue_columns"])
+        self.assertEqual(frame.dtypes, ISSUE_TYPES)
+        for row in frame.to_dicts():
             self.assertTrue(row["condition"])
-            self.assert_projection(row, record)
+            self.assertIsInstance(json.loads(row["context"]), dict)
+            span = row["source_span"]
+            if span is not None:
+                self.assertEqual(len(span), 2)
+                self.assertLessEqual(0, span[0])
+                self.assertLessEqual(span[0], span[1])
         return frame
 
-    def assert_projection(self, row, record):
-        """One frame row and one named record describe the same finding."""
-        self.assertIsInstance(record, yamaa.Diagnostic)
-        self.assertEqual(
-            [field.name for field in dataclasses.fields(record)],
-            TRUTH["diagnostic_record_names"],
-        )
-        self.assertEqual(
-            (record.phase, record.condition, record.requirement, record.spec_paths),
-            (row["phase"], row["condition"], row["requirement"], row["spec_paths"]),
-        )
-        self.assertIsInstance(record.context, dict)
-        # The frame context is the canonical JSON text of the record context;
-        # Python's JSON reader keeps integer tokens exact, so the two agree
-        # value for value.
-        self.assertEqual(record.context, json.loads(row["context"]))
-        if record.source_span is not None:
-            self.assertIsInstance(record.source_span, yamaa.SourceSpan)
-            self.assertLessEqual(0, record.source_span.start)
-            self.assertLessEqual(record.source_span.start, record.source_span.end)
-        if record.operand_route is not None:
-            self.assertIsInstance(record.operand_route, list)
-            self.assertTrue(all(isinstance(step, str) for step in record.operand_route))
-        with self.assertRaises(dataclasses.FrozenInstanceError):
-            record.phase = "changed"
+    def refusal(self, call):
+        """Run `call`, require a yamaa.Error, and return it."""
+        with self.assertRaises(yamaa.Error) as caught:
+            call()
+        error = caught.exception
+        self.assertIs(type(error), yamaa.Error)
+        self.assertIsNone(error.__cause__)
+        self.assertTrue(error.__suppress_context__)
+        self.issues(error)
+        return error
 
-    def test_component_endpoints_are_absent_from_the_installed_binding(self):
+    def test_exports_native_surface_and_version(self):
         from yamaa import _native
 
-        for name in (
-            "engine_info",
-            "analyze_aggregate",
-            "analyze_numeric",
-            "analyze_predicate",
-            "analyze_dependencies",
-            "analyze_column_dependencies",
-            "analyze_references",
-            "reference_capabilities",
-            "dataset_capabilities",
-            "scalar_round_trip",
-            "evaluate_numeric",
-            "evaluate_regex",
-            "table_round_trip",
-            "table_snapshot",
-            "execute_dataset",
-            "execute_dataset_sources",
-            "execute_dataset_functions",
-            "invoke_function",
-            "interpret_schema",
-            "decode_yaml",
-            "_compile_schema",
-            "_Schema",
-            "_compile_reference_catalog",
-            "_ReferenceCatalog",
-            "_profile_dataset_functions",
-            "_temporal_result",
-            "_capture_schema_metadata",
-            "_schema_include_names",
-            "_SchemaMetadata",
-            "_ProducerReport",
-            "_prepare_document",
-            "_prepare_specification",
-            "_prepare_inherited_specification",
-            "_prepare_file_specification",
-            "_prepare_file_project",
-            "_prepare_producer_file",
-            "_Specification",
-            "_FileSpecification",
-            "_ProjectSpecification",
-            "_ProjectAttempt",
-            "_ProjectResult",
-            "_ProducerSpecification",
-            "_BuildResult",
-        ):
+        self.assertEqual(
+            yamaa.__all__, ["Error", "__version__", "project", "read_odm", "spec"]
+        )
+        self.assertTrue(issubclass(yamaa.Error, Exception))
+        for name in REMOVED:
             with self.subTest(name=name):
-                self.assertFalse(hasattr(_native, name))
-        self.assertIsInstance(_native._CORE_VERSION, str)
-        self.assertTrue(_native._CORE_VERSION)
+                self.assertFalse(hasattr(yamaa, name))
+        for module in ("yamaa.resources", "yamaa._odm"):
+            self.assertIsNone(importlib.util.find_spec(module))
+        self.assertEqual(
+            sorted(name for name in dir(_native) if not name.startswith("__")),
+            [
+                "_ArrowTable",
+                "_CORE_VERSION",
+                "_Error",
+                "_ProjectRun",
+                "_Run",
+                "_Submission",
+                "_project_check",
+                "_project_run",
+                "_project_spec",
+                "_project_submission",
+                "_read_odm",
+                "_spec_check",
+                "_spec_resolve",
+                "_spec_run",
+                "_style_same_value",
+            ],
+        )
         self.assertEqual(yamaa.__version__, "0.5.0")
         self.assertEqual(_native._CORE_VERSION, yamaa.__version__)
 
-    def test_signatures_argument_types_and_removed_options(self):
-        for function in (yamaa.domain, yamaa.check):
-            parameters = inspect.signature(function).parameters
-            self.assertEqual(
-                list(parameters), ["specification", "environment", "resolver"]
-            )
-            self.assertEqual(
-                parameters["environment"].kind, inspect.Parameter.KEYWORD_ONLY
-            )
-            self.assertIsNone(parameters["environment"].default)
-            for value in (None, 7, True, [], object()):
-                with self.subTest(
-                    function=function.__name__, value=type(value).__name__
-                ):
+    def test_signatures_members_and_argument_types(self):
+        expected = TRUTH["arguments"]
+        project = yamaa.project(self.root / "project.yaml")
+        spec = yamaa.spec(self.spec)
+        callables = {
+            "spec": yamaa.spec,
+            "project": yamaa.project,
+            "read_odm": yamaa.read_odm,
+            "spec.check": spec.check,
+            "spec.resolve": spec.resolve,
+            "spec.run": spec.run,
+            "project.spec": project.spec,
+            "project.check": project.check,
+            "project.run": project.run,
+            "project.submission": project.submission,
+        }
+        for name, function in callables.items():
+            with self.subTest(name=name):
+                self.assertEqual(arguments(function), expected[name])
+        options = inspect.signature(yamaa.read_odm).parameters
+        self.assertEqual(
+            options["source"].kind, inspect.Parameter.POSITIONAL_OR_KEYWORD
+        )
+        self.assertIsNone(options["archive_member"].default)
+        for name, default in TRUTH["read_odm_limits"].items():
+            self.assertEqual(options[name].default, int(default))
+        for name in expected["read_odm"][1:]:
+            self.assertEqual(options[name].kind, inspect.Parameter.KEYWORD_ONLY)
+        self.assertIsNone(inspect.signature(project.run).parameters["section"].default)
+        submission = inspect.signature(project.submission).parameters
+        self.assertIsNone(submission["section"].default)
+        self.assertIsNone(submission["created"].default)
+        self.assertEqual(submission["created"].kind, inspect.Parameter.KEYWORD_ONLY)
+
+        members = TRUTH["members"]
+        self.assertEqual(public_names(spec), members["spec"])
+        self.assertEqual(public_names(project), members["project"])
+        self.assertEqual(public_names(spec.check()), members["check"])
+        run = spec.run()
+        self.assertEqual(public_names(run), members["run"])
+        self.assertEqual(arguments(run.save), expected["run.save"])
+
+        for value in (None, 7, True, [], object()):
+            with self.subTest(value=type(value).__name__):
+                for function in (yamaa.spec, yamaa.project, yamaa.read_odm):
                     with self.assertRaises(TypeError):
                         function(value)
-                    if value is not None:
+                with self.assertRaises(TypeError):
+                    project.spec(value)
+                if value is not None:
+                    for call in (
+                        lambda: project.run(value),
+                        lambda: project.submission(value),
+                        lambda: project.submission(created=value),
+                        lambda: yamaa.read_odm(self.spec, archive_member=value),
+                    ):
                         with self.assertRaises(TypeError):
-                            function(self.spec, environment=value)
-            with self.assertRaises(TypeError):
-                function(self.spec, None)
-            for option in (
-                "schema_root",
-                "project_root",
-                "data_roots",
-                "read_project_configuration",
-                "dispatcher",
-                "study_document",
-            ):
-                with self.subTest(option=option), self.assertRaises(TypeError):
-                    function(self.spec, **{option: None})
-
-    def test_missing_specification_is_an_issue_and_failed_save_is_typed(self):
-        absent = self.root / "absent.yaml"
-        for function in (yamaa.check, yamaa.domain):
-            result = function(absent)
-            self.assertGreater(self.issues(result).height, 0)
-            for name in ("spec", "specification", "resolved", "resolved_specification"):
-                self.assertFalse(hasattr(result, name))
-            self.assertEqual(
-                [record.condition for record in result.diagnostics],
-                result.issues["condition"].to_list(),
-            )
-            if function is yamaa.domain:
-                self.assertIsNone(result.output)
-                before = result.issues.to_dicts()
-                records = result.diagnostics
-                for _ in range(2):
-                    with self.assertRaises(yamaa.DomainError):
-                        result.save()
-                    self.assertEqual(result.issues.to_dicts(), before)
-                    self.assertEqual(result.diagnostics, records)
+                            call()
+        # The removed options are gone, not ignored.
+        for option in ("environment", "resolver"):
+            with self.subTest(option=option):
+                with self.assertRaises(TypeError):
+                    yamaa.spec(self.spec, **{option: None})
+                for method in (spec.check, spec.resolve, spec.run, project.check):
+                    with self.assertRaises(TypeError):
+                        method(**{option: None})
+        with self.assertRaises(TypeError):
+            run.save(self.root / "other.csv")
         self.assertFalse((self.root / "output.csv").exists())
 
-    def test_read_only_views_repeated_builds_and_owned_publication(self):
-        first, second = yamaa.domain(self.spec), yamaa.domain(self.spec)
+    def test_missing_specification_is_an_issue_and_failed_save_raises(self):
+        spec = yamaa.spec(self.root / "absent.yaml")
+        checked = self.issues(spec.check())
+        self.assertEqual(checked["condition"].to_list(), ["engine_rejected"])
+        self.assertEqual(
+            json.loads(checked["context"][0]),
+            {"code": "resource_missing", "stage": "prepare"},
+        )
+        run = spec.run()
+        self.assertIsNone(run.output)
+        self.assertIsNone(run.report)
+        self.assertTrue(self.issues(run).equals(checked))
+        for _ in range(2):
+            error = self.refusal(run.save)
+            self.assertEqual(str(error), MESSAGES["failed_run_save"])
+            self.assertTrue(error.issues.equals(checked))
+            self.assertTrue(run.issues.equals(checked))
+        error = self.refusal(spec.resolve)
+        self.assertEqual(str(error), MESSAGES["resolve"])
+        self.assertTrue(error.issues.equals(checked))
+        self.assertFalse((self.root / "output.csv").exists())
+
+    def test_results_are_snapshots_and_save_publishes_held_bytes(self):
+        first, second = yamaa.spec(self.spec).run(), yamaa.spec(self.spec).run()
         for result in (first, second):
             self.assertTrue(self.issues(result).is_empty())
             self.assertEqual(result.output["VALUE"].to_list(), VALUES)
-            self.assertIsNone(result.verification_log)
-            self.assertIsNone(result.warning_log)
-            for name in tuple(TRUTH["owned_view_names"]):
+            self.assertEqual(result.report.columns, TRUTH["report_columns"])
+            self.assertEqual(
+                result.report["KIND"].to_list(),
+                ["run", "input", "rows", "column", "column"],
+            )
+            self.assertEqual(result.report["OUTCOME"][0], "succeeded")
+            self.assertEqual(result.report["COUNT"][0], 3)
+            for name in TRUTH["read_only_views"]["run"]:
                 with self.subTest(name=name), self.assertRaises(AttributeError):
                     setattr(result, name, None)
-            with self.assertRaises(TypeError):
-                result.save(self.root / "other.csv")
         self.assertFalse((self.root / "output.csv").exists())
         view = first.output
         view[0, "VALUE"] = 9
@@ -210,94 +248,121 @@ class PublicContract(unittest.TestCase):
         self.spec.unlink()
         (self.root / "input.csv").unlink()
         gc.collect()
-        for _ in range(2):
-            self.assertIs(first.save(), True)
-            self.assertEqual((self.root / "output.csv").read_bytes(), INPUT)
+        self.assertIsNone(first.save())
+        self.assertEqual((self.root / "output.csv").read_bytes(), INPUT)
         del first
         gc.collect()
         self.assertEqual(second.output["VALUE"].to_list(), VALUES)
-        self.assertIs(second.save(), True)
+        self.assertIsNone(second.save())
 
-    def test_exact_nul_text_and_empty_literal_are_distinct_from_missing(self):
+    def test_typed_columns_keep_their_exact_values(self):
+        self.spec.write_text(TRUTH["typed_specification_yaml"], encoding="utf-8")
+        (self.root / "input.csv").write_bytes(TRUTH["typed_input_csv"].encode("utf-8"))
+        result = yamaa.spec(self.spec).run()
+        self.assertTrue(self.issues(result).is_empty(), result.issues)
+        frame = result.output
+        self.assertEqual(
+            frame.dtypes[:5], [pl.Int64, pl.String, pl.Int64, pl.Float64, pl.Date]
+        )
+        self.assertIsInstance(frame.dtypes[5], pl.Datetime)
+        self.assertIsNone(frame.dtypes[5].time_zone)
+        truth = TRUTH["typed_values"]
+        epoch = datetime.datetime(1970, 1, 1)
+        for name, convert in (
+            ("ID", int),
+            ("S", str),
+            ("I", int),
+            ("F", float),
+            ("D", lambda days: epoch.date() + datetime.timedelta(days=int(days))),
+            ("T", lambda seconds: epoch + datetime.timedelta(seconds=int(seconds))),
+        ):
+            with self.subTest(column=name):
+                self.assertEqual(
+                    frame[name].to_list(),
+                    [
+                        None if value is None else convert(value)
+                        for value in truth[name]
+                    ],
+                )
+        self.assertEqual(math.copysign(1.0, frame["F"][0]), -1.0)
+
+    def test_text_with_nul_and_empty_literal_are_distinct_from_missing(self):
         self.spec.write_text(
             SPEC.replace("VALUE, type: int", "VALUE, type: str")
-            .replace(
-                "output: {",
-                TRUTH["empty_text_column"],
-            )
+            .replace("output: {", TRUTH["empty_text_column"])
             .replace("columns: [ID, VALUE]", "columns: [ID, VALUE, EMPTY]"),
             encoding="utf-8",
         )
         (self.root / "input.csv").write_bytes(b"ID,VALUE\na,a\x00b\nb,\xc3\xa9\nc,\n")
-        result = yamaa.domain(self.spec)
+        result = yamaa.spec(self.spec).run()
         self.assertTrue(self.issues(result).is_empty())
         self.assertEqual(result.output["VALUE"].to_list(), ["a\x00b", "\u00e9", None])
         self.assertEqual(result.output["EMPTY"].to_list(), ["", "", ""])
-        result.save()
+        self.assertIsNone(result.save())
         self.assertEqual(
             (self.root / "output.csv").read_bytes(),
             b'ID,VALUE,EMPTY\na,a\x00b,""\nb,\xc3\xa9,""\nc,,""\n',
         )
 
-    def test_failed_verification_retains_owned_diagnostic_log(self):
+    def test_failed_run_writes_its_report_and_raises(self):
         self.spec.write_text(
             SPEC.replace(
-                TRUTH["integer_column_yaml"],
-                "  - name: VALUE\n    type: int\n    derivation: SRC.VALUE\n"
-                "    verifications:\n"
-                "      - range: {max: 0, severity: warning, id: warn}\n"
-                "      - range: {max: 0, severity: error, id: fatal}",
+                TRUTH["integer_column_yaml"], TRUTH["fatal_integer_column_yaml"]
             )
-            .replace(
-                "output: {",
-                TRUTH["unreached_row_count_yaml"],
-            )
-            .replace(
-                "columns: [ID, VALUE]}",
-                TRUTH["log_output_yaml"],
-            ),
+            .replace("output: {", TRUTH["unreached_row_count_yaml"])
+            .replace("columns: [ID, VALUE]}", TRUTH["report_output_yaml"]),
             encoding="utf-8",
         )
-        (self.root / "input.csv").write_bytes(b"ID,VALUE\na,-3\nb,7\nc,\n")
-        for name in ("output.csv", "warnings.csv"):
+        (self.root / "input.csv").write_bytes(TRUTH["failed_input_csv"].encode())
+        for name in ("output.csv", "checks.csv"):
             (self.root / name).write_bytes(b"sentinel")
-        result = yamaa.domain(self.spec)
+        result = yamaa.spec(self.spec).run()
         issues = self.issues(result).to_dicts()
-        self.assertEqual(len(issues), 1)
-        self.assertEqual(issues[0]["condition"], "range_failed")
-        # The same failure through the named record.
-        (record,) = result.diagnostics
-        self.assertEqual(record.condition, "range_failed")
-        self.assertEqual(record.phase, issues[0]["phase"])
-        self.assertEqual(record.requirement, issues[0]["requirement"])
-        self.assertEqual(record.spec_paths, issues[0]["spec_paths"])
-        self.assertEqual(record.context, json.loads(issues[0]["context"]))
+        self.assertEqual(
+            [(row["phase"], row["condition"], row["requirement"]) for row in issues],
+            [("verification", "range_failed", "REQ-0377")],
+        )
+        self.assertEqual(
+            json.loads(issues[0]["context"]),
+            {
+                "column": "VALUE",
+                "failure_count": 1,
+                "keys": [{"ID": "b"}],
+                "verification_id": "fatal",
+            },
+        )
         self.assertIsNone(result.output)
-        # REQ-0396 builds the warning artifact only for successful runs;
-        # REQ-1177 retains the evaluated diagnostic prefix on failure.
-        self.assertIsNone(result.warning_log)
-        view = result.verification_log
-        self.assertEqual(view["VERIFICATION_ID"].to_list(), ["warn", "fatal"])
-        self.assertEqual(view["OUTCOME"].to_list(), ["violated", "violated"])
-        self.assertEqual(view["EVALUATED_COUNT"].to_list(), [3, 3])
-        self.assertEqual(view["FAILURE_COUNT"].to_list(), [1, 1])
-        self.assertEqual(view["REQUIREMENT"].to_list(), ["REQ-0377", "REQ-0377"])
-        truth = view.to_dicts()
-        view[0, "REPORT_VERSION"] = "changed"
+        report = result.report
+        self.assertEqual(report.columns, TRUTH["report_columns"])
+        self.assertEqual(
+            report["KIND"].to_list(), ["run", "input", "rows", "check", "check"]
+        )
+        checks = report.filter(pl.col("KIND") == "check")
+        self.assertEqual(checks["ID"].to_list(), ["warn", "fatal"])
+        self.assertEqual(checks["OUTCOME"].to_list(), ["violated", "violated"])
+        self.assertEqual(checks["COUNT"].to_list(), [1, 1])
+        self.assertEqual(checks["TOTAL"].to_list(), [3, 3])
+        self.assertEqual(checks["RULE"].to_list(), ["REQ-0377", "REQ-0377"])
+        truth = report.to_dicts()
+        report[0, "OUTCOME"] = "changed"
         self.spec.unlink()
         (self.root / "input.csv").unlink()
         gc.collect()
+        # Every save rewrites the report, then raises: a deleted report comes
+        # back unchanged and the stale output is never touched.
         for _ in range(2):
-            with self.assertRaises(yamaa.DomainError):
-                result.save()
+            error = self.refusal(result.save)
+            self.assertEqual(str(error), MESSAGES["failed_run_save"])
+            self.assertEqual(error.issues.to_dicts(), issues)
             self.assertEqual(result.issues.to_dicts(), issues)
-            self.assertEqual(result.diagnostics, [record])
-            self.assertEqual(result.verification_log.to_dicts(), truth)
+            self.assertEqual(result.report.to_dicts(), truth)
             self.assertEqual((self.root / "output.csv").read_bytes(), b"sentinel")
-            self.assertEqual((self.root / "warnings.csv").read_bytes(), b"sentinel")
-            lines = (self.root / "checks.csv").read_bytes().splitlines()
-            self.assertEqual(len(lines), 3)
-        held = result.verification_log
+            self.assertEqual(
+                (self.root / "checks.csv").read_bytes(),
+                TRUTH["failed_report_csv"].encode("utf-8"),
+            )
+            (self.root / "checks.csv").unlink()
+        held = result.report
         del result
         gc.collect()
         self.assertEqual(held.to_dicts(), truth)
@@ -315,51 +380,57 @@ class PublicContract(unittest.TestCase):
             ),
             encoding="utf-8",
         )
-        return source, case / "python/environment.yaml"
+        return yamaa.project(case / "project.yaml"), case
 
     def test_each_callback_stage_preserves_original_interrupt_identity(self):
-        source, environment = self.function_study()
+        project, case = self.function_study()
         verify, resolve = host.verify_versions, host.resolve_callable
+        entries = {
+            "spec": lambda: project.spec("TEST").run(),
+            "project": lambda: project.run(),
+        }
         for kind in (KeyboardInterrupt, SystemExit):
             for stage in ("lock", "binding", "conformance", "derivation"):
-                with self.subTest(kind=kind.__name__, stage=stage):
-                    original = kind(TRUTH["interrupt_message"])
-                    calls = []
+                for entry, call in entries.items():
+                    with self.subTest(kind=kind.__name__, stage=stage, entry=entry):
+                        original = kind(TRUTH["interrupt_message"])
+                        calls = []
 
-                    def versions(*arguments):
-                        if stage == "lock":
-                            raise original
-                        return verify(*arguments)
-
-                    def binding(*arguments):
-                        if stage == "binding":
-                            raise original
-                        invoke = resolve(*arguments)
-
-                        def callback(**arguments):
-                            calls.append(arguments)
-                            if stage == "conformance" or (
-                                stage == "derivation" and len(calls) > 2
-                            ):
+                        def versions(*arguments):
+                            if stage == "lock":
                                 raise original
-                            return invoke(**arguments)
+                            return verify(*arguments)
 
-                        return callback
+                        def binding(*arguments):
+                            if stage == "binding":
+                                raise original
+                            invoke = resolve(*arguments)
 
-                    with (
-                        patch.object(host, "verify_versions", side_effect=versions),
-                        patch.object(host, "resolve_callable", side_effect=binding),
-                        self.assertRaises(kind) as seen,
-                    ):
-                        yamaa.domain(source, environment=environment)
-                    self.assertIs(seen.exception, original)
-                    self.assertEqual(
-                        len(calls), {"conformance": 1, "derivation": 3}.get(stage, 0)
-                    )
-                    self.assertFalse((source.parent / "test.csv").exists())
+                            def callback(**arguments):
+                                calls.append(arguments)
+                                if stage == "conformance" or (
+                                    stage == "derivation" and len(calls) > 2
+                                ):
+                                    raise original
+                                return invoke(**arguments)
 
-    def test_callback_can_reenter_public_check_and_domain(self):
-        source, environment = self.function_study()
+                            return callback
+
+                        with (
+                            patch.object(host, "verify_versions", side_effect=versions),
+                            patch.object(host, "resolve_callable", side_effect=binding),
+                            self.assertRaises(kind) as seen,
+                        ):
+                            call()
+                        self.assertIs(seen.exception, original)
+                        self.assertEqual(
+                            len(calls),
+                            {"conformance": 1, "derivation": 3}.get(stage, 0),
+                        )
+                        self.assertFalse((case / "test.csv").exists())
+
+    def test_callback_can_reenter_public_check_and_run(self):
+        project, case = self.function_study()
         resolve = host.resolve_callable
         calls = []
 
@@ -367,8 +438,8 @@ class PublicContract(unittest.TestCase):
             invoke = resolve(reference, parameters)
 
             def callback(**arguments):
-                checked = yamaa.check(self.spec)
-                nested = yamaa.domain(self.spec)
+                checked = yamaa.spec(self.spec).check()
+                nested = yamaa.spec(self.spec).run()
                 self.assertTrue(checked.issues.is_empty())
                 self.assertTrue(nested.issues.is_empty())
                 self.assertEqual(nested.output["VALUE"].to_list(), VALUES)
@@ -378,22 +449,23 @@ class PublicContract(unittest.TestCase):
             return callback
 
         with patch.object(host, "resolve_callable", side_effect=resolve_reentrant):
-            result = yamaa.domain(source, environment=environment)
+            result = project.spec("TEST").run()
         self.assertTrue(self.issues(result).is_empty(), result.issues)
         self.assertGreaterEqual(len(calls), 3)
         self.spec.unlink()
         gc.collect()
         self.assertEqual(calls[0].output["VALUE"].to_list(), VALUES)
         self.assertFalse((self.root / "output.csv").exists())
+        self.assertFalse((case / "test.csv").exists())
 
     def assert_callback_exception_lifetime(self, reentrant):
-        source, environment = self.function_study()
+        project, case = self.function_study()
         reentries = []
 
         class OriginalError(RuntimeError):
             def __str__(error):
                 if reentrant:
-                    nested = yamaa.domain(self.spec)
+                    nested = yamaa.spec(self.spec).run()
                     self.assertTrue(nested.issues.is_empty(), nested.issues)
                     self.assertEqual(nested.output["VALUE"].to_list(), VALUES)
                     reentries.append(nested.output.height)
@@ -409,32 +481,36 @@ class PublicContract(unittest.TestCase):
             return callback
 
         with patch.object(host, "resolve_callable", side_effect=resolve):
-            result = yamaa.domain(source, environment=environment)
+            result = project.spec("TEST").run()
         self.assertIsNone(result.output)
-        self.assertFalse(result.issues.is_empty())
-        failures = result._native.project_failures()
-        self.assertTrue(failures)
-        self.assertTrue(all(error is failure_reference() for _, error in failures))
-        del failures
+        self.assertEqual(
+            set(self.issues(result)["condition"]), {"function_conformance_failed"}
+        )
+        for row in result.issues.to_dicts():
+            failure = json.loads(row["context"])["failure"]
+            self.assertEqual(failure["context"]["host_error"], "OriginalError")
+            self.assertEqual(
+                failure["context"]["host_message"], "retained callback failure"
+            )
         held.clear()
         gc.collect()
+        # The run owns the original failure as long as the run itself lives.
         self.assertIsNotNone(failure_reference())
-        failures = result._native.project_failures()
-        self.assertTrue(all(error is failure_reference() for _, error in failures))
-        del failures
-        with self.assertRaises(yamaa.DomainError):
-            result.save()
+        self.refusal(result.save)
         del result
         gc.collect()
         self.assertIsNone(failure_reference())
-        self.assertFalse((source.parent / "test.csv").exists())
+        self.assertFalse((case / "test.csv").exists())
         self.assertEqual(bool(reentries), reentrant)
 
     def test_callback_exception_lives_exactly_as_long_as_its_public_result(self):
         self.assert_callback_exception_lifetime(False)
 
+    def test_reentrant_exception_rendering_keeps_owned_failures_collectable(self):
+        self.assert_callback_exception_lifetime(True)
+
     def test_callback_exception_keeps_its_complete_unicode_and_nul_message(self):
-        source, environment = self.function_study()
+        project, _ = self.function_study()
         message = "\u00e9\x00" * 30_000 + "complete failure"
         original = RuntimeError(message)
         resolve = host.resolve_callable
@@ -452,28 +528,95 @@ class PublicContract(unittest.TestCase):
             return callback
 
         with patch.object(host, "resolve_callable", side_effect=binding):
-            result = yamaa.domain(source, environment=environment)
+            result = project.spec("TEST").run()
         self.assertEqual(len(calls), 3)
         self.assertIsNone(result.output)
-        self.assertEqual(result.issues["condition"].to_list(), ["function_call_failed"])
+        self.assertEqual(
+            self.issues(result)["condition"].to_list(), ["function_call_failed"]
+        )
         context = json.loads(result.issues["context"][0])
         self.assertEqual(context["host_error"], "RuntimeError")
         self.assertEqual(context["host_message"], message)
         self.assertNotIn("host_details_truncated", context)
-        # The structured record keeps the complete NUL-bearing text as str.
-        (record,) = result.diagnostics
-        self.assertEqual(record.condition, "function_call_failed")
-        self.assertEqual(record.context["host_error"], "RuntimeError")
-        self.assertEqual(record.context["host_message"], message)
-        self.assertNotIn("host_details_truncated", record.context)
-        self.assertIs(result._native.project_failures()[0][1], original)
-        with self.assertRaises(yamaa.DomainError):
-            result.save()
+        self.refusal(result.save)
+
+    def test_project_run_members_hold_each_run_and_only_the_project_run_saves(self):
+        project, case = self.function_study()
+        runs = project.run()
+        self.assertEqual(runs.names, ["TEST"])
+        self.assertTrue(self.issues(runs).is_empty())
+        member = runs["TEST"]
+        self.assertEqual(public_names(member), TRUTH["members"]["member_run"])
+        for name in TRUTH["read_only_views"]["member_run"]:
+            with self.subTest(name=name), self.assertRaises(AttributeError):
+                setattr(member, name, None)
+        single = project.spec("TEST").run()
+        self.assertTrue(self.issues(member).is_empty())
+        self.assertTrue(member.output.equals(single.output))
+        self.assertTrue(member.report.equals(single.report))
+        # The project report stacks its members' reports in run order.
+        self.assertTrue(runs.report.equals(member.report))
+        error = self.refusal(lambda: runs["ADSL"])
+        self.assertEqual(str(error), MESSAGES["unknown_member"])
+        self.assertEqual(project.run("adam").names, ["TEST"])
+        self.assertEqual(project.run("sdtm").names, [])
+        self.assertFalse((case / "test.csv").exists())
+        self.assertIsNone(runs.save())
+        self.assertEqual((case / "test.csv").read_bytes(), b"ID,RESULT\n01,1.5\n")
+
+    def test_every_save_rewrites_what_the_result_holds_without_rereading(self):
+        def restored(directory, names, save):
+            """Save, delete what was written, save again: the same bytes return."""
+            self.assertIsNone(save())
+            held = {name: (directory / name).read_bytes() for name in names}
+            for name in names:
+                (directory / name).unlink()
+            self.assertIsNone(save())
+            for name in names:
+                self.assertEqual((directory / name).read_bytes(), held[name])
+            return held
+
+        # A run: its output and its declared report.
+        self.spec.write_text(
+            SPEC.replace(
+                "columns: [ID, VALUE]}", "columns: [ID, VALUE], report: report.csv}"
+            ),
+            encoding="utf-8",
+        )
+        run = yamaa.spec(self.spec).run()
+        self.assertTrue(self.issues(run).is_empty())
+        self.spec.unlink()
+        (self.root / "input.csv").unlink()
+        held = restored(self.root, ["output.csv", "report.csv"], run.save)
+        self.assertEqual(held["output.csv"], INPUT)
+        # A project run: each member's output.
+        project, case = self.function_study()
+        runs = project.run()
+        self.assertTrue(self.issues(runs).is_empty())
+        shutil.rmtree(case / "input")
+        (case / "spec.yaml").unlink()
+        held = restored(case, ["test.csv"], runs.save)
+        self.assertEqual(held["test.csv"], b"ID,RESULT\n01,1.5\n")
+        # A submission: its define.xml and Dataset-JSON.
+        fixture = Path(__file__).with_name("define-fixtures") / "sdtm-dm-metadata"
+        directory = self.root / "submission"
+        shutil.copytree(fixture, directory)
+        shutil.copy2(directory / "expected/dm.csv", directory / "dm.csv")
+        submission = yamaa.project(directory / "project.yaml").submission(
+            "sdtm", created=load_truth(__file__, "public-define")["created"]
+        )
+        self.assertTrue(self.issues(submission).is_empty())
+        for name in ("project.yaml", "spec.yaml", "dm.csv"):
+            (directory / name).unlink()
+        held = restored(directory, ["define.xml", "dm.json"], submission.save)
+        for name, content in held.items():
+            self.assertEqual(content, (fixture / "expected" / name).read_bytes())
 
     def test_callback_string_larger_than_one_mebibyte_is_owned_and_saved_exactly(self):
-        source, environment = self.function_study()
+        _, case = self.function_study()
+        environment = case / "python/environment.yaml"
         environment.write_text(
-            "schema_version: '1.0'\nlanguage: python\nlock: uv.lock\n"
+            "schema_version: '1.0'\nlock: uv.lock\n"
             "functions:\n  text:\n    function: yamaa_benchmarks.project_value\n"
             "    description: Return text unchanged.\n"
             "    params: [{name: x, type: str}]\n    returns: str\n    tests:\n"
@@ -482,6 +625,7 @@ class PublicContract(unittest.TestCase):
             "      - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n",
             encoding="utf-8",
         )
+        source = case / "spec.yaml"
         source.write_text(
             "schema_version: '1.0'\ndomain: TEXT\nkeys: [ID]\n"
             "input: {SRC: {path: large.csv, types: {ID: int, V: str}}}\n"
@@ -492,37 +636,83 @@ class PublicContract(unittest.TestCase):
         )
         value = "\u00e9" * 524_289 + "complete"
         expected = ("ID,V\n1," + value + "\n").encode("utf-8")
-        (source.parent / "large.csv").write_bytes(expected)
-        result = yamaa.domain(source, environment=environment)
-        self.assertTrue(result.issues.is_empty(), result.issues)
+        (case / "large.csv").write_bytes(expected)
+        result = yamaa.project(case / "project.yaml").spec("TEXT").run()
+        self.assertTrue(self.issues(result).is_empty(), result.issues)
         self.assertEqual(result.output["V"].to_list(), [value])
-        source.unlink()
-        environment.unlink()
-        (source.parent / "large.csv").unlink()
-        for _ in range(2):
-            self.assertTrue(result.save())
-            self.assertEqual((source.parent / "held.csv").read_bytes(), expected)
+        for name in (
+            "spec.yaml",
+            "project.yaml",
+            "python/environment.yaml",
+            "large.csv",
+        ):
+            (case / name).unlink()
+        self.assertIsNone(result.save())
+        self.assertEqual((case / "held.csv").read_bytes(), expected)
 
-    def test_reentrant_exception_rendering_keeps_owned_failures_collectable(self):
-        self.assert_callback_exception_lifetime(True)
-
-    def test_public_define_signature_and_missing_environment(self):
-        parameters = inspect.signature(yamaa.define).parameters
-        self.assertEqual(list(parameters), TRUTH["define_argument_names"])
-        self.assertEqual(parameters["created"].kind, inspect.Parameter.KEYWORD_ONLY)
-        self.assertIsNone(parameters["created"].default)
-        result = yamaa.define(
-            self.root / "absent-environment.yaml", "sdtm", created="2026-09-11T00:00:00"
+    def test_project_refusals_are_issues_and_unknown_sections_raise(self):
+        project = yamaa.project(self.root / "absent-project.yaml")
+        error = self.refusal(lambda: project.spec("TEST"))
+        self.assertEqual(str(error), MESSAGES["unread_project"])
+        unread = error.issues.to_dicts()
+        self.assertEqual(
+            [(row["condition"], row["spec_paths"]) for row in unread],
+            [("project_environment_missing", ["environment"])],
         )
-        self.assertGreater(self.issues(result).height, 0)
-        with self.assertRaises(yamaa.DefineError) as caught:
-            result.save()
-        self.assertTrue(caught.exception.issues.equals(result.issues))
-        self.assertEqual(caught.exception.diagnostics, result.diagnostics)
-        with self.assertRaises(TypeError):
-            yamaa.define(None, "sdtm")
+        checked = self.issues(project.check())
+        self.assertEqual(checked.to_dicts(), unread)
+        runs = project.run()
+        self.assertEqual(runs.names, [])
+        self.assertEqual(self.issues(runs).to_dicts(), unread)
+        self.assertEqual(runs.report.columns, TRUTH["report_columns"])
+        self.assertTrue(runs.report.is_empty())
+        self.assertEqual(public_names(runs), TRUTH["members"]["project_run"])
+        error = self.refusal(runs.save)
+        self.assertEqual(str(error), MESSAGES["refused_project_run_save"])
+        self.assertEqual(error.issues.to_dicts(), unread)
+        error = self.refusal(lambda: runs["ADSL"])
+        self.assertEqual(str(error), MESSAGES["no_member_built"])
+        self.assertTrue(error.issues.is_empty())
+        submission = project.submission("sdtm", created="2026-09-11T00:00:00")
+        self.assertEqual(public_names(submission), TRUTH["members"]["submission"])
+        self.assertEqual(self.issues(submission).to_dicts(), unread)
+        for _ in range(2):
+            error = self.refusal(submission.save)
+            self.assertEqual(str(error), MESSAGES["refused_submission_save"])
+            self.assertTrue(error.issues.equals(submission.issues))
+        for name in TRUTH["read_only_views"]["project_run"]:
+            with self.subTest(name=name), self.assertRaises(AttributeError):
+                setattr(runs, name, None)
+        with self.assertRaises(AttributeError):
+            submission.issues = None
+        for call, message in (
+            (lambda: project.run("bogus"), MESSAGES["unknown_section_run"]),
+            (
+                lambda: project.submission("bogus"),
+                MESSAGES["unknown_section_submission"],
+            ),
+        ):
+            error = self.refusal(call)
+            self.assertEqual(str(error), message)
+            (row,) = error.issues.to_dicts()
+            self.assertEqual(
+                (row["phase"], row["condition"]), ("engine", "engine_rejected")
+            )
+            self.assertEqual(
+                json.loads(row["context"]),
+                {
+                    "code": "unknown_section",
+                    "section": "bogus",
+                    "sections": ["sdtm", "adam", "send"],
+                    "stage": "project",
+                },
+            )
+        self.assertEqual(
+            sorted(path.name for path in self.root.iterdir()),
+            ["input.csv", "spec.yaml"],
+        )
 
-    def test_records_keep_exact_wide_integers_and_recorded_geometry(self):
+    def test_issue_rows_keep_exact_wide_integers_and_recorded_geometry(self):
         # A literal beyond every 64-bit range is refused before study access;
         # its context carries the signed 64-bit bounds and the exact literal.
         self.spec.write_text(
@@ -532,26 +722,28 @@ class PublicContract(unittest.TestCase):
             "output: {path: output.csv, columns: [ID, N]}\n",
             encoding="utf-8",
         )
-        checked = yamaa.check(self.spec)
-        frame = self.issues(checked)
-        (record,) = checked.diagnostics
-        self.assertEqual(record.phase, "validation")
-        self.assertEqual(record.condition, "integer_overflow")
-        self.assertEqual(record.requirement, "REQ-0014")
-        self.assertEqual(record.spec_paths, ["columns.N.derivation.literal"])
+        (row,) = self.issues(yamaa.spec(self.spec).check()).to_dicts()
         self.assertEqual(
-            record.context,
-            {"minimum": -(2**63), "maximum": 2**63 - 1, "actual": 2**64},
+            (row["phase"], row["condition"], row["requirement"], row["spec_paths"]),
+            (
+                "validation",
+                "integer_overflow",
+                "REQ-0014",
+                ["columns.N.derivation.literal"],
+            ),
         )
-        self.assertTrue(all(type(value) is int for value in record.context.values()))
-        self.assertIn('"actual":18446744073709551616', frame["context"][0])
-        # A definition finding records no geometry: None, not zero.
-        self.assertIsNone(record.source_span)
-        self.assertIsNone(record.operand_route)
+        context = json.loads(row["context"])
+        self.assertEqual(
+            context, {"minimum": -(2**63), "maximum": 2**63 - 1, "actual": 2**64}
+        )
+        self.assertTrue(all(type(value) is int for value in context.values()))
+        # A definition finding records no geometry: None, not an empty list.
+        self.assertIsNone(row["source_span"])
+        self.assertIsNone(row["operand_route"])
 
         # A division by zero fails at one node of the compute expression: the
-        # record spans that node's bytes and routes to it from the root, so a
-        # failure at the root has a present empty route, not an absent one.
+        # span covers that node's bytes and the route leads to it from the
+        # root, so a failure at the root has a present empty route.
         (self.root / "input.csv").write_bytes(b"ID,VALUE,ZERO\na,2.5,0\n")
         for expression, route in (
             ("1 + VALUE / ZERO", ["right"]),
@@ -568,30 +760,20 @@ class PublicContract(unittest.TestCase):
                     "output: {path: output.csv, columns: [ID, VALUE, ZERO, RATIO]}\n",
                     encoding="utf-8",
                 )
-                result = yamaa.domain(self.spec)
-                frame = self.issues(result)
-                (record,) = result.diagnostics
+                result = yamaa.spec(self.spec).run()
                 self.assertIsNone(result.output)
-                self.assertEqual(record.phase, "derivation")
-                self.assertEqual(record.condition, "division_by_zero")
-                self.assertEqual(record.requirement, "REQ-0430")
-                self.assertEqual(
-                    record.spec_paths, ["columns.RATIO.derivation.compute"]
-                )
-                self.assertEqual(record.context["expr"], expression)
-                self.assertEqual(record.context["keys"], [{"ID": "a"}])
-                self.assertEqual(record.context, json.loads(frame["context"][0]))
-                self.assertIsInstance(record.source_span, yamaa.SourceSpan)
-                span = record.source_span
-                self.assertEqual(expression[span.start : span.end], "VALUE / ZERO")
-                self.assertEqual(record.operand_route, route)
-                self.assertIsNotNone(record.operand_route)
-                self.assertEqual(result.diagnostics, [record])
+                (row,) = self.issues(result).to_dicts()
+                self.assertEqual(row["condition"], "division_by_zero")
+                start, end = row["source_span"]
+                self.assertEqual(expression[start:end], "VALUE / ZERO")
+                self.assertEqual(row["operand_route"], route)
+                self.assertIsNotNone(row["operand_route"])
+                self.assertEqual(json.loads(row["context"])["keys"], [{"ID": "a"}])
 
-    def test_records_equal_the_shared_parity_truth_field_for_field(self):
+    def test_issue_rows_equal_the_shared_parity_truth(self):
         # R reads the same cases; both hosts equal one truth, so they equal
-        # each other. Numbers are tagged in the truth, because a JSON reader
-        # would otherwise choose each host's number types.
+        # each other. The context is compared as its canonical JSON text, so
+        # no JSON reader chooses a number type.
         for case in PARITY["cases"]:
             with self.subTest(case=case["name"]):
                 spec = self.root / case["name"] / "spec.yaml"
@@ -601,39 +783,8 @@ class PublicContract(unittest.TestCase):
                     (spec.parent / "input.csv").write_bytes(
                         fixture_bytes(case["input_csv"])
                     )
-                entry = {"check": yamaa.check, "domain": yamaa.domain}[case["entry"]]
-                result = entry(spec)
-                self.issues(result)
-                self.assertEqual(len(result.diagnostics), len(case["records"]))
-                for record, truth in zip(
-                    result.diagnostics, case["records"], strict=True
-                ):
-                    span = truth["source_span"]
-                    self.assertEqual(
-                        (
-                            record.phase,
-                            record.condition,
-                            record.requirement,
-                            record.spec_paths,
-                            record.source_span,
-                            record.operand_route,
-                        ),
-                        (
-                            truth["phase"],
-                            truth["condition"],
-                            truth["requirement"],
-                            truth["spec_paths"],
-                            None if span is None else yamaa.SourceSpan(*span),
-                            truth["operand_route"],
-                        ),
-                    )
-                    self.assertTrue(
-                        same_value(record.context, parity_value(truth["context"])),
-                        (record.context, truth["context"]),
-                    )
-
-
-PARITY = load_truth(__file__, "diagnostic-parity")
+                call = getattr(yamaa.spec(spec), case["call"])
+                self.assertEqual(self.issues(call()).to_dicts(), case["issues"])
 
 
 def fixture_bytes(value):
@@ -642,260 +793,212 @@ def fixture_bytes(value):
     return value.encode("utf-8")
 
 
-def parity_value(value):
-    """Build the Python value a tagged truth value names."""
-    if isinstance(value, dict) and len(value) == 1:
-        (tag, text), *_ = value.items()
-        if tag == "integer":
-            return int(text)
-        if tag == "float":
-            return float(text)
-        if tag == "hex":
-            return bytes.fromhex(text).decode("utf-8")
-    if isinstance(value, dict):
-        return {key: parity_value(item) for key, item in value.items()}
-    if isinstance(value, list):
-        return [parity_value(item) for item in value]
-    if isinstance(value, (int, float)):
-        raise TypeError("parity truth tags every number")
-    return value
+class Resolve(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(prefix="yamaa-resolve-")
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name).resolve()
 
-
-def same_value(actual, expected):
-    """Equal values of the same type, with object keys in the same order."""
-    if type(actual) is not type(expected):
-        return False
-    if isinstance(expected, dict):
-        return list(actual) == list(expected) and all(
-            same_value(actual[key], expected[key]) for key in expected
-        )
-    if isinstance(expected, list):
-        return len(actual) == len(expected) and all(map(same_value, actual, expected))
-    return actual == expected
-
-
-class ResolvedSpecificationContract(unittest.TestCase):
     def test_original_origins_survive_inheritance_materialization_and_window_expansion(
         self,
     ):
-        with tempfile.TemporaryDirectory(prefix="yamaa-resolved-origins-") as temporary:
-            root = Path(temporary).resolve()
-            base = root / "base.yaml"
-            child = root / "child.yaml"
-            base.write_text(
-                "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {RAW: missing.csv}\n"
-                "columns: [{name: ID, type: str, derivation: {mapping: {source: RAW.ID, dict: {A: Alpha}}}}]\n"
-                "output: {path: result.csv, columns: [ID]}\n",
-                encoding="utf-8",
-            )
-            child.write_text(
-                "schema_version: '1.0'\nparents: base.yaml\n", encoding="utf-8"
-            )
-            direct = yamaa.resolve_specification(base).to_dict()["entries"][0][
-                "origins"
-            ]
-            inherited = yamaa.resolve_specification(child).to_dict()["entries"][0][
-                "origins"
-            ]
-            pointer = "/columns/0/derivation/value/mapping/case_sensitive"
-            self.assertEqual(direct[pointer]["source_kind"], "schema_default")
-            self.assertEqual(inherited[pointer], direct[pointer])
-            self.assertTrue(inherited["/input/RAW"]["generated"])
-            base.write_text(
-                "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {RAW: missing.csv}\n"
-                "windows: {W: {order_by: [RAW.ID]}}\n"
-                "columns: [{name: ID, type: int, derivation: RAW.ID}]\n"
-                "output: {path: result.csv, columns: [ID]}\n",
-                encoding="utf-8",
-            )
-            child.write_text(
-                "schema_version: '1.0'\nparents: base.yaml\n"
-                "columns: [{name: N, type: int, derivation: {row_number: {window: W}}}]\n"
-                "output: {path: result.csv, columns: [ID, N]}\n",
-                encoding="utf-8",
-            )
-            origins = yamaa.resolve_specification(child).to_dict()["entries"][0][
-                "origins"
-            ]
-            prefix = "/columns/1/derivation/value/row_number/window"
-            self.assertEqual(origins[prefix]["declaring_source"], child.as_posix())
-            self.assertEqual(
-                origins[prefix + "/order_by/0/variable"]["declaring_source"],
-                base.as_posix(),
-            )
-            self.assertEqual(
-                origins[prefix + "/order_by/0/direction"]["source_kind"],
-                "schema_default",
-            )
-            self.assertTrue(
-                origins["/columns/0/derivation/value/source/variable"]["generated"]
-            )
+        base = self.root / "base.yaml"
+        child = self.root / "child.yaml"
+        base.write_text(
+            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {RAW: missing.csv}\n"
+            "columns: [{name: ID, type: str, derivation: {mapping: {source: RAW.ID, dict: {A: Alpha}}}}]\n"
+            "output: {path: result.csv, columns: [ID]}\n",
+            encoding="utf-8",
+        )
+        child.write_text(
+            "schema_version: '1.0'\nparents: base.yaml\n", encoding="utf-8"
+        )
+        direct = yamaa.spec(base).resolve()["entries"][0]["origins"]
+        inherited = yamaa.spec(child).resolve()["entries"][0]["origins"]
+        pointer = "/columns/0/derivation/value/mapping/case_sensitive"
+        self.assertEqual(direct[pointer]["source_kind"], "schema_default")
+        self.assertEqual(inherited[pointer], direct[pointer])
+        self.assertTrue(inherited["/input/RAW"]["generated"])
+        base.write_text(
+            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {RAW: missing.csv}\n"
+            "windows: {W: {order_by: [RAW.ID]}}\n"
+            "columns: [{name: ID, type: int, derivation: RAW.ID}]\n"
+            "output: {path: result.csv, columns: [ID]}\n",
+            encoding="utf-8",
+        )
+        child.write_text(
+            "schema_version: '1.0'\nparents: base.yaml\n"
+            "columns: [{name: N, type: int, derivation: {row_number: {window: W}}}]\n"
+            "output: {path: result.csv, columns: [ID, N]}\n",
+            encoding="utf-8",
+        )
+        origins = yamaa.spec(child).resolve()["entries"][0]["origins"]
+        prefix = "/columns/1/derivation/value/row_number/window"
+        self.assertEqual(origins[prefix]["declaring_source"], child.as_posix())
+        self.assertEqual(
+            origins[prefix + "/order_by/0/variable"]["declaring_source"],
+            base.as_posix(),
+        )
+        self.assertEqual(
+            origins[prefix + "/order_by/0/direction"]["source_kind"], "schema_default"
+        )
+        self.assertTrue(
+            origins["/columns/0/derivation/value/source/variable"]["generated"]
+        )
 
-    def test_explicit_environment_is_admitted_without_activating_its_callable(self):
-        with tempfile.TemporaryDirectory(
-            prefix="yamaa-resolved-environment-"
-        ) as temporary:
-            root = Path(temporary).resolve()
-            source = root / "spec.yaml"
-            environment = root / "environment.yaml"
-            source.write_text(
-                "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n"
-                "input: {RAW: {path: missing.csv, types: {ID: int, V: str}}}\n"
-                "columns: [{name: ID, type: int, derivation: RAW.ID}, "
-                "{name: V, type: str, derivation: {function: {name: text, args: {x: RAW.V}}}}]\n"
-                "output: {path: output.csv, columns: [ID, V]}\n",
-                encoding="utf-8",
-            )
-            environment.write_text(
-                "schema_version: '1.0'\nlanguage: python\nfunctions:\n"
-                "  text:\n    function: uninstalled_resolved_fixture.identity\n"
-                "    description: Identity.\n    params: [{name: x, type: str}]\n"
-                "    returns: str\n    tests:\n"
-                "      - {id: normal, covers: [normal], args: {x: a}, result: a}\n"
-                "      - {id: empty, covers: [boundary], args: {x: ''}, result: ''}\n"
-                "      - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n",
-                encoding="utf-8",
-            )
-            with (
-                patch.object(
-                    host,
-                    "resolve_callable",
-                    side_effect=AssertionError("unexpected activation"),
-                ),
-                patch.object(
-                    host,
-                    "verify_versions",
-                    side_effect=AssertionError("unexpected verification"),
-                ),
-            ):
-                artifact = yamaa.resolve_specification(source, environment=environment)
-            self.assertEqual(artifact.to_dict()["environment"], environment.as_posix())
+    def test_project_spec_resolves_without_activating_its_callable(self):
+        source = self.root / "spec.yaml"
+        source.write_text(
+            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n"
+            "input: {RAW: {path: missing.csv, types: {ID: int, V: str}}}\n"
+            "columns: [{name: ID, type: int, derivation: RAW.ID}, "
+            "{name: V, type: str, derivation: {function: {name: text, args: {x: RAW.V}}}}]\n"
+            "output: {path: output.csv, columns: [ID, V]}\n",
+            encoding="utf-8",
+        )
+        (self.root / "environment.yaml").write_text(
+            "schema_version: '1.0'\nfunctions:\n"
+            "  text:\n    function: uninstalled_resolved_fixture.identity\n"
+            "    description: Identity.\n    params: [{name: x, type: str}]\n"
+            "    returns: str\n    tests:\n"
+            "      - {id: normal, covers: [normal], args: {x: a}, result: a}\n"
+            "      - {id: empty, covers: [boundary], args: {x: ''}, result: ''}\n"
+            "      - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n",
+            encoding="utf-8",
+        )
+        project = self.root / "project.yaml"
+        project.write_text(
+            "schema_version: '1.0'\n"
+            "environments: {python: environment.yaml, r: environment.yaml}\n"
+            "adam: {specs: [spec.yaml]}\n",
+            encoding="utf-8",
+        )
+        with (
+            patch.object(
+                host,
+                "resolve_callable",
+                side_effect=AssertionError("unexpected activation"),
+            ),
+            patch.object(
+                host,
+                "verify_versions",
+                side_effect=AssertionError("unexpected verification"),
+            ),
+        ):
+            facts = yamaa.project(project).spec("TEST").resolve()
+        self.assertEqual(facts["project"], project.as_posix())
+        self.assertEqual(facts["entry"], source.as_posix())
+        # The project supplies the function: the same file alone names an
+        # unknown one.
+        with self.assertRaises(yamaa.Error) as caught:
+            yamaa.spec(source).resolve()
+        self.assertEqual(
+            caught.exception.issues.select(
+                "condition", "requirement", "spec_paths", "context"
+            ).rows(),
+            [
+                (
+                    "unknown_project_function",
+                    "REQ-0698",
+                    ["columns.V.derivation.function.name"],
+                    '{"function":"text"}',
+                )
+            ],
+        )
 
-    def test_two_studies_keep_producer_entry_bindings_used_by_domain(self):
-        with tempfile.TemporaryDirectory(
-            prefix="yamaa-resolved-producers-"
-        ) as temporary:
-            root = Path(temporary).resolve()
-            (root / "shared").mkdir()
-            (root / "shared/producer.yaml").write_text(
-                "schema_version: '1.0'\ndomain: PRODUCER\nkeys: [ID]\n"
-                "input: {RAW: {path: input/raw.csv, relative_to: entry, types: {ID: int}}}\n"
-                "columns: [{name: ID, type: int, label: Identifier, derivation: RAW.ID}]\n"
-                "output: {path: output/produced.csv, relative_to: entry, columns: [ID]}\n",
+    def test_two_studies_keep_producer_entry_bindings_used_by_run(self):
+        (self.root / "shared").mkdir()
+        (self.root / "shared/producer.yaml").write_text(
+            "schema_version: '1.0'\ndomain: PRODUCER\nkeys: [ID]\n"
+            "input: {RAW: {path: input/raw.csv, relative_to: entry, types: {ID: int}}}\n"
+            "columns: [{name: ID, type: int, label: Identifier, derivation: RAW.ID}]\n"
+            "output: {path: output/produced.csv, relative_to: entry, columns: [ID]}\n",
+            encoding="utf-8",
+        )
+        (self.root / "shared/consumer.yaml").write_text(
+            "schema_version: '1.0'\ndomain: CONSUMER\nkeys: [ID]\n"
+            "input: {P: {path: output/produced.csv, schema: producer.yaml, relative_to: entry}}\n"
+            "columns: [{name: ID, type: int, label: Identifier, derivation: P.ID}]\n"
+            "output: {path: output/final.csv, relative_to: entry, columns: [ID]}\n",
+            encoding="utf-8",
+        )
+        for wrapper, identifier in (("A", 17), ("B", 29)):
+            study = self.root / wrapper
+            (study / "input").mkdir(parents=True)
+            (study / "input/raw.csv").write_text(
+                f"ID\n{identifier}\n", encoding="utf-8"
+            )
+            (study / "spec.yaml").write_text(
+                "schema_version: '1.0'\nparents: ../shared/consumer.yaml\n",
                 encoding="utf-8",
             )
-            (root / "shared/consumer.yaml").write_text(
-                "schema_version: '1.0'\ndomain: CONSUMER\nkeys: [ID]\n"
-                "input: {P: {path: output/produced.csv, schema: producer.yaml, relative_to: entry}}\n"
-                "columns: [{name: ID, type: int, label: Identifier, derivation: P.ID}]\n"
-                "output: {path: output/final.csv, relative_to: entry, columns: [ID]}\n",
+            (study / "producer.yaml").write_text(
+                "schema_version: '1.0'\nparents: ../shared/producer.yaml\n",
                 encoding="utf-8",
             )
-            for wrapper, identifier in (("A", 17), ("B", 29)):
-                study = root / wrapper
-                (study / "input").mkdir(parents=True)
-                (study / "input/raw.csv").write_text(
-                    f"ID\n{identifier}\n", encoding="utf-8"
-                )
-                (study / "spec.yaml").write_text(
-                    "schema_version: '1.0'\nparents: ../shared/consumer.yaml\n",
-                    encoding="utf-8",
-                )
-                (study / "producer.yaml").write_text(
-                    "schema_version: '1.0'\nparents: ../shared/producer.yaml\n",
-                    encoding="utf-8",
-                )
-                artifact = yamaa.resolve_specification(study / "spec.yaml")
-                root_entry, producer = artifact.to_dict()["entries"]
-                self.assertEqual(
-                    root_entry["producers"], {"P": (study / "producer.yaml").as_posix()}
-                )
-                resource = next(
-                    item
-                    for item in producer["resources"]
-                    if item["role"] == "input_data"
-                )
-                self.assertEqual(
-                    resource["location"]["path"], (study / "input/raw.csv").as_posix()
-                )
-                result = yamaa.domain(study / "spec.yaml")
-                self.assertTrue(result.issues.is_empty(), result.issues)
-                self.assertEqual(result.output["ID"].to_list(), [identifier])
-                self.assertFalse((study / "output").exists())
+            spec = yamaa.spec(study / "spec.yaml")
+            root_entry, producer = spec.resolve()["entries"]
+            self.assertEqual(
+                root_entry["producers"], {"P": (study / "producer.yaml").as_posix()}
+            )
+            resource = next(
+                item for item in producer["resources"] if item["role"] == "input_data"
+            )
+            self.assertEqual(
+                resource["location"]["path"], (study / "input/raw.csv").as_posix()
+            )
+            result = spec.run()
+            self.assertTrue(result.issues.is_empty(), result.issues)
+            self.assertEqual(result.output["ID"].to_list(), [identifier])
+            self.assertFalse((study / "output").exists())
 
-    def test_owned_inspection_and_explicit_round_trip_without_sources_or_callbacks(
-        self,
-    ):
-        with tempfile.TemporaryDirectory(prefix="yamaa-resolved-public-") as temporary:
-            root = Path(temporary).resolve()
-            spec = root / "spec.yaml"
-            spec.write_text(
-                "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n"
-                "input: {RAW: {path: missing/raw.csv, types: {ID: int}}}\n"
-                "columns: [{name: ID, type: int, derivation: RAW.ID}]\n"
-                "output: {path: absent/output.csv, columns: [ID]}\n",
-                encoding="utf-8",
-            )
-            with (
-                patch.object(
-                    host,
-                    "resolve_callable",
-                    side_effect=AssertionError("unexpected activation"),
-                ),
-                patch.object(
-                    host,
-                    "verify_versions",
-                    side_effect=AssertionError("unexpected verification"),
-                ),
-            ):
-                artifact = yamaa.resolve_specification(spec)
-            facts = artifact.to_dict()
-            self.assertEqual(facts["format"], "yamaa.resolved-specification")
-            self.assertEqual(facts["artifact_version"], 1)
-            self.assertEqual(facts["replay"], "inspection_only")
-            self.assertEqual(facts["entry"], spec.as_posix())
-            resources = facts["entries"][0]["resources"]
-            source = next(item for item in resources if item["role"] == "input_data")
-            self.assertEqual(
-                source["location"],
-                {"kind": "local", "path": (root / "missing/raw.csv").as_posix()},
-            )
-            self.assertFalse((root / "absent").exists())
-            serialized = artifact.to_json()
-            facts["entries"][0]["specification"]["domain"] = "MUTATED"
-            self.assertEqual(
-                artifact.to_dict()["entries"][0]["specification"]["domain"], "TEST"
-            )
-            spec.unlink()
-            previous = Path.cwd()
-            try:
-                import os
-
-                os.chdir(root.parent)
-                restored = yamaa.ResolvedSpecification.from_json(serialized)
-                self.assertEqual(restored.to_json(), serialized)
-                self.assertEqual(restored.to_dict(), artifact.to_dict())
-            finally:
-                os.chdir(previous)
-            with self.assertRaises(yamaa.ResolvedSpecificationError) as error:
-                yamaa.resolve_specification(spec)
-            self.assertGreater(error.exception.issues.height, 0)
-            self.assertEqual(
-                [record.condition for record in error.exception.diagnostics],
-                error.exception.issues["condition"].to_list(),
-            )
-            self.assertTrue(
-                all(
-                    isinstance(record, yamaa.Diagnostic)
-                    for record in error.exception.diagnostics
-                )
-            )
-            invalid = json.loads(serialized)
-            invalid["artifact_version"] = 2
-            with self.assertRaises(ValueError):
-                yamaa.ResolvedSpecification.from_json(json.dumps(invalid))
-            with self.assertRaises(ValueError):
-                yamaa.ResolvedSpecification.from_json("schema_version: '1.0'")
+    def test_resolve_returns_owned_facts_and_raises_for_an_unreadable_spec(self):
+        spec = self.root / "spec.yaml"
+        spec.write_text(
+            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n"
+            "input: {RAW: {path: missing/raw.csv, types: {ID: int}}}\n"
+            "columns: [{name: ID, type: int, derivation: RAW.ID}]\n"
+            "output: {path: absent/output.csv, columns: [ID]}\n",
+            encoding="utf-8",
+        )
+        handle = yamaa.spec(spec)
+        with (
+            patch.object(
+                host,
+                "resolve_callable",
+                side_effect=AssertionError("unexpected activation"),
+            ),
+            patch.object(
+                host,
+                "verify_versions",
+                side_effect=AssertionError("unexpected verification"),
+            ),
+        ):
+            facts = handle.resolve()
+        self.assertIsInstance(facts, dict)
+        self.assertEqual(facts["format"], "yamaa.resolved-specification")
+        self.assertEqual(facts["artifact_version"], 1)
+        self.assertEqual(facts["replay"], "inspection_only")
+        self.assertEqual(facts["entry"], spec.as_posix())
+        self.assertIsNone(facts["project"])
+        resources = facts["entries"][0]["resources"]
+        source = next(item for item in resources if item["role"] == "input_data")
+        self.assertEqual(
+            source["location"],
+            {"kind": "local", "path": (self.root / "missing/raw.csv").as_posix()},
+        )
+        self.assertFalse((self.root / "absent").exists())
+        facts["entries"][0]["specification"]["domain"] = "MUTATED"
+        self.assertEqual(
+            handle.resolve()["entries"][0]["specification"]["domain"], "TEST"
+        )
+        spec.unlink()
+        with self.assertRaises(yamaa.Error) as caught:
+            handle.resolve()
+        self.assertEqual(str(caught.exception), MESSAGES["resolve"])
+        self.assertEqual(
+            caught.exception.issues["condition"].to_list(), ["engine_rejected"]
+        )
 
 
 if __name__ == "__main__":

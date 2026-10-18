@@ -33,10 +33,7 @@ mod file {
                 .unwrap_or_else(|error| {
                     panic!(
                         "{:?}",
-                        yamaa_adapters::project_application::selection_failure(
-                            &error,
-                            Language::Python
-                        )
+                        yamaa_adapters::project_application::selection_failure(&error)
                     )
                 }) else {
                     panic!("selected producer workflow")
@@ -229,6 +226,21 @@ mod file {
                 if self.0.exists() {
                     fs::remove_dir_all(&self.0).unwrap();
                 }
+            }
+        }
+        /// Prepare a graph whose metadata admission must refuse it.
+        fn refused_graph(
+            study: &Study,
+            language: Language,
+        ) -> Box<yamaa_adapters::file_graph::RejectedGraph> {
+            match FileGraph::prepare(
+                Resources::new(&study.path(""), &study.path(""), &[]).unwrap(),
+                "consumer/root.yaml",
+                environment(language),
+                shipped_schema::capture().unwrap(),
+            ) {
+                Err(rejected) => rejected,
+                Ok(_) => panic!("graph admission must refuse colliding targets"),
             }
         }
         const PRODUCER: &str = "schema_version: '1.0'\ndomain: TEST\nbase: RAW\nkeys: [ID]\ninput: {RAW: {path: ../../raw/raw.csv, types: {ID: int, VALUE: float}}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - {name: VALUE, type: float, label: Reported value, derivation: {function: {name: id_float, args: {x: RAW.VALUE}}}}\noutput: {path: ../../generated/producer.csv, columns: [ID, VALUE], decimals: 2}\n";
@@ -488,7 +500,7 @@ columns:
             assert!(prepare_owned_classified(&failed, report_id(), &[]).is_err());
         }
         #[test]
-        fn whole_set_invalid_target_and_duplicate_normalized_alias_refuse_every_write() {
+        fn invalid_target_refuses_every_write_and_duplicate_alias_is_refused_at_validation() {
             use yamaa_adapters::producer_result::prepare_owned_classified;
             for duplicate in [false, true] {
                 let study = Study::new();
@@ -500,9 +512,20 @@ columns:
                         CONSUMER
                             .replace("../generated/root.csv", "../generated/dir/../producer.csv"),
                     );
-                } else {
-                    fs::create_dir(study.0.join("generated/root.csv")).unwrap();
+                    // Two primary files at one resolved location are refused
+                    // at validation, before any study read, build or Save.
+                    let rejected = refused_graph(&study, Language::Python);
+                    let error = format!("{:?}", rejected.error());
+                    assert!(
+                        error.contains(
+                            r#"GraphCollision { left: "output.path", right: "output.path""#
+                        ),
+                        "{error}"
+                    );
+                    assert_eq!(fs::read_dir(study.0.join("generated")).unwrap().count(), 0);
+                    continue;
                 }
+                fs::create_dir(study.0.join("generated/root.csv")).unwrap();
                 let mut build = study.build(Language::Python);
                 let mut activation = Activation::new(&study, Mode::Pass);
                 let owned = build.build_owned_reported(&mut activation, report_id(), scope());
@@ -527,8 +550,7 @@ columns:
 
         #[cfg(windows)]
         #[test]
-        fn absent_windows_case_alias_targets_refuse_before_every_write() {
-            use yamaa_adapters::producer_result::prepare_owned_classified;
+        fn absent_windows_case_alias_targets_are_refused_at_validation() {
             let study = Study::new();
             study.rounded();
             study.write(
@@ -536,24 +558,15 @@ columns:
                 CONSUMER.replace("../generated/root.csv", "../generated/PRODUCER.csv"),
             );
             fs::create_dir(study.0.join("generated")).unwrap();
-            let mut build = study.build(Language::Python);
-            let mut activation = Activation::new(&study, Mode::Pass);
-            let owned = build.build_owned_reported(&mut activation, report_id(), scope());
-            assert!(owned.accepted());
-            let mut result = prepare_owned_classified(&owned, report_id(), &[]).unwrap();
-            assert!(!result.save().unwrap());
-            assert_eq!(
-                result.observations()["publication"]["error"]["code"],
-                "target_admission"
+            // Ordinal case-insensitive names select one Windows target, so the
+            // two primary files collide before any study read or Save.
+            let rejected = refused_graph(&study, Language::Python);
+            let error = format!("{:?}", rejected.error());
+            assert!(
+                error.contains(r#"GraphCollision { left: "output.path", right: "output.path""#),
+                "{error}"
             );
-            assert!(result
-                .publication_attempt()
-                .unwrap()
-                .entered
-                .entered
-                .is_empty());
             assert_eq!(fs::read_dir(study.0.join("generated")).unwrap().count(), 0);
-            assert!(result.output().is_some());
         }
         #[cfg(target_os = "macos")]
         #[test]
@@ -697,47 +710,78 @@ columns:
             );
         }
 
-        struct LockCapture {
+        /// The held project links one environment file per host language. Each
+        /// preparation must open only its own host's entry and then the lock that
+        /// environment file declares; any other request fails the fixture.
+        const HELD_PROJECT: &str = "schema_version: '1.0'\nenvironments: {python: python/environment.yaml, r: r/environment.yaml}\n";
+        struct HeldProject {
             language: Language,
         }
-        impl ProjectCapturePort for LockCapture {
+        impl ProjectCapturePort for HeldProject {
             type Error = ();
             fn capture(&mut self, request: Request<'_>) -> Result<Reply, ()> {
-                assert_eq!(request.kind, Kind::Lock);
-                Ok(Reply::Lock {
-                    source: Source {
-                        identity: "held/lock".into(),
-                        bytes: b"held original lock".to_vec(),
-                    },
-                    kind: if self.language == Language::Python {
-                        LockKind::Uv
-                    } else {
-                        LockKind::Renv
-                    },
-                })
+                let (written, call, lock, kind) = if self.language == Language::Python {
+                    (
+                        "python/environment.yaml",
+                        "program.id_float",
+                        "uv.lock",
+                        LockKind::Uv,
+                    )
+                } else {
+                    (
+                        "r/environment.yaml",
+                        "program::id_float",
+                        "renv.lock",
+                        LockKind::Renv,
+                    )
+                };
+                match request.kind {
+                    Kind::Environment => {
+                        assert_eq!(
+                            (request.declaring_source, request.written),
+                            ("held/project.yaml", written)
+                        );
+                        Ok(Reply::Document(Source {
+                            identity: "held/environment.yaml".into(),
+                            bytes: format!("schema_version: '1.0'\nlock: {lock}\nfunctions:\n  id_float:\n    function: {call}\n    description: Float identity.\n    params: [{{name: x, type: float}}]\n    returns: float\n    tests:\n      - {{id: normal, covers: [normal, numeric-comparison], args: {{x: 7.0}}, result: 7.0}}\n      - {{id: boundary, covers: [boundary], args: {{x: 0.0}}, result: 0.0}}\n      - {{id: missing, covers: ['short-circuit-missing:x'], args: {{x: null}}, result: null}}\n").into_bytes(),
+                        }))
+                    }
+                    // The lock path resolves from the environment file that declares it.
+                    Kind::Lock => {
+                        assert_eq!(
+                            (request.declaring_source, request.written),
+                            ("held/environment.yaml", lock)
+                        );
+                        Ok(Reply::Lock {
+                            source: Source {
+                                identity: "held/lock".into(),
+                                bytes: b"held original lock".to_vec(),
+                            },
+                            kind,
+                        })
+                    }
+                    kind => panic!("undeclared {kind:?} dependency"),
+                }
             }
         }
         fn environment(language: Language) -> OwnedEnvironment {
-            let (name, call, lock) = if language == Language::Python {
-                ("python", "program.id_float", "uv.lock")
-            } else {
-                ("r", "program::id_float", "renv.lock")
-            };
-            let text = format!("schema_version: '1.0'\nlanguage: {name}\nlock: {lock}\nfunctions:\n  id_float:\n    function: {call}\n    description: Float identity.\n    params: [{{name: x, type: float}}]\n    returns: float\n    tests:\n      - {{id: normal, covers: [normal, numeric-comparison], args: {{x: 7.0}}, result: 7.0}}\n      - {{id: boundary, covers: [boundary], args: {{x: 0.0}}, result: 0.0}}\n      - {{id: missing, covers: ['short-circuit-missing:x'], args: {{x: null}}, result: null}}\n");
+            held_project(language, HELD_PROJECT)
+        }
+        fn held_project(language: Language, text: &str) -> OwnedEnvironment {
             project_source::prepare(
-                shipped_schema::capture_environment().unwrap(),
+                shipped_schema::capture_project().unwrap(),
                 Source {
-                    identity: "held/environment.yaml".into(),
-                    bytes: text.into_bytes(),
+                    identity: "held/project.yaml".into(),
+                    bytes: text.as_bytes().to_vec(),
                 },
                 language,
-                &mut LockCapture { language },
+                &mut HeldProject { language },
             )
             .unwrap_or_else(|error| match error {
                 project_source::Failure::Rejected(error) => {
-                    panic!("environment fixture: {:?}", error.admission)
+                    panic!("project fixture: {:?}", error.admission)
                 }
-                _ => panic!("environment fixture capture failed"),
+                _ => panic!("project fixture capture failed"),
             })
             .into_owned()
         }
@@ -2168,13 +2212,17 @@ columns:
                 if !matches!(mode, Mode::LiveFailure) {
                     assert!(attempt.graph.nodes.is_empty());
                     assert_eq!(report["source_reads"], yamaa_adapters::json!([]));
+                    // The linked environment file declares the lock and the
+                    // inline function, so it is the source of each finding.
                     assert_eq!(
                         report["diagnostics"][0]["context"]["source"],
                         "held/environment.yaml"
                     );
+                    // Lock, binding and conformance findings all name the
+                    // project file as their entry.
                     assert_eq!(
                         report["diagnostics"][0]["context"]["entry"],
-                        "held/environment.yaml"
+                        "held/project.yaml"
                     );
                 } else {
                     assert_eq!(attempt.graph.nodes.len(), 1);
@@ -2390,9 +2438,12 @@ columns:
             drop(build);
             drop(host);
             fs::remove_dir_all(&study.0).unwrap();
+            // The environment section names the caller-supplied project file;
+            // activation names the linked environment file as each inline
+            // function's source.
             for (attempt, created) in [(&first, 1), (&second, 0)] {
                 let observed = attempt_report(attempt, report_id()).unwrap();
-                let expected = json!({"report_version":"0.3.0-draft","runtime":"python","backend":"rust","runtime_version":"fixture-host","engine_version":"fixture-engine","example":"independent-rounded-producer","entry":"consumer/root.yaml","outcome":"success","activation":activation,"environment":{"source":"held/environment.yaml","lock_source":"held/lock"},
+                let expected = json!({"report_version":"0.3.0-draft","runtime":"python","backend":"rust","runtime_version":"fixture-host","engine_version":"fixture-engine","example":"independent-rounded-producer","entry":"consumer/root.yaml","outcome":"success","activation":activation,"environment":{"source":"held/project.yaml","lock_source":"held/lock"},
             "nodes":[{"specification":producer,"outcome":"success","diagnostics":[],"unsupported":[],"handler_counts":[]},{"specification":consumer,"outcome":"success","diagnostics":[],"unsupported":[],"handler_counts":[]}],
             "artifacts":[
                 {"name":"producer","profile":"csv","columns":["ID","VALUE"],"types":["int","float"],"row_count":2,"records":["ID,VALUE","1,1.23","2,2.35"],"byte_length":23,"content":"ID,VALUE\n1,1.23\n2,2.35\n","specification":producer},
@@ -2736,21 +2787,31 @@ columns:
             let study = Study::new();
             study.rounded();
             // This preparation fixture independently supplies the real original native
-            // environment/lock closure rather than the supplied in-memory test owner.
-            study.write("environment.yaml", "schema_version: '1.0'\nlanguage: python\nlock: uv.lock\nfunctions:\n  id_float:\n    function: program.id_float\n    description: Float identity.\n    params: [{name: x, type: float}]\n    returns: float\n    tests:\n      - {id: normal, covers: [normal, numeric-comparison], args: {x: 7.0}, result: 7.0}\n      - {id: boundary, covers: [boundary], args: {x: 0.0}, result: 0.0}\n      - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n");
-            study.write("uv.lock", "version = 1\npackage = []\n");
+            // project/environment/lock closure rather than the supplied in-memory test
+            // owner. The environment file's lock resolves beside it in python/.
+            study.write(
+                "project.yaml",
+                "schema_version: '1.0'\nenvironments: {python: python/environment.yaml}\n",
+            );
+            study.write("python/environment.yaml", "schema_version: '1.0'\nlock: uv.lock\nfunctions:\n  id_float:\n    function: program.id_float\n    description: Float identity.\n    params: [{name: x, type: float}]\n    returns: float\n    tests:\n      - {id: normal, covers: [normal, numeric-comparison], args: {x: 7.0}, result: 7.0}\n      - {id: boundary, covers: [boundary], args: {x: 0.0}, result: 0.0}\n      - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n");
+            study.write("python/uv.lock", "version = 1\npackage = []\n");
             let Selected::Producer(graph) = file_workflow::select_with_resources(
                 Resources::new(&study.path(""), &study.path(""), &[]).unwrap(),
                 "consumer/root.yaml",
-                "environment.yaml",
+                "project.yaml",
                 Language::Python,
                 shipped_schema::capture().unwrap(),
-                shipped_schema::capture_environment().unwrap(),
+                shipped_schema::capture_project().unwrap(),
             )
             .unwrap() else {
                 panic!("producer capability");
             };
-            assert_eq!(graph.capture_reads(), 5); // environment, lock, entry, producer, parent
+            // project, environment, lock, entry, producer, parent
+            assert_eq!(graph.capture_reads(), 6);
+            assert_eq!(
+                graph.environment().lock().unwrap().source.identity,
+                study.path("python/uv.lock")
+            );
             let root = Arc::clone(&graph.nodes()[0].document);
             let producer = Arc::clone(&graph.nodes()[1].document);
             assert!(Arc::ptr_eq(
@@ -2792,11 +2853,11 @@ columns:
         }
 
         #[test]
-        fn key_failures_retain_the_verification_log_and_report_as_output_findings() {
+        fn key_failures_report_as_output_findings_beside_the_checks_that_held() {
             use yamaa_adapters::producer_result::prepare_owned_classified;
-            // Key failures are output findings, not verification checks: feeding
-            // them to the verification-phase projection used to fail
-            // `prepare_diagnostics`, dropping this node's verification log.
+            // Key failures are output findings, not verification checks: the
+            // failed node's report keeps the verification prefix that held and
+            // fails with the key condition.
             for (csv, condition) in [
                 ("ID,GRP,VALUE\n1,a,10\n1,b,20\n", "duplicate_key"),
                 ("ID,GRP,VALUE\n,a,10\n1,b,20\n", "missing_key"),
@@ -2806,26 +2867,14 @@ columns:
                 study.write("input.csv", csv);
                 study.write(
             "root.yaml",
-            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int, GRP: str, VALUE: int}}}\nrows:\n  - id: grouped\n    dataset: SRC\n    group_by: [SRC.GRP]\n    derivations: {ID: {aggregate: 'MAX(SRC.ID)'}, GRP: SRC.GRP, VALUE: {aggregate: 'MAX(SRC.VALUE)'}}\ncolumns:\n  - {name: ID, type: int, label: Identifier}\n  - {name: GRP, type: str, label: Group}\n  - name: VALUE\n    type: int\n    label: Value\n    verifications: [{not_missing: {id: value-present}}]\noutput: {path: generated/root.csv, columns: [ID, GRP, VALUE], verification_log: generated/root-checks.csv, warning_log: generated/root-warnings.csv}\n",
+            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int, GRP: str, VALUE: int}}}\nrows:\n  - id: grouped\n    dataset: SRC\n    group_by: [SRC.GRP]\n    derivations: {ID: {aggregate: 'MAX(SRC.ID)'}, GRP: SRC.GRP, VALUE: {aggregate: 'MAX(SRC.VALUE)'}}\ncolumns:\n  - {name: ID, type: int, label: Identifier}\n  - {name: GRP, type: str, label: Group}\n  - name: VALUE\n    type: int\n    label: Value\n    verifications: [{not_missing: {id: value-present}}]\noutput: {path: generated/root.csv, columns: [ID, GRP, VALUE], report: generated/root-report.csv}\n",
         );
-                let environment = project_source::prepare(
-                    shipped_schema::capture_environment().unwrap(),
-                    Source {
-                        identity: "held/environment.yaml".into(),
-                        bytes: b"schema_version: '1.0'\n".to_vec(),
-                    },
-                    Language::Python,
-                    &mut LockCapture {
-                        language: Language::Python,
-                    },
-                )
-                .unwrap()
-                .into_owned();
+                // A project without environments: the functionless graph needs none.
                 let mut build = GraphBuild::new(
                     FileGraph::prepare(
                         Resources::new(&study.path(""), &study.path(""), &[]).unwrap(),
                         "root.yaml",
-                        environment,
+                        held_project(Language::Python, "schema_version: '1.0'\n"),
                         shipped_schema::capture().unwrap(),
                     )
                     .unwrap_or_else(|error| panic!("graph fixture: {:?}", error.error())),
@@ -2837,9 +2886,10 @@ columns:
                 assert!(activation.trace.is_empty(), "{condition}");
                 let mut result = prepare_owned_classified(&owned, report_id(), &[]).unwrap();
                 assert!(result.output().is_none(), "{condition}");
-                assert!(result.verification_log().is_some(), "{condition}");
-                let table = result.log_table(false).unwrap();
-                assert_eq!(table.rows(), 1, "{condition}");
+                // The run, its input and row template, and the held check; a
+                // failed run has no column rows.
+                let table = result.report_table().unwrap();
+                assert_eq!(table.rows(), 4, "{condition}");
                 assert!(
                     result.issues().iter().any(|issue| issue.phase == "output"
                         && issue.condition == condition
@@ -2847,31 +2897,35 @@ columns:
                     "{condition}: {:?}",
                     result.issues()
                 );
-                // The retained log is the completed verification prefix, so a
-                // diagnostic save publishes exactly that one artifact.
-                for name in ["root.csv", "root-warnings.csv"] {
-                    study.write(&format!("generated/{name}"), b"held sentinel");
-                }
+                // A failed graph's save publishes exactly the report of the node
+                // that ran and no primary artifact.
+                study.write("generated/root.csv", b"held sentinel");
                 assert!(result.save().is_err(), "{condition}");
                 assert_eq!(
                     result.observations()["artifacts"].as_array().unwrap().len(),
                     1,
-                    "{condition}: exactly the retained verification log is published"
+                    "{condition}: exactly the report is published"
                 );
                 assert_eq!(
                     fs::read(study.0.join("generated").join("root.csv")).unwrap(),
                     b"held sentinel"
                 );
-                assert_eq!(
-                    fs::read(study.0.join("generated").join("root-warnings.csv")).unwrap(),
-                    b"held sentinel"
-                );
-                let checks = String::from_utf8(
-                    fs::read(study.0.join("generated").join("root-checks.csv")).unwrap(),
+                let report = String::from_utf8(
+                    fs::read(study.0.join("generated").join("root-report.csv")).unwrap(),
                 )
                 .unwrap();
-                assert!(checks.contains("value-present"), "{condition}: {checks}");
-                assert!(checks.contains("not_missing"), "{condition}: {checks}");
+                assert!(
+                    report.contains(&format!(
+                        "\ngenerated/root.csv,run,output,,,,,,failed,{condition},,,,{{}}\n"
+                    )),
+                    "{condition}: {report}"
+                );
+                assert!(
+                    report.contains(
+                        ",check,columns.VALUE.verifications[0].not_missing,not_missing,value-present,VALUE,"
+                    ),
+                    "{condition}: {report}"
+                );
             }
         }
     }

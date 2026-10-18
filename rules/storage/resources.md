@@ -12,14 +12,17 @@ status: normative
 
 <a id="req-0772"></a>
 
-**REQ-0772.** The caller explicitly supplies the entry file and any implementation
-environment file. These caller arguments follow ordinary host path resolution.
-By default, every document-declared relative path resolves from the file that
-writes it, including an inherited layer or a producing specification.
+**REQ-0772.** The caller explicitly supplies the entry file and any
+[project file](../specification/project.md#req-1331); the project file links the
+implementation environment file of each host language. These caller arguments
+follow ordinary host path resolution. By default, every document-declared
+relative path resolves from the file that writes it, including an inherited
+layer, a producing specification, a project file and an environment file.
 A dataset or output declaration may explicitly select its entry file with
 `relative_to: entry` under [REQ-0780](resources.md#req-0780). Composition retains
 the original declaring file and written spelling. No project configuration is
-discovered or read to select resource locations.
+discovered, and a project file does not select a specification's resource
+locations.
 
 ### The written form
 
@@ -73,8 +76,8 @@ repository-authored value.
 `declaring` selects the directory of the file that writes the path; `entry`
 selects the directory of the specification's entry file. The schema fixes the
 closed values and default. On an input dataset this setting applies to both
-`path` and `schema`; on `output` it applies to `path`, `warning_log` and
-`verification_log`. Other document resources use their declaring file.
+`path` and `schema`; on `output` it applies to `path` and `report`. Other
+document resources use their declaring file.
 An inherited input uses its composed setting, even when another layer supplied
 the path. An inherited output uses its complete inherited declaration.
 
@@ -94,11 +97,12 @@ root, a data root or the process working directory.
 <a id="req-0781"></a>
 
 **REQ-0781.** Every resolved location has a physical directory **anchor** and
-retained component witnesses. The caller's entry parent is canonicalized and
-opened once; aliases the caller used for that selected directory retain the
-same authority. A declaration outside that parent is walked from its filesystem
-root. The anchor is an IO consistency mechanism, not an application containment
-policy or fallback search location. Python and R use the same resolution and
+retained component witnesses. The caller's entry parent, and the parent of the
+project file the caller passes, are each canonicalized and opened once; aliases
+the caller used for a selected directory retain the same authority. A
+declaration outside those parents is walked from its filesystem root. The
+anchor is an IO consistency mechanism, not an application containment policy
+or fallback search location. Python and R use the same resolution and
 native traversal rules on every supported platform.
 
 <a id="req-1246"></a>
@@ -107,8 +111,8 @@ native traversal rules on every supported platform.
 `input/dm.csv` names the file beside that shared layer. If that file is absent,
 a study's own `input/dm.csv` is not substituted. A shared input with
 `relative_to: entry` explicitly names each study entry's own `input/dm.csv`.
-`yamaa-project.yaml` and old project/data-root settings do not affect either
-selection. Missing-file diagnostics retain the original declaring field and
+A project file, `yamaa-project.yaml` and old project/data-root settings do not
+affect either selection. Missing-file diagnostics retain the original declaring field and
 written path.
 
 <a id="req-1247"></a>
@@ -120,7 +124,10 @@ the input's selected `relative_to` base under [REQ-0780](resources.md#req-0780).
 The producing specification that `schema` names already exists. Its
 `output.path`, resolved with the producer's own selected base, must name the same
 artifact location. Workflow execution consumes held serialized producer bytes;
-explicit Save publishes those bytes under [Publication](publication.md).
+explicit Save publishes those bytes under
+[REQ-1330](publication.md#req-1330). In a project run, a producer outside the
+run scope is not executed, and the artifact path names the saved file the
+consumer reads under [REQ-1343](../specification/project.md#req-1343).
 
 <a id="req-0782"></a>
 
@@ -131,12 +138,13 @@ component is a regular file.
 <a id="req-0783"></a>
 
 **REQ-0783.** **No component below the anchor is a symbolic link**, including
-one whose target is otherwise readable. The caller-selected entry parent is
-exempt: its canonical directory and descriptor are selected before any
-specification is read. Declared paths do not select exempt directories. A path
-outside that parent retains the no-link check on every component below its
-filesystem root. Each walk verifies the retained directory and file entries so
-that a name substitution cannot redirect a read or publication silently.
+one whose target is otherwise readable. The caller-selected parents of
+[REQ-0781](resources.md#req-0781) are exempt: their canonical directories and
+descriptors are selected before any specification is read. Declared paths do
+not select exempt directories. A path outside those parents retains the
+no-link check on every component below its filesystem root. Each walk verifies
+the retained directory and file entries; a name substitution cannot redirect a
+read or publication silently.
 
 <a id="req-0784"></a>
 
@@ -193,7 +201,7 @@ when content does.
 | --- | --- |
 | `project_path` | Local resource a run reads or publishes; a relative spelling uses the base selected by REQ-0780 and an absolute spelling names its local location. |
 | `dataset_class.relative_to` | Base for the input dataset's `path` and `schema`. |
-| `output_class.relative_to` | Base for the primary artifact and its warning and verification logs. |
+| `output_class.relative_to` | Base for the primary artifact and its run report file. |
 
 ## Error conditions
 

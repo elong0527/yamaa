@@ -5,106 +5,98 @@
   .Call(wrap__core_version)
 }
 
-.native_domain_file <- function(specification, environment_path, version, capabilities) {
-  .Call(wrap__domain_file, specification, environment_path, version, capabilities)
+.native_spec_check <- function(specification, project, version) {
+  .Call(wrap__spec_check, specification, project, version)
 }
 
-.native_domain_resolved <- function(specification, environment_path, version, capabilities, resolver) {
-  .Call(wrap__domain_resolved, specification, environment_path, version, capabilities, resolver)
+.native_spec_run <- function(specification, project, version, capabilities) {
+  .Call(wrap__spec_run, specification, project, version, capabilities)
 }
 
-.native_check_file <- function(specification, environment_path, version) {
-  .Call(wrap__check_file, specification, environment_path, version)
+.native_spec_resolve <- function(specification, project, version) {
+  .Call(wrap__spec_resolve, specification, project, version)
 }
 
-.native_check_resolved <- function(specification, environment_path, version, resolver) {
-  .Call(wrap__check_resolved, specification, environment_path, version, resolver)
+.native_read_odm <- function(source, archive_member, max_archive_members, max_expanded_bytes, max_xml_depth) {
+  .Call(wrap__read_odm, source, archive_member, max_archive_members, max_expanded_bytes, max_xml_depth)
 }
 
-.native_domain_issues <- function(handle) {
-  .Call(wrap__domain_issues, handle)
+.native_run_output <- function(handle) {
+  .Call(wrap__run_output, handle)
 }
 
-.native_domain_diagnostics <- function(handle) {
-  .Call(wrap__domain_diagnostics, handle)
+.native_run_issues <- function(handle) {
+  .Call(wrap__run_issues, handle)
 }
 
-.native_domain_output <- function(handle) {
-  .Call(wrap__domain_output, handle)
+.native_run_report <- function(handle) {
+  .Call(wrap__run_report, handle)
 }
 
-.native_domain_arrow <- function(handle, destination, kind) {
-  .Call(wrap__domain_arrow, handle, destination, kind)
+.native_run_save <- function(handle) {
+  .Call(wrap__run_save, handle)
 }
 
-.native_domain_log <- function(handle, warning) {
-  .Call(wrap__domain_log, handle, warning)
+.native_run_observations <- function(handle, include_measurements) {
+  .Call(wrap__run_observations, handle, include_measurements)
 }
 
-.native_domain_observations <- function(handle, include_measurements) {
-  .Call(wrap__domain_observations, handle, include_measurements)
+.native_run_interrupt <- function(handle) {
+  .Call(wrap__run_interrupt, handle)
 }
 
-.native_domain_save <- function(handle) {
-  .Call(wrap__domain_save, handle)
+.native_project_spec <- function(project, name, version) {
+  .Call(wrap__project_spec, project, name, version)
 }
 
-.native_domain_interrupt <- function(handle) {
-  .Call(wrap__domain_interrupt, handle)
+.native_project_check <- function(project, version) {
+  .Call(wrap__project_check, project, version)
 }
 
-.native_domain_producer_evidence <- function(handle) {
-  .Call(wrap__domain_producer_evidence, handle)
+.native_project_run <- function(project, section, version, capabilities) {
+  .Call(wrap__project_run, project, section, version, capabilities)
 }
 
-.native_domain_preparation_sources <- function(handle) {
-  .Call(wrap__domain_preparation_sources, handle)
+.native_project_run_names <- function(handle) {
+  .Call(wrap__project_run_names, handle)
 }
 
-.native_domain_projection_failure <- function(handle) {
-  .Call(wrap__domain_projection_failure, handle)
+.native_project_run_output <- function(handle, name) {
+  .Call(wrap__project_run_output, handle, name)
 }
 
-.native_define_file <- function(environment, standard, created, installed) {
-  .Call(wrap__define_file, environment, standard, created, installed)
+.native_project_run_member_issues <- function(handle, name) {
+  .Call(wrap__project_run_member_issues, handle, name)
 }
 
-.native_define_issues <- function(handle) {
-  .Call(wrap__define_issues, handle)
+.native_project_run_member_report <- function(handle, name) {
+  .Call(wrap__project_run_member_report, handle, name)
 }
 
-.native_define_diagnostics <- function(handle) {
-  .Call(wrap__define_diagnostics, handle)
+.native_project_run_issues <- function(handle) {
+  .Call(wrap__project_run_issues, handle)
 }
 
-.native_define_artifacts <- function(handle) {
-  .Call(wrap__define_artifacts, handle)
+.native_project_run_report <- function(handle) {
+  .Call(wrap__project_run_report, handle)
 }
 
-.native_define_save <- function(handle) {
-  .Call(wrap__define_save, handle)
+.native_project_run_save <- function(handle) {
+  .Call(wrap__project_run_save, handle)
 }
 
-.native_scalar_bytes <- function(tag, payload) {
-  .Call(wrap__scalar_bytes, tag, payload)
+.native_project_run_interrupt <- function(handle) {
+  .Call(wrap__project_run_interrupt, handle)
 }
 
-.native_scalar_exact_double <- function(tag, payload) {
-  .Call(wrap__scalar_exact_double, tag, payload)
+.native_project_submission <- function(project, section, created, version) {
+  .Call(wrap__project_submission, project, section, created, version)
 }
 
-.native_scalar_operator_code <- function(name, unary) {
-  .Call(wrap__scalar_operator_code, name, unary)
+.native_submission_issues <- function(handle) {
+  .Call(wrap__submission_issues, handle)
 }
 
-.native_scalar_operator <- function(code, left_tag, left, right_tag, right, unary) {
-  .Call(wrap__scalar_operator, code, left_tag, left, right_tag, right, unary)
-}
-
-.native_resolve_specification_file <- function(specification, environment) {
-  .Call(wrap__resolve_specification_file, specification, environment)
-}
-
-.native_read_resolved_specification <- function(value) {
-  .Call(wrap__read_resolved_specification, value)
+.native_submission_save <- function(handle) {
+  .Call(wrap__submission_save, handle)
 }

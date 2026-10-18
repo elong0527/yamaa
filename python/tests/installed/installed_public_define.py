@@ -1,4 +1,9 @@
-"""Installed public Define with independent XML/JSON oracles and no reference imports."""
+"""Installed project submissions with independent XML/JSON oracles and no reference imports.
+
+`project.submission(section, created=...)` composes Define-XML (and
+Dataset-JSON where the section sets `datasets: json`) when called; nothing is
+written until `save()`, which publishes the composed bytes.
+"""
 
 import builtins
 import json
@@ -14,12 +19,15 @@ from jsonschema import Draft202012Validator
 from lxml import etree
 
 import yamaa
-from yamaa import DefineError, define
 
 TRUTH = load_truth(__file__, "public-define")
 
 ROOT = Path(__file__).with_name("define-fixtures")
 SCHEMAS = ROOT / "schemas"
+NS = {
+    "o": "http://www.cdisc.org/ns/odm/v1.3",
+    "d": "http://www.cdisc.org/ns/def/v2.1",
+}
 
 
 class PublicDefine(unittest.TestCase):
@@ -39,7 +47,18 @@ class PublicDefine(unittest.TestCase):
         self.assertFalse((directory / "input").exists())
         return directory
 
-    def call(self, directory, created=TRUTH["created"]):
+    def edit_project(self, directory, edit):
+        path = directory / "project.yaml"
+        document = yaml.safe_load(path.read_text())
+        edit(document)
+        path.write_text(yaml.safe_dump(document, sort_keys=False))
+        return document
+
+    def metadata_only(self, directory):
+        """Compose Define-XML alone: the section no longer asks for Dataset-JSON."""
+        self.edit_project(directory, lambda document: document["sdtm"].pop("datasets"))
+
+    def call(self, directory, created=TRUTH["created"], section="sdtm"):
         original = builtins.__import__
 
         def guarded(name, *args, **kwargs):
@@ -58,9 +77,28 @@ class PublicDefine(unittest.TestCase):
             return original(name, *args, **kwargs)
 
         with patch("builtins.__import__", guarded):
-            result = define(directory / "environment.yaml", "sdtm", created=created)
+            result = yamaa.project(directory / "project.yaml").submission(
+                section, created=created
+            )
         self.assertEqual(result.issues.columns, TRUTH["issue_columns"])
+        for row in result.issues.to_dicts():
+            self.assertIsNone(row["source_span"])
+            self.assertIsNone(row["operand_route"])
         return result
+
+    def save(self, result, directory, names):
+        """Save, require exactly `names` to appear, and return their bytes."""
+        before = {path.name for path in directory.iterdir()}
+        self.assertIsNone(result.save())
+        self.assertEqual(
+            {path.name for path in directory.iterdir()} - before, set(names)
+        )
+        return {name: (directory / name).read_bytes() for name in names}
+
+    def refused(self, result):
+        with self.assertRaises(yamaa.Error) as caught:
+            result.save()
+        self.assertTrue(caught.exception.issues.equals(result.issues))
 
     def validate_xml(self, content):
         parser = etree.XMLParser(no_network=True, resolve_entities=False)
@@ -71,33 +109,37 @@ class PublicDefine(unittest.TestCase):
         schema.assertValid(root)
         return root
 
+    def validate_json(self, content):
+        data = json.loads(content)
+        Draft202012Validator(
+            json.loads((SCHEMAS / "dataset.schema.json").read_bytes())
+        ).validate(data)
+        return data
+
     def test_lb_independent_completion_value_links_schema_json_and_held_save(self):
         directory = self.fixture("sdtm-lb-metadata", published=True)
         result = self.call(directory)
         self.assertEqual(result.issues.height, 0, result.issues)
-        artifacts = result._native.artifacts()
-        self.assertEqual(
-            [(name, state) for name, _, state in artifacts],
-            [("lb.json", "Ready"), ("define.xml", "Ready")],
-        )
-        xml = self.validate_xml(artifacts[1][1])
-        ns = {
-            "o": "http://www.cdisc.org/ns/odm/v1.3",
-            "d": "http://www.cdisc.org/ns/def/v2.1",
-        }
+        # The composition is held: sources may change or go before save.
+        for name in TRUTH["retained_source_files"]:
+            (directory / name).unlink()
+            self.assertFalse((directory / name).exists())
+        (directory / "lb.csv").write_text("changed after preparation\n")
+        written = self.save(result, directory, ["lb.json", "define.xml"])
+        xml = self.validate_xml(written["define.xml"])
         self.assertEqual(xml.get("CreationDateTime"), TRUTH["created"])
         self.assertEqual(xml.get("SourceSystemVersion"), "1.0")
         self.assertEqual(
-            xml.xpath("//d:ValueListDef/@OID", namespaces=ns), ["VL.LB.LBORRESU"]
+            xml.xpath("//d:ValueListDef/@OID", namespaces=NS), ["VL.LB.LBORRESU"]
         )
         self.assertEqual(
-            xml.xpath("//o:ItemDef[d:ValueListRef]/@OID", namespaces=ns),
+            xml.xpath("//o:ItemDef[d:ValueListRef]/@OID", namespaces=NS),
             ["IT.LB.LBORRESU"],
         )
-        refs = xml.xpath("//d:ValueListDef/o:ItemRef", namespaces=ns)
+        refs = xml.xpath("//d:ValueListDef/o:ItemRef", namespaces=NS)
         self.assertEqual([ref.get("OrderNumber") for ref in refs], ["1", "2"])
         self.assertEqual([ref.get("Mandatory") for ref in refs], ["No", "No"])
-        self.assertEqual(len(xml.xpath("//o:ItemDef", namespaces=ns)), 13)
+        self.assertEqual(len(xml.xpath("//o:ItemDef", namespaces=NS)), 13)
         for ordinal, code, source, codelist in [
             (1, "GLUC", "Vendor", "CL_GLUCOSE"),
             (2, "CREAT", "Sponsor", "CL_CREATININE"),
@@ -106,41 +148,38 @@ class PublicDefine(unittest.TestCase):
             self.assertEqual(refs[ordinal - 1].get("ItemOID"), "IT." + identity)
             self.assertEqual(
                 refs[ordinal - 1].xpath(
-                    "d:WhereClauseRef/@WhereClauseOID", namespaces=ns
+                    "d:WhereClauseRef/@WhereClauseOID", namespaces=NS
                 ),
                 ["WC." + identity],
             )
             item = xml.xpath(
-                "//o:ItemDef[@OID=$oid]", namespaces=ns, oid="IT." + identity
+                "//o:ItemDef[@OID=$oid]", namespaces=NS, oid="IT." + identity
             )[0]
             self.assertEqual(
                 (item.get("Name"), item.get("DataType"), item.get("Length")),
                 ("LBORRESU", "text", "8"),
             )
             self.assertEqual(
-                item.xpath("o:CodeListRef/@CodeListOID", namespaces=ns),
+                item.xpath("o:CodeListRef/@CodeListOID", namespaces=NS),
                 ["CL." + codelist],
             )
-            self.assertEqual(item.xpath("d:Origin/@Type", namespaces=ns), ["Assigned"])
-            self.assertEqual(item.xpath("d:Origin/@Source", namespaces=ns), [source])
+            self.assertEqual(item.xpath("d:Origin/@Type", namespaces=NS), ["Assigned"])
+            self.assertEqual(item.xpath("d:Origin/@Source", namespaces=NS), [source])
             check = xml.xpath(
                 "//d:WhereClauseDef[@OID=$oid]/o:RangeCheck",
-                namespaces=ns,
+                namespaces=NS,
                 oid="WC." + identity,
             )[0]
             self.assertEqual(
                 (
                     check.get("Comparator"),
                     check.get("SoftHard"),
-                    check.get("{" + ns["d"] + "}ItemOID"),
+                    check.get("{" + NS["d"] + "}ItemOID"),
                 ),
                 ("EQ", "Soft", "IT.LB.LBTESTCD"),
             )
-            self.assertEqual(check.xpath("o:CheckValue/text()", namespaces=ns), [code])
-        data = json.loads(artifacts[0][1])
-        Draft202012Validator(
-            json.loads((SCHEMAS / "dataset.schema.json").read_bytes())
-        ).validate(data)
+            self.assertEqual(check.xpath("o:CheckValue/text()", namespaces=NS), [code])
+        data = self.validate_json(written["lb.json"])
         self.assertEqual(
             [column["name"] for column in data["columns"]], TRUTH["lb_columns"]
         )
@@ -188,16 +227,6 @@ class PublicDefine(unittest.TestCase):
                 ],
             ],
         )
-        reads = result._native.capture_reads()
-        for name in TRUTH["retained_source_files"]:
-            (directory / name).unlink()
-            self.assertFalse((directory / name).exists())
-        (directory / "lb.csv").write_text("changed after preparation\n")
-        self.assertTrue(result.save())
-        self.assertFalse(result.save())
-        self.assertEqual(result._native.capture_reads(), reads)
-        for name, content, _ in artifacts:
-            self.assertEqual((directory / name).read_bytes(), content)
 
     def test_lb_original_source_and_selected_value_codelist_rejections_write_nothing(
         self,
@@ -258,8 +287,7 @@ class PublicDefine(unittest.TestCase):
                             "rows.glucose.submission.LBORRESU.codelist"
                         )
                     )
-                with self.assertRaises(DefineError):
-                    result.save()
+                self.refused(result)
                 self.assertFalse((directory / "define.xml").exists())
                 self.assertFalse((directory / "lb.json").exists())
                 shutil.rmtree(directory)
@@ -308,13 +336,7 @@ class PublicDefine(unittest.TestCase):
         ]:
             with self.subTest(case=case):
                 directory = self.fixture("sdtm-lb-metadata")
-                environment = yaml.safe_load(
-                    (directory / "environment.yaml").read_text()
-                )
-                environment["sdtm"]["dataset_json"] = False
-                (directory / "environment.yaml").write_text(
-                    yaml.safe_dump(environment, sort_keys=False)
-                )
+                self.metadata_only(directory)
                 spec = yaml.safe_load((directory / "spec.yaml").read_text())
                 overlay = yaml.safe_load(
                     (directory / "submission-spec.yaml").read_text()
@@ -368,15 +390,11 @@ class PublicDefine(unittest.TestCase):
                 result = self.call(directory)
                 if requirement is None:
                     self.assertEqual(result.issues.height, 0, result.issues)
-                    self.assertEqual(
-                        [name for name, _, _ in result._native.artifacts()],
-                        ["define.xml"],
-                    )
-                    xml = self.validate_xml(result._native.artifacts()[0][1])
+                    written = self.save(result, directory, ["define.xml"])
+                    xml = self.validate_xml(written["define.xml"])
                     if case == "identical duplicate":
-                        ns = {"d": "http://www.cdisc.org/ns/def/v2.1"}
                         self.assertEqual(
-                            len(xml.xpath("//d:WhereClauseDef", namespaces=ns)), 1
+                            len(xml.xpath("//d:WhereClauseDef", namespaces=NS)), 1
                         )
                 else:
                     self.assertTrue(
@@ -388,48 +406,53 @@ class PublicDefine(unittest.TestCase):
                         ),
                         result.issues,
                     )
-                    with self.assertRaises(DefineError):
-                        result.save()
+                    self.refused(result)
+                    self.assertFalse((directory / "define.xml").exists())
                 self.assertFalse((directory / "input").exists())
                 self.assertFalse((directory / "lb.csv").exists())
                 self.assertFalse((directory / "lb.json").exists())
-                self.assertFalse((directory / "define.xml").exists())
                 shutil.rmtree(directory)
 
     def test_dm_goldens_public_issues_and_held_save(self):
         directory = self.fixture("sdtm-dm-metadata", published=True)
         result = self.call(directory)
         self.assertEqual(result.issues.height, 0, result.issues)
-        artifacts = result._native.artifacts()
-        self.assertEqual(
-            [(p, state) for p, _, state in artifacts],
-            [("dm.json", "Ready"), ("define.xml", "Ready")],
-        )
-        for name, content, _ in artifacts:
-            self.assertEqual(content, (directory / "expected" / name).read_bytes())
+        for name in ("dm.json", "define.xml"):
             self.assertFalse((directory / name).exists())
-        self.validate_xml(artifacts[1][1])
-        Draft202012Validator(
-            json.loads((SCHEMAS / "dataset.schema.json").read_bytes())
-        ).validate(json.loads(artifacts[0][1]))
-        reads = result._native.capture_reads()
-        (directory / "environment.yaml").unlink()
+        (directory / "project.yaml").unlink()
         (directory / "spec.yaml").unlink()
         (directory / "dm.csv").write_text("changed published artifact\n")
-        self.assertTrue(result.save())
-        self.assertEqual(result._native.capture_reads(), reads)
-        self.assertFalse(result.save())
-        for name in ["define.xml", "dm.json"]:
-            self.assertEqual(
-                (directory / name).read_bytes(),
-                (directory / "expected" / name).read_bytes(),
-            )
+        written = self.save(result, directory, ["dm.json", "define.xml"])
+        for name, content in written.items():
+            self.assertEqual(content, (directory / "expected" / name).read_bytes())
+        self.validate_xml(written["define.xml"])
+        self.validate_json(written["dm.json"])
+        # Every save rewrites the held bytes: deleted files come back unchanged.
+        for name in written:
+            (directory / name).unlink()
+        self.assertEqual(
+            self.save(result, directory, ["dm.json", "define.xml"]), written
+        )
+
+    def test_every_declared_define_section_is_composed_without_a_section(self):
+        directory = self.fixture("sdtm-dm-metadata", published=True)
+        result = self.call(directory, section=None)
+        self.assertEqual(result.issues.height, 0, result.issues)
+        written = self.save(result, directory, ["dm.json", "define.xml"])
+        for name, content in written.items():
+            self.assertEqual(content, (directory / "expected" / name).read_bytes())
+        # A section the project does not declare is a submission issue.
+        absent = self.call(directory, section="adam")
+        self.assertEqual(
+            [
+                (row["condition"], row["requirement"], row["spec_paths"])
+                for row in absent.issues.to_dicts()
+            ],
+            [("missing_required_field", "REQ-1337", ["adam"])],
+        )
+        self.refused(absent)
 
     def test_ae_vs_independent_fixed_time_schema_and_structure(self):
-        ns = {
-            "o": "http://www.cdisc.org/ns/odm/v1.3",
-            "d": "http://www.cdisc.org/ns/def/v2.1",
-        }
         expected = {
             "sdtm-ae-coding": ("AE", TRUTH["ae_columns"], "Submission", "MEDDRA", True),
             "sdtm-vs-epoch-from-subject-elements": (
@@ -445,54 +468,49 @@ class PublicDefine(unittest.TestCase):
                 directory = self.fixture(name)
                 result = self.call(directory, "2026-09-30T00:00:00")
                 self.assertEqual(result.issues.height, 0, result.issues)
-                artifacts = result._native.artifacts()
-                self.assertEqual(len(artifacts), 1)
-                xml = self.validate_xml(artifacts[0][1])
+                self.assertFalse((directory / (id_.lower() + ".csv")).exists())
+                written = self.save(result, directory, ["define.xml"])
+                xml = self.validate_xml(written["define.xml"])
                 self.assertEqual(xml.get("CreationDateTime"), "2026-09-30T00:00:00")
                 self.assertEqual(xml.get("SourceSystem"), "yamaa")
                 self.assertEqual(xml.get("SourceSystemVersion"), "1.0")
-                self.assertEqual(xml.get("{" + ns["d"] + "}Context"), context)
+                self.assertEqual(xml.get("{" + NS["d"] + "}Context"), context)
                 self.assertEqual(
-                    xml.xpath("//o:ItemGroupDef/@OID", namespaces=ns), ["IG." + id_]
+                    xml.xpath("//o:ItemGroupDef/@OID", namespaces=NS), ["IG." + id_]
                 )
-                self.assertEqual(xml.xpath("//o:ItemDef/@Name", namespaces=ns), columns)
+                self.assertEqual(xml.xpath("//o:ItemDef/@Name", namespaces=NS), columns)
                 self.assertEqual(
-                    xml.xpath("//o:ItemRef/@OrderNumber", namespaces=ns),
+                    xml.xpath("//o:ItemRef/@OrderNumber", namespaces=NS),
                     [str(i) for i in range(1, len(columns) + 1)],
                 )
                 self.assertEqual(
-                    xml.xpath("//o:CodeList/@OID", namespaces=ns), ["CL." + codelist]
+                    xml.xpath("//o:CodeList/@OID", namespaces=NS), ["CL." + codelist]
                 )
                 self.assertEqual(
-                    bool(xml.xpath("//d:AnnotatedCRF", namespaces=ns)), acrf
+                    bool(xml.xpath("//d:AnnotatedCRF", namespaces=NS)), acrf
                 )
                 if id_ == "AE":
                     self.assertEqual(
-                        xml.xpath("//o:ExternalCodeList/@Dictionary", namespaces=ns),
+                        xml.xpath("//o:ExternalCodeList/@Dictionary", namespaces=NS),
                         ["MedDRA"],
                     )
                     self.assertEqual(
-                        xml.xpath("//o:MethodDef/@OID", namespaces=ns),
+                        xml.xpath("//o:MethodDef/@OID", namespaces=NS),
                         ["MT.AE.AEDECOD", "MT.AE.AEBODSYS"],
                     )
                 else:
                     self.assertEqual(
                         xml.xpath(
-                            "//o:CodeList/o:EnumeratedItem/@CodedValue", namespaces=ns
+                            "//o:CodeList/o:EnumeratedItem/@CodedValue", namespaces=NS
                         ),
                         ["SCREENING", "TREATMENT", "FOLLOW-UP"],
                     )
                     self.assertEqual(
                         xml.xpath(
-                            "//o:ItemDef[@Name='VSDTC']/@DataType", namespaces=ns
+                            "//o:ItemDef[@Name='VSDTC']/@DataType", namespaces=NS
                         ),
                         ["datetime"],
                     )
-                self.assertFalse((directory / (id_.lower() + ".csv")).exists())
-                self.assertTrue(result.save())
-                self.assertEqual(
-                    (directory / "define.xml").read_bytes(), artifacts[0][1]
-                )
 
     def test_missing_artifact_only_when_requested_and_semantic_failure_zero_writes(
         self,
@@ -503,36 +521,29 @@ class PublicDefine(unittest.TestCase):
             "producer_contract_mismatch", result.issues["condition"].to_list()
         )
         self.assertIn("REQ-0535", result.issues["requirement"].to_list())
-        with self.assertRaises(DefineError):
-            result.save()
-        environment = directory / "environment.yaml"
-        environment.write_text(
-            environment.read_text().replace("dataset_json: true", "dataset_json: false")
-        )
+        self.refused(result)
+        self.metadata_only(directory)
         result = self.call(directory)
         self.assertEqual(result.issues.height, 0, result.issues)
-        environment.write_text(
-            environment.read_text().replace("name: SDTMIG", "name: ADaMIG")
-        )
+        project = directory / "project.yaml"
+        project.write_text(project.read_text().replace("name: SDTMIG", "name: ADaMIG"))
         result = self.call(directory)
         self.assertIn("unknown_standard_family", result.issues["condition"].to_list())
-        with self.assertRaises(DefineError) as caught:
-            result.save()
-        self.assertTrue(caught.exception.issues.equals(result.issues))
-        self.assertEqual(caught.exception.diagnostics, result.diagnostics)
+        self.refused(result)
         self.assertFalse((directory / "define.xml").exists())
         self.assertFalse((directory / "dm.json").exists())
 
     def test_output_preflight_failure_stops_all_outputs_and_preserves_cause(self):
         directory = self.fixture("sdtm-dm-metadata", published=True)
         result = self.call(directory)
+        self.assertEqual(result.issues.height, 0, result.issues)
         (directory / "define.xml").mkdir()
-        with self.assertRaises(DefineError):
+        with self.assertRaises(yamaa.Error) as caught:
             result.save()
         self.assertFalse((directory / "dm.json").exists())
-        self.assertEqual(
-            [s for _, _, s in result._native.artifacts()], ["Stopped", "Failed"]
-        )
+        self.assertTrue((directory / "define.xml").is_dir())
+        # The refused save explains itself, and the submission keeps that cause.
+        self.assertTrue(caught.exception.issues.equals(result.issues))
         self.assertEqual(result.issues["phase"].to_list(), ["engine"])
         self.assertEqual(result.issues["condition"].to_list(), ["engine_rejected"])
         self.assertEqual(result.issues["requirement"].to_list(), [None])
@@ -542,91 +553,101 @@ class PublicDefine(unittest.TestCase):
 
     def test_source_version_defaults_and_schema_facet_failures(self):
         directory = self.fixture("sdtm-dm-metadata", published=True)
-        environment = directory / "environment.yaml"
-        environment.write_text(
-            environment.read_text().replace("  source_system_version: '1.0'\n", "")
+        project = directory / "project.yaml"
+        project.write_text(
+            project.read_text().replace("  source_system_version: '1.0'\n", "")
         )
         result = self.call(directory)
         self.assertEqual(result.issues.height, 0, result.issues)
-        artifacts = result._native.artifacts()
+        written = self.save(result, directory, ["dm.json", "define.xml"])
         self.assertEqual(
-            json.loads(artifacts[0][1])["sourceSystem"]["version"], yamaa.__version__
+            json.loads(written["dm.json"])["sourceSystem"]["version"], yamaa.__version__
         )
         self.assertEqual(
-            self.validate_xml(artifacts[1][1]).get("SourceSystemVersion"),
+            self.validate_xml(written["define.xml"]).get("SourceSystemVersion"),
             yamaa.__version__,
         )
-        environment.write_text(
-            environment.read_text().replace("name: CDISC/NCI", "name: InvalidStandard")
+        for name in written:
+            (directory / name).unlink()
+        project.write_text(
+            project.read_text().replace("name: CDISC/NCI", "name: InvalidStandard")
         )
         result = self.call(directory)
         self.assertIn("REQ-1026", result.issues["requirement"].to_list())
-        with self.assertRaises(DefineError):
-            result.save()
+        self.refused(result)
         self.assertFalse((directory / "define.xml").exists())
 
     def test_defaults_selection_bound_lists_and_required_acrf_aliases(self):
         directory = self.fixture("sdtm-dm-metadata", published=True)
-        environment = directory / "environment.yaml"
-        document = yaml.safe_load(environment.read_text())
-        section = document["sdtm"]
-        del section["file_oid"], section["metadata_version"]
-        document["adam"] = {
-            "standard": {"name": "ADaMIG", "version": "1.3", "status": "Final"},
-            "specs": ["missing-other-section.yaml"],
-            "define": "adam.xml",
-        }
-        document["codelists"].append(
-            {
-                "codelists": [
-                    {
-                        "id": "UNUSED",
-                        "name": "Used only by another submission",
-                        "data_type": "text",
-                        "items": [{"value": "OTHER"}],
-                    },
-                ]
+
+        def edit(document):
+            section = document["sdtm"]
+            del section["file_oid"], section["metadata_version"]
+            document["adam"] = {
+                "standard": {"name": "ADaMIG", "version": "1.3", "status": "Final"},
+                "specs": ["missing-other-section.yaml"],
+                "define": "adam.xml",
             }
-        )
-        environment.write_text(yaml.safe_dump(document, sort_keys=False))
+            document["codelists"].append(
+                {
+                    "codelists": [
+                        {
+                            "id": "UNUSED",
+                            "name": "Used only by another submission",
+                            "data_type": "text",
+                            "items": [{"value": "OTHER"}],
+                        },
+                    ]
+                }
+            )
+
+        document = self.edit_project(directory, edit)
         result = self.call(directory)
         self.assertEqual(result.issues.height, 0, result.issues)
-        content = result._native.artifacts()[1][1]
+        content = self.save(result, directory, ["dm.json", "define.xml"])["define.xml"]
         xml = self.validate_xml(content)
         self.assertEqual(xml.get("FileOID"), "STUDY01.sdtm.Define-XML_2.1")
-        ns = {"o": "http://www.cdisc.org/ns/odm/v1.3"}
         self.assertEqual(
-            xml.xpath("//o:MetaDataVersion/@OID", namespaces=ns), ["MDV.STUDY01.sdtm"]
+            xml.xpath("//o:MetaDataVersion/@OID", namespaces=NS), ["MDV.STUDY01.sdtm"]
         )
         self.assertEqual(
-            xml.xpath("//o:MetaDataVersion/@Name", namespaces=ns),
+            xml.xpath("//o:MetaDataVersion/@Name", namespaces=NS),
             ["STUDY01 sdtm metadata"],
         )
         self.assertNotIn(b"UNUSED", content)
         self.assertEqual(
-            xml.xpath("//o:CodeList/@OID", namespaces=ns),
+            xml.xpath("//o:CodeList/@OID", namespaces=NS),
             ["CL.DOMAIN", "CL.AGEU", "CL.SEX", "CL.COUNTRY"],
         )
-        self.assertEqual(content, self.call(directory)._native.artifacts()[1][1])
+        # Composing again gives the same bytes.
+        for name in ("dm.json", "define.xml"):
+            (directory / name).unlink()
+        again = self.save(self.call(directory), directory, ["dm.json", "define.xml"])
+        self.assertEqual(again["define.xml"], content)
         self.assertFalse((directory / "adam.xml").exists())
+        for name in ("dm.json", "define.xml"):
+            (directory / name).unlink()
+        section = document["sdtm"]
         section["documents"] = [
             d for d in section["documents"] if d["kind"] != "annotated_crf"
         ]
-        environment.write_text(yaml.safe_dump(document, sort_keys=False))
+        (directory / "project.yaml").write_text(
+            yaml.safe_dump(document, sort_keys=False)
+        )
         result = self.call(directory)
         self.assertIn("origin_document_missing", result.issues["condition"].to_list())
-        with self.assertRaises(DefineError):
-            result.save()
+        self.refused(result)
         self.assertFalse((directory / "dm.json").exists())
         section["documents"] = yaml.safe_load(
-            (ROOT / "sdtm-dm-metadata/environment.yaml").read_text()
+            (ROOT / "sdtm-dm-metadata/project.yaml").read_text()
         )["sdtm"]["documents"]
         del document["codelists"][0]["codelists"][0]["alias"]
-        environment.write_text(yaml.safe_dump(document, sort_keys=False))
+        (directory / "project.yaml").write_text(
+            yaml.safe_dump(document, sort_keys=False)
+        )
         result = self.call(directory)
         self.assertIn("REQ-1004", result.issues["requirement"].to_list())
-        with self.assertRaises(DefineError):
-            result.save()
+        self.refused(result)
         self.assertFalse((directory / "define.xml").exists())
 
     def test_inherited_original_output_and_metadata_refusals(self):
@@ -642,21 +663,18 @@ class PublicDefine(unittest.TestCase):
         (directory / "children/spec.yaml").write_text(
             "schema_version: '1.0'\nparents: ../parents/base.yaml\n"
         )
-        environment = directory / "environment.yaml"
-        environment.write_text(
-            environment.read_text()
+        project = directory / "project.yaml"
+        project.write_text(
+            project.read_text()
             .replace("  - spec.yaml", "  - children/spec.yaml")
             .replace("define: define.xml", "define: artifacts/define.xml")
         )
         shutil.copy2(directory / "expected/dm.csv", directory / "artifacts/dm.csv")
         result = self.call(directory)
         self.assertEqual(result.issues.height, 0, result.issues)
-        self.assertIn(b'xlink:href="dm.json"', result._native.artifacts()[1][1])
-        self.assertEqual(
-            json.loads(result._native.artifacts()[0][1])["metaDataRef"], "define.xml"
-        )
-        self.assertTrue(result.save())
-        self.assertTrue((directory / "artifacts/dm.json").is_file())
+        written = self.save(result, directory / "artifacts", ["dm.json", "define.xml"])
+        self.assertIn(b'xlink:href="dm.json"', written["define.xml"])
+        self.assertEqual(json.loads(written["dm.json"])["metaDataRef"], "define.xml")
         self.assertFalse((directory / "dm.json").exists())
         (directory / "parents/base.yaml").write_text(
             spec.replace("values: [F, M, U]", "values: [F, M]")
@@ -664,10 +682,10 @@ class PublicDefine(unittest.TestCase):
         result = self.call(directory)
         self.assertIn("codelist_values_conflict", result.issues["condition"].to_list())
         self.assertIn("REQ-0955", result.issues["requirement"].to_list())
-        previous = (directory / "artifacts/define.xml").read_bytes()
-        with self.assertRaises(DefineError):
-            result.save()
-        self.assertEqual((directory / "artifacts/define.xml").read_bytes(), previous)
+        self.refused(result)
+        self.assertEqual(
+            (directory / "artifacts/define.xml").read_bytes(), written["define.xml"]
+        )
 
     def test_mutual_reference_and_stale_published_contract_refusals(self):
         directory = self.fixture("sdtm-dm-metadata")
@@ -677,8 +695,7 @@ class PublicDefine(unittest.TestCase):
         spec.write_text(original.replace("path: dm.csv", "path: artifacts/dm.csv"))
         result = self.call(directory)
         self.assertIn("REQ-1229", result.issues["requirement"].to_list())
-        with self.assertRaises(DefineError):
-            result.save()
+        self.refused(result)
         self.assertFalse((directory / "define.xml").exists())
         spec.write_text(original)
         csv = (directory / "expected/dm.csv").read_text()
@@ -687,13 +704,11 @@ class PublicDefine(unittest.TestCase):
         )
         result = self.call(directory)
         self.assertIn("REQ-0535", result.issues["requirement"].to_list())
-        with self.assertRaises(DefineError):
-            result.save()
+        self.refused(result)
         (directory / "dm.csv").write_text(csv.replace("STUDYID", "WRONG"))
         result = self.call(directory)
         self.assertIn("REQ-0535", result.issues["requirement"].to_list())
-        with self.assertRaises(DefineError):
-            result.save()
+        self.refused(result)
         (directory / "dm.csv").write_text(csv.replace(",F,USA", ",Z,USA"))
         result = self.call(directory)
         issue = result.issues.filter(result.issues["requirement"] == "REQ-0957").row(
@@ -703,8 +718,7 @@ class PublicDefine(unittest.TestCase):
         context = json.loads(issue["context"])
         self.assertEqual(context["value"], "Z")
         self.assertIn("CATH-UCSD-0001", context["key_values"])
-        with self.assertRaises(DefineError):
-            result.save()
+        self.refused(result)
         self.assertFalse((directory / "dm.json").exists())
 
     def test_physical_case_aliases_preserve_existing_publication_sentinel(self):
@@ -713,9 +727,9 @@ class PublicDefine(unittest.TestCase):
         sentinel.write_bytes(b"original publication sentinel")
         if not (directory / "DM.JSON").exists():
             self.skipTest("This volume admits distinct case-sensitive target names")
-        environment = directory / "environment.yaml"
-        environment.write_text(
-            environment.read_text().replace(
+        project = directory / "project.yaml"
+        project.write_text(
+            project.read_text().replace(
                 "  - spec.yaml", "  - spec.yaml\n  - second.yaml"
             )
         )
@@ -737,16 +751,10 @@ class PublicDefine(unittest.TestCase):
         context = result.issues["context"][0]
         self.assertIn("dm.json", context)
         self.assertIn("DM.json", context)
-        reads = result._native.capture_reads()
-        with self.assertRaises(DefineError):
-            result.save()
-        self.assertEqual(result._native.capture_reads(), reads)
+        self.refused(result)
         self.assertEqual(sentinel.read_bytes(), b"original publication sentinel")
         self.assertEqual(define_sentinel.read_bytes(), b"original Define sentinel")
         self.assertEqual(sorted(path.name for path in directory.iterdir()), names)
-        self.assertTrue(
-            all(state == "Stopped" for _, _, state in result._native.artifacts())
-        )
 
     def test_numeric_terminology_uses_numeric_equality(self):
         directory = self.fixture("sdtm-dm-metadata", published=True)
@@ -758,31 +766,31 @@ class PublicDefine(unittest.TestCase):
                 TRUTH["numeric_original_metadata"], TRUTH["numeric_completion_metadata"]
             )
         )
-        environment = directory / "environment.yaml"
-        environment.write_text(
-            environment.read_text().replace("sdtm:\n", TRUTH["numeric_codelist_yaml"])
+        project = directory / "project.yaml"
+        project.write_text(
+            project.read_text().replace("sdtm:\n", TRUTH["numeric_codelist_yaml"])
         )
         result = self.call(directory)
         self.assertEqual(result.issues.height, 0, result.issues)
-        self.validate_xml(result._native.artifacts()[1][1])
-        data = json.loads(result._native.artifacts()[0][1])
+        written = self.save(result, directory, ["dm.json", "define.xml"])
+        self.validate_xml(written["define.xml"])
+        data = json.loads(written["dm.json"])
         self.assertEqual([row[5] for row in data["rows"]], [34.0, 67.0, 52.0])
 
     def test_xml_text_findings_name_the_original_field_and_keep_render_order(self):
         for case in TRUTH["xml_text_cases"]:
             with self.subTest(case=case["name"]):
                 directory = self.fixture("sdtm-dm-metadata")
+                self.metadata_only(directory)
                 for filename, mutations in [
                     ("spec.yaml", case["specification_mutations"]),
-                    ("environment.yaml", case["environment_mutations"]),
+                    ("project.yaml", case["project_mutations"]),
                 ]:
                     path = directory / filename
                     text = path.read_text()
                     for before, after in mutations:
                         self.assertIn(before, text)
                         text = text.replace(before, after, 1)
-                    if filename == "environment.yaml":
-                        text = text.replace("dataset_json: true", "dataset_json: false")
                     path.write_text(text)
                 if case["inherit_specification"]:
                     (directory / "spec.yaml").rename(directory / "base.yaml")
@@ -791,24 +799,24 @@ class PublicDefine(unittest.TestCase):
                     )
                 result = self.call(directory)
                 actual = [
-                    {**row, "context": json.loads(row["context"])}
+                    {
+                        key: json.loads(value) if key == "context" else value
+                        for key, value in row.items()
+                        if key not in ("source_span", "operand_route")
+                    }
                     for row in result.issues.to_dicts()
                 ]
                 self.assertEqual(actual, case["issues"])
                 self.assertFalse((directory / "define.xml").exists())
                 self.assertFalse((directory / "dm.json").exists())
                 if case["issues"]:
-                    with self.assertRaises(DefineError):
-                        result.save()
-                    self.assertEqual(result._native.artifacts(), [])
+                    self.refused(result)
+                    self.assertFalse((directory / "define.xml").exists())
                 else:
-                    [(name, content, state)] = result._native.artifacts()
-                    self.assertEqual((name, state), ("define.xml", "Ready"))
+                    content = self.save(result, directory, ["define.xml"])["define.xml"]
                     self.validate_xml(content)
                     for fragment in case["xml_fragments"]:
                         self.assertIn(fragment.encode(), content)
-                    self.assertTrue(result.save())
-                    self.assertEqual((directory / name).read_bytes(), content)
                 self.assertFalse((directory / "input").exists())
                 self.assertFalse((directory / "dm.csv").exists())
 

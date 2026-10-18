@@ -17,9 +17,6 @@ pub fn standard_name(written: &str) -> Result<Submission, Finding> {
         )),
     }
 }
-pub fn required<T>(value: Option<T>, path: &str, detail: &str) -> Result<T, Finding> {
-    value.ok_or_else(|| Finding::cause(ConditionCode::DefineRequiredDeclaration, path, detail))
-}
 /// Clock acquisition stays native. The held explicit text has the same portable
 /// whole-second civil grammar as a generated Define creation attribute.
 pub fn created_text(written: &str) -> Result<&str, Finding> {

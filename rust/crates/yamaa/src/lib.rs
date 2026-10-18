@@ -13,22 +13,25 @@
 //! type here is facade-owned, and adapters or core types are converted at the
 //! boundary. Core keeps its boundary (no I/O, no `unsafe`, no Arrow).
 //!
-//! The facade forwards the `yaml`, `parquet` and `readstat` format features
-//! to `yamaa-adapters`, all on by default, and builds with any combination
-//! of them. With no format feature, CSV and Arrow routes remain. A capability
-//! a build omits fails the same way it does in adapters: the stable codes
-//! (`yaml_reader_unavailable`, `parquet_reader_unavailable`,
+//! The facade forwards the `yaml`, `parquet`, `readstat` and `odm` format
+//! features to `yamaa-adapters`, all on by default, and builds with any
+//! combination of them. With no format feature, CSV and Arrow routes remain.
+//! A capability a build omits fails the same way it does in adapters: the
+//! stable codes (`yaml_reader_unavailable`, `parquet_reader_unavailable`,
 //! `sas_reader_unavailable`, `parquet_codec_unavailable`) surface as
-//! diagnostics or as [`Error::Unavailable`]. The facade adds no native
+//! diagnostics or as [`Error::Unavailable`], and [`read_odm`] without `odm`
+//! returns `Error::Unavailable { feature: "odm" }`. The facade adds no native
 //! dependencies of its own.
 #![deny(unsafe_code)]
 
+pub mod api;
 pub mod cancel;
 pub mod diagnostic;
 pub mod engine;
 pub mod error;
 pub mod functions;
 pub mod observe;
+pub mod odm;
 pub mod plan;
 pub mod resolver;
 pub mod scalar;
@@ -36,6 +39,7 @@ pub mod table;
 
 mod internal;
 
+pub use api::{Failure, ProjectRun, Run, Submission};
 pub use cancel::CancellationToken;
 pub use diagnostic::{ContextValue, Diagnostic, DiagnosticContext, Report, Severity, SourceSpan};
 pub use engine::{
@@ -43,27 +47,26 @@ pub use engine::{
     Request, ResolvedSpecification, SaveOutcome, SourceBytes,
 };
 pub use error::{
-    Error, FunctionError, HostPayload, LockFinding, LockReason, LockSyntaxError, ResolverFailure,
-    TableError,
+    Error, FunctionError, HostPayload, LockFinding, LockReason, LockSyntaxError, OdmError,
+    ResolverFailure, TableError,
 };
 pub use functions::{
-    decode_renv_lock, Argument, BatchArgument, CallError, FunctionHandle, FunctionIdentity,
-    HostLanguage, LockContext, LockKind, Parameter, ProjectFunctions, RenvLock, Signature,
+    decode_renv_lock, Argument, BatchArgument, CallError, ColumnType, FunctionHandle,
+    FunctionIdentity, HostLanguage, LockContext, LockKind, Parameter, ProjectFunctions, RenvLock,
+    Signature,
 };
 pub use observe::{CallStage, DatasetPhase, Event, Node, Outcome, Phase, Progress, Refusal};
+pub use odm::{read_odm, OdmOptions, ODM_COLUMNS};
 pub use plan::{Plan, RunRequest};
 pub use resolver::{
     MemoryResolver, ResolverKind, ResolverOperation, ResolverReply, ResolverRequest,
     ResourceResolver,
 };
-pub use scalar::{
-    apply_scalar_operator, exact_float, scalar_operator_code, Date, DateTime, EncodedScalar,
-    Scalar, ScalarDecodeError, ScalarOperatorError, ScalarRef,
-};
+pub use scalar::{Date, DateTime, EncodedScalar, Scalar, ScalarDecodeError, ScalarRef};
 pub use table::{
     Array, DataType, Date32Array, FFI_ArrowArrayStream, Field, Fields, Float64Array, InputFrame,
-    Int64Array, LargeStringArray, RecordBatch, SchemaRef, StringArray, StringViewArray, Table,
-    TimeUnit, TimestampSecondArray,
+    Int64Array, LargeStringArray, ListArray, RecordBatch, SchemaRef, StringArray, StringViewArray,
+    Table, TimeUnit, TimestampSecondArray,
 };
 
 /// Version of the shared core compiled into a native installation.

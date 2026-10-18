@@ -1,9 +1,9 @@
 # Parquet Everywhere
 
 **Goal:** carry each subject's `AGE` into ADSL as collected, listing a
-subject whose age falls outside 18 to 100 in a warning log rather than
+subject whose age falls outside 18 to 100 in the run report rather than
 stopping the run, with every file in the Parquet format: the input, the
-output dataset, and the warning log (`adsl-violations.parquet`).
+output dataset, and the run report (`adsl-violations.parquet`).
 
 **Input:** one Parquet file, `input/dm.parquet`, carrying age (`AGE`) per
 subject.

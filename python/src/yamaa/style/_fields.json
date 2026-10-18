@@ -30,8 +30,7 @@
     "relative_to",
     "decimals",
     "columns",
-    "warning_log",
-    "verification_log",
+    "report",
     "order_by"
   ],
   "intermediate_class": [

@@ -84,6 +84,9 @@
 }
 
 # Mechanical host capabilities. Native Rust decides when each may run.
+# A bound function receives plain R values named by its parameters and replies
+# with the plain value it returned; Rust converts that value by the declared
+# result type.
 .yamaa_locked_host_capabilities <- function() {
   text <- function(bytes) {
     value <- rawToChar(bytes)
@@ -98,22 +101,14 @@
     selected <- vapply(calls, text, "")
     findings <- .yamaa_verify_locked_versions(held, selected)
     lapply(findings, function(finding) list(
-      .scalar_text_bytes(finding$package), .scalar_text_bytes(finding$reason),
-      if (is.null(finding$expected)) NULL else .scalar_text_bytes(finding$expected),
-      if (is.null(finding$actual)) NULL else .scalar_text_bytes(finding$actual)))
+      .utf8_raw(finding$package), .utf8_raw(finding$reason),
+      if (is.null(finding$expected)) NULL else .utf8_raw(finding$expected),
+      if (is.null(finding$actual)) NULL else .utf8_raw(finding$actual)))
   })
   resolve <- function(call, parameters) reply(function() {
     target <- .yamaa_resolve_locked_function(text(call), vapply(parameters, text, ""))
     force(target)
-    function(encoded) {
-      called <- reply(function() do.call(target, lapply(encoded, .scalar_unpack), quote = TRUE))
-      if (called[[1L]] != 0L) return(called)
-      tryCatch({
-        packed <- .function_pack(called[[2L]])
-        list(0L, list(packed$tag, packed$payload))
-      }, interrupt=function(condition) list(3L, condition),
-         error=function(condition) list(2L, condition))
-    }
+    function(arguments) reply(function() do.call(target, arguments, quote = TRUE))
   })
   list(verify = verify, resolve = resolve)
 }

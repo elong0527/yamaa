@@ -81,7 +81,7 @@ impl FileProject {
             },
         )
         .and_then(|run| {
-            let findings = crate::verification_logs::location_findings(&resources, &run);
+            let findings = crate::run_report::location_findings(&resources, &run);
             if findings.is_empty() {
                 Ok(run)
             } else {
@@ -104,17 +104,17 @@ impl FileProject {
         }
     }
     /// Schemas are retained capabilities; public entry points use the shipped
-    /// domain and environment closures.
+    /// domain and project closures. `environment` names the project file.
     pub fn prepare(
         mut resources: Resources,
         specification: &str,
         environment: &str,
         host: Language,
         specification_schema: Arc<CapturedSchema>,
-        environment_schema: Arc<CapturedSchema>,
+        project_schemas: project_source::ProjectSchemas,
     ) -> Result<Self, Error> {
         let mut environment =
-            capture_environment(&mut resources, environment, host, environment_schema)?;
+            capture_environment(&mut resources, environment, host, project_schemas)?;
         let document = file_preparation::prepare_document(
             &mut resources,
             specification,
@@ -137,7 +137,7 @@ impl FileProject {
             },
         )
         .map_err(Error::Compile)?;
-        let findings = crate::verification_logs::location_findings(&resources, &run);
+        let findings = crate::run_report::location_findings(&resources, &run);
         if !findings.is_empty() {
             return Err(Error::Compile(run.reject(
                 yamaa_core::specification::PrepareError::Invalid(findings),
@@ -209,19 +209,20 @@ impl FileProject {
     }
 }
 
-/// Capture the original environment and declared metadata through the same
-/// approved reader. Static workflow preparation reuses this transfer without
-/// introducing a second capture or any activation or study-source port.
+/// Capture the original project file, the environment file it links for the
+/// host and their declared metadata through the same approved reader. Static
+/// workflow preparation reuses this transfer without introducing a second
+/// capture or any activation or study-source port.
 pub(crate) fn capture_environment(
     resources: &mut Resources,
     written: &str,
     host: Language,
-    schema: Arc<CapturedSchema>,
+    schemas: project_source::ProjectSchemas,
 ) -> Result<project_source::OwnedEnvironment, Error> {
     let mut reader = crate::file_metadata::Reader { resources };
     let prepared = match yamaa_core::build::prepare_environment(
         &mut reader,
-        &mut project_source::Decoder(schema),
+        &mut project_source::Decoder(schemas),
         written,
         host,
     ) {

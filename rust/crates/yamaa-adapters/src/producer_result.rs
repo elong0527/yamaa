@@ -19,9 +19,10 @@ pub struct RootResult {
     issues: Vec<Issue>,
     output: Option<(PublicTable, Vec<u8>)>,
     root: usize,
-    logs: Arc<[crate::producer_report::NodeLogs]>,
-    log_publication: Option<Arc<crate::producer_log_publication::Publication>>,
-    log_save_attempt: Option<crate::producer_log_publication::Attempt>,
+    /// The verified run report of every node that ran, in node order.
+    reports: Vec<crate::producer_report::NodeRunReport>,
+    report_publication: Option<Arc<crate::producer_report_publication::Publication>>,
+    report_save_attempt: Option<crate::producer_report_publication::Attempt>,
     _output_failure: Option<TableError>,
     publication: Option<Arc<crate::producer_publication::Publication>>,
     publication_refusal: Option<&'static str>,
@@ -51,26 +52,21 @@ impl RootResult {
     pub fn output_table(&self) -> Option<&PublicTable> {
         self.output.as_ref().map(|(table, _)| table)
     }
-    fn held_log(&self, warning: bool) -> Option<&crate::verification_logs::HeldLog> {
-        if warning && self.output.is_none() {
-            return None;
-        }
-        let logs = &self.logs.iter().find(|logs| logs.node == self.root)?.logs;
-        (if warning {
-            &logs.warning
-        } else {
-            &logs.verification
-        })
-        .as_ref()
+    fn root_report(&self) -> Option<&crate::run_report::HeldReport> {
+        self.reports
+            .iter()
+            .find(|held| held.node == self.root)
+            .map(|held| &held.report)
     }
-    pub fn verification_log(&self) -> Option<&[u8]> {
-        self.held_log(false).map(|log| log.ipc())
+    /// The entry specification's run report as Arrow IPC bytes. A graph whose
+    /// entry never ran, because an earlier producer failed, has none; its
+    /// issues explain why.
+    pub fn run_report(&self) -> Option<&[u8]> {
+        self.root_report().map(|report| report.ipc())
     }
-    pub fn warning_log(&self) -> Option<&[u8]> {
-        self.held_log(true).map(|log| log.ipc())
-    }
-    pub fn log_table(&self, warning: bool) -> Option<&PublicTable> {
-        self.held_log(warning).map(|log| log.table())
+    /// The entry specification's run report as an owned host table.
+    pub fn report_table(&self) -> Option<&PublicTable> {
+        self.root_report().map(|report| report.table())
     }
     /// Retain the original operational failure and actual entered prefix beside
     /// the unchanged build owner. Reading evidence grants no publication port.
@@ -82,9 +78,57 @@ impl RootResult {
         self.issues = crate::issue_rows::collect(std::mem::take(&mut self.issues));
         outcome
     }
+    /// Whether a node that ran declares a report file.
+    pub fn declares_report(&self) -> bool {
+        self.reports.iter().any(|held| held.report.file().is_some())
+    }
+    /// Publish the report files of the nodes that ran, in node order, and no
+    /// primary artifact, as a failed graph saves, even when the graph
+    /// succeeded. `Err` means no node that ran declares a report file.
+    pub fn save_report(&mut self) -> Result<bool, crate::file_application::FailedBuild> {
+        if self.report_publication.is_none() || !self.declares_report() {
+            return Err(crate::file_application::FailedBuild);
+        }
+        let outcome = self.save_reports_mode(true, |publisher, path, bytes| {
+            publisher.publish(path, bytes)
+        });
+        self.issues = crate::issue_rows::collect(std::mem::take(&mut self.issues));
+        match outcome {
+            Err(crate::file_application::FailedBuild) => Ok(self
+                .report_save_attempt
+                .as_ref()
+                .is_some_and(|attempt| attempt.outcome.is_ok() && attempt.unwind.is_none())),
+            saved => saved,
+        }
+    }
+    /// Open the publisher of every file a save would write, the report files
+    /// alone with `report_only`, without writing any of them.
+    pub(crate) fn publishers(
+        &self,
+        report_only: bool,
+    ) -> Result<Vec<crate::resource_publication::Publisher>, Vec<Issue>> {
+        let diagnostic = report_only || self.output.is_none();
+        if let Some(publication) = &self.report_publication {
+            if diagnostic && !self.declares_report() {
+                return Ok(Vec::new());
+            }
+            return publication.publishers(diagnostic);
+        }
+        if diagnostic {
+            return Ok(Vec::new());
+        }
+        match (&self.publication, self.publication_refusal) {
+            (Some(publication), _) => publication.publishers(),
+            (None, Some(code)) => Err(crate::file_application::rejected("output", code)),
+            (None, None) => Err(crate::file_application::rejected(
+                "output",
+                "publication_incomplete",
+            )),
+        }
+    }
     fn save_actual(&mut self) -> Result<bool, crate::file_application::FailedBuild> {
-        if self.log_publication.is_some() {
-            return self.save_logs_with(|publisher, path, bytes| publisher.publish(path, bytes));
+        if self.report_publication.is_some() {
+            return self.save_reports_with(|publisher, path, bytes| publisher.publish(path, bytes));
         }
         if self.output.is_none()
             || (self.publication.is_none() && self.publication_refusal.is_none())
@@ -198,7 +242,10 @@ impl RootResult {
         self.save_attempt = Some(attempt);
         Ok(saved)
     }
-    fn save_logs_with(
+    /// Publish node by node in node order: each declared report immediately
+    /// before its node's primary artifact. A failed graph publishes only the
+    /// reports of the nodes that ran and still raises the failed build.
+    fn save_reports_with(
         &mut self,
         publish: impl FnMut(
             &mut crate::resource_publication::Publisher,
@@ -206,30 +253,48 @@ impl RootResult {
             &[u8],
         ) -> Result<(), crate::file_publication::Error>,
     ) -> Result<bool, crate::file_application::FailedBuild> {
-        use crate::producer_log_publication::Failure;
+        self.save_reports_mode(false, publish)
+    }
+    /// `report_only` publishes in diagnostic mode, as a failed graph does.
+    fn save_reports_mode(
+        &mut self,
+        report_only: bool,
+        publish: impl FnMut(
+            &mut crate::resource_publication::Publisher,
+            &str,
+            &[u8],
+        ) -> Result<(), crate::file_publication::Error>,
+    ) -> Result<bool, crate::file_application::FailedBuild> {
+        use crate::producer_report_publication::Failure;
         let failed = self.output.is_none();
-        if failed
-            && !self
-                .logs
-                .iter()
-                .any(|logs| logs.logs.verification.is_some())
-        {
-            return Err(crate::file_application::FailedBuild);
+        let diagnostic = failed || report_only;
+        if diagnostic && !self.declares_report() {
+            return if failed {
+                Err(crate::file_application::FailedBuild)
+            } else {
+                Ok(false)
+            };
         }
         self.issues.truncate(self.base_issues);
         self.latest = None;
         self.save_attempt = None;
-        self.log_save_attempt = None;
-        let publication = self.log_publication.as_ref().expect("logged owner");
-        let count = publication.requests(failed).count();
+        self.report_save_attempt = None;
+        let publication = self.report_publication.as_ref().expect("reported owner");
+        let count = publication.requests(diagnostic).count();
 
         let report = (|| {
             // Own the complete report before any write. Every actual prefix is
             // formed by dropping already-owned artifact/entry suffixes; it never
             // reprojects observations or clones their tables and CSV content.
-            let mut value = publication.prefix_report(&self.observations, failed, count, count)?;
+            let mut value = publication.prefix_report(
+                &self.observations,
+                &self.reports,
+                diagnostic,
+                count,
+                count,
+            )?;
             let locations = publication
-                .requests(failed)
+                .requests(diagnostic)
                 .map(|(key, request)| crate::report_publication::Location {
                     key,
                     node: request.node,
@@ -256,9 +321,11 @@ impl RootResult {
                 };
             }
         };
-        let mut attempt = crate::producer_log_publication::Attempt::default();
-        publication.save_into(failed, &mut attempt, publish);
-        let (saved, code, request) = if let Some(failure) = publication.admission_failure(failed) {
+        let mut attempt = crate::producer_report_publication::Attempt::default();
+        publication.save_into(diagnostic, &self.reports, &mut attempt, publish);
+        let (saved, code, request) = if let Some(failure) =
+            publication.admission_failure(diagnostic)
+        {
             use crate::producer_publication::AdmissionFailure;
             match &failure.failure {
                 AdmissionFailure::Incomplete => (false, "publication_incomplete", failure.request),
@@ -350,7 +417,7 @@ impl RootResult {
             }
         }
         self.latest = Some(value);
-        self.log_save_attempt = Some(attempt);
+        self.report_save_attempt = Some(attempt);
         if failed {
             Err(crate::file_application::FailedBuild)
         } else {
@@ -380,15 +447,33 @@ impl<E> std::fmt::Debug for Error<'_, E> {
 
 /// Both host facts and root projection originate in this exact whole owner.
 /// A failed graph may retain earlier producer artifacts as evidence, but has
-/// no accepted public output. No metadata, study or host port is entered here.
+/// no accepted public output. Every node that ran holds its verified run
+/// report and the entry's is the host-facing one. No metadata, study or host
+/// port is entered here.
 pub fn prepare_classified<'a, E>(
     attempt: &'a NativeAttempt<E>,
     id: Identity<'_>,
     facts: &[Classified<'a, E>],
 ) -> Result<RootResult, Error<'a, E>> {
     let observations =
-        producer_report::attempt_report_classified(attempt, id, facts).map_err(Error::Report)?;
-    prepare_observations(attempt, observations, true)
+        producer_report::attempt_report_classified(attempt, producer_report::reborrow(&id), facts)
+            .map_err(Error::Report)?;
+    let result = prepare_observations(attempt, observations, true)?;
+    with_reports(result, attempt, &id, facts, None)
+}
+/// Build the run report of every node that ran once the result's outcome is
+/// final. A report that cannot be built, verified or rendered refuses the
+/// result rather than recording a failure inside itself.
+fn with_reports<'a, E>(
+    mut result: RootResult,
+    attempt: &'a NativeAttempt<E>,
+    id: &Identity<'_>,
+    facts: &[Classified<'a, E>],
+    root_failure: Option<&str>,
+) -> Result<RootResult, Error<'a, E>> {
+    result.reports = producer_report::node_reports(attempt, id, facts, root_failure)
+        .map_err(|error| Error::Report(ProjectionError::Report(error)))?;
+    Ok(result)
 }
 fn prepare_observations<'a, E>(
     attempt: &'a NativeAttempt<E>,
@@ -431,9 +516,9 @@ fn prepare_observations<'a, E>(
         issues,
         output,
         root: attempt.provenance.metadata().root(),
-        logs: Arc::from([]),
-        log_publication: None,
-        log_save_attempt: None,
+        reports: Vec::new(),
+        report_publication: None,
+        report_save_attempt: None,
         _output_failure: None,
         publication: None,
         publication_refusal: None,
@@ -449,22 +534,36 @@ pub fn prepare_owned_classified<'a, E>(
     id: Identity<'_>,
     facts: &[Classified<'a, E>],
 ) -> Result<RootResult, Error<'a, E>> {
-    let has_verification = attempt
-        .logs()
-        .iter()
-        .any(|logs| logs.logs.verification.is_some());
-    let mut result = match prepare_classified(attempt, id, facts) {
+    // A node that ran and declares a report file keeps a failed result whose
+    // reports record the failure, so a failed save still publishes them.
+    let reported = attempt.graph.nodes.iter().any(|entered| {
+        attempt
+            .provenance
+            .report_views()
+            .nth(entered.node)
+            .is_some_and(|view| view.compiled().output_report().is_some())
+    });
+    let mut result = match prepare_classified(attempt, producer_report::reborrow(&id), facts) {
         Ok(result) => result,
         Err(Error::Output {
             mut observations,
             error,
             ..
-        }) if has_verification => {
+        }) if reported => {
             observations["outcome"] = Value::String("failure".into());
             observations["error"] = crate::json!({"stage":"output","code":"output_projection"});
             let finding = crate::specification_diagnostics::portable_diagnostic(
                 yamaa_core::application_issue::rejected("output", "output_projection"),
             );
+            // The entry's host view failed after its artifact was prepared:
+            // its run fails with this finding, as a single run's would.
+            let condition =
+                finding["condition"]
+                    .as_str()
+                    .map(String::from)
+                    .ok_or(Error::Report(ProjectionError::Report(
+                        ReportError::InvalidObservation,
+                    )))?;
             observations["diagnostics"]
                 .as_array_mut()
                 .ok_or(Error::Report(ProjectionError::Report(
@@ -473,15 +572,15 @@ pub fn prepare_owned_classified<'a, E>(
                 .push(finding);
             let mut result = prepare_observations(attempt, observations, false)?;
             result._output_failure = Some(error);
-            result
+            with_reports(result, attempt, &id, facts, Some(&condition))?
         }
-        Err(Error::Report(ProjectionError::Original { observations, .. })) if has_verification => {
-            prepare_observations(attempt, observations, false)?
+        Err(Error::Report(ProjectionError::Original { observations, .. })) if reported => {
+            let result = prepare_observations(attempt, observations, false)?;
+            with_reports(result, attempt, &id, facts, None)?
         }
         Err(error) => return Err(error),
     };
-    result.logs = Arc::clone(attempt.logs());
-    result.log_publication = attempt.log_publication().cloned();
+    result.report_publication = attempt.report_publication().cloned();
     if result.output.is_some() {
         result.publication = attempt.publication().cloned();
         result.publication_refusal = attempt.publication_refusal();
@@ -599,7 +698,7 @@ fn root_output<E>(attempt: &NativeAttempt<E>) -> Result<(PublicTable, Vec<u8>), 
 }
 
 #[cfg(all(test, feature = "yaml"))]
-mod log_tests {
+mod report_tests {
     use super::*;
     use crate::{
         file_graph::FileGraph,
@@ -630,7 +729,7 @@ mod log_tests {
     impl Study {
         fn new() -> Self {
             let root = std::env::temp_dir().join(format!(
-                "yamaa-producer-logs-{}-{}",
+                "yamaa-producer-reports-{}-{}",
                 std::process::id(),
                 NEXT.fetch_add(1, Ordering::Relaxed)
             ));
@@ -646,18 +745,16 @@ mod log_tests {
         fn write(&self, name: &str, bytes: impl AsRef<[u8]>) {
             fs::write(self.0.join(name), bytes).unwrap();
         }
-        fn fixture(&self, fatal_leaf: bool, fatal_root: bool, logs: bool) {
+        fn fixture(&self, fatal_leaf: bool, fatal_root: bool, reports: bool) {
             self.write("input.csv", "ID\n1\n2\n");
             let yaml = |source: &str, base: &str, name: &str, fatal: bool| {
-                let logs = if logs {
-                    format!(
-                        ", verification_log: generated/{name}-checks.csv, warning_log: generated/{name}-warnings.csv"
-                    )
+                let report = if reports {
+                    format!(", report: generated/{name}-report.csv")
                 } else {
                     String::new()
                 };
                 let severity = if fatal { "error" } else { "warning" };
-                let checks = if logs.is_empty() {
+                let checks = if report.is_empty() {
                     String::new()
                 } else {
                     format!(
@@ -665,7 +762,7 @@ mod log_tests {
                     )
                 };
                 format!(
-                    "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\nbase: {base}\ninput: {source}\ncolumns:\n  - name: ID\n    type: int\n    label: Identifier\n    derivation: {base}.ID\n{checks}output: {{path: generated/{name}.csv, columns: [ID]{logs}}}\n"
+                    "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\nbase: {base}\ninput: {source}\ncolumns:\n  - name: ID\n    type: int\n    label: Identifier\n    derivation: {base}.ID\n{checks}output: {{path: generated/{name}.csv, columns: [ID]{report}}}\n"
                 )
             };
             self.write(
@@ -732,9 +829,9 @@ mod log_tests {
     }
     fn environment(language: Language) -> OwnedEnvironment {
         project_source::prepare(
-            shipped_schema::capture_environment().unwrap(),
+            shipped_schema::capture_project().unwrap(),
             Source {
-                identity: "held/environment.yaml".into(),
+                identity: "held/project.yaml".into(),
                 bytes: b"schema_version: '1.0'\n".to_vec(),
             },
             language,
@@ -771,7 +868,7 @@ mod log_tests {
             runtime: "test",
             runtime_version: "test",
             engine_version: yamaa_core::VERSION,
-            example: "producer-logs",
+            example: "producer-reports",
             specification: "root.yaml",
             base_directory: ".",
         }
@@ -818,14 +915,14 @@ mod log_tests {
                     result.issues()
                 }
                 "project" => {
-                    study.write("environment.yaml", "schema_version: '1.0'\n");
+                    study.write("project.yaml", "schema_version: '1.0'\n");
                     let prepared = crate::file_project::FileProject::prepare(
                         resources(),
                         "producer.yaml",
-                        "environment.yaml",
+                        "project.yaml",
                         Language::Python,
                         shipped_schema::capture().unwrap(),
-                        shipped_schema::capture_environment().unwrap(),
+                        shipped_schema::capture_project().unwrap(),
                     )
                     .unwrap();
                     let attempt = prepared.build(
@@ -867,7 +964,7 @@ mod log_tests {
         }
     }
     #[test]
-    fn actual_alias_logs_publish_in_node_order_and_repeat_only_held_bytes() {
+    fn actual_alias_reports_publish_in_node_order_and_repeat_only_held_bytes() {
         for language in [Language::Python, Language::R] {
             let study = Study::new();
             study.fixture(false, false, true);
@@ -881,15 +978,15 @@ mod log_tests {
             let mut result = root(&owned);
             let before = execution(result.observations().clone());
             let output = result.output().unwrap().to_vec();
-            let warning = result.warning_log().unwrap().to_vec();
+            let report = result.run_report().unwrap().to_vec();
             assert_eq!(fs::read_dir(study.0.join("generated")).unwrap().count(), 0);
             study.remove_inputs();
             let mut snapshots = None;
             for _ in 0..2 {
                 assert!(result.save().unwrap());
-                let report = result.observations();
+                let observed = result.observations();
                 assert_eq!(
-                    report["publication"]["entered"]
+                    observed["publication"]["entered"]
                         .as_array()
                         .unwrap()
                         .iter()
@@ -898,31 +995,30 @@ mod log_tests {
                             item["field"].as_str().unwrap()
                         ))
                         .collect::<Vec<_>>(),
-                    [
-                        (1, "verification_log"),
-                        (1, "warning_log"),
-                        (1, "path"),
-                        (0, "verification_log"),
-                        (0, "warning_log"),
-                        (0, "path")
-                    ]
+                    [(1, "report"), (1, "path"), (0, "report"), (0, "path")]
                 );
-                assert_eq!(report["artifacts"].as_array().unwrap().len(), 6);
-                assert_eq!(execution(report.clone()), before);
+                assert_eq!(observed["artifacts"].as_array().unwrap().len(), 4);
+                assert_eq!(execution(observed.clone()), before);
                 assert_eq!(result.output().unwrap(), output);
-                assert_eq!(result.warning_log().unwrap(), warning);
+                assert_eq!(result.run_report().unwrap(), report);
                 assert!(result.issues().is_empty());
                 let bytes = [
-                    "producer-checks.csv",
-                    "producer-warnings.csv",
+                    "producer-report.csv",
                     "producer.csv",
-                    "root-checks.csv",
-                    "root-warnings.csv",
+                    "root-report.csv",
                     "root.csv",
                 ]
                 .map(|name| study.generated(name));
-                assert_eq!(bytes[2], b"ID\n1\n2\n");
-                assert_eq!(bytes[5], b"ID\n1\n2\n");
+                assert_eq!(bytes[1], b"ID\n1\n2\n");
+                assert_eq!(bytes[3], b"ID\n1\n2\n");
+                // Both aliases read the producer's one held artifact: its
+                // seven encoded bytes are each input's byte length.
+                let root_report = String::from_utf8(bytes[2].clone()).unwrap();
+                for input in ["A", "B"] {
+                    assert!(root_report.contains(&format!(
+                        "generated/root.csv,input,input.{input},{input},,,,,,,2,,,\"{{\"\"bytes\"\":7,"
+                    )));
+                }
                 if let Some(first) = &snapshots {
                     assert_eq!(&bytes, first);
                 } else {
@@ -939,7 +1035,7 @@ mod log_tests {
         study.write("input.csv", &csv);
         let yaml = |source: &str, base: &str, name: &str| {
             format!(
-                "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\nbase: {base}\ninput: {source}\ncolumns:\n  - {{name: ID, type: int, label: Identifier, derivation: {base}.ID}}\n  - {{name: VALUE, type: str, label: Value, derivation: {base}.VALUE}}\noutput: {{path: generated/{name}.csv, columns: [ID, VALUE], verification_log: generated/{name}-checks.csv, warning_log: generated/{name}-warnings.csv}}\n"
+                "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\nbase: {base}\ninput: {source}\ncolumns:\n  - {{name: ID, type: int, label: Identifier, derivation: {base}.ID}}\n  - {{name: VALUE, type: str, label: Value, derivation: {base}.VALUE}}\noutput: {{path: generated/{name}.csv, columns: [ID, VALUE], report: generated/{name}-report.csv}}\n"
             )
         };
         study.write("producer.yaml", yaml("{SRC: input.csv}", "SRC", "producer"));
@@ -961,10 +1057,10 @@ mod log_tests {
         assert_eq!(study.generated("root.csv"), csv.as_bytes());
         let report = result.observations();
         assert_eq!(execution(report.clone()), before);
-        assert_eq!(report["artifacts"].as_array().unwrap().len(), 6);
+        assert_eq!(report["artifacts"].as_array().unwrap().len(), 4);
         assert_eq!(
             report["publication"]["entered"].as_array().unwrap().len(),
-            6
+            4
         );
         assert!(report["publication"]["entered"]
             .as_array()
@@ -974,8 +1070,8 @@ mod log_tests {
         assert!(result.issues().is_empty());
     }
     #[test]
-    fn fatal_leaf_or_dependent_keeps_actual_v_prefix_and_revokes_every_primary_and_warning() {
-        for (leaf, expected_nodes, expected_v) in [(true, 1, 1), (false, 2, 2)] {
+    fn fatal_leaf_or_dependent_publishes_the_reports_of_the_nodes_that_ran_and_no_primary() {
+        for (leaf, expected_nodes) in [(true, 1), (false, 2)] {
             let study = Study::new();
             study.fixture(leaf, !leaf, true);
             let owned = study.owned(Language::Python);
@@ -983,15 +1079,12 @@ mod log_tests {
             assert_eq!(owned.graph.nodes.len(), expected_nodes);
             let mut result = root(&owned);
             assert!(result.output().is_none());
-            assert!(result.warning_log().is_none());
+            // The entry reports only when it ran; a producer failure stops the
+            // graph before it.
+            assert_eq!(result.run_report().is_some(), !leaf);
             let before = execution(result.observations().clone());
             let issues = result.issues().to_vec();
-            for name in [
-                "producer.csv",
-                "root.csv",
-                "producer-warnings.csv",
-                "root-warnings.csv",
-            ] {
+            for name in ["producer.csv", "root.csv"] {
                 study.write(&format!("generated/{name}"), b"held sentinel");
             }
             study.remove_inputs();
@@ -1001,17 +1094,29 @@ mod log_tests {
                 assert_eq!(result.observations()["publication"]["mode"], "diagnostic");
                 assert_eq!(
                     result.observations()["artifacts"].as_array().unwrap().len(),
-                    expected_v
+                    expected_nodes
                 );
                 assert_eq!(execution(result.observations().clone()), before);
                 assert_eq!(result.issues(), issues);
-                for name in [
-                    "producer.csv",
-                    "root.csv",
-                    "producer-warnings.csv",
-                    "root-warnings.csv",
-                ] {
+                for name in ["producer.csv", "root.csv"] {
                     assert_eq!(study.generated(name), b"held sentinel");
+                }
+                let producer = String::from_utf8(study.generated("producer-report.csv")).unwrap();
+                let outcome = if leaf {
+                    "failed,range_failed,"
+                } else {
+                    "succeeded,,2"
+                };
+                assert!(producer.contains(&format!(
+                    "\ngenerated/producer.csv,run,output,,,,,,{outcome},,,{{}}\n"
+                )));
+                if leaf {
+                    assert!(!study.0.join("generated/root-report.csv").exists());
+                } else {
+                    let root = String::from_utf8(study.generated("root-report.csv")).unwrap();
+                    assert!(root.contains(
+                        "\ngenerated/root.csv,run,output,,,,,,failed,range_failed,,,,{}\n"
+                    ));
                 }
             }
         }
@@ -1037,9 +1142,9 @@ mod log_tests {
             let payload = Arc::new(());
             let mut calls = 0;
             assert!(!result
-                .save_logs_with(|publisher, path, bytes| {
+                .save_reports_with(|publisher, path, bytes| {
                     calls += 1;
-                    if calls == 5 {
+                    if calls == 3 {
                         if unwind {
                             std::panic::panic_any(Payload(Arc::clone(&payload)));
                         }
@@ -1050,14 +1155,14 @@ mod log_tests {
                     publisher.publish(path, bytes)
                 })
                 .unwrap());
-            let saved = result.log_save_attempt.as_ref().unwrap();
-            assert_eq!(saved.entered.len(), 5);
+            let saved = result.report_save_attempt.as_ref().unwrap();
+            assert_eq!(saved.entered.len(), 3);
             assert_eq!(
                 saved.entered.iter().filter(|entry| entry.published).count(),
-                4
+                2
             );
-            assert_eq!(saved.entered[4].field, "warning_log");
-            assert_eq!(saved.entered[4].node, 0);
+            assert_eq!(saved.entered[2].field, "report");
+            assert_eq!(saved.entered[2].node, 0);
             if unwind {
                 assert!(Arc::ptr_eq(
                     &saved
@@ -1070,7 +1175,7 @@ mod log_tests {
                     &payload
                 ));
             } else {
-                let Err(crate::producer_log_publication::Failure::Publish(failure)) =
+                let Err(crate::producer_report_publication::Failure::Publish(failure)) =
                     &saved.outcome
                 else {
                     panic!("original publish failure")
@@ -1092,13 +1197,13 @@ mod log_tests {
             assert_eq!(study.generated("root.csv"), b"earlier root");
             assert_eq!(
                 result.observations()["artifacts"].as_array().unwrap().len(),
-                4
+                2
             );
             assert_eq!(execution(result.observations().clone()), before);
             assert!(result
                 .issues()
                 .iter()
-                .any(|issue| issue.spec_paths == ["output.warning_log"]));
+                .any(|issue| issue.spec_paths == ["output.report"]));
             let normative = result
                 .issues()
                 .iter()
@@ -1121,28 +1226,34 @@ mod log_tests {
                     1,
                     "actual publication failure must report REQ-0764"
                 );
-                assert_eq!(normative[0].spec_paths, ["output.warning_log"]);
+                assert_eq!(normative[0].spec_paths, ["output.report"]);
                 let context: Value = normative[0].context.clone();
                 assert_eq!(context["node"], 0);
-                assert_eq!(context["path"], "generated/root-warnings.csv");
-                assert_eq!(context["entered"], 5);
-                assert_eq!(context["completed"], 4);
+                assert_eq!(context["path"], "generated/root-report.csv");
+                assert_eq!(context["entered"], 3);
+                assert_eq!(context["completed"], 2);
             }
             assert!(result.save().unwrap());
             assert!(result.issues().is_empty());
-            assert_eq!(result.log_save_attempt.as_ref().unwrap().entered.len(), 6);
-            assert!(result.log_save_attempt.as_ref().unwrap().unwind.is_none());
+            assert_eq!(
+                result.report_save_attempt.as_ref().unwrap().entered.len(),
+                4
+            );
+            assert!(result
+                .report_save_attempt
+                .as_ref()
+                .unwrap()
+                .unwind
+                .is_none());
             assert_eq!(execution(result.observations().clone()), before);
         }
     }
     #[test]
     fn every_error_and_unwind_boundary_keeps_the_actual_owned_prefix() {
         let requests = [
-            (1, "verification_log", "producer-checks.csv"),
-            (1, "warning_log", "producer-warnings.csv"),
+            (1, "report", "producer-report.csv"),
             (1, "path", "producer.csv"),
-            (0, "verification_log", "root-checks.csv"),
-            (0, "warning_log", "root-warnings.csv"),
+            (0, "report", "root-report.csv"),
             (0, "path", "root.csv"),
         ];
         for unwind in [false, true] {
@@ -1155,7 +1266,7 @@ mod log_tests {
                 study.remove_inputs();
                 let mut calls = 0;
                 assert!(!result
-                    .save_logs_with(|publisher, path, bytes| {
+                    .save_reports_with(|publisher, path, bytes| {
                         calls += 1;
                         if calls == boundary {
                             if unwind {
@@ -1209,9 +1320,14 @@ mod log_tests {
         let mut result = root(&owned);
         fs::remove_dir(study.0.join("generated")).unwrap();
         assert!(!result
-            .save_logs_with(|_, _, _| panic!("all parents first"))
+            .save_reports_with(|_, _, _| panic!("all parents first"))
             .unwrap());
-        assert!(result.log_save_attempt.as_ref().unwrap().entered.is_empty());
+        assert!(result
+            .report_save_attempt
+            .as_ref()
+            .unwrap()
+            .entered
+            .is_empty());
         assert!(!result
             .issues()
             .iter()
@@ -1222,8 +1338,31 @@ mod log_tests {
         fs::create_dir(study.0.join("generated")).unwrap();
         assert!(result.save().unwrap());
     }
+    /// The refused graph's single finding, the registered report path
+    /// collision: its node and diagnostic.
+    fn collision(rejected: &crate::file_graph::RejectedGraph) -> (usize, Value) {
+        let crate::file_graph::Error::Graph(crate::producer_graph::Error::Graph(
+            yamaa_core::producer_graph::Error::Compilation {
+                node,
+                error: yamaa_core::specification::PrepareError::Invalid(findings),
+            },
+        )) = rejected.error()
+        else {
+            panic!("graph collision: {:?}", rejected.error())
+        };
+        assert_eq!(findings.len(), 1);
+        let diagnostic =
+            crate::specification_diagnostics::portable_diagnostic(findings[0].diagnostic());
+        let definition = yamaa_core::diagnostic::ConditionCode::ReportPathCollision.definition();
+        assert_eq!(diagnostic["condition"], definition.condition);
+        assert_eq!(
+            diagnostic["requirement"],
+            definition.requirement.expect("registered requirement")
+        );
+        (*node, diagnostic)
+    }
     #[test]
-    fn logged_graph_metadata_refuses_cross_node_aliases_before_study_and_missing_parents_stay_allowed(
+    fn reported_graph_metadata_refuses_cross_node_aliases_before_study_and_missing_parents_stay_allowed(
     ) {
         let study = Study::new();
         study.fixture(false, false, true);
@@ -1231,7 +1370,7 @@ mod log_tests {
         study.write(
             "root.yaml",
             raw.replace(
-                "generated/root-checks.csv",
+                "generated/root-report.csv",
                 "generated/../generated/producer.csv",
             ),
         );
@@ -1240,21 +1379,57 @@ mod log_tests {
             Ok(_) => panic!("cross-node collision"),
         };
         assert_eq!(rejected.capture_reads(), 2);
-        assert!(format!("{:?}", rejected.error()).contains("Collision"));
+        // The entry's report is admitted first; the producer's primary file,
+        // written another way, then names the same location.
+        let (node, diagnostic) = collision(&rejected);
+        assert_eq!(node, 1);
+        assert_eq!(
+            diagnostic["spec_paths"],
+            crate::json!(["output.report", "output.path"])
+        );
+        assert_eq!(
+            diagnostic["context"],
+            crate::json!({"path": "generated/producer.csv"})
+        );
         study.write("root.yaml", raw);
         fs::remove_dir(study.0.join("generated")).unwrap();
         assert!(study.graph(Language::Python).is_ok());
     }
     #[test]
-    fn target_admission_retains_the_actual_warning_field_and_its_original_path() {
+    fn primary_files_of_two_nodes_collide_at_validation_without_any_report() {
+        let study = Study::new();
+        study.fixture(false, false, false);
+        let raw = fs::read_to_string(study.0.join("root.yaml")).unwrap();
+        study.write(
+            "root.yaml",
+            raw.replace(
+                "path: generated/root.csv",
+                "path: generated/../generated/producer.csv",
+            ),
+        );
+        let rejected = match study.graph(Language::Python) {
+            Err(error) => error,
+            Ok(_) => panic!("cross-node primary collision"),
+        };
+        assert_eq!(rejected.capture_reads(), 2);
+        let (node, diagnostic) = collision(&rejected);
+        assert_eq!(node, 1);
+        assert_eq!(
+            diagnostic["spec_paths"],
+            crate::json!(["output.path", "output.path"])
+        );
+        assert_eq!(fs::read_dir(study.0.join("generated")).unwrap().count(), 0);
+    }
+    #[test]
+    fn target_admission_retains_the_actual_report_field_and_its_original_path() {
         let study = Study::new();
         study.fixture(false, false, true);
         let raw = fs::read_to_string(study.0.join("root.yaml")).unwrap();
         study.write(
             "root.yaml",
             raw.replace(
-                "generated/root-warnings.csv",
-                "https://example.invalid/root-warnings.csv",
+                "generated/root-report.csv",
+                "https://example.invalid/root-report.csv",
             ),
         );
         let owned = study.owned(Language::Python);
@@ -1264,17 +1439,22 @@ mod log_tests {
         study.remove_inputs();
         for _ in 0..2 {
             assert!(!result
-                .save_logs_with(|_, _, _| panic!("all target admission precedes publication"))
+                .save_reports_with(|_, _, _| panic!("all target admission precedes publication"))
                 .unwrap());
             let error = &result.observations()["publication"]["error"];
             assert_eq!(error["code"], "target_admission");
             assert_eq!(error["node"], 0);
-            assert_eq!(error["field"], "warning_log");
-            assert_eq!(error["path"], "https://example.invalid/root-warnings.csv");
+            assert_eq!(error["field"], "report");
+            assert_eq!(error["path"], "https://example.invalid/root-report.csv");
             assert!(result.issues()[result.base_issues..]
                 .iter()
-                .all(|issue| issue.spec_paths == ["output.warning_log"]));
-            assert!(result.log_save_attempt.as_ref().unwrap().entered.is_empty());
+                .all(|issue| issue.spec_paths == ["output.report"]));
+            assert!(result
+                .report_save_attempt
+                .as_ref()
+                .unwrap()
+                .entered
+                .is_empty());
             assert!(!result
                 .issues()
                 .iter()
@@ -1288,13 +1468,13 @@ mod log_tests {
     }
     #[cfg(windows)]
     #[test]
-    fn absent_windows_graph_sidecar_case_alias_is_metadata_refused_before_study() {
+    fn absent_windows_graph_report_case_alias_is_metadata_refused_before_study() {
         let study = Study::new();
         study.fixture(false, false, true);
         let raw = fs::read_to_string(study.0.join("root.yaml")).unwrap();
         study.write(
             "root.yaml",
-            raw.replace("generated/root-checks.csv", "generated/PRODUCER-checks.csv"),
+            raw.replace("generated/root-report.csv", "generated/PRODUCER-report.csv"),
         );
         let rejected = study
             .graph(Language::Python)
@@ -1306,14 +1486,14 @@ mod log_tests {
     }
     #[cfg(target_os = "macos")]
     #[test]
-    fn macos_graph_sidecar_absent_entry_and_physical_parent_aliases_preflight_as_one_set() {
+    fn macos_graph_report_absent_entry_and_physical_parent_aliases_preflight_as_one_set() {
         let study = Study::new();
         study.write("generated/case-probe", b"native case witness");
         let sensitive = !study.0.join("generated/CASE-PROBE").exists();
         fs::remove_file(study.0.join("generated/case-probe")).unwrap();
         for (name, physical_parent) in [
-            ("generated/PRODUCER-checks.csv", false),
-            ("GENERATED/producer-checks.csv", true),
+            ("generated/PRODUCER-report.csv", false),
+            ("GENERATED/producer-report.csv", true),
             (r#""generated/\u00e9.csv""#, false),
         ] {
             if physical_parent && sensitive {
@@ -1321,26 +1501,26 @@ mod log_tests {
             }
             study.fixture(false, false, true);
             let raw = fs::read_to_string(study.0.join("root.yaml")).unwrap();
-            study.write("root.yaml", raw.replace("generated/root-checks.csv", name));
+            study.write("root.yaml", raw.replace("generated/root-report.csv", name));
             if physical_parent {
                 assert_eq!(
                     crate::canonical_path::canonicalize(study.0.join("GENERATED")).unwrap(),
                     crate::canonical_path::canonicalize(study.0.join("generated")).unwrap()
                 );
             }
-            assert!(!study.0.join("generated/producer-checks.csv").exists());
+            assert!(!study.0.join("generated/producer-report.csv").exists());
             let owned = study.owned(Language::Python);
             assert!(owned.accepted());
             let mut result = root(&owned);
             let before = execution(result.observations().clone());
-            if name == "generated/PRODUCER-checks.csv" && sensitive {
+            if name == "generated/PRODUCER-report.csv" && sensitive {
                 assert!(result.save().unwrap());
                 for entry in fs::read_dir(study.0.join("generated")).unwrap() {
                     fs::remove_file(entry.unwrap().path()).unwrap();
                 }
             } else {
                 assert!(!result
-                    .save_logs_with(|_, _, _| panic!("whole physical target set first"))
+                    .save_reports_with(|_, _, _| panic!("whole physical target set first"))
                     .unwrap());
                 assert_eq!(
                     result.observations()["publication"]["error"]["code"],
@@ -1348,9 +1528,14 @@ mod log_tests {
                 );
                 assert_eq!(
                     result.observations()["publication"]["error"]["field"],
-                    "verification_log"
+                    "report"
                 );
-                assert!(result.log_save_attempt.as_ref().unwrap().entered.is_empty());
+                assert!(result
+                    .report_save_attempt
+                    .as_ref()
+                    .unwrap()
+                    .entered
+                    .is_empty());
             }
             assert!(result.output().is_some());
             assert_eq!(execution(result.observations().clone()), before);
@@ -1358,7 +1543,7 @@ mod log_tests {
         }
     }
     #[test]
-    fn caller_authored_logged_success_cannot_gain_any_log_save_authority() {
+    fn caller_authored_reported_success_cannot_gain_any_report_save_authority() {
         let study = Study::new();
         study.fixture(false, false, true);
         let graph = study.graph(Language::Python).unwrap();
@@ -1374,15 +1559,18 @@ mod log_tests {
         };
         let mut result = prepare_classified(&authored, id(), &[]).unwrap();
         assert!(result.output().is_some());
-        assert!(result.verification_log().is_none());
+        // The host view holds the entry's report; Save authority is sealed
+        // only beside an actual build.
+        assert!(result.run_report().is_some());
+        assert!(result.report_publication.is_none());
         assert!(result.save().is_err());
         assert_eq!(fs::read_dir(study.0.join("generated")).unwrap().count(), 0);
     }
     #[test]
-    fn actual_root_at_the_fixed_column_boundary_retains_logs_and_held_output() {
-        for logs in [false, true] {
+    fn actual_root_at_the_fixed_column_boundary_retains_reports_and_held_output() {
+        for reports in [false, true] {
             let study = Study::new();
-            study.fixture(false, false, logs);
+            study.fixture(false, false, reports);
             let columns = (0..1_024)
                 .map(|index| {
                     format!("  - {{name: C{index}, type: int, label: Column, derivation: A.ID}}\n")
@@ -1391,12 +1579,12 @@ mod log_tests {
             let names = (0..1_024)
                 .map(|index| format!("C{index}"))
                 .collect::<Vec<_>>();
-            let sidecars = if logs {
-                ", verification_log: generated/root-checks.csv, warning_log: generated/root-warnings.csv"
+            let report = if reports {
+                ", report: generated/root-report.csv"
             } else {
                 ""
             };
-            study.write("root.yaml", format!("schema_version: '1.0'\ndomain: TEST\nkeys: [C0]\nbase: A\ninput: {{A: {{path: generated/producer.csv, schema: producer.yaml}}}}\ncolumns:\n{columns}output: {{path: generated/root.csv, columns: [{}]{sidecars}}}\n", names.join(", ")));
+            study.write("root.yaml", format!("schema_version: '1.0'\ndomain: TEST\nkeys: [C0]\nbase: A\ninput: {{A: {{path: generated/producer.csv, schema: producer.yaml}}}}\ncolumns:\n{columns}output: {{path: generated/root.csv, columns: [{}]{report}}}\n", names.join(", ")));
             let owned = study.owned(Language::Python);
             assert!(owned.accepted());
             let artifact = owned.graph.nodes[1]
@@ -1417,12 +1605,14 @@ mod log_tests {
             let mut result = root(&owned);
             assert!(result.output().is_some());
             assert_eq!(result.output_table().unwrap().columns().len(), 1_024);
-            assert_eq!(result.verification_log().is_some(), logs);
-            assert_eq!(result.warning_log().is_some(), logs);
+            // One run, input and base row, then one row per output column.
+            assert_eq!(result.report_table().unwrap().rows(), 1_027);
+            assert_eq!(result.report_publication.is_some(), reports);
             study.remove_inputs();
             for _ in 0..2 {
                 assert!(result.save().unwrap());
                 assert_eq!(study.generated("root.csv"), expected.as_bytes());
+                assert_eq!(study.0.join("generated/root-report.csv").exists(), reports);
             }
         }
     }

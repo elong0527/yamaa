@@ -150,6 +150,7 @@ fn ingestion_failure<E>(error: Box<dataset::ExecutionError<E>>) -> ExecutionAtte
         result: Err(error),
         handler_counts: Vec::new(),
         retained_verifications: Vec::new(),
+        template_rows: Vec::new(),
     }
 }
 
@@ -378,6 +379,7 @@ fn execute_inner_into<P: SpecificationSourcePort, D: SourceDecoder>(
                     result: Err(Box::new(dataset::ExecutionError::FunctionBinding { slot })),
                     handler_counts: Vec::new(),
                     retained_verifications: Vec::new(),
+                    template_rows: Vec::new(),
                 });
                 return;
             }

@@ -127,8 +127,7 @@ impl<E, R, RE> Attempt<E, R, RE> {
 /// build. Arbitrary public Attempt records cannot be promoted to this owner.
 pub struct OwnedAttempt<E> {
     attempt: crate::producer_report::NativeAttempt<E>,
-    logs: Arc<[crate::producer_report::NodeLogs]>,
-    log_publication: Option<Arc<crate::producer_log_publication::Publication>>,
+    report_publication: Option<Arc<crate::producer_report_publication::Publication>>,
     publication: Option<Arc<crate::producer_publication::Publication>>,
     publication_refusal: Option<&'static str>,
 }
@@ -139,13 +138,12 @@ impl<E> std::ops::Deref for OwnedAttempt<E> {
     }
 }
 impl<E> OwnedAttempt<E> {
-    pub(crate) fn log_publication(
+    /// Report and primary authority, sealed when any node declares
+    /// `output.report`.
+    pub(crate) fn report_publication(
         &self,
-    ) -> Option<&Arc<crate::producer_log_publication::Publication>> {
-        self.log_publication.as_ref()
-    }
-    pub(crate) fn logs(&self) -> &Arc<[crate::producer_report::NodeLogs]> {
-        &self.logs
+    ) -> Option<&Arc<crate::producer_report_publication::Publication>> {
+        self.report_publication.as_ref()
     }
     pub(crate) fn publication(&self) -> Option<&Arc<crate::producer_publication::Publication>> {
         self.publication.as_ref()
@@ -154,9 +152,37 @@ impl<E> OwnedAttempt<E> {
         self.publication_refusal
     }
 }
+/// Serialized artifacts a project run has already built, by producer. A saved
+/// producer link whose producer and artifact location match a held artifact
+/// reads those bytes instead of the saved file, still under the producer's
+/// output contract.
+#[derive(Clone, Debug, Default)]
+pub struct HeldArtifacts {
+    artifacts: std::collections::BTreeMap<String, (String, Arc<[u8]>)>,
+}
+impl HeldArtifacts {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    /// Hold the artifact the producer with canonical identity `producer`
+    /// built for its `output.path` location `location`.
+    pub fn insert(&mut self, producer: String, location: String, bytes: Arc<[u8]>) {
+        self.artifacts.insert(producer, (location, bytes));
+    }
+    /// The held artifact of `producer`, when it was built for `location`.
+    pub fn get(&self, producer: &str, location: &str) -> Option<Arc<[u8]>> {
+        self.artifacts
+            .get(producer)
+            .filter(|(held, _)| crate::producer_publication::same_location(held, location))
+            .map(|(_, bytes)| Arc::clone(bytes))
+    }
+    pub fn is_empty(&self) -> bool {
+        self.artifacts.is_empty()
+    }
+}
 /// The whole graph's build owner: its provenance and the compile-time
-/// metadata authority. Study snapshots, retained study sources and Save
-/// targets belong to each build's [`RunScope`].
+/// metadata authority. Study snapshots, retained study sources, held producer
+/// artifacts and Save targets belong to each build's [`RunScope`].
 pub struct FileBuild {
     provenance: Arc<Provenance>,
     resources: Resources,
@@ -210,7 +236,8 @@ impl FileBuild {
         self.build(run, activation, &mut report, scope)
     }
     /// Seal only the actual boundary. Failed graphs retain their original
-    /// evidence and any completed V capability, with primary/W authority revoked.
+    /// evidence and the report authority of every node that ran, with primary
+    /// authority revoked.
     pub fn build_owned_reported<A: ActivationPort>(
         &self,
         run: &mut RunScope,
@@ -221,19 +248,17 @@ impl FileBuild {
         let provenance = Arc::clone(&self.provenance);
         let mut report = crate::producer_report::NativeReport::new(&provenance, id);
         let (attempt, publication) = self.build_actual(run, activation, &mut report, scope);
-        let logs: Arc<[crate::producer_report::NodeLogs]> = report.take_logs().into();
-        let logged = self
+        let reported = self
             .provenance
             .report_views()
-            .any(|view| view.compiled().output_logs().declared());
+            .any(|view| view.compiled().output_report().is_some());
         // Save targets resolve from this build's scope.
-        let (log_publication, publication, publication_refusal) = if logged {
+        let (report_publication, publication, publication_refusal) = if reported {
             (
                 Some(Arc::new(
-                    crate::producer_log_publication::Publication::from_build(
+                    crate::producer_report_publication::Publication::from_build(
                         &attempt,
                         publication,
-                        Arc::clone(&logs),
                         run.resources(),
                     ),
                 )),
@@ -260,8 +285,7 @@ impl FileBuild {
         };
         OwnedAttempt {
             attempt,
-            logs,
-            log_publication,
+            report_publication,
             publication,
             publication_refusal,
         }
@@ -301,6 +325,7 @@ impl FileBuild {
                 error,
             });
         let mut publication = Err("producer_build_failed");
+        let held = run.held();
         attempt.boundary = match ready {
             Err(error) => Err(error),
             Ok(()) => match catch_unwind(AssertUnwindSafe(|| {
@@ -309,6 +334,7 @@ impl FileBuild {
                         activation,
                         study: &mut Study {
                             resources: run.resources_mut(),
+                            held: held.as_deref(),
                         },
                         decoder: &mut Decoder::<A::Error>::default(),
                         report,
@@ -328,6 +354,7 @@ impl FileBuild {
 }
 struct Study<'a> {
     resources: &'a mut Resources,
+    held: Option<&'a HeldArtifacts>,
 }
 impl StudyPort for Study<'_> {
     type Error = ResourceError;
@@ -338,6 +365,15 @@ impl StudyPort for Study<'_> {
     ) -> Option<Arc<dyn std::any::Any + Send + Sync>> {
         self.resources
             .owned_table_from(node.identity(), &source.path)
+    }
+    fn held(
+        &self,
+        _node: &Node,
+        _source: &SourceDeclaration,
+        producer: &yamaa_core::producer_admission::Declaration,
+    ) -> Option<Arc<[u8]>> {
+        self.held?
+            .get(producer.producer_identity(), producer.artifact_identity())
     }
     fn resource_failure(
         &self,

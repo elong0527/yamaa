@@ -1,2 +1,8 @@
-LOG_VERSION,ARTIFACT,SEVERITY,CONDITION,REQUIREMENT,SPEC_PATH,VERIFICATION_ID,FAILURE_COUNT,OFFENDING_KEYS,DETAILS
-1.0,adsl.csv,warning,range_failed,REQ-0377,columns.AGE.verifications[0].range,,3,"[{""STUDYID"":""YAMAA-01"",""USUBJID"":""YAMAA-01-104""},{""STUDYID"":""YAMAA-01"",""USUBJID"":""YAMAA-01-105""},{""STUDYID"":""YAMAA-01"",""USUBJID"":""YAMAA-01-106""}]","{""column"":""AGE""}"
+ARTIFACT,KIND,SPEC_PATH,NAME,ID,TARGET,RULE,SEVERITY,OUTCOME,CONDITION,COUNT,TOTAL,KEYS,DETAILS
+adsl.csv,run,output,,,,,,succeeded,,8,,,{}
+adsl.csv,input,input.DM,DM,,,,,,,8,,,"{""bytes"":221,""path"":""input/dm.csv"",""profile"":""csv""}"
+adsl.csv,rows,base,DM,,,,,,,8,8,,{}
+adsl.csv,column,columns.STUDYID,STUDYID,,,,,,,0,8,,"{""max_length"":8}"
+adsl.csv,column,columns.USUBJID,USUBJID,,,,,,,0,8,,"{""max_length"":12}"
+adsl.csv,column,columns.AGE,AGE,,,,,,,1,8,,{}
+adsl.csv,check,columns.AGE.verifications[0].range,range,,AGE,REQ-0377,warning,violated,range_failed,3,8,"[{""STUDYID"":""YAMAA-01"",""USUBJID"":""YAMAA-01-104""},{""STUDYID"":""YAMAA-01"",""USUBJID"":""YAMAA-01-105""},{""STUDYID"":""YAMAA-01"",""USUBJID"":""YAMAA-01-106""}]","{""column"":""AGE""}"

@@ -172,7 +172,7 @@
         "spec.yaml"
       ],
       "define": "define.xml",
-      "dataset_json": true,
+      "datasets": "json",
       "context": "Submission",
       "xml_lang": "en",
       "file_oid": "READERS.1",

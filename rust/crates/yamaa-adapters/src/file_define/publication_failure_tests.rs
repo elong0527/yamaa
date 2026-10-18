@@ -46,7 +46,7 @@ fn public_define_issue_prefix_keeps_complete_raw_metadata_and_diagnostics_in_bot
 }
 
 #[test]
-fn actual_changed_define_resource_keeps_authored_cause_path_and_snapshot_in_both_hosts() {
+fn actual_changed_define_resource_keeps_authored_cause_path_and_snapshot() {
     let directory = std::env::temp_dir().join(format!(
         "yamaa-define-resource-change-{}-{}",
         std::process::id(),
@@ -61,26 +61,31 @@ fn actual_changed_define_resource_keeps_authored_cause_path_and_snapshot_in_both
     fs::write(directory.join("dm.csv"), b"ID\n2\n").unwrap();
     let error = resources.capture("dm.csv").unwrap_err();
     assert_eq!(error, file_resources::Error::Changed);
-    for host in [Language::Python, Language::R] {
-        let error = resources.capture("dm.csv").unwrap_err();
-        let findings = issues(&resource("datasets.DM.artifact", "dm.csv", error), host);
-        assert_eq!(findings.len(), 1);
-        let finding = &findings[0];
-        assert_eq!(finding.phase, "ingest");
-        assert_eq!(finding.condition, "resource_path_content_changed");
-        assert_eq!(finding.requirement.as_deref(), Some("REQ-0788"));
-        assert_eq!(finding.spec_paths, ["datasets.DM.artifact"]);
-        assert_eq!(finding.context.clone(), crate::json!({"path":"dm.csv"}));
-    }
+    let error = resources.capture("dm.csv").unwrap_err();
+    let findings = issues(&resource("datasets.DM.artifact", "dm.csv", error));
+    assert_eq!(findings.len(), 1);
+    let finding = &findings[0];
+    assert_eq!(finding.phase, "ingest");
+    assert_eq!(finding.condition, "resource_path_content_changed");
+    assert_eq!(finding.requirement.as_deref(), Some("REQ-0788"));
+    assert_eq!(finding.spec_paths, ["datasets.DM.artifact"]);
+    assert_eq!(finding.context.clone(), crate::json!({"path":"dm.csv"}));
     assert_eq!(resources.capture_reads(), 1);
     assert_eq!(original.as_ref(), b"ID\n1\n");
     drop(resources);
     fs::remove_dir_all(directory).unwrap();
 }
 #[test]
-fn changed_define_metadata_uses_original_root_spec_parent_and_dictionary_occurrences() {
+fn changed_define_metadata_uses_original_project_environment_spec_parent_and_dictionary_occurrences(
+) {
     const SPEC: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: never-read.csv}\noutput: {path: never-written.csv, columns: [ID]}\ncolumns: [{name: ID, type: str, derivation: SRC.ID}]\n";
-    for changed in ["environment.yaml", "spec.yaml", "base.yaml", "dict.yaml"] {
+    for changed in [
+        "project.yaml",
+        "python/environment.yaml",
+        "spec.yaml",
+        "base.yaml",
+        "dict.yaml",
+    ] {
         let directory = std::env::temp_dir().join(format!(
             "yamaa-define-metadata-change-{}-{}",
             std::process::id(),
@@ -89,8 +94,14 @@ fn changed_define_metadata_uses_original_root_spec_parent_and_dictionary_occurre
         fs::create_dir(&directory).unwrap();
         let directory = crate::canonical_path::canonicalize(&directory).unwrap();
         fs::write(
-            directory.join("environment.yaml"),
-            b"schema_version: '1.0'\nlanguage: python\n",
+            directory.join("project.yaml"),
+            b"schema_version: '1.0'\nenvironments: {python: python/environment.yaml}\n",
+        )
+        .unwrap();
+        fs::create_dir(directory.join("python")).unwrap();
+        fs::write(
+            directory.join("python/environment.yaml"),
+            b"schema_version: '1.0'\n",
         )
         .unwrap();
         let spec = match changed {
@@ -109,7 +120,7 @@ fn changed_define_metadata_uses_original_root_spec_parent_and_dictionary_occurre
         };
         fs::write(directory.join("spec.yaml"), &spec).unwrap();
         let environment_written =
-            file_resources::caller_path(&directory.join("environment.yaml")).unwrap();
+            file_resources::caller_path(&directory.join("project.yaml")).unwrap();
         let mut ports = NativePorts {
             after_publish: None,
             resources: None,
@@ -140,21 +151,20 @@ fn changed_define_metadata_uses_original_root_spec_parent_and_dictionary_occurre
             }
         ));
         let (field, written) = match changed {
-            "environment.yaml" => ("environment", environment_written.as_str()),
+            "project.yaml" => ("environment", environment_written.as_str()),
+            "python/environment.yaml" => ("environments.python", "python/environment.yaml"),
             "spec.yaml" => ("sdtm.specs[0]", "spec.yaml"),
             "base.yaml" => ("parents[0]", "base.yaml"),
             "dict.yaml" => ("columns.ID.derivation.mapping.dict", "dict.yaml"),
             _ => unreachable!(),
         };
-        for host in [Language::Python, Language::R] {
-            let findings = issues(&failure, host);
-            assert_eq!(findings.len(), 1);
-            assert_eq!(findings[0].phase, "ingest");
-            assert_eq!(findings[0].condition, "resource_path_content_changed");
-            assert_eq!(findings[0].requirement.as_deref(), Some("REQ-0788"));
-            assert_eq!(findings[0].spec_paths, [field]);
-            assert_eq!(findings[0].context.clone(), crate::json!({"path":written}));
-        }
+        let findings = issues(&failure);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].phase, "ingest");
+        assert_eq!(findings[0].condition, "resource_path_content_changed");
+        assert_eq!(findings[0].requirement.as_deref(), Some("REQ-0788"));
+        assert_eq!(findings[0].spec_paths, [field]);
+        assert_eq!(findings[0].context.clone(), crate::json!({"path":written}));
         assert_eq!(ports.resources().capture_reads(), reads);
         assert_eq!(specification.source().bytes, spec.as_bytes());
         assert_eq!(environment.root().source().bytes, original_environment);
@@ -175,11 +185,11 @@ fn later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_re
     let directory = crate::canonical_path::canonicalize(&directory).unwrap();
     let original =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../benchmarks/sdtm-dm-metadata");
-    let environment = fs::read_to_string(original.join("environment.yaml"))
+    let project = fs::read_to_string(original.join("project.yaml"))
         .unwrap()
         .replace("  - spec.yaml", "  - spec.yaml\n  - second.yaml");
     let spec = fs::read_to_string(original.join("spec.yaml")).unwrap();
-    fs::write(directory.join("environment.yaml"), environment).unwrap();
+    fs::write(directory.join("project.yaml"), project).unwrap();
     fs::write(directory.join("spec.yaml"), &spec).unwrap();
     fs::write(
         directory.join("second.yaml"),
@@ -192,7 +202,7 @@ fn later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_re
     }
     fs::write(directory.join("define.xml"), b"prior document").unwrap();
     let mut result = Define::prepare(
-        directory.join("environment.yaml").to_str().unwrap(),
+        directory.join("project.yaml").to_str().unwrap(),
         "sdtm",
         Some("2026-09-11T00:00:00"),
         "0.3.0",

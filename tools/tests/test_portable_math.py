@@ -50,7 +50,7 @@ class PublicPortableMath(unittest.TestCase):
     def build(self, specification):
         path = self.root / "spec.yaml"
         path.write_text(json.dumps(specification), encoding="ascii")
-        return yamaa.domain(path)
+        return yamaa.spec(path).run()
 
     def test_public_values_preserve_bits_missingness_and_integer_promotion(self):
         fixture = WORKSPACE / "crates/yamaa-core/tests/fixtures/portable_math.tsv"
@@ -160,7 +160,7 @@ class PublicPortableMath(unittest.TestCase):
         self.assertEqual(
             struct.pack(">d", result.output["ROUNDED"][0]).hex(), rounded_bits
         )
-        self.assertTrue(result.save())
+        self.assertIsNone(result.save())
         self.assertEqual((self.root / "result.csv").read_bytes(), csv)
         specification["verifications"] = [
             {
@@ -181,6 +181,8 @@ class PublicPortableMath(unittest.TestCase):
                     "spec_paths": ["verifications[0].assert"],
                     "context": '{"failure_count":1,"keys":[{"ID":1}],'
                     '"verification_id":"historical-exp-one-limit"}',
+                    "source_span": None,
+                    "operand_route": None,
                 }
             ]
             if above

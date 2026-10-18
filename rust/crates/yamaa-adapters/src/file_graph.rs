@@ -203,6 +203,16 @@ impl FileGraph {
         }
     }
     pub(crate) fn prepare_captured(entry: CapturedEntry) -> Result<Self, Box<RejectedGraph>> {
+        Self::prepare_closure(entry, false)
+    }
+    /// Prepare the entry alone, with every producer link saved: each producer
+    /// document is captured for its contract and output location but is not a
+    /// node, so the build reads its artifact from a held or saved copy. A
+    /// project run builds each specification of its scope this way.
+    pub(crate) fn prepare_captured_saved(entry: CapturedEntry) -> Result<Self, Box<RejectedGraph>> {
+        Self::prepare_closure(entry, true)
+    }
+    fn prepare_closure(entry: CapturedEntry, saved: bool) -> Result<Self, Box<RejectedGraph>> {
         let CapturedEntry {
             mut resources,
             written,
@@ -221,6 +231,7 @@ impl FileGraph {
             &schema,
             &mut documents,
             &mut origin,
+            saved,
         )
         .and_then(|nodes| {
             crate::file_inventory::prepare_parts(
@@ -234,9 +245,14 @@ impl FileGraph {
                 &documents[0].source().identity,
             )
             .map_err(Error::Document)?;
-            crate::producer_log_publication::admit_locations(&documents, &resources)?;
+            crate::producer_report_publication::admit_locations(&documents, &resources)?;
             let root = documents[0].source().identity.as_str();
-            producer_graph::prepare(root, nodes, environment).map_err(Error::Graph)
+            if saved {
+                producer_graph::prepare_saved(root, nodes, environment)
+            } else {
+                producer_graph::prepare(root, nodes, environment)
+            }
+            .map_err(Error::Graph)
         });
         match result {
             Ok(graph) => {
@@ -317,10 +333,11 @@ fn collect(
     schema: &Arc<CapturedSchema>,
     documents: &mut Vec<Arc<PreparedDocument>>,
     origin: &mut Option<Origin>,
+    saved: bool,
 ) -> Result<Vec<SuppliedNode>, Error> {
     let mut identities = BTreeMap::new();
     own_document(root, documents, &mut identities);
-    collect_nodes(resources, documents, origin, identities, schema)
+    collect_nodes(resources, documents, origin, identities, schema, saved)
 }
 
 fn collect_nodes(
@@ -329,7 +346,11 @@ fn collect_nodes(
     origin: &mut Option<Origin>,
     mut identities: BTreeMap<String, usize>,
     schema: &Arc<CapturedSchema>,
+    saved: bool,
 ) -> Result<Vec<SuppliedNode>, Error> {
+    // Saved producers are prepared once per canonical identity and shared by
+    // every alias edge, like nodes, but never join the frontier.
+    let mut saved_documents: BTreeMap<String, Arc<PreparedDocument>> = BTreeMap::new();
     let mut nodes = Vec::new();
     let mut index = 0;
     // New documents append to the frontier. Alias edges verify their original
@@ -370,8 +391,11 @@ fn collect_nodes(
                         schema_origin.written,
                     )
                 })?;
-            let producer = if let Some(&known) = identities.get(&identity) {
-                let prior = &documents[known];
+            let known = identities
+                .get(&identity)
+                .map(|&known| Arc::clone(&documents[known]))
+                .or_else(|| saved_documents.get(&identity).cloned());
+            let producer = if let Some(prior) = known {
                 resources
                     .capture_metadata_from(schema_origin.base_source, schema_origin.written)
                     .map_err(|error| {
@@ -381,7 +405,7 @@ fn collect_nodes(
                             schema_origin.written,
                         )
                     })?;
-                Arc::clone(prior)
+                prior
             } else {
                 let prepared = file_preparation::prepare_document_from(
                     resources,
@@ -402,7 +426,13 @@ fn collect_nodes(
                         schema_origin.written,
                     )));
                 }
-                own_document(prepared, documents, &mut identities)
+                if saved {
+                    let prepared = Arc::new(prepared);
+                    saved_documents.insert(identity.clone(), Arc::clone(&prepared));
+                    prepared
+                } else {
+                    own_document(prepared, documents, &mut identities)
+                }
             };
             let output = producer
                 .written_output_origin()
@@ -460,7 +490,7 @@ mod inventory_rejection_tests {
             })),
         );
         assert_eq!(
-            crate::project_application::selection_failure(&rejected, Language::Python),
+            crate::project_application::selection_failure(&rejected),
             crate::file_application::preparation_failure(error().into_message())
         );
     }

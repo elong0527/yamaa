@@ -8,7 +8,7 @@ fn inspection_round_trip_requires_no_yaml_or_parquet_reader() {
     const TEXT: &str = r#"{
       "format":"yamaa.resolved-specification", "artifact_version":1,
       "model_kind":"normalized_with_named_dictionary_references", "replay":"inspection_only",
-      "entry":"/held/spec.yaml", "environment":null,
+      "entry":"/held/spec.yaml", "project":null,
       "entries":[{
         "entry":"/held/spec.yaml", "schema_version":"1.0",
         "specification":{"schema_version":"1.0","examples":[123456789012345678901234567890,1.0]},

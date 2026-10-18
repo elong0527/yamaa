@@ -927,6 +927,7 @@ mod diagnostics {
                 let records = lock_diagnostics(
                     Some(LockOrigins {
                         source: "é\0🙂/environment.yaml",
+                        entry: "\u{e9}\0\u{1f642}/project.yaml",
                         lock_source: "captured-lock",
                         written: "../declared/uv.lock",
                     }),
@@ -947,7 +948,10 @@ mod diagnostics {
                 assert_eq!(records[2].context["actual"], text(" 1.0 "));
                 assert_eq!(records[3].context["actual"], text(""));
                 assert_eq!(records[0].context["source"], text("é\0🙂/environment.yaml"));
-                assert_eq!(records[0].context["entry"], records[0].context["source"]);
+                assert_eq!(
+                    records[0].context["entry"],
+                    text("\u{e9}\0\u{1f642}/project.yaml")
+                );
                 assert_eq!(records[0].context["lock"], text("../declared/uv.lock"));
             }
             #[test]
@@ -1006,7 +1010,7 @@ mod diagnostics {
                         spec_paths: vec!["lock".into()],
                         context: [
                             ("source".into(), text(&source)),
-                            ("entry".into(), text(&source)),
+                            ("entry".into(), text("study/project.yaml")),
                             ("lock_source".into(), text("held/uv.lock")),
                             ("lock".into(), text("../uv.lock")),
                             ("package".into(), text(&package)),
@@ -1062,7 +1066,7 @@ mod diagnostics {
                         Tree::map(vec![("values", Tree::list(vec![Tree::text(&long)]))]),
                     )])]),
                 );
-                let study = one(environment(), spec, &lists).unwrap();
+                let study = one(project(), spec, &lists).unwrap();
                 assert_eq!(study.codelists().len(), 1);
                 assert_eq!(
                     study.codelists()[0].declaration.items.as_ref().unwrap()[0].value,
@@ -1081,12 +1085,8 @@ mod diagnostics {
                         Tree::map(vec![("values", Tree::list(vec![Tree::text("Y")]))]),
                     )])]),
                 );
-                let findings = one(
-                    environment(),
-                    spec,
-                    &catalogue(false, Value::Str("X".into())),
-                )
-                .unwrap_err();
+                let findings =
+                    one(project(), spec, &catalogue(false, Value::Str("X".into()))).unwrap_err();
                 assert_eq!(findings.len(), 1);
                 assert_eq!(
                     findings[0].code,
@@ -1116,7 +1116,7 @@ mod diagnostics {
                     }
                 }
                 let lists = ct::Catalogue::admit(vec![]).unwrap();
-                let study = one(environment(), specification(), &lists).unwrap();
+                let study = one(project(), specification(), &lists).unwrap();
                 let table = Oversized(
                     TableSchema::new(vec![Column {
                         name: "VALUE".into(),
