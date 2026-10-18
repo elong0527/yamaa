@@ -21,6 +21,23 @@ pub(crate) enum Key<'a> {
     DateTime(DateTime),
 }
 
+/// Hash consistent with key equality: temporal values hash their civil
+/// fields, as their equality compares only those.
+impl std::hash::Hash for Key<'_> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::mem::discriminant(self).hash(state);
+        match self {
+            Self::Missing => (),
+            Self::Str(value) => value.hash(state),
+            Self::Int(value) => value.hash(state),
+            Self::Float(bits) => bits.hash(state),
+            Self::Bool(value) => value.hash(state),
+            Self::Date(value) => value.fields().hash(state),
+            Self::DateTime(value) => value.fields().hash(state),
+        }
+    }
+}
+
 impl<'a> From<ValueRef<'a>> for Key<'a> {
     /// Borrow text and retain logical equality, ignoring temporal precision.
     fn from(value: ValueRef<'a>) -> Self {
