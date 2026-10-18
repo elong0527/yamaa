@@ -205,19 +205,22 @@ impl PreparedSpecification {
             let mut dependencies = Vec::new();
             for (column, declaration) in self.declarations.iter().enumerate() {
                 let start = findings.len();
+                // Binding reports a key that reads other records first and
+                // binds nothing else of it (COLUMN-7).
+                let refused = self.key_record_findings(column);
+                if !refused.is_empty() {
+                    findings.extend(refused);
+                    if outputs.is_some() {
+                        dependencies.push(Some(Vec::new()));
+                    }
+                    continue;
+                }
                 operation(
                     &declaration.operation,
                     &declaration.path,
                     self.rows.is_none().then_some(&self.output),
                     findings,
                 )?;
-                // Without row templates, the base drives every row.
-                aggregates::check_ranges(
-                    &declaration.operation,
-                    &self.sources,
-                    &[self.source().name.as_str()],
-                    findings,
-                );
                 if let Some(outputs) = &outputs {
                     dependencies.push(Some(self.formula_reads(declaration, outputs, findings)));
                 }
@@ -233,14 +236,16 @@ impl PreparedSpecification {
                 self.formula_dependencies(&dependencies, findings)?;
             }
             if let Some(rows) = &self.rows {
-                rows.check_findings(
-                    &self.output,
-                    &input,
-                    &self.sources,
-                    &self.intermediates,
-                    findings,
-                )?;
+                rows.check_findings(&self.output, &input, findings)?;
             }
+            // Binding admits range values once every row's reads are bound.
+            lookup_range::check(
+                self.range_contexts(),
+                &self.intermediates,
+                &self.sources,
+                self.project_calls.as_ref(),
+                findings,
+            );
             Ok(())
         };
         collect(&mut findings).map_err(|error| match error {
@@ -256,6 +261,39 @@ impl PreparedSpecification {
             }
         }
         Ok(self)
+    }
+
+    /// The contexts whose rows read lookup ranges ([`lookup_range::check`]).
+    /// Without row templates the base drives every row, and its qualifier
+    /// reads the row's own record. A dataset verification reads its lookups
+    /// for every row, as a column does.
+    fn range_contexts(&self) -> Vec<lookup_range::Declared<'_>> {
+        let verified = relation_predicates::verification_predicates(&self.verifications.checks)
+            .flat_map(crate::bound_expression::BoundPredicate::bindings)
+            .filter(|binding| {
+                matches!(
+                    binding.read,
+                    crate::bound_expression::Read::Intermediate { .. }
+                )
+            })
+            .map(|binding| lookup_range::Evaluated::Name(&binding.name));
+        match &self.rows {
+            Some(rows) => rows.range_contexts(&self.sources, &self.intermediates, verified),
+            None => {
+                let base = self.source().name.as_str();
+                vec![lookup_range::Declared {
+                    evaluated: self
+                        .declarations
+                        .iter()
+                        .map(|declaration| {
+                            lookup_range::Evaluated::Operation(&declaration.operation, Some(base))
+                        })
+                        .chain(verified)
+                        .collect(),
+                    drivers: vec![base],
+                }]
+            }
+        }
     }
 
     /// A formula binds without a source schema: a qualified name is a declared

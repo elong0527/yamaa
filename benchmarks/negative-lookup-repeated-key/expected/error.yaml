@@ -2,7 +2,7 @@ phase: validation
 condition: invalid_field_type
 spec_paths:
   - intermediates[0].key[2]
-requirement: REQ-0115
+requirement: LOOKUP-5
 context:
   intermediate: FIRSTDOSE
   dataset: EX

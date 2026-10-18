@@ -190,4 +190,35 @@ impl Plan {
             yamaa_core::application_observer::Scope::new(&bridge),
         )
     }
+
+    /// Whether an engine configured as `shared` may run this plan again: it
+    /// compiled, for the same host language and resource authority, and the
+    /// run-start check finds every file it was compiled from unchanged.
+    pub(crate) fn reusable_by(&self, shared: &EngineShared) -> bool {
+        crate::internal::same_authority(&self.shared, shared)
+            && crate::internal::unchanged(&self.compiled.state)
+    }
+
+    /// One run of this plan through an engine configured as `shared`: that
+    /// engine's project functions, observer and runtime identity, so a host
+    /// call keeps its own capabilities. The caller has just verified the held
+    /// files, or compiled them. A project run offers its `held` artifacts.
+    pub(crate) fn run_through(
+        &self,
+        shared: &EngineShared,
+        held: Option<Arc<yamaa_adapters::file_resources::HeldArtifacts>>,
+        measurements: &yamaa_adapters::application_measurements::Measurements,
+        progress: Option<&dyn Progress>,
+    ) -> BuildOutcome {
+        let bridge = ObserverBridge::new(measurements, progress);
+        crate::internal::run(
+            shared,
+            &self.compiled.specification,
+            &self.compiled.state,
+            None,
+            held,
+            false,
+            yamaa_core::application_observer::Scope::new(&bridge),
+        )
+    }
 }

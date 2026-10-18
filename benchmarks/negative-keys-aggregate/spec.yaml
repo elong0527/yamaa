@@ -1,0 +1,29 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID, MAXDOSE]
+input:
+  EX: {path: input/ex.csv, types: {EXSTDY: int, EXDOSE: float}}
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, MAXDOSE]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: EX.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: EX.USUBJID
+
+  # The subject's highest dose summarizes all of the subject's
+  # administrations, but it is declared a key, which each administration
+  # must supply by itself, so the specification is rejected before any data
+  # is read.
+  - name: MAXDOSE
+    type: float
+    label: Maximum Dose
+    derivation: {aggregate: "MAX(EX.EXDOSE)"}

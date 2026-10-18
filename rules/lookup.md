@@ -39,7 +39,10 @@ narrowed only after it matches, and selection or reduction sees only the
 narrowed records. A key value whose type cannot compare therefore fails even
 on a record the filter would remove ([LOOKUP-9](#lookup-9)), and a filter that
 would fail on a record no row matches is never asked about it
-([LOOKUP-8](#lookup-8)).
+([LOOKUP-8](#lookup-8)). A named intermediate that verifies a unique
+combination ([LOOKUP-17](#lookup-17)) or drives a row template
+([ROW-2](rows.md#row-2)) reads every record its filter keeps, so there its
+filter is asked about every record.
 
 The current row's match values and range value are evaluated before any
 record is read, so a failure there is reported before any record is matched
@@ -68,7 +71,7 @@ no record, and a record missing a key or a stated bound does not match.
 `between` names a current-row value and at least one bound field.
 
 Fails: `incompatible_input_type`, `incomparable_range_types`, `invalid_field_type`, `prohibited_construct`, `unknown_field`.
-Evidence: `negative-lookup-bad-range`, `negative-lookup-range-other-input`, `negative-aggregate-range-other-input`, `schema-lookup-source-range`, `schema-lookup-intermediate-range-driver`, `schema-aggregate-range-driver`, `sdtm-lb-lab-specific-ranges`, `adam-advs-window-table`, `adam-adtr-nadir`, `adam-adsl-new-therapy`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`.
+Evidence: `negative-lookup-bad-range`, `negative-lookup-range-other-input`, `negative-aggregate-range-other-input`, `schema-lookup-source-range`, `schema-lookup-source-range-driver`, `schema-lookup-intermediate-range-driver`, `schema-aggregate-range-driver`, `sdtm-lb-lab-specific-ranges`, `adam-advs-window-table`, `adam-adtr-nadir`, `adam-adsl-new-therapy`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`.
 Replaces: REQ-0121, REQ-0128, REQ-0134, REQ-0330, REQ-0472, REQ-0473, REQ-0474,
 REQ-0509, REQ-1049.
 
@@ -106,12 +109,19 @@ a named intermediate selects for the row, qualified by its id. A value read
 from a driver's record must name the driver of every row that reads the
 lookup, wherever the lookup is read: in a row template, that template's driver
 ([LOOKUP-2](#lookup-2)), and during column derivation, the driver of every row
-template the read can evaluate on. A value naming nothing the current row
+template the read can evaluate on: the templates that leave the column to the
+column phase. A row template's `filter` reads its lookups for that template's
+rows, and a dataset verification for the rows of every template. A named
+intermediate is also read through an aggregate's `derive` binding and through
+the range value of another lookup. A value naming nothing the current row
 holds, such as a field of another input or of the lookup's own relation, fails
 as `unknown_field` at `between.value`, once per range, whichever kind of
-lookup declares it. A field of another input is never read through the
-implicit join ([LOOKUP-1](#lookup-1)); bring it onto the row as a column
-first, and name the column:
+lookup declares it. Which input drives each row is declared, so `check`
+reports a value qualified by an input that drives none of the rows reading the
+lookup from the declarations alone, whether or not that input stores the
+field. A field of another input is never read through the implicit join
+([LOOKUP-1](#lookup-1)); bring it onto the row as a column first, and name the
+column:
 
 ```yaml
 columns:
@@ -201,8 +211,11 @@ record gives one answer for a record whichever row matched it, and that answer
 may be reused; a correlated result is never reused for another row. Normal
 predicate typing and missing-value rules apply without coercion. The filter is
 asked only about matched records, so a filter that would fail on a record no
-row matches never runs. A `filter` on a construct with no records to select
-among (an output column, a chosen lookup record, a group key) fails as
+row matches never runs as a lookup. A named intermediate's unique verification
+([LOOKUP-17](#lookup-17)) and a row template it drives
+([ROW-2](rows.md#row-2)) read every record the filter keeps, so they ask it
+about every record. A `filter` on a construct with no records to select among
+(an output column, a chosen lookup record, a group key) fails as
 `prohibited_construct`.
 
 An aggregate's `filter` narrows the relation it reduces: for a qualified
@@ -474,7 +487,7 @@ current row's same-named value. A structured `source:` binding adds its
 join ([LOOKUP-25](#lookup-25)). The join gives one value per current row and
 preserves the row. The qualifier of the row template's driver is not a join.
 
-Evidence: `schema-lookup`, `schema-source-binding`, `schema-lookup-source-range`, `sdtm-sv-subject-visits`, `negative-input-require-match`.
+Evidence: `schema-lookup`, `schema-source-binding`, `schema-lookup-source-range`, `schema-lookup-source-range-driver`, `sdtm-sv-subject-visits`, `negative-input-require-match`.
 Replaces: REQ-0111, REQ-0150, REQ-0151, REQ-0152, REQ-1051, REQ-1052.
 
 ```yaml
@@ -532,7 +545,7 @@ match value must be available in the row phase; one available only in a later
 phase fails.
 
 Fails: `ungrouped_driver_field`, `unknown_field`, `phase_boundary`.
-Evidence: `negative-grouped-lookup-ungrouped-key`, `negative-grouped-range-ungrouped-value`, `negative-lookup-key-column-phase`, `negative-lookup-match-column-phase`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs`, `adam-adlb-supplb-padded-key`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-adapters/tests/execution_row_phase_reads.rs`.
+Evidence: `negative-grouped-lookup-ungrouped-key`, `negative-grouped-range-ungrouped-value`, `negative-lookup-key-column-phase`, `negative-lookup-match-column-phase`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs`, `adam-adlb-supplb-padded-key`, `schema-lookup-source-range-driver`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-adapters/tests/execution_row_phase_reads.rs`.
 Replaces: REQ-0126, REQ-0156, REQ-0157.
 
 In ungrouped row construction each retained input record builds one candidate
@@ -682,16 +695,19 @@ unfinished rows are never eligible, and a read from the first template fails.
 only through a named intermediate, never as a directly qualified source.
 
 Fails: `phase_boundary`.
-Evidence: `adam-adae-prior-serious-event`, `adam-advs-windows`, `negative-self-window-first-template`, `rust/crates/yamaa-adapters/tests/execution_declarative_self.rs`.
+Evidence: `adam-adae-prior-serious-event`, `adam-advs-windows`, `negative-self-window-first-template`, `negative-self-filter-first-template`, `rust/crates/yamaa-adapters/tests/execution_declarative_self.rs`.
 Replaces: REQ-0120.
 
 A read from the first template fails as `phase_boundary`. So does a
 first-template read of another named intermediate whose `between` value reads
 a `SELF` intermediate, directly or through the `between` values of further
 intermediates; the finding names the read, then each `between` value in the
-order followed. The donor fields are output columns derived in every row
-template; a column derived only in the later column phase is unavailable to
-`SELF`. The order of donors follows row construction order.
+order followed. The first template's row `filter` reads for that template's
+candidates, so a read there fails the same way, at `rows[0].filter`; a
+grouped template's `filter` reads no qualified name at all
+([ROW-6](rows.md#row-6)). The donor fields are output columns derived in every
+row template; a column derived only in the later column phase is unavailable
+to `SELF`. The order of donors follows row construction order.
 
 For `SELF`, `filter` and `order_by` may name its donor fields either bare or as
 `SELF.field`. Bare donor fields in `filter` are not correlated current-row
@@ -781,7 +797,7 @@ record before matching, `filter`, `order_by` selection and `columns`
 projection, and behave there like stored fields.
 
 Fails: `unknown_field`, `duplicate_derivation`.
-Evidence: `schema-lookup-intermediate-derived-filter`, `schema-lookup-intermediate-correlated-derive`, `schema-window-intermediate-rank`, `negative-lookup-derivation-scope`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`.
+Evidence: `schema-lookup-intermediate-derived-filter`, `schema-lookup-intermediate-correlated-derive`, `schema-lookup-intermediate-closest-datetime`, `schema-window-intermediate-rank`, `negative-lookup-derivation-scope`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`.
 Replaces: REQ-1185.
 
 Each entry is either an untyped expression, including its
@@ -879,6 +895,22 @@ The `filter` drops every `SRC` record whose distance is missing. When the
 current input record's reference is missing, every distance is missing, no
 candidate survives, and the read takes `no_match` ([LOOKUP-24](#lookup-24)).
 
+`ABS(DAY - BASE.REF)` is the number of days between two days only on a
+numbering without a gap. A study day (`--DY`, `ADY`) has no day 0
+([TIME-6](temporal.md#time-6)), so when one study day falls before day 1 and
+the other on or after it, their difference is one more than the days between
+their dates: day -1 and day 1 are consecutive dates, yet the difference gives
+2, so a candidate on day -1 loses to one on day 2, which is no nearer a
+reference on day 1. Measure such a distance between dates instead, here the
+candidate's `ADT` and the reference's `BASE.REFDT`, with `diff`
+([TIME-4](temporal.md#time-4)):
+
+```yaml
+    derivations:
+      GAP: {diff: {type: date, start: ADT, end: BASE.REFDT, unit: day}}
+      DIST: {compute: {expr: "ABS(GAP)"}}
+```
+
 To fall back to a candidate instead, leave the filter out and place missing
 distances last. Without `nulls`, a missing distance sorts first under `asc`
 ([VALUE-22](values.md#value-22)), and a candidate without a distance is
@@ -894,6 +926,22 @@ A measured candidate is then selected ahead of every candidate without a
 distance. A selected record whose `DIST` is missing shows that no candidate had
 a distance and the tie-break chose it.
 
+`ABS` drops the direction, so a candidate before the reference and one after
+it at the same distance tie, and record order chooses between them
+([LOOKUP-10](#lookup-10)). Order next on the signed `GAP`, which is positive
+before the reference, and then on a sequence number:
+
+```yaml
+    order_by: [SRC.DIST, {variable: SRC.GAP, direction: desc}, SRC.SEQ]
+```
+
+`direction: desc` prefers the candidate before the reference, and `asc` the
+one after it ([VALUE-22](values.md#value-22)); `SEQ` decides between
+candidates that still tie, such as two records at the same time. For a
+baseline-type selection, which reads only records on or before the reference,
+filter on `SRC.GAP >= 0` rather than taking the nearest record on either
+side; a missing `GAP` never satisfies it ([LOOKUP-8](#lookup-8)).
+
 When the reference is a `datetime`, such as `BASE.REFDTM`, `impute` completes
 each candidate's collected text ([TIME-8](temporal.md#time-8)), `diff` takes
 the elapsed difference ([TIME-4](temporal.md#time-4)), and `ABS` makes it a
@@ -906,18 +954,37 @@ distance:
       DIST: {compute: {expr: "ABS(GAP)"}}
 ```
 
-`GAP`, and with it `DIST`, is missing when `ADTM` or the reference is missing.
-A candidate without a distance is dropped by the filter, or placed last by
+`diff` with `type: datetime` reads two `datetime` values
+([TIME-1](temporal.md#time-1)), so the reference must be one: a field its
+input declares `datetime`, which must hold complete text
+([VALUE-15](values.md#value-15)), or a value `impute` completed. A reference
+collected as text that may be partial or have no time, such as an SDTM
+`--DTC`, takes its own `impute` in the same derivations, and the difference
+reads the completed value:
+
+```yaml
+      REFDTM: {impute: {type: datetime, source: BASE.REFDTC, minimum_source_precision: day, time: first}}
+      GAP: {diff: {type: datetime, start: ADTM, end: REFDTM, unit: hour}}
+```
+
+`GAP`, and with it `DIST`, is missing when `ADTM` or the reference is missing,
+including a reference whose text is coarser than its minimum precision. A
+candidate without a distance is dropped by the filter, or placed last by
 `nulls: last` when the filter is left out. For each candidate's `DTC`:
 
 - A missing `DTC` gives a missing `ADTM` without any handler
   ([TIME-13](temporal.md#time-13)).
 - Partial collected text such as `2024-03` is valid
-  ([TIME-7](temporal.md#time-7)). Under `minimum_source_precision: day` it
-  gives a missing `ADTM`. A coarser minimum completes it from the rules that
-  minimum requires ([TIME-10](temporal.md#time-10)): with
-  `minimum_source_precision: month` and `day: first`, `2024-03` becomes
-  `2024-03-01T00:00:00`, and the distance is measured from that imputed value.
+  ([TIME-7](temporal.md#time-7)), so `invalid` never answers it. Under
+  `minimum_source_precision: day` it gives a missing `ADTM` and has no
+  distance ([TIME-8](temporal.md#time-8)). A coarser minimum completes it
+  from the rules that minimum requires ([TIME-10](temporal.md#time-10)):
+  with `minimum_source_precision: month` and `day: first`, `2024-03` becomes
+  `2024-03-01T00:00:00`, and the distance is measured from that imputed
+  value. To measure in days instead, complete a `date` with `impute` of
+  `type: date`, which takes no `time`, and take the day difference with
+  `diff` of `type: date`, as for study days above: `2024-03` then becomes
+  `2024-03-01`.
 - A complete date without a time, such as `2024-03-10`, takes its time from
   `time`: `2024-03-10T00:00:00` under `time: first`.
 - Text that is not collected date text, such as `2024-03-10 09:00`, fails as
@@ -925,6 +992,31 @@ A candidate without a distance is dropped by the filter, or placed last by
   One such record in `SRC` stops the run, even when no current input record
   matches its key, unless `invalid: {literal: null}` answers it with a missing
   `ADTM` ([COLUMN-10](columns.md#column-10)).
+
+`time: first` is not neutral for a distance. Against a 09:00 reference, a
+date-only candidate on the same day is imputed to 00:00, 9 hours away, and a
+14:00 candidate, 5 hours away, wins; `time: last` moves the date-only
+candidate to 23:59:59 instead. How a missing time, day or month is completed,
+for a candidate or the reference, comes from the statistical analysis plan.
+When the imputed datetime is published, publish its imputation flags beside
+it: derive `ATMF: {imputation_flag: {source: ADTM, part: time}}` after `ADTM`
+([TIME-18](temporal.md#time-18)), and a `part: date` flag as well when a
+coarser minimum supplies a day or month, and list them in `columns`. `ATMF`
+is `H` for a date-only candidate, and `seconds_collected: false` keeps a study
+that collects times to the minute from flagging every timed candidate `S`.
+
+To exclude the candidates collected without a time instead, read the
+precision of each candidate's text ([TIME-7](temporal.md#time-7)) and keep
+those collected to the minute or the second:
+
+```yaml
+    derivations:
+      PREC: {precision: {type: datetime, source: DTC}}
+      ADTM: {impute: {type: datetime, source: DTC, minimum_source_precision: day, time: first}}
+      GAP: {diff: {type: datetime, start: ADTM, end: BASE.REFDTM, unit: hour}}
+      DIST: {compute: {expr: "ABS(GAP)"}}
+    filter: "SRC.DIST IS NOT NULL AND SRC.PREC IN ('minute', 'second')"
+```
 
 <a id="lookup-16"></a>
 

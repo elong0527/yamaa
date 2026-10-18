@@ -135,7 +135,11 @@ fn a_day_after_a_missing_month_is_never_looked_up() {
     );
     let (csv, handlers) = fixture.saved();
     assert_eq!(csv, "ID,DTC\n1,2025-03-15\n2,2025\n3,2025-04-20\n");
-    assert_eq!(handlers, []);
+    // The read's site is registered before any row and never answers.
+    assert_eq!(
+        handlers,
+        [("columns.DTC.derivation.dtc.day.no_match".into(), 0)]
+    );
 }
 
 #[test]
@@ -174,11 +178,13 @@ fn an_absence_answer_after_a_missing_month_is_not_counted() {
         csv,
         "ID,DFLT,JOIN\n1,2025-03-15,2025-03-15\n2,2025,2025\n3,2025-04-20,2025-04-20\n"
     );
-    // The implicit join's site is reported before any row fires it, and the
-    // intermediate's when it first fires.
+    // Both reads' sites are reported before any row fires them.
     assert_eq!(
         handlers,
-        [("columns.JOIN.derivation.dtc.day.absent".into(), 0)]
+        [
+            ("columns.DFLT.derivation.dtc.day.no_match".into(), 0),
+            ("columns.JOIN.derivation.dtc.day.absent".into(), 0)
+        ]
     );
 }
 

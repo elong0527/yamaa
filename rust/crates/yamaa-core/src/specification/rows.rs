@@ -1748,11 +1748,39 @@ impl Rows {
                 self_admission.visit(field(d, raw, "value")?, prefix, 0)?;
             }
         }
+        // A grouped template's filter reads no qualified name at all
+        // (ROW-6), which binding reports for every template.
+        if let (None, Some((_, Ok(plan)))) = (&templates[0].groups, &templates[0].filter) {
+            self_admission.filter(plan, "rows[0].filter");
+        }
         let self_findings = self_admission.finish();
         if !self_findings.is_empty() {
             return Err(PrepareError::Invalid(self_findings));
         }
         validate_row_phases(&templates, project, output)?;
+        // A column-level window spans the rows of every row template and
+        // reads a driver field at the record that built each row, so it may
+        // read only a driver they all share (WINDOW-11). The records that
+        // build rows belong to each distinct driver and, for a driver
+        // intermediate, to the input it reads.
+        let mut drivers: Vec<&str> = Vec::new();
+        for template in &templates {
+            if !drivers.contains(&template.driver.as_str()) {
+                drivers.push(&template.driver);
+            }
+        }
+        let declared_inputs = mapping(d, field(d, root, "input")?)?;
+        let mut records = drivers.clone();
+        for &name in &drivers {
+            if let Some(index) = intermediates.input(name) {
+                let (input, _) = declared_inputs.get(index).ok_or(PrepareError::Internal)?;
+                let input = text(d, *input)?;
+                if !records.contains(&input) {
+                    records.push(input);
+                }
+            }
+        }
+        let mut window_drivers = Vec::new();
         let mut lowered_columns = Vec::new();
         let mut unaddressable = Vec::new();
         for (column, &id) in columns.iter().enumerate() {
@@ -1793,6 +1821,14 @@ impl Rows {
                     string_templates,
                     intermediates,
                 )?;
+                if let RowOperation::Shared(branch) = &declaration.operation {
+                    windows::column_driver_findings(
+                        &branch.operation,
+                        &drivers,
+                        &records,
+                        &mut window_drivers,
+                    );
+                }
                 // Binding uses the driver the needing templates share; a
                 // named intermediate's unaddressable record is refused here.
                 let mut needing = templates
@@ -1821,6 +1857,15 @@ impl Rows {
                 }
                 lowered_columns.push(declaration);
             }
+        }
+        // A language refusal comes before an implementation refusal.
+        if !window_drivers.is_empty() {
+            return Err(PrepareError::Invalid(
+                window_drivers
+                    .into_iter()
+                    .map(PreflightFinding::Scalar)
+                    .collect(),
+            ));
         }
         if !unaddressable.is_empty() {
             return Err(PrepareError::Unsupported(unaddressable));
@@ -2024,9 +2069,16 @@ impl Rows {
                 diagnostics: analyzed.diagnostics,
             });
         }
-        // A column derivation and a dataset verification evaluate for the rows
-        // of every template; a template's own derivations and row filter for
-        // its rows only.
+        // A column derivation evaluates only for the rows of the templates that
+        // leave the column to the column phase, a dataset verification for the
+        // rows of every template, and a template's own derivations and row
+        // filter for its rows only (LOOKUP-8, LOOKUP-9).
+        let leaves = |template: &Template, column: usize| {
+            !template
+                .declarations
+                .iter()
+                .any(|declaration| declaration.column == column)
+        };
         let verification_reads = relation_predicates::predicate_reads(
             relation_predicates::verification_predicates(verifications),
         );
@@ -2035,33 +2087,42 @@ impl Rows {
             .map(|template| relation_predicates::predicate_reads(template.filter.as_ref()))
             .collect::<Vec<_>>();
         lookup_range::admit(
-            std::iter::once((
-                columns
-                    .iter()
-                    .map(|assignment| &assignment.expression)
-                    .chain(&verification_reads)
-                    .collect(),
-                templates
-                    .iter()
-                    .map(|template| template.mode.source_index())
-                    .collect(),
-            ))
-            .chain(
-                templates
-                    .iter()
-                    .zip(&filter_reads)
-                    .map(|(template, filter)| {
-                        (
-                            template
-                                .assignments
-                                .iter()
-                                .map(|assignment| &assignment.expression)
-                                .chain(filter)
-                                .collect(),
-                            vec![template.mode.source_index()],
-                        )
-                    }),
-            ),
+            columns
+                .iter()
+                .map(|assignment| {
+                    (
+                        vec![&assignment.expression],
+                        templates
+                            .iter()
+                            .zip(&declared)
+                            .filter(|(_, declaration)| leaves(declaration, assignment.column))
+                            .map(|(template, _)| template.mode.source_index())
+                            .collect(),
+                    )
+                })
+                .chain(std::iter::once((
+                    verification_reads.iter().collect(),
+                    templates
+                        .iter()
+                        .map(|template| template.mode.source_index())
+                        .collect(),
+                )))
+                .chain(
+                    templates
+                        .iter()
+                        .zip(&filter_reads)
+                        .map(|(template, filter)| {
+                            (
+                                template
+                                    .assignments
+                                    .iter()
+                                    .map(|assignment| &assignment.expression)
+                                    .chain(filter)
+                                    .collect(),
+                                vec![template.mode.source_index()],
+                            )
+                        }),
+                ),
             &intermediates,
             &mut findings,
         );
@@ -2073,7 +2134,11 @@ impl Rows {
                 template
                     .assignments
                     .iter()
-                    .chain(&columns)
+                    .chain(
+                        columns
+                            .iter()
+                            .filter(|assignment| leaves(declaration, assignment.column)),
+                    )
                     .map(|assignment| &assignment.expression)
                     .chain(filter)
                     .chain(&verification_reads),
@@ -2170,11 +2235,9 @@ impl Rows {
         &self,
         output: &TableSchema,
         input: &dyn Fn(&str) -> crate::result_type::ResultType,
-        sources: &[SourceDeclaration],
-        named: &intermediates::Declarations,
         findings: &mut Vec<BindFinding>,
     ) -> Result<(), BindError> {
-        self.declaration_findings(sources, named, findings)?;
+        self.declaration_findings(findings)?;
         // Static types in binding order: each template's derivations, then the
         // column-phase defaults, a shared default stating one derivation.
         for declaration in self
@@ -2211,20 +2274,19 @@ impl Rows {
         }
         Ok(())
     }
-    fn declaration_findings(
-        &self,
-        sources: &[SourceDeclaration],
+    /// The contexts whose rows read lookup ranges, in binding's order
+    /// ([`lookup_range::check`]): the column phase, whose derivations and
+    /// dataset verifications (`verified`) evaluate for the rows of every
+    /// template, then each template, whose derivations and filter evaluate
+    /// for its rows only. A row's driver is the input behind its template,
+    /// named directly or through a named intermediate.
+    pub(super) fn range_contexts<'a>(
+        &'a self,
+        sources: &'a [SourceDeclaration],
         named: &intermediates::Declarations,
-        findings: &mut Vec<BindFinding>,
-    ) -> Result<(), BindError> {
-        let groups = self.column_groups();
-        let column_groups = groups
-            .iter()
-            .map(|(driver, group)| (*driver, group.as_slice()))
-            .collect::<Vec<_>>();
-        // The input whose records drive each template's rows, when every
-        // template names one, directly or through a named intermediate.
-        let drivers = self
+        verified: impl Iterator<Item = lookup_range::Evaluated<'a>>,
+    ) -> Vec<lookup_range::Declared<'a>> {
+        let Some(drivers) = self
             .templates
             .iter()
             .map(|template| {
@@ -2237,7 +2299,85 @@ impl Rows {
                         .map(|source| source.name.as_str())
                 }
             })
-            .collect::<Option<Vec<_>>>();
+            .collect::<Option<Vec<_>>>()
+        else {
+            return Vec::new();
+        };
+        let evaluated =
+            |declaration: &'a RowDeclaration, own: Option<&'a str>| match &declaration.operation {
+                RowOperation::Shared(branch) => {
+                    Some(lookup_range::Evaluated::Operation(&branch.operation, own))
+                }
+                RowOperation::Source(name) => Some(lookup_range::Evaluated::Name(name)),
+                RowOperation::ProjectFunction { call, .. } => {
+                    Some(lookup_range::Evaluated::Call(*call))
+                }
+                RowOperation::Output(_) => None,
+            };
+        // A column derivation evaluates only for the rows of the templates that
+        // leave the column to this phase (LOOKUP-9), and binds against the
+        // driver they share; without one, every input joins.
+        let column_phase = self
+            .columns
+            .iter()
+            .filter_map(|declaration| {
+                let leaving = self
+                    .templates
+                    .iter()
+                    .zip(&drivers)
+                    .filter(|(template, _)| {
+                        !template
+                            .declarations
+                            .iter()
+                            .any(|derived| derived.column == declaration.column)
+                    })
+                    .collect::<Vec<_>>();
+                let own = leaving
+                    .first()
+                    .map(|(template, _)| template.driver.as_str())
+                    .filter(|&first| leaving.iter().all(|(template, _)| template.driver == first));
+                evaluated(declaration.as_ref(), own).map(|evaluated| lookup_range::Declared {
+                    evaluated: vec![evaluated],
+                    drivers: leaving.iter().map(|(_, driver)| **driver).collect(),
+                })
+            })
+            .collect::<Vec<_>>();
+        let templates = self
+            .templates
+            .iter()
+            .zip(&drivers)
+            .map(|(template, &driver)| {
+                let mut evaluated = template
+                    .declarations
+                    .iter()
+                    .filter_map(|declaration| {
+                        evaluated(declaration.as_ref(), Some(&template.driver))
+                    })
+                    .collect::<Vec<_>>();
+                if let Some((_, Ok(filter))) = &template.filter {
+                    evaluated.extend(filter.identifiers().map(lookup_range::Evaluated::Name));
+                }
+                lookup_range::Declared {
+                    evaluated,
+                    drivers: vec![driver],
+                }
+            });
+        // A dataset verification evaluates for the rows of every template.
+        column_phase
+            .into_iter()
+            .chain(std::iter::once(lookup_range::Declared {
+                evaluated: verified.collect(),
+                drivers: drivers.clone(),
+            }))
+            .chain(templates)
+            .collect()
+    }
+    fn declaration_findings(&self, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
+        let groups = self.column_groups();
+        let column_groups = groups
+            .iter()
+            .map(|(driver, group)| (*driver, group.as_slice()))
+            .collect::<Vec<_>>();
         for declaration in &self.columns {
             if let RowOperation::Shared(branch) = &declaration.operation {
                 static_checks::scoped_branch(
@@ -2250,10 +2390,6 @@ impl Rows {
                     )),
                     findings,
                 )?;
-                // A column-phase aggregate evaluates for the rows of every template.
-                if let Some(drivers) = &drivers {
-                    aggregates::check_ranges(&branch.operation, sources, drivers, findings);
-                }
             }
         }
         for (index, template) in self.templates.iter().enumerate() {

@@ -82,7 +82,7 @@ pub(super) fn declaration_findings(
                 dataset,
             )));
         }
-        // A list pairs each column with its same-named value once (REQ-0115).
+        // A list pairs each column with its same-named value once (LOOKUP-5).
         if let Some(N::Sequence(columns)) = d.field(item, "key").map(|key| &d.nodes()[key]) {
             for (position, &column) in columns.iter().enumerate() {
                 let column = text(d, column)?;

@@ -88,13 +88,10 @@ impl HandlerCounter {
         &self.counts
     }
 
-    /// Preserve selected nested observations, including before a donor failure.
-    pub(crate) fn transfer_selected(
-        &mut self,
-        target: &mut Self,
-        select: impl Fn(&HandlerCount) -> bool,
-    ) -> Result<(), HandlerCountOverflow> {
-        for entry in self.counts.iter_mut().filter(|entry| select(entry)) {
+    /// Move every nested observation into `target`, including before a donor
+    /// failure.
+    pub(crate) fn transfer(&mut self, target: &mut Self) -> Result<(), HandlerCountOverflow> {
+        for entry in &mut self.counts {
             target.register(&entry.spec_path, entry.handler);
             let destination = target
                 .counts

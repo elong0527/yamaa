@@ -137,9 +137,13 @@ rows:
                 result.observations()["handler_counts"],
                 yamaa_adapters::json!([
                     {"spec_path":"rows[1].derivations.V.compute.multiple_matches","handler":"multiple_matches","count":1},
+                    {"spec_path":"rows[1].derivations.V.compute.no_match","handler":"no_match","count":0},
                     {"spec_path":"rows[2].derivations.V.compute.multiple_matches","handler":"multiple_matches","count":2},
+                    {"spec_path":"rows[2].derivations.V.compute.no_match","handler":"no_match","count":0},
                     {"spec_path":"columns.FINAL.derivation.source.multiple_matches","handler":"multiple_matches","count":5},
+                    {"spec_path":"columns.FINAL.derivation.source.no_match","handler":"no_match","count":0},
                     {"spec_path":"columns.FIRST.derivation.source.multiple_matches","handler":"multiple_matches","count":5},
+                    {"spec_path":"columns.FIRST.derivation.source.no_match","handler":"no_match","count":0},
                 ])
             );
             // The two third-template records both see completed value 15, never 115
@@ -190,8 +194,13 @@ rows:
             assert_eq!(
                 result.observations()["handler_counts"],
                 yamaa_adapters::json!([
+                    {"spec_path":"rows[1].derivations.V.compute.multiple_matches","handler":"multiple_matches","count":0},
                     {"spec_path":"rows[1].derivations.V.compute.no_match","handler":"no_match","count":1},
+                    {"spec_path":"rows[2].derivations.V.compute.multiple_matches","handler":"multiple_matches","count":0},
+                    {"spec_path":"rows[2].derivations.V.compute.no_match","handler":"no_match","count":0},
                     {"spec_path":"columns.FINAL.derivation.source.multiple_matches","handler":"multiple_matches","count":3},
+                    {"spec_path":"columns.FINAL.derivation.source.no_match","handler":"no_match","count":0},
+                    {"spec_path":"columns.FIRST.derivation.source.multiple_matches","handler":"multiple_matches","count":0},
                     {"spec_path":"columns.FIRST.derivation.source.no_match","handler":"no_match","count":3},
                 ])
             );
@@ -437,6 +446,80 @@ rows:
                 );
                 assert!(!fixture.0.join("src.csv").exists());
             }
+        }
+        /// The first template's row filter reads for its own rows, before any
+        /// row is complete, directly or through `between` values (LOOKUP-7).
+        #[test]
+        fn first_template_filter_reads_of_self_fail_before_study_access() {
+            let filtered = |filter: &str| {
+                WINDOWS.replace(
+                    "  - id: first\n    dataset: SRC\n",
+                    &format!("  - id: first\n    dataset: SRC\n    filter: \"{filter}\"\n"),
+                )
+            };
+            for (filter, identifier, paths) in [
+                ("P.DAY IS NULL", "P.DAY", vec!["rows[0].filter"]),
+                (
+                    "W.NAME IS NULL",
+                    "P.DAY",
+                    vec!["rows[0].filter", "intermediates[1].between.value"],
+                ),
+                (
+                    "W2.NAME IS NULL AND DAY > 0",
+                    "P.DAY",
+                    vec![
+                        "rows[0].filter",
+                        "intermediates[2].between.value",
+                        "intermediates[1].between.value",
+                    ],
+                ),
+            ] {
+                let fixture = Fixture::new();
+                assert_eq!(
+                    issues(fixture.run(&filtered(filter))),
+                    vec![yamaa_adapters::json!({
+                        "phase":"validation", "condition":"phase_boundary", "requirement":"REQ-0120",
+                        "spec_paths":paths,
+                        "context":{"identifier":identifier,"available_phase":"completed_prior_row_template","required_phase":"row_construction"}
+                    })],
+                    "{filter}"
+                );
+                assert!(!fixture.0.join("src.csv").exists());
+            }
+            // A grouped first template's filter reads no qualified name, which
+            // binding reports as before (ROW-6).
+            let fixture = Fixture::new();
+            fs::write(fixture.0.join("src.csv"), "ID,DAY\na,3\n").unwrap();
+            fs::write(fixture.0.join("win.csv"), "ID,LO,HI,NAME\na,1,5,early\n").unwrap();
+            let grouped = filtered("P.DAY IS NULL").replace(
+                "    filter: \"P.DAY IS NULL\"\n",
+                "    group_by: [SRC.ID, SRC.DAY]\n    filter: \"P.DAY IS NULL\"\n",
+            );
+            assert_eq!(
+                issues(fixture.run(&grouped)),
+                vec![yamaa_adapters::json!({
+                    "phase":"validation", "condition":"phase_boundary", "requirement":"REQ-0068",
+                    "spec_paths":["rows[0].filter"],
+                    "context":{"identifier":"P.DAY","row":"first","available_phase":"row_construction","required_phase":"grouped_row_filter"}
+                })]
+            );
+            // In a later template the filter reads the completed first rows:
+            // each second-template row is kept only when its subject has no
+            // first-template row, so none is.
+            let fixture = Fixture::new();
+            fs::write(fixture.0.join("src.csv"), "ID,DAY\na,3\nb,12\n").unwrap();
+            fs::write(fixture.0.join("win.csv"), "ID,LO,HI,NAME\na,1,5,early\n").unwrap();
+            let later = WINDOWS.replace(
+                "  - id: second\n    dataset: SRC\n",
+                "  - id: second\n    dataset: SRC\n    filter: \"P.DAY IS NULL\"\n",
+            );
+            let mut result = fixture.run(&later).unwrap();
+            assert!(result.issues().is_empty(), "{:?}", result.issues());
+            assert!(result.save().unwrap());
+            assert_eq!(
+                fs::read_to_string(fixture.0.join("result.csv")).unwrap(),
+                "ID,SECTION,DAY,WINDOW\na,first,3,none\nb,first,12,none\n"
+            );
         }
         #[test]
         fn later_templates_read_completed_rows_through_between_values() {

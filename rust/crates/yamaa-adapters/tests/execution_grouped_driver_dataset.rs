@@ -6,7 +6,8 @@
 //! input or named intermediate. It need not be the input behind the first row
 //! template's driver. At column level only the grouped templates over the
 //! read's own driver decide: a template grouped over another driver leaves
-//! the read scalar, except in a column-level window.
+//! the read scalar. A column-level window instead reads only a driver that
+//! every row template shares, grouped or not (WINDOW-11).
 use std::{
     fs,
     path::PathBuf,
@@ -186,9 +187,11 @@ fn column_read_of_an_ungrouped_driver_ignores_another_drivers_groups() {
 }
 
 #[test]
-fn column_window_still_needs_every_grouped_template_to_group_by_its_field() {
+fn column_window_over_a_template_grouped_by_another_driver_names_the_drivers() {
     // A column-level window also orders the rows the home template groups,
-    // which no clinic measurement built.
+    // which no clinic measurement built. Grouping is not the cause: the home
+    // rows hold no clinic record at all, so the read fails as a field that
+    // names nothing they hold, naming both drivers.
     let specification = vitals(
         "",
         "",
@@ -197,11 +200,17 @@ fn column_window_still_needs_every_grouped_template_to_group_by_its_field() {
     .replace("type: float", "type: int");
     assert_eq!(
         Fixture::new(&specification).issues(),
-        ungrouped_driver_field(
-            "REQ-0107",
-            "columns.VSSTRESN.derivation.row_number.window.order_by[0]",
-            yamaa_adapters::json!({"identifier": "CLINIC.SYSBP", "dataset": "CLINIC"}),
-        )
+        vec![yamaa_adapters::json!({
+            "phase": "validation",
+            "condition": "unknown_field",
+            "requirement": "WINDOW-11",
+            "spec_paths": ["columns.VSSTRESN.derivation.row_number.window.order_by[0]"],
+            "context": {
+                "identifier": "CLINIC.SYSBP",
+                "drivers": ["CLINIC", "HOME"],
+                "operation": "row_number"
+            }
+        })]
     );
 }
 

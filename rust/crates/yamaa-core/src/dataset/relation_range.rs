@@ -80,6 +80,10 @@ pub struct RelationRange {
     value_kind: Option<ValueType>,
     lower: Option<RelationRangeBound>,
     upper: Option<RelationRangeBound>,
+    /// The variable of the source binding whose implicit join the range
+    /// narrows, which findings about the range name; none for another kind of
+    /// lookup.
+    variable: Option<String>,
 }
 fn comparable(a: ValueType, b: ValueType) -> bool {
     matches!(
@@ -130,10 +134,20 @@ impl RelationRange {
             value_kind,
             lower,
             upper,
+            variable: None,
         })
+    }
+    /// Name the source binding whose implicit join the range narrows.
+    pub fn for_variable(mut self, variable: &str) -> Self {
+        self.variable = Some(variable.into());
+        self
     }
     pub fn path(&self) -> &str {
         &self.path
+    }
+    /// The variable of the source binding that declares the range.
+    pub fn variable(&self) -> Option<&str> {
+        self.variable.as_deref()
     }
     pub fn current(&self) -> &CurrentField {
         &self.current

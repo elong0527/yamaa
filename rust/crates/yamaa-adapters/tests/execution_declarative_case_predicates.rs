@@ -412,7 +412,10 @@ columns:
             );
             assert_eq!(
                 result.observations()["handler_counts"],
-                yamaa_adapters::json!([])
+                yamaa_adapters::json!([
+                    {"spec_path":"columns.VALUE.derivation.source.multiple_matches","handler":"multiple_matches","count":0},
+                    {"spec_path":"columns.VALUE.derivation.source.no_match","handler":"no_match","count":0}
+                ])
             );
             assert!(result.output().is_none());
             assert!(result.save().is_err());
@@ -605,8 +608,8 @@ columns:
                 result.observations()["handler_counts"],
                 yamaa_adapters::json!([
                     {"spec_path":"rows[0].derivations.A.source.multiple_matches","handler":"multiple_matches","count":1},
-                    {"spec_path":"rows[0].derivations.B.source.multiple_matches","handler":"multiple_matches","count":1},
                     {"spec_path":"rows[0].derivations.A.source.no_match","handler":"no_match","count":1},
+                    {"spec_path":"rows[0].derivations.B.source.multiple_matches","handler":"multiple_matches","count":1},
                     {"spec_path":"rows[0].derivations.B.source.no_match","handler":"no_match","count":1}
                 ])
             );
@@ -650,7 +653,9 @@ columns:
             assert_eq!(
                 result.observations()["handler_counts"],
                 yamaa_adapters::json!([
+                    {"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":0},
                     {"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":4},
+                    {"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":0},
                     {"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":4}
                 ])
             );
@@ -1699,7 +1704,9 @@ columns:
             assert_eq!(
                 result.observations()["handler_counts"],
                 yamaa_adapters::json!([
+                    {"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":0},
                     {"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":1},
+                    {"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":0},
                     {"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":1}
                 ])
             );
@@ -1721,8 +1728,8 @@ columns:
                 result.observations()["handler_counts"],
                 yamaa_adapters::json!([
                     {"spec_path":"rows[0].derivations.A.source.multiple_matches","handler":"multiple_matches","count":1},
-                    {"spec_path":"rows[0].derivations.B.source.multiple_matches","handler":"multiple_matches","count":1},
                     {"spec_path":"rows[0].derivations.A.source.no_match","handler":"no_match","count":3},
+                    {"spec_path":"rows[0].derivations.B.source.multiple_matches","handler":"multiple_matches","count":1},
                     {"spec_path":"rows[0].derivations.B.source.no_match","handler":"no_match","count":3}
                 ])
             );
@@ -1751,7 +1758,9 @@ columns:
             assert_eq!(
                 result.observations()["handler_counts"],
                 yamaa_adapters::json!([
+                    {"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":0},
                     {"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":1},
+                    {"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":0},
                     {"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":1}
                 ])
             );
@@ -1811,7 +1820,9 @@ columns:
             assert_eq!(
                 result.observations()["handler_counts"],
                 yamaa_adapters::json!([
+                    {"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":0},
                     {"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":1},
+                    {"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":0},
                     {"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":1}
                 ])
             );
@@ -1843,7 +1854,7 @@ columns:
             assert_eq!(
                 findings,
                 [
-                    yamaa_adapters::json!({"phase":"validation","condition":"incomparable_range_types","requirement":"REQ-0121","spec_paths":["intermediates[0].between"],"context":{"intermediate":"EPOCHDEF","value_type":"date","lower_type":"int","upper_type":"int"}})
+                    yamaa_adapters::json!({"phase":"validation","condition":"incomparable_range_types","requirement":"LOOKUP-9","spec_paths":["intermediates[0].between"],"context":{"intermediate":"EPOCHDEF","value_type":"date","lower_type":"int","upper_type":"int"}})
                 ]
             );
             assert_eq!(
@@ -2421,8 +2432,8 @@ columns:
                 result.observations()["handler_counts"],
                 yamaa_adapters::json!([
                     {"spec_path":"rows[0].derivations.A.source.multiple_matches","handler":"multiple_matches","count":1},
-                    {"spec_path":"rows[0].derivations.B.source.multiple_matches","handler":"multiple_matches","count":1},
                     {"spec_path":"rows[0].derivations.A.source.no_match","handler":"no_match","count":2},
+                    {"spec_path":"rows[0].derivations.B.source.multiple_matches","handler":"multiple_matches","count":1},
                     {"spec_path":"rows[0].derivations.B.source.no_match","handler":"no_match","count":2},
                 ])
             );

@@ -36,6 +36,20 @@ the held bytes.
 | diagnostic-parity | Refusal cases with their complete expected issue rows |
 | read-odm | The two reader documents (the adapters' `odm` fixtures), all 30 columns and cells, archive member selection and refusal codes |
 | parquet-containment | A Parquet file that makes the native decoder panic, its issue row, and a readable file with its saved CSV |
+| plan-reuse | One specification run A, B, A on one object with exact output CSV and issue rows; a changed specification's output; a changed function default's output |
+
+`plan-reuse` is the repeated-run truth for #2821. A spec object's first
+`run()` compiles and later runs reuse the plan, so study A, then B, then A on
+one object must each give its own authored result: A's exact output CSV, and
+B's `division_by_zero` row, the same row as `division_in_a_right_operand` in
+`diagnostic-parity`. A run that leaked another study's output or issues would
+differ. The changed specification adds 2 instead of 1, so A's output becomes
+`3.5` and `2.25`. The function change sets `default: 1` for the `decimals` of
+the `schema-functions` project function, so `RATIO_DEFAULT` rounds to one
+place under ties-to-even (`0.33` becomes `0.3`, `2.25` becomes `2.2`) while
+every column that passes `decimals` keeps the benchmark's expected value. The
+Python and R `plan_reuse` suites run both changes on one object and require
+the changed output, so a stale plan would fail them.
 
 `diagnostic-parity` is the cross-host issue parity truth. Each case holds a
 specification, its input, the call (`check` or `run`) and every row of the

@@ -2367,7 +2367,18 @@ mod execution {
             for row in &rows[3..] {
                 assert_eq!(row[3..], [Value::Str("Y".into()), Value::Str("Y".into())]);
             }
-            assert!(attempt.handler_counts.is_empty());
+            assert_eq!(
+                attempt
+                    .handler_counts
+                    .iter()
+                    .map(|h| (h.spec_path.as_str(), h.handler.name(), h.count))
+                    .collect::<Vec<_>>(),
+                [
+                    ("rows[0].derivations.ROWV.source.no_match", "no_match", 0),
+                    ("rows[1].derivations.ROWV.source.no_match", "no_match", 0),
+                    ("columns.COLV.derivation.source.no_match", "no_match", 0)
+                ]
+            );
             assert_eq!(
                 trace
                     .borrow()
@@ -2415,7 +2426,18 @@ mod execution {
                     ("DONOR", 0, 1)
                 ]
             );
-            assert!(attempt.handler_counts.is_empty());
+            assert_eq!(
+                attempt
+                    .handler_counts
+                    .iter()
+                    .map(|h| (h.spec_path.as_str(), h.handler.name(), h.count))
+                    .collect::<Vec<_>>(),
+                [
+                    ("rows[0].derivations.ROWV.source.no_match", "no_match", 0),
+                    ("rows[1].derivations.ROWV.source.no_match", "no_match", 0),
+                    ("columns.COLV.derivation.source.no_match", "no_match", 0)
+                ]
+            );
         }
         #[test]
         fn failure_position_is_retained_row_position_not_private_attempt_token() {
@@ -2468,7 +2490,18 @@ mod execution {
             );
             assert!(empty.result.unwrap().dataset.rows().is_empty());
             assert!(trace.borrow().is_empty());
-            assert!(empty.handler_counts.is_empty());
+            assert_eq!(
+                empty
+                    .handler_counts
+                    .iter()
+                    .map(|h| (h.spec_path.as_str(), h.handler.name(), h.count))
+                    .collect::<Vec<_>>(),
+                [
+                    ("rows[0].derivations.ROWV.source.no_match", "no_match", 0),
+                    ("rows[1].derivations.ROWV.source.no_match", "no_match", 0),
+                    ("columns.COLV.derivation.source.no_match", "no_match", 0)
+                ]
+            );
         }
 
         use crate::support::document::Tree;

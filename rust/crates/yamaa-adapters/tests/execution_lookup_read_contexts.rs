@@ -261,7 +261,7 @@ fn a_correlated_lookup_reads_only_the_driver_of_the_reading_template() {
         Err(vec![yamaa_adapters::json!({
             "phase": "validation",
             "condition": "unknown_field",
-            "requirement": "REQ-0121",
+            "requirement": "LOOKUP-9",
             "spec_paths": ["intermediates[0].between.value"],
             "context": {"identifier": "DONOR.X", "intermediate": "R"}
         })])
@@ -333,7 +333,7 @@ fn a_dataset_verification_reads_a_lookup_as_a_column_does() {
         Err(vec![yamaa_adapters::json!({
             "phase": "validation",
             "condition": "unknown_field",
-            "requirement": "REQ-0121",
+            "requirement": "LOOKUP-9",
             "spec_paths": ["intermediates[0].between.value"],
             "context": {"identifier": "WIN.LO", "intermediate": "P"}
         })])

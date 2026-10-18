@@ -1449,7 +1449,17 @@ mod execution {
                     observed.result.unwrap().dataset.rows(),
                     [vec![Value::Int(1), Value::Int(7), Value::Int(7)]]
                 );
-                assert!(observed.handler_counts.is_empty());
+                assert_eq!(
+                    observed
+                        .handler_counts
+                        .iter()
+                        .map(|h| (h.spec_path.as_str(), h.count))
+                        .collect::<Vec<_>>(),
+                    [
+                        ("columns.C1.derivation.source.no_match", 0),
+                        ("columns.C2.derivation.source.no_match", 0)
+                    ]
+                );
                 // The record matches its padded key before the filter narrows it.
                 assert_eq!(
                     *trace.borrow(),
@@ -1494,7 +1504,17 @@ mod execution {
             assert_eq!(source_row, 0);
             assert_eq!(*trace.borrow(), [("SRC", 0, 0), ("SRC", 0, 1)]);
             assert!(tab.fail.borrow().is_some());
-            assert!(observed.handler_counts.is_empty());
+            assert_eq!(
+                observed
+                    .handler_counts
+                    .iter()
+                    .map(|h| (h.spec_path.as_str(), h.count))
+                    .collect::<Vec<_>>(),
+                [
+                    ("columns.C1.derivation.source.no_match", 0),
+                    ("columns.C2.derivation.source.no_match", 0)
+                ]
+            );
         }
         /// An ordinary selector resolves its current match value before any
         /// donor record is matched or narrowed, as an expression selector does
@@ -1529,7 +1549,17 @@ mod execution {
             assert_eq!(source_row, 0);
             assert_eq!(*trace.borrow(), [("SRC", 0, 0), ("SRC", 0, 1)]);
             assert!(tab.fail.borrow().is_some());
-            assert!(observed.handler_counts.is_empty());
+            assert_eq!(
+                observed
+                    .handler_counts
+                    .iter()
+                    .map(|h| (h.spec_path.as_str(), h.count))
+                    .collect::<Vec<_>>(),
+                [
+                    ("columns.C1.derivation.source.no_match", 0),
+                    ("columns.C2.derivation.source.no_match", 0)
+                ]
+            );
         }
         #[test]
         fn missing_first_key_does_not_skip_later_padding_refusal_or_current_dependency() {
@@ -1549,7 +1579,17 @@ mod execution {
                 ExecutionError::Allocation
             ));
             assert_eq!(*trace.borrow(), [("SRC", 0, 0), ("SRC", 0, 1)]);
-            assert!(observed.handler_counts.is_empty());
+            assert_eq!(
+                observed
+                    .handler_counts
+                    .iter()
+                    .map(|h| (h.spec_path.as_str(), h.count))
+                    .collect::<Vec<_>>(),
+                [
+                    ("columns.C1.derivation.source.no_match", 0),
+                    ("columns.C2.derivation.source.no_match", 0)
+                ]
+            );
         }
         #[test]
         fn key_missingness_never_matches_and_counts_each_reading_handler() {
@@ -1732,7 +1772,17 @@ mod execution {
                         *trace.borrow(),
                         [("SRC", 0, 0), ("SRC", 0, 1), ("TAB", 0, 0), ("TAB", 0, 3)]
                     );
-                    assert!(observed.handler_counts.is_empty());
+                    assert_eq!(
+                        observed
+                            .handler_counts
+                            .iter()
+                            .map(|h| (h.spec_path.as_str(), h.count))
+                            .collect::<Vec<_>>(),
+                        [
+                            ("columns.C1.derivation.source.no_match", 0),
+                            ("columns.C2.derivation.source.no_match", 0)
+                        ]
+                    );
                 } else {
                     assert_eq!(
                         observed.result.unwrap().dataset.rows(),

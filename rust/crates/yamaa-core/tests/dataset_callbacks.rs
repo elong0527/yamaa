@@ -5,7 +5,8 @@ mod execution {
     mod dataset {
         use crate::support::dataset::*;
 
-        /// Equal or absent values bypass all order reads and do not register a zero count.
+        /// Equal or absent values bypass all order reads; the declared selection
+        /// still reports its zero count, registered before any row.
         #[test]
         fn source_order_is_lazy_for_one_distinct_reading_and_restarts_observations() {
             use yamaa_core::dataset::Keep;
@@ -32,7 +33,14 @@ mod execution {
                 attempt.result.unwrap().dataset.rows(),
                 &[vec![Value::Int(1), Value::Int(7)]]
             );
-            assert!(attempt.handler_counts.is_empty());
+            assert_eq!(
+                attempt
+                    .handler_counts
+                    .iter()
+                    .map(|count| (count.spec_path.as_str(), count.count))
+                    .collect::<Vec<_>>(),
+                [("columns.C1.derivation.multiple_matches", 0)]
+            );
             assert!(!source.reads.borrow().iter().any(|(_, column)| *column == 2));
             source.rows[1][1] = Value::Str("8".into());
             let attempt = plan.execute(
@@ -45,7 +53,14 @@ mod execution {
                 *attempt.result.unwrap_err(),
                 ExecutionError::Cell { source_row: 0, .. }
             ));
-            assert!(attempt.handler_counts.is_empty());
+            assert_eq!(
+                attempt
+                    .handler_counts
+                    .iter()
+                    .map(|count| (count.spec_path.as_str(), count.count))
+                    .collect::<Vec<_>>(),
+                [("columns.C1.derivation.multiple_matches", 0)]
+            );
             source.fail = None;
             assert_eq!(
                 plan.execute(
@@ -82,7 +97,14 @@ mod execution {
                 attempt.result.unwrap().dataset.rows(),
                 &[vec![Value::Int(1), Value::Missing]]
             );
-            assert!(attempt.handler_counts.is_empty());
+            assert_eq!(
+                attempt
+                    .handler_counts
+                    .iter()
+                    .map(|count| (count.spec_path.as_str(), count.count))
+                    .collect::<Vec<_>>(),
+                [("columns.C1.derivation.multiple_matches", 0)]
+            );
             source.rows.clear();
             let attempt = plan.execute(
                 &source,
@@ -91,7 +113,14 @@ mod execution {
                 None,
             );
             assert!(attempt.result.unwrap().dataset.rows().is_empty());
-            assert!(attempt.handler_counts.is_empty());
+            assert_eq!(
+                attempt
+                    .handler_counts
+                    .iter()
+                    .map(|count| (count.spec_path.as_str(), count.count))
+                    .collect::<Vec<_>>(),
+                [("columns.C1.derivation.multiple_matches", 0)]
+            );
         }
 
         /// A completed choice remains observable after its conversion or later execution fails.
@@ -187,7 +216,14 @@ mod execution {
                     &mut yamaa_core::function_invocation::NoFunctions::new(),
                     None,
                 );
-                assert!(attempt.handler_counts.is_empty());
+                assert_eq!(
+                    attempt
+                        .handler_counts
+                        .iter()
+                        .map(|count| (count.spec_path.as_str(), count.count))
+                        .collect::<Vec<_>>(),
+                    [("columns.C1.derivation.multiple_matches", 0)]
+                );
                 let result = attempt.result.unwrap();
                 match &result.dataset.rows()[0][1] {
                     Value::Float(v) => assert_eq!(v.get().to_bits(), (-0.0_f64).to_bits()),
@@ -365,7 +401,18 @@ mod execution {
             assert!(
                 matches!(*attempt.result.unwrap_err(), ExecutionError::MultipleMatches { intermediate, path, match_count: 2, identity: Some(_), .. } if intermediate == "SELECTED" && path == "intermediates[0]")
             );
-            assert!(attempt.handler_counts.is_empty());
+            // Both reads registered their zero before the first match failed.
+            assert_eq!(
+                attempt
+                    .handler_counts
+                    .iter()
+                    .map(|count| (count.spec_path.as_str(), count.count))
+                    .collect::<Vec<_>>(),
+                [
+                    ("columns.C1.derivation.no_match", 0),
+                    ("columns.C2.derivation.no_match", 0)
+                ]
+            );
             assert!(secondary
                 .reads
                 .borrow()
@@ -383,7 +430,18 @@ mod execution {
             assert!(
                 matches!(*attempt.result.unwrap_err(), ExecutionError::UnmatchedKey { matched_key, identity: Some(_), .. } if matched_key == vec![("ID".into(),Value::Int(2))])
             );
-            assert_eq!(attempt.handler_counts.len(), 1);
+            // A read that requires a match registers no `no_match`.
+            assert_eq!(
+                attempt
+                    .handler_counts
+                    .iter()
+                    .map(|count| (count.spec_path.as_str(), count.count))
+                    .collect::<Vec<_>>(),
+                [
+                    ("columns.C1.derivation.multiple_matches", 1),
+                    ("columns.C2.derivation.multiple_matches", 0)
+                ]
+            );
             let mut item = named_item();
             item.no_match = Some(Value::Str("bad".into()));
             let attempt = named_plan(&source, &secondary, item).unwrap().execute(
@@ -396,7 +454,19 @@ mod execution {
                 *attempt.result.unwrap_err(),
                 ExecutionError::Conversion { output_row: 1, .. }
             ));
-            assert_eq!(attempt.handler_counts.len(), 2);
+            assert_eq!(
+                attempt
+                    .handler_counts
+                    .iter()
+                    .map(|count| (count.spec_path.as_str(), count.count))
+                    .collect::<Vec<_>>(),
+                [
+                    ("columns.C1.derivation.multiple_matches", 1),
+                    ("columns.C1.derivation.no_match", 1),
+                    ("columns.C2.derivation.multiple_matches", 0),
+                    ("columns.C2.derivation.no_match", 0)
+                ]
+            );
             secondary.rows[1][1] = Value::Str("bad".into());
             let attempt = named_plan(&source, &secondary, named_item())
                 .unwrap()
@@ -413,7 +483,8 @@ mod execution {
             assert_eq!(attempt.handler_counts[0].count, 1);
         }
 
-        /// Filtering is lazy globally, finishes before matching and never executes for empty output.
+        /// Filtering is lazy: it runs after matching, only on matched records, and
+        /// never executes for empty output (LOOKUP-25).
         #[test]
         fn named_intermediate_filter_scope_and_handlers_are_attempt_local() {
             let mut source = table(&[("ID", ColumnType::Int)], vec![vec![Value::Int(99)]]);
@@ -472,7 +543,20 @@ mod execution {
                 None,
             );
             assert!(empty.result.unwrap().dataset.rows().is_empty());
-            assert!(empty.handler_counts.is_empty());
+            // An empty output still reports every registered read at zero.
+            assert_eq!(
+                empty
+                    .handler_counts
+                    .iter()
+                    .map(|count| (count.spec_path.as_str(), count.count))
+                    .collect::<Vec<_>>(),
+                [
+                    ("columns.C1.derivation.multiple_matches", 0),
+                    ("columns.C1.derivation.no_match", 0),
+                    ("columns.C2.derivation.multiple_matches", 0),
+                    ("columns.C2.derivation.no_match", 0)
+                ]
+            );
             assert!(secondary.reads.borrow().is_empty());
             source.rows.push(vec![Value::Int(99)]);
             let plan = named_plan(&source, &secondary, named_item()).unwrap();
@@ -484,8 +568,15 @@ mod execution {
                     None
                 )
                 .handler_counts
-                .len(),
-                2
+                .iter()
+                .map(|count| (count.spec_path.as_str(), count.count))
+                .collect::<Vec<_>>(),
+                [
+                    ("columns.C1.derivation.multiple_matches", 0),
+                    ("columns.C1.derivation.no_match", 1),
+                    ("columns.C2.derivation.multiple_matches", 0),
+                    ("columns.C2.derivation.no_match", 1)
+                ]
             );
             let mut item = named_item();
             item.keys[0].value =
