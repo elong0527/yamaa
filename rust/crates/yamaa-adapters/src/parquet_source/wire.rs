@@ -591,6 +591,43 @@ mod tests {
         }
     }
 
+    /// The native copy of the footer presents a UUID or a map as a binary of
+    /// the same length and a set as the identically encoded list. Under a
+    /// known binary or list id, the presented footer passes the check, so the
+    /// reader must check the held footer before it presents it. No page
+    /// header field the native reader reads is a binary or a list.
+    #[test]
+    fn the_footer_is_checked_as_held_before_its_native_presentation() {
+        use super::super::compact;
+        use super::{check, Error, Shape};
+        let checked = |footer: &[u8]| check(compact::parse(footer)?.0, Shape::FileMetaData);
+        let cases: [fn(Fields) -> Fields; 3] = [
+            // created_by as a UUID.
+            |f| f.uuid(6),
+            // key_value_metadata as a set.
+            |f| {
+                let pair = Fields::default().binary(1, b"k").binary(2, b"v");
+                f.collection(5, 10, 12, &[pair.end()])
+            },
+            // A key-value value as an empty map.
+            |f| {
+                let pair = Fields::default().binary(1, b"k").raw(2, 11, &[0]);
+                f.list(5, 12, &[pair.end()])
+            },
+        ];
+        for (index, add) in cases.into_iter().enumerate() {
+            let bytes = file(&[7], At::File, add);
+            let trailer = bytes.len() - 8;
+            let length = u32::from_le_bytes(bytes[trailer..trailer + 4].try_into().unwrap());
+            let held = &bytes[trailer - length as usize..trailer];
+            let presented = compact::native_metadata(held).unwrap();
+            assert_eq!(checked(held), Err(Error::Malformed), "case {index}: held");
+            assert_eq!(checked(&presented), Ok(()), "case {index}: presented");
+            let error = reader::read(&bytes).unwrap_err();
+            assert_eq!(error, reader::Error::Malformed, "case {index}: read");
+        }
+    }
+
     #[test]
     fn well_typed_optional_fields_still_read() {
         let bytes = file(&[0, 1_000_000], At::Leaf, |f| {

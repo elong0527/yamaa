@@ -6,8 +6,9 @@
 //! under `compare_present_refs` share one bucket: integer and float
 //! spellings of the same number encode identically, as do both float
 //! zero signs, and temporal precision is ignored exactly as temporal
-//! equality ignores it. Immutable donor coordinates retain eligible
-//! (donor read) order inside each bucket.
+//! equality ignores it. Immutable donor coordinates retain stored
+//! (donor read) order inside each bucket, and the filter narrows a bucket
+//! only after its keys match (LOOKUP-25).
 use super::*;
 use std::collections::BTreeMap;
 
@@ -76,14 +77,14 @@ pub(super) struct KeyIndex {
 }
 
 impl KeyIndex {
-    /// Build the index over the eligible donors, or return `None` when a
+    /// Build the index over the given donor rows, or return `None` when a
     /// donor cell's type does not fit its declared column type: such a
     /// relation keeps the scan path, whose per-cell comparison owns the
     /// incompatible-type diagnostic for that shape.
     pub(super) fn build<E>(
         table: &dyn TableAccess<Error = E>,
         item: &Intermediate,
-        eligible: &[usize],
+        rows: &[usize],
     ) -> Result<Option<Self>, Box<ExecutionError<E>>> {
         // The first ordinary scan keeps its existing admission and donor read
         // order. cell() admits each value before this index can copy it.
@@ -97,7 +98,7 @@ impl KeyIndex {
             columns,
             buckets: BTreeMap::new(),
         };
-        for &row in eligible {
+        for &row in rows {
             let mut key = Vec::new();
             let mut missing = false;
             for &column in &index.columns {

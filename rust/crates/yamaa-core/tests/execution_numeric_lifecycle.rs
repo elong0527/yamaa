@@ -615,9 +615,6 @@ mod execution {
             for keep in [Keep::First, Keep::Last] {
                 for _ in 0..2 {
                     let (primary, donors, plan, trace) = fixture(keep, Mode::Ordinary, true);
-                    // Every first donor is filtered out before its key can be inspected.
-                    *donors.failure.borrow_mut() =
-                        Some((0, 0, Original(Box::new(17), Rc::new(()))));
                     let attempted = plan.execute(
                         &primary,
                         &[&donors],
@@ -626,32 +623,31 @@ mod execution {
                     );
                     assert_eq!(attempted.result.unwrap().dataset.rows(), expected(keep));
                     let events = trace.borrow();
-                    let first_current = events
-                        .iter()
-                        .position(|event| *event == ("BASE", 0, 1))
-                        .unwrap();
-                    assert_eq!(
-                        events[..first_current]
-                            .iter()
-                            .filter(|(name, _, col)| *name == "DONOR" && *col == 2)
-                            .count(),
-                        256
-                    );
+                    // The index reads every donor key once, in donor order.
                     let key_reads = events
                         .iter()
                         .filter(|(name, _, col)| *name == "DONOR" && *col == 0)
                         .copied()
                         .collect::<Vec<_>>();
-                    assert_eq!(key_reads.len(), 192);
-                    {
-                        assert_eq!(
-                            key_reads,
-                            (0..256)
-                                .filter(|r| r % 4 != 0)
-                                .map(|r| ("DONOR", r, 0))
-                                .collect::<Vec<_>>()
-                        );
-                    }
+                    assert_eq!(
+                        key_reads,
+                        (0..256).map(|r| ("DONOR", r, 0)).collect::<Vec<_>>()
+                    );
+                    // The filter narrows only the donors some row matches, once
+                    // each: neither the missing keys of rows 0 and 10 nor the
+                    // unmatched row 64 asks about a donor (LOOKUP-8).
+                    let filter_reads = events
+                        .iter()
+                        .filter(|(name, _, col)| *name == "DONOR" && *col == 2)
+                        .copied()
+                        .collect::<Vec<_>>();
+                    assert_eq!(
+                        filter_reads,
+                        (0..256)
+                            .filter(|r| r / 4 != 0 && r / 4 != 10)
+                            .map(|r| ("DONOR", r, 2))
+                            .collect::<Vec<_>>()
+                    );
                 }
             }
         }
@@ -673,19 +669,14 @@ mod execution {
                         .rows(),
                         expected(Keep::First)
                     );
+                    // Every row with a present key matches it against every
+                    // donor before the filter narrows the matched ones.
                     let key_reads = trace
                         .borrow()
                         .iter()
                         .filter(|(name, _, col)| *name == "DONOR" && *col == 0)
                         .count();
-                    assert_eq!(
-                        key_reads,
-                        if matches!(mode, Mode::Correlated) {
-                            256 * 63
-                        } else {
-                            192 * 63
-                        }
-                    );
+                    assert_eq!(key_reads, 256 * 63);
                 }
             }
         }
@@ -706,9 +697,9 @@ mod execution {
                     .rows(),
                     expected(Keep::First)
                 );
-                // The index is built once over the eligible donors: every
-                // eligible donor key cell is read exactly once, in donor
-                // order, instead of once per output row on the scan path.
+                // The index is built once over the donors: every donor key
+                // cell is read exactly once, in donor order, instead of once
+                // per output row on the scan path.
                 let key_reads = trace
                     .borrow()
                     .iter()
@@ -717,10 +708,7 @@ mod execution {
                     .collect::<Vec<_>>();
                 assert_eq!(
                     key_reads,
-                    (0..256)
-                        .filter(|r| r % 4 != 0)
-                        .map(|r| ("DONOR", r, 0))
-                        .collect::<Vec<_>>()
+                    (0..256).map(|r| ("DONOR", r, 0)).collect::<Vec<_>>()
                 );
             }
         }
@@ -822,45 +810,68 @@ mod execution {
             }
         }
 
+        /// The current key resolves before any donor is matched or narrowed,
+        /// and the filter is asked only about a donor that matched.
         #[test]
-        fn entire_source_filter_finishes_before_current_key_and_donor_key_effects() {
+        fn current_key_resolves_before_any_donor_key_or_filter_effect() {
             let mut traces = Vec::new();
             for _ in 0..2 {
                 let (primary, donors, plan, trace) = fixture(Keep::First, Mode::Ordinary, true);
-                let original = Original(Box::new(41), Rc::new(()));
+                let original = Original(Box::new(43), Rc::new(()));
                 let pointer = original.0.as_ref() as *const u8;
                 let marker = Rc::clone(&original.1);
-                *donors.failure.borrow_mut() = Some((130, 2, original));
-                *primary.failure.borrow_mut() = Some((0, 1, Original(Box::new(43), Rc::new(()))));
+                *donors.failure.borrow_mut() = Some((130, 2, Original(Box::new(41), Rc::new(()))));
+                *primary.failure.borrow_mut() = Some((0, 1, original));
                 let attempted = plan.execute(
                     &primary,
                     &[&donors],
                     &mut yamaa_core::function_invocation::NoFunctions::new(),
                     None,
                 );
-                let ExecutionError::Predicate {
-                    source_row: 130,
-                    error,
-                } = *attempted.result.unwrap_err()
-                else {
-                    panic!("source-only filter keeps its original failure")
-                };
-                let yamaa_core::expression::ErrorKind::Resolution {
+                let ExecutionError::Cell {
+                    source_row: 0,
                     error: CellError::Access(original),
                     ..
-                } = error.kind
+                } = *attempted.result.unwrap_err()
                 else {
-                    panic!("original predicate operand failure")
+                    panic!("current key keeps its original failure")
                 };
                 assert_eq!(original.0.as_ref() as *const u8, pointer);
                 assert!(Rc::ptr_eq(&original.1, &marker));
-                assert!(primary.failure.borrow().is_some());
-                assert!(!trace.borrow().iter().any(|(name, _, column)| {
-                    (*name == "BASE" && *column == 1) || (*name == "DONOR" && *column != 2)
-                }));
+                assert!(donors.failure.borrow().is_some());
+                assert!(!trace.borrow().iter().any(|(name, _, _)| *name == "DONOR"));
                 traces.push(trace.borrow().clone());
             }
             assert_eq!(traces[0], traces[1]);
+            // Without the current failure, the first row that matches donor 130
+            // asks the filter about it, and its failure keeps its payload.
+            let (primary, donors, plan, trace) = fixture(Keep::First, Mode::Ordinary, true);
+            let original = Original(Box::new(41), Rc::new(()));
+            let pointer = original.0.as_ref() as *const u8;
+            *donors.failure.borrow_mut() = Some((130, 2, original));
+            let attempted = plan.execute(
+                &primary,
+                &[&donors],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None,
+            );
+            let ExecutionError::Predicate {
+                source_row: 130,
+                error,
+            } = *attempted.result.unwrap_err()
+            else {
+                panic!("the filter keeps its original failure")
+            };
+            let yamaa_core::expression::ErrorKind::Resolution {
+                error: CellError::Access(original),
+                ..
+            } = error.kind
+            else {
+                panic!("original predicate operand failure")
+            };
+            assert_eq!(original.0.as_ref() as *const u8, pointer);
+            assert!(trace.borrow().contains(&("BASE", 32, 1)));
+            assert!(!trace.borrow().contains(&("BASE", 33, 1)));
         }
 
         #[test]

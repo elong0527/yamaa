@@ -428,11 +428,34 @@ mod execution {
             let mut item = named_item();
             item.filter = Some(positive(Read::Source(1)).into());
             let plan = named_plan(&source, &secondary, item).unwrap();
+            // The filter narrows matched records only (LOOKUP-8): a record whose
+            // key differs is never asked, and a matched one fails the comparison.
+            assert!(plan
+                .execute(
+                    &source,
+                    &[&secondary],
+                    &mut yamaa_core::function_invocation::NoFunctions::new(),
+                    None
+                )
+                .result
+                .is_ok());
+            let matched = table(
+                &[
+                    ("ID", ColumnType::Int),
+                    ("V", ColumnType::Str),
+                    ("ORDER", ColumnType::Int),
+                ],
+                vec![vec![
+                    Value::Int(99),
+                    Value::Str("bad".into()),
+                    Value::Int(0),
+                ]],
+            );
             assert!(matches!(
                 *plan
                     .execute(
                         &source,
-                        &[&secondary],
+                        &[&matched],
                         &mut yamaa_core::function_invocation::NoFunctions::new(),
                         None
                     )

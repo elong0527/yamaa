@@ -88,7 +88,6 @@ conditions:
   matches_failed: {phases: [verification]}
   method_missing: {phases: [validation]}
   minimum_length: {phases: [validation]}
-  missing_aggregate_keys: {phases: [validation]}
   missing_derivation: {phases: [validation]}
   missing_input: {phases: [mapping]}
   missing_key: {phases: [output]}

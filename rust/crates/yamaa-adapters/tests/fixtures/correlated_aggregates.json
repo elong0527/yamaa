@@ -984,7 +984,7 @@
             "identifier": "SRC.ABSENT"
           },
           "phase": "validation",
-          "requirement": "REQ-0141",
+          "requirement": "LOOKUP-5",
           "spec_paths": [
             "columns.V.derivation.aggregate.expr"
           ]
@@ -1003,7 +1003,7 @@
                 "identifier": "SRC.ABSENT"
               },
               "phase": "validation",
-              "requirement": "REQ-0141",
+              "requirement": "LOOKUP-5",
               "spec_paths": [
                 "columns.V.derivation.aggregate.expr"
               ]
@@ -1095,7 +1095,7 @@
             "identifier": "ABSENT"
           },
           "phase": "validation",
-          "requirement": "REQ-0141",
+          "requirement": "LOOKUP-5",
           "spec_paths": [
             "columns.V.derivation.aggregate.expr"
           ]
@@ -1114,7 +1114,7 @@
                 "identifier": "ABSENT"
               },
               "phase": "validation",
-              "requirement": "REQ-0141",
+              "requirement": "LOOKUP-5",
               "spec_paths": [
                 "columns.V.derivation.aggregate.expr"
               ]
@@ -1208,7 +1208,7 @@
             "source": "ID"
           },
           "phase": "validation",
-          "requirement": "REQ-0004",
+          "requirement": "LOOKUP-9",
           "spec_paths": [
             "columns.V.derivation.aggregate.expr"
           ]
@@ -1229,7 +1229,7 @@
                 "source": "ID"
               },
               "phase": "validation",
-              "requirement": "REQ-0004",
+              "requirement": "LOOKUP-9",
               "spec_paths": [
                 "columns.V.derivation.aggregate.expr"
               ]
@@ -1316,13 +1316,13 @@
       "callbacks": [],
       "diagnostics": [
         {
-          "condition": "missing_aggregate_keys",
+          "condition": "invalid_field_type",
           "context": {
             "dataset": "SRC",
-            "key": {}
+            "expected": "at least one match pair"
           },
           "phase": "validation",
-          "requirement": "REQ-0140",
+          "requirement": "LOOKUP-5",
           "spec_paths": [
             "columns.V.derivation.aggregate"
           ]
@@ -1336,13 +1336,13 @@
         {
           "diagnostics": [
             {
-              "condition": "missing_aggregate_keys",
+              "condition": "invalid_field_type",
               "context": {
                 "dataset": "SRC",
-                "key": {}
+                "expected": "at least one match pair"
               },
               "phase": "validation",
-              "requirement": "REQ-0140",
+              "requirement": "LOOKUP-5",
               "spec_paths": [
                 "columns.V.derivation.aggregate"
               ]
@@ -1429,13 +1429,13 @@
       "callbacks": [],
       "diagnostics": [
         {
-          "condition": "missing_aggregate_keys",
+          "condition": "invalid_field_type",
           "context": {
             "dataset": "SRC",
-            "key": []
+            "expected": "at least one match pair"
           },
           "phase": "validation",
-          "requirement": "REQ-0140",
+          "requirement": "LOOKUP-5",
           "spec_paths": [
             "columns.V.derivation.aggregate"
           ]
@@ -1449,13 +1449,13 @@
         {
           "diagnostics": [
             {
-              "condition": "missing_aggregate_keys",
+              "condition": "invalid_field_type",
               "context": {
                 "dataset": "SRC",
-                "key": []
+                "expected": "at least one match pair"
               },
               "phase": "validation",
-              "requirement": "REQ-0140",
+              "requirement": "LOOKUP-5",
               "spec_paths": [
                 "columns.V.derivation.aggregate"
               ]
