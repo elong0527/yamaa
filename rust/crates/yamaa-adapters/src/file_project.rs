@@ -25,6 +25,10 @@ pub struct FileProject {
     resources: Resources,
     /// Inputs a project run may serve from artifacts it already built.
     linked: Vec<crate::file_resources::LinkedInput>,
+    /// The entry path as written and the producing specifications its
+    /// `schema` links name: the declarations a run-start refusal names.
+    entry: String,
+    links: Vec<crate::specification_source::LinkedSpecification>,
 }
 /// Ordinary compilation rejection beside the original native resource owner.
 /// Projection refusal and file deletion never consume or replace this evidence.
@@ -99,6 +103,8 @@ impl FileProject {
                     run: Arc::new(run),
                     resources,
                     linked,
+                    entry,
+                    links,
                 })
             }
             Err(run) => Err(Box::new(RejectedOrdinary {
@@ -161,6 +167,8 @@ impl FileProject {
             run: Arc::new(run),
             resources,
             linked,
+            entry: specification.into(),
+            links,
         })
     }
     pub fn run(&self) -> &PreparedRun {
@@ -180,6 +188,40 @@ impl FileProject {
         resolver: Option<Arc<dyn crate::host_resources::Resolver>>,
     ) -> RunScope {
         self.resources.run_scope(resolver)
+    }
+    /// Verify every held metadata snapshot at run start, before activation or
+    /// any study read: the entry, its layers, dictionaries and linked
+    /// producing specifications, the project file, the environment file it
+    /// links, and the lock, function definitions and codelists they declare.
+    /// A changed or missing file refuses the run naming its declaration; see
+    /// [`crate::file_application::verify_held`].
+    pub fn verify_metadata(&self) -> Result<(), crate::file_application::Failure> {
+        use crate::changed_metadata as changed;
+        crate::file_application::verify_held(&self.resources, |identity, failure| {
+            let document = self.run.document();
+            let captured = self.run.captured_environment();
+            changed::specification("specification", &self.entry, document, identity, failure)
+                .or_else(|| changed::links(document, &self.links, identity, failure))
+                .or_else(|| {
+                    let root = captured.root_optional()?;
+                    changed::inventory(root, captured.inventory_documents(), identity, failure)
+                        .or_else(|| {
+                            let environment = changed::Environment {
+                                written: captured.written()?,
+                                host: self.run.environment().host(),
+                                root,
+                                environment_file: captured.environment_file(),
+                                lock: captured.lock(),
+                                captures: captured.captures(),
+                            };
+                            changed::environment(&environment, identity, failure)
+                        })
+                })
+        })
+    }
+    /// Bounded aliases of the held metadata bytes; no file access or replay.
+    pub fn retained_sources(&self) -> crate::file_resources::RetainedSources {
+        self.resources.retain_sources()
     }
     pub(crate) fn publication_target(
         &self,
@@ -250,5 +292,5 @@ pub(crate) fn capture_environment(
     };
     project_source::adapt_preparation(prepared)
         .map_err(Error::Environment)
-        .map(project_source::PreparedEnvironment::into_owned)
+        .map(|prepared| prepared.into_owned().with_written(written))
 }

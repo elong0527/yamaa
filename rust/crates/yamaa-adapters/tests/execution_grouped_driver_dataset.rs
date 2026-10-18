@@ -4,13 +4,15 @@
 //! REQ-0067 and at column level under REQ-0107. The finding's `dataset` names
 //! the driver that the read qualifies, which is the grouped template's own
 //! input or named intermediate. It need not be the input behind the first row
-//! template's driver.
+//! template's driver. At column level only the grouped templates over the
+//! read's own driver decide: a template grouped over another driver leaves
+//! the read scalar, except in a column-level window.
 use std::{
     fs,
     path::PathBuf,
     sync::atomic::{AtomicUsize, Ordering},
 };
-use yamaa_adapters::{file_application, specification_report::Identity};
+use yamaa_adapters::{file_application, issue_rows::Issue, specification_report::Identity};
 use yamaa_core::{domain_entry::Request, json::Value};
 
 struct Fixture(PathBuf);
@@ -29,11 +31,10 @@ impl Fixture {
         fs::write(root.join("ae.csv"), AE).unwrap();
         Self(root)
     }
-    /// The issues `domain` reports, whether preparation or the build fails.
-    fn issues(&self) -> Vec<Value> {
+    fn domain(&self) -> Result<file_application::Domain, Vec<Issue>> {
         let specification = self.0.join("spec.yaml");
         let specification = specification.to_str().unwrap();
-        let issues = match file_application::domain(
+        file_application::domain(
             yamaa_core::project_function::Language::Python,
             Request {
                 specification,
@@ -47,7 +48,18 @@ impl Fixture {
                 specification,
                 base_directory: ".",
             },
-        ) {
+        )
+    }
+    /// `domain` reports nothing and saves exactly `expected` to `output`.
+    fn saved(&self, output: &str, expected: &str) {
+        let mut domain = self.domain().unwrap_or_else(|issues| panic!("{issues:?}"));
+        assert!(domain.issues().is_empty(), "{:?}", domain.issues());
+        assert!(domain.save().unwrap());
+        assert_eq!(fs::read_to_string(self.0.join(output)).unwrap(), expected);
+    }
+    /// The issues `domain` reports, whether preparation or the build fails.
+    fn issues(&self) -> Vec<Value> {
+        let issues = match self.domain() {
             Ok(domain) => domain.issues(),
             Err(issues) => issues,
         };
@@ -152,6 +164,43 @@ fn column_derivation_completed_by_a_later_template_names_its_input() {
             "REQ-0067",
             "columns.VSSTRESN.derivation.source",
             yamaa_adapters::json!({"identifier": "HOME.SYSBP", "row": "home", "dataset": "HOME"}),
+        )
+    );
+}
+
+#[test]
+fn column_read_of_an_ungrouped_driver_ignores_another_drivers_groups() {
+    // The home template averages its readings itself, so only the clinic
+    // template completes VSSTRESN from the column-level derivation. No
+    // template groups the clinic measurements, so each clinic row reads its
+    // own measurement.
+    let fixture = Fixture::new(&vitals(
+        "",
+        ", VSSTRESN: {aggregate: 'MEAN(HOME.SYSBP)'}",
+        ", derivation: CLINIC.SYSBP",
+    ));
+    fixture.saved(
+        "vs.csv",
+        "USUBJID,VSDY,VSCAT,VSSTRESN\nS1,1,CLINIC,132\nS1,15,CLINIC,128\nS1,8,HOME,128\n",
+    );
+}
+
+#[test]
+fn column_window_still_needs_every_grouped_template_to_group_by_its_field() {
+    // A column-level window also orders the rows the home template groups,
+    // which no clinic measurement built.
+    let specification = vitals(
+        "",
+        "",
+        ", derivation: {row_number: {window: {order_by: [CLINIC.SYSBP]}}}",
+    )
+    .replace("type: float", "type: int");
+    assert_eq!(
+        Fixture::new(&specification).issues(),
+        ungrouped_driver_field(
+            "REQ-0107",
+            "columns.VSSTRESN.derivation.row_number.window.order_by[0]",
+            yamaa_adapters::json!({"identifier": "CLINIC.SYSBP", "dataset": "CLINIC"}),
         )
     );
 }

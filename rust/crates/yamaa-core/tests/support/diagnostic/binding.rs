@@ -178,7 +178,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     )
     .unwrap();
     let group = ["SRC.ID"];
-    let groups = [&group[..]];
+    let groups = [("SRC", &group[..])];
     for (phase, condition, requirement, row) in [
         (
             Phase::Row {

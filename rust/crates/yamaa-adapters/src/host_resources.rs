@@ -335,6 +335,21 @@ impl Resources {
             .collect()
     }
     pub fn verify(&self, count: usize) -> Result<(), (String, Failure)> {
+        self.verify_named(count, |snapshot| snapshot.reference.clone())
+    }
+    /// [`Self::verify`], naming a failed snapshot by its logical location:
+    /// the identity [`Self::resolve`] gave the document it holds.
+    pub fn verify_located(&self, count: usize) -> Result<(), (String, Failure)> {
+        self.verify_named(count, |snapshot| {
+            Self::location(&snapshot.declaring, &snapshot.written)
+                .unwrap_or_else(|_| snapshot.reference.clone())
+        })
+    }
+    fn verify_named(
+        &self,
+        count: usize,
+        name: impl Fn(&Snapshot) -> String,
+    ) -> Result<(), (String, Failure)> {
         let snapshots = self
             .snapshots
             .lock()
@@ -350,7 +365,7 @@ impl Resources {
                 snapshot.kind,
                 snapshot.bytes.len(),
             )
-            .map_err(|failure| (snapshot.reference, failure))?;
+            .map_err(|failure| (name(&snapshot), failure))?;
         }
         Ok(())
     }

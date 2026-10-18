@@ -1,16 +1,19 @@
-//! Lower inherited and per-value terminology against one admitted environment.
+//! Lower column and value-level terminology against one admitted environment.
 use super::*;
 use crate::{
-    dataset::{Check, ValueCodelist, Verification},
+    dataset::{Check, ValueCodelist, Verification, WhereClause},
     project_codelist_binding as ct,
     project_terminology::Catalogue,
+    submission_values as values,
 };
 
+/// One binding: the column's own, or an entry's over the rows its where
+/// clause selects.
 struct Declaration<'a> {
     column: usize,
     identifier: &'a str,
     path: String,
-    code: Option<&'a str>,
+    clause: Option<WhereClause>,
 }
 fn present(d: &Document, node: usize, name: &str) -> Option<usize> {
     d.field(node, name)
@@ -25,64 +28,32 @@ pub(super) fn apply(
 ) -> Result<(), PrepareError> {
     let mut declarations = Vec::new();
     for (column, &node) in columns.iter().enumerate() {
+        let name = output.columns()[column].name.as_str();
         if let Some(identifier) =
             present(d, node, "submission").and_then(|id| present(d, id, "codelist"))
         {
             declarations.push(Declaration {
                 column,
                 identifier: text(d, identifier)?,
-                path: format!(
-                    "columns.{}.submission.codelist",
-                    output.columns()[column].name
-                ),
-                code: None,
+                path: format!("columns.{name}.submission.codelist"),
+                clause: None,
             });
         }
-    }
-    let discriminator_name = format!("{}TESTCD", text(d, field(d, d.root(), "domain")?)?);
-    let discriminator = output
-        .columns()
-        .iter()
-        .position(|c| c.name == discriminator_name);
-    if let Some(rows) = present(d, d.root(), "rows") {
-        for &row in sequence(d, rows)? {
-            let Some(submission) = present(d, row, "submission") else {
+        for entry in values::entries(d, node) {
+            let Some(identifier) = present(d, entry.node, "codelist") else {
                 continue;
             };
-            let code = present(d, row, "derivations")
-                .and_then(|id| present(d, id, &discriminator_name))
-                .and_then(|id| present(d, id, "value"))
-                .and_then(|id| present(d, id, "literal"))
-                .and_then(|id| {
-                    if let N::Text(text) = &d.nodes()[id] {
-                        Some(text.as_str())
-                    } else {
-                        None
-                    }
-                });
-            // Submission admission owns the absent/dynamic discriminator and
-            // unknown-column findings. No partially selected scope is executable.
-            let (Some(code), Some(_)) = (code, discriminator) else {
+            // Value-level admission owns a clause no row could be selected by;
+            // no partially selected scope is executable.
+            let Some(clause) = super::value_level::clause(&entry, output, column) else {
                 continue;
             };
-            for &(name, metadata) in mapping(d, submission)? {
-                let name = text(d, name)?;
-                let Some(column) = output.columns().iter().position(|c| c.name == name) else {
-                    continue;
-                };
-                let Some(identifier) = present(d, metadata, "codelist") else {
-                    continue;
-                };
-                declarations.push(Declaration {
-                    column,
-                    identifier: text(d, identifier)?,
-                    path: format!(
-                        "rows.{}.submission.{name}.codelist",
-                        text(d, field(d, row, "id")?)?
-                    ),
-                    code: Some(code),
-                });
-            }
+            declarations.push(Declaration {
+                column,
+                identifier: text(d, identifier)?,
+                path: format!("{}.codelist", values::path(name, entry.id)),
+                clause: Some(clause),
+            });
         }
     }
     // A column-level list of items states the column's value set, so an
@@ -107,7 +78,7 @@ pub(super) fn apply(
             kind: output.columns()[declaration.column].kind,
             path: ct::Path::Authored(&declaration.path),
             codelist: declaration.identifier,
-            allowed_values: if declaration.code.is_none() {
+            allowed_values: if declaration.clause.is_none() {
                 allowed[declaration.column].as_slice()
             } else {
                 &[]
@@ -123,11 +94,13 @@ pub(super) fn apply(
         )
     })?;
     for (column, group) in groups.iter_mut().enumerate() {
+        // The rows of every entry declaring a codelist leave the column's
+        // binding, whether or not that codelist lists items.
         let overrides = declarations
             .iter()
-            .filter(|d| d.column == column)
-            .filter_map(|d| d.code)
-            .collect::<std::collections::BTreeSet<_>>();
+            .filter(|declaration| declaration.column == column)
+            .filter_map(|declaration| declaration.clause.clone())
+            .collect::<Vec<_>>();
         if overrides.is_empty() {
             for check in checks.iter().filter(|c| c.column == column) {
                 group.append_codelist(check.verification.clone());
@@ -150,19 +123,16 @@ pub(super) fn apply(
                     lists.push(ValueCodelist {
                         id: id.clone(),
                         values: values.clone(),
-                        codes: Vec::new(),
+                        clauses: Vec::new(),
                         default: false,
                         path: declaration.path.clone(),
                     });
                     lists.len() - 1
                 }
             };
-            match declaration.code {
+            match &declaration.clause {
                 None => lists[index].default = true,
-                Some(code) if !lists[index].codes.iter().any(|prior| prior == code) => {
-                    lists[index].codes.push(code.into())
-                }
-                _ => (),
+                Some(clause) => lists[index].clauses.push(clause.clone()),
             }
         }
         if !lists.is_empty() {
@@ -172,8 +142,7 @@ pub(super) fn apply(
                     output.columns()[column].name
                 ),
                 check: Check::ValueCodelists {
-                    discriminator: discriminator.expect("admitted literal owner"),
-                    overrides: overrides.into_iter().map(String::from).collect(),
+                    overrides,
                     bindings: lists,
                 },
             });

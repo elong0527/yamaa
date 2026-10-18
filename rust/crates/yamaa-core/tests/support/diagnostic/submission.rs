@@ -191,37 +191,38 @@ pub(crate) fn reached_finding(
     assert!(finding.context.contains_key("detail"));
     reached.insert(code);
 }
-pub(crate) fn row(
+/// One value-level entry selecting the rows whose `where_column` holds one of
+/// `values`, with its own metadata fields.
+pub(crate) fn entry(
     id: &str,
-    code: &str,
-    field: &'static str,
-    metadata: Tree,
-    literal: bool,
+    where_column: &str,
+    values: &[&str],
+    metadata: Vec<(&'static str, Tree)>,
 ) -> Tree {
-    Tree::map(vec![
+    let mut fields = vec![
         ("id", Tree::text(id)),
         (
-            "derivations",
+            "where",
             Tree::map(vec![(
-                "D0TESTCD",
-                Tree::map(vec![(
-                    if literal { "literal" } else { "source" },
-                    Tree::text(code),
-                )]),
+                where_column,
+                Tree::list(values.iter().copied().map(Tree::text).collect()),
             )]),
         ),
-        ("submission", Tree::map(vec![(field, metadata)])),
-    ])
+    ];
+    fields.extend(metadata);
+    Tree::map(fields)
 }
-pub(crate) fn value_spec() -> Tree {
+/// `VALUE` carries the given entries over the rows `D0TESTCD`, a literal
+/// `X`, selects.
+pub(crate) fn value_spec(entries: Vec<Tree>) -> Tree {
     let mut spec = specification();
-    *spec.at(&["columns"]) = Tree::list(vec![column("VALUE"), column("D0TESTCD")]);
+    let mut value = column("VALUE");
+    value
+        .at(&["submission"])
+        .set(&["value_level"], Tree::list(entries));
+    *spec.at(&["columns"]) = Tree::list(vec![value, column("D0TESTCD")]);
     *spec.at(&["output", "columns"]) =
         Tree::list(vec![Tree::text("VALUE"), Tree::text("D0TESTCD")]);
-    spec.set(
-        &["rows"],
-        Tree::list(vec![row("row 1", "CODE", "VALUE", Tree::map(vec![]), true)]),
-    );
     spec
 }
 pub(crate) struct Held {
@@ -685,92 +686,61 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     assert_eq!(findings.len(), 1, "{findings:?}");
     assert_eq!(findings[0].code, SubmissionCdiscAliasMissing);
     assert_eq!(findings[0].path, "codelists.LIST");
-    for (code, condition, requirement, change) in [
+    // A valid entry composes; each static fault and a refuted entry origin has
+    // its own registered cause.
+    let valid = value_spec(vec![entry("X", "D0TESTCD", &["X"], vec![])]);
+    let study = one(project(), valid, &empty).unwrap();
+    assert_eq!(study.datasets()[0].columns()[0].values()[0].id(), "X");
+    let derived = || {
+        vec![
+            (
+                "origin",
+                Tree::map(vec![
+                    ("type", Tree::text("Derived")),
+                    ("source", Tree::text("Sponsor")),
+                ]),
+            ),
+            ("method", Tree::text("Independent algorithm")),
+        ]
+    };
+    for (code, condition, requirement, entries, path) in [
         (
-            SubmissionValueTestcdMissing,
-            "value_metadata_requires_testcd",
-            "REQ-1163",
-            0,
+            SubmissionValueWhereInvalid,
+            "value_level_where_invalid",
+            "SUB-12",
+            vec![entry("X", "BOGUS", &["X"], vec![])],
+            "sdtm.specs[0].columns.VALUE.submission.value_level.X.where.BOGUS",
         ),
         (
-            SubmissionValueTestcdDynamic,
-            "value_metadata_requires_literal_testcd",
-            "REQ-1164",
-            1,
+            SubmissionValueDuplicateId,
+            "duplicate_identifier",
+            "SUB-12",
+            vec![
+                entry("X", "D0TESTCD", &["X"], vec![]),
+                entry("X", "D0TESTCD", &["Y"], vec![]),
+            ],
+            "sdtm.specs[0].columns.VALUE.submission.value_level.X.id",
         ),
         (
-            SubmissionValueColumnUnknown,
-            "value_metadata_unknown_column",
-            "REQ-1165",
-            2,
+            SubmissionValueOverlap,
+            "value_level_overlap",
+            "SUB-12",
+            vec![
+                entry("X", "D0TESTCD", &["X", "Y"], vec![]),
+                entry("Y", "D0TESTCD", &["Y"], vec![]),
+            ],
+            "sdtm.specs[0].columns.VALUE.submission.value_level.Y.where",
         ),
-        (
-            SubmissionValueColumnNotOutput,
-            "value_metadata_not_output_column",
-            "REQ-1166",
-            3,
-        ),
-        (
-            SubmissionValueMetadataConflict,
-            "conflicting_value_metadata",
-            "REQ-1167",
-            4,
-        ),
+        // A literal value refutes Derived on the rows the entry selects.
         (
             SubmissionValueOriginRefuted,
             "refuted_value_origin",
-            "REQ-1168",
-            5,
+            "SUB-13",
+            vec![entry("X", "D0TESTCD", &["X"], derived())],
+            "sdtm.specs[0].columns.VALUE.submission.value_level.X",
         ),
     ] {
-        let mut spec = value_spec();
-        match change {
-            0 => *spec.at(&["columns"]) = Tree::list(vec![column("VALUE")]),
-            1 => {
-                *spec.at(&["rows", "0"]) =
-                    row("row 1", "SOURCE.CODE", "VALUE", Tree::map(vec![]), false)
-            }
-            2 => *spec.at(&["rows", "0"]) = row("row 1", "CODE", "BOGUS", Tree::map(vec![]), true),
-            3 => *spec.at(&["output", "columns"]) = Tree::list(vec![Tree::text("D0TESTCD")]),
-            4 => {
-                *spec.at(&["rows"]) = Tree::list(vec![
-                    row(
-                        "row 1",
-                        "CODE",
-                        "VALUE",
-                        Tree::map(vec![("length", Tree::integer("4"))]),
-                        true,
-                    ),
-                    row(
-                        "row 2",
-                        "CODE",
-                        "VALUE",
-                        Tree::map(vec![("length", Tree::integer("5"))]),
-                        true,
-                    ),
-                ])
-            }
-            5 => {
-                *spec.at(&["rows", "0"]) = row(
-                    "row 1",
-                    "CODE",
-                    "VALUE",
-                    Tree::map(vec![
-                        (
-                            "origin",
-                            Tree::map(vec![
-                                ("type", Tree::text("Derived")),
-                                ("source", Tree::text("Sponsor")),
-                            ]),
-                        ),
-                        ("method", Tree::text("Independent algorithm")),
-                    ]),
-                    true,
-                )
-            }
-            _ => unreachable!(),
-        }
-        let findings = one(project(), spec, &empty).unwrap_err();
+        let findings = one(project(), value_spec(entries), &empty).unwrap_err();
         reached_finding(
             &mut reached,
             &findings,
@@ -779,12 +749,12 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             condition,
             requirement,
         );
-        if change == 5 {
-            let finding = findings.iter().find(|f| f.code == code).unwrap();
+        let finding = findings.iter().find(|f| f.code == code).unwrap();
+        assert_eq!(finding.path, path);
+        if code == SubmissionValueOriginRefuted {
             for (key, value) in [
                 ("column", "VALUE"),
-                ("row", "row 1"),
-                ("testcd", "CODE"),
+                ("entry", "X"),
                 ("derivation_kind", "literal"),
                 ("origin_type", "Derived"),
             ] {
@@ -792,6 +762,14 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             }
         }
     }
+    // A construction that derives the where column outside the entry's values
+    // produces none of its rows, so it refutes nothing.
+    assert!(one(
+        project(),
+        value_spec(vec![entry("Y", "D0TESTCD", &["Y"], derived())]),
+        &empty
+    )
+    .is_ok());
     // A Predecessor that keeps its predecessor's name keeps its label, wherever
     // another section of the study declares that column.
     let mut spec = specification();

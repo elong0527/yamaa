@@ -82,6 +82,10 @@ pub struct FileSpecification {
     resources: Resources,
     /// Inputs a project run may serve from artifacts it already built.
     linked: Vec<crate::file_resources::LinkedInput>,
+    /// The entry path as written and the producing specifications its
+    /// `schema` links name: the declarations a run-start refusal names.
+    entry: String,
+    links: Vec<crate::specification_source::LinkedSpecification>,
 }
 /// A plain compilation refusal still owns the original native snapshots.
 pub struct RejectedPlain {
@@ -136,6 +140,8 @@ impl FileSpecification {
             run,
             resources,
             linked,
+            entry: written.into(),
+            links,
         })
     }
     pub(crate) fn from_workflow(
@@ -165,6 +171,8 @@ impl FileSpecification {
                 run,
                 resources,
                 linked,
+                entry,
+                links,
             }),
             Err(error) => Err(Box::new(RejectedPlain {
                 error: Error::Compile(error),
@@ -192,6 +200,28 @@ impl FileSpecification {
         resolver: Option<Arc<dyn crate::host_resources::Resolver>>,
     ) -> RunScope {
         self.resources.run_scope(resolver)
+    }
+    /// Verify every held metadata snapshot at run start, before any study
+    /// read: the entry, its layers and dictionaries, and the producing
+    /// specifications its `schema` links name. A changed or missing file
+    /// refuses the run naming its declaration; see
+    /// [`crate::file_application::verify_held`].
+    pub fn verify_metadata(&self) -> Result<(), crate::file_application::Failure> {
+        crate::file_application::verify_held(&self.resources, |identity, failure| {
+            let document = self.run.document();
+            crate::changed_metadata::specification(
+                "specification",
+                &self.entry,
+                document,
+                identity,
+                failure,
+            )
+            .or_else(|| crate::changed_metadata::links(document, &self.links, identity, failure))
+        })
+    }
+    /// Bounded aliases of the held metadata bytes; no file access or replay.
+    pub fn retained_sources(&self) -> crate::file_resources::RetainedSources {
+        self.resources.retain_sources()
     }
     pub(crate) fn publication_target(
         &self,

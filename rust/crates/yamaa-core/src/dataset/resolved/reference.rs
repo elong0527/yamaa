@@ -5,7 +5,7 @@
 //! `execution/intermediates`, step for step, over the bound plan alone. The
 //! resolved schedule must equal it until the executor over the resolved plan
 //! replaces both (#2843).
-use crate::dataset::{read_requires_window, window_stages, Check, DatasetPlan, RowMode};
+use crate::dataset::{read_requires_window, window_stages, DatasetPlan, RowMode};
 
 /// One step in the bound plan's own coordinates.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -128,18 +128,14 @@ fn check_columns(
             .iter()
             .find(|group| group.column == *next)
         {
-            if group
-                .checks
-                .iter()
-                .any(|verification| match &verification.check {
-                    Check::ValueCodelists { discriminator, .. }
-                    | Check::ValueMaxLength { discriminator, .. } => !completed[*discriminator],
-                    Check::Inventory {
-                        scope: Some(scope), ..
-                    } => !completed[scope.discriminator],
-                    _ => false,
-                })
-            {
+            if group.checks.iter().any(|verification| {
+                verification
+                    .check
+                    .clauses()
+                    .iter()
+                    .flat_map(|clause| clause.columns())
+                    .any(|column| !completed[column])
+            }) {
                 return;
             }
             for check in 0..group.checks.len() {
