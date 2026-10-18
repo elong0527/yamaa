@@ -1,8 +1,9 @@
-"""Installed graph log capabilities and complete retained publication witnesses."""
+"""Installed producer-graph run reports and complete retained publication witnesses."""
 
 import builtins
 import copy
 import gc
+import io
 import json
 import os
 import shutil
@@ -19,19 +20,78 @@ import yamaa
 
 TRUTH = load_truth(__file__, "producer-logs")
 
-ROOT = Path(__file__).with_name("project-original")
 SPECIFICATION = Path(__file__).with_name("specification-original")
 IDS = [int(value) for value in TRUTH["ids_decimal"]]
 CSV = TRUTH["input_csv"].encode("utf-8")
 KEYS = TRUTH["offending_keys_json"]
+ROOT_ID = "\u00e9\U0001d11e"
+HEADER = (
+    "ARTIFACT,KIND,SPEC_PATH,NAME,ID,TARGET,RULE,SEVERITY,OUTCOME,CONDITION,"
+    "COUNT,TOTAL,KEYS,DETAILS\n"
+)
+# The inputs each node reports, in declaration order, as (dataset, declared
+# path, declared schema link). A linked input reads its producer's held
+# artifact, which holds the same IDs and so the same bytes as the raw source.
+INPUTS = {
+    "producer": [("SRC", "input.csv", None)],
+    "left": [("P", "generated/producer.csv", "producer.yaml")],
+    "right": [("P", "generated/producer.csv", "producer.yaml")],
+    "root": [
+        ("A", "generated/producer.csv", "producer.yaml"),
+        ("B", "generated/producer.csv", "./producer.yaml"),
+    ],
+    "diamond root": [
+        ("A", "generated/left.csv", "left.yaml"),
+        ("B", "generated/right.csv", "right.yaml"),
+    ],
+}
 
 
-def golden(name, warning=False, severity="warning"):
-    """Read complete independent CSV truth without a second rendering algorithm."""
-    records = TRUTH["golden_csv"][name]
-    return (
-        records["warning"] if warning else records["verification"][severity]
-    ).encode("utf-8")
+def cell(text):
+    """One CSV field holding `text`, which carries quotes."""
+    return '"' + text.replace('"', '""') + '"'
+
+
+def golden(name, *, diamond=False, fatal=None):
+    """The authored run report of one graph node (REQ-0392, REQ-0393).
+
+    Its rows are the run; each input with the file facts of REQ-1176; the
+    base row template, driven by the first input; the ID column, for a
+    successful run only; and the range check with every offending key.
+    """
+    failed = name == fatal
+    count = len(IDS)
+    inputs = INPUTS["diamond root" if diamond and name == "root" else name]
+    rows = [
+        "run,output,,,,,,failed,range_failed,,,,{}"
+        if failed
+        else f"run,output,,,,,,succeeded,,{count},,,{{}}"
+    ]
+    for dataset, path, schema in inputs:
+        link = "" if schema is None else f',"schema":"{schema}"'
+        facts = f'{{"bytes":{len(CSV)},"path":"{path}","profile":"csv"{link}}}'
+        rows.append(f"input,input.{dataset},{dataset},,,,,,,{count},,,{cell(facts)}")
+    rows.append(f"rows,base,{inputs[0][0]},,,,,,,{count},{count},,{{}}")
+    if not failed:
+        rows.append(f"column,columns.ID,ID,,,,,,,0,{count},,{{}}")
+    identifier = ROOT_ID if name == "root" else name + "-range"
+    severity = "error" if failed else "warning"
+    rows.append(
+        f"check,columns.ID.verifications[0].range,range,{identifier},ID,REQ-0377,"
+        f"{severity},violated,range_failed,{count},{count},{cell(KEYS)},"
+        + cell('{"column":"ID"}')
+    )
+    artifact = f"generated/{name}.csv"
+    return (HEADER + "".join(f"{artifact},{row}\n" for row in rows)).encode("utf-8")
+
+
+def frame(report):
+    """Read report bytes with the run report column types (REQ-0392)."""
+    return pl.read_csv(
+        io.BytesIO(report),
+        schema_overrides={"COUNT": pl.Int64, "TOTAL": pl.Int64},
+        infer_schema=False,
+    )
 
 
 class ProducerLogs(unittest.TestCase):
@@ -39,12 +99,8 @@ class ProducerLogs(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.work = Path(self.temporary.name).resolve()
+        # The retired yamaa-project.yaml marker is never read.
         self.write("yamaa-project.yaml", "version: '1.0'\n")
-        self.write(
-            "environment.yaml",
-            "schema_version: '1.0'\nlanguage: python\nlock: uv.lock\nfunctions: {}\n",
-        )
-        self.write("uv.lock", (ROOT / "schema-functions/python/uv.lock").read_bytes())
         destination = os.environ.get("YAMAA_PUBLIC_REPORT_DIR")
         self.evidence = (
             Path(destination) / "producer-graph-logs/python" / self._testMethodName
@@ -105,10 +161,10 @@ class ProducerLogs(unittest.TestCase):
                 )
             intermediate = TRUTH["root_intermediate_yaml"] if name == "root" else ""
             severity = "error" if name == fatal else "warning"
-            warning = (
-                "blocked/root-warnings.csv"
+            report = (
+                "blocked/root-report.csv"
                 if blocked and name == "root"
-                else f"generated/{name}-warnings.csv"
+                else f"generated/{name}-report.csv"
             )
             identifier = r'"\u00e9\U0001d11e"' if name == "root" else name + "-range"
             # The root's ID reads SHARED through first_available so pruning
@@ -126,24 +182,21 @@ class ProducerLogs(unittest.TestCase):
                 f"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\nbase: {base}\ninput: {source}\n{intermediate}columns:\n"
                 f"  - name: ID\n    type: int\n    label: Identifier\n    derivation: {derivation}\n"
                 f"    verifications: [{{range: {{max: 0, severity: {severity}, id: {identifier}}}}}]\n"
-                f"output: {{path: generated/{name}.csv, columns: [ID], verification_log: generated/{name}-checks.csv, warning_log: {warning}}}\n",
+                f"output: {{path: generated/{name}.csv, columns: [ID], report: {report}}}\n",
             )
         self.paths = [
             path
             for name in self.names
             for path in (
-                f"generated/{name}-checks.csv",
-                "blocked/root-warnings.csv"
+                "blocked/root-report.csv"
                 if blocked and name == "root"
-                else f"generated/{name}-warnings.csv",
+                else f"generated/{name}-report.csv",
                 f"generated/{name}.csv",
             )
         ]
 
     def build(self):
-        return yamaa.domain(
-            self.work / "root.yaml", environment=self.work / "environment.yaml"
-        )
+        return yamaa.spec(self.work / "root.yaml").run()
 
     def remove_inputs(self):
         for name in ["input.csv", *(name + ".yaml" for name in self.names)]:
@@ -172,7 +225,9 @@ class ProducerLogs(unittest.TestCase):
             if key not in {"artifacts", "publication"}
         }
 
-    def test_alias_and_diamond_logs_use_actual_owned_views_and_repeat_held_bytes(self):
+    def test_alias_and_diamond_reports_use_actual_owned_views_and_repeat_held_bytes(
+        self,
+    ):
         for diamond in (False, True):
             with self.subTest(diamond=diamond):
                 self.fixture(diamond=diamond)
@@ -182,15 +237,16 @@ class ProducerLogs(unittest.TestCase):
                 self.assertEqual(
                     result.output.to_dicts(), [{"ID": value} for value in IDS]
                 )
-                verification, warning = result.verification_log, result.warning_log
-                self.assertEqual(
-                    verification["VERIFICATION_ID"].to_list(), ["\u00e9\U0001d11e"]
-                )
-                self.assertEqual(verification["EVALUATED_COUNT"].to_list(), [8])
-                self.assertEqual(warning["FAILURE_COUNT"].to_list(), [8])
-                self.assertEqual(warning["OFFENDING_KEYS"].to_list(), [KEYS])
-                self.assertEqual(warning.schema["FAILURE_COUNT"], pl.Int64)
-                self.assertEqual(verification.schema["EVALUATED_COUNT"], pl.Int64)
+                # The graph's result exposes the entry specification's report.
+                report = result.report
+                self.assertTrue(report.equals(frame(golden("root", diamond=diamond))))
+                check = report.filter(pl.col("KIND") == "check")
+                self.assertEqual(check["ID"].to_list(), [ROOT_ID])
+                self.assertEqual(check["TOTAL"].to_list(), [8])
+                self.assertEqual(check["COUNT"].to_list(), [8])
+                self.assertEqual(check["KEYS"].to_list(), [KEYS])
+                self.assertEqual(report.schema["COUNT"], pl.Int64)
+                self.assertEqual(report.schema["TOTAL"], pl.Int64)
                 self.assertTrue(
                     all(not (self.work / path).exists() for path in self.paths)
                 )
@@ -203,25 +259,30 @@ class ProducerLogs(unittest.TestCase):
                     (self.work / (name + ".yaml")).as_posix() for name in self.names
                 }
                 self.assertEqual(owners, expected_owners)
-                verification.replace_column(0, pl.Series("REPORT_VERSION", ["mutated"]))
-                self.assertNotEqual(
-                    result.verification_log["REPORT_VERSION"].to_list(), ["mutated"]
+                report.replace_column(0, pl.Series("ARTIFACT", ["mutated"] * 6))
+                self.assertEqual(
+                    result.report["ARTIFACT"].to_list(), ["generated/root.csv"] * 6
                 )
                 self.remove_inputs()
                 gc.collect()
                 held = None
                 for attempt in (1, 2):
-                    self.assertTrue(result.save())
+                    result.save()
                     report = self.retain(result, f"save-{diamond}-{attempt}")
                     self.assertEqual(self.execution(report), self.execution(before))
                     entries = report["publication"]["entered"]
                     order = TRUTH["diamond_names"] if diamond else ["producer", "root"]
+                    # Each node publishes its report, then its primary artifact.
                     expected = [
                         f"generated/{name}{suffix}.csv"
                         for name in order
-                        for suffix in ("-checks", "-warnings", "")
+                        for suffix in ("-report", "")
                     ]
                     self.assertEqual([entry["path"] for entry in entries], expected)
+                    self.assertEqual(
+                        [entry["field"] for entry in entries],
+                        ["report", "path"] * len(order),
+                    )
                     self.assertTrue(all(entry["published"] for entry in entries))
                     self.assertEqual(len(report["artifacts"]), len(expected))
                     actual = {
@@ -236,7 +297,7 @@ class ProducerLogs(unittest.TestCase):
                         else:
                             name = Path(path).name.split("-")[0]
                             self.assertEqual(
-                                actual[path], golden(name, "-warnings" in path)
+                                actual[path], golden(name, diamond=diamond)
                             )
                     if held is not None:
                         self.assertEqual(actual, held)
@@ -244,13 +305,19 @@ class ProducerLogs(unittest.TestCase):
                 for path in self.paths:
                     (self.work / path).unlink()
 
-    def test_failed_leaf_and_dependent_publish_only_completed_verification_prefix(self):
+    def test_failed_leaf_and_dependent_save_only_the_reports_of_nodes_that_ran(self):
         for fatal in ("producer", "root"):
             self.fixture(fatal=fatal)
             result = self.build()
             self.assertIsNone(result.output)
-            self.assertIsNone(result.warning_log)
-            self.assertEqual(result.verification_log is None, fatal == "producer")
+            # A failed producer stops the graph: the entry never runs and so
+            # has no report (REQ-1330).
+            if fatal == "producer":
+                self.assertIsNone(result.report)
+            else:
+                self.assertTrue(
+                    result.report.equals(frame(golden("root", fatal="root")))
+                )
             issues = result.issues.clone()
             self.assertEqual(issues["condition"].to_list(), ["range_failed"])
             before = self.retain(result, "failed-build-" + fatal)
@@ -258,27 +325,25 @@ class ProducerLogs(unittest.TestCase):
                 self.write(path, b"earlier sentinel")
             self.remove_inputs()
             for attempt in (1, 2):
-                with self.assertRaises(yamaa.DomainError):
+                with self.assertRaises(yamaa.Error) as raised:
                     result.save()
+                self.assertTrue(raised.exception.issues.equals(issues))
                 report = self.retain(result, f"failed-save-{fatal}-{attempt}")
                 self.assertTrue(result.issues.equals(issues))
                 self.assertEqual(self.execution(report), self.execution(before))
                 self.assertEqual(report["publication"]["mode"], "diagnostic")
                 self.assertEqual(
                     [entry["field"] for entry in report["publication"]["entered"]],
-                    ["verification_log"] * (1 if fatal == "producer" else 2),
+                    ["report"] * (1 if fatal == "producer" else 2),
                 )
                 for path in self.paths:
-                    expected_log = path.endswith("-checks.csv") and (
+                    expected_report = path.endswith("-report.csv") and (
                         fatal == "root" or "producer" in path
                     )
-                    if expected_log:
+                    if expected_report:
                         name = Path(path).name.split("-")[0]
                         self.assertEqual(
-                            (self.work / path).read_bytes(),
-                            golden(
-                                name, severity="error" if name == fatal else "warning"
-                            ),
+                            (self.work / path).read_bytes(), golden(name, fatal=fatal)
                         )
                     else:
                         self.assertEqual(
@@ -293,18 +358,21 @@ class ProducerLogs(unittest.TestCase):
         before = self.retain(result, "parent-build")
         self.assertFalse((self.work / "generated").exists())
         self.remove_inputs()
-        self.assertFalse(result.save())
+        with self.assertRaises(yamaa.Error):
+            result.save()
         refused = self.retain(result, "parent-refused")
         self.assertEqual(refused["publication"]["entered"], [])
         self.assertEqual(self.execution(refused), self.execution(before))
         (self.work / "generated").mkdir()
-        self.assertTrue(result.save())
+        result.save()
         self.assertTrue(result.issues.is_empty())
         saved = self.retain(result, "parent-retry")
-        self.assertEqual(len(saved["artifacts"]), 6)
+        self.assertEqual(len(saved["artifacts"]), 4)
         self.assertEqual(self.execution(saved), self.execution(before))
 
-    def test_unchanged_original_log_document_and_goldens_run_as_shared_producer(self):
+    def test_unchanged_original_report_document_and_goldens_run_as_shared_producer(
+        self,
+    ):
         source = SPECIFICATION / "cases/schema-verification-log"
         original = (source / "spec.yaml").read_bytes()
         self.write("producer.yaml", original)
@@ -320,7 +388,7 @@ class ProducerLogs(unittest.TestCase):
             .replace("DM.", "A.")
         )
         self.write("root.yaml", consumer)
-        self.paths = TRUTH["verification_producer_artifacts"]
+        self.paths = ["adsl-checks.csv", "adsl.csv", "root-checks.csv", "root.csv"]
         result = self.build()
         self.assertTrue(result.issues.is_empty(), result.issues)
         truth = json.loads(
@@ -355,16 +423,30 @@ class ProducerLogs(unittest.TestCase):
             (self.work / name).unlink()
             self.assertFalse((self.work / name).exists())
         expected = {
-            name: (source / "expected" / name).read_bytes() for name in self.paths[:3]
+            name: (source / "expected" / name).read_bytes() for name in self.paths[:2]
         }
-        expected.update(
-            {
-                name.replace("adsl", "root"): content.replace(b"adsl.csv", b"root.csv")
-                for name, content in tuple(expected.items())
-            }
+        # The consumer reports its own artifact and reads only A, the held
+        # producer artifact, which pruning keeps; B is never read (REQ-0638).
+        # A linked input names its producer (REQ-1176).
+        produced = expected["adsl.csv"]
+        root_report = (
+            expected["adsl-checks.csv"]
+            .replace(b"adsl.csv,", b"root.csv,")
+            .replace(
+                b'input,input.DM,DM,,,,,,,3,,,"{""bytes"":66,""path"":""input/dm.csv"",'
+                b'""profile"":""csv""}"',
+                b'input,input.A,A,,,,,,,3,,,"{""bytes"":'
+                + str(len(produced)).encode()
+                + b',""path"":""adsl.csv"",""profile"":""csv"",""schema"":'
+                b'""producer.yaml""}"',
+            )
+            .replace(b"rows,base,DM,", b"rows,base,A,")
         )
+        self.assertIn(b"root.csv,input,input.A,A,", root_report)
+        expected.update({"root-checks.csv": root_report, "root.csv": produced})
+        self.assertTrue(result.report.equals(frame(root_report)))
         for attempt in (1, 2):
-            self.assertTrue(result.save())
+            result.save()
             report = self.retain(result, f"original-save-{attempt}")
             self.assertEqual(self.execution(report), self.execution(before))
             self.assertEqual(
@@ -373,20 +455,20 @@ class ProducerLogs(unittest.TestCase):
             )
             self.assertEqual(
                 [entry["published"] for entry in report["publication"]["entered"]],
-                [True] * 6,
+                [True] * 4,
             )
             for name, content in expected.items():
                 self.assertEqual((self.work / name).read_bytes(), content)
 
-    def test_lexical_collisions_and_invalid_sidecars_precede_study_access(self):
+    def test_lexical_collisions_and_invalid_reports_precede_study_access(self):
         for replacement in (
             "generated/../generated/producer.csv",
-            "generated/root-checks.arrow",
+            "generated/root-report.arrow",
         ):
             self.fixture()
             entry = self.work / "root.yaml"
             entry.write_text(
-                entry.read_text().replace("generated/root-checks.csv", replacement)
+                entry.read_text().replace("generated/root-report.csv", replacement)
             )
             (self.work / "input.csv").unlink()
             result = self.build()
@@ -398,7 +480,7 @@ class ProducerLogs(unittest.TestCase):
                     for value in result.issues["condition"].to_list()
                 )
             )
-            with self.assertRaises(yamaa.DomainError):
+            with self.assertRaises(yamaa.Error):
                 result.save()
             self.assertTrue(all(not (self.work / path).exists() for path in self.paths))
 
@@ -415,13 +497,16 @@ class ProducerLogs(unittest.TestCase):
         (self.work / "generated/case-probe").unlink()
         if sensitive:
             self.skipTest("fixture directory is case-sensitive")
-        for name in ("generated/PRODUCER-checks.csv", "GENERATED/producer-checks.csv"):
+        for name in (
+            "generated/PRODUCER-report.csv",
+            "GENERATED/producer-report.csv",
+        ):
             self.fixture()
             entry = self.work / "root.yaml"
             entry.write_text(
-                entry.read_text().replace("generated/root-checks.csv", name)
+                entry.read_text().replace("generated/root-report.csv", name)
             )
-            self.assertFalse((self.work / "generated/producer-checks.csv").exists())
+            self.assertFalse((self.work / "generated/producer-report.csv").exists())
             if name.startswith("GENERATED"):
                 self.assertTrue(
                     (self.work / "GENERATED").samefile(self.work / "generated")
@@ -430,11 +515,12 @@ class ProducerLogs(unittest.TestCase):
             if os.name == "nt":
                 self.assertIsNone(result.output)
                 self.assertFalse(result.issues.is_empty())
-                with self.assertRaises(yamaa.DomainError):
+                with self.assertRaises(yamaa.Error):
                     result.save()
             else:
                 self.assertIsNotNone(result.output)
-                self.assertFalse(result.save())
+                with self.assertRaises(yamaa.Error):
+                    result.save()
                 phase = (
                     "case-parent-alias"
                     if name.startswith("GENERATED")
@@ -442,16 +528,14 @@ class ProducerLogs(unittest.TestCase):
                 )
                 report = self.retain(result, phase)
                 self.assertEqual(report["publication"]["entered"], [])
-                self.assertEqual(
-                    report["publication"]["error"]["field"], "verification_log"
-                )
+                self.assertEqual(report["publication"]["error"]["field"], "report")
             self.assertEqual(list((self.work / "generated").iterdir()), [])
 
     @unittest.skipUnless(os.name == "posix", "Unix denied-write capability witness")
-    def test_actual_late_warning_publication_failure_keeps_prefix_and_retries(self):
+    def test_actual_late_report_publication_failure_keeps_prefix_and_retries(self):
         self.fixture(blocked=True)
         (self.work / "generated").mkdir()
-        self.write("blocked/root-warnings.csv", b"older warning")
+        self.write("blocked/root-report.csv", b"older report")
         self.write("generated/root.csv", b"older primary")
         result = self.build()
         before = self.retain(result, "late-build")
@@ -470,14 +554,15 @@ class ProducerLogs(unittest.TestCase):
                 "host cannot deny writes; failure witness skipped\n"
             )
             self.skipTest("host permissions cannot deny this write")
-        self.assertFalse(result.save())
+        with self.assertRaises(yamaa.Error):
+            result.save()
         failed = self.retain(result, "late-failure")
         self.assertEqual(self.execution(failed), self.execution(before))
         self.assertEqual(
             [entry["published"] for entry in failed["publication"]["entered"]],
-            [True, True, True, True, False],
+            [True, True, False],
         )
-        self.assertEqual(failed["publication"]["error"]["field"], "warning_log")
+        self.assertEqual(failed["publication"]["error"]["field"], "report")
         normative = result.issues.filter(pl.col("requirement") == "REQ-0764")
         self.assertEqual(normative.height, 1)
         context = json.loads(normative["context"][0])
@@ -488,33 +573,29 @@ class ProducerLogs(unittest.TestCase):
                 context["entered"],
                 context["completed"],
             ),
-            (0, "blocked/root-warnings.csv", 5, 4),
+            (0, "blocked/root-report.csv", 3, 2),
         )
-        self.assertEqual(len(failed["artifacts"]), 4)
+        self.assertEqual(len(failed["artifacts"]), 2)
         self.assertEqual((self.work / "generated/producer.csv").read_bytes(), CSV)
         self.assertEqual(
-            (self.work / "generated/producer-checks.csv").read_bytes(),
+            (self.work / "generated/producer-report.csv").read_bytes(),
             golden("producer"),
-        )
-        self.assertEqual(
-            (self.work / "generated/producer-warnings.csv").read_bytes(),
-            golden("producer", True),
-        )
-        self.assertEqual(
-            (self.work / "generated/root-checks.csv").read_bytes(), golden("root")
         )
         self.assertEqual(
             (self.work / "generated/root.csv").read_bytes(), b"older primary"
         )
         self.assertEqual(
-            (self.work / "blocked/root-warnings.csv").read_bytes(), b"older warning"
+            (self.work / "blocked/root-report.csv").read_bytes(), b"older report"
         )
         blocked.chmod(0o700)
-        self.assertTrue(result.save())
+        result.save()
         self.assertTrue(result.issues.is_empty())
         retry = self.retain(result, "late-retry")
         self.assertEqual(self.execution(retry), self.execution(before))
-        self.assertEqual(len(retry["artifacts"]), 6)
+        self.assertEqual(len(retry["artifacts"]), 4)
+        self.assertEqual(
+            (self.work / "blocked/root-report.csv").read_bytes(), golden("root")
+        )
 
 
 if __name__ == "__main__":

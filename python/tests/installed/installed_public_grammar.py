@@ -1,4 +1,4 @@
-"""Authored shared grammar decisions through the installed Python domain facade."""
+"""Authored shared grammar decisions through the installed Python spec run."""
 
 import csv
 from pathlib import Path
@@ -17,7 +17,7 @@ def main():
     with (root / "cases.tsv").open(encoding="utf-8", newline="") as stream:
         vectors = list(csv.DictReader(stream, delimiter="\t"))
     for case in vectors:
-        issues = yamaa.domain(root / case["specification"]).issues
+        issues = yamaa.spec(root / case["specification"]).run().issues
         conditions = [row["condition"] for row in issues.to_dicts()]
         observed = (
             conditions

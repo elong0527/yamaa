@@ -13,7 +13,7 @@ from unittest.mock import patch
 import yamaa_benchmarks as program
 from host_fixtures import load as load_truth
 
-from yamaa import DomainError, domain
+import yamaa
 from yamaa import _locked_functions as host
 from yamaa import _native as native
 
@@ -28,6 +28,8 @@ CONSUMER = TRUTH["consumer_yaml"]
 FUNCTION = TRUTH["function_yaml"].replace(
     "HOST_CALLABLE", "yamaa_benchmarks.project_value"
 )
+# The issue fields the authored findings state; geometry is not authored here.
+FIELDS = ("phase", "condition", "requirement", "spec_paths", "context")
 
 
 class PublicProducers(unittest.TestCase):
@@ -42,11 +44,19 @@ class PublicProducers(unittest.TestCase):
         self.write("raw/raw.csv", RAW)
         self.write(
             "env/environment.yaml",
-            "schema_version: '1.0'\nlanguage: python\nlock: uv.lock\nfunctions: {id_float: float.yaml}\n",
+            "schema_version: '1.0'\nlock: uv.lock\nfunctions: {id_float: float.yaml}\n",
         )
         self.write("env/float.yaml", FUNCTION)
         self.write(
             "env/uv.lock", (ROOT / "schema-functions/python/uv.lock").read_bytes()
+        )
+        # The project links the Python environment and lists the consumer,
+        # whose `domain` names it; a producer its `schema` links reach is
+        # not listed.
+        self.write(
+            "project.yaml",
+            "schema_version: '1.0'\nenvironments: {python: env/environment.yaml}\n"
+            "adam: {specs: [consumer/root.yaml]}\n",
         )
 
     def write(self, name, value):
@@ -54,14 +64,15 @@ class PublicProducers(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(value.encode() if isinstance(value, str) else value)
 
-    def build(self):
-        return domain(
-            self.root / "consumer/root.yaml",
-            environment=self.root / "env/environment.yaml",
-        )
+    def build(self, name="TEST"):
+        return yamaa.project(self.root / "project.yaml").spec(name).run()
 
-    def entered(self, result):
-        return result._native.producer_attempt()
+    def nodes(self, result):
+        """The specification of every graph node the run entered, in order."""
+        return [
+            Path(node["specification"]).relative_to(self.root).as_posix()
+            for node in json.loads(result._native.observations())["nodes"]
+        ]
 
     def observe(self, result):
         text = result._native.observations()
@@ -151,13 +162,13 @@ columns:
 output: {{path: ../generated/root.csv, columns: [ID, SOURCE_COUNT, VALUE]}}
 """,
                 )
-                result = domain(self.root / "consumer/root.yaml")
+                result = yamaa.spec(self.root / "consumer/root.yaml").run()
                 self.assertEqual(result.issues.height, 0)
                 self.assertEqual(result.output.columns, ["ID", "SOURCE_COUNT", "VALUE"])
                 self.assertEqual(result.output.rows(), [(1, 7, 1)])
                 (self.root / "generated").mkdir(exist_ok=True)
                 for _ in range(2):
-                    self.assertTrue(result.save())
+                    result.save()
                     self.assertEqual(
                         (self.root / "generated/root.csv").read_bytes(),
                         b"ID,SOURCE_COUNT,VALUE\n1,7,1\n",
@@ -168,14 +179,15 @@ output: {{path: ../generated/root.csv, columns: [ID, SOURCE_COUNT, VALUE]}}
                         b"ID,VALUE\n1,7\n",
                     )
 
-    def test_absent_environment_graph_keeps_no_metadata_and_saves_held_artifacts(self):
-        from yamaa import check
-
+    def test_absent_project_graph_keeps_no_metadata_and_saves_held_artifacts(self):
         self.write(
             "producer/layers/base.yaml",
             PRODUCER.replace(TRUTH["identity_derivation"], "RAW.VALUE"),
         )
+        # Neither file is discovered: a run without a project file has no
+        # implementation environment (REQ-1331).
         self.write("env/environment.yaml", "[")
+        self.write("project.yaml", "[")
         (self.root / "generated").mkdir()
         with (
             patch.object(
@@ -189,7 +201,7 @@ output: {{path: ../generated/root.csv, columns: [ID, SOURCE_COUNT, VALUE]}}
                 side_effect=AssertionError("unexpected binding"),
             ),
         ):
-            result = domain(self.root / "consumer/root.yaml")
+            result = yamaa.spec(self.root / "consumer/root.yaml").run()
             self.assertTrue(result.issues.is_empty(), result.issues)
             self.assertEqual(result.output["VALUE"].to_list(), [2.46, 4.70])
             observed = self.observe(result)
@@ -197,18 +209,19 @@ output: {{path: ../generated/root.csv, columns: [ID, SOURCE_COUNT, VALUE]}}
                 observed["environment"], {"source": None, "lock_source": None}
             )
             self.assertEqual(observed["activation"]["lock"], "not_requested")
+            # The only data the graph read is the producer's source.
+            self.assertEqual(len(observed["source_reads"]), 1)
             self.assertFalse(
-                any(
-                    name.endswith("environment.yaml")
-                    for name, _ in self.entered(result).retained_sources()
-                )
+                any(read["path"].endswith(".yaml") for read in observed["source_reads"])
             )
             (self.root / "raw/raw.csv").unlink()
-            self.assertTrue(check(self.root / "consumer/root.yaml").issues.is_empty())
+            self.assertTrue(
+                yamaa.spec(self.root / "consumer/root.yaml").check().issues.is_empty()
+            )
             for name in tuple(TRUTH["retained_specification_files"]):
                 (self.root / name).unlink()
             for _ in range(2):
-                self.assertTrue(result.save())
+                result.save()
                 self.assertEqual(
                     (self.root / "generated/producer.csv").read_bytes(), PRODUCED
                 )
@@ -217,8 +230,6 @@ output: {{path: ../generated/root.csv, columns: [ID, SOURCE_COUNT, VALUE]}}
                 )
 
     def test_untyped_date_selector_and_original_producer_filter_cause(self):
-        from yamaa import check
-
         producer = """schema_version: '1.0'
 domain: ADSL
 keys: [USUBJID]
@@ -265,12 +276,12 @@ output: {path: ../generated/root.csv, columns: [USUBJID, TRTEDT]}
             ("consumer/root.yaml", consumed),
         ]:
             path = self.root / name
-            self.assertTrue(check(path).issues.is_empty())
-            result = domain(path)
+            self.assertTrue(yamaa.spec(path).check().issues.is_empty())
+            result = yamaa.spec(path).run()
             self.assertTrue(result.issues.is_empty(), result.issues)
             self.assertIsNotNone(result.output)
             self.assertEqual(result.output.height, 2)
-            self.assertTrue(result.save())
+            result.save()
             target = "producer.csv" if name.startswith("producer/") else "root.csv"
             self.assertEqual((self.root / "generated" / target).read_bytes(), expected)
         self.assertEqual((self.root / "generated/producer.csv").read_bytes(), produced)
@@ -286,11 +297,12 @@ output: {path: ../generated/root.csv, columns: [USUBJID, TRTEDT]}
         }
         for name, content in prior.items():
             self.write(name, content)
-        failed = domain(self.root / "consumer/root.yaml")
+        failed = yamaa.spec(self.root / "consumer/root.yaml").run()
         self.assertIsNone(failed.output)
         issues = failed.issues.to_dicts()
         self.assertEqual(len(issues), 1)
-        actual = {**issues[0], "context": json.loads(issues[0]["context"])}
+        actual = {key: issues[0][key] for key in FIELDS}
+        actual["context"] = json.loads(actual["context"])
         self.assertEqual(
             actual,
             {
@@ -302,7 +314,7 @@ output: {path: ../generated/root.csv, columns: [USUBJID, TRTEDT]}
             },
         )
         for _ in range(2):
-            with self.assertRaisesRegex(DomainError, "cannot save a failed build"):
+            with self.assertRaisesRegex(yamaa.Error, "cannot save a failed run"):
                 failed.save()
             self.assertEqual(failed.issues.to_dicts(), issues)
             for name, content in prior.items():
@@ -358,16 +370,27 @@ output: {path: ../generated/root.csv, columns: [USUBJID, TRTEDT]}
                 [{"ID": 1, "VALUE": 2.46}, {"ID": 2, "VALUE": 4.70}],
             )
             self.assertTrue(result.issues.is_empty())
-            self.assertIsNone(result.verification_log)
-            self.assertIsNone(result.warning_log)
-            held = self.entered(result)
-            self.assertTrue(held.accepted())
-            self.assertEqual(held.entered_nodes(), [1, 0])
-            self.assertEqual(held.artifact(1), PRODUCED)
-            self.assertEqual(held.artifact(0), CONSUMED)
-            self.assertIn(RAW, dict(held.retained_sources()).values())
+            # Every run returns its report, declared as a file or not (REQ-1173).
+            run = result.report.row(0, named=True)
+            self.assertEqual(
+                (run["KIND"], run["OUTCOME"], run["COUNT"]), ("run", "succeeded", 2)
+            )
+            self.assertEqual(
+                self.nodes(result), ["producer/p.yaml", "consumer/root.yaml"]
+            )
             observed = self.observe(result)
             self.assertEqual(observed["outcome"], "success")
+            # The producer read the source written during activation, not the
+            # earlier 99.99 record.
+            source = next(
+                table
+                for table in observed["tables"]
+                if (table["name"], table["stage"]) == ("RAW", "source")
+            )
+            self.assertEqual(
+                [row[1]["value"] for row in source["rows"]],
+                [TRUTH["raw_first_f64"], TRUTH["raw_second_f64"]],
+            )
             self.assertEqual(len(observed["source_reads"]), 1)
             self.assertEqual(
                 [item["content"].encode() for item in observed["artifacts"]],
@@ -379,7 +402,8 @@ output: {path: ../generated/root.csv, columns: [USUBJID, TRTEDT]}
                 ["normal", "boundary", "missing"],
             )
             self.assertFalse(observed["activation"]["tests"][-1]["invoked"])
-            self.assertFalse(result.save())
+            with self.assertRaises(yamaa.Error):
+                result.save()
             after = self.observe(result)
             self.assertEqual(after.pop("publication")["entered"], [])
             self.assertEqual(after, observed)
@@ -395,11 +419,17 @@ output: {path: ../generated/root.csv, columns: [USUBJID, TRTEDT]}
         self.assertTrue(result.issues.is_empty())
         self.assertEqual(result.output.columns, TRUTH["root_unrounded_columns"])
         self.assertEqual(result.output["ROOT_UNROUNDED"].to_list(), [2.464, 4.704])
+        # Each node's held artifact, producer first.
         self.assertEqual(
-            self.entered(result).artifact(0),
-            TRUTH["root_unrounded_csv"].encode("utf-8"),
+            [
+                (item["name"], item["content"].encode())
+                for item in self.observe(result)["artifacts"]
+            ],
+            [
+                ("producer", PRODUCED),
+                ("root", TRUTH["root_unrounded_csv"].encode("utf-8")),
+            ],
         )
-        self.assertEqual(self.entered(result).artifact(1), PRODUCED)
         changed = result.output.with_columns(result.output["VALUE"] * 10)
         self.assertEqual(changed["VALUE"].to_list(), [24.6, 47.0])
         self.assertEqual(result.output["VALUE"].to_list(), [2.46, 4.70])
@@ -437,20 +467,35 @@ output: {path: ../generated/root.csv, columns: [USUBJID, TRTEDT]}
             return original(x)
 
         with patch.object(program, "project_value", value):
-            result = self.build()
+            result = self.build("ROOT")
         self.assertEqual(calls, [7.25, 0.0, 1.234, 2.345])
         self.assertTrue(result.issues.is_empty())
         self.assertEqual(result.output["VALUE"].to_list(), [2.46, 4.70])
-        self.assertEqual(self.entered(result).entered_nodes(), [3, 1, 2, 0])
+        # The shared leaf runs once, before both bridges and the root.
+        self.assertEqual(
+            self.nodes(result),
+            [
+                "producer/p.yaml",
+                "bridge/left.yaml",
+                "bridge/right.yaml",
+                "consumer/root.yaml",
+            ],
+        )
         self.assertEqual(len(self.observe(result)["nodes"]), 4)
         self.assertFalse((self.root / "generated").exists())
         (self.root / "generated").mkdir()
         before = self.observe(result)
+        self.assertEqual(len(before["source_reads"]), 1)
+        # The project file is the one the caller named; the retired
+        # yamaa-project.yaml beside it is never read.
+        self.assertEqual(
+            before["environment"]["source"], (self.root / "project.yaml").as_posix()
+        )
         for directory in tuple(TRUTH["owned_bridge_directories"]):
             shutil.rmtree(self.root / directory)
         gc.collect()
         for _ in range(2):
-            self.assertTrue(result.save())
+            result.save()
             self.assertEqual(
                 (self.root / "generated/producer.csv").read_bytes(), PRODUCED
             )
@@ -472,9 +517,6 @@ output: {path: ../generated/root.csv, columns: [USUBJID, TRTEDT]}
             self.assertEqual(calls, [7.25, 0.0, 1.234, 2.345])
             self.assertTrue(result.issues.is_empty())
         shutil.rmtree(self.root)
-        sources = dict(self.entered(result).retained_sources())
-        self.assertEqual(len(sources), 10)
-        self.assertFalse(any(name.endswith("/yamaa-project.yaml") for name in sources))
         self.assertEqual(result.output["VALUE"].to_list(), [2.46, 4.70])
 
     def test_save_retains_rounded_alias_bytes_and_unrounded_root_after_originals_drop(
@@ -511,7 +553,7 @@ output: {path: ../generated/root.csv, columns: [USUBJID, TRTEDT]}
             ),
         ):
             for _ in range(2):
-                self.assertTrue(result.save())
+                result.save()
                 self.assertEqual(
                     (self.root / "generated/producer.csv").read_bytes(), PRODUCED
                 )
@@ -535,13 +577,14 @@ output: {path: ../generated/root.csv, columns: [USUBJID, TRTEDT]}
         (self.root / "generated/root.csv").mkdir(parents=True)
         result = self.build()
         self.assertIsNotNone(result.output)
-        self.assertFalse(result.save())
+        with self.assertRaises(yamaa.Error):
+            result.save()
         self.assertFalse((self.root / "generated/producer.csv").exists())
         self.assertEqual(self.observe(result)["publication"]["entered"], [])
-        self.assertTrue(self.entered(result).accepted())
+        self.assertEqual(self.observe(result)["outcome"], "success")
         self.assertEqual(result.output["VALUE"].to_list(), [2.46, 4.70])
         (self.root / "generated/root.csv").rmdir()
-        self.assertTrue(result.save())
+        result.save()
         self.assertTrue(result.issues.is_empty())
 
     def test_actual_producer_or_consumer_save_failure_preserves_entered_prefix_and_prior_targets(
@@ -575,7 +618,8 @@ output: {path: ../generated/root.csv, columns: [USUBJID, TRTEDT]}
                         self.skipTest(
                             "directory permissions cannot deny writes on this host"
                         )
-                self.assertFalse(result.save())
+                with self.assertRaises(yamaa.Error):
+                    result.save()
                 entered = (
                     [{"node": 1, "published": False}]
                     if failed == "producer"
@@ -598,12 +642,12 @@ output: {path: ../generated/root.csv, columns: [USUBJID, TRTEDT]}
                     b"previous producer bytes" if failed == "producer" else PRODUCED,
                 )
                 self.assertEqual(result.output["VALUE"].to_list(), [2.46, 4.70])
-                self.assertTrue(self.entered(result).accepted())
+                self.assertEqual(self.observe(result)["outcome"], "success")
                 self.assertIn("REQ-0764", result.issues["requirement"].to_list())
                 self.assertEqual(list(target.parent.glob("*.stage")), [])
             finally:
                 readonly.chmod(0o600 if os.name == "nt" else 0o700)
-            self.assertTrue(result.save())
+            result.save()
             self.assertTrue(result.issues.is_empty())
             after = self.observe(result)
             after.pop("publication")
@@ -620,10 +664,11 @@ output: {path: ../generated/root.csv, columns: [USUBJID, TRTEDT]}
         (self.root / "generated").mkdir()
         result = self.build()
         self.assertIsNotNone(result.output)
-        self.assertFalse(result.save())
+        with self.assertRaises(yamaa.Error):
+            result.save()
         self.assertEqual(list((self.root / "generated").iterdir()), [])
         self.assertEqual(self.observe(result)["publication"]["entered"], [])
-        self.assertTrue(self.entered(result).accepted())
+        self.assertEqual(self.observe(result)["outcome"], "success")
 
     @unittest.skipUnless(sys.platform == "darwin", "macOS native parent case policy")
     def test_macos_absent_case_aliases_and_unproven_unicode_targets_preflight(self):
@@ -640,9 +685,9 @@ output: {path: ../generated/root.csv, columns: [USUBJID, TRTEDT]}
             )
             result = self.build()
             self.assertIsNotNone(result.output)
-            self.assertTrue(self.entered(result).accepted())
+            self.assertEqual(self.observe(result)["outcome"], "success")
             if name == "PRODUCER.csv" and sensitive:
-                self.assertTrue(result.save())
+                result.save()
                 self.assertEqual(
                     (self.root / "generated/producer.csv").read_bytes(), PRODUCED
                 )
@@ -652,7 +697,8 @@ output: {path: ../generated/root.csv, columns: [USUBJID, TRTEDT]}
                 for path in (self.root / "generated").iterdir():
                     path.unlink()
             else:
-                self.assertFalse(result.save())
+                with self.assertRaises(yamaa.Error):
+                    result.save()
                 self.assertEqual(self.observe(result)["publication"]["entered"], [])
                 self.assertEqual(list((self.root / "generated").iterdir()), [])
 
@@ -665,7 +711,7 @@ output: {path: ../generated/root.csv, columns: [USUBJID, TRTEDT]}
         self.write("env/bad.yaml", bad)
         self.write(
             "env/environment.yaml",
-            "schema_version: '1.0'\nlanguage: python\nlock: uv.lock\nfunctions: {id_float: float.yaml, bad: bad.yaml}\n",
+            "schema_version: '1.0'\nlock: uv.lock\nfunctions: {id_float: float.yaml, bad: bad.yaml}\n",
         )
         self.write(
             "consumer/root.yaml",
@@ -683,7 +729,7 @@ output: {path: ../generated/root.csv, columns: [USUBJID, TRTEDT]}
             result = self.build()
         self.assertEqual(calls, [])
         self.assertIsNone(result.output)
-        self.assertEqual(self.entered(result).entered_nodes(), [])
+        self.assertEqual(self.nodes(result), [])
         observed = self.observe(result)
         self.assertEqual(observed["source_reads"], [])
         self.assertEqual(observed["activation"]["tests"], [])
@@ -706,20 +752,20 @@ output: {path: ../generated/root.csv, columns: [USUBJID, TRTEDT]}
         shutil.rmtree(self.root)
         gc.collect()
         self.assertIsNone(result.output)
-        self.assertEqual(self.entered(result).entered_nodes(), [1])
+        self.assertEqual(self.nodes(result), ["producer/p.yaml"])
         self.assertEqual(result.issues["condition"].to_list(), ["function_call_failed"])
-        self.assertIs(result._native.project_failures()[0][1], original)
-        self.assertIs(self.entered(result).host_failures()[0][1], original)
+        # The original host failure survives as the issue's facts.
+        context = json.loads(result.issues["context"][0])
+        self.assertEqual(context["host_error"], "RuntimeError")
+        self.assertEqual(context["host_message"], str(original))
         observed = self.observe(result)
         self.assertEqual(observed["artifacts"], [])
         self.assertEqual(len(observed["nodes"]), 1)
         self.assertEqual(len(observed["source_reads"]), 1)
-        with self.assertRaisesRegex(DomainError, "cannot save a failed build"):
+        with self.assertRaisesRegex(yamaa.Error, "cannot save a failed run"):
             result.save()
 
-    def test_public_interrupt_propagates_original_and_native_owner_retains_its_prefix(
-        self,
-    ):
+    def test_public_interrupt_propagates_original_and_retains_no_native_run(self):
         original = KeyboardInterrupt("original public graph interrupt")
         real = program.project_value
 
@@ -729,26 +775,20 @@ output: {path: ../generated/root.csv, columns: [USUBJID, TRTEDT]}
             return real(x)
 
         with patch.object(program, "project_value", value):
-            held = native._domain_file(
-                str(self.root / "consumer/root.yaml"),
-                str(self.root / "env/environment.yaml"),
-            )
             with self.assertRaises(KeyboardInterrupt) as raised:
                 self.build()
         self.assertIs(raised.exception, original)
+        # No frame of the interrupt's traceback keeps the interrupted run.
         traceback = original.__traceback__
         while traceback is not None:
-            if traceback.tb_frame.f_code.co_name == "domain":
-                self.assertNotIn("native", traceback.tb_frame.f_locals)
+            self.assertFalse(
+                any(
+                    isinstance(local, native._Run)
+                    for local in traceback.tb_frame.f_locals.values()
+                )
+            )
             traceback = traceback.tb_next
-        shutil.rmtree(self.root)
-        gc.collect()
-        self.assertIs(held.project_failures()[0][1], original)
-        self.assertEqual(held.producer_attempt().entered_nodes(), [1])
-        with self.assertRaises(KeyboardInterrupt) as retained:
-            held.propagate_interrupt()
-        self.assertIs(retained.exception, original)
-        self.assertIsNone(held.output())
+        self.assertFalse((self.root / "generated").exists())
 
     def test_long_exception_message_preserves_exact_facts_and_original_failure(
         self,
@@ -765,8 +805,7 @@ output: {path: ../generated/root.csv, columns: [USUBJID, TRTEDT]}
         with patch.object(program, "project_value", value):
             result = self.build()
         self.assertIsNone(result.output)
-        self.assertIs(result._native.project_failures()[0][1], original)
-        self.assertEqual(self.entered(result).entered_nodes(), [1])
+        self.assertEqual(self.nodes(result), ["producer/p.yaml"])
         self.assertEqual(result.issues["condition"].to_list(), ["function_call_failed"])
         context = json.loads(result.issues["context"][0])
         self.assertEqual(context["host_error"], "RuntimeError")
@@ -777,35 +816,40 @@ output: {path: ../generated/root.csv, columns: [USUBJID, TRTEDT]}
         self.write("consumer/root.yaml", CONSUMER + TRUTH["fatal_row_count_yaml"])
         result = self.build()
         self.assertIsNone(result.output)
-        held = self.entered(result)
-        self.assertFalse(held.accepted())
-        self.assertEqual(held.entered_nodes(), [1, 0])
-        self.assertEqual(held.artifact(1), PRODUCED)
-        self.assertIsNone(held.artifact(0))
+        observed = self.observe(result)
+        self.assertEqual(observed["outcome"], "failure")
+        self.assertEqual(self.nodes(result), ["producer/p.yaml", "consumer/root.yaml"])
+        # Only the accepted producer holds an artifact.
+        self.assertEqual(
+            [
+                (item["name"], item["content"].encode())
+                for item in observed["artifacts"]
+            ],
+            [("producer", PRODUCED)],
+        )
         self.assertEqual(result.issues["condition"].to_list(), ["row_count_failed"])
         self.assertFalse((self.root / "generated").exists())
         shutil.rmtree(self.root)
         self.assertIsNone(result.output)
-        with self.assertRaisesRegex(DomainError, "cannot save a failed build"):
+        with self.assertRaisesRegex(yamaa.Error, "cannot save a failed run"):
             result.save()
 
     def test_actual_ingestion_failure_stops_before_dependents(self):
         self.write("raw/raw.csv", b"ID,VALUE\n1,bad\n")
         result = self.build()
         self.assertIsNone(result.output)
-        self.assertEqual(self.entered(result).entered_nodes(), [1])
-        self.assertIn(
-            b"ID,VALUE\n1,bad\n", dict(self.entered(result).retained_sources()).values()
-        )
+        self.assertEqual(self.nodes(result), ["producer/p.yaml"])
+        # The finding names the value the producer read from its source.
+        self.assertEqual(json.loads(result.issues["context"][0])["value"], "bad")
         self.assertEqual(self.observe(result)["artifacts"], [])
         self.assertGreater(result.issues.height, 0)
 
     def assert_large_projection_admitted(self, result, ids, columns, expected_csv):
         # The fixed table geometry admits these cells and their held bytes.
-        self.assertTrue(self.entered(result).accepted())
-        self.assertEqual(self.entered(result).entered_nodes(), [1, 0])
+        self.assertEqual(self.observe(result)["outcome"], "success")
+        self.assertEqual(self.nodes(result), ["producer/p.yaml", "consumer/root.yaml"])
+        # Admitted projection: no issue and the whole output.
         self.assertEqual(result.issues.height, 0)
-        self.assertIsNone(result._native.producer_projection_failure())
         self.assertEqual(result.output.columns, columns)
         self.assertEqual(result.output["ID"].to_list(), ids)
         self.assertEqual(result.output["VALUE"].to_list(), [2.46] * len(ids))
@@ -821,7 +865,7 @@ output: {path: ../generated/root.csv, columns: [USUBJID, TRTEDT]}
             shutil.rmtree(self.root / directory)
         gc.collect()
         for _ in range(2):
-            self.assertTrue(result.save())
+            result.save()
             self.assertEqual(
                 (self.root / "generated/root.csv").read_bytes(), expected_csv
             )
@@ -829,8 +873,8 @@ output: {path: ../generated/root.csv, columns: [USUBJID, TRTEDT]}
                 (self.root / "generated/producer.csv").read_bytes(), produced
             )
             self.assertTrue(result.output.equals(held))
-            self.assertTrue(self.entered(result).accepted())
-            self.assertIsNone(result._native.producer_projection_failure())
+            self.assertEqual(self.observe(result)["outcome"], "success")
+            self.assertTrue(result.issues.is_empty())
 
     def test_public_copy_bytes_admit_original_large_geometry_and_held_saves(self):
         payload = "x" * 2048
@@ -912,38 +956,46 @@ output: {path: ../generated/root.csv, columns: [USUBJID, TRTEDT]}
             result = self.build()
         verify.assert_not_called()
         invoked.assert_not_called()
-        self.assertIsNone(self.entered(result))
+        # Refused while prepared: no graph ran, so there is no report.
+        self.assertIsNone(result._native.observations())
+        self.assertIsNone(result.report)
         self.assertIn("REQ-0523", result.issues["requirement"].to_list())
-        before = dict(result._native.preparation_sources())
+        before = result.issues.to_dicts()
         shutil.rmtree(self.root)
-        self.assertEqual(dict(result._native.preparation_sources()), before)
-        self.assertIn(PRODUCER.encode(), before.values())
+        self.assertEqual(result.issues.to_dicts(), before)
 
-    def test_early_environment_and_schema_null_failures_retain_original_bytes(self):
+    def test_early_environment_and_schema_null_failures_keep_original_facts(self):
         self.write("env/environment.yaml", b"schema_version: [\n")
+        # The project reads its environment link, so the project itself
+        # cannot be read and no specification is selected.
         with patch.object(host, "verify_versions") as verify:
-            result = self.build()
+            with self.assertRaises(yamaa.Error) as raised:
+                self.build()
         verify.assert_not_called()
-        self.assertIsNone(result.output)
-        self.assertIsNone(self.entered(result))
-        self.assertIn(
-            b"schema_version: [\n", dict(result._native.preparation_sources()).values()
+        issue = raised.exception.issues.row(0, named=True)
+        self.assertEqual(issue["condition"], "invalid_yaml")
+        context = json.loads(issue["context"])
+        self.assertEqual(
+            (context["environment_path"], context["path"]),
+            ("environments.python", "env/environment.yaml"),
         )
         self.write(
             "env/environment.yaml",
-            "schema_version: '1.0'\nlanguage: python\nlock: uv.lock\nfunctions: {id_float: float.yaml}\n",
+            "schema_version: '1.0'\nlock: uv.lock\nfunctions: {id_float: float.yaml}\n",
         )
         self.write(
             "consumer/root.yaml",
             CONSUMER.replace("schema: ../producer/p.yaml", "schema: null"),
         )
-        rejected = self.build()
-        self.assertIsNone(self.entered(rejected))
+        # A listing that cannot be read has no name to select, so the
+        # refusal comes from the project run, where nothing ran to report.
+        rejected = yamaa.project(self.root / "project.yaml").run()
+        self.assertEqual(rejected.names, [])
+        self.assertEqual(rejected.report.height, 0)
         self.assertIn("REQ-0287", rejected.issues["requirement"].to_list())
+        before = rejected.issues.to_dicts()
         shutil.rmtree(self.root)
-        self.assertIn(
-            b"schema_version: [\n", dict(result._native.preparation_sources()).values()
-        )
+        self.assertEqual(rejected.issues.to_dicts(), before)
 
 
 if __name__ == "__main__":
