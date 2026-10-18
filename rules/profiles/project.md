@@ -166,9 +166,9 @@ A project run builds the specifications one selected section lists, or those
 of every declared section in the order `sdtm`, `adam`, `send`: its run scope.
 Each builds exactly once, as its own run with its own output, findings and run
 report, reported under its name. A `schema` link to a run-scope specification
-is a dependency: the producer builds first, and the consumer reads the
-producer's held serialized artifact instead of the file at `path`.
-Independent specifications keep run-scope order.
+is a dependency: the producer builds first, and a consumer whose `path` names
+the producer's `output.path` location reads the held serialized artifact
+instead of that file. Independent specifications keep run-scope order.
 
 Fails: `producer_workflow_cycle`.
 Evidence: `rust/crates/yamaa/tests/project_operations.rs::a_section_run_builds_only_its_scope_and_a_full_run_hands_producers_over_in_memory`, `rust/crates/yamaa-adapters/tests/project_scope.rs::plans_order_their_scope_producer_first`, `rust/crates/yamaa-adapters/tests/project_scope.rs::unlinked_inputs_cycles_and_collisions_are_project_findings`.
