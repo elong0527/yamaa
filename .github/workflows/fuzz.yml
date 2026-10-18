@@ -1,0 +1,150 @@
+name: Fuzz
+
+# The readers that parse untrusted input run under libFuzzer with
+# AddressSanitizer, and the C they compile adds UndefinedBehaviorSanitizer
+# (rust/fuzz/README.md). A pull request runs, for three minutes each, the
+# targets whose readers it changes: the paths below, narrowed per target by
+# `python -m tools.ci.fuzz select`; tools/tests/test_fuzz.py keeps the two in
+# step. The nightly schedule and a dispatch run every target for longer. A
+# crash, sanitizer report, escaped panic, timeout or memory blowup fails the
+# job, which keeps the reproducing input as an artifact.
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/fuzz.yml'
+      - 'rust/Cargo.lock'
+      - 'rust/crates/yamaa-adapters/Cargo.toml'
+      - 'rust/crates/yamaa-adapters/build.rs'
+      - 'rust/crates/yamaa-adapters/src/arrow_table.rs'
+      - 'rust/crates/yamaa-adapters/src/arrow_temporal.rs'
+      - 'rust/crates/yamaa-adapters/src/csv_source.rs'
+      - 'rust/crates/yamaa-adapters/src/ipc_table.rs'
+      - 'rust/crates/yamaa-adapters/src/parquet_source/**'
+      - 'rust/crates/yamaa-adapters/src/project_source_decoder.rs'
+      - 'rust/crates/yamaa-adapters/src/sas_source.rs'
+      - 'rust/crates/yamaa-adapters/src/sas_source/**'
+      - 'rust/crates/yamaa-adapters/src/shipped_schema/**'
+      - 'rust/crates/yamaa-adapters/src/source_ordinal.rs'
+      - 'rust/crates/yamaa-adapters/src/specification_run.rs'
+      - 'rust/crates/yamaa-adapters/src/specification_source/**'
+      - 'rust/crates/yamaa-adapters/src/storage_api.rs'
+      - 'rust/crates/yamaa-adapters/src/submission_json.rs'
+      - 'rust/crates/yamaa-adapters/src/typed_csv.rs'
+      - 'rust/crates/yamaa-adapters/src/yaml_decode.rs'
+      - 'rust/crates/yamaa-adapters/src/yaml_decode/**'
+      - 'rust/crates/yamaa-adapters/src/yaml_source.rs'
+      - 'rust/crates/yamaa-adapters/src/yaml_source/**'
+      - 'rust/crates/yamaa-adapters/vendor/readstat/**'
+      - 'rust/crates/yamaa-core/Cargo.toml'
+      - 'rust/crates/yamaa-core/src/conversion.rs'
+      - 'rust/crates/yamaa-core/src/csv_source.rs'
+      - 'rust/crates/yamaa-core/src/dictionary_preparation.rs'
+      - 'rust/crates/yamaa-core/src/document_preparation.rs'
+      - 'rust/crates/yamaa-core/src/domain.rs'
+      - 'rust/crates/yamaa-core/src/expression/**'
+      - 'rust/crates/yamaa-core/src/inheritance.rs'
+      - 'rust/crates/yamaa-core/src/inheritance_capture.rs'
+      - 'rust/crates/yamaa-core/src/inheritance_preparation.rs'
+      - 'rust/crates/yamaa-core/src/odm_source.rs'
+      - 'rust/crates/yamaa-core/src/parquet_source.rs'
+      - 'rust/crates/yamaa-core/src/schema/**'
+      - 'rust/crates/yamaa-core/src/schema_capture.rs'
+      - 'rust/crates/yamaa-core/src/specification/**'
+      - 'rust/crates/yamaa-core/src/standalone_preparation.rs'
+      - 'rust/crates/yamaa-core/src/structural_preparation.rs'
+      - 'rust/crates/yamaa-core/src/submission_json.rs'
+      - 'rust/crates/yamaa-core/src/temporal.rs'
+      - 'rust/crates/yamaa-core/src/typed_csv.rs'
+      - 'rust/fuzz/Cargo.toml'
+      - 'rust/fuzz/fuzz_targets/csv.rs'
+      - 'rust/fuzz/fuzz_targets/dataset_json.rs'
+      - 'rust/fuzz/fuzz_targets/parquet.rs'
+      - 'rust/fuzz/fuzz_targets/sas7bdat.rs'
+      - 'rust/fuzz/fuzz_targets/specification.rs'
+      - 'rust/fuzz/fuzz_targets/xport.rs'
+      - 'rust/fuzz/regressions/csv/**'
+      - 'rust/fuzz/regressions/dataset_json/**'
+      - 'rust/fuzz/regressions/parquet/**'
+      - 'rust/fuzz/regressions/sas7bdat/**'
+      - 'rust/fuzz/regressions/specification/**'
+      - 'rust/fuzz/regressions/xport/**'
+      - 'rust/fuzz/src/**'
+      - 'rust/vendor/saphyr-parser/**'
+      - 'tools/ci/fuzz.py'
+  schedule:
+    - cron: '41 3 * * *'
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: Seconds to fuzz each target
+        default: '1800'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fuzz-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  select:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      targets: ${{ steps.select.outputs.targets }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # A pull request checks out its merge commit, whose first parent is
+          # the base it merges into.
+          fetch-depth: 2
+      - id: select
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            python3 -m tools.ci.fuzz select --since HEAD^1 >> "$GITHUB_OUTPUT"
+          else
+            python3 -m tools.ci.fuzz select >> "$GITHUB_OUTPUT"
+          fi
+  fuzz:
+    needs: select
+    if: needs.select.outputs.targets != '[]'
+    name: fuzz (${{ matrix.target }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(needs.select.outputs.targets) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The scheduled runs save the dependency build that pull requests
+      # restore. The copied canonical lock keys it, as the fuzz build reads it.
+      - run: cp rust/Cargo.lock rust/fuzz/Cargo.lock
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: rust/fuzz -> target
+          key: ${{ github.workflow }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Install the pinned nightly and cargo-fuzz
+        run: python3 -m tools.ci.fuzz install
+      - name: Fuzz the target
+        env:
+          TARGET: ${{ matrix.target }}
+          FUZZ_SECONDS: ${{ github.event_name == 'pull_request' && '180' || inputs.seconds || '1800' }}
+        run: python3 -m tools.ci.fuzz run "$TARGET" --seconds "$FUZZ_SECONDS"
+      - name: Keep the reproducing input
+        if: failure()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: fuzz-${{ matrix.target }}
+          path: rust/fuzz/artifacts/${{ matrix.target }}/
+          if-no-files-found: ignore
