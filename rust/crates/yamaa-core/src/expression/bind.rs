@@ -8,10 +8,7 @@
 use super::syntax::{parse, NodeKind, Parsed, SourceSpan, TemporalKind};
 use super::{CompileError, Construct, Context, Failure, Function, Reducer, Resource};
 use crate::portable_regex::{self, Pattern};
-use crate::value::{ColumnType, Value};
-
-/// The declared result type of a numeric expression, before any value exists.
-pub const NUMERIC_RESULT_TYPE: ColumnType = ColumnType::Float;
+use crate::value::Value;
 
 /// What a reduction reads from each record of its relation.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -53,6 +50,9 @@ pub struct CompiledExpression {
     pub(super) patterns: Vec<Option<Pattern>>,
     pub(super) reductions: Vec<Reduction>,
     pub(super) result: AggregateResult,
+    /// The `NULLIF` nodes, in node order, whose result type is `float` where
+    /// the expression is bound ([`CompiledExpression::typed`]).
+    pub(super) widened: Vec<usize>,
     identifiers: Vec<String>,
     record_relations: Vec<String>,
     ungrouped: Vec<String>,
@@ -91,14 +91,6 @@ impl CompiledExpression {
     }
     pub fn result(&self) -> AggregateResult {
         self.result
-    }
-    /// A numeric expression has a closed declared type; a bare reduction and a
-    /// predicate have none.
-    pub fn numeric_result_type(&self) -> Option<ColumnType> {
-        match (self.context, self.result) {
-            (Context::Predicate, _) | (_, AggregateResult::Reduction(_)) => None,
-            _ => Some(NUMERIC_RESULT_TYPE),
-        }
     }
     pub(super) fn reduction_at(&self, node: usize) -> usize {
         self.reductions
@@ -186,6 +178,7 @@ pub fn compile(
         patterns,
         reductions,
         result,
+        widened: Vec::new(),
         syntax,
     })
 }

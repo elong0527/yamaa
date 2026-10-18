@@ -2,6 +2,7 @@
 use super::*;
 use crate::{
     dataset::{Intermediate, IntermediateKey, Keep, OrderTerm, SecondarySource, SourceSelection},
+    result_type::ResultType,
     value::Value,
 };
 
@@ -351,15 +352,14 @@ fn bind_one(
     let pairs_declared = item.keys.as_ref().unwrap_or(&default_keys);
     // Result types and donor fields precede expression declarations and reads.
     for (field, declaration) in pairs_declared {
-        if let (Some(donor), Some(expected)) = (
-            schema
-                .columns()
-                .iter()
-                .position(|column| column.name == *field)
-                .and_then(&donor_kind),
-            declaration.result_type(&catalog),
-        ) {
-            if !crate::key_relation::comparable(expected, donor.into()) {
+        if let Some(donor) = schema
+            .columns()
+            .iter()
+            .position(|column| column.name == *field)
+            .and_then(&donor_kind)
+        {
+            let expected = declaration.result_type(&catalog);
+            if !expected.comparable(donor.into()) {
                 findings.push(BindFinding::Lookup(LookupFinding::key_type(
                     &format!("{}.key", item.path),
                     &item.name,
@@ -630,6 +630,8 @@ impl Declarations {
             findings.push(BindFinding::Lookup(finding));
             return Ok(());
         }
+        // A driver is admitted whenever each field it exposes has one result
+        // type (EXPR-14): its rows then carry the declared layout.
         if let Some(derived) = &item.derivations {
             let schema = item.source_schema(secondary).ok_or(BindError::Internal)?;
             let unknown = schema
@@ -639,10 +641,7 @@ impl Declarations {
                 .filter(|(column, _)| {
                     item.admits_column(*column)
                         && *column >= derived.stored_columns
-                        && derived
-                            .driver_kinds
-                            .get(*column - derived.stored_columns)
-                            .is_none_or(Option::is_none)
+                        && derived.column_kind(*column).is_none()
                 })
                 .map(|(_, column)| column.name.as_str())
                 .collect::<Vec<_>>();
@@ -1126,23 +1125,37 @@ impl Declarations {
             })
             .collect::<Vec<_>>();
         let catalog = Catalog::compile(&output_fields, &datasets).map_err(BindError::Catalog)?;
-        let mut known = BTreeMap::<String, Option<ColumnType>>::new();
+        // Before capture, a stored field has its declared type; an undeclared
+        // field may not exist, so its type waits for binding.
+        let stored = |owner: &str, field: &str| {
+            sources
+                .iter()
+                .find(|source| source.name == owner)
+                .and_then(|source| source.declared_type(field))
+        };
+        // Fields of earlier intermediates: derived names, and the input each
+        // one reads for its stored fields.
+        let mut known = BTreeMap::<String, ResultType>::new();
+        let mut inputs = BTreeMap::<&str, &str>::new();
         for declaration in self.0.iter() {
             let dataset = match declaration.source {
                 self_relations::Relation::Input(index) => sources[index].name.as_str(),
                 self_relations::Relation::SelfRows => "SELF",
             };
             let mut donor = match declaration.source {
-                self_relations::Relation::Input(index) => sources[index]
-                    .types
-                    .iter()
-                    .map(|(name, kind)| (name.clone(), Some(*kind)))
-                    .collect::<BTreeMap<_, _>>(),
+                self_relations::Relation::Input(_) => BTreeMap::new(),
                 self_relations::Relation::SelfRows => output
                     .columns()
                     .iter()
-                    .map(|column| (column.name.clone(), Some(column.kind)))
-                    .collect(),
+                    .map(|column| (column.name.clone(), ResultType::column(column.kind)))
+                    .collect::<BTreeMap<_, _>>(),
+            };
+            let donor_type = |donor: &BTreeMap<String, ResultType>, field: &str| {
+                donor.get(field).copied().or_else(|| {
+                    matches!(declaration.source, self_relations::Relation::Input(_))
+                        .then(|| stored(dataset, field).map(ResultType::column))
+                        .flatten()
+                })
             };
             if let (Some(expression), Some(compiled)) =
                 (&declaration.filter_text, &declaration.filter)
@@ -1156,25 +1169,20 @@ impl Declarations {
             }
             for derived in &declaration.derivations {
                 static_checks::branch(&derived.branch, findings)?;
-                let kind = derived.result_kind(&|name| {
+                let input = |name: &str| {
                     let (owner, field) = name.split_once('.').unwrap_or((dataset, name));
                     if owner == dataset {
-                        donor.get(field).copied().flatten()
+                        donor_type(&donor, field).unwrap_or(ResultType::UNKNOWN)
                     } else if let Some(kind) = known.get(name) {
                         *kind
                     } else {
-                        sources
-                            .iter()
-                            .find(|source| source.name == owner)
-                            .and_then(|source| {
-                                source
-                                    .types
-                                    .iter()
-                                    .find(|(name, _)| name == field)
-                                    .map(|(_, kind)| *kind)
-                            })
+                        ResultType::declared(stored(inputs.get(owner).unwrap_or(&owner), field))
                     }
-                });
+                };
+                if let Some(finding) = derived.conversion_finding(&input) {
+                    findings.push(BindFinding::Scalar(finding));
+                }
+                let kind = derived.field_type(&input);
                 donor.insert(derived.name.clone(), kind);
             }
             if let Some(Ok(filter)) = &declaration.filter {
@@ -1184,15 +1192,9 @@ impl Declarations {
                             .split_once('.')
                             .or_else(|| (dataset == "SELF").then_some((dataset, name)))?;
                         if owner == dataset {
-                            donor.get(field).copied().flatten().map(Into::into)
+                            donor_type(&donor, field)?.single()
                         } else {
-                            sources
-                                .iter()
-                                .find(|source| source.name == owner)
-                                .and_then(|source| {
-                                    source.types.iter().find(|(name, _)| name == field)
-                                })
-                                .map(|(_, kind)| (*kind).into())
+                            stored(owner, field).map(Into::into)
                         }
                     })
                     .into_iter()
@@ -1200,11 +1202,9 @@ impl Declarations {
                 );
             }
             for (field, value) in declaration.keys.iter().flatten() {
-                if let (Some(actual), Some(expected)) = (
-                    donor.get(field).copied().flatten(),
-                    value.result_type(&catalog),
-                ) {
-                    if !crate::key_relation::comparable(expected, actual.into()) {
+                if let Some(actual) = donor_type(&donor, field).and_then(ResultType::column_type) {
+                    let expected = value.result_type(&catalog);
+                    if !expected.comparable(actual.into()) {
                         findings.push(BindFinding::Lookup(LookupFinding::key_type(
                             &format!("{}.key", declaration.path),
                             &declaration.name,
@@ -1217,6 +1217,9 @@ impl Declarations {
             }
             for (field, kind) in donor {
                 known.insert(format!("{}.{field}", declaration.name), kind);
+            }
+            if matches!(declaration.source, self_relations::Relation::Input(_)) {
+                inputs.insert(&declaration.name, dataset);
             }
         }
         Ok(())

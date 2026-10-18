@@ -193,9 +193,11 @@ mod scalar {
             );
         }
 
+        /// A Boolean converts to no column type, so a row derivation that can
+        /// only return one fails before any record is read (VALUE-24).
         #[test]
-        fn row_boolean_keeps_conversion_failure_and_refuses_every_save() {
-            for (literal, expected) in [("false", false), ("true", true)] {
+        fn row_boolean_is_refused_at_validation_and_refuses_every_save() {
+            for literal in ["false", "true"] {
                 let source = format!(
             "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: input.csv}}\noutput: {{path: output.csv, columns: [ID, RESULT]}}\ncolumns:\n  - {{name: ID, type: str}}\n  - {{name: RESULT, type: str}}\nrows:\n  - id: values\n    derivations:\n      ID: SRC.ID\n      RESULT: {{literal: {literal}}}\n"
         );
@@ -204,10 +206,17 @@ mod scalar {
                 let issues = result.issues();
                 assert_eq!(issues.len(), 1);
                 let issue = issue_json(&issues[0]);
-                assert_eq!(issue["phase"], "convert");
+                assert_eq!(issue["phase"], "validation");
                 assert_eq!(issue["condition"], "conversion_failed");
-                assert_eq!(issue["requirement"], "REQ-0013");
-                assert_eq!(issue["context"]["value"], yamaa_adapters::json!(expected));
+                assert_eq!(issue["requirement"], "VALUE-24");
+                assert_eq!(
+                    issue["spec_paths"],
+                    yamaa_adapters::json!(["columns.RESULT"])
+                );
+                assert_eq!(
+                    issue["context"],
+                    yamaa_adapters::json!({"from": "bool", "to": "str"})
+                );
                 assert!(result.output().is_none());
                 for _ in 0..2 {
                     assert!(result.save().is_err());

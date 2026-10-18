@@ -1,0 +1,47 @@
+schema_version: "1.0"
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE:
+    path: input/ae.csv
+    types: {AESEQ: int, AESTDTC: date, TRTSDT: date}
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, ASTDT, TRTSDT, ASTDY]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+
+  - name: ASTDT
+    type: date
+    label: Analysis Start Date
+    derivation: AE.AESTDTC
+
+  - name: TRTSDT
+    type: date
+    label: Date of First Exposure to Treatment
+    derivation: AE.TRTSDT
+
+  # Intentionally invalid: a study day is a count of days, which no date
+  # column can hold.
+  - name: ASTDY
+    type: date
+    label: Analysis Start Relative Day
+    derivation:
+      study_day:
+        date: ASTDT
+        reference: TRTSDT

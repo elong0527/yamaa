@@ -74,8 +74,9 @@ Enforced by [LAYER-3](inheritance.md#layer-3),
 **P9. Faults are found before data.** A fault that does not depend on data
 fails during validation, before any input record is read. Enforced by
 [LAYER-12](inheritance.md#layer-12),
-[FILE-11](reference/files.md#file-11) and
-[INPUT-1](inputs.md#input-1).
+[FILE-11](reference/files.md#file-11),
+[INPUT-1](inputs.md#input-1) and
+[VALUE-24](values.md#value-24).
 
 **P10. Artifacts are reproducible.** The same specification and inputs produce
 the same artifact bytes, and an artifact is published whole or not at all.
@@ -99,7 +100,7 @@ keep their `REQ-NNNN` requirements and are listed with the prefix `REQ`.
 | [Inputs](inputs.md) | INPUT | Select input profiles, keep stored record order, and type source fields without inferring values. |
 | [Row construction](rows.md) | ROW | Construct output rows from declared input records or groups, or from the distinct keys of the base records. |
 | [Column derivation](columns.md) | COLUMN | Sequence a run, order column dependencies, complete each value's lifecycle, and handle conditions at their site. |
-| [Expressions](expressions.md) | EXPR | Register and dispatch expressions, restrict nesting, and copy, select and classify values. |
+| [Expressions](expressions.md) | EXPR | Register and dispatch expressions, give each one result type, restrict nesting, and copy, select and classify values. |
 | [Formulas](formulas.md) | FORMULA | Read the one closed expression language in its predicate, compute and aggregate fields, and evaluate it exactly as written. |
 | [Lookup and joins](lookup.md) | LOOKUP | Match declared keys, narrow and select records, answer absence, and scope aggregates to one relation. |
 | [Windows](windows.md) | WINDOW | Declare complete named windows and compute partitions, ranks, neighbors, carried values, and baseline flags. |

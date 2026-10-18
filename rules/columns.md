@@ -361,7 +361,10 @@ alone restates the bare expression and fails as `redundant_long_form` under
 
 [Values](values.md) defines which conversions fail and
 states that a missing input is not converted at all, so `unconvertible` never
-fires for one. A conversion replacement that cannot be converted fails.
+fires for one. A conversion replacement that cannot be converted fails. A
+derivation declaring `unconvertible` is not refused under
+[VALUE-24](values.md#value-24) when its result type can never convert: the
+literal answers every value.
 
 <a id="column-14"></a>
 

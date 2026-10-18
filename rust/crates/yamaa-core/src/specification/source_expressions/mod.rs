@@ -318,7 +318,16 @@ impl Declaration {
         if findings.len() != start {
             return Ok(None);
         }
-        BoundPredicate::new(plan.clone(), bindings)
+        let typed = plan.typed(|name| {
+            crate::result_type::ResultType::declared(
+                name.split_once('.')
+                    .and_then(|(_, field)| {
+                        schema.columns().iter().find(|column| column.name == field)
+                    })
+                    .map(|column| column.kind),
+            )
+        });
+        BoundPredicate::new(typed, bindings)
             .map(Some)
             .map_err(BindError::InvalidPredicateBinding)
     }
@@ -400,7 +409,9 @@ impl Declaration {
         if findings.len() != start {
             return Ok(None);
         }
-        BoundPredicate::new(plan.clone(), bindings)
+        let typed =
+            plan.typed(|name| crate::result_type::ResultType::declared(catalog.type_of(name)));
+        BoundPredicate::new(typed, bindings)
             .map(Some)
             .map_err(BindError::InvalidPredicateBinding)
     }
