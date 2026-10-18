@@ -288,6 +288,13 @@ Indexed and scanned lookups keep the same diagnostics and ordering.
 
 ## Migration
 
+### From 0.4.0
+
+The [1.0.0 release notes](releases/1.0.0.md#migration) list each step that
+converts a 0.4.0 specification and environment, with before and after
+examples. Apply the tables below first when upgrading from an earlier
+release.
+
 ### From 0.3.0
 
 | Earlier spelling or behavior | Current form |
