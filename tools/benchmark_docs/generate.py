@@ -78,9 +78,7 @@ OUTCOMES = (
 # account of what the suite holds.
 GROUP_NOTES = {
     "schema": "Assess yamaa schema",
-    "adam": "Assess SDTM to ADaM derivations",
-    "ars": "Assess analysis datasets to analysis results",
-    "bimo": "Assess BIMO clinical site dataset derivations",
+    "adam": "Assess SDTM to ADaM and ADaM to results derivations",
     "sdtm": "Assess ODM to SDTM derivations",
     "negative": "Assess yamaa error handling",
 }
