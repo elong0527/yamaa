@@ -15,6 +15,7 @@ import zipfile
 from pathlib import Path, PurePosixPath
 
 from tools.ci import native
+from tools.packaging import check_package_notices
 from tools.packaging.check_shared_release_versions import violations
 from tools.paths import ROOT
 
@@ -222,8 +223,8 @@ def package_version(payload, version):
     )
 
 
-def archive_payloads(path, license_names):
-    wanted = {"METADATA", "PKG-INFO", "DESCRIPTION", *license_names}
+def archive_payloads(path):
+    wanted = {"METADATA", "PKG-INFO", "DESCRIPTION"}
     if path.suffix == ".whl":
         with zipfile.ZipFile(path) as archive:
             names = archive.namelist()
@@ -248,9 +249,6 @@ def archive_payloads(path, license_names):
 
 def downloaded_assets(destination, selected, linux, version, root):
     assets = []
-    python_project = tomllib.loads((root / "python/pyproject.toml").read_text())[
-        "project"
-    ]
     for artifact in selected:
         directory = destination / artifact["name"]
         paths = list(directory.iterdir())
@@ -300,7 +298,7 @@ def downloaded_assets(destination, selected, linux, version, root):
             )
             assets.append(paths[0])
         for path in paths:
-            payloads = archive_payloads(path, python_project["license-files"])
+            payloads = archive_payloads(path)
             if is_python:
                 metadata = [
                     payload
@@ -319,20 +317,9 @@ def downloaded_assets(destination, selected, linux, version, root):
                     and re.findall(r"(?m)^Version: (.+)$", description) == [version],
                     "R DESCRIPTION name/version differs",
                 )
-            for license_name in python_project["license-files"]:
-                copies = [
-                    payload
-                    for name, payload in payloads.items()
-                    if PurePosixPath(name).name == license_name
-                ]
-                require(
-                    copies
-                    and all(
-                        payload == (root / "python" / license_name).read_bytes()
-                        for payload in copies
-                    ),
-                    f"{path.name}: required license differs or is missing: {license_name}",
-                )
+            # Each package carries the project license and every notice at its
+            # own location, unchanged from the checkout.
+            check_package_notices.check_archive(path, root)
     require(
         len(assets) == len(native.PLATFORMS) + 2
         and len({path.name for path in assets}) == len(assets),
