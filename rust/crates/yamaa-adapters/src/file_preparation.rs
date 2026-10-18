@@ -726,10 +726,7 @@ mod inventory_rejection_tests {
             resources: Resources::for_entry(&base).unwrap(),
         }));
         assert_eq!(
-            crate::project_application::selection_failure(
-                &rejected,
-                yamaa_core::project_function::Language::Python,
-            ),
+            crate::project_application::selection_failure(&rejected),
             crate::file_application::preparation_failure(error().into_message())
         );
     }

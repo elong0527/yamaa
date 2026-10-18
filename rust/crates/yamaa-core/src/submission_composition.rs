@@ -81,6 +81,8 @@ pub struct Standard {
 pub struct Study {
     pub(crate) study: env::Study,
     pub(crate) section: env::Section,
+    /// The implementation guide every represented dataset follows.
+    pub(crate) guide: String,
     pub(crate) file_oid: String,
     pub(crate) metadata_id: String,
     pub(crate) metadata_name: String,
@@ -982,7 +984,7 @@ fn compose_datasets(
                 &id,
             ));
         }
-        if dataset.has_no_data.value && section.dataset_json.value {
+        if dataset.has_no_data.value && section.dataset_json() {
             findings.push(Finding::cause(
                 ConditionCode::SubmissionDatasetJsonNoData,
                 &path,
@@ -1097,14 +1099,71 @@ fn compose_datasets(
     datasets
 }
 
+/// The declarations composition requires beyond the specifications a run uses.
+#[derive(Clone, Copy, Debug)]
+pub struct Required<'a> {
+    pub study: &'a env::Study,
+    pub section: &'a env::Section,
+    pub standard: &'a env::ImplementationGuide,
+    pub define: &'a env::Field<String>,
+}
+impl<'a> Required<'a> {
+    /// A section admits for runs with only its `specs`. Composition requires the
+    /// project `study`, the selected family's section and that section's
+    /// `standard` and `define`, and reports every missing one together as a
+    /// missing required field.
+    pub fn admit(
+        study: Option<&'a env::Study>,
+        section: Option<&'a env::Section>,
+        family: Submission,
+    ) -> Result<Self, Vec<Finding>> {
+        let family = family_name(family);
+        let missing = |path: String, field: &str| {
+            Finding::cause(ConditionCode::DefineRequiredDeclaration, &path, field)
+        };
+        let standard = section.and_then(|section| section.standard.as_ref());
+        let define = section.and_then(|section| section.define.as_ref());
+        if let (Some(study), Some(section), Some(standard), Some(define)) =
+            (study, section, standard, define)
+        {
+            return Ok(Self {
+                study,
+                section,
+                standard,
+                define,
+            });
+        }
+        let mut findings = Vec::new();
+        if study.is_none() {
+            findings.push(missing("study".into(), "study"));
+        }
+        if section.is_none() {
+            findings.push(missing(family.into(), family));
+        } else {
+            if standard.is_none() {
+                findings.push(missing(format!("{family}.standard"), "standard"));
+            }
+            if define.is_none() {
+                findings.push(missing(format!("{family}.define"), "define"));
+            }
+        }
+        Err(findings)
+    }
+}
+
 pub fn compose(
-    study: &env::Study,
-    section: &env::Section,
+    required: Required<'_>,
     catalogue: &ct::Catalogue,
     inputs: &[Input<'_>],
     installed: &str,
     created: &str,
 ) -> Result<Study, Vec<Finding>> {
+    let Required {
+        study,
+        section,
+        standard: guide_declaration,
+        define,
+    } = required;
     let mut findings = Vec::new();
     let family = family_name(section.family);
     let prefix = family.to_string();
@@ -1118,7 +1177,7 @@ pub fn compose(
             "incomplete captured dataset set",
         );
     }
-    let guide = section.standard.name.value.name();
+    let guide = guide_declaration.name.value.name();
     let compatible = match section.family {
         Submission::Sdtm => guide.starts_with("SDTMIG"),
         Submission::Adam => guide.starts_with("ADaMIG"),
@@ -1131,7 +1190,7 @@ pub fn compose(
             guide,
         );
     }
-    if !section.define.value.to_ascii_lowercase().ends_with(".xml") {
+    if !define.value.to_ascii_lowercase().ends_with(".xml") {
         fail(
             ConditionCode::SubmissionDefineExtension,
             "define",
@@ -1187,8 +1246,8 @@ pub fn compose(
         name: guide.into(),
         kind: "IG",
         publishing_set: None,
-        version: section.standard.version.value.clone(),
-        status: match section.standard.status.value {
+        version: guide_declaration.version.value.clone(),
+        status: match guide_declaration.status.value {
             env::GuideStatus::Draft => "Draft",
             env::GuideStatus::Final => "Final",
         }
@@ -1262,6 +1321,7 @@ pub fn compose(
     Ok(Study {
         study: study.clone(),
         section: section.clone(),
+        guide: guide.into(),
         file_oid: section.file_oid.as_ref().map_or_else(
             || format!("{}.{}.Define-XML_2.1", study.id.value, family),
             |f| f.value.clone(),

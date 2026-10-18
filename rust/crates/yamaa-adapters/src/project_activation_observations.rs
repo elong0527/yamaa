@@ -89,9 +89,10 @@ fn function(run: &dyn ActivationView, selected: usize) -> Result<(&Function, &st
         .find(|capture| matches!(&capture.origin, Origin::Function(held) if held == name))
         .map(|capture| capture.document.source().identity.as_str())
         .or_else(|| {
+            // Inline functions are declared by the linked environment file.
             run.captured_environment()
-                .root_optional()
-                .map(|root| root.source().identity.as_str())
+                .environment_file()
+                .map(|file| file.source().identity.as_str())
         })
         .ok_or(Error::InvalidObservation)?;
     Ok((function, source))

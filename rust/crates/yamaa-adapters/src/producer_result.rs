@@ -731,9 +731,9 @@ mod log_tests {
     }
     fn environment(language: Language) -> OwnedEnvironment {
         project_source::prepare(
-            shipped_schema::capture_environment().unwrap(),
+            shipped_schema::capture_project().unwrap(),
             Source {
-                identity: "held/environment.yaml".into(),
+                identity: "held/project.yaml".into(),
                 bytes: b"schema_version: '1.0'\n".to_vec(),
             },
             language,
@@ -816,14 +816,14 @@ mod log_tests {
                     result.issues()
                 }
                 "project" => {
-                    study.write("environment.yaml", "schema_version: '1.0'\n");
+                    study.write("project.yaml", "schema_version: '1.0'\n");
                     let mut prepared = crate::file_project::FileProject::prepare(
                         resources(),
                         "producer.yaml",
-                        "environment.yaml",
+                        "project.yaml",
                         Language::Python,
                         shipped_schema::capture().unwrap(),
-                        shipped_schema::capture_environment().unwrap(),
+                        shipped_schema::capture_project().unwrap(),
                     )
                     .unwrap();
                     let attempt = prepared.build(

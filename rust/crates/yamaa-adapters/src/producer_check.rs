@@ -129,12 +129,9 @@ fn graph_error(error: &crate::producer_graph::Error) -> Option<(usize, Rejection
         _ => None,
     }
 }
-pub fn rejected(
-    error: &file_workflow::Error,
-    host: yamaa_core::project_function::Language,
-) -> Result<Vec<Issue>, Error<'_>> {
+pub fn rejected(error: &file_workflow::Error) -> Result<Vec<Issue>, Error<'_>> {
     if let file_workflow::Error::Environment(environment) = error {
-        return environment_issues(error, environment.error(), host);
+        return environment_issues(error, environment.error());
     }
     let file_workflow::Error::Graph(graph) = error else {
         return Err(Error::Original(error));
@@ -211,7 +208,6 @@ pub fn rejected(
 fn environment_issues<'a>(
     owner: &'a file_workflow::Error,
     cause: &crate::file_project::Error,
-    host: yamaa_core::project_function::Language,
 ) -> Result<Vec<Issue>, Error<'a>> {
     use crate::project_environment_diagnostics as D;
     use crate::project_source::Failure as F;
@@ -251,7 +247,7 @@ fn environment_issues<'a>(
             issues.extend(D::root_boundary(error, written).map_err(projection)?);
         }
         F::RootScalar { root, findings } => {
-            issues.extend(D::scalar_root_with_host(root, findings, host).map_err(|_| invalid())?)
+            issues.extend(D::scalar_root(root, findings).map_err(|_| invalid())?)
         }
         F::Rejected(rejected) => {
             for rows in [

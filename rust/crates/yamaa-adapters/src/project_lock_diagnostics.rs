@@ -11,8 +11,10 @@ pub fn issues(
     environment: &CapturedEnvironment,
     findings: &[Finding],
 ) -> Result<Vec<Issue>, Error> {
-    let document = &environment.root().raw().document;
+    // The linked environment file declares the lock, and its path resolves there.
     let origins = environment.lock().and_then(|lock| {
+        let file = environment.environment_file()?;
+        let document = &file.raw().document;
         let written = document
             .field(document.root(), "lock")
             .and_then(|node| document.nodes().get(node))
@@ -21,7 +23,8 @@ pub fn issues(
                 _ => None,
             })?;
         Some(LockOrigins {
-            source: &environment.root().source().identity,
+            source: &file.source().identity,
+            entry: &environment.root().source().identity,
             lock_source: &lock.source.identity,
             written,
         })
