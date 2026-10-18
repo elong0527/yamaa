@@ -37,8 +37,8 @@ columns:
     type: str
     label: Result or Finding in Original Units
 
-  # Column-wide submission metadata; each row template below overrides it
-  # for its own test code.
+  # Column-wide submission metadata; each value-level entry overrides it on
+  # the rows of its test code.
   - name: LBORRESU
     type: str
     label: Original Units
@@ -47,6 +47,19 @@ columns:
       origin:
         type: Assigned
       codelist: CL_LBORRESU
+      value_level:
+        - id: GLUC
+          where: {LBTESTCD: [GLUC]}
+          origin:
+            type: Assigned
+            source: Vendor
+          codelist: CL_GLUCOSE
+        - id: CREAT
+          where: {LBTESTCD: [CREAT]}
+          origin:
+            type: Assigned
+            source: Investigator
+          codelist: CL_CREATININE
 
   - name: LBSTRESN
     type: float
@@ -93,14 +106,8 @@ rows:
         aggregate:
           filter: "ODM.ItemOID = 'IT.LB.LBDTC'"
           expr: "ONLY(ODM.Value)"
-    submission:
-      LBORRESU:
-        origin:
-          type: Assigned
-          source: Vendor
-        codelist: CL_GLUCOSE
 
-  # The same for the creatinine entry, with its own LBORRESU metadata.
+  # The same for the creatinine entry.
   - id: creatinine
     group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
     filter: "LBORRES IS NOT NULL"
@@ -115,9 +122,3 @@ rows:
         aggregate:
           filter: "ODM.ItemOID = 'IT.LB.LBDTC'"
           expr: "ONLY(ODM.Value)"
-    submission:
-      LBORRESU:
-        origin:
-          type: Assigned
-          source: Investigator
-        codelist: CL_CREATININE

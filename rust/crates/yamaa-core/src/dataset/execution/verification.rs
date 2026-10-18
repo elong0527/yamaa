@@ -189,6 +189,7 @@ pub(crate) fn predicate_check<T: TableAccess + ?Sized>(
         inventory: None,
         row_count: None,
         offending_rows: dataset::identities(dataset, plan.keys(), offending)?,
+        entries: None,
     }))
 }
 
@@ -296,6 +297,7 @@ pub(crate) fn row_count_check<T: TableAccess + ?Sized>(
             denominators: (check.min_fraction.is_some() || check.max_fraction.is_some())
                 .then_some(denominators),
         }),
+        entries: None,
     })
 }
 

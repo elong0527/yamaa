@@ -1,0 +1,133 @@
+schema_version: "1.0"
+domain: ADLB
+keys: [STUDYID, USUBJID, PARAMCD]
+input:
+  LB:
+    path: input/lb.csv
+    types: {LBSTRESN: float}
+
+output:
+  path: adlb.csv
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVAL, AVALC, AVALU]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: LB.STUDYID
+    submission:
+      core: Req
+      mandatory: true
+      length: 20
+      origin:
+        type: Predecessor
+        description: LB.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: LB.USUBJID
+    submission:
+      core: Req
+      mandatory: true
+      length: 30
+      origin:
+        type: Predecessor
+        description: LB.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: LB.LBTESTCD
+    submission:
+      core: Req
+      mandatory: true
+      length: 8
+      origin:
+        type: Predecessor
+        description: LB.LBTESTCD
+
+  - name: PARAM
+    type: str
+    label: Parameter
+    derivation:
+      mapping:
+        source: LB.LBTESTCD
+        dict:
+          GLUC: Glucose (mg/dL)
+          CREAT: Creatinine (umol/L)
+          HCG: Choriogonadotropin Beta
+    submission:
+      core: Req
+      mandatory: true
+      length: 40
+      origin:
+        type: Assigned
+
+  # Each numeric parameter states its own precision and description and
+  # requires a value on its records; the pregnancy test has none.
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: LB.LBSTRESN
+    submission:
+      core: Cond
+      mandatory: false
+      length: 8
+      significant_digits: 1
+      origin:
+        type: Predecessor
+        description: LB.LBSTRESN
+      value_level:
+        - id: GLUC
+          where: {PARAMCD: [GLUC]}
+          label: Glucose (mg/dL)
+          mandatory: true
+          significant_digits: 0
+        - id: CREAT
+          where: {PARAMCD: [CREAT]}
+          label: Creatinine (umol/L)
+          mandatory: true
+
+  # The pregnancy test is reported only as text, from its own codelist.
+  - name: AVALC
+    type: str
+    label: Analysis Value (C)
+    derivation: LB.LBSTRESC
+    submission:
+      core: Cond
+      mandatory: false
+      length: 8
+      origin:
+        type: Predecessor
+        description: LB.LBSTRESC
+      value_level:
+        - id: HCG
+          where: {PARAMCD: [HCG]}
+          mandatory: true
+          codelist: HCGRS
+
+  # One entry covers both numeric parameters: their unit is required and
+  # drawn from the units codelist.
+  - name: AVALU
+    type: str
+    label: Analysis Value Unit
+    derivation: LB.LBSTRESU
+    submission:
+      core: Perm
+      mandatory: false
+      length: 8
+      origin:
+        type: Predecessor
+        description: LB.LBSTRESU
+      value_level:
+        - id: NUMERIC
+          where: {PARAMCD: [GLUC, CREAT]}
+          mandatory: true
+          codelist: UNIT
+
+submission:
+  label: Laboratory Analysis Dataset
+  class: BASIC DATA STRUCTURE
+  structure: One record per subject per parameter
+  repeating: true

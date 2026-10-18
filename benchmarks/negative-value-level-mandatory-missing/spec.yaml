@@ -1,0 +1,41 @@
+schema_version: "1.0"
+domain: ADVS
+keys: [USUBJID, PARAMCD]
+input:
+  VS:
+    path: input/vs.csv
+    types: {VSSTRESN: float}
+
+output:
+  path: advs.csv
+  columns: [USUBJID, PARAMCD, AVAL]
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: VS.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: VS.VSTESTCD
+
+  # A systolic pressure is required on every systolic record; any other
+  # parameter may be missing.
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: VS.VSSTRESN
+    submission:
+      mandatory: false
+      length: 8
+      significant_digits: 0
+      origin:
+        type: Predecessor
+        description: VS.VSSTRESN
+      value_level:
+        - id: SYSBP
+          where: {PARAMCD: [SYSBP]}
+          label: Systolic Blood Pressure (mmHg)
+          mandatory: true
