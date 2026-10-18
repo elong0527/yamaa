@@ -318,14 +318,15 @@ mod tests {
     #[test]
     fn only_a_thread_inside_contain_decode_is_silent() {
         assert!(!contained());
+        // A nested call that panics leaves the outer call silent; another
+        // thread is outside. Nothing asserts inside, where a failure would
+        // be contained too.
         let inside = contain_decode(|| {
-            // A nested call, even one that panics, leaves the outer call
-            // silent; another thread is outside.
-            assert!(contain_decode::<()>(|| panic!("a nested contained panic")).is_none());
+            let nested = contain_decode::<()>(|| panic!("a nested contained panic"));
             let other = std::thread::spawn(contained).join().unwrap();
-            (contained(), other)
+            (nested.is_none(), contained(), other)
         });
-        assert_eq!(inside, Some((true, false)));
+        assert_eq!(inside, Some((true, true, false)));
         assert!(!contained());
     }
 }
