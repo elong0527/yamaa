@@ -1,8 +1,7 @@
 # yamaa agent guide
 
 This file is the single entry point for agents. It maps the repository,
-states the hard rules, and gives the command that proves each kind of
-change. Area guides (linked below) add detail; none of them overrides
+states the hard rules, and says what to run before a push. Area guides (linked below) add detail; none of them overrides
 this file. Release docs are not needed for normal changes: read
 `docs/release.md` only for a release, a supported-platform change, or a
 migration decision.
@@ -66,34 +65,37 @@ their prerequisites. Local targets and CI share the owned scripts under
   files through `tools/docs/canonical_pages.py`; do not create
   `docs/index.md` or `docs/articles/rules.md`.
 
-## Change recipes
+## Before a push
 
-Each recipe names the command that proves the change. Run the recipe
-for every area a change touches.
+Run `make setup` once, then `make quick` before each push. It runs the
+lint and repository checks CI runs, leaving out only the R binding's
+Clippy, and no test suite, so it needs no R. Pull request CI runs the
+complete `make check`, so there is no need to run it locally.
 
-- **Rule or schema change** (`rules/`, `yaml/`): follow the terminology
-  and requirement-allocation rules in `rules/README.md` and the
-  maintenance rules in `yaml/README.md`, then run
-  `make check-repository`.
-- **Rust change** (`rust/`): from `rust/`, run
-  `cargo test --locked -p <crate>` for each crate touched, then
-  `cargo clippy --locked --workspace --all-targets --all-features -- -D warnings` and
-  `cargo fmt --all --check`. Portable-math controls live in
+While developing, run only the tests nearest the change:
+
+- **Rust** (`rust/`): from `rust/`, `cargo test --locked -p <crate>`
+  for each crate touched. Portable-math controls live in
   `CONTRIBUTING.md`.
-- **Python host change** (`python/`): run `make test-python` for package
-  tests and standalone installed-host checks.
-- **R host change** (`R/`): run `make test-r` for a fresh source build,
-  installation and strict package check.
-- **New or changed benchmark** (`benchmarks/`): follow
-  `benchmarks/AGENTS.md`. After `make setup` once, run one positive
-  benchmark from the root with
-  `uv run --project python --no-sync python -m tools.benchmark benchmarks/<name>`,
-  then `make check-repository`, which also checks negative benchmarks.
-- **Docs change** (`docs/`, `README.md`, `rules/README.md`): run
-  `make docs-test docs`.
-- **Anything else, or a cross-area change:** run `make check` for the
-  ordinary CI checks. Complete native release qualification is a
-  separate route described in `CONTRIBUTING.md`.
+- **Python host or tools** (`python/`, `tools/`): the touched test
+  files with `uv run --project python --no-sync python -m pytest <path>`.
+  After changing `rust/` or `python/src/`, run `make setup` again
+  first; the tests import the installed package.
+- **R host** (`R/`): `make test-r` when R 4.6.1 is installed;
+  otherwise CI's `r` job checks it.
+- **Benchmark** (`benchmarks/`): follow `benchmarks/AGENTS.md`, then
+  run the case from the root with
+  `uv run --project python --no-sync python -m tools.benchmark benchmarks/<name>`.
+- **Rules, schemas or docs** (`rules/`, `yaml/`, `docs/`, `README.md`):
+  `make quick` checks them and builds the strict site. Follow the
+  terminology and requirement-allocation rules in `rules/README.md` and
+  the maintenance rules in `yaml/README.md`.
+
+When a CI job fails, reproduce it with that job's own target from
+`make help` (`check-lint`, `check-repository`, `test-rust`,
+`test-python` or `test-r`) rather than all of `make check`. Complete
+native release qualification is a separate route described in
+`CONTRIBUTING.md`.
 
 ## Pointers
 

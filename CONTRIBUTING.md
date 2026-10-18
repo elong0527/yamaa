@@ -62,9 +62,17 @@ Run `make help` at the repository root for prerequisites, configuration variable
 and supported targets. Its inventory is the command reference. Set
 `CARGO_TARGET_DIR` when separate worktrees need independent Rust build output.
 
+Before a push, run `make quick` and the tests nearest the change. It runs lint
+and the repository checks, leaving out only the R binding's Clippy, and no test
+suite, so it needs no R. Pull request CI runs the complete `make check`; when a
+job fails, reproduce it with that job's own target below. Run `make setup` again
+after changing `rust/` or `python/src/` before Python tests, which import the
+installed package.
+
 | Command | Purpose |
 | --- | --- |
 | `make setup` | Install the locked development environment. |
+| `make quick` | Run lint without the R binding and the repository checks, before a push. |
 | `make check` | Run the checks required by ordinary CI. |
 | `make check-lint` | Check formatting and lint across Python and Rust. |
 | `make check-repository` | Check authored specifications, layout, rules, references and the site. |
@@ -102,8 +110,8 @@ Repository orchestration imports the installed development tools package.
 Standalone installed suites use copied fixtures and readers; they must not
 import repository packages.
 
-For rule or schema changes, follow their area guides and run the corresponding
-AGENTS recipe. Repository Python checks source syntax, physical schema includes,
+For rule or schema changes, follow their area guides; `make quick` runs the
+repository checks. Repository Python checks source syntax, physical schema includes,
 fixture metadata, grammar documents, layout and editorial rules without
 importing an installed engine. Its complete-corpus test refuses imports of
 yamaa, Polars and PyArrow. Shared Rust tests own schema admission, inheritance,
