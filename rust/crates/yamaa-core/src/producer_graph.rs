@@ -63,7 +63,8 @@ impl Node {
     pub fn saved(&self) -> &[Declaration] {
         &self.saved
     }
-    /// One entry per authored producer declaration, including shared aliases.
+    /// One entry per producer link this graph builds, in authored order and
+    /// including shared aliases; saved links add none.
     pub fn dependencies(&self) -> &[usize] {
         &self.dependencies
     }
