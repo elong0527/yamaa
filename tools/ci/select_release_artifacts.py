@@ -215,9 +215,11 @@ def required_jobs(coverage):
             "Report installed Python public benchmark conformance",
             "Qualify the installed package outside checkout",
         )
+    # The Linux host builds the R source archive once; every R lane installs it.
+    jobs[f"native-r-dist ({source_platform(coverage)})"] = ("Build R source package",)
     for platform in coverage["r"]["os"]:
         jobs[f"native-r ({platform})"] = (
-            "Build and install R outside checkout",
+            "Install R outside checkout",
             "Report installed R public benchmark conformance",
             "Run installed R supplemental suites outside checkout",
             "Check R source package outside checkout",
@@ -225,23 +227,29 @@ def required_jobs(coverage):
     return jobs
 
 
+def source_platform(coverage):
+    """The Linux platform whose source archives every source lane installs."""
+    linux = [
+        platform for platform in coverage["r"]["os"] if platform.startswith("ubuntu-")
+    ]
+    require(len(linux) == 1, "canonical Linux source platform is ambiguous")
+    return linux[0]
+
+
 def release_artifacts(coverage):
     """Map each release artifact to the required job that uploads it.
 
     Also return the Linux platform whose source archives are published.
     """
-    linux = [
-        platform for platform in coverage["r"]["os"] if platform.startswith("ubuntu-")
-    ]
-    require(len(linux) == 1, "canonical Linux source platform is ambiguous")
+    linux = source_platform(coverage)
     producers = {
         f"native-python-{lane['os']}-{lane['python']}": (
             f"native-dist ({lane['os']}, {lane['python']})"
         )
         for lane in coverage["build"]["include"]
     }
-    producers[f"native-r-{linux[0]}"] = f"native-r ({linux[0]})"
-    return producers, linux[0]
+    producers[f"native-r-{linux}"] = f"native-r-dist ({linux})"
+    return producers, linux
 
 
 def validate_jobs(jobs, coverage, run):

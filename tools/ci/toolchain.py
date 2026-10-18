@@ -8,6 +8,11 @@ from pathlib import Path
 
 from tools.paths import WORKSPACE
 
+# Repository checks lint and format with these. The toolchain file names only
+# what a build needs, because both source packages carry it and rustup would
+# otherwise add these to every R source installation.
+CHECK_COMPONENTS = ("clippy", "rustfmt")
+
 
 def declaration():
     return tomllib.loads((WORKSPACE / "rust-toolchain.toml").read_text())["toolchain"]
@@ -24,6 +29,25 @@ def minimum():
     return ".".join((version.split(".") + ["0", "0"])[:3])
 
 
+def install_command(toolchain):
+    """The rustup command that installs a toolchain for repository checks."""
+    components = dict.fromkeys([*toolchain.get("components", []), *CHECK_COMPONENTS])
+    return [
+        "rustup",
+        "toolchain",
+        "install",
+        toolchain["channel"],
+        "--profile",
+        toolchain["profile"],
+        "--no-self-update",
+        *[
+            argument
+            for component in components
+            for argument in ("--component", component)
+        ],
+    ]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--install", action="store_true")
@@ -37,23 +61,7 @@ def main():
     if arguments.minimum:
         toolchain["channel"] = minimum()
     if arguments.install:
-        subprocess.run(
-            [
-                "rustup",
-                "toolchain",
-                "install",
-                toolchain["channel"],
-                "--profile",
-                toolchain["profile"],
-                "--no-self-update",
-                *[
-                    argument
-                    for component in toolchain.get("components", [])
-                    for argument in ("--component", component)
-                ],
-            ],
-            check=True,
-        )
+        subprocess.run(install_command(toolchain), check=True)
     if github_environment := os.environ.get("GITHUB_ENV"):
         with Path(github_environment).open("a") as output:
             output.write(f"RUSTUP_TOOLCHAIN={toolchain['channel']}\n")

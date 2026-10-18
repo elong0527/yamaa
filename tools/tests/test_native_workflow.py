@@ -16,19 +16,67 @@ from tools.ci import select_release_artifacts as release
 from tools.paths import ROOT
 from tools.validation._repository_yaml import UniqueKeyLoader
 
-MATRIX_VALUE = re.compile(r"\$\{\{\s*matrix\.([A-Za-z0-9_-]+)\s*\}\}")
+EXPRESSION = re.compile(r"\$\{\{(.*?)\}\}")
 
 
-def expand(template, lane):
+def evaluate(expression, context):
+    """Evaluate the GitHub expression subset that native.yml names use.
+
+    Operands are quoted strings and context properties such as matrix.os;
+    the operators are ==, && and ||, with GitHub's precedence and operand
+    results. Anything else fails rather than being guessed.
+    """
+    tokens = re.findall(r"'[^']*'|==|&&|\|\||[^\s=&|]+", expression)
+    if not tokens:
+        raise AssertionError(f"this test cannot evaluate {expression!r}")
+
+    def operand():
+        token = tokens.pop(0) if tokens else ""
+        if len(token) > 1 and token.startswith("'") and token.endswith("'"):
+            return token[1:-1]
+        scope, _, key = token.partition(".")
+        if key not in context.get(scope, {}):
+            raise AssertionError(f"this test cannot evaluate {expression!r}")
+        return context[scope][key]
+
+    def comparison():
+        value = operand()
+        while tokens[:1] == ["=="]:
+            tokens.pop(0)
+            value = value == operand()
+        return value
+
+    def conjunction():
+        value = comparison()
+        while tokens[:1] == ["&&"]:
+            tokens.pop(0)
+            right = comparison()
+            value = right if value else value
+        return value
+
+    def disjunction():
+        value = conjunction()
+        while tokens[:1] == ["||"]:
+            tokens.pop(0)
+            right = conjunction()
+            value = value or right
+        return value
+
+    value = disjunction()
+    if tokens:
+        raise AssertionError(f"this test cannot evaluate {expression!r}")
+    return value
+
+
+def expand(template, context):
     """Fill a job or artifact name with one matrix lane's values."""
-    name = MATRIX_VALUE.sub(lambda match: str(lane[match.group(1)]), template)
-    if "${{" in name:
-        raise AssertionError(f"this test cannot expand the expression in {template}")
-    return name
+    return EXPRESSION.sub(
+        lambda match: str(evaluate(match.group(1), context)), template
+    )
 
 
 def native_run_jobs():
-    """Map each job a native run lists to its step names and uploaded artifacts."""
+    """Map each job a native run lists to its steps and artifact names."""
     workflow = yaml.load(
         (ROOT / ".github/workflows/native.yml").read_text(encoding="utf-8"),
         Loader=UniqueKeyLoader,
@@ -42,17 +90,31 @@ def native_run_jobs():
             raise AssertionError(f"{job_id}: this test expands only plain matrices")
         for values in itertools.product(*matrix.values()):
             lane = dict(zip(matrix, values, strict=True))
-            name = expand(job.get("name", job_id), lane)
+            context = {"matrix": lane, "env": dict(workflow.get("env", {}))}
+            context["env"].update(
+                {
+                    key: expand(value, context)
+                    for key, value in job.get("env", {}).items()
+                }
+            )
+            name = expand(job.get("name", job_id), context)
             if name in jobs:
                 raise AssertionError(f"more than one native job is named {name}")
-            jobs[name] = (
-                [step.get("name") for step in job["steps"]],
-                [
-                    expand(step["with"]["name"], lane)
-                    for step in job["steps"]
-                    if step.get("uses", "").startswith("actions/upload-artifact@")
-                ],
-            )
+            jobs[name] = {"steps": [], "uploads": [], "downloads": []}
+            for step in job["steps"]:
+                jobs[name]["steps"].append(step.get("name"))
+                action = step.get("uses", "").split("@")[0]
+                if action not in (
+                    "actions/upload-artifact",
+                    "actions/download-artifact",
+                ) or "name" not in step.get("with", {}):
+                    continue
+                if action == "actions/download-artifact" and "if" in step:
+                    raise AssertionError(
+                        f"{name}: this test reads no download condition"
+                    )
+                kind = "uploads" if action == "actions/upload-artifact" else "downloads"
+                jobs[name][kind].append(expand(step["with"]["name"], context))
     return jobs
 
 
@@ -69,20 +131,67 @@ class NativeWorkflowContract(unittest.TestCase):
 
     def test_each_required_step_is_named_once_in_its_job(self):
         for job, steps in release.required_jobs(self.coverage).items():
-            names = self.jobs.get(job, ([], []))[0]
+            names = self.jobs.get(job, {"steps": []})["steps"]
             for step in steps:
                 with self.subTest(job=job, step=step):
                     self.assertEqual(names.count(step), 1)
 
     def test_each_release_artifact_is_uploaded_by_its_producing_job_alone(self):
         uploaders = {}
-        for job, (_, artifacts) in self.jobs.items():
-            for artifact in artifacts:
+        for job, artifacts in self.jobs.items():
+            for artifact in artifacts["uploads"]:
                 uploaders.setdefault(artifact, []).append(job)
         producers, _ = release.release_artifacts(self.coverage)
         for artifact, producer in producers.items():
             with self.subTest(artifact=artifact):
                 self.assertEqual(uploaders.get(artifact), [producer])
+
+    def test_every_source_lane_installs_the_published_source_archives(self):
+        # macOS and Windows install the Linux-built archives a release
+        # publishes, rather than building their own.
+        producers, linux = release.release_artifacts(self.coverage)
+        python_source = f"native-python-{linux}-{native.BUILD_PYTHON}"
+        r_source = f"native-r-{linux}"
+        self.assertLessEqual({python_source, r_source}, set(producers))
+        for lane in self.coverage["qualify"]["include"]:
+            job = "native-qualify ({os}, {python}, {form})".format(**lane)
+            own = f"native-python-{lane['os']}-{native.BUILD_PYTHON}"
+            with self.subTest(job=job):
+                self.assertEqual(
+                    [
+                        name
+                        for name in self.jobs[job]["downloads"]
+                        if name.startswith("native-python-")
+                    ],
+                    [python_source if lane["form"] == "source" else own],
+                )
+        for platform in self.coverage["r"]["os"]:
+            job = f"native-r ({platform})"
+            with self.subTest(job=job):
+                self.assertEqual(
+                    [
+                        name
+                        for name in self.jobs[job]["downloads"]
+                        if name.startswith("native-r-")
+                    ],
+                    [r_source],
+                )
+
+    def test_the_expression_subset_follows_github_operand_results(self):
+        context = {"matrix": {"form": "source", "os": "macos-15"}, "env": {}}
+        for expression, expected in (
+            ("matrix.form == 'source' && 'ubuntu-24.04' || matrix.os", "ubuntu-24.04"),
+            ("matrix.form == 'wheel' && 'ubuntu-24.04' || matrix.os", "macos-15"),
+            ("matrix.os", "macos-15"),
+        ):
+            with self.subTest(expression=expression):
+                self.assertEqual(evaluate(expression, context), expected)
+        for expression in ("runner.os == 'Windows'", "matrix.form != 'wheel'", "", "("):
+            with (
+                self.subTest(expression=expression),
+                self.assertRaisesRegex(AssertionError, "cannot evaluate"),
+            ):
+                evaluate(expression, context)
 
 
 if __name__ == "__main__":
