@@ -187,6 +187,86 @@ mod execution {
         assert!(!fixture.0.join("result.csv").exists());
     }
         }
+        /// A qualified `between.value` reads the record that built the row, so
+        /// it names the driver of every row the aggregate is derived for.
+        /// Another input has no record there and is refused (#2904).
+        #[test]
+        fn a_qualified_between_value_reads_only_the_rows_own_driver_record() {
+            let run = |spec: String| {
+                let fixture = Fixture::new();
+                fs::write(fixture.0.join("a.csv"), b"ID,CUT\na,1\nb,2\n").unwrap();
+                fs::write(
+                    fixture.0.join("b.csv"),
+                    b"ID,N\na,1\na,2\na,3\nb,1\nb,2\nb,3\n",
+                )
+                .unwrap();
+                // C orders the subjects the other way and keeps each limit in
+                // the column where A keeps its cutoff.
+                fs::write(fixture.0.join("c.csv"), b"ID,LIMIT\nb,3\na,2\n").unwrap();
+                fs::write(fixture.0.join("spec.yaml"), spec).unwrap();
+                let issues = match fixture.run() {
+                    Ok(mut domain) if domain.issues().is_empty() => {
+                        assert!(domain.save().unwrap());
+                        return Ok(fs::read_to_string(fixture.0.join("result.csv")).unwrap());
+                    }
+                    Ok(mut domain) => {
+                        assert!(domain.save().is_err());
+                        domain.issues()
+                    }
+                    Err(issues) => issues,
+                };
+                Err(issues
+                    .iter()
+                    .map(|issue| yamaa_adapters::json!({"phase": issue.phase, "condition": issue.condition, "requirement": issue.requirement, "spec_paths": issue.spec_paths, "context": issue.context.clone()}))
+                    .collect::<Vec<_>>())
+            };
+            let refused = |identifier: &str| {
+                Err(vec![yamaa_adapters::json!({
+                    "phase": "validation", "condition": "unknown_field", "requirement": "REQ-0121",
+                    "spec_paths": ["columns.TOTAL.derivation.aggregate.between.value"],
+                    "context": {"identifier": identifier}
+                })])
+            };
+            let operation = |value: &str| {
+                format!("        between: {{value: {value}, lower: N}}\n        expr: SUM(B.N)\n")
+            };
+            let inputs = |spec: String| {
+                spec.replace(
+                    "  B: {path: b.csv, types: {N: int}}\n",
+                    "  B: {path: b.csv, types: {N: int}}\n  C: {path: c.csv, types: {LIMIT: int}}\n",
+                )
+            };
+            // Without row templates the base input builds every row.
+            for value in ["A.CUT", "CUT"] {
+                assert_eq!(
+                    run(inputs(specification(&operation(value)))),
+                    Ok("ID,CUT,TOTAL\na,1,1\nb,2,3\n".into())
+                );
+            }
+            assert_eq!(
+                run(inputs(specification(&operation("C.LIMIT")))),
+                refused("C.LIMIT")
+            );
+            // Rows built from A and from C share the aggregate's column, so
+            // neither input supplies a record for every row.
+            let rows = |value: &str, templates: &str| {
+                format!("schema_version: '1.0'\ndomain: TEST\nkeys: [ID, ORIGIN]\ninput:\n  A: {{path: a.csv, types: {{CUT: int}}}}\n  B: {{path: b.csv, types: {{N: int}}}}\n  C: {{path: c.csv, types: {{LIMIT: int}}}}\noutput: {{path: result.csv, columns: [ID, ORIGIN, TOTAL]}}\ncolumns:\n  - {{name: ID, type: str}}\n  - {{name: ORIGIN, type: str}}\n  - name: TOTAL\n    type: float\n    derivation:\n      aggregate:\n{}rows:\n{templates}", operation(value))
+            };
+            let from_a =
+                "  - id: a\n    dataset: A\n    derivations: {ID: A.ID, ORIGIN: {literal: A}}\n";
+            let from_c =
+                "  - id: c\n    dataset: C\n    derivations: {ID: C.ID, ORIGIN: {literal: C}}\n";
+            assert_eq!(
+                run(rows("A.CUT", from_a)),
+                Ok("ID,ORIGIN,TOTAL\na,A,1\nb,A,3\n".into())
+            );
+            for value in ["A.CUT", "C.LIMIT"] {
+                assert_eq!(
+                    run(rows(value, &format!("{from_a}{from_c}"))),
+                    refused(value)
+                );
+            }
+        }
         #[test]
         fn named_derive_read_requires_keep_and_uses_original_current_record() {
             let fixture = Fixture::new();
@@ -1247,10 +1327,14 @@ S1,002,2024-06
         /// finding is decided from. `domain` reaches each of them once it reads or
         /// binds the inputs. A case that `check` starts to report fails until it
         /// leaves this list.
-        const NOT_REPORTED_BY_CHECK: [(&str, &str); 24] = [
+        const NOT_REPORTED_BY_CHECK: [(&str, &str); 26] = [
             (
                 "negative-adlb-computed-param",
                 "a cycle through an aggregate and a case",
+            ),
+            (
+                "negative-aggregate-range-other-input",
+                "the fields stored in the input an aggregate range reads",
             ),
             ("negative-cut-coded", "the stored type of an input field"),
             (
@@ -1276,6 +1360,10 @@ S1,002,2024-06
             (
                 "negative-lookup-mismatched",
                 "the fields stored in the current input",
+            ),
+            (
+                "negative-lookup-range-other-input",
+                "the fields stored in the input a lookup range reads",
             ),
             (
                 "negative-lookup-unknown-key",
@@ -2770,6 +2858,101 @@ S1,002,2024-06
             assert!(result.issues().is_empty(), "{:?}", result.issues());
             assert!(result.save().unwrap());
             assert_eq!(fs::read_to_string(fixture.0.join("out.csv")).unwrap(), "USUBJID,PCSEQ,ADTM,LDOSEDTM,X\nS1,1,2030-01-01T09:00:00,2030-01-01T07:00:00,2030-01-02T07:00:00\nS1,2,2030-01-02T09:00:00,2030-01-02T07:00:00,2030-01-02T07:00:00\nS2,1,2030-01-01T10:00:00,2030-01-01T07:30:00,2030-01-01T07:30:00\n");
+        }
+
+        /// A `between.value` qualified by an input reads that input's record
+        /// only where it drives the reading row or donor record. Elsewhere it
+        /// names no current-row value, however the intermediate is reached.
+        #[test]
+        fn a_qualified_between_value_reads_only_its_own_driver_record() {
+            const WINDOW: &str = "  - id: W\n    dataset: WIN\n    key: [USUBJID]\n    between: {value: REF.REFDAY, lower: LO, upper: HI}\n    order_by: [WIN.LO]\n    keep: first\n    no_match: null\n";
+            let run = |body: &str| {
+                let fixture = Fixture::new();
+                fs::write(fixture.0.join("spec.yaml"), format!("schema_version: '1.0'\ndomain: OUT\ninput:\n  SUBJ: {{path: subj.csv, types: {{SUBJDAY: int}}}}\n  REF: {{path: ref.csv, types: {{REFDAY: int}}}}\n  WIN: {{path: win.csv, types: {{LO: int, HI: int}}}}\n  EVT: {{path: evt.csv, types: {{EVDAY: int}}}}\n{body}")).unwrap();
+                // REF orders subjects the other way and keeps its day in the
+                // column where SUBJ keeps a different day.
+                fs::write(fixture.0.join("subj.csv"), "USUBJID,SUBJDAY\nS1,5\nS2,50\n").unwrap();
+                fs::write(fixture.0.join("ref.csv"), "USUBJID,REFDAY\nS2,5\nS1,50\n").unwrap();
+                fs::write(fixture.0.join("win.csv"), "USUBJID,NAME,LO,HI\nS1,EARLY,1,10\nS1,LATE,11,100\nS2,EARLY,1,10\nS2,LATE,11,100\n").unwrap();
+                fs::write(fixture.0.join("evt.csv"), "USUBJID,EVDAY\nS1,3\nS2,3\n").unwrap();
+                let path = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
+                let mut result = match file_application::domain(
+                    yamaa_core::project_function::Language::Python,
+                    Request {
+                        specification: &path,
+                        environment: None,
+                    },
+                    Identity {
+                        runtime: "test",
+                        runtime_version: "test",
+                        engine_version: yamaa_core::VERSION,
+                        example: "between-current-driver",
+                        specification: &path,
+                        base_directory: ".",
+                    },
+                ) {
+                    Ok(result) => result,
+                    Err(failure) => return Err(failure.iter().map(issue).collect::<Vec<_>>()),
+                };
+                let issues = result.issues().iter().map(issue).collect::<Vec<_>>();
+                if !issues.is_empty() {
+                    assert!(result.save().is_err());
+                    return Err(issues);
+                }
+                assert!(result.save().unwrap());
+                Ok(fs::read_to_string(fixture.0.join("out.csv")).unwrap())
+            };
+            let base = "keys: [USUBJID]\nbase: SUBJ\noutput: {path: out.csv, columns: [USUBJID, WINDOW]}\nintermediates:\n";
+            let column = |derivation: &str| {
+                format!("columns:\n  - {{name: USUBJID, type: str, derivation: SUBJ.USUBJID}}\n  - {{name: WINDOW, type: str, derivation: {derivation}}}\n")
+            };
+            // The base driver's rows name no REF record: read directly, through
+            // another intermediate's value, from an aggregate's derive step, or
+            // through an aggregate's range value.
+            let direct = format!("{base}{WINDOW}{}", column("W.NAME"));
+            let chained = WINDOW.replace("id: W\n", "id: W2\n")
+                + &WINDOW.replace("value: REF.REFDAY", "value: W2.LO");
+            let chained = format!("{base}{chained}{}", column("W.NAME"));
+            let aggregated = |derivation: &str| {
+                format!("{base}{WINDOW}{}", column(derivation)).replace(
+                    "type: str, derivation: {aggregate",
+                    "type: int, derivation: {aggregate",
+                )
+            };
+            let derived = aggregated("{aggregate: {key: [USUBJID], derive: [{name: DAY, type: int, derivation: EVT.EVDAY}, {name: LOW, type: int, derivation: W.LO}], expr: 'MAX(LOW)'}}");
+            let ranged = aggregated(
+                "{aggregate: {between: {value: W.LO, lower: EVDAY}, expr: 'COUNT(EVT.EVDAY)'}}",
+            );
+            let refused = |intermediate: &str| {
+                Err(vec![yamaa_adapters::json!({
+                    "phase": "validation", "condition": "unknown_field", "requirement": "REQ-0121",
+                    "spec_paths": ["intermediates[0].between.value"],
+                    "context": {"intermediate": intermediate, "identifier": "REF.REFDAY"}
+                })])
+            };
+            assert_eq!(run(&direct), refused("W"));
+            assert_eq!(run(&chained), refused("W2"));
+            assert_eq!(run(&derived), refused("W"));
+            assert_eq!(run(&ranged), refused("W"));
+            // A donor record of REF supplies the value under REQ-1263.
+            let reader = "  - id: R\n    dataset: REF\n    key: [USUBJID]\n    derivations: {WINNAME: W.NAME}\n";
+            assert_eq!(
+                run(&format!("{base}{WINDOW}{reader}{}", column("R.WINNAME"))),
+                Ok("USUBJID,WINDOW\nS1,LATE\nS2,EARLY\n".into())
+            );
+            // So does REF's record in the row template it drives, read by the
+            // range or by a correlated filter.
+            let rows = "keys: [USUBJID, ORIGIN]\noutput: {path: out.csv, columns: [USUBJID, ORIGIN, WINDOW]}\ncolumns:\n  - {name: USUBJID, type: str}\n  - {name: ORIGIN, type: str}\n  - {name: WINDOW, type: str}\nrows:\n  - id: subj\n    dataset: SUBJ\n    derivations: {USUBJID: SUBJ.USUBJID, ORIGIN: {literal: SUBJ}, WINDOW: {literal: NONE}}\n  - id: ref\n    dataset: REF\n    derivations: {USUBJID: REF.USUBJID, ORIGIN: {literal: REF}, WINDOW: W.NAME}\nintermediates:\n";
+            let filtered = WINDOW.replace(
+                "between: {value: REF.REFDAY, lower: LO, upper: HI}",
+                "filter: 'WIN.LO <= REF.REFDAY AND REF.REFDAY <= WIN.HI'",
+            );
+            for window in [WINDOW.to_owned(), filtered] {
+                assert_eq!(
+                    run(&format!("{rows}{window}")),
+                    Ok("USUBJID,ORIGIN,WINDOW\nS1,SUBJ,NONE\nS2,SUBJ,NONE\nS2,REF,EARLY\nS1,REF,LATE\n".into())
+                );
+            }
         }
     }
     mod completed_lookup_assertions {

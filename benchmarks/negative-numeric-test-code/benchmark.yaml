@@ -1,0 +1,6 @@
+lifecycle: draft
+standard: SDTM
+domain: LB
+validation:
+  rule: R024
+  validator: submission_contract
