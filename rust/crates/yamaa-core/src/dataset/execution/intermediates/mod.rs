@@ -210,6 +210,24 @@ fn materialize<E>(
     if let Some(data) = state.intermediates.materialized.get(&key) {
         return Ok(Some(Rc::clone(data)));
     }
+    let current = current_fields(derived, assignment, context, plan, row, state)?;
+    let data = build(item, derived, &current, None, plan, state)?;
+    state
+        .intermediates
+        .materialized
+        .insert(key, Rc::clone(&data));
+    Ok(Some(data))
+}
+
+/// The current record's fields a derived intermediate's derivations read.
+fn current_fields<E>(
+    derived: &IntermediateDerivations,
+    assignment: &Assignment,
+    context: &Candidate,
+    plan: &DatasetPlan,
+    row: usize,
+    state: &mut EvaluationState<'_, E>,
+) -> Result<Vec<Value>, Box<ExecutionError<E>>> {
     let primary = row_drivers::Driver::Primary(state.primary);
     let mut current = Vec::new();
     for field in &derived.current {
@@ -224,6 +242,96 @@ fn materialize<E>(
             state,
         )?);
     }
+    Ok(current)
+}
+
+/// A donor built for one current row, with the row's match values.
+type Matched<E> = Result<(Rc<Dataset>, Vec<(usize, Value)>), Box<ExecutionError<E>>>;
+
+/// LOOKUP-15: the donor records that derivations reading the current record
+/// augment for one current row, with the row's match values. The current
+/// fields resolve first, as for every build, then the match values, and only
+/// the records whose stored keys match them are augmented. The others keep
+/// no derived value: no later step of the match reads one.
+#[allow(clippy::too_many_arguments)]
+fn materialize_matched<T: TableAccess + ?Sized>(
+    index: usize,
+    assignment: &Assignment,
+    candidate: &Candidate,
+    plan: &DatasetPlan,
+    row: usize,
+    primary: &T,
+    state: &mut EvaluationState<'_, T::Error>,
+) -> Matched<T::Error> {
+    let item = &plan.intermediates()[index];
+    let derived = item
+        .derivations
+        .as_ref()
+        .expect("an intermediate deriving matched records has derivations");
+    let current = current_fields(derived, assignment, candidate, plan, row, state)?;
+    let keys = match_values(item, candidate, plan, row, primary, state)?;
+    let donors = self_relations::Donors::<T::Error>::new(state.self_rows, plan.output());
+    let table: &dyn TableAccess<Error = T::Error> = match &item.source {
+        IntermediateSource::Input(index) => state.secondary[*index],
+        IntermediateSource::Primary { .. } => state.primary,
+        IntermediateSource::SelfRows { .. } => &donors,
+    };
+    let matched = matched_records(table, item, plan, &keys)?;
+    let data = build(item, derived, &current, Some(&matched), plan, state)?;
+    state.intermediates.materialized.insert(
+        (index, Some(candidate.selection_identity)),
+        Rc::clone(&data),
+    );
+    Ok((data, keys))
+}
+
+/// The records whose stored keys equal the match values, in stored order. A
+/// key pair whose types cannot compare is refused as the match would refuse
+/// it, on the same record.
+fn matched_records<E>(
+    table: &dyn TableAccess<Error = E>,
+    item: &Intermediate,
+    plan: &DatasetPlan,
+    keys: &[(usize, Value)],
+) -> Result<Vec<usize>, Box<ExecutionError<E>>> {
+    let probe_keys = keys
+        .iter()
+        .map(|(column, value)| (*column, ValueRef::from(value)))
+        .collect::<Vec<_>>();
+    let kinds = keys
+        .iter()
+        .map(|(column, _)| item.source_kind(plan.secondary(), *column).map(Into::into))
+        .collect::<Vec<_>>();
+    let probe = matching::Probe {
+        keys: &probe_keys,
+        kinds: &kinds,
+        range: None,
+    };
+    if probe.incomplete() {
+        return Ok(Vec::new());
+    }
+    matching::candidates(
+        0..table.row_count(),
+        table.row_count(),
+        &probe,
+        |source_row, column| cell(table, item, source_row, column),
+        |_| Ok(true),
+    )
+    .map(|found| found.rows)
+    .map_err(|found| refusal(found, item, table, keys))
+}
+
+/// A derived intermediate's donor records: every stored field copied, then
+/// each derivation evaluated in declaration order for every record, or for
+/// the `matched` records only.
+fn build<E>(
+    item: &Intermediate,
+    derived: &IntermediateDerivations,
+    current: &[Value],
+    matched: Option<&[usize]>,
+    plan: &DatasetPlan,
+    state: &mut EvaluationState<'_, E>,
+) -> Result<Rc<Dataset>, Box<ExecutionError<E>>> {
     let donors = self_relations::Donors::<E>::new(state.self_rows, plan.output());
     let table: &dyn TableAccess<Error = E> = match &item.source {
         IntermediateSource::Input(index) => state.secondary[*index],
@@ -283,12 +391,20 @@ fn materialize<E>(
     // donor records are built (COLUMN-14); typed results convert against the
     // caller's counter.
     let mut donor_handlers = HandlerCounter::default();
+    let all: Vec<usize>;
+    let rows = match matched {
+        Some(rows) => rows,
+        None => {
+            all = (0..candidates.len()).collect();
+            &all
+        }
+    };
     for assignment in nested.columns() {
         let table = Data::<E>::new(&input);
         let mut numbers =
             windows::Evaluation::new(assignment, &candidates, nested, &table, &mut donor_handlers)?;
         let mut nested_windows = windows::Cache::default();
-        for row in 0..candidates.len() {
+        for &row in rows {
             let table = Data::<E>::new(&input);
             let evaluated = if let Some(run) = &mut numbers {
                 run.value(row, &candidates, &table, assignment, nested)
@@ -337,18 +453,13 @@ fn materialize<E>(
             candidates[row].completed[assignment.column] = true;
         }
     }
-    let data = Rc::new(Dataset {
+    Ok(Rc::new(Dataset {
         schema: nested.output().clone(),
         rows: candidates
             .into_iter()
             .map(|candidate| candidate.values)
             .collect(),
-    });
-    state
-        .intermediates
-        .materialized
-        .insert(key, Rc::clone(&data));
-    Ok(Some(data))
+    }))
 }
 
 /// A raw donor failure has donor provenance, rather than a destination identity.
@@ -580,7 +691,20 @@ fn read_with_observations<T: TableAccess + ?Sized>(
     }
     let item = &plan.intermediates()[index];
     let cache_key = (candidate.selection_identity, index);
-    let prepared = materialize(index, assignment, candidate, plan, row, state)?;
+    // Derivations that read the current record augment only the records the
+    // match values select (LOOKUP-15), so those values resolve first.
+    let (prepared, keys) = if item.derives_matched_records()
+        && !state.intermediates.choices.contains_key(&cache_key)
+    {
+        let (data, keys) =
+            materialize_matched(index, assignment, candidate, plan, row, primary, state)?;
+        (Some(data), Some(keys))
+    } else {
+        (
+            materialize(index, assignment, candidate, plan, row, state)?,
+            None,
+        )
+    };
     let materialized = prepared.as_ref().map(|data| Data::<T::Error>::new(data));
     let donors = self_relations::Donors::<T::Error>::new(state.self_rows, plan.output());
     let table: &dyn TableAccess<Error = T::Error> = if let Some(data) = &materialized {
@@ -612,6 +736,7 @@ fn read_with_observations<T: TableAccess + ?Sized>(
             item,
             source_name,
             cache_key,
+            keys,
         )?
     };
     let (value, handler) = match choice {
@@ -723,21 +848,11 @@ fn resolve_choice<T: TableAccess + ?Sized>(
     item: &Intermediate,
     source_name: &str,
     cache_key: (SelectionIdentity, usize),
+    keys: Option<Vec<(usize, Value)>>,
 ) -> Result<Choice, Box<ExecutionError<T::Error>>> {
-    // Expression match values resolve their current references first.
-    let current = if item.has_expression_keys() {
-        Some(match_values::resolve(
-            item, candidate, plan, row, primary, state,
-        )?)
-    } else {
-        None
-    };
-    check_deferred_filter_types(item)?;
-    let keys = match current {
-        Some(current) => {
-            match_values::evaluate(item, &current, candidate, plan, row, primary, state)?
-        }
-        None => match_values::ordinary(item, candidate, plan, row, primary, state)?,
+    let keys = match keys {
+        Some(keys) => keys,
+        None => match_values(item, candidate, plan, row, primary, state)?,
     };
     let range_value = item
         .range
@@ -899,36 +1014,7 @@ fn resolve_choice<T: TableAccess + ?Sized>(
                 Ok(kept)
             },
         )
-        .map_err(|refusal| match refusal {
-            matching::Refusal::Failed(error) => error,
-            matching::Refusal::Key {
-                index: pair,
-                current,
-                donor,
-            } => {
-                let column = keys[pair].0;
-                let key = item
-                    .keys
-                    .iter()
-                    .find(|key| key.source_column == column)
-                    .expect("resolved key belongs to the admitted selector");
-                Box::new(ExecutionError::ScalarDiagnostic(
-                    crate::diagnostic::lookup::key_type(
-                        &key.path,
-                        crate::diagnostic::lookup::Owner::Intermediate(&item.identifier),
-                        &matching::key_source(key, &table.schema().columns()[column].name),
-                        crate::result_type::ResultType::known(current),
-                        crate::result_type::ResultType::known(donor),
-                    ),
-                ))
-            }
-            matching::Refusal::Range(types) => {
-                Box::new(ExecutionError::ScalarDiagnostic(types.diagnostic(
-                    item.range.as_ref().map_or("", |range| range.path()),
-                    &item.identifier,
-                )))
-            }
-        })?;
+        .map_err(|found| refusal(found, item, table, &keys))?;
         count = found.rows.len();
         selected = found.rows.first().copied();
         if count > 1 {
@@ -969,6 +1055,71 @@ fn resolve_choice<T: TableAccess + ?Sized>(
 
     state.intermediates.choices.insert(cache_key, choice);
     Ok(choice)
+}
+
+/// The current row's match values: the current references of expression
+/// match values first, then every key.
+fn match_values<T: TableAccess + ?Sized>(
+    item: &Intermediate,
+    candidate: &Candidate,
+    plan: &DatasetPlan,
+    row: usize,
+    primary: &T,
+    state: &mut EvaluationState<'_, T::Error>,
+) -> match_values::KeyValues<T::Error> {
+    let current = if item.has_expression_keys() {
+        Some(match_values::resolve(
+            item, candidate, plan, row, primary, state,
+        )?)
+    } else {
+        None
+    };
+    check_deferred_filter_types(item)?;
+    match current {
+        Some(current) => {
+            match_values::evaluate(item, &current, candidate, plan, row, primary, state)
+        }
+        None => match_values::ordinary(item, candidate, plan, row, primary, state),
+    }
+}
+
+/// The finding of a match that stopped before its candidates were complete.
+fn refusal<E>(
+    refusal: matching::Refusal<E>,
+    item: &Intermediate,
+    table: &dyn TableAccess<Error = E>,
+    keys: &[(usize, Value)],
+) -> Box<ExecutionError<E>> {
+    match refusal {
+        matching::Refusal::Failed(error) => error,
+        matching::Refusal::Key {
+            index: pair,
+            current,
+            donor,
+        } => {
+            let column = keys[pair].0;
+            let key = item
+                .keys
+                .iter()
+                .find(|key| key.source_column == column)
+                .expect("resolved key belongs to the admitted selector");
+            Box::new(ExecutionError::ScalarDiagnostic(
+                crate::diagnostic::lookup::key_type(
+                    &key.path,
+                    crate::diagnostic::lookup::Owner::Intermediate(&item.identifier),
+                    &matching::key_source(key, &table.schema().columns()[column].name),
+                    crate::result_type::ResultType::known(current),
+                    crate::result_type::ResultType::known(donor),
+                ),
+            ))
+        }
+        matching::Refusal::Range(types) => {
+            Box::new(ExecutionError::ScalarDiagnostic(types.diagnostic(
+                item.range.as_ref().map_or("", |range| range.path()),
+                &item.identifier,
+            )))
+        }
+    }
 }
 
 /// Whether a filter that reads only the donor records keeps one of them.

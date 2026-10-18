@@ -29,6 +29,9 @@ pub(super) use super::aggregates::{aggregate, Record};
 pub(super) use super::joins::{join, joined_value, JoinSite};
 pub(super) use super::odm::odm;
 
+/// A row's match values: each key's donor column and the value it must equal.
+pub(super) type MatchValues = Vec<(usize, Value)>;
+
 /// One row's record choice: immutable donor coordinates and whether
 /// several records competed.
 #[derive(Clone, Copy, Debug)]
@@ -509,22 +512,34 @@ pub(super) fn named_value<E>(
     let plan = run.plan;
     let item = item(plan, relation);
     let identity = cx.frame.identity(row);
-    let prepared = donor::materialize(run, cx, relation, Some(site), Some(row))?;
-    let table = match &prepared {
-        Some(data) => data.table(),
-        None => source_table(item, cx),
-    };
-    let secondary = &plan.region(cx.region).secondary;
-    let name = source_name(item, secondary);
     let cached = run
         .relations
         .named(relation)
         .choices
         .get(&identity)
         .copied();
+    // Derivations that read the current record augment only the records the
+    // match values select (LOOKUP-15), so those values resolve first.
+    let (prepared, keys) = if cached.is_none() && item.derives_matched_records() {
+        let (data, keys) = donor::materialize_matched(run, cx, relation, site, row)?;
+        (Some(data), Some(keys))
+    } else {
+        (
+            donor::materialize(run, cx, relation, Some(site), Some(row))?,
+            None,
+        )
+    };
+    let table = match &prepared {
+        Some(data) => data.table(),
+        None => source_table(item, cx),
+    };
+    let secondary = &plan.region(cx.region).secondary;
+    let name = source_name(item, secondary);
     let choice = match cached {
         Some(choice) => choice,
-        None => resolve_choice(run, cx, site, relation, item, table, name, row, identity)?,
+        None => resolve_choice(
+            run, cx, site, relation, item, table, name, row, identity, keys,
+        )?,
     };
     let (value, handler) = match choice {
         Choice::Record { row, multiple } => (
@@ -575,17 +590,13 @@ fn resolve_choice<E>(
     source_name: &str,
     row: usize,
     identity: Identity,
+    keys: Option<Vec<(usize, Value)>>,
 ) -> Result<Choice, Fail<E>> {
     let plan = run.plan;
     let secondary = &plan.region(cx.region).secondary;
-    // Expression match values resolve their current references first.
-    let keys = if item.has_expression_keys() {
-        let current = resolve_operands(run, cx, &item.path, &item.keys, row)?;
-        check_deferred_filter_types(item)?;
-        evaluate_keys(run, cx, relation, &item.keys, &current, row)?
-    } else {
-        check_deferred_filter_types(item)?;
-        ordinary_keys(run, cx, &item.path, &item.keys, row)?
+    let keys = match keys {
+        Some(keys) => keys,
+        None => match_values(run, cx, relation, item, row)?,
     };
     let range_value = match &item.range {
         Some(range) => Some(current_value(
@@ -702,34 +713,7 @@ fn resolve_choice<E>(
             },
             run,
         )
-        .map_err(|refusal| match refusal {
-            Refusal::Failed(error) => error,
-            Refusal::Key {
-                index: pair,
-                current,
-                donor,
-            } => {
-                let column = keys[pair].0;
-                let key = item
-                    .keys
-                    .iter()
-                    .find(|key| key.source_column == column)
-                    .expect("resolved key belongs to the admitted selector");
-                Box::new(ExecutionError::ScalarDiagnostic(
-                    crate::diagnostic::lookup::key_type(
-                        &key.path,
-                        crate::diagnostic::lookup::Owner::Intermediate(&item.identifier),
-                        &key_source(key, &table.schema().columns()[column].name),
-                        crate::result_type::ResultType::known(current),
-                        crate::result_type::ResultType::known(donor),
-                    ),
-                ))
-            }
-            Refusal::Range(types) => Box::new(ExecutionError::ScalarDiagnostic(types.diagnostic(
-                item.range.as_ref().map_or("", |range| range.path()),
-                &item.identifier,
-            ))),
-        })?;
+        .map_err(|found| refusal(found, item, table, &keys))?;
         count = found.rows.len();
         selected = found.rows.first().copied();
         if count > 1 {
@@ -773,6 +757,101 @@ fn resolve_choice<E>(
         .journal
         .push(Entry::Choice(relation, identity));
     Ok(choice)
+}
+
+/// The current row's match values: the current references of expression
+/// match values first, then every key.
+pub(super) fn match_values<E>(
+    run: &mut Run<'_, '_, E>,
+    cx: &Cx<'_, E>,
+    relation: RelationId,
+    item: &Intermediate,
+    row: usize,
+) -> Result<MatchValues, Fail<E>> {
+    if item.has_expression_keys() {
+        let current = resolve_operands(run, cx, &item.path, &item.keys, row)?;
+        check_deferred_filter_types(item)?;
+        evaluate_keys(run, cx, relation, &item.keys, &current, row)
+    } else {
+        check_deferred_filter_types(item)?;
+        ordinary_keys(run, cx, &item.path, &item.keys, row)
+    }
+}
+
+/// The records of a named intermediate's source whose stored keys equal the
+/// match values, in stored order. A key pair whose types cannot compare is
+/// refused as the match would refuse it, on the same record.
+pub(super) fn matched_records<E>(
+    plan: &ResolvedPlan,
+    cx: &Cx<'_, E>,
+    item: &Intermediate,
+    keys: &[(usize, Value)],
+) -> Result<Vec<usize>, Fail<E>> {
+    let secondary = &plan.region(cx.region).secondary;
+    let table = source_table(item, cx);
+    let probe_keys: Vec<(usize, ValueRef<'_>)> = keys
+        .iter()
+        .map(|(column, value)| (*column, ValueRef::from(value)))
+        .collect();
+    let kinds: Vec<Option<ValueType>> = keys
+        .iter()
+        .map(|(column, _)| item.source_kind(secondary, *column).map(Into::into))
+        .collect();
+    let probe = Probe {
+        keys: &probe_keys,
+        kinds: &kinds,
+        range: None,
+    };
+    if probe.incomplete() {
+        return Ok(Vec::new());
+    }
+    candidates(
+        0..table.row_count(),
+        &probe,
+        |source_row, column| cell(table, item, source_row, column),
+        |_, _: &mut ()| Ok(true),
+        &mut (),
+    )
+    .map(|found| found.rows)
+    .map_err(|found| refusal(found, item, table, keys))
+}
+
+/// The finding of a named intermediate's match that stopped before its
+/// candidates were complete.
+fn refusal<E>(
+    refusal: Refusal<E>,
+    item: &Intermediate,
+    table: Table<'_, E>,
+    keys: &[(usize, Value)],
+) -> Fail<E> {
+    match refusal {
+        Refusal::Failed(error) => error,
+        Refusal::Key {
+            index: pair,
+            current,
+            donor,
+        } => {
+            let column = keys[pair].0;
+            let key = item
+                .keys
+                .iter()
+                .find(|key| key.source_column == column)
+                .expect("resolved key belongs to the admitted selector");
+            Box::new(ExecutionError::ScalarDiagnostic(
+                crate::diagnostic::lookup::key_type(
+                    &key.path,
+                    crate::diagnostic::lookup::Owner::Intermediate(&item.identifier),
+                    &key_source(key, &table.schema().columns()[column].name),
+                    crate::result_type::ResultType::known(current),
+                    crate::result_type::ResultType::known(donor),
+                ),
+            ))
+        }
+        Refusal::Range(types) => Box::new(ExecutionError::ScalarDiagnostic(types.diagnostic(
+            item.range.as_ref().map_or("", |range| range.path()),
+            &item.identifier,
+        ))),
+    }
 }
 
 /// A correlated filter over one donor record and the current row.

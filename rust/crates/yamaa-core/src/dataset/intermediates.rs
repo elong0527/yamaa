@@ -162,6 +162,59 @@ impl Intermediate {
     pub fn has_expression_keys(&self) -> bool {
         self.keys.iter().any(|key| key.value.is_expression())
     }
+    /// Whether derivations that read the current record evaluate only for the
+    /// donor records whose stored keys match the current row (LOOKUP-15). A
+    /// key or `between` bound on a derived field, or a window among the
+    /// derivations, reads every record's derived values, so every record is
+    /// augmented; so it is without keys, where every record matches.
+    pub fn derives_matched_records(&self) -> bool {
+        let Some(derived) = &self.derivations else {
+            return false;
+        };
+        let stored = |column: usize| column < derived.stored_columns;
+        !derived.current.is_empty()
+            && !self.keys.is_empty()
+            && self.keys.iter().all(|key| stored(key.source_column))
+            && self.range.as_ref().is_none_or(|range| {
+                range
+                    .lower()
+                    .into_iter()
+                    .chain(range.upper())
+                    .all(|bound| stored(bound.column))
+            })
+            && !derived
+                .plan
+                .columns()
+                .iter()
+                .any(|assignment| contains_window(&assignment.expression))
+    }
+}
+
+/// Whether an expression is, or holds, a window over the donor records.
+fn contains_window(expression: &Expression) -> bool {
+    match expression {
+        Expression::Window(_) | Expression::ContextWindow(_) => true,
+        Expression::SourceBinding { source, .. }
+        | Expression::MappingCut { source, .. }
+        | Expression::StrCase { source, .. }
+        | Expression::StrPad { source, .. }
+        | Expression::StrExtract { source, .. }
+        | Expression::StrReplace { source, .. }
+        | Expression::Round { source, .. } => contains_window(&source.expression),
+        Expression::Extreme { operands, .. }
+        | Expression::StrTemplate { operands, .. }
+        | Expression::Temporal { operands, .. }
+        | Expression::Imputation { operands, .. } => operands
+            .iter()
+            .any(|operand| contains_window(&operand.expression)),
+        Expression::FirstAvailable(selection) => selection.sources().iter().any(|source| {
+            matches!(&source.read, SelectionRead::Expression(read) if contains_window(&read.expression))
+        }),
+        Expression::Case(branches) => branches
+            .iter()
+            .any(|branch| contains_window(&branch.assignment.expression)),
+        _ => false,
+    }
 }
 
 /// The handlers a read of a named intermediate counts at the reading path:
