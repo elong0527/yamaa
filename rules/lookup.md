@@ -387,7 +387,7 @@ keys ([LOOKUP-1](#lookup-1)). A lookup names at least one pair, every column
 must exist, and every match value must read a known current-row value.
 
 Fails: `invalid_field_type`, `no_applicable_keys`, `unknown_field`, `invalid_aggregate_context`.
-Evidence: `negative-lookup-mismatched`, `negative-lookup-unknown-key`, `negative-lookup-repeated-key`, `negative-lookup-key-other-template`, `negative-verification-lookup-key`, `negative-row-aggregate-keys`, `sdtm-lb-lab-specific-ranges`, `rust/crates/yamaa-adapters/tests/fixtures/intermediate_key_reference.json`, `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`.
+Evidence: `negative-lookup-mismatched`, `negative-lookup-unknown-key`, `negative-lookup-repeated-key`, `negative-lookup-key-other-template`, `negative-aggregate-key-other-template`, `negative-verification-lookup-key`, `negative-row-aggregate-keys`, `sdtm-lb-lab-specific-ranges`, `rust/crates/yamaa-adapters/tests/fixtures/intermediate_key_reference.json`, `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-adapters/tests/execution_aggregate_key_reads.rs`.
 Replaces: REQ-0115, REQ-0116, REQ-0117, REQ-0118, REQ-0140, REQ-0141, REQ-0142,
 REQ-0305.
 
@@ -433,8 +433,9 @@ reads the lookup, wherever the lookup is read: in a row template's derivations
 or row `filter`, that template's driver ([LOOKUP-2](#lookup-2)), and in a
 column derivation or a dataset verification, the driver of every row template
 the read can evaluate on. A match value reading the record of another input
-names no value of those rows and fails as `unknown_field` at `key`, once for
-the lookup.
+names no value of those rows and fails as `unknown_field` once for the lookup,
+however many row templates read it: at a named intermediate's `key`, and at
+a qualified aggregate's pair, `key.<column>`.
 
 Each pair compares its match value with its column in the match step
 ([LOOKUP-9](#lookup-9)): the two types must be mutually comparable under
@@ -843,7 +844,10 @@ unknown field fails as `unknown_field`; a derived name that shadows a stored
 column fails as `duplicate_derivation`. A current-record read is checked in
 every context that reads the intermediate: when a row reading it is built from
 another input's record, the read names no value of that row and fails as
-`unknown_field` at the derivation, once.
+`unknown_field` at the derivation, once. A project function that a derivation
+calls is invoked once per donor record, so an argument that reads a named
+intermediate reads only one that declares `keep` ([LOOKUP-22](#lookup-22));
+an argument may read the donor record's own fields as any operand does.
 
 Derivations that read only donor records are computed once per record for
 each build of the donor records; [COLUMN-14](columns.md#column-14) lists when
@@ -1041,7 +1045,7 @@ absence policy apply as for any other read ([LOOKUP-25](#lookup-25)), once per
 donor record.
 
 Fails: `unknown_field`, `phase_boundary`, `dependency_cycle`.
-Evidence: `adam-adlb-end-of-treatment`, `adam-adsl-crossover-sequence`, `rust/crates/yamaa-adapters/tests/execution_aggregate_record_operations.rs`.
+Evidence: `adam-adlb-end-of-treatment`, `adam-adsl-crossover-sequence`, `rust/crates/yamaa-adapters/tests/execution_aggregate_record_operations.rs`, `rust/crates/yamaa-adapters/tests/project_environment.rs::intermediate_callback_reads_a_kept_selection_beside_its_own_donor_field`.
 Replaces: REQ-1263.
 
 Either form of a donor-record name names a stored field or a derivation
@@ -1055,7 +1059,11 @@ of that record that reads it shares the selection ([LOOKUP-12](#lookup-12)). A
 read that fails, such as an intermediate declaring `require_match: true` that
 selects nothing, fails the run with that intermediate's condition at that
 intermediate's path, as a row reading it would. The read adds no current-row
-dependency and never changes the number of donor records.
+dependency and never changes the number of donor records. Any operand may read
+an intermediate without `keep`, which fails as `multiple_matches` when it
+matches several records for a donor record ([LOOKUP-10](#lookup-10)), except a
+project function argument, which may read only an intermediate that declares
+`keep` ([LOOKUP-22](#lookup-22)).
 
 The other intermediate must read an `input` dataset. A `SELF` intermediate has
 no completed rows while donor records are augmented, and reading one fails as
@@ -1228,7 +1236,7 @@ variable by its unqualified `name`. A binding cannot use a window operation,
 and `derive` is not available on unqualified or grouped-input aggregates.
 
 Fails: `invalid_derive_step`.
-Evidence: `schema-derive-text-score`, `schema-derive-date-epoch`, `schema-aggregate-derive-intermediate`.
+Evidence: `schema-derive-text-score`, `schema-derive-date-epoch`, `schema-aggregate-derive-intermediate`, `negative-donor-function-unkept`, `rust/crates/yamaa-core/tests/support/diagnostic/project_functions.rs::donor_keep_reached`.
 Replaces: REQ-1189, REQ-1190, REQ-1191, REQ-1192, REQ-1242.
 
 A derive binding is not an expression function. Text becomes a number only
@@ -1259,6 +1267,13 @@ row-scoped value, not another reduced relation. The binding still evaluates
 once per record of the aggregate's one relation, and each record sees the same
 intermediate value for its row. A binding that reads a named intermediate
 without `keep` is an error.
+
+A project function called in an intermediate derivation
+([LOOKUP-15](#lookup-15)) is invoked once per donor record, so its arguments
+follow the same rule: an argument may read a named intermediate that declares
+`keep`, and an argument that reads one without `keep` fails as
+`invalid_derive_step` at that argument, naming the function, the argument and
+the intermediate.
 
 For ordered pairwise reductions, first construct one row per sample and derive
 its neighbours with [window operations](windows.md), then derive each segment

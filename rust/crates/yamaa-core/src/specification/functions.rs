@@ -473,6 +473,58 @@ pub(super) fn select_rows(
     })
 }
 
+/// A project function that an intermediate derivation calls is invoked once
+/// per donor record, so an argument reads a named intermediate only when it
+/// declares `keep`, as an aggregate's derive binding does (LOOKUP-22). The
+/// declarations decide it: `named` holds the intermediates declared before the
+/// reading one, which are the ones its derivations may read.
+pub(super) fn donor_keep_findings(
+    project: &Prepared,
+    operation: &Operation,
+    named: &intermediates::Declarations,
+) -> Result<Vec<PreflightFinding>, PrepareError> {
+    let mut calls = Vec::new();
+    derivations::calls(operation, &mut calls);
+    let mut findings = Vec::new();
+    for call in calls {
+        let located = &project
+            .calls
+            .calls()
+            .get(call)
+            .ok_or(PrepareError::Internal)?
+            .located;
+        for argument in &located.call.arguments {
+            let Input::Reference(name) = &argument.input else {
+                continue;
+            };
+            let Some((intermediate, _)) = name.split_once('.') else {
+                continue;
+            };
+            if named.reference(name).is_none() || named.kept(intermediate) {
+                continue;
+            }
+            let text = |value: &str| V::String(value.into());
+            findings.push(PreflightFinding::Scalar(Diagnostic {
+                code: C::DonorFunctionIntermediate,
+                spec_paths: vec![format!("{}.args.{}", located.path, argument.name)],
+                context: [
+                    ("function".into(), text(&located.call.name)),
+                    ("argument".into(), text(&argument.name)),
+                    ("intermediate".into(), text(intermediate)),
+                    (
+                        "reason".into(),
+                        text("a donor function argument reads only keep-declared named intermediates"),
+                    ),
+                ]
+                .into(),
+                source_span: None,
+                operand_route: None,
+            }));
+        }
+    }
+    Ok(findings)
+}
+
 pub(super) fn bind_findings(
     calls: &ProjectCalls,
     call: usize,

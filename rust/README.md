@@ -359,13 +359,15 @@ pub enum SaveOutcome { Saved, NothingToSave }  // #[non_exhaustive]
   up a change. `build` skips the run-start check because its compilation has
   just captured the same metadata.
 - The hosts' lazy objects keep a `Plans` holder each (#2821).
-  `Engine::spec_run_reusing` and `Engine::project_run_reusing` run a kept
-  plan when the run-start check finds every file it was compiled from
-  unchanged, and otherwise compile again exactly as `build` does and keep the
-  new plan; a refused compilation keeps nothing. A kept plan runs through the
-  calling engine's project functions and observer, so each host call keeps
-  its own capabilities. `spec_run` and `project_run` run through an empty
-  holder.
+  `Engine::spec_run_reusing` and `Engine::project_run_reusing` first resolve
+  the request's paths as compilation does: absolute against the current
+  working directory, with each parent directory canonical. They run the plan
+  kept for those identities when the run-start check finds every file it was
+  compiled from unchanged (#3069). Otherwise they compile again exactly as
+  `build` does and keep the new plan; a refused compilation keeps nothing. A
+  kept plan holds no project functions or observer. It runs through the
+  calling engine's, so each host call keeps its own capabilities. `spec_run`
+  and `project_run` run through an empty holder.
 
 ### Handles, ownership and thread safety
 
@@ -375,7 +377,7 @@ pub enum SaveOutcome { Saved, NothingToSave }  // #[non_exhaustive]
 | `Build`, `DefineBuild` | Owned, one attempt | Yes | No | `save(&mut self)` publishes once, as today. |
 | `Plan` | Owned, reusable, cheap to clone (shared `Arc` state) | Yes | Yes | `run` takes `&self`; each run is an independent attempt in its own resource scope. The plan lives until its last clone drops, independently of the `Engine`. |
 | `RunRequest` | Owned | Yes | Yes | Concurrent runs pass their own observer; progress events carry no run identity. |
-| `Plans` | Owned by one host object, interior lock | Yes | Yes | Keeps one `Plan` per specification and project path. The lock is held only to read or replace a kept plan, never across a compilation, a run or a callback, so a run started from a callback or another thread proceeds as any other. |
+| `Plans` | Owned by one host object, interior lock | Yes | Yes | Keeps one `Plan` per resolved specification and project identity. The lock is held only to read or replace a kept plan, never across a compilation, a run or a callback, so a run started from a callback or another thread proceeds as any other. |
 | `Table` | Owned, immutable batches | Yes | Yes | Borrowed views share buffers with the owning table. |
 | `ResolvedSpecification` | Owned, immutable | Yes | Yes | No source access after construction. |
 | `MemoryResolver` | Owned, interior-mutable | Yes | Yes | Mirrors today's `host_resources::MemoryResolver`. |

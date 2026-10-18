@@ -285,6 +285,7 @@ mod diagnostics {
             reached.extend(yaml_source::reached());
             reached.extend(project_activation::reached());
             reached.extend(project_functions::reached());
+            reached.extend(project_functions::donor_keep_reached());
             reached.extend(project_environment::reached());
             reached.extend(project_environment::extended_alias_reached());
             reached.extend(project_lock::reached());

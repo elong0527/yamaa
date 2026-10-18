@@ -221,13 +221,17 @@ abort or allocation abort cannot be turned into a recoverable record.
 The imported plan record is inspection metadata, not execution authority.
 Neither the resolved JSON artifact nor a previous accepted result authorizes
 another run. Plan reuse ([#2821](https://github.com/elong0527/yamaa/issues/2821))
-is declared here as the `plans` operation and the optional `plan_reuse`
-capability. Each public spec or project object holds one opaque plans handle,
-which `spec_run` and `project_run` take as their last argument. A run reuses a
-kept plan only when every file it was compiled from is unchanged, and compiles
-again otherwise; it activates project functions afresh through the call's own
-capabilities. No handle method exists, and no plan or reuse is visible in any
-result.
+is declared here as the `plans` operation and the required `plan_reuse`
+feature. Each public spec or project object holds one opaque plans handle,
+which `spec_run` and `project_run` take as their last argument. Python makes
+the handle with its object and gives a copy or an unpickled object a new one;
+R makes it on the first run, and R's `plans` replaces a handle that came back
+expired from `saveRDS`, an `.RData` file or another process. A run reuses a
+kept plan only when the request's paths, resolved again as compilation
+resolves them, name the files it was compiled from and every one is unchanged
+(#3069); otherwise it compiles again. It activates project functions afresh
+through the call's own capabilities. No handle method exists, and no public
+field shows reuse; only the private run observations record it.
 
 ## Ownership, threading and cancellation
 
@@ -236,7 +240,7 @@ result.
 | Input text/bytes | Borrow only during a synchronous call; clone into a retained Rust owner before returning or retaining for a callback. |
 | Diagnostic/result/plan metadata | Owned values independent of temporary interpreter buffers and of later calls. |
 | Run, project run or submission handle | Owning PyO3 object or rooted R external pointer; drop/finalize once, invalidate before dropping state. No caller dereferences a stale address. |
-| Plans handle | Frozen PyO3 object or registered R external pointer owned by one public spec or project object. A run only borrows it, so a run started from a project function shares it too; each run returns its own run handle, which outlives the plans. Kept plans hold the compiling call's project-function roots until the handle drops; R frees it on the R thread at finalization. |
+| Plans handle | Frozen PyO3 object or registered R external pointer owned by one public spec or project object. A run only borrows it, so a run started from a project function shares it too; each run returns its own run handle, which outlives the plans. Kept plans hold no project-function roots or observer. R frees the handle on the R thread at finalization, and a serialized handle comes back expired and is replaced. |
 | Project function callback or host failure | Strong interpreter root held by the attempt that may call or inspect it; release on its owning interpreter thread. |
 | Arrow stream or emitted schema/array | Current holder of the moved standard header, with independent references to immutable buffers. |
 

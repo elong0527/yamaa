@@ -175,15 +175,31 @@ run_conformance <- function(args = commandArgs(trailingOnly = TRUE)) {
       readBin(file, "raw", n=file.info(file)$size)
     }), paths)
   }
+  # How a run got its plan, from its private observations: compiled, refused
+  # or reused. The measurements close the observations, so their plan is the
+  # last one named.
+  plan_of <- function(built) {
+    text <- yamaa:::.run_observations(built, include_measurements=TRUE)
+    found <- regmatches(text, gregexpr('"plan":"[a-z]+"', text))[[1L]]
+    if (!length(found)) return(NULL)
+    sub('^"plan":"([a-z]+)"$', "\\1", found[[length(found)]])
+  }
   build_one <- function(case, specification, environment, repeat_run=FALSE) {
     spec <- open_spec(case, specification, environment)
-    record <- c(list(specification=specification, environment=environment), observe(spec, spec$run()))
+    first <- spec$run()
+    record <- c(list(specification=specification, environment=environment), observe(spec, first))
     if (repeat_run) {
       # The repeat pass (#2821): a second run of the same object reuses what
       # the first compiled and must equal it, saving the same bytes.
+      record$plan <- plan_of(first)
       before <- case_files(case)
-      again <- observe(spec, spec$run())
-      again$same_files <- identical(case_files(case), before)
+      second <- spec$run()
+      again <- observe(spec, second)
+      after <- case_files(case)
+      paths <- sort(union(names(before), names(after)))
+      again$plan <- plan_of(second)
+      again$changed_files <- as.list(paths[!vapply(paths, function(path)
+        identical(before[[path]], after[[path]]), logical(1L))])
       record[["repeat"]] <- again
     }
     record

@@ -1784,6 +1784,16 @@ functions:
       - {id: ordinary, covers: [normal], args: {x: 7}, result: 7}
       - {id: boundary, covers: [boundary], args: {x: -9223372036854775808}, result: -9223372036854775808}
       - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}
+  pair:
+    function: project.pair
+    description: Integer sum of a weight and an own value.
+    params: [{name: weight, type: int}, {name: own, type: int}]
+    returns: int
+    tests:
+      - {id: ordinary, covers: [normal], args: {weight: 7, own: 3}, result: 10}
+      - {id: boundary, covers: [boundary], args: {weight: 0, own: 0}, result: 0}
+      - {id: missing-weight, covers: ['short-circuit-missing:weight'], args: {weight: null, own: 1}, result: null}
+      - {id: missing-own, covers: ['short-circuit-missing:own'], args: {weight: 1, own: null}, result: null}
 "#;
         struct EnvironmentCapture;
         impl ProjectCapturePort for EnvironmentCapture {
@@ -1860,6 +1870,9 @@ functions:
             unwind: Arc<()>,
             mode: Mode,
             values: Vec<i64>,
+            /// The one function the run calls: `id`, or `pair`, which sums
+            /// its two arguments.
+            function: &'static str,
         }
         impl Activation {
             fn payload(&self, interrupt: bool) -> Payload {
@@ -1881,7 +1894,7 @@ functions:
                 assert_eq!(language, Language::Python);
                 assert_eq!(lock.written, "../uv.lock");
                 assert_eq!(functions.len(), 1);
-                assert_eq!(functions[0].name, "id");
+                assert_eq!(functions[0].name, self.function);
                 self.trace.borrow_mut().push("lock");
                 if matches!(self.mode, Mode::LockFailure) {
                     Err(self.payload(false))
@@ -1894,8 +1907,20 @@ functions:
                 identity: &ProjectFunctionIdentity,
                 signature: &LogicalSignature,
             ) -> Result<(), Payload> {
-                assert_eq!(identity.call, "project.id");
-                assert_eq!(signature.parameters()[0].name, "x");
+                assert_eq!(identity.call, format!("project.{}", self.function));
+                let names = signature
+                    .parameters()
+                    .iter()
+                    .map(|parameter| parameter.name.as_str())
+                    .collect::<Vec<_>>();
+                assert_eq!(
+                    names,
+                    if self.function == "pair" {
+                        vec!["weight", "own"]
+                    } else {
+                        vec!["x"]
+                    }
+                );
                 self.trace.borrow_mut().push("bind");
                 if matches!(self.mode, Mode::BindFailure) {
                     Err(self.payload(false))
@@ -1911,6 +1936,18 @@ functions:
                 _: &(),
                 args: &[Argument<'_>],
             ) -> Result<Value, HostError<Payload>> {
+                if let [Argument {
+                    name: "weight",
+                    value: ValueRef::Int(weight),
+                }, Argument {
+                    name: "own",
+                    value: ValueRef::Int(own),
+                }] = args
+                {
+                    self.values.extend([*weight, *own]);
+                    self.trace.borrow_mut().push("pair");
+                    return Ok(Value::Int(weight + own));
+                }
                 let [Argument {
                     name: "x",
                     value: ValueRef::Int(value),
@@ -1976,6 +2013,7 @@ functions:
                     unwind: Arc::new(()),
                     mode: Mode::Pass,
                     values: Vec::new(),
+                    function: "id",
                 },
                 Study {
                     trace,
@@ -2028,7 +2066,7 @@ functions:
                     environment.functions()[1].definition().tests.as_ptr(),
                     definition
                 );
-                assert_eq!(captured.origins().functions, ["unused", "id"]);
+                assert_eq!(captured.origins().functions, ["unused", "id", "pair"]);
             }
         }
 
@@ -3131,6 +3169,40 @@ functions:
                 ]
             );
             assert_eq!(activation.values, [7, i64::MIN, 10, 10, 40]);
+        }
+
+        /// A donor function call reads a kept intermediate's selection for
+        /// its donor record beside the donor's own field (LOOKUP-16,
+        /// LOOKUP-22): each B record sums CAP's lowest N of its subject and
+        /// its own N.
+        #[test]
+        fn intermediate_callback_reads_a_kept_selection_beside_its_own_donor_field() {
+            let raw = "schema_version: '1.0'\ndomain: TEST\ninput:\n  SRC: {path: input.csv, types: {ID: int, N: int}}\n  B: {path: input.csv, types: {ID: int, N: int}}\nbase: SRC\nkeys: [ID, N]\nintermediates:\n  - {id: CAP, dataset: SRC, key: [ID], order_by: [SRC.N], keep: first}\n  - id: DON\n    dataset: B\n    key: {ID: ID, N: N}\n    derivations:\n      V: {function: {name: pair, args: {weight: CAP.N, own: B.N}}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: VALUE, type: int, derivation: DON.V}\noutput: {path: output.csv, columns: [ID, N, VALUE]}\n";
+            let document = schemas::domain_schema()
+                .prepare_standalone(source("study/domain.yaml", raw.as_bytes()))
+                .unwrap();
+            let run = PreparedRun::prepare(document, environment())
+                .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
+            let (mut activation, mut study) = ports();
+            activation.function = "pair";
+            study.bytes = Arc::from(b"ID,N\n1,10\n1,30\n2,40\n".as_slice());
+            let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
+            assert!(attempt.boundary.is_ok());
+            let entered = attempt
+                .dataset
+                .result
+                .unwrap_or_else(|error| panic!("{error:?}"));
+            let result = entered.result.unwrap_or_else(|error| panic!("{error:?}"));
+            assert_eq!(
+                result.dataset.rows(),
+                &[
+                    vec![Value::Int(1), Value::Int(10), Value::Int(20)],
+                    vec![Value::Int(1), Value::Int(30), Value::Int(40)],
+                    vec![Value::Int(2), Value::Int(40), Value::Int(80)]
+                ]
+            );
+            // The cases run first, then one call per donor record.
+            assert_eq!(activation.values, [7, 3, 0, 0, 10, 10, 10, 30, 40, 40]);
         }
 
         /// A function's declared result type is its derived field's type

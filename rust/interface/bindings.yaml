@@ -25,13 +25,12 @@ handshake:
   r: interface_handshake
   python_error: InterfaceError
   r_error: yamaa_interface_error
-  required_features: [structured_records, arrow_c_stream]
+  required_features: [structured_records, arrow_c_stream, plan_reuse]
   optional_features:
     format_yaml: yamaa-adapters/yaml
     format_parquet: yamaa-adapters/parquet
     format_readstat: yamaa-adapters/readstat
     format_odm: yamaa-adapters/odm
-    plan_reuse: yamaa::Plans
   failure_record: records.diagnostic
   result_record: records.result
 
@@ -166,7 +165,7 @@ r:
       source: rust/crates/yamaa-r/src/api_entry.rs
       functions:
         - {name: spec_check, args: {specification: raw, project: robj, version: raw}, returns: r_reply}
-        - {name: plans, args: {}, returns: r_reply}
+        - {name: plans, args: {handle: robj}, returns: r_reply}
         - name: spec_run
           args: {specification: raw, project: robj, version: raw, capabilities: r_list, plans: robj}
           returns: r_reply

@@ -9,8 +9,8 @@
   .Call(wrap__spec_check, specification, project, version)
 }
 
-.native_plans <- function() {
-  .Call(wrap__plans)
+.native_plans <- function(handle) {
+  .Call(wrap__plans, handle)
 }
 
 .native_spec_run <- function(specification, project, version, capabilities, plans) {

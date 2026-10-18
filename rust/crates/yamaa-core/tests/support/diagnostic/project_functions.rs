@@ -199,3 +199,132 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     reached.insert(diagnostic.code);
     reached
 }
+
+/// A project function argument of an intermediate's derivation reads another
+/// intermediate that declares no `keep`: one value per donor record needs
+/// one selected record (LOOKUP-22). The declarations decide it, so
+/// preparation reports it, and `check()` with it.
+pub fn donor_keep_reached() -> BTreeSet<ConditionCode> {
+    use yamaa_core::{
+        schema::{Document, SpecificationDocument},
+        specification::PreflightFinding,
+    };
+    let source = |name: &str| {
+        Tree::map(vec![(
+            "value",
+            Tree::map(vec![(
+                "source",
+                Tree::map(vec![("variable", Tree::text(name))]),
+            )]),
+        )])
+    };
+    let input = |path: &str| Tree::map(vec![("path", Tree::text(path))]);
+    let mut nodes = vec![];
+    let root = Tree::map(vec![
+        ("schema_version", Tree::text("1.0")),
+        ("domain", Tree::text("TEST")),
+        ("base", Tree::text("SRC")),
+        (
+            "input",
+            Tree::map(vec![
+                ("SRC", input("src.csv")),
+                ("DONOR", input("donor.csv")),
+                ("OBS", input("obs.csv")),
+            ]),
+        ),
+        ("keys", Tree::List(vec![Tree::text("ID")])),
+        (
+            "intermediates",
+            Tree::List(vec![
+                Tree::map(vec![
+                    ("id", Tree::text("SUBJ")),
+                    ("dataset", Tree::text("DONOR")),
+                    ("filter", Tree::text("DONOR.N > 0")),
+                ]),
+                Tree::map(vec![
+                    ("id", Tree::text("FIRST")),
+                    ("dataset", Tree::text("OBS")),
+                    (
+                        "derivations",
+                        Tree::map(vec![(
+                            "NV",
+                            Tree::map(vec![(
+                                "value",
+                                call("id", vec![("x", Tree::text("SUBJ.N"))]),
+                            )]),
+                        )]),
+                    ),
+                    (
+                        "order_by",
+                        Tree::List(vec![Tree::map(vec![("variable", Tree::text("OBS.K"))])]),
+                    ),
+                    ("keep", Tree::text("first")),
+                ]),
+            ]),
+        ),
+        (
+            "columns",
+            Tree::List(vec![
+                Tree::map(vec![
+                    ("name", Tree::text("ID")),
+                    ("type", Tree::text("int")),
+                    ("derivation", source("SRC.ID")),
+                ]),
+                Tree::map(vec![
+                    ("name", Tree::text("NV")),
+                    ("type", Tree::text("int")),
+                    ("derivation", source("FIRST.NV")),
+                ]),
+            ]),
+        ),
+        (
+            "output",
+            Tree::map(vec![
+                ("path", Tree::text("out.csv")),
+                (
+                    "columns",
+                    Tree::List(vec![Tree::text("ID"), Tree::text("NV")]),
+                ),
+            ]),
+        ),
+    ])
+    .append(&mut nodes);
+    let spec = SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+        .unwrap()
+        .unwrap();
+    let Err(PrepareError::Invalid(findings)) =
+        PreparedSpecification::prepare_with_project(&spec, &[function("id")])
+    else {
+        panic!("a donor function argument over an unkept intermediate must fail")
+    };
+    let [PreflightFinding::Scalar(diagnostic)] = findings.as_slice() else {
+        panic!("one donor keep finding, not {findings:?}")
+    };
+    assert_eq!(
+        (
+            diagnostic.definition().phase,
+            diagnostic.definition().condition,
+            diagnostic.definition().requirement
+        ),
+        ("validation", "invalid_derive_step", Some("LOOKUP-22"))
+    );
+    assert_eq!(
+        diagnostic.spec_paths,
+        ["intermediates[1].derivations.NV.function.args.x"]
+    );
+    let text = |value: &str| JsonValue::String(value.into());
+    assert_eq!(
+        diagnostic.context,
+        [
+            ("function".into(), text("id")),
+            ("argument".into(), text("x")),
+            ("intermediate".into(), text("SUBJ")),
+            (
+                "reason".into(),
+                text("a donor function argument reads only keep-declared named intermediates"),
+            ),
+        ]
+        .into()
+    );
+    BTreeSet::from([diagnostic.code])
+}

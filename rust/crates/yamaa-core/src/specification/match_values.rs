@@ -332,6 +332,10 @@ impl Declaration {
             };
             return Ok(Some(MatchValue::Literal(value.clone())));
         };
+        // The catalog's own record is the primary input, or the donor record
+        // in a donor context: a named intermediate's catalog lists the primary
+        // first, an aggregate key binds against `aggregates::record_catalog`,
+        // and a donor context leaves its donor out of `secondary`.
         let read = match catalog.bind(name) {
             Some(reference_binding::Binding::Output { column, .. }) => MatchRead::Output {
                 column,

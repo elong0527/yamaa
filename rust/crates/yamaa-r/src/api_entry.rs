@@ -228,15 +228,24 @@ fn spec_check(specification: Raw, project: Robj, version: Raw) -> List {
     })
 }
 
-/// An empty holder for the compiled plans one lazy object keeps between its
-/// runs (#2821). Creating it reads nothing.
+/// The holder for the compiled plans one lazy object keeps between its runs
+/// (#2821): `handle` while it is live, else a new empty one. A lazy object
+/// passes `NULL` before its first run; a handle restored by `readRDS`, an
+/// `.RData` file or another R process has expired, so the restored object
+/// starts afresh (#3069). Creating a holder reads nothing.
 #[extendr]
-fn plans() -> List {
-    reply(|| store_plans(yamaa::Plans::new()))
+fn plans(handle: Robj) -> List {
+    reply(|| {
+        if !handle.is_null() && plans_of(&handle).is_ok() {
+            return Ok(handle);
+        }
+        store_plans(yamaa::Plans::new())
+    })
 }
 
-/// The holder a lazy object passes, or `None` for a one-shot run. A run only
-/// borrows it, so a run started from a project function shares it too.
+/// The holder a lazy object passes, or `None` for a one-shot run. Nothing
+/// borrows a holder mutably, so a run started from a project function shares
+/// it too.
 fn held_plans(plans: &Robj) -> std::result::Result<Option<Rc<RefCell<yamaa::Plans>>>, Refusal> {
     if plans.is_null() {
         return Ok(None);
@@ -259,8 +268,7 @@ fn spec_run(
         let token = CancellationToken::new();
         let run = match held_plans(&plans)? {
             Some(plans) => {
-                let plans = plans.try_borrow().map_err(|_| "plans handle in use")?;
-                engine.spec_run_reusing(&specification, project.as_deref(), &plans, &token)
+                engine.spec_run_reusing(&specification, project.as_deref(), &plans.borrow(), &token)
             }
             None => engine.spec_run(&specification, project.as_deref(), &token),
         }
@@ -390,8 +398,7 @@ fn project_run(project: Raw, section: Robj, version: Raw, capabilities: List, pl
         let token = CancellationToken::new();
         let runs = match held_plans(&plans)? {
             Some(plans) => {
-                let plans = plans.try_borrow().map_err(|_| "plans handle in use")?;
-                engine.project_run_reusing(&project, section.as_deref(), &plans, &token)
+                engine.project_run_reusing(&project, section.as_deref(), &plans.borrow(), &token)
             }
             None => engine.project_run(&project, section.as_deref(), &token),
         }

@@ -1,0 +1,53 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+  HEIGHT: {path: input/height.csv, types: {VSDY: int, HEIGHTCM: float}}
+  WEIGHT: {path: input/weight.csv, types: {WTSEQ: int, WEIGHTKG: float}}
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, BMIBL]
+
+intermediates:
+  # The subject's screening weights. A subject may have been weighed more
+  # than once at screening, and no weight is chosen among them.
+  - id: SCREENWT
+    dataset: WEIGHT
+    key: [USUBJID]
+    filter: "WEIGHT.VISIT = 'SCREENING'"
+
+  # The body mass index of each height measurement, from the screening
+  # weight, by the project's own routine. The routine takes one weight per
+  # measurement, but the screening weight is not chosen, so the
+  # specification is rejected before any data is read.
+  - id: FIRSTBMI
+    dataset: HEIGHT
+    key: [USUBJID]
+    order_by: [HEIGHT.VSDY]
+    keep: first
+    derivations:
+      BMI:
+        function:
+          name: bmi
+          args:
+            weight_kg: SCREENWT.WEIGHTKG
+            height_cm: HEIGHT.HEIGHTCM
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  - name: BMIBL
+    type: float
+    label: Baseline Body Mass Index (kg/m2)
+    derivation: FIRSTBMI.BMI

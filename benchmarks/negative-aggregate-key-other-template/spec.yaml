@@ -1,0 +1,49 @@
+schema_version: "1.0"
+domain: VS
+keys: [USUBJID, VSDY, VSCAT]
+input:
+  CLINIC: {path: input/clinic.csv, types: {VSDY: int, SYSBP: int}}
+  HOME: {path: input/home.csv, types: {VSDY: int, SYSBP: int}}
+  CALIB: {path: input/calibrations.csv, types: {CALDY: int}}
+
+output:
+  path: vs.csv
+  columns: [USUBJID, VSDY, VSCAT, VSSTRESN, NCAL]
+
+columns:
+  - {name: USUBJID, type: str, label: Unique Subject Identifier}
+  - {name: VSDY, type: int, label: Study Day of Vital Signs}
+  - {name: VSCAT, type: str, label: Category for Vital Signs}
+
+  - name: VSSTRESN
+    type: int
+    label: Numeric Result/Finding in Standard Units
+
+  # The number of calibrations of the device each measurement was taken
+  # with, matched on the clinic record's device number. Home records build
+  # some of the rows and have no clinic record, so the specification is
+  # rejected before any data is read.
+  - name: NCAL
+    type: int
+    label: Number of Device Calibrations
+    derivation:
+      aggregate:
+        expr: "COUNT(CALIB.CALDY)"
+        key: {DEVICEID: CLINIC.DEVICEID}
+
+rows:
+  - id: clinic
+    dataset: CLINIC
+    derivations:
+      USUBJID: CLINIC.USUBJID
+      VSDY: CLINIC.VSDY
+      VSCAT: {literal: CLINIC}
+      VSSTRESN: CLINIC.SYSBP
+
+  - id: home
+    dataset: HOME
+    derivations:
+      USUBJID: HOME.USUBJID
+      VSDY: HOME.VSDY
+      VSCAT: {literal: HOME}
+      VSSTRESN: HOME.SYSBP
