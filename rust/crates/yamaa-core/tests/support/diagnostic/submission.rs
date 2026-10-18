@@ -412,6 +412,12 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             "XPT-9",
             30,
         ),
+        (
+            SubmissionTransportDecimals,
+            "decimals_not_applicable",
+            "JSON-5",
+            31,
+        ),
     ] {
         let mut env = environment();
         let mut spec = specification();
@@ -587,6 +593,12 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 *spec.at(&["output", "columns"]) =
                     Tree::list(vec![Tree::text("VALUE"), Tree::text("NUMBER")]);
             }
+            // A transport re-reads the artifact, so its display digits would
+            // become the submitted values.
+            31 => {
+                env.set(&["sdtm", "transport"], Tree::text("dataset_json"));
+                spec.set(&["output", "decimals"], Tree::integer("2"));
+            }
             _ => unreachable!(),
         }
         let findings = one(env, spec, &lists).unwrap_err();
@@ -598,7 +610,63 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             condition,
             requirement,
         );
+        if change == 31 {
+            assert_eq!(findings.len(), 1, "{findings:?}");
+            assert_eq!(findings[0].path, "sdtm.specs[0].output.decimals");
+            for (key, value) in [
+                ("dataset", JsonValue::String("D0".into())),
+                ("specification", JsonValue::String("d0.yaml".into())),
+                (
+                    "decimals",
+                    JsonValue::Number(("2").parse().expect("canonical integer")),
+                ),
+            ] {
+                assert_eq!(findings[0].context[key], value, "{key}");
+            }
+        }
     }
+    // DEFINE-4 and CT-6: under Submission every published item of a CDISC/NCI
+    // list carries its NCI code, and a sponsor-extended item, which has none,
+    // carries no alias.
+    let epoch = |alias: Option<&str>| {
+        let item = |value: &str, alias: Option<&str>, extended| ct::Item {
+            value: Value::Str(value.into()),
+            decode: None,
+            rank: None,
+            alias: alias.map(String::from),
+            extended,
+        };
+        ct::Catalogue::admit(vec![ct::Source {
+            standard: Some(ct::Standard {
+                name: "CDISC/NCI".into(),
+                publishing_set: "SDTM".into(),
+                version: "2026-09-30".into(),
+            }),
+            codelists: vec![ct::Codelist {
+                id: "LIST".into(),
+                name: "Independent list".into(),
+                data_type: ct::DataType::Text,
+                extensible: true,
+                alias: Some("C99079".into()),
+                format_name: None,
+                external: None,
+                items: Some(vec![item("SCREENING", alias, false), item("X", None, true)]),
+            }],
+        }])
+        .unwrap()
+    };
+    let mut env = environment();
+    env.set(&["sdtm", "context"], Tree::text("Submission"));
+    let mut spec = specification();
+    spec.set(
+        &["columns", "0", "submission", "codelist"],
+        Tree::text("LIST"),
+    );
+    assert!(one(env.clone(), spec.clone(), &epoch(Some("C48262"))).is_ok());
+    let findings = one(env, spec, &epoch(None)).unwrap_err();
+    assert_eq!(findings.len(), 1, "{findings:?}");
+    assert_eq!(findings[0].code, SubmissionCdiscAliasMissing);
+    assert_eq!(findings[0].path, "codelists.LIST");
     for (code, condition, requirement, change) in [
         (
             SubmissionValueTestcdMissing,

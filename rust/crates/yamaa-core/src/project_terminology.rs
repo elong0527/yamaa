@@ -130,6 +130,7 @@ pub enum Fault {
     PartialDecode,
     PartialRank,
     ExtensionNotAdmitted { item: usize },
+    ExtendedAlias { item: usize },
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Finding {
@@ -234,6 +235,10 @@ pub fn validate(sources: &[Source]) -> Vec<Finding> {
                     }
                     if item.extended && (!list.extensible || source.standard.is_none()) {
                         push(Fault::ExtensionNotAdmitted { item: item_index });
+                    }
+                    // A sponsor addition has no published identifier (CT-6).
+                    if item.extended && item.alias.is_some() {
+                        push(Fault::ExtendedAlias { item: item_index });
                     }
                 }
                 if items.iter().any(|item| item.decode.is_some())

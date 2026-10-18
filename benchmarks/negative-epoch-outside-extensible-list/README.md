@@ -21,8 +21,8 @@ passes.
 ## How to fix
 
 Decide whether `RUN-IN` is a real trial period of this study. When it
-is, declare it as a sponsor addition to the extensible list, so the
-data-definition document also shows it as an extended value:
+is, add it to the study's epoch list. `RUN-IN` is a published epoch term,
+so it is an ordinary item:
 
 ```yaml
 - id: EPOCH
@@ -30,9 +30,12 @@ data-definition document also shows it as an extended value:
   extensible: true
   items:
     - {value: SCREENING}
-    - {value: RUN-IN, extended: true}
+    - {value: RUN-IN}
     - {value: TREATMENT}
     - {value: FOLLOW-UP}
 ```
 
-When it is not, correct the collected epoch at its source and rerun.
+Only a period the published list lacks is a sponsor addition, declared as
+an item with `extended: true` and no NCI code, which the data-definition
+document shows as an extended value. When `RUN-IN` is not a period of this
+study, correct the collected epoch at its source and rerun.

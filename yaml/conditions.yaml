@@ -18,6 +18,7 @@ conditions:
   assert_failed: {phases: [verification]}
   bare_derivation_scalar: {phases: [validation]}
   codelist_duplicate_value: {phases: [validation]}
+  codelist_extended_alias: {phases: [validation]}
   codelist_extension_not_admitted: {phases: [validation]}
   codelist_partial_item_field: {phases: [validation]}
   codelist_shape_invalid: {phases: [validation]}

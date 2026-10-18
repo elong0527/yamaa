@@ -356,10 +356,11 @@ fn copy_failure(
     document: &Document,
     derivations: &[usize],
     predecessor: &origin::Predecessor<'_>,
+    reads: &Reads,
 ) -> Option<origin::CopyFailure> {
     derivations
         .iter()
-        .find_map(|&node| origin::copies(document, node, predecessor).err())
+        .find_map(|&node| origin::copies(document, node, predecessor, reads).err())
 }
 fn reserved_metadata(
     document: &Document,
@@ -626,7 +627,7 @@ impl ColumnAdmission<'_> {
             findings.push(Finding::cause(refutation, column_path, name));
         } else if let Some(failure) = predecessor
             .as_ref()
-            .and_then(|predecessor| copy_failure(doc, derivations, predecessor))
+            .and_then(|predecessor| copy_failure(doc, derivations, predecessor, reads))
         {
             // SUB-20: a Predecessor is a bare `source` of the column it names.
             let mut finding = Finding::cause(refutation, column_path, name);
@@ -1348,6 +1349,37 @@ fn compose_datasets(
                 &id,
             ));
         }
+        // JSON-5: a transport re-reads the published artifact, so display digits
+        // the csv profile writes would become the submitted values.
+        if section.transport.is_some() {
+            if let Some(decimals) = doc
+                .field(doc.root(), "output")
+                .and_then(|output| doc.field(output, "decimals"))
+            {
+                let mut finding = Finding::cause(
+                    ConditionCode::SubmissionTransportDecimals,
+                    &format!("{path}.output.decimals"),
+                    "display precision would become the submitted values",
+                );
+                finding
+                    .context
+                    .insert("dataset".into(), crate::json::Value::String(id.clone()));
+                if let Some(written) = section.specs.value.get(index) {
+                    finding.context.insert(
+                        "specification".into(),
+                        crate::json::Value::String(written.value.clone()),
+                    );
+                }
+                if let N::Integer(value) = &doc.nodes()[decimals] {
+                    if let Ok(number) = value.parse() {
+                        finding
+                            .context
+                            .insert("decimals".into(), crate::json::Value::Number(number));
+                    }
+                }
+                findings.push(finding);
+            }
+        }
         let declarations = match spec::decode(doc, doc.root()) {
             Ok(value) => value,
             Err(_) => {
@@ -1722,13 +1754,15 @@ pub fn compose(
             if !bound.contains(&list.id) {
                 continue;
             }
+            // DEFINE-4: a sponsor-extended item has no NCI code, so only the
+            // published items carry one (CT-6 refuses an alias on the others).
             if section.context.value == env::Context::Submission
                 && source
                     .standard
                     .as_ref()
                     .is_some_and(|s| s.name == "CDISC/NCI")
                 && list.items.as_ref().is_some_and(|items| {
-                    list.alias.is_none() || items.iter().any(|i| i.alias.is_none())
+                    list.alias.is_none() || items.iter().any(|i| !i.extended && i.alias.is_none())
                 })
             {
                 findings.push(Finding::cause(

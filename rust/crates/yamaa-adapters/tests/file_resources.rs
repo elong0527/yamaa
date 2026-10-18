@@ -737,6 +737,31 @@ mod file {
                 assert!(item.contains(&format!("Source=\"{source}\"")));
                 assert!(xml.contains(&format!("<CheckValue>{code}</CheckValue>")));
             }
+            // SDTMIG's required variables are mandatory, the pivoted result and
+            // collection date are collected, and the numeric standard result
+            // is derived by its method.
+            for reference in [
+                "<ItemRef ItemOID=\"IT.LB.DOMAIN\" OrderNumber=\"1\" Mandatory=\"Yes\"/>",
+                "<ItemRef ItemOID=\"IT.LB.LBTESTCD\" OrderNumber=\"5\" Mandatory=\"Yes\"/>",
+                "<ItemRef ItemOID=\"IT.LB.LBTEST\" OrderNumber=\"6\" Mandatory=\"Yes\"/>",
+                "<ItemRef ItemOID=\"IT.LB.LBORRES\" OrderNumber=\"7\" Mandatory=\"No\"/>",
+                "<ItemRef ItemOID=\"IT.LB.LBSTRESN\" OrderNumber=\"9\" Mandatory=\"No\" MethodOID=\"MT.LB.LBSTRESN\"/>",
+                "<ItemRef ItemOID=\"IT.LB.LBDTC\" OrderNumber=\"11\" Mandatory=\"No\"/>",
+            ] {
+                assert!(xml.contains(reference), "{reference}");
+            }
+            for (column, origin) in [
+                ("LBORRES", "Type=\"Collected\" Source=\"Vendor\""),
+                ("LBSTRESN", "Type=\"Derived\" Source=\"Sponsor\""),
+                ("LBDTC", "Type=\"Collected\" Source=\"Vendor\""),
+            ] {
+                let begin = xml
+                    .find(&format!("<ItemDef OID=\"IT.LB.{column}\""))
+                    .unwrap();
+                let item = &xml[begin..begin + xml[begin..].find("</ItemDef>").unwrap()];
+                assert!(item.contains(&format!("<def:Origin {origin}/>")), "{item}");
+            }
+            assert_eq!(xml.matches("<MethodDef ").count(), 2);
             assert!(!temp.0.join("input").exists());
             let reads = run.capture_reads();
             for file in ["spec.yaml", "submission-spec.yaml", "environment.yaml"] {
@@ -957,6 +982,12 @@ mod file {
                 assert_eq!(xml.matches("<ItemDef ").count(), count);
                 assert_eq!(xml.contains("<def:AnnotatedCRF>"), has_acrf);
                 assert!(xml.contains(&format!("OID=\"CL.{codelist}\"")));
+                if id == "AE" {
+                    // SDTMIG requires the dictionary-derived term.
+                    assert!(xml.contains(
+                        "<ItemRef ItemOID=\"IT.AE.AEDECOD\" OrderNumber=\"6\" Mandatory=\"Yes\""
+                    ));
+                }
                 assert!(!temp
                     .0
                     .join(format!("{}.csv", id.to_ascii_lowercase()))
@@ -1267,24 +1298,36 @@ mod file {
                 assert!(!temp.0.join("define.xml").exists());
                 assert!(!temp.0.join("dm.json").exists());
             }
-            let temp = Temp::fixture("sdtm-ae-coding", false);
-            let spec = fs::read_to_string(temp.0.join("spec.yaml"))
-                .unwrap()
-                .replace(
-                "codelist: MEDDRA\n      origin:\n        type: Assigned\n        source: Sponsor",
-                "codelist: MEDDRA\n      origin:\n        type: Collected\n        source: Vendor",
-            );
-            fs::write(temp.0.join("spec.yaml"), spec).unwrap();
-            let result = temp.run("2026-09-30T00:00:00");
-            assert!(
-                result
-                    .issues()
-                    .iter()
-                    .any(|i| i.condition == "origin_contradicts_derivation"
-                        && i.spec_paths[0].contains("AEDECOD")),
-                "{:?}",
-                result.issues()
-            );
+            // The coded terms are a plain dictionary lookup, which copies the
+            // record it selects and refutes no origin; a lookup that derives
+            // fields computes what it exposes and refutes Collected.
+            for (derives, refuted) in [(false, false), (true, true)] {
+                let temp = Temp::fixture("sdtm-ae-coding", false);
+                let mut spec = fs::read_to_string(temp.0.join("spec.yaml"))
+                    .unwrap()
+                    .replace(
+                    "codelist: MEDDRA\n      origin:\n        type: Assigned\n        source: Sponsor",
+                    "codelist: MEDDRA\n      origin:\n        type: Collected\n        source: Vendor",
+                );
+                if derives {
+                    spec = spec.replace(
+                        "    no_match: NOT CODED\n",
+                        "    no_match: NOT CODED\n    derivations:\n      LLTUPPER: {str_case: {source: LLTNAME, to: upper}}\n",
+                    );
+                }
+                fs::write(temp.0.join("spec.yaml"), spec).unwrap();
+                let result = temp.run("2026-09-30T00:00:00");
+                assert_eq!(
+                    result
+                        .issues()
+                        .iter()
+                        .any(|i| i.condition == "origin_contradicts_derivation"
+                            && i.spec_paths[0].contains("AEDECOD")),
+                    refuted,
+                    "{:?}",
+                    result.issues()
+                );
+            }
         }
         /// Rewrite the DM fixture's metadata-only environment for one section.
         fn metadata_only(temp: &Temp, section: &str, context: &str) {

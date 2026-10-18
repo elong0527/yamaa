@@ -152,6 +152,7 @@ mod transport {
         for required in [
             "adam-adsl-xpt",
             "negative-transport-define-name",
+            "negative-transport-display-decimals",
             "negative-transport-empty-string",
             "negative-transport-label-too-long",
             "negative-transport-name-too-long",
@@ -159,6 +160,7 @@ mod transport {
             "negative-transport-trailing-blank",
             "sdtm-dm-metadata",
             "sdtm-dm-xpt",
+            "sdtm-ta-sponsor-epoch",
         ] {
             assert!(names.iter().any(|name| name == required), "{required}");
         }
