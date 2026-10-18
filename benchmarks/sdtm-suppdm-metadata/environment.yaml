@@ -1,0 +1,45 @@
+# Fixed creation time is supplied by the Define call in benchmark.yaml.
+schema_version: '1.0'
+study:
+  id: CATH
+  name: CATH
+  description: Example study carrying supplemental demographic qualifiers
+  protocol_name: CATH-01
+codelists:
+- standard:
+    name: CDISC/NCI
+    publishing_set: SDTM
+    version: '2023-12-15'
+  codelists:
+  - id: RACE
+    name: Race
+    alias: C74457
+    extensible: true
+    items:
+    - value: AMERICAN INDIAN OR ALASKA NATIVE
+      alias: C41259
+    - value: ASIAN
+      alias: C41260
+    - value: BLACK OR AFRICAN AMERICAN
+      alias: C16352
+    - value: NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER
+      alias: C41219
+    - value: WHITE
+      alias: C41261
+    data_type: text
+sdtm:
+  standard:
+    name: SDTMIG
+    version: '3.4'
+    status: Final
+  specs:
+  - spec.yaml
+  define: define.xml
+  transport: dataset_json
+  context: Submission
+  source_system_version: '1.0'
+  documents:
+  - id: acrf
+    kind: annotated_crf
+    link: acrf.pdf
+    title: Annotated Case Report Form

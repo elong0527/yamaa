@@ -176,10 +176,10 @@ mod project {
             assert!(!study.0.join("output.csv").exists());
         }
 
-        const ROW_CT: &str = "schema_version: '1.0'\ndomain: LB\nkeys: [ID, LBTESTCD]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, RESULT, LBTESTCD]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: RESULT, type: str, derivation: SRC.VALUE, submission: {origin: {type: Assigned}, codelist: DEFAULT}}\n  - {name: LBTESTCD, type: str}\nrows:\n  - id: glucose\n    derivations: {LBTESTCD: {literal: GLUC}}\n    submission: {RESULT: {codelist: GLUCOSE}}\n  - id: creatinine\n    derivations: {LBTESTCD: {literal: CREAT}}\n";
+        const ROW_CT: &str = "schema_version: '1.0'\ndomain: LB\nkeys: [ID, LBTESTCD]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, RESULT, LBTESTCD]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: RESULT, type: str, derivation: SRC.VALUE, submission: {origin: {type: Assigned}, codelist: DEFAULT, value_level: [{id: GLUC, where: {LBTESTCD: [GLUC]}, codelist: GLUCOSE}]}}\n  - {name: LBTESTCD, type: str}\nrows:\n  - id: glucose\n    derivations: {LBTESTCD: {literal: GLUC}}\n  - id: creatinine\n    derivations: {LBTESTCD: {literal: CREAT}}\n";
         const CT_ENV: &str = "schema_version: '1.0'\ncodelists:\n  - codelists:\n      - {id: DEFAULT, name: Default values, items: [{value: D}]}\n      - {id: GLUCOSE, name: Glucose values, items: [{value: G}]}\n      - {id: EXT, name: Extended values, extensible: true, items: [{value: X}]}\n      - {id: DICT, name: Dictionary, external: {dictionary: MedDRA, version: '27.1'}}\n";
         #[test]
-        fn per_value_codelists_inherit_origins_and_check_completed_discriminators() {
+        fn per_value_codelists_inherit_origins_and_check_completed_where_columns() {
             let study = Study::new();
             fs::write(study.0.join("spec.yaml"), ROW_CT).unwrap();
             fs::write(study.0.join("environment.yaml"), CT_ENV).unwrap();
@@ -303,7 +303,7 @@ mod project {
                 assert_eq!(issues[0].condition, expected);
                 assert_eq!(
                     issues[0].spec_paths,
-                    ["rows.glucose.submission.RESULT.codelist"]
+                    ["columns.RESULT.submission.value_level.GLUC.codelist"]
                 );
                 assert!(!study.0.join("input.csv").exists());
             }
@@ -412,6 +412,7 @@ mod project {
                 codelist: None,
                 inventory: None,
                 row_count: None,
+                entries: None,
             }];
             let projected = yamaa_core::verification_diagnostics::project(
                 compiled,
@@ -581,7 +582,9 @@ mod project {
                 let environment = study.0.join("environment.yaml");
                 let mut run = project_domain(path, environment.to_str().unwrap());
                 assert_eq!(run.issues().len(), usize::from(fail));
-                assert_eq!(run.log_table(false).unwrap().rows(), 2);
+                // The two bindings follow the value-level selection check and
+                // the entry's warning that it matches a row (SUB-13).
+                assert_eq!(run.log_table(false).unwrap().rows(), 4);
                 assert!(!study.0.join("checks.csv").exists());
                 let saved = run.save();
                 assert_eq!(saved.is_ok(), !fail);
@@ -590,6 +593,12 @@ mod project {
                     checks.matches("columns.RESULT.submission.codelist").count(),
                     2
                 );
+                for row in [
+                    "columns.RESULT.submission.value_level,,value_level,RESULT,SUB-13,error,held,,4,0,{}",
+                    "columns.RESULT.submission.value_level.GLUC,,value_level,RESULT,SUB-13,warning,held,,1,0,{}",
+                ] {
+                    assert!(checks.contains(row), "{checks}");
+                }
                 assert_eq!(checks.matches("REQ-0957").count(), 2);
                 assert_eq!(study.0.join("output.csv").exists(), !fail);
             }
@@ -613,7 +622,7 @@ mod project {
                 (
                     "2",
                     "ID,VALUE\n1,abc\n2,é字\n3,\n",
-                    "rows.glucose.submission.RESULT.length",
+                    "columns.RESULT.submission.value_level.GLUC.length",
                     "GLUC",
                     2,
                 ),
@@ -673,9 +682,10 @@ mod project {
                 )
                 .unwrap();
                 assert!(run.issues().is_empty(), "{:?}", run.issues());
+                // Two value-level checks precede the length checks.
                 assert_eq!(
                     run.log_table(false).unwrap().rows(),
-                    if length == "3" { 1 } else { 2 }
+                    if length == "3" { 3 } else { 4 }
                 );
                 assert!(run.save().unwrap());
                 assert_eq!(
@@ -691,22 +701,22 @@ mod project {
                 (
                     "length: -999999999999999999999999999999",
                     "submission_length_invalid",
-                    "rows.glucose.submission.RESULT.length",
+                    "columns.RESULT.submission.value_level.GLUC.length",
                 ),
                 (
                     "length: 0",
                     "submission_length_invalid",
-                    "rows.glucose.submission.RESULT.length",
+                    "columns.RESULT.submission.value_level.GLUC.length",
                 ),
                 (
                     "data_type: float",
                     "submission_data_type_not_admitted",
-                    "rows.glucose.submission.RESULT",
+                    "columns.RESULT.submission.value_level.GLUC",
                 ),
                 (
                     "significant_digits: -999999999999999999999999999999",
                     "submission_length_invalid",
-                    "rows.glucose.submission.RESULT.significant_digits",
+                    "columns.RESULT.submission.value_level.GLUC.significant_digits",
                 ),
             ] {
                 let study = Study::new();
@@ -733,7 +743,10 @@ mod project {
                 ),
                 ("declared_length_conflict", Some("REQ-0913"))
             );
-            assert_eq!(issues[0].spec_paths, ["rows.glucose.submission.RESULT"]);
+            assert_eq!(
+                issues[0].spec_paths,
+                ["columns.RESULT.submission.value_level.GLUC"]
+            );
             assert_eq!(
                 yamaa_adapters::json_wire::encode(&issues[0].context),
                 "{\"column\":\"RESULT\",\"length\":4,\"max_length\":3}"
@@ -823,7 +836,7 @@ mod project {
                 (
                     "length: 3",
                     "mandatory: true",
-                    "rows.glucose.submission.RESULT.mandatory",
+                    "columns.RESULT.submission.value_level.GLUC.mandatory",
                     "GLUC",
                 ),
                 (
@@ -855,6 +868,134 @@ mod project {
                 assert!(run.issues().is_empty(), "{path}: {:?}", run.issues());
                 assert!(run.save().unwrap());
             }
+        }
+        /// Entries over two where columns: one by test code, one by specimen;
+        /// nothing static rules out a glucose urine row.
+        const SELECTED: &str = "schema_version: '1.0'\ndomain: LB\nkeys: [ID, LBTESTCD]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, LBTESTCD, LBSPEC, RESULT], warning_log: warnings.csv, verification_log: checks.csv}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: LBTESTCD, type: str}\n  - {name: LBSPEC, type: str, derivation: SRC.SPEC}\n  - name: RESULT\n    type: str\n    derivation: SRC.VALUE\n    submission:\n      origin: {type: Assigned}\n      value_level:\n        - {id: GLUC, where: {LBTESTCD: [GLUC]}, mandatory: true}\n        - {id: URINE, where: {LBSPEC: [URINE]}, length: 2}\n        - {id: ALB, where: {LBTESTCD: [ALB], LBSPEC: [SERUM]}}\nrows:\n  - id: glucose\n    derivations: {LBTESTCD: {literal: GLUC}}\n  - id: creatinine\n    derivations: {LBTESTCD: {literal: CREAT}}\n";
+        #[test]
+        fn a_row_two_entries_select_fails_with_its_keys_and_both_entries() {
+            let study = Study::new();
+            assert!(study.check(SELECTED).is_empty());
+            let mut run = domain(&study, SELECTED, "ID,SPEC,VALUE\n1,SERUM,5\n2,URINE,7\n");
+            assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
+            let issue = &run.issues()[0];
+            assert_eq!(
+                (
+                    issue.phase.as_str(),
+                    issue.condition.as_str(),
+                    issue.requirement.as_deref()
+                ),
+                (
+                    "verification",
+                    "value_level_multiple_matches",
+                    Some("SUB-13")
+                )
+            );
+            assert_eq!(issue.spec_paths, ["columns.RESULT.submission.value_level"]);
+            assert_eq!(
+                issue.context.clone(),
+                yamaa_adapters::json!({"column": "RESULT", "entries": [["GLUC", "URINE"]], "failure_count": 1, "keys": [{"ID": 2, "LBTESTCD": "GLUC"}]})
+            );
+            assert!(run.save().is_err());
+            assert!(!study.0.join("output.csv").exists());
+        }
+        #[test]
+        fn an_entry_that_matches_no_row_is_a_warning_and_scoped_checks_read_their_rows() {
+            let study = Study::new();
+            // Only serum is collected: URINE and ALB select no row, which warns
+            // without failing; neither needs a warning log to be declared.
+            let quiet = SELECTED.replace(
+                ", warning_log: warnings.csv, verification_log: checks.csv",
+                "",
+            );
+            assert!(study.check(&quiet).is_empty());
+            let mut run = domain(
+                &study,
+                SELECTED,
+                "ID,SPEC,VALUE\n1,SERUM,5\n2,SERUM,toolong\n",
+            );
+            assert!(run.issues().is_empty(), "{:?}", run.issues());
+            assert!(run.save().unwrap());
+            let warnings = fs::read_to_string(study.0.join("warnings.csv")).unwrap();
+            assert_eq!(
+                warnings,
+                "LOG_VERSION,ARTIFACT,SEVERITY,CONDITION,REQUIREMENT,SPEC_PATH,VERIFICATION_ID,FAILURE_COUNT,OFFENDING_KEYS,DETAILS\n\
+                 1.0,output.csv,warning,value_level_unmatched,SUB-13,columns.RESULT.submission.value_level.URINE,,1,[{}],\"{\"\"column\"\":\"\"RESULT\"\",\"\"entry\"\":\"\"URINE\"\"}\"\n\
+                 1.0,output.csv,warning,value_level_unmatched,SUB-13,columns.RESULT.submission.value_level.ALB,,1,[{}],\"{\"\"column\"\":\"\"RESULT\"\",\"\"entry\"\":\"\"ALB\"\"}\"\n"
+            );
+            let checks = fs::read_to_string(study.0.join("checks.csv")).unwrap();
+            for row in [
+                "columns.RESULT.submission.value_level.GLUC,,value_level,RESULT,SUB-13,warning,held,,1,0,{}",
+                "columns.RESULT.submission.value_level.GLUC.mandatory,,not_missing,RESULT,REQ-0885,error,held,,2,0,{}",
+                "columns.RESULT.submission.value_level.URINE.length,,max_length,RESULT,REQ-0378,error,held,,0,0,{}",
+            ] {
+                assert!(checks.contains(row), "{checks}");
+            }
+            // The glucose entry's `mandatory` decides the glucose rows alone.
+            let study = Study::new();
+            let mut run = domain(&study, SELECTED, "ID,SPEC,VALUE\n1,SERUM,\n");
+            assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
+            let issue = &run.issues()[0];
+            assert_eq!(issue.condition, "not_missing_failed");
+            assert_eq!(
+                issue.spec_paths,
+                ["columns.RESULT.submission.value_level.GLUC.mandatory"]
+            );
+            assert_eq!(
+                issue.context.clone(),
+                yamaa_adapters::json!({"column": "RESULT", "failure_count": 1, "keys": [{"ID": 1, "LBTESTCD": "GLUC"}]})
+            );
+            assert!(run.save().is_err());
+        }
+        #[test]
+        fn where_clauses_name_declared_str_output_columns_and_cannot_overlap() {
+            let study = Study::new();
+            for (from, to, condition, path) in [
+                (
+                    "where: {LBSPEC: [URINE]}",
+                    "where: {LBORNAM: [URINE]}",
+                    "value_level_where_invalid",
+                    vec!["columns.RESULT.submission.value_level.URINE.where.LBORNAM"],
+                ),
+                (
+                    "where: {LBSPEC: [URINE]}",
+                    "where: {ID: [URINE]}",
+                    "value_level_where_invalid",
+                    vec!["columns.RESULT.submission.value_level.URINE.where.ID"],
+                ),
+                (
+                    "where: {LBSPEC: [URINE]}",
+                    "where: {LBSPEC: []}",
+                    "value_level_where_invalid",
+                    vec!["columns.RESULT.submission.value_level.URINE.where.LBSPEC"],
+                ),
+                (
+                    "{id: URINE, where: {LBSPEC: [URINE]}",
+                    "{id: GLUC, where: {LBSPEC: [URINE]}",
+                    "duplicate_identifier",
+                    vec!["columns.RESULT.submission.value_level.GLUC.id"],
+                ),
+                (
+                    "where: {LBTESTCD: [ALB], LBSPEC: [SERUM]}",
+                    "where: {LBTESTCD: [GLUC], LBSPEC: [SERUM]}",
+                    "value_level_overlap",
+                    vec![
+                        "columns.RESULT.submission.value_level.GLUC.where",
+                        "columns.RESULT.submission.value_level.ALB.where",
+                    ],
+                ),
+            ] {
+                let raw = SELECTED.replace(from, to);
+                assert_ne!(raw, SELECTED);
+                let issues = study.check(&raw);
+                assert_eq!(issues.len(), 1, "{to}: {issues:?}");
+                assert_eq!(
+                    (issues[0].phase.as_str(), issues[0].condition.as_str()),
+                    ("validation", condition)
+                );
+                assert_eq!(issues[0].spec_paths, path);
+            }
+            assert!(!study.0.join("input.csv").exists());
         }
         #[test]
         fn restated_facts_and_relaxed_keys_fail_validation_before_data() {
@@ -919,13 +1060,13 @@ mod project {
                 );
                 assert!(!study.0.join("input.csv").exists());
             }
-            // A `not_missing` restates nothing when a test code relaxes the column's
+            // A `not_missing` restates nothing when an entry relaxes the column's
             // `mandatory`, and a `unique` over more than the keys is its own claim.
             let study = Study::new();
             let relaxed = ROW_CT
                 .replace(
-                    "submission: {origin: {type: Assigned}, codelist: DEFAULT}",
-                    "verifications: [{not_missing: {}}], submission: {origin: {type: Assigned}, mandatory: true}",
+                    "submission: {origin: {type: Assigned}, codelist: DEFAULT,",
+                    "verifications: [{not_missing: {}}], submission: {origin: {type: Assigned}, mandatory: true,",
                 )
                 .replace("codelist: GLUCOSE", "mandatory: false");
             assert!(study.check(&relaxed).is_empty());
@@ -951,8 +1092,8 @@ mod project {
                 ("significant_digits: 2", "field"),
             ] {
                 let raw = base.replace(
-                    "submission: {RESULT: {length: 3}}",
-                    &format!("submission: {{RESULT: {{{entry}}}}}"),
+                    "where: {LBTESTCD: [GLUC]}, length: 3}",
+                    &format!("where: {{LBTESTCD: [GLUC]}}, {entry}}}"),
                 );
                 let issues = study.check(&raw);
                 assert_eq!(issues.len(), 1, "{entry}: {issues:?}");
@@ -963,7 +1104,10 @@ mod project {
                     ),
                     ("submission_length_not_applicable", Some("REQ-0912"))
                 );
-                assert_eq!(issues[0].spec_paths, ["rows.glucose.submission.RESULT"]);
+                assert_eq!(
+                    issues[0].spec_paths,
+                    ["columns.RESULT.submission.value_level.GLUC"]
+                );
                 let context = issues[0].context.clone();
                 assert_eq!(context["column"], "RESULT");
                 assert_eq!(
@@ -1295,8 +1439,9 @@ columns:
             ));
             assert_eq!(issues.len(), 1, "{issues:?}");
             assert_eq!(issues[0].condition, "origin_contradicts_derivation");
-            // A value-level Predecessor is checked against its row's derivation.
-            let values = "schema_version: '1.0'\ndomain: LB\nkeys: [ID, LBTESTCD]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, LBTESTCD, LBORRES]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: LBTESTCD, type: str}\n  - {name: LBORRES, type: str, submission: {origin: {type: Assigned}}}\nrows:\n  - id: glucose\n    derivations: {LBTESTCD: {literal: GLUC}, LBORRES: SRC.GLUC}\n    submission: {LBORRES: {origin: {type: Predecessor, description: SRC.GLUC}}}\n  - id: creatinine\n    derivations: {LBTESTCD: {literal: CREAT}, LBORRES: SRC.CREAT}\n";
+            // A value-level Predecessor is checked against the derivations
+            // that can produce the rows its where clause selects.
+            let values = "schema_version: '1.0'\ndomain: LB\nkeys: [ID, LBTESTCD]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, LBTESTCD, LBORRES]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: LBTESTCD, type: str}\n  - {name: LBORRES, type: str, submission: {origin: {type: Assigned}, value_level: [{id: GLUC, where: {LBTESTCD: [GLUC]}, origin: {type: Predecessor, description: SRC.GLUC}}]}}\nrows:\n  - id: glucose\n    derivations: {LBTESTCD: {literal: GLUC}, LBORRES: SRC.GLUC}\n  - id: creatinine\n    derivations: {LBTESTCD: {literal: CREAT}, LBORRES: SRC.CREAT}\n";
             assert!(study.check(values).is_empty());
             let issues =
                 study.check(&values.replacen("LBORRES: SRC.GLUC", "LBORRES: SRC.CREAT", 1));
@@ -1306,12 +1451,15 @@ columns:
                     issues[0].condition.as_str(),
                     issues[0].requirement.as_deref()
                 ),
-                ("refuted_value_origin", Some("REQ-1168"))
+                ("refuted_value_origin", Some("SUB-13"))
             );
-            assert_eq!(issues[0].spec_paths, ["rows.glucose.submission.LBORRES"]);
+            assert_eq!(
+                issues[0].spec_paths,
+                ["columns.LBORRES.submission.value_level.GLUC"]
+            );
             assert_eq!(
                 issues[0].context,
-                yamaa_adapters::json!({"column": "LBORRES", "derivation_kind": "source", "origin_type": "Predecessor", "reason": "predecessor_source", "testcd": "GLUC"})
+                yamaa_adapters::json!({"column": "LBORRES", "derivation_kind": "source", "entry": "GLUC", "origin_type": "Predecessor", "reason": "predecessor_source"})
             );
             assert!(!study.0.join("dm.csv").exists());
         }
@@ -2017,6 +2165,7 @@ columns:
                     id: "SEX".into(),
                     values: vec![value],
                 }),
+                entries: None,
             }
         }
         #[test]

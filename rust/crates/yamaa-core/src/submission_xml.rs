@@ -301,6 +301,9 @@ fn item_definition(
     item.push(node);
     item
 }
+/// Every base and per-value definition of a dataset, in `ItemDef` order: each
+/// column followed by its value-level entries, with the entry `id` closing
+/// the per-value identity (DEFINE-9).
 fn variants(dataset: &model::Dataset) -> impl Iterator<Item = (&model::Column, String)> {
     dataset.columns.iter().flat_map(move |column| {
         let identity = format!("{}.{}", dataset.id, column.declaration.name.value);
@@ -308,7 +311,7 @@ fn variants(dataset: &model::Dataset) -> impl Iterator<Item = (&model::Column, S
             column
                 .values
                 .iter()
-                .map(move |value| (&value.column, format!("{identity}.{}", value.test_code))),
+                .map(move |value| (&value.column, format!("{identity}.{}", value.id))),
         )
     })
 }
@@ -540,7 +543,7 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
             let mut list = Element::new("def:ValueListDef", &format!("datasets.{identity}.values"))
                 .attr("OID", format!("VL.{identity}"));
             for (index, value) in column.values.iter().enumerate() {
-                let identity = format!("{identity}.{}", value.test_code);
+                let identity = format!("{identity}.{}", value.id);
                 let meta = value
                     .column
                     .declaration
@@ -570,23 +573,25 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
             for value in &column.values {
                 let identity = format!(
                     "{}.{}.{}",
-                    dataset.id, column.declaration.name.value, value.test_code
+                    dataset.id, column.declaration.name.value, value.id
                 );
-                let discriminator = &dataset.columns
-                    [dataset.discriminator.expect("admitted discriminator")]
-                .declaration
-                .name
-                .value;
                 let mut clause = Element::new("def:WhereClauseDef", &value.path)
                     .attr("OID", format!("WC.{identity}"));
-                let mut check = Element::new("RangeCheck", &value.path)
-                    .attr("Comparator", "EQ")
-                    .attr("SoftHard", "Soft")
-                    .attr("def:ItemOID", format!("IT.{}.{discriminator}", dataset.id));
-                let mut code = Element::new("CheckValue", &value.path);
-                code.text = Some(value.test_code.clone());
-                check.push(code);
-                clause.push(check);
+                // One range check per where column, in written order: one
+                // value is an equality and several a membership.
+                for (position, listed) in &value.clause {
+                    let target = &dataset.columns[*position].declaration.name.value;
+                    let mut check = Element::new("RangeCheck", &value.path)
+                        .attr("Comparator", if listed.len() == 1 { "EQ" } else { "IN" })
+                        .attr("SoftHard", "Soft")
+                        .attr("def:ItemOID", format!("IT.{}.{target}", dataset.id));
+                    for checked in listed {
+                        let mut code = Element::new("CheckValue", &value.path);
+                        code.text = Some(checked.clone());
+                        check.push(code);
+                    }
+                    clause.push(check);
+                }
                 metadata.push(clause);
             }
         }

@@ -212,10 +212,6 @@ row_class:
         type: "dict[identifier, derivation]"
         required: true
         description: Columns this row template derives, whose coverage across row templates follows REQ-0200.
-    - submission:
-        type: "dict[identifier, submission_column_class]"
-        required: false
-        description: Per-value submission metadata for this row template's values, keyed by column (REQ-1162).
 
 variable:
     type: str
@@ -972,6 +968,34 @@ submission_dataset_class:
         description: Sponsor comment carried with the dataset definition.
 
 submission_column_class:
+    - fields_from: submission_metadata_fields
+    - value_level:
+        type: "list[submission_value_class]"
+        required: false
+        description: Value-level entries, each overriding the column's metadata on the rows its where clause selects (SUB-12).
+
+submission_value_class:
+    - id:
+        type: identifier
+        required: true
+        description: Identifier of the entry, unique within the column, naming its value-level definitions (SUB-12, DEFINE-9).
+    - where:
+        type: "dict[identifier, list[where_value]]"
+        required: true
+        description: Declared str output columns and the values that select the entry's rows; a row is selected when every listed column holds one of its values (SUB-12).
+    - label:
+        type: str
+        required: false
+        min_length: 1
+        description: Description of the value-level definition; the column's label when omitted (DEFINE-27).
+    - fields_from: submission_metadata_fields
+
+where_value:
+    type: str
+    min_length: 1
+    description: One value a where clause selects rows by (SUB-12).
+
+submission_metadata_fields:
     - core:
         type: core_designation
         required: false

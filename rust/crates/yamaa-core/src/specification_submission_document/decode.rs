@@ -7,6 +7,22 @@ use FieldName as F;
 const DATASET: &[F] = DATASET_METADATA_FIELDS;
 const COLUMN: &[F] = &[F::Name, F::Type, F::Label, F::Submission];
 const SUBMISSION: &[F] = COLUMN_METADATA_FIELDS;
+const ENTRY: &[F] = VALUE_ENTRY_FIELDS;
+/// The metadata fields an entry shares with its column.
+const ENTRY_METADATA: &[F] = &[
+    F::Core,
+    F::Mandatory,
+    F::Role,
+    F::DataType,
+    F::Length,
+    F::SignificantDigits,
+    F::DisplayFormat,
+    F::Codelist,
+    F::InventoryVocabulary,
+    F::Origin,
+    F::Method,
+    F::Comment,
+];
 const ORIGIN: &[F] = &[F::Type, F::Source, F::Description, F::Documents];
 const METHOD: &[F] = &[
     F::Name,
@@ -27,7 +43,7 @@ impl Path {
         }
     }
     fn child(mut self, step: Step) -> Self {
-        // A row override's deepest pages field reaches ten segments.
+        // A value-level entry's deepest pages field reaches ten segments.
         self.steps[self.len] = Some(step);
         self.len += 1;
         self
@@ -401,72 +417,6 @@ impl<'a> Parser<'a> {
             submission,
         }))
     }
-    fn value_rows(&mut self, root: usize) -> Result<Vec<ValueRow>, Cause> {
-        let Some(N::Sequence(rows)) = self.get(root, F::Rows).node.map(|n| &self.input.nodes()[n])
-        else {
-            return Ok(Vec::new());
-        };
-        let mut owned = Vec::new();
-        for (index, &node) in rows.iter().enumerate() {
-            let origin = self.get(node, F::Submission);
-            let Some(submission) = origin.node else {
-                continue;
-            };
-            if matches!(&self.input.nodes()[submission], N::Null) {
-                continue;
-            }
-            let path = Path::root().field(F::Rows).child(Step::Index(index));
-            let N::Mapping(fields) = &self.input.nodes()[submission] else {
-                self.fault(
-                    origin,
-                    path.field(F::Submission),
-                    Kind::ExpectedMapping,
-                    None,
-                )?;
-                continue;
-            };
-            if fields.is_empty() {
-                continue;
-            }
-            let id = self.text_field(node, F::Id, path, TextRule::NonEmpty, true)?;
-            let mut overrides = Vec::new();
-            for (column_index, &(key, value)) in fields.iter().enumerate() {
-                let occurrence = Origin {
-                    container: submission,
-                    key: Some(key),
-                    node: Some(value),
-                    field: F::Submission,
-                };
-                let field_path = path.field(F::Submission).child(Step::Index(column_index));
-                let name = self.text(
-                    Origin {
-                        node: Some(key),
-                        ..occurrence
-                    },
-                    field_path,
-                    TextRule::Identifier,
-                    true,
-                )?;
-                let metadata = self.submission(occurrence, field_path)?;
-                {
-                    if let Some((name, submission)) = name.zip(metadata) {
-                        overrides.push(ValueOverride { name, submission });
-                    }
-                }
-            }
-            {
-                if let Some(id) = id {
-                    owned.push(ValueRow {
-                        node,
-                        id,
-                        origin,
-                        overrides,
-                    });
-                }
-            }
-        }
-        Ok(owned)
-    }
     fn submission(
         &mut self,
         origin: Origin,
@@ -476,6 +426,111 @@ impl<'a> Parser<'a> {
             return Ok(None);
         }
         let node = origin.node.unwrap();
+        let mut metadata = self.metadata(origin, node, path, SUBMISSION)?;
+        metadata.value_level =
+            self.entries(self.get(node, F::ValueLevel), path.field(F::ValueLevel))?;
+        Ok(Some(metadata))
+    }
+    fn entries(&mut self, origin: Origin, path: Path) -> Result<Vec<ValueEntry>, Cause> {
+        let nodes = self.sequence(origin, path)?.unwrap_or(&[]);
+        let mut owned = Vec::with_capacity(nodes.len());
+        for (index, &node) in nodes.iter().enumerate() {
+            let item = Origin {
+                container: origin.node.unwrap(),
+                key: None,
+                node: Some(node),
+                field: F::ValueLevel,
+            };
+            if let Some(entry) = self.entry(item, path.child(Step::Index(index)))? {
+                owned.push(entry);
+            }
+        }
+        Ok(owned)
+    }
+    fn entry(&mut self, origin: Origin, path: Path) -> Result<Option<ValueEntry>, Cause> {
+        if !self.mapping(origin, path, ENTRY, false)? {
+            return Ok(None);
+        }
+        let node = origin.node.unwrap();
+        let id = self.text_field(node, F::Id, path, TextRule::Identifier, true)?;
+        let clause = self.clause(self.get(node, F::Where), path.field(F::Where))?;
+        let label = self.text_field(node, F::Label, path, TextRule::NonEmpty, false)?;
+        let metadata = self.metadata(origin, node, path, ENTRY_METADATA)?;
+        Ok(id.zip(clause).map(|(id, clause)| ValueEntry {
+            origin,
+            fields: self.fields(node, ENTRY),
+            id,
+            clause,
+            label,
+            metadata,
+        }))
+    }
+    /// A where clause: each declared column and the nonempty values it admits.
+    fn clause(&mut self, origin: Origin, path: Path) -> Result<Option<Vec<WhereTerm>>, Cause> {
+        let Some(node) = origin.node else {
+            self.fault(origin, path, Kind::Missing, None)?;
+            return Ok(None);
+        };
+        let N::Mapping(fields) = &self.input.nodes()[node] else {
+            self.fault(origin, path, Kind::ExpectedMapping, None)?;
+            return Ok(None);
+        };
+        let mut terms = Vec::with_capacity(fields.len());
+        let mut complete = true;
+        for (index, &(key, value)) in fields.iter().enumerate() {
+            let occurrence = Origin {
+                container: node,
+                key: Some(key),
+                node: Some(value),
+                field: F::Where,
+            };
+            let term = path.child(Step::Index(index));
+            let column = self.text(
+                Origin {
+                    node: Some(key),
+                    ..occurrence
+                },
+                term,
+                TextRule::Identifier,
+                true,
+            )?;
+            let Some(items) = self.sequence(occurrence, term)? else {
+                complete = false;
+                continue;
+            };
+            let mut values = Vec::with_capacity(items.len());
+            for (position, &item) in items.iter().enumerate() {
+                let item = Origin {
+                    container: value,
+                    key: None,
+                    node: Some(item),
+                    field: F::Where,
+                };
+                match self.text(
+                    item,
+                    term.child(Step::Index(position)),
+                    TextRule::NonEmpty,
+                    true,
+                )? {
+                    Some(text) => values.push(text),
+                    None => complete = false,
+                }
+            }
+            match column {
+                Some(column) => terms.push(WhereTerm { column, values }),
+                None => complete = false,
+            }
+        }
+        Ok(complete.then_some(terms))
+    }
+    /// The metadata fields a column and each of its entries share.
+    fn metadata(
+        &mut self,
+        origin: Origin,
+        node: usize,
+        path: Path,
+        allowed: &[F],
+    ) -> Result<ColumnSubmission, Cause> {
         let core = self.choice(
             self.get(node, F::Core),
             path.field(F::Core),
@@ -514,9 +569,9 @@ impl<'a> Parser<'a> {
         let origin_metadata = self.origin(self.get(node, F::Origin), path.field(F::Origin))?;
         let method = self.method(self.get(node, F::Method), path.field(F::Method))?;
         let comment = self.comment(self.get(node, F::Comment), path.field(F::Comment))?;
-        Ok(Some(ColumnSubmission {
+        Ok(ColumnSubmission {
             origin,
-            fields: self.fields(node, SUBMISSION),
+            fields: self.fields(node, allowed),
             core,
             mandatory,
             role,
@@ -529,7 +584,8 @@ impl<'a> Parser<'a> {
             origin_metadata,
             method,
             comment,
-        }))
+            value_level: Vec::new(),
+        })
     }
     fn origin(&mut self, origin: Origin, path: Path) -> Result<Option<OriginMetadata>, Cause> {
         if origin.node.is_none() {
@@ -781,10 +837,9 @@ impl<'a> Parser<'a> {
         }
         Ok(Declarations {
             root,
-            fields: self.fields(root, &[F::Submission, F::Columns, F::Rows]),
+            fields: self.fields(root, &[F::Submission, F::Columns]),
             dataset,
             columns,
-            value_rows: self.value_rows(root)?,
         })
     }
 }
