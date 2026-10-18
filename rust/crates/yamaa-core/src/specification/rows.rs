@@ -2011,9 +2011,10 @@ impl Rows {
                 match named_driver {
                     // A qualified aggregate reduces a declared input through
                     // the primary port (REQ-0467), so its column keeps the
-                    // whole-dataset scope. Preparation has refused that
-                    // column's reads of the intermediate.
-                    Some(_) if declaration.aggregates() => (&catalog, source, name),
+                    // whole-dataset scope, whichever driver builds the rows
+                    // that evaluate it. Preparation has refused that column's
+                    // reads of a driver intermediate.
+                    _ if declaration.aggregates() => (&catalog, source, name),
                     // The intermediate's qualifier reads the record that
                     // built the row (REQ-0111), as in its row template;
                     // preparation has refused the reads this phase cannot

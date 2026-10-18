@@ -120,6 +120,12 @@ pub(super) fn prepare(
             templates,
             Some(dataset),
         )?;
+        if let Some(project) = project {
+            let refused = functions::donor_keep_findings(project, &branch.operation, named)?;
+            if !refused.is_empty() {
+                return Err(PrepareError::Invalid(refused));
+            }
+        }
         let mut references = Vec::new();
         derivations::references(d, value, project, &mut references, 0)?;
         self_relations::template_references(d, value, templates, &mut references, 0)?;

@@ -1,8 +1,10 @@
 #![cfg(feature = "yaml")]
-//! A matched aggregate reads the current row through its match values and
-//! its range value. A match value read from an input's record names the
-//! driver of every row that evaluates it (LOOKUP-5); a range value read
-//! before the template's window pass completes it is not supported yet.
+//! A matched aggregate reads the current row through its match values, its
+//! range value and its derive bindings. A match value read from an input's
+//! record names the driver of every row that evaluates it (LOOKUP-5). During
+//! row construction, a range value or a derive binding that reads a window
+//! result before the stage split completes it, and an unqualified aggregate
+//! key, are not supported yet.
 use std::{
     fs,
     path::PathBuf,
@@ -27,6 +29,16 @@ impl Fixture {
         }
         Self(root)
     }
+    fn identity(specification: &str) -> Identity<'_> {
+        Identity {
+            runtime: "test",
+            runtime_version: "test",
+            engine_version: yamaa_core::VERSION,
+            example: "aggregate-key-reads",
+            specification,
+            base_directory: ".",
+        }
+    }
     /// The saved artifact, or the issues that kept anything from being saved.
     fn run(&self) -> Result<String, Vec<Value>> {
         let specification = self.0.join("spec.yaml");
@@ -37,14 +49,7 @@ impl Fixture {
                 specification,
                 environment: None,
             },
-            Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "aggregate-key-reads",
-                specification,
-                base_directory: ".",
-            },
+            Self::identity(specification),
         )
         .map_err(|failure| failure.iter().map(issue).collect::<Vec<_>>())?;
         let issues = domain.issues().iter().map(issue).collect::<Vec<_>>();
@@ -54,6 +59,22 @@ impl Fixture {
         }
         assert!(domain.save().unwrap());
         Ok(fs::read_to_string(self.0.join("out.csv")).unwrap())
+    }
+    /// What `check` reports without reading data.
+    fn checked(&self) -> Vec<Value> {
+        let specification = self.0.join("spec.yaml");
+        let specification = specification.to_str().unwrap();
+        file_application::check(
+            yamaa_core::project_function::Language::Python,
+            Request {
+                specification,
+                environment: None,
+            },
+            Self::identity(specification),
+        )
+        .iter()
+        .map(issue)
+        .collect()
     }
 }
 impl Drop for Fixture {
@@ -65,6 +86,37 @@ impl Drop for Fixture {
 fn issue(issue: &Issue) -> Value {
     yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":issue.context.clone()})
 }
+
+/// One `unknown_field` finding at a key pair that names `identifier` (LOOKUP-5).
+fn refused(path: &str, identifier: &str) -> Result<String, Vec<Value>> {
+    Err(vec![yamaa_adapters::json!({
+        "phase": "validation",
+        "condition": "unknown_field",
+        "requirement": "LOOKUP-5",
+        "spec_paths": [path],
+        "context": {"identifier": identifier}
+    })])
+}
+
+/// One `unsupported_operation` finding at `path`.
+fn unsupported(operation: &str, path: &str) -> Vec<Value> {
+    vec![yamaa_adapters::json!({
+        "phase": "planning",
+        "condition": "unsupported_operation",
+        "requirement": null,
+        "spec_paths": [path],
+        "context": {"operation": operation}
+    })]
+}
+
+/// Clinic and home measurements, each naming the device used, and the
+/// calibration records of each device. The home file stores its fields in
+/// another order, so a read at the wrong input's position reads another field.
+const DEVICES: [(&str, &str); 3] = [
+    ("clinic.csv", "ID,DEVICE\na,D1\nb,D2\n"),
+    ("home.csv", "DEVICE,ID\nD2,a\n"),
+    ("calib.csv", "DEVICE,DAY\nD1,1\nD1,2\nD2,3\n"),
+];
 
 #[test]
 fn an_aggregate_key_reads_the_driver_of_every_row_that_evaluates_it() {
@@ -106,27 +158,21 @@ fn an_aggregate_key_reads_the_driver_of_every_row_that_evaluates_it() {
         )
     };
     let own = "      NCAL: {literal: 0}\n";
-    let files = [
-        ("clinic.csv", "ID,DEVICE\na,D1\nb,D2\n"),
-        ("home.csv", "ID,DEVICE\na,D2\n"),
-        ("calib.csv", "DEVICE,DAY\nD1,1\nD1,2\nD2,3\n"),
-    ];
-    let refused = |path: &str, identifier: &str| {
-        Err(vec![yamaa_adapters::json!({
-            "phase": "validation",
-            "condition": "unknown_field",
-            "requirement": "LOOKUP-5",
-            "spec_paths": [path],
-            "context": {"identifier": identifier}
-        })])
-    };
-    let run = |text: String| Fixture::new(&text, &files).run();
-    // Home rows have no clinic record to read the device from.
+    let run = |text: String| Fixture::new(&text, &DEVICES).run();
+    // Home rows have no clinic record to read the device from, and clinic
+    // rows no home record; either key is reported at its pair.
     assert_eq!(
         run(specification(&column("CLINIC.DEVICE"), "", Some(""))),
         refused(
             "columns.NCAL.derivation.aggregate.key.DEVICE",
             "CLINIC.DEVICE"
+        )
+    );
+    assert_eq!(
+        run(specification(&column("HOME.DEVICE"), "", Some(""))),
+        refused(
+            "columns.NCAL.derivation.aggregate.key.DEVICE",
+            "HOME.DEVICE"
         )
     );
     assert_eq!(
@@ -153,54 +199,193 @@ fn an_aggregate_key_reads_the_driver_of_every_row_that_evaluates_it() {
         Ok(format!("{counted}a,HOME,\n"))
     );
     // Where only home rows evaluate the count, the home record names its
-    // device: home subject a used D2, calibrated once.
+    // device, as a variable or inside an expression: home subject a used D2,
+    // calibrated once.
+    for key in [
+        "HOME.DEVICE",
+        "{str_case: {source: HOME.DEVICE, to: upper}}",
+    ] {
+        assert_eq!(
+            run(specification(&nested(key), own, Some(""))),
+            Ok("ID,ORIGIN,NCAL\na,CLINIC,0\nb,CLINIC,0\na,HOME,1\n".into()),
+            "{key}"
+        );
+    }
+}
+
+#[test]
+fn without_row_templates_an_aggregate_key_reads_the_base_record() {
+    let specification = |key: &str| {
+        format!(
+            "schema_version: '1.0'\ndomain: VS\nkeys: [ID]\nbase: CLINIC\n\
+             input:\n  CLINIC: clinic.csv\n  HOME: home.csv\n  \
+             CALIB: {{path: calib.csv, types: {{DAY: int}}}}\n\
+             output: {{path: out.csv, columns: [ID, NCAL]}}\n\
+             columns:\n  - {{name: ID, type: str, derivation: CLINIC.ID}}\n\
+             \x20 - name: NCAL\n    type: int\n    derivation:\n      aggregate:\n        \
+             expr: 'COUNT(CALIB.DAY)'\n        key: {{DEVICE: {key}}}\n"
+        )
+    };
+    let run = |text: String| Fixture::new(&text, &DEVICES).run();
     assert_eq!(
-        run(specification(&nested("HOME.DEVICE"), own, Some(""))),
-        Ok("ID,ORIGIN,NCAL\na,CLINIC,0\nb,CLINIC,0\na,HOME,1\n".into())
+        run(specification("CLINIC.DEVICE")),
+        Ok("ID,NCAL\na,2\nb,1\n".into())
+    );
+    // Every row is built from a clinic record, which no home record is.
+    assert_eq!(
+        run(specification("HOME.DEVICE")),
+        refused(
+            "columns.NCAL.derivation.aggregate.key.DEVICE",
+            "HOME.DEVICE"
+        )
     );
 }
 
 #[test]
+fn an_aggregate_over_the_first_input_serves_rows_another_input_builds() {
+    // Only home rows evaluate NCAL: it counts the clinic records of the
+    // row's subject, a reduction of the first template's input.
+    let specification = "schema_version: '1.0'\ndomain: VS\nkeys: [ID, ORIGIN]\n\
+        input:\n  CLINIC: clinic.csv\n  HOME: home.csv\n\
+        output: {path: out.csv, columns: [ID, ORIGIN, NCAL]}\n\
+        columns:\n  - {name: ID, type: str}\n  - {name: ORIGIN, type: str}\n\
+        \x20 - name: NCAL\n    type: int\n    derivation:\n      case:\n        \
+        - when: ID IS NOT NULL\n          then:\n            aggregate:\n              \
+        expr: 'COUNT(CLINIC.DEVICE)'\n              key: {ID: ID}\n\
+        rows:\n  - id: clinic\n    dataset: CLINIC\n    derivations:\n      \
+        ID: CLINIC.ID\n      ORIGIN: {literal: CLINIC}\n      NCAL: {literal: 0}\n\
+        \x20 - id: home\n    dataset: HOME\n    derivations:\n      ID: HOME.ID\n      \
+        ORIGIN: {literal: HOME}\n";
+    assert_eq!(
+        Fixture::new(specification, &DEVICES).run(),
+        Ok("ID,ORIGIN,NCAL\na,CLINIC,0\nb,CLINIC,0\na,HOME,1\n".into())
+    );
+}
+
+/// Without row templates, the window key SEQ gives each record its own row;
+/// `columns` follows ID and SEQ and holds the keys.
+fn window_key(keys: &str, intermediates: &str, columns: &str) -> String {
+    format!(
+        "schema_version: '1.0'\ndomain: OUT\nkeys: [ID, SEQ, {keys}]\nbase: SRC\n\
+         input:\n  SRC: {{path: source.csv, types: {{ID: int, VAL: int, LO: int, HI: int, W: int}}}}\n  \
+         CAL: {{path: cal.csv, types: {{SEQN: int, LO: int, HI: int, W: int}}}}\n\
+         output: {{path: out.csv, columns: [ID, SEQ, {keys}]}}\n{intermediates}\
+         columns:\n  - {{name: ID, type: int, derivation: SRC.ID}}\n\
+         \x20 - name: SEQ\n    type: int\n    derivation:\n      row_number:\n        \
+         window: {{group_by: [ID], order_by: [SRC.VAL]}}\n{columns}"
+    )
+}
+
+/// Two records of ID 1 and one of ID 2; SEQ numbers them 1 and 2, then 1.
+const WINDOWED: [(&str, &str); 2] = [
+    (
+        "source.csv",
+        "ID,VAL,LO,HI,W\n1,3,1,1,10\n1,5,2,9,20\n2,4,1,9,30\n",
+    ),
+    ("cal.csv", "SEQN,LO,HI,W\n1,1,1,10\n1,1,5,5\n2,2,2,20\n"),
+];
+
+#[test]
 fn an_aggregate_range_read_before_its_window_completes_is_unsupported() {
-    // Without row templates, the window key SEQ gives each record its own
-    // row, and the key WT sums the weights of the records with the row's ID
-    // (the applicable output key SRC carries) whose bounds hold the range
-    // value.
-    let specification = |value: &str| {
+    let ranged = |value: &str| {
         format!(
-            "schema_version: '1.0'\ndomain: OUT\nkeys: [ID, SEQ, WT]\n\
-             input: {{SRC: {{path: source.csv, types: {{ID: int, VAL: int, LO: int, HI: int, W: int}}}}}}\n\
-             output: {{path: out.csv, columns: [ID, SEQ, WT]}}\n\
-             columns:\n  - {{name: ID, type: int, derivation: SRC.ID}}\n\
-             \x20 - name: SEQ\n    type: int\n    derivation:\n      row_number:\n        \
-             window: {{group_by: [ID], order_by: [SRC.VAL]}}\n\
-             \x20 - name: WT\n    type: int\n    derivation:\n      aggregate:\n        \
+            "  - name: WT\n    type: int\n    derivation:\n      aggregate:\n        \
              expr: 'SUM(SRC.W)'\n        between: {{value: {value}, lower: LO, upper: HI}}\n"
         )
     };
-    let files = [(
-        "source.csv",
-        "ID,VAL,LO,HI,W\n1,3,1,3,10\n1,5,4,9,20\n2,4,4,4,30\n",
-    )];
-    // SEQ completes only in the window pass, after the key that reads it.
-    let fixture = Fixture::new(&specification("SEQ"), &files);
+    let run = |columns: &str| Fixture::new(&window_key("WT", "", columns), &WINDOWED).run();
+    // WT is computed before the window pass that completes SEQ.
     assert_eq!(
-        fixture.run(),
-        Err(vec![yamaa_adapters::json!({
-            "phase": "planning",
-            "condition": "unsupported_operation",
-            "requirement": null,
-            "spec_paths": ["columns.WT.derivation.aggregate.between.value"],
-            "context": {"operation": "aggregate_range_window_read"}
-        })])
+        run(&ranged("SEQ")),
+        Err(unsupported(
+            "aggregate_range_window_read",
+            "columns.WT.derivation.aggregate.between.value"
+        ))
     );
-    // A range value the record holds before the window pass builds. Among
-    // ID 1's records VAL 3 falls only in 1..3 (weight 10) and VAL 5 only in
-    // 4..9 (20); ID 2's VAL 4 falls in its own 4..4 (30), and ID 1's 4..9
-    // is not read for it.
-    let fixture = Fixture::new(&specification("SRC.VAL"), &files);
+    // WT sums the weights of the records of the row's ID (the applicable
+    // output key) whose bounds hold the range value. A value the record holds
+    // before the window pass builds: ID 1's VAL 3 and VAL 5 fall in 2..9
+    // (20), not in 1..1, and ID 2's VAL 4 in 1..9 (30).
     assert_eq!(
-        fixture.run(),
+        run(&ranged("SRC.VAL")),
+        Ok("ID,SEQ,WT\n1,1,20\n1,2,20\n2,1,30\n".into())
+    );
+    // The stage split moves WT to the window pass when a `case` condition
+    // around the aggregate reads SEQ, or when its key does; WT then reads the
+    // completed SEQ. SEQ 1 of ID 1 falls in 1..1 (10), SEQ 2 in 2..9 (20),
+    // and SEQ 1 of ID 2 in 1..9 (30).
+    let guarded = "  - name: WT\n    type: int\n    derivation:\n      case:\n        \
+        - when: SEQ > 0\n          then:\n            aggregate:\n              \
+        expr: 'SUM(SRC.W)'\n              between: {value: SEQ, lower: LO, upper: HI}\n";
+    assert_eq!(
+        run(guarded),
         Ok("ID,SEQ,WT\n1,1,10\n1,2,20\n2,1,30\n".into())
     );
+    // Matched on SEQN = SEQ: SEQ 1 sums the calibrations 10 and 5, whose
+    // bounds 1..1 and 1..5 hold 1, and SEQ 2 the one of 20.
+    let keyed = "  - name: WT\n    type: int\n    derivation:\n      aggregate:\n        \
+        expr: 'SUM(CAL.W)'\n        key: {SEQN: SEQ}\n        \
+        between: {value: SEQ, lower: LO, upper: HI}\n";
+    assert_eq!(run(keyed), Ok("ID,SEQ,WT\n1,1,15\n1,2,20\n2,1,15\n".into()));
+}
+
+#[test]
+fn an_aggregate_derive_read_before_its_window_completes_is_unsupported() {
+    // K selects the lightest calibration of the row's SEQ; each record of the
+    // row's ID contributes the greater of its weight and K's.
+    let intermediate = "intermediates:\n  - id: K\n    dataset: CAL\n    key: {SEQN: SEQ}\n    \
+        order_by: [CAL.W]\n    keep: first\n";
+    let aggregate = "aggregate:\n  key: [ID]\n  derive:\n    \
+        - {name: D, type: int, derivation: SRC.W}\n    \
+        - {name: V, type: int, derivation: K.W}\n    \
+        - {name: T, type: int, derivation: {greatest: {sources: [D, V]}}}\n  \
+        expr: 'SUM(T)'\n";
+    let indented = |text: &str, depth: usize| -> String {
+        text.lines()
+            .map(|line| format!("{}{line}\n", " ".repeat(depth)))
+            .collect()
+    };
+    let run =
+        |columns: String| Fixture::new(&window_key("WT", intermediate, &columns), &WINDOWED).run();
+    let direct = format!(
+        "  - name: WT\n    type: int\n    derivation:\n{}",
+        indented(aggregate, 6)
+    );
+    assert_eq!(
+        run(direct),
+        Err(unsupported(
+            "aggregate_derive_window_read",
+            "columns.WT.derivation.aggregate.derive[1].derivation.source"
+        ))
+    );
+    // Behind a `case` condition that reads SEQ, WT is computed in the window
+    // pass. SEQ 1 selects weight 5 and SEQ 2 weight 20: ID 1's weights 10
+    // and 20 give 30 for SEQ 1 and 40 for SEQ 2, and ID 2's 30 gives 30.
+    let guarded = format!(
+        "  - name: WT\n    type: int\n    derivation:\n      case:\n        \
+         - when: SEQ > 0\n          then:\n{}",
+        indented(aggregate, 12)
+    );
+    assert_eq!(
+        run(guarded),
+        Ok("ID,SEQ,WT\n1,1,30\n1,2,40\n2,1,30\n".into())
+    );
+}
+
+#[test]
+fn an_unqualified_aggregate_key_beside_a_window_key_is_unsupported() {
+    // N counts the rows of the row's ID, which row construction completes
+    // only after every key.
+    let fixture = Fixture::new(
+        &window_key(
+            "N",
+            "",
+            "  - name: N\n    type: int\n    derivation:\n      aggregate:\n        \
+             group_by: [ID]\n        expr: 'COUNT(SEQ)'\n",
+        ),
+        &WINDOWED,
+    );
+    let refused = unsupported("output_aggregate_key", "columns.N.derivation.aggregate");
+    assert_eq!(fixture.checked(), refused);
+    assert_eq!(fixture.run(), Err(refused));
 }

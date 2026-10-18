@@ -1880,7 +1880,7 @@ impl PreparedSpecification {
         };
         // A plan the stage split cannot schedule is refused before resolution
         // with the operation it does not support.
-        let unsupported = aggregates::late_ranges(&plan);
+        let unsupported = aggregates::late_reads(&plan);
         if !unsupported.is_empty() {
             return Err(BindError::Invalid(unsupported));
         }
@@ -2281,13 +2281,17 @@ impl PreparedSpecification {
     /// every record its own row, an aggregate, which reduces the records of a
     /// key combination, and an `odm` read, which reads them, fail as
     /// `key_dependency` at the operation, also inside a `case` branch.
+    ///
+    /// With record rows, a key is derived as any column is, but during row
+    /// construction: an unqualified aggregate, which reduces the constructed
+    /// rows, is not supported there yet and fails as `unsupported_operation`.
     pub(super) fn key_record_findings(&self, column: usize) -> Vec<BindFinding> {
-        fn visit(operation: &Operation, found: &mut Vec<(&'static str, String)>) {
+        fn visit<'a>(operation: &'a Operation, found: &mut Vec<(&'static str, &'a str, bool)>) {
             match operation {
                 Operation::Aggregate(aggregate) => {
-                    found.push(("aggregate", aggregate.path().into()))
+                    found.push(("aggregate", aggregate.path(), aggregate.reduces_output()))
                 }
-                Operation::Odm(odm) => found.push(("odm", odm.path().into())),
+                Operation::Odm(odm) => found.push(("odm", odm.path(), false)),
                 Operation::Case(branches) => {
                     for branch in branches {
                         visit(&branch.operation, found);
@@ -2296,7 +2300,7 @@ impl PreparedSpecification {
                 _ => (),
             }
         }
-        if self.rows.is_some() || self.record_rows() || !self.keys.contains(&column) {
+        if self.rows.is_some() || !self.keys.contains(&column) {
             return Vec::new();
         }
         let Some(declaration) = self.declarations.get(column) else {
@@ -2304,13 +2308,25 @@ impl PreparedSpecification {
         };
         let mut found = Vec::new();
         visit(&declaration.operation, &mut found);
+        if self.record_rows() {
+            return found
+                .into_iter()
+                .filter(|&(_, _, output)| output)
+                .map(|(_, path, _)| {
+                    BindFinding::Scalar(crate::application_issue::unsupported(
+                        "output_aggregate_key",
+                        Some(path),
+                    ))
+                })
+                .collect();
+        }
         let name = &self.output.columns()[column].name;
         found
             .into_iter()
-            .map(|(operation, path)| {
+            .map(|(operation, path, _)| {
                 BindFinding::Scalar(crate::diagnostic::Diagnostic {
                     code: crate::diagnostic::ConditionCode::ColumnKeyRecordRead,
-                    spec_paths: vec![path],
+                    spec_paths: vec![path.into()],
                     context: [
                         ("column".into(), crate::json::Value::String(name.clone())),
                         (
@@ -2601,18 +2617,16 @@ impl PreparedSpecification {
         let verification_reads = relation_predicates::predicate_reads(
             relation_predicates::verification_predicates(&verifications),
         );
-        lookup_range::admit(
-            [(
-                assignments
-                    .values()
-                    .map(|assignment| &assignment.expression)
-                    .chain(&verification_reads)
-                    .collect(),
-                vec![0],
-            )],
-            &intermediates,
-            &mut findings,
-        );
+        let contexts = [(
+            assignments
+                .values()
+                .map(|assignment| &assignment.expression)
+                .chain(&verification_reads)
+                .collect::<Vec<_>>(),
+            vec![0],
+        )];
+        lookup_range::admit(contexts.iter().cloned(), &intermediates, &mut findings);
+        aggregates::admit_record_keys(&contexts, &mut findings);
         relation_predicates::admit_reads(
             assignments
                 .values()
