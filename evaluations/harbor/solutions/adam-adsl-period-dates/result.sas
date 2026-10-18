@@ -14,19 +14,22 @@ data ex;
   infile "/app/input/ex.csv" dsd dlm="," firstobs=2 truncover lrecl=32767;
   input STUDYID : $char1024. USUBJID : $char1024. EXSEQ EPOCH : $char1024. EXSTDTC : $char1024.
         EXENDTC : $char1024.;
-  START=.; END=.;
-  if not missing(EXSTDTC) then START=input(EXSTDTC, yymmdd10.);
-  if not missing(EXENDTC) then END=input(EXENDTC, yymmdd10.);
+  STARTDT=.; ENDDT=.;
+  if not missing(EXSTDTC) then STARTDT=input(EXSTDTC, yymmdd10.);
+  if not missing(EXENDTC) then ENDDT=input(EXENDTC, yymmdd10.);
 run;
 
 /* The last exposure end counts every record, with or without a start. */
 proc sql;
+  create table p1 as select USUBJID, min(STARTDT) as P1 from ex where EPOCH='TREATMENT 1' group by USUBJID;
+  create table p2 as select USUBJID, min(STARTDT) as P2 from ex where EPOCH='TREATMENT 2' group by USUBJID;
+  create table lastend as select USUBJID, max(ENDDT) as LASTEND from ex group by USUBJID;
   create table subject as
-  select d.STUDYID, d.USUBJID, d.ORDER,
-         (select min(START) from ex as e where e.USUBJID=d.USUBJID and e.EPOCH='TREATMENT 1') as P1,
-         (select min(START) from ex as e where e.USUBJID=d.USUBJID and e.EPOCH='TREATMENT 2') as P2,
-         (select max(END) from ex as e where e.USUBJID=d.USUBJID) as LASTEND
+  select d.STUDYID, d.USUBJID, d.ORDER, a.P1, b.P2, c.LASTEND
   from dm as d
+  left join p1 as a on d.USUBJID=a.USUBJID
+  left join p2 as b on d.USUBJID=b.USUBJID
+  left join lastend as c on d.USUBJID=c.USUBJID
   order by d.ORDER;
 quit;
 

@@ -71,7 +71,7 @@ jobs:
           # Without `workspaces` the action looks for Cargo.toml at the root,
           # fails, and saves an empty cache under a key that never refreshes.
           workspaces: rust
-          shared-key: yamaa-${{ runner.os }}
+          key: ${{ github.workflow }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Install build tools
         run: |
@@ -173,7 +173,7 @@ jobs:
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: rust
-          shared-key: yamaa-${{ runner.os }}
+          key: ${{ github.workflow }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Check benchmark SDK lock versions
         run: python -m tools.packaging.check_benchmark_sdk_versions
@@ -303,7 +303,7 @@ jobs:
           python -m pip install --no-cache-dir --no-deps native-dist/*.tar.gz project-dist/*.whl
       - name: Install the minimum supported Python saved artifact readers
         working-directory: ${{ runner.temp }}
-        run: python -m pip install polars==1.43.2 pyarrow==23.0.1 lxml==6.1.0
+        run: python -m pip install polars==1.35.2 pyarrow==23.0.1 lxml==6.1.0
       - name: Report installed Python public benchmark conformance
         working-directory: ${{ runner.temp }}
         run: |
@@ -406,7 +406,7 @@ jobs:
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: rust
-          shared-key: yamaa-${{ runner.os }}
+          key: ${{ github.workflow }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
         with:
