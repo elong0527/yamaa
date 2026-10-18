@@ -9,6 +9,9 @@ stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 library(yamaa)
 root <- system.file("specification-original",package="yamaa",mustWork=TRUE)
 rawfile <- function(path) readBin(path,"raw",n=file.info(path)$size)
+# The report counts input bytes, so inputs end lines with LF on every
+# platform: writeLines would write CRLF on Windows.
+write_lf <- function(lines,path) writeBin(charToRaw(paste0(lines,"\n",collapse="")),path)
 # Private installed-run evidence: the run's complete observations as JSON text.
 observations <- function(result) yamaa:::.run_observations(result)
 json_text <- function(value) {
@@ -126,7 +129,7 @@ source <- paste0("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: 
 # Use a double-quoted YAML scalar so the unicode escape is decoded in Rust.
 source <- sub("id: '\\u00e9'",'id: "\\u00e9"',source,fixed=TRUE)
 writeBin(charToRaw(source),entry)
-writeLines(c("ID",as.character(seq_len(8L))),file.path(case,"input.csv"))
+write_lf(c("ID",as.character(seq_len(8L))),file.path(case,"input.csv"))
 keys <- paste0('[',paste0('{"ID":',seq_len(8L),'}',collapse=','),']')
 warned <- c(
   "absent/out.csv,run,output,,,,,,succeeded,,8,,,{}",
@@ -151,7 +154,7 @@ stopifnot(is.null(warn$save()),nrow(warn$issues)==0L,identical(rawfile(file.path
 # A run without checks still reports its run, input, rows and columns.
 source <- strsplit(source,"    verifications:",fixed=TRUE)[[1L]][[1L]]
 writeBin(charToRaw(source),entry)
-writeLines(c("ID","1"),file.path(case,"input.csv"))
+write_lf(c("ID","1"),file.path(case,"input.csv"))
 unchecked <- c(
   "absent/out.csv,run,output,,,,,,succeeded,,1,,,{}",
   'absent/out.csv,input,input.SRC,SRC,,,,,,,1,,,"{""bytes"":5,""path"":""input.csv"",""profile"":""csv""}"',
