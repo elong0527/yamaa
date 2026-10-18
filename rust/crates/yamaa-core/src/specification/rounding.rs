@@ -174,6 +174,7 @@ pub(super) fn bind_operand(
             findings.push(BindFinding::OutputReference {
                 path,
                 name: name.into(),
+                row: None,
                 finding,
             });
             return Ok(None);
@@ -335,6 +336,7 @@ pub(super) fn bind_row_operand(
         findings.push(BindFinding::OutputReference {
             path,
             name: name.into(),
+            row: row.map(String::from),
             finding,
         });
         return Ok(None);
