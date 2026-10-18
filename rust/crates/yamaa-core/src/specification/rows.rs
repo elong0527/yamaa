@@ -1335,6 +1335,21 @@ impl Rows {
             .iter()
             .map(|template| template.driver.as_str())
     }
+    /// Each grouped row template's driver with its `group_by`, in
+    /// construction order: the column phase checks a read of a driver
+    /// against the groups of that driver's templates (NAME-4).
+    fn column_groups(&self) -> Vec<(&str, Vec<&str>)> {
+        self.templates
+            .iter()
+            .filter_map(|template| {
+                let group = template.groups.as_ref()?;
+                Some((
+                    template.driver.as_str(),
+                    group.iter().map(String::as_str).collect(),
+                ))
+            })
+            .collect()
+    }
     pub(super) fn self_columns(&self) -> Vec<usize> {
         self.templates[0]
             .declarations
@@ -1864,13 +1879,11 @@ impl Rows {
             // template. Every stored source uses its captured port and output keys.
             catalog = row_drivers::extend_catalog(catalog, source, name, keys, &secondary, "")?;
         }
-        let groups = self
-            .templates
+        let groups = self.column_groups();
+        let column_groups = groups
             .iter()
-            .filter_map(|t| t.groups.as_ref())
-            .map(|g| g.iter().map(String::as_str).collect::<Vec<_>>())
+            .map(|(driver, group)| (*driver, group.as_slice()))
             .collect::<Vec<_>>();
-        let column_groups = groups.iter().map(Vec::as_slice).collect::<Vec<_>>();
         let mut templates = Vec::new();
         for (index, template) in self.templates.iter().enumerate() {
             if let Some(bound) = bind_template(
@@ -2263,13 +2276,11 @@ impl Rows {
         .collect()
     }
     fn declaration_findings(&self, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
-        let groups = self
-            .templates
+        let groups = self.column_groups();
+        let column_groups = groups
             .iter()
-            .filter_map(|template| template.groups.as_ref())
-            .map(|group| group.iter().map(String::as_str).collect::<Vec<_>>())
+            .map(|(driver, group)| (*driver, group.as_slice()))
             .collect::<Vec<_>>();
-        let column_groups = groups.iter().map(Vec::as_slice).collect::<Vec<_>>();
         for declaration in &self.columns {
             if let RowOperation::Shared(branch) = &declaration.operation {
                 static_checks::scoped_branch(
