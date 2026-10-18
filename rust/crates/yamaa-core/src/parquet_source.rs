@@ -142,7 +142,7 @@ pub fn column_type(
     match (physical, representation) {
         (Physical::ByteArray, Representation::Text) if string => Some(ColumnType::Str),
         (Physical::Int64, Representation::Int64) if none || signed(64) => Some(ColumnType::Int),
-        (Physical::Int32, Representation::Int32) if signed(32) => Some(ColumnType::Int),
+        (Physical::Int32, Representation::Int32) if none || signed(32) => Some(ColumnType::Int),
         (Physical::Int32, Representation::Int16) if signed(16) => Some(ColumnType::Int),
         (Physical::Int32, Representation::Int8) if signed(8) => Some(ColumnType::Int),
         (Physical::Double, Representation::Float64) if none => Some(ColumnType::Float),
