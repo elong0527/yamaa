@@ -187,6 +187,86 @@ mod execution {
         assert!(!fixture.0.join("result.csv").exists());
     }
         }
+        /// A qualified `between.value` reads the record that built the row, so
+        /// it names the driver of every row the aggregate is derived for.
+        /// Another input has no record there and is refused (#2904).
+        #[test]
+        fn a_qualified_between_value_reads_only_the_rows_own_driver_record() {
+            let run = |spec: String| {
+                let fixture = Fixture::new();
+                fs::write(fixture.0.join("a.csv"), b"ID,CUT\na,1\nb,2\n").unwrap();
+                fs::write(
+                    fixture.0.join("b.csv"),
+                    b"ID,N\na,1\na,2\na,3\nb,1\nb,2\nb,3\n",
+                )
+                .unwrap();
+                // C orders the subjects the other way and keeps each limit in
+                // the column where A keeps its cutoff.
+                fs::write(fixture.0.join("c.csv"), b"ID,LIMIT\nb,3\na,2\n").unwrap();
+                fs::write(fixture.0.join("spec.yaml"), spec).unwrap();
+                let issues = match fixture.run() {
+                    Ok(mut domain) if domain.issues().is_empty() => {
+                        assert!(domain.save().unwrap());
+                        return Ok(fs::read_to_string(fixture.0.join("result.csv")).unwrap());
+                    }
+                    Ok(mut domain) => {
+                        assert!(domain.save().is_err());
+                        domain.issues()
+                    }
+                    Err(issues) => issues,
+                };
+                Err(issues
+                    .iter()
+                    .map(|issue| yamaa_adapters::json!({"phase": issue.phase, "condition": issue.condition, "requirement": issue.requirement, "spec_paths": issue.spec_paths, "context": issue.context.clone()}))
+                    .collect::<Vec<_>>())
+            };
+            let refused = |identifier: &str| {
+                Err(vec![yamaa_adapters::json!({
+                    "phase": "validation", "condition": "unknown_field", "requirement": "REQ-0121",
+                    "spec_paths": ["columns.TOTAL.derivation.aggregate.between.value"],
+                    "context": {"identifier": identifier}
+                })])
+            };
+            let operation = |value: &str| {
+                format!("        between: {{value: {value}, lower: N}}\n        expr: SUM(B.N)\n")
+            };
+            let inputs = |spec: String| {
+                spec.replace(
+                    "  B: {path: b.csv, types: {N: int}}\n",
+                    "  B: {path: b.csv, types: {N: int}}\n  C: {path: c.csv, types: {LIMIT: int}}\n",
+                )
+            };
+            // Without row templates the base input builds every row.
+            for value in ["A.CUT", "CUT"] {
+                assert_eq!(
+                    run(inputs(specification(&operation(value)))),
+                    Ok("ID,CUT,TOTAL\na,1,1\nb,2,3\n".into())
+                );
+            }
+            assert_eq!(
+                run(inputs(specification(&operation("C.LIMIT")))),
+                refused("C.LIMIT")
+            );
+            // Rows built from A and from C share the aggregate's column, so
+            // neither input supplies a record for every row.
+            let rows = |value: &str, templates: &str| {
+                format!("schema_version: '1.0'\ndomain: TEST\nkeys: [ID, ORIGIN]\ninput:\n  A: {{path: a.csv, types: {{CUT: int}}}}\n  B: {{path: b.csv, types: {{N: int}}}}\n  C: {{path: c.csv, types: {{LIMIT: int}}}}\noutput: {{path: result.csv, columns: [ID, ORIGIN, TOTAL]}}\ncolumns:\n  - {{name: ID, type: str}}\n  - {{name: ORIGIN, type: str}}\n  - name: TOTAL\n    type: float\n    derivation:\n      aggregate:\n{}rows:\n{templates}", operation(value))
+            };
+            let from_a =
+                "  - id: a\n    dataset: A\n    derivations: {ID: A.ID, ORIGIN: {literal: A}}\n";
+            let from_c =
+                "  - id: c\n    dataset: C\n    derivations: {ID: C.ID, ORIGIN: {literal: C}}\n";
+            assert_eq!(
+                run(rows("A.CUT", from_a)),
+                Ok("ID,ORIGIN,TOTAL\na,A,1\nb,A,3\n".into())
+            );
+            for value in ["A.CUT", "C.LIMIT"] {
+                assert_eq!(
+                    run(rows(value, &format!("{from_a}{from_c}"))),
+                    refused(value)
+                );
+            }
+        }
         #[test]
         fn named_derive_read_requires_keep_and_uses_original_current_record() {
             let fixture = Fixture::new();
@@ -1247,10 +1327,14 @@ S1,002,2024-06
         /// finding is decided from. `domain` reaches each of them once it reads or
         /// binds the inputs. A case that `check` starts to report fails until it
         /// leaves this list.
-        const NOT_REPORTED_BY_CHECK: [(&str, &str); 22] = [
+        const NOT_REPORTED_BY_CHECK: [(&str, &str); 23] = [
             (
                 "negative-adlb-computed-param",
                 "a cycle through an aggregate and a case",
+            ),
+            (
+                "negative-aggregate-range-other-input",
+                "the fields stored in the input an aggregate range reads",
             ),
             ("negative-cut-coded", "the stored type of an input field"),
             (

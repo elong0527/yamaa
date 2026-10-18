@@ -2370,6 +2370,14 @@ impl PreparedSpecification {
             &RowMode::Keys,
             &mut findings,
         );
+        aggregates::admit_ranges(
+            assignments
+                .values()
+                .map(|assignment| &assignment.expression),
+            0,
+            &mut std::collections::BTreeSet::new(),
+            &mut findings,
+        );
         if !findings.is_empty() {
             return Err(BindError::Invalid(findings));
         }

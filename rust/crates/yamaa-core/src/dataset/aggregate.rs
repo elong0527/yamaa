@@ -319,10 +319,10 @@ impl BoundAggregate {
                 CurrentRead::Record { source: 0, column } => {
                     primary.columns().get(column).map(|field| Some(field.kind))
                 }
-                CurrentRead::Record { source, column } => secondary
-                    .get(source - 1)
-                    .and_then(|source| source.schema.columns().get(column))
-                    .map(|field| Some(field.kind)),
+                // A range narrows a reduction for completed rows. A qualified
+                // value reads the primary record that built the row (REQ-0085);
+                // another input has no record at that row's position.
+                CurrentRead::Record { .. } => None,
                 CurrentRead::Intermediate { index, column } => {
                     intermediates.get(index).and_then(|item| {
                         item.source_schema(secondary)?.columns().get(column)?;
@@ -405,5 +405,69 @@ impl BoundAggregate {
                 .map_err(PlanError::Filter)?;
         }
         Ok(())
+    }
+}
+
+/// Visit the range of every aggregate an expression evaluates, including an
+/// aggregate in a case branch, an operand or a derive binding.
+pub(crate) fn visit_ranges(expression: &Expression, visitor: &mut impl FnMut(&RelationRange)) {
+    match expression {
+        Expression::Aggregate(aggregate) => {
+            if let Some(range) = aggregate.range() {
+                visitor(range);
+            }
+            for binding in aggregate.derivations() {
+                visit_ranges(&binding.assignment.expression, visitor);
+            }
+        }
+        Expression::Case(branches) => {
+            for branch in branches {
+                visit_ranges(&branch.assignment.expression, visitor);
+            }
+        }
+        Expression::SourceBinding { source, .. }
+        | Expression::MappingCut { source, .. }
+        | Expression::StrContains { source, .. }
+        | Expression::StrCase { source, .. }
+        | Expression::StrPad { source, .. }
+        | Expression::StrExtract { source, .. }
+        | Expression::StrReplace { source, .. }
+        | Expression::Round { source, .. } => visit_ranges(&source.expression, visitor),
+        Expression::FirstAvailable(selection) => {
+            for source in selection.sources() {
+                if let SelectionRead::Expression(source) = &source.read {
+                    visit_ranges(&source.expression, visitor);
+                }
+            }
+        }
+        Expression::Extreme { operands, .. }
+        | Expression::StrConcat { operands, .. }
+        | Expression::StrTemplate { operands, .. }
+        | Expression::Temporal { operands, .. }
+        | Expression::Imputation { operands, .. } => {
+            for source in operands {
+                visit_ranges(&source.expression, visitor);
+            }
+        }
+        // These hold bound reads, never a nested expression.
+        Expression::Joined(_)
+        | Expression::JoinedSource { .. }
+        | Expression::Odm(_)
+        | Expression::Literal(_)
+        | Expression::SourceLookup { .. }
+        | Expression::Flag(_)
+        | Expression::Compute(_)
+        | Expression::Function(_)
+        | Expression::ProjectFunction(_)
+        | Expression::Window(_)
+        | Expression::ContextWindow(_)
+        | Expression::Source(_)
+        | Expression::Lookup(_)
+        | Expression::RowLookup(_)
+        | Expression::Intermediate { .. }
+        | Expression::Collect { .. }
+        | Expression::Column(_)
+        | Expression::Reduce { .. }
+        | Expression::Count { .. } => (),
     }
 }
