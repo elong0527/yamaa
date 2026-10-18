@@ -26,6 +26,7 @@ mod intermediates;
 mod lookup_diagnostics;
 mod match_values;
 mod relation_predicates;
+mod result_types;
 mod static_checks;
 mod static_types;
 pub use lookup_diagnostics::LookupFinding;
@@ -325,6 +326,15 @@ impl SourceDeclaration {
     pub fn text_is_missing(&self, value: &str) -> bool {
         !self.empty_string_present && value.is_empty()
     }
+    /// A stored field's type before its schema is captured: the declared
+    /// type. An undeclared field's type, and whether it exists at all, is
+    /// known only once capture reads the stored schema (INPUT-5).
+    pub(crate) fn declared_type(&self, field: &str) -> Option<ColumnType> {
+        self.types
+            .iter()
+            .find(|(name, _)| name == field)
+            .map(|&(_, kind)| kind)
+    }
 }
 #[derive(Clone, Debug)]
 enum Operation {
@@ -337,7 +347,10 @@ enum Operation {
     StrReplace(crate::text_replace::StringReplace),
     StrTemplate(crate::text_template::StringTemplate),
     Case(Vec<cases::Branch>),
-    ProjectFunction(usize),
+    ProjectFunction {
+        call: usize,
+        returns: ColumnType,
+    },
     Literal(crate::value::Value),
     Window(std::boxed::Box<windows::Declaration>),
     Source(std::boxed::Box<source_expressions::Declaration>),
@@ -1974,7 +1987,7 @@ impl PreparedSpecification {
                     findings,
                     declarations_reported,
                 )?,
-                Operation::ProjectFunction(call) => {
+                Operation::ProjectFunction { call, .. } => {
                     self.bind_project_function(*call, column, catalog, &mut edges, findings)?
                 }
                 Operation::Literal(value) => Some(Expression::Literal(value.clone())),
@@ -2130,6 +2143,21 @@ impl PreparedSpecification {
                     start,
                 )?,
             };
+            if expression.is_some() && findings.len() == start && declaration.handler.is_none() {
+                let input = |name: &str| {
+                    static_types::result_type(
+                        name,
+                        &self.intermediates,
+                        catalog,
+                        secondary,
+                        intermediates,
+                    )
+                };
+                findings.extend(
+                    self.conversion_finding(column, declaration.operation.result_type(&input))
+                        .map(BindFinding::Scalar),
+                );
+            }
             // Invalid declarations remain in the graph so independent cycles and
             // key dependencies are still reported after the reference findings.
             dependencies.push(Some(edges));
@@ -2360,8 +2388,17 @@ impl PreparedSpecification {
             )?;
             if findings.len() == start {
                 Some(Expression::Compute(
-                    BoundNumeric::new(compiled.clone(), bindings)
-                        .map_err(BindError::InvalidNumericBinding)?,
+                    BoundNumeric::new(
+                        static_types::typed(
+                            compiled,
+                            &self.intermediates,
+                            catalog,
+                            secondary,
+                            intermediates,
+                        ),
+                        bindings,
+                    )
+                    .map_err(BindError::InvalidNumericBinding)?,
                 ))
             } else {
                 None

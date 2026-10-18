@@ -79,7 +79,7 @@ fn match_identifiers_keep_the_complete_authored_name() {
             identifier: name.clone(),
         }],
         schema.clone(),
-        Some(ColumnType::Int.into()),
+        crate::result_type::ResultType::INT,
     )
     .unwrap();
     expression

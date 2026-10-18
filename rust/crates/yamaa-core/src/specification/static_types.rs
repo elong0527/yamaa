@@ -63,6 +63,56 @@ pub(super) fn kind(
     Ok(catalog.type_of(name).map(Into::into))
 }
 
+/// A name's static type at a bound site, as EXPR-14 reads its inputs: an
+/// intermediate's field, a column, or a field of a declared relation.
+pub(super) fn result_type(
+    name: &str,
+    named: &intermediates::Declarations,
+    catalog: &Catalog,
+    secondary: &[SecondarySource],
+    intermediates: &[Option<Intermediate>],
+) -> crate::result_type::ResultType {
+    crate::result_type::ResultType::known(
+        kind(name, named, catalog, secondary, intermediates)
+            .ok()
+            .flatten(),
+    )
+}
+
+/// The plan as a bound site types its names, so each `NULLIF` returns its
+/// result type (EXPR-14).
+pub(super) fn typed(
+    plan: &CompiledExpression,
+    named: &intermediates::Declarations,
+    catalog: &Catalog,
+    secondary: &[SecondarySource],
+    intermediates: &[Option<Intermediate>],
+) -> CompiledExpression {
+    plan.typed(|name| result_type(name, named, catalog, secondary, intermediates))
+}
+
+/// Every static type fault of a flag condition or a case predicate at a
+/// bound site (FORMULA-5, FORMULA-12), before any value is read.
+pub(super) fn predicate(
+    plan: &CompiledExpression,
+    named: &intermediates::Declarations,
+    catalog: &Catalog,
+    secondary: &[SecondarySource],
+    intermediates: &[Option<Intermediate>],
+    findings: &mut Vec<BindFinding>,
+) -> Result<(), BindError> {
+    let kinds = plan
+        .identifiers()
+        .map(|name| kind(name, named, catalog, secondary, intermediates).map(|kind| (name, kind)))
+        .collect::<Result<BTreeMap<_, _>, _>>()?;
+    findings.extend(
+        predicate_kinds(plan, |name| kinds.get(name).copied().flatten())
+            .into_iter()
+            .map(BindFinding::Predicate),
+    );
+    Ok(())
+}
+
 pub(super) fn numeric(
     plan: &CompiledExpression,
     bindings: &[Binding],

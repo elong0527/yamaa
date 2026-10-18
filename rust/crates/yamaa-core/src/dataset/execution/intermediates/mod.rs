@@ -928,8 +928,8 @@ fn resolve_choice<T: TableAccess + ?Sized>(
                                     &key.path,
                                     &item.identifier,
                                     &source,
-                                    expected.value_type().expect("present key"),
-                                    value.value_type().expect("present donor key"),
+                                    crate::result_type::ResultType::known(expected.value_type()),
+                                    crate::result_type::ResultType::known(value.value_type()),
                                 ),
                             )));
                         }

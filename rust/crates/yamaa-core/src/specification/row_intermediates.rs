@@ -295,11 +295,9 @@ pub(super) fn bind(
             .columns()
             .get(key.source_column)
             .ok_or(BindError::Internal)?;
-        if let (Some(kind), Some(donor_kind)) = (
-            key.value.result_type(read_kind),
-            item.source_kind(secondary, key.source_column),
-        ) {
-            if !crate::key_relation::comparable(kind, donor_kind.into()) {
+        let kind = key.value.result_type(read_kind);
+        if let Some(donor_kind) = item.source_kind(secondary, key.source_column) {
+            if !kind.comparable(donor_kind.into()) {
                 let name = if key.value.is_expression() {
                     format!("key[{}]", field.name)
                 } else {

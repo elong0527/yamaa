@@ -29,18 +29,20 @@ fn bind_predicate(
     intermediates: &[Option<Intermediate>],
 ) -> Result<Result<BoundPredicate, Diagnostic>, BindError> {
     let mut bindings = Vec::new();
+    let mut kinds = Vec::new();
     for binding in predicate.bindings() {
         let read = if matches!(binding.read, Read::Intermediate { .. }) {
             let (index, field) = spec
                 .intermediates
                 .reference(&binding.name)
                 .ok_or(BindError::Internal)?;
-            let Some(column) = intermediates[index]
-                .as_ref()
-                .and_then(|item| item.source_column(secondary, field))
-            else {
+            let Some((item, column)) = intermediates[index].as_ref().and_then(|item| {
+                item.source_column(secondary, field)
+                    .map(|column| (item, column))
+            }) else {
                 return Ok(Err(unknown(predicate, &binding.name)));
             };
+            kinds.push((binding.name.as_str(), item.source_kind(secondary, column)));
             Read::Intermediate { index, column }
         } else {
             binding.read.clone()
@@ -50,7 +52,13 @@ fn bind_predicate(
             read,
         });
     }
-    BoundPredicate::new_contextual(predicate.plan().clone(), bindings, Vec::new())
+    let typed = predicate.plan().typed(|name| {
+        kinds.iter().find(|(bound, _)| *bound == name).map_or_else(
+            || spec.declared_input(name),
+            |&(_, kind)| crate::result_type::ResultType::declared(kind),
+        )
+    });
+    BoundPredicate::new_contextual(typed, bindings, Vec::new())
         .map(Ok)
         .map_err(BindError::InvalidPredicateBinding)
 }
