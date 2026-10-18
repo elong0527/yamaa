@@ -671,6 +671,12 @@ does not open. A `pages` reference states whether the `refs` are physical page
 numbers or named destinations and carries the `refs` as a space-separated
 list.
 
+The mapping forms are written only for what they add: a comment mapping
+holding only `text`, a method mapping holding only `description` and a
+document reference holding only `document` restate their string and fail as
+`redundant_long_form` under
+[SCHEMA-15](../reference/schema-language.md#schema-15).
+
 ## When the profile is checked
 
 <a id="sub-23"></a>

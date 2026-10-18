@@ -98,7 +98,10 @@ versions. A malformed fragment fails under
 [Schema language](reference/schema-language.md) at its contributing file and
 field. [Schema language](reference/schema-language.md) shorthand is expanded
 in every supplied non-null field before composition, so equivalent spellings
-contribute the same value.
+contribute the same value. A long form that only restates its shorthand fails
+in the layer that writes it under
+[SCHEMA-15](reference/schema-language.md#schema-15); the composed document
+holds the expanded classes and is not checked again.
 
 ## Composition
 

@@ -258,8 +258,7 @@ no dataset but its own.
 ```yaml
 - name: HEIGHTCM
   type: float
-  derivation:
-    source: DM.HEIGHTCM
+  derivation: DM.HEIGHTCM
 - name: BMI
   type: float
   derivation:
