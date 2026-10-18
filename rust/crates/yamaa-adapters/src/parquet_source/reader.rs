@@ -244,8 +244,7 @@ fn read_interpreted(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
         })
         .collect();
     let source = native_pages(bytes, &frame)?;
-    let raw = contain_decode(|| physical::read(source, &metadata, &keep, &arrow_schema))
-        .ok_or(Error::Malformed)??;
+    let raw = physical::read(source, &metadata, &keep, &arrow_schema)?;
     let group_rows = metadata
         .row_groups()
         .iter()
@@ -862,6 +861,15 @@ mod tests {
         assert!(std::panic::catch_unwind(|| panic!("a panic outside contain_decode")).is_err());
     }
 
+    /// Panics when it is dropped.
+    struct PanicOnDrop;
+
+    impl Drop for PanicOnDrop {
+        fn drop(&mut self) {
+            panic!("a destructor panicked while a contained panic unwound");
+        }
+    }
+
     /// Hook output without the thread id that follows the thread's name,
     /// which differs between processes.
     fn without_thread_id(text: &str) -> String {
@@ -895,6 +903,15 @@ mod tests {
                 uncontained_panic();
                 return;
             }
+            // The runtime aborts the process when a destructor panics while
+            // another panic unwinds.
+            Ok("abort") => {
+                contain_decode::<()>(|| {
+                    let _armed = PanicOnDrop;
+                    panic!("a contained panic");
+                });
+                unreachable!("the process aborted");
+            }
             _ => {}
         }
         // Each child runs this test alone. Its output is not captured, so the
@@ -903,14 +920,17 @@ mod tests {
             module_path!(),
             "::contained_panics_print_nothing_and_others_print_as_before"
         );
-        let stderr = |role: &str| {
-            let output = std::process::Command::new(std::env::current_exe().unwrap())
+        let child = |role: &str| {
+            std::process::Command::new(std::env::current_exe().unwrap())
                 .args(["--exact", test.split_once("::").unwrap().1])
-                .args(["--nocapture", "--test-threads=1"])
+                .args(["--no-capture", "--test-threads=1"])
                 .env(PANIC_CHILD, role)
                 .env_remove("RUST_BACKTRACE")
                 .output()
-                .unwrap();
+                .unwrap()
+        };
+        let stderr = |role: &str| {
+            let output = child(role);
             assert!(output.status.success(), "{role}: {output:?}");
             String::from_utf8(output.stderr).unwrap()
         };
@@ -921,6 +941,17 @@ mod tests {
             "{before}"
         );
         assert_eq!(without_thread_id(&stderr("after-contained")), before);
+        // A panic while the contained one unwinds reaches the hook the
+        // wrapper wraps, so the abort keeps its message. The contained panic
+        // stays silent.
+        let aborted = child("abort");
+        let message = String::from_utf8_lossy(&aborted.stderr);
+        assert!(!aborted.status.success(), "{aborted:?}");
+        assert!(
+            message.contains("a destructor panicked while a contained panic unwound"),
+            "{message}"
+        );
+        assert!(!message.contains("a contained panic\n"), "{message}");
     }
 
     #[test]
