@@ -57,6 +57,21 @@ impl PublicTable {
         self.rows
     }
 
+    /// Wrap engine-built auxiliary tables, such as issues and ODM items, whose
+    /// columns need not be specification column types. Specification outputs
+    /// use `from_snapshot`/`from_table`, which enforce that profile.
+    pub fn from_batches(schema: SchemaRef, batches: Vec<RecordBatch>) -> Result<Self, Error> {
+        if batches.iter().any(|batch| batch.schema() != schema) {
+            return Err(Error::InvalidTable);
+        }
+        let rows = batches.iter().map(RecordBatch::num_rows).sum();
+        Ok(Self {
+            schema,
+            batches,
+            rows,
+        })
+    }
+
     pub fn decode(input: &[u8]) -> Result<Self, Error> {
         Self::from_snapshot(&ipc_table::decode_snapshot(input)?)
     }

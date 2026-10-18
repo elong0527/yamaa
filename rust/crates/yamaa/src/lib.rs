@@ -23,6 +23,7 @@
 //! dependencies of its own.
 #![deny(unsafe_code)]
 
+pub mod api;
 pub mod cancel;
 pub mod diagnostic;
 pub mod engine;
@@ -35,6 +36,7 @@ pub mod table;
 
 mod internal;
 
+pub use api::{Failure, Run};
 pub use cancel::CancellationToken;
 pub use diagnostic::{ContextValue, Diagnostic, DiagnosticContext, Report, Severity, SourceSpan};
 pub use engine::{
