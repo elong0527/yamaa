@@ -172,11 +172,13 @@ Keep workflow-specific setup in CI and reusable check logic in `tools/`.
 Pin external actions to complete commit IDs with exact release comments.
 
 PRs and the main schedule run only development checks: lint, repository
-checks, the Rust workspace, and the Python and R hosts on Linux. Release lanes
+checks, the Rust workspace, and the Python and R hosts on Linux. On PRs to
+main, CI reports the required `formats` check as skipped so release
+qualification does not delay merging. Release lanes
 check support claims and run on each `release/**` push and on dispatch: CI's
-minimum Rust toolchain, Python 3.15 and minimum saved artifact reader lanes,
-the optional format feature selections and the macOS, Windows and R-devel
-package checks. Dependency graphs and advisories, native qualification, Harbor
+minimum Rust toolchain, minimal format builds, Python 3.15 and minimum saved
+artifact reader lanes, and the macOS, Windows and R-devel package checks.
+Dependency graphs and advisories, native qualification, Harbor
 and coverage run on dispatch (native qualification also on a
 `qualification/issue-*` push). Dispatch any of them on a branch with
 `gh workflow run <workflow> --ref <branch>` to check a change that needs them
@@ -202,6 +204,16 @@ reviewed versions:
 ```sh
 cp rust/Cargo.lock rust/tests/embedder/Cargo.lock
 RUSTFLAGS='-D warnings' cargo +1.90.0 test --manifest-path rust/tests/embedder/Cargo.toml --target-dir rust/target
+```
+
+It also builds the facade with no optional formats and with YAML + Parquet.
+These two builds run only the focused adapter capability tests, verify the
+facade's dependency graph and linked native symbols, and check the core's
+dependency isolation once. Ordinary workspace tests cover all default formats.
+Run both minimal builds from the repository root with the minimum toolchain:
+
+```sh
+RUSTUP_TOOLCHAIN=1.90.0 python -m tools.ci.format_features
 ```
 
 `.github/workflows/dependency-graphs.yml` checks both locks against the
