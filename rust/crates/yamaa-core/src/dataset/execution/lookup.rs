@@ -96,7 +96,6 @@ pub(super) fn range_value<'a, T: TableAccess + ?Sized>(
                 plan,
                 row,
                 assignment,
-                relation_predicates::CurrentObservation::Operand,
                 state,
             )
             .map(|value| (range, value))
