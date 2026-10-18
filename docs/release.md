@@ -240,8 +240,8 @@ release assets only, and those assets do not establish PyPI publication. PyPI
 publication is a separate decision and requires configured authentication;
 the GitHub release assets remain the documented standalone download route.
 
-The `Release rehearsal` workflow runs the same selection and downloads, daily
-and on dispatch, against the latest successful native run on main, with its own
+The `Release rehearsal` workflow runs the same selection and downloads, on
+dispatch, against the latest successful native run on main, with its own
 read-only token. It reads no tag, does not look for an existing release and
 stops before `gh release create`. Dispatch it before tagging with
 `gh workflow run release-rehearsal.yml --repo elong0527/yamaa`; its log names

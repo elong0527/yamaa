@@ -2,12 +2,11 @@ name: Release rehearsal
 
 # release.yml runs only when a release tag is pushed. Rehearse its selection
 # and downloads against the latest successful native run on main, with this
-# workflow's read-only token, and stop before anything is published.
+# workflow's read-only token, and stop before anything is published. Like the
+# other release lanes it runs only on dispatch: dispatch it before pushing a
+# release tag, after the native run that the tag will name.
 on:
   workflow_dispatch:
-  schedule:
-    # Daily; dispatch it before pushing a release tag.
-    - cron: '43 9 * * *'
 
 permissions:
   contents: read
