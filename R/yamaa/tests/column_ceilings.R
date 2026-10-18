@@ -21,11 +21,12 @@ operations <- function(project) {
 }
 # The issues without the project route's identification: `entry` names the
 # listed specification, and so does `source` unless the finding already names
-# its own source operand. A context without `entry` is unchanged text.
-route_issues <- function(issues, spec) {
+# its own source operand. The specification alone adds neither.
+route_issues <- function(issues, spec, project) {
   issues$context <- vapply(issues$context, function(text) {
     context <- jsonlite::fromJSON(text, simplifyVector = FALSE)
-    if (is.null(context$entry)) return(text)
+    stopifnot(identical(!is.null(context$entry), project))
+    if (!project) return(text)
     stopifnot(endsWith(context$entry, paste0("/", basename(spec))), !is.null(context$source))
     if (identical(context$source, context$entry)) context$source <- NULL
     context$entry <- NULL
@@ -178,7 +179,7 @@ run_column_ceilings <- function() {
     for (operation in operations(project)) {
       refused <- operation(spec)
       assert_refusal(refused, TRUE)
-      issue <- route_issues(refused$issues, spec)
+      issue <- route_issues(refused$issues, spec, project)
       stopifnot(nrow(issue) == 1L, is.na(issue$requirement),
         !grepl("incomplete_checks_from", issue$context, fixed = TRUE),
         grepl('"actual":1025', issue$context, fixed = TRUE),
@@ -191,7 +192,7 @@ run_column_ceilings <- function() {
     repaired[startsWith(repaired, "output:")] <- gsub(", C1024\\]", "]", repaired[startsWith(repaired, "output:")])
     writeLines(repaired, spec)
     for (operation in operations(project)) {
-      issue <- route_issues(operation(spec)$issues, spec)
+      issue <- route_issues(operation(spec)$issues, spec, project)
       stopifnot(nrow(issue) == 1L, identical(issue$condition, "incompatible_input_type"),
         identical(issue$requirement, "REQ-0308"),
         !grepl("incomplete_checks_from", issue$context, fixed = TRUE))
@@ -226,7 +227,7 @@ run_column_ceilings <- function() {
                         actual, limit, resource)
     for (project in c(FALSE, TRUE)) {
       for (operation in operations(project)) {
-        issue <- route_issues(operation(spec)$issues, spec)
+        issue <- route_issues(operation(spec)$issues, spec, project)
         stopifnot(nrow(issue) == 1L, identical(issue$phase, "engine"),
           identical(issue$condition, "engine_rejected"), is.na(issue$requirement),
           identical(issue$spec_paths, list(spec_path)), identical(issue$context, expected))
@@ -257,8 +258,9 @@ run_column_ceilings <- function() {
       issue <- operation(spec)$issues
       # Keep the wide number as exact text: drop the project identification
       # literally rather than through a JSON number codec.
-      issue$context <- sub(',"entry":"[^"]*","expected":"1.0","source":"[^"]*"}$',
-                           ',"expected":"1.0"}', issue$context)
+      identified <- ',"entry":"[^"]*","expected":"1.0","source":"[^"]*"}$'
+      stopifnot(identical(grepl(identified, issue$context), project))
+      issue$context <- sub(identified, ',"expected":"1.0"}', issue$context)
       stopifnot(nrow(issue) == 1L, identical(issue$phase, "validation"),
         identical(issue$condition, "schema_version_mismatch"),
         identical(issue$requirement, "REQ-0281"),
