@@ -34,6 +34,9 @@ theme:
     - content.action.edit
     - content.action.view
     - content.code.copy
+    # Choosing R or Python in one tab group switches every group with the
+    # same labels, so a reader picks a language once.
+    - content.tabs.link
     - navigation.footer
     - navigation.indexes
     - navigation.instant
@@ -65,6 +68,15 @@ markdown_extensions:
   - admonition
   - attr_list
   - md_in_html
+  # Content tabs (`=== "R"`) need superfences, which nests code blocks in a
+  # tab, and the alternate tab markup, the only one Material styles.
+  # Superfences highlights code with Pygments unless told not to; keep code
+  # blocks plain, as MkDocs' default fenced_code rendered them.
+  - pymdownx.highlight:
+      use_pygments: false
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
   - tables
   - toc:
       permalink: true
@@ -83,6 +95,7 @@ nav:
   - Home: index.md
   - Start:
       - Introduction: articles/intro.md
+      - R and Python API: articles/api.md
       - Principles: articles/principles.md
       - Derivation: articles/derive.md
       - Excel to yamaa: articles/excel.md
