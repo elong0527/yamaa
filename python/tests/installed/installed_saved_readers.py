@@ -138,7 +138,8 @@ class SavedReaders(unittest.TestCase):
         document.save()
         saved = (root / "output.json").read_bytes()
         define = (root / "define.xml").read_bytes()
-        # A repeated save leaves the published submission files unchanged.
+        # A repeated save rewrites the held bytes, so a changed file is restored.
+        (root / "output.json").write_bytes(b"sentinel")
         document.save()
         self.assertEqual((root / "output.json").read_bytes(), saved)
         self.assertEqual((root / "define.xml").read_bytes(), define)

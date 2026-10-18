@@ -68,11 +68,10 @@ check_submission <- function(directory, profile, empty) {
   unlink(file.path(directory, c("spec.yaml", "project.yaml", paste0("output.", profile))))
   stopifnot(is.null(document$save()))
   saved <- rawfile(file.path(directory, "output.json"))
-  # A submission publishes once: a second save writes nothing.
+  # A repeated save rewrites the held bytes, so a changed file is restored.
   writeBin(charToRaw("sentinel"), file.path(directory, "output.json"))
   stopifnot(is.null(document$save()),
-            identical(rawfile(file.path(directory, "output.json")), charToRaw("sentinel")))
-  writeBin(saved, file.path(directory, "output.json"))
+            identical(rawfile(file.path(directory, "output.json")), saved))
   # bigint_as_char is required: R doubles cannot carry every signed-i64 value.
   data <- jsonlite::fromJSON(rawToChar(saved), simplifyVector = FALSE, bigint_as_char = TRUE)
   row_lines <- grep("^    \\[", strsplit(rawToChar(saved), "\n", fixed = TRUE)[[1L]], value = TRUE)
