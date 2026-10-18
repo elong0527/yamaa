@@ -28,9 +28,9 @@ describes.
 `.github/workflows/native.yml` builds, installs and tests every supported
 combination on manual dispatch. A release is cut from a commit whose complete
 native run passed. Development PRs do not run the release lanes, so before a
-release also dispatch R-CMD-check, Optional format features and Dependency
-graphs on the candidate, and CI for its minimum toolchain, Python 3.15 and
-minimum saved artifact reader lanes.
+release also dispatch R-CMD-check and Dependency graphs on the candidate, and
+CI for its minimum toolchain, minimal format builds, Python 3.15 and minimum
+saved artifact reader lanes.
 
 Python, R and Cargo versions move together;
 `tools.packaging.check_shared_release_versions` checks that they agree. The
