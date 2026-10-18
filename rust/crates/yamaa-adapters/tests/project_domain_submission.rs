@@ -351,6 +351,59 @@ mod project {
             );
         }
 
+        /// A value-level check reads its completed where column. When that
+        /// column is not a key and a row template leaves it to its column
+        /// derivation, it completes after the checked column, so the check
+        /// waits for it in the executor, the resolved plan and its reference
+        /// order alike: `check()` passes and the run succeeds.
+        #[test]
+        fn value_level_checks_wait_for_a_where_column_the_column_phase_completes() {
+            const SPEC: &str = "schema_version: '1.0'\ndomain: LB\nkeys: [ID, SEQ]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, SEQ, LBORRES, LBTESTCD]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: LBORRES, type: str, derivation: SRC.RES, submission: {length: 20, origin: {type: Collected}, value_level: [{id: ONSET, where: {LBTESTCD: [ONSET]}, ENTRY}]}}\n  - {name: LBTESTCD, type: str, derivation: SRC.CODE}\nrows:\n  - id: onset\n    filter: \"SRC.CODE = 'ONSET'\"\n    derivations: {LBTESTCD: {literal: ONSET}}\n  - id: other\n    filter: \"SRC.CODE <> 'ONSET'\"\n    derivations: {}\n";
+            for (entry, field, failing, context) in [
+                (
+                    "mandatory: true",
+                    "mandatory",
+                    "ID,SEQ,CODE,RES\n1,1,ONSET,\n1,2,GLUC,\n",
+                    yamaa_adapters::json!({"column": "LBORRES", "failure_count": 1, "keys": [{"ID": 1, "SEQ": 1}]}),
+                ),
+                (
+                    "data_type: date",
+                    "data_type",
+                    "ID,SEQ,CODE,RES\n1,1,ONSET,2025-03\n1,2,GLUC,2025-03\n",
+                    yamaa_adapters::json!({"column": "LBORRES", "data_type": "date", "failure_count": 1, "keys": [{"ID": 1, "SEQ": 1}]}),
+                ),
+            ] {
+                let study = Study::new();
+                let spec = SPEC.replace("ENTRY", entry);
+                let issues = study.check(&spec);
+                assert!(issues.is_empty(), "{entry}: {issues:?}");
+                // The onset row holds a date; the glucose row, which the
+                // entry does not select, may hold anything or nothing.
+                let mut run = domain(
+                    &study,
+                    &spec,
+                    "ID,SEQ,CODE,RES\n1,1,ONSET,2025-03-04\n1,2,GLUC,\n",
+                );
+                assert!(run.issues().is_empty(), "{entry}: {:?}", run.issues());
+                assert!(run.save().unwrap());
+                assert_eq!(
+                    fs::read_to_string(study.0.join("output.csv")).unwrap(),
+                    "ID,SEQ,LBORRES,LBTESTCD\n1,1,2025-03-04,ONSET\n1,2,,GLUC\n"
+                );
+                // The check selects the onset row by its completed test code.
+                let run = domain(&study, &spec, failing);
+                assert_eq!(run.issues().len(), 1, "{entry}: {:?}", run.issues());
+                let issue = &run.issues()[0];
+                assert_eq!(
+                    issue.spec_paths,
+                    [format!(
+                        "columns.LBORRES.submission.value_level.ONSET.{field}"
+                    )]
+                );
+                assert_eq!(issue.context, context, "{entry}");
+            }
+        }
+
         /// SUB-27: a dataset of a tabulation class carries no `datetime`
         /// output column; an internal one, an analysis class and a dataset
         /// without a class are not refused.

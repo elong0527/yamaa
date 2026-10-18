@@ -610,6 +610,62 @@ fn registration_reproduces_the_eager_walk_and_marks_first_firings() {
     assert_eq!(info.partition, PartitionClass::Global);
 }
 
+/// A value-level `mandatory` or `data_type` check selects its rows by a where
+/// column. When the column phase completes that column after the checked one,
+/// the check waits for it in the schedule and in the executor's reference
+/// order alike, so the plan resolves.
+#[test]
+fn a_scoped_check_waits_for_a_where_column_the_column_phase_completes() {
+    use crate::dataset::{RowScope, WhereClause};
+    let scope = || RowScope {
+        clauses: vec![WhereClause {
+            terms: vec![(2, vec!["ONSET".into()])],
+        }],
+        include: true,
+    };
+    for check in [
+        Check::Mandatory(Some(scope())),
+        Check::DataType {
+            form: crate::iso8601::Form::Date,
+            scope: Some(scope()),
+        },
+    ] {
+        let plan = DatasetPlan::new(
+            schema(&[("ID", ColumnType::Int), ("RES", ColumnType::Str)]),
+            schema(&[
+                ("ID", ColumnType::Int),
+                ("RES", ColumnType::Str),
+                ("CODE", ColumnType::Str),
+            ]),
+            vec![RowTemplate {
+                mode: RowMode::Records,
+                assignments: vec![
+                    assign(0, Expression::Source(0)),
+                    assign(1, Expression::Source(1)),
+                ],
+                filter: None,
+            }],
+            vec![assign(2, Expression::Literal(Value::Str("ONSET".into())))],
+            vec![0],
+            vec![],
+        )
+        .unwrap()
+        .with_column_verifications(vec![ColumnVerifications {
+            column: 1,
+            checks: vec![verification(
+                "columns.RES.submission.value_level.ONSET",
+                check,
+            )],
+        }])
+        .unwrap();
+        let resolved = plan.resolve().unwrap();
+        assert!(
+            position(&resolved, Step::Column(ColumnId(2)))
+                < position(&resolved, Step::Checks(CheckId(0)))
+        );
+    }
+}
+
 #[test]
 fn a_reordered_schedule_is_refused_at_the_first_diverging_step() {
     let plan = records_plan();

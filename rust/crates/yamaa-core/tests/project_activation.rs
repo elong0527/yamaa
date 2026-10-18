@@ -2467,7 +2467,7 @@ mod project {
                     values: vec![Value::Str("good".into())],
                     clauses: vec![later(column)],
                     default: false,
-                    path: "rows.later.submission.CODE.codelist".into(),
+                    path: "columns.CODE.submission.value_level.LATER.codelist".into(),
                 }],
             };
             let groups = |check| {
