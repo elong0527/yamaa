@@ -300,6 +300,72 @@ fn mixed_specification_completes_only_the_intermediate_rows() {
     ));
 }
 
+/// An input-driven template beside a template grouping the serious events by
+/// subject. The template named by `own` derives `R` itself, so only the
+/// other completes it from the column-level derivation.
+fn grouped_mixed(derivation: &str, own: &str) -> String {
+    let (all, subjects) = match own {
+        "all" => (", R: {literal: OWN}", ""),
+        _ => ("", ", R: {literal: OWN}"),
+    };
+    format!(
+        "schema_version: \"1.0\"\n\
+         domain: XX\n\
+         keys: [USUBJID, AESEQ, SRC]\n\
+         output: {{path: out.csv, columns: [USUBJID, AESEQ, SRC, R]}}\n\
+         input:\n\
+         \x20 AE: {{path: ae.csv, types: {{AESEQ: int}}}}\n\
+         intermediates:\n\
+         \x20 - {{id: SER, dataset: AE, filter: \"AE.AESER = 'Y'\"}}\n\
+         rows:\n\
+         \x20 - id: all\n\
+         \x20   dataset: AE\n\
+         \x20   derivations: {{USUBJID: AE.USUBJID, AESEQ: AE.AESEQ, SRC: {{literal: ALL}}{all}}}\n\
+         \x20 - id: subjects\n\
+         \x20   dataset: SER\n\
+         \x20   group_by: [SER.USUBJID]\n\
+         \x20   derivations: {{USUBJID: SER.USUBJID, AESEQ: {{aggregate: 'MIN(SER.AESEQ)'}}, SRC: {{literal: SER}}{subjects}}}\n\
+         columns:\n\
+         \x20 - {{name: USUBJID, type: str}}\n\
+         \x20 - {{name: AESEQ, type: int}}\n\
+         \x20 - {{name: SRC, type: str}}\n\
+         \x20 - {{name: R, type: str, derivation: {derivation}}}\n"
+    )
+}
+
+#[test]
+fn input_rows_read_their_own_record_beside_a_grouped_intermediate() {
+    // Only the input-driven template completes R. The intermediate's groups
+    // are not groups of AE, so each AE row reads its own event.
+    Fixture::new(&grouped_mixed("AE.AETERM", "subjects")).saved(
+        "USUBJID,AESEQ,SRC,R\nS1,1,ALL,HEADACHE\nS1,2,ALL,NAUSEA\nS2,1,ALL,RASH\n\
+         S1,3,ALL,DIZZINESS\nS1,1,SER,OWN\nS2,1,SER,OWN\n",
+    );
+}
+
+#[test]
+fn grouped_intermediate_rows_read_only_its_group_keys() {
+    // Only the grouped template completes R, and S1's group holds two
+    // serious events.
+    let issue = Fixture::new(&grouped_mixed("SER.AETERM", "all")).issue();
+    assert_eq!(
+        (
+            issue.condition.as_str(),
+            issue.requirement.as_deref(),
+            issue.spec_paths.as_slice()
+        ),
+        (
+            "ungrouped_driver_field",
+            Some("REQ-0107"),
+            ["columns.R.derivation.source".to_owned()].as_slice()
+        )
+    );
+    assert_eq!(
+        issue.context,
+        yamaa_adapters::json!({"identifier": "SER.AETERM", "dataset": "SER"})
+    );
+}
+
 const LOWER: &str = "derivations: {LOWER: {str_case: {source: AE.AETERM, to: lower}}}";
 
 #[test]

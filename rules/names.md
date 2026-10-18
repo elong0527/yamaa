@@ -88,7 +88,7 @@ is scalar only when the exact variable appears in the enclosing
 source variable with a scalar `source` fails.
 
 Fails: `ungrouped_driver_field`.
-Evidence: `rust/crates/yamaa-adapters/tests/fixtures/source_filter_scope.json`, `rust/crates/yamaa-adapters/tests/execution_grouped_driver_dataset.rs`, `rust/crates/yamaa-core/tests/support/diagnostic/binding.rs`.
+Evidence: `schema-rows-group-scope`, `rust/crates/yamaa-adapters/tests/fixtures/source_filter_scope.json`, `rust/crates/yamaa-adapters/tests/execution_grouped_driver_dataset.rs`, `rust/crates/yamaa-core/tests/support/diagnostic/binding.rs`.
 Replaces: REQ-0085, REQ-0086, REQ-0087, REQ-0107.
 
 The driver is an input dataset or an eligible named intermediate under

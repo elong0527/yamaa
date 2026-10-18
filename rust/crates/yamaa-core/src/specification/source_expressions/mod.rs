@@ -87,21 +87,12 @@ impl Declaration {
                     && group_by.is_some_and(|group| group.contains(&self.variable.as_str()))
             }
             crate::reference_scope::Phase::Column { groups } => {
-                let mut relevant = false;
-                let shared = groups
+                let mut own = groups
                     .iter()
-                    .filter(|group| {
-                        group.iter().any(|field| {
-                            field
-                                .split_once('.')
-                                .is_some_and(|(owner, _)| owner == dataset)
-                        })
-                    })
-                    .all(|group| {
-                        relevant = true;
-                        group.contains(&self.variable.as_str())
-                    });
-                relevant && shared
+                    .filter(|&&(owner, _)| owner == dataset)
+                    .peekable();
+                own.peek().is_some()
+                    && own.all(|(_, group)| group.contains(&self.variable.as_str()))
             }
         }
     }

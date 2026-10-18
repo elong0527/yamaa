@@ -62,7 +62,15 @@ mod relations {
             });
             let column = scope(Phase::Column { groups: &[] });
             let columns = scope(Phase::Column {
-                groups: &[&["SRC.K", "SRC.N"], &["SRC.K"]],
+                groups: &[("SRC", &["SRC.K", "SRC.N"]), ("SRC", &["SRC.K"])],
+            });
+            // Templates grouped over another driver leave a read of this
+            // driver scalar; only this driver's own groups decide it.
+            let foreign = scope(Phase::Column {
+                groups: &[("OTHER", &["OTHER.N"])],
+            });
+            let mixed = scope(Phase::Column {
+                groups: &[("SRC", &["SRC.K"]), ("OTHER", &["OTHER.N"])],
             });
             for (name, expected, scope, findings) in [
                 ("SRC.N", Some(Int), row, vec![]),
@@ -230,6 +238,9 @@ mod relations {
                     },
                     vec![],
                 ),
+                ("SRC.N", Some(Int), foreign, vec![]),
+                ("SRC.K", Some(Str), mixed, vec![]),
+                ("SRC.N", None, mixed, vec![F::ColumnGroup]),
                 ("OTHER.N", Some(Str), column, vec![]),
                 ("OTHER.ABSENT", Some(Str), column, vec![F::UnknownField]),
                 (
@@ -279,7 +290,9 @@ mod relations {
                 (
                     "SRC.K",
                     None,
-                    scope(Phase::Column { groups: &[&[]] }),
+                    scope(Phase::Column {
+                        groups: &[("SRC", &[])],
+                    }),
                     vec![F::ColumnGroup],
                 ),
             ] {
