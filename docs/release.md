@@ -53,7 +53,7 @@ Python package dependencies and R package `Suggests` declare these floors.
 The R readers are optional: public Build and Save use the shared native codecs.
 CSV carries text rather than an embedded schema; controls supply an explicit
 text schema and check exact authored CSV bytes. Its empty-field ingestion
-semantics are described in the [CSV profile](../rules/storage/csv.md).
+semantics are described in the [CSV profile](../rules/reference/csv.md).
 Parquet checks every logical type, nullable field, zone-free microsecond
 timestamp, field and row order, full signed-i64 values, exact finite double
 bits and empty-table schema. Read R integer columns through Arrow arrays, or
@@ -77,9 +77,9 @@ R arrow reads its installed host's corresponding captured buffer. Repeated
 saves of one run must retain identical bytes. Ordinary CI tests the minimum
 readers; every native wheel/source and R source lane also runs these controls
 with the minimum versions for its interpreter. SAS datasets and Transport are
-input formats; the published dataset profiles remain CSV and Parquet.
-Dataset-JSON and Define-XML are generated through the public project
-submission API.
+input formats; the published dataset profiles remain CSV and Parquet. SAS
+Transport version 5 and Dataset-JSON files and Define-XML are generated through
+the public project submission API.
 
 ## Supported dependency combinations
 
@@ -307,7 +307,7 @@ package to carry each notice unchanged.
 
 Native qualification exercises the static source bridge on every supported
 platform and compares both installed hosts with independently authored binary
-fixtures and exact saved bytes. The [SAS source contract](../rules/storage/sas.md)
+fixtures and exact saved bytes. The [SAS source contract](../rules/reference/sas.md)
 owns decoding behavior.
 
 ## Approved decisions
@@ -346,7 +346,9 @@ owns decoding behavior.
 - Resolve resources from their original declaring file by default; explicit
   input/output `relative_to: entry` selects each specification entry. Admit
   absolute and parent-relative local paths without project-root fallback. Preserve snapshots,
-  original failures, callback counts and producer-first publication order.
+  original failures, callback counts and log-first publication order. A `schema`
+  link types a stored artifact from its producing specification and never runs
+  it; callers build and save producers before their consumers.
 - Keep normative diagnostics registry-owned, including the reviewed
   `unsupported_operation` and `engine_rejected` null-requirement exceptions.
   Cut breaks remain finite and strictly ascending; signed-i64 predicate
@@ -361,7 +363,7 @@ owns decoding behavior.
   contract, cache and resource identities use references, canonical forms or
   bytes; only packaging-tool lockfiles carry their own checksum fields.
 - Prune every specification after composition, including an entry file that
-  declares no `parents`; resolved-column ordering stays inheritance-only.
+  declares no `parent`; resolved-column ordering stays inheritance-only.
 - Ship `str_replace` with literal replacement text only. Group references,
   if ever added, come through a different field, so `replacement` never
   changes meaning.
@@ -416,8 +418,8 @@ its metadata-only authority. Reduce the refused size and rerun the operation.
 
 The shared Rust engine behind every Python and R spec and project call uses one
 fixed policy in `yamaa_core::limits::Limits`.
-Admission checks the physical file, table geometry, declaration shape or actual
-regex match at its owning boundary. There are no caller-selected profiles or
+Admission checks the physical file, table geometry, declaration shape or compiled
+regex at its owning boundary. There are no caller-selected profiles or
 cumulative byte, copy, traversal or work pools.
 
 `read_odm()` keeps its own archive-member, expanded-byte and XML-depth options
@@ -436,7 +438,7 @@ in both hosts and reports a parser refusal as `yamaa.Error` in Python or a
 | Inputs to one specification | 16 |
 | Operands in one source selection | 64 |
 | Parent occurrences in one inheritance traversal, including aliases | 8,192 |
-| Steps in one regex match | 1,000,000 |
+| Compiled program of one regular expression | 10 MiB |
 | Findings in the final public issue collection | 10,000 |
 | YAML nesting depth | 64 |
 | Semantic expression and context nesting depth | 128 |
@@ -445,7 +447,8 @@ A MiB is 1,048,576 bytes; a GiB is 1,073,741,824 bytes. File readers check the
 encoded size before retaining bytes and check growth during reading. Writers
 check the saved file size before extending it. Table admission checks rows,
 columns and their product before constructing or growing the corresponding
-geometry. The regex step counter is fresh for each match.
+geometry. A regular expression is refused when it compiles, never while it
+matches: matching takes time linear in the subject, so there is no step budget.
 
 Semantic admission and retained observations stay complete. The final public
 issue collection keeps its first 10,000 findings in their existing order. Source
@@ -482,7 +485,7 @@ The main ones:
 | `save()` returns `True` | `save()` returns nothing and raises `yamaa.Error` when it cannot write. |
 | An environment file holds `language`, `codelists`, `study` and the `sdtm`, `adam` and `send` sections | A `project.yaml` holds `codelists`, `study` and the sections, and its `environments` names each language's environment file. The environment file keeps `schema_version`, `lock` and `functions`; the `environments` key states its language. |
 | A section requires `standard` and `define` | A section needs only `specs`; `study`, `standard` and `define` are required only to create submission files. |
-| `dataset_json: true` | `datasets: json`. |
+| `dataset_json: true` | `datasets: json`; `datasets: xpt` writes SAS Transport version 5 files instead. |
 | `output.verification_log` and `output.warning_log`, read as `verification_log` and `warning_log` | `output.report`, read as `report`: one run report per run, with a row for the run and for each input, row template, handler, output column and evaluated check. |
 | Lock pins yamaa 0.4.0 | Regenerate the project lock for 0.5.0 before using project functions; each applicable build checks the runtime version. |
 
@@ -501,9 +504,9 @@ Make the 0.4.0 changes above as well as these:
 | R `cdiscbuilder` package | The `yamaa` R package: `yamaa_spec`, `yamaa_project` and `yamaa_read_odm`. |
 | A dead declaration with an invalid reference fails a file without `parents` | The declaration is removed before validation and the file builds. To keep a declaration validated, name the column in `output.columns`, `keys` or `output.order_by`, or read it from a live derivation or verification. |
 | An input that no column reads is the implied driver | The input is removed too; name it in `base`. |
-| `parents: []` added only to enable pruning | Every specification is pruned, so the line no longer affects pruning. Any `parents` field, even an empty one, still orders resolved columns by dependency; without one, declaration order is the resolved order ([REQ-0060](../rules/execution/lifecycle.md#req-0060), [REQ-0643](../rules/specification/composition.md#req-0643)). Remove the line only once no column reads a column declared after it; otherwise the specification fails with `forward_reference` ([REQ-0071](../rules/execution/lifecycle.md#req-0071)). |
+| `parents: []` added only to enable pruning | Every specification is pruned; remove the line. Without a `parent`, declaration order is the resolved order, so a column that reads a column declared after it fails with `forward_reference` ([COLUMN-5](../rules/columns.md#column-5)). |
 | Rust code depending on `yamaa-adapters` or `yamaa-core` | Depend on the `yamaa` facade crate by path or git, as the [Rust guide](../rust/README.md#distribution) shows. Its default `yaml` feature brings the reviewed YAML parser with no other configuration; 0.4.0 itself also needs the `saphyr-parser` patch that its [release notes](releases/0.4.0.md) show. |
-| `datetime_precision` of minute text (`2025-03-04T08:30`) is `S`; `datetime_impute` with `time: last` gives `08:30:00`; hour text (`T08`) is invalid | `M`, `08:30:59`, and hour text is accepted (`H`). `IN ('M', 'S')` selects what `= 'S'` selected in 0.3.0, and only those forms convert directly to a `datetime`. A condition meaning "a time was collected" tests `IN ('H', 'M', 'S')`, because hour text also carries a collected time ([REQ-1327](../rules/operations/temporal.md#req-1327)). Complete hour text with `datetime_impute`; it is not a `datetime` ([REQ-1329](../rules/operations/temporal.md#req-1329)). |
+| `datetime_precision` of minute text (`2025-03-04T08:30`) is `S`; `datetime_impute` with `time: last` gives `08:30:00`; hour text (`T08`) is invalid | `precision` with `type: datetime` gives `minute`, `impute` with `type: datetime`, `minimum_source_precision: day` and `time: last` gives `08:30:59`, and hour text is accepted (`hour`). A condition that tested `= 'S'` for a collected time tests `IN ('minute', 'second')`; a condition meaning "a time was collected" tests `IN ('hour', 'minute', 'second')` ([TIME-7](../rules/temporal.md#time-7)). |
 | Lock pins an earlier yamaa | Regenerate the project lock for the installed yamaa before using project functions; each applicable build checks the runtime version. |
 | A `between.value` qualified by an input that does not drive the row reads a wrong value with no message | It fails validation as `unknown_field`. Derive the value into a column, for example `AGE` from `DM.AGE`, and name that column. |
 | A `.sas7bdat` input that holds records deleted in place returns them as rows | It fails as `source_sas_invalid` with cause `deleted_records`. Rewrite the dataset first, for example with `PROC COPY`. |
@@ -523,6 +526,6 @@ The 0.4.0 upgrade also includes language and environment changes made before
 | Data roots or `yamaa-project.yaml` | Relative resources resolve from the YAML file that declares them, including inherited layers. |
 | Symbolic link below the entry directory | Copy or hard-link the input; the resource policy refuses symbolic links. |
 
-The normative contracts are [verification](../rules/execution/verification.md),
-[functions and project environments](../rules/operations/functions.md) and
-[resources](../rules/storage/resources.md).
+The normative contracts are [verification](../rules/verification.md),
+[functions and project environments](../rules/profiles/functions.md) and
+[resources](../rules/reference/files.md).

@@ -42,46 +42,49 @@ columns:
     derivation: ADSL.DTHDT
 
   # Complete a partial end to the last day of its month, or of the year when
-  # only a year was collected, never after death. The bound moves only the
-  # supplied components, so a month that begins after death gives no date.
+  # only a year was collected, moved back to death when that falls inside
+  # the collected month or year. The bound moves only the supplied
+  # components, so a death before the collected month moves nothing.
   - name: AENDT
     type: date
     label: Analysis End Date
     derivation:
-      date_impute:
+      impute:
+        type: date
         source: CMENDTC
         month: 12
         day: last
         not_after: DTHDT
-        missing: null   # handlers are explicit: an omitted one is fatal
-        invalid: null
+        # handlers are explicit: an omitted one is fatal
+        invalid: {literal: null}
 
-  - name: AENDTPR
-    type: str
-    label: Analysis End Date Precision
+  # The first day the collected end allows; a supplied end can follow
+  # death only when this does too.
+  - name: AENDTE
+    type: date
+    label: Earliest Analysis End Date Allowed
     derivation:
-      date_precision:
-        source: AENDT
-        missing: null
+      impute:
+        type: date
+        source: CMENDTC
+        month: 1
+        day: first
+        invalid: {literal: null}
 
-  # M means a year and month were collected, so the day was supplied; Y
-  # means only the year was, so the month and day were supplied.
+  # D: a year and month were collected, so the day was supplied; M: only
+  # the year was, so the month and day were supplied.
   - name: AENDTF
     type: str
     label: Analysis End Date Imputation Flag
     derivation:
-      case:
-        - when: "AENDTPR = 'M'"
-          then: {literal: "D"}
-        - when: "AENDTPR = 'Y'"
-          then: {literal: "M"}
+      imputation_flag:
+        source: AENDT
+        part: date
     verifications:
-      allowed_values:
-        values: ["D", "M"]
+      - allowed_values:
+          values: ["D", "M"]
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, CMSEQ]
   - row_count:
       min: 11
       max: 11
@@ -90,6 +93,6 @@ verifications:
       when: "AENDTF IS NOT NULL"
       require: "AENDT IS NOT NULL"
   - assert:
-      id: supplied-end-never-follows-death
-      when: "AENDTF IS NOT NULL"
-      require: "DTHDT IS NULL OR AENDT <= DTHDT"
+      id: supplied-end-never-follows-death-in-its-period
+      when: "AENDTF IS NOT NULL AND AENDTE <= DTHDT"
+      require: "AENDT <= DTHDT"

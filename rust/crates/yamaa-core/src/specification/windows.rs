@@ -3,7 +3,6 @@ use super::*;
 use crate::{
     bound_expression::BoundPredicate,
     dataset::{OrderTerm, Window, WindowKind},
-    predicate_compiler,
 };
 use std::collections::BTreeSet;
 
@@ -16,11 +15,16 @@ enum Kind {
         source: String,
         offset: i64,
     },
-    PreviousNonMissing(String),
-    Locf(String),
+    Locf {
+        source: String,
+        include_current: bool,
+    },
     BaselineFlag {
         date: String,
         reference_date: String,
+        value: String,
+        inclusive: bool,
+        tie_break: Vec<(String, bool, bool)>,
     },
 }
 #[derive(Clone, Debug)]
@@ -30,10 +34,7 @@ pub(super) struct Declaration {
     path: String,
     groups: Vec<String>,
     order: Vec<(String, bool, bool)>,
-    filter: Option<(
-        String,
-        Result<crate::predicate::Plan, predicate_compiler::Error>,
-    )>,
+    filter: Option<(String, Result<CompiledExpression, CompileError>)>,
 }
 #[derive(Debug)]
 pub enum WindowFinding {
@@ -112,7 +113,6 @@ impl Declaration {
         payload: usize,
         op: &str,
         path: &str,
-        extra: &mut Vec<UnsupportedFeature>,
     ) -> Result<Self, PrepareError> {
         let name = |field_name| text(d, field(d, payload, field_name)?).map(String::from);
         let kind = match op {
@@ -147,12 +147,46 @@ impl Declaration {
                     offset,
                 }
             }
-            "previous_non_missing" => Kind::PreviousNonMissing(name("source")?),
-            "locf" => Kind::Locf(name("source")?),
-            "baseline_flag" => Kind::BaselineFlag {
-                date: name("date")?,
-                reference_date: name("reference_date")?,
+            "locf" => Kind::Locf {
+                source: name("source")?,
+                include_current: match d.field(payload, "include_current").map(|id| &d.nodes()[id])
+                {
+                    Some(N::Boolean(value)) => *value,
+                    None => true,
+                    _ => return Err(PrepareError::Internal),
+                },
             },
+            "baseline_flag" => {
+                let mut tie_break = Vec::new();
+                if let Some(terms) = d
+                    .field(payload, "tie_break")
+                    .filter(|&id| !matches!(d.nodes()[id], N::Null))
+                {
+                    let items = sequence(d, terms)?;
+                    if items.len() > crate::limits::Limits::COLUMNS {
+                        return Err(PrepareError::limit(
+                            "window_order",
+                            crate::limits::Limits::COLUMNS,
+                            Some(items.len()),
+                            Some(&format!("{path}.tie_break")),
+                        ));
+                    }
+                    for &term in items {
+                        tie_break.push(order_term(d, term)?);
+                    }
+                }
+                Kind::BaselineFlag {
+                    date: name("date")?,
+                    reference_date: name("reference_date")?,
+                    value: name("value")?,
+                    inclusive: match d.field(payload, "inclusive").map(|id| &d.nodes()[id]) {
+                        Some(N::Boolean(value)) => *value,
+                        None => true,
+                        _ => return Err(PrepareError::Internal),
+                    },
+                    tie_break,
+                }
+            }
             _ => return Err(PrepareError::Internal),
         };
         let mut groups = Vec::new();
@@ -196,25 +230,7 @@ impl Declaration {
                     ));
                 }
                 for &term in items {
-                    let (variable, descending, nulls_first) =
-                        if let N::Text(value) = &d.nodes()[term] {
-                            (value.as_str(), false, false)
-                        } else {
-                            (
-                                text(d, field(d, term, "variable")?)?,
-                                d.field(term, "direction")
-                                    .map(|id| text(d, id))
-                                    .transpose()?
-                                    .unwrap_or("asc")
-                                    == "desc",
-                                d.field(term, "nulls")
-                                    .map(|id| text(d, id))
-                                    .transpose()?
-                                    .unwrap_or("last")
-                                    == "first",
-                            )
-                        };
-                    order.push((variable.into(), descending, nulls_first));
+                    order.push(order_term(d, term)?);
                 }
             }
             if let Some(id) = d
@@ -223,18 +239,11 @@ impl Declaration {
             {
                 let expression = text(d, id)?;
                 let filter_path = format!("{path}.window.filter");
-                let compiled = predicate_compiler::compile(expression, &filter_path);
+                let compiled = compile(expression, ExpressionContext::Predicate, &filter_path);
                 match &compiled {
-                    Ok(_)
-                    | Err(predicate_compiler::Error::Parse(
-                        crate::predicate_parser::ParseError::Grammar { .. },
-                    )) => {}
-                    Err(predicate_compiler::Error::Parse(
-                        crate::predicate_parser::ParseError::UnsupportedRegex { .. },
-                    )) => reject(extra, "predicate_regex", filter_path),
-                    Err(predicate_compiler::Error::Internal) => return Err(PrepareError::Internal),
+                    Ok(_) | Err(CompileError::Invalid { .. }) => {}
                     Err(error) => {
-                        return Err(PrepareError::predicate(error.clone(), Some(&filter_path)))
+                        return Err(PrepareError::expression(error.clone(), Some(&filter_path)))
                     }
                 }
                 filter = Some((expression.into(), compiled));
@@ -248,6 +257,19 @@ impl Declaration {
             order,
             filter,
         })
+    }
+    /// EXPR-14: ranks and row numbers are `int` and a baseline flag `str`;
+    /// a neighbor or carried value has its source's type.
+    pub(super) fn result_type(
+        &self,
+        input: &dyn Fn(&str) -> crate::result_type::ResultType,
+    ) -> crate::result_type::ResultType {
+        use crate::result_type::ResultType;
+        match &self.kind {
+            Kind::RowNumber | Kind::Competition | Kind::Dense => ResultType::INT,
+            Kind::RowValue { source, .. } | Kind::Locf { source, .. } => input(source),
+            Kind::BaselineFlag { .. } => ResultType::STR,
+        }
     }
     pub fn bind(
         &self,
@@ -272,18 +294,25 @@ impl Declaration {
         use crate::reference_scope::{self, Finding, Reach, Scope};
         let mut reads = Vec::new();
         match &self.kind {
-            Kind::RowValue { source, .. }
-            | Kind::PreviousNonMissing(source)
-            | Kind::Locf(source) => reads.push((source.as_str(), format!("{}.source", self.path))),
+            Kind::RowValue { source, .. } | Kind::Locf { source, .. } => {
+                reads.push((source.as_str(), format!("{}.source", self.path)))
+            }
             Kind::BaselineFlag {
                 date,
                 reference_date,
+                value,
+                tie_break,
+                ..
             } => {
                 reads.push((date.as_str(), format!("{}.date", self.path)));
                 reads.push((
                     reference_date.as_str(),
                     format!("{}.reference_date", self.path),
                 ));
+                reads.push((value.as_str(), format!("{}.value", self.path)));
+                for (index, (name, ..)) in tie_break.iter().enumerate() {
+                    reads.push((name.as_str(), format!("{}.tie_break[{index}]", self.path)));
+                }
             }
             Kind::RowNumber | Kind::Competition | Kind::Dense => (),
         }
@@ -361,11 +390,9 @@ impl Declaration {
         let filter = match &self.filter {
             Some((
                 text,
-                Err(predicate_compiler::Error::Parse(
-                    crate::predicate_parser::ParseError::Grammar {
-                        position, failure, ..
-                    },
-                )),
+                Err(CompileError::Invalid {
+                    position, failure, ..
+                }),
             )) => {
                 findings.push(BindFinding::Lookup(LookupFinding::grammar(
                     &format!("{}.window.filter", self.path),
@@ -375,7 +402,7 @@ impl Declaration {
                 )));
                 None
             }
-            Some((_, Err(error))) => return Err(BindError::PredicatePolicy(error.clone())),
+            Some((_, Err(error))) => return Err(BindError::ExpressionPolicy(error.clone())),
             Some((_, Ok(plan))) => Some(plan),
             None => None,
         };
@@ -431,20 +458,41 @@ impl Declaration {
                 column: resolve(source, format!("{}.source", self.path))?,
                 offset: *offset,
             },
-            Kind::PreviousNonMissing(source) => WindowKind::PreviousNonMissing {
+            Kind::Locf {
+                source,
+                include_current,
+            } => WindowKind::Locf {
                 column: resolve(source, format!("{}.source", self.path))?,
-            },
-            Kind::Locf(source) => WindowKind::Locf {
-                column: resolve(source, format!("{}.source", self.path))?,
+                include_current: *include_current,
             },
             Kind::BaselineFlag {
                 date,
                 reference_date,
+                value,
+                inclusive,
+                ..
             } => WindowKind::BaselineFlag {
                 date: resolve(date, format!("{}.date", self.path))?,
                 reference_date: resolve(reference_date, format!("{}.reference_date", self.path))?,
+                value: resolve(value, format!("{}.value", self.path))?,
+                inclusive: *inclusive,
             },
         };
+        // The baseline's tie-break terms bind in authored order and become the
+        // plan's order terms; `window.order_by` stays forbidden beside them.
+        let mut tie_break = Vec::new();
+        if let Kind::BaselineFlag {
+            tie_break: terms, ..
+        } = &self.kind
+        {
+            for (index, (name, descending, nulls_first)) in terms.iter().enumerate() {
+                tie_break.push(OrderTerm {
+                    column: resolve(name, format!("{}.tie_break[{index}]", self.path))?,
+                    descending: *descending,
+                    nulls_first: *nulls_first,
+                });
+            }
+        }
         let mut group_by = Vec::new();
         for (index, name) in self.groups.iter().enumerate() {
             group_by.push(resolve(
@@ -460,9 +508,10 @@ impl Declaration {
                 nulls_first: *nulls_first,
             });
         }
+        order_by.extend(tie_break);
         let mut bindings = Vec::new();
         if let Some(plan) = filter {
-            let names: BTreeSet<_> = plan.identifiers().into_iter().collect();
+            let names: BTreeSet<_> = plan.identifiers().collect();
             for name in names {
                 bindings.push(Binding {
                     name: name.into(),
@@ -476,6 +525,7 @@ impl Declaration {
         if let Kind::BaselineFlag {
             date,
             reference_date,
+            ..
         } = &self.kind
         {
             let kind = |name: &str| match catalog.bind(name) {
@@ -489,7 +539,11 @@ impl Declaration {
             }
         }
         let filter = filter
-            .map(|plan| BoundPredicate::new(plan.clone(), bindings))
+            .map(|plan| {
+                let typed = plan
+                    .typed(|name| crate::result_type::ResultType::declared(catalog.type_of(name)));
+                BoundPredicate::new(typed, bindings)
+            })
             .transpose()
             .map_err(BindError::InvalidPredicateBinding)?;
         let window = Window {
@@ -528,6 +582,7 @@ impl Declaration {
         let Kind::BaselineFlag {
             date,
             reference_date,
+            ..
         } = &self.kind
         else {
             return None;
@@ -566,6 +621,9 @@ impl Declaration {
         let Kind::BaselineFlag {
             date,
             reference_date,
+            value,
+            tie_break,
+            ..
         } = &self.kind
         else {
             return;
@@ -578,6 +636,8 @@ impl Declaration {
                 .map(|column| column.kind)
         };
         if !self.order.is_empty()
+            || kind(value).is_none()
+            || tie_break.iter().any(|(name, ..)| kind(name).is_none())
             || self
                 .groups
                 .iter()

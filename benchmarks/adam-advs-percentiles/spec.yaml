@@ -20,7 +20,7 @@ intermediates:
   - id: GROWTH
     dataset: LMS
     key: {PARAMCD: ADVS_RAW.PARAMCD, SEX: ADVS_RAW.SEX, AGE: ADVS_RAW.AGE}
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: STUDYID
@@ -54,8 +54,8 @@ columns:
         - when: "ADVS_RAW.PARAMCD = 'WEIGHT'"
           then: {literal: WGTPCTL}
     verifications:
-      allowed_values:
-        values: [BMIPCTL, WGTPCTL]
+      - allowed_values:
+          values: [BMIPCTL, WGTPCTL]
 
   - name: PARAM
     type: str
@@ -100,8 +100,6 @@ columns:
         expr: "100 * NORMCDF"
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, AVISIT, PARAMCD]
   - row_count:
       min: 8
       max: 8

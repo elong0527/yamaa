@@ -97,7 +97,7 @@ columns:
           THRESHOLD: THRESHOLD MET
           OTHERWISE: THRESHOLD NOT MET
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   # No branch for NOT EVALUABLE, so AVAL stays empty there.
   - name: AVAL
@@ -111,8 +111,6 @@ columns:
           then: {literal: 0}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, PARAMCD, AVISIT]
   - row_count:
       min: 10
       max: 10

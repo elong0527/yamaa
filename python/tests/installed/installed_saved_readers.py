@@ -132,16 +132,26 @@ class SavedReaders(unittest.TestCase):
         document = yamaa.project(root / "project.yaml").submission(
             "sdtm", created=TRUTH["created"]
         )
+        if empty:
+            # A transported dataset without rows must declare it has no data.
+            self.assertEqual(
+                document.issues["condition"].to_list(), ["transport_dataset_empty"]
+            )
+            with self.assertRaises(yamaa.Error):
+                document.save()
+            self.assertFalse((root / "test.json").exists())
+            self.assertFalse((root / "define.xml").exists())
+            return
         self.assertTrue(document.issues.is_empty(), document.issues)
         for name in ("spec.yaml", "project.yaml", f"output.{profile}"):
             (root / name).unlink()
         document.save()
-        saved = (root / "output.json").read_bytes()
+        saved = (root / "test.json").read_bytes()
         define = (root / "define.xml").read_bytes()
         # A repeated save rewrites the held bytes, so a changed file is restored.
-        (root / "output.json").write_bytes(b"sentinel")
+        (root / "test.json").write_bytes(b"sentinel")
         document.save()
-        self.assertEqual((root / "output.json").read_bytes(), saved)
+        self.assertEqual((root / "test.json").read_bytes(), saved)
         self.assertEqual((root / "define.xml").read_bytes(), define)
         # Preserve JSON's signed -0 before applying its declared float type.
         data = json.loads(
@@ -195,7 +205,7 @@ class SavedReaders(unittest.TestCase):
         )
         self.assertEqual(
             xml.xpath("//d:leaf/@*[local-name()='href']", namespaces=ns),
-            ["output.json"],
+            ["test.json"],
         )
 
     def test_public_held_saves_cover_every_type_and_empty_table(self):

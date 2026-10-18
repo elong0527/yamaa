@@ -39,9 +39,6 @@ pub enum TemporalKind {
     DurationValue {
         unit: ElapsedUnit,
     },
-    DurationText {
-        unit: ElapsedUnit,
-    },
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ElapsedUnit {
@@ -117,6 +114,52 @@ impl Temporal {
             code: ConditionCode::TemporalOperand,
             spec_paths: vec![path.into()],
             context: [("source", source), ("expected", "date"), ("actual", actual)]
+                .into_iter()
+                .map(|(key, value)| (key.into(), JsonValue::String(value.into())))
+                .collect(),
+            source_span: None,
+            operand_route: None,
+        }
+    }
+    /// A `unit` the declared `type` does not count in.
+    pub(crate) fn unit_diagnostic(path: &str, value: &str, permitted: &[&str]) -> Diagnostic {
+        Diagnostic {
+            code: ConditionCode::TemporalUnit,
+            spec_paths: vec![format!("{path}.unit")],
+            context: vec![
+                ("value".into(), JsonValue::String(value.into())),
+                (
+                    "permitted".into(),
+                    JsonValue::Array(
+                        permitted
+                            .iter()
+                            .map(|unit| JsonValue::String((*unit).into()))
+                            .collect(),
+                    ),
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            source_span: None,
+            operand_route: None,
+        }
+    }
+    /// A field the declared `type` requires but the operation omits, or one
+    /// the declared `type` does not take.
+    pub(crate) fn type_field_diagnostic(
+        required: bool,
+        path: &str,
+        field: &str,
+        target: &str,
+    ) -> Diagnostic {
+        Diagnostic {
+            code: if required {
+                ConditionCode::TemporalFieldRequired
+            } else {
+                ConditionCode::TemporalFieldNotPermitted
+            },
+            spec_paths: vec![format!("{path}.{field}")],
+            context: [("field", field), ("type", target)]
                 .into_iter()
                 .map(|(key, value)| (key.into(), JsonValue::String(value.into())))
                 .collect(),
@@ -202,7 +245,7 @@ impl TemporalKind {
             Self::StudyDay => &["date", "reference"],
             Self::DateShift => &["source", "days"],
             Self::DateTimeShift { .. } => &["source", "amount"],
-            Self::EpochDay | Self::DurationValue { .. } | Self::DurationText { .. } => &["source"],
+            Self::EpochDay | Self::DurationValue { .. } => &["source"],
         }
     }
 }

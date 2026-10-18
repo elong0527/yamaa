@@ -66,11 +66,11 @@ columns:
       source:
         variable: EX.EXTRT
         filter: "EX.EPOCH = 'TREATMENT 1'"
-        order_by: [EX.EXSTDTC, EX.EXSEQ]
+        order_by: [{variable: EX.EXSTDTC, nulls: last}, EX.EXSEQ]
         keep: first
     verifications:
-      allowed_values:
-        values: [VITAMIN D3, PLACEBO]
+      - allowed_values:
+          values: [VITAMIN D3, PLACEBO]
 
   - name: TRT02A
     type: str
@@ -79,11 +79,11 @@ columns:
       source:
         variable: EX.EXTRT
         filter: "EX.EPOCH = 'TREATMENT 2'"
-        order_by: [EX.EXSTDTC, EX.EXSEQ]
+        order_by: [{variable: EX.EXSTDTC, nulls: last}, EX.EXSEQ]
         keep: first
     verifications:
-      allowed_values:
-        values: [VITAMIN D3, PLACEBO]
+      - allowed_values:
+          values: [VITAMIN D3, PLACEBO]
 
   # Days strictly between the end of period 1 and the start of period 2, so
   # back-to-back periods give 0; empty when either date is.
@@ -91,18 +91,17 @@ columns:
     type: int
     label: Washout Duration (Days)
     derivation:
-      date_diff:
+      diff:
+        type: date
         start: TR01EDT
         end: TR02SDT
         unit: day
         bounds: between
     verifications:
-      range:
-        min: 0
+      - range:
+          min: 0
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID]
   - row_count:
       min: 6
       max: 6

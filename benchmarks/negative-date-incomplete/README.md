@@ -23,7 +23,8 @@ the collected text permits:
 
 ```yaml
 derivation:
-  date_impute:
+  impute:
+    type: date
     source: AE.AESTDTC
     month: 1
     day: 1

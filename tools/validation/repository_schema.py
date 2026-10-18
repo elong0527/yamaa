@@ -3,7 +3,60 @@
 import re
 from pathlib import Path
 
-from tools.validation.check_rule_rewrite import SchemaSourceError, load_schema
+import yaml
+from tools.validation.editorial import UniqueKeyLoader
+
+# A description that only points at its rule.
+POINTER = re.compile(r"See (?P<id>[A-Z]+-\d+)\.")
+
+
+class SchemaSourceError(ValueError):
+    """Invalid authored schema source or navigation metadata."""
+
+
+def load_schema(path):
+    """Parse contract-bearing schemas with the repository's strict source loader."""
+    try:
+        document = yaml.load(path.read_text(encoding="ascii"), Loader=UniqueKeyLoader)
+    except (OSError, yaml.YAMLError) as exc:
+        raise SchemaSourceError(f"{path.name}: invalid schema source: {exc}") from exc
+    if not isinstance(document, dict):
+        raise SchemaSourceError(f"{path.name}: expected schema mapping")
+    return document
+
+
+def schema_descriptions(node, parts=(), field_entry=False):
+    """Distinguish navigation metadata from a class field named description."""
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if key == "description" and not field_entry:
+                yield ".".join(parts) + ".description", value
+            else:
+                yield from schema_descriptions(value, (*parts, key))
+    elif isinstance(node, list):
+        for value in node:
+            yield from schema_descriptions(value, parts, field_entry=True)
+
+
+def description_rules(source, value, rules):
+    """Return the rule IDs one schema description cites, each resolved.
+
+    During the 0.5.0 conversion a description is ``See ID.`` or free text;
+    every rule ID it names must resolve in ``rules``, a
+    :class:`tools.rules.model.RuleSet`.
+    """
+    if not isinstance(value, str):
+        raise SchemaSourceError(f"schema description must be a string: {source}")
+    if not value.strip():
+        raise SchemaSourceError(f"schema description is empty: {source}")
+    pointer = POINTER.fullmatch(value)
+    cited = [pointer["id"]] if pointer else rules.citation.findall(value)
+    for identifier in cited:
+        if rules.resolve(identifier) is None:
+            raise SchemaSourceError(
+                f"schema description cites {identifier}, which names no rule: {source}"
+            )
+    return cited
 
 
 def validate_schema_sources(root: Path):

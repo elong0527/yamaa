@@ -313,7 +313,7 @@ mod relations {
                 IntermediateKey, IntermediateSource, MatchRead, MatchValue, PlanError,
                 RelationPredicate, RowMode, RowTemplate, SecondarySource, SourceSchemas,
             },
-            predicate_compiler,
+            expression::{compile, Context},
             value::Value,
         };
         fn assignment(column: usize, expression: Expression) -> Assignment {
@@ -326,8 +326,9 @@ mod relations {
         fn filter(identifier: &str, read: CurrentRead) -> RelationPredicate {
             RelationPredicate::new(
                 BoundPredicate::new(
-                    predicate_compiler::compile(
+                    compile(
                         &format!("D.V > {identifier}"),
+                        Context::Predicate,
                         "intermediates[0].filter",
                     )
                     .unwrap(),
@@ -366,6 +367,7 @@ mod relations {
                 filter,
                 selection: None,
                 no_match: Some(Value::Missing),
+                require_match: false,
                 unique: Vec::new(),
                 derivations: None,
                 pending_schema: None,
@@ -478,7 +480,12 @@ mod relations {
                 },
             )));
             let numeric = yamaa_core::bound_expression::BoundNumeric::new(
-                yamaa_core::numeric_compiler::compile_numeric("P.V + 1", "C2").unwrap(),
+                yamaa_core::expression::compile(
+                    "P.V + 1",
+                    yamaa_core::expression::Context::Compute,
+                    "C2",
+                )
+                .unwrap(),
                 vec![Binding {
                     name: "P.V".into(),
                     read: Read::Intermediate {
@@ -623,7 +630,12 @@ mod relations {
         fn bound_intermediate_compute() -> Expression {
             Expression::Compute(
                 yamaa_core::bound_expression::BoundNumeric::new(
-                    yamaa_core::numeric_compiler::compile_numeric("P.V + 1", "C2").unwrap(),
+                    yamaa_core::expression::compile(
+                        "P.V + 1",
+                        yamaa_core::expression::Context::Compute,
+                        "C2",
+                    )
+                    .unwrap(),
                     vec![Binding {
                         name: "P.V".into(),
                         read: Read::Intermediate {
@@ -638,7 +650,7 @@ mod relations {
         fn bound_intermediate_flag() -> Expression {
             Expression::Flag(
                 yamaa_core::dataset::Flag::new(
-                    predicate_compiler::compile("P.V > 0", "C2").unwrap(),
+                    compile("P.V > 0", Context::Predicate, "C2").unwrap(),
                     vec![yamaa_core::dataset::FlagBinding {
                         name: "P.V".into(),
                         read: yamaa_core::dataset::FlagRead::Read(Read::Intermediate {
@@ -838,6 +850,7 @@ mod relations {
                 selection: None,
                 columns: Some(vec![2]),
                 no_match: Some(Value::Missing),
+                require_match: false,
                 unique: Vec::new(),
                 derivations: None,
                 pending_schema: None,
@@ -912,7 +925,12 @@ mod relations {
             .unwrap();
             assert_eq!(dependencies, [0, 0, 1]);
             let filter = BoundPredicate::new(
-                yamaa_core::predicate_compiler::compile("VALUE > 0", "row.filter").unwrap(),
+                yamaa_core::expression::compile(
+                    "VALUE > 0",
+                    yamaa_core::expression::Context::Predicate,
+                    "row.filter",
+                )
+                .unwrap(),
                 vec![Binding {
                     name: "VALUE".into(),
                     read: Read::Column(2),
@@ -1010,13 +1028,13 @@ mod relations {
         #[test]
         fn an_aggregate_range_value_reads_only_its_rows_driver_record() {
             use yamaa_core::{
-                aggregate_compiler::compile_aggregate,
                 dataset::{AggregatePhase, AggregateRelation, AggregateSource, BoundAggregate},
+                expression::{compile, Context},
             };
             let path = "columns.N.derivation.aggregate";
             let aggregate = |source| {
                 BoundAggregate::new(
-                    compile_aggregate("COUNT(EVT.*)", &format!("{path}.expr")).unwrap(),
+                    compile("COUNT(EVT.*)", Context::Aggregate, &format!("{path}.expr")).unwrap(),
                     AggregateRelation::Matched {
                         source: AggregateSource::Secondary(1),
                         keys: vec![IntermediateKey {
@@ -1528,7 +1546,10 @@ mod relations {
                         ("id", Tree::text("P")),
                         ("dataset", Tree::text("DONOR")),
                         ("key", Tree::map(vec![("K", Tree::text("KEY"))])),
-                        ("no_match", Tree::Scalar(N::Null)),
+                        (
+                            "no_match",
+                            Tree::map(vec![("literal", Tree::Scalar(N::Null))]),
+                        ),
                     ])]),
                 ),
                 (
@@ -1857,6 +1878,7 @@ mod relations {
                         filter: None,
                         selection: None,
                         no_match: Some(Value::Missing),
+                        require_match: false,
                         unique: Vec::new(),
                         derivations: None,
                         pending_schema: None,
@@ -1912,6 +1934,7 @@ mod relations {
                         filter: None,
                         selection: None,
                         no_match: Some(Value::Missing),
+                        require_match: false,
                         unique: Vec::new(),
                         derivations: None,
                         pending_schema: None,
@@ -1993,6 +2016,7 @@ mod relations {
                         range: None,
                         columns: None,
                         no_match: None,
+                        require_match: true,
                         unique: vec![],
                         derivations: None,
                         pending_schema: None,
@@ -2056,6 +2080,7 @@ mod relations {
         }
         fn wrapped(column: usize, expression: Expression) -> Expression {
             Expression::FirstAvailable(Box::new(FirstAvailable::new(
+                "row.selection".into(),
                 vec![SelectionSource {
                     path: "row.selection[0]".into(),
                     read: SelectionRead::Expression(Box::new(assignment(
@@ -2106,7 +2131,12 @@ mod relations {
         #[test]
         fn source_selection_readers_of_windows_remain_unavailable_to_record_filters() {
             let predicate = BoundPredicate::new(
-                yamaa_core::predicate_compiler::compile("VALUE > 1", "rows[0].filter").unwrap(),
+                yamaa_core::expression::compile(
+                    "VALUE > 1",
+                    yamaa_core::expression::Context::Predicate,
+                    "rows[0].filter",
+                )
+                .unwrap(),
                 vec![Binding {
                     name: "VALUE".into(),
                     read: Read::Column(2),
@@ -2184,6 +2214,7 @@ mod relations {
                 filter: None,
                 selection: None,
                 no_match: Some(Value::Missing),
+                require_match: false,
                 unique: Vec::new(),
                 derivations: None,
                 pending_schema: None,
@@ -2195,6 +2226,7 @@ mod relations {
         #[test]
         fn first_template_self_hidden_in_first_available_is_rejected() {
             let hidden = Expression::FirstAvailable(Box::new(FirstAvailable::new(
+                "rows[0].first_available".into(),
                 vec![SelectionSource {
                     path: "rows[0].first_available.sources[0]".into(),
                     read: SelectionRead::Expression(Box::new(assign(
@@ -2263,13 +2295,14 @@ mod relations {
         #[test]
         fn typed_aggregate_raw_field_labels_cannot_invent_a_self_relation_owner() {
             use yamaa_core::{
-                aggregate_compiler::compile_aggregate,
                 dataset::{
                     AggregateBinding, AggregatePhase, AggregateRelation, AggregateSource,
                     BoundAggregate,
                 },
+                expression::{compile, Context},
             };
-            let expression = compile_aggregate("SUM(P.V)", "rows[0].V.aggregate").unwrap();
+            let expression =
+                compile("SUM(P.V)", Context::Aggregate, "rows[0].V.aggregate").unwrap();
             let aggregate = BoundAggregate::new(
                 expression,
                 AggregateRelation::Matched {
@@ -2380,7 +2413,7 @@ mod relations {
     }
     mod source_ordinal {
         use yamaa_core::{
-            source_ordinal::{stored_fields, Error, Ordinal},
+            source_ordinal::{Error, Ordinal},
             table::{Column, TableSchema},
             value::ColumnType,
         };
@@ -2397,10 +2430,7 @@ mod relations {
         fn positions_and_stored_contract_are_exact_at_the_admission_boundary() {
             let original = schema();
             let admitted = Ordinal::admit(&original, 3, "REC").unwrap();
-            assert_eq!(
-                stored_fields(admitted.schema(), Some("REC")).unwrap(),
-                original.columns()
-            );
+            assert_eq!(&admitted.schema().columns()[..1], original.columns());
             assert_eq!(
                 admitted.schema().columns()[1],
                 Column {
@@ -2426,18 +2456,9 @@ mod relations {
                 Ordinal::admit(&original, 0, "ID"),
                 Err(Error::Collision)
             ));
-            assert!(matches!(
-                stored_fields(&original, Some("REC")),
-                Err(Error::InvalidTable)
-            ));
-            assert!(matches!(
-                stored_fields(&original, Some("ID")),
-                Err(Error::InvalidTable)
-            ));
             let empty = Ordinal::admit(&original, 0, "REC").unwrap();
             assert_eq!(empty.schema(), admitted.schema());
             assert_eq!(empty.value(0), None);
-            assert_eq!(stored_fields(&original, None).unwrap(), original.columns());
             let edge = Ordinal::admit(&original, 10_000_000, "REC").unwrap();
             assert_eq!(edge.value(9_999_999), Some(10_000_000));
             assert!(matches!(
@@ -2780,7 +2801,7 @@ mod relations {
                     "columns.A.derivation.mapping.missing",
                     "missing",
                     Some("A"),
-                    Some("REQ-0334"),
+                    None,
                 ),
                 (
                     "rows[0].derivations.V.mapping.unmapped",
@@ -2810,7 +2831,7 @@ mod relations {
                     "columns.A.derivation.cut.missing",
                     "missing",
                     Some("A"),
-                    Some("REQ-0334"),
+                    None,
                 ),
                 (
                     "columns.S.derivation.str_template.missing",
@@ -2825,46 +2846,40 @@ mod relations {
                     Some("REQ-0103"),
                 ),
                 (
-                    "columns.D.derivation.date_impute.missing",
+                    "columns.D.derivation.impute.missing",
                     "missing",
                     Some("D"),
-                    Some("REQ-0588"),
+                    None,
                 ),
                 (
-                    "columns.D.derivation.date_impute.invalid",
+                    "columns.D.derivation.impute.invalid",
                     "invalid",
                     Some("D"),
                     Some("REQ-0588"),
                 ),
                 (
-                    "columns.P.derivation.date_precision.missing",
+                    "columns.P.derivation.precision.missing",
                     "missing",
                     Some("P"),
+                    None,
+                ),
+                (
+                    "rows[0].derivations.T.impute.partial",
+                    "partial",
+                    Some("T"),
+                    None,
+                ),
+                (
+                    "columns.T.derivation.to_date.invalid",
+                    "invalid",
+                    Some("T"),
                     Some("REQ-0588"),
                 ),
                 (
-                    "rows[0].derivations.T.datetime_impute.missing",
-                    "missing",
-                    Some("T"),
-                    Some("REQ-1182"),
-                ),
-                (
-                    "columns.T.derivation.datetime_impute.invalid",
-                    "invalid",
-                    Some("T"),
-                    Some("REQ-1182"),
-                ),
-                (
-                    "columns.Q.derivation.datetime_precision.missing",
-                    "missing",
-                    Some("Q"),
-                    Some("REQ-1183"),
-                ),
-                (
-                    "columns.Q.derivation.datetime_precision.invalid",
+                    "columns.Q.derivation.precision.invalid",
                     "invalid",
                     Some("Q"),
-                    Some("REQ-1183"),
+                    Some("REQ-0588"),
                 ),
                 (
                     "columns.E.derivation.duration_value.invalid",

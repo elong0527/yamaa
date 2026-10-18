@@ -1,0 +1,31 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+  VS: {path: input/vs.csv, types: {VSSEQ: int, WEIGHT: float}}
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, WTMAX]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  # The full form holds nothing but the formula, so it only repeats the
+  # short spelling of the same summary.
+  - name: WTMAX
+    type: float
+    label: Maximum Collected Weight
+    derivation:
+      aggregate:
+        expr: "MAX(VS.WEIGHT)"

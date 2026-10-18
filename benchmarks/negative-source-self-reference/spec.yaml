@@ -13,6 +13,7 @@ intermediates:
   - id: ADLB_LOOKUP
     dataset: ADLB
     key: {USUBJID: USUBJID, ADT: ADT, PARAMCD: ASTCODE}
+    require_match: true
 
 columns:
   - name: STUDYID
@@ -34,8 +35,8 @@ columns:
     type: str
     label: Parameter Code
     verifications:
-      allowed_values:
-        values: [ALT, AST, ASTALT]
+      - allowed_values:
+          values: [ALT, AST, ASTALT]
 
   - name: PARAM
     type: str
@@ -103,8 +104,6 @@ rows:
       ALTDEN: LB.LBSTRESN
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, ADT, PARAMCD]
   - row_count:
       min: 6
       max: 6

@@ -105,7 +105,7 @@ mod tests {
     use arrow_array::RecordBatch;
     use yamaa_core::{
         table::{Column, TableSchema},
-        temporal::{Date, DatePrecision},
+        temporal::{Date, Precision},
     };
 
     fn make_table(kind: ColumnType, array: ArrayRef) -> ArrowTable {
@@ -122,9 +122,9 @@ mod tests {
     #[test]
     fn column_values_retain_precision_missing_and_empty_string() {
         let dates = date_array(&[
-            Some(Date::new(2025, 1, 1, DatePrecision::Year).unwrap()),
+            Some(Date::new(2025, 1, 1, Precision::Year).unwrap()),
             None,
-            Some(Date::new(2024, 2, 3, DatePrecision::Day).unwrap()),
+            Some(Date::new(2024, 2, 3, Precision::Day).unwrap()),
         ])
         .unwrap();
         let table = make_table(ColumnType::Date, Arc::new(dates));
@@ -132,13 +132,13 @@ mod tests {
         assert_eq!(
             values,
             [
-                Value::Date(Date::new(2025, 1, 1, DatePrecision::Year).unwrap()),
+                Value::Date(Date::new(2025, 1, 1, Precision::Year).unwrap()),
                 Value::Missing,
-                Value::Date(Date::new(2024, 2, 3, DatePrecision::Day).unwrap()),
+                Value::Date(Date::new(2024, 2, 3, Precision::Day).unwrap()),
             ]
         );
         if let Value::Date(date) = values[0] {
-            assert_eq!(date.collected_precision(), DatePrecision::Year);
+            assert_eq!(date.collected_precision(), Precision::Year);
         } else {
             panic!("date")
         }

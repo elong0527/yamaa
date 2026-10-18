@@ -71,11 +71,13 @@ pub struct IntermediateDerivations {
     pub plan: std::rc::Rc<DatasetPlan>,
     pub current: Vec<CurrentField>,
     pub stored_columns: usize,
-    pub driver_kinds: Vec<Option<ColumnType>>,
     /// Explicitly typed results convert before completing their donor slot.
     pub typed_columns: Vec<usize>,
 }
 impl IntermediateDerivations {
+    /// A field's type: a stored field's, a typed derivation's declared type,
+    /// or an untyped derivation's one result type (EXPR-14), and none for a
+    /// result type decided per value.
     pub fn column_kind(&self, column: usize) -> Option<ColumnType> {
         self.plan.output_kind(column)
     }
@@ -93,8 +95,12 @@ pub struct Intermediate {
     pub range: Option<RelationRange>,
     /// Visible selected fields; donor keys, filters and order still see every slot.
     pub columns: Option<Vec<usize>>,
-    /// `Some(Missing)` handles absence; `None` leaves it as a join condition.
+    /// The declared `no_match` literal; `None` answers absence with missing.
+    /// Either way the answer is counted under `no_match` (LOOKUP-13).
     pub no_match: Option<Value>,
+    /// `require_match: true` fails an absence as `unmatched_key` instead;
+    /// admission refuses it beside a declared `no_match`.
+    pub require_match: bool,
     pub unique: Vec<IntermediateUnique>,
     pub derivations: Option<IntermediateDerivations>,
     /// Retained compilation metadata for a rejected augmentation; never executable.

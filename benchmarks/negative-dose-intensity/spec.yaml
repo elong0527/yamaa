@@ -35,8 +35,7 @@ columns:
     type: float
     label: Cumulative Dose
     derivation:
-      aggregate:
-        expr: "SUM(EX.EXDOSE)"
+      aggregate: "SUM(EX.EXDOSE)"
 
   # EX.EXPLDOS stands outside any reduction. The plan is recorded on every
   # administration record, so nothing says which record's plan divides the

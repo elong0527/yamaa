@@ -47,12 +47,12 @@ columns:
     type: date
     label: Analysis Date of Last Contact
     derivation:
-      date_impute:
+      impute:
+        type: date
         source: LSTCNTDC
         month: 1
         day: first
-        missing: null
-        invalid: null
+        invalid: {literal: null}
 
   # The subject's latest adverse event end and vital signs date, matched on
   # STUDYID and USUBJID; empty with no records or only missing dates.
@@ -60,15 +60,13 @@ columns:
     type: date
     label: Latest Adverse Event Date
     derivation:
-      aggregate:
-        expr: "MAX(ADAE.AENDT)"
+      aggregate: "MAX(ADAE.AENDT)"
 
   - name: ADVS_LST
     type: date
     label: Latest Vital Signs Date
     derivation:
-      aggregate:
-        expr: "MAX(ADVS.ADATE)"
+      aggregate: "MAX(ADVS.ADATE)"
 
   # The latest of the four, passing over missing ones; empty only when all
   # four are missing.

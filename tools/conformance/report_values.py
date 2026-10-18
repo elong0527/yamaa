@@ -274,7 +274,7 @@ class ConformanceError(ValueError):
 
 
 def _records(payload: bytes) -> tuple[str, ...]:
-    """Split R020's bytes on the U+000A terminator it writes after each."""
+    """Split CSV profile bytes on the U+000A terminator written after each record."""
     text = payload.decode("utf-8")
     text = text.removesuffix("\n")
     return tuple(text.split("\n")) if text else ()

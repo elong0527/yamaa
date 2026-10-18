@@ -52,12 +52,12 @@ columns:
         source: TRT01SRC
         to: upper
     verifications:
-      allowed_values:
-        values: [VITAMIN D3, PLACEBO, NOT TREATED]
+      - allowed_values:
+          values: [VITAMIN D3, PLACEBO, NOT TREATED]
 
   # Earliest start and latest end as collected text. A date alone gets
-  # 00:00:00 (start) or 23:59:59 (end), and precision D marks that; a date
-  # missing its day gives no date/time at all.
+  # 00:00:00 (start) or 23:59:59 (end), and the time flag H marks that; a
+  # date missing its day gives no date/time at all.
   - name: TRTSDTC
     type: str
     label: Collected Date/Time of First Exposure to Treatment
@@ -80,59 +80,45 @@ columns:
     type: datetime
     label: Datetime of First Exposure to Treatment
     derivation:
-      datetime_impute:
+      impute:
+        type: datetime
         source: TRTSDTC
+        minimum_source_precision: day
         time: first
-        missing: null
-        invalid: null
-
-  - name: TRTSTPR
-    type: str
-    label: First Exposure Date/Time Collected Precision
-    derivation:
-      datetime_precision:
-        source: TRTSDTM
-        missing: null
+        invalid: {literal: null}
 
   - name: TRTSTMF
     type: str
     label: Time of First Exposure Imputation Flag
     derivation:
-      case:
-        - when: "TRTSTPR = 'D'"
-          then: {literal: H}
+      imputation_flag:
+        source: TRTSDTM
+        part: time
     verifications:
-      allowed_values:
-        values: [H]
+      - allowed_values:
+          values: [H, M, S]
 
   - name: TRTEDTM
     type: datetime
     label: Datetime of Last Exposure to Treatment
     derivation:
-      datetime_impute:
+      impute:
+        type: datetime
         source: TRTEDTC
+        minimum_source_precision: day
         time: last
-        missing: null
-        invalid: null
-
-  - name: TRTETPR
-    type: str
-    label: Last Exposure Date/Time Collected Precision
-    derivation:
-      datetime_precision:
-        source: TRTEDTM
-        missing: null
+        invalid: {literal: null}
 
   - name: TRTETMF
     type: str
     label: Time of Last Exposure Imputation Flag
     derivation:
-      case:
-        - when: "TRTETPR = 'D'"
-          then: {literal: H}
+      imputation_flag:
+        source: TRTEDTM
+        part: time
     verifications:
-      allowed_values:
-        values: [H]
+      - allowed_values:
+          values: [H, M, S]
 
   - name: TRTSDT
     type: date
@@ -152,14 +138,15 @@ columns:
     type: int
     label: Total Treatment Duration (Days)
     derivation:
-      date_diff:
+      diff:
+        type: date
         start: TRTSDT
         end: TRTEDT
         unit: day
         bounds: inclusive
     verifications:
-      range:
-        min: 1
+      - range:
+          min: 1
 
   - name: SAFFL
     type: str
@@ -175,8 +162,6 @@ columns:
           values: [Y, N]
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID]
   - row_count:
       min: 8
       max: 8
@@ -185,11 +170,11 @@ verifications:
       columns: [TRTSDT, TRTSDTM, TRTEDT, TRTEDTM, TRTDURD]
   - assert:
       id: start-time-imputation-requires-a-start-datetime
-      when: "TRTSTMF = 'H'"
+      when: "TRTSTMF IS NOT NULL"
       require: "TRTSDTM IS NOT NULL"
   - assert:
       id: end-time-imputation-requires-an-end-datetime
-      when: "TRTETMF = 'H'"
+      when: "TRTETMF IS NOT NULL"
       require: "TRTEDTM IS NOT NULL"
   - assert:
       id: placebo-subject-is-in-safety-population

@@ -252,6 +252,8 @@ pub fn handler_condition(path: &str, handler: &str) -> Option<ConditionCode> {
         H::Unconvertible,
         H::MultipleMatches,
         H::NoMatch,
+        H::Partial,
+        H::CrossedBounds,
     ]
     .into_iter()
     .find(|kind| kind.name() == handler)?;
@@ -263,21 +265,18 @@ pub fn handler_condition(path: &str, handler: &str) -> Option<ConditionCode> {
         H::NoMatch => C::DatasetUnmatchedKey,
         H::Unmapped => C::MappingUnmapped,
         H::Unconvertible => C::ConversionInput,
+        // A missing input gives missing by default and raises nothing; only a
+        // string template fails on a missing part.
         H::Missing => match operation {
-            "mapping" => C::MappingMissing,
-            "cut" => C::CutMissing,
-            "date_impute" | "date_precision" => C::DateImputeMissing,
-            "datetime_impute" => C::DatetimeImputeMissing,
-            "datetime_precision" => C::DatetimePrecisionMissing,
-            _ => C::StrCaseMissing,
+            "str_template" => C::TemplateMissing,
+            _ => return None,
         },
         H::Invalid => match operation {
-            "date_impute" | "date_precision" => C::DateImputeInvalid,
-            "datetime_impute" => C::DatetimeImputeInvalid,
-            "datetime_precision" => C::DatetimePrecisionInvalid,
+            "impute" | "precision" | "to_date" => C::ImputeInvalid,
             "duration_value" => C::DurationInvalid,
             _ => return None,
         },
+        H::Partial | H::CrossedBounds => return None,
     })
 }
 

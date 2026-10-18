@@ -5,6 +5,8 @@ use crate::json::Value as V;
 use crate::{
     dataset::{Check, Verification},
     diagnostic::{ConditionCode as C, Diagnostic},
+    specification_submission_document::OriginType,
+    submission_origin::{self as origin, Reads},
     value::Value,
 };
 use std::collections::{BTreeMap, BTreeSet};
@@ -47,9 +49,8 @@ fn checks(d: &Document, column: usize, name: &str) -> Vec<usize> {
     let Some(id) = present_field(d, column, "verifications") else {
         return Vec::new();
     };
-    let entries = match &d.nodes()[id] {
-        N::Sequence(entries) => entries.as_slice(),
-        _ => std::slice::from_ref(&id),
+    let N::Sequence(entries) = &d.nodes()[id] else {
+        return Vec::new();
     };
     entries.iter().filter_map(|&id| d.field(id, name)).collect()
 }
@@ -89,29 +90,38 @@ fn reserved(
     }
     Ok(())
 }
-fn kinds(d: &Document, node: usize, intermediates: &BTreeSet<String>) -> &'static [&'static str] {
-    match crate::submission_composition::derivation_kind(d, node, intermediates) {
-        "literal" => &["Assigned", "Other", "Protocol"],
-        "source" => &[
-            "Assigned",
-            "Collected",
-            "Not Available",
-            "Other",
-            "Predecessor",
-            "Protocol",
-        ],
-        _ => &["Assigned", "Derived", "Other"],
+/// The origin types SUB-19 leaves unrefuted by one derivation.
+fn kinds(d: &Document, node: usize, reads: &Reads) -> Vec<&'static str> {
+    origin::classify(d, node, reads).admitted()
+}
+/// A declared origin's type and description.
+struct Declared<'a> {
+    kind: &'a str,
+    description: Option<&'a str>,
+}
+impl Declared<'_> {
+    /// The column a Predecessor origin names, when its description has the form.
+    fn predecessor(&self) -> Option<origin::Predecessor<'_>> {
+        (self.kind == OriginType::Predecessor.name())
+            .then_some(self.description?)
+            .and_then(origin::predecessor)
     }
 }
-fn origins(
-    d: &Document,
+fn declared(d: &Document, origin: usize) -> Option<Declared<'_>> {
+    Some(Declared {
+        kind: string(d, origin, "type")?,
+        description: string(d, origin, "description"),
+    })
+}
+fn origins<'a>(
+    d: &'a Document,
     submission: usize,
     name: &str,
     row: Option<&str>,
     path: &str,
     inherited_method: bool,
     result: &mut Vec<PreflightFinding>,
-) -> Option<String> {
+) -> Option<Declared<'a>> {
     let mut fields = vec![("column", s(name))];
     if let Some(row) = row {
         fields.push(("row", s(row)));
@@ -120,18 +130,40 @@ fn origins(
         result.push(finding(C::SubmissionOriginMissing, path, &fields));
         return None;
     };
-    let kind = string(d, origin, "type")?;
+    let declaration = declared(d, origin)?;
+    let kind = declaration.kind;
     if ["Predecessor", "Other", "Not Available"].contains(&kind)
-        && string(d, origin, "description").is_none_or(str::is_empty)
+        && declaration.description.is_none_or(str::is_empty)
     {
         let mut context = fields.clone();
         context.push(("origin_type", s(kind)));
         result.push(finding(C::SubmissionOriginDescription, path, &context));
+    } else if kind == OriginType::Predecessor.name() && declaration.predecessor().is_none() {
+        // SUB-16: a Predecessor description names `<dataset>.<column>`.
+        let mut context = fields.clone();
+        context.push(("origin_type", s(kind)));
+        context.push(("reason", s("predecessor_form")));
+        result.push(finding(
+            C::SubmissionOriginDescription,
+            &format!("{path}.origin.description"),
+            &context,
+        ));
     }
     if kind == "Derived" && present_field(d, submission, "method").is_none() && !inherited_method {
         result.push(finding(C::SubmissionMethodMissing, path, &fields));
     }
-    Some(kind.into())
+    Some(declaration)
+}
+/// SUB-20: the first derivation that is not the copy a Predecessor claims.
+fn copy_failure(
+    d: &Document,
+    derivations: &[usize],
+    predecessor: &origin::Predecessor<'_>,
+    reads: &Reads,
+) -> Option<origin::CopyFailure> {
+    derivations
+        .iter()
+        .find_map(|&node| origin::copies(d, node, predecessor, reads).err())
 }
 // Normalized metadata is compared directly, including defaulted fields; arena
 // indices and mapping order cannot invent a different declaration identity.
@@ -231,7 +263,10 @@ fn admit_value_fields(
         }
     }
     if present_field(d, d.root(), "submission").is_some() {
-        let length_type = ["text", "integer", "float"].contains(&resolved);
+        // SUB-7: a date or datetime never declares a length, whatever type it
+        // is submitted as.
+        let length_type = !["date", "datetime"].contains(&kind)
+            && ["text", "integer", "float"].contains(&resolved);
         if length_type && length.is_none() && maxima.is_empty() {
             result.push(finding(
                 C::SubmissionLengthMissing,
@@ -261,22 +296,6 @@ fn admit_value_fields(
             ));
         }
     }
-    if effective_field(d, entry, base, "mandatory")
-        .is_some_and(|id| d.nodes()[id] == N::Boolean(true))
-    {
-        let keys = sequence(d, field(d, d.root(), "keys")?)?;
-        if !keys
-            .iter()
-            .any(|&id| text(d, id).is_ok_and(|key| key == name))
-            && checks(d, column, "not_missing").is_empty()
-        {
-            result.push(finding(
-                C::SubmissionMandatoryUnenforced,
-                path,
-                &[("column", s(name))],
-            ));
-        }
-    }
     // An explicit verification binds the entire column once. Only authored
     // value overrides without such a verification introduce a scoped check.
     if kind == "str" && maxima.is_empty() {
@@ -300,7 +319,7 @@ fn admit_value_declarations(
     rows: &[usize],
     by_name: &BTreeMap<&str, usize>,
     output: &BTreeSet<&str>,
-    intermediates: &BTreeSet<String>,
+    reads: &Reads,
     result: &mut Vec<PreflightFinding>,
 ) -> Result<(String, Vec<ValueLength>), PrepareError> {
     // Value declarations are admitted as a whole before execution. Origin and
@@ -406,32 +425,35 @@ fn admit_value_declarations(
                     ));
                 }
             }
-            if let Some(origin) = present_field(d, entry, "origin")
+            if let Some(declaration) = present_field(d, entry, "origin")
                 .or_else(|| {
                     by_name
                         .get(name)
                         .and_then(|&column| present_field(d, column, "submission"))
                         .and_then(|base| present_field(d, base, "origin"))
                 })
-                .and_then(|id| string(d, id, "type"))
+                .and_then(|id| declared(d, id))
             {
-                if !kinds(d, effective, intermediates).contains(&origin) {
+                let derivation = origin::classify(d, effective, reads);
+                let refuted = !derivation.admitted().contains(&declaration.kind);
+                let copy = declaration
+                    .predecessor()
+                    .filter(|_| !refuted)
+                    .and_then(|predecessor| copy_failure(d, &[effective], &predecessor, reads));
+                if refuted || copy.is_some() {
+                    let mut context = vec![
+                        ("column", s(name)),
+                        ("testcd", s(testcd)),
+                        ("derivation_kind", s(derivation.name())),
+                        ("origin_type", s(declaration.kind)),
+                    ];
+                    if let Some(copy) = copy {
+                        context.push(("reason", s(copy.reason())));
+                    }
                     result.push(finding(
                         C::SubmissionValueOriginRefuted,
                         &field_path,
-                        &[
-                            ("column", s(name)),
-                            ("testcd", s(testcd)),
-                            (
-                                "derivation_kind",
-                                s(crate::submission_composition::derivation_kind(
-                                    d,
-                                    effective,
-                                    intermediates,
-                                )),
-                            ),
-                            ("origin_type", s(origin)),
-                        ],
+                        &context,
                     ));
                 }
             }
@@ -581,21 +603,11 @@ pub(super) fn admit(
         .iter()
         .map(|&id| text(d, id))
         .collect::<Result<BTreeSet<_>, _>>()?;
-    let keys = sequence(d, field(d, root, "keys")?)?
-        .iter()
-        .map(|&id| text(d, id))
-        .collect::<Result<BTreeSet<_>, _>>()?;
     let rows = present_field(d, root, "rows")
         .map(|id| sequence(d, id))
         .transpose()?
         .unwrap_or(&[]);
-    let intermediates = present_field(d, root, "intermediates")
-        .map(|id| sequence(d, id))
-        .transpose()?
-        .unwrap_or(&[])
-        .iter()
-        .map(|&id| text(d, field(d, id, "id")?).map(String::from))
-        .collect::<Result<BTreeSet<_>, _>>()?;
+    let reads = Reads::of(d);
     reserved(d, root, None, result)?;
     let has_root = present_field(d, root, "submission");
     if let Some(metadata) = has_root {
@@ -713,7 +725,10 @@ pub(super) fn admit(
             }
         }
         if has_root.is_some() {
-            let length_type = ["text", "integer", "float"].contains(&resolved);
+            // SUB-7: a date or datetime never declares a length, whatever
+            // type it is submitted as.
+            let length_type = !["date", "datetime"].contains(&kind)
+                && ["text", "integer", "float"].contains(&resolved);
             if length_type && length.is_none() && maxima.is_empty() {
                 result.push(finding(
                     C::SubmissionLengthMissing,
@@ -751,17 +766,6 @@ pub(super) fn admit(
                 ));
             }
         }
-        if d.field(submission, "mandatory")
-            .is_some_and(|id| d.nodes()[id] == N::Boolean(true))
-            && !keys.contains(name)
-            && checks(d, column, "not_missing").is_empty()
-        {
-            result.push(finding(
-                C::SubmissionMandatoryUnenforced,
-                &path,
-                &[("column", s(name))],
-            ));
-        }
         let Some(origin) = origins(d, submission, name, None, &path, false, result) else {
             continue;
         };
@@ -783,9 +787,9 @@ pub(super) fn admit(
             derivations.extend(present_field(d, column, "derivation"));
         }
         if !derivations.is_empty() {
-            let mut admitted = kinds(d, derivations[0], &intermediates).to_vec();
+            let mut admitted = kinds(d, derivations[0], &reads);
             for &node in &derivations[1..] {
-                admitted.retain(|kind| kinds(d, node, &intermediates).contains(kind));
+                admitted.retain(|kind| kinds(d, node, &reads).contains(kind));
             }
             if admitted.is_empty() {
                 result.push(finding(
@@ -796,24 +800,40 @@ pub(super) fn admit(
                         ("reason", s("row_derivations_disagree")),
                     ],
                 ));
-            } else if !admitted.contains(&origin.as_str()) {
+            } else if !admitted.contains(&origin.kind) {
                 result.push(finding(
                     C::SubmissionOriginRefuted,
                     &path,
                     &[
                         ("column", s(name)),
-                        ("origin_type", s(&origin)),
+                        ("origin_type", s(origin.kind)),
                         (
                             "admitted",
                             V::Array(admitted.iter().map(|kind| s(kind)).collect()),
                         ),
                     ],
                 ));
+            } else if let Some((predecessor, failure)) =
+                origin.predecessor().and_then(|predecessor| {
+                    copy_failure(d, &derivations, &predecessor, &reads)
+                        .map(|failure| (predecessor.name(), failure))
+                })
+            {
+                // SUB-20: a Predecessor is a bare `source` of the column it names.
+                result.push(finding(
+                    C::SubmissionOriginRefuted,
+                    &path,
+                    &[
+                        ("column", s(name)),
+                        ("origin_type", s(origin.kind)),
+                        ("predecessor", s(&predecessor)),
+                        ("reason", s(failure.reason())),
+                    ],
+                ));
             }
         }
     }
-    let values =
-        admit_value_declarations(d, columns, rows, &by_name, &output, &intermediates, result)?;
+    let values = admit_value_declarations(d, columns, rows, &by_name, &output, &reads, result)?;
     apply_value_bounds_and_inventory(d, columns, inventory, groups, result, rows, &values)?;
     discriminator_type_findings(d, columns, rows, groups, &values.0, result)
 }

@@ -17,8 +17,8 @@ columns:
     label: Domain Abbreviation
     derivation: {literal: DS}
     verifications:
-      allowed_values:
-        values: [DS]
+      - allowed_values:
+          values: [DS]
 
   - name: STUDYID
     type: str
@@ -40,7 +40,6 @@ columns:
           EOT: 1
           EOS: 2
     verifications:
-      - not_missing: {}
       - allowed_values:
           values: [1, 2]
 
@@ -49,8 +48,8 @@ columns:
     label: Category for Disposition Event
     derivation: {literal: DISPOSITION EVENT}
     verifications:
-      allowed_values:
-        values: [DISPOSITION EVENT]
+      - allowed_values:
+          values: [DISPOSITION EVENT]
 
   - name: DSSCAT
     type: str
@@ -122,8 +121,6 @@ columns:
       - not_missing: {}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, DSSEQ]
   - row_count:
       min: 6
       max: 6

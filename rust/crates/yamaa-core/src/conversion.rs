@@ -219,6 +219,21 @@ pub fn float_text(value: FiniteFloat) -> String {
     result
 }
 
+/// Whether a value of `source` can convert to `target` at all: false exactly
+/// for the `fail` cells of the matrix [`convert`] applies (VALUE-3), where
+/// every value of the type fails. A parse or an integral conversion can still
+/// fail for a particular value.
+pub fn convertible(source: ValueType, target: ColumnType) -> bool {
+    use ColumnType as T;
+    use ValueType as V;
+    match (source, target) {
+        (V::Bool, _) => false,
+        (_, T::Str) | (V::Str, _) | (V::Int | V::Float, T::Int | T::Float) => true,
+        (V::Date, T::Date) | (V::DateTime, T::DateTime) => true,
+        _ => false,
+    }
+}
+
 /// Convert a completed derivation result through the closed column-type matrix.
 /// Identity retains temporal precision; conversion to text intentionally drops it.
 /// Missing succeeds before handler selection; bool fails for every column type.
@@ -256,4 +271,41 @@ pub fn convert(value: &Value, target: ColumnType) -> Result<Value, ConversionErr
 pub struct LiteralHandler {
     pub spec_path: String,
     pub value: Value,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `convertible` is the matrix [`convert`] applies without its fail cells:
+    /// a cell is convertible exactly when some value of the type converts.
+    #[test]
+    fn convertible_names_every_cell_some_value_converts_through() {
+        let samples = |kind| match kind {
+            ValueType::Str => vec![
+                Value::Str("1".into()),
+                Value::Str("2025-01-02".into()),
+                Value::Str("2025-01-02T03:04".into()),
+            ],
+            ValueType::Int => vec![Value::Int(1)],
+            ValueType::Float => vec![Value::float(1.0)],
+            ValueType::Bool => vec![Value::Bool(true)],
+            ValueType::Date => vec![Value::Date("2025-01-02".parse().unwrap())],
+            ValueType::DateTime => vec![Value::DateTime("2025-01-02T03:04:05".parse().unwrap())],
+        };
+        use ColumnType as T;
+        use ValueType as V;
+        for source in [V::Str, V::Int, V::Float, V::Bool, V::Date, V::DateTime] {
+            for target in [T::Str, T::Int, T::Float, T::Date, T::DateTime] {
+                let converts = samples(source)
+                    .iter()
+                    .any(|value| convert(value, target).is_ok());
+                assert_eq!(
+                    convertible(source, target),
+                    converts,
+                    "{source:?} to {target:?}"
+                );
+            }
+        }
+    }
 }

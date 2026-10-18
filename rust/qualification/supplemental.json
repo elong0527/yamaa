@@ -919,10 +919,8 @@
       "family": "verification_logs",
       "level": "compile",
       "consumers": [
-        "R/yamaa/tests/producer_logs.R",
         "R/yamaa/tests/run_report.R",
         "rust/crates/yamaa-adapters/tests/scalar_language.rs",
-        "python/tests/installed/installed_producer_logs.py",
         "python/tests/installed/installed_run_report.py"
       ]
     },
@@ -1028,18 +1026,12 @@
       "level": "component",
       "consumers": [
         "rust/crates/yamaa-adapters/tests/execution_retired_odm_context.rs",
-        "python/tests/installed/installed_public_producers.py",
-        "python/tests/installed/installed_producer_cohort.py",
         "python/tests/installed/installed_original_specifications.py",
         "R/yamaa/tests/original_specifications.R",
         "python/tests/installed/installed_file_resources.py",
         "python/tests/installed/installed_public_environment.py",
-        "R/yamaa/tests/public_producers.R",
-        "R/yamaa/tests/producer_cohort.R",
         "R/yamaa/tests/public_environment.R",
         "python/tests/installed/installed_run_report.py",
-        "python/tests/installed/installed_producer_logs.py",
-        "R/yamaa/tests/producer_logs.R",
         "python/tests/installed/installed_public_define.py",
         "R/yamaa/tests/public_define.R",
         "python/tests/installed/installed_public_contract.py",
@@ -1087,7 +1079,6 @@
     "python/file-resources": "shared_run",
     "python/longitudinal-capacity": "shared_run",
     "python/original-specifications": "shared_run",
-    "python/producer-logs": "shared_run",
     "python/public-contract": "shared_run",
     "python/public-define": "shared_run",
     "python/public-environment": "shared_run",
@@ -1099,7 +1090,6 @@
     "r/compact-yaml": "shared_run",
     "r/longitudinal-capacity": "shared_run",
     "r/original-specifications": "shared_run",
-    "r/producer-logs": "shared_run",
     "r/public-contract": "shared_run",
     "r/public-define": "shared_run",
     "r/public-environment": "shared_run",
@@ -1110,9 +1100,7 @@
     "r/run-report": "shared_run"
   },
   "suite_ids": {
-    "R/yamaa/tests/public_producers.R": "r/public-producer-builds",
-    "python/tests/installed/installed_project_functions.py": "python/project_functions",
-    "python/tests/installed/installed_public_producers.py": "python/public-producer-builds"
+    "python/tests/installed/installed_project_functions.py": "python/project_functions"
   },
   "support_roles": {}
 }

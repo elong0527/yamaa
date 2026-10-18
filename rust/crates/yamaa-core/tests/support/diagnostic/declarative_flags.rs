@@ -5,8 +5,7 @@ pub(crate) use yamaa_core::{
     bound_expression::Read,
     dataset::{Flag, FlagBinding, FlagError, FlagRead},
     diagnostic::ConditionCode as C,
-    predicate::{Condition, ErrorKind, EvaluationError, Route, Truth},
-    predicate_compiler,
+    expression::{compile, Condition, Context, ErrorKind, EvaluationError, Step as Route, Truth},
     schema::DocumentNode as N,
     specification::{BindError, PreparedSpecification},
     table::{Column, TableSchema, ValueRef},
@@ -63,17 +62,22 @@ pub fn reached() -> std::collections::BTreeSet<C> {
             .map(|d| d.code),
     );
     pub(crate) struct IntPort;
-    impl yamaa_core::predicate::Resolver for IntPort {
+    impl yamaa_core::expression::Resolver for IntPort {
         type Error = std::convert::Infallible;
         fn resolve(&mut self, _: &str) -> Result<yamaa_core::value::Selection, Self::Error> {
             Ok(yamaa_core::value::Selection::Present(Value::Int(1)))
         }
     }
-    let plan =
-        predicate_compiler::compile("str_contains(SRC.EXTRA,'a')", "flag.condition").unwrap();
-    let finding =
-        yamaa_core::dataset::flag_condition_diagnostic(&plan.evaluate(&mut IntPort).unwrap_err())
-            .unwrap();
+    let plan = compile(
+        "str_contains(SRC.EXTRA,'a')",
+        Context::Predicate,
+        "flag.condition",
+    )
+    .unwrap();
+    let finding = yamaa_core::dataset::flag_condition_diagnostic(
+        &plan.evaluate_truth(&mut IntPort).unwrap_err(),
+    )
+    .unwrap();
     assert_eq!(finding.definition().requirement, Some("REQ-0190"));
     reached.insert(finding.code);
     assert_eq!(

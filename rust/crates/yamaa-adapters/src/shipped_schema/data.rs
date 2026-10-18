@@ -16,35 +16,35 @@ root_class:
     - schema_version:
         type: str
         required: true
-        description: See REQ-1042.
-    - parents:
-        type: [path, "list[path]"]
+        description: Schema bundle this specification is written against, which must match exactly (SPEC-1).
+    - parent:
+        type: path
         required: false
-        description: See REQ-1042.
+        description: Local specification layer this one inherits from, resolved before validation and execution (LAYER-2).
     - domain:
         type: identifier
         required: true
-        description: See REQ-1042.
+        description: Name of the output dataset this specification derives (SPEC-1).
     - keys:
         type: "list[identifier]"
         required: true
-        description: See REQ-1042.
+        description: Output columns identifying a row (OUTPUT-2).
     - input:
         type: "dict[identifier, dataset_source]"
         required: true
-        description: See REQ-1042.
+        description: Source datasets this specification reads, each under the name it is read through (NAME-1).
     - base:
         type: identifier
         required: false
-        description: See REQ-1042.
+        description: Input dataset whose records build output rows when `rows` is absent; row construction states when it is required.
     - filter:
         type: predicate
         required: false
-        description: See REQ-1042.
+        description: Predicate selecting base input records for row construction when `rows` is absent, as the filter-only row template lifted to the root; it cannot be declared with `rows`.
     - output:
         type: output_class
         required: true
-        description: See REQ-1042.
+        description: Artifact presentation, independent of the dependency-ordered declarations (OUTPUT-1).
     - windows:
         type: "dict[identifier, window_spec]"
         required: false
@@ -52,96 +52,100 @@ root_class:
     - intermediates:
         type: "list[intermediate_class]"
         required: false
-        description: See REQ-1042.
+        description: Named dataset lookups that several columns read through `<lookup-id>.<column>`.
     - columns:
         type: "list[column_class]"
         required: true
-        description: See REQ-1042.
+        description: Columns in the dependency order the execution lifecycle requires; `output.columns` controls artifact order.
     - rows:
         type: "list[row_class]"
         required: false
-        description: See REQ-1042.
+        description: Row templates constructing output rows from input records or groups; it cannot be declared with `filter`.
     - verifications:
-        type: [dataset_verification, "list[dataset_verification]"]
+        type: "list[dataset_verification]"
         required: false
-        description: See REQ-1042.
+        description: Assertions over the completed dataset, written as a list even when there is one (CHECK-1).
     - submission:
         type: submission_dataset_class
         required: false
-        description: See REQ-1042.
+        description: Governed dataset metadata a submission document is generated from.
     - metadata:
         type: "dict[str, str]"
         required: false
-        description: See REQ-1042.
+        description: Free-form annotations carried with the specification; submission metadata reserves the key names it governs.
 
 output_class:
     - path:
         type: path
         required: true
-        description: See REQ-1047.
+        description: File this specification produces, whose extension selects the serialization profile (OUTPUT-5).
     - relative_to:
         type: path_base
         default: declaring
-        description: See REQ-0780.
+        description: Base for the primary artifact and the run report file (FILE-2).
     - decimals:
         type: int
         required: false
-        description: See REQ-1047.
+        description: Fixed display digits for every float column of a csv artifact; the CSV profile defines the rounding and rejects it for parquet.
     - columns:
         type: "list[identifier]"
         required: true
-        description: See REQ-1047.
+        description: Declared columns selected for the artifact, in artifact order (OUTPUT-1).
     - report:
         type: path
         required: false
-        description: See REQ-1047.
+        description: File the run report is written to, its extension selecting its profile; required when any verification is a warning (CHECK-22).
     - order_by:
         type: "list[order_by_term]"
         required: false
-        description: See REQ-1047.
+        description: Terms ordering artifact rows after every verification; omission keeps construction order (OUTPUT-11).
 
 intermediate_class:
     - id:
         type: intermediate_id
         required: true
-        description: See REQ-1048.
+        description: Name through which the looked-up record is read (LOOKUP-3).
     - dataset:
         type: identifier
         required: true
-        description: See REQ-1048.
+        description: Declared input dataset, or SELF for completed derived rows (LOOKUP-7).
     - fields_from: match_key_range_fields
     - fields_from: match_filter_fields
     - fields_from: match_selection_fields
     - columns:
         type: "list[identifier]"
         required: false
-        description: See REQ-1048.
+        description: Stored and derived columns the lookup may read; defaults to every available column (LOOKUP-11).
     - no_match:
-        type: literal_value
+        type: substitute_value
         required: false
-        description: See REQ-1048.
+        description: Value returned when the lookup yields nothing; without it, yielding nothing gives missing (LOOKUP-13).
+    - require_match:
+        type: bool
+        required: false
+        description: When true, yielding nothing fails instead of being answered; it cannot be declared with no_match (LOOKUP-13).
     - derivations:
         type: "dict[identifier, intermediate_derivation]"
         required: false
-        description: See REQ-1185.
+        description: Per-record derivations over donor fields, the current input record and records other named intermediates select for it (LOOKUP-15).
     - verifications:
         type: "list[intermediate_verification]"
         required: false
-        description: See REQ-1245.
+        description: Uniqueness checks over the filtered donor records (LOOKUP-17).
 
 record_between_class:
     - value:
         type: variable
         required: true
-        description: See REQ-1049.
+        description: Value read from the current row (LOOKUP-9).
     - lower:
         type: identifier
         required: false
-        description: See REQ-1049.
+        description: Donor-record field whose value is an inclusive lower bound; omit for no lower bound (LOOKUP-9).
     - upper:
         type: identifier
         required: false
-        description: See REQ-1049.
+        description: Donor-record field whose value is an inclusive upper bound; omit for no upper bound (LOOKUP-9).
 
 # See REQ-0251.
 match_key_range_fields:
@@ -159,72 +163,72 @@ column_class:
     - name:
         type: identifier
         required: true
-        description: See REQ-1043.
+        description: Column name this specification declares.
     - type:
         type: column_type
         required: true
-        description: See REQ-1043.
+        description: Declared data type this column must carry in the completed dataset.
     - label:
         type: str
         required: false
-        description: See REQ-1043.
+        description: Descriptive text carried with the column for a reader of the dataset.
     # See REQ-1260.
     - derivation:
         type: derivation
         required: false
-        description: See REQ-1043.
+        description: How the column's value is produced (SPEC-4).
     - verifications:
-        type: [column_verification, "list[column_verification]"]
+        type: "list[column_verification]"
         required: false
-        description: See REQ-1043.
+        description: Assertions over this column's completed values, written as a list even when there is one (CHECK-1).
     - submission:
         type: submission_column_class
         required: false
-        description: See REQ-1043.
+        description: Governed column metadata a submission document is generated from.
     - metadata:
         type: "dict[str, str]"
         required: false
-        description: See REQ-1043.
+        description: Free-form annotations carried with the column; submission metadata reserves the key names it governs.
 
 row_class:
     - id:
         type: row_id
         required: true
-        description: See REQ-1056.
+        description: Identifier of this row template, unique within rows (ROW-1).
     - dataset:
         type: identifier
         required: false
-        description: See REQ-1056.
+        description: Input dataset or eligible named intermediate whose records build this row template's output rows, required when more than one input dataset is declared (ROW-1).
     - group_by:
         type: "list[variable]"
         required: false
-        description: See REQ-1056.
+        description: Grouping keys over driver records, producing one candidate row per group (ROW-4).
     - filter:
         type: predicate
         required: false
-        description: See REQ-1056.
+        description: Predicate gating each driver record's candidate row for an ungrouped row template, or completed candidate groups for a grouped row template (ROW-3, ROW-4).
     # See REQ-0199.
     - derivations:
         type: "dict[identifier, derivation]"
         required: true
-        description: See REQ-1056.
+        description: Columns this row template derives, whose coverage across row templates follows REQ-0200.
     - submission:
         type: "dict[identifier, submission_column_class]"
         required: false
-        description: See REQ-1056.
+        description: Per-value submission metadata for this row template's values, keyed by column (REQ-1162).
 
 variable:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$'
-    description: See REQ-1057.
+    description: Qualified source variable or unqualified constructed output column (NAME-3).
 
 match_key:
     type: [match_key_columns, "dict[identifier, match_value]"]
     description: See REQ-0115.
 
 match_key_columns:
-    type: [identifier, "list[identifier]"]
-    description: See REQ-0115.
+    type: "list[identifier]"
+    description: Lookup columns, each paired with the same-named current-row value, written as a list even when there is one (LOOKUP-5).
 
 match_value:
     type: [variable, expression]
@@ -232,30 +236,30 @@ match_value:
 
 dataset_source:
     type: [project_path, dataset_class]
-    description: See REQ-1059.
+    description: Path to the dataset, or a path with its producing specification, field types or generated ordinal (INPUT-5).
 
 dataset_class:
     - path:
         type: project_path
         required: true
-        description: See REQ-1060.
+        description: Source data path, relative to its relative_to base or absolute at its local location, with no missing-file fallback; its extension selects the source profile (INPUT-1).
     - relative_to:
         type: path_base
         default: declaring
-        description: See REQ-0780.
+        description: Base for the input dataset's path and schema (FILE-2).
     - types:
         type: "dict[identifier, column_type]"
         required: false
-        description: See REQ-1060.
+        description: Type each named field carries; every other field of a typeless source is str (INPUT-5).
     - encoding:
         type: str
         required: false
         values: [utf-8, windows-1252, iso-8859-1, ascii]
-        description: See REQ-1311.
+        description: Declared text encoding of a SAS or Transport input, absent on every other input (SAS-2).
     - schema:
         type: project_path
         required: false
-        description: See REQ-1060.
+        description: Producing specification whose output contract supplies the source fields and types (INPUT-10).
     - empty_string:
         type: str
         required: false
@@ -265,22 +269,26 @@ dataset_class:
     - ordinal:
         type: identifier
         required: false
-        description: See REQ-1291.
+        description: Name of the generated source record ordinal (INPUT-3).
+    - require_match:
+        type: bool
+        required: false
+        description: When true, every read through an implicit join to this input must find a record, unless the read declares absent (LOOKUP-24).
 
 intermediate_id:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-    description: See REQ-1050.
+    description: Identifier of a lookup, unique among dataset identifiers, other lookups and the output domain (LOOKUP-3).
 
 row_id:
     type: str
     min_length: 1
-    description: See REQ-1044.
+    description: Identifier of a row template, unique within rows (SPEC-2).
 
 regex:
     type: str
     min_length: 1
-    description: See REQ-1058.
+    description: Regular expression applied to a string value under text operations.
 
 predicate:
     type: str
@@ -304,7 +312,7 @@ derivation:
 
 handled_expression_class:
     - value: {type: expression, required: true}
-    - unconvertible: {type: literal_value, required: false}
+    - unconvertible: {type: substitute_value, required: false}
 
 # See REQ-1185.
 intermediate_derivation:
@@ -319,7 +327,7 @@ intermediate_expression_class:
 intermediate_binding_class:
     - type: {type: column_type, required: true}
     - derivation: {type: untyped_intermediate_derivation, required: true}
-    - unconvertible: {type: literal_value, required: false}
+    - unconvertible: {type: substitute_value, required: false}
 
 expression:
     registry: expressions
@@ -338,110 +346,102 @@ aggregate_class:
     - fields_from: match_filter_fields
     - group_by:
         type: "list[variable]"
-        description: See REQ-1088.
+        description: Grouping keys of an ordinary right-side or output-row reduction; omit when the enclosing grouped row owns the keys (LOOKUP-19).
     - derive:
         type: "list[derive_binding_class]"
         required: false
-        description: See REQ-1189.
+        description: Per-record intermediate variable bindings evaluated before reduction (LOOKUP-22).
     - expr:
         type: aggregate_expression
         required: true
-        description: See REQ-1088.
+        description: Closed reducer expression over the records of one relation (FORMULA-17).
 
 derive_binding_class:
     - name:
         type: identifier
         required: true
-        description: See REQ-1192.
+        description: Intermediate variable the aggregate's reducer expression names (LOOKUP-22).
     - type:
         type: column_type
         required: true
-        description: See REQ-1192.
+        description: Declared type the per-record value converts to (LOOKUP-22).
     - derivation:
         type: derivation
         required: true
-        description: See REQ-1192.
+        description: Per-record derivation over the relation's fields and earlier bindings (LOOKUP-22).
 
 aggregate_expression:
     type: str
     min_length: 1
-    description: See REQ-1089.
+    description: Expression in the closed expression grammar that admits the reducers (FORMULA-27).
 "#),
     ("schema_expression_core.yaml", r#"version: "1.0"
 
 expressions:
     source: # See REQ-1093.
         type: [variable, source_binding_class]
-        description: See REQ-1093.
+        description: Copies a named source or derived variable (EXPR-4).
     literal: # See REQ-1094.
         type: literal_value
-        description: See REQ-1094.
+        description: Returns the declared scalar value unchanged (EXPR-4).
     first_available: # See REQ-1095.
         - sources:
             type: "list[filtered_source]"
             required: true
-            description: See REQ-1095.
+            description: Variables to test in order (EXPR-9).
         - missing:
-            type: literal_value
-            description: See REQ-1095.
+            type: substitute_value
+            description: Value returned when every source is missing; missing when absent (EXPR-9).
     greatest: # See REQ-1096.
         - sources:
             type: "list[variable]"
             required: true
-            description: See REQ-1096.
+            description: Mutually comparable variables to inspect (EXPR-10).
     least: # See REQ-1097.
         - sources:
             type: "list[variable]"
             required: true
-            description: See REQ-1097.
+            description: Mutually comparable variables to inspect (EXPR-10).
     case: # See REQ-1098.
         type: "list[case_item_class]"
-        description: See REQ-1098.
+        description: Ordered when/then items with an optional trailing otherwise (EXPR-7).
     flag: # See REQ-1256.
         type: [predicate, flag_class]
-        description: See REQ-1256.
+        description: A one-predicate flag derivation; a bare predicate string is the condition with the default values (EXPR-8).
 
 source_binding_class:
     - variable:
         type: variable
         required: true
-        description: See REQ-1051.
+        description: Variable to copy (LOOKUP-1).
     - fields_from: match_filter_fields
     - fields_from: match_selection_fields
     - absent:
-        type: literal_value
-        description: See REQ-1051.
+        type: substitute_value
+        description: Value used when the source variable or item is absent, or when its implicit join finds no record; without it, a join that finds no record gives missing (LOOKUP-24).
+    - require_match:
+        type: bool
+        description: When true, an implicit join that finds no record fails instead of being answered; it cannot be declared with absent (LOOKUP-24).
 
 flag_class:
     - condition:
         type: predicate
         required: true
-        description: See REQ-1256.
+        description: Predicate selecting the true value (EXPR-8).
     - true_value:
-        type: literal_value
+        type: substitute_value
         default: "Y"
-        description: See REQ-1256.
+        description: Value returned when the condition is true (EXPR-8).
     - false_value:
-        type: literal_value
-        description: See REQ-1257.
+        type: substitute_value
+        description: Value returned when the condition is false; missing when absent (EXPR-8).
     - missing:
-        type: literal_value
-        description: See REQ-1257.
+        type: substitute_value
+        description: Value returned when the condition is unknown; missing when absent, and required when false_value is declared (EXPR-8).
 
 filtered_source:
-    type: [variable, filtered_source_class]
-    description: See REQ-1052.
-
-filtered_source_class:
-    - variable:
-        type: variable
-        required: true
-        description: See REQ-1053.
-    - fields_from: match_filter_fields
-    - fields_from: match_selection_fields
-    - absent:
-        type: literal_value
-        description: See REQ-1053.
+    type: [variable, source_binding_class]
+    description: A variable, or the source_binding_class form carrying it with its filter, selection or absent value (LOOKUP-1).
 
 keep_policy:
     type: str
@@ -450,43 +450,42 @@ keep_policy:
 
 order_by_term:
     type: [variable, order_term_class]
-    description: See REQ-1102.
+    description: Order term; a bare variable sorts ascending with missing values first, as the lowest value (VALUE-22).
 
 order_term_class:
     - variable:
         type: variable
         required: true
-        description: See REQ-1103.
+        description: Variable used as an ordering term (VALUE-22).
     - direction:
         type: str
         default: asc
         values: [asc, desc]
-        description: See REQ-1103.
+        description: Sort direction for non-missing values (VALUE-22).
     - nulls:
         type: str
-        default: last
         values: [first, last]
-        description: See REQ-1103.
+        description: Absolute placement of missing values, never flipped by direction; when omitted, missing sorts lowest (VALUE-22).
 
 case_item_class:
     type: [case_branch_class, case_otherwise_class]
-    description: See REQ-1099.
+    description: A when/then branch, or the trailing otherwise item (EXPR-7).
 
 case_branch_class:
     - when:
         type: predicate
         required: true
-        description: See REQ-1100.
+        description: Condition that selects this branch when true (EXPR-7).
     - then:
         type: case_result
         required: true
-        description: See REQ-1100.
+        description: Result returned when the condition is true (EXPR-7).
 
 case_otherwise_class:
     - otherwise:
         type: case_result
         required: true
-        description: See REQ-1101.
+        description: Result used when no branch condition is true (EXPR-7).
 
 case_result:
     type: [str, expression]
@@ -494,181 +493,157 @@ case_result:
     ("schema_expression_date.yaml", r#"version: "1.0"
 
 expressions:
-    date_diff: # See REQ-1104.
+    diff: # See REQ-1104.
+        - type:
+            type: temporal_type
+            required: true
+            description: Declared type of both dates or both datetimes, which selects the units (TIME-4).
         - start:
             type: variable
             required: true
-            description: See REQ-1104.
+            description: Starting date or datetime (TIME-4).
         - end:
             type: variable
             required: true
-            description: See REQ-1104.
+            description: Ending date or datetime; an earlier end produces a negative result (TIME-4).
         - unit:
             type: str
             required: true
-            values: [day, week, month, year]
-            description: See REQ-1104.
+            values: [day, week, month, year, second, minute, hour]
+            description: Calendar unit day, week, month or year for dates, or elapsed unit second, minute, hour or day for datetimes, where a day is 86400 seconds (TIME-4).
         - bounds:
             type: str
             default: exclusive
             values: [exclusive, inclusive, between]
-            description: See REQ-1104.
-    date_impute: # See REQ-1105.
+            description: Which endpoints the day count includes, defined only for dates with unit day (TIME-5).
+    impute: # See REQ-1105.
+        - type:
+            type: temporal_type
+            required: true
+            description: Declared type of the completed value (TIME-8).
         - source:
             type: variable
             required: true
-            description: See REQ-1105.
+            description: Right-truncated ISO 8601 date or datetime text, or a value of the declared type (TIME-7).
         - month:
             type: int
-            description: See REQ-1105.
+            description: Month supplied to a source carrying only a year, 1 to 12; declared exactly when minimum_source_precision is year (TIME-10).
         - day:
             type: [int, day_rule]
-            required: true
-            description: See REQ-1105.
+            description: Day supplied to a source carrying no day, an integer from 1 to 31 or first or last resolved against the month the date lands in; declared exactly when minimum_source_precision is year or month (TIME-10).
         - minimum_source_precision:
             type: str
             default: year
-            values: [year, month]
-            description: See REQ-1105.
-        - not_before:
-            type: variable
-            description: See REQ-1105.
-        - not_after:
-            type: variable
-            description: See REQ-1105.
-        - missing:
-            type: literal_value
-            description: See REQ-1105.
-        - invalid:
-            type: literal_value
-            description: See REQ-1105.
-    date_precision: # See REQ-1106.
-        - source:
-            type: variable
-            required: true
-            description: See REQ-1106.
-        - missing:
-            type: literal_value
-            description: See REQ-1106.
-        - invalid:
-            type: literal_value
-            description: See REQ-1106.
-    datetime_impute: # See REQ-1182.
-        - source:
-            type: variable
-            required: true
-            description: See REQ-1182.
+            values: [year, month, day]
+            description: Coarsest collected precision completed; a coarser source gives missing (TIME-8).
         - time:
             type: time_rule
-            required: true
-            description: See REQ-1182.
-        - missing:
-            type: literal_value
-            description: See REQ-1182.
+            description: Time fields supplied when the source does not carry them, first supplying 00 to each and last 23, 59 and 59; declared exactly when type is datetime (TIME-10).
+        - not_before:
+            type: variable
+            description: Value of the declared type the completed value must not precede; it moves only supplied components, and a bound outside the interval the collected components admit is ignored (TIME-9).
+        - not_after:
+            type: variable
+            description: Value of the declared type the completed value must not follow; it moves only supplied components, a bound outside the collected interval is ignored, and it wins when the bounds cross (TIME-9).
+        - fallback:
+            type: variable
+            description: Value of the declared type returned, with collected precision none, when the source is missing (TIME-13).
         - invalid:
-            type: literal_value
-            description: See REQ-1182.
-    datetime_precision: # See REQ-1183.
+            type: substitute_value
+            description: Result when the source is text that is not a right-truncated ISO 8601 date or datetime (TIME-13).
+    precision: # See REQ-1106.
+        - type:
+            type: temporal_type
+            required: true
+            description: Declared type whose collected precision is reported, at most day for a date (TIME-7).
         - source:
             type: variable
             required: true
-            description: See REQ-1183.
-        - missing:
-            type: literal_value
-            description: See REQ-1183.
+            description: Right-truncated ISO 8601 date or datetime text, or a value of the declared type (TIME-7).
         - invalid:
-            type: literal_value
-            description: See REQ-1183.
+            type: substitute_value
+            description: Result when the source is text that is not a right-truncated ISO 8601 date or datetime (TIME-13).
+    imputation_flag:
+        - source:
+            type: variable
+            required: true
+            description: Imputed date or datetime whose collected precision is flagged (TIME-18).
+        - part:
+            type: str
+            required: true
+            values: [date, time]
+            description: Flag derived, the date flag of a date or datetime or the time flag of a datetime (TIME-18).
+        - seconds_collected:
+            type: bool
+            default: true
+            description: Whether the study collects seconds, so a time collected to the minute had its seconds imputed (TIME-18).
     to_date: # See REQ-1107.
         - source:
             type: variable
             required: true
-            description: See REQ-1107.
+            description: Datetime whose calendar date is returned, or ISO 8601 date or datetime text whose date part is returned (TIME-2).
     study_day: # See REQ-1108.
         - date:
             type: variable
             required: true
-            description: See REQ-1108.
+            description: Date whose study day is returned (TIME-6).
         - reference:
             type: variable
             required: true
-            description: See REQ-1108.
+            description: Reference start date, which is study day 1 (TIME-6).
     to_epoch_day: # See REQ-1188.
         - source:
             type: variable
             required: true
-            description: See REQ-1188.
+            description: Date converted to days since 1970-01-01 (TIME-3).
 
-    date_shift: # See REQ-1298.
+    shift: # See REQ-1298.
+        - type:
+            type: temporal_type
+            required: true
+            description: Declared type of the source and the result (TIME-14).
         - source:
             type: variable
             required: true
-            description: See REQ-1298.
+            description: Complete date or civil datetime to move (TIME-14).
         - days:
             type: [variable, int]
-            required: true
-            description: See REQ-1298.
-    datetime_diff: # See REQ-1299.
-        - start:
-            type: variable
-            required: true
-            description: See REQ-1299.
-        - end:
-            type: variable
-            required: true
-            description: See REQ-1299.
-        - unit:
-            type: str
-            required: true
-            values: [second, minute, hour, day]
-            description: See REQ-1299.
-    datetime_shift: # See REQ-1300.
-        - source:
-            type: variable
-            required: true
-            description: See REQ-1300.
+            description: Signed integer literal or integer variable moving a date; declared exactly when type is date (TIME-14).
         - amount:
             type: [variable, int, float]
-            required: true
-            description: See REQ-1300.
+            description: Signed numeric literal or variable moving a datetime, an integer with unit second; declared exactly when type is datetime (TIME-14).
         - unit:
             type: str
-            required: true
             values: [second, minute, hour, day]
-            description: See REQ-1300.
+            description: Elapsed unit of the amount, where a day is 86400 seconds; declared exactly when type is datetime (TIME-14).
     duration_value: # See REQ-1301.
         - source:
             type: variable
             required: true
-            description: See REQ-1301.
+            description: ISO 8601 fixed-length duration text (TIME-17).
         - unit:
             type: str
             required: true
             values: [second, minute, hour, day]
-            description: See REQ-1301.
+            description: Numeric result unit of second, minute, hour or day (TIME-17).
         - invalid:
-            type: literal_value
-            description: See REQ-1301.
-    duration_text: # See REQ-1302.
-        - source:
-            type: [variable, int, float]
-            required: true
-            description: See REQ-1302.
-        - unit:
-            type: str
-            required: true
-            values: [second, minute, hour, day]
-            description: See REQ-1302.
+            type: substitute_value
+            description: Literal result for invalid or out-of-range duration text (TIME-17).
+
+temporal_type:
+    type: str
+    values: [date, datetime]
+    description: Declared temporal type a type-dispatched operation reads and returns, never inferred from runtime text (TIME-1).
 
 day_rule:
     type: str
     values: [first, last]
-    description: See REQ-1109.
+    description: Day resolved against the month the completed date lands in (TIME-8).
 
 time_rule:
     type: str
     values: [first, last]
-    description: See REQ-1184.
+    description: Earliest or latest civil moment the collected source admits, each missing time field taking its first or last value (TIME-8).
 "#),
     ("schema_expression_mapping.yaml", r#"version: "1.0"
 
@@ -677,42 +652,42 @@ expressions:
         - source:
             type: filtered_source
             required: true
-            description: See REQ-1110.
+            description: String variable used as the dictionary key, or a filtered source carrying it (EXPR-11).
         - dict:
-            type: ["dict[str, literal_value]", project_path]
+            type: ["dict[str, substitute_value]", project_path]
             required: true
-            description: See REQ-1110.
+            description: Source-value to result-value dictionary, written inline or as the path of a YAML file holding it (EXPR-11).
         - case_sensitive:
             type: bool
             default: true
-            description: See REQ-1110.
+            description: Compare exactly when true; fold ASCII letters when false (EXPR-12).
         - missing:
-            type: literal_value
-            description: See REQ-1110.
+            type: substitute_value
+            description: Value returned when the source is missing; without it, a missing source gives missing (EXPR-11).
         - unmapped:
-            type: literal_value
-            description: See REQ-1110.
+            type: substitute_value
+            description: Value returned when the source is present but has no dictionary entry; without it, such a source fails (EXPR-11).
     cut: # See REQ-1118.
 
         - source:
             type: filtered_source
             required: true
-            description: See REQ-1118.
+            description: Numeric variable to classify, or a filtered source carrying it (EXPR-13).
         - breaks:
             type: "list[float]"
             required: true
-            description: See REQ-1118.
+            description: Ascending interval boundaries (EXPR-13).
         - labels:
             type: "list[str]"
             required: true
-            description: See REQ-1118.
+            description: One label per interval; exactly one more than breaks (EXPR-13).
         - right:
             type: bool
             default: false
-            description: See REQ-1118.
+            description: Right-closed and left-open when true; left-closed and right-open when false (EXPR-13).
         - missing:
-            type: literal_value
-            description: See REQ-1118.
+            type: substitute_value
+            description: Value returned when the source is missing; without it, a missing source gives missing (EXPR-13).
 "#),
     ("schema_expression_numeric.yaml", r#"version: "1.0"
 
@@ -723,21 +698,21 @@ expressions:
         - expr:
             type: numeric_expression
             required: true
-            description: See REQ-1119.
+            description: Numeric expression over named variables in the compute field of the expression language (FORMULA-27).
     round_half_away_from_zero: # See REQ-1172.
         - source:
             type: variable
             required: true
-            description: See REQ-1172.
+            description: Numeric variable to round (FORMULA-16).
         - digits:
             type: int
             required: true
-            description: See REQ-1172.
+            description: Integer decimal places; negative rounds left of the decimal point (FORMULA-16).
 
 numeric_expression:
     type: str
     min_length: 1
-    description: See REQ-1120.
+    description: Expression in the closed expression grammar with a numeric root (FORMULA-1).
 "#),
     ("schema_expression_odm.yaml", r#"version: "1.0"
 
@@ -746,7 +721,7 @@ numeric_expression:
 expressions:
     odm: # See REQ-1265.
         type: [odm_item, odm_class]
-        description: See REQ-1274.
+        description: One collected item read from the row's ODM scope; a bare string is the item (NAME-7).
 
 odm_item:
     type: str
@@ -762,19 +737,19 @@ odm_class:
     - item:
         type: odm_item
         required: true
-        description: See REQ-1274.
+        description: The ODM input and the complete ItemOID, written as DATASET.ItemOID (NAME-7).
     - event:
-        type: [odm_oid, "list[odm_oid]"]
-        description: See REQ-1274.
+        type: "list[odm_oid]"
+        description: StudyEventOID values an identified record carries, written as a list even when there is one (NAME-12).
     - form:
-        type: [odm_oid, "list[odm_oid]"]
-        description: See REQ-1274.
+        type: "list[odm_oid]"
+        description: FormOID values an identified record carries, written as a list even when there is one (NAME-12).
     - item_group:
-        type: [odm_oid, "list[odm_oid]"]
-        description: See REQ-1274.
+        type: "list[odm_oid]"
+        description: ItemGroupOID values an identified record carries, written as a list even when there is one (NAME-12).
     - filter:
         type: predicate
-        description: See REQ-1274.
+        description: Predicate over the ODM input's schema fields that an identified record satisfies (NAME-12).
 "#),
     ("schema_expression_str.yaml", r#"version: "1.0"
 
@@ -792,86 +767,66 @@ expressions:
         - source:
             type: variable
             required: true
-            description: See REQ-1111.
+            description: String variable to search (TEXT-10).
         - pattern:
             type: regex
             required: true
-            description: See REQ-1111.
+            description: Regular expression searched for in the source (TEXT-9).
         - group:
             type: int
             default: 0
-            description: See REQ-1111.
+            description: Match group to return; 0 is the full match (TEXT-10).
         - missing:
-            type: literal_value
-            description: See REQ-1111.
+            type: substitute_value
+            description: Value returned when the source is missing; without it, a missing source gives missing (TEXT-10).
         - no_match:
-            type: literal_value
-            description: See REQ-1111.
+            type: substitute_value
+            description: Value returned when the pattern does not match the source (TEXT-10).
     str_replace: # See REQ-1322.
         - source:
             type: variable
             required: true
-            description: See REQ-1322.
+            description: String variable to search (TEXT-11).
         - pattern:
             type: regex
             required: true
-            description: See REQ-1322.
+            description: Regular expression whose every match in the source is replaced (TEXT-11).
         - replacement:
             type: str
             required: true
-            description: See REQ-1322.
+            description: Literal text that replaces each match (TEXT-11).
         - missing:
-            type: literal_value
-            description: See REQ-1322.
-    str_contains: # See REQ-1243.
-        - source:
-            type: variable
-            required: true
-            description: See REQ-1243.
-        - pattern:
-            type: regex
-            required: true
-            description: See REQ-1243.
-        - missing:
-            type: literal_value
-            description: See REQ-1243.
-    str_concat: # See REQ-1112.
-        - sources:
-            type: "list[expression]"
-            required: true
-            description: See REQ-1112.
-        - missing:
-            type: literal_value
-            description: See REQ-1112.
+            type: substitute_value
+            description: Value returned when the source is missing; without it, a missing source gives missing (TEXT-11).
     str_template: # See REQ-1113.
         type: [string_template, str_template_class]
-        description: See REQ-1113.
+        description: Portable string template, concise or with missing handling (TEXT-4).
     str_case: # See REQ-1114.
         - source:
             type: variable
             required: true
-            description: See REQ-1114.
+            description: String variable whose ASCII letters change case (TEXT-5).
         - to:
             type: str
             required: true
             values: [upper, lower, sentence, title]
-            description: See REQ-1114.
+            description: Case to produce, one of upper, lower, sentence or title (TEXT-5).
         - missing:
-            type: literal_value
-            description: See REQ-1114.
+            type: substitute_value
+            description: Value returned when the source is missing; without it, a missing source gives missing (TEXT-5).
 
 string_template:
     type: str
-    description: See REQ-1116.
+    description: Template string of literal text, braced placeholders and doubled braces (TEXT-3).
 
 str_template_class:
     - template:
         type: string_template
         required: true
-        description: See REQ-1117.
+        description: Text containing literal content and braced variables (TEXT-3).
     - missing:
-        type: literal_value
-        description: See REQ-1117.
+        type: substitute_value
+        description: Value returned when any placeholder value is missing; without it, a missing placeholder fails (TEXT-4).
 "#),
     ("schema_expression_window.yaml", r#"version: "1.0"
 
@@ -884,68 +839,75 @@ window_selection:
 window_spec:
     - group_by:
         type: "list[variable]"
-        description: See REQ-1122.
+        description: Variables defining partitions; omission uses one partition (WINDOW-3).
     - order_by:
         type: "list[order_by_term]"
-        description: See REQ-1122.
+        description: Terms ordering rows within each partition (WINDOW-3).
     - filter:
         type: predicate
-        description: See REQ-1122.
+        description: Predicate selecting rows (WINDOW-4).
 
 expressions:
     row_number: # See REQ-1123.
         - window:
             type: window_selection
-            description: See REQ-1123.
+            description: Partition, ordering and row selection for the window (WINDOW-6).
     rank: # See REQ-1124.
         - method:
             type: str
             default: competition
             values: [competition, dense]
-            description: See REQ-1124.
+            description: Tie numbering; competition leaves position gaps and dense does not (WINDOW-6).
         - window:
             type: window_selection
-            description: See REQ-1124.
+            description: Partition, ordering and row selection for the window (WINDOW-6).
     row_value: # See REQ-1125.
         - source:
             type: variable
             required: true
-            description: See REQ-1125.
+            description: Variable read from the offset row (WINDOW-7).
         - offset:
             type: int
             required: true
-            description: See REQ-1125.
+            description: Rows to move along the declared order; nonzero (WINDOW-7).
         - window:
             type: window_selection
-            description: See REQ-1125.
-    previous_non_missing: # See REQ-1126.
-        - source:
-            type: variable
-            required: true
-            description: See REQ-1126.
-        - window:
-            type: window_selection
-            description: See REQ-1126.
+            description: Partition, ordering and row selection for the window (WINDOW-7).
     locf: # See REQ-1239.
         - source:
             type: variable
             required: true
-            description: See REQ-1239.
+            description: Completed observed variable to carry forward (WINDOW-8).
+        - include_current:
+            type: bool
+            default: true
+            description: Whether a present current source answers before earlier rows (WINDOW-8).
         - window:
             type: window_selection
-            description: See REQ-1239.
+            description: Partition, ordering and optional row selection (WINDOW-8).
     baseline_flag: # See REQ-1127.
         - date:
             type: variable
             required: true
-            description: See REQ-1127.
+            description: Candidate baseline date or datetime (WINDOW-9).
         - reference_date:
             type: variable
             required: true
-            description: See REQ-1127.
+            description: Upper bound for the baseline date, of the same temporal type (WINDOW-9).
+        - value:
+            type: variable
+            required: true
+            description: Analysis value the baseline is for; a row whose value is missing is not eligible (WINDOW-9).
+        - inclusive:
+            type: bool
+            default: true
+            description: Whether a date equal to the reference date is eligible; false admits only earlier dates (WINDOW-9).
+        - tie_break:
+            type: "list[order_by_term]"
+            description: Terms ordering eligible rows that share the latest date; the last row is the baseline (WINDOW-9).
         - window:
             type: window_selection
-            description: See REQ-1127.
+            description: Baseline-selection partitions and row filter; order_by is not allowed (WINDOW-5).
 "#),
     ("schema_function.yaml", r#"version: "1.0"
 
@@ -954,11 +916,11 @@ expressions:
         - name:
             type: identifier
             required: true
-            description: See REQ-1085.
+            description: Logical function selected from the environment the project links for the host language (FUNC-4).
         - args:
             type: "dict[identifier, function_arg]"
             default: {}
-            description: See REQ-1085.
+            description: Named argument leaves of the call (FUNC-6).
 
 function_arg:
     type:
@@ -966,11 +928,11 @@ function_arg:
         - int
         - float
         - bool
-        - "null"
+        - missing_value
         - function_string_literal_class
         - function_date_literal_class
         - function_datetime_literal_class
-    description: See REQ-1086.
+    description: "Named variable or scalar literal leaf, with `{literal: null}` for the missing value; arbitrary nesting is not allowed."
 "#),
     ("schema_metadata.yaml", r#"version: "1.0"
 
@@ -980,93 +942,93 @@ submission_dataset_class:
     - has_no_data:
         type: bool
         default: false
-        description: See REQ-1296.
+        description: Whether the submitted dataset has no data, carried for submission composition only (SUB-4).
     - label:
         type: str
         required: true
         min_length: 1
-        description: See REQ-1130.
+        description: Description of the dataset as a whole, distinct from the domain it derives.
     - class:
         type: dataset_class_name
         required: true
-        description: See REQ-1130.
+        description: General observation class of the dataset.
     - subclass:
         type: dataset_subclass_name
         required: false
-        description: See REQ-1130.
+        description: Observation subclass, declared when the standard defines one for the dataset.
     - structure:
         type: str
         required: true
         min_length: 1
-        description: See REQ-1130.
+        description: Level of detail one record represents, stated in prose.
     - repeating:
         type: bool
         required: true
-        description: See REQ-1130.
+        description: Whether the dataset may carry more than one record per subject or pool.
     - reference_data:
         type: bool
         default: false
-        description: See REQ-1130.
+        description: Whether the dataset carries reference data rather than subject data.
     - domain:
         type: identifier
         required: false
-        description: See REQ-1130.
+        description: Domain the dataset belongs to; defaults to the specification's domain.
     - comment:
         type: submission_comment
         required: false
-        description: See REQ-1130.
+        description: Sponsor comment carried with the dataset definition.
 
 submission_column_class:
     - core:
         type: core_designation
         required: false
-        description: See REQ-1131.
+        description: Standard core designation, declared and derived by family (SUB-10).
     - mandatory:
         type: bool
         required: false
-        description: See REQ-1131.
+        description: Whether every completed value must be present, resolved from keys, declaration and class (SUB-10) and enforced (SUB-11).
     - role:
         type: str
         required: false
         min_length: 1
-        description: See REQ-1131.
+        description: Role the column plays in its dataset, in the vocabulary its standard publishes.
     - data_type:
         type: define_data_type
         required: false
-        description: See REQ-1131.
+        description: Submission data type, defaulted from the declared column type (SUB-6).
     - length:
         type: int
         required: false
-        description: See REQ-1131.
+        description: Maximum expected value length, derived from a max_length verification and bound to the constraint that enforces it (SUB-8).
     - significant_digits:
         type: int
         required: false
-        description: See REQ-1131.
+        description: Digits after the decimal point; required with a float submission data type.
     - display_format:
         type: str
         required: false
         min_length: 1
-        description: See REQ-1131.
+        description: Presentation format carried for a reader; it never changes a computed value.
     - codelist:
         type: identifier
         required: false
-        description: See REQ-1131.
+        description: Codelist whose values this column carries (CT-1).
     - inventory_vocabulary:
         type: bool
         required: false
-        description: See REQ-1156.
+        description: Whether every non-missing value must name a dataset any submission section of the project file declares (CT-11).
     - origin:
         type: submission_origin_class
         required: false
-        description: See REQ-1131.
+        description: Declared provenance of the value, which the derivation may refute (SUB-19).
     - method:
         type: submission_method
         required: false
-        description: See REQ-1131.
+        description: Algorithm producing the value, required for a derived origin (SUB-18).
     - comment:
         type: submission_comment
         required: false
-        description: See REQ-1131.
+        description: Sponsor comment carried with the column definition.
 
 # See REQ-1157.
 
@@ -1074,134 +1036,134 @@ submission_origin_class:
     - type:
         type: origin_type
         required: true
-        description: See REQ-1132.
+        description: How the value originated.
     - source:
         type: origin_source
         required: false
-        description: See REQ-1132.
+        description: Party responsible for the value, admitted and derived by family (SUB-15).
     - description:
         type: str
         required: false
         min_length: 1
-        description: See REQ-1132.
+        description: Explanatory text, required where the origin is incomplete without it; a Predecessor names the column it copies (SUB-16).
     - documents:
         type: "list[document_reference]"
         required: false
-        description: See REQ-1132.
+        description: Supporting documents evidencing the origin; a value collected from a person names its annotated case report form page under Submission (SUB-17).
 
 submission_method_class:
     - name:
         type: str
         required: false
         min_length: 1
-        description: See REQ-1133.
+        description: Name of the algorithm; Define-XML derives one when it is omitted (DEFINE-21).
     - type:
         type: method_type
         default: Computation
-        description: See REQ-1133.
+        description: Kind of algorithm the method describes.
     - description:
         type: str
         required: true
         min_length: 1
-        description: See REQ-1133.
+        description: Statement of the algorithm in prose.
     - expression:
         type: formal_expression_class
         required: false
-        description: See REQ-1133.
+        description: Machine-readable code the method is also stated in.
     - documents:
         type: "list[document_reference]"
         required: false
-        description: See REQ-1133.
+        description: Supporting documents carrying the full algorithm.
 
 submission_comment_class:
     - text:
         type: str
         required: true
         min_length: 1
-        description: See REQ-1134.
+        description: Text of the comment.
     - documents:
         type: "list[document_reference]"
         required: false
-        description: See REQ-1134.
+        description: Supporting documents the comment refers to.
 
 formal_expression_class:
     - context:
         type: str
         required: true
         min_length: 1
-        description: See REQ-1135.
+        description: Language the code is written in, named for a reader that evaluates it.
     - code:
         type: str
         required: true
         min_length: 1
-        description: See REQ-1135.
+        description: The code itself; nothing in this language parses or executes it.
 
 document_reference_class:
     - document:
         type: identifier
         required: true
-        description: See REQ-1136.
+        description: Supporting document this reference names.
     - pages:
         type: page_reference_class
         required: false
-        description: See REQ-1136.
+        description: Place within the document the reference points at.
 
 page_reference_class:
     - type:
         type: str
         required: true
         values: [PhysicalRef, NamedDestination]
-        description: See REQ-1137.
+        description: Whether refs are physical page numbers or named destinations.
     - refs:
         type: str
         required: true
         min_length: 1
-        description: See REQ-1137.
+        description: Space-separated page numbers or destination names.
     - title:
         type: str
         required: false
         min_length: 1
-        description: See REQ-1137.
+        description: Label a reader sees in place of the raw reference.
 
 submission_comment:
     type: [str, submission_comment_class]
-    description: See REQ-1138.
+    description: Comment text, or text with the documents it refers to.
 
 submission_method:
     type: [str, submission_method_class]
-    description: See REQ-1139.
+    description: Algorithm stated in prose, or with its name, code, and documents.
 
 document_reference:
     type: [identifier, document_reference_class]
-    description: See REQ-1140.
+    description: Document identifier, or an identifier with the place it points at.
 
 core_designation:
     type: str
     values: [Req, Exp, Perm, Cond]
-    description: See REQ-1141.
+    description: Required, expected, conditionally required, or permissible in the dataset's standard, admitted by family (SUB-10).
 
 origin_type:
     type: str
     values: [Assigned, Collected, Derived, Not Available, Other, Predecessor,
         Protocol]
-    description: See REQ-1142.
+    description: Define-XML 2.1 origin type.
 
 origin_source:
     type: str
     values: [Investigator, Sponsor, Subject, Vendor]
-    description: See REQ-1143.
+    description: Define-XML 2.1 origin source.
 
 method_type:
     type: str
     values: [Computation, Imputation]
-    description: See REQ-1144.
+    description: Kind of algorithm a method describes.
 
 define_data_type:
     type: str
     values: [text, integer, float, date, datetime, time, partialDate,
         partialTime, partialDatetime, incompleteDate, incompleteTime,
         incompleteDatetime, durationDatetime, intervalDatetime, URI]
-    description: See REQ-1145.
+    description: Submission data type a column is represented by, within the closed set its declared column type admits (SUB-6).
 
 dataset_class_name:
     type: str
@@ -1211,14 +1173,14 @@ dataset_class_name:
         MEDICAL DEVICE OCCURRENCE DATA STRUCTURE, OCCURRENCE DATA STRUCTURE,
         REFERENCE DATA STRUCTURE, RELATIONSHIP, SPECIAL PURPOSE,
         STUDY REFERENCE, SUBJECT LEVEL ANALYSIS DATASET, TRIAL DESIGN]
-    description: See REQ-1146.
+    description: General observation class, in the exact case Define-XML 2.1 publishes.
 
 dataset_subclass_name:
     type: str
     values: [ADVERSE EVENT, MEDICAL DEVICE TIME-TO-EVENT,
         NON-COMPARTMENTAL ANALYSIS, POPULATION PHARMACOKINETIC ANALYSIS,
         TIME-TO-EVENT]
-    description: See REQ-1147.
+    description: Observation subclass, in the exact case Define-XML 2.1 publishes.
 "#),
     ("schema_shared.yaml", r#"version: "1.0"
 
@@ -1230,7 +1192,19 @@ column_type:
 
 literal_value:
     type: [str, int, float, bool, "null"]
-    description: See REQ-1149.
+    description: Scalar literal; a non-finite float becomes missing (VALUE-4).
+
+substitute_value:
+    type: [str, int, float, bool, missing_value]
+    description: "Literal a handler, flag or mapping returns, with `{literal: null}` for the missing value (COLUMN-10)."
+
+missing_value:
+    registry: missing_values
+
+missing_values:
+    literal:
+        type: "null"
+        description: The missing value, spelled as the literal expression; a bare YAML null instead leaves a field absent (LAYER-9).
 
 path:
     type: str
@@ -1239,17 +1213,17 @@ path:
 project_path:
     type: str
     min_length: 1
-    description: See REQ-1151.
+    description: Local resource a run reads or publishes; a relative spelling uses the base its declaration selects and an absolute spelling names its local location (FILE-2).
 
 path_base:
     type: str
     values: [declaring, entry]
-    description: See REQ-0780.
+    description: Base directory of a relative path, the declaring file's or the entry file's directory (FILE-2).
 
 identifier:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-    description: See REQ-1046.
+    description: Single-token identifier; the field's own description states which naming list it belongs to, such as a declared dataset, a declared column, a standard, a document or a function (SPEC-2).
 
 
 function_param_type:
@@ -1324,7 +1298,7 @@ dataset_verifications:
         - when:
             type: predicate
             required: false
-            description: See REQ-1154.
+            description: A predicate over one constructed output row that binds a group when at least one of its rows evaluates it to TRUE, leaving a group with no such row exempt (CHECK-14).
         - min: {type: int, required: false}
         - max: {type: int, required: false}
         - min_fraction: {type: float, required: false}
@@ -1359,58 +1333,58 @@ verification_severity:
 #[rustfmt::skip]
 pub(super) const PROJECT_MODULES: &[(&str, &str)] = &[
     ("schema_project.yaml", r#"version: '1.0'
-# See REQ-1331.
+# See PROJECT-1.
 includes:
 - schema_shared.yaml
 project_class:
 - schema_version:
     type: str
     required: true
-    description: See REQ-1335.
+    description: Schema bundle version this project file is admitted against (PROJECT-1).
 - environments:
     type: environments_class
-    description: See REQ-1335.
+    description: Environment file of each host language, by language key (PROJECT-2).
 - codelists:
     type: list[codelist_source]
-    description: See REQ-1335.
+    description: Codelist sources supplying study terminology (CT-1).
 - study:
     type: study_class
-    description: See REQ-1335.
+    description: Study the specifications belong to; Define-XML requires it (DEFINE-1, DEFINE-28).
 - sdtm:
     type: submission_section_class
-    description: See REQ-1335.
+    description: Tabulation specifications and the submission metadata composing them into one Define-XML document (PROJECT-3).
 - adam:
     type: submission_section_class
-    description: See REQ-1335.
+    description: Analysis specifications and the submission metadata composing them into one Define-XML document (PROJECT-3).
 - send:
     type: submission_section_class
-    description: See REQ-1335.
+    description: Nonclinical tabulation specifications and the submission metadata composing them into one Define-XML document (PROJECT-3).
 environments_class:
 - python:
     type: project_path
-    description: See REQ-1336.
+    description: Environment file the Python host reads, relative to the project file (PROJECT-2).
 - r:
     type: project_path
-    description: See REQ-1336.
+    description: Environment file the R host reads, relative to the project file (PROJECT-2).
 codelist_source:
   type:
   - project_path
   - codelist_source_class
-  description: See REQ-0928.
+  description: Inline codelist source, or the path of a file holding one (CT-1).
 codelist_source_class:
 - standard:
     type: terminology_standard_class
-    description: See REQ-0928.
+    description: Published terminology the source's codelists are drawn from; a source without one is sponsor-defined (CT-2).
 - codelists:
     type: list[codelist_class]
     required: true
-    description: See REQ-0928.
+    description: Codelists this source declares (CT-1).
 terminology_standard_class:
 - name:
     type: str
     required: true
     min_length: 1
-    description: See REQ-0928.
+    description: Name of the published terminology (CT-2).
 - publishing_set:
     type: str
     required: true
@@ -1420,57 +1394,57 @@ terminology_standard_class:
     - DEFINE-XML
     - SDTM
     - SEND
-    description: See REQ-0928.
+    description: Publishing set of the published terminology (CT-2).
 - version:
     type: str
     required: true
     min_length: 1
-    description: See REQ-0928.
+    description: Version of the published terminology (CT-2).
 study_class:
 - id:
     type: define_id
     required: true
-    description: See REQ-1062.
+    description: Identifier the study's generated identity is built from (DEFINE-9).
 - name:
     type: str
     required: true
     min_length: 1
-    description: See REQ-1062.
+    description: Name of the study.
 - description:
     type: str
     required: true
     min_length: 1
-    description: See REQ-1062.
+    description: Description of the study.
 - protocol_name:
     type: str
     required: true
     min_length: 1
-    description: See REQ-1062.
+    description: Protocol the study runs under.
 metadata_version_class:
 - id:
     type: define_id
     required: true
-    description: See REQ-1063.
+    description: Identifier this metadata version's generated identity is built from (DEFINE-9).
 - name:
     type: str
     required: true
     min_length: 1
-    description: See REQ-1063.
+    description: Name of this metadata version.
 - description:
     type: str
     required: false
     min_length: 1
-    description: See REQ-1063.
+    description: Description of what this metadata version covers.
 codelist_class:
 - id:
     type: identifier
     required: true
-    description: See REQ-1077.
+    description: Name column bindings refer to this codelist by (CT-1).
 - name:
     type: str
     required: true
     min_length: 1
-    description: See REQ-1077.
+    description: Name of the codelist, unique within the document.
 - data_type:
     type: str
     default: text
@@ -1478,80 +1452,80 @@ codelist_class:
     - text
     - integer
     - float
-    description: See REQ-1077.
+    description: Type of the coded values.
 - extensible:
     type: bool
     default: false
-    description: See REQ-1077.
+    description: Whether the published list admits sponsor items marked extended (CT-6).
 - alias:
     type: str
     required: false
     min_length: 1
-    description: See REQ-1077.
+    description: Published concept identifier of the codelist itself.
 - format_name:
     type: str
     required: false
     min_length: 1
-    description: See REQ-1077.
+    description: Transport format name carried for a reader.
 - items:
     type: list[codelist_item_class]
     required: false
-    description: See REQ-1077.
+    description: Coded values this codelist admits, the whole value set of a bound column, in the order the document presents them (CT-7).
 - external:
     type: external_codelist_class
     required: false
-    description: See REQ-1077.
+    description: Dictionary this codelist defers to instead of listing values.
 codelist_item_class:
 - value:
     type: literal_value
     required: true
-    description: See REQ-1078.
+    description: The coded value itself.
 - decode:
     type: str
     required: false
     min_length: 1
-    description: See REQ-1078.
+    description: Text the coded value stands for.
 - rank:
     type: int
     required: false
-    description: See REQ-1078.
+    description: Ordering significance of this value relative to the others.
 - alias:
     type: str
     required: false
     min_length: 1
-    description: See REQ-1078.
+    description: Published concept identifier of this value.
 - extended:
     type: bool
     default: false
-    description: See REQ-1078.
+    description: Whether the sponsor added this value to an extensible published list (CT-6).
 external_codelist_class:
 - dictionary:
     type: str
     required: true
     min_length: 1
-    description: See REQ-1079.
+    description: Name of the external dictionary.
 - version:
     type: str
     required: true
     min_length: 1
-    description: See REQ-1079.
+    description: Version of that dictionary.
 - href:
     type: str
     required: false
     min_length: 1
-    description: See REQ-1079.
+    description: Location the dictionary is published at.
 define_id:
   type: str
   pattern: ^[A-Za-z_][A-Za-z0-9_.-]*$
-  description: See REQ-1068.
+  description: Identifier a generated OID is built from.
 relative_href:
   type: str
-  pattern: ^(?!/)(?!.*(^|/)\.\.(/|$))[^\\]+$
-  description: See REQ-1070.
+  pattern: ^(?:[^./\\][^/\\]*|\.(?:[^./\\][^/\\]*|\.[^/\\]+)?)(?:/(?:[^./\\][^/\\]*|\.(?:[^./\\][^/\\]*|\.[^/\\]+)?)?)*$
+  description: Location referenced from the generated document, relative to the directory holding it and never leaving that directory, which need not exist when the document is generated.
 language_tag:
   type: str
   pattern: ^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$
-  description: See REQ-1073.
+  description: Language tag carried by every generated translated text.
 standard_name:
   type: str
   values:
@@ -1566,43 +1540,56 @@ standard_name:
   - SENDIG-AR
   - SENDIG-DART
   - SENDIG-GENETOX
-  description: See REQ-1074.
+  description: Standard name, in the exact case Define-XML 2.1 publishes.
 submission_section_class:
 - specs:
     type: list[path]
     required: true
+    description: Ordered specifications of this family, resolved with their parent layers; the only field a run needs (PROJECT-3, DEFINE-5).
 - standard:
     type: implementation_guide_class
+    description: Implementation guide shared by the selected datasets; Define-XML requires it (DEFINE-6, DEFINE-28).
 - define:
     type: path
+    description: Define-XML publication target, relative to the project file; Define-XML requires it (DEFINE-2, DEFINE-28).
 - documents:
     type: list[document_class]
+    description: Supporting document IDs, kinds, literal links and titles (DEFINE-13).
 - datasets:
     type: str
     values:
     - json
+    - xpt
+    description: Optional transport file written for each composed dataset in the document's directory, read from its published artifact, json for Dataset-JSON and xpt for SAS Transport; omission writes only the Define-XML document (JSON-1, XPT-1).
 - context:
     type: str
     default: Submission
     values:
     - Submission
     - Other
+    description: Submission or Other; defaults to Submission (DEFINE-4).
 - xml_lang:
     type: language_tag
     default: en
+    description: Language of generated translated text; defaults to en (DEFINE-21).
 - file_oid:
     type: str
     min_length: 1
+    description: Optional nonempty file-identity text that admits the existing URL-style spellings; generated object and leaf identifiers are validated separately (DEFINE-3).
 - metadata_version:
     type: metadata_version_class
+    description: Optional metadata-version ID, name and description overrides (DEFINE-3).
 - originator:
     type: str
     min_length: 1
+    description: Optional submitting party (DEFINE-12).
 - stylesheet:
     type: relative_href
+    description: Optional relative stylesheet link (DEFINE-23).
 - source_system_version:
     type: str
     min_length: 1
+    description: Optional nonempty XML and JSON source-system version; omission selects the installed package version (DEFINE-12).
 implementation_guide_class:
 - name:
     type: standard_name
@@ -1621,7 +1608,7 @@ document_class:
 - id:
     type: identifier
     required: true
-    description: See REQ-1065.
+    description: Name references to this document use.
 - kind:
     type: str
     required: true
@@ -1629,16 +1616,16 @@ document_class:
     - annotated_crf
     - supplemental
     - other
-    description: See REQ-1065.
+    description: Where the document is listed; an other document is listed only where it is referenced.
 - link:
     type: relative_href
     required: true
-    description: See REQ-1065.
+    description: File the document is, relative to the directory holding the generated document.
 - title:
     type: str
     required: true
     min_length: 1
-    description: See REQ-1065.
+    description: Label a reader sees for the document.
 "#),
     ("schema_shared.yaml", r#"version: "1.0"
 
@@ -1650,7 +1637,19 @@ column_type:
 
 literal_value:
     type: [str, int, float, bool, "null"]
-    description: See REQ-1149.
+    description: Scalar literal; a non-finite float becomes missing (VALUE-4).
+
+substitute_value:
+    type: [str, int, float, bool, missing_value]
+    description: "Literal a handler, flag or mapping returns, with `{literal: null}` for the missing value (COLUMN-10)."
+
+missing_value:
+    registry: missing_values
+
+missing_values:
+    literal:
+        type: "null"
+        description: The missing value, spelled as the literal expression; a bare YAML null instead leaves a field absent (LAYER-9).
 
 path:
     type: str
@@ -1659,17 +1658,17 @@ path:
 project_path:
     type: str
     min_length: 1
-    description: See REQ-1151.
+    description: Local resource a run reads or publishes; a relative spelling uses the base its declaration selects and an absolute spelling names its local location (FILE-2).
 
 path_base:
     type: str
     values: [declaring, entry]
-    description: See REQ-0780.
+    description: Base directory of a relative path, the declaring file's or the entry file's directory (FILE-2).
 
 identifier:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-    description: See REQ-1046.
+    description: Single-token identifier; the field's own description states which naming list it belongs to, such as a declared dataset, a declared column, a standard, a document or a function (SPEC-2).
 
 
 function_param_type:
@@ -1702,97 +1701,97 @@ environment_class:
 - schema_version:
     type: str
     required: true
-    description: See REQ-1080.
+    description: Schema bundle version this environment file is admitted against (FUNC-2).
 - lock:
     type: project_path
-    description: See REQ-1080.
+    description: Optional packaging lock the installed called packages are verified against, for the language the project's environments key states (FUNC-3).
 - functions:
     type: dict[identifier, function_definition]
-    description: See REQ-1080.
+    description: Project function definitions keyed by logical name (FUNC-4).
 function_definition:
   type:
   - project_path
   - function_definition_class
-  description: See REQ-1083.
+  description: Inline project function definition, or the path of a file holding one (FUNC-4).
 function_definition_class:
 - function:
     type: qualified_callable
     required: true
-    description: See REQ-1083.
+    description: Statically written fully qualified callable the definition binds (FUNC-8).
 - description:
     type: str
     required: true
     min_length: 1
-    description: See REQ-1083.
+    description: Description of what the function computes (FUNC-4).
 - params:
     type: list[function_parameter_class]
     required: true
-    description: See REQ-1083.
+    description: Closed, ordered named parameters of the function (FUNC-5).
 - returns:
     type: column_type
     required: true
-    description: See REQ-1083.
+    description: Column type of the one scalar the function returns (FUNC-9).
 - may_return_missing:
     type: bool
     default: false
-    description: See REQ-1083.
+    description: Whether an invoked binding may return the missing value (FUNC-9).
 - comparison_decimals:
     type: int
     default: 4
-    description: See REQ-1083.
+    description: Decimal places at which numeric test results are compared (FUNC-13).
 - tests:
     type: list[function_test_class]
     required: true
-    description: See REQ-1083.
+    description: Inline test cases activation runs before any study data is read (FUNC-11).
 function_parameter_class:
 - name:
     type: identifier
     required: true
-    description: See REQ-1083.
+    description: Parameter name, matching the callable's parameter exactly (FUNC-5).
 - type:
     type: function_param_type
     required: true
-    description: See REQ-1083.
+    description: Exact type every argument and default of this parameter has (FUNC-5).
 - required:
     type: bool
     default: true
-    description: See REQ-1083.
+    description: Whether a call must supply this argument (FUNC-5).
 - default:
     type: function_value
-    description: See REQ-1083.
+    description: Value an omitted optional argument takes (FUNC-7).
 - accepts_missing:
     type: bool
     default: false
-    description: See REQ-1083.
+    description: Whether a missing argument is passed to the binding instead of short-circuiting the call (FUNC-7).
 qualified_callable:
   type: str
   min_length: 1
-  description: See REQ-0669.
+  description: Fully qualified callable name, such as projectbmi.bmi or projectbmi::bmi (FUNC-8).
 function_case_id:
   type: str
   pattern: ^[a-z][a-z0-9-]*$
-  description: See REQ-1083.
+  description: Name of one function test case (FUNC-11).
 function_coverage:
   type: str
   pattern: ^(normal|boundary|nullable-output|numeric-comparison|(default|accepted-missing|short-circuit-missing|boolean-true|boolean-false):[A-Za-z_][A-Za-z0-9_]*)$
-  description: See REQ-1083.
+  description: Obligation a function test case demonstrates (FUNC-11).
 function_test_class:
 - id:
     type: function_case_id
     required: true
-    description: See REQ-1083.
+    description: Unique name of the test case (FUNC-11).
 - covers:
     type: list[function_coverage]
     required: true
-    description: See REQ-1083.
+    description: Obligations this case demonstrates (FUNC-11).
 - args:
     type: dict[identifier, function_value]
     required: true
-    description: See REQ-1083.
+    description: Logical arguments the case passes, by parameter name (FUNC-11).
 - result:
     type: function_value
     required: true
-    description: See REQ-1083.
+    description: Result the call is expected to return (FUNC-11).
 "#),
     ("schema_shared.yaml", r#"version: "1.0"
 
@@ -1804,7 +1803,19 @@ column_type:
 
 literal_value:
     type: [str, int, float, bool, "null"]
-    description: See REQ-1149.
+    description: Scalar literal; a non-finite float becomes missing (VALUE-4).
+
+substitute_value:
+    type: [str, int, float, bool, missing_value]
+    description: "Literal a handler, flag or mapping returns, with `{literal: null}` for the missing value (COLUMN-10)."
+
+missing_value:
+    registry: missing_values
+
+missing_values:
+    literal:
+        type: "null"
+        description: The missing value, spelled as the literal expression; a bare YAML null instead leaves a field absent (LAYER-9).
 
 path:
     type: str
@@ -1813,17 +1824,17 @@ path:
 project_path:
     type: str
     min_length: 1
-    description: See REQ-1151.
+    description: Local resource a run reads or publishes; a relative spelling uses the base its declaration selects and an absolute spelling names its local location (FILE-2).
 
 path_base:
     type: str
     values: [declaring, entry]
-    description: See REQ-0780.
+    description: Base directory of a relative path, the declaring file's or the entry file's directory (FILE-2).
 
 identifier:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-    description: See REQ-1046.
+    description: Single-token identifier; the field's own description states which naming list it belongs to, such as a declared dataset, a declared column, a standard, a document or a function (SPEC-2).
 
 
 function_param_type:

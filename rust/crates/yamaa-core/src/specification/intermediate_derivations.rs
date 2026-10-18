@@ -4,7 +4,7 @@ use crate::dataset::{
     CurrentField, CurrentRead, Intermediate, IntermediateDerivations, IntermediateSource,
     SecondarySource, SourceSchemas,
 };
-use crate::value::Value;
+use crate::{result_type::ResultType, value::Value};
 
 #[derive(Clone, Debug)]
 pub(super) struct Derivation {
@@ -13,8 +13,6 @@ pub(super) struct Derivation {
     path: String,
     typed: Option<ColumnType>,
     handler: Option<crate::conversion::LiteralHandler>,
-    kind: Kind,
-    driver_kind: Kind,
     pub(super) references: Vec<String>,
 }
 impl Derivation {
@@ -25,11 +23,26 @@ impl Derivation {
             &self.branch.path
         }
     }
-    pub(super) fn result_kind(
+    /// The derived field's type: a typed entry's declared type, and otherwise
+    /// its expression's result type (EXPR-14) over the names `input` types.
+    pub(super) fn field_type(&self, input: &dyn Fn(&str) -> ResultType) -> ResultType {
+        self.typed.map_or_else(
+            || self.branch.operation.result_type(input),
+            ResultType::column,
+        )
+    }
+    /// VALUE-24: a typed entry whose expression's result type can never
+    /// convert to the declared type, unless `unconvertible` answers it.
+    pub(super) fn conversion_finding(
         &self,
-        lookup: &impl Fn(&str) -> Option<ColumnType>,
-    ) -> Option<ColumnType> {
-        self.typed.or_else(|| self.kind.infer(lookup))
+        input: &dyn Fn(&str) -> ResultType,
+    ) -> Option<crate::diagnostic::Diagnostic> {
+        let typed = self.typed.filter(|_| self.handler.is_none())?;
+        result_types::conversion_finding(
+            &self.path,
+            self.branch.operation.result_type(input),
+            typed,
+        )
     }
 }
 /// Both admitted entry forms expose the same normalized expression boundary.
@@ -42,304 +55,6 @@ pub(super) fn value(
         Ok((field(d, derivation, "value")?, format!("{path}.derivation")))
     } else {
         Ok((field(d, entry, "value")?, path.into()))
-    }
-}
-#[derive(Clone, Debug)]
-enum Kind {
-    Literal(Option<ColumnType>),
-    Reference(String),
-    Numeric(crate::numeric_parser::ParsedNumeric),
-    Choice(Vec<Kind>),
-    StrictChoice(Vec<Kind>),
-    Unavailable,
-}
-fn value_kind(value: &N) -> Option<ColumnType> {
-    match value {
-        N::Text(_) => Some(ColumnType::Str),
-        N::Integer(_) => Some(ColumnType::Int),
-        N::Float(_) => Some(ColumnType::Float),
-        _ => None,
-    }
-}
-fn literal_kind(value: &N) -> Kind {
-    if matches!(value, N::Null) {
-        Kind::Literal(None)
-    } else {
-        value_kind(value).map_or(Kind::Unavailable, |kind| Kind::Literal(Some(kind)))
-    }
-}
-fn prepare_kind(
-    d: &Document,
-    value: usize,
-    depth: usize,
-    project: Option<&functions::Prepared>,
-) -> Result<Kind, PrepareError> {
-    if depth > crate::limits::Limits::SEMANTIC_DEPTH {
-        return Err(PrepareError::limit(
-            "semantic_depth",
-            crate::limits::Limits::SEMANTIC_DEPTH,
-            Some(depth),
-            None,
-        ));
-    }
-    let &[(op, payload)] = mapping(d, value)? else {
-        return Err(PrepareError::Internal);
-    };
-    let op = text(d, op)?;
-    Ok(match op {
-        "function" => project
-            .and_then(|project| project.returns.get(&payload).copied())
-            .map_or(Kind::Unavailable, |kind| Kind::Literal(Some(kind))),
-        "literal" => literal_kind(&d.nodes()[payload]),
-        "source" => Kind::Reference(match &d.nodes()[payload] {
-            N::Text(name) => name.clone(),
-            _ => text(d, field(d, payload, "variable")?)?.into(),
-        }),
-        "first_available" | "greatest" | "least" => {
-            let mut kinds = sequence(d, field(d, payload, "sources")?)?
-                .iter()
-                .map(|&source| {
-                    Ok(Kind::Reference(match &d.nodes()[source] {
-                        N::Text(name) => name.clone(),
-                        _ => text(d, field(d, source, "variable")?)?.into(),
-                    }))
-                })
-                .collect::<Result<Vec<_>, PrepareError>>()?;
-            if op == "first_available" {
-                if let Some(missing) = d.field(payload, "missing") {
-                    kinds.push(literal_kind(&d.nodes()[missing]));
-                }
-            }
-            Kind::Choice(kinds)
-        }
-        "compute" => {
-            match crate::numeric_parser::parse_numeric(text(d, field(d, payload, "expr")?)?) {
-                Ok(plan) => Kind::Numeric(plan),
-                Err(_) => Kind::Unavailable,
-            }
-        }
-        "mapping" => Kind::Choice(
-            mapping(d, field(d, payload, "dict")?)?
-                .iter()
-                .map(|&(_, value)| literal_kind(&d.nodes()[value]))
-                .collect(),
-        ),
-        "cut" => Kind::Choice(
-            sequence(d, field(d, payload, "labels")?)?
-                .iter()
-                .map(|&value| literal_kind(&d.nodes()[value]))
-                .collect(),
-        ),
-        "case" => Kind::Choice(
-            sequence(d, payload)?
-                .iter()
-                .map(|&item| {
-                    prepare_kind(
-                        d,
-                        d.field(item, "then")
-                            .or_else(|| d.field(item, "otherwise"))
-                            .ok_or(PrepareError::Internal)?,
-                        depth + 1,
-                        project,
-                    )
-                })
-                .collect::<Result<_, _>>()?,
-        ),
-        "row_number" | "rank" | "date_diff" | "study_day" | "to_epoch_day" => {
-            Kind::Literal(Some(ColumnType::Int))
-        }
-        "str_pad" | "str_case" | "str_concat" | "str_template" | "str_extract" | "str_replace"
-        | "date_precision" | "datetime_precision" | "baseline_flag" => {
-            Kind::Literal(Some(ColumnType::Str))
-        }
-        "flag" => d
-            .field(payload, "true_value")
-            .map(|id| literal_kind(&d.nodes()[id]))
-            .unwrap_or(Kind::Literal(Some(ColumnType::Str))),
-        "date_impute" | "to_date" | "date_shift" => Kind::Literal(Some(ColumnType::Date)),
-        "datetime_impute" | "datetime_shift" => Kind::Literal(Some(ColumnType::DateTime)),
-        "datetime_diff" => {
-            Kind::Literal(Some(if text(d, field(d, payload, "unit")?)? == "second" {
-                ColumnType::Int
-            } else {
-                ColumnType::Float
-            }))
-        }
-        "duration_value" => {
-            if text(d, field(d, payload, "unit")?)? == "second" {
-                Kind::Unavailable
-            } else {
-                Kind::Literal(Some(ColumnType::Float))
-            }
-        }
-        "duration_text" => Kind::Literal(Some(ColumnType::Str)),
-        "round_half_away_from_zero" => Kind::Literal(Some(ColumnType::Float)),
-        "row_value" | "previous_non_missing" | "locf" => {
-            Kind::Reference(text(d, field(d, payload, "source")?)?.into())
-        }
-        _ => Kind::Unavailable,
-    })
-}
-fn prepare_driver_kind(
-    d: &Document,
-    value: usize,
-    depth: usize,
-    project: Option<&functions::Prepared>,
-) -> Result<Kind, PrepareError> {
-    if depth > crate::limits::Limits::SEMANTIC_DEPTH {
-        return Err(PrepareError::limit(
-            "semantic_depth",
-            crate::limits::Limits::SEMANTIC_DEPTH,
-            Some(depth),
-            None,
-        ));
-    }
-    let &[(operation, payload)] = mapping(d, value)? else {
-        return Err(PrepareError::Internal);
-    };
-    Ok(match text(d, operation)? {
-        "literal" if matches!(d.nodes()[payload], N::Boolean(_)) => Kind::Unavailable,
-        "source" | "literal" | "row_number" | "rank" | "str_case" => {
-            prepare_kind(d, value, depth, project)?
-        }
-        "case" => Kind::StrictChoice(
-            sequence(d, payload)?
-                .iter()
-                .map(|&item| {
-                    prepare_driver_kind(
-                        d,
-                        d.field(item, "then")
-                            .or_else(|| d.field(item, "otherwise"))
-                            .ok_or(PrepareError::Internal)?,
-                        depth + 1,
-                        project,
-                    )
-                })
-                .collect::<Result<_, _>>()?,
-        ),
-        _ => Kind::Unavailable,
-    })
-}
-fn unify(items: impl Iterator<Item = Option<ColumnType>>) -> Option<ColumnType> {
-    let mut kind = None;
-    for item in items {
-        let item = item?;
-        kind = match kind {
-            None => Some(item),
-            Some(previous) if previous == item => Some(item),
-            Some(ColumnType::Int | ColumnType::Float)
-                if matches!(item, ColumnType::Int | ColumnType::Float) =>
-            {
-                Some(ColumnType::Float)
-            }
-            _ => return None,
-        };
-    }
-    kind
-}
-fn unify_exact(mut items: impl Iterator<Item = Option<ColumnType>>) -> Option<ColumnType> {
-    let kind = items.next()??;
-    for item in items {
-        if item? != kind {
-            return None;
-        }
-    }
-    Some(kind)
-}
-
-impl Kind {
-    fn missing_only(&self) -> bool {
-        match self {
-            Self::Literal(None) => true,
-            Self::Choice(items) | Self::StrictChoice(items) => items.iter().all(Self::missing_only),
-            _ => false,
-        }
-    }
-    fn infer(&self, lookup: &impl Fn(&str) -> Option<ColumnType>) -> Option<ColumnType> {
-        match self {
-            Self::Unavailable => None,
-            Self::StrictChoice(items) => {
-                let mut kind = None;
-                for item in items {
-                    if matches!(item, Self::Literal(None)) {
-                        continue;
-                    }
-                    let next = item.infer(lookup)?;
-                    if kind.is_some_and(|previous| previous != next) {
-                        return None;
-                    }
-                    kind = Some(next);
-                }
-                kind
-            }
-            Self::Literal(kind) => *kind,
-            Self::Reference(name) => lookup(name),
-            Self::Choice(items) => unify_exact(
-                items
-                    .iter()
-                    .filter(|item| !item.missing_only())
-                    .map(|item| item.infer(lookup)),
-            ),
-            Self::Numeric(parsed) => {
-                use crate::numeric_parser::{NumericFunction as F, ParsedKind as K};
-                let mut kinds = Vec::new();
-                for node in parsed.nodes() {
-                    let kind = match &node.kind {
-                        K::Number { fractional } => Some(if *fractional {
-                            ColumnType::Float
-                        } else {
-                            ColumnType::Int
-                        }),
-                        K::Null => None,
-                        K::Identifier => {
-                            lookup(&parsed.expression()[node.span.start..node.span.end])
-                        }
-                        K::Unary { operand, .. } | K::Group { operand } => kinds[*operand],
-                        K::Binary {
-                            operator: crate::numeric::BinaryOperator::Divide,
-                            ..
-                        } => Some(ColumnType::Float),
-                        K::Binary { left, right, .. } => {
-                            unify([kinds[*left], kinds[*right]].into_iter())
-                        }
-                        K::Call {
-                            function:
-                                F::Sqrt
-                                | F::Exp
-                                | F::Ln
-                                | F::Power
-                                | F::RoundHalfAwayFromZero
-                                | F::Ceil
-                                | F::Floor
-                                | F::Trunc,
-                            ..
-                        } => Some(ColumnType::Float),
-                        // A missing float does not promote a present integer,
-                        // so mixed operand kinds cannot promise a float result.
-                        K::Call {
-                            function: F::NullIf,
-                            arguments,
-                            ..
-                        } => unify_exact(arguments.iter().map(|&index| kinds[index])),
-                        K::Call {
-                            function: F::Greatest | F::Least | F::Coalesce,
-                            arguments,
-                            ..
-                        } => unify_exact(
-                            arguments
-                                .iter()
-                                .filter(|&&index| !matches!(parsed.nodes()[index].kind, K::Null))
-                                .map(|&index| kinds[index]),
-                        ),
-                        K::Call { arguments, .. } => {
-                            unify(arguments.iter().map(|&index| kinds[index]))
-                        }
-                    };
-                    kinds.push(kind);
-                }
-                kinds[parsed.root()]
-            }
-        }
     }
 }
 #[allow(clippy::too_many_arguments)]
@@ -401,8 +116,6 @@ pub(super) fn prepare(
         let mut references = Vec::new();
         derivations::references(d, value, project, &mut references, 0)?;
         self_relations::template_references(d, value, templates, &mut references, 0)?;
-        let kind = prepare_kind(d, value, 0, project)?;
-        let driver_kind = prepare_driver_kind(d, value, 0, project)?;
         let handler = literal_handler(d, handled, &path)?;
         result.push(Derivation {
             name: name.into(),
@@ -410,18 +123,14 @@ pub(super) fn prepare(
             path,
             typed,
             handler,
-            kind,
-            driver_kind,
             references,
         });
     }
     Ok(result)
 }
-type FieldKinds = (
-    TableSchema,
-    Vec<Option<ColumnType>>,
-    Vec<Option<ColumnType>>,
-);
+/// The donor layout, each derived field's record type where it has one, and
+/// each derivation's expression result type for its conversion check.
+type FieldKinds = (TableSchema, Vec<Option<ColumnType>>, Vec<ResultType>);
 
 #[allow(clippy::too_many_arguments)]
 fn resolve_field_kinds(
@@ -442,87 +151,49 @@ fn resolve_field_kinds(
     // Admit aggregate retained schema/catalog copies before making the first copy.
     let original_secondary = outer_secondary(sources, schemas, driver);
     let mut fields = stored.columns().to_vec();
-    let mut result_kinds = Vec::new();
-    let mut driver_kinds = Vec::new();
+    let mut field_types = Vec::new();
+    let mut operation_types = Vec::new();
     for declaration in declarations {
-        let lookup = |name: &str| {
+        let input = |name: &str| {
             let (owner, field) = name.split_once('.').unwrap_or((dataset, name));
             if owner == dataset {
                 fields
                     .iter()
                     .position(|column| column.name == field)
-                    .and_then(|column| {
+                    .map_or(ResultType::UNKNOWN, |column| {
                         if column < stored.columns().len() {
-                            Some(fields[column].kind)
+                            fields[column].kind.into()
                         } else {
-                            result_kinds
+                            field_types
                                 .get(column - stored.columns().len())
                                 .copied()
-                                .flatten()
+                                .unwrap_or(ResultType::UNKNOWN)
                         }
                     })
             } else if let Some((index, field)) = named.reference(name) {
-                let item = previous.get(index).and_then(Option::as_ref)?;
-                let column = item.source_column(&original_secondary, field)?;
-                item.source_kind(&original_secondary, column)
+                ResultType::declared(previous.get(index).and_then(Option::as_ref).and_then(
+                    |item| {
+                        let column = item.source_column(&original_secondary, field)?;
+                        item.source_kind(&original_secondary, column)
+                    },
+                ))
             } else {
-                sources
-                    .iter()
-                    .position(|source| source.name == owner)
-                    .and_then(|index| {
-                        schemas[index]
-                            .columns()
-                            .iter()
-                            .find(|column| column.name == field)
-                    })
-                    .map(|column| column.kind)
+                ResultType::declared(
+                    sources
+                        .iter()
+                        .position(|source| source.name == owner)
+                        .and_then(|index| {
+                            schemas[index]
+                                .columns()
+                                .iter()
+                                .find(|column| column.name == field)
+                        })
+                        .map(|column| column.kind),
+                )
             }
         };
-        let result_kind = declaration.result_kind(&lookup);
-        let kind = result_kind.unwrap_or({
-            // An unresolved numeric operand must not turn a later read of
-            // this computed field into a spurious text-input diagnostic.
-            if matches!(declaration.kind, Kind::Numeric(_)) {
-                ColumnType::Float
-            } else {
-                ColumnType::Str
-            }
-        });
-        driver_kinds.push(declaration.typed.or_else(|| {
-            declaration.driver_kind.infer(&|name| {
-                let (owner, field) = name.split_once('.').unwrap_or((dataset, name));
-                if owner == dataset {
-                    let index = fields.iter().position(|column| column.name == field)?;
-                    if index < stored.columns().len() {
-                        Some(fields[index].kind)
-                    } else {
-                        driver_kinds
-                            .get(index - stored.columns().len())
-                            .copied()
-                            .flatten()
-                    }
-                } else if let Some((index, field)) = named.reference(name) {
-                    let item = previous.get(index).and_then(Option::as_ref)?;
-                    let schema = item.source_schema(&original_secondary)?;
-                    let column = schema
-                        .columns()
-                        .iter()
-                        .position(|column| column.name == field)?;
-                    item.derivations
-                        .as_ref()
-                        .filter(|derived| column >= derived.stored_columns)
-                        .map_or(Some(schema.columns()[column].kind), |derived| {
-                            derived
-                                .driver_kinds
-                                .get(column - derived.stored_columns)
-                                .copied()
-                                .flatten()
-                        })
-                } else {
-                    None
-                }
-            })
-        }));
+        let field_type = declaration.field_type(&input);
+        let operation_type = declaration.branch.operation.result_type(&input);
         if fields.iter().any(|field| field.name == declaration.name) {
             let mut finding = LookupFinding::new(
                 &declaration.path,
@@ -536,16 +207,21 @@ fn resolve_field_kinds(
         }
         fields.push(Column {
             name: declaration.name.clone(),
-            kind,
+            kind: field_type.layout(),
         });
-        result_kinds.push(result_kind);
+        field_types.push(field_type);
+        operation_types.push(operation_type);
     }
     let output = TableSchema::new(fields).map_err(|_| BindError::Internal)?;
     *pending_schema = Some(output.clone());
     if findings.len() != before {
         return Ok(None);
     }
-    Ok(Some((output, result_kinds, driver_kinds)))
+    Ok(Some((
+        output,
+        field_types.iter().map(|kind| kind.column_type()).collect(),
+        operation_types,
+    )))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -846,7 +522,7 @@ pub(super) fn bind(
         return Ok(None);
     }
     let before = findings.len();
-    let Some((output, result_kinds, driver_kinds)) = resolve_field_kinds(
+    let Some((output, result_kinds, operation_types)) = resolve_field_kinds(
         declarations,
         dataset,
         reader,
@@ -921,6 +597,15 @@ pub(super) fn bind(
             &earlier,
         )?;
         donor_scope_findings(&mut findings[start..], reader, named, &unavailable);
+        if let Some(finding) = declaration
+            .typed
+            .filter(|_| expression.is_some() && declaration.handler.is_none())
+            .and_then(|typed| {
+                result_types::conversion_finding(&declaration.path, operation_types[index], typed)
+            })
+        {
+            findings.push(BindFinding::Scalar(finding));
+        }
         if let Some(expression) = expression {
             assignments.push(Assignment {
                 column,
@@ -986,7 +671,6 @@ pub(super) fn bind(
         plan: std::rc::Rc::new(plan),
         current,
         stored_columns: stored.columns().len(),
-        driver_kinds,
         typed_columns: declarations
             .iter()
             .enumerate()
@@ -1090,6 +774,7 @@ fn unused_slot_placeholder(
         range: None,
         columns: None,
         no_match: Some(Value::Missing),
+        require_match: false,
         unique: Vec::new(),
         derivations: None,
         pending_schema: None,
@@ -1392,14 +1077,14 @@ fn rebase(
 #[cfg(test)]
 mod inference_tests {
     use super::*;
-    use crate::{evaluation::NumericResolver, numeric::Number, value::Selection};
+    use crate::{expression::Resolver, numeric::Number, value::Selection};
     use std::convert::Infallible;
 
     struct Inputs {
         integer: Value,
         float: Value,
     }
-    impl NumericResolver for Inputs {
+    impl Resolver for Inputs {
         type Error = Infallible;
         fn resolve(&mut self, name: &str) -> Result<Selection, Self::Error> {
             Ok(Selection::Present(match name {
@@ -1411,59 +1096,39 @@ mod inference_tests {
     }
 
     #[test]
-    fn mixed_numeric_selection_kinds_remain_unknown_when_missing_floats_preserve_integers() {
-        for (expression, promoted) in [
-            ("NULLIF(INT_COL, FLOAT_COL)", Number::float(7.0)),
-            ("GREATEST(INT_COL, FLOAT_COL)", Number::float(7.0)),
-            ("LEAST(INT_COL, FLOAT_COL)", Number::float(2.5)),
-            ("COALESCE(INT_COL, FLOAT_COL)", Number::float(7.0)),
-        ] {
-            let parsed = crate::numeric_parser::parse_numeric(expression).unwrap();
-            assert_eq!(
-                Kind::Numeric(parsed).infer(&|name| match name {
-                    "INT_COL" => Some(ColumnType::Int),
-                    "FLOAT_COL" => Some(ColumnType::Float),
-                    _ => None,
-                }),
-                None,
-                "{expression}: a possibly missing float cannot promise a float result",
-            );
-            let plan =
-                crate::numeric_compiler::compile_numeric(expression, "donor.compute").unwrap();
-            for (integer, float, expected) in [
-                (Value::Int(7), Value::Missing, Number::Int(7)),
-                (Value::Int(7), Value::float(2.5), promoted),
-                (Value::Missing, Value::Missing, Number::Missing),
-            ] {
-                assert_eq!(
-                    plan.evaluate(&mut Inputs { integer, float }).unwrap(),
-                    expected,
-                    "{expression}",
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn coalesce_float_with_an_integer_fallback_keeps_the_fallbacks_runtime_kind() {
-        let expression = "COALESCE(FLOAT_COL, 0)";
-        let parsed = crate::numeric_parser::parse_numeric(expression).unwrap();
-        assert_eq!(
-            Kind::Numeric(parsed).infer(&|_| Some(ColumnType::Float)),
-            None,
-        );
-        let plan = crate::numeric_compiler::compile_numeric(expression, "donor.compute").unwrap();
-        for (float, expected) in [
-            (Value::Missing, Number::Int(0)),
-            (Value::float(2.5), Number::float(2.5)),
+    fn nullif_over_an_int_and_a_float_is_a_float_even_when_the_float_is_missing() {
+        let expression = "NULLIF(INT_COL, FLOAT_COL)";
+        let compiled = crate::expression::compile(
+            expression,
+            crate::expression::Context::Compute,
+            "donor.compute",
+        )
+        .unwrap();
+        let types = |name: &str| match name {
+            "INT_COL" => ResultType::INT,
+            "FLOAT_COL" => ResultType::FLOAT,
+            _ => ResultType::UNKNOWN,
+        };
+        let kind = compiled.result_type(types);
+        assert_eq!(kind, ResultType::FLOAT, "VALUE-10: float when either is");
+        assert_eq!(kind.column_type(), Some(ColumnType::Float));
+        // The bound site widens the int it returns, so the value has the type.
+        let plan = compiled.typed(types);
+        for (integer, float, expected) in [
+            (Value::Int(7), Value::Missing, Number::float(7.0)),
+            (Value::Int(7), Value::float(2.5), Number::float(7.0)),
+            (Value::Int(7), Value::float(7.0), Number::Missing),
+            (
+                Value::Int(9_007_199_254_740_993),
+                Value::Missing,
+                Number::float(9_007_199_254_740_992.0),
+            ),
+            (Value::Missing, Value::Missing, Number::Missing),
         ] {
             assert_eq!(
-                plan.evaluate(&mut Inputs {
-                    integer: Value::Missing,
-                    float
-                })
-                .unwrap(),
-                expected,
+                plan.evaluate_number(&mut Inputs { integer, float })
+                    .unwrap(),
+                expected
             );
         }
     }

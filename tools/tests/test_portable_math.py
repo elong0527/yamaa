@@ -144,7 +144,7 @@ class PublicPortableMath(unittest.TestCase):
                     "name": "ROUNDED",
                     "type": "float",
                     "derivation": {
-                        "compute": {"expr": "ROUND_HALF_AWAY_FROM_ZERO(VALUE, 15)"}
+                        "round_half_away_from_zero": {"source": "VALUE", "digits": 15}
                     },
                 },
             ]

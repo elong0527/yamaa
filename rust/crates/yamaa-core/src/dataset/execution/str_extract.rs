@@ -1,17 +1,20 @@
 //! Extraction shares regex counters and admits captured/context copies before retention.
+//! A missing source is counted under `missing`, declared or by default.
 use super::*;
 use crate::text_extract::{Error, Step};
 
 pub(super) fn register(expression: &Expression, counter: &mut HandlerCounter) {
     match expression {
         Expression::StrExtract { source, operation } => {
-            for (name, kind) in [
-                ("missing", HandlerKind::Missing),
-                ("no_match", HandlerKind::NoMatch),
-            ] {
-                if operation.handler(name).is_some() {
-                    counter.register(&std::format!("{}.{}", operation.path(), name), kind);
-                }
+            counter.register(
+                &std::format!("{}.missing", operation.path()),
+                HandlerKind::Missing,
+            );
+            if operation.handler("no_match").is_some() {
+                counter.register(
+                    &std::format!("{}.no_match", operation.path()),
+                    HandlerKind::NoMatch,
+                );
             }
             register(&source.expression, counter);
         }
@@ -21,7 +24,6 @@ pub(super) fn register(expression: &Expression, counter: &mut HandlerCounter) {
             }
         }
         Expression::Extreme { operands, .. }
-        | Expression::StrConcat { operands, .. }
         | Expression::Imputation { operands, .. }
         | Expression::StrTemplate { operands, .. }
         | Expression::Temporal { operands, .. } => {
@@ -53,7 +55,6 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
         Ok(Step::Capture(Some(text))) => Ok(Value::Str(text.into())),
         Ok(Step::Capture(None)) => Ok(Value::Missing),
         Ok(Step::Recovered(name)) => {
-            let value = operation.handler(name).expect("declared recovery");
             state
                 .handlers
                 .record(
@@ -65,9 +66,9 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
                     },
                 )
                 .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))?;
-            Ok(value.clone())
+            Ok(operation.substitute(name))
         }
-        Ok(step @ (Step::Missing | Step::NoMatch(_))) => {
+        Ok(step @ Step::NoMatch(_)) => {
             let diagnostic = operation
                 .failure_diagnostic(step)
                 .expect("admitted complete context");
@@ -76,6 +77,5 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
         Err(Error::Diagnostic(diagnostic)) => {
             Err(retained_diagnostic(diagnostic, false, candidate, plan, row))
         }
-        Err(Error::Regex(limit)) => Err(Box::new(regex_limit(limit))),
     }
 }

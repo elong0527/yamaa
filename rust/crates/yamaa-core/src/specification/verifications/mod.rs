@@ -8,7 +8,6 @@ use crate::json::Value as JsonValue;
 use crate::{
     bound_expression::BoundPredicate,
     diagnostic::{ConditionCode, Diagnostic},
-    predicate_compiler,
     value::Value,
 };
 
@@ -50,36 +49,25 @@ fn predicate(
             operand_route: None,
         }));
     };
-    let plan = match predicate_compiler::compile(expression, &path) {
+    let plan = match compile(expression, ExpressionContext::Predicate, &path) {
         Ok(plan) => plan,
         // Every grammar failure, including an invalid expression, reports the
         // shared structured {position, predicate} context that `when` and
         // `filter` report; verifications add no prose-only variant.
-        Err(predicate_compiler::Error::Parse(crate::predicate_parser::ParseError::Grammar {
-            position,
-            failure,
-            ..
-        })) => {
-            return Ok(Err(failure.original_diagnostic(
+        Err(CompileError::Invalid {
+            position, failure, ..
+        }) => {
+            return Ok(Err(failure.diagnostic(
+                ExpressionContext::Predicate,
                 &path,
                 expression,
                 position.character,
             )));
         }
-        Err(predicate_compiler::Error::Parse(
-            crate::predicate_parser::ParseError::UnsupportedRegex { .. },
-        )) => {
-            return Err(PrepareError::Unsupported(vec![UnsupportedFeature {
-                operation: "predicate_regex".into(),
-                path,
-            }]));
-        }
-        Err(predicate_compiler::Error::Internal) => return Err(PrepareError::Internal),
-        Err(error) => return Err(PrepareError::predicate(error.clone(), Some(&path))),
+        Err(error) => return Err(PrepareError::expression(error.clone(), Some(&path))),
     };
     if let Some(name) = plan
         .identifiers()
-        .into_iter()
         .filter(|name| {
             !(output.columns().iter().any(|column| column.name == *name)
                 || allow_lookups && lookups::declared(d, name).is_some())
@@ -94,7 +82,7 @@ fn predicate(
             operand_route: None,
         }));
     }
-    let names: std::collections::BTreeSet<_> = plan.identifiers().into_iter().collect();
+    let names: std::collections::BTreeSet<_> = plan.identifiers().collect();
     let bindings = names
         .into_iter()
         .map(|name| Binding {
@@ -112,7 +100,18 @@ fn predicate(
             },
         })
         .collect();
-    BoundPredicate::new_contextual(plan, bindings, Vec::new())
+    // An output column has its declared type; a lookup's field is typed when
+    // its schema is captured.
+    let typed = plan.typed(|name| {
+        crate::result_type::ResultType::declared(
+            output
+                .columns()
+                .iter()
+                .find(|column| column.name == name)
+                .map(|column| column.kind),
+        )
+    });
+    BoundPredicate::new_contextual(typed, bindings, Vec::new())
         .map(Ok)
         .map_err(|_| PrepareError::Internal)
 }
@@ -174,9 +173,6 @@ fn admit_vocabulary(
                 continue;
             }
         };
-        if op == "unique" && matches!(d.nodes()[payload], N::Sequence(_)) {
-            continue;
-        }
         for &(name, _) in mapping(d, payload)? {
             let name = text(d, name)?;
             if !allowed.contains(&name) {
@@ -261,6 +257,68 @@ fn admit_identity(
             reason: "a verification id is text".into(),
         }),
     }
+}
+
+/// A dataset `unique` over exactly the `keys` columns restates the unique,
+/// non-missing identity output-key validation already asserts.
+pub(super) fn redundant_unique(
+    d: &Document,
+    result: &mut Vec<PreflightFinding>,
+) -> Result<(), PrepareError> {
+    let root = d.root();
+    let keys = sequence(d, field(d, root, "keys")?)?
+        .iter()
+        .map(|&id| text(d, id))
+        .collect::<Result<std::collections::BTreeSet<_>, _>>()?;
+    let Some(entries) = d
+        .field(root, "verifications")
+        .filter(|&id| !matches!(d.nodes()[id], N::Null))
+    else {
+        return Ok(());
+    };
+    for (index, &id) in sequence(d, entries)?.iter().enumerate() {
+        let (op, payload) = operation(d, id)?;
+        if op != "unique" {
+            continue;
+        }
+        let Some(columns) = d.field(payload, "columns") else {
+            continue;
+        };
+        let columns = sequence(d, columns)?;
+        let names = columns
+            .iter()
+            .map(|&id| text(d, id))
+            .collect::<Result<Vec<_>, _>>()?;
+        if names.is_empty()
+            || names
+                .iter()
+                .copied()
+                .collect::<std::collections::BTreeSet<_>>()
+                != keys
+        {
+            continue;
+        }
+        result.push(PreflightFinding::Scalar(Diagnostic {
+            code: ConditionCode::VerificationUniqueRedundant,
+            spec_paths: vec![format!("verifications[{index}].unique")],
+            context: [
+                (
+                    "columns".into(),
+                    JsonValue::Array(
+                        names
+                            .iter()
+                            .map(|name| JsonValue::String((*name).into()))
+                            .collect(),
+                    ),
+                ),
+                ("stated_by".into(), JsonValue::String("keys".into())),
+            ]
+            .into(),
+            source_span: None,
+            operand_route: None,
+        }));
+    }
+    Ok(())
 }
 
 fn push_deferred(result: &mut Verifications) {
@@ -389,11 +447,7 @@ impl Verifications {
                 }
                 check
             } else if op == "unique" || op == "all_or_none" {
-                let values = if matches!(d.nodes()[payload], N::Sequence(_)) {
-                    sequence(d, payload)?
-                } else {
-                    sequence(d, field(d, payload, "columns")?)?
-                };
+                let values = sequence(d, field(d, payload, "columns")?)?;
                 if values.is_empty() {
                     result.deferred = invalid(
                         path,

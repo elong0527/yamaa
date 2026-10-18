@@ -58,8 +58,7 @@ impl Run {
         let guard = self.inner.try_lock().map_err(|_| poisoned())?;
         let build = guard.build();
         let interrupt = build
-            .project_interrupt()
-            .or_else(|| build.producer_interrupt())
+            .interrupt()
             .and_then(|error| crate::function_callback::payload(py, error));
         match interrupt {
             Some(error) => Err(crate::function_callback::raise(py, error)),
@@ -246,8 +245,7 @@ pub fn _project_run(py: Python<'_>, project: &str, section: Option<&str>) -> PyR
         if let Some(run) = runs.get(&name) {
             let build = run.build();
             let interrupt = build
-                .project_interrupt()
-                .or_else(|| build.producer_interrupt())
+                .interrupt()
                 .and_then(|error| crate::function_callback::payload(py, error));
             if let Some(error) = interrupt {
                 return Err(crate::function_callback::raise(py, error));

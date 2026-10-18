@@ -43,8 +43,6 @@ pub(crate) struct HostFailure {
 pub(crate) type ProjectAttempt =
     yamaa_adapters::project_run::Attempt<yamaa_adapters::file_resources::Error, HostFailure>;
 
-pub(crate) type ProducerAttempt = yamaa_adapters::file_producer_build::OwnedAttempt<HostFailure>;
-
 pub(crate) struct ResolverBridge {
     inner: Arc<dyn ResourceResolver>,
 }
@@ -119,7 +117,7 @@ impl<'a> ObserverBridge<'a> {
 }
 
 impl yamaa_core::application_observer::Observer for ObserverBridge<'_> {
-    fn observe(&self, event: yamaa_core::application_observer::Event<'_>) {
+    fn observe(&self, event: yamaa_core::application_observer::Event) {
         self.measurements.observe(event);
         if let Some(progress) = self.progress {
             progress.observe(Event::from_core(event));
@@ -356,40 +354,6 @@ pub(crate) fn format_project_attempt(
     }
 }
 
-/// Project one retained owned producer attempt into its public projection.
-pub(crate) fn format_producer_attempt(
-    attempt: &ProducerAttempt,
-    identity: yamaa_adapters::specification_report::Identity<'_>,
-) -> yamaa_adapters::producer_result::RootProjection {
-    use yamaa_adapters::project_report::Classified;
-    let mut borrowed = Vec::new();
-    yamaa_adapters::producer_attempt::visit_host_failures(attempt, |stage, error| {
-        borrowed.push((stage, error));
-    });
-    let classified: Vec<ClassifiedFailure> = borrowed
-        .iter()
-        .map(|(_, failure)| classify(&failure.error))
-        .collect();
-    let facts: Vec<Classified<'_, HostFailure>> = borrowed
-        .iter()
-        .zip(&classified)
-        .filter_map(|((_, failure), item)| match item {
-            ClassifiedFailure::Host(error) => {
-                yamaa_adapters::callback::details(error).map(|details| Classified::Host {
-                    failure: *failure,
-                    details,
-                })
-            }
-            ClassifiedFailure::Lock(findings) => Some(Classified::Lock {
-                failure: *failure,
-                findings,
-            }),
-            ClassifiedFailure::Opaque => None,
-        })
-        .collect();
-    yamaa_adapters::producer_result::project_owned(attempt, identity, &facts)
-}
-
 pub(crate) enum BuildOutcome {
     Plain {
         result: Result<
@@ -398,15 +362,11 @@ pub(crate) enum BuildOutcome {
         >,
     },
     Project {
-        attempt: ProjectAttempt,
+        attempt: Box<ProjectAttempt>,
         result: Result<
             yamaa_adapters::file_application::Domain,
             Vec<yamaa_adapters::issue_rows::Issue>,
         >,
-    },
-    Producer {
-        attempt: ProducerAttempt,
-        projection: yamaa_adapters::producer_result::RootProjection,
     },
     SelectionFailed {
         issues: Vec<yamaa_adapters::issue_rows::Issue>,
@@ -429,9 +389,9 @@ struct EngineRuntime<'a> {
     shared: &'a EngineShared,
     specification: &'a str,
     run_resolver: Option<Arc<dyn yamaa_adapters::host_resources::Resolver>>,
-    /// Artifacts a project run already built; their presence selects the
-    /// saved-link producer route for this one specification.
-    held: Option<Arc<yamaa_adapters::file_producer_build::HeldArtifacts>>,
+    /// Artifacts a project run already built, offered to this run's inputs
+    /// whose `schema` links name their producers.
+    held: Option<Arc<yamaa_adapters::file_resources::HeldArtifacts>>,
 }
 
 impl yamaa_adapters::file_application::RuntimePort for EngineRuntime<'_> {
@@ -442,14 +402,6 @@ impl yamaa_adapters::file_application::RuntimePort for EngineRuntime<'_> {
         resolver_bridge(self.shared)
     }
 
-    fn producers(&self) -> yamaa_adapters::file_workflow::Producers {
-        if self.held.is_some() {
-            yamaa_adapters::file_workflow::Producers::Saved
-        } else {
-            yamaa_adapters::file_workflow::Producers::Built
-        }
-    }
-
     fn plain(
         &mut self,
         prepared: &yamaa_adapters::file_preparation::FileSpecification,
@@ -457,6 +409,9 @@ impl yamaa_adapters::file_application::RuntimePort for EngineRuntime<'_> {
     ) -> Result<Self::Result, Self::Error> {
         let identity = self.shared.identity("domain", self.specification);
         let mut run_scope = prepared.run_scope(self.run_resolver.clone());
+        if let Some(held) = &self.held {
+            run_scope.hold(Arc::clone(held));
+        }
         let result =
             yamaa_adapters::file_application::plain(prepared, &mut run_scope, identity, scope);
         Ok(BuildOutcome::Plain { result })
@@ -476,6 +431,9 @@ impl yamaa_adapters::file_application::RuntimePort for EngineRuntime<'_> {
             });
         };
         let mut run_scope = project.run_scope(self.run_resolver.clone());
+        if let Some(held) = &self.held {
+            run_scope.hold(Arc::clone(held));
+        }
         let inner = project.build_with(
             &mut run_scope,
             |run| {
@@ -503,55 +461,8 @@ impl yamaa_adapters::file_application::RuntimePort for EngineRuntime<'_> {
             },
         );
         Ok(BuildOutcome::Project {
-            attempt: inner,
+            attempt: Box::new(inner),
             result,
-        })
-    }
-
-    fn producer(
-        &mut self,
-        graph: &yamaa_adapters::file_graph::FileGraph,
-        scope: yamaa_core::application_observer::Scope<'_>,
-    ) -> Result<Self::Result, Self::Error> {
-        let Some(functions) = self.shared.functions.clone() else {
-            return Ok(BuildOutcome::Unsupported {
-                issues: yamaa_adapters::file_application::unsupported("producer_host", None),
-            });
-        };
-        let build = graph.build();
-        let mut run_scope = build.run_scope(self.run_resolver.clone());
-        if let Some(held) = &self.held {
-            run_scope.hold(Arc::clone(held));
-        }
-        let provenance = Arc::clone(build.provenance());
-        let lock_bytes = provenance
-            .environment()
-            .lock()
-            .map_or(Vec::new(), |lock| lock.source.bytes.clone());
-        let mut port = HostPort {
-            functions: functions.as_ref(),
-            lock_bytes: &lock_bytes,
-        };
-        let identity = self.shared.identity("domain", self.specification);
-        let inner = build.build_owned_reported(&mut run_scope, &mut port, identity, scope);
-        // The Output phase starts after the producer build, exactly as the
-        // pre-facade host paths did: producer execution is not output work.
-        scope.phase(yamaa_core::application_observer::Phase::Output);
-        let projection = {
-            let identity = self.shared.identity("domain", self.specification);
-            format_producer_attempt(&inner, identity)
-        };
-        scope.exit(
-            yamaa_core::application_observer::Phase::Output,
-            if projection.result.is_ok() {
-                yamaa_core::application_observer::Outcome::Succeeded
-            } else {
-                yamaa_core::application_observer::Outcome::Failed
-            },
-        );
-        Ok(BuildOutcome::Producer {
-            attempt: inner,
-            projection,
         })
     }
 }
@@ -609,15 +520,11 @@ fn selection_failed(
 }
 
 /// The Preparation half of a build: capture metadata through the engine's
-/// resolver, admit and compile. No study input is captured or read. `held`
-/// selects the project-run route: producer links are not built, and each
-/// reads the held artifact of a producer the run already built, or the saved
-/// file its path names.
+/// resolver, admit and compile. No study input is captured or read.
 pub(crate) fn compile(
     shared: &EngineShared,
     specification: &str,
     environment: Option<&str>,
-    held: Option<Arc<yamaa_adapters::file_producer_build::HeldArtifacts>>,
     scope: yamaa_core::application_observer::Scope<'_>,
 ) -> Compiled {
     let mut application = yamaa_adapters::file_application::Application {
@@ -626,7 +533,7 @@ pub(crate) fn compile(
             shared,
             specification,
             run_resolver: None,
-            held,
+            held: None,
         },
     };
     match yamaa_core::domain_entry::compile(
@@ -649,13 +556,13 @@ pub(crate) fn compile(
 /// The Build and Finished half: one run of a compiled request in its own
 /// resource scope. A refused compilation's run returns its held refusal and
 /// performs no resource, activation or study work. A project run offers its
-/// `held` artifacts to the saved producer links its compilation selected.
+/// `held` artifacts to the inputs whose `schema` links name their producers.
 pub(crate) fn run(
     shared: &EngineShared,
     specification: &str,
     compiled: &Compiled,
     run_resolver: Option<Arc<dyn yamaa_adapters::host_resources::Resolver>>,
-    held: Option<Arc<yamaa_adapters::file_producer_build::HeldArtifacts>>,
+    held: Option<Arc<yamaa_adapters::file_resources::HeldArtifacts>>,
     scope: yamaa_core::application_observer::Scope<'_>,
 ) -> BuildOutcome {
     let selected = match compiled {
@@ -696,10 +603,6 @@ pub(crate) fn outcome_accepted(outcome: &BuildOutcome) -> bool {
         BuildOutcome::Project { result, .. } => result
             .as_ref()
             .is_ok_and(|domain| domain.output().is_some()),
-        BuildOutcome::Producer { projection, .. } => projection
-            .result
-            .as_ref()
-            .is_ok_and(|root| root.output().is_some()),
         BuildOutcome::SelectionFailed { .. }
         | BuildOutcome::Unsupported { .. }
         | BuildOutcome::Refused { .. } => false,
@@ -712,10 +615,6 @@ pub(crate) fn outcome_issues(outcome: &BuildOutcome) -> Vec<yamaa_adapters::issu
         BuildOutcome::Plain { result } | BuildOutcome::Project { result, .. } => match result {
             Ok(domain) => domain.issues(),
             Err(issues) => issues.clone(),
-        },
-        BuildOutcome::Producer { projection, .. } => match &projection.result {
-            Ok(root) => root.issues().to_vec(),
-            Err(refusal) => refusal.issues(),
         },
         BuildOutcome::SelectionFailed { issues, .. }
         | BuildOutcome::Unsupported { issues }

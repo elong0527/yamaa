@@ -11,6 +11,8 @@ import yaml
 HOSTS = ("python", "r")
 PROJECT = "project.yaml"
 LIFECYCLES = {"draft": "lightgrey", "reviewed": "yellow", "finalized": "brightgreen"}
+DEFINE_STANDARDS = ("sdtm", "adam", "send")
+CREATED = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}")
 
 
 class MetadataLoader(yaml.SafeLoader):
@@ -54,10 +56,10 @@ def load_metadata(case):
                 "standard",
                 "domain",
                 "entries",
-                "validation",
                 "covers",
                 "conformance",
                 "harbor",
+                "define",
             }
         ),
         f"{label}: unknown metadata field",
@@ -85,23 +87,6 @@ def load_metadata(case):
         and len(set(covers)) == len(covers),
         f"{label}: covers must name unique operations",
     )
-    if "validation" in metadata:
-        validation = metadata["validation"]
-        require(
-            isinstance(validation, dict)
-            and set(validation) in ({"rule", "validator"}, {"rule", "blocked_by"})
-            and isinstance(validation.get("rule"), str)
-            and re.fullmatch(r"R[0-9]{3}", validation["rule"]),
-            f"{label}: validation needs rule and exactly one validator or blocked_by",
-        )
-        key = "validator" if "validator" in validation else "blocked_by"
-        pattern = (
-            r"[a-z][a-z0-9]*(?:_[a-z0-9]+)*" if key == "validator" else r"#[1-9][0-9]*"
-        )
-        require(
-            isinstance(validation[key], str) and re.fullmatch(pattern, validation[key]),
-            f"{label}: invalid validation {key}",
-        )
     if "conformance" in metadata:
         conformance = metadata["conformance"]
         require(
@@ -134,6 +119,17 @@ def load_metadata(case):
                 and (not declaration.get("permanent") or "reason" in declaration),
                 f"{label}: malformed metamorphic declaration: {check}",
             )
+    if "define" in metadata:
+        define = metadata["define"]
+        require(
+            isinstance(define, dict)
+            and set(define) == {"environment", "standard", "created"}
+            and define["standard"] in DEFINE_STANDARDS
+            and isinstance(define["created"], str)
+            and CREATED.fullmatch(define["created"]),
+            f"{label}: define declares its environment, standard and created time",
+        )
+        relative_file(case, define["environment"], "define environment")
     if "harbor" in metadata:
         harbor = metadata["harbor"]
         require(
@@ -219,44 +215,123 @@ def entries(case, metadata=None):
     return result
 
 
-def specification_name(path):
-    """The `domain` a project names a listed specification by (REQ-1338).
+def compare_define(case, staged, define):
+    """Run the declared project submission over saved artifacts and compare it.
 
-    Layers contribute in REQ-0620 order, each parent list left to right and
-    depth first with every layer once, and a later layer's `domain` replaces
-    an earlier one (REQ-0621).
+    `define` names the project file in its `environment` field and the
+    submission section in its `standard` field. A positive case saves the
+    submission and compares every file it writes, the Define-XML document and
+    each transport file, with ``expected/`` byte for byte; a negative case
+    compares its first issue with the partial assertion of
+    ``expected/error.yaml``. Returns the problems.
+    """
+    import json
+
+    import yamaa
+
+    try:
+        result = yamaa.project(staged / define["environment"]).submission(
+            define["standard"], created=define["created"]
+        )
+        issues = result.issues.to_dicts()
+    except yamaa.Error as error:
+        result, issues = None, error.issues.to_dicts()
+    for issue in issues:
+        issue["context"] = json.loads(issue["context"])
+    negative = case / "expected" / "error.yaml"
+    if negative.exists():
+        want = yaml.safe_load(negative.read_text(encoding="utf-8"))
+        first = issues[0] if issues else None
+        print(f"define first issue: {first}")
+
+        def subset(expected, actual):
+            if isinstance(expected, dict):
+                return isinstance(actual, dict) and all(
+                    key in actual and subset(value, actual[key])
+                    for key, value in expected.items()
+                )
+            return expected == actual
+
+        keys = ("phase", "condition", "spec_paths", "requirement")
+        if first is None or any(
+            want.get(key) != first.get(key) for key in keys if key in want
+        ):
+            return [f"define first issue differs from expected/error.yaml: {first}"]
+        if not subset(want.get("context", {}), first.get("context")):
+            return [f"define issue context differs from expected/error.yaml: {first}"]
+        return []
+    if issues:
+        return [f"define issues: {issues}"]
+
+    def files():
+        return {
+            path.relative_to(staged).as_posix(): path.read_bytes()
+            for path in staged.rglob("*")
+            if path.is_file()
+        }
+
+    before = files()
+    result.save()
+    problems = []
+    for name, content in sorted(files().items()):
+        if before.get(name) == content:
+            continue
+        truth = case / "expected" / PurePosixPath(name).name
+        verdict = (
+            "matches"
+            if truth.is_file() and truth.read_bytes() == content
+            else "DIFFERS"
+        )
+        print(f"define {name}: {len(content)} bytes, {verdict} expected/{truth.name}")
+        if verdict != "matches":
+            problems.append(f"{name} differs from expected/{truth.name}")
+    return problems
+
+
+def specification_name(path):
+    """The `domain` a project names a listed specification by (PROJECT-5).
+
+    Layers contribute from the root ancestor down to the entry file, a later
+    layer taking precedence (LAYER-3), so the layer nearest the entry that
+    writes `domain` supplies the name.
     """
     import yaml12
 
-    names, complete = [], set()
-
-    def visit(layer, active):
+    layer, chain = Path(path), set()
+    while True:
         identity = layer.resolve()
-        require(identity not in active, f"{path}: cyclic parents at {layer}")
-        if identity in complete:
-            return
+        require(identity not in chain, f"{path}: cyclic parent at {layer}")
+        chain.add(identity)
         try:
             document = yaml12.parse_yaml(layer.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, ValueError) as error:
             raise ValueError(f"{layer}: {error}") from error
         require(isinstance(document, dict), f"{layer}: expected a mapping")
-        parents = document.get("parents") or []
-        for parent in [parents] if isinstance(parents, str) else parents:
-            visit(layer.parent / parent, (*active, identity))
-        complete.add(identity)
         if "domain" in document:
-            names.append(document["domain"])
-
-    visit(Path(path), ())
+            name = document["domain"]
+            break
+        parent = document.get("parent")
+        if parent is None:
+            name = None
+            break
+        require(isinstance(parent, str) and parent, f"{layer}: parent must be one path")
+        layer = layer.parent / parent
     require(
-        bool(names) and isinstance(names[-1], str) and names[-1],
+        isinstance(name, str) and bool(name),
         f"{path}: no layer names the specification's domain",
     )
-    return names[-1]
+    return name
 
 
 def main():
-    """Run a case's declared Python entries without publishing output files."""
+    """Build a case's declared Python entries in order inside a staged copy.
+
+    Each entry is saved in the staged copy before the next entry is built, so a
+    later entry reads an earlier entry's artifact at its own declared path, as
+    a `schema` link requires. A case declaring ``define`` then runs that
+    project submission over the saved artifacts and compares it with
+    ``expected/``. Nothing is published into the checkout.
+    """
     parser = argparse.ArgumentParser(description=main.__doc__)
     parser.add_argument("case", type=Path, help="benchmark directory")
     case = parser.parse_args().case.resolve()
@@ -264,7 +339,9 @@ def main():
 
     from tools.staging.stage_project_inputs import stage_case
 
-    calls = entries(case)["python"]
+    metadata = load_metadata(case)
+    calls = entries(case, metadata)["python"]
+    define = metadata.get("define")
     with tempfile.TemporaryDirectory(prefix="yamaa-benchmark-") as temporary:
         staged = Path(temporary) / case.name
         stage_case(
@@ -284,7 +361,12 @@ def main():
             output = result.output
             if output is None:
                 parser.exit(1, f"{call['specification']}: {result.issues}\n")
+            result.save()
             print(output)
+        if define is not None:
+            problems = compare_define(case, staged, define)
+            if problems:
+                parser.exit(1, "\n".join(problems) + "\n")
 
 
 if __name__ == "__main__":

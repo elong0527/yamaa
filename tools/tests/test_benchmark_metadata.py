@@ -176,23 +176,37 @@ class BenchmarkMetadata(unittest.TestCase):
                     }
                 },
             },
-            {**self.metadata, "validation": {"rule": "R007"}},
-            {
-                **self.metadata,
-                "validation": {
-                    "rule": "R007",
-                    "validator": "schema",
-                    "blocked_by": "#1",
-                },
-            },
-            {**self.metadata, "validation": {"rule": "R7", "validator": "schema"}},
-            {**self.metadata, "validation": {"rule": "R007", "blocked_by": "closed"}},
+            {**self.metadata, "validation": {"validator": "schema"}},
         ]
         for metadata in mutations:
             with self.subTest(metadata=metadata):
                 (self.case / "benchmark.yaml").write_text(yaml.safe_dump(metadata))
                 with self.assertRaises(ValueError):
                     benchmark.entries(self.case)
+
+    def test_define_call_declares_its_project_section_and_created_time(self):
+        (self.case / "project.yaml").write_text("schema_version: '1.0'\n")
+        define = {
+            "environment": "project.yaml",
+            "standard": "adam",
+            "created": "2026-09-11T00:00:00",
+        }
+        self.write({**self.metadata, "define": define})
+        self.assertEqual(benchmark.load_metadata(self.case)["define"], define)
+        for mutation in [
+            None,
+            "project.yaml",
+            {**define, "standard": "SDTM"},
+            {**define, "created": "2026-09-11"},
+            {**define, "environment": "missing.yaml"},
+            {**define, "environment": "../project.yaml"},
+            {key: value for key, value in define.items() if key != "created"},
+            {**define, "host": "python"},
+        ]:
+            with self.subTest(define=mutation):
+                self.write({**self.metadata, "define": mutation})
+                with self.assertRaises(ValueError):
+                    benchmark.load_metadata(self.case)
 
     def test_duplicate_metadata_keys_and_calls_are_rejected(self):
         (self.case / "benchmark.yaml").write_text(
@@ -227,16 +241,19 @@ class BenchmarkMetadata(unittest.TestCase):
 
     def test_project_name_is_the_domain_the_layers_compose(self):
         (self.case / "common.yaml").write_text("domain: COMMON\n")
-        (self.case / "a.yaml").write_text("parents: common.yaml\ndomain: A\n")
-        (self.case / "b.yaml").write_text("parents: common.yaml\n")
+        (self.case / "a.yaml").write_text("parent: common.yaml\ndomain: A\n")
+        (self.case / "b.yaml").write_text("parent: a.yaml\n")
         entry = self.case / "entry.yaml"
         # Common -> A -> B -> entry: B adds no domain, so A's replaces Common's.
-        entry.write_text("parents: [a.yaml, b.yaml]\n")
+        entry.write_text("parent: b.yaml\n")
         self.assertEqual(benchmark.specification_name(entry), "A")
-        entry.write_text("parents: [a.yaml, b.yaml]\ndomain: NO\n")
+        entry.write_text("parent: b.yaml\ndomain: NO\n")
         self.assertEqual(benchmark.specification_name(entry), "NO")
-        (self.case / "common.yaml").write_text("parents: entry.yaml\n")
-        with self.assertRaisesRegex(ValueError, "cyclic parents"):
+        (self.case / "a.yaml").write_text("parent: common.yaml\n")
+        entry.write_text("parent: b.yaml\n")
+        self.assertEqual(benchmark.specification_name(entry), "COMMON")
+        (self.case / "common.yaml").write_text("parent: entry.yaml\n")
+        with self.assertRaisesRegex(ValueError, "cyclic parent"):
             benchmark.specification_name(entry)
         (self.case / "lone.yaml").write_text("keys: [ID]\n")
         with self.assertRaisesRegex(ValueError, "domain"):

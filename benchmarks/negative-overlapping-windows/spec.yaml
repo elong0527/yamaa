@@ -20,8 +20,9 @@ intermediates:
   # matches with no rule to choose one, so the run stops.
   - id: AWIN
     dataset: AWINDOW
-    key: STUDYID
+    key: [STUDYID]
     between: {value: ADY, lower: AWLO, upper: AWHI}
+    require_match: true
 
 columns:
   - name: STUDYID
@@ -53,7 +54,3 @@ columns:
     type: str
     label: Analysis Visit
     derivation: AWIN.AVISIT
-
-verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, PARAMCD, VSSEQ]

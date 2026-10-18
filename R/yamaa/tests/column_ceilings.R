@@ -118,10 +118,11 @@ assert_layered_cases <- function(root, width) {
     unlist(lapply(seq_len(width - 1L), case_column), use.names = FALSE),
     sprintf("output: {path: out.csv, columns: [%s]}", paste(names, collapse = ", ")))
   writeLines(document, file.path(root, "parent.yaml"))
-  writeLines(c(document, "parents: []"), file.path(root, "explicit.yaml"))
-  writeLines(c("schema_version: '1.0'", "parents: [parent.yaml]"),
+  # A null parent names no parent: the entry stays standalone.
+  writeLines(c(document, "parent: null"), file.path(root, "explicit.yaml"))
+  writeLines(c("schema_version: '1.0'", "parent: parent.yaml"),
              file.path(root, "child.yaml"))
-  writeLines(c("schema_version: '1.0'", "parents: [child.yaml]"),
+  writeLines(c("schema_version: '1.0'", "parent: child.yaml"),
              file.path(root, "grandchild.yaml"))
   rows <- list(
     c("S-001", ifelse(seq_len(width - 1L) %% 3L == 1L, "P", "x")),
@@ -151,12 +152,16 @@ run_column_ceilings <- function() {
   for (width in c(40L, 64L, 1024L)) {
     assert_layered_cases(path(paste0("layered-", width)), width)
   }
-  parent <- write_case(path("repeated-parents"))
-  child <- file.path(dirname(parent), "child.yaml")
-  writeLines(c("schema_version: '1.0'",
-               paste0("parents: [", paste(rep("spec.yaml", 8193L), collapse = ", "), "]")), child)
+  # Each layer names one parent, so only a chain of 8,193 distinct layers
+  # reaches the occurrence bound; without the bound it would reach the base.
+  base <- write_case(path("long-parent-chain"))
+  for (index in 0:8192) {
+    writeLines(c("schema_version: '1.0'", sprintf("parent: layer-%d.yaml", index + 1L)),
+               file.path(dirname(base), sprintf("layer-%d.yaml", index)))
+  }
+  file.copy(base, file.path(dirname(base), "layer-8193.yaml"))
   for (operation in operations(FALSE)) {
-    result <- operation(child)
+    result <- operation(file.path(dirname(base), "layer-0.yaml"))
     assert_refusal(result)
     stopifnot(nrow(result$issues) == 1L, identical(result$issues$context,
       '{"actual":8193,"code":"resource_limit","limit":8192,"phase":"inheritance","resource":"parent_occurrences","stage":"prepare"}'))
@@ -241,10 +246,10 @@ run_column_ceilings <- function() {
   file.copy(spec, file.path(case_root, "base.yaml"))
   for (index in 0:64) {
     parent <- if (index < 64L) sprintf("layer-%s.yaml", index + 1L) else "base.yaml"
-    writeLines(c("schema_version: '1.0'", sprintf("parents: [%s]", parent)),
+    writeLines(c("schema_version: '1.0'", sprintf("parent: %s", parent)),
                file.path(case_root, sprintf("layer-%s.yaml", index)))
   }
-  writeLines(c("schema_version: '1.0'", "parents: [layer-0.yaml]"), spec)
+  writeLines(c("schema_version: '1.0'", "parent: layer-0.yaml"), spec)
   for (project in c(FALSE, TRUE)) assert_build(spec, project = project)
 
   # A wide scalar within the file boundary reaches its language finding with exact digits.
@@ -292,8 +297,7 @@ run_column_ceilings <- function() {
     assert_refusal(yamaa_spec(spec)$run())
   }
 
-  for (width in c(1024L, 1025L)) {
-    producer <- write_case(path(paste0("producer-", width)), columns = width)
+  linked_consumer <- function(producer) {
     consumer <- file.path(dirname(producer), "consumer.yaml")
     writeLines(c(
       "schema_version: '1.0'", "domain: TEST", "keys: [ID]",
@@ -301,24 +305,29 @@ run_column_ceilings <- function() {
       "  - {name: ID, type: str, label: ID, derivation: SRC.ID}",
       "output: {path: consumer.csv, columns: [ID]}"
     ), consumer)
+    consumer
+  }
+  for (width in c(1024L, 1025L)) {
+    producer <- write_case(path(paste0("producer-", width)), columns = width)
+    consumer <- linked_consumer(producer)
     if (width == 1024L) {
+      # Callers build and save the producer before its consumer reads it.
+      stopifnot(is.null(yamaa_spec(producer)$run()$save()))
       assert_build(consumer)
     } else {
       for (operation in operations(FALSE)) assert_refusal(operation(consumer))
     }
   }
 
-  # Keep producer metadata in range while its raw source crosses the runtime
-  # width ceiling; the Rust decoder control pins producer_source_fields itself.
+  # Keep the link's metadata in range while its stored artifact crosses the
+  # width ceiling; the Rust decoder control pins the contract itself.
   for (width in c(1024L, 1025L)) {
-    producer <- write_case(path(paste0("producer-input-", width)), columns = 1024L, fields = width)
-    consumer <- file.path(dirname(producer), "consumer.yaml")
-    writeLines(c(
-      "schema_version: '1.0'", "domain: TEST", "keys: [ID]",
-      "input: {SRC: {path: out.csv, schema: spec.yaml}}", "columns:",
-      "  - {name: ID, type: str, label: ID, derivation: SRC.ID}",
-      "output: {path: consumer.csv, columns: [ID]}"
-    ), consumer)
+    producer <- write_case(path(paste0("producer-input-", width)), columns = 1024L)
+    consumer <- linked_consumer(producer)
+    header <- c("ID", sprintf("C%04d", seq_len(width - 1L)))
+    writeLines(c(paste(header, collapse = ","),
+                 paste(c("S-001", rep("x", width - 1L)), collapse = ",")),
+               file.path(dirname(producer), "out.csv"))
     stopifnot(nrow(yamaa_spec(consumer)$check()$issues) == 0L)
     if (width == 1024L) assert_build(consumer) else assert_refusal(yamaa_spec(consumer)$run())
   }

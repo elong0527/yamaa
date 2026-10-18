@@ -31,9 +31,10 @@ adae <- ae |>
       ymd(AESTDTC, quiet = TRUE)
     ),
     completed = if_else(is_full | is_month, completed, as.Date(NA)),
-    # A completed date is never placed before first exposure. When the
-    # whole collected month ends before the exposure date, no day it
-    # allows can satisfy that, so the event is left without a date.
+    # A supplied day is never placed before a first exposure that falls
+    # inside the collected month. When the whole collected month ends
+    # before the exposure date, no day it allows could reach it, so the
+    # date stays on the 15th.
     month_end = if_else(
       is_month,
       completed + days(days_in_month(completed) - 15L),
@@ -42,7 +43,7 @@ adae <- ae |>
     month_before_trt = is_month &
       !is.na(month_end) & !is.na(TRTSDT) & month_end < TRTSDT,
     ASTDT = case_when(
-      month_before_trt ~ as.Date(NA),
+      month_before_trt ~ completed,
       is_month & !is.na(completed) & !is.na(TRTSDT) & completed < TRTSDT ~ TRTSDT,
       .default = completed
     ),

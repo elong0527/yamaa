@@ -27,7 +27,7 @@ pub use bundle::{
     SchemaShape, SchemaStructure,
 };
 pub use composition::{ComposedValue, CompositionOrigin};
-pub use constraints::{ConstraintError, ConstraintViolation};
+pub use constraints::ConstraintViolation;
 pub use descriptor::{Descriptor, DescriptorError, DescriptorIssue, DescriptorReport};
 pub use diagnostic_projection::{
     admit_schema_diagnostics, schema_diagnostic_kind_label, ResolvedSchemaDiagnostic,

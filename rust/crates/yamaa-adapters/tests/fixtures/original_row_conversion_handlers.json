@@ -1,7 +1,7 @@
 [
   {
     "case": "replace-bool",
-    "source": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"input\":{\"SRC\":{\"path\":\"source.csv\",\"types\":{\"ID\":\"int\"}}},\"keys\":[\"ID\",\"ROW\"],\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"ROW\",\"type\":\"str\"},{\"name\":\"VALUE\",\"type\":\"int\"}],\"output\":{\"path\":\"result.csv\",\"columns\":[\"ID\",\"ROW\",\"VALUE\"]},\"rows\":[{\"id\":\"one\",\"derivations\":{\"ROW\":{\"value\":{\"literal\":\"one\"}},\"VALUE\":{\"value\":{\"literal\":true},\"unconvertible\":7}}}]}",
+    "source": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"input\":{\"SRC\":{\"path\":\"source.csv\",\"types\":{\"ID\":\"int\"}}},\"keys\":[\"ID\",\"ROW\"],\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"ROW\",\"type\":\"str\"},{\"name\":\"VALUE\",\"type\":\"int\"}],\"output\":{\"path\":\"result.csv\",\"columns\":[\"ID\",\"ROW\",\"VALUE\"]},\"rows\":[{\"id\":\"one\",\"derivations\":{\"ROW\":{\"literal\":\"one\"},\"VALUE\":{\"value\":{\"literal\":true},\"unconvertible\":7}}}]}",
     "expected": {
       "artifacts": [
         {
@@ -126,7 +126,7 @@
   },
   {
     "case": "null-replacement",
-    "source": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"input\":{\"SRC\":{\"path\":\"source.csv\",\"types\":{\"ID\":\"int\"}}},\"keys\":[\"ID\",\"ROW\"],\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"ROW\",\"type\":\"str\"},{\"name\":\"VALUE\",\"type\":\"int\"}],\"output\":{\"path\":\"result.csv\",\"columns\":[\"ID\",\"ROW\",\"VALUE\"]},\"rows\":[{\"id\":\"one\",\"derivations\":{\"ROW\":{\"value\":{\"literal\":\"one\"}},\"VALUE\":{\"value\":{\"literal\":1.5},\"unconvertible\":null}}}]}",
+    "source": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"input\":{\"SRC\":{\"path\":\"source.csv\",\"types\":{\"ID\":\"int\"}}},\"keys\":[\"ID\",\"ROW\"],\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"ROW\",\"type\":\"str\"},{\"name\":\"VALUE\",\"type\":\"int\"}],\"output\":{\"path\":\"result.csv\",\"columns\":[\"ID\",\"ROW\",\"VALUE\"]},\"rows\":[{\"id\":\"one\",\"derivations\":{\"ROW\":{\"literal\":\"one\"},\"VALUE\":{\"value\":{\"literal\":1.5},\"unconvertible\":{\"literal\":null}}}}]}",
     "expected": {
       "artifacts": [
         {
@@ -251,7 +251,7 @@
   },
   {
     "case": "unused-invalid",
-    "source": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"input\":{\"SRC\":{\"path\":\"source.csv\",\"types\":{\"ID\":\"int\"}}},\"keys\":[\"ID\",\"ROW\"],\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"ROW\",\"type\":\"str\"},{\"name\":\"VALUE\",\"type\":\"int\"}],\"output\":{\"path\":\"result.csv\",\"columns\":[\"ID\",\"ROW\",\"VALUE\"]},\"rows\":[{\"id\":\"one\",\"derivations\":{\"ROW\":{\"value\":{\"literal\":\"one\"}},\"VALUE\":{\"value\":{\"literal\":5},\"unconvertible\":true}}}]}",
+    "source": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"input\":{\"SRC\":{\"path\":\"source.csv\",\"types\":{\"ID\":\"int\"}}},\"keys\":[\"ID\",\"ROW\"],\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"ROW\",\"type\":\"str\"},{\"name\":\"VALUE\",\"type\":\"int\"}],\"output\":{\"path\":\"result.csv\",\"columns\":[\"ID\",\"ROW\",\"VALUE\"]},\"rows\":[{\"id\":\"one\",\"derivations\":{\"ROW\":{\"literal\":\"one\"},\"VALUE\":{\"value\":{\"literal\":5},\"unconvertible\":true}}}]}",
     "expected": {
       "artifacts": [
         {
@@ -376,7 +376,7 @@
   },
   {
     "case": "missing-no-fire",
-    "source": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"input\":{\"SRC\":{\"path\":\"source.csv\",\"types\":{\"ID\":\"int\"}}},\"keys\":[\"ID\",\"ROW\"],\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"ROW\",\"type\":\"str\"},{\"name\":\"VALUE\",\"type\":\"int\"}],\"output\":{\"path\":\"result.csv\",\"columns\":[\"ID\",\"ROW\",\"VALUE\"]},\"rows\":[{\"id\":\"one\",\"derivations\":{\"ROW\":{\"value\":{\"literal\":\"one\"}},\"VALUE\":{\"value\":{\"literal\":null},\"unconvertible\":7}}}]}",
+    "source": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"input\":{\"SRC\":{\"path\":\"source.csv\",\"types\":{\"ID\":\"int\"}}},\"keys\":[\"ID\",\"ROW\"],\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"ROW\",\"type\":\"str\"},{\"name\":\"VALUE\",\"type\":\"int\"}],\"output\":{\"path\":\"result.csv\",\"columns\":[\"ID\",\"ROW\",\"VALUE\"]},\"rows\":[{\"id\":\"one\",\"derivations\":{\"ROW\":{\"literal\":\"one\"},\"VALUE\":{\"value\":{\"literal\":null},\"unconvertible\":7}}}]}",
     "expected": {
       "artifacts": [
         {
@@ -501,7 +501,7 @@
   },
   {
     "case": "invalid-replacement",
-    "source": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"input\":{\"SRC\":{\"path\":\"source.csv\",\"types\":{\"ID\":\"int\"}}},\"keys\":[\"ID\",\"ROW\"],\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"ROW\",\"type\":\"str\"},{\"name\":\"VALUE\",\"type\":\"int\"}],\"output\":{\"path\":\"result.csv\",\"columns\":[\"ID\",\"ROW\",\"VALUE\"]},\"rows\":[{\"id\":\"one\",\"derivations\":{\"ROW\":{\"value\":{\"literal\":\"one\"}},\"VALUE\":{\"value\":{\"literal\":1.5},\"unconvertible\":true}}}]}",
+    "source": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"input\":{\"SRC\":{\"path\":\"source.csv\",\"types\":{\"ID\":\"int\"}}},\"keys\":[\"ID\",\"ROW\"],\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"ROW\",\"type\":\"str\"},{\"name\":\"VALUE\",\"type\":\"int\"}],\"output\":{\"path\":\"result.csv\",\"columns\":[\"ID\",\"ROW\",\"VALUE\"]},\"rows\":[{\"id\":\"one\",\"derivations\":{\"ROW\":{\"literal\":\"one\"},\"VALUE\":{\"value\":{\"literal\":1.5},\"unconvertible\":true}}}]}",
     "expected": {
       "artifacts": [],
       "backend": "rust",
@@ -601,7 +601,7 @@
   },
   {
     "case": "shared-default",
-    "source": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"input\":{\"SRC\":{\"path\":\"source.csv\",\"types\":{\"ID\":\"int\"}}},\"keys\":[\"ID\",\"ROW\"],\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"ROW\",\"type\":\"str\"},{\"name\":\"VALUE\",\"type\":\"int\",\"derivation\":{\"value\":{\"literal\":true},\"unconvertible\":7}}],\"output\":{\"path\":\"result.csv\",\"columns\":[\"ID\",\"ROW\",\"VALUE\"]},\"rows\":[{\"id\":\"one\",\"derivations\":{\"ROW\":{\"value\":{\"literal\":\"one\"}}}},{\"id\":\"two\",\"derivations\":{\"ROW\":{\"value\":{\"literal\":\"two\"}}}}]}",
+    "source": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"input\":{\"SRC\":{\"path\":\"source.csv\",\"types\":{\"ID\":\"int\"}}},\"keys\":[\"ID\",\"ROW\"],\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"ROW\",\"type\":\"str\"},{\"name\":\"VALUE\",\"type\":\"int\",\"derivation\":{\"value\":{\"literal\":true},\"unconvertible\":7}}],\"output\":{\"path\":\"result.csv\",\"columns\":[\"ID\",\"ROW\",\"VALUE\"]},\"rows\":[{\"id\":\"one\",\"derivations\":{\"ROW\":{\"literal\":\"one\"}}},{\"id\":\"two\",\"derivations\":{\"ROW\":{\"literal\":\"two\"}}}]}",
     "expected": {
       "artifacts": [
         {
@@ -741,7 +741,7 @@
   },
   {
     "case": "override-default",
-    "source": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"input\":{\"SRC\":{\"path\":\"source.csv\",\"types\":{\"ID\":\"int\"}}},\"keys\":[\"ID\",\"ROW\"],\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"ROW\",\"type\":\"str\"},{\"name\":\"VALUE\",\"type\":\"int\",\"derivation\":{\"value\":{\"literal\":true},\"unconvertible\":7}}],\"output\":{\"path\":\"result.csv\",\"columns\":[\"ID\",\"ROW\",\"VALUE\"]},\"rows\":[{\"id\":\"one\",\"derivations\":{\"ROW\":{\"value\":{\"literal\":\"one\"}},\"VALUE\":{\"value\":{\"literal\":true},\"unconvertible\":8}}},{\"id\":\"two\",\"derivations\":{\"ROW\":{\"value\":{\"literal\":\"two\"}}}}]}",
+    "source": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"input\":{\"SRC\":{\"path\":\"source.csv\",\"types\":{\"ID\":\"int\"}}},\"keys\":[\"ID\",\"ROW\"],\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"ROW\",\"type\":\"str\"},{\"name\":\"VALUE\",\"type\":\"int\",\"derivation\":{\"value\":{\"literal\":true},\"unconvertible\":7}}],\"output\":{\"path\":\"result.csv\",\"columns\":[\"ID\",\"ROW\",\"VALUE\"]},\"rows\":[{\"id\":\"one\",\"derivations\":{\"ROW\":{\"literal\":\"one\"},\"VALUE\":{\"value\":{\"literal\":true},\"unconvertible\":8}}},{\"id\":\"two\",\"derivations\":{\"ROW\":{\"literal\":\"two\"}}}]}",
     "expected": {
       "artifacts": [
         {
@@ -891,7 +891,7 @@
   },
   {
     "case": "unused-default",
-    "source": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"input\":{\"SRC\":{\"path\":\"source.csv\",\"types\":{\"ID\":\"int\"}}},\"keys\":[\"ID\",\"ROW\"],\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"ROW\",\"type\":\"str\"},{\"name\":\"VALUE\",\"type\":\"int\",\"derivation\":{\"value\":{\"literal\":true},\"unconvertible\":7}}],\"output\":{\"path\":\"result.csv\",\"columns\":[\"ID\",\"ROW\",\"VALUE\"]},\"rows\":[{\"id\":\"one\",\"derivations\":{\"ROW\":{\"value\":{\"literal\":\"one\"}},\"VALUE\":{\"value\":{\"literal\":true},\"unconvertible\":8}}}]}",
+    "source": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"input\":{\"SRC\":{\"path\":\"source.csv\",\"types\":{\"ID\":\"int\"}}},\"keys\":[\"ID\",\"ROW\"],\"columns\":[{\"name\":\"ID\",\"type\":\"int\",\"derivation\":\"SRC.ID\"},{\"name\":\"ROW\",\"type\":\"str\"},{\"name\":\"VALUE\",\"type\":\"int\",\"derivation\":{\"value\":{\"literal\":true},\"unconvertible\":7}}],\"output\":{\"path\":\"result.csv\",\"columns\":[\"ID\",\"ROW\",\"VALUE\"]},\"rows\":[{\"id\":\"one\",\"derivations\":{\"ROW\":{\"literal\":\"one\"},\"VALUE\":{\"value\":{\"literal\":true},\"unconvertible\":8}}}]}",
     "expected": {
       "artifacts": [
         {

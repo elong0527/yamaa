@@ -130,6 +130,7 @@ pub enum Fault {
     PartialDecode,
     PartialRank,
     ExtensionNotAdmitted { item: usize },
+    ExtendedAlias { item: usize },
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Finding {
@@ -144,7 +145,8 @@ pub enum BindingFinding {
         expected: ColumnType,
         actual: ColumnType,
     },
-    ValuesConflict,
+    /// An `allowed_values` verification restates the bound list's items.
+    RedundantAllowedValues,
 }
 
 /// No source overrides another; catalogue order is the authored source/list order.
@@ -174,21 +176,14 @@ impl Catalogue {
             .flat_map(|source| &source.codelists)
             .find(|list| list.id == id)
     }
-    /// Only fixed item lists contribute an allowed-values column checkpoint.
+    /// Every list that declares items, extensible or not, contributes an
+    /// allowed-values column checkpoint; an external dictionary contributes none.
     pub fn enforced_items(&self, id: &str) -> Option<&[Item]> {
-        let list = self.get(id)?;
-        if list.extensible {
-            None
-        } else {
-            list.items.as_deref()
-        }
+        self.get(id)?.items.as_deref()
     }
-    pub fn bind(
-        &self,
-        id: &str,
-        column: ColumnType,
-        allowed_values: Option<&[Value]>,
-    ) -> Vec<BindingFinding> {
+    /// `allowed_values` reports whether the bound column also declares an
+    /// `allowed_values` verification, which a list of items already states.
+    pub fn bind(&self, id: &str, column: ColumnType, allowed_values: bool) -> Vec<BindingFinding> {
         let Some(list) = self.get(id) else {
             return std::vec![BindingFinding::UnknownCodelist];
         };
@@ -199,19 +194,8 @@ impl Catalogue {
                 actual: column,
             });
         }
-        if let (Some(items), Some(allowed)) = (self.enforced_items(id), allowed_values) {
-            let items: BTreeSet<_> = items
-                .iter()
-                .map(|item| ValueKey::new(list.data_type, &item.value))
-                .collect();
-            let allowed: BTreeSet<_> = allowed
-                .iter()
-                .map(|value| ValueKey::new(list.data_type, value))
-                .collect();
-            let equal = items == allowed;
-            if !equal {
-                findings.push(BindingFinding::ValuesConflict);
-            }
+        if allowed_values && list.items.is_some() {
+            findings.push(BindingFinding::RedundantAllowedValues);
         }
         findings
     }
@@ -251,6 +235,10 @@ pub fn validate(sources: &[Source]) -> Vec<Finding> {
                     }
                     if item.extended && (!list.extensible || source.standard.is_none()) {
                         push(Fault::ExtensionNotAdmitted { item: item_index });
+                    }
+                    // A sponsor addition has no published identifier (CT-6).
+                    if item.extended && item.alias.is_some() {
+                        push(Fault::ExtendedAlias { item: item_index });
                     }
                 }
                 if items.iter().any(|item| item.decode.is_some())

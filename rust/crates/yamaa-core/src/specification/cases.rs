@@ -2,13 +2,13 @@
 use super::*;
 use crate::{
     dataset::{CaseBranch, Intermediate, SecondarySource},
-    predicate::Plan,
-    predicate_compiler, project_call_binding,
+    expression::Failure,
+    project_call_binding,
 };
 
 #[derive(Clone, Debug)]
 pub(super) struct Branch {
-    when: Option<Result<Plan, InvalidPredicate>>,
+    when: Option<std::boxed::Box<Result<CompiledExpression, InvalidPredicate>>>,
     pub(super) path: String,
     pub(super) operation: std::boxed::Box<Operation>,
 }
@@ -20,8 +20,8 @@ impl Branch {
             operation: std::boxed::Box::new(operation),
         }
     }
-    pub(super) fn predicate(&self) -> Option<&Result<Plan, InvalidPredicate>> {
-        self.when.as_ref()
+    pub(super) fn predicate(&self) -> Option<&Result<CompiledExpression, InvalidPredicate>> {
+        self.when.as_deref()
     }
 }
 /// Keep the complete parser cause on the prepared branch; document reporting
@@ -30,24 +30,18 @@ impl Branch {
 pub(super) struct InvalidPredicate {
     path: String,
     expression: String,
-    error: crate::predicate_parser::ParseError,
+    position: usize,
+    failure: Failure,
 }
 impl InvalidPredicate {
     pub(super) fn diagnostic(&self) -> Result<crate::diagnostic::Diagnostic, BindError> {
-        let crate::predicate_parser::ParseError::Grammar {
-            position, failure, ..
-        } = &self.error
-        else {
-            return Err(BindError::Internal);
-        };
-        Ok(failure.original_diagnostic(&self.path, &self.expression, position.character))
+        Ok(self.failure.diagnostic(
+            ExpressionContext::Predicate,
+            &self.path,
+            &self.expression,
+            self.position,
+        ))
     }
-}
-fn unsupported(path: &str, operation: &str) -> PrepareError {
-    PrepareError::Unsupported(vec![UnsupportedFeature {
-        operation: operation.into(),
-        path: path.into(),
-    }])
 }
 #[allow(clippy::too_many_arguments)]
 pub(super) fn prepare(
@@ -91,29 +85,30 @@ pub(super) fn prepare(
             (None, value, format!("{prefix}.otherwise"))
         } else {
             let when = text(d, field(d, item, "when")?)?;
-            let compiled = predicate_compiler::compile(when, &format!("{prefix}.when"));
+            let compiled = compile(
+                when,
+                ExpressionContext::Predicate,
+                &format!("{prefix}.when"),
+            );
             let compiled = match compiled {
                 Ok(plan) => Ok(plan),
-                Err(predicate_compiler::Error::Parse(
-                    error @ crate::predicate_parser::ParseError::Grammar { .. },
-                )) => Err(InvalidPredicate {
+                Err(CompileError::Invalid {
+                    position, failure, ..
+                }) => Err(InvalidPredicate {
                     path: format!("{prefix}.when"),
                     expression: when.into(),
-                    error,
+                    position: position.character,
+                    failure,
                 }),
-                Err(predicate_compiler::Error::Parse(
-                    crate::predicate_parser::ParseError::UnsupportedRegex { .. },
-                )) => return Err(unsupported(&format!("{prefix}.when"), "predicate_regex")),
-                Err(predicate_compiler::Error::Internal) => return Err(PrepareError::Internal),
                 Err(error) => {
-                    return Err(PrepareError::predicate(
-                        error.clone(),
+                    return Err(PrepareError::expression(
+                        error,
                         Some(&format!("{prefix}.when")),
                     ))
                 }
             };
             (
-                Some(compiled),
+                Some(std::boxed::Box::new(compiled)),
                 field(d, item, "then")?,
                 format!("{prefix}.then"),
             )
@@ -136,8 +131,9 @@ pub(super) fn prepare(
 }
 
 /// A width defect shares its derivation's authored declaration-validation order
-/// with predicate and numeric grammar defects, before any reference binding.
-/// Consumers without a width defect retain their existing binding checkpoint.
+/// with the expression defects of its predicates and formulas, before any
+/// reference binding. Consumers without a width defect retain their existing
+/// binding checkpoint.
 pub(super) fn padding_findings(
     operation: &Operation,
     findings: &mut Vec<BindFinding>,
@@ -149,12 +145,6 @@ pub(super) fn padding_findings(
             Operation::Case(branches) => branches
                 .iter()
                 .any(|branch| has_width_error(&branch.operation)),
-            Operation::Scalar(operation) => match operation.as_ref() {
-                scalar::Declaration::Concat { sources, .. } => sources
-                    .iter()
-                    .any(|branch| has_width_error(&branch.operation)),
-                _ => false,
-            },
             _ => false,
         }
     }
@@ -175,17 +165,10 @@ pub(super) fn padding_findings(
             }
             Operation::Case(branches) => {
                 for branch in branches {
-                    if let Some(Err(invalid)) = &branch.when {
+                    if let Some(Err(invalid)) = branch.when.as_deref() {
                         findings.push(BindFinding::Predicate(invalid.diagnostic()?));
                     }
                     append(&branch.operation, &branch.path, findings)?;
-                }
-            }
-            Operation::Scalar(operation) => {
-                if let scalar::Declaration::Concat { sources, .. } = operation.as_ref() {
-                    for branch in sources {
-                        append(&branch.operation, &branch.path, findings)?;
-                    }
                 }
             }
             _ => (),
@@ -213,7 +196,7 @@ fn bind_when(
     findings: &mut Vec<BindFinding>,
     declarations_reported: bool,
 ) -> Result<Option<crate::bound_expression::BoundPredicate>, BindError> {
-    let Some(compiled) = branch.when.as_ref() else {
+    let Some(compiled) = branch.when.as_deref() else {
         return Ok(None);
     };
     let plan = match compiled {
@@ -289,7 +272,7 @@ fn bind_project_operation(
 fn bind_compute_operation(
     spec: &PreparedSpecification,
     branch: &Branch,
-    compiled: &CompiledNumeric,
+    compiled: &CompiledExpression,
     catalog: &Catalog,
     secondary: &[SecondarySource],
     intermediates: &[Option<Intermediate>],
@@ -341,8 +324,17 @@ fn bind_compute_operation(
     )?;
     Ok(if findings.len() == start {
         Some(Expression::Compute(
-            BoundNumeric::new(compiled.clone(), bindings)
-                .map_err(BindError::InvalidNumericBinding)?,
+            BoundNumeric::new(
+                static_types::typed(
+                    compiled,
+                    &spec.intermediates,
+                    catalog,
+                    secondary,
+                    intermediates,
+                ),
+                bindings,
+            )
+            .map_err(BindError::InvalidNumericBinding)?,
         ))
     } else {
         None
@@ -401,7 +393,7 @@ fn bind_operation(
             findings,
             declarations_reported,
         )?,
-        Operation::ProjectFunction(call) => {
+        Operation::ProjectFunction { call, .. } => {
             bind_project_operation(spec, call, column, catalog, edges, findings)?
         }
         Operation::StrTemplate(operation) => str_template::bind(
@@ -416,18 +408,6 @@ fn bind_operation(
             findings,
         )?,
         Operation::Scalar(operation) => scalar::bind(
-            spec,
-            operation,
-            column,
-            catalog,
-            driver,
-            secondary,
-            intermediates,
-            edges,
-            findings,
-            declarations_reported,
-        )?,
-        Operation::StrContains(operation) => scalar::bind_contains(
             spec,
             operation,
             column,

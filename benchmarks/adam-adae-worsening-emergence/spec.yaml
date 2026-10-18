@@ -26,6 +26,7 @@ intermediates:
   - id: EVENT
     dataset: AE
     key: [STUDYID, USUBJID, AELNKID]
+    require_match: true
 
 columns:
   - name: STUDYID
@@ -105,7 +106,7 @@ columns:
     derivation:
       locf: {source: SEVCOL, window: EVENT_ORDER}
     verifications:
-      allowed_values: {values: [MILD, MODERATE, SEVERE]}
+      - allowed_values: {values: [MILD, MODERATE, SEVERE]}
 
   - name: ATOXGRN
     type: int
@@ -113,7 +114,7 @@ columns:
     derivation:
       locf: {source: GRDCOL, window: EVENT_ORDER}
     verifications:
-      allowed_values: {values: [1, 2, 3, 4, 5]}
+      - allowed_values: {values: [1, 2, 3, 4, 5]}
 
   - name: ASEVN
     type: int
@@ -122,7 +123,7 @@ columns:
       mapping:
         source: ASEV
         dict: {MILD: 1, MODERATE: 2, SEVERE: 3}
-        missing: null
+        missing: {literal: null}
 
   - name: PRETRTFL
     type: str
@@ -133,6 +134,7 @@ columns:
       baseline_flag:
         date: ASTDTM
         reference_date: TRTSDTM
+        value: ASEVN
         window:
           group_by: [STUDYID, USUBJID, AESEQ]
           filter: "ASTDTM < TRTSDTM"
@@ -180,7 +182,7 @@ columns:
       flag: "AESTDTC IS NOT NULL AND TRTSDTM IS NOT NULL AND
         (AESTDTC >= TRTSDTM OR ASTDTM >= FIRSTWRS)"
     verifications:
-      allowed_values: {values: [Y]}
+      - allowed_values: {values: [Y]}
 
   - name: ASEQ
     type: int
@@ -212,8 +214,7 @@ rows:
           expr: "ONLY(FA.FASTRESC)"
 
 verifications:
-  - unique: {columns: [STUDYID, USUBJID, ASEQ]}
-  - unique: {columns: [STUDYID, USUBJID, AESEQ, ASTDTM]}
+  - unique: [STUDYID, USUBJID, AESEQ, ASTDTM]
   - row_count: {min: 14, max: 14}
   - assert:
       id: segment-start-within-source-event

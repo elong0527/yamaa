@@ -3,19 +3,20 @@ domain: ADPP
 keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
 input:
   PP: {path: input/pp.csv, types: {PPSTRESN: float}}
-  ADSL: {path: input/adsl.csv}
+  ADSL: input/adsl.csv
 
 output:
   path: adpp.csv
   columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVISIT, AVAL, AVALU]
 
-# The subject's planned arm. No `no_match`: a PP subject missing from ADSL
-# stops the run instead of losing its ratios.
+# The subject's planned arm. A match is required: a PP subject missing from
+# ADSL stops the run instead of losing its ratios.
 intermediates:
   - id: SUBJARM
     dataset: ADSL
     key: [STUDYID, USUBJID]
     columns: [ARMCD]
+    require_match: true
 
   # Each PP record with its subject's arm and the arm's steady-state visit:
   # the last planned dosing day (arm A doses on days 1 to 7, arm B on days 1
@@ -144,8 +145,6 @@ rows:
       AVALU: {literal: RATIO}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, PARAMCD, AVISIT]
   - assert:
       id: every-subject-has-a-planned-arm-a-or-b
       require: "ARMCD = 'A' OR ARMCD = 'B'"

@@ -1,7 +1,6 @@
 //! R013 declarations select one of the three admitted relation contexts.
 use super::*;
 use crate::{
-    aggregate_compiler::{compile_aggregate, CompiledAggregate},
     bound_expression::{Binding, BoundPredicate, Read},
     dataset::{
         AggregateBinding, AggregatePhase, AggregateRelation, AggregateRowContext, AggregateSource,
@@ -17,15 +16,12 @@ pub(super) struct Declaration {
     expression: String,
     expression_path: String,
     path: String,
-    compiled: Result<CompiledAggregate, crate::aggregate_parser::ParseError>,
+    compiled: Result<CompiledExpression, CompileError>,
     groups: Vec<String>,
     keys: Option<Vec<(String, match_values::Declaration)>>,
     empty_key: Option<AggregateEmptyKey>,
     output_keys: Vec<String>,
-    filter: Option<(
-        String,
-        Result<crate::predicate::Plan, crate::predicate_compiler::Error>,
-    )>,
+    filter: Option<(String, Result<CompiledExpression, CompileError>)>,
     derive: Option<Vec<DeriveDeclaration>>,
     derive_relations: Vec<String>,
     derive_references: Vec<String>,
@@ -51,6 +47,54 @@ impl Declaration {
         for derive in self.derive.iter().flatten() {
             derivations::calls(&derive.branch.operation, result);
         }
+    }
+    /// VALUE-24 for each derive binding over the types `input` declares, an
+    /// earlier binding naming its declared type, as binding checks them.
+    pub(super) fn derive_conversion_findings(
+        &self,
+        input: &dyn Fn(&str) -> crate::result_type::ResultType,
+        findings: &mut Vec<BindFinding>,
+    ) {
+        let Some(derive) = &self.derive else {
+            return;
+        };
+        for (index, binding) in derive.iter().enumerate() {
+            if binding.handler.is_some() {
+                continue;
+            }
+            let earlier = &derive[..index];
+            let binding_input = |name: &str| {
+                earlier
+                    .iter()
+                    .find(|earlier| earlier.name == name)
+                    .map_or_else(|| input(name), |earlier| earlier.kind.into())
+            };
+            findings.extend(
+                result_types::conversion_finding(
+                    &binding.path,
+                    binding.branch.operation.result_type(&binding_input),
+                    binding.kind,
+                )
+                .map(BindFinding::Scalar),
+            );
+        }
+    }
+    /// EXPR-14 by FORMULA-23 over the relation's fields, a derive binding
+    /// naming its declared type.
+    pub(super) fn result_type(
+        &self,
+        input: &dyn Fn(&str) -> crate::result_type::ResultType,
+    ) -> crate::result_type::ResultType {
+        let Ok(compiled) = &self.compiled else {
+            return crate::result_type::ResultType::UNKNOWN;
+        };
+        compiled.result_type(|name| {
+            self.derive
+                .iter()
+                .flatten()
+                .find(|binding| binding.name == name)
+                .map_or_else(|| input(name), |binding| binding.kind.into())
+        })
     }
 }
 fn diagnostic(
@@ -86,7 +130,7 @@ fn window_path(
     let operation = text(d, operation)?;
     let path = format!("{path}.{operation}");
     match operation {
-        "row_number" | "rank" | "row_value" | "previous_non_missing" | "locf" | "baseline_flag" => {
+        "row_number" | "rank" | "row_value" | "locf" | "baseline_flag" => {
             return Ok(Some(path));
         }
         "case" => {
@@ -102,18 +146,6 @@ fn window_path(
                 }
             }
         }
-        "str_concat" => {
-            for (index, &child) in sequence(d, field(d, payload, "sources")?)?
-                .iter()
-                .enumerate()
-            {
-                if let Some(path) =
-                    window_path(d, child, &format!("{path}.sources[{index}]"), depth + 1)?
-                {
-                    return Ok(Some(path));
-                }
-            }
-        }
         _ => {}
     }
     Ok(None)
@@ -123,15 +155,11 @@ fn prepare_keys(
     d: &Document,
     payload: usize,
     path: &str,
-    scalar: bool,
     project: Option<&functions::Prepared>,
     extraction: &str_extract::Prepared,
     templates: &str_template::Prepared,
     extra: &mut Vec<UnsupportedFeature>,
 ) -> Result<Option<Vec<(String, match_values::Declaration)>>, PrepareError> {
-    if scalar {
-        return Ok(None);
-    }
     d.field(payload, "key")
         .filter(|&id| !matches!(d.nodes()[id], N::Null))
         .map(|id| {
@@ -141,7 +169,6 @@ fn prepare_keys(
                 return Err(PrepareError::limit("aggregate_keys", 64, None, None));
             }
             let names = match &d.nodes()[id] {
-                N::Text(name) => Some(vec![name.as_str()]),
                 N::Sequence(ids) => Some(
                     ids.iter()
                         .map(|&id| text(d, id))
@@ -196,21 +223,18 @@ pub(super) fn prepare(
     extraction: &str_extract::Prepared,
     templates: &str_template::Prepared,
 ) -> Result<Declaration, PrepareError> {
-    let scalar = matches!(d.nodes()[payload], N::Text(_));
-    let expr = if scalar {
-        text(d, payload)?
-    } else {
-        text(d, field(d, payload, "expr")?)?
-    };
-    let simple = scalar || mapping(d, payload)?.len() == 1;
+    let expr = text(d, field(d, payload, "expr")?)?;
+    // A written long form never holds only `expr` (SCHEMA-15), so such a
+    // mapping is the expanded shorthand and its findings name the operation.
+    let simple = mapping(d, payload)?.len() == 1;
     let expression_path = if simple {
         path.into()
     } else {
         format!("{path}.expr")
     };
-    let compiled = compile_aggregate(expr, &expression_path);
-    if let Err(error @ crate::aggregate_parser::ParseError::Limit { .. }) = &compiled {
-        return Err(PrepareError::aggregate_parse(
+    let compiled = compile(expr, ExpressionContext::Aggregate, &expression_path);
+    if let Err(error @ CompileError::Limit { .. }) = &compiled {
+        return Err(PrepareError::expression(
             error.clone(),
             Some(&expression_path),
         ));
@@ -218,153 +242,146 @@ pub(super) fn prepare(
     let mut extra = Vec::new();
     let mut derive_relations = Vec::<String>::new();
     let mut derive_references = Vec::<String>::new();
-    let derive = if scalar {
-        None
-    } else {
-        d.field(payload, "derive")
-            .filter(|&id| !matches!(d.nodes()[id], N::Null))
-            .map(|id| {
-                let items = sequence(d, id)?;
+    let derive = d
+        .field(payload, "derive")
+        .filter(|&id| !matches!(d.nodes()[id], N::Null))
+        .map(|id| {
+            let items = sequence(d, id)?;
 
-                let mut bindings = Vec::<DeriveDeclaration>::new();
-                let invalid = |path: &str, reason: &str| {
-                    PrepareError::Invalid(vec![PreflightFinding::Scalar(diagnostic(
-                        crate::diagnostic::ConditionCode::AggregateDeriveDeclaration,
-                        path,
-                        &[("reason", reason)],
-                    ))])
-                };
-                if items.is_empty() {
+            let mut bindings = Vec::<DeriveDeclaration>::new();
+            let invalid = |path: &str, reason: &str| {
+                PrepareError::Invalid(vec![PreflightFinding::Scalar(diagnostic(
+                    crate::diagnostic::ConditionCode::AggregateDeriveDeclaration,
+                    path,
+                    &[("reason", reason)],
+                ))])
+            };
+            if items.is_empty() {
+                return Err(invalid(
+                    &format!("{path}.derive"),
+                    "a derive step is a non-empty binding list",
+                ));
+            }
+            for (index, &item) in items.iter().enumerate() {
+                let binding_path = format!("{path}.derive[{index}]");
+                let name = text(d, field(d, item, "name")?)?;
+                if bindings.iter().any(|binding| binding.name == name) {
                     return Err(invalid(
-                        &format!("{path}.derive"),
-                        "a derive step is a non-empty binding list",
+                        &binding_path,
+                        "derive binding names are unique identifiers",
                     ));
                 }
-                for (index, &item) in items.iter().enumerate() {
-                    let binding_path = format!("{path}.derive[{index}]");
-                    let name = text(d, field(d, item, "name")?)?;
-                    if bindings.iter().any(|binding| binding.name == name) {
-                        return Err(invalid(
-                            &binding_path,
-                            "derive binding names are unique identifiers",
-                        ));
-                    }
-                    let kind = match text(d, field(d, item, "type")?)? {
-                        "str" => ColumnType::Str,
-                        "int" => ColumnType::Int,
-                        "float" => ColumnType::Float,
-                        "date" => ColumnType::Date,
-                        "datetime" => ColumnType::DateTime,
-                        _ => return Err(PrepareError::Internal),
-                    };
-                    let derivation = field(d, item, "derivation")?;
-                    let value = field(d, derivation, "value")?;
-                    if let Some(window) =
-                        window_path(d, value, &format!("{binding_path}.derivation"), depth + 1)?
-                    {
-                        return Err(invalid(
-                            &window,
-                            "a derive binding cannot use a window operation",
-                        ));
-                    }
-                    let mut references = Vec::new();
-                    let mut intermediate_names = Vec::<String>::new();
-                    derivations::current_references(d, value, project, &mut references, 0)?;
-                    self_relations::template_references(d, value, templates, &mut references, 0)?;
-                    for reference in references {
-                        if let Some((relation, _)) = reference.split_once('.') {
-                            if !named.contains(relation) {
-                                derive_relations.push(relation.into());
-                                derive_references.push(reference);
-                            } else {
-                                intermediate_names.push(relation.into());
-                            }
-                        } else if !bindings.iter().any(|binding| binding.name == reference) {
-                            return Err(PrepareError::Invalid(vec![PreflightFinding::Scalar(
-                                diagnostic(
-                                    crate::diagnostic::ConditionCode::AggregateDeriveVariable,
-                                    &binding_path,
-                                    &[("variable", &reference), ("binding", name)],
-                                ),
-                            )]));
+                let kind = match text(d, field(d, item, "type")?)? {
+                    "str" => ColumnType::Str,
+                    "int" => ColumnType::Int,
+                    "float" => ColumnType::Float,
+                    "date" => ColumnType::Date,
+                    "datetime" => ColumnType::DateTime,
+                    _ => return Err(PrepareError::Internal),
+                };
+                let derivation = field(d, item, "derivation")?;
+                let value = field(d, derivation, "value")?;
+                if let Some(window) =
+                    window_path(d, value, &format!("{binding_path}.derivation"), depth + 1)?
+                {
+                    return Err(invalid(
+                        &window,
+                        "a derive binding cannot use a window operation",
+                    ));
+                }
+                let mut references = Vec::new();
+                let mut intermediate_names = Vec::<String>::new();
+                derivations::current_references(d, value, project, &mut references, 0)?;
+                self_relations::template_references(d, value, templates, &mut references, 0)?;
+                for reference in references {
+                    if let Some((relation, _)) = reference.split_once('.') {
+                        if !named.contains(relation) {
+                            derive_relations.push(relation.into());
+                            derive_references.push(reference);
+                        } else {
+                            intermediate_names.push(relation.into());
                         }
+                    } else if !bindings.iter().any(|binding| binding.name == reference) {
+                        return Err(PrepareError::Invalid(vec![PreflightFinding::Scalar(
+                            diagnostic(
+                                crate::diagnostic::ConditionCode::AggregateDeriveVariable,
+                                &binding_path,
+                                &[("variable", &reference), ("binding", name)],
+                            ),
+                        )]));
                     }
-                    if let Some(qualifier) = intermediate_names.iter().find(|name| !named.kept(name)) {
-                        return Err(PrepareError::Invalid(vec![PreflightFinding::Scalar(diagnostic(
+                }
+                if let Some(qualifier) = intermediate_names.iter().find(|name| !named.kept(name)) {
+                    return Err(PrepareError::Invalid(vec![PreflightFinding::Scalar(
+                        diagnostic(
                             crate::diagnostic::ConditionCode::AggregateDeriveIntermediate,
                             &format!("{path}.derive"),
-                            &[("reason", "a derive step reads only keep-declared named intermediates"), ("intermediate", qualifier)],
-                        ))]));
-                    }
-                    let branch = derivations::prepare_value(
-                        d,
-                        value,
-                        &format!("{binding_path}.derivation"),
-                        project,
-                        named,
-                        true,
-                        depth + 1,
-                        extraction,
-                        templates,
-                    )?;
-                    bindings.push(DeriveDeclaration {
-                        name: name.into(),
-                        kind,
-                        branch,
-                        handler: literal_handler(
-                            d,
-                            derivation,
-                            &format!("{binding_path}.derivation"),
-                        )?,
-                        path: binding_path,
-                        intermediate_names,
-                    });
+                            &[
+                                (
+                                    "reason",
+                                    "a derive step reads only keep-declared named intermediates",
+                                ),
+                                ("intermediate", qualifier),
+                            ],
+                        ),
+                    )]));
                 }
-                Ok(bindings)
+                let branch = derivations::prepare_value(
+                    d,
+                    value,
+                    &format!("{binding_path}.derivation"),
+                    project,
+                    named,
+                    true,
+                    depth + 1,
+                    extraction,
+                    templates,
+                )?;
+                bindings.push(DeriveDeclaration {
+                    name: name.into(),
+                    kind,
+                    branch,
+                    handler: literal_handler(d, derivation, &format!("{binding_path}.derivation"))?,
+                    path: binding_path,
+                    intermediate_names,
+                });
+            }
+            Ok(bindings)
+        })
+        .transpose()?;
+    let between = d
+        .field(payload, "between")
+        .filter(|&id| !matches!(d.nodes()[id], N::Null))
+        .map(|id| {
+            let bound = |name| {
+                d.field(id, name)
+                    .filter(|&id| !matches!(d.nodes()[id], N::Null))
+                    .map(|id| text(d, id).map(String::from))
+                    .transpose()
+            };
+            Ok::<_, PrepareError>(RangeDeclaration {
+                value: text(d, field(d, id, "value")?)?.into(),
+                lower: bound("lower")?,
+                upper: bound("upper")?,
             })
-            .transpose()?
-    };
-    let between = if scalar {
-        None
-    } else {
-        d.field(payload, "between")
-            .filter(|&id| !matches!(d.nodes()[id], N::Null))
-            .map(|id| {
-                let bound = |name| {
-                    d.field(id, name)
-                        .filter(|&id| !matches!(d.nodes()[id], N::Null))
-                        .map(|id| text(d, id).map(String::from))
-                        .transpose()
-                };
-                Ok::<_, PrepareError>(RangeDeclaration {
-                    value: text(d, field(d, id, "value")?)?.into(),
-                    lower: bound("lower")?,
-                    upper: bound("upper")?,
-                })
-            })
-            .transpose()?
-    };
-    let groups = if scalar {
-        Vec::new()
-    } else {
-        d.field(payload, "group_by")
-            .filter(|&id| !matches!(d.nodes()[id], N::Null))
-            .map(|id| {
-                sequence(d, id)?
-                    .iter()
-                    .map(|&id| Ok(text(d, id)?.into()))
-                    .collect()
-            })
-            .transpose()?
-            .unwrap_or_default()
-    };
+        })
+        .transpose()?;
+    let groups = d
+        .field(payload, "group_by")
+        .filter(|&id| !matches!(d.nodes()[id], N::Null))
+        .map(|id| {
+            sequence(d, id)?
+                .iter()
+                .map(|&id| Ok(text(d, id)?.into()))
+                .collect()
+        })
+        .transpose()?
+        .unwrap_or_default();
     let output_keys = sequence(d, field(d, d.root(), "keys")?)?
         .iter()
         .map(|&id| Ok(text(d, id)?.into()))
         .collect::<Result<_, PrepareError>>()?;
-    let keys = prepare_keys(
-        d, payload, path, scalar, project, extraction, templates, &mut extra,
-    )?;
+    let keys = prepare_keys(d, payload, path, project, extraction, templates, &mut extra)?;
     let empty_key = if keys.as_ref().is_some_and(Vec::is_empty) {
         Some(
             if matches!(
@@ -379,26 +396,26 @@ pub(super) fn prepare(
     } else {
         None
     };
-    let filter = if scalar {
-        None
-    } else {
-        d.field(payload, "filter")
-            .filter(|&id| !matches!(d.nodes()[id], N::Null))
-            .map(|id| {
-                let expr = text(d, id)?;
-                Ok((
-                    expr.into(),
-                    crate::predicate_compiler::compile(expr, &format!("{path}.filter")),
-                ))
-            })
-            .transpose()?
-    };
+    let filter = d
+        .field(payload, "filter")
+        .filter(|&id| !matches!(d.nodes()[id], N::Null))
+        .map(|id| {
+            let expr = text(d, id)?;
+            Ok((
+                expr.into(),
+                compile(
+                    expr,
+                    ExpressionContext::Predicate,
+                    &format!("{path}.filter"),
+                ),
+            ))
+        })
+        .transpose()?;
     if derive.is_some() {
         if let Some((_, Ok(filter))) = &filter {
             derive_relations.extend(
                 filter
                     .identifiers()
-                    .into_iter()
                     .filter_map(|name| {
                         name.split_once('.')
                             .map(|(relation, _)| String::from(relation))
@@ -458,10 +475,10 @@ fn validate_header<'a>(
     driver: &str,
     intermediates: &[Option<crate::dataset::Intermediate>],
     findings: &mut Vec<BindFinding>,
-) -> Result<Option<(&'a CompiledAggregate, Vec<String>)>, BindError> {
+) -> Result<Option<(&'a CompiledExpression, Vec<String>)>, BindError> {
     let compiled = match &declaration.compiled {
         Ok(compiled) => compiled,
-        Err(crate::aggregate_parser::ParseError::Grammar { failure, .. }) => {
+        Err(CompileError::Invalid { failure, .. }) => {
             findings.push(BindFinding::Aggregate {
                 path: declaration.expression_path.clone(),
                 expression: declaration.expression.clone(),
@@ -631,7 +648,7 @@ type GroupOperands = (Vec<usize>, Vec<AggregateBinding>);
 
 #[allow(clippy::too_many_arguments)]
 fn bind_groups_and_operands(
-    compiled: &CompiledAggregate,
+    compiled: &CompiledExpression,
     declaration: &Declaration,
     relation: Option<&str>,
     donor: AggregateSource,
@@ -754,34 +771,41 @@ fn bind_groups_and_operands(
             }
         }
     }
-    let kind = |name: &str| {
-        bindings
-            .iter()
-            .find(|binding| binding.name == name)
-            .and_then(|binding| {
-                donor_schema
-                    .columns()
-                    .get(binding.column)
-                    .map(|column| column.kind.into())
-                    .or_else(|| {
-                        declaration
-                            .derive
-                            .as_ref()
-                            .and_then(|derive| {
-                                derive.get(
-                                    binding.column.saturating_sub(donor_schema.columns().len()),
-                                )
-                            })
-                            .map(|derive| derive.kind.into())
-                    })
-            })
-    };
+    let kind = |name: &str| binding_kind(name, &bindings, donor_schema, declaration);
     findings.extend(
         static_types::aggregate_kinds(compiled, kind, matches!(phase, Phase::Row { .. }))?
             .into_iter()
             .map(BindFinding::AggregateDiagnostic),
     );
     Ok(Some((group_columns, bindings)))
+}
+
+/// The type of a name the aggregate expression binds: a relation field's
+/// captured type, or a derive binding's declared type.
+fn binding_kind(
+    name: &str,
+    bindings: &[AggregateBinding],
+    donor_schema: &TableSchema,
+    declaration: &Declaration,
+) -> Option<crate::value::ValueType> {
+    bindings
+        .iter()
+        .find(|binding| binding.name == name)
+        .and_then(|binding| {
+            donor_schema
+                .columns()
+                .get(binding.column)
+                .map(|column| column.kind.into())
+                .or_else(|| {
+                    declaration
+                        .derive
+                        .as_ref()
+                        .and_then(|derive| {
+                            derive.get(binding.column.saturating_sub(donor_schema.columns().len()))
+                        })
+                        .map(|derive| derive.kind.into())
+                })
+        })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -796,24 +820,34 @@ fn bind_filter(
     Ok(match &declaration.filter {
         Some((_, Ok(plan))) => {
             let mut bound = Vec::new();
+            let mut kinds = Vec::new();
             let mut seen = std::collections::BTreeSet::new();
             for name in plan.identifiers() {
                 if !seen.insert(name) {
                     continue;
                 }
-                if let Some((column, _)) = resolve(name, plan.spec_path(), findings)? {
+                if let Some((column, kind)) = resolve(name, plan.spec_path(), findings)? {
                     bound.push(Binding {
                         name: name.into(),
                         read: Read::Source(column),
                     });
+                    kinds.push((name, kind));
                     if relation.is_none() {
                         edges.push(column);
                     }
                 }
             }
             if findings.len() == before {
+                let typed = plan.typed(|name| {
+                    crate::result_type::ResultType::declared(
+                        kinds
+                            .iter()
+                            .find(|(bound, _)| *bound == name)
+                            .map(|&(_, kind)| kind),
+                    )
+                });
                 Some(
-                    BoundPredicate::new(plan.clone(), bound)
+                    BoundPredicate::new(typed, bound)
                         .map_err(BindError::InvalidPredicateBinding)?,
                 )
             } else {
@@ -822,11 +856,9 @@ fn bind_filter(
         }
         Some((
             expr,
-            Err(crate::predicate_compiler::Error::Parse(
-                crate::predicate_parser::ParseError::Grammar {
-                    position, failure, ..
-                },
-            )),
+            Err(CompileError::Invalid {
+                position, failure, ..
+            }),
         )) => {
             findings.push(BindFinding::Lookup(LookupFinding::grammar(
                 &format!("{}.filter", declaration.path),
@@ -836,7 +868,7 @@ fn bind_filter(
             )));
             None
         }
-        Some((_, Err(error))) => return Err(BindError::PredicatePolicy(error.clone())),
+        Some((_, Err(error))) => return Err(BindError::ExpressionPolicy(error.clone())),
         None => None,
     })
 }
@@ -848,7 +880,7 @@ fn bound_relation(
     donor: AggregateSource,
     group_columns: Vec<usize>,
     declaration: &Declaration,
-    compiled: &CompiledAggregate,
+    compiled: &CompiledExpression,
     catalog: &Catalog,
     secondary: &[SecondarySource],
     output: &TableSchema,
@@ -963,19 +995,18 @@ fn bound_relation(
                     )?;
                     continue;
                 };
-                if let Some(expected) = value.result_type(catalog) {
-                    if !crate::key_relation::comparable(expected, actual.into()) {
-                        finding(
-                            Finding::KeyType {
-                                path: key_path,
-                                source: &value.display_name(field),
-                                expected,
-                                actual,
-                                inferred,
-                            },
-                            findings,
-                        )?;
-                    }
+                let expected = value.result_type(catalog);
+                if !expected.comparable(actual.into()) {
+                    finding(
+                        Finding::KeyType {
+                            path: key_path,
+                            source: &value.display_name(field),
+                            expected,
+                            actual,
+                            inferred,
+                        },
+                        findings,
+                    )?;
                 }
                 let before_references = findings.len();
                 for reference in value.references() {
@@ -1241,8 +1272,16 @@ pub(super) fn bind(
     if findings.len() != before {
         return Ok(None);
     }
+    let typed = compiled.typed(|name| {
+        crate::result_type::ResultType::known(binding_kind(
+            name,
+            &bindings,
+            &donor_schema,
+            declaration,
+        ))
+    });
     let bound = BoundAggregate::new(
-        compiled.clone(),
+        typed,
         bound_relation,
         bindings,
         filter,
@@ -1472,13 +1511,6 @@ pub(super) fn check_ranges(
                 check_ranges(&branch.operation, inputs, drivers, findings);
             }
         }
-        Operation::Scalar(operation) => {
-            if let scalar::Declaration::Concat { sources, .. } = operation.as_ref() {
-                for branch in sources {
-                    check_ranges(&branch.operation, inputs, drivers, findings);
-                }
-            }
-        }
         _ => (),
     }
 }
@@ -1610,7 +1642,8 @@ fn bind_derivations(
     for (index, binding) in derive.iter().enumerate() {
         let available = (0..width + index).collect::<Vec<_>>();
         let mut dependencies = Vec::new();
-        if let Some(expression) = derivations::bind_row(
+        let start = findings.len();
+        let expression = derivations::bind_row(
             &binding.branch.operation,
             &binding.branch.path,
             width + index,
@@ -1627,7 +1660,22 @@ fn bind_derivations(
             named,
             secondary,
             intermediates,
-        )? {
+        )?;
+        // VALUE-24: a binding converts to its declared type like a column.
+        if expression.is_some() && findings.len() == start && binding.handler.is_none() {
+            let input = |name: &str| {
+                static_types::result_type(name, named, &catalog, secondary, intermediates)
+            };
+            findings.extend(
+                result_types::conversion_finding(
+                    &binding.path,
+                    binding.branch.operation.result_type(&input),
+                    binding.kind,
+                )
+                .map(BindFinding::Scalar),
+            );
+        }
+        if let Some(expression) = expression {
             edges.extend(dependencies.into_iter().filter(|&column| column < width));
             bound.push(crate::dataset::AggregateDerivation {
                 assignment: crate::dataset::Assignment {
@@ -1648,7 +1696,7 @@ impl Declaration {
     pub(super) fn check_findings(&self, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
         match &self.compiled {
             Ok(_) => (),
-            Err(crate::aggregate_parser::ParseError::Grammar { failure, .. }) => {
+            Err(CompileError::Invalid { failure, .. }) => {
                 findings.push(BindFinding::Aggregate {
                     path: self.expression_path.clone(),
                     expression: self.expression.clone(),

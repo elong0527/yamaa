@@ -4,7 +4,7 @@ pub(crate) use yamaa_core::json::Value as V;
 pub(crate) use yamaa_core::{
     diagnostic::{ConditionCode, DatasetFinding as F, ProjectionError},
     reduction::NumericReducer,
-    temporal::{Date, DatePrecision, DateTime, DateTimePrecision},
+    temporal::{Date, DateTime, Precision},
     value::{Value, ValueType},
 };
 pub(crate) fn text(value: &str) -> V {
@@ -14,7 +14,7 @@ pub(crate) fn text(value: &str) -> V {
 /// Independent normative assertions; engine tests reach the same causes from
 /// real attempted runs and pin their first-failure table effects.
 pub fn reached() -> BTreeSet<ConditionCode> {
-    let date = Value::Date(Date::new(2024, 2, 29, DatePrecision::Month).unwrap());
+    let date = Value::Date(Date::new(2024, 2, 29, Precision::Month).unwrap());
     let cases = [
         (
             F::MultipleValues {
@@ -32,11 +32,27 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 path: "columns.A.source",
                 dataset: "DM",
                 intermediate: "I",
+                implicit_join: false,
             },
             "join",
             "unmatched_key",
             "REQ-0124",
             vec![("dataset", text("DM")), ("intermediate", text("I"))],
+        ),
+        (
+            F::UnmatchedKey {
+                path: "columns.A.derivation.source",
+                dataset: "DM",
+                intermediate: "intermediate(DM)",
+                implicit_join: true,
+            },
+            "join",
+            "unmatched_key",
+            "LOOKUP-24",
+            vec![
+                ("dataset", text("DM")),
+                ("intermediate", text("intermediate(DM)")),
+            ],
         ),
         (
             F::MultipleMatches {

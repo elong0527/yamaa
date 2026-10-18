@@ -60,13 +60,11 @@ rows:
       PARAMCD: {literal: SYSBP}
       AVAL: VS_RAW.SYSBP
       ABLFL:
-        flag:
-          condition: "AVISITN = 1"
+        flag: "AVISITN = 1"
 
   - id: diastolic
     derivations:
       PARAMCD: {literal: DIABP}
       AVAL: VS_RAW.DIABP
       ABLFL:
-        flag:
-          condition: "AVISITN = 1"
+        flag: "AVISITN = 1"

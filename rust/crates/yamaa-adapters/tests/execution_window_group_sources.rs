@@ -68,7 +68,7 @@ fn grouped_windows_read_only_group_keys_of_the_driver() {
         "{HEAD}columns:\n  - {{name: ID, type: int}}\n  - {{name: LOW, type: int}}\n\
          \x20 - {{name: SEQ, type: int}}\n\
          rows:\n  - id: grouped\n    group_by: [SRC.ID]\n    derivations:\n      ID: SRC.ID\n\
-         \x20     LOW: {{aggregate: {{expr: 'MIN(SRC.VAL)'}}}}\n\
+         \x20     LOW: {{aggregate: 'MIN(SRC.VAL)'}}\n\
          \x20     SEQ: {{row_number: {{window: {{order_by: [ORDER]}}}}}}\n"
     );
     let column = format!(
@@ -76,7 +76,7 @@ fn grouped_windows_read_only_group_keys_of_the_driver() {
          \x20 - name: SEQ\n    type: int\n\
          \x20   derivation: {{row_number: {{window: {{order_by: [ORDER]}}}}}}\n\
          rows:\n  - id: grouped\n    group_by: [SRC.ID]\n    derivations:\n      ID: SRC.ID\n\
-         \x20     LOW: {{aggregate: {{expr: 'MIN(SRC.VAL)'}}}}\n"
+         \x20     LOW: {{aggregate: 'MIN(SRC.VAL)'}}\n"
     );
     for (specification, path, requirement, row) in [
         (

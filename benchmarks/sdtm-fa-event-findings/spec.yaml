@@ -22,7 +22,7 @@ intermediates:
       StudyEventOID: ODM.StudyEventOID
       StudyEventRepeatKey: ODM.StudyEventRepeatKey
     filter: "ODM_AE.ItemOID = 'IT.AE.AETERM'"
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: DOMAIN
@@ -52,7 +52,7 @@ columns:
     type: str
     label: Object of the Observation
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   - name: FACAT
     type: str

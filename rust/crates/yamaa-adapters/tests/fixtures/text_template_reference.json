@@ -12,6 +12,11 @@
         "count": 4
       },
       {
+        "spec_path": "columns.SITEID.derivation.first_available.missing",
+        "handler": "missing",
+        "count": 1
+      },
+      {
         "spec_path": "columns.SUBJREF.derivation.str_template.missing",
         "handler": "missing",
         "count": 1
@@ -567,7 +572,9 @@
           "derivation": {
             "str_template": {
               "template": "{A}:{B}",
-              "missing": null
+              "missing": {
+                "literal": null
+              }
             }
           }
         }
@@ -2362,7 +2369,9 @@
                 "otherwise": {
                   "str_template": {
                     "template": "{B}",
-                    "missing": null
+                    "missing": {
+                      "literal": null
+                    }
                   }
                 }
               }

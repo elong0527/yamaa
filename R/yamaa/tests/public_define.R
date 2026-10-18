@@ -1,6 +1,7 @@
 # Independent installed R submission witnesses. The runtime has no Python
-# executable. project$submission() composes Define-XML (and Dataset-JSON where
-# the section sets `datasets: json`) when called; only $save() writes files.
+# executable. project$submission() composes Define-XML (and the Dataset-JSON or
+# SAS Transport files where the section sets `datasets: json` or
+# `datasets: xpt`) when called; only $save() writes files.
 library(yamaa)
 host_fixture_root <- if(file.exists("host-fixtures/reader.R")) "host-fixtures" else
   system.file("host-fixtures",package="yamaa",mustWork=TRUE)
@@ -100,7 +101,8 @@ for (case in list(list(i = 1L, code = "GLUC", source = "Vendor", list = "CL_GLUC
   stopifnot(item_start > 0L)
   item <- substring(xml, item_start)
   item <- substring(item, 1L, regexpr("</ItemDef>", item, fixed = TRUE)[[1L]])
-  stopifnot(grepl('Name="LBORRESU" DataType="text" Length="8"', item, fixed = TRUE),
+  # Every unit of both test codes is `mg/dL`, five bytes (SUB-24).
+  stopifnot(grepl('Name="LBORRESU" DataType="text" Length="5"', item, fixed = TRUE),
     grepl(paste0('CodeListOID="CL.', case$list, '"'), item, fixed = TRUE),
     grepl(paste0('<def:Origin Type="Assigned" Source="', case$source, '"/>'), item, fixed = TRUE),
     grepl(paste0('<def:WhereClauseRef WhereClauseOID="WC.', oid, '"/>'), xml, fixed = TRUE),
@@ -266,7 +268,7 @@ for (name in c("parents", "children", "artifacts")) dir.create(file.path(root, n
 spec <- readLines(file.path(root, "spec.yaml"))
 spec <- gsub("path: dm.csv", "path: ../artifacts/dm.csv", spec, fixed = TRUE)
 writeLines(spec, file.path(root, "parents/base.yaml"))
-writeLines(c("schema_version: '1.0'", "parents: ../parents/base.yaml"), file.path(root, "children/spec.yaml"))
+writeLines(c("schema_version: '1.0'", "parent: ../parents/base.yaml"), file.path(root, "children/spec.yaml"))
 project <- file.path(root, "project.yaml")
 edit_lines(project, function(lines) gsub("define: define.xml", "define: artifacts/define.xml",
   gsub("  - spec.yaml", "  - children/spec.yaml", lines, fixed = TRUE), fixed = TRUE))
@@ -276,17 +278,25 @@ held <- saved(result, file.path(root, "artifacts"), c("dm.json", "define.xml"))
 stopifnot(grepl('xlink:href="dm.json"', rawToChar(held[["define.xml"]]), fixed = TRUE),
   grepl('"metaDataRef": "define.xml"', rawToChar(held[["dm.json"]]), fixed = TRUE),
   !file.exists(file.path(root, "dm.json")))
-writeLines(gsub("values: [F, M, U]", "values: [F, M]", spec, fixed = TRUE), file.path(root, "parents/base.yaml"))
+# The SEX codelist lists its items, so an allowed_values beside it states the same value set twice.
+sex <- which(spec == "    derivation: DM_RAW.SEX"); stopifnot(length(sex) == 1L)
+writeLines(append(spec, c("    verifications:", "      - allowed_values:", "          values: [F, M, U]"), after = sex),
+  file.path(root, "parents/base.yaml"))
 result <- submission(root)
-stopifnot("codelist_values_conflict" %in% result$issues$condition, "REQ-0955" %in% result$issues$requirement,
+stopifnot("redundant_declaration" %in% result$issues$condition, "REQ-0955" %in% result$issues$requirement,
   refused(result), identical(rawfile(file.path(root, "artifacts/define.xml")), held[["define.xml"]]))
 unlink(root, recursive = TRUE)
 root <- fixture("sdtm-dm-metadata")
 dir.create(file.path(root, "artifacts"))
 spec_path <- file.path(root, "spec.yaml"); spec <- readLines(spec_path)
 writeLines(gsub("path: dm.csv", "path: artifacts/dm.csv", spec, fixed = TRUE), spec_path)
-result <- submission(root)
-stopifnot("REQ-1229" %in% result$issues$requirement, refused(result), !file.exists(file.path(root, "define.xml")))
+stopifnot(file.copy(file.path(fixtures, "sdtm-dm-metadata/expected/dm.csv"), file.path(root, "artifacts/dm.csv")))
+# The transport file sits beside the document wherever the artifact is.
+result <- submission(root); check_issues(result)
+held <- saved(result, root, c("dm.json", "define.xml"))
+stopifnot(grepl('xlink:href="dm.json"', rawToChar(held[["define.xml"]]), fixed = TRUE),
+  !file.exists(file.path(root, "artifacts/dm.json")))
+unlink(file.path(root, c("dm.json", "define.xml")))
 writeLines(spec, spec_path)
 csv <- readLines(file.path(fixtures, "sdtm-dm-metadata/expected/dm.csv"))
 writeLines(gsub("STUDYID,USUBJID", "USUBJID,STUDYID", csv, fixed = TRUE), file.path(root, "dm.csv"))
@@ -319,21 +329,22 @@ unlink(root, recursive = TRUE)
 root <- fixture("sdtm-dm-metadata", TRUE)
 sentinel <- file.path(root, "dm.json")
 writeBin(charToRaw("original publication sentinel"), sentinel)
-if (file.exists(file.path(root, "DM.JSON"))) {
-  project <- file.path(root, "project.yaml")
-  edit_lines(project, function(lines) gsub("  - spec.yaml", "  - spec.yaml\n  - second.yaml", lines, fixed = TRUE))
-  spec <- gsub("domain: DM", "domain: DM2", readLines(file.path(root, "spec.yaml")), fixed = TRUE)
-  writeLines(gsub("path: dm.csv", "path: DM.csv", spec, fixed = TRUE), file.path(root, "second.yaml"))
-  define_sentinel <- file.path(root, "define.xml")
-  writeBin(charToRaw("original Define sentinel"), define_sentinel)
-  previous_names <- sort(list.files(root, all.files = TRUE, no.. = TRUE))
-  result <- submission(root)
-  stopifnot(identical(result$issues$phase, "validation"), identical(result$issues$condition, "dataset_json_path_collision"), identical(result$issues$requirement, "REQ-1226"),
-    grepl("dm.json", result$issues$context, fixed = TRUE), grepl("DM.json", result$issues$context, fixed = TRUE), refused(result),
-    identical(rawfile(sentinel), charToRaw("original publication sentinel")),
-    identical(rawfile(define_sentinel), charToRaw("original Define sentinel")),
-    identical(sort(list.files(root, all.files = TRUE, no.. = TRUE)), previous_names))
-}
+# Under Other a lower-case dataset name is admitted, and its transport file is
+# named for it in lower case beside the document.
+project <- file.path(root, "project.yaml")
+edit_lines(project, function(lines) gsub("context: Submission", "context: Other",
+  gsub("  - spec.yaml", "  - spec.yaml\n  - second.yaml", lines, fixed = TRUE), fixed = TRUE))
+spec <- gsub("domain: DM", "domain: dm", readLines(file.path(root, "spec.yaml")), fixed = TRUE)
+writeLines(gsub("path: dm.csv", "path: second.csv", spec, fixed = TRUE), file.path(root, "second.yaml"))
+define_sentinel <- file.path(root, "define.xml")
+writeBin(charToRaw("original Define sentinel"), define_sentinel)
+previous_names <- sort(list.files(root, all.files = TRUE, no.. = TRUE))
+result <- submission(root)
+stopifnot(identical(result$issues$phase, "validation"), identical(result$issues$condition, "transport_path_collision"), identical(result$issues$requirement, "REQ-1226"),
+  identical(result$issues$spec_paths[[1L]], "sdtm.specs[1]"), grepl("dm.json", result$issues$context, fixed = TRUE), refused(result),
+  identical(rawfile(sentinel), charToRaw("original publication sentinel")),
+  identical(rawfile(define_sentinel), charToRaw("original Define sentinel")),
+  identical(sort(list.files(root, all.files = TRUE, no.. = TRUE)), previous_names))
 unlink(root, recursive = TRUE)
 for (case in host_truth[["xml_text_cases"]]) {
   root <- fixture("sdtm-dm-metadata")
@@ -350,7 +361,7 @@ for (case in host_truth[["xml_text_cases"]]) {
   }
   if (case[["inherit_specification"]]) {
     stopifnot(file.rename(file.path(root, "spec.yaml"), file.path(root, "base.yaml")))
-    writeLines(c("schema_version: '1.0'", "parents: base.yaml"), file.path(root, "spec.yaml"))
+    writeLines(c("schema_version: '1.0'", "parent: base.yaml"), file.path(root, "spec.yaml"))
   }
   result <- submission(root)
   check_issues(result, empty = !length(case[["issues"]]))
@@ -371,6 +382,35 @@ for (case in host_truth[["xml_text_cases"]]) {
     for (fragment in case[["xml_fragments"]]) stopifnot(grepl(fragment, xml, fixed = TRUE))
   }
   stopifnot(!dir.exists(file.path(root, "input")), !file.exists(file.path(root, "dm.csv")))
+  unlink(root, recursive = TRUE)
+}
+# Every benchmark declaring a Define call: positive cases hold and save the
+# expected bytes; negative cases fail with the expected first issue.
+manifest <- jsonlite::fromJSON(file.path(fixtures, "benchmarks", "manifest.json"), simplifyVector = FALSE)
+case_names <- vapply(manifest$cases, `[[`, character(1), "name")
+stopifnot(all(c("sdtm-dm-xpt", "adam-adsl-xpt", "sdtm-dm-metadata") %in% case_names))
+for (case in manifest$cases) {
+  source <- file.path(fixtures, "benchmarks", case$name)
+  root <- tempfile(paste0(case$name, "-")); dir.create(root)
+  files <- list.files(source)
+  files <- files[!dir.exists(file.path(source, files))]
+  stopifnot(all(file.copy(file.path(source, files), root)))
+  for (name in unlist(case$published)) stopifnot(file.copy(file.path(source, "expected", name), file.path(root, name)))
+  result <- yamaa_project(file.path(root, case$project))$submission(case$standard, created = case$created)
+  if (!is.null(case$error)) {
+    want <- case$error
+    stopifnot(nrow(result$issues) >= 1L, identical(result$issues$phase[[1L]], want$phase),
+      identical(result$issues$condition[[1L]], want$condition),
+      identical(result$issues$requirement[[1L]], want$requirement),
+      identical(result$issues$spec_paths[[1L]], fixture_strings(want$spec_paths)))
+    context <- jsonlite::fromJSON(result$issues$context[[1L]], simplifyVector = FALSE)
+    for (key in names(want$context)) stopifnot(identical(context[[key]], want$context[[key]]))
+    stopifnot(refused(result), !file.exists(file.path(root, "define.xml")))
+  } else {
+    check_issues(result)
+    held <- saved(result, root, unlist(case$expected))
+    for (name in names(held)) stopifnot(identical(held[[name]], rawfile(file.path(source, "expected", name))))
+  }
   unlink(root, recursive = TRUE)
 }
 Sys.setenv(PATH = original_path)

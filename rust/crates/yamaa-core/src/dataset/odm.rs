@@ -172,14 +172,12 @@ macro_rules! walk {
             Expression::Odm(bound) => $visitor(bound)?,
             Expression::SourceBinding { source, .. }
             | Expression::MappingCut { source, .. }
-            | Expression::StrContains { source, .. }
             | Expression::StrExtract { source, .. }
             | Expression::StrReplace { source, .. }
             | Expression::StrCase { source, .. }
             | Expression::StrPad { source, .. }
             | Expression::Round { source, .. } => $recurse(&$($mutable)? source.expression, $visitor, $depth + 1)?,
             Expression::Extreme { operands, .. }
-            | Expression::StrConcat { operands, .. }
             | Expression::StrTemplate { operands, .. }
             | Expression::Imputation { operands, .. }
             | Expression::Temporal { operands, .. } => {

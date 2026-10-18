@@ -15,8 +15,9 @@ cm <- read_csv(
 adsl <- read_csv("/app/input/adsl.csv", col_types = cols(.default = col_character()))
 
 # A full date stands as collected; a year and month runs to its last day,
-# a year alone to December 31, never past the date of death. When the whole
-# collected month or year lies after death there is no analysis date.
+# a year alone to December 31, never past a date of death that falls inside
+# the collected month or year. When the whole collected month or year lies
+# after death, the last day stands.
 adcm <- cm |>
   left_join(select(adsl, STUDYID, USUBJID, DTHDT), by = c("STUDYID", "USUBJID")) |>
   mutate(
@@ -32,7 +33,7 @@ adcm <- cm |>
     DEATH = ymd(DTHDT, quiet = TRUE),
     BOUNDED = case_when(
       is.na(DEATH) ~ LAST,
-      DEATH < FIRST ~ as.Date(NA),
+      DEATH < FIRST ~ LAST,
       TRUE ~ pmin(LAST, DEATH)
     ),
     AENDT = case_when(

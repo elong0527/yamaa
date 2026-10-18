@@ -18,7 +18,7 @@ intermediates:
     order_by: [SRC.DIST]
     keep: first
     columns: [VALUE, DIST]
-    no_match: null
+    no_match: {literal: null}
     derivations:
       DIST: {compute: {expr: "ABS(DAY - BASE.REF)"}}
 

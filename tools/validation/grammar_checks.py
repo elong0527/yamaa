@@ -13,12 +13,21 @@ from tools.validation._repository_yaml import UniqueKeyLoader
 GRAMMAR_DIR = PurePosixPath("yaml/grammar")
 
 
+# Legacy owners of each grammar, used until a rule card file carries the
+# grammar's marker. A card file renders a grammar as a ```text block directly
+# after the line `<!-- grammar: NAME -->`.
 GRAMMAR_CONTRACTS = {
-    "predicate": "operations/predicates",
-    "numeric": "operations/computation",
-    "string-template": "operations/text",
-    "aggregate": "operations/aggregation",
+    "expression": "formulas",
+    "string-template": "text",
 }
+# The fields a contract is written in. Each case names one, and a contract
+# without contexts is read the same way everywhere.
+GRAMMAR_CONTEXTS = {
+    "expression": ["predicate", "compute", "aggregate"],
+}
+GRAMMAR_MARKER = re.compile(
+    r"<!-- grammar: ([a-z-]+) -->\n+```text\n(.*?)\n```", re.DOTALL
+)
 
 
 GRAMMAR_DOCUMENT_KEYS = {
@@ -27,10 +36,10 @@ GRAMMAR_DOCUMENT_KEYS = {
     "contract_version",
     "rule",
     "start",
+    "contexts",
     "productions",
     "imports",
     "vocabulary",
-    "prohibited",
     "reserved",
     "cases",
 }
@@ -54,6 +63,7 @@ GRAMMAR_PRODUCTION_KEYS = {"name", "definition", "prose"}
 
 GRAMMAR_CASE_KEYS = {
     "id",
+    "context",
     "covers",
     "text",
     "parse",
@@ -64,10 +74,12 @@ GRAMMAR_CASE_KEYS = {
 
 
 GRAMMAR_COVERS = {
-    "predicate": {
+    "expression": {
+        "arithmetic",
         "between",
         "call",
         "comparison",
+        "context",
         "escape",
         "grouping",
         "identifier",
@@ -76,23 +88,14 @@ GRAMMAR_COVERS = {
         "like",
         "literal",
         "logic",
+        "null-literal",
         "null-test",
         "precedence",
+        "reduction",
         "rejection",
         "reserved",
+        "star",
         "temporal",
-    },
-    "numeric": {
-        "arithmetic",
-        "call",
-        "grouping",
-        "identifier",
-        "keyword-case",
-        "literal",
-        "null-literal",
-        "precedence",
-        "prohibited",
-        "rejection",
         "unary",
         "vocabulary",
     },
@@ -103,23 +106,12 @@ GRAMMAR_COVERS = {
         "rejection",
         "text",
     },
-    "aggregate": {
-        "arithmetic",
-        "call",
-        "grouping",
-        "identifier",
-        "keyword-case",
-        "literal",
-        "null-literal",
-        "precedence",
-        "prohibited",
-        "reduction",
-        "rejection",
-        "star",
-        "unary",
-        "vocabulary",
-    },
 }
+
+
+# The result a function declares, and the argument forms a reducer takes.
+FUNCTION_RESULTS = {"numeric", "boolean"}
+REDUCER_ARGUMENTS = {"expression", "star"}
 
 
 def render_grammar_block(productions):
@@ -141,8 +133,15 @@ def render_grammar_block(productions):
     return "\n".join(lines)
 
 
-def rule_grammar_block(text):
-    """Return the grammar block written in a rule's Grammar section."""
+def rule_grammar_block(text, contract=None):
+    """Return the grammar block a rule renders for a contract.
+
+    A marked block wins; a legacy contract's Grammar section is the fallback.
+    """
+    if contract is not None:
+        for name, block in GRAMMAR_MARKER.findall(text):
+            if name == contract:
+                return block
     section = re.search(
         r"\n#{2,3} (?:Templates: )?Grammar\n(.*?)(?=\n#{2,3} |\Z)", text, re.DOTALL
     )
@@ -150,6 +149,23 @@ def rule_grammar_block(text):
         return None
     block = re.search(r"```text\n(.*?)\n```", section.group(1), re.DOTALL)
     return None if block is None else block.group(1)
+
+
+def grammar_rule_id(root: Path, contract: str):
+    """The rule file (relative to rules/, without .md) that renders a grammar."""
+    owners = sorted(
+        path.relative_to(root / "rules").with_suffix("").as_posix()
+        for path in (root / "rules").rglob("*.md")
+        if any(
+            name == contract
+            for name, _ in GRAMMAR_MARKER.findall(path.read_text(encoding="utf-8"))
+        )
+    )
+    if len(owners) == 1:
+        return owners[0]
+    if not owners:
+        return GRAMMAR_CONTRACTS[contract]
+    return None
 
 
 def grammar_symbol_references(definition):
@@ -169,9 +185,8 @@ def grammar_defined_symbols(document):
     vocabulary = document.get("vocabulary")
     if isinstance(vocabulary, dict):
         defined.update(name for name in vocabulary if isinstance(name, str))
-    for closed in ("prohibited", "reserved"):
-        if closed in document:
-            defined.add(closed)
+    if "reserved" in document:
+        defined.add("reserved")
     return defined
 
 
@@ -195,16 +210,30 @@ def validate_grammar_contract(root: Path, contract: str):
     unknown = sorted(set(document) - GRAMMAR_DOCUMENT_KEYS)
     if unknown:
         errors.append(f"ERROR: {label}: unknown keys {unknown}")
-    missing = [key for key in GRAMMAR_REQUIRED_KEYS if key not in document]
+    required = GRAMMAR_REQUIRED_KEYS + (
+        ("contexts",) if contract in GRAMMAR_CONTEXTS else ()
+    )
+    missing = [key for key in required if key not in document]
     if missing:
         errors.append(f"ERROR: {label}: missing keys {missing}")
         return errors
+    contexts = GRAMMAR_CONTEXTS.get(contract)
+    if contexts is None and "contexts" in document:
+        errors.append(f"ERROR: {label}: the contract is read in no contexts")
+    elif contexts is not None and document["contexts"] != contexts:
+        errors.append(
+            f"ERROR: {label}: contexts must be {contexts!r}, got "
+            f"{document['contexts']!r}"
+        )
     if document["contract"] != contract:
         errors.append(
             f"ERROR: {label}: contract must be {contract!r}, got "
             f"{document['contract']!r}"
         )
-    rule_id = GRAMMAR_CONTRACTS[contract]
+    rule_id = grammar_rule_id(root, contract)
+    if rule_id is None:
+        errors.append(f"ERROR: {label}: more than one rule file renders it")
+        return errors
     if document["rule"] != rule_id:
         errors.append(
             f"ERROR: {label}: rule must be {rule_id!r}, got {document['rule']!r}"
@@ -294,7 +323,7 @@ def validate_grammar_contract(root: Path, contract: str):
     if not rule_path.is_file():
         errors.append(f"ERROR: {label}: rule {rule_id} has no file")
     else:
-        block = rule_grammar_block(rule_path.read_text(encoding="utf-8"))
+        block = rule_grammar_block(rule_path.read_text(encoding="utf-8"), contract)
         rendered = render_grammar_block(productions)
         if block is None:
             errors.append(
@@ -335,6 +364,12 @@ def validate_grammar_contract(root: Path, contract: str):
     missing_covers = sorted(GRAMMAR_COVERS[contract] - covered)
     if missing_covers:
         errors.append(f"ERROR: {label}: no case covers {missing_covers}")
+    read = {case.get("context") for case in cases if isinstance(case, dict)}
+    unread = [
+        context for context in GRAMMAR_CONTEXTS.get(contract, []) if context not in read
+    ]
+    if unread:
+        errors.append(f"ERROR: {label}: no case is read in {unread}")
     return errors
 
 
@@ -351,55 +386,73 @@ def grammar_vocabulary_errors(contract, document, label):
     vocabulary = document.get("vocabulary")
     if not isinstance(vocabulary, dict):
         return [f"ERROR: {label}: vocabulary must be a mapping"]
+    if contract != "expression":
+        errors = [f"ERROR: {label}: vocabulary must be empty"] if vocabulary else []
+        if "reserved" in document:
+            errors.append(f"ERROR: {label}: the contract reserves no names")
+        return errors
     errors = []
-    if contract == "numeric":
-        functions = vocabulary.get("function")
-        if not isinstance(functions, dict):
-            return [f"ERROR: {label}: vocabulary.function is missing"]
-        for name, arity in functions.items():
-            if not isinstance(arity, dict) or set(arity) != {
-                "min_arguments",
-                "max_arguments",
-            }:
-                errors.append(
-                    f"ERROR: {label}: function {name} must declare min_arguments and max_arguments"
-                )
-                continue
-            lower, upper = arity["min_arguments"], arity["max_arguments"]
-            if (
-                type(lower) is not int
-                or lower < 1
-                or (upper is not None and (type(upper) is not int or upper < lower))
-            ):
-                errors.append(
-                    f"ERROR: {label}: function {name} has invalid argument bounds"
-                )
-    elif contract == "aggregate":
-        reducers = vocabulary.get("reducer")
-        if not isinstance(reducers, dict):
-            return [f"ERROR: {label}: vocabulary.reducer is missing"]
-        for name, declaration in reducers.items():
-            arguments = (
-                declaration.get("argument") if isinstance(declaration, dict) else None
+    unknown = sorted(set(vocabulary) - {"function", "reducer"})
+    if unknown:
+        errors.append(f"ERROR: {label}: unknown vocabulary {unknown}")
+    functions = vocabulary.get("function")
+    if not isinstance(functions, dict):
+        errors.append(f"ERROR: {label}: vocabulary.function is missing")
+        functions = {}
+    for name, arity in functions.items():
+        if not isinstance(arity, dict) or set(arity) != {
+            "min_arguments",
+            "max_arguments",
+            "result",
+        }:
+            errors.append(
+                f"ERROR: {label}: function {name} must declare min_arguments, "
+                "max_arguments and result"
             )
-            if (
-                not isinstance(arguments, list)
-                or not arguments
-                or any(value not in {"expr", "star"} for value in arguments)
-            ):
-                errors.append(
-                    f"ERROR: {label}: reducer {name} must declare its argument forms"
-                )
-    elif contract == "predicate":
-        reserved = document.get("reserved")
-        if not isinstance(reserved, list) or not all(
-            isinstance(name, str) for name in reserved
+            continue
+        lower, upper = arity["min_arguments"], arity["max_arguments"]
+        if (
+            type(lower) is not int
+            or lower < 1
+            or (upper is not None and (type(upper) is not int or upper < lower))
         ):
-            errors.append(f"ERROR: {label}: reserved must be a list of names")
-        elif len(reserved) != len(set(reserved)):
-            errors.append(f"ERROR: {label}: duplicate reserved name")
-    elif vocabulary:
-        errors.append(f"ERROR: {label}: vocabulary must be empty")
+            errors.append(
+                f"ERROR: {label}: function {name} has invalid argument bounds"
+            )
+        if arity["result"] not in FUNCTION_RESULTS:
+            errors.append(
+                f"ERROR: {label}: function {name} must return one of "
+                f"{sorted(FUNCTION_RESULTS)}"
+            )
+    reducers = vocabulary.get("reducer")
+    if not isinstance(reducers, dict):
+        errors.append(f"ERROR: {label}: vocabulary.reducer is missing")
+        reducers = {}
+    for name, declaration in reducers.items():
+        arguments = (
+            declaration.get("argument") if isinstance(declaration, dict) else None
+        )
+        if (
+            not isinstance(arguments, list)
+            or not arguments
+            or any(value not in REDUCER_ARGUMENTS for value in arguments)
+        ):
+            errors.append(
+                f"ERROR: {label}: reducer {name} must declare its argument forms"
+            )
+    reserved = document.get("reserved")
+    if not isinstance(reserved, list) or not all(
+        isinstance(name, str) for name in reserved
+    ):
+        errors.append(f"ERROR: {label}: reserved must be a list of names")
+    elif len(reserved) != len(set(reserved)):
+        errors.append(f"ERROR: {label}: duplicate reserved name")
+    else:
+        callable_names = sorted(set(reserved) & (set(functions) | set(reducers)))
+        if callable_names:
+            errors.append(
+                f"ERROR: {label}: reserved names {callable_names} are also callable"
+            )
     return errors
 
 
@@ -409,6 +462,12 @@ def grammar_case_errors(contract, case, label):
     unknown = sorted(set(case) - GRAMMAR_CASE_KEYS)
     if unknown:
         errors.append(f"ERROR: {label}: unknown keys {unknown}")
+    contexts = GRAMMAR_CONTEXTS.get(contract)
+    if contexts is None:
+        if "context" in case:
+            errors.append(f"ERROR: {label}: the contract is read in no contexts")
+    elif case.get("context") not in contexts:
+        errors.append(f"ERROR: {label}: context must be one of {contexts}")
     covers = case.get("covers")
     if not isinstance(covers, list) or not covers:
         errors.append(f"ERROR: {label}: covers must be a non-empty list")

@@ -13,7 +13,6 @@ outside the expected 18-to-100 range.
 - `range` on `AGE`: violated by the age outside 18-to-100; it is a
   warning, so the run still succeeds and the run report lists the
   offending subject.
-- `unique` on `USUBJID`: held, no subject repeats.
 - `row_count`: held, the run produced at least one row.
 
 The run report (`adsl-checks.csv`) has one row per item, named by its kind
@@ -25,9 +24,9 @@ longest text, and one `check` row per check. Every row names the dataset
 (`NAME`). A check row also carries its optional label (`ID`), the column
 it covers (`TARGET`), the rule it applies (`RULE`), its `SEVERITY`, and how
 many units failed out of how many it examined (`COUNT`, `TOTAL`): rows for
-a row-by-row check, distinct subjects for `unique`, and the whole dataset
-as one unit for `row_count`. A held check leaves `CONDITION` and `KEYS`
-empty and has empty details (`{}`).
+a row-by-row check and the whole dataset as one unit for `row_count`. A
+held check leaves `CONDITION` and `KEYS` empty and has empty details
+(`{}`).
 
 **Note:** the report says what was read, built and checked, and for a
 violated check what broke and for whom: its `KEYS` list every offending

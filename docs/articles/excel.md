@@ -51,8 +51,6 @@ columns:                       # this section (below) is the Variable sheet
         expr: "WEIGHTKG / POWER(NULLIF(HEIGHTCM, 0) / 100, 2)"
 
 verifications:                 # <- no cell for this either
-  - unique:
-      columns: [STUDYID, USUBJID]
   - assert:
       id: bmi-missing-only-without-usable-inputs
       when: "BMI IS NULL"
@@ -71,9 +69,10 @@ what has no Excel counterpart at all. Four things:
    programmer picks differently.
 3. **Dependency order vs delivery order.** One `Variable Order` column does both
    jobs. yamaa splits them into `columns` order and `output.columns`.
-4. **The two verifications.** `Key Variables` looks like it asserts uniqueness,
-   but nothing executes it. The `assert` rule -- "BMI is empty only when
-   height or weight is unusable" -- normally survives as a sentence in a review email.
+4. **The checks.** `Key Variables` looks like it asserts uniqueness, but
+   nothing executes it; `keys` does, so no separate uniqueness check is
+   written. The `assert` rule -- "BMI is empty only when height or weight is
+   unusable" -- normally survives as a sentence in a review email.
 
 Going the other way, every one of the eleven columns has a yamaa field --
 two live in governed submission metadata rather than in the derivation:
@@ -103,7 +102,7 @@ as `core`, `codelist`, `length`, or `comment`.
 | Sort Order (submission sort) | `output.order_by` | A presentation order applied after every check |
 | Input datasets (usually only in a Comment) | `input:` | Every input is declared and named |
 | Structure: "one record per subject per visit" | `base` plus `rows` templates | Row count comes from these, not from a sentence |
-| Copy the corporate template and edit | `parents:` | Real layering; a change to the parent flows down (Specification composition) |
+| Copy the corporate template and edit | `parent:` | Real layering; a change to the parent flows down (Specification composition) |
 | Dataset-level review checks | `verifications:` | `unique`, `row_count`, `all_or_none`, `assert` |
 
 ### 2.2 Variable level
@@ -163,27 +162,32 @@ it. From
         source: Investigator
 ```
 
-then the `codelists:` entry in `define.yaml` that the binding names:
+then the codelist in the study's `environment.yaml` that the binding names:
 
 ```yaml
 codelists:
-  - id: SEX
-    name: Sex
-    standard: CT_SDTM
-    items:
-      - value: F
-        decode: Female
-      - value: M
-        decode: Male
-      - value: U
-        decode: Unknown
+  - standard:
+      name: CDISC/NCI
+      publishing_set: SDTM
+      version: '2023-12-15'
+    codelists:
+      - id: SEX
+        name: Sex
+        items:
+          - value: F
+            decode: Female
+          - value: M
+            decode: Male
+          - value: U
+            decode: Unknown
 ```
 
-`submission.codelist` carries the `id`, not the values. The document carries
+`submission.codelist` carries the `id`, not the values. The environment carries
 the values once, and every column naming that `id` shares the one statement.
-When the bound codelist declares `items`, an `allowed_values` verification on
-the same column must list the same values -- the check the run executes and
-the terminology the document publishes stay in agreement.
+When the bound codelist declares `items`, the run checks every non-missing
+value against them, and an `allowed_values` verification on the same column is
+rejected as a second statement of the same list -- the check the run executes
+and the terminology the document publishes come from one declaration.
 
 ### 2.4 Value-level metadata
 
@@ -270,12 +274,13 @@ What changed:
   "unrecognised" branch to answer -- SEX is already constrained to three
   values. Where a wording genuinely can surprise you, the same benchmark's
   RACEN shows both handlers at once: `unmapped: 99` for a race the
-  dictionary does not know, `missing: null` for an empty one. A condition
+  dictionary does not know, `missing: {literal: null}` for an empty one. A condition
   with no handler stops the run instead of turning into a blank.
 - The codelist *name* (`SEX`, `AGEGR1`) has no single home. The translation
-  lives in `mapping.dict`, the check lives in `allowed_values`, and the name
-  itself goes in `submission.codelist` if you generate define.xml -- see
-  [Where the codelist name lives](#where-the-codelist-name-lives) below.
+  lives in `mapping.dict`, and the name goes in `submission.codelist` if you
+  generate define.xml; a bound list of items is then also the check, so the
+  `allowed_values` above is written only when no codelist is bound -- see
+  [Where the codelist name lives](#where-the-codelist-name-lives) above.
 
 ### Example 2: a Comment sentence becomes `compute`
 
@@ -356,8 +361,8 @@ columns:
           then: {literal: "Y"}
         - otherwise: {literal: null}
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 ```
 
 What changed:
@@ -386,7 +391,7 @@ benchmark for the full side-by-side:
 |---|---|
 | [`adam-adlb-bds`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adlb-bds) | VLM and BDS: one row template per PARAMCD, then `baseline_flag` / `aggregate`-with-`filter` / `row_number` as columns |
 | [`adam-adex-cumulative-dose`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adex-cumulative-dose) | `aggregate:` with `expr: "SUM(EX.EXDOSE)"`, reducing by the applicable keys; a CSV field entering arithmetic must declare its type |
-| [`adam-adae-partial-dates`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adae-partial-dates) | `date_impute` beside `date_precision` reading the same source; `missing` and `invalid` are separate defects |
+| [`adam-adae-partial-dates`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adae-partial-dates) | `impute` with a treatment-start bound beside `imputation_flag` reading the completed date; a missing start gives no date and `invalid` answers non-date text |
 | [`sdtm-dm-metadata`](https://github.com/elong0527/yamaa/tree/main/benchmarks/sdtm-dm-metadata) | `submission` vs `verifications`: Length becomes both `submission.length` (for define.xml) and a `max_length` check |
 | [`sdtm-ae-coding`](https://github.com/elong0527/yamaa/tree/main/benchmarks/sdtm-ae-coding) | Coding against MedDRA with a named intermediate; several columns read the one record it selects |
-| [`schema-inheritance`](https://github.com/elong0527/yamaa/tree/main/benchmarks/schema-inheritance) | Corporate, compound and study layers via `parents:` -- real layering instead of copying the template |
+| [`schema-inheritance`](https://github.com/elong0527/yamaa/tree/main/benchmarks/schema-inheritance) | Corporate, compound and study layers chained by `parent:` -- real layering instead of copying the template |

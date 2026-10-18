@@ -31,7 +31,5 @@ columns:
           severity: warning
 
 verifications:
-  - unique:
-      columns: [USUBJID]
   - row_count:
       min: 1

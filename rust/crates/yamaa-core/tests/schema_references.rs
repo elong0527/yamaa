@@ -362,7 +362,7 @@ mod schema {
             assert!(matches!(
                 refs(&schema, text(&input), &["numeric_expression"], None),
                 Err(InheritanceReferenceError::Numeric(
-                    yamaa_core::numeric_parser::ParseError::Limit { .. }
+                    yamaa_core::expression::CompileError::Limit { .. }
                 ))
             ));
         }
@@ -544,6 +544,7 @@ mod schema {
                         V::map(vec![
                             ("id", text("UNUSED_LOOKUP")),
                             ("dataset", text("DEAD")),
+                            ("require_match", V::boolean(true)),
                         ]),
                     ]),
                 ),
@@ -923,7 +924,7 @@ mod schema {
                             "root_class",
                             V::List(vec![
                                 field("schema_version", "str", true),
-                                field("parents", "list[str]", false),
+                                field("parent", "str", false),
                                 field("input", "dict[str, dataset_class]", false),
                                 field("columns", "list[column_class]", false),
                                 field("rows", "list[row_class]", false),
@@ -1227,7 +1228,7 @@ mod schema {
         }
 
         #[test]
-        fn column_fragments_defer_nested_requiredness_but_other_supplied_values_do_not() {
+        fn keyed_member_fragments_defer_nested_requiredness_but_root_values_do_not() {
             let findings = diagnostics(layer(vec![
                 (
                     "input",
@@ -1258,24 +1259,56 @@ mod schema {
             ]));
             assert_eq!(
                 paths(&findings),
+                [("settings.needed", "missing_required_field")]
+            );
+        }
+
+        #[test]
+        fn nested_required_nulls_are_invalid_clears_in_members_and_root_values() {
+            let findings = diagnostics(layer(vec![
+                (
+                    "rows",
+                    V::List(vec![V::map(vec![
+                        ("id", V::text("R")),
+                        ("options", V::map(vec![("needed", V::Scalar(N::Null))])),
+                    ])]),
+                ),
+                ("settings", V::map(vec![("needed", V::Scalar(N::Null))])),
+            ]));
+            assert_eq!(
+                findings,
                 [
-                    ("input.SRC.options.needed", "missing_required_field"),
-                    ("rows.R.options.needed", "missing_required_field"),
-                    ("intermediates.I.options.needed", "missing_required_field"),
-                    ("settings.needed", "missing_required_field"),
+                    finding(
+                        "rows.R.options.needed",
+                        "invalid_clear",
+                        "REQ-0660",
+                        vec![("field", text("needed"))]
+                    ),
+                    finding(
+                        "settings.needed",
+                        "invalid_clear",
+                        "REQ-0660",
+                        vec![("field", text("needed"))]
+                    ),
                 ]
             );
         }
 
         #[test]
-        fn normalization_preserves_clears_defers_column_defaults_and_owns_shorthand() {
+        fn normalization_preserves_clears_at_every_depth_defers_defaults_and_owns_shorthand() {
             let normalized = {
                 let input = layer(vec![
                     (
                         "rows",
                         V::List(vec![V::map(vec![
                             ("id", V::text("R")),
-                            ("options", V::map(vec![("needed", V::text("yes"))])),
+                            (
+                                "options",
+                                V::map(vec![
+                                    ("needed", V::text("yes")),
+                                    ("defaulted", V::Scalar(N::Null)),
+                                ]),
+                            ),
                         ])]),
                     ),
                     (
@@ -1320,7 +1353,7 @@ mod schema {
                             "options",
                             V::map(vec![
                                 ("needed", V::text("yes")),
-                                ("defaulted", V::text("DEFAULT")),
+                                ("defaulted", V::Scalar(N::Null)),
                             ]),
                         ),
                     ])]),
@@ -1328,7 +1361,7 @@ mod schema {
             ]);
             assert_document(&normalized.document, &expected);
             assert_eq!(normalized.origins.len(), expected.nodes().len());
-            assert!(normalized
+            assert!(!normalized
                 .origins
                 .iter()
                 .any(|o| matches!(o.source, SchemaSource::Default { .. })));
@@ -1466,18 +1499,20 @@ mod schema {
                 V::text("bool"),
                 V::text("null"),
             ]));
+            // A dataset written as a mapping says more than its path, so it is
+            // not a restated path shorthand (SCHEMA-15).
+            let dataset = |path: &str| {
+                V::map(vec![
+                    ("path", V::text(path)),
+                    ("options", V::map(vec![("defaulted", V::text("SET"))])),
+                ])
+            };
             let input = layer(vec![(
                 "input",
                 V::Pairs(vec![
-                    (
-                        V::integer("2"),
-                        V::map(vec![("path", V::text("first.csv"))]),
-                    ),
-                    (
-                        V::text("KEEP"),
-                        V::map(vec![("path", V::text("middle.csv"))]),
-                    ),
-                    (V::text("2"), V::map(vec![("path", V::text("last.csv"))])),
+                    (V::integer("2"), dataset("first.csv")),
+                    (V::text("KEEP"), dataset("middle.csv")),
+                    (V::text("2"), dataset("last.csv")),
                     (V::boolean(true), V::text("first-bool.csv")),
                     (V::text("True"), V::text("last-bool.csv")),
                     (V::Scalar(N::Null), V::text("first-null.csv")),
@@ -1490,8 +1525,8 @@ mod schema {
                 &layer(vec![(
                     "input",
                     V::map(vec![
-                        ("2", V::map(vec![("path", V::text("last.csv"))])),
-                        ("KEEP", V::map(vec![("path", V::text("middle.csv"))])),
+                        ("2", dataset("last.csv")),
+                        ("KEEP", dataset("middle.csv")),
                         ("True", V::map(vec![("path", V::text("last-bool.csv"))])),
                         ("None", V::map(vec![("path", V::text("last-null.csv"))])),
                     ]),
@@ -1518,13 +1553,44 @@ mod schema {
                 "input",
                 V::Pairs(vec![
                     (V::integer("2"), V::map(vec![("path", V::boolean(false))])),
-                    (V::text("2"), V::map(vec![("path", V::text("last.csv"))])),
+                    (V::text("2"), V::text("last.csv")),
                 ]),
             )]);
             let Err(NormalizationError::Invalid(findings)) = schema.normalize_layer(&input) else {
                 panic!("shadowed invalid member must fail")
             };
             assert_eq!(paths(&findings), [("input[2].path", "invalid_field_type")]);
+        }
+
+        #[test]
+        fn a_dataset_mapping_holding_only_its_path_restates_the_path_shorthand() {
+            let schema = schema();
+            let input = layer(vec![(
+                "input",
+                V::map(vec![
+                    ("DM", V::map(vec![("path", V::text("dm.csv"))])),
+                    // A clear marker beside the path adds to it.
+                    (
+                        "AE",
+                        V::map(vec![
+                            ("path", V::text("ae.csv")),
+                            ("options", V::Scalar(N::Null)),
+                        ]),
+                    ),
+                    ("LB", V::text("lb.csv")),
+                ]),
+            )]);
+            let Err(NormalizationError::Invalid(findings)) = schema.normalize_layer(&input) else {
+                panic!("a restated path shorthand must fail")
+            };
+            assert_eq!(paths(&findings), [("input.DM", "redundant_long_form")]);
+            assert_eq!(
+                findings[0].context,
+                [
+                    ("field", C::Text("path".into())),
+                    ("shorthand", C::InputValue(5)),
+                ]
+            );
         }
     }
     mod schema_type_expression {
@@ -1620,9 +1686,9 @@ mod schema {
     }
     mod schema_validation {
         use yamaa_core::schema::{
-            Document, DocumentKind, DocumentNode as N, NormalizationError, NormalizationResource,
-            NormalizedDocument, SchemaContext as C, SchemaDiagnostic, SchemaModule, SchemaSource,
-            SchemaStructure,
+            BundleError, BundleIssueKind, DescriptorIssue, Document, DocumentKind,
+            DocumentNode as N, NormalizationError, NormalizationResource, NormalizedDocument,
+            SchemaContext as C, SchemaDiagnostic, SchemaModule, SchemaSource, SchemaStructure,
         };
 
         use crate::support::document::Tree as V;
@@ -1816,10 +1882,14 @@ mod schema {
                             "type",
                             V::List(vec![
                                 V::text("tree_value"),
-                                V::text("list[tree_value]"),
+                                V::text("tree_branch"),
                                 V::text("str"),
                             ]),
                         )]),
+                    ),
+                    (
+                        "tree_branch",
+                        V::map(vec![("type", V::text("list[tree_value]"))]),
                     ),
                 ],
             );
@@ -2173,10 +2243,26 @@ mod schema {
             assert!(validate(
                 &schema,
                 "derive",
-                V::map(vec![("source", V::text("DM.AGE"))]),
+                V::map(vec![("literal", V::integer("4"))]),
                 false
             )
             .is_empty());
+            // The bare string is the only spelling of a plain source (EXPR-5).
+            let restated = validate(
+                &schema,
+                "derive",
+                V::map(vec![("source", V::text("DM.AGE"))]),
+                false,
+            );
+            assert_eq!(findings(&restated), [("derive", "redundant_long_form")]);
+            assert_eq!(
+                restated[0].context,
+                [
+                    ("field", C::Text("source".into())),
+                    ("shorthand", C::InputValue(1)),
+                ]
+            );
+            assert_eq!(restated[0].definition().requirement, Some("SCHEMA-15"));
             assert_eq!(
                 findings(&validate(&schema, "derive", V::map(vec![]), false)),
                 [("derive", "invalid_operation_count")]
@@ -2447,71 +2533,76 @@ mod schema {
         }
 
         #[test]
-        fn collection_normalization_prioritizes_canonical_lists_even_when_t_is_a_list() {
-            let schema = bundle(
-                vec![
-                    V::map(vec![(
-                        "simple",
-                        V::map(vec![(
-                            "type",
-                            V::List(vec![V::text("str"), V::text("list[str]")]),
-                        )]),
-                    )]),
-                    V::map(vec![(
-                        "nested",
-                        V::map(vec![(
-                            "type",
-                            V::List(vec![V::text("list[str]"), V::text("list[list[str]]")]),
-                        )]),
-                    )]),
-                    V::map(vec![(
-                        "larger",
-                        V::map(vec![(
-                            "type",
-                            V::List(vec![V::text("str"), V::text("list[str]"), V::text("null")]),
-                        )]),
-                    )]),
-                ],
-                vec![],
+        fn single_or_list_unions_are_bundle_errors_and_lists_normalize_as_written() {
+            // One spelling per meaning: a union may not offer a type and a list
+            // of it, so no bare value is ever wrapped into a list (SCHEMA-10).
+            let declaration = |members: Vec<&'static str>| {
+                V::map(vec![(
+                    "type",
+                    V::List(members.into_iter().map(V::text).collect()),
+                )])
+            };
+            let Err(BundleError::Invalid(issues)) = SchemaStructure::admit(
+                vec![SchemaModule {
+                    name: "schema.yaml".into(),
+                    document: document(V::map(vec![
+                        ("version", V::text("1.0")),
+                        (
+                            "root_class",
+                            V::List(vec![
+                                field("schema_version", "str"),
+                                V::map(vec![("simple", declaration(vec!["str", "list[str]"]))]),
+                                V::map(vec![(
+                                    "nested",
+                                    declaration(vec!["list[str]", "list[list[str]]"]),
+                                )]),
+                                V::map(vec![(
+                                    "larger",
+                                    declaration(vec!["str", "list[str]", "null"]),
+                                )]),
+                                V::map(vec![("plain", declaration(vec!["str", "list[int]"]))]),
+                            ]),
+                        ),
+                    ])),
+                }],
+                0,
+                "root_class",
+            ) else {
+                panic!("a single-or-list union must be refused");
+            };
+            assert_eq!(
+                issues
+                    .iter()
+                    .map(|issue| (issue.path.as_str(), &issue.kind))
+                    .collect::<Vec<_>>(),
+                [
+                    (
+                        "root_class.simple",
+                        &BundleIssueKind::Descriptor(DescriptorIssue::SingleOrList {
+                            member: "str".into()
+                        })
+                    ),
+                    (
+                        "root_class.nested",
+                        &BundleIssueKind::Descriptor(DescriptorIssue::SingleOrList {
+                            member: "list[str]".into()
+                        })
+                    ),
+                    (
+                        "root_class.larger",
+                        &BundleIssueKind::Descriptor(DescriptorIssue::SingleOrList {
+                            member: "str".into()
+                        })
+                    ),
+                ]
             );
-            let result = normalize(&schema, "simple", V::text("DM"), false);
+            let schema = bundle(vec![field("names", "list[str]")], vec![]);
+            let result = normalize(&schema, "names", V::List(vec![V::text("DM")]), false);
             assert_value(&result.document, V::List(vec![V::text("DM")]));
-            assert!(result.origins[result.document.root()].generated);
-            assert!(result
-                .origins
-                .iter()
-                .all(|o| o.source == SchemaSource::Input));
-            assert_value(
-                &normalize(
-                    &schema,
-                    "simple",
-                    V::List(vec![V::text("DM"), V::text("AE")]),
-                    false,
-                )
-                .document,
-                V::List(vec![V::text("DM"), V::text("AE")]),
-            );
-            assert_value(
-                &normalize(&schema, "nested", V::List(vec![V::text("DM")]), false).document,
-                V::List(vec![V::List(vec![V::text("DM")])]),
-            );
-            assert_value(
-                &normalize(
-                    &schema,
-                    "nested",
-                    V::List(vec![V::List(vec![V::text("DM")])]),
-                    false,
-                )
-                .document,
-                V::List(vec![V::List(vec![V::text("DM")])]),
-            );
-            assert_value(
-                &normalize(&schema, "nested", V::List(vec![]), false).document,
-                V::List(vec![]),
-            );
-            assert_value(
-                &normalize(&schema, "larger", V::text("DM"), false).document,
-                V::text("DM"),
+            assert!(result.origins.iter().all(|o| !o.generated));
+            assert_eq!(
+                findings(&validate(&schema, "names", V::text("DM"), false)),
+                [("names", "invalid_field_type")]
             );
         }
 
@@ -2568,21 +2659,49 @@ mod schema {
                 &normalize(
                     &schema,
                     "item",
-                    V::map(vec![("name", V::text("DM"))]),
+                    V::map(vec![("name", V::text("DM")), ("optional", V::integer("1"))]),
                     false,
                 )
                 .document,
-                V::map(vec![("enabled", V::boolean(true)), ("name", V::text("DM"))]),
+                V::map(vec![
+                    ("enabled", V::boolean(true)),
+                    ("name", V::text("DM")),
+                    ("optional", V::integer("1")),
+                ]),
             );
             assert_value(
                 &normalize(&schema, "item", V::map(vec![]), true).document,
                 V::map(vec![]),
             );
+            // A written long form that holds only the shorthand's field restates
+            // it (SCHEMA-15), in a complete value and in a fragment alike.
+            for fragment in [false, true] {
+                let input = document(V::map(vec![("name", V::text("DM"))]));
+                let descriptor = schema.root_class().fields[1].descriptor;
+                let Err(NormalizationError::Invalid(findings)) =
+                    schema.normalize_descriptor(descriptor, &input, input.root(), fragment)
+                else {
+                    panic!("a restated shorthand must fail");
+                };
+                assert_eq!(
+                    findings
+                        .iter()
+                        .map(|d| (d.path.as_str(), d.definition().condition))
+                        .collect::<Vec<_>>(),
+                    [("<normalization>", "redundant_long_form")]
+                );
+                assert_eq!(
+                    findings[0].context,
+                    [
+                        ("field", C::Text("name".into())),
+                        ("shorthand", C::InputValue(1)),
+                    ]
+                );
+            }
         }
 
         #[test]
-        fn derivation_calls_redispatch_through_registry_and_class_while_case_results_remain_sources(
-        ) {
+        fn bare_derivation_strings_are_source_references_never_calls() {
             let schema = bundle(
                 vec![
                     field("derive", "derivation"),
@@ -2646,40 +2765,29 @@ mod schema {
                     ("fallback", V::integer("0")),
                 ]),
             );
-            assert_value(
-                &normalize(&schema, "derive", V::text("  to_number( DM.AGE )  "), false).document,
-                V::map(vec![
-                    (
-                        "value",
-                        V::map(vec![(
-                            "to_number",
-                            V::map(vec![("source", V::text("DM.AGE"))]),
-                        )]),
-                    ),
-                    ("fallback", V::integer("0")),
-                ]),
-            );
-            assert_value(
-                &normalize(&schema, "derive", V::text("to_number(DM.AGE)"), true).document,
-                V::map(vec![(
-                    "value",
-                    V::map(vec![(
-                        "to_number",
-                        V::map(vec![("source", V::text("DM.AGE"))]),
-                    )]),
-                )]),
-            );
-            assert_value(
-                &normalize(&schema, "result", V::text("to_number(DM.AGE)"), false).document,
-                V::map(vec![("source", V::text("to_number(DM.AGE)"))]),
-            );
-            for source in ["nested(call(DM.AGE))", "1invalid(DM.AGE)", "op (DM.AGE)"] {
+            // A string spelled like a call is still only a source reference
+            // (EXPR-5); the source's own type then refuses it.
+            for source in [
+                "to_number(DM.AGE)",
+                "  to_number( DM.AGE )  ",
+                "nested(call(DM.AGE))",
+                "1invalid(DM.AGE)",
+                "op (DM.AGE)",
+            ] {
                 assert_value(
                     &normalize(&schema, "derive", V::text(source), false).document,
                     V::map(vec![
                         ("value", V::map(vec![("source", V::text(source))])),
                         ("fallback", V::integer("0")),
                     ]),
+                );
+                assert_value(
+                    &normalize(&schema, "derive", V::text(source), true).document,
+                    V::map(vec![("value", V::map(vec![("source", V::text(source))]))]),
+                );
+                assert_value(
+                    &normalize(&schema, "result", V::text(source), false).document,
+                    V::map(vec![("source", V::text(source))]),
                 );
             }
         }
@@ -2761,10 +2869,19 @@ mod schema {
                     "value",
                     V::map(vec![(
                         "type",
-                        V::List(vec![V::text("str"), V::text("list[str]")]),
+                        V::List(vec![V::text("str"), V::text("record")]),
                     )]),
                 )])],
-                vec![],
+                vec![(
+                    "record",
+                    V::List(vec![V::map(vec![(
+                        "name",
+                        V::map(vec![
+                            ("type", V::text("str")),
+                            ("required", V::boolean(true)),
+                        ]),
+                    )])]),
+                )],
             );
             let input = document(V::text("DM"));
             let before = input.clone();
@@ -2777,7 +2894,7 @@ mod schema {
                 .unwrap();
             assert_eq!(first, second);
             assert_eq!(input, before);
-            assert_value(&first.document, V::List(vec![V::text("DM")]));
+            assert_value(&first.document, V::map(vec![("name", V::text("DM"))]));
         }
 
         #[test]

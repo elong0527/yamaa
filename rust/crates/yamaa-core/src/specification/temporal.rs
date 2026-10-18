@@ -1,77 +1,135 @@
-//! Complete-date declarations share operand binding with other scalar operations.
+//! Temporal declarations dispatch on their declared `type` and share operand
+//! binding with other scalar operations.
 use super::*;
 use crate::dataset::{CalendarUnit, DateBounds, ElapsedUnit, Temporal, TemporalKind};
 
 pub(super) const OPERATIONS: &[&str] = &[
-    "date_diff",
+    "diff",
     "study_day",
     "to_epoch_day",
-    "date_shift",
-    "datetime_diff",
-    "datetime_shift",
+    "shift",
     "duration_value",
-    "duration_text",
 ];
 
-fn elapsed_unit(d: &Document, payload: usize) -> Result<ElapsedUnit, PrepareError> {
-    Ok(match text(d, field(d, payload, "unit")?)? {
+const CALENDAR_UNITS: &[&str] = &["day", "week", "month", "year"];
+const ELAPSED_UNITS: &[&str] = &["second", "minute", "hour", "day"];
+
+fn elapsed_unit(unit: &str) -> Option<ElapsedUnit> {
+    Some(match unit {
         "second" => ElapsedUnit::Second,
         "minute" => ElapsedUnit::Minute,
         "hour" => ElapsedUnit::Hour,
         "day" => ElapsedUnit::Day,
-        _ => return Err(PrepareError::Internal),
+        _ => return None,
     })
 }
 
+/// Every field that may hold an operand, whichever `type` is declared.
 pub(super) fn fields(operation: &str) -> &'static [&'static str] {
     match operation {
-        "date_diff" | "datetime_diff" => &["start", "end"],
+        "diff" => &["start", "end"],
         "study_day" => &["date", "reference"],
-        "date_shift" => &["source", "days"],
-        "datetime_shift" => &["source", "amount"],
+        "shift" => &["source", "days", "amount"],
         _ => &["source"],
     }
 }
 
-fn kind(d: &Document, payload: usize, operation: &str) -> Result<TemporalKind, PrepareError> {
-    Ok(match operation {
-        "date_diff" => TemporalKind::Difference {
-            unit: match text(d, field(d, payload, "unit")?)? {
-                "day" => CalendarUnit::Day,
-                "week" => CalendarUnit::Week,
-                "month" => CalendarUnit::Month,
-                "year" => CalendarUnit::Year,
-                _ => return Err(PrepareError::Internal),
-            },
-            bounds: match d
+/// The declared `type` of a type-dispatched operation.
+fn datetime(d: &Document, payload: usize) -> Result<bool, PrepareError> {
+    match text(d, field(d, payload, "type")?)? {
+        "date" => Ok(false),
+        "datetime" => Ok(true),
+        _ => Err(PrepareError::Internal),
+    }
+}
+
+/// Read the operation's kind, or the declaration findings that keep it from
+/// having one: a unit or bounds its `type` does not take, or a field its
+/// `type` requires or does not take.
+fn declared(
+    d: &Document,
+    payload: usize,
+    operation: &str,
+    path: &str,
+) -> Result<Result<TemporalKind, Vec<PreflightFinding>>, PrepareError> {
+    let unit = || text(d, field(d, payload, "unit")?);
+    Ok(Ok(match operation {
+        "diff" => {
+            let bounds = d
                 .field(payload, "bounds")
                 .map(|id| text(d, id))
                 .transpose()?
-                .unwrap_or("exclusive")
-            {
-                "exclusive" => DateBounds::Exclusive,
-                "inclusive" => DateBounds::Inclusive,
-                "between" => DateBounds::Between,
-                _ => return Err(PrepareError::Internal),
-            },
-        },
+                .unwrap_or("exclusive");
+            let unit = unit()?;
+            if datetime(d, payload)? {
+                let Some(unit) = elapsed_unit(unit) else {
+                    return Ok(Err(vec![PreflightFinding::Scalar(
+                        Temporal::unit_diagnostic(path, unit, ELAPSED_UNITS),
+                    )]));
+                };
+                if bounds != "exclusive" {
+                    return Ok(Err(vec![PreflightFinding::TemporalBounds {
+                        path: path.into(),
+                        value: bounds.into(),
+                    }]));
+                }
+                TemporalKind::DateTimeDifference { unit }
+            } else {
+                TemporalKind::Difference {
+                    unit: match unit {
+                        "day" => CalendarUnit::Day,
+                        "week" => CalendarUnit::Week,
+                        "month" => CalendarUnit::Month,
+                        "year" => CalendarUnit::Year,
+                        other => {
+                            return Ok(Err(vec![PreflightFinding::Scalar(
+                                Temporal::unit_diagnostic(path, other, CALENDAR_UNITS),
+                            )]))
+                        }
+                    },
+                    bounds: match bounds {
+                        "exclusive" => DateBounds::Exclusive,
+                        "inclusive" => DateBounds::Inclusive,
+                        "between" => DateBounds::Between,
+                        _ => return Err(PrepareError::Internal),
+                    },
+                }
+            }
+        }
+        "shift" => {
+            let datetime = datetime(d, payload)?;
+            let target = if datetime { "datetime" } else { "date" };
+            let findings = [
+                ("days", !datetime),
+                ("amount", datetime),
+                ("unit", datetime),
+            ]
+            .into_iter()
+            .filter(|&(name, wanted)| d.field(payload, name).is_some() != wanted)
+            .map(|(name, wanted)| {
+                PreflightFinding::Scalar(Temporal::type_field_diagnostic(
+                    wanted, path, name, target,
+                ))
+            })
+            .collect::<Vec<_>>();
+            if !findings.is_empty() {
+                return Ok(Err(findings));
+            }
+            if datetime {
+                TemporalKind::DateTimeShift {
+                    unit: elapsed_unit(unit()?).ok_or(PrepareError::Internal)?,
+                }
+            } else {
+                TemporalKind::DateShift
+            }
+        }
         "study_day" => TemporalKind::StudyDay,
         "to_epoch_day" => TemporalKind::EpochDay,
-        "date_shift" => TemporalKind::DateShift,
-        "datetime_diff" => TemporalKind::DateTimeDifference {
-            unit: elapsed_unit(d, payload)?,
-        },
-        "datetime_shift" => TemporalKind::DateTimeShift {
-            unit: elapsed_unit(d, payload)?,
-        },
         "duration_value" => TemporalKind::DurationValue {
-            unit: elapsed_unit(d, payload)?,
-        },
-        "duration_text" => TemporalKind::DurationText {
-            unit: elapsed_unit(d, payload)?,
+            unit: elapsed_unit(unit()?).ok_or(PrepareError::Internal)?,
         },
         _ => return Err(PrepareError::Internal),
-    })
+    }))
 }
 
 /// CSV fields have an authored type or the schema-defined string default.
@@ -140,8 +198,14 @@ pub(super) fn declaration_findings(
         }
         for &op in OPERATIONS {
             if let Some(payload) = d.field(value, op) {
-                let operation = kind(d, payload, op)?;
                 let path = format!("{prefix}.{op}");
+                let operation = match declared(d, payload, op, &path)? {
+                    Ok(operation) => operation,
+                    Err(errors) => {
+                        findings.extend(errors);
+                        continue;
+                    }
+                };
                 if let TemporalKind::Difference { unit, bounds } = operation {
                     if unit != CalendarUnit::Day && bounds != DateBounds::Exclusive {
                         let value = text(d, field(d, payload, "bounds")?)?;
@@ -276,25 +340,22 @@ pub(super) fn prepare(
     _intermediates: Option<&intermediates::Declarations>,
     extra: &mut Vec<UnsupportedFeature>,
 ) -> Result<Temporal, PrepareError> {
-    let kind = kind(d, payload, op)?;
-    let mut sources = Vec::new();
+    let allowed: &[&str] = match op {
+        "diff" => &["type", "start", "end", "unit", "bounds"],
+        "shift" => &["type", "source", "days", "amount", "unit"],
+        "study_day" => &["date", "reference"],
+        "to_epoch_day" => &["source"],
+        "duration_value" => &["source", "unit", "invalid"],
+        _ => return Err(PrepareError::Internal),
+    };
     for &(name, _) in mapping(d, payload)? {
         let name = text(d, name)?;
-        if !(kind.fields().contains(&name)
-            || op == "date_diff" && ["unit", "bounds"].contains(&name)
-            || [
-                "datetime_diff",
-                "datetime_shift",
-                "duration_value",
-                "duration_text",
-            ]
-            .contains(&op)
-                && name == "unit"
-            || op == "duration_value" && name == "invalid")
-        {
+        if !allowed.contains(&name) {
             reject(extra, name, format!("{path}.{name}"));
         }
     }
+    let kind = declared(d, payload, op, path)?.map_err(PrepareError::Invalid)?;
+    let mut sources = Vec::new();
     for field_name in kind.fields() {
         let id = field(d, payload, field_name)?;
         sources.push(match &d.nodes()[id] {

@@ -46,7 +46,7 @@ columns:
         pattern: '^ | $'
         replacement: ""
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   - name: AESPID
     type: str
@@ -64,4 +64,4 @@ columns:
         source: AESPID
         pattern: '[^0-9]'
         replacement: ""
-        missing: null
+        missing: {literal: null}

@@ -16,7 +16,7 @@ intermediates:
       STUDYID: LB.STUDYID
       USUBJID: LB.USUBJID
       IDVARVAL: {str_pad: {source: LBSEQ, width: 8}}
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - {name: STUDYID, type: str, label: Study Identifier, derivation: LB.STUDYID}

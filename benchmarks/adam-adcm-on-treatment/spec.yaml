@@ -64,12 +64,10 @@ columns:
             (TRTEDT IS NULL OR ASTDT IS NULL OR ASTDT <= TRTEDT) AND
             (AENDT IS NULL OR AENDT >= TRTSDT)
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, CMSEQ]
   - row_count:
       min: 13
       max: 13

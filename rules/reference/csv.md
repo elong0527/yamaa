@@ -1,0 +1,333 @@
+# CSV profile
+
+The `csv` profile writes an artifact as one canonical spelling of delimited
+text and reads a delimited source exactly as it is stored. These rules fix the
+bytes a writer produces, the display precision of `float` values, and the
+spellings a reader admits.
+
+## Writing
+
+<a id="csv-1"></a>
+
+### CSV-1. A csv artifact is UTF-8 without a byte-order mark, and every record ends in a line feed
+
+The artifact is UTF-8 and has no byte-order mark. `U+002C` separates fields,
+and no other delimiter is defined. `U+000A` terminates every record, including
+the last, so every artifact ends with it. `U+000D` is never written as part of
+a terminator; it appears only inside a quoted field that contains one.
+
+Evidence: `schema-text-functions`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::exact_quoting_preserves_empty_missing_whitespace_unicode_and_line_characters`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::retired_python_scalar_text_and_calendar_edges_keep_exact_csv_bytes`.
+Replaces: REQ-0722, REQ-0723, REQ-0724, REQ-0765.
+
+[Values](../values.md) owns the text being encoded. Writing a
+byte-order mark, a `U+000D` record terminator, or a quoting that differs from
+[CSV-3](#csv-3) is not an implementation option.
+
+<a id="csv-2"></a>
+
+### CSV-2. The header names `output.columns` in order, and each row follows as one record
+
+The first record is the header: the `output.columns` names, in that order,
+written under the quoting rule of [CSV-3](#csv-3). Each following record is one
+row, in the order [OUTPUT-11](../output.md#output-11) fixes, holding one field
+per header name in the same order. An artifact with no rows is the header
+record and its terminator alone.
+
+Evidence: `schema-ordering`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::header_only_and_projection_order_are_exact`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
+Replaces: REQ-0725, REQ-0726, REQ-0727.
+
+An artifact with no rows is not empty: the columns exist whether or not a row
+does.
+
+<a id="csv-3"></a>
+
+### CSV-3. A field is quoted exactly when it is empty or contains a quote, comma, `U+000D` or `U+000A`
+
+A field is quoted exactly when its text contains `U+0022`, `U+002C`, `U+000D`
+or `U+000A`, or when the field is the empty string; every other field is
+written bare. A quoted field is wrapped in `U+0022`, and each `U+0022` within
+its text is written twice. Nothing else is escaped: a quoted field carries its
+newlines, delimiters and every other scalar exactly.
+
+Evidence: `adam-adsl-investigator-comment`, `adam-adcm-atc-classes`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::exact_quoting_preserves_empty_missing_whitespace_unicode_and_line_characters`.
+Replaces: REQ-0728, REQ-0729, REQ-0730.
+
+A writer that quotes a field this condition leaves bare, or leaves bare a field
+this condition quotes, does not conform even if ordinary readers accept its
+output.
+
+<a id="csv-4"></a>
+
+### CSV-4. Missing is written as an empty bare field and the empty string as two quote characters
+
+A missing value is written as no characters at all, unquoted. A collected
+empty string is written as two quote characters. The two forms stay apart in
+the artifact, and no text stands in for absence. Reading does not restore the
+pair: [INPUT-8](../inputs.md#input-8) reads an empty field as
+missing whether it was bare or quoted.
+
+Evidence: `schema-str-replace`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::exact_quoting_preserves_empty_missing_whitespace_unicode_and_line_characters`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
+Replaces: REQ-0731.
+
+A collected empty string written here therefore returns as missing if the
+artifact is later read as a delimited source.
+
+```text
+STUDYID,COMMENT,NOTE
+S1,plain text,
+S1,"has, comma",""
+S1,"say ""hi""",x
+```
+
+The third row's `NOTE` is the ordinary string `x`. The second row's is a
+collected empty string. The first row's is missing.
+
+<a id="csv-5"></a>
+
+### CSV-5. Each value is written as the canonical text of its column type
+
+A value is written as the text its column type fixes in the table below. An
+`int` is written without a leading `U+002B`, without digit grouping and without
+a leading zero; zero is `0`. A `float` that takes no display precision is
+written by [Values](../values.md)'s conversion to `str`:
+the shortest round-tripping digits in positional notation, with a trailing
+`.0` omitted. That conversion has no exponent.
+
+Evidence: `adam-adlb-bds`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::scalar_output_uses_exact_integer_and_shortest_positional_float_text`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::retired_python_scalar_text_and_calendar_edges_keep_exact_csv_bytes`.
+Replaces: REQ-0732, REQ-0733.
+
+| Column type | Text written |
+|---|---|
+| `str` | its scalar values, under [Values](../values.md) |
+| `int` | its decimal digits, with a leading `U+002D` when negative |
+| `float` | [Values](../values.md)'s float text, or the fixed-point form of [CSV-7](#csv-7) |
+| `date` | [Values](../values.md)'s canonical `date` text |
+| `datetime` | [Values](../values.md)'s canonical `datetime` text |
+
+## Display precision
+
+<a id="csv-6"></a>
+
+### CSV-6. `output.decimals` is an integer from 0 to 18 for every float column of a csv artifact
+
+`output.decimals` is optional. When declared, it is an integer from 0 through
+18, inclusive, and it applies to the `csv` profile alone and to every `float`
+column of the artifact. The declaration is validated even when the artifact
+has no rows or no `float` columns. An invalid value fails validation at
+`output.decimals`, and so does a declaration on an output path the extension
+mapping resolves to `parquet`.
+
+Fails: `invalid_field_type`, `decimals_not_applicable`.
+Evidence: `adam-adlb-reported-precision`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::output_precision_rejection_follows_original_execution_failure_and_denies_publication`, `rust/crates/yamaa-adapters/tests/execution_aggregate_record_operations.rs::csv_precision_range_is_validated_for_empty_and_non_float_outputs_in_both_hosts`.
+Replaces: REQ-0744, REQ-0762.
+
+An invalid value fails with `invalid_field_type`. A declaration on a `parquet`
+path fails with `decimals_not_applicable`: a display precision that cannot
+take effect is a defect in the specification, not a setting to ignore.
+
+<a id="csv-7"></a>
+
+### CSV-7. With `output.decimals` of n, every float is written in fixed point with exactly n decimal digits
+
+When `output.decimals` is absent, a `float` is written as
+[Values](../values.md)'s float text. When it is present
+with the value `n`, a `float` is written in fixed-point form with exactly `n`
+digits after the decimal point, and with a decimal point only when `n` is
+greater than zero. A value keeps its declared width whether or not its digits
+require it: at `n` of 4, an integral 25 is written `25.0000`.
+
+Evidence: `adam-adlb-reported-precision`, `negative-transport-display-decimals`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::ties_and_near_ties_round_away_from_zero_with_independent_text`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::large_precision_uses_the_exact_fraction_and_retains_all_declared_zeros`.
+Replaces: REQ-0745.
+
+The fixed-point text is the artifact's presentation, and nothing the
+specification computes sees it ([CSV-8](#csv-8)); a reader of the artifact
+receives the rounded value. A submission section that requests a transport
+reads the published artifact back, so a specification it composes declares no
+`output.decimals` ([JSON-5](../profiles/dataset-json.md#json-5)), and the
+submitted display is the column's `submission.display_format`.
+
+<a id="csv-8"></a>
+
+### CSV-8. Display rounding happens once, when a field is written, and no other stage sees it
+
+Writing a field under `output.decimals` is the only place a value is rounded
+for presentation. It happens once, when the field is written, after everything
+the [Column derivation](../columns.md) sequences: every
+derivation, every conversion, every verification, key validation and row
+ordering. No dependent column, predicate, aggregate, verification, key or
+order term sees a rounded value, and changing `output.decimals` cannot change
+whether a run passes or which rows it produces.
+
+Evidence: `adam-adlb-reported-precision`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::whole_result_keeps_unrounded_derivation_and_prepares_exact_saved_bytes_once`, `python/tests/installed/installed_public_environment.py::test_csv_precision_changes_saved_bytes_only_and_preserves_derived_values`.
+Replaces: REQ-0746.
+
+<a id="csv-9"></a>
+
+### CSV-9. Display rounding applies the one rounding to the exact binary64 value
+
+Each binary64 value is an exact decimal fraction. Writing it with `n` digits
+rounds that exact value with the one rounding of
+[FORMULA-16](../formulas.md#formula-16): a tie, or a value within
+`2^-26 * 10^-n` below a tie, goes away from zero. The rounded decimal is
+written directly, and a value that rounds to zero is written without a sign.
+No host rounding or formatting routine may be assumed to do this.
+
+Evidence: `adam-adlb-reported-precision`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::ties_and_near_ties_round_away_from_zero_with_independent_text`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::precision_serializes_float_projection_only_and_preserves_missing_and_empty_text`.
+Replaces: REQ-0747, REQ-0748, REQ-0749, REQ-0750, REQ-0766.
+
+The difference is observable:
+
+| Value as written in source | Its exact binary64 value | `decimals: 2` |
+|---|---|---|
+| `0.125` | 0.125 | `0.13` |
+| `-0.125` | -0.125 | `-0.13` |
+| `2.675` | 2.674999999999999822364316059974953532218933105468750 | `2.68` |
+| `1.004999999` | 1.0049999990000000327228235619259066879749298095703125 | `1.00` |
+
+`0.125` is a genuine tie and rounds away from zero. `2.675` is `1.8e-14` below
+its tie, inside the window, so it rounds up as a decimal reader expects;
+`1.004999999` is `1e-7` below its tie, outside the window, so it rounds down.
+A routine that sends an exact tie to the even digit reports `0.12` for
+`0.125` and does not conform. Rounding a value another stage can observe
+([CSV-8](#csv-8)) is not an implementation option.
+
+## Reading
+
+<a id="csv-10"></a>
+
+### CSV-10. A csv source is UTF-8 without a byte-order mark
+
+A delimited source is UTF-8. Ill-formed encoded bytes fail under
+[Values](../values.md) rather than being replaced, skipped or decoded
+under a machine default. A byte-order mark is rejected rather than skipped.
+
+Fails: `invalid_text`, `source_byte_order_mark`.
+Evidence: `negative-source-bad-encoding`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::defects_have_exact_priority_and_coordinates`, `rust/crates/yamaa-adapters/tests/fixtures/csv_profile_diagnostics.json::bom`.
+Replaces: REQ-0836, REQ-0837, REQ-0853.
+
+Ill-formed encoded bytes fail with [Values](../values.md)'s
+`invalid_text`, reporting the record and field the reader had reached. A
+byte-order mark fails with `source_byte_order_mark`.
+
+<a id="csv-11"></a>
+
+### CSV-11. A record ends in `U+000A`, optionally preceded by `U+000D`, and the last may end the file
+
+A reader admits a spelling other than the one [CSV-1](#csv-1) writes only when
+both spellings deliver the same records. A record terminator is `U+000A`,
+optionally preceded by `U+000D`, and the final record may omit its terminator.
+`U+000D` occurs only as the first character of a record terminator; anywhere
+else, including inside a quoted field, it fails rather than joining the value.
+
+Fails: `source_carriage_return`.
+Evidence: `adam-advs-windows`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::retired_python_admitted_terminators_and_header_only_schema_are_exact`, `rust/crates/yamaa-adapters/tests/fixtures/csv_profile_diagnostics.json::quoted-cr`.
+Replaces: REQ-0833, REQ-0834, REQ-0835, REQ-0838, REQ-0843.
+
+A writer controls its bytes and emits one spelling, while a reader receives a
+study file as stored. The admitted spellings are a record terminated by
+`U+000D U+000A` rather than `U+000A`, and a final record with no terminator at
+all. Every other difference is refused rather than silently repaired: a
+byte-order mark ([CSV-10](#csv-10)), a `U+000D` anywhere else, and every reader
+option [CSV-15](#csv-15) excludes.
+
+<a id="csv-12"></a>
+
+### CSV-12. Fields are separated by commas and are either bare or quoted, with nothing trimmed
+
+`,` is the only delimiter. A field is bare or quoted, a property of the stored
+field rather than of its value. A bare field runs from the delimiter or
+terminator before it to the one after it and carries no `U+0022` and no
+`U+000D`. A quoted field opens and closes with `U+0022`; inside it,
+`U+0022 U+0022` is one literal `U+0022`, and `,` and `U+000A` are ordinary
+characters of the value. A closing quote is followed only by a delimiter or a
+terminator.
+
+Fails: `source_quote_unterminated`, `source_quote_in_bare_field`, `source_text_after_quote`.
+Evidence: `negative-source-unterminated-quote`, `adam-adsl-investigator-comment`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::retired_python_nonconforming_csv_has_exact_coordinates`.
+Replaces: REQ-0839, REQ-0840, REQ-0841, REQ-0842, REQ-0844.
+
+Nothing is trimmed. A space beside a delimiter is a character of the field,
+and a reader that removes it changes a collected value. A quoted field with no
+closing quote fails with `source_quote_unterminated`, a `U+0022` inside a bare
+field with `source_quote_in_bare_field`, and text after a closing quote with
+`source_text_after_quote`.
+
+<a id="csv-13"></a>
+
+### CSV-13. The header names each field once, and every later record has exactly that many fields
+
+The first record is the header, and it names the source's fields in order.
+Each name is non-empty, and no two names are the same under
+[Values](../values.md)'s equality; a quoted name carries the text
+inside its quotes, so a quoted empty name is an empty name and fails. Every
+later record carries exactly as many fields as the header names. A file with
+no bytes has no header and fails; a header-only file holds no records and is
+valid.
+
+Fails: `source_header_absent`, `source_field_name_empty`, `source_field_name_duplicate`, `source_record_width`.
+Evidence: `negative-source-extra-field`, `negative-source-field-duplicate`, `negative-source-unnamed-field`.
+Replaces: REQ-0845, REQ-0846, REQ-0847.
+
+A record with more or fewer fields than the header fails. Padding a short
+record and discarding a long record's surplus are not implementation options.
+An empty dataset still has its fields.
+
+<a id="csv-14"></a>
+
+### CSV-14. A field reaches ingestion as its text, or as missing when it has no characters
+
+Every field reaches [Inputs](../inputs.md) as its text or
+as missing, and an implementation must preserve the text and the missing
+state. A field with no characters is missing, bare or quoted. Quoting is a
+transport detail the reader does not report:
+[Inputs](../inputs.md) gives an empty field one meaning
+and never sees an empty string.
+
+Evidence: `adam-adsl-investigator-comment`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::retired_python_quoted_and_bare_empty_records_keep_order`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::collected_text_and_missing_remain_lossless`.
+Replaces: REQ-0850.
+
+<a id="csv-15"></a>
+
+### CSV-15. No reader option changes what the csv profile fixes, and a reader repairs nothing
+
+An implementation must not expose, and must not silently apply, a reader
+option that changes what this profile fixes: no comment prefix or skipped
+preamble, no alternate delimiter or quote character, no whitespace trimming,
+no header synthesis or renaming, and no missing-value sentinel. A reader does
+not repair a rejected file by skipping a mark, trimming a field, padding a
+record, renaming a duplicate name or normalizing a terminator inside a value.
+
+Evidence: `negative-source-na-age`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::retired_python_missing_looking_text_is_never_inferred_as_missing`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::discarded_ragged_rows_preserve_complete_syntax_and_header_priority`.
+Replaces: REQ-0848, REQ-0849, REQ-0854.
+
+[Inputs](../inputs.md) fixes what a stored field means,
+including that no text spells absence.
+
+<a id="csv-16"></a>
+
+### CSV-16. A csv reading failure names the dataset, the written path, and the record and field
+
+A reading failure names the input dataset, the path exactly as the
+specification wrote it, and the record and field where it was decided.
+Records and fields are counted from one, and the header is record one. A
+message carries no host path. Each condition rejects what the table below
+lists.
+
+Fails: `source_profile_unknown`, `source_byte_order_mark`, `source_header_absent`, `source_field_name_empty`, `source_field_name_duplicate`, `source_record_width`, `source_quote_unterminated`, `source_quote_in_bare_field`, `source_text_after_quote`, `source_carriage_return`.
+Evidence: `negative-source-unterminated-quote`, `negative-source-unnamed-field`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::every_csv_cause_retains_the_complete_independent_context`.
+Replaces: REQ-0851.
+
+| Condition | Rejects |
+|---|---|
+| `source_profile_unknown` | an extension the [Source ingestion](../inputs.md#input-1) mapping does not name |
+| `source_byte_order_mark` | a byte-order mark |
+| `source_header_absent` | a file with no header record |
+| `source_field_name_empty` | an empty header name |
+| `source_field_name_duplicate` | one name twice in the header |
+| `source_record_width` | a record whose field count is not the header's |
+| `source_quote_unterminated` | a quoted field with no closing quote |
+| `source_quote_in_bare_field` | `U+0022` inside a bare field |
+| `source_text_after_quote` | text after a closing quote |
+| `source_carriage_return` | `U+000D` that does not begin a record terminator |
+
+`source_text_after_quote` excludes a delimiter or a terminator after the quote.

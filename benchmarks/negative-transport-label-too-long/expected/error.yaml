@@ -1,0 +1,10 @@
+phase: validation
+condition: transport_label_invalid
+spec_paths:
+  - sdtm.specs[0].columns.SEX.label
+requirement: XPT-5
+context:
+  dataset: DM
+  column: SEX
+  label: Sex of the Subject as Collected on the Form
+  cause: length

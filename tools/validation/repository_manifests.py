@@ -30,7 +30,7 @@ def validation_phase_contracts(root: Path):
 
 
 def load_validation_fixtures(root: Path):
-    """Join each case's metadata with its independently authored error truth."""
+    """Collect each validation-phase case's independently authored error truth."""
     fixtures = {}
     errors = []
     directory = root / "benchmarks"
@@ -53,19 +53,10 @@ def load_validation_fixtures(root: Path):
         except ValueError as error:
             errors.append(f"ERROR: {label}: {error}")
             continue
-        declared = metadata.get("validation")
         contract = contracts.get(case.name)
-        if declared is None:
-            if contract is not None:
-                errors.append(
-                    f"ERROR: {label}.validation: missing validation declaration"
-                )
-            continue
         if contract is None:
-            errors.append(f"ERROR: {label}.validation: stale or non-validation fixture")
             continue
         entry = {
-            **declared,
             "condition": contract.get("condition"),
             "spec_paths": contract.get("spec_paths"),
         }

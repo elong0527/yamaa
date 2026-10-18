@@ -125,7 +125,7 @@ fn records(head: &str, kind: &str, derivation: &str) -> String {
          output: {{path: out.csv, columns: [USUBJID, AESEQ, R]}}\n\
          input:\n\
          \x20 AE: {{path: ae.csv, types: {{AESEQ: int}}}}\n\
-         \x20 DM: {{path: dm.csv}}\n\
+         \x20 DM: dm.csv\n\
          intermediates:\n\
          \x20 - {{id: SER, dataset: AE, filter: \"AE.AESER = 'Y'\"}}\n\
          \x20 - {{id: SUBJ, dataset: DM, key: [USUBJID]}}\n\
@@ -176,7 +176,7 @@ fn case_reads_the_driver_record_in_conditions_and_branches() {
     Fixture::new(&records(
         "",
         "str",
-        "{case: [{when: \"SER.AETERM = 'RASH'\", then: {literal: SKIN}}, {otherwise: {source: SER.AETERM}}]}",
+        "{case: [{when: \"SER.AETERM = 'RASH'\", then: {literal: SKIN}}, {otherwise: SER.AETERM}]}",
     ))
     .saved("USUBJID,AESEQ,R\nS1,1,HEADACHE\nS2,1,SKIN\nS1,3,DIZZINESS\n");
 }
@@ -326,7 +326,7 @@ fn derived_field_read_in_the_template_feeds_a_column() {
         &serious(
             LOWER,
             "str",
-            "{case: [{when: \"TERM = 'rash'\", then: {literal: SKIN}}, {otherwise: {source: TERM}}]}",
+            "{case: [{when: \"TERM = 'rash'\", then: {literal: SKIN}}, {otherwise: TERM}]}",
         )
         .replace(
             "derivations: {USUBJID: SER.USUBJID, AESEQ: SER.AESEQ}",
@@ -346,7 +346,7 @@ fn derived_field_in_an_imputation_bound_is_refused() {
         &records(
             "",
             "date",
-            "{date_impute: {source: SER.AEDTC, day: 15, minimum_source_precision: month, not_before: SER.FLOOR}}",
+            "{impute: {type: date, source: SER.AEDTC, day: 15, minimum_source_precision: month, not_before: SER.FLOOR}}",
         )
         .replace("types: {AESEQ: int}", "types: {AESEQ: int, AESTDT: date}")
         .replace(
@@ -359,7 +359,7 @@ fn derived_field_in_an_imputation_bound_is_refused() {
         "USUBJID,AESEQ,AESER,AEDTC,AESTDT\nS1,1,Y,2024-03,2024-03-20\n",
     )
     .unwrap();
-    fixture.refused("columns.R.derivation.date_impute");
+    fixture.refused("columns.R.derivation.impute");
 }
 
 /// A count of every collected event of the row's subject.
@@ -410,7 +410,7 @@ fn secondary(derivation: &str) -> String {
          keys: [USUBJID, AESEQ, SRC]\n\
          output: {{path: out.csv, columns: [USUBJID, AESEQ, SRC, R]}}\n\
          input:\n\
-         \x20 DM: {{path: dm.csv}}\n\
+         \x20 DM: dm.csv\n\
          \x20 AE: {{path: ae.csv, types: {{AESEQ: int}}}}\n\
          intermediates:\n\
          \x20 - {{id: SER, dataset: AE, filter: \"AE.AESER = 'Y'\"}}\n\

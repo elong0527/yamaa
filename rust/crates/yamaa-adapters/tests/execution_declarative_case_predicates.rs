@@ -159,7 +159,7 @@ columns:
 
         #[test]
         fn qualified_case_predicate_and_full_pattern_capture_execute_in_each_expression_position() {
-            let expression = "{case: [{when: 'SRC.V > 0', then: {str_extract: {source: SRC.TEXT, pattern: '(?<=prefix:)([A-Z]+)(?=$)', group: 1}}}, {otherwise: {literal: none}}]}";
+            let expression = "{case: [{when: 'SRC.V > 0', then: {str_extract: {source: SRC.TEXT, pattern: 'prefix:([A-Z]+)$', group: 1}}}, {otherwise: {literal: none}}]}";
             let prefix = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n";
             for (position, tail) in [
         ("column-case", format!("  - {{name: VALUE, type: str, derivation: {expression}}}\n")),
@@ -206,7 +206,7 @@ columns:
                 assert_eq!(fs::read(fixture.0.join("result.csv")).unwrap(), b"ID,VALUE\na,1\nb,0\n");
             } else {
                 let issue = &result.issues()[0];
-                assert_eq!(issue.condition, "invalid_predicate");
+                assert_eq!(issue.condition, "invalid_expression");
                 assert_eq!(issue.spec_paths, ["verifications[0].assert.require"]);
                 assert!(result.output().is_none());
                 assert!(result.save().is_err());
@@ -360,13 +360,17 @@ columns:
         }
 
         #[test]
-        fn false_when_still_resolves_require_lookup_and_refuses_an_unhandled_absence() {
+        fn false_when_still_resolves_require_lookup_and_refuses_a_required_match() {
             let (fixture, body) = lookup_fixture("assert_lookup_only");
-            for pattern in ["    no_match: null\n", "when: 'P.X IS NOT NULL'"] {
+            for pattern in ["    no_match: {literal: null}\n", "when: 'P.X IS NOT NULL'"] {
                 assert!(body.contains(pattern), "fixture drifted: {pattern}");
             }
+            // An omitted `no_match` answers with missing; `require_match` refuses.
             let body = body
-                .replace("    no_match: null\n", "")
+                .replace(
+                    "    no_match: {literal: null}\n",
+                    "    require_match: true\n",
+                )
                 .replace("when: 'P.X IS NOT NULL'", "when: 'FALSE'");
             let mut result = fixture.run(&body).unwrap();
             assert!(
@@ -522,7 +526,7 @@ intermediates:
     filter: "D.TIME < SRC.CUT"
     order_by: [D.TIME]
     keep: last
-    no_match: null
+    no_match: {literal: null}
 columns:
   - {name: ID, type: int, derivation: SRC.ID}
   - {name: SEQ, type: int, derivation: SRC.SEQ}
@@ -655,7 +659,7 @@ columns:
             // (REQ-0638) keeps P live and its filter is still refused. A
             // refused intermediate's fields no longer bind, so A's read
             // reports unknown_field as well — the same pair a composed
-            // specification (parents: []) reports.
+            // specification (one with a parent) reports.
             let issues = refusal(
                 &fixture,
                 &BODY
@@ -965,7 +969,7 @@ intermediates:
     dataset: DONOR
     order_by: [DONOR.SEQ]
     keep: first
-    no_match: null
+    no_match: {literal: null}
 columns:
   - {name: ID, type: int, derivation: SRC.ID}
   - {name: PARAM, type: str, derivation: {literal: only}}
@@ -1018,11 +1022,14 @@ columns:
                 .replace("derivation: P.A", "derivation: {literal: a}")
                 .replace("derivation: P.B", "derivation: {literal: b}");
             fs::write(fixture.0.join("parent.yaml"), &body).unwrap();
-            let explicit = body.replace("domain: TEST", "parents: []\ndomain: TEST");
+            // Explicit composition: the complete declaration in an entry whose
+            // parent contributes nothing but the schema version.
+            fs::write(fixture.0.join("base.yaml"), "schema_version: '1.0'\n").unwrap();
+            let explicit = body.replace("domain: TEST", "parent: base.yaml\ndomain: TEST");
             for authored in [
                 body,
                 explicit,
-                "schema_version: '1.0'\nparents: parent.yaml\n".into(),
+                "schema_version: '1.0'\nparent: parent.yaml\n".into(),
             ] {
                 assert_eq!(
                     issues(fixture.run(&authored)),
@@ -1058,7 +1065,7 @@ columns:
             // (REQ-0638) keeps P live and key admission still runs for it.
             // A refused intermediate's fields no longer bind, so A's read
             // reports unknown_field as well — the same pair a composed
-            // specification (parents: []) reports.
+            // specification (one with a parent) reports.
             let unused = BODY
                 .replace("derivation: P.B", "derivation: {literal: b}")
                 .replace("types: {ID: float, SEQ: int}", "types: {SEQ: int}");
@@ -1080,8 +1087,8 @@ columns:
             );
         }
     }
-    mod declarative_intermediate_key_shorthand {
-        //! REQ-0115 scalar key shorthand retains exact integers and shared donor choice.
+    mod declarative_intermediate_single_key {
+        //! LOOKUP-5 single-column key list retains exact integers and shared donor choice.
         use std::{
             fs,
             path::PathBuf,
@@ -1116,10 +1123,10 @@ output: {path: result.csv, columns: [ID, A, B]}
 intermediates:
   - id: P
     dataset: D
-    key: ID
+    key: [ID]
     order_by: [D.SEQ]
     keep: first
-    no_match: null
+    no_match: {literal: null}
 columns:
   - {name: ID, type: int, derivation: SRC.ID}
   - {name: A, type: str, derivation: P.V}
@@ -1152,7 +1159,7 @@ columns:
             }
         }
         #[test]
-        fn scalar_shorthand_preserves_distinct_large_integer_keys_and_per_read_handlers() {
+        fn single_column_key_preserves_distinct_large_integer_keys_and_per_read_handlers() {
             let fixture = Fixture::new();
             fs::write(
                 fixture.0.join("src.csv"),
@@ -1382,7 +1389,7 @@ columns:
                 case["specification"] = yamaa_adapters::json!(case["specification"]
                     .as_str()
                     .unwrap()
-                    .replace("derivation: LOOK.VAL", "derivation: {case: [{when: 'FALSE', then: {source: LOOK.VAL}}, {otherwise: {literal: ok}}]}"))
+                    .replace("derivation: LOOK.VAL", "derivation: {case: [{when: 'FALSE', then: LOOK.VAL}, {otherwise: {literal: ok}}]}"))
             }
             "boolean_missing" => {
                 case["inputs"]["tab.csv"] = yamaa_adapters::json!("K,KINT,KNUM,VAL\n\"       7\",,7,A\n");
@@ -1537,7 +1544,7 @@ output: {path: result.csv, columns: [ID, SEQ, X, A, B]}
 intermediates:
   - id: P
     dataset: D
-    key: ID
+    key: [ID]
     filter: "D.ELIG = 'Y'"
     between: {value: X, lower: LOW, upper: HIGH}
     columns: [V, W, V]
@@ -1589,7 +1596,7 @@ intermediates:
     between: {value: TRTSDT, lower: ADT}
     order_by: [VS.ADT]
     keep: last
-    no_match: null
+    no_match: {literal: null}
 columns:
   - {name: ID, type: str, derivation: SRC.ID}
   - {name: TRTSDT, type: date, derivation: SRC.TRTSDT}
@@ -1761,8 +1768,8 @@ columns:
             )
             .unwrap();
             let body = BODY.replace("no_match: absent", "no_match: true")
-        .replace("derivation: P.V", "derivation: {flag: {condition: 'P.V IS NOT NULL', true_value: Y, false_value: N, missing: null}}")
-        .replace("derivation: P.W", "derivation: {flag: {condition: 'P.W IS NOT NULL', true_value: Y, false_value: N, missing: null}}");
+        .replace("derivation: P.V", "derivation: {flag: {condition: 'P.V IS NOT NULL', true_value: Y, false_value: N, missing: {literal: null}}}")
+        .replace("derivation: P.W", "derivation: {flag: {condition: 'P.W IS NOT NULL', true_value: Y, false_value: N, missing: {literal: null}}}");
             let mut result = f.run(&body);
             assert!(result.issues().is_empty(), "{:?}", result.issues());
             assert!(result.save().unwrap());
@@ -1770,10 +1777,14 @@ columns:
                 fs::read(f.0.join("result.csv")).unwrap(),
                 b"ID,SEQ,X,A,B\n2,1,3,Y,Y\n"
             );
-            // Predicate normalization retains the literal value and discards recovery sites.
+            // Predicate normalization retains the literal value and discards recovery
+            // sites; each flag's UNKNOWN answer is registered and never reached.
             assert_eq!(
                 result.observations()["handler_counts"],
-                yamaa_adapters::json!([])
+                yamaa_adapters::json!([
+                    {"spec_path":"columns.A.derivation.flag.missing","handler":"missing","count":0},
+                    {"spec_path":"columns.B.derivation.flag.missing","handler":"missing","count":0}
+                ])
             );
         }
 
@@ -2193,7 +2204,7 @@ domain: TEST
 keys: [ID]
 input: {SRC: {path: absent.parquet, ordinal: REC}}
 output: {path: result.csv, columns: [ID]}
-columns: [{name: ID, type: str, derivation: {odm: {item: SRC.ITEM}}}]
+columns: [{name: ID, type: str, derivation: {odm: SRC.ITEM}}]
 "#,
                 b"unused\n",
             );
@@ -2243,8 +2254,8 @@ columns:
         #[test]
         fn nested_column_and_row_odm_derivations_still_reject_ordinals_before_capture() {
             for declarations in [
-        "columns:\n  - name: ID\n    type: str\n    derivation:\n      case:\n        - when: \"1 = 1\"\n          then: {odm: {item: SRC.ITEM}}\n        - otherwise: {literal: x}\n",
-        "columns: [{name: ID, type: str, derivation: SRC.ID}]\nrows:\n  - id: records\n    derivations:\n      ID: {value: {odm: {item: SRC.ITEM}}}\n",
+        "columns:\n  - name: ID\n    type: str\n    derivation:\n      case:\n        - when: \"1 = 1\"\n          then: {odm: SRC.ITEM}\n        - otherwise: {literal: x}\n",
+        "columns: [{name: ID, type: str, derivation: SRC.ID}]\nrows:\n  - id: records\n    derivations:\n      ID: {odm: SRC.ITEM}\n",
     ] {
         let fixture = authored(
             &format!("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: {{path: absent.parquet, ordinal: REC}}}}\noutput: {{path: result.csv, columns: [ID]}}\n{declarations}"),
@@ -2356,7 +2367,7 @@ intermediates:
     filter: "SRC.ELIG = 'Y'"
     order_by: [SRC.SEQ]
     keep: last
-    no_match: null
+    no_match: {literal: null}
 columns:
   - {name: ID, type: int, derivation: SRC.ID}
   - {name: SEQ, type: int, derivation: SRC.SEQ}

@@ -186,6 +186,7 @@ mod project {
                 yamaa_adapters::json_wire::encode(&issues[0].context),
                 "{\"column\":\"VALUE\",\"length\":-99999999999999999999999999999}"
             );
+            // A bare source admits Derived, which still needs its method.
             let issues =
                 study.check(&VALID.replace("origin: {type: Assigned}", "origin: {type: Derived}"));
             assert_eq!(
@@ -193,11 +194,11 @@ mod project {
                     .iter()
                     .map(|issue| issue.condition.as_str())
                     .collect::<Vec<_>>(),
-                ["method_missing", "origin_contradicts_derivation"]
+                ["method_missing"]
             );
             let raw = VALID.replace(
                 "submission: {length: 3",
-                "verifications: {max_length: {max: 4}}\n    submission: {length: 3",
+                "verifications: [{max_length: {max: 4}}]\n    submission: {length: 3",
             );
             let issues = study.check(&raw);
             assert_eq!(issues[0].condition, "declared_length_conflict");
@@ -276,27 +277,62 @@ mod project {
             assert!(!study.0.join("output.csv").exists());
         }
         #[test]
-        fn per_value_external_and_extensible_bindings_exclude_default_enforcement() {
-            for codelist in ["EXT", "DICT"] {
-                let study = Study::new();
-                fs::write(
-                    study.0.join("spec.yaml"),
-                    ROW_CT.replace("codelist: GLUCOSE", &format!("codelist: {codelist}")),
-                )
-                .unwrap();
-                fs::write(study.0.join("project.yaml"), CT_PROJECT).unwrap();
-                fs::write(study.0.join("input.csv"), "ID,VALUE\n1,D\n2,\n").unwrap();
-                let path = study.0.join("spec.yaml");
-                let path = path.to_str().unwrap();
-                let project = study.0.join("project.yaml");
-                let mut run = project_domain(path, project.to_str().unwrap());
-                assert!(run.issues().is_empty(), "{codelist}: {:?}", run.issues());
-                assert!(run.save().unwrap());
-                assert_eq!(
-                    fs::read_to_string(study.0.join("output.csv")).unwrap(),
-                    "ID,RESULT,LBTESTCD\n1,D,GLUC\n2,,GLUC\n1,D,CREAT\n2,,CREAT\n"
-                );
-            }
+        fn per_value_extensible_lists_are_enforced_on_their_rows_and_dictionaries_replace_the_default(
+        ) {
+            // An extensible list of items states its rows' value set like any other
+            // list: the glucose rows are checked against EXT alone.
+            let study = Study::new();
+            fs::write(
+                study.0.join("spec.yaml"),
+                ROW_CT.replace("codelist: GLUCOSE", "codelist: EXT"),
+            )
+            .unwrap();
+            fs::write(study.0.join("project.yaml"), CT_PROJECT).unwrap();
+            fs::write(study.0.join("input.csv"), "ID,VALUE\n1,D\n2,X\n").unwrap();
+            let path = study.0.join("spec.yaml");
+            let path = path.to_str().unwrap();
+            let environment = study.0.join("project.yaml");
+            let mut run = project_domain(path, environment.to_str().unwrap());
+            assert_eq!(run.issues().len(), 2, "{:?}", run.issues());
+            assert_eq!(
+                (
+                    run.issues()[0].phase.as_str(),
+                    run.issues()[0].condition.as_str(),
+                    run.issues()[0].requirement.as_deref()
+                ),
+                ("verification", "allowed_values_failed", Some("REQ-0957"))
+            );
+            assert_eq!(
+                run.issues()
+                    .iter()
+                    .map(|issue| issue.context.clone())
+                    .collect::<Vec<_>>(),
+                [
+                    yamaa_adapters::json!({"column":"RESULT", "codelist":"DEFAULT", "failure_count":1, "keys":[{"ID":2,"LBTESTCD":"CREAT"}], "values":["X"]}),
+                    yamaa_adapters::json!({"column":"RESULT", "codelist":"EXT", "failure_count":1, "keys":[{"ID":1,"LBTESTCD":"GLUC"}], "values":["D"]}),
+                ]
+            );
+            assert!(run.save().is_err());
+            // An external dictionary is not enforced, and it still replaces the
+            // column's list on its own rows.
+            let study = Study::new();
+            fs::write(
+                study.0.join("spec.yaml"),
+                ROW_CT.replace("codelist: GLUCOSE", "codelist: DICT"),
+            )
+            .unwrap();
+            fs::write(study.0.join("project.yaml"), CT_PROJECT).unwrap();
+            fs::write(study.0.join("input.csv"), "ID,VALUE\n1,D\n2,\n").unwrap();
+            let path = study.0.join("spec.yaml");
+            let path = path.to_str().unwrap();
+            let project = study.0.join("project.yaml");
+            let mut run = project_domain(path, project.to_str().unwrap());
+            assert!(run.issues().is_empty(), "{:?}", run.issues());
+            assert!(run.save().unwrap());
+            assert_eq!(
+                fs::read_to_string(study.0.join("output.csv")).unwrap(),
+                "ID,RESULT,LBTESTCD\n1,D,GLUC\n2,,GLUC\n1,D,CREAT\n2,,CREAT\n"
+            );
         }
         #[test]
         fn per_value_codelist_unknown_and_type_failures_retain_the_authored_row_path() {
@@ -510,7 +546,7 @@ mod project {
                 fs::write(study.0.join("project.yaml"), text).unwrap();
                 fs::write(
                     study.0.join("catalog/renamed.yaml"),
-                    "schema_version: '1.0'\nparents: [parent.yaml]\n",
+                    "schema_version: '1.0'\nparent: parent.yaml\n",
                 )
                 .unwrap();
                 fs::write(
@@ -798,11 +834,6 @@ mod project {
                     "submission_length_invalid",
                     "rows.glucose.submission.RESULT.significant_digits",
                 ),
-                (
-                    "mandatory: true",
-                    "mandatory_not_enforced",
-                    "rows.glucose.submission.RESULT",
-                ),
             ] {
                 let study = Study::new();
                 let raw = ROW_CT
@@ -817,7 +848,7 @@ mod project {
             let study = Study::new();
             let raw = value_length_spec("4").replace(
                 "derivation: SRC.VALUE, submission",
-                "derivation: SRC.VALUE, verifications: {max_length: {max: 3}}, submission",
+                "derivation: SRC.VALUE, verifications: [{max_length: {max: 3}}], submission",
             );
             let issues = study.check(&raw);
             assert_eq!(issues.len(), 1, "{issues:?}");
@@ -835,6 +866,199 @@ mod project {
             );
         }
 
+        fn domain(study: &Study, raw: &str, input: &str) -> file_application::Domain {
+            fs::write(study.0.join("spec.yaml"), raw).unwrap();
+            fs::write(study.0.join("input.csv"), input).unwrap();
+            let path = study.0.join("spec.yaml");
+            let path = path.to_str().unwrap();
+            file_application::domain(
+                yamaa_core::project_function::Language::Python,
+                Request {
+                    specification: path,
+                    environment: None,
+                },
+                identity(path),
+            )
+            .unwrap()
+        }
+        const FINDINGS: &str = "submission: {label: Results, class: FINDINGS, structure: One record per test, repeating: true}\n";
+        #[test]
+        fn mandatory_columns_are_checked_without_a_study_document() {
+            let missing = "ID,VALUE\n1,abc\n2,\n";
+            for (raw, path) in [
+                (
+                    VALID.replace(
+                        "submission: {length: 3",
+                        "submission: {mandatory: true, length: 3",
+                    ),
+                    "columns.VALUE.submission.mandatory",
+                ),
+                (
+                    format!(
+                        "{}{FINDINGS}",
+                        VALID.replace(
+                            "submission: {length: 3",
+                            "submission: {core: Req, length: 3"
+                        )
+                    ),
+                    "columns.VALUE.submission.core",
+                ),
+            ] {
+                let study = Study::new();
+                let mut run = domain(&study, &raw, missing);
+                assert_eq!(run.issues().len(), 1, "{path}: {:?}", run.issues());
+                let issue = &run.issues()[0];
+                assert_eq!(
+                    (
+                        issue.phase.as_str(),
+                        issue.condition.as_str(),
+                        issue.requirement.as_deref()
+                    ),
+                    ("verification", "not_missing_failed", Some("REQ-0885"))
+                );
+                assert_eq!(issue.spec_paths, [path]);
+                assert_eq!(
+                    yamaa_adapters::json_wire::encode(&issue.context),
+                    "{\"column\":\"VALUE\",\"failure_count\":1,\"keys\":[{\"ID\":2}]}"
+                );
+                assert!(run.save().is_err());
+                assert!(!study.0.join("output.csv").exists());
+            }
+            // `core` derives nothing for an analysis class or without a declared
+            // class, so the same missing value is admitted.
+            for root in [
+                FINDINGS.replace("FINDINGS", "BASIC DATA STRUCTURE"),
+                String::new(),
+            ] {
+                let study = Study::new();
+                let raw = format!(
+                    "{}{root}",
+                    VALID.replace(
+                        "submission: {length: 3",
+                        "submission: {core: Req, length: 3"
+                    )
+                );
+                let mut run = domain(&study, &raw, missing);
+                assert!(run.issues().is_empty(), "{root}: {:?}", run.issues());
+                assert!(run.save().unwrap());
+            }
+        }
+        #[test]
+        fn value_level_mandatory_applies_only_to_the_rows_of_its_test_code() {
+            let missing = "ID,VALUE\n1,abc\n2,\n";
+            for (base, value, path, code) in [
+                (
+                    "length: 3",
+                    "mandatory: true",
+                    "rows.glucose.submission.RESULT.mandatory",
+                    "GLUC",
+                ),
+                (
+                    "mandatory: true, length: 3",
+                    "mandatory: false",
+                    "columns.RESULT.submission.mandatory",
+                    "CREAT",
+                ),
+            ] {
+                let raw = ROW_CT
+                    .replace("codelist: DEFAULT", base)
+                    .replace("codelist: GLUCOSE", value);
+                let study = Study::new();
+                let mut run = domain(&study, &raw, missing);
+                assert_eq!(run.issues().len(), 1, "{path}: {:?}", run.issues());
+                let issue = &run.issues()[0];
+                assert_eq!(
+                    (issue.condition.as_str(), issue.requirement.as_deref()),
+                    ("not_missing_failed", Some("REQ-0885"))
+                );
+                assert_eq!(issue.spec_paths, [path]);
+                assert_eq!(
+                    issue.context.clone(),
+                    yamaa_adapters::json!({"column":"RESULT","failure_count":1,"keys":[{"ID":2,"LBTESTCD":code}]})
+                );
+                assert!(run.save().is_err());
+                let study = Study::new();
+                let mut run = domain(&study, &raw, "ID,VALUE\n1,abc\n2,xyz\n");
+                assert!(run.issues().is_empty(), "{path}: {:?}", run.issues());
+                assert!(run.save().unwrap());
+            }
+        }
+        #[test]
+        fn restated_facts_and_relaxed_keys_fail_validation_before_data() {
+            let key_check = VALID.replace(
+                "{name: ID, type: int, derivation: SRC.ID}",
+                "{name: ID, type: int, derivation: SRC.ID, verifications: [{not_missing: {}}]}",
+            );
+            let mandatory_check = VALID.replace(
+                "    submission: {length: 3",
+                "    verifications: [{not_missing: {}}]\n    submission: {mandatory: true, length: 3",
+            );
+            let key_unique = format!("{VALID}verifications: [{{unique: [ID]}}]\n");
+            let relaxed_key = VALID.replace(
+                "{name: ID, type: int, derivation: SRC.ID}",
+                "{name: ID, type: int, derivation: SRC.ID, submission: {mandatory: false, length: 8, origin: {type: Assigned}}}",
+            );
+            for (raw, condition, requirement, path, context) in [
+                (
+                    key_check,
+                    "redundant_declaration",
+                    "REQ-0375",
+                    "columns.ID.verifications[0].not_missing",
+                    "{\"column\":\"ID\",\"stated_by\":\"keys[0]\"}",
+                ),
+                (
+                    mandatory_check,
+                    "redundant_declaration",
+                    "REQ-0916",
+                    "columns.VALUE.verifications[0].not_missing",
+                    "{\"column\":\"VALUE\",\"stated_by\":\"columns.VALUE.submission.mandatory\"}",
+                ),
+                (
+                    key_unique,
+                    "redundant_declaration",
+                    "REQ-0381",
+                    "verifications[0].unique",
+                    "{\"columns\":[\"ID\"],\"stated_by\":\"keys\"}",
+                ),
+                (
+                    relaxed_key,
+                    "value_not_permitted",
+                    "REQ-0881",
+                    "columns.ID.submission.mandatory",
+                    "{\"column\":\"ID\"}",
+                ),
+            ] {
+                let study = Study::new();
+                let issues = study.check(&raw);
+                assert_eq!(issues.len(), 1, "{path}: {issues:?}");
+                assert_eq!(
+                    (
+                        issues[0].phase.as_str(),
+                        issues[0].condition.as_str(),
+                        issues[0].requirement.as_deref()
+                    ),
+                    ("validation", condition, Some(requirement))
+                );
+                assert_eq!(issues[0].spec_paths, [path]);
+                assert_eq!(
+                    yamaa_adapters::json_wire::encode(&issues[0].context),
+                    context
+                );
+                assert!(!study.0.join("input.csv").exists());
+            }
+            // A `not_missing` restates nothing when a test code relaxes the column's
+            // `mandatory`, and a `unique` over more than the keys is its own claim.
+            let study = Study::new();
+            let relaxed = ROW_CT
+                .replace(
+                    "submission: {origin: {type: Assigned}, codelist: DEFAULT}",
+                    "verifications: [{not_missing: {}}], submission: {origin: {type: Assigned}, mandatory: true}",
+                )
+                .replace("codelist: GLUCOSE", "mandatory: false");
+            assert!(study.check(&relaxed).is_empty());
+            let wider = format!("{VALID}verifications: [{{unique: [ID, VALUE]}}]\n");
+            assert!(study.check(&wider).is_empty());
+        }
         #[test]
         fn effective_value_fields_inherit_full_metadata_and_refute_inapplicable_lengths_and_digits()
         {
@@ -880,16 +1104,403 @@ mod project {
             }
             assert!(!study.0.join("input.csv").exists());
         }
+
+        /// SUB-19's recode, literal and stored-value rows, as an SDTM study
+        /// declares them: each origin below is admitted by its derivation.
+        const ORIGINS: &str = r#"schema_version: '1.0'
+domain: DM
+keys: [ID]
+input: {SRC: {path: input.csv, types: {ID: int, AGE: int, EGFR: float, WEIGHT: float, HEIGHT: float}}}
+output: {path: output.csv, columns: [ID, SEX, RACE, BRTHDTC, RFICDT, HEIGHTU, EGFR, DTHDTC, AGE, BMI, AGEGR1, ARMCD]}
+columns:
+  - {name: ID, type: int, derivation: SRC.ID}
+  - name: SEX
+    type: str
+    derivation: {mapping: {source: SRC.SEX, dict: {Male: M, Female: F}}}
+    submission: {origin: {type: Collected, source: Investigator}}
+  - name: RACE
+    type: str
+    derivation:
+      case:
+        - {when: "SRC.RACE = 'white'", then: {literal: WHITE}}
+        - {otherwise: {str_case: {source: SRC.RACE, to: upper}}}
+    submission: {origin: {type: Collected, source: Investigator}}
+  - name: BRTHDTC
+    type: str
+    derivation: {str_template: "{SRC.BRTHYR}-{SRC.BRTHMO}-{SRC.BRTHDY}"}
+    submission: {origin: {type: Collected, source: Subject}}
+  - name: RFICDT
+    type: date
+    derivation: {to_date: {source: SRC.RFICDTC}}
+    submission: {origin: {type: Collected, source: Investigator}}
+  - name: HEIGHTU
+    type: str
+    derivation: {literal: cm}
+    submission: {origin: {type: Collected, source: Investigator}}
+  - name: EGFR
+    type: float
+    derivation: SRC.EGFR
+    submission:
+      origin: {type: Derived, source: Vendor}
+      method: Estimated by the central laboratory from serum creatinine.
+  - name: DTHDTC
+    type: str
+    derivation: {literal: null}
+    submission: {origin: {type: Not Available, description: Death date was not collected.}}
+  - {name: AGE, type: int, derivation: SRC.AGE}
+  - {name: WEIGHT, type: float, derivation: SRC.WEIGHT}
+  - {name: HEIGHT, type: float, derivation: SRC.HEIGHT}
+  - name: BMI
+    type: float
+    derivation: {compute: {expr: "WEIGHT / (HEIGHT * HEIGHT)"}}
+    submission:
+      origin: {type: Derived, source: Sponsor}
+      method: Weight in kilograms divided by the square of height in metres.
+  - name: AGEGR1
+    type: str
+    derivation:
+      case:
+        - {when: "AGE >= 65", then: {literal: '>=65'}}
+        - {otherwise: {literal: '<65'}}
+    submission:
+      origin: {type: Derived, source: Sponsor}
+      method: Age grouped at 65 years.
+  - name: ARMCD
+    type: str
+    derivation: {mapping: {source: SRC.ARM, dict: {Placebo: PBO, Active: ACT}}}
+    submission: {origin: {type: Assigned, source: Sponsor}}
+"#;
+        #[test]
+        fn recodes_literals_and_stored_values_admit_their_published_origins() {
+            // A recode of collected terminology, a case over collected values,
+            // an ISO 8601 assembly of date parts, a printed unit and a value
+            // computed upstream and read as stored keep the origin a study
+            // declares for them; Not Available is admitted by every derivation.
+            let study = Study::new();
+            let issues = study.check(ORIGINS);
+            assert!(issues.is_empty(), "{issues:?}");
+            for (column, declared) in [
+                ("BMI", "Not Available, description: Not derived."),
+                ("AGEGR1", "Not Available, description: Not derived."),
+                ("HEIGHTU", "Protocol, source: Sponsor"),
+                ("EGFR", "Collected, source: Vendor"),
+            ] {
+                let raw = replace_origin(ORIGINS, column, declared);
+                let issues = study.check(&raw);
+                assert!(issues.is_empty(), "{column}: {issues:?}");
+            }
+            assert!(!study.0.join("input.csv").exists());
+        }
+        /// Replace one column's declared origin in [`ORIGINS`].
+        fn replace_origin(raw: &str, column: &str, origin: &str) -> String {
+            let start = raw.find(&format!("name: {column}\n")).unwrap();
+            let at = start + raw[start..].find("origin: {type: ").unwrap();
+            let end = at + raw[at..].find('}').unwrap();
+            format!("{}origin: {{type: {origin}{}", &raw[..at], &raw[end..])
+        }
+        #[test]
+        fn computed_values_and_case_reads_of_derived_columns_refute_collected() {
+            let study = Study::new();
+            for (column, declared, admitted) in [
+                // Arithmetic computes the value.
+                (
+                    "BMI",
+                    "Collected, source: Vendor",
+                    &["Assigned", "Derived", "Not Available", "Other"][..],
+                ),
+                // A case whose condition reads an output column classifies a
+                // derived value rather than recoding a collected one.
+                (
+                    "AGEGR1",
+                    "Collected, source: Investigator",
+                    &["Assigned", "Derived", "Not Available", "Other"],
+                ),
+                // A recode refutes Protocol and a literal refutes Derived.
+                (
+                    "ARMCD",
+                    "Protocol, source: Sponsor",
+                    &["Assigned", "Collected", "Derived", "Not Available", "Other"],
+                ),
+                (
+                    "HEIGHTU",
+                    "Derived, source: Sponsor",
+                    &[
+                        "Assigned",
+                        "Collected",
+                        "Not Available",
+                        "Other",
+                        "Protocol",
+                    ],
+                ),
+            ] {
+                let raw = replace_origin(ORIGINS, column, declared);
+                let issues = study.check(&raw);
+                let refuted: Vec<_> = issues
+                    .iter()
+                    .filter(|issue| issue.condition == "origin_contradicts_derivation")
+                    .collect();
+                assert_eq!(refuted.len(), 1, "{column}: {issues:?}");
+                assert_eq!(refuted[0].requirement.as_deref(), Some("REQ-0922"));
+                assert_eq!(
+                    refuted[0].spec_paths,
+                    [format!("columns.{column}.submission")]
+                );
+                let context = refuted[0].context.clone();
+                assert_eq!(context["column"], column);
+                assert_eq!(context["origin_type"], declared.split(',').next().unwrap());
+                assert_eq!(context["admitted"], yamaa_adapters::json!(admitted));
+            }
+            // Reading a declared input dataset instead makes AGEGR1 a recode.
+            let raw = replace_origin(
+                &ORIGINS.replace("when: \"AGE >= 65\"", "when: \"SRC.AGE >= 65\""),
+                "AGEGR1",
+                "Collected, source: Investigator",
+            );
+            assert!(study.check(&raw).is_empty());
+            assert!(!study.0.join("input.csv").exists());
+        }
+
+        /// SUB-19's bare reads beyond a `source`: an `ONLY` pivot of long
+        /// collected records and a plain lookup copy a stored value.
+        const READS: &str = r#"schema_version: '1.0'
+domain: LB
+keys: [USUBJID, LBTESTCD]
+input: {ODM: input.csv, RANGES: ranges.csv}
+intermediates:
+  - id: RANGE
+    dataset: RANGES
+    key: {TESTCD: LBTESTCD}
+output: {path: output.csv, columns: [USUBJID, LBTESTCD, LBORRES, LBORNRLO]}
+columns:
+  - {name: USUBJID, type: str, derivation: ODM.SubjectKey}
+  - {name: LBTESTCD, type: str}
+  - name: LBORRES
+    type: str
+    submission: {origin: {type: Collected, source: Investigator}}
+  - name: LBORNRLO
+    type: str
+    derivation: RANGE.LOW
+    submission: {origin: {type: Collected, source: Vendor}}
+rows:
+  - id: glucose
+    dataset: ODM
+    group_by: [ODM.SubjectKey]
+    derivations:
+      LBTESTCD: {literal: GLUC}
+      LBORRES:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.LB.GLUC'"
+          expr: "ONLY(ODM.Value)"
+"#;
+        #[test]
+        fn pivots_and_plain_lookups_are_bare_reads_that_admit_collected() {
+            // A pivot selects the one collected value of its group, and a lookup
+            // that declares no derivations copies the record it selects.
+            let study = Study::new();
+            let issues = study.check(READS);
+            assert!(issues.is_empty(), "{issues:?}");
+            let shorthand = READS.replace(
+                "aggregate:\n          filter: \"ODM.ItemOID = 'IT.LB.GLUC'\"\n          expr: \"ONLY(ODM.Value)\"",
+                "aggregate: \"ONLY(ODM.Value)\"",
+            );
+            assert!(study.check(&shorthand).is_empty());
+            for (from, to, column) in [
+                // Any other reduction computes the value it returns.
+                ("ONLY(ODM.Value)", "MAX(ODM.Value)", "LBORRES"),
+                // A lookup that derives fields is not a plain copy.
+                (
+                    "key: {TESTCD: LBTESTCD}\n",
+                    "key: {TESTCD: LBTESTCD}\n    derivations:\n      LOWTEXT: {str_case: {source: LOW, to: upper}}\n",
+                    "LBORNRLO",
+                ),
+            ] {
+                let issues = study.check(&READS.replacen(from, to, 1));
+                let refuted: Vec<_> = issues
+                    .iter()
+                    .filter(|issue| issue.condition == "origin_contradicts_derivation")
+                    .collect();
+                assert_eq!(refuted.len(), 1, "{column}: {issues:?}");
+                assert_eq!(
+                    refuted[0].spec_paths,
+                    [format!("columns.{column}.submission")]
+                );
+                assert_eq!(refuted[0].context["origin_type"], "Collected");
+                assert_eq!(
+                    refuted[0].context["admitted"],
+                    yamaa_adapters::json!(["Assigned", "Derived", "Not Available", "Other"])
+                );
+            }
+            // A plain lookup is a bare read, but it is no predecessor's dataset.
+            let issues = study.check(&READS.replace(
+                "{origin: {type: Collected, source: Vendor}}",
+                "{origin: {type: Predecessor, description: RANGE.LOW}}",
+            ));
+            assert_eq!(issues.len(), 1, "{issues:?}");
+            assert_eq!(issues[0].condition, "origin_contradicts_derivation");
+            assert_eq!(issues[0].context["reason"], "predecessor_source");
+            assert!(!study.0.join("input.csv").exists());
+        }
+
+        const PREDECESSORS: &str = r#"schema_version: '1.0'
+domain: ADSL
+keys: [USUBJID]
+input: {DM: dm.csv, SUPPDM: suppdm.csv}
+base: DM
+output: {path: adsl.csv, columns: [USUBJID, AGE, RACEOTH]}
+columns:
+  - {name: USUBJID, type: str, label: Unique Subject Identifier, derivation: DM.USUBJID}
+  - name: AGE
+    type: str
+    label: Age
+    derivation: DM.AGE
+    submission: {origin: {type: Predecessor, description: DM.AGE}}
+  - name: RACEOTH
+    type: str
+    label: Race, Other
+    derivation: {source: {variable: SUPPDM.QVAL, filter: "SUPPDM.QNAM = 'RACEOTH'"}}
+    submission: {origin: {type: Predecessor, description: "SUPPDM.QVAL where QNAM = 'RACEOTH'"}}
+"#;
+        #[test]
+        fn predecessor_columns_copy_the_column_their_description_names() {
+            let study = Study::new();
+            let issues = study.check(PREDECESSORS);
+            assert!(issues.is_empty(), "{issues:?}");
+            for (from, to, column, reason, predecessor) in [
+                (
+                    "derivation: DM.AGE",
+                    "derivation: DM.USUBJID",
+                    "AGE",
+                    "predecessor_source",
+                    "DM.AGE",
+                ),
+                (
+                    "derivation: {source: {variable: SUPPDM.QVAL, filter: \"SUPPDM.QNAM = 'RACEOTH'\"}}",
+                    "derivation: SUPPDM.QVAL",
+                    "RACEOTH",
+                    "predecessor_filter",
+                    "SUPPDM.QVAL",
+                ),
+            ] {
+                let issues = study.check(&PREDECESSORS.replace(from, to));
+                assert_eq!(issues.len(), 1, "{column}: {issues:?}");
+                assert_eq!(
+                    (
+                        issues[0].condition.as_str(),
+                        issues[0].requirement.as_deref()
+                    ),
+                    ("origin_contradicts_derivation", Some("REQ-0922"))
+                );
+                assert_eq!(issues[0].spec_paths, [format!("columns.{column}.submission")]);
+                let context = issues[0].context.clone();
+                assert_eq!(context["column"], column);
+                assert_eq!(context["origin_type"], "Predecessor");
+                assert_eq!(context["predecessor"], predecessor);
+                assert_eq!(context["reason"], reason);
+            }
+            // A description that names no `<dataset>.<column>` is not the form.
+            let issues = study.check(&PREDECESSORS.replace(
+                "description: DM.AGE}",
+                "description: Copied from demographics}",
+            ));
+            assert_eq!(issues.len(), 1, "{issues:?}");
+            assert_eq!(
+                (
+                    issues[0].condition.as_str(),
+                    issues[0].requirement.as_deref()
+                ),
+                ("origin_description_missing", Some("REQ-0920"))
+            );
+            assert_eq!(
+                issues[0].spec_paths,
+                ["columns.AGE.submission.origin.description"]
+            );
+            assert_eq!(issues[0].context["reason"], "predecessor_form");
+            // A computed column cannot claim to be a copy.
+            let issues = study.check(&PREDECESSORS.replace(
+                "derivation: DM.AGE",
+                "derivation: {str_template: \"{DM.AGE} years\"}",
+            ));
+            assert_eq!(issues.len(), 1, "{issues:?}");
+            assert_eq!(issues[0].condition, "origin_contradicts_derivation");
+            // A value-level Predecessor is checked against its row's derivation.
+            let values = "schema_version: '1.0'\ndomain: LB\nkeys: [ID, LBTESTCD]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, LBTESTCD, LBORRES]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: LBTESTCD, type: str}\n  - {name: LBORRES, type: str, submission: {origin: {type: Assigned}}}\nrows:\n  - id: glucose\n    derivations: {LBTESTCD: {literal: GLUC}, LBORRES: SRC.GLUC}\n    submission: {LBORRES: {origin: {type: Predecessor, description: SRC.GLUC}}}\n  - id: creatinine\n    derivations: {LBTESTCD: {literal: CREAT}, LBORRES: SRC.CREAT}\n";
+            assert!(study.check(values).is_empty());
+            let issues =
+                study.check(&values.replacen("LBORRES: SRC.GLUC", "LBORRES: SRC.CREAT", 1));
+            assert_eq!(issues.len(), 1, "{issues:?}");
+            assert_eq!(
+                (
+                    issues[0].condition.as_str(),
+                    issues[0].requirement.as_deref()
+                ),
+                ("refuted_value_origin", Some("REQ-1168"))
+            );
+            assert_eq!(issues[0].spec_paths, ["rows.glucose.submission.LBORRES"]);
+            assert_eq!(
+                issues[0].context,
+                yamaa_adapters::json!({"column": "LBORRES", "derivation_kind": "source", "origin_type": "Predecessor", "reason": "predecessor_source", "testcd": "GLUC"})
+            );
+            assert!(!study.0.join("dm.csv").exists());
+        }
+        #[test]
+        fn inventory_names_the_datasets_of_every_submission_section() {
+            // An ADaM SRCDOM names the SDTM domain another section lists.
+            let study = Study::new();
+            fs::create_dir(study.0.join("sdtm")).unwrap();
+            fs::write(
+                study.0.join("spec.yaml"),
+                inventory_spec().replace("domain: TEST", "domain: ADAE"),
+            )
+            .unwrap();
+            fs::write(
+                study.0.join("sdtm/ae.yaml"),
+                VALID
+                    .replace("domain: TEST", "domain: AE")
+                    .replace("input.csv", "never-read.csv"),
+            )
+            .unwrap();
+            fs::write(
+                study.0.join("environment.yaml"),
+                "schema_version: '1.0'\nstudy: {id: STUDY, name: Study, description: Study dataset inventory, protocol_name: Protocol}\nsdtm:\n  standard: {name: SDTMIG, version: '3.4', status: Final}\n  specs: [sdtm/ae.yaml]\n  define: sdtm/define.xml\nadam:\n  standard: {name: ADaMIG, version: '1.3', status: Final}\n  specs: [spec.yaml]\n  define: define.xml\n",
+            )
+            .unwrap();
+            fs::write(
+                study.0.join("input.csv"),
+                "ID,VALUE\n1,AE\n2,ADAE\n3,XX\n4,\n",
+            )
+            .unwrap();
+            let path = study.0.join("spec.yaml");
+            let environment = study.0.join("environment.yaml");
+            let run = project_domain(path.to_str().unwrap(), environment.to_str().unwrap());
+            assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
+            assert_eq!(
+                (
+                    run.issues()[0].phase.as_str(),
+                    run.issues()[0].condition.as_str(),
+                    run.issues()[0].requirement.as_deref()
+                ),
+                ("verification", "allowed_values_failed", Some("REQ-1156"))
+            );
+            assert_eq!(
+                yamaa_adapters::json_wire::encode(&run.issues()[0].context),
+                "{\"column\":\"VALUE\",\"failure_count\":1,\"keys\":[{\"ID\":3}],\"values\":[\"XX\"]}"
+            );
+            assert!(!study.0.join("sdtm/never-read.csv").exists());
+            assert!(!study.0.join("define.xml").exists());
+        }
     }
-    mod producer_admission {
+    mod producer_links {
         use std::sync::Arc;
         use yamaa_adapters::{
-            producer_admission::{prepare, Error, SuppliedProducer},
             shipped_schema,
-            specification_source::{InheritancePort, PreparedDocument, Source},
+            specification_source::{
+                link_metadata, InheritancePort, LinkedSpecification, PreparedDocument, Source,
+            },
         };
         use yamaa_core::inheritance::{Source as FileIdentity, SourceError};
-        use yamaa_core::{producer_admission::Error as CoreError, specification::PrepareError};
+        use yamaa_core::{
+            producer_contract::Links, specification::PrepareError, value::ColumnType,
+        };
         const PRODUCER:&str="schema_version: '1.0'\ndomain: PROD\nkeys: [ID]\ninput: {RAW: never-read.csv}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - {name: VALUE, type: float, label: Reported value, derivation: RAW.VALUE}\noutput: {path: './produced.csv', columns: [ID, VALUE]}\n";
         const CONSUMER:&str="schema_version: '1.0'\ndomain: CONS\nkeys: [ID]\ninput: {SRC: {path: './produced.csv', schema: nested/producer.yaml}}\ncolumns: [{name: ID, type: int, label: ID, derivation: SRC.ID}]\noutput: {path: consumer.csv, columns: [ID]}\n";
         fn standalone(identity: &str, text: &str) -> Arc<PreparedDocument> {
@@ -903,50 +1514,65 @@ mod project {
                     .unwrap(),
             )
         }
-        fn supplied(document: Arc<PreparedDocument>) -> SuppliedProducer {
-            SuppliedProducer {
+        fn linked(document: Arc<PreparedDocument>) -> LinkedSpecification {
+            LinkedSpecification {
                 dataset: "SRC".into(),
-                schema_identity: "/producer.yaml".into(),
-                source_identity: "/artifacts/produced.csv".into(),
-                output_identity: "/artifacts/produced.csv".into(),
-                document,
+                identity: document.source().identity.clone(),
+                document: Some(document),
             }
         }
+        fn check(
+            consumer: &PreparedDocument,
+            links: &[LinkedSpecification],
+        ) -> Result<yamaa_core::domain::CheckedSpecification, PrepareError> {
+            let metadata = link_metadata(consumer, links);
+            yamaa_core::domain::check_linked(
+                consumer.model(),
+                None,
+                Links {
+                    consumer: &consumer.source().identity,
+                    links: &metadata,
+                },
+            )
+        }
         #[test]
-        fn original_documents_and_distinct_metadata_remain_held_without_study_authority() {
+        fn linked_documents_supply_only_their_output_contract_without_study_authority() {
             let consumer = standalone("/consumer.yaml", CONSUMER);
             let producer = standalone("/producer.yaml", PRODUCER);
-            let admitted = prepare(
-                Arc::clone(&consumer),
-                vec![supplied(Arc::clone(&producer))],
-                None,
-            )
-            .unwrap();
-            drop(consumer);
-            drop(producer);
-            assert_eq!(admitted.consumer().source().bytes, CONSUMER.as_bytes());
+            let links = [linked(Arc::clone(&producer))];
+            let checked = check(&consumer, &links).unwrap();
+            let compiled = checked.compiled();
+            assert_eq!(compiled.sources()[0].path, "./produced.csv");
             assert_eq!(
-                admitted.producers()[0].document.source().bytes,
-                PRODUCER.as_bytes()
-            );
-            let declaration = &admitted.metadata().producers()[0];
-            assert_eq!(
-                declaration.schema_origin().written(),
-                "nested/producer.yaml"
+                compiled.sources()[0].types,
+                [
+                    ("ID".to_owned(), ColumnType::Int),
+                    ("VALUE".to_owned(), ColumnType::Float)
+                ]
             );
             assert_eq!(
-                declaration.schema_origin().declaring_source(),
-                "/consumer.yaml"
-            );
-            assert_eq!(declaration.output_origin().written(), "./produced.csv");
-            assert_eq!(
-                declaration
-                    .contract()
+                compiled
+                    .source_contract(0)
+                    .unwrap()
                     .fields()
                     .iter()
                     .map(|f| f.name.as_str())
                     .collect::<Vec<_>>(),
                 ["ID", "VALUE"]
+            );
+            drop(links);
+            drop(producer);
+            assert_eq!(compiled.source_contract(0).unwrap().fields().len(), 2);
+            // Without the linked document the declaration has no type authority.
+            let Err(PrepareError::Invalid(findings)) = check(&consumer, &[]) else {
+                panic!("missing link metadata")
+            };
+            let finding = findings[0].diagnostic();
+            assert_eq!(finding.definition().condition, "invalid_producer_contract");
+            assert_eq!(finding.spec_paths, ["input.SRC.schema"]);
+            assert_eq!(
+                finding.context["reason"],
+                yamaa_core::json::Value::String("missing_metadata".into())
             );
         }
         struct Parent {
@@ -1009,15 +1635,15 @@ mod project {
             (Arc::new(document), port)
         }
         #[test]
-        fn inherited_schema_artifact_and_output_paths_keep_independent_authored_layers() {
-            let entry="schema_version: '1.0'\nparents: parent.yaml\ndomain: CONS\nkeys: [ID]\ninput: {SRC: {path: './child.csv'}}\ncolumns: [{name: ID, type: int, label: ID, derivation: SRC.ID}]\noutput: {path: consumer.csv, columns: [ID]}\n";
+        fn inherited_link_and_artifact_paths_keep_independent_authored_layers() {
+            let entry="schema_version: '1.0'\nparent: parent.yaml\ndomain: CONS\nkeys: [ID]\ninput: {SRC: './child.csv'}\ncolumns: [{name: ID, type: int, label: ID, derivation: SRC.ID}]\noutput: {path: consumer.csv, columns: [ID]}\n";
             let parent =
         "schema_version: '1.0'\ninput: {SRC: {path: parent.csv, schema: '../producer.yaml'}}\n";
             let (consumer, consumer_port) = inherited("/consumer.yaml", entry, parent);
             let producer_entry = PRODUCER
                 .replace(
                     "schema_version: '1.0'",
-                    "schema_version: '1.0'\nparents: parent.yaml",
+                    "schema_version: '1.0'\nparent: parent.yaml",
                 )
                 .replace("output: {path: './produced.csv', columns: [ID, VALUE]}", "");
             let producer_parent =
@@ -1025,584 +1651,36 @@ mod project {
             let (producer, producer_port) =
                 inherited("/producer.yaml", &producer_entry, producer_parent);
             let before = (consumer_port.calls.clone(), producer_port.calls.clone());
-            let admitted = prepare(Arc::clone(&consumer), vec![supplied(producer)], None).unwrap();
-            let declaration = &admitted.metadata().producers()[0];
-            assert_eq!(
-                declaration.schema_path(),
-                "internal/parent/../producer.yaml"
-            );
-            assert_eq!(declaration.schema_origin().written(), "../producer.yaml");
-            assert_eq!(
-                declaration.schema_origin().declaring_source(),
-                "/parent.yaml"
-            );
-            assert_eq!(declaration.input_origin().written(), "./child.csv");
-            assert_eq!(
-                declaration.input_origin().declaring_source(),
-                "/consumer.yaml"
-            );
-            assert_eq!(declaration.output_origin().written(), "../stored.csv");
-            assert_eq!(
-                declaration.output_origin().declaring_source(),
-                "/producer-parent.yaml"
-            );
-            assert_eq!(
-                declaration.contract().path(),
-                "internal/parent/../stored.csv"
-            );
+            let schema = consumer.written_input_origin("SRC", "schema").unwrap();
+            assert_eq!(schema.written, "../producer.yaml");
+            assert_eq!(schema.declaring_source, "/parent.yaml");
+            let path = consumer.written_input_origin("SRC", "path").unwrap();
+            assert_eq!(path.written, "./child.csv");
+            assert_eq!(path.declaring_source, "/consumer.yaml");
+            let checked = check(&consumer, &[linked(Arc::clone(&producer))]).unwrap();
+            // The consumer reads its own path; the producer's inherited output
+            // path is never consulted.
+            assert_eq!(checked.compiled().sources()[0].path, "./child.csv");
+            assert_eq!(checked.compiled().sources()[0].types.len(), 2);
             assert_eq!(consumer.parents()[0].source().bytes, parent.as_bytes());
             assert_eq!(
-                admitted.producers()[0].document.parents()[0].source().bytes,
+                producer.parents()[0].source().bytes,
                 producer_parent.as_bytes()
             );
             assert_eq!(before, (consumer_port.calls, producer_port.calls));
         }
         #[test]
-        fn missing_and_contradictory_metadata_fail_before_capability() {
-            let consumer = standalone("/consumer.yaml", CONSUMER);
-            let producer = standalone("/producer.yaml", PRODUCER);
-            assert!(matches!(
-                prepare(Arc::clone(&consumer), vec![], None),
-                Err(Error::Admission(CoreError::Invalid(_)))
-            ));
-            let mut wrong = supplied(Arc::clone(&producer));
-            wrong.schema_identity = "/wrong.yaml".into();
-            assert!(matches!(
-                prepare(Arc::clone(&consumer), vec![wrong], None),
-                Err(Error::Admission(CoreError::Invalid(_)))
-            ));
-            assert!(prepare(consumer, vec![supplied(producer)], None).is_ok());
-        }
-        #[test]
-        fn ordinary_preparation_remains_unsupported_and_inline_types_are_portable() {
-            let consumer = standalone("/consumer.yaml", CONSUMER);
-            let redundant = CONSUMER.replace(
-                "schema: nested/producer.yaml",
-                "schema: nested/producer.yaml, types: {ID: int}",
-            );
-            let redundant = standalone("/consumer.yaml", &redundant);
-            let error = prepare(
-                redundant,
-                vec![supplied(standalone("/producer.yaml", PRODUCER))],
-                None,
-            );
-            let Err(Error::Admission(CoreError::Invalid(findings))) = error else {
-                panic!("redundant authority")
-            };
-            assert_eq!(findings[0].definition().requirement, Some("REQ-0523"));
-            assert_eq!(findings[0].spec_paths, ["input.SRC.types.ID"]);
-            assert!(matches!(
-                yamaa_core::domain::check(consumer.model()),
-                Err(PrepareError::Unsupported(_))
-            ));
-        }
-        #[test]
-        fn producer_must_use_the_same_captured_root_closure() {
-            use yamaa_adapters::specification_source::CapturedSchema;
-            let consumer = standalone("/consumer.yaml", CONSUMER);
-            let shipped = shipped_schema::capture().unwrap();
-            let mut sources = shipped.sources().to_vec();
-            sources[0]
-                .bytes
-                .extend_from_slice(b"\n# independent changed closure\n");
-            let different = CapturedSchema::admit(sources, 0).unwrap();
-            let producer = Arc::new(
-                different
-                    .prepare_standalone(Source {
-                        identity: "/producer.yaml".into(),
-                        bytes: PRODUCER.as_bytes().to_vec(),
-                    })
-                    .unwrap(),
-            );
-            let Err(Error::Admission(CoreError::Invalid(findings))) =
-                prepare(Arc::clone(&consumer), vec![supplied(producer)], None)
-            else {
-                panic!("captured root mismatch")
-            };
-            assert_eq!(findings[0].definition().requirement, Some("REQ-0534"));
-            assert_eq!(findings[0].spec_paths, ["input.SRC.schema"]);
-        }
-        #[test]
-        fn shared_producer_identities_require_the_same_original_byte_snapshot() {
-            let two=CONSUMER.replace("schema: nested/producer.yaml}}", "schema: nested/producer.yaml}, OTHER: {path: './produced.csv', schema: nested/producer.yaml}}")+"base: SRC\n";
-            let consumer = standalone("/consumer.yaml", &two);
-            let original = standalone("/producer.yaml", PRODUCER);
-            // Equal normalized contracts cannot hide different captured source bytes.
-            let changed = standalone(
-                "/producer.yaml",
-                &(PRODUCER.to_owned() + "# different captured bytes\n"),
-            );
-            let mut other = supplied(changed);
-            other.dataset = "OTHER".into();
-            let Err(Error::Admission(CoreError::Invalid(findings))) =
-                prepare(consumer, vec![supplied(original), other], None)
-            else {
-                panic!("contradictory source snapshot")
-            };
-            assert_eq!(findings[0].definition().requirement, Some("REQ-0534"));
-            assert_eq!(findings[0].spec_paths, ["input.OTHER.schema"]);
-            assert_eq!(
-                findings[0].context["reason"],
-                yamaa_core::json::Value::String("contradictory_snapshot".into())
-            );
-        }
-        #[test]
-        fn undeclared_and_schema_less_supplied_metadata_retain_the_portable_cause() {
-            let producer = standalone("/producer.yaml", PRODUCER);
-            for (text, dataset) in [
-                (CONSUMER.to_owned(), "ABSENT"),
-                (
-                    CONSUMER.replace(", schema: nested/producer.yaml", ""),
-                    "SRC",
-                ),
-                (
-                    CONSUMER.replace(
-                        "{path: './produced.csv', schema: nested/producer.yaml}",
-                        "produced.csv",
-                    ),
-                    "SRC",
-                ),
-            ] {
-                let consumer = standalone("/consumer.yaml", &text);
-                let mut supplied = supplied(Arc::clone(&producer));
-                supplied.dataset = dataset.into();
-                let Err(Error::Admission(CoreError::Invalid(findings))) =
-                    prepare(consumer, vec![supplied], None)
-                else {
-                    panic!("undeclared metadata diagnostic")
-                };
-                assert_eq!(findings[0].definition().requirement, Some("REQ-0534"));
-                assert_eq!(findings[0].spec_paths, [format!("input.{dataset}.schema")]);
-                assert_eq!(
-                    findings[0].context["reason"],
-                    yamaa_core::json::Value::String("undeclared_metadata".into())
-                );
-            }
-            // The shipped structural root rejects explicit-null schema before this
-            // metadata boundary; retain that original finding rather than bypassing it.
+        fn explicit_null_schema_is_an_absent_link() {
+            // Null clears (LAYER-9): an explicit-null schema is absent, so the
+            // input is an ordinary schema-less source.
             let null = CONSUMER.replace("schema: nested/producer.yaml", "schema: null");
-            let Err(yamaa_adapters::specification_source::Error::Findings(findings)) =
-                shipped_schema::capture()
-                    .unwrap()
-                    .prepare_standalone(Source {
-                        identity: "/consumer.yaml".into(),
-                        bytes: null.into_bytes(),
-                    })
-            else {
-                panic!("original structural null refusal")
-            };
-            assert_eq!(findings.findings()[0].path, "input.SRC.schema");
-            assert_eq!(
-                findings.findings()[0].definition().requirement,
-                Some("REQ-0287")
-            );
-        }
-    }
-    mod producer_graph {
-        use std::sync::Arc;
-        use yamaa_adapters::{
-            producer_admission::SuppliedProducer,
-            producer_graph::{prepare, Error, SuppliedNode},
-            shipped_schema,
-            specification_source::{InheritancePort, PreparedDocument, Source},
-        };
-        use yamaa_core::inheritance::{Source as Identity, SourceError};
-        use yamaa_core::{
-            producer_graph::Error as CoreError,
-            project_environment::{Draft, Environment, ExecutionEnvironment},
-            project_function::Language,
-            specification::PrepareError,
-        };
-
-        fn environment() -> ExecutionEnvironment {
-            Environment::admit(
-                Language::Python,
-                Draft {
-                    language: None,
-                    lock: None,
-                    functions: None,
-                    codelists: vec![],
-                },
-            )
-            .unwrap()
-            .into_execution()
-        }
-        fn text(input: &str, base: &str, output: &str) -> String {
-            format!("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\nbase: {base}\ninput: {input}\ncolumns:\n  - {{name: ID, type: int, label: Identifier, derivation: {base}.ID}}\n  - {{name: VALUE, type: float, label: Reported value, derivation: {base}.VALUE}}\noutput: {{path: {output}, columns: [ID, VALUE], decimals: 2}}\n")
-        }
-        fn document(identity: &str, text: &str) -> Arc<PreparedDocument> {
-            Arc::new(
-                shipped_schema::capture()
-                    .unwrap()
-                    .prepare_standalone(Source {
-                        identity: identity.into(),
-                        bytes: text.as_bytes().to_vec(),
-                    })
-                    .unwrap(),
-            )
-        }
-        fn link(
-            dataset: &str,
-            document: &Arc<PreparedDocument>,
-            artifact: &str,
-        ) -> SuppliedProducer {
-            SuppliedProducer {
-                dataset: dataset.into(),
-                schema_identity: document.source().identity.clone(),
-                source_identity: artifact.into(),
-                output_identity: artifact.into(),
-                document: Arc::clone(document),
-            }
-        }
-        fn node(
-            document: &Arc<PreparedDocument>,
-            producers: Vec<SuppliedProducer>,
-        ) -> SuppliedNode {
-            SuppliedNode {
-                document: Arc::clone(document),
-                producers,
-            }
-        }
-
-        #[test]
-        fn recursive_original_documents_are_owned_once_and_all_alias_origins_remain_held() {
-            let leaf_text = text("{RAW: never-read.csv}", "RAW", "leaf.csv");
-            let left_text = text(
-                "{LEAF: {path: leaf.csv, schema: './leaf.yaml'}}",
-                "LEAF",
-                "left.csv",
-            );
-            let right_text = text(
-                "{LEAF: {path: leaf.csv, schema: leaf.yaml}}",
-                "LEAF",
-                "right.csv",
-            );
-            // VALUE reads all three producer datasets so pruning (REQ-0638)
-            // keeps every supplied link declared in the resolved model.
-            let root_text = text("{RIGHT: {path: right.csv, schema: right.yaml}, LEFT: {path: left.csv, schema: left.yaml}, AGAIN: {path: left.csv, schema: './left.yaml'}}", "RIGHT", "root.csv")
-                .replace(
-                    "derivation: RIGHT.VALUE",
-                    "derivation: {first_available: {sources: [RIGHT.VALUE, LEFT.VALUE, AGAIN.VALUE]}}",
-                );
-            let leaf = document("/leaf.yaml", &leaf_text);
-            let left = document("/left.yaml", &left_text);
-            let right = document("/right.yaml", &right_text);
-            let root = document("/root.yaml", &root_text);
-            let graph = prepare(
-                "/root.yaml",
-                vec![
-                    node(&left, vec![link("LEAF", &leaf, "/leaf.csv")]),
-                    node(
-                        &root,
-                        vec![
-                            link("AGAIN", &left, "/left.csv"),
-                            link("LEFT", &left, "/left.csv"),
-                            link("RIGHT", &right, "/right.csv"),
-                        ],
-                    ),
-                    node(&leaf, vec![]),
-                    node(&right, vec![link("LEAF", &leaf, "/leaf.csv")]),
-                ],
-                environment(),
-            )
-            .unwrap();
-            drop((root, left, right, leaf));
-            assert_eq!(graph.metadata().root(), 1);
-            assert_eq!(graph.metadata().order(), [2, 3, 0, 1]);
-            assert_eq!(graph.nodes().len(), 4);
-            assert_eq!(
-                graph.nodes()[1].document.source().bytes,
-                root_text.as_bytes()
-            );
-            assert_eq!(
-                graph.nodes()[2].document.source().bytes,
-                leaf_text.as_bytes()
-            );
-            assert!(Arc::ptr_eq(
-                &graph.nodes()[0].producers[0].document,
-                &graph.nodes()[2].document
-            ));
-            assert!(Arc::ptr_eq(
-                &graph.nodes()[3].producers[0].document,
-                &graph.nodes()[2].document
-            ));
-            let aliases = graph.metadata().nodes()[1].producers();
-            assert_eq!(
-                aliases
-                    .iter()
-                    .map(|p| (
-                        p.dataset(),
-                        p.schema_origin().declaring_source(),
-                        p.schema_origin().written()
-                    ))
-                    .collect::<Vec<_>>(),
-                [
-                    ("RIGHT", "/root.yaml", "right.yaml"),
-                    ("LEFT", "/root.yaml", "left.yaml"),
-                    ("AGAIN", "/root.yaml", "./left.yaml")
-                ]
-            );
-            assert!(matches!(
-                yamaa_core::domain::check(graph.nodes()[1].document.model()),
-                Err(PrepareError::Unsupported(_))
-            ));
-        }
-
-        #[test]
-        fn incomplete_duplicate_replaced_and_unreachable_supplied_nodes_are_denied() {
-            let p = document("/p.yaml", &text("{RAW: never-read.csv}", "RAW", "p.csv"));
-            let root = document(
-                "/root.yaml",
-                &text("{P: {path: p.csv, schema: p.yaml}}", "P", "root.csv"),
-            );
-            let replaced = document(
-                "/p.yaml",
-                &text("{RAW: different-never-read.csv}", "RAW", "p.csv"),
-            );
-            let extra = document(
-                "/extra.yaml",
-                &text("{RAW: never-read.csv}", "RAW", "extra.csv"),
-            );
-            for (nodes, reason) in [
-                (
-                    vec![node(&root, vec![link("P", &p, "/p.csv")])],
-                    "missing_producer_node",
-                ),
-                (
-                    vec![
-                        node(&root, vec![link("P", &p, "/p.csv")]),
-                        node(&p, vec![]),
-                        node(&p, vec![]),
-                    ],
-                    "duplicate_identity",
-                ),
-                (
-                    vec![
-                        node(&root, vec![link("P", &replaced, "/p.csv")]),
-                        node(&p, vec![]),
-                    ],
-                    "contradictory_producer_document",
-                ),
-            ] {
-                assert!(
-                    matches!(prepare("/root.yaml", nodes, environment()), Err(Error::Boundary { reason: actual, .. }) if actual == reason)
-                );
-            }
-            assert!(matches!(
-                prepare(
-                    "/root.yaml",
-                    vec![
-                        node(&root, vec![link("P", &p, "/p.csv")]),
-                        node(&p, vec![]),
-                        node(&extra, vec![])
-                    ],
-                    environment()
-                ),
-                Err(Error::Graph(CoreError::Boundary {
-                    reason: "unreachable_node",
-                    ..
-                }))
-            ));
-        }
-
-        struct Parent {
-            bytes: Vec<u8>,
-            calls: usize,
-        }
-        impl InheritancePort for Parent {
-            type Error = ();
-            fn canonicalize(
-                &mut self,
-                _: &str,
-                written: &str,
-            ) -> Result<Identity, SourceError<()>> {
-                self.calls += 1;
-                assert_eq!(written, "parent.yaml");
-                Ok(Identity {
-                    identity: "/shared-parent.yaml".into(),
-                    display_path: "parent.yaml".into(),
+            assert!(shipped_schema::capture()
+                .unwrap()
+                .prepare_standalone(Source {
+                    identity: "/consumer.yaml".into(),
+                    bytes: null.into_bytes(),
                 })
-            }
-            fn capture(&mut self, _: &Identity) -> Result<Vec<u8>, SourceError<()>> {
-                self.calls += 1;
-                Ok(self.bytes.clone())
-            }
-            fn rebase(&mut self, _: &Identity, _: &Identity, written: &str) -> Result<String, ()> {
-                self.calls += 1;
-                Ok(written.into())
-            }
-        }
-        fn inherited(identity: &str, text: &str, parent: &[u8]) -> (Arc<PreparedDocument>, Parent) {
-            let mut port = Parent {
-                bytes: parent.into(),
-                calls: 0,
-            };
-            let bytes = text.replace("domain: TEST", "parents: parent.yaml\ndomain: TEST");
-            let prepared = shipped_schema::prepare(
-                Source {
-                    identity: identity.into(),
-                    bytes: bytes.into_bytes(),
-                },
-                identity.into(),
-                &mut port,
-            )
-            .unwrap();
-            (Arc::new(prepared), port)
-        }
-
-        #[test]
-        fn snapshots_shared_only_across_distinct_branches_must_hold_identical_bytes() {
-            let (a, a_port) = inherited(
-                "/a.yaml",
-                &text("{RAW: never-read.csv}", "RAW", "a.csv"),
-                b"schema_version: '1.0'\n# first retained parent\n",
-            );
-            let (b, b_port) = inherited(
-                "/b.yaml",
-                &text("{RAW: never-read.csv}", "RAW", "b.csv"),
-                b"schema_version: '1.0'\n# different retained parent\n",
-            );
-            let left = document(
-                "/left.yaml",
-                &text("{A: {path: a.csv, schema: a.yaml}}", "A", "left.csv"),
-            );
-            let right = document(
-                "/right.yaml",
-                &text("{B: {path: b.csv, schema: b.yaml}}", "B", "right.csv"),
-            );
-            let root = document("/root.yaml", &text("{LEFT: {path: left.csv, schema: left.yaml}, RIGHT: {path: right.csv, schema: right.yaml}}", "LEFT", "root.csv"));
-            let before = (a_port.calls, b_port.calls);
-            assert!(matches!(
-                prepare(
-                    "/root.yaml",
-                    vec![
-                        node(
-                            &root,
-                            vec![
-                                link("LEFT", &left, "/left.csv"),
-                                link("RIGHT", &right, "/right.csv")
-                            ]
-                        ),
-                        node(&left, vec![link("A", &a, "/a.csv")]),
-                        node(&right, vec![link("B", &b, "/b.csv")]),
-                        node(&a, vec![]),
-                        node(&b, vec![])
-                    ],
-                    environment()
-                ),
-                Err(Error::Boundary {
-                    reason: "contradictory_snapshot",
-                    ..
-                })
-            ));
-            assert_eq!(before, (a_port.calls, b_port.calls));
-        }
-
-        #[test]
-        fn equal_shared_parent_snapshots_and_written_inherited_origins_remain_retained() {
-            let producer_text = text("{RAW: never-read.csv}", "RAW", "p.csv").replace(
-                "output: {path: p.csv, columns: [ID, VALUE], decimals: 2}\n",
-                "",
-            );
-            let parent = b"schema_version: '1.0'\noutput: {path: p.csv, columns: [ID, VALUE], decimals: 2}\n# retained parent\n";
-            let (p, port) = inherited("/p.yaml", &producer_text, parent);
-            let (root, root_port) = inherited(
-                "/root.yaml",
-                &text("{P: {path: p.csv, schema: p.yaml}}", "P", "root.csv"),
-                parent,
-            );
-            let before = (port.calls, root_port.calls);
-            let graph = prepare(
-                "/root.yaml",
-                vec![node(&root, vec![link("P", &p, "/p.csv")]), node(&p, vec![])],
-                environment(),
-            )
-            .unwrap();
-            assert_eq!(
-                graph.nodes()[1].document.parents()[0].source().bytes,
-                parent
-            );
-            assert_eq!(
-                graph.nodes()[0].document.parents()[0].source().bytes,
-                parent
-            );
-            assert_eq!(
-                graph.metadata().nodes()[0].producers()[0]
-                    .output_origin()
-                    .declaring_source(),
-                "/shared-parent.yaml"
-            );
-            assert_eq!(
-                graph.metadata().nodes()[0].producers()[0]
-                    .output_origin()
-                    .written(),
-                "p.csv"
-            );
-            assert_eq!(before, (port.calls, root_port.calls));
-        }
-
-        #[test]
-        fn changed_schema_bytes_are_rejected_before_capability() {
-            let p_text = text("{RAW: never-read.csv}", "RAW", "p.csv");
-            let root = document(
-                "/root.yaml",
-                &text("{P: {path: p.csv, schema: p.yaml}}", "P", "root.csv"),
-            );
-            let mut sources = shipped_schema::capture().unwrap().sources().to_vec();
-            sources[0]
-                .bytes
-                .extend_from_slice(b"\n# changed schema closure\n");
-            let schema =
-                yamaa_adapters::specification_source::CapturedSchema::admit(sources, 0).unwrap();
-            let changed = Arc::new(
-                schema
-                    .prepare_standalone(Source {
-                        identity: "/p.yaml".into(),
-                        bytes: p_text.into_bytes(),
-                    })
-                    .unwrap(),
-            );
-            assert!(matches!(
-                prepare(
-                    "/root.yaml",
-                    vec![
-                        node(&root, vec![link("P", &changed, "/p.csv")]),
-                        node(&changed, vec![])
-                    ],
-                    environment()
-                ),
-                Err(Error::Boundary {
-                    reason: "schema_mismatch",
-                    ..
-                })
-            ));
-        }
-
-        #[test]
-        fn original_inline_type_conflict_is_not_erased_by_complete_graph_admission() {
-            let p = document("/p.yaml", &text("{RAW: never-read.csv}", "RAW", "p.csv"));
-            let root = document(
-                "/root.yaml",
-                &text(
-                    "{P: {path: p.csv, schema: p.yaml, types: {ID: int}}}",
-                    "P",
-                    "root.csv",
-                ),
-            );
-            let Err(Error::Graph(CoreError::Admission {
-                error: yamaa_core::producer_admission::Error::Invalid(findings),
-                ..
-            })) = prepare(
-                "/root.yaml",
-                vec![node(&root, vec![link("P", &p, "/p.csv")]), node(&p, vec![])],
-                environment(),
-            )
-            else {
-                panic!("original conflicting authority")
-            };
-            assert_eq!(findings[0].definition().condition, "redundant_field_type");
-            assert_eq!(findings[0].definition().requirement, Some("REQ-0523"));
-            assert_eq!(findings[0].spec_paths, ["input.P.types.ID"]);
+                .is_ok());
         }
     }
     mod project_activation_diagnostics {
@@ -2520,7 +2598,7 @@ mod project {
                 specification_source::Error as SourceError,
             };
             let mut port = port(CODE);
-            let body = "schema_version: '1.0'\nenvironments: {python: environment.yaml}\nparents: []\nruntime: {}\nversion: '1'\n";
+            let body = "schema_version: '1.0'\nenvironments: {python: environment.yaml}\nparent: base.yaml\nruntime: {}\nversion: '1'\n";
             let Failure::Root(SourceError::Findings(captured)) = project_source::prepare(
                 schemas(),
                 source(PROJECT, body),
@@ -2532,7 +2610,7 @@ mod project {
             };
             let issues = schema_root(&captured).unwrap();
             assert_eq!(issues.len(), 3);
-            for (issue, field) in issues.iter().zip(["parents", "runtime", "version"]) {
+            for (issue, field) in issues.iter().zip(["parent", "runtime", "version"]) {
                 assert_eq!(issue.spec_paths, [field]);
                 assert_eq!(issue.condition, "unknown_field");
                 assert_eq!(issue.requirement, Some("REQ-0285".into()));

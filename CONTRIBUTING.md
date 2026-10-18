@@ -122,9 +122,17 @@ Standalone installed suites use copied fixtures and readers; they must not
 import repository packages.
 
 For rule or schema changes, follow their area guides; `make quick` runs the
-repository checks. Repository Python checks source syntax, physical schema includes,
-fixture metadata, grammar documents, layout and editorial rules without
-importing an installed engine. Its complete-corpus test refuses imports of
+repository checks. `make check-repository` runs `tools.rules.check`, which reads the
+rules once through `tools/rules/model.py` and checks cards, legacy requirements,
+every rule citation and markdown links. During the 0.5.0 conversion, run
+`python -m tools.rules.migrate statements --base origin/main` to list
+the card titles and statements a pull request adds, changes or removes for
+review; `report` accounts for the replaced requirements and `links` moves
+markdown citations to their cards.
+
+Repository Python checks source syntax, physical schema includes, fixture
+metadata, grammar documents, layout and editorial rules without importing an
+installed engine. Its complete-corpus test refuses imports of
 yamaa, Polars and PyArrow. Shared Rust tests own schema admission, inheritance,
 expressions, source binding, execution and the unchanged grammar, regex and
 exact rounding fixtures directly.
@@ -221,8 +229,9 @@ Neither lane updates the source checkout's locks. Release builds and source
 archives continue to use the canonical unchanged locks; these compatibility
 lanes supplement [native qualification](rust/qualification/README.md).
 
-Before every merge, run a fresh read-only review check with an authenticated
-GitHub CLI, supplying the exact final commit:
+Before every merge into `main` or a `release/X.Y.Z` branch, run a fresh
+read-only review check with an authenticated GitHub CLI, supplying the exact
+final commit:
 
 ```sh
 python -m tools.ci.review_gate --repository elong0527/yamaa --pr <number> --head <full-commit>
@@ -311,11 +320,12 @@ MkDocs reads those canonical files through its configured hook, resolves their
 repository-relative links and preserves their edit targets. Do not create
 copies under `docs/`. Other site pages live there; the navigation links directly
 to this contributor guide. A site page links a repository file outside `docs/`
-by relative path, such as `../rules/storage/csv.md`: the site points it at the
+by relative path, such as `../rules/reference/csv.md`: the site points it at the
 file on main, and a copy read at a release tag names that tag's file.
 
-Requirement and schema-field references are generated from `rules/` and `yaml/`
-on every build. Edit the owning contract or schema, not a generated page.
+The requirement index, rules summary and schema-field references are generated
+from `rules/` and `yaml/` on every build. Edit the owning rule or schema, not a
+generated page.
 Benchmark dashboards likewise render authored fixtures without executing the
 engine. Their [guide](tools/benchmark_docs/README.md) describes the
 rendered materials. Generated pages and build output are ignored by Git.

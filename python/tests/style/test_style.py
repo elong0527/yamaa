@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 import textwrap
 from pathlib import Path
 
@@ -40,7 +39,7 @@ from yamaa.style._fix import proved
 
 REPOSITORY_ROOT = Path(__file__).parents[3]
 SCHEMA_ROOT = REPOSITORY_ROOT / "yaml"
-CONTRACT = REPOSITORY_ROOT / "rules" / "specification" / "style.md"
+GUIDE = REPOSITORY_ROOT / "docs" / "articles" / "style.md"
 ORDERS = field_orders()
 
 CANONICAL = """\
@@ -105,7 +104,7 @@ def _fix(path: Path) -> tuple[str, list[str]]:
     after = path.read_text(encoding="utf-8")
     assert changed == (after != before)
     assert proved(before, after)
-    # REQ-1286: fixing the fixed file changes nothing.
+    # A fix is kept only when fixing the fixed file changes nothing.
     assert fix_file(path, orders=ORDERS)[0] is False
     return after, [finding.name for finding in remaining]
 
@@ -114,15 +113,15 @@ def test_canonical_specification_has_no_findings(tmp_path: Path) -> None:
     assert _names(_spec(tmp_path, CANONICAL)) == []
 
 
-def test_finding_carries_file_line_column_and_requirement(tmp_path: Path) -> None:
+def test_finding_carries_file_line_column_and_name(tmp_path: Path) -> None:
     path = _spec(
         tmp_path, CANONICAL.replace("    dataset: EX\n", "    dataset: EX\n\n\n")
     )
     finding = check_file(path, orders=ORDERS)[0]
     assert finding.name == "blank_lines"
     assert (finding.line, finding.column) == (17, 1)
-    assert finding.requirement == "REQ-1284"
-    assert finding.render().startswith(f"{path}:17:1: blank_lines ")
+    # A finding carries its name and message only, never a rule ID.
+    assert finding.render() == f"{path}:17:1: blank_lines {finding.message}"
 
 
 def test_root_fields_follow_the_schema_order(tmp_path: Path) -> None:
@@ -142,13 +141,13 @@ def test_root_fields_follow_the_schema_order(tmp_path: Path) -> None:
     assert remaining == []
 
 
-def test_parents_and_filter_belong_to_the_header(tmp_path: Path) -> None:
+def test_parent_and_filter_belong_to_the_header(tmp_path: Path) -> None:
     path = _spec(
         tmp_path,
         """\
         schema_version: "1.0"
         domain: ADSL
-        parents: base.yaml
+        parent: base.yaml
         keys: [USUBJID]
         input:
           DM: input/dm.csv
@@ -171,7 +170,7 @@ def test_parents_and_filter_belong_to_the_header(tmp_path: Path) -> None:
     after, remaining = _fix(path)
     assert remaining == []
     assert after.startswith(
-        'schema_version: "1.0"\nparents: base.yaml\ndomain: ADSL\n'
+        'schema_version: "1.0"\nparent: base.yaml\ndomain: ADSL\n'
         "keys: [USUBJID]\ninput:\n  DM: input/dm.csv\n"
         'filter: "DM.ARMCD IS NOT NULL"\n\noutput:\n'
     )
@@ -289,7 +288,7 @@ def test_blank_lines(tmp_path: Path, text: str, message: str) -> None:
 
 
 def test_missing_line_break_is_reported_at_the_last_line(tmp_path: Path) -> None:
-    # REQ-1280: a finding carries the line and column where the departure
+    # A finding carries the line and column where the departure
     # starts; a missing final line break starts at the end of the last line.
     text = CANONICAL.rstrip("\n")
     path = tmp_path / "spec.yaml"
@@ -301,7 +300,7 @@ def test_missing_line_break_is_reported_at_the_last_line(tmp_path: Path) -> None
 
 
 def test_fix_preserves_crlf_line_endings(tmp_path: Path) -> None:
-    # REQ-1286: a fix rearranges lines and never rewrites what a value
+    # A fix rearranges lines and never rewrites what a value
     # says; the file's line endings are not a value, but silently
     # converting every CRLF ending to LF rewrites the whole file for a
     # one-line spacing fix, so the written ending is preserved.
@@ -347,7 +346,7 @@ def test_crlf_line_width_counts_the_line_without_its_ending(
     tmp_path: Path,
 ) -> None:
     # The carriage return belongs to the line ending, not the line: a
-    # 79-character CRLF line is within REQ-1285, and an 80-character one
+    # 79-character CRLF line is within the width, and an 80-character one
     # is reported as 80 characters, not 81.
     label = "    label: Study Identifier\n"
     for width, expected in ((79, []), (80, ["line is 80 characters"])):
@@ -497,7 +496,8 @@ def test_long_predicates_continue_after_a_comma_or_before_a_connective(
 
 def test_long_flow_mappings_become_blocks_but_literals_stay(tmp_path: Path) -> None:
     derivation = (
-        "{date_impute: {source: FIRSTDOSE.EXSTDTC, month: 1, day: last, missing: null}}"
+        "{impute: {type: date, source: FIRSTDOSE.EXSTDTC, month: 1, day: last, "
+        "invalid: {literal: null}}}"
     )
     path = _spec(
         tmp_path,
@@ -508,9 +508,10 @@ def test_long_flow_mappings_become_blocks_but_literals_stay(tmp_path: Path) -> N
     after, remaining = _fix(path)
     assert remaining == []
     assert (
-        "    derivation:\n      date_impute: {source: FIRSTDOSE.EXSTDTC, month: 1,"
+        "    derivation:\n      impute: {type: date, source: FIRSTDOSE.EXSTDTC,"
         in after
-        or "    derivation:\n      date_impute:\n        source: FIRSTDOSE.EXSTDTC\n"
+        or "    derivation:\n      impute:\n        type: date\n"
+        "        source: FIRSTDOSE.EXSTDTC\n"
         in after
     )
     assert "then: {literal: null}" in after
@@ -530,7 +531,7 @@ def test_a_long_comment_is_reported_and_left_to_its_author(tmp_path: Path) -> No
 
 
 def test_line_width_boundary_is_seventy_nine(tmp_path: Path) -> None:
-    # REQ-1285: a line holds at most 79 characters, and a longer line is
+    # A line holds at most 79 characters, and a longer line is
     # reported at its eightieth character.
     at_limit = CANONICAL.replace(
         "    label: Study Identifier\n", "    label: " + "x" * 68 + "\n"
@@ -564,31 +565,38 @@ def test_a_long_block_scalar_at_the_end_is_left_to_its_author(
     assert remaining == ["line_width"]
 
 
-def test_literal_and_source_spellings(tmp_path: Path) -> None:
+def test_literal_spelling(tmp_path: Path) -> None:
     path = _spec(
         tmp_path,
         CANONICAL.replace(
-            "          then: {literal: null}\n        - otherwise: FIRSTDOSE.EXSTDTC\n",
-            "          then:\n            literal: null\n"
-            "        - otherwise: {source: FIRSTDOSE.EXSTDTC}\n",
-        ).replace(
-            "    derivation: DM.USUBJID\n",
-            "    derivation:\n      source: DM.USUBJID\n",
+            "          then: {literal: null}\n",
+            "          then:\n            literal: null\n",
         ),
     )
     findings = check_file(path, orders=ORDERS)
     assert [(item.name, item.spec_path) for item in findings] == [
-        ("source_form", "columns[1].derivation"),
         ("literal_form", "columns[2].derivation.case[0].then"),
-        ("source_form", "columns[2].derivation.case[1].otherwise"),
     ]
-    # REQ-1286: a spelling is corrected by its author, not by a fix.
+    # A spelling is corrected by its author, not by a fix.
     _, remaining = _fix(path)
-    assert remaining == ["source_form", "literal_form", "source_form"]
+    assert remaining == ["literal_form"]
+
+
+def test_a_source_mapping_is_left_to_the_language(tmp_path: Path) -> None:
+    # The language itself refuses {source: X} where the bare string is the
+    # shorthand, so the style check names no source spelling.
+    path = _spec(
+        tmp_path,
+        CANONICAL.replace(
+            "    derivation: DM.USUBJID\n",
+            "    derivation:\n      source: DM.USUBJID\n",
+        ),
+    )
+    assert _names(path) == []
 
 
 def test_literal_block_form_reports_any_value_shape(tmp_path: Path) -> None:
-    # REQ-1250 names the block form itself: a literal holding a collection,
+    # `literal_form` names the block form itself: a literal holding a collection,
     # or a scalar written on the line below `literal:`, parses to the same
     # value as the canonical {literal: X} and is reported the same way.
     for block in (
@@ -620,7 +628,7 @@ def test_literal_flow_form_on_following_line_is_not_reported(
     assert _names(path) == []
 
 
-def test_sources_outside_the_shorthand_positions_keep_the_mapping(
+def test_sources_with_more_than_a_variable_keep_the_mapping(
     tmp_path: Path,
 ) -> None:
     path = _spec(
@@ -636,16 +644,15 @@ def test_sources_outside_the_shorthand_positions_keep_the_mapping(
     assert _names(path) == []
 
 
-def test_literal_and_source_forms_need_a_single_key_mapping(
+def test_the_literal_form_needs_a_single_key_mapping(
     tmp_path: Path,
 ) -> None:
-    # REQ-1250 and REQ-1255 name the single-key mappings {literal: X} and
-    # {source: X}: a block mapping with another key beside literal/source
-    # is a different value and stays silent, and an empty mapping is
-    # neither form (and must not crash the check).
+    # `literal_form` names the single-key mapping {literal: X}: a block
+    # mapping with another key beside literal is a different value and stays
+    # silent, and an empty mapping is not the form (and must not crash the
+    # check).
     for derivation in (
         "    derivation:\n      literal: DM\n      note: x\n",
-        "    derivation:\n      source: DM.USUBJID\n      note: x\n",
         "    derivation: {}\n",
     ):
         path = _spec(
@@ -696,7 +703,7 @@ def test_the_proof_keeps_types_and_comments_apart() -> None:
 
 def test_directories_expand_to_specifications_only(tmp_path: Path) -> None:
     _spec(tmp_path, CANONICAL, "adsl.yaml")
-    _spec(tmp_path, 'schema_version: "1.0"\ndefine_version: "2.1.11"\n', "define.yaml")
+    _spec(tmp_path, 'schema_version: "1.0"\nstudy: {id: S1}\n', "environment.yaml")
     _spec(tmp_path, "data_roots: [data]\n", "yamaa-project.yaml")
     hidden = tmp_path / ".cache"
     hidden.mkdir()
@@ -705,7 +712,7 @@ def test_directories_expand_to_specifications_only(tmp_path: Path) -> None:
     assert [path.name for path in specification_files([tmp_path], root_fields)] == [
         "adsl.yaml"
     ]
-    assert not is_specification(tmp_path / "define.yaml", root_fields)
+    assert not is_specification(tmp_path / "environment.yaml", root_fields)
 
 
 def test_a_complex_root_key_is_not_a_specification(tmp_path: Path) -> None:
@@ -753,14 +760,10 @@ def test_command_line_exit_status(
                 main([*schema, option, value, str(packed)])
 
 
-def test_every_finding_is_named_by_its_contract_requirement() -> None:
-    contract = CONTRACT.read_text(encoding="ascii")
-    for name, requirement in FINDINGS.items():
-        match = re.search(
-            rf"\*\*{requirement}\.\*\*(.*?)(?=<a id=|\Z)", contract, re.DOTALL
-        )
-        assert match is not None, requirement
-        assert f"`{name}`" in match[1], (name, requirement)
+def test_every_finding_is_documented_in_the_style_guide() -> None:
+    guide = GUIDE.read_text(encoding="ascii")
+    for name in FINDINGS:
+        assert f"`{name}`" in guide, name
 
 
 @pytest.mark.parametrize(
@@ -838,16 +841,16 @@ def test_repeated_row_derivations_move_to_column_level(
 ) -> None:
     path = _spec(tmp_path, REPEATED)
     findings = check_file(path, orders=ORDERS)
-    assert [(item.name, item.spec_path, item.requirement) for item in findings] == [
-        ("repeated_row_derivation", "rows[0].derivations.STUDYID", "REQ-1288"),
-        ("repeated_row_derivation", "rows[0].derivations.USUBJID", "REQ-1288"),
-        ("repeated_row_derivation", "rows[0].derivations.DOMAIN", "REQ-1288"),
+    assert [(item.name, item.spec_path) for item in findings] == [
+        ("repeated_row_derivation", "rows[0].derivations.STUDYID"),
+        ("repeated_row_derivation", "rows[0].derivations.USUBJID"),
+        ("repeated_row_derivation", "rows[0].derivations.DOMAIN"),
     ]
     first = findings[0]
     assert (first.line, first.column) == (27, 7)
     assert "move it to columns[].derivation" in first.message
     assert first.render().startswith(f"{path}:27:7: repeated_row_derivation ")
-    # REQ-1286: authoring lints rewrite the value, so no fix is offered.
+    # Authoring lints rewrite the value, so no fix is offered.
     changed, remaining = fix_file(path, orders=ORDERS)
     assert changed is False
     assert [item.name for item in remaining] == [
@@ -911,7 +914,7 @@ def test_repeated_row_derivation_skips_row_phase_work(tmp_path: Path) -> None:
     intermediate = REPEATED.replace(
         "output:\n  path: dm.csv",
         "intermediates:\n  - id: PICK\n    dataset: DM\n"
-        '    filter: "DM.X = 1"\n    no_match: null\n\noutput:\n  path: dm.csv',
+        '    filter: "DM.X = 1"\n    no_match: {literal: null}\n\noutput:\n  path: dm.csv',
     ).replace("DOMAIN: {literal: DM}", "DOMAIN: PICK.X")
     assert ("repeated_row_derivation", "rows[0].derivations.DOMAIN") not in [
         (item.name, item.spec_path)
@@ -1068,7 +1071,7 @@ intermediates:
   - id: ADSL1
     dataset: ADSL
     key: [STUDYID, USUBJID]
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: STUDYID
@@ -1093,8 +1096,8 @@ def test_redundant_intermediate_reads_the_dataset_directly(
 ) -> None:
     path = _spec(tmp_path, REDUNDANT)
     findings = check_file(path, orders=ORDERS)
-    assert [(item.name, item.spec_path, item.requirement) for item in findings] == [
-        ("redundant_intermediate", "intermediates[0]", "REQ-1289"),
+    assert [(item.name, item.spec_path) for item in findings] == [
+        ("redundant_intermediate", "intermediates[0]"),
     ]
     assert findings[0].message == (
         "intermediate `ADSL1` reads exactly what the implicit join to `ADSL` "
@@ -1115,8 +1118,8 @@ def test_redundant_intermediate_positions_ignore_stray_entries(
         "intermediates:\n  - stray\n\n  - id: ADSL1\n",
     )
     findings = check_file(_spec(tmp_path, stray), orders=ORDERS)
-    assert [(item.name, item.spec_path, item.requirement) for item in findings] == [
-        ("redundant_intermediate", "intermediates[1]", "REQ-1289"),
+    assert [(item.name, item.spec_path) for item in findings] == [
+        ("redundant_intermediate", "intermediates[1]"),
     ]
 
 
@@ -1124,9 +1127,9 @@ def test_redundant_intermediate_keeps_narrowing_lookups(
     tmp_path: Path,
 ) -> None:
     filtered = REDUNDANT.replace(
-        "    key: [STUDYID, USUBJID]\n    no_match: null",
+        "    key: [STUDYID, USUBJID]\n    no_match: {literal: null}",
         "    key: [STUDYID, USUBJID]\n"
-        "    filter: \"ADSL.EFFFL = 'Y'\"\n    no_match: null",
+        "    filter: \"ADSL.EFFFL = 'Y'\"\n    no_match: {literal: null}",
     )
     assert _names(_spec(tmp_path, filtered)) == []
     custom = REDUNDANT.replace(
@@ -1134,10 +1137,23 @@ def test_redundant_intermediate_keeps_narrowing_lookups(
         "    key: [USUBJID]",
     )
     assert _names(_spec(tmp_path, custom)) == []
-    required = REDUNDANT.replace("\n    no_match: null", "")
+    required = REDUNDANT.replace("no_match: {literal: null}", "require_match: true")
     assert "redundant_intermediate" not in _names(_spec(tmp_path, required))
+    # Omitted or cleared by a bare null, the answer is missing, as the join's.
+    omitted = REDUNDANT.replace("\n    no_match: {literal: null}", "")
+    assert "redundant_intermediate" in _names(_spec(tmp_path, omitted))
+    cleared = REDUNDANT.replace("no_match: {literal: null}", "no_match: null")
+    assert "redundant_intermediate" in _names(_spec(tmp_path, cleared))
+    # An input requiring a match fails its implicit join where the
+    # intermediate answers with missing.
+    input_required = REDUNDANT.replace(
+        "  ADSL: input/adsl.csv",
+        "  ADSL: {path: input/adsl.csv, require_match: true}",
+    )
+    assert "redundant_intermediate" not in _names(_spec(tmp_path, input_required))
     rename_only = REDUNDANT.replace(
-        "    key: [STUDYID, USUBJID]\n    no_match: null", "    no_match: null"
+        "    key: [STUDYID, USUBJID]\n    no_match: {literal: null}",
+        "    no_match: {literal: null}",
     )
     # REQ-1248 owns the omitted-key rename; style stays silent.
     assert "redundant_intermediate" not in _names(_spec(tmp_path, rename_only))
@@ -1172,7 +1188,7 @@ def test_repeated_row_derivation_rejects_suffix_intermediate_match(
             "  - id: DSL\n"
             "    dataset: DM\n"
             "    key: [STUDYID, USUBJID]\n"
-            "    no_match: null\n\n"
+            "    no_match: {literal: null}\n\n"
             "output:\n  path: dm.csv",
         )
         .replace("DOMAIN: {literal: DM}", "DOMAIN: ADSL.AGE")
@@ -1210,8 +1226,8 @@ columns:
 def test_missing_output_column_labels(tmp_path: Path) -> None:
     path = _spec(tmp_path, MISSING_LABEL)
     findings = check_file(path, orders=ORDERS)
-    assert [(item.name, item.spec_path, item.requirement) for item in findings] == [
-        ("missing_label", "columns[1]", "REQ-1290"),
+    assert [(item.name, item.spec_path) for item in findings] == [
+        ("missing_label", "columns[1]"),
     ]
     assert findings[0].message == ("output column `AGE` has no label; declare `label:`")
     changed, remaining = fix_file(path, orders=ORDERS)
@@ -1230,8 +1246,8 @@ def test_missing_label_positions_ignore_stray_column_entries(
     )
     path = _spec(tmp_path, stray)
     findings = check_file(path, orders=ORDERS)
-    assert [(item.name, item.spec_path, item.requirement) for item in findings] == [
-        ("missing_label", "columns[2]", "REQ-1290"),
+    assert [(item.name, item.spec_path) for item in findings] == [
+        ("missing_label", "columns[2]"),
     ]
     age_line = next(
         number
@@ -1251,8 +1267,8 @@ def test_missing_label_reports_a_repeated_output_column_once(
     )
     path = _spec(tmp_path, repeated)
     findings = check_file(path, orders=ORDERS)
-    assert [(item.name, item.spec_path, item.requirement) for item in findings] == [
-        ("missing_label", "columns[1]", "REQ-1290"),
+    assert [(item.name, item.spec_path) for item in findings] == [
+        ("missing_label", "columns[1]"),
     ]
 
 
@@ -1266,9 +1282,15 @@ def test_missing_label_skips_internal_and_inherited_columns(
     assert _names(_spec(tmp_path, internal)) == []
     inherited = MISSING_LABEL.replace(
         'schema_version: "1.0"\ndomain: ADSL',
-        'schema_version: "1.0"\nparents: base.yaml\ndomain: ADSL',
+        'schema_version: "1.0"\nparent: base.yaml\ndomain: ADSL',
     )
     assert "missing_label" not in _names(_spec(tmp_path, inherited))
+    # A null parent names no parent: the standalone file owns its labels.
+    standalone = MISSING_LABEL.replace(
+        'schema_version: "1.0"\ndomain: ADSL',
+        'schema_version: "1.0"\nparent: null\ndomain: ADSL',
+    )
+    assert "missing_label" in _names(_spec(tmp_path, standalone))
 
 
 def test_authoring_suppression_with_a_reason_covers_its_entry(

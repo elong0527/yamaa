@@ -39,6 +39,9 @@ run_longitudinal_capacity <- function() {
       stopifnot(identical(built$output[[column]], as.double(wanted)))
     }
     if (profile == "parquet") {
+      # A link only types the stored artifact: save the producer before its
+      # consumer reads it.
+      stopifnot(is.null(built$save()))
       consumer <- file.path(root, "consumer.yaml")
       writeLines(c(
         "schema_version: '1.0'", "domain: WIDE", "keys: [ID]", "input:",
@@ -46,10 +49,10 @@ run_longitudinal_capacity <- function() {
         "output:", "  path: consumer.csv",
         paste0("  columns: [", paste(names, collapse = ", "), "]")
       ), consumer, useBytes = TRUE)
-      produced <- run(consumer)
-      stopifnot(nrow(produced$issues) == 0L,
-                identical(dim(produced$output), c(rows, 100L)),
-                is.null(produced$save()))
+      consumed <- run(consumer)
+      stopifnot(nrow(consumed$issues) == 0L,
+                identical(dim(consumed$output), c(rows, 100L)),
+                is.null(consumed$save()))
       output <- file.path(root, "consumer.csv")
       stopifnot(identical(readBin(output, "raw", n = file.info(output)$size), expected))
     }

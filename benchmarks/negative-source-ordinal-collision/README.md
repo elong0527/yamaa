@@ -13,4 +13,4 @@ collected field. The stored values are never overwritten or renamed.
 Choose an ordinal name that is absent from the stored input fields, such as
 `ordinal: OriginalPosition`, and reference `SOURCE.OriginalPosition` in the
 consuming expressions. See
-[REQ-1294](../../rules/storage/ingestion.md#req-1294).
+[INPUT-4](../../rules/inputs.md#input-4).

@@ -73,7 +73,7 @@ UniqueKeyLoader.add_constructor("tag:yaml.org,2002:int", construct_yaml_12_int)
 
 
 def normalize_non_finite_float(value):
-    """Apply R011's normalization at a numeric value boundary."""
+    """Apply non-finite normalization at a numeric value boundary."""
     if type(value) is float and not math.isfinite(value):
         return None
     return value

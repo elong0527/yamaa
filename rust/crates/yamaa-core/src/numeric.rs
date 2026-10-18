@@ -3,7 +3,7 @@
 //! Parsing, operand evaluation order, callbacks and handler application belong
 //! to later layers. These functions do not skip evaluating an expression tree.
 
-use crate::value::{FiniteFloat, Value, ValueType};
+use crate::value::{compare_present, FiniteFloat, Value, ValueType};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Number {
@@ -16,6 +16,14 @@ impl Number {
     /// Normalize binary64 input or an operator result before another numeric consumer.
     pub fn float(value: f64) -> Self {
         FiniteFloat::new(value).map_or(Self::Missing, Self::Float)
+    }
+
+    /// VALUE-8: an `int` widened to the nearest binary64 `float`.
+    pub fn widened(self) -> Self {
+        match self {
+            Self::Int(value) => Self::float(value as f64),
+            other => other,
+        }
     }
 
     /// Promote a present number to binary64, retaining missing as None.
@@ -81,8 +89,6 @@ pub enum ArithmeticErrorKind {
     DivisionByZero,
     SqrtOfNegative,
     LnOfNonpositive,
-    /// A present digits argument is float, even when its value is integral.
-    InvalidRoundingDigits,
     /// Promoted finite arguments retained as exact bits for future diagnostic transport.
     InvalidPower {
         base_bits: u64,
@@ -99,7 +105,7 @@ pub struct ArithmeticError {
 }
 
 impl ArithmeticError {
-    /// Distinguish integer-digits validation from numeric derivation failures.
+    /// Return the registry phase owning this arithmetic failure.
     pub fn phase(&self) -> &'static str {
         self.kind.diagnostic_code().definition().phase
     }
@@ -198,69 +204,24 @@ pub fn unary(
     }
 }
 
-/// Numeric functions selecting among already-evaluated arguments (REQ-0424).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SelectionFunction {
-    Greatest,
-    Least,
-    Coalesce,
-}
-
-/// Select a present value, then promote if any present argument is float.
-/// Extremes compare before promotion and retain the first equal value (including
-/// signed zero); COALESCE selects the first present value. Missing arguments do
-/// not influence promotion. Empty primitive input is missing; the grammar layer
-/// separately enforces each function's minimum arity.
-pub fn select(function: SelectionFunction, arguments: &[Number]) -> Number {
-    use std::cmp::Ordering;
-    let mut selected = Number::Missing;
-    let mut has_float = false;
-    for &argument in arguments {
-        if argument == Number::Missing {
-            continue;
-        }
-        has_float |= matches!(argument, Number::Float(_));
-        if selected == Number::Missing {
-            selected = argument;
-        } else if function != SelectionFunction::Coalesce {
-            let order = crate::value::compare_present(&argument.into(), &selected.into())
-                .expect("present numeric arguments are comparable");
-            if (function == SelectionFunction::Greatest && order == Ordering::Greater)
-                || (function == SelectionFunction::Least && order == Ordering::Less)
-            {
-                selected = argument;
-            }
-        }
-    }
-    match (selected, has_float) {
-        (Number::Int(value), true) => Number::float(value as f64),
-        _ => selected,
-    }
-}
-
-/// Return missing for equal arguments, comparing mixed types after promotion.
-/// Unlike extreme selection, the reference NULLIF compares a mixed pair as two
-/// binary64 values. A present unmatched left operand has the promoted pair type.
+/// Return missing for equal arguments. A mixed pair compares by exact value,
+/// like every other comparison; zero signs are equal. A present unmatched left
+/// operand has the promoted pair type. A missing right operand has no value
+/// to promote by; the bound site widens the result when its declared type is
+/// `float` (EXPR-14).
 pub fn null_if(left: Number, right: Number) -> Number {
+    if left == Number::Missing {
+        return Number::Missing;
+    }
+    if right == Number::Missing {
+        return left;
+    }
+    if compare_present(&left.into(), &right.into()) == Ok(std::cmp::Ordering::Equal) {
+        return Number::Missing;
+    }
     match (left, right) {
-        (Number::Missing, _) => Number::Missing,
-        (_, Number::Missing) => left,
-        (Number::Int(a), Number::Int(b)) => {
-            if a == b {
-                Number::Missing
-            } else {
-                left
-            }
-        }
-        _ => {
-            let a = left.as_float().expect("present numeric left operand");
-            let b = right.as_float().expect("present numeric right operand");
-            if a == b {
-                Number::Missing
-            } else {
-                Number::float(a)
-            }
-        }
+        (Number::Int(_), Number::Int(_)) => left,
+        _ => Number::float(left.as_float().expect("present numeric left operand")),
     }
 }
 
@@ -365,27 +326,7 @@ pub fn power(left: Number, right: Number, expression: &str) -> Result<Number, Ar
 }
 
 /// Round to decimal places under REQ-0418, returning float or normalized missing.
-/// Both operands are already evaluated. Missing precedes digits validation;
-/// a float digits argument is invalid even when numerically integral.
-pub fn round_half_away_from_zero(
-    value: Number,
-    digits: Number,
-    expression: &str,
-) -> Result<Number, ArithmeticError> {
-    if matches!(value, Number::Missing) || matches!(digits, Number::Missing) {
-        return Ok(Number::Missing);
-    }
-    let Number::Int(digits) = digits else {
-        return Err(ArithmeticError {
-            expression: expression.to_string(),
-            kind: ArithmeticErrorKind::InvalidRoundingDigits,
-        });
-    };
-    Ok(round_integer_places(value, digits))
-}
-
-/// Apply the shared arithmetic after an integer declaration has been admitted.
-/// Declarative operations do not construct formula text or formula diagnostics.
+/// The integer digits declaration is admitted before any value is read.
 pub(crate) fn round_integer_places(value: Number, digits: i64) -> Number {
     value.as_float().map_or(Number::Missing, |value| {
         Number::float(crate::decimal_rounding::round_finite(value, digits))

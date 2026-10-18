@@ -1,0 +1,67 @@
+schema_version: "1.0"
+domain: ADLB
+keys: [USUBJID, LBSEQ]
+input:
+  LB:
+    path: input/lb.csv
+    types: {LBSEQ: int, ADT: date, AVAL: float, TRTSDT: date}
+
+output:
+  path: adlb.csv
+  columns: [USUBJID, LBSEQ, ADT, ATM, AVAL, TRTSDT, ABLFL]
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: LB.USUBJID
+
+  - name: LBSEQ
+    type: int
+    label: Sequence Number
+    derivation: LB.LBSEQ
+
+  - name: ADT
+    type: date
+    label: Analysis Date
+    derivation: LB.ADT
+
+  # Collection time as zero-padded hh:mm text, so text order is clock order.
+  - name: ATM
+    type: str
+    label: Analysis Time
+    derivation: LB.ATM
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: LB.AVAL
+
+  - name: TRTSDT
+    type: date
+    label: Date of First Exposure to Treatment
+    derivation: LB.TRTSDT
+
+  # The latest result on or before treatment start. Results sharing that
+  # date are ordered by collection time and then by sequence number, and
+  # the last is the baseline. A missing time sorts lowest, so subject 03's
+  # timed result wins over its untimed one.
+  - name: ABLFL
+    type: str
+    label: Baseline Record Flag
+    derivation:
+      baseline_flag:
+        date: ADT
+        reference_date: TRTSDT
+        value: AVAL
+        tie_break: [ATM, LBSEQ]
+        window:
+          group_by: [USUBJID]
+
+verifications:
+  - row_count:
+      id: one-baseline-per-subject
+      group_by: [USUBJID]
+      filter: "ABLFL = 'Y'"
+      min: 1
+      max: 1

@@ -19,7 +19,7 @@ mod table {
             numeric::{ArithmeticErrorKind, Number},
             reduction::{NumericReducer, ReductionError},
             table::{CellError, TableAccess, TableSchema, ValueRef},
-            temporal::{Date, DatePrecision as DP, DateTime, DateTimePrecision as TP},
+            temporal::{Date, DateTime, Precision as DP, Precision as TP},
             value::ColumnType as CT,
         };
 
@@ -190,11 +190,27 @@ mod table {
         }
 
         #[test]
-        /// Keep hour and minute collected precision beside the completed fields.
-        fn hour_and_minute_datetime_precision_survive_encoding() {
+        /// Keep every rung of the one collected-precision ladder beside the
+        /// completed fields, for dates and datetimes alike.
+        fn every_collected_precision_survives_encoding() {
+            let schema = logical_schema(&[("date", CT::Date)]);
+            let dates = [DP::None, DP::Year, DP::Month, DP::Day]
+                .map(|precision| Date::new(2025, 3, 4, precision).unwrap());
+            let encoded = Arc::new(date_array(&dates.map(Some)).unwrap());
+            let table =
+                ArrowTable::try_new(schema.clone(), vec![batch(&schema, vec![encoded])]).unwrap();
+            for (row, expected) in dates.into_iter().enumerate() {
+                let ValueRef::Date(value) = table.cell(row, 0).unwrap() else {
+                    panic!("date")
+                };
+                assert_eq!(value.collected_precision(), expected.collected_precision());
+            }
             let schema = logical_schema(&[("datetime", CT::DateTime)]);
             let day = Date::new(2025, 3, 4, DP::Day).unwrap();
             let values = [
+                DateTime::new(day, 0, 0, 0, TP::None).unwrap(),
+                DateTime::new(day, 0, 0, 0, TP::Year).unwrap(),
+                DateTime::new(day, 0, 0, 0, TP::Month).unwrap(),
                 DateTime::new(day, 0, 0, 0, TP::Day).unwrap(),
                 DateTime::new(day, 8, 59, 59, TP::Hour).unwrap(),
                 DateTime::new(day, 8, 30, 0, TP::Minute).unwrap(),
@@ -273,8 +289,9 @@ mod table {
         #[test]
         /// Reject malformed visible data but honor parent-null masking.
         fn visible_temporal_payloads_are_validated_before_any_use() {
+            // Codes 0 to 3 name year, month, day and none; 4 is the first unknown.
             for (values, precisions, precision) in [
-                (vec![0, 0], vec![2, 3], true),
+                (vec![0, 0], vec![2, 4], true),
                 (vec![0, i32::MIN], vec![2, 2], false),
                 (vec![0, 2932897], vec![2, 2], false),
             ] {
@@ -542,7 +559,8 @@ mod table {
                 (i64::MAX, 1, false),
                 (-62135596801, 1, false),
                 (253402300800, 1, false),
-                (0, 4, true),
+                // Codes 0 to 6 name day, second, hour, minute, none, year and month.
+                (0, 7, true),
             ] {
                 let array = StructArray::try_new(
                     fields.clone(),
@@ -797,7 +815,7 @@ mod table {
                     vec![Value::Int(4), Value::float(-0.004), Value::Str("z".into())],
                 ],
             };
-            let expected = b"S,F,I\n\"\",0.13,1\n\"a,b\",2.67,2\n,,3\nz,0.00,4\n";
+            let expected = b"S,F,I\n\"\",0.13,1\n\"a,b\",2.68,2\n,,3\nz,0.00,4\n";
             assert_eq!(
                 csv_artifact::render(&table, &[2, 1, 0], Some("2")).unwrap(),
                 expected
@@ -2069,15 +2087,15 @@ mod table {
 
         #[test]
         fn artifacts_keep_complete_temporal_fields_and_drop_collected_precision() {
-            use yamaa_core::temporal::{Date, DatePrecision, DateTime, DateTimePrecision};
+            use yamaa_core::temporal::{Date, DateTime, Precision};
             // REQ-0570: precision is internal provenance. Even imputed values carry
             // complete calendar fields; artifacts deliberately retain only those fields.
             let table = table(
                 &[("D", ColumnType::Date), ("T", ColumnType::DateTime)],
                 [
-                    (DatePrecision::Year, DateTimePrecision::Day),
-                    (DatePrecision::Month, DateTimePrecision::Day),
-                    (DatePrecision::Day, DateTimePrecision::Second),
+                    (Precision::Year, Precision::Day),
+                    (Precision::Month, Precision::Day),
+                    (Precision::Day, Precision::Second),
                 ]
                 .into_iter()
                 .map(|(date_precision, time_precision)| {
@@ -2085,7 +2103,7 @@ mod table {
                         Value::Date(Date::new(1970, 2, 28, date_precision).unwrap()),
                         Value::DateTime(
                             DateTime::new(
-                                Date::new(1970, 1, 1, DatePrecision::Day).unwrap(),
+                                Date::new(1970, 1, 1, Precision::Day).unwrap(),
                                 23,
                                 59,
                                 59,
@@ -2161,7 +2179,7 @@ mod table {
             use yamaa_adapters::parquet_source::{parse, Error};
             use yamaa_core::{
                 table::{TableAccess, ValueRef},
-                temporal::{DatePrecision, DateTimePrecision},
+                temporal::Precision,
                 value::ColumnType,
             };
 
@@ -2240,7 +2258,7 @@ mod table {
                         panic!("date cell")
                     };
                     assert_eq!(value.to_string(), text);
-                    assert_eq!(value.collected_precision(), DatePrecision::Day);
+                    assert_eq!(value.collected_precision(), Precision::Day);
                 }
                 for (row, fields) in [
                     (0, (1969, 12, 31, 23, 59, 59)),
@@ -2250,7 +2268,7 @@ mod table {
                         panic!("datetime cell")
                     };
                     assert_eq!(value.fields(), fields);
-                    assert_eq!(value.collected_precision(), DateTimePrecision::Second);
+                    assert_eq!(value.collected_precision(), Precision::Second);
                 }
             }
 
@@ -2387,7 +2405,7 @@ mod table {
         use yamaa_adapters::parquet_source::{parse, Error};
         use yamaa_core::{
             table::{TableAccess, ValueRef},
-            temporal::{DatePrecision, DateTimePrecision},
+            temporal::Precision,
             value::ColumnType,
         };
 
@@ -2523,7 +2541,7 @@ mod table {
                         panic!("{name}")
                     };
                     assert_eq!(value.to_string(), text, "{name}");
-                    assert_eq!(value.collected_precision(), DatePrecision::Day);
+                    assert_eq!(value.collected_precision(), Precision::Day);
                 }
                 for (row, fields) in [
                     (0, (1969, 12, 31, 23, 59, 59)),
@@ -2533,7 +2551,7 @@ mod table {
                         panic!("{name}")
                     };
                     assert_eq!(value.fields(), fields, "{name}");
-                    assert_eq!(value.collected_precision(), DateTimePrecision::Second);
+                    assert_eq!(value.collected_precision(), Precision::Second);
                 }
             }
         }
@@ -2557,7 +2575,7 @@ mod table {
                 panic!()
             };
             assert_eq!(value.to_string(), "1970-01-01");
-            assert_eq!(value.collected_precision(), DatePrecision::Day);
+            assert_eq!(value.collected_precision(), Precision::Day);
         }
 
         #[test]
@@ -3145,7 +3163,7 @@ mod table {
         };
         use yamaa_core::{
             table::{Column, TableSchema},
-            temporal::{Date, DatePrecision, DateTime, DateTimePrecision},
+            temporal::{Date, DateTime, Precision},
             value::ColumnType,
         };
 
@@ -3173,20 +3191,20 @@ mod table {
                 },
             ])
             .unwrap();
-            let date = Date::new(1970, 1, 1, DatePrecision::Year).unwrap();
-            let time = DateTime::new(date, 0, 0, 0, DateTimePrecision::Day).unwrap();
+            let date = Date::new(1970, 1, 1, Precision::Year).unwrap();
+            let time = DateTime::new(date, 0, 0, 0, Precision::Day).unwrap();
             let strings = [Some("nul\0text"), None, Some("")];
             let integers = [Some(i64::MIN), None, Some(i64::MAX)];
             let floats = [Some(-0.0), None, Some(1.25)];
             let dates = [
                 Some(date),
                 None,
-                Some(Date::new(1969, 12, 31, DatePrecision::Day).unwrap()),
+                Some(Date::new(1969, 12, 31, Precision::Day).unwrap()),
             ];
             let times = [
                 Some(time),
                 None,
-                Some(DateTime::new(date, 0, 0, 1, DateTimePrecision::Second).unwrap()),
+                Some(DateTime::new(date, 0, 0, 1, Precision::Second).unwrap()),
             ];
             let arrays: Vec<ArrayRef> = vec![
                 Arc::new(StringArray::from(strings[..rows].to_vec())),

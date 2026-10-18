@@ -17,6 +17,7 @@ intermediates:
   - id: REFRANGE
     dataset: LBRANGE
     key: [LBTESTCD, SEX, UNIT]
+    require_match: true
 
 columns:
   - name: STUDYID

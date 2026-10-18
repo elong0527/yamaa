@@ -78,8 +78,6 @@ pub struct Entry {
     /// Composition layers in postorder (one entry for standalone documents).
     pub layers: Vec<String>,
     pub resources: Vec<Resource>,
-    /// Consumer dataset names map to the producer's own canonical entry.
-    pub producers: BTreeMap<String, String>,
 }
 
 /// The JSON wire format is intentionally distinct from an authored specification.
@@ -169,12 +167,12 @@ impl ResolvedArtifact {
         {
             return Err(Error::Version);
         }
-        if self.entries.first().map(|entry| &entry.entry) != Some(&self.entry) {
-            return Err(Error::Facts("root entry must be first"));
-        }
-        let identities: BTreeSet<_> = self.entries.iter().map(|entry| &entry.entry).collect();
-        if identities.len() != self.entries.len() {
-            return Err(Error::Facts("duplicate entry"));
+        // A linked producing specification is a resource of the requested
+        // entry, never an entry of its own.
+        if self.entries.len() != 1 || self.entries[0].entry != self.entry {
+            return Err(Error::Facts(
+                "the artifact holds exactly the requested entry",
+            ));
         }
         for entry in &self.entries {
             if entry.entry.is_empty()
@@ -194,13 +192,6 @@ impl ResolvedArtifact {
                 return Err(Error::Facts("schema version differs from the model"));
             }
             validate_ledgers(entry)?;
-            if entry
-                .producers
-                .values()
-                .any(|producer| !identities.contains(producer))
-            {
-                return Err(Error::Facts("producer entry is absent"));
-            }
             for resource in &entry.resources {
                 let expected = match resource.relative_to {
                     RelativeTo::Entry => &entry.entry,

@@ -20,11 +20,12 @@ intermediates:
     dataset: ODM
     key: {StudyOID: STUDYID, SubjectKey: USUBJID}
     filter: "ODM.FormOID = 'FO.EX' AND ODM.ItemOID = 'IT.EX.EXSTDTC'"
+    require_match: true
 
   - id: VS_MAP
     dataset: VS_MAPPING
     key: {ItemOID: ODM.ItemOID}
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: DOMAIN
@@ -75,7 +76,7 @@ columns:
           FO.VS_1H: 3
           FO.VS_4H: 4
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   - name: VSELTM
     type: str
@@ -89,14 +90,14 @@ columns:
           FO.VS_1H: PT1H
           FO.VS_4H: PT4H
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   - name: VSTESTCD
     type: str
     label: Vital Signs Test Short Name
     verifications:
-      allowed_values:
-        values: [PULSE, SYSBP, DIABP]
+      - allowed_values:
+          values: [PULSE, SYSBP, DIABP]
 
   - name: ORD_TEST
     type: int
@@ -120,8 +121,6 @@ columns:
         window:
           group_by: [STUDYID, USUBJID]
           order_by: [VSTPTNUM, ORD_TEST]
-    verifications:
-      not_missing: {}
 
   - name: VSORRES
     type: str
@@ -131,8 +130,8 @@ columns:
     type: str
     label: Original Units
     verifications:
-      allowed_values:
-        values: [beats/min, mmHg]
+      - allowed_values:
+          values: [beats/min, mmHg]
 
   # Collected in standard units, so this is the collected result read as a
   # number; a result that is not a number stops the run.
@@ -161,7 +160,7 @@ columns:
           FormOID: ODM.FormOID
         expr: "ONLY(ODM.Value)"
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   # Typed copies of the first-dose date-time and the reference start date,
   # for the dose-order checks and the study day; neither is in the output.
@@ -202,13 +201,10 @@ rows:
     derivations:
       VSTESTCD: VS_MAP.VSTESTCD
       VSORRES:
-        aggregate:
-          expr: "ONLY(ODM.Value)"
+        aggregate: "ONLY(ODM.Value)"
       VSORRESU: VS_MAP.UNIT
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, VSSEQ]
   - row_count:
       min: 24
       max: 24

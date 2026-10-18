@@ -117,7 +117,11 @@ fn authored_positive_benchmark_reproduces_its_expected_bytes() {
     assert!(result.issues().is_empty(), "{:?}", result.issues());
     assert_eq!(
         result.observations()["handler_counts"],
-        json!([{"spec_path":"columns.AESPDIG.derivation.str_replace.missing","handler":"missing","count":1}])
+        json!([
+            {"spec_path":"columns.AETERMS.derivation.str_replace.missing","handler":"missing","count":0},
+            {"spec_path":"columns.AETERMC.derivation.str_replace.missing","handler":"missing","count":0},
+            {"spec_path":"columns.AESPDIG.derivation.str_replace.missing","handler":"missing","count":1}
+        ])
     );
     assert!(result.save().unwrap());
     assert_eq!(
@@ -171,10 +175,13 @@ fn empty_matches_and_literal_replacement_survive_file_application() {
     );
     let (csv, handlers) = saved(&fixture);
     assert_eq!(csv, "ID,TEXT,RESULT\nrow1,baa,$&b$&$&\nrow2,x,$&x$&\n");
-    assert_eq!(handlers, json!([]));
+    assert_eq!(
+        handlers,
+        json!([{"spec_path":"columns.RESULT.derivation.str_replace.missing","handler":"missing","count":0}])
+    );
 }
 #[test]
-fn missing_source_without_handler_stops_with_the_row_keys() {
+fn missing_source_without_handler_gives_missing_counted_as_the_default() {
     let fixture = Fixture::bespoke(
         &specification(
             "str",
@@ -182,15 +189,11 @@ fn missing_source_without_handler_stops_with_the_row_keys() {
         ),
         "ID,TEXT\nrow1,\n",
     );
+    let (csv, handlers) = saved(&fixture);
+    assert_eq!(csv, "ID,TEXT,RESULT\nrow1,,\n");
     assert_eq!(
-        issues(&fixture),
-        vec![json!({
-            "phase": "mapping",
-            "condition": "missing_input",
-            "requirement": "REQ-0334",
-            "spec_paths": ["columns.RESULT.derivation.str_replace"],
-            "context": {"variable": "TEXT", "keys": [{"ID": "row1"}]}
-        })]
+        handlers,
+        json!([{"spec_path":"columns.RESULT.derivation.str_replace.missing","handler":"missing","count":1}])
     );
 }
 #[test]
@@ -233,7 +236,7 @@ fn nested_case_branches_and_row_templates_bind_the_same_operation() {
         "str",
         json!({"case": [
             {"when": "ID = 'row1'", "then": {"str_replace": {"source": "TEXT", "pattern": "\\s+", "replacement": " "}}},
-            {"otherwise": {"str_replace": {"source": "TEXT", "pattern": "^\\s+|\\s+$", "replacement": "", "missing": null}}}
+            {"otherwise": {"str_replace": {"source": "TEXT", "pattern": "^\\s+|\\s+$", "replacement": "", "missing": {"literal": null}}}}
         ]}),
     );
     let fixture = Fixture::bespoke(&nested, "ID,TEXT\nrow1,\"a  b\"\nrow2,\" c \"\nrow3,\n");
@@ -241,7 +244,10 @@ fn nested_case_branches_and_row_templates_bind_the_same_operation() {
     assert_eq!(csv, "ID,TEXT,RESULT\nrow1,a  b,a b\nrow2, c ,c\nrow3,,\n");
     assert_eq!(
         handlers,
-        json!([{"spec_path":"columns.RESULT.derivation.case[1].otherwise.str_replace.missing","handler":"missing","count":1}])
+        json!([
+            {"spec_path":"columns.RESULT.derivation.case[0].then.str_replace.missing","handler":"missing","count":0},
+            {"spec_path":"columns.RESULT.derivation.case[1].otherwise.str_replace.missing","handler":"missing","count":1}
+        ])
     );
     nested["columns"] = json!([
         {"name": "ID", "type": "str"},
@@ -261,6 +267,9 @@ fn nested_case_branches_and_row_templates_bind_the_same_operation() {
     assert_eq!(csv, "ID,TEXT,RESULT\nrow1,-1-,/1/\nrow2,x-y,x/y\n");
     assert_eq!(
         handlers,
-        json!([{"spec_path":"rows[0].derivations.TEXT.str_replace.missing","handler":"missing","count":1}])
+        json!([
+            {"spec_path":"rows[0].derivations.TEXT.str_replace.missing","handler":"missing","count":1},
+            {"spec_path":"columns.RESULT.derivation.str_replace.missing","handler":"missing","count":0}
+        ])
     );
 }

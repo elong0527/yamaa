@@ -1,7 +1,7 @@
-//! One original environment and recursive metadata closure under one native
-//! capture scope. Preparation accepts no activation, data or publication port.
+//! One original environment, entry and linked producing specifications under one
+//! native capture scope. Preparation accepts no activation, data or publication port.
 use crate::{
-    file_graph::{FileGraph, RejectedGraph},
+    file_entry::RejectedEntry,
     file_project::{self, FileProject, RejectedOrdinary},
     file_resources::Resources,
     project_source::ProjectSchemas,
@@ -29,7 +29,7 @@ pub enum Error {
     Configuration(crate::file_configuration::Error),
     Schema(crate::specification_source::Error),
     Environment(Box<RejectedEnvironment>),
-    Graph(Box<RejectedGraph>),
+    Entry(Box<RejectedEntry>),
 }
 /// Even an early root decode or metadata transport failure retains the original
 /// raw captures and both schema capabilities. No diagnostic refusal consumes it.
@@ -84,7 +84,7 @@ impl std::fmt::Debug for Error {
             Self::Configuration(error) => f.debug_tuple("Configuration").field(error).finish(),
             Self::Schema(error) => f.debug_tuple("Schema").field(error).finish(),
             Self::Environment(error) => f.debug_tuple("Environment").field(error).finish(),
-            Self::Graph(error) => f.debug_tuple("Graph").field(error).finish(),
+            Self::Entry(error) => f.debug_tuple("Entry").field(error).finish(),
         }
     }
 }
@@ -158,51 +158,11 @@ pub fn capture_project(project: &str, host: Language) -> Result<CapturedProject,
     })
 }
 
-pub fn prepare(specification: &str, environment: &str, host: Language) -> Result<FileGraph, Error> {
-    let request = configure(specification, Some(environment))?;
-    prepare_with_resources(
-        request.resources,
-        &request.entry,
-        request
-            .environment
-            .as_deref()
-            .expect("explicit environment"),
-        host,
-        request.specification_schema,
-        request.project_schemas,
-    )
-}
-
-pub fn prepare_with_resources(
-    resources: Resources,
-    entry: &str,
-    environment: &str,
-    host: Language,
-    specification_schema: Arc<CapturedSchema>,
-    project_schemas: ProjectSchemas,
-) -> Result<FileGraph, Error> {
-    let (resources, environment) = capture_environment(
-        resources,
-        entry,
-        Some(environment),
-        host,
-        Arc::clone(&specification_schema),
-        project_schemas,
-    )?;
-    FileGraph::capture_entry(resources, entry, environment, specification_schema)
-        .and_then(FileGraph::prepare_captured)
-        .map_err(Error::Graph)
-}
-
 /// Explicit prepared capabilities from one original capture. Preparation takes
-/// no activation, study-source or publication port. The ordinary capability keeps
-/// existing build/Save behavior; the static producer graph grants no publisher.
-/// Installed public dispatch remains a separate integration boundary.
-pub type Selected = yamaa_core::build::Prepared<
-    crate::file_preparation::FileSpecification,
-    Box<FileProject>,
-    Box<FileGraph>,
->;
+/// no activation, study-source or publication port; each capability keeps the
+/// existing build/Save behavior.
+pub type Selected =
+    yamaa_core::build::Prepared<crate::file_preparation::FileSpecification, Box<FileProject>>;
 #[derive(Debug)]
 pub enum SelectionError {
     Preparation(Error),
@@ -214,7 +174,7 @@ impl SelectionError {
     pub fn retained_sources(&self) -> crate::file_resources::RetainedSources {
         match self {
             Self::Preparation(Error::Environment(error)) => error.retained_sources(),
-            Self::Preparation(Error::Graph(error)) => error.retained_sources(),
+            Self::Preparation(Error::Entry(error)) => error.retained_sources(),
             Self::Ordinary(error) => error.retained_sources(),
             Self::Plain(error) => error.retained_sources(),
             Self::Preparation(Error::Configuration(_) | Error::Schema(_)) => Vec::new(),
@@ -240,70 +200,37 @@ pub fn select_request(
     request: yamaa_core::build::Request<'_>,
     host: Language,
 ) -> Result<Selected, SelectionError> {
-    select_request_mode(request, host, Producers::Built)
-}
-
-/// How a selected producer workflow treats its `schema` links.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Producers {
-    /// The graph builds every producer the links reach, entry last.
-    Built,
-    /// The graph builds the entry alone; each link reads a held or saved
-    /// artifact checked against its producer's contract, as a project run
-    /// builds each specification of its run scope.
-    Saved,
-}
-
-/// Select with an explicit producer mode; [`select_request`] builds them.
-pub fn select_request_mode(
-    request: yamaa_core::build::Request<'_>,
-    host: Language,
-    producers: Producers,
-) -> Result<Selected, SelectionError> {
-    yamaa_core::build::prepare(request, &mut Metadata { host, producers })
+    yamaa_core::build::prepare(request, &mut Metadata { host })
 }
 
 /// Host authority replaces physical lookup while all metadata preparation and
-/// ordinary/project/producer selection use the same engine ports.
+/// plain/project selection use the same engine ports.
 pub fn select_with_resolver(
     request: yamaa_core::build::Request<'_>,
     host: Language,
     resolver: Arc<dyn crate::host_resources::Resolver>,
 ) -> Result<Selected, SelectionError> {
-    select_with_resolver_mode(request, host, resolver, Producers::Built)
-}
-
-/// Select through a host resolver with an explicit producer mode.
-pub fn select_with_resolver_mode(
-    request: yamaa_core::build::Request<'_>,
-    host: Language,
-    resolver: Arc<dyn crate::host_resources::Resolver>,
-    producers: Producers,
-) -> Result<Selected, SelectionError> {
     let specification_schema = crate::shipped_schema::capture()
         .map_err(|error| SelectionError::Preparation(Error::Schema(error)))?;
     let project_schemas = crate::shipped_schema::capture_project()
         .map_err(|error| SelectionError::Preparation(Error::Schema(error)))?;
-    select_with_optional_resources_mode(
+    select_with_optional_resources(
         Resources::with_resolver(resolver, request.specification),
         request.specification,
         request.environment,
         host,
         specification_schema,
         project_schemas,
-        producers,
     )
 }
 
 struct Metadata {
     host: Language,
-    producers: Producers,
 }
 impl yamaa_core::build::PreparationPort for Metadata {
-    type Entry = crate::file_graph::CapturedEntry;
+    type Entry = crate::file_entry::CapturedEntry;
     type Plain = crate::file_preparation::FileSpecification;
     type Project = Box<FileProject>;
-    type Producer = Box<FileGraph>;
     type Failure = SelectionError;
     fn capture(
         &mut self,
@@ -320,16 +247,13 @@ impl yamaa_core::build::PreparationPort for Metadata {
             request.project_schemas,
         )
         .map_err(SelectionError::Preparation)?;
-        FileGraph::capture_entry(
+        crate::file_entry::capture(
             resources,
             &request.entry,
             environment,
             request.specification_schema,
         )
-        .map_err(|error| SelectionError::Preparation(Error::Graph(error)))
-    }
-    fn selection(entry: &Self::Entry) -> &yamaa_core::build::EntrySelection {
-        entry.selection()
+        .map_err(|error| SelectionError::Preparation(Error::Entry(error)))
     }
     fn plain(&mut self, entry: Self::Entry) -> Result<Self::Plain, SelectionError> {
         crate::file_preparation::FileSpecification::from_workflow(entry)
@@ -339,14 +263,6 @@ impl yamaa_core::build::PreparationPort for Metadata {
         FileProject::from_workflow(entry)
             .map(Box::new)
             .map_err(SelectionError::Ordinary)
-    }
-    fn producer(&mut self, entry: Self::Entry) -> Result<Self::Producer, SelectionError> {
-        match self.producers {
-            Producers::Built => FileGraph::prepare_captured(entry),
-            Producers::Saved => FileGraph::prepare_captured_saved(entry),
-        }
-        .map(Box::new)
-        .map_err(|error| SelectionError::Preparation(Error::Graph(error)))
     }
 }
 
@@ -376,26 +292,6 @@ pub fn select_with_optional_resources(
     specification_schema: Arc<CapturedSchema>,
     project_schemas: ProjectSchemas,
 ) -> Result<Selected, SelectionError> {
-    select_with_optional_resources_mode(
-        resources,
-        entry,
-        environment,
-        host,
-        specification_schema,
-        project_schemas,
-        Producers::Built,
-    )
-}
-
-fn select_with_optional_resources_mode(
-    resources: Resources,
-    entry: &str,
-    environment: Option<&str>,
-    host: Language,
-    specification_schema: Arc<CapturedSchema>,
-    project_schemas: ProjectSchemas,
-    producers: Producers,
-) -> Result<Selected, SelectionError> {
     let has_environment = environment.is_some();
     let (resources, environment) = capture_environment(
         resources,
@@ -406,9 +302,9 @@ fn select_with_optional_resources_mode(
         project_schemas,
     )
     .map_err(SelectionError::Preparation)?;
-    let entry = FileGraph::capture_entry(resources, entry, environment, specification_schema)
-        .map_err(|error| SelectionError::Preparation(Error::Graph(error)))?;
-    yamaa_core::build::select(entry, has_environment, &mut Metadata { host, producers })
+    let entry = crate::file_entry::capture(resources, entry, environment, specification_schema)
+        .map_err(|error| SelectionError::Preparation(Error::Entry(error)))?;
+    yamaa_core::build::select(entry, has_environment, &mut Metadata { host })
 }
 
 fn capture_environment(
@@ -479,7 +375,7 @@ mod root_read_tests {
             unreachable!()
         };
         let original = owner.error() as *const file_project::Error;
-        let issues = crate::producer_check::rejected(&rejection).unwrap();
+        let issues = crate::project_application::preparation_issues(&rejection).unwrap();
         assert_eq!(issues.len(), 1);
         let definition =
             yamaa_core::diagnostic::ConditionCode::ProjectEnvironmentMissing.definition();

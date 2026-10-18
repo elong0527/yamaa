@@ -3,7 +3,7 @@ use super::*;
 use crate::json::Value as JsonValue;
 use crate::{
     diagnostic::{ConditionCode as C, Diagnostic},
-    predicate_parser::GrammarFailure,
+    expression::{Context, Failure},
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -82,13 +82,9 @@ impl LookupFinding {
         path: &str,
         intermediate: &str,
         source: &str,
-        expected: crate::key_relation::ComparableType,
+        expected: crate::result_type::ResultType,
         actual: ColumnType,
     ) -> Self {
-        let expected = match expected {
-            crate::key_relation::ComparableType::Boolean => crate::value::ValueType::Bool,
-            crate::key_relation::ComparableType::Column(kind) => kind.into(),
-        };
         Self(crate::diagnostic::lookup_key_type(
             path,
             intermediate,
@@ -97,7 +93,7 @@ impl LookupFinding {
             actual.into(),
         ))
     }
-    pub(super) fn grammar(path: &str, text: &str, position: usize, error: &GrammarFailure) -> Self {
-        Self(error.original_diagnostic(path, text, position))
+    pub(super) fn grammar(path: &str, text: &str, position: usize, error: &Failure) -> Self {
+        Self(error.diagnostic(Context::Predicate, path, text, position))
     }
 }

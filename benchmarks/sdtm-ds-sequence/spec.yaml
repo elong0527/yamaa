@@ -14,8 +14,8 @@ columns:
     label: Domain Abbreviation
     derivation: {literal: DS}
     verifications:
-      allowed_values:
-        values: [DS]
+      - allowed_values:
+          values: [DS]
 
   - name: STUDYID
     type: str
@@ -31,12 +31,12 @@ columns:
     type: date
     label: Date/Time of Collection
     derivation:
-      date_impute:
+      impute:
+        type: date
         source: DS_RAW.DSDTCOL
         month: 6
         day: 15
-        missing: null
-        invalid: null
+        invalid: {literal: null}
 
   # Number on the completed collection date so a partial entry takes
   # its chronological position among fully dated records.
@@ -48,8 +48,6 @@ columns:
         window:
           group_by: [STUDYID, USUBJID]
           order_by: [DSDTC]
-    verifications:
-      not_missing: {}
 
   - name: DSDECOD
     type: str
@@ -69,16 +67,14 @@ columns:
           then: {literal: PROTOCOL MILESTONE}
         - otherwise: {literal: DISPOSITION EVENT}
     verifications:
-      allowed_values:
-        values: [PROTOCOL MILESTONE, DISPOSITION EVENT]
+      - allowed_values:
+          values: [PROTOCOL MILESTONE, DISPOSITION EVENT]
 
 rows:
   - id: disposition
     derivations: {}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, DSSEQ]
   - row_count:
       min: 7
       max: 7

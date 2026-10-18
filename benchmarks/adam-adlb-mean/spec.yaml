@@ -45,8 +45,6 @@ columns:
         expr: "MEAN(AVAL)"
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, LBSEQ]
   - row_count:
       min: 7
       max: 7

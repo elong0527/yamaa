@@ -47,7 +47,7 @@ model!(
         required!("domain", Text),
         required!("input", Dictionary(&Object(SOURCE))),
         optional!("base", Text),
-        optional!("parents", STRINGS),
+        optional!("parent", Text),
         optional!("intermediates", List(&Object(INTERMEDIATE))),
         required!("keys", STRINGS),
         required!("output", Object(OUTPUT)),
@@ -73,6 +73,7 @@ model!(
         optional!("schema", Text),
         field!("empty_string", Enum(&["missing", "present"])),
         optional!("ordinal", Ordinal),
+        optional!("require_match", Boolean),
     ]
 );
 model!(
@@ -116,16 +117,7 @@ model!(
 model!(
     INTERMEDIATE_CHECK,
     "IntermediateVerification",
-    [required!(
-        "unique",
-        Union(&[
-            ("list[str]", STRINGS),
-            (
-                "function-after[reject_null_id(), IntermediateUnique]",
-                Object(UNIQUE)
-            )
-        ])
-    ),]
+    [required!("unique", Object(UNIQUE))]
 );
 model!(
     INTERMEDIATE,
@@ -163,6 +155,7 @@ model!(
         ),
         optional!("verifications", List(&Object(INTERMEDIATE_CHECK))),
         field!("no_match", Json),
+        optional!("require_match", Boolean),
     ]
 );
 model!(

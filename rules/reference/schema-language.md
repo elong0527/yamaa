@@ -1,101 +1,110 @@
----
-id: reference/schema-language
-title: Schema language
-status: normative
----
-
 # Schema language
 
-## Requirements
+The schema bundle under `yaml/` defines the shape of every specification,
+project file and environment file. These rules fix how the bundle is written
+and read: its documents and includes, the YAML every document is read as,
+named types and registries, type expressions, shorthand unions, the one
+spelling a written value takes, and descriptor keywords.
 
-### Schema bundle
+## Bundles and documents
 
-<a id="req-0242"></a>
+<a id="schema-1"></a>
 
-**REQ-0242.** `schema.yaml` is the specification-bundle entry point,
-`schema_project.yaml` is the [Project file](../specification/project.md)'s
-independent project-bundle entry point, and `schema_environment.yaml` is
-[Project functions](../operations/functions.md)'s independent environment-bundle
-entry point. Every schema document is a YAML 1.2 mapping containing
-`version`, an optional `includes`, and declarations. A document may be
-included by several entry points; declaration uniqueness applies within each
-loaded bundle.
+### SCHEMA-1. A schema bundle is one entry point and every document it includes, loaded whole
 
-<a id="req-0243"></a>
+`schema.yaml` is the specification-bundle entry point, `schema_project.yaml`
+is the independent project-bundle entry point of the
+[Project file](../profiles/project.md), and `schema_environment.yaml` is the
+independent environment-bundle entry point of
+[Project functions](../profiles/functions.md). Every schema document is a YAML
+1.2 mapping containing `version`, an optional `includes` and declarations.
+`includes` is an ordered list of filenames matching `schema_[a-z0-9_]+.yaml`,
+resolved relative to the including file. The complete transitive bundle is
+loaded before names resolve, and every document in a bundle declares the same
+version.
 
-**REQ-0243.** `includes` is an ordered list of filenames resolved relative to
-the including file. Included filenames must match `schema_[a-z0-9_]+.yaml`.
-Absolute paths, parent traversal, URLs, missing files, and include cycles
-are errors. Every document in a bundle must declare the same version.
-Include order has no validation or execution meaning.
+Evidence: `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::duplicate_registry_entries_and_closed_include_names_are_rejected`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::include_and_field_reuse_cycles_do_not_become_recursive_aliases`, `rust/crates/yamaa-adapters/tests/declaration_schema_capture.rs::shipped_closure_retains_every_authoritative_byte_and_admits_without_a_directory`.
+Replaces: REQ-0242, REQ-0243, REQ-0244, REQ-0282.
 
-<a id="req-0244"></a>
+A document may be included by several entry points; declaration uniqueness
+applies within each loaded bundle. Absolute paths, parent traversal, URLs,
+missing files and include cycles are errors. Include order has no validation
+or execution meaning. Except for registries, a declaration name may occur once
+in the bundle. An unknown or duplicate type, registry, registry entry or schema
+construct fails.
 
-**REQ-0244.** Implementations load the complete transitive bundle before
-resolving names. Except for registries, a declaration name may occur once
-in the bundle.
+<a id="schema-2"></a>
 
-<a id="req-0245"></a>
+### SCHEMA-2. A specification, project file or environment file declares in `schema_version` the bundle version it is written against
 
-**REQ-0245.** A specification, project file or environment file declares its
-entry-point bundle version in `schema_version`. The declared version must equal the bundle
-version. Any other version is an error, and the document is not validated
-against the bundle.
+A specification, project file or environment file declares its entry-point
+bundle version in `schema_version`, and the declared version must equal the
+bundle version. Any other version is an error, and the document is not validated
+against the bundle. An invalid include or an inconsistent bundle version also
+fails.
 
-<a id="req-0246"></a>
+Fails: `schema_version_mismatch`.
+Evidence: `negative-version-mismatch`, `rust/crates/yamaa-core/tests/schema_references.rs::version_precedes_field_findings_and_classes_keep_schema_then_input_order`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::entry_version_finding_precedes_parent_and_study_authority`.
+Replaces: REQ-0245, REQ-0281.
 
-**REQ-0246.** All schema documents must reject duplicate YAML keys, aliases,
-merge keys, explicit tags, and unknown schema constructs.
+A specification whose `schema_version` does not equal the bundle version fails
+with `schema_version_mismatch`.
 
-<a id="req-0247"></a>
+<a id="schema-3"></a>
 
-**REQ-0247.** Schema documents and the documents they validate use [Text values](../values/text.md)'s
-ASCII source boundary. A decoded string value follows [Text values](../values/text.md) even when written
-with ASCII escape notation.
+### SCHEMA-3. Documents reject duplicate keys, aliases, merge keys, explicit tags and unknown constructs
 
-### Scalar resolution
+All schema documents must reject duplicate YAML keys, aliases, merge keys,
+explicit tags and unknown schema constructs. Invalid YAML or a prohibited YAML
+feature fails. Schema documents and the documents they validate use the ASCII
+source boundary of [Values](../values.md), and a decoded string value
+follows [Values](../values.md) even when written with ASCII escape
+notation.
 
-<a id="req-0248"></a>
+Fails: `invalid_yaml`.
+Evidence: `rust/crates/yamaa-adapters/tests/declaration_schema_capture.rs::complete_original_codec_reports_survive_schema_closure_admission`, `rust/crates/yamaa-adapters/src/yaml_decode/tests.rs::forbidden_metadata_reports_its_prefix_and_precedes_later_errors`, `rust/crates/yamaa-adapters/src/yaml_decode/tests.rs::merge_key_style_and_non_scalar_keys_are_checked`.
+Replaces: REQ-0246, REQ-0247, REQ-0280.
 
-**REQ-0248.** The schema bundle and every specification use the YAML 1.2 core
-schema. Only `true`, `True`, `TRUE`, `false`, `False`, and `FALSE` resolve
-to Boolean. Every other alphabetic scalar, including `y`, `Y`, `n`, `N`,
-`yes`, `no`, `on`, and `off`, resolves to a string. The core schema has no
-timestamp resolver, so an unquoted ISO-looking date or datetime is also a
-string.
+<a id="schema-4"></a>
 
-<a id="req-0249"></a>
+### SCHEMA-4. Scalars resolve under the YAML 1.2 core schema, where only true and false spellings are Boolean
 
-**REQ-0249.** Default parser settings do not satisfy this requirement.
-Implementations must meet it without requiring authors to quote values.
-[Types and conversion](../values/types.md)'s non-finite normalization
-applies immediately after core-schema scalar resolution.
+The schema bundle and every specification use the YAML 1.2 core schema. Only
+`true`, `True`, `TRUE`, `false`, `False` and `FALSE` resolve to Boolean. Every
+other alphabetic scalar, including `y`, `Y`, `n`, `N`, `yes`, `no`, `on` and
+`off`, resolves to a string. The core schema has no timestamp resolver, so an
+unquoted ISO-looking date or datetime is also a string. This holds without
+requiring authors to quote values.
 
-The reference implementations use the `py-yaml12` package (imported as
-`yaml12`) in Python and the CRAN `yaml12` package in R to resolve YAML 1.2
-core values. The optional shared Rust adapter uses the same pinned underlying
-event parser and admits values before host numeric conversion. Parser choice
-does not replace the document restrictions in
-[REQ-0246](#req-0246) or the non-finite normalization above. The Python
-reader also uses PyYAML to check syntax features that `py-yaml12`'s
-plain-object API does not expose.
-The shared adapter checks those restrictions on retained events. It preserves
-exact decoded integer identity before later schema/runtime range admission;
-host overflow must not silently round or collapse distinct mapping keys. This
-does not expand the signed-i64 runtime integer range.
+Evidence: `schema-non-finite`, `rust/crates/yamaa-adapters/src/yaml_decode/tests.rs::core_booleans_nulls_and_text_do_not_use_yaml11_resolvers`, `rust/crates/yamaa-adapters/src/yaml_decode/tests.rs::different_large_integer_keys_are_never_rounded_or_collapsed`.
+Replaces: REQ-0248, REQ-0249.
 
-### Named types
+Default parser settings do not satisfy this rule.
+[Values](../values.md)'s non-finite normalization applies
+immediately after core-schema scalar resolution. An integer scalar keeps its
+exact decoded identity until schema and runtime range admission: overflow must
+not silently round it or collapse distinct mapping keys. This does not expand
+the signed 64-bit runtime integer range.
 
-<a id="req-0250"></a>
+## Named types and registries
 
-**REQ-0250.** A named type is a class, value descriptor, or registry-backed
+<a id="schema-5"></a>
+
+### SCHEMA-5. A named type is a class, a value descriptor or a registry-backed type
+
+A named type is a class, a value descriptor or a registry-backed type. A class
+is an ordered list of one-entry mappings; each entry maps an allowed field name
+to a descriptor or uses `fields_from` ([SCHEMA-6](#schema-6)). A value type is
+a descriptor written directly as a mapping. A registry-backed type contains
+exactly the `registry` keyword, naming a schema registry, and cannot also
+declare `type` or descriptor constraints. Named-type references may cross
+module boundaries, and recursive types are allowed.
+
+Evidence: `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::complete_bundle_resolves_forward_names_and_preserves_reused_default_origin`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::registry_contributions_merge_after_complete_include_loading`, `rust/crates/yamaa-core/tests/schema_references.rs::union_selects_success_then_matching_outer_type_and_recursion_is_value_local`.
+Replaces: REQ-0250, REQ-0251, REQ-0253, REQ-0254, REQ-0255, REQ-0256.
+
+A specification value is finite and must eventually match a non-recursive
 type.
-
-<a id="req-0251"></a>
-
-**REQ-0251.** A class is an ordered list of one-entry mappings. Each entry
-maps an allowed field name to a descriptor, or uses `fields_from` to copy
-the fields of another named class in the same bundle:
 
 ```yaml
 shared_fields:
@@ -107,60 +116,48 @@ example_class:
         description: Name of the example.
     - fields_from: shared_fields
     - values: {type: "list[str]", required: false}
-```
-
-<a id="req-0252"></a>
-
-**REQ-0252.** Class fields are closed. Field order is descriptive and has no
-execution meaning. `fields_from` is reserved for class field reuse and its
-value must name a class, not a value type or registry. Implementations resolve
-it after loading the complete bundle, including cross-module references.
-Unknown references, reuse cycles, and duplicate field names after expansion
-are errors. The copied fields keep their descriptors; a class cannot override
-one by repeating its name.
-
-<a id="req-0253"></a>
-
-**REQ-0253.** A field name is not a descriptor keyword and may match one. In
-`- type: {type: column_type, required: true}` the outer name is the field
-`type` of `column_class` and the inner `type` is this contract's descriptor
-keyword. The two uses are unrelated. [Types and conversion](../values/types.md) separates the vocabularies.
-
-<a id="req-0254"></a>
-
-**REQ-0254.** A value type is a descriptor written directly as a mapping:
-
-```yaml
 identifier:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-```
-
-<a id="req-0255"></a>
-
-**REQ-0255.** A registry-backed type points to a schema registry:
-
-```yaml
 expression:
     registry: expressions
 ```
 
-Its declaration contains exactly the `registry` keyword and cannot also
-declare `type` or descriptor constraints.
+A field name is not a descriptor keyword and may match one. In
+`- type: {type: column_type, required: true}` the outer name is the field
+`type` of `column_class` and the inner `type` is the descriptor keyword. The
+two uses are unrelated; [Values](../values.md) separates
+the vocabularies.
 
-<a id="req-0256"></a>
+<a id="schema-6"></a>
 
-**REQ-0256.** Named-type references may cross module boundaries. Recursive
-types are allowed; a specification value is finite and must eventually match
-a non-recursive type.
+### SCHEMA-6. Class fields are closed, and `fields_from` copies another class's fields unchanged
 
-### Registries
+Class fields are closed, and field order is descriptive with no execution
+meaning. `fields_from` is reserved for class field reuse; its value must name a
+class, not a value type or registry. It is resolved after the complete bundle
+is loaded, including cross-module references. The copied fields keep
+their descriptors, and a class cannot override one by repeating its name.
+Unknown references, reuse cycles and duplicate field names after expansion are
+errors.
 
-<a id="req-0257"></a>
+Evidence: `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::include_and_field_reuse_cycles_do_not_become_recursive_aliases`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::duplicate_reused_fields_and_unknown_types_preserve_stage_order`, `rust/crates/yamaa-adapters/tests/declaration_schema_capture.rs::original_sources_locations_reused_defaults_and_fresh_normalization_are_retained`.
+Replaces: REQ-0252.
 
-**REQ-0257.** A registry is a mapping from a permitted keyword to its payload
-shape. A registry is identified by a named type referencing it with
-`registry`. Multiple modules may contribute entries to the same registry:
+<a id="schema-7"></a>
+
+### SCHEMA-7. A registry maps keywords to payload shapes, and a registry value names exactly one keyword
+
+A registry is a mapping from a permitted keyword to its payload shape, either a
+class or a value descriptor, identified by a named type that references it with
+`registry`. Multiple modules may contribute entries, and entry names are unique
+across the complete bundle. A value matching a registry-backed type is a
+one-entry mapping whose key exists in the referenced registry and whose value
+matches that entry's payload shape.
+
+Fails: `invalid_operation_count`, `unknown_operation`, `model_contract_mismatch`.
+Evidence: `rust/crates/yamaa-core/tests/schema_references.rs::registry_and_bare_derivation_diagnostics_preserve_paths_and_context`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::duplicate_registry_entries_and_closed_include_names_are_rejected`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::duplicate_reused_fields_and_unknown_types_preserve_stage_order`.
+Replaces: REQ-0257, REQ-0258, REQ-0259, REQ-0260, REQ-0286.
 
 ```yaml
 expressions:
@@ -169,47 +166,48 @@ expressions:
         - dict: {type: "dict[str, literal_value]", required: true}
 ```
 
-<a id="req-0258"></a>
+Registry declaration order has no meaning. An unreferenced registry, an empty
+registry, an unknown registry reference or a duplicate registry entry is an
+error. A registry-backed value with zero or multiple keywords fails with
+`invalid_operation_count`, and one with an unknown keyword with
+`unknown_operation`. Final normalized model admission reports
+`model_contract_mismatch` for operation cardinality.
 
-**REQ-0258.** Registry entry names must be unique across the complete bundle.
-An entry's payload shape is either a class or a value descriptor.
+<a id="schema-8"></a>
 
-<a id="req-0259"></a>
+### SCHEMA-8. Two things in one naming list never share a name
 
-**REQ-0259.** A value matching a registry-backed type must be a one-entry
-mapping. Its key must exist in the referenced registry. Its value must match
-that registry entry's payload shape. Registry declaration order has no
-meaning.
+A naming list is the set of names used in one place. Two things in one naming
+list may not share a name. The rules name each place's list explicitly.
 
-<a id="req-0260"></a>
+Evidence: `negative-lookup-id-collision`, `negative-source-self-reference`, `rust/crates/yamaa-adapters/tests/execution_declarative_self.rs::a_reachable_qualifier_collision_is_rejected_in_flat_and_composed_specs`.
 
-**REQ-0260.** An unreferenced registry, an empty registry, an unknown
-registry reference, or a duplicate registry entry is an error.
-
-### Naming lists
-
-A naming list is the set of names used in one place. Two things in one
-naming list may not share a name. The requirements name each place's list
-explicitly:
-
-- a schema descriptor's `type`, a column's declared `type`, and a value's
+- a schema descriptor's `type`, a column's declared `type` and a value's
   runtime type belong to different naming lists
-  ([REQ-0001](../values/types.md));
+  ([VALUE-1](../values.md#value-1));
 - datasets and record lookups share one naming list
-  ([REQ-0084](../specification/binding.md));
-- a lookup `id` shares one naming list with dataset identifiers, other
-  lookup ids, and the output `domain` ([REQ-0113](../operations/lookup.md));
+  ([NAME-3](../names.md#name-3));
+- a lookup `id` shares one naming list with dataset identifiers, other lookup
+  ids and the output `domain` ([LOOKUP-3](../lookup.md#lookup-3));
 - window names belong to a separate window naming list
-  ([REQ-1251](../operations/windows.md)).
+  ([WINDOW-1](../windows.md#window-1)).
 
-### Type expressions
+## Type expressions
 
-<a id="req-0261"></a>
+<a id="schema-9"></a>
 
-**REQ-0261.** Built-in types are `str`, `int`, `float`, `bool`, `"null"`,
-`list`, and `dict`. Boolean values are not integers. An `int` is accepted
-where `float` is expected, but a `float` is not accepted where `int` is
-expected.
+### SCHEMA-9. A type expression is a type name, a list or dict of type expressions, or a union
+
+Built-in types are `str`, `int`, `float`, `bool`, `"null"`, `list` and `dict`.
+A type expression is a type name, `list[` one type expression `]`, or `dict[`
+two type expressions `]`; whitespace around nested expressions and the comma
+is ignored, and a YAML sequence of type expressions is a union. Boolean values
+are not integers. An `int` is accepted where `float` is expected, but a
+`float` is not accepted where `int` is expected. An invalid type expression or
+unresolved reference fails.
+
+Evidence: `rust/crates/yamaa-core/tests/schema_references.rs::builtins_and_unresolved_names_are_syntax_not_bundle_resolution`, `rust/crates/yamaa-core/tests/schema_references.rs::malformed_types_and_string_encoded_unions_are_rejected`, `rust/crates/yamaa-core/tests/schema_references.rs::constraints_keep_order_unicode_lengths_and_alias_requirements_after_type_success`.
+Replaces: REQ-0261, REQ-0262, REQ-0263, REQ-0283.
 
 ```text
 type_expression := type_name
@@ -217,22 +215,16 @@ type_expression := type_name
                  | "dict[" type_expression "," type_expression "]"
 ```
 
-<a id="req-0262"></a>
+The quoted string `"null"` is a type name. An unquoted YAML null is a value.
 
-**REQ-0262.** Whitespace around nested expressions and the comma is ignored.
-A YAML sequence of type expressions is a union. The quoted string `"null"`
-is a type name. An unquoted YAML null is a value.
-
-<a id="req-0263"></a>
-
-**REQ-0263.** `[` and `,` are structural characters inside a YAML flow
-mapping or flow sequence, so a type expression containing either must be
-quoted wherever it is written inside one. Block form imposes no such
-requirement, but the bundle quotes a bracketed type expression in both:
+`[` and `,` are structural characters inside a YAML flow mapping or flow
+sequence, so a type expression containing either must be quoted wherever it is
+written inside one. Block form imposes no such requirement, but the bundle
+quotes a bracketed type expression in both:
 
 ```yaml
 - keys: {type: "list[identifier]", required: true}
-- parents: {type: [path, "list[path]"], required: false}
+- dict: {type: ["dict[str, substitute_value]", project_path], required: true}
 - order_by:
     type: "list[order_by_term]"
     required: false
@@ -240,103 +232,155 @@ requirement, but the bundle quotes a bracketed type expression in both:
 ```
 
 The quotes are YAML syntax and are not part of the type expression. Quoting
-where YAML does not require it is a convention of the bundle; omitting it
-where YAML does require it is a parse error.
+where YAML does not require it is a convention of the bundle; omitting it where
+YAML does require it is a parse error.
 
-### Shorthand unions
+<a id="schema-10"></a>
 
-<a id="req-0264"></a>
+### SCHEMA-10. One union shape is shorthand, expanded to its canonical class while validating
 
-**REQ-0264.** Two union shapes are shorthand for a canonical form. An
-implementation expands shorthand while validating. A validated document
-contains only the canonical form. Both implementations agree on what they
-validated.
+A union of a non-class type `V` and a class declaring exactly one required
+field whose type is `V` accepts either, and a bare `V` expands to that class
+with the field set to it. An implementation expands shorthand while
+validating, after the written value matches its union member, and a validated
+document contains only the canonical class. A union of a type `T` and
+`list[T]` is a bundle error, and no other union is shorthand.
 
-<a id="req-0265"></a>
+Evidence: `schema-shorthand`, `rust/crates/yamaa-core/tests/schema_references.rs::single_or_list_unions_are_bundle_errors_and_lists_normalize_as_written`, `rust/crates/yamaa-core/tests/schema_references.rs::shorthand_checks_the_written_member_without_reinterpreting_generated_fields`.
+Replaces: REQ-0264, REQ-0265, REQ-0266, REQ-0267, REQ-0268.
 
-**REQ-0265.** A union of `T` and `list[T]` accepts either. A bare `T`
-expands to a one-element list, and the list is canonical.
+The class is the canonical form. When a bare `V` expands, declared defaults
+are applied to the remaining fields of the class and other optional fields
+remain absent. This form also applies when `V` is registry-backed, as
+`expression` is in `derivation`. Expansion happens after the written value has
+been validated against the union member it matched, so a constraint on the
+written form is checked before the value is expanded.
 
-<a id="req-0266"></a>
+A field that takes several values is typed `list[T]` and is written as a list
+even when it holds one value. No union offers the single value beside the
+list, and no bare value is wrapped into one. A union matching neither shape,
+such as `literal_value`, selects a member and expands nothing. A rule may say
+where a shorthand applies and what the expanded value means, but the rule must
+not define a different expansion.
 
-**REQ-0266.** A union of a non-class type `V` and a class declaring exactly
-one required field whose type is `V` accepts either. A bare `V` expands to
-that class with the field set to it, and the class is canonical. Declared
-defaults are applied to the remaining fields; other optional fields remain
-absent. This form also applies when `V` is registry-backed, as `expression`
-is in `derivation`.
+<a id="schema-15"></a>
 
-<a id="req-0267"></a>
+### SCHEMA-15. A written long form that holds only the field its shorthand fills is refused
 
-**REQ-0267.** Expansion happens after the written value has been validated
-against the union member it matched, so a constraint on the written form is
-checked before the value is expanded.
+A value has one spelling. A written value that matches the class of a
+shorthand union and holds nothing but the field a bare value of that union
+fills restates the shorthand and fails validation, reporting its path, that
+field and the shorthand to write instead. A long form that writes any other
+field, even a default or a null, keeps its meaning. The refusal applies to
+what an author wrote, never to the canonical form a validation produces.
 
-<a id="req-0268"></a>
+Fails: `redundant_long_form`.
+Evidence: `negative-redundant-long-form`, `rust/crates/yamaa-adapters/tests/declaration_one_spelling.rs`, `rust/crates/yamaa-core/tests/schema_references.rs::a_dataset_mapping_holding_only_its_path_restates_the_path_shorthand`.
 
-**REQ-0268.** No other union is shorthand. A union matching neither shape,
-such as `literal_value`, selects a member and expands nothing. A rule may
-say where a shorthand applies and what the expanded value means, but the
-rule must not define a different expansion.
+The shorthand unions of the specification bundle, and the long form each one
+refuses, are:
 
-### Descriptor keywords
+| Written in | Shorthand | Refused long form |
+|---|---|---|
+| `aggregate` | `aggregate: E` | `aggregate: {expr: E}` |
+| `flag` | `flag: P` | `flag: {condition: P}` |
+| `str_template` | `str_template: T` | `str_template: {template: T}` |
+| `odm` | `odm: D.I` | `odm: {item: D.I}` |
+| `source` and a filtered source | `X` | `{variable: X}` |
+| an order term | `X` | `{variable: X}` |
+| `unique` | `unique: [A, B]` | `unique: {columns: [A, B]}` |
+| an input dataset | `D: path.csv` | `D: {path: path.csv}` |
+| a derivation | `E` | `{value: E}` |
+| a submission comment, method or document reference | `T` | `{text: T}`, `{description: T}`, `{document: T}` |
 
-<a id="req-0269"></a>
+A bare string derivation or case result is the source shorthand of
+[EXPR-5](../expressions.md#expr-5), and a written `{source: X}` with a string
+`X` in a `derivation`, a `derivations` entry or a `case` `then` or `otherwise`
+restates it and fails the same way. A restatement around another one names the
+innermost shorthand: `derivation: {value: {source: X}}` reports `X`.
 
-**REQ-0269.** Only these descriptor keywords are supported:
+The check runs on the document each author wrote: a standalone specification,
+and each inheritance layer before composition. A composed, pruned or resolved
+document holds the canonical class of every shorthand and is validated
+without this check. A clear marker in a layer is a written field and keeps a
+long form valid.
 
-`type` is required and contains one type expression or a
-  union.
+## Descriptors
 
-<a id="req-0270"></a>
+<a id="schema-11"></a>
 
-**REQ-0270.** `required` is allowed only in a class field descriptor. It
-  defaults to false.
+### SCHEMA-11. A descriptor uses only the closed descriptor keywords, each where it applies
 
-<a id="req-0271"></a>
+Only these descriptor keywords are supported: `type`, `required`,
+`description`, `pattern`, `min_length`, `size`, `values` and `default`. `type`
+is required and contains one type expression or a union. Every other keyword
+is allowed only where the table below admits it. A `default` is allowed only
+when `required` is false or absent, and it must satisfy the same descriptor.
+An invalid descriptor keyword or default fails.
 
-**REQ-0271.** `description` is an optional non-empty string documenting the field or
-value type. It has no effect on validation. Runtime semantics belong to the
-owning contract, which the description references.
+Evidence: `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::findings_follow_keyword_type_required_description_constraint_order`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::invalid_types_and_required_flags_do_not_become_boolean_integer_coercions`, `rust/crates/yamaa-core/tests/schema_references.rs::invalid_default_preparation_never_bypasses_normalization_admission`.
+Replaces: REQ-0269, REQ-0270, REQ-0271, REQ-0272, REQ-0273, REQ-0274, REQ-0275, REQ-0276, REQ-0284.
 
-<a id="req-0272"></a>
+| Keyword | Allowed | Meaning |
+|---|---|---|
+| `type` | every descriptor; required | one type expression or a union |
+| `required` | a class field descriptor only | whether the field must be written; defaults to false |
+| `description` | every descriptor; optional | a non-empty string documenting the field or value type; it has no effect on validation |
+| `pattern` | `str` only | a regular expression; [Text](../text.md) owns its syntax, the engine that reads it, and what satisfying it means |
+| `min_length` | `str` only | a minimum length, counted in [Values](../values.md) scalar values |
+| `size` | `list` or `dict` only | an exact size |
+| `values` | `str` only | permitted values, compared by [Values](../values.md) equality |
+| `default` | when `required` is false or absent | a value satisfying the same descriptor |
 
-**REQ-0272.** `pattern` is allowed only for `str` and carries a regular
-  expression. [Text operations](../operations/text.md) owns its syntax, the engine that reads it, and what
-  satisfying it means.
+Runtime semantics belong to the owning rule, which a description references.
 
-<a id="req-0273"></a>
+<a id="schema-12"></a>
 
-**REQ-0273.** `min_length` is allowed only for `str` and counts [Text values](../values/text.md) scalar
-  values.
+### SCHEMA-12. A value satisfies its type and every constraint its descriptor declares
 
-<a id="req-0274"></a>
+When several constraints are present, all must pass. Defaults belong in the
+schema, not only in prose. A value that fails its type or a constraint fails
+validation, retaining the rejected value's declaring path and complete reason.
 
-**REQ-0274.** `size` is allowed only for `list` or `dict` and requires an
-  exact size.
+Fails: `invalid_field_type`, `value_not_permitted`, `pattern_mismatch`, `minimum_length`, `invalid_size`, `model_contract_mismatch`.
+Evidence: `negative-str-case-unknown`, `negative-str-pad-width`, `rust/crates/yamaa-adapters/tests/declaration_schema_capture.rs::captured_structural_projection_preserves_complete_ordered_constraint_outcome_and_authority`.
+Replaces: REQ-0277, REQ-0287.
 
-<a id="req-0275"></a>
+A value of the wrong type fails with `invalid_field_type`, a value outside
+`values` with `value_not_permitted`, a string that does not satisfy `pattern`
+with `pattern_mismatch`, a string shorter than `min_length` with
+`minimum_length`, and a list or mapping of the wrong `size` with
+`invalid_size`. Final normalized model admission reports
+`model_contract_mismatch` for these causes.
 
-**REQ-0275.** `values` is allowed only for `str` and lists permitted values
-  compared by [Text values](../values/text.md) equality.
+<a id="schema-13"></a>
 
-<a id="req-0276"></a>
+### SCHEMA-13. A class value carries every required field and no undeclared field
 
-**REQ-0276.** `default` is allowed only when `required` is false or absent
-  and must satisfy the same descriptor.
+A value of a class carries every field its class declares required and no
+field the class does not declare. An undeclared or missing class field fails.
 
-<a id="req-0277"></a>
+Fails: `unknown_field`, `missing_required_field`, `model_contract_mismatch`.
+Evidence: `rust/crates/yamaa-adapters/tests/declaration_schema_capture.rs::custom_versionless_class_preserves_ordered_required_type_and_unknown_findings`, `rust/crates/yamaa-adapters/tests/declaration_schema_capture.rs::final_model_findings_retain_no_pass_document_and_move_original_source`, `rust/crates/yamaa-core/tests/schema_references.rs::version_precedes_field_findings_and_classes_keep_schema_then_input_order`.
+Replaces: REQ-0285.
 
-**REQ-0277.** When several constraints are present, all must pass. Defaults
-belong in the schema, not only in prose.
+Schema findings report an undeclared field as `unknown_field` and a missing
+required field as `missing_required_field`. Final normalized model admission
+reports `model_contract_mismatch` for the same undeclared or missing-field
+causes.
 
-### Descriptor style
+<a id="schema-14"></a>
 
-<a id="req-0278"></a>
+### SCHEMA-14. A descriptor written in flow form and in block form is the same descriptor
 
-**REQ-0278.** A descriptor may be written as a YAML flow mapping or in block
-form. The two parse to the same mapping. Nothing in this contract
-distinguishes them.
+A descriptor may be written as a YAML flow mapping or in block form. The two
+parse to the same mapping, and nothing in the schema language distinguishes
+them. The bundle writes a class field descriptor in flow form without a
+`description`, and in block form with a `description`; this is a convention
+of how the bundle is written, not a validation requirement.
+
+Evidence: `rust/crates/yamaa-adapters/src/yaml_decode/tests.rs::compact_flow_pairs_keep_nested_mapping_entries`, `rust/crates/yamaa-adapters/tests/declaration_schema_capture.rs::shipped_closure_retains_every_authoritative_byte_and_admits_without_a_directory`.
+Replaces: REQ-0278, REQ-0279.
 
 ```yaml
 example_class:
@@ -347,56 +391,4 @@ example_class:
         description: Current-row value the record is matched on.
 ```
 
-<a id="req-0279"></a>
-
-**REQ-0279.** The bundle writes a class field descriptor in flow form without
-a `description`, and in block form with a `description`. This is a convention
-of how the bundle is written, not a validation requirement. A document that
-mixes the forms differently is still valid.
-
-## Error conditions
-
-<a id="req-0280"></a>
-
-**REQ-0280.** Implementations must fail for:
-
-invalid YAML or a prohibited YAML feature;
-
-<a id="req-0281"></a>
-
-**REQ-0281.** an invalid include, an inconsistent bundle version, or a
-  specification whose `schema_version` does not equal the bundle version;
-  the latter failure reports `schema_version_mismatch` with REQ-0281;
-
-<a id="req-0282"></a>
-
-**REQ-0282.** an unknown or duplicate type, registry, registry entry, or
-  schema construct;
-
-<a id="req-0283"></a>
-
-**REQ-0283.** an invalid type expression or unresolved reference;
-
-<a id="req-0284"></a>
-
-**REQ-0284.** an invalid descriptor keyword or default;
-
-<a id="req-0285"></a>
-
-**REQ-0285.** an undeclared or missing class field; schema findings report
-  `unknown_field` or `missing_required_field` with REQ-0285. Final normalized
-  model admission reports `model_contract_mismatch` with REQ-0285 for the same
-  undeclared or missing-field causes;
-
-<a id="req-0286"></a>
-
-**REQ-0286.** a registry-backed value with zero, multiple, or unknown
-  keywords; schema findings report `invalid_operation_count` or
-  `unknown_operation` with REQ-0286. Final normalized model admission reports
-  `model_contract_mismatch` with REQ-0286 for operation cardinality;
-
-<a id="req-0287"></a>
-
-**REQ-0287.** a value that fails its type or constraints. Final normalized
-model admission reports `model_contract_mismatch` with REQ-0287 for these
-causes, retaining the rejected value's declaring path and complete reason.
+A document that mixes the forms differently is still valid.

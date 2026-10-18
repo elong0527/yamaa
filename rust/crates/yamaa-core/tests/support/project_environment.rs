@@ -5,9 +5,69 @@ use yamaa_core::{
     project_environment::{self, Draft, LockKind, LockReference},
     project_environment_diagnostics,
     project_function::Language,
-    project_terminology::{Codelist, DataType, External, Item, Source},
+    project_terminology::{Codelist, DataType, External, Item, Source, Standard},
     value::Value,
 };
+/// CT-6: a sponsor-extended item of a published extensible list has no
+/// published identifier, so an `alias` on it is refused; the published item
+/// beside it keeps its own.
+pub fn extended_alias_reached() -> BTreeSet<ConditionCode> {
+    let item = |value: &str, alias: Option<&str>, extended| Item {
+        value: Value::Str(value.into()),
+        decode: None,
+        rank: None,
+        alias: alias.map(String::from),
+        extended,
+    };
+    let mut draft = draft();
+    draft.codelists = vec![Source {
+        standard: Some(Standard {
+            name: "CDISC/NCI".into(),
+            publishing_set: "SDTM".into(),
+            version: "2025-03-28".into(),
+        }),
+        codelists: vec![Codelist {
+            id: "EPOCH".into(),
+            name: "Epoch".into(),
+            data_type: DataType::Text,
+            extensible: true,
+            alias: Some("C99079".into()),
+            format_name: None,
+            items: Some(vec![
+                item("SCREENING", Some("C48262"), false),
+                item("EXTENSION", Some("C48262"), true),
+                item("TITRATION", None, true),
+            ]),
+            external: None,
+        }],
+    }];
+    draft.language = Some(Language::Python);
+    let findings = project_environment::validate(Language::Python, &draft);
+    let projected = project_environment_diagnostics::diagnostics(&draft, &findings).unwrap();
+    assert_eq!(projected.len(), 1, "{projected:?}");
+    let finding = &projected[0];
+    assert_eq!(
+        (
+            finding.definition().phase,
+            finding.definition().condition,
+            finding.definition().requirement
+        ),
+        ("validation", "codelist_extended_alias", Some("CT-6"))
+    );
+    assert_eq!(
+        finding.spec_paths,
+        ["codelists[0].codelists[0].items[1].alias"]
+    );
+    for (key, value) in [
+        ("codelist", "EPOCH"),
+        ("value", "EXTENSION"),
+        ("alias", "C48262"),
+    ] {
+        assert_eq!(finding.context[key], JsonValue::String(value.into()));
+    }
+    assert_eq!(finding.context.len(), 3);
+    BTreeSet::from([finding.code])
+}
 /// A project that links a Python environment file with no functions and
 /// declares two invalid codelists of its own.
 pub fn draft() -> Draft {

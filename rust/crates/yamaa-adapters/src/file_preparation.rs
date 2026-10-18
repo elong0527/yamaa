@@ -80,6 +80,8 @@ impl Error {
 pub struct FileSpecification {
     run: PreparedRun,
     resources: Resources,
+    /// Inputs a project run may serve from artifacts it already built.
+    linked: Vec<crate::file_resources::LinkedInput>,
 }
 /// A plain compilation refusal still owns the original native snapshots.
 pub struct RejectedPlain {
@@ -114,39 +116,56 @@ impl RejectedPlain {
 impl FileSpecification {
     pub fn prepare(mut resources: Resources, written: &str) -> Result<Self, Error> {
         let document = prepare_document(&mut resources, written, None)?;
-        let run =
-            PreparedRun::prepare_with_profile_inspection(document, |document, dataset, path| {
+        let links = capture_links(&mut resources, &document, None, &mut None)?;
+        let linked = crate::file_resources::linked_inputs(&resources, &document, &links);
+        let run = PreparedRun::prepare_with_profile_inspection(
+            document,
+            &links,
+            |document, dataset, path| {
                 crate::source_profile_inspection::inspect(document, &resources, dataset, path)
-            })
-            .map_err(Error::Compile)?;
-        let findings = crate::run_report::location_findings(&resources, &run);
+            },
+        )
+        .map_err(Error::Compile)?;
+        let findings = crate::run_report::location_findings(&resources, &run, &links);
         if !findings.is_empty() {
             return Err(Error::Compile(crate::specification_run::Error::Prepare(
                 yamaa_core::specification::PrepareError::Invalid(findings),
             )));
         }
-        Ok(Self { run, resources })
+        Ok(Self {
+            run,
+            resources,
+            linked,
+        })
     }
     pub(crate) fn from_workflow(
-        entry: crate::file_graph::CapturedEntry,
+        entry: crate::file_entry::CapturedEntry,
     ) -> Result<Self, Box<RejectedPlain>> {
-        let (resources, entry, document, _) = entry.into_ordinary_parts();
-        let result =
-            PreparedRun::prepare_with_profile_inspection(document, |document, dataset, path| {
+        let (resources, entry, document, links, _) = entry.into_parts();
+        let linked = crate::file_resources::linked_inputs(&resources, &document, &links);
+        let result = PreparedRun::prepare_with_profile_inspection(
+            document,
+            &links,
+            |document, dataset, path| {
                 crate::source_profile_inspection::inspect(document, &resources, dataset, path)
-            })
-            .and_then(|run| {
-                let findings = crate::run_report::location_findings(&resources, &run);
-                if findings.is_empty() {
-                    Ok(run)
-                } else {
-                    Err(crate::specification_run::Error::Prepare(
-                        yamaa_core::specification::PrepareError::Invalid(findings),
-                    ))
-                }
-            });
+            },
+        )
+        .and_then(|run| {
+            let findings = crate::run_report::location_findings(&resources, &run, &links);
+            if findings.is_empty() {
+                Ok(run)
+            } else {
+                Err(crate::specification_run::Error::Prepare(
+                    yamaa_core::specification::PrepareError::Invalid(findings),
+                ))
+            }
+        });
         match result {
-            Ok(run) => Ok(Self { run, resources }),
+            Ok(run) => Ok(Self {
+                run,
+                resources,
+                linked,
+            }),
             Err(error) => Err(Box::new(RejectedPlain {
                 error: Error::Compile(error),
                 entry,
@@ -199,7 +218,8 @@ impl FileSpecification {
         run: &mut RunScope,
         scope: yamaa_core::application_observer::Scope<'_>,
     ) -> CapturedAttempt<ResourceError> {
-        self.run.execute_with_port(run.resources_mut(), scope)
+        let mut port = crate::file_resources::HeldPort::new(run, &self.linked);
+        self.run.execute_with_port(&mut port, scope)
     }
 }
 
@@ -238,6 +258,107 @@ pub(crate) fn prepare_document_from(
             Error::PreparationFinding { error, diagnostic }
         }
     })
+}
+
+/// A classified failure observed for a `schema` link keeps its authored field.
+fn link_resource(error: ResourceError, field: &str, written: &str) -> Error {
+    match crate::file_resources::resource_failure(&error) {
+        Some(failure) => Error::ResourceFinding {
+            error,
+            diagnostic: Box::new(failure.field_diagnostic(field, written)),
+        },
+        None => Error::Resource(error),
+    }
+}
+
+/// Read each producing specification a `schema` link names once, as a validated
+/// specification document; aliases share the one prepared document. A linked
+/// producer's own links are not followed: a link supplies only the stored
+/// artifact's output contract, and the producer is never compiled or executed.
+/// `origin` names the input being read when a failure returns.
+pub(crate) fn capture_links(
+    resources: &mut Resources,
+    document: &crate::specification_source::PreparedDocument,
+    schema: Option<&Arc<crate::specification_source::CapturedSchema>>,
+    origin: &mut Option<String>,
+) -> Result<Vec<crate::specification_source::LinkedSpecification>, Error> {
+    use crate::specification_source::LinkedSpecification;
+    use yamaa_core::schema::DocumentNode as N;
+    let d = document.model().document();
+    let Some(N::Mapping(entries)) = d.field(d.root(), "input").map(|id| &d.nodes()[id]) else {
+        return Ok(Vec::new());
+    };
+    let mut links: Vec<LinkedSpecification> = Vec::new();
+    let mut prepared_any = false;
+    for &(name, declaration) in entries {
+        let N::Text(dataset) = &d.nodes()[name] else {
+            continue;
+        };
+        if !d
+            .field(declaration, "schema")
+            .is_some_and(|id| !matches!(d.nodes()[id], N::Null))
+        {
+            continue;
+        }
+        // Without an authored origin no link is supplied; link admission then
+        // reports the declaration's missing metadata.
+        let Some(link) = document.written_input_origin(dataset, "schema") else {
+            continue;
+        };
+        *origin = Some(dataset.clone());
+        let field = format!("input.{dataset}.schema");
+        let identity = resources
+            .resolve_from(link.base_source, link.written)
+            .map_err(|error| link_resource(error, &field, link.written))?;
+        let linked = if identity == document.source().identity {
+            // A link naming the consuming specification is refused by link
+            // admission; it holds no separate document.
+            None
+        } else if let Some(known) = links
+            .iter()
+            .filter_map(|prior| prior.document.as_ref())
+            .find(|prior| prior.source().identity == identity)
+        {
+            // An alias spelling verifies its own snapshot but reuses the one
+            // canonical prepared document.
+            let known = Arc::clone(known);
+            resources
+                .capture_metadata_from(link.base_source, link.written)
+                .map_err(|error| link_resource(error, &field, link.written))?;
+            Some(known)
+        } else {
+            let prepared = prepare_document_from(
+                resources,
+                Some(link.base_source),
+                link.written,
+                schema.cloned(),
+            )
+            .map_err(|error| error.entry_field(&field, link.written))?;
+            prepared_any = true;
+            if prepared.source().identity != identity {
+                return Err(Error::resource_at(
+                    ResourceError::Changed,
+                    &field,
+                    link.written,
+                ));
+            }
+            Some(Arc::new(prepared))
+        };
+        links.push(LinkedSpecification {
+            dataset: dataset.clone(),
+            identity,
+            document: linked,
+        });
+    }
+    *origin = None;
+    if prepared_any {
+        // Producing-specification preparation selects its own entry base.
+        // Restore the consumer's before its source paths acquire read authority.
+        resources
+            .select_entry_base(&document.source().identity)
+            .map_err(Error::Resource)?;
+    }
+    Ok(links)
 }
 
 /// Return only unclassified native failures; observed facts retain their source owner.
@@ -280,7 +401,7 @@ mod profile_inspection_tests {
         fs::write(root.join("parent/base.yaml"), source).unwrap();
         fs::write(
             root.join("entry/root.yaml"),
-            "schema_version: '1.0'\nparents: [../parent/base.yaml]\n",
+            "schema_version: '1.0'\nparent: ../parent/base.yaml\n",
         )
         .unwrap();
         let root = crate::canonical_path::canonicalize(root).unwrap();
@@ -317,6 +438,7 @@ mod profile_inspection_tests {
                 yamaa_core::specification::PrepareError::Invalid(findings),
             )) = PreparedRun::prepare_with_profile_inspection(
                 document,
+                &[],
                 |document, dataset, path| {
                     crate::source_profile_inspection::inspect(document, &resources, dataset, path)
                 },
@@ -389,7 +511,7 @@ mod declaring_origin_tests {
         }
         fn check(&self) {
             let parent = "schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {SRC: never-read.csv}\noutput: {path: never-written.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
-            let child = "schema_version: '1.0'\nparents: ['./base.yaml']\ndomain: PRODUCER\n";
+            let child = "schema_version: '1.0'\nparent: './base.yaml'\ndomain: PRODUCER\n";
             fs::write(self.0.join("entry/root.yaml"), b"declaring metadata").unwrap();
             fs::write(self.0.join("producer/base.yaml"), parent).unwrap();
             fs::write(self.0.join("producer/child.yaml"), child).unwrap();
@@ -449,7 +571,7 @@ mod dispatch_policy_tests {
     };
     static NEXT: AtomicUsize = AtomicUsize::new(0);
     const PARENT: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: never-read.csv}\noutput: {path: never-written.csv, columns: [ID]}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\n";
-    const ROOT: &str = "schema_version: '1.0'\nparents: [../parent/base.yaml, ../parent/./base.yaml, ../parent/base.yaml]\n";
+    const ROOT: &str = "schema_version: '1.0'\nparent: ../parent/base.yaml\n";
     struct Study(PathBuf);
     impl Study {
         fn new(root: &str) -> Self {
@@ -573,7 +695,7 @@ mod dispatch_policy_tests {
         if matches!(*error, yamaa_core::inheritance_preparation::Error::Traversal(
             yamaa_core::inheritance::Error::Host(crate::specification_source::SourceFailure::Host(ResourceError::Changed))
         ))));
-        assert_content_change(&diagnostic, "parents", "../parent/base.yaml");
+        assert_content_change(&diagnostic, "parent", "../parent/base.yaml");
         assert_eq!(original.as_ref(), PARENT.as_bytes());
         assert_eq!(resources.capture_reads(), 2);
         assert_eq!(resources.resolve("root.yaml").unwrap(), original_base);
@@ -710,7 +832,7 @@ mod dispatch_policy_tests {
             diagnostic.code,
             yamaa_core::diagnostic::ConditionCode::ResourceContentChanged
         );
-        assert_eq!(diagnostic.spec_paths, ["parents[0]"]);
+        assert_eq!(diagnostic.spec_paths, ["parent"]);
         assert_eq!(
             diagnostic.context,
             [(

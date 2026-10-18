@@ -64,6 +64,7 @@ mod execution {
                         column: 1,
                         path: owner.into(),
                         expression: Expression::FirstAvailable(Box::new(FirstAvailable::new(
+                            owner.into(),
                             vec![
                                 SelectionSource {
                                     path: operand.into(),
@@ -112,11 +113,18 @@ mod execution {
             );
             assert_eq!(
                 attempt.handler_counts,
-                vec![yamaa_core::numeric_lifecycle::HandlerCount {
-                    spec_path: format!("{operand}.absent"),
-                    handler: yamaa_core::numeric_lifecycle::HandlerKind::Absent,
-                    count: 0,
-                }],
+                vec![
+                    yamaa_core::numeric_lifecycle::HandlerCount {
+                        spec_path: format!("{owner}.missing"),
+                        handler: yamaa_core::numeric_lifecycle::HandlerKind::Missing,
+                        count: 0,
+                    },
+                    yamaa_core::numeric_lifecycle::HandlerCount {
+                        spec_path: format!("{operand}.absent"),
+                        handler: yamaa_core::numeric_lifecycle::HandlerKind::Absent,
+                        count: 0,
+                    }
+                ],
             );
             assert!(source.reads.borrow().iter().all(|&(_, column)| column != 2));
 
@@ -143,16 +151,25 @@ mod execution {
                 attempt.result.unwrap().dataset.rows(),
                 &[vec![Value::Int(1), Value::Int(9)]]
             );
-            assert_eq!(attempt.handler_counts.len(), 1);
             assert_eq!(
-                attempt.handler_counts[0].spec_path,
-                format!("{operand}.absent")
+                attempt
+                    .handler_counts
+                    .iter()
+                    .map(|count| (count.spec_path.clone(), count.handler, count.count))
+                    .collect::<Vec<_>>(),
+                [
+                    (
+                        format!("{owner}.missing"),
+                        yamaa_core::numeric_lifecycle::HandlerKind::Missing,
+                        0
+                    ),
+                    (
+                        format!("{operand}.absent"),
+                        yamaa_core::numeric_lifecycle::HandlerKind::Absent,
+                        1
+                    )
+                ]
             );
-            assert_eq!(
-                attempt.handler_counts[0].handler,
-                yamaa_core::numeric_lifecycle::HandlerKind::Absent
-            );
-            assert_eq!(attempt.handler_counts[0].count, 1);
             assert!(source.reads.borrow().iter().all(|&(_, column)| column == 0));
         }
 
@@ -345,14 +362,14 @@ mod execution {
         fn presentation_order_preserves_all_types_ties_and_direction_independent_nulls() {
             use yamaa_core::dataset::OrderTerm;
             use yamaa_core::{
-                temporal::{DateTime, DateTimePrecision},
+                temporal::{DateTime, Precision},
                 value::FiniteFloat,
             };
             let date = |year, precision| Value::Date(Date::new(year, 1, 1, precision).unwrap());
             let datetime = |year, precision| {
                 Value::DateTime(
                     DateTime::new(
-                        Date::new(year, 1, 1, DatePrecision::Day).unwrap(),
+                        Date::new(year, 1, 1, Precision::Day).unwrap(),
                         0,
                         0,
                         0,
@@ -382,15 +399,15 @@ mod execution {
                 ),
                 (
                     ColumnType::Date,
-                    date(2020, DatePrecision::Year),
-                    date(2021, DatePrecision::Day),
-                    date(2020, DatePrecision::Month),
+                    date(2020, Precision::Year),
+                    date(2021, Precision::Day),
+                    date(2020, Precision::Month),
                 ),
                 (
                     ColumnType::DateTime,
-                    datetime(2020, DateTimePrecision::Day),
-                    datetime(2021, DateTimePrecision::Second),
-                    datetime(2020, DateTimePrecision::Second),
+                    datetime(2020, Precision::Day),
+                    datetime(2021, Precision::Second),
+                    datetime(2020, Precision::Second),
                 ),
             ] {
                 let source = table(
@@ -744,8 +761,12 @@ mod execution {
             rows[99][16] = Value::Int(1);
             let source = table(&fields, rows);
             let filter = BoundPredicate::new(
-                yamaa_core::predicate_compiler::compile("KEEP = 1", "intermediates[0].filter")
-                    .unwrap(),
+                yamaa_core::expression::compile(
+                    "KEEP = 1",
+                    yamaa_core::expression::Context::Predicate,
+                    "intermediates[0].filter",
+                )
+                .unwrap(),
                 vec![Binding {
                     name: "KEEP".into(),
                     read: Read::Source(16),
@@ -770,6 +791,7 @@ mod execution {
                 filter: Some(filter.into()),
                 selection: None,
                 no_match: None,
+                require_match: true,
                 range: None,
                 columns: None,
                 unique: Vec::new(),
@@ -810,7 +832,7 @@ mod execution {
         }
 
         #[test]
-        fn contains_fixed_match_boundary_precedes_later_source_reads() {
+        fn contains_answers_a_catastrophic_pattern_for_every_row() {
             let source = table(
                 &[("id", ColumnType::Str)],
                 vec![vec![Value::Str("a".repeat(30) + "!")]; 2],
@@ -840,15 +862,10 @@ mod execution {
                 &mut yamaa_core::function_invocation::NoFunctions::new(),
                 None,
             );
-            assert!(matches!(
-                *attempt.result.unwrap_err(),
-                ExecutionError::Limit {
-                    resource: yamaa_core::dataset::Resource::RegexWork,
-                    limit: 1_000_000,
-                    ..
-                }
-            ));
-            assert_eq!(*source.reads.borrow(), [(0, 0)]);
+            // (a+)+$ cannot match before the final "!". The linear-time search
+            // answers every row; there is no match budget to refuse the first.
+            assert!(attempt.result.unwrap().dataset.rows().is_empty());
+            assert_eq!(*source.reads.borrow(), [(0, 0), (1, 0)]);
             assert!(attempt.handler_counts.is_empty() && attempt.retained_verifications.is_empty());
         }
     }

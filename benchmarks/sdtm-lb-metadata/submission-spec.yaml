@@ -4,43 +4,43 @@
 # witness explicitly selects Sponsor, while tests retain the original
 # rejection.
 schema_version: '1.0'
-parents: spec.yaml
+parent: spec.yaml
 
 columns:
   - name: DOMAIN
     submission:
-      core: Exp
+      core: Req
       length: 2
       origin: {type: Assigned, source: Sponsor}
 
   - name: STUDYID
     submission:
-      core: Exp
+      core: Req
       length: 20
       origin: {type: Collected, source: Vendor}
 
   - name: USUBJID
     submission:
-      core: Exp
+      core: Req
       length: 20
       origin: {type: Collected, source: Vendor}
 
   - name: LBSEQ
     submission:
-      core: Exp
+      core: Req
       length: 8
       origin: {type: Derived, source: Sponsor}
       method: Sequence within each subject by collection date and test code
 
   - name: LBTESTCD
     submission:
-      core: Exp
+      core: Req
       length: 8
       origin: {type: Assigned, source: Sponsor}
 
   - name: LBTEST
     submission:
-      core: Exp
+      core: Req
       length: 40
       origin: {type: Assigned, source: Sponsor}
 
@@ -48,8 +48,7 @@ columns:
     submission:
       core: Exp
       length: 20
-      origin: {type: Derived, source: Sponsor}
-      method: Select the only matching ODM result for the subject and visit
+      origin: {type: Collected, source: Vendor}
 
   - name: LBORRESU
     submission:
@@ -62,7 +61,7 @@ columns:
       core: Exp
       length: 8
       significant_digits: 2
-      origin: {type: Assigned, source: Sponsor}
+      origin: {type: Derived, source: Sponsor}
       method: Convert the original result to the declared numeric type
 
   - name: LBSTRESU
@@ -74,8 +73,7 @@ columns:
   - name: LBDTC
     submission:
       core: Exp
-      origin: {type: Derived, source: Sponsor}
-      method: Select the only collection date for the subject and visit
+      origin: {type: Collected, source: Vendor}
 
 rows:
   - id: glucose

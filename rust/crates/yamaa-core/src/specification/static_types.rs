@@ -3,89 +3,45 @@ use super::*;
 use crate::{
     dataset::{Intermediate, SecondarySource},
     diagnostic::Diagnostic,
-    evaluation::NumericCondition,
-    predicate::Plan,
     value::ValueType,
 };
 
+/// Every static type fault of a numeric expression or predicate.
+fn findings(
+    plan: &CompiledExpression,
+    kind: impl Fn(&str) -> Option<ValueType>,
+    collected_sources: bool,
+) -> Result<Vec<Diagnostic>, BindError> {
+    plan.type_findings(kind, collected_sources)
+        .iter()
+        .map(|finding| {
+            finding
+                .diagnostic(plan.spec_path(), plan.expression())
+                .map_err(|_| BindError::InvalidDiagnostic)
+        })
+        .collect()
+}
+
 pub(super) fn numeric_kinds(
-    plan: &CompiledNumeric,
+    plan: &CompiledExpression,
     kind: impl Fn(&str) -> Option<ValueType>,
 ) -> Vec<Diagnostic> {
-    let mut findings = Vec::new();
-    for name in plan.identifiers() {
-        if let Some(actual) =
-            kind(name).filter(|actual| !matches!(actual, ValueType::Int | ValueType::Float))
-        {
-            findings.push(
-                NumericCondition::IncompatibleInput {
-                    identifier: name.into(),
-                    actual,
-                }
-                .static_diagnostic(plan.spec_path(), plan.expression()),
-            );
-        }
-    }
-    findings
+    findings(plan, kind, false).expect("numeric findings project")
 }
 
 pub(super) fn aggregate_kinds(
-    plan: &crate::aggregate_compiler::CompiledAggregate,
+    plan: &CompiledExpression,
     kind: impl Fn(&str) -> Option<ValueType>,
     source_arguments: bool,
 ) -> Result<Vec<Diagnostic>, BindError> {
-    use crate::{
-        aggregate_compiler::{AggregateOperand, AggregateResult},
-        aggregate_parser::Reducer,
-        reduction::NumericReducer,
-    };
-    let mut findings = Vec::new();
-    for reduction in plan.reductions() {
-        if let AggregateOperand::Numeric(numeric) = &reduction.operand {
-            findings.extend(numeric_kinds(numeric, &kind));
-        }
-        let reducer = match reduction.reducer {
-            Reducer::Sum => NumericReducer::Sum,
-            Reducer::Mean => NumericReducer::Mean,
-            _ => continue,
-        };
-        if let AggregateOperand::Value(name) = &reduction.operand {
-            // A grouped source reduction checks the collected present values.
-            // Its storage kind does not make missing cells numeric arguments.
-            if source_arguments && name.contains('.') {
-                continue;
-            }
-            if let Some(actual) =
-                kind(name).filter(|actual| !matches!(actual, ValueType::Int | ValueType::Float))
-            {
-                findings.push(
-                    crate::diagnostic::DatasetFinding::ReductionInputType {
-                        path: plan.spec_path(),
-                        expression: plan.expression(),
-                        reducer,
-                        source: name,
-                        actual,
-                    }
-                    .diagnostic()
-                    .map_err(|_| BindError::InvalidDiagnostic)?,
-                );
-            }
-        }
-    }
-    if let AggregateResult::Numeric(numeric) = plan.result() {
-        findings.extend(numeric_kinds(numeric, kind));
-    }
-    Ok(findings)
+    findings(plan, kind, source_arguments)
 }
 
 pub(super) fn predicate_kinds(
-    plan: &Plan,
+    plan: &CompiledExpression,
     kind: impl Fn(&str) -> Option<ValueType>,
 ) -> Vec<Diagnostic> {
-    plan.type_conditions(kind)
-        .into_iter()
-        .map(|(condition, route)| condition.static_diagnostic(plan.spec_path(), &route))
-        .collect()
+    findings(plan, kind, false).expect("predicate findings project")
 }
 
 pub(super) fn kind(
@@ -107,8 +63,58 @@ pub(super) fn kind(
     Ok(catalog.type_of(name).map(Into::into))
 }
 
+/// A name's static type at a bound site, as EXPR-14 reads its inputs: an
+/// intermediate's field, a column, or a field of a declared relation.
+pub(super) fn result_type(
+    name: &str,
+    named: &intermediates::Declarations,
+    catalog: &Catalog,
+    secondary: &[SecondarySource],
+    intermediates: &[Option<Intermediate>],
+) -> crate::result_type::ResultType {
+    crate::result_type::ResultType::known(
+        kind(name, named, catalog, secondary, intermediates)
+            .ok()
+            .flatten(),
+    )
+}
+
+/// The plan as a bound site types its names, so each `NULLIF` returns its
+/// result type (EXPR-14).
+pub(super) fn typed(
+    plan: &CompiledExpression,
+    named: &intermediates::Declarations,
+    catalog: &Catalog,
+    secondary: &[SecondarySource],
+    intermediates: &[Option<Intermediate>],
+) -> CompiledExpression {
+    plan.typed(|name| result_type(name, named, catalog, secondary, intermediates))
+}
+
+/// Every static type fault of a flag condition or a case predicate at a
+/// bound site (FORMULA-5, FORMULA-12), before any value is read.
+pub(super) fn predicate(
+    plan: &CompiledExpression,
+    named: &intermediates::Declarations,
+    catalog: &Catalog,
+    secondary: &[SecondarySource],
+    intermediates: &[Option<Intermediate>],
+    findings: &mut Vec<BindFinding>,
+) -> Result<(), BindError> {
+    let kinds = plan
+        .identifiers()
+        .map(|name| kind(name, named, catalog, secondary, intermediates).map(|kind| (name, kind)))
+        .collect::<Result<BTreeMap<_, _>, _>>()?;
+    findings.extend(
+        predicate_kinds(plan, |name| kinds.get(name).copied().flatten())
+            .into_iter()
+            .map(BindFinding::Predicate),
+    );
+    Ok(())
+}
+
 pub(super) fn numeric(
-    plan: &CompiledNumeric,
+    plan: &CompiledExpression,
     bindings: &[Binding],
     named: &intermediates::Declarations,
     catalog: &Catalog,

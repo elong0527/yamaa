@@ -148,7 +148,7 @@ impl RelationPredicate {
     pub fn predicate(&self) -> &BoundPredicate {
         &self.predicate
     }
-    pub fn plan(&self) -> &crate::predicate::Plan {
+    pub fn plan(&self) -> &crate::expression::CompiledExpression {
         self.predicate.plan()
     }
     pub fn bindings(&self) -> &[Binding] {
@@ -202,7 +202,6 @@ pub(crate) fn visit(expression: &Expression, visitor: &mut impl FnMut(usize)) {
         Expression::Intermediate { index, .. } => visitor(*index),
         Expression::SourceBinding { source, .. }
         | Expression::MappingCut { source, .. }
-        | Expression::StrContains { source, .. }
         | Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }
         | Expression::StrExtract { source, .. }
@@ -216,7 +215,6 @@ pub(crate) fn visit(expression: &Expression, visitor: &mut impl FnMut(usize)) {
             }
         }
         Expression::Extreme { operands, .. }
-        | Expression::StrConcat { operands, .. }
         | Expression::StrTemplate { operands, .. }
         | Expression::Temporal { operands, .. }
         | Expression::Imputation { operands, .. } => {
@@ -298,7 +296,6 @@ pub(crate) fn visit_aggregates(expression: &Expression, visitor: &mut impl FnMut
         Expression::Aggregate(aggregate) => visitor(aggregate),
         Expression::SourceBinding { source, .. }
         | Expression::MappingCut { source, .. }
-        | Expression::StrContains { source, .. }
         | Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }
         | Expression::StrExtract { source, .. }
@@ -312,7 +309,6 @@ pub(crate) fn visit_aggregates(expression: &Expression, visitor: &mut impl FnMut
             }
         }
         Expression::Extreme { operands, .. }
-        | Expression::StrConcat { operands, .. }
         | Expression::StrTemplate { operands, .. }
         | Expression::Temporal { operands, .. }
         | Expression::Imputation { operands, .. } => {

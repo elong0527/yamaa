@@ -432,6 +432,11 @@
           "spec_path": "columns.VALUE.derivation.source.multiple_matches",
           "handler": "multiple_matches",
           "count": 0
+        },
+        {
+          "spec_path": "columns.VALUE.derivation.source.absent",
+          "handler": "absent",
+          "count": 0
         }
       ],
       "csv": "ID,VALUE\na,selected\nb,B\n",

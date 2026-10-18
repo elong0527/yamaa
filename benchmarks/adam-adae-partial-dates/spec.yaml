@@ -42,47 +42,54 @@ columns:
     label: Date of First Exposure to Treatment
     derivation: ADSL.TRTSDT
 
-  # Complete a year-and-month start to the 15th, never before first
-  # exposure. A year alone, non-date text, or nothing gives no date.
-  # (Month precision is the minimum accepted, so no month is ever
-  # supplied, and none is written.)
+  # Complete a year-and-month start to the 15th, moved up to first exposure
+  # when that falls later in the collected month; an exposure date outside
+  # the collected month moves nothing. A year alone, non-date text, or
+  # nothing gives no date. (Month precision is the minimum accepted, so no
+  # month is ever supplied, and none is written.)
   - name: ASTDT
     type: date
     label: Analysis Start Date
     derivation:
-      date_impute:
+      impute:
+        type: date
         source: AESTDTC
         day: 15
         minimum_source_precision: month
         not_before: TRTSDT
-        missing: null   # handlers are explicit: an omitted one is fatal
-        invalid: null
+        # handlers are explicit: an omitted one is fatal
+        invalid: {literal: null}
 
   - name: ASTDTC
     type: str
     label: Analysis Start Date (C)
     derivation: ASTDT
 
-  - name: ASTDTPR
-    type: str
-    label: Analysis Start Date Precision
+  # The last day the collected start allows; a supplied day can precede
+  # first exposure only when this does too.
+  - name: ASTDTL
+    type: date
+    label: Latest Analysis Start Date Allowed
     derivation:
-      date_precision:
-        source: ASTDT
-        missing: null
+      impute:
+        type: date
+        source: AESTDTC
+        day: last
+        minimum_source_precision: month
+        invalid: {literal: null}
 
-  # M means the collected start carried a year and month, so the day was
-  # supplied.
+  # D: the collected start carried a year and month, so the day was
+  # supplied, whether or not first exposure then moved it.
   - name: ASTDTF
     type: str
     label: Analysis Start Date Imputation Flag
     derivation:
-      case:
-        - when: "ASTDTPR = 'M'"
-          then: {literal: "D"}
+      imputation_flag:
+        source: ASTDT
+        part: date
     verifications:
-      allowed_values:
-        values: ["D"]
+      - allowed_values:
+          values: ["D"]
 
   - name: TRTEMFL
     type: str
@@ -90,12 +97,10 @@ columns:
     derivation:
       flag: "ASTDT >= TRTSDT"
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
       min: 13
       max: 13
@@ -107,9 +112,9 @@ verifications:
       when: "ASTDTF IS NOT NULL"
       require: "ASTDT IS NOT NULL"
   - assert:
-      id: supplied-day-never-precedes-treatment-start
-      when: "ASTDTF = 'D'"
-      require: "TRTSDT IS NULL OR ASTDT >= TRTSDT"
+      id: supplied-day-never-precedes-treatment-start-in-its-month
+      when: "ASTDTF = 'D' AND ASTDTL >= TRTSDT"
+      require: "ASTDT >= TRTSDT"
   - assert:
       id: treatment-emergent-event-has-an-analysis-date
       when: "TRTEMFL = 'Y'"

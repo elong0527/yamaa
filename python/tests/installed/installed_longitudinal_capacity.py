@@ -56,15 +56,17 @@ class LongitudinalCapacity(unittest.TestCase):
                     "schema_version": "1.0",
                     "domain": "WIDE",
                     "keys": ["ID"],
+                    # A typed csv source is a mapping; an untyped parquet
+                    # source is written as its bare path.
                     "input": {
-                        "SRC": {
-                            "path": source.name,
-                            **(
-                                {"types": dict.fromkeys(names, "int")}
-                                if source_profile == "csv"
-                                else {}
-                            ),
-                        }
+                        "SRC": (
+                            {
+                                "path": source.name,
+                                "types": dict.fromkeys(names, "int"),
+                            }
+                            if source_profile == "csv"
+                            else source.name
+                        )
                     },
                     "columns": [
                         {
@@ -89,6 +91,9 @@ class LongitudinalCapacity(unittest.TestCase):
                         tuple(value(row, column) for column in range(100)),
                     )
                 if profile == "parquet":
+                    # A link only types the stored artifact: save the producer
+                    # before its consumer reads it.
+                    built.save()
                     consumer_document = dict(document)
                     consumer_document["input"] = {
                         "SRC": {"path": "output.parquet", "schema": "spec.yaml"}
@@ -99,12 +104,12 @@ class LongitudinalCapacity(unittest.TestCase):
                     }
                     consumer = root / "consumer.yaml"
                     consumer.write_text(json.dumps(consumer_document), encoding="ascii")
-                    produced = yamaa.spec(consumer).run()
-                    self.assertEqual(produced.issues.to_dicts(), [])
-                    self.assertEqual(produced.output.shape, (50_000, 100))
-                    produced.save()
+                    consumed = yamaa.spec(consumer).run()
+                    self.assertEqual(consumed.issues.to_dicts(), [])
+                    self.assertEqual(consumed.output.shape, (50_000, 100))
+                    consumed.save()
                     self.assertEqual((root / "consumer.csv").read_bytes(), expected)
-                    del produced
+                    del consumed
                 # Saving uses accepted bytes, including after source changes.
                 source.write_bytes(b"changed\n")
                 for _ in range(2):

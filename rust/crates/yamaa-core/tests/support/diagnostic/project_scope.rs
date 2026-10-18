@@ -96,14 +96,14 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             ("producer", Value::String("/study/sdtm/dm.yaml".into())),
         ],
     ));
-    // A run-scope cycle keeps the producer graph's cycle cause and wording.
+    // A run-scope cycle names each specification on it.
     let cycle = project_scope::workflow_cycle("B", &["/a.yaml", "/b.yaml", "/a.yaml"]);
-    check(
+    reached.insert(check(
         &cycle,
         "producer_workflow_cycle",
-        "REQ-0534",
+        "REQ-1342",
         &["input.B.schema"],
         &[("cycle", texts(&["/a.yaml", "/b.yaml", "/a.yaml"]))],
-    );
+    ));
     reached
 }

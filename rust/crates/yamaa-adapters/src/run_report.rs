@@ -549,41 +549,73 @@ pub(crate) fn empty_table() -> Result<PublicTable, Error> {
     PublicTable::from_table(&table, &projection).map_err(|_| Error::InvalidObservation)
 }
 
-/// Compare the primary and report locations without requiring parent or
-/// target existence. Operational path refusal remains at the publication gate.
+/// The output locations a run admits before any study read: `output.path`
+/// and `output.report` name two files, and neither names an `output.path` or
+/// `output.report` location of a producer an input links, whose files the run
+/// reads. The comparison needs neither file nor parent to exist; operational
+/// path refusal remains at the publication gate.
 pub(crate) fn location_findings(
     resources: &crate::file_resources::Resources,
     run: &dyn RunView,
+    links: &[crate::specification_source::LinkedSpecification],
 ) -> Vec<yamaa_core::specification::PreflightFinding> {
+    use crate::file_resources::same_location;
     use yamaa_core::specification::{PreflightFinding, ReportFinding};
-    if run.compiled().output_report().is_none() {
-        return Vec::new();
+    let fields = [("path", "output.path"), ("report", "output.report")];
+    fn location<'a>(
+        resources: &crate::file_resources::Resources,
+        document: &'a crate::specification_source::PreparedDocument,
+        field: &str,
+    ) -> Option<(&'a str, String)> {
+        let origin = document.written_output_field_origin(field)?;
+        let location = resources
+            .location_from(origin.base_source, origin.written)
+            .ok()?;
+        Some((origin.written, location))
     }
-    let location = |field| {
-        run.document()
-            .written_output_field_origin(field)
-            .and_then(|origin| {
-                resources
-                    .location_from(origin.base_source, origin.written)
-                    .ok()
-                    .map(|location| (origin.written, location))
-            })
-    };
-    let (Some((_, primary)), Some((written, report))) = (location("path"), location("report"))
-    else {
-        return Vec::new();
-    };
-    #[cfg(windows)]
-    let same = crate::windows_file::equal_name(&primary, &report);
-    #[cfg(unix)]
-    let same = primary == report;
-    if same {
-        vec![PreflightFinding::Report(ReportFinding::Collision {
-            path: written.into(),
-        })]
-    } else {
-        Vec::new()
+    let declares_report = run.compiled().output_report().is_some();
+    let own = fields
+        .into_iter()
+        .filter(|(field, _)| *field == "path" || declares_report)
+        .filter_map(|(field, right)| {
+            location(resources, run.document(), field)
+                .map(|(written, location)| (right, written, location))
+        })
+        .collect::<Vec<_>>();
+    let mut findings = Vec::new();
+    if let [(_, _, primary), (_, written, report)] = own.as_slice()
+        && same_location(primary, report)
+    {
+        findings.push(PreflightFinding::Report(ReportFinding::Collision {
+            path: (*written).into(),
+        }));
     }
+    // A producer that several inputs link is compared once.
+    let mut producers: Vec<&str> = Vec::new();
+    for link in links {
+        let Some(producer) = &link.document else {
+            continue;
+        };
+        if producers.contains(&link.identity.as_str()) {
+            continue;
+        }
+        producers.push(&link.identity);
+        for (field, left) in fields {
+            let Some((_, theirs)) = location(resources, producer, field) else {
+                continue;
+            };
+            for (right, written, ours) in &own {
+                if same_location(&theirs, ours) {
+                    findings.push(PreflightFinding::Report(ReportFinding::GraphCollision {
+                        left,
+                        right,
+                        path: (*written).into(),
+                    }));
+                }
+            }
+        }
+    }
+    findings
 }
 
 #[cfg(test)]

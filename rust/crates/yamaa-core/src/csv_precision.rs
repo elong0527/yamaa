@@ -1,16 +1,18 @@
-//! Exact CSV display rounding under REQ-0745/0747/0748, after execution gates.
+//! CSV display rounding under REQ-0745/0747/0748, after execution gates.
 use num_bigint::BigUint;
 
-use crate::{decimal_rounding::binary64_fraction, value::FiniteFloat};
+use crate::{decimal_rounding::rounded_magnitude, value::FiniteFloat};
 
 /// Trusted output budget exhaustion, never an invalid language precision.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Limit;
 
-/// Format the exact binary64 fraction, with genuine ties away from zero.
-/// This does not use the numeric function's near-tie interval or round back to
-/// binary64. Every finite binary64 has at most 1,074 exact fractional decimal
-/// places; larger declarations append zeros, bounding integer intermediates
+/// Format the exact binary64 value at `digits` places with the language's one
+/// rounding (REQ-0418): ties, and near ties within 2^-26 of a scaled tie, go
+/// away from zero. The rounded decimal integer is written directly, never
+/// rounded back to binary64, and a value that rounds to zero has no sign.
+/// Every finite binary64 has at most 1,074 exact fractional decimal places;
+/// larger declarations append zeros, bounding integer intermediates
 /// independently of the declared width. Charge width before constructing powers
 /// and charge the complete spelling before allocating the final text.
 pub fn fixed_point(value: FiniteFloat, digits: usize, maximum: usize) -> Result<String, Limit> {
@@ -23,13 +25,7 @@ pub fn fixed_point(value: FiniteFloat, digits: usize, maximum: usize) -> Result<
         return Err(Limit);
     }
     let exact_digits = digits.min(1074);
-    let (mut numerator, denominator) = binary64_fraction(value.get());
-    numerator *= BigUint::from(10u32).pow(exact_digits as u32);
-    let remainder = &numerator % &denominator;
-    let mut rounded = numerator / &denominator;
-    if (remainder << 1usize) >= denominator {
-        rounded += 1u32;
-    }
+    let rounded = rounded_magnitude(value.get(), exact_digits as i64);
     let negative = value.get().is_sign_negative() && rounded != BigUint::from(0u32);
     // This bounded intermediate has at most 1,383 decimal digits.
     let decimal = rounded.to_str_radix(10);

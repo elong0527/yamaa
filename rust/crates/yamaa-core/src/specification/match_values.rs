@@ -2,8 +2,7 @@
 use super::*;
 use crate::{
     dataset::{MatchRead, MatchValue},
-    key_relation::ComparableType,
-    match_value::{self, LiteralKind},
+    result_type::ResultType,
 };
 
 #[derive(Clone, Copy)]
@@ -26,7 +25,6 @@ pub(super) enum Declaration {
     Expression {
         branch: cases::Branch,
         references: Vec<String>,
-        operation: String,
     },
 }
 impl Declaration {
@@ -79,21 +77,18 @@ impl Declaration {
                 extra,
             )?),
             "str_case"
-            | "date_impute"
-            | "datetime_impute"
+            | "impute"
             | "to_date"
-            | "date_precision"
-            | "datetime_precision"
+            | "precision"
+            | "imputation_flag"
             | "round_half_away_from_zero"
-            | "date_diff"
+            | "diff"
             | "study_day"
             | "to_epoch_day"
             | "mapping"
             | "cut"
             | "greatest"
             | "least"
-            | "str_concat"
-            | "str_contains"
             | "str_extract"
             | "str_replace"
             | "str_template"
@@ -102,13 +97,9 @@ impl Declaration {
             | "rank"
             | "baseline_flag"
             | "row_value"
-            | "previous_non_missing"
             | "locf"
-            | "date_shift"
-            | "datetime_diff"
-            | "datetime_shift"
-            | "duration_value"
-            | "duration_text" => {
+            | "shift"
+            | "duration_value" => {
                 let mut references = Vec::new();
                 derivations::references(d, value, project, &mut references, 0)?;
                 self_relations::template_references(d, value, templates, &mut references, 0)?;
@@ -124,11 +115,7 @@ impl Declaration {
                     templates,
                 )?;
                 reject_deferred_owners(&branch, extra);
-                Self::Expression {
-                    branch,
-                    references,
-                    operation: op.into(),
-                }
+                Self::Expression { branch, references }
             }
             _ => {
                 reject(extra, op, operation_path);
@@ -178,21 +165,17 @@ impl Declaration {
             _ => format!("key[{field}]"),
         }
     }
-    pub(super) fn result_type(&self, catalog: &Catalog) -> Option<ComparableType> {
-        let expression = match self {
-            Self::Variable(name) | Self::Source(name) => match_value::Expression::Source(name),
-            Self::StrPad(_) => match_value::Expression::Operation("str_pad"),
-            Self::Expression { operation, .. } => match_value::Expression::Operation(operation),
-            Self::Literal(value) => match_value::Expression::Literal(match value {
-                crate::value::Value::Missing => LiteralKind::Missing,
-                crate::value::Value::Str(_) => LiteralKind::Str,
-                crate::value::Value::Int(_) => LiteralKind::Int,
-                crate::value::Value::Float(_) => LiteralKind::Float,
-                crate::value::Value::Bool(_) => LiteralKind::Bool,
-                _ => LiteralKind::Other,
-            }),
-        };
-        match_value::result_type(catalog, expression)
+    /// The match value's result type (EXPR-14): the read variable's, a
+    /// literal's, `str_pad`'s text, or the expression's over the names the
+    /// current row types. LOOKUP-6 compares it with the key column's type.
+    pub(super) fn result_type(&self, catalog: &Catalog) -> ResultType {
+        let input = |name: &str| ResultType::declared(catalog.type_of(name));
+        match self {
+            Self::Variable(name) | Self::Source(name) => input(name),
+            Self::Literal(value) => ResultType::of_value(value),
+            Self::StrPad(pad) => Operation::StrPad(pad.clone()).result_type(&input),
+            Self::Expression { branch, .. } => branch.operation.result_type(&input),
+        }
     }
     pub(super) fn bind(
         &self,
@@ -416,27 +399,19 @@ impl Declaration {
 }
 
 /// Conditional and callback relation contexts need a demand-aware key owner.
-/// Keep them outside this bounded scalar/window expansion, including nested
-/// concatenation operands, rather than pre-reading their unselected branches.
+/// Keep them outside this bounded scalar/window expansion rather than
+/// pre-reading their unselected branches.
 fn reject_deferred_owners(branch: &cases::Branch, extra: &mut Vec<UnsupportedFeature>) {
     let operation = match branch.operation.as_ref() {
         Operation::Case(_) => Some("case"),
-        Operation::ProjectFunction(_) => Some("function"),
+        Operation::ProjectFunction { .. } => Some("function"),
         Operation::Aggregate(_) => Some("aggregate"),
         Operation::Odm(_) => Some("odm"),
         Operation::Flag(_) => Some("flag"),
         Operation::FirstAvailable(_) => Some("first_available"),
-        Operation::Imputation(operation) if operation.bounds().next().is_some() => {
-            for (field, _) in operation.bounds() {
+        Operation::Imputation(operation) if operation.has_conditional_operands() => {
+            for (field, _) in operation.operands().skip(1) {
                 reject(extra, field, format!("{}.{field}", branch.path));
-            }
-            None
-        }
-        Operation::Scalar(declaration) => {
-            if let scalar::Declaration::Concat { sources, .. } = declaration.as_ref() {
-                for source in sources {
-                    reject_deferred_owners(source, extra);
-                }
             }
             None
         }
@@ -536,20 +511,6 @@ pub(super) fn visit_keys(
                         )?;
                     }
                 }
-            }
-        }
-        if let Some(payload) = d.field(value, "str_concat") {
-            for (index, &value) in sequence(d, field(d, payload, "sources")?)?
-                .iter()
-                .enumerate()
-            {
-                expression(
-                    d,
-                    value,
-                    &format!("{path}.str_concat.sources[{index}]"),
-                    depth + 1,
-                    visit,
-                )?;
             }
         }
         Ok(())

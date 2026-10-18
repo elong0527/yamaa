@@ -14,6 +14,7 @@ intermediates:
   - id: MH_PARENT
     dataset: MH
     key: {USUBJID: MH_SUPP_RAW.USUBJID, MHTERM: MH_SUPP_RAW.MHTERM}
+    require_match: true
 
 columns:
   - name: STUDYID
@@ -38,20 +39,18 @@ columns:
 
   # The parent MH record for the same subject and condition term; its MHSEQ
   # (read as text) is the link. A qualifier with no parent record leaves this
-  # missing, and the not_missing check fails the run.
+  # key missing, which fails the run.
   - name: IDVARVAL
     type: str
     label: Identifying Variable Value
     derivation: MH_PARENT.MHSEQ
-    verifications:
-      not_missing: {}
 
   - name: QNAM
     type: str
     label: Qualifier Variable Name
     verifications:
-      allowed_values:
-        values: [MHFAMHX, MHCONF]
+      - allowed_values:
+          values: [MHFAMHX, MHCONF]
 
   - name: QLABEL
     type: str
@@ -95,8 +94,6 @@ rows:
       QVAL: MH_SUPP_RAW.MHCONF
 
 verifications:
-  - unique:
-      columns: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM]
   - row_count:
       min: 7
       max: 7

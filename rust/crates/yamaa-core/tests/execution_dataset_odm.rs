@@ -10,8 +10,8 @@ mod execution {
         use yamaa_core::{
             bound_expression::{Binding, BoundPredicate, Read},
             diagnostic::ConditionCode,
+            expression::ErrorKind,
             odm_source::{FIELDS, HIERARCHY, IDENTIFYING},
-            predicate::ErrorKind,
             table::{CellError, Column, TableAccess, TableSchema, ValueRef},
             value::{ColumnType, Value},
         };
@@ -80,7 +80,12 @@ mod execution {
         }
         fn predicate(text: &str, field: usize, path: &str) -> BoundPredicate {
             BoundPredicate::new(
-                yamaa_core::predicate_compiler::compile(text, path).unwrap(),
+                yamaa_core::expression::compile(
+                    text,
+                    yamaa_core::expression::Context::Predicate,
+                    path,
+                )
+                .unwrap(),
                 vec![Binding {
                     name: format!("SRC.{}", FIELDS[field]),
                     read: Read::Source(field),
@@ -715,7 +720,7 @@ mod execution {
                 FlagRead, Intermediate, IntermediateKey, MatchRead, MatchValue, RowMode,
                 RowTemplate, SecondarySource, SourceSchemas,
             },
-            predicate_compiler,
+            expression::{compile, Context},
             table::{CellError, TableAccess, TableSchema, ValueRef},
             value::{ColumnType as T, Value},
         };
@@ -767,8 +772,12 @@ mod execution {
         fn flag(expr: &str, read: FlagRead, true_value: Value) -> Expression {
             Expression::Flag(
                 Flag::new(
-                    predicate_compiler::compile(expr, "columns.C1.derivation.flag.condition")
-                        .unwrap(),
+                    compile(
+                        expr,
+                        Context::Predicate,
+                        "columns.C1.derivation.flag.condition",
+                    )
+                    .unwrap(),
                     vec![FlagBinding {
                         name: "AGE".into(),
                         read,
@@ -827,11 +836,17 @@ mod execution {
                     vec![Value::Int(3), Value::Int(3)]
                 ]
             );
-            assert_eq!(attempt.handler_counts.len(), 1);
-            assert_eq!(attempt.handler_counts[0].count, 1);
+            // The UNKNOWN row takes the declared `missing` and is counted there.
             assert_eq!(
-                attempt.handler_counts[0].spec_path,
-                "columns.C1.derivation.unconvertible"
+                attempt
+                    .handler_counts
+                    .iter()
+                    .map(|count| (count.spec_path.as_str(), count.count))
+                    .collect::<Vec<_>>(),
+                [
+                    ("columns.C1.derivation.unconvertible", 1),
+                    ("columns.C1.derivation.flag.missing", 1)
+                ]
             );
             assert_eq!(
                 *table.reads.borrow(),
@@ -863,7 +878,14 @@ mod execution {
             assert_eq!(source_row, 0);
             assert_eq!(&*payload as *const u8, address);
             assert!(Rc::ptr_eq(&marker, &retained));
-            assert!(attempt.handler_counts.is_empty());
+            assert_eq!(
+                attempt
+                    .handler_counts
+                    .iter()
+                    .map(|count| (count.spec_path.as_str(), count.count))
+                    .collect::<Vec<_>>(),
+                [("columns.C1.derivation.flag.missing", 0)]
+            );
             assert_eq!(*table.reads.borrow(), [(0, 0), (0, 1)]);
         }
         #[test]
@@ -909,6 +931,7 @@ mod execution {
                     filter: None,
                     selection: None,
                     no_match: Some(Value::Missing),
+                    require_match: false,
                     unique: Vec::new(),
                     derivations: None,
                     pending_schema: None,
@@ -941,7 +964,15 @@ mod execution {
                     vec![Value::Int(3), Value::Int(3)]
                 ]
             );
-            assert!(attempt.handler_counts.is_empty());
+            // Predicate reads suppress `no_match`; the UNKNOWN condition counts.
+            assert_eq!(
+                attempt
+                    .handler_counts
+                    .iter()
+                    .map(|count| (count.spec_path.as_str(), count.count))
+                    .collect::<Vec<_>>(),
+                [("columns.C1.derivation.flag.missing", 1)]
+            );
             assert_eq!(
                 donor.reads.borrow().iter().filter(|(_, c)| *c == 1).count(),
                 4
@@ -1020,7 +1051,14 @@ mod execution {
             let identity = identity.unwrap();
             assert_eq!(identity.position, 0);
             assert_eq!(identity.values, [Value::Int(1)]);
-            assert!(attempt.handler_counts.is_empty());
+            assert_eq!(
+                attempt
+                    .handler_counts
+                    .iter()
+                    .map(|count| (count.spec_path.as_str(), count.count))
+                    .collect::<Vec<_>>(),
+                [("columns.C1.derivation.flag.missing", 0)]
+            );
             assert_eq!(
                 table
                     .reads
@@ -1033,11 +1071,11 @@ mod execution {
             );
         }
         #[test]
-        fn constant_flag_needs_only_identity_reads_and_has_no_handlers() {
+        fn constant_flag_needs_only_identity_reads_and_never_counts_unknown() {
             let table = table();
             let constant = Expression::Flag(
                 Flag::new(
-                    predicate_compiler::compile("TRUE", "flag.condition").unwrap(),
+                    compile("TRUE", Context::Predicate, "flag.condition").unwrap(),
                     vec![],
                     Value::Str("Y".into()),
                     None,
@@ -1072,14 +1110,21 @@ mod execution {
                     vec![Value::Int(3), Value::Str("Y".into())],
                 ]
             );
-            assert!(attempt.handler_counts.is_empty());
+            assert_eq!(
+                attempt
+                    .handler_counts
+                    .iter()
+                    .map(|count| (count.spec_path.as_str(), count.count))
+                    .collect::<Vec<_>>(),
+                [("flag.missing", 0)]
+            );
             assert_eq!(*table.reads.borrow(), [(0, 0), (1, 0), (2, 0)]);
         }
         fn named_plan(table: &Table, donor: &Table, filtered: bool) -> DatasetPlan {
             use yamaa_core::bound_expression::{Binding, BoundPredicate};
             let filter = filtered.then(|| {
                 BoundPredicate::new(
-                    predicate_compiler::compile("TAB.V > 0", "intermediates[0].filter").unwrap(),
+                    compile("TAB.V > 0", Context::Predicate, "intermediates[0].filter").unwrap(),
                     vec![Binding {
                         name: "TAB.V".into(),
                         read: Read::Source(1),
@@ -1110,6 +1155,7 @@ mod execution {
                     filter: filter.map(Into::into),
                     selection: None,
                     no_match: Some(Value::Missing),
+                    require_match: false,
                     unique: Vec::new(),
                     derivations: None,
                     pending_schema: None,
@@ -1166,7 +1212,7 @@ mod execution {
                     };
                     assert_eq!(source_row, 0);
                     assert_eq!(error.spec_path, "intermediates[0].filter");
-                    let yamaa_core::predicate::ErrorKind::Resolution {
+                    let yamaa_core::expression::ErrorKind::Resolution {
                         identifier,
                         error: CellError::Access(failure),
                     } = error.kind
@@ -1194,7 +1240,14 @@ mod execution {
                 };
                 assert_eq!(&*failure.0 as *const u8, address);
                 assert!(Rc::ptr_eq(&failure.1, &marker));
-                assert!(attempt.handler_counts.is_empty());
+                assert_eq!(
+                    attempt
+                        .handler_counts
+                        .iter()
+                        .map(|count| (count.spec_path.as_str(), count.count))
+                        .collect::<Vec<_>>(),
+                    [("columns.C1.derivation.flag.missing", 0)]
+                );
             }
         }
     }
@@ -1209,7 +1262,7 @@ mod execution {
                 Assignment, DatasetPlan, Expression, Intermediate, IntermediateKey, MatchRead,
                 MatchValue, PlanError, RowMode, RowTemplate, SecondarySource, SourceSchemas,
             },
-            predicate::{self, Comparison, Node, Scalar},
+            expression::{self, compile, Context},
             table::{CellError, TableAccess, TableSchema, ValueRef},
             text_pad::StringPad,
             value::{ColumnType as T, Value},
@@ -1295,6 +1348,7 @@ mod execution {
                 filter: None,
                 selection: None,
                 no_match: Some(Value::Missing),
+                require_match: false,
                 unique: Vec::new(),
                 derivations: None,
                 pending_schema: None,
@@ -1359,15 +1413,10 @@ mod execution {
         }
         fn filter() -> BoundPredicate {
             BoundPredicate::new(
-                predicate::Plan::new(
-                    vec![Node::Compare {
-                        operator: Comparison::Greater,
-                        left: Scalar::Identifier("TAB.FILTER".into()),
-                        right: Scalar::Literal(Value::Int(0)),
-                    }],
-                    0,
-                    "intermediates[0].filter".into(),
-                    "TAB.FILTER > 0".into(),
+                compile(
+                    "TAB.FILTER > 0",
+                    Context::Predicate,
+                    "intermediates[0].filter",
                 )
                 .unwrap(),
                 vec![Binding {
@@ -1464,7 +1513,7 @@ mod execution {
             let ExecutionError::Predicate { error, .. } = *observed.result.unwrap_err() else {
                 panic!("original predicate port failure")
             };
-            let predicate::ErrorKind::Resolution {
+            let expression::ErrorKind::Resolution {
                 error: CellError::Access(Failure(retained, identity)),
                 ..
             } = error.kind
@@ -1716,11 +1765,11 @@ mod execution {
         #[test]
         fn typed_calendar_and_datetime_keys_compare_calendar_values_including_collected_precision()
         {
-            use yamaa_core::temporal::{Date, DatePrecision, DateTime, DateTimePrecision};
-            let year = Date::new(2025, 1, 1, DatePrecision::Year).unwrap();
-            let day = Date::new(2025, 1, 1, DatePrecision::Day).unwrap();
-            let midnight = DateTime::new(day, 0, 0, 0, DateTimePrecision::Day).unwrap();
-            let second = DateTime::new(day, 0, 0, 0, DateTimePrecision::Second).unwrap();
+            use yamaa_core::temporal::{Date, DateTime, Precision};
+            let year = Date::new(2025, 1, 1, Precision::Year).unwrap();
+            let day = Date::new(2025, 1, 1, Precision::Day).unwrap();
+            let midnight = DateTime::new(day, 0, 0, 0, Precision::Day).unwrap();
+            let second = DateTime::new(day, 0, 0, 0, Precision::Second).unwrap();
             for (current, donor, kind) in [
                 (Value::Date(year), Value::Date(day), T::Date),
                 (
@@ -2170,11 +2219,11 @@ mod execution {
         use yamaa_core::{dataset::ExecutionError, numeric_lifecycle::HandlerKind};
         use yamaa_core::{
             dataset::{
-                date_policy, Assignment, DatasetPlan, DayDeclaration as D, Expression, Imputation,
-                ImputationKind as K, RowMode, RowTemplate,
+                completion_policy, Assignment, DatasetPlan, DayDeclaration as D, Expression,
+                Imputation, ImputationKind as K, RowMode, RowTemplate, TemporalType as Target,
             },
             table::{CellError, TableAccess, TableSchema, ValueRef},
-            temporal::DatePrecision as P,
+            temporal::Precision as P,
             value::{ColumnType as T, Value},
         };
         #[derive(Debug, PartialEq)]
@@ -2220,229 +2269,21 @@ mod execution {
                 reads: RefCell::default(),
             }
         }
-        fn make_plan(table: &Table, missing: Option<Value>, invalid: Option<Value>) -> DatasetPlan {
-            let kind = date_policy(Some("6"), D::Position("first"), P::Year, "impute").unwrap();
-            let operation = Imputation::new(
-                kind,
-                "SRC.TEXT".into(),
-                Some("SRC.REF".into()),
-                None,
-                "columns.DATE.derivation.date_impute".into(),
-                missing,
-                invalid,
+        fn date_kind(day: D<'_>) -> K {
+            K::Impute(
+                completion_policy(Target::Date, Some("6"), Some(day), P::Year, None, "impute")
+                    .unwrap(),
             )
-            .unwrap();
+        }
+        fn plan_with(
+            table: &Table,
+            output: T,
+            operation: Imputation,
+            operands: Vec<Assignment>,
+        ) -> DatasetPlan {
             DatasetPlan::new(
                 table.schema.clone(),
-                schema(&[("ID", T::Int), ("DATE", T::Date)]),
-                vec![RowTemplate {
-                    mode: RowMode::Records,
-                    assignments: vec![
-                        Assignment {
-                            column: 0,
-                            path: "columns.ID.derivation".into(),
-                            expression: Expression::Source(0),
-                        },
-                        Assignment {
-                            column: 1,
-                            path: "columns.DATE.derivation".into(),
-                            expression: Expression::Imputation {
-                                operation,
-                                operands: vec![
-                                    Assignment {
-                                        column: 1,
-                                        path: "columns.DATE.derivation.date_impute.source".into(),
-                                        expression: Expression::Source(1),
-                                    },
-                                    Assignment {
-                                        column: 1,
-                                        path: "columns.DATE.derivation.date_impute.not_before"
-                                            .into(),
-                                        expression: Expression::Source(2),
-                                    },
-                                ],
-                            },
-                        },
-                    ],
-                    filter: None,
-                }],
-                vec![],
-                vec![0],
-                vec![],
-            )
-            .unwrap()
-        }
-        #[test]
-        fn complete_sources_and_recovered_values_never_read_the_bound() {
-            for source in [
-                Value::Str("2024-02-01".into()),
-                Value::Missing,
-                Value::Str("invalid".into()),
-            ] {
-                let mut table = make_table(source);
-                table.bad_column = 2;
-                *table.fail.borrow_mut() = Some(Failure(Box::new(7), Rc::new(())));
-                let result = make_plan(&table, Some(Value::Missing), Some(Value::Missing)).execute(
-                    &table,
-                    &[],
-                    &mut yamaa_core::function_invocation::NoFunctions::new(),
-                    None,
-                );
-                assert!(result.result.is_ok());
-                assert_eq!(*table.reads.borrow(), [0, 1]);
-                assert!(table.fail.borrow().is_some());
-                let expected_missing = u64::from(table.source == Value::Missing);
-                let expected_invalid = u64::from(table.source == Value::Str("invalid".into()));
-                assert_eq!(
-                    result
-                        .handler_counts
-                        .iter()
-                        .map(|count| (count.handler, count.count))
-                        .collect::<Vec<_>>(),
-                    [
-                        (HandlerKind::Missing, expected_missing),
-                        (HandlerKind::Invalid, expected_invalid)
-                    ]
-                );
-            }
-        }
-        #[test]
-        fn opaque_bound_failure_preserves_nonclone_payload_identity_and_is_never_retried() {
-            let mut table = make_table(Value::Str("2024-02".into()));
-            table.bad_column = 2;
-            let marker = Rc::new(());
-            let failure = Failure(Box::new(9), marker.clone());
-            let address = &*failure.0 as *const u8;
-            *table.fail.borrow_mut() = Some(failure);
-            let result = make_plan(&table, Some(Value::Missing), Some(Value::Missing)).execute(
-                &table,
-                &[],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None,
-            );
-            let ExecutionError::Cell {
-                path,
-                error: CellError::Access(Failure(payload, retained_marker)),
-                ..
-            } = *result.result.unwrap_err()
-            else {
-                panic!("original source failure")
-            };
-            assert_eq!(path, "columns.DATE.derivation.date_impute.not_before");
-            assert_eq!(&*payload as *const u8, address);
-            assert!(Rc::ptr_eq(&marker, &retained_marker));
-            assert_eq!(*table.reads.borrow(), [0, 1, 2]);
-            assert!(result.handler_counts.iter().all(|count| count.count == 0));
-        }
-        #[test]
-        fn runtime_impute_failure_retains_current_key_and_is_not_answered_by_invalid_handler() {
-            let mut table = make_table(Value::Str("2024-02".into()));
-            let mut plan = make_plan(&table, None, Some(Value::Missing));
-            // A real invalid completion cannot be answered by the text-invalid handler.
-            let assignment = &plan.templates()[0].assignments[1];
-            let Expression::Imputation { operands, .. } = &assignment.expression else {
-                panic!("imputation")
-            };
-            let operation = Imputation::new(
-                date_policy(Some("6"), D::Number("31"), P::Year, "impute").unwrap(),
-                "SRC.TEXT".into(),
-                Some("SRC.REF".into()),
-                None,
-                "columns.DATE.derivation.date_impute".into(),
-                None,
-                Some(Value::Missing),
-            )
-            .unwrap();
-            plan = DatasetPlan::new(
-                table.schema.clone(),
-                plan.output().clone(),
-                vec![RowTemplate {
-                    mode: RowMode::Records,
-                    assignments: vec![
-                        plan.templates()[0].assignments[0].clone(),
-                        Assignment {
-                            column: 1,
-                            path: assignment.path.clone(),
-                            expression: Expression::Imputation {
-                                operation,
-                                operands: operands.clone(),
-                            },
-                        },
-                    ],
-                    filter: None,
-                }],
-                vec![],
-                vec![0],
-                vec![],
-            )
-            .unwrap();
-            let attempt = plan.execute(
-                &table,
-                &[],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None,
-            );
-            let ExecutionError::SemanticDiagnostic {
-                diagnostic,
-                identity,
-            } = *attempt.result.unwrap_err()
-            else {
-                panic!("calendar cause")
-            };
-            assert_eq!(diagnostic.definition().condition, "invalid_calendar_date");
-            assert_eq!(identity.unwrap().values, [Value::Int(1)]);
-            assert_eq!(*table.reads.borrow(), [0, 1, 2]);
-            assert_eq!(attempt.handler_counts[0].count, 0);
-            // The original evaluator resolves the bound before rejecting a bad completion.
-            table.reads.borrow_mut().clear();
-            table.bad_column = 2;
-            *table.fail.borrow_mut() = Some(Failure(Box::new(6), Rc::new(())));
-            assert!(matches!(
-                *plan
-                    .execute(
-                        &table,
-                        &[],
-                        &mut yamaa_core::function_invocation::NoFunctions::new(),
-                        None
-                    )
-                    .result
-                    .unwrap_err(),
-                ExecutionError::Cell {
-                    error: CellError::Access(_),
-                    ..
-                }
-            ));
-            assert_eq!(*table.reads.borrow(), [0, 1, 2]);
-        }
-
-        /// Declare the named bounds, each reading the table's REF date (2024-02-20).
-        fn bounded_plan(table: &Table, not_before: bool, not_after: bool) -> DatasetPlan {
-            let path = "columns.DATE.derivation.date_impute";
-            let operation = Imputation::new(
-                date_policy(Some("6"), D::Position("last"), P::Year, "impute").unwrap(),
-                "SRC.TEXT".into(),
-                not_before.then(|| "SRC.REF".into()),
-                not_after.then(|| "SRC.REF".into()),
-                path.into(),
-                None,
-                None,
-            )
-            .unwrap();
-            let mut operands = vec![Assignment {
-                column: 1,
-                path: format!("{path}.source"),
-                expression: Expression::Source(1),
-            }];
-            for (field, _) in operation.bounds() {
-                operands.push(Assignment {
-                    column: 1,
-                    path: format!("{path}.{field}"),
-                    expression: Expression::Source(2),
-                });
-            }
-            DatasetPlan::new(
-                table.schema.clone(),
-                schema(&[("ID", T::Int), ("DATE", T::Date)]),
+                schema(&[("ID", T::Int), ("DATE", output)]),
                 vec![RowTemplate {
                     mode: RowMode::Records,
                     assignments: vec![
@@ -2468,103 +2309,343 @@ mod execution {
             )
             .unwrap()
         }
+        /// Each declared operand after the source reads the table's REF date.
+        fn operands(path: &str, operation: &Imputation) -> Vec<Assignment> {
+            operation
+                .operands()
+                .map(|(field, _)| Assignment {
+                    column: 1,
+                    path: format!("{path}.{field}"),
+                    expression: Expression::Source(if field == "source" { 1 } else { 2 }),
+                })
+                .collect()
+        }
+        fn make_plan(table: &Table, invalid: Option<Value>) -> DatasetPlan {
+            let path = "columns.DATE.derivation.impute";
+            let operation = Imputation::new(
+                date_kind(D::Position("first")),
+                "SRC.TEXT".into(),
+                Some("SRC.REF".into()),
+                None,
+                None,
+                path.into(),
+                invalid,
+            )
+            .unwrap();
+            let operands = operands(path, &operation);
+            plan_with(table, T::Date, operation, operands)
+        }
+        fn run(
+            plan: &DatasetPlan,
+            table: &Table,
+        ) -> yamaa_core::dataset::ExecutionAttempt<Failure> {
+            plan.execute(
+                table,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None,
+            )
+        }
+        #[test]
+        fn complete_sources_and_recovered_values_never_read_the_bound() {
+            for source in [
+                Value::Str("2024-02-01".into()),
+                Value::Missing,
+                Value::Str("invalid".into()),
+            ] {
+                let mut table = make_table(source);
+                table.bad_column = 2;
+                *table.fail.borrow_mut() = Some(Failure(Box::new(7), Rc::new(())));
+                let result = run(&make_plan(&table, Some(Value::Missing)), &table);
+                assert!(result.result.is_ok());
+                assert_eq!(*table.reads.borrow(), [0, 1]);
+                assert!(table.fail.borrow().is_some());
+                // A missing source is counted as a default substitution at
+                // `missing`, beside the declared `invalid` handler.
+                let expected_missing = u64::from(table.source == Value::Missing);
+                let expected_invalid = u64::from(table.source == Value::Str("invalid".into()));
+                assert_eq!(
+                    result
+                        .handler_counts
+                        .iter()
+                        .map(|count| (count.spec_path.as_str(), count.handler, count.count))
+                        .collect::<Vec<_>>(),
+                    [
+                        (
+                            "columns.DATE.derivation.impute.missing",
+                            HandlerKind::Missing,
+                            expected_missing
+                        ),
+                        (
+                            "columns.DATE.derivation.impute.invalid",
+                            HandlerKind::Invalid,
+                            expected_invalid
+                        )
+                    ]
+                );
+            }
+        }
+        #[test]
+        fn opaque_bound_failure_preserves_nonclone_payload_identity_and_is_never_retried() {
+            let mut table = make_table(Value::Str("2024-02".into()));
+            table.bad_column = 2;
+            let marker = Rc::new(());
+            let failure = Failure(Box::new(9), marker.clone());
+            let address = &*failure.0 as *const u8;
+            *table.fail.borrow_mut() = Some(failure);
+            let result = run(&make_plan(&table, Some(Value::Missing)), &table);
+            let ExecutionError::Cell {
+                path,
+                error: CellError::Access(Failure(payload, retained_marker)),
+                ..
+            } = *result.result.unwrap_err()
+            else {
+                panic!("original source failure")
+            };
+            assert_eq!(path, "columns.DATE.derivation.impute.not_before");
+            assert_eq!(&*payload as *const u8, address);
+            assert!(Rc::ptr_eq(&marker, &retained_marker));
+            assert_eq!(*table.reads.borrow(), [0, 1, 2]);
+            assert!(result.handler_counts.iter().all(|count| count.count == 0));
+        }
+        #[test]
+        fn runtime_impute_failure_retains_current_key_and_is_not_answered_by_invalid_handler() {
+            let mut table = make_table(Value::Str("2024-02".into()));
+            let path = "columns.DATE.derivation.impute";
+            // A real invalid completion cannot be answered by the text-invalid handler.
+            let operation = Imputation::new(
+                date_kind(D::Number("31")),
+                "SRC.TEXT".into(),
+                Some("SRC.REF".into()),
+                None,
+                None,
+                path.into(),
+                Some(Value::Missing),
+            )
+            .unwrap();
+            let operands = operands(path, &operation);
+            let plan = plan_with(&table, T::Date, operation, operands);
+            let attempt = run(&plan, &table);
+            let ExecutionError::SemanticDiagnostic {
+                diagnostic,
+                identity,
+            } = *attempt.result.unwrap_err()
+            else {
+                panic!("calendar cause")
+            };
+            assert_eq!(diagnostic.definition().condition, "invalid_calendar_date");
+            assert_eq!(identity.unwrap().values, [Value::Int(1)]);
+            // Completion precedes the bounds, so a failed completion never reads them.
+            assert_eq!(*table.reads.borrow(), [0, 1]);
+            assert!(attempt.handler_counts.iter().all(|count| count.count == 0));
+            table.reads.borrow_mut().clear();
+            table.bad_column = 2;
+            *table.fail.borrow_mut() = Some(Failure(Box::new(6), Rc::new(())));
+            assert!(matches!(
+                *run(&plan, &table).result.unwrap_err(),
+                ExecutionError::SemanticDiagnostic { .. }
+            ));
+            assert_eq!(*table.reads.borrow(), [0, 1]);
+        }
+
+        /// Declare the named bounds, each reading the table's REF date (2024-02-20).
+        fn bounded_plan(table: &Table, not_before: bool, not_after: bool) -> DatasetPlan {
+            let path = "columns.DATE.derivation.impute";
+            let operation = Imputation::new(
+                date_kind(D::Position("last")),
+                "SRC.TEXT".into(),
+                not_before.then(|| "SRC.REF".into()),
+                not_after.then(|| "SRC.REF".into()),
+                None,
+                path.into(),
+                None,
+            )
+            .unwrap();
+            let operands = operands(path, &operation);
+            plan_with(table, T::Date, operation, operands)
+        }
         #[test]
         fn upper_and_paired_bounds_read_their_operands_in_declaration_order() {
             for (text, not_before, not_after, expected, reads) in [
-                ("2024-02", false, true, Some("2024-02-20"), &[0, 1, 2][..]),
-                ("2024-02", true, true, Some("2024-02-20"), &[0, 1, 2, 2][..]),
-                ("2024-01", false, true, Some("2024-01-31"), &[0, 1, 2][..]),
-                ("2024-03", false, true, None, &[0, 1, 2][..]),
-                ("2024-01", true, true, None, &[0, 1, 2, 2][..]),
-                ("2024-02-25", false, true, Some("2024-02-25"), &[0, 1][..]),
+                ("2024-02", false, true, "2024-02-20", &[0, 1, 2][..]),
+                ("2024-02", true, true, "2024-02-20", &[0, 1, 2, 2][..]),
+                ("2024-01", false, true, "2024-01-31", &[0, 1, 2][..]),
+                // A bound outside the collected month is ignored.
+                ("2024-03", false, true, "2024-03-31", &[0, 1, 2][..]),
+                ("2024-01", true, true, "2024-01-31", &[0, 1, 2, 2][..]),
+                ("2024-02-25", false, true, "2024-02-25", &[0, 1][..]),
             ] {
                 let table = make_table(Value::Str(text.into()));
-                let attempt = bounded_plan(&table, not_before, not_after).execute(
-                    &table,
-                    &[],
-                    &mut yamaa_core::function_invocation::NoFunctions::new(),
-                    None,
-                );
+                let attempt = run(&bounded_plan(&table, not_before, not_after), &table);
                 assert_eq!(
                     attempt.result.unwrap().dataset.rows(),
-                    [vec![
-                        Value::Int(1),
-                        expected.map_or(Value::Missing, |date| Value::Date(date.parse().unwrap()))
-                    ]],
+                    [vec![Value::Int(1), Value::Date(expected.parse().unwrap())]],
                     "{text}"
                 );
                 assert_eq!(*table.reads.borrow(), reads, "{text}");
+                // Equal bounds do not cross.
+                assert!(attempt
+                    .handler_counts
+                    .iter()
+                    .all(|count| count.handler != HandlerKind::CrossedBounds || count.count == 0));
             }
             let mut table = make_table(Value::Str("2024-02".into()));
             table.bad_column = 2;
             *table.fail.borrow_mut() = Some(Failure(Box::new(4), Rc::new(())));
-            let ExecutionError::Cell { path, .. } = *bounded_plan(&table, false, true)
-                .execute(
-                    &table,
-                    &[],
-                    &mut yamaa_core::function_invocation::NoFunctions::new(),
-                    None,
-                )
-                .result
-                .unwrap_err()
+            let ExecutionError::Cell { path, .. } =
+                *run(&bounded_plan(&table, false, true), &table)
+                    .result
+                    .unwrap_err()
             else {
                 panic!("bound read failure")
             };
-            assert_eq!(path, "columns.DATE.derivation.date_impute.not_after");
+            assert_eq!(path, "columns.DATE.derivation.impute.not_after");
+        }
+
+        #[test]
+        fn crossed_bounds_resolve_to_not_after_and_are_counted() {
+            let path = "columns.DATE.derivation.impute";
+            let table = make_table(Value::Str("2024-02".into()));
+            // not_before reads REF (2024-02-20) and not_after is 2024-02-10: both
+            // lie inside the collected month and cross, so not_after wins.
+            let operation = Imputation::new(
+                date_kind(D::Number("15")),
+                "SRC.TEXT".into(),
+                Some("SRC.REF".into()),
+                Some("SRC.EARLY".into()),
+                None,
+                path.into(),
+                None,
+            )
+            .unwrap();
+            let operands = vec![
+                Assignment {
+                    column: 1,
+                    path: format!("{path}.source"),
+                    expression: Expression::Source(1),
+                },
+                Assignment {
+                    column: 1,
+                    path: format!("{path}.not_before"),
+                    expression: Expression::Source(2),
+                },
+                Assignment {
+                    column: 1,
+                    path: format!("{path}.not_after"),
+                    expression: Expression::Literal(Value::Date("2024-02-10".parse().unwrap())),
+                },
+            ];
+            let attempt = run(&plan_with(&table, T::Date, operation, operands), &table);
+            assert_eq!(
+                attempt.result.unwrap().dataset.rows(),
+                [vec![
+                    Value::Int(1),
+                    Value::Date("2024-02-10".parse().unwrap())
+                ]]
+            );
+            assert_eq!(
+                attempt
+                    .handler_counts
+                    .iter()
+                    .map(|count| (count.spec_path.as_str(), count.handler, count.count))
+                    .collect::<Vec<_>>(),
+                [
+                    (
+                        "columns.DATE.derivation.impute.missing",
+                        HandlerKind::Missing,
+                        0
+                    ),
+                    (
+                        "columns.DATE.derivation.impute.not_after",
+                        HandlerKind::CrossedBounds,
+                        1
+                    )
+                ]
+            );
+        }
+
+        #[test]
+        fn a_fallback_is_read_only_for_a_missing_source_and_counted() {
+            let path = "columns.DATE.derivation.impute";
+            for (source, expected, reads, fired) in [
+                (Value::Missing, "2024-02-20", &[0, 1, 2][..], 1),
+                (Value::Str("2024-03".into()), "2024-03-01", &[0, 1][..], 0),
+            ] {
+                let table = make_table(source);
+                let operation = Imputation::new(
+                    date_kind(D::Position("first")),
+                    "SRC.TEXT".into(),
+                    None,
+                    None,
+                    Some("SRC.REF".into()),
+                    path.into(),
+                    None,
+                )
+                .unwrap();
+                let operands = operands(path, &operation);
+                let attempt = run(&plan_with(&table, T::Date, operation, operands), &table);
+                let rows = attempt.result.unwrap().dataset.rows().to_vec();
+                assert_eq!(
+                    rows,
+                    [vec![Value::Int(1), Value::Date(expected.parse().unwrap())]]
+                );
+                let Value::Date(date) = rows[0][1] else {
+                    panic!("date")
+                };
+                assert_eq!(
+                    date.collected_precision(),
+                    if fired == 1 { P::None } else { P::Month }
+                );
+                assert_eq!(*table.reads.borrow(), reads);
+                assert_eq!(
+                    attempt
+                        .handler_counts
+                        .iter()
+                        .map(|count| (count.spec_path.as_str(), count.handler, count.count))
+                        .collect::<Vec<_>>(),
+                    [(
+                        "columns.DATE.derivation.impute.fallback",
+                        HandlerKind::Missing,
+                        fired
+                    )]
+                );
+            }
         }
 
         #[test]
         fn recovered_datetime_literal_is_converted_once_and_its_handler_is_counted() {
-            let table = make_table(Value::Missing);
+            let table = make_table(Value::Str("bad".into()));
             let operation = Imputation::new(
-                K::DateTime {
-                    time: yamaa_core::dataset::TimeRule::First,
-                },
+                K::Impute(
+                    completion_policy(
+                        Target::DateTime,
+                        None,
+                        None,
+                        P::Day,
+                        Some(yamaa_core::dataset::TimeRule::First),
+                        "impute",
+                    )
+                    .unwrap(),
+                ),
                 "SRC.TEXT".into(),
+                None,
                 None,
                 None,
                 "impute".into(),
                 Some(Value::Str("2024-02-29T12:13".into())),
-                None,
             )
             .unwrap();
-            let plan = DatasetPlan::new(
-                table.schema.clone(),
-                schema(&[("ID", T::Int), ("DATE", T::DateTime)]),
-                vec![RowTemplate {
-                    mode: RowMode::Records,
-                    assignments: vec![
-                        Assignment {
-                            column: 0,
-                            path: "ID".into(),
-                            expression: Expression::Source(0),
-                        },
-                        Assignment {
-                            column: 1,
-                            path: "impute".into(),
-                            expression: Expression::Imputation {
-                                operation,
-                                operands: vec![Assignment {
-                                    column: 1,
-                                    path: "impute.source".into(),
-                                    expression: Expression::Source(1),
-                                }],
-                            },
-                        },
-                    ],
-                    filter: None,
-                }],
-                vec![],
-                vec![0],
-                vec![],
-            )
-            .unwrap();
-            let attempt = plan.execute(
+            let plan = plan_with(
                 &table,
-                &[],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None,
+                T::DateTime,
+                operation,
+                vec![Assignment {
+                    column: 1,
+                    path: "impute.source".into(),
+                    expression: Expression::Source(1),
+                }],
             );
+            let attempt = run(&plan, &table);
             assert_eq!(
                 attempt.result.unwrap().dataset.rows(),
                 [vec![
@@ -2572,8 +2653,17 @@ mod execution {
                     Value::DateTime("2024-02-29T12:13:00".parse().unwrap())
                 ]]
             );
-            assert_eq!(attempt.handler_counts[0].handler, HandlerKind::Missing);
-            assert_eq!(attempt.handler_counts[0].count, 1);
+            assert_eq!(
+                attempt
+                    .handler_counts
+                    .iter()
+                    .map(|count| (count.spec_path.as_str(), count.handler, count.count))
+                    .collect::<Vec<_>>(),
+                [
+                    ("impute.missing", HandlerKind::Missing, 0),
+                    ("impute.invalid", HandlerKind::Invalid, 1)
+                ]
+            );
             assert_eq!(*table.reads.borrow(), [0, 1]);
         }
     }

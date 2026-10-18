@@ -32,7 +32,7 @@ columns:
         dict:
           M: Male
           F: Female
-        missing: null
+        missing: {literal: null}
         unmapped: Outside codelist
 
   # One result for both events, stated for each: the missing code and the

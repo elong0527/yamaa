@@ -100,10 +100,12 @@ nav:
       - Derivation: articles/derive.md
       - Excel to yamaa: articles/excel.md
       - SDTM to ADaM: articles/sdtm-to-adam.md
+      - Specification style guide: articles/style.md
   - Reference:
       - Schema introduction: articles/schema-intro.md
       - Schema reference: articles/schema.md
       - Rules: articles/rules.md
+      - Rules at a glance: reference/rules-summary.md
       - Requirement index: reference/requirements.md
       - Schema fields: reference/schema-fields.md
       - Codelists and terminology: articles/terminology.md

@@ -1,56 +1,56 @@
 version: '1.0'
-# See REQ-1331.
+# See PROJECT-1.
 includes:
 - schema_shared.yaml
 project_class:
 - schema_version:
     type: str
     required: true
-    description: See REQ-1335.
+    description: Schema bundle version this project file is admitted against (PROJECT-1).
 - environments:
     type: environments_class
-    description: See REQ-1335.
+    description: Environment file of each host language, by language key (PROJECT-2).
 - codelists:
     type: list[codelist_source]
-    description: See REQ-1335.
+    description: Codelist sources supplying study terminology (CT-1).
 - study:
     type: study_class
-    description: See REQ-1335.
+    description: Study the specifications belong to; Define-XML requires it (DEFINE-1, DEFINE-28).
 - sdtm:
     type: submission_section_class
-    description: See REQ-1335.
+    description: Tabulation specifications and the submission metadata composing them into one Define-XML document (PROJECT-3).
 - adam:
     type: submission_section_class
-    description: See REQ-1335.
+    description: Analysis specifications and the submission metadata composing them into one Define-XML document (PROJECT-3).
 - send:
     type: submission_section_class
-    description: See REQ-1335.
+    description: Nonclinical tabulation specifications and the submission metadata composing them into one Define-XML document (PROJECT-3).
 environments_class:
 - python:
     type: project_path
-    description: See REQ-1336.
+    description: Environment file the Python host reads, relative to the project file (PROJECT-2).
 - r:
     type: project_path
-    description: See REQ-1336.
+    description: Environment file the R host reads, relative to the project file (PROJECT-2).
 codelist_source:
   type:
   - project_path
   - codelist_source_class
-  description: See REQ-0928.
+  description: Inline codelist source, or the path of a file holding one (CT-1).
 codelist_source_class:
 - standard:
     type: terminology_standard_class
-    description: See REQ-0928.
+    description: Published terminology the source's codelists are drawn from; a source without one is sponsor-defined (CT-2).
 - codelists:
     type: list[codelist_class]
     required: true
-    description: See REQ-0928.
+    description: Codelists this source declares (CT-1).
 terminology_standard_class:
 - name:
     type: str
     required: true
     min_length: 1
-    description: See REQ-0928.
+    description: Name of the published terminology (CT-2).
 - publishing_set:
     type: str
     required: true
@@ -60,57 +60,57 @@ terminology_standard_class:
     - DEFINE-XML
     - SDTM
     - SEND
-    description: See REQ-0928.
+    description: Publishing set of the published terminology (CT-2).
 - version:
     type: str
     required: true
     min_length: 1
-    description: See REQ-0928.
+    description: Version of the published terminology (CT-2).
 study_class:
 - id:
     type: define_id
     required: true
-    description: See REQ-1062.
+    description: Identifier the study's generated identity is built from (DEFINE-9).
 - name:
     type: str
     required: true
     min_length: 1
-    description: See REQ-1062.
+    description: Name of the study.
 - description:
     type: str
     required: true
     min_length: 1
-    description: See REQ-1062.
+    description: Description of the study.
 - protocol_name:
     type: str
     required: true
     min_length: 1
-    description: See REQ-1062.
+    description: Protocol the study runs under.
 metadata_version_class:
 - id:
     type: define_id
     required: true
-    description: See REQ-1063.
+    description: Identifier this metadata version's generated identity is built from (DEFINE-9).
 - name:
     type: str
     required: true
     min_length: 1
-    description: See REQ-1063.
+    description: Name of this metadata version.
 - description:
     type: str
     required: false
     min_length: 1
-    description: See REQ-1063.
+    description: Description of what this metadata version covers.
 codelist_class:
 - id:
     type: identifier
     required: true
-    description: See REQ-1077.
+    description: Name column bindings refer to this codelist by (CT-1).
 - name:
     type: str
     required: true
     min_length: 1
-    description: See REQ-1077.
+    description: Name of the codelist, unique within the document.
 - data_type:
     type: str
     default: text
@@ -118,80 +118,80 @@ codelist_class:
     - text
     - integer
     - float
-    description: See REQ-1077.
+    description: Type of the coded values.
 - extensible:
     type: bool
     default: false
-    description: See REQ-1077.
+    description: Whether the published list admits sponsor items marked extended (CT-6).
 - alias:
     type: str
     required: false
     min_length: 1
-    description: See REQ-1077.
+    description: Published concept identifier of the codelist itself.
 - format_name:
     type: str
     required: false
     min_length: 1
-    description: See REQ-1077.
+    description: Transport format name carried for a reader.
 - items:
     type: list[codelist_item_class]
     required: false
-    description: See REQ-1077.
+    description: Coded values this codelist admits, the whole value set of a bound column, in the order the document presents them (CT-7).
 - external:
     type: external_codelist_class
     required: false
-    description: See REQ-1077.
+    description: Dictionary this codelist defers to instead of listing values.
 codelist_item_class:
 - value:
     type: literal_value
     required: true
-    description: See REQ-1078.
+    description: The coded value itself.
 - decode:
     type: str
     required: false
     min_length: 1
-    description: See REQ-1078.
+    description: Text the coded value stands for.
 - rank:
     type: int
     required: false
-    description: See REQ-1078.
+    description: Ordering significance of this value relative to the others.
 - alias:
     type: str
     required: false
     min_length: 1
-    description: See REQ-1078.
+    description: Published concept identifier of this value.
 - extended:
     type: bool
     default: false
-    description: See REQ-1078.
+    description: Whether the sponsor added this value to an extensible published list (CT-6).
 external_codelist_class:
 - dictionary:
     type: str
     required: true
     min_length: 1
-    description: See REQ-1079.
+    description: Name of the external dictionary.
 - version:
     type: str
     required: true
     min_length: 1
-    description: See REQ-1079.
+    description: Version of that dictionary.
 - href:
     type: str
     required: false
     min_length: 1
-    description: See REQ-1079.
+    description: Location the dictionary is published at.
 define_id:
   type: str
   pattern: ^[A-Za-z_][A-Za-z0-9_.-]*$
-  description: See REQ-1068.
+  description: Identifier a generated OID is built from.
 relative_href:
   type: str
-  pattern: ^(?!/)(?!.*(^|/)\.\.(/|$))[^\\]+$
-  description: See REQ-1070.
+  pattern: ^(?:[^./\\][^/\\]*|\.(?:[^./\\][^/\\]*|\.[^/\\]+)?)(?:/(?:[^./\\][^/\\]*|\.(?:[^./\\][^/\\]*|\.[^/\\]+)?)?)*$
+  description: Location referenced from the generated document, relative to the directory holding it and never leaving that directory, which need not exist when the document is generated.
 language_tag:
   type: str
   pattern: ^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$
-  description: See REQ-1073.
+  description: Language tag carried by every generated translated text.
 standard_name:
   type: str
   values:
@@ -206,43 +206,56 @@ standard_name:
   - SENDIG-AR
   - SENDIG-DART
   - SENDIG-GENETOX
-  description: See REQ-1074.
+  description: Standard name, in the exact case Define-XML 2.1 publishes.
 submission_section_class:
 - specs:
     type: list[path]
     required: true
+    description: Ordered specifications of this family, resolved with their parent layers; the only field a run needs (PROJECT-3, DEFINE-5).
 - standard:
     type: implementation_guide_class
+    description: Implementation guide shared by the selected datasets; Define-XML requires it (DEFINE-6, DEFINE-28).
 - define:
     type: path
+    description: Define-XML publication target, relative to the project file; Define-XML requires it (DEFINE-2, DEFINE-28).
 - documents:
     type: list[document_class]
+    description: Supporting document IDs, kinds, literal links and titles (DEFINE-13).
 - datasets:
     type: str
     values:
     - json
+    - xpt
+    description: Optional transport file written for each composed dataset in the document's directory, read from its published artifact, json for Dataset-JSON and xpt for SAS Transport; omission writes only the Define-XML document (JSON-1, XPT-1).
 - context:
     type: str
     default: Submission
     values:
     - Submission
     - Other
+    description: Submission or Other; defaults to Submission (DEFINE-4).
 - xml_lang:
     type: language_tag
     default: en
+    description: Language of generated translated text; defaults to en (DEFINE-21).
 - file_oid:
     type: str
     min_length: 1
+    description: Optional nonempty file-identity text that admits the existing URL-style spellings; generated object and leaf identifiers are validated separately (DEFINE-3).
 - metadata_version:
     type: metadata_version_class
+    description: Optional metadata-version ID, name and description overrides (DEFINE-3).
 - originator:
     type: str
     min_length: 1
+    description: Optional submitting party (DEFINE-12).
 - stylesheet:
     type: relative_href
+    description: Optional relative stylesheet link (DEFINE-23).
 - source_system_version:
     type: str
     min_length: 1
+    description: Optional nonempty XML and JSON source-system version; omission selects the installed package version (DEFINE-12).
 implementation_guide_class:
 - name:
     type: standard_name
@@ -261,7 +274,7 @@ document_class:
 - id:
     type: identifier
     required: true
-    description: See REQ-1065.
+    description: Name references to this document use.
 - kind:
     type: str
     required: true
@@ -269,13 +282,13 @@ document_class:
     - annotated_crf
     - supplemental
     - other
-    description: See REQ-1065.
+    description: Where the document is listed; an other document is listed only where it is referenced.
 - link:
     type: relative_href
     required: true
-    description: See REQ-1065.
+    description: File the document is, relative to the directory holding the generated document.
 - title:
     type: str
     required: true
     min_length: 1
-    description: See REQ-1065.
+    description: Label a reader sees for the document.

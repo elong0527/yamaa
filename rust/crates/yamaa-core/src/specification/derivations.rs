@@ -1,4 +1,4 @@
-//! Shared expression lowering for column, case, concatenation and row declarations.
+//! Shared expression lowering for column, case and row declarations.
 use super::*;
 use crate::{
     bound_expression::BoundPredicate,
@@ -80,11 +80,16 @@ pub(super) fn prepare_value_with_driver(
         )?)),
         "flag" => Operation::Flag(flags::prepare(d, payload, &result_path)?),
         "literal" => Operation::Literal(literal(d, payload, &result_path)?),
-        "function" => Operation::ProjectFunction(
-            *project
-                .and_then(|p| p.nodes.get(&payload))
-                .ok_or(PrepareError::Internal)?,
-        ),
+        "function" => {
+            let project = project.ok_or(PrepareError::Internal)?;
+            Operation::ProjectFunction {
+                call: *project.nodes.get(&payload).ok_or(PrepareError::Internal)?,
+                returns: *project
+                    .returns
+                    .get(&payload)
+                    .ok_or(PrepareError::Internal)?,
+            }
+        }
         "case" => Operation::Case(cases::prepare(
             d,
             payload,
@@ -99,21 +104,13 @@ pub(super) fn prepare_value_with_driver(
         "str_template" => Operation::StrTemplate(templates.get(payload)?),
         "str_extract" => Operation::StrExtract(extraction.get(payload)?),
         "str_replace" => Operation::StrReplace(extraction.replacement(payload)?),
-        "str_contains" => Operation::StrContains(extraction.get(payload)?),
-        "greatest" | "least" | "str_concat" => {
-            Operation::Scalar(std::boxed::Box::new(scalar::prepare(
-                d,
-                payload,
-                op,
-                &result_path,
-                project,
-                intermediates,
-                record,
-                depth + 1,
-                extraction,
-                templates,
-            )?))
-        }
+        "greatest" | "least" => Operation::Scalar(std::boxed::Box::new(scalar::prepare(
+            d,
+            payload,
+            op,
+            &result_path,
+            depth + 1,
+        )?)),
         "mapping" | "cut" => {
             let mut features = Vec::new();
             let declaration =
@@ -153,7 +150,7 @@ pub(super) fn prepare_value_with_driver(
             }
             Operation::StrPad(operation)
         }
-        "date_impute" | "date_precision" | "datetime_impute" | "datetime_precision" | "to_date" => {
+        "impute" | "precision" | "imputation_flag" | "to_date" => {
             let mut features = Vec::new();
             let operation = imputation::prepare(
                 d,
@@ -169,8 +166,7 @@ pub(super) fn prepare_value_with_driver(
             }
             Operation::Imputation(operation)
         }
-        "date_diff" | "study_day" | "to_epoch_day" | "date_shift" | "datetime_diff"
-        | "datetime_shift" | "duration_value" | "duration_text" => {
+        "diff" | "study_day" | "to_epoch_day" | "shift" | "duration_value" => {
             let mut features = Vec::new();
             let operation = temporal::prepare(
                 d,
@@ -215,13 +211,8 @@ pub(super) fn prepare_value_with_driver(
             }
             Operation::FirstAvailable(std::boxed::Box::new(operation))
         }
-        "row_number" | "rank" | "row_value" | "previous_non_missing" | "locf" | "baseline_flag" => {
-            let mut features = Vec::new();
-            let operation =
-                windows::Declaration::prepare(d, payload, op, &result_path, &mut features)?;
-            if !features.is_empty() {
-                return Err(PrepareError::Unsupported(features));
-            }
+        "row_number" | "rank" | "row_value" | "locf" | "baseline_flag" => {
+            let operation = windows::Declaration::prepare(d, payload, op, &result_path)?;
             Operation::Window(std::boxed::Box::new(operation))
         }
         "compute" => {
@@ -232,9 +223,9 @@ pub(super) fn prepare_value_with_driver(
                 }
             }
             let expression = text(d, field(d, payload, "expr")?)?;
-            match compile_numeric(expression, &result_path) {
+            match compile(expression, ExpressionContext::Compute, &result_path) {
                 Ok(compiled) => Operation::Compute(compiled),
-                Err(error @ ParseError::Grammar { .. }) => Operation::InvalidNumeric {
+                Err(error @ CompileError::Invalid { .. }) => Operation::InvalidNumeric {
                     expression: expression.into(),
                     error,
                 },
@@ -267,7 +258,7 @@ pub(super) fn prepare_value_with_driver(
 
 #[allow(clippy::too_many_arguments)]
 fn bind_row_compute(
-    compiled: &CompiledNumeric,
+    compiled: &CompiledExpression,
     path: &str,
     catalog: &Catalog,
     driver: &str,
@@ -349,7 +340,13 @@ fn bind_row_compute(
         findings,
     )?;
     (findings.len() == before)
-        .then(|| BoundNumeric::new(compiled.clone(), bindings).map(Expression::Compute))
+        .then(|| {
+            BoundNumeric::new(
+                static_types::typed(compiled, named, catalog, secondary, intermediates),
+                bindings,
+            )
+            .map(Expression::Compute)
+        })
         .transpose()
         .map_err(BindError::InvalidNumericBinding)
 }
@@ -485,8 +482,12 @@ fn bind_row_case(
                 }
                 if findings.len() == before {
                     Some(
-                        BoundPredicate::new_contextual(plan.clone(), bindings, Vec::new())
-                            .map_err(BindError::InvalidPredicateBinding)?,
+                        BoundPredicate::new_contextual(
+                            static_types::typed(plan, named, catalog, secondary, intermediates),
+                            bindings,
+                            Vec::new(),
+                        )
+                        .map_err(BindError::InvalidPredicateBinding)?,
                     )
                 } else {
                     None
@@ -578,23 +579,6 @@ pub(super) fn bind_row(
             intermediates,
         ),
         Operation::Scalar(operation) => scalar::bind_row(
-            operation,
-            column,
-            catalog,
-            driver,
-            row,
-            phase,
-            available,
-            edges,
-            findings,
-            reported,
-            output,
-            project,
-            named,
-            secondary,
-            intermediates,
-        ),
-        Operation::StrContains(operation) => scalar::bind_row_contains(
             operation,
             column,
             catalog,
@@ -772,7 +756,7 @@ pub(super) fn bind_row(
             secondary,
             intermediates,
         ),
-        Operation::ProjectFunction(call) => bind_row_project(
+        Operation::ProjectFunction { call, .. } => bind_row_project(
             call, catalog, driver, row, phase, available, edges, findings, project,
         ),
         Operation::Case(branches) => bind_row_case(
@@ -855,13 +839,6 @@ pub(super) fn declaration_findings(
                 declaration_findings(&branch.operation, &branch.path, findings)?;
             }
         }
-        Operation::Scalar(operation) => {
-            if let scalar::Declaration::Concat { sources, .. } = operation.as_ref() {
-                for branch in sources {
-                    declaration_findings(&branch.operation, &branch.path, findings)?;
-                }
-            }
-        }
         _ => (),
     }
     Ok(())
@@ -939,25 +916,18 @@ pub(super) fn bind_selection(
     }
     Ok(
         (findings.len() == before).then_some(Expression::FirstAvailable(std::boxed::Box::new(
-            crate::dataset::FirstAvailable::new(operands, selection.missing.clone()),
+            crate::dataset::FirstAvailable::new(path.into(), operands, selection.missing.clone()),
         ))),
     )
 }
 
 pub(super) fn calls(operation: &Operation, result: &mut Vec<usize>) {
     match operation {
-        Operation::ProjectFunction(call) => result.push(*call),
+        Operation::ProjectFunction { call, .. } => result.push(*call),
         Operation::Aggregate(operation) => operation.calls(result),
         Operation::Case(branches) => {
             for branch in branches {
                 calls(&branch.operation, result);
-            }
-        }
-        Operation::Scalar(operation) => {
-            if let scalar::Declaration::Concat { sources, .. } = operation.as_ref() {
-                for branch in sources {
-                    calls(&branch.operation, result);
-                }
             }
         }
         _ => (),
@@ -1027,32 +997,33 @@ fn references_mode(
         }
     }
     if let Some(payload) = d.field(value, "compute") {
-        match crate::numeric_parser::parse_numeric(text(d, field(d, payload, "expr")?)?) {
-            Ok(parsed) => names.extend(parsed.identifiers().map(String::from)),
-            Err(crate::numeric_parser::ParseError::Grammar { .. }) => (),
-            Err(error) => return Err(PrepareError::numeric_parse(error, None)),
+        let expression = text(d, field(d, payload, "expr")?)?;
+        match compile(expression, ExpressionContext::Compute, "") {
+            Ok(compiled) => names.extend(compiled.identifiers().map(String::from)),
+            Err(CompileError::Invalid { .. }) => (),
+            Err(error) => return Err(PrepareError::expression(error, None)),
         }
     }
     if let Some(payload) = d.field(value, "aggregate") {
-        let id = if matches!(d.nodes()[payload], N::Text(_)) {
-            payload
-        } else {
-            field(d, payload, "expr")?
-        };
-        match crate::aggregate_parser::parse_aggregate(text(d, id)?) {
-            Ok(parsed) => {
+        let id = field(d, payload, "expr")?;
+        match compile(text(d, id)?, ExpressionContext::Aggregate, "") {
+            Ok(compiled) => {
                 names.extend(
-                    parsed
+                    compiled
                         .identifiers()
                         .filter(|name| aggregate_relation || !name.contains('.'))
                         .map(String::from),
                 );
                 if aggregate_relation {
-                    names.extend(parsed.star_datasets().map(|dataset| format!("{dataset}.*")));
+                    names.extend(
+                        compiled
+                            .record_relations()
+                            .map(|dataset| format!("{dataset}.*")),
+                    );
                 }
             }
-            Err(crate::aggregate_parser::ParseError::Grammar { .. }) => (),
-            Err(error) => return Err(PrepareError::aggregate_parse(error, None)),
+            Err(CompileError::Invalid { .. }) => (),
+            Err(error) => return Err(PrepareError::expression(error, None)),
         }
         if let Some(key) = d.field(payload, "key") {
             match &d.nodes()[key] {
@@ -1118,16 +1089,12 @@ fn references_mode(
         }
     }
     if let Some(payload) = d.field(value, "flag") {
-        let condition = if matches!(d.nodes()[payload], N::Text(_)) {
-            payload
-        } else {
-            field(d, payload, "condition")?
-        };
+        let condition = field(d, payload, "condition")?;
         predicate_references(d, condition, names)?;
     }
-    for op in ["date_diff", "study_day"] {
+    for op in ["diff", "study_day"] {
         if let Some(payload) = d.field(value, op) {
-            for name in if op == "date_diff" {
+            for name in if op == "diff" {
                 ["start", "end"]
             } else {
                 ["date", "reference"]
@@ -1162,34 +1129,25 @@ fn references_mode(
             }
         }
     }
-    if let Some(payload) = d.field(value, "str_concat") {
-        for &child in sequence(d, field(d, payload, "sources")?)? {
-            references_mode(
-                d,
-                child,
-                project,
-                names,
-                depth + 1,
-                aggregate_relation,
-                window_references,
-            )?;
-        }
-    }
     if !window_references {
         return Ok(());
     }
-    for op in [
-        "row_number",
-        "rank",
-        "row_value",
-        "previous_non_missing",
-        "locf",
-        "baseline_flag",
-    ] {
+    for op in ["row_number", "rank", "row_value", "locf", "baseline_flag"] {
         if let Some(payload) = d.field(value, op) {
-            for field_name in ["source", "date", "reference_date"] {
+            for field_name in ["source", "date", "reference_date", "value"] {
                 if let Some(id) = d.field(payload, field_name) {
                     names.push(text(d, id)?.into());
+                }
+            }
+            if let Some(terms) = d
+                .field(payload, "tie_break")
+                .filter(|&id| !matches!(d.nodes()[id], N::Null))
+            {
+                for &id in sequence(d, terms)? {
+                    names.push(match &d.nodes()[id] {
+                        N::Text(name) => name.clone(),
+                        _ => text(d, field(d, id, "variable")?)?.into(),
+                    });
                 }
             }
             if let Some(window) = d
@@ -1231,10 +1189,10 @@ fn predicate_references(
     id: usize,
     names: &mut Vec<String>,
 ) -> Result<(), PrepareError> {
-    match crate::predicate_parser::parse_predicate(text(d, id)?) {
-        Ok(parsed) => names.extend(parsed.identifiers().map(String::from)),
-        Err(crate::predicate_parser::ParseError::Grammar { .. }) => (),
-        Err(error) => return Err(PrepareError::predicate_parse(error, None)),
+    match compile(text(d, id)?, ExpressionContext::Predicate, "") {
+        Ok(compiled) => names.extend(compiled.identifiers().map(String::from)),
+        Err(CompileError::Invalid { .. }) => (),
+        Err(error) => return Err(PrepareError::expression(error, None)),
     }
     Ok(())
 }

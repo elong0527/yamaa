@@ -45,13 +45,13 @@ columns:
     type: date
     label: Date of Birth Completed to First Day
     derivation:
-      date_impute:
+      impute:
+        type: date
         source: DOBTC
         month: 6
         day: first
         minimum_source_precision: year
-        missing: null
-        invalid: null
+        invalid: {literal: null}
 
   # The same completion, to the last day of the month the date lands in
   # (28 or 29 in a February, by year).
@@ -59,34 +59,34 @@ columns:
     type: date
     label: Date of Birth Completed to Last Day
     derivation:
-      date_impute:
+      impute:
+        type: date
         source: DOBTC
         month: 6
         day: last
         minimum_source_precision: year
-        missing: null
-        invalid: null
+        invalid: {literal: null}
 
-  # Y, M or D: how much of a date the collected text carries.
+  # year, month or day: how much of a date the collected text carries.
   - name: DOB_PREC_TX
     type: str
     label: Date of Birth Precision From Text
     derivation:
-      date_precision:
+      precision:
+        type: date
         source: DOBTC
-        missing: null
-        invalid: null
+        invalid: {literal: null}
 
   # The completed date keeps the precision of the text it came from, so
-  # this reads the same code as DOB_PREC_TX. A date value is never invalid
-  # text, so only the missing case needs an answer.
+  # this reads the same word as DOB_PREC_TX. A date value is never invalid
+  # text, and a missing date gives a missing precision.
   - name: DOB_PREC_DT
     type: str
     label: Date of Birth Precision From Date
     derivation:
-      date_precision:
+      precision:
+        type: date
         source: DOB_FIRST
-        missing: null
 
   - name: DTMDT
     type: date
@@ -106,8 +106,6 @@ columns:
         reference: REFDT
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID]
   - row_count:
       min: 5
       max: 5

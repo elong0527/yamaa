@@ -41,7 +41,7 @@ fn assign(column: usize, expression: Expression) -> Assignment {
 }
 fn predicate(text: &str, path: &str, bindings: Vec<Bound>) -> BoundPredicate {
     BoundPredicate::new(
-        crate::predicate_compiler::compile(text, path).unwrap(),
+        crate::expression::compile(text, crate::expression::Context::Predicate, path).unwrap(),
         bindings,
     )
     .unwrap()
@@ -465,6 +465,7 @@ fn lookup() -> Intermediate {
         range: None,
         columns: None,
         no_match: Some(Value::Missing),
+        require_match: false,
         unique: vec![],
         derivations: None,
         pending_schema: None,
@@ -515,6 +516,7 @@ fn handler_plan() -> DatasetPlan {
                 assign(
                     2,
                     Expression::FirstAvailable(Box::new(FirstAvailable::new(
+                        "columns.ALT.derivation".into(),
                         vec![SelectionSource {
                             path: "columns.ALT.derivation.sources[0]".into(),
                             read: SelectionRead::Expression(Box::new(Assignment {
@@ -530,14 +532,7 @@ fn handler_plan() -> DatasetPlan {
                         Value::Missing,
                     ))),
                 ),
-                assign(
-                    3,
-                    Expression::StrConcat {
-                        operands: vec![assign(3, Expression::Source(1))],
-                        missing: Some(Value::Str("-".into())),
-                        path: "columns.CAT.derivation".into(),
-                    },
-                ),
+                assign(3, upper(3, "columns.CAT.derivation", Expression::Source(1))),
                 assign(
                     4,
                     Expression::Intermediate {
@@ -579,6 +574,7 @@ fn registration_reproduces_the_eager_walk_and_marks_first_firings() {
         [
             ("columns.UP.unconvertible", H::Unconvertible, Eager),
             ("columns.UP.derivation.missing", H::Missing, Eager),
+            ("columns.ALT.derivation.missing", H::Missing, Eager),
             ("columns.CAT.derivation.missing", H::Missing, Eager),
             (
                 "columns.ALT.derivation.sources[0].missing",
@@ -596,7 +592,7 @@ fn registration_reproduces_the_eager_walk_and_marks_first_firings() {
         .iter()
         .map(|entry| (entry.spec_path.as_str(), entry.handler, Eager))
         .collect();
-    assert_eq!(walked, table[..3]);
+    assert_eq!(walked, table[..4]);
     let up = resolved.binding(BindingId(1));
     assert_eq!(up.unconvertible, Some(HandlerSiteId(0)));
     let read = resolved.binding(BindingId(4));
@@ -686,7 +682,7 @@ fn a_diverging_handler_table_is_refused() {
             position: 1,
             expected: Some(("columns.UP.derivation.missing".into(), HandlerKind::Missing)),
             found: Some((
-                "columns.CAT.derivation.missing".into(),
+                "columns.ALT.derivation.missing".into(),
                 HandlerKind::Missing
             )),
         })

@@ -12,14 +12,13 @@ AESTDTC character date:
 - a full date is kept exactly as collected, even before treatment start;
 - a year and month only is completed to the 15th of that month, except
   that when the 15th falls before TRTSDT within the same month ASTDT is
-  TRTSDT, and when the whole month falls before TRTSDT ASTDT is missing;
+  TRTSDT; when the whole month falls before TRTSDT the 15th stands;
 - a year only, non-date text, or a missing value gives no ASTDT.
 
 ASTDTF is "D" when a day was supplied to complete a year and month.
 TRTEMFL is "Y" when ASTDT falls on or after TRTSDT.
 """
 
-import calendar
 import csv
 import os
 import re
@@ -59,9 +58,7 @@ def derive_astdt(aestdtc, trtsdt):
             return candidate, True
         if trtsdt.year == year and trtsdt.month == month:
             return trtsdt, True
-        last_day = date(year, month, calendar.monthrange(year, month)[1])
-        if last_day < trtsdt:
-            return None, False
+        # The whole month falls before TRTSDT, so the 15th stands.
         return candidate, True
     return None, False
 

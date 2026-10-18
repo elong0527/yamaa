@@ -101,6 +101,148 @@ pub struct Resources {
     reads: usize,
 }
 
+/// Whether two resource locations name one file: ordinal case-insensitive on
+/// Windows, where child opens are, and exact elsewhere.
+pub(crate) fn same_location(left: &str, right: &str) -> bool {
+    #[cfg(windows)]
+    {
+        crate::windows_file::equal_name(left, right)
+    }
+    #[cfg(unix)]
+    {
+        left == right
+    }
+}
+
+/// Serialized artifacts a project run has already built, by producer. An
+/// input whose `schema` link names that producer and whose `path` names the
+/// held artifact's location reads those bytes instead of the saved file, still
+/// under the producer's output contract.
+#[derive(Clone, Debug, Default)]
+pub struct HeldArtifacts {
+    artifacts: BTreeMap<String, (String, Arc<[u8]>)>,
+}
+impl HeldArtifacts {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    /// Hold the artifact the producer with canonical identity `producer`
+    /// built for its `output.path` location `location`.
+    pub fn insert(&mut self, producer: String, location: String, bytes: Arc<[u8]>) {
+        self.artifacts.insert(producer, (location, bytes));
+    }
+    /// The held artifact of `producer`, when it was built for `location`.
+    pub fn get(&self, producer: &str, location: &str) -> Option<Arc<[u8]>> {
+        self.artifacts
+            .get(producer)
+            .filter(|(held, _)| same_location(held, location))
+            .map(|(_, bytes)| Arc::clone(bytes))
+    }
+    pub fn is_empty(&self) -> bool {
+        self.artifacts.is_empty()
+    }
+}
+
+/// One input that reads a producing specification's artifact through a
+/// `schema` link, with the location its `path` names.
+#[derive(Clone, Debug)]
+pub(crate) struct LinkedInput {
+    dataset: String,
+    producer: String,
+    location: String,
+}
+
+/// The linked inputs of one prepared document. Locations are lexical: no file
+/// is opened, and an input whose location cannot be formed reads its file.
+pub(crate) fn linked_inputs(
+    resources: &Resources,
+    document: &crate::specification_source::PreparedDocument,
+    links: &[crate::specification_source::LinkedSpecification],
+) -> Vec<LinkedInput> {
+    links
+        .iter()
+        .filter_map(|link| {
+            let origin = document.written_input_origin(&link.dataset, "path")?;
+            let location = resources
+                .location_from(origin.base_source, origin.written)
+                .ok()?;
+            Some(LinkedInput {
+                dataset: link.dataset.clone(),
+                producer: link.identity.clone(),
+                location,
+            })
+        })
+        .collect()
+}
+
+/// A run's study port that serves held producer artifacts to linked inputs
+/// and reads every other input through the run's resources.
+pub(crate) struct HeldPort<'a> {
+    resources: &'a mut Resources,
+    held: Option<Arc<HeldArtifacts>>,
+    inputs: &'a [LinkedInput],
+}
+impl<'a> HeldPort<'a> {
+    pub(crate) fn new(run: &'a mut RunScope, inputs: &'a [LinkedInput]) -> Self {
+        let held = run.held();
+        Self {
+            resources: run.resources_mut(),
+            held,
+            inputs,
+        }
+    }
+    fn held(&self, source: &yamaa_core::specification::SourceDeclaration) -> Option<Arc<[u8]>> {
+        let held = self.held.as_ref()?;
+        self.inputs
+            .iter()
+            .find(|input| input.dataset == source.name)
+            .and_then(|input| held.get(&input.producer, &input.location))
+    }
+}
+impl yamaa_core::specification_run::SpecificationSourcePort for HeldPort<'_> {
+    type Error = Error;
+    fn owned_table(
+        &self,
+        source: &yamaa_core::specification::SourceDeclaration,
+    ) -> Option<Arc<dyn std::any::Any + Send + Sync>> {
+        if self.held(source).is_some() {
+            None
+        } else {
+            self.resources.owned_table(source)
+        }
+    }
+    fn resource_failure(&self, error: &Error) -> Option<yamaa_core::resource::ResourceFailure> {
+        resource_failure(error)
+    }
+    fn inspect(
+        &mut self,
+        source: &yamaa_core::specification::SourceDeclaration,
+    ) -> Result<(), Error> {
+        if self.held(source).is_some() {
+            return Ok(());
+        }
+        Resources::inspect(self.resources, &source.path)
+    }
+    fn capture_reads(&self) -> usize {
+        self.resources.reads
+    }
+    fn capture(
+        &mut self,
+        source: &yamaa_core::specification::SourceDeclaration,
+        origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
+    ) -> Result<Arc<[u8]>, Error> {
+        if let Some(bytes) = self.held(source) {
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Generated);
+            return Ok(bytes);
+        }
+        yamaa_core::specification_run::SpecificationSourcePort::capture(
+            self.resources,
+            source,
+            origin,
+        )
+    }
+}
+
 /// The study half of one run's resource authority. A prepared value keeps
 /// its compile-time [`Resources`] (the metadata snapshots, read during a run
 /// only to verify them); each run captures study inputs, retains host
@@ -114,15 +256,15 @@ pub struct RunScope {
     compiled: RetainedSources,
     /// Artifacts a project run already built, offered to this run's saved
     /// producer links.
-    held: Option<Arc<crate::file_producer_build::HeldArtifacts>>,
+    held: Option<Arc<HeldArtifacts>>,
 }
 impl RunScope {
     /// Offer artifacts the caller already built to this run's saved links.
     /// Links without a held artifact read the saved file their path names.
-    pub fn hold(&mut self, held: Arc<crate::file_producer_build::HeldArtifacts>) {
+    pub fn hold(&mut self, held: Arc<HeldArtifacts>) {
         self.held = Some(held);
     }
-    pub(crate) fn held(&self) -> Option<Arc<crate::file_producer_build::HeldArtifacts>> {
+    pub(crate) fn held(&self) -> Option<Arc<HeldArtifacts>> {
         self.held.clone()
     }
     /// Snapshots created so far in this scope, including those it inherited.
@@ -284,16 +426,6 @@ impl Resources {
             by_identity: BTreeMap::new(),
             reads: 0,
         })
-    }
-    pub(crate) fn owned_table_from(
-        &self,
-        declaring: &str,
-        written: &str,
-    ) -> Option<Arc<dyn std::any::Any + Send + Sync>> {
-        self.host
-            .as_ref()
-            .and_then(|host| host.frame(declaring, written))
-            .map(|table| table as Arc<dyn std::any::Any + Send + Sync>)
     }
     pub fn capture_reads(&self) -> usize {
         self.reads

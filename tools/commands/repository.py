@@ -23,10 +23,8 @@ CHECKS = (
     "tools.validation.validate_repository",
     "tools.validation.check_execution_manifest",
     "tools.validation.check_vocabulary_coverage",
-    "tools.validation.check_rule_metadata",
+    "tools.rules.check",
     "tools.validation.check_documentation",
-    "tools.validation.check_rule_rewrite",
-    "tools.validation.check_rationale_phrases",
     "tools.validation.check_diagnostics",
 )
 

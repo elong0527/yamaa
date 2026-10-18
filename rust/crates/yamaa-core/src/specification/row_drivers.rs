@@ -151,7 +151,8 @@ pub(super) fn unaddressable(
     project: Option<&functions::Prepared>,
     templates: &str_template::Prepared,
 ) -> Result<bool, PrepareError> {
-    /// The imputation bounds name variables the shared reference scan skips.
+    /// The imputation bounds and fallback name variables the shared reference
+    /// scan skips.
     fn bounds(
         d: &Document,
         value: usize,
@@ -166,12 +167,10 @@ pub(super) fn unaddressable(
                 None,
             ));
         }
-        for operation in ["date_impute", "datetime_impute"] {
-            if let Some(payload) = d.field(value, operation) {
-                for bound in ["not_before", "not_after"] {
-                    if let Some(N::Text(name)) = d.field(payload, bound).map(|id| &d.nodes()[id]) {
-                        names.push(name.clone());
-                    }
+        if let Some(payload) = d.field(value, "impute") {
+            for operand in ["not_before", "not_after", "fallback"] {
+                if let Some(N::Text(name)) = d.field(payload, operand).map(|id| &d.nodes()[id]) {
+                    names.push(name.clone());
                 }
             }
         }
@@ -183,11 +182,6 @@ pub(super) fn unaddressable(
                 {
                     bounds(d, child, names, depth + 1)?;
                 }
-            }
-        }
-        if let Some(payload) = d.field(value, "str_concat") {
-            for &child in sequence(d, field(d, payload, "sources")?)? {
-                bounds(d, child, names, depth + 1)?;
             }
         }
         Ok(())
@@ -266,11 +260,6 @@ pub(super) fn admit_reads(
                 {
                     template_names(d, child, templates, names, depth + 1)?;
                 }
-            }
-        }
-        if let Some(payload) = d.field(value, "str_concat") {
-            for &child in sequence(d, field(d, payload, "sources")?)? {
-                template_names(d, child, templates, names, depth + 1)?;
             }
         }
         Ok(())

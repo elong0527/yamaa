@@ -58,9 +58,5 @@ rows:
         mapping:
           source: ODM.ItemOID
           dict: {IT.LB.ALT: ALT, IT.LB.AST: AST}
-          unmapped: null
+          unmapped: {literal: null}
       LBORRES: ODM.Value
-
-verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, LBSEQ]

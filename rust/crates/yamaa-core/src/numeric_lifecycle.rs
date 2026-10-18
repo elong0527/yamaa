@@ -4,8 +4,7 @@
 //! (REQ-0211-0214), not table execution, verification or specification decoding.
 
 use crate::conversion::{convert, ConversionError};
-use crate::evaluation::NumericResolver;
-use crate::numeric_compiler::{CompiledEvaluationError, CompiledNumeric};
+use crate::expression::{CompiledExpression, EvaluationError, Resolver};
 use crate::value::{ColumnType, Value};
 
 /// Handler sites supported by this application slice, not the full language registry.
@@ -18,6 +17,10 @@ pub enum HandlerKind {
     Unconvertible,
     MultipleMatches,
     NoMatch,
+    /// `to_date` read year or year-month text and gave missing.
+    Partial,
+    /// Both imputation bounds lay inside the collected interval and crossed.
+    CrossedBounds,
 }
 
 impl HandlerKind {
@@ -35,6 +38,8 @@ impl HandlerKind {
                     .condition
             }
             Self::NoMatch => "no_match",
+            Self::Partial => "partial",
+            Self::CrossedBounds => "crossed_bounds",
         }
     }
 }
@@ -139,7 +144,7 @@ pub use crate::conversion::LiteralHandler;
 #[derive(Debug, PartialEq, thiserror::Error)]
 pub enum NumericLifecycleError<E> {
     #[error("numeric lifecycle evaluation: {0:?}")]
-    Evaluation(CompiledEvaluationError<E>),
+    Evaluation(EvaluationError<E>),
     #[error("numeric lifecycle conversion: spec_path={spec_path:?}, error={error:?}")]
     Conversion {
         spec_path: String,
@@ -216,7 +221,7 @@ pub(crate) fn recover_conversion(
 /// type does not parse specifications or validate expression-local handler fields.
 #[derive(Clone, Debug, PartialEq)]
 pub struct NumericDerivation {
-    expression: CompiledNumeric,
+    expression: CompiledExpression,
     target: ColumnType,
     column_path: String,
     unconvertible: Option<LiteralHandler>,
@@ -226,7 +231,7 @@ impl NumericDerivation {
     /// Bind result conversion and an optional literal handler without evaluating either.
     /// None means no handler; Some with Value::Missing means an explicit null handler.
     pub fn new(
-        expression: CompiledNumeric,
+        expression: CompiledExpression,
         target: ColumnType,
         column_path: &str,
         unconvertible: Option<LiteralHandler>,
@@ -250,7 +255,7 @@ impl NumericDerivation {
     /// Arithmetic/resolver errors bypass conversion handling. A failed replacement is
     /// fatal without recursion, while the already-fired count remains in the counter.
     /// Reusing this plan repeats resolver effects; it provides no callback rollback.
-    pub fn evaluate<R: NumericResolver>(
+    pub fn evaluate<R: Resolver>(
         &self,
         resolver: &mut R,
         counter: &mut HandlerCounter,
@@ -258,8 +263,8 @@ impl NumericDerivation {
         self.register_handlers(counter);
         let value = Value::from(
             self.expression
-                .evaluate(resolver)
-                .map_err(|error| Box::new(NumericLifecycleError::Evaluation(error)))?,
+                .evaluate_number(resolver)
+                .map_err(|error| Box::new(NumericLifecycleError::Evaluation(*error)))?,
         );
         let original = match convert(&value, self.target) {
             Ok(converted) => return Ok(converted),

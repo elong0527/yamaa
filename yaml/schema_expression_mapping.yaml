@@ -5,39 +5,39 @@ expressions:
         - source:
             type: filtered_source
             required: true
-            description: See REQ-1110.
+            description: String variable used as the dictionary key, or a filtered source carrying it (EXPR-11).
         - dict:
-            type: ["dict[str, literal_value]", project_path]
+            type: ["dict[str, substitute_value]", project_path]
             required: true
-            description: See REQ-1110.
+            description: Source-value to result-value dictionary, written inline or as the path of a YAML file holding it (EXPR-11).
         - case_sensitive:
             type: bool
             default: true
-            description: See REQ-1110.
+            description: Compare exactly when true; fold ASCII letters when false (EXPR-12).
         - missing:
-            type: literal_value
-            description: See REQ-1110.
+            type: substitute_value
+            description: Value returned when the source is missing; without it, a missing source gives missing (EXPR-11).
         - unmapped:
-            type: literal_value
-            description: See REQ-1110.
+            type: substitute_value
+            description: Value returned when the source is present but has no dictionary entry; without it, such a source fails (EXPR-11).
     cut: # See REQ-1118.
 
         - source:
             type: filtered_source
             required: true
-            description: See REQ-1118.
+            description: Numeric variable to classify, or a filtered source carrying it (EXPR-13).
         - breaks:
             type: "list[float]"
             required: true
-            description: See REQ-1118.
+            description: Ascending interval boundaries (EXPR-13).
         - labels:
             type: "list[str]"
             required: true
-            description: See REQ-1118.
+            description: One label per interval; exactly one more than breaks (EXPR-13).
         - right:
             type: bool
             default: false
-            description: See REQ-1118.
+            description: Right-closed and left-open when true; left-closed and right-open when false (EXPR-13).
         - missing:
-            type: literal_value
-            description: See REQ-1118.
+            type: substitute_value
+            description: Value returned when the source is missing; without it, a missing source gives missing (EXPR-13).

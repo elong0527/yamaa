@@ -3,8 +3,8 @@
 use super::*;
 use crate::{
     bound_expression::Binding,
+    expression::{compile, CompileError, CompiledExpression, Context},
     function_signature::InvocationPlan,
-    numeric_compiler::{compile_numeric, CompiledNumeric},
 };
 
 /// Decoded declarations carry coordinates, never authority to execute a plan.
@@ -83,7 +83,6 @@ pub enum WindowDeclarationKind {
     Competition,
     Dense,
     RowValue,
-    PreviousNonMissing,
     Locf,
     BaselineFlag,
 }
@@ -94,7 +93,6 @@ impl From<WindowKind> for WindowDeclarationKind {
             WindowKind::Competition => Self::Competition,
             WindowKind::Dense => Self::Dense,
             WindowKind::RowValue { .. } => Self::RowValue,
-            WindowKind::PreviousNonMissing { .. } => Self::PreviousNonMissing,
             WindowKind::Locf { .. } => Self::Locf,
             WindowKind::BaselineFlag { .. } => Self::BaselineFlag,
         }
@@ -121,7 +119,7 @@ pub fn validate_window_form(
 #[derive(Debug, thiserror::Error)]
 pub enum DatasetCompileError {
     #[error("dataset compiler numeric: {0:?}")]
-    Numeric(crate::numeric_parser::ParseError),
+    Numeric(CompileError),
     #[error("dataset compiler plan: {0:?}")]
     Plan(PlanError),
 }
@@ -191,7 +189,7 @@ pub struct DatasetCompiler {
     templates: Vec<RowTemplate>,
     columns: Vec<Assignment>,
     reserved_function: Option<(usize, InvocationPlan)>,
-    reserved_numeric: Option<CompiledNumeric>,
+    reserved_numeric: Option<CompiledExpression>,
     failed: bool,
 }
 impl DatasetCompiler {
@@ -268,7 +266,7 @@ impl DatasetCompiler {
             self.failed = true;
             return Err(PlanError::InvalidColumns.into());
         }
-        match compile_numeric(text, path) {
+        match compile(text, Context::Compute, path) {
             Ok(compiled) => {
                 self.reserved_numeric = Some(compiled);
                 Ok(())
@@ -350,7 +348,8 @@ impl DatasetCompiler {
                         compiled
                     }
                     Some(_) => return Err(PlanError::InvalidColumns.into()),
-                    None => compile_numeric(&text, path).map_err(DatasetCompileError::Numeric)?,
+                    None => compile(&text, Context::Compute, path)
+                        .map_err(DatasetCompileError::Numeric)?,
                 };
                 Expression::Compute(
                     BoundNumeric::new(compiled, bindings).map_err(|_| PlanError::InvalidColumns)?,

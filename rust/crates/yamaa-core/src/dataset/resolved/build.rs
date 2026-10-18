@@ -8,9 +8,9 @@ use crate::bound_expression::{BoundPredicate, Read as BoundRead};
 use crate::dataset::{
     read_requires_window, window_stages, AggregateRelation, AggregateSource, Assignment,
     BoundAggregate, BoundOdm, Check, CurrentField, CurrentRead, Expression, FirstAvailable,
-    FlagRead, FunctionArgument, FunctionInput, IntermediateKey, IntermediateSource, JoinedRead,
-    MatchRead, MatchValue, OdmScope, RelationPredicate, RowMode, RowTemplate, SelectionRead,
-    SourceSelection, Window, WindowKind,
+    FlagRead, FunctionArgument, FunctionInput, ImputationKind, IntermediateKey, IntermediateSource,
+    JoinAbsence, JoinedRead, MatchRead, MatchValue, OdmScope, RelationPredicate, RowMode,
+    RowTemplate, SelectionRead, SourceSelection, Window, WindowKind,
 };
 use std::collections::{BTreeMap, VecDeque};
 
@@ -94,6 +94,8 @@ impl Sites {
             HandlerKind::Unconvertible => 4,
             HandlerKind::MultipleMatches => 5,
             HandlerKind::NoMatch => 6,
+            HandlerKind::Partial => 7,
+            HandlerKind::CrossedBounds => 8,
         };
         let path: Arc<str> = path.into();
         let next = self.entries.len() as u32;
@@ -562,6 +564,45 @@ impl<'p> Builder<'p> {
         }
     }
 
+    /// An implicit join's `absent` count, registered by the scalar walker
+    /// unless the read fails instead of answering.
+    fn absent(&mut self, cx: &Cx<'_>, node: &mut Node, absence: &JoinAbsence, input: &str) {
+        let answers = !absence.requires_match(cx.plan.requires_match(input));
+        let site = format!("{}.absent", absence.path);
+        if answers && !self.has_site(node, &site) {
+            self.site(
+                cx,
+                node,
+                true,
+                site,
+                HandlerKind::Absent,
+                Some(Walker::Scalar),
+            );
+        }
+    }
+
+    /// A formula operand read through an implicit join counts at its owner's path.
+    fn joined_operands<'r>(
+        &mut self,
+        cx: &Cx<'_>,
+        node: &mut Node,
+        path: &str,
+        reads: impl IntoIterator<Item = &'r BoundRead>,
+    ) {
+        for read in reads {
+            if let BoundRead::Joined(read) = read {
+                self.absent(cx, node, &JoinAbsence::operand(path), &read.name);
+            }
+        }
+    }
+
+    /// Whether the node already fires the site at this path.
+    fn has_site(&self, node: &Node, path: &str) -> bool {
+        node.sites
+            .iter()
+            .any(|entry| &*self.sites.entries[entry.site.index()].0 == path)
+    }
+
     /// Lower one assignment and its nested assignments, children first.
     fn lower(
         &mut self,
@@ -632,9 +673,17 @@ impl<'p> Builder<'p> {
                     node.reads.push(read);
                     self.observed(cx, &mut node, &binding.read, path)?;
                 }
+                self.joined_operands(
+                    cx,
+                    &mut node,
+                    path,
+                    numeric.bindings().iter().map(|b| &b.read),
+                );
             }
             E::Flag(flag) => {
                 node.kind = ExprKind::Flag;
+                // A missing operand is counted whether or not `missing` is declared.
+                self.site(cx, &mut node, true, flag.missing_path(), H::Missing, scalar);
                 for binding in flag.bindings() {
                     let read = match &binding.read {
                         FlagRead::Read(read) => self.bound_read(cx, fields, read, path)?,
@@ -668,12 +717,12 @@ impl<'p> Builder<'p> {
             E::MappingCut { source, operation } => {
                 node.kind = ExprKind::MappingCut;
                 let base = operation.path();
-                let missing = operation.missing().is_some();
                 let unmapped = operation.unmapped().is_some();
+                // A missing source is counted whether or not `missing` is declared.
                 self.site(
                     cx,
                     &mut node,
-                    missing,
+                    true,
                     format!("{base}.missing"),
                     H::Missing,
                     scalar,
@@ -698,11 +747,25 @@ impl<'p> Builder<'p> {
             } => {
                 node.kind = ExprKind::Imputation;
                 let walker = Some(Walker::Imputation);
-                for (name, kind) in [("missing", H::Missing), ("invalid", H::Invalid)] {
-                    let declared = operation.handler(name).is_some();
-                    let site = format!("{}.{name}", operation.path());
-                    self.site(cx, &mut node, declared, site, kind, walker);
-                }
+                let base = operation.path();
+                // A missing source is counted at `fallback` when one is declared.
+                let missing = if operation.fallback().is_some() {
+                    "fallback"
+                } else {
+                    "missing"
+                };
+                let counts = operation.counts_missing_source();
+                let site = format!("{base}.{missing}");
+                self.site(cx, &mut node, counts, site, H::Missing, walker);
+                let declared = operation.handler("invalid").is_some();
+                let site = format!("{base}.invalid");
+                self.site(cx, &mut node, declared, site, H::Invalid, walker);
+                let crossed = operation.counts_crossed_bounds();
+                let site = format!("{base}.not_after");
+                self.site(cx, &mut node, crossed, site, H::CrossedBounds, walker);
+                let partial = matches!(operation.kind(), ImputationKind::ToDate);
+                let site = format!("{base}.partial");
+                self.site(cx, &mut node, partial, site, H::Partial, walker);
                 // Bounds are evaluated only after a partial source needs them.
                 for (index, operand) in operands.iter().enumerate() {
                     values.push((operand, Value, if index == 0 { Always } else { Reached }));
@@ -723,27 +786,6 @@ impl<'p> Builder<'p> {
                 node.kind = ExprKind::Extreme;
                 values.extend(operands.iter().map(|operand| (operand, Value, Always)));
             }
-            E::StrConcat {
-                operands,
-                missing,
-                path: concat,
-            } => {
-                node.kind = ExprKind::StrConcat;
-                let site = format!("{concat}.missing");
-                self.site(cx, &mut node, missing.is_some(), site, H::Missing, scalar);
-                // A recovered missing operand ends the concatenation.
-                for (index, operand) in operands.iter().enumerate() {
-                    let lazy = index > 0 && missing.is_some();
-                    values.push((operand, Value, if lazy { Reached } else { Always }));
-                }
-            }
-            E::StrContains { source, operation } => {
-                node.kind = ExprKind::StrContains;
-                let declared = operation.handler("missing").is_some();
-                let site = format!("{}.missing", operation.path());
-                self.site(cx, &mut node, declared, site, H::Missing, scalar);
-                values.push((source, Value, Always));
-            }
             E::StrTemplate {
                 operands,
                 operation,
@@ -758,27 +800,25 @@ impl<'p> Builder<'p> {
             E::StrExtract { source, operation } => {
                 node.kind = ExprKind::StrExtract;
                 let walker = Some(Walker::StrExtract);
-                for (name, kind) in [("missing", H::Missing), ("no_match", H::NoMatch)] {
-                    let declared = operation.handler(name).is_some();
-                    let site = format!("{}.{name}", operation.path());
-                    self.site(cx, &mut node, declared, site, kind, walker);
-                }
+                let site = format!("{}.missing", operation.path());
+                self.site(cx, &mut node, true, site, H::Missing, walker);
+                let declared = operation.handler("no_match").is_some();
+                let site = format!("{}.no_match", operation.path());
+                self.site(cx, &mut node, declared, site, H::NoMatch, walker);
                 values.push((source, Value, Always));
             }
             E::StrReplace { source, operation } => {
                 node.kind = ExprKind::StrReplace;
-                let declared = operation.missing().is_some();
                 let site = format!("{}.missing", operation.path());
                 let walker = Some(Walker::StrReplace);
-                self.site(cx, &mut node, declared, site, H::Missing, walker);
+                self.site(cx, &mut node, true, site, H::Missing, walker);
                 values.push((source, Value, Always));
             }
             E::StrCase { source, operation } => {
                 node.kind = ExprKind::StrCase;
-                let declared = operation.missing().is_some();
                 let site = format!("{}.missing", operation.path());
                 let walker = Some(Walker::StrCase);
-                self.site(cx, &mut node, declared, site, H::Missing, walker);
+                self.site(cx, &mut node, true, site, H::Missing, walker);
                 values.push((source, Value, Always));
             }
             E::StrPad { source, .. } => {
@@ -802,12 +842,15 @@ impl<'p> Builder<'p> {
             }
             E::FirstAvailable(selection) => {
                 node.kind = ExprKind::FirstAvailable;
+                let site = selection.missing_path();
+                self.site(cx, &mut node, true, site, H::Missing, scalar);
                 self.first_available(cx, &mut node, selection, fields)?;
             }
             E::SourceLookup {
                 lookup,
                 filter,
                 selection,
+                absence,
             } => {
                 let keys = lookup
                     .keys
@@ -826,6 +869,10 @@ impl<'p> Builder<'p> {
                 let site = format!("{path}.multiple_matches");
                 let selected = selection.is_some();
                 self.site(cx, &mut node, selected, site, H::MultipleMatches, scalar);
+                if let Some(absence) = absence {
+                    let input = &cx.plan.secondary()[lookup.source].name;
+                    self.absent(cx, &mut node, absence, input);
+                }
             }
             E::Lookup(lookup) => {
                 let keys = lookup
@@ -861,11 +908,13 @@ impl<'p> Builder<'p> {
                 node.kind = ExprKind::Joined(relation);
                 node.reads
                     .push(Read::Relation(relation, field(read.column)?));
+                self.absent(cx, &mut node, &JoinAbsence::operand(path), &read.name);
             }
             E::JoinedSource {
                 read,
                 filter,
                 selection,
+                absence,
             } => {
                 let relation = self.joined(cx, path, read, filter.as_ref(), selection.as_ref())?;
                 node.kind = ExprKind::JoinedSource(relation);
@@ -874,6 +923,9 @@ impl<'p> Builder<'p> {
                 let site = format!("{path}.multiple_matches");
                 let selected = selection.is_some();
                 self.site(cx, &mut node, selected, site, H::MultipleMatches, scalar);
+                if let Some(absence) = absence {
+                    self.absent(cx, &mut node, absence, &read.name);
+                }
             }
             E::Intermediate { index, column } => {
                 let relation = cx.named(*index)?;
@@ -890,12 +942,14 @@ impl<'p> Builder<'p> {
             E::Function(function) => {
                 node.kind = ExprKind::Function;
                 self.arguments(cx, &mut node, function.arguments(), fields, path)?;
+                self.joined_operands(cx, &mut node, path, argument_reads(function.arguments()));
                 let signature = FunctionSignature::Host(function.signature().clone());
                 call = Some((function.slot(), signature));
             }
             E::ProjectFunction(function) => {
                 node.kind = ExprKind::ProjectFunction;
                 self.arguments(cx, &mut node, function.arguments(), fields, path)?;
+                self.joined_operands(cx, &mut node, path, argument_reads(function.arguments()));
                 let signature = FunctionSignature::Project(function.signature().clone());
                 call = Some((function.slot(), signature));
             }
@@ -1485,16 +1539,21 @@ impl<'p> Builder<'p> {
             WindowKind::RowValue { column, offset } => {
                 (WindowFunction::RowValue { offset }, vec![slot(column)?])
             }
-            WindowKind::PreviousNonMissing { column } => {
-                (WindowFunction::PreviousNonMissing, vec![slot(column)?])
-            }
-            WindowKind::Locf { column } => (WindowFunction::Locf, vec![slot(column)?]),
+            WindowKind::Locf {
+                column,
+                include_current,
+            } => (
+                WindowFunction::Locf { include_current },
+                vec![slot(column)?],
+            ),
             WindowKind::BaselineFlag {
                 date,
                 reference_date,
+                value,
+                inclusive,
             } => (
-                WindowFunction::BaselineFlag,
-                vec![slot(date)?, slot(reference_date)?],
+                WindowFunction::BaselineFlag { inclusive },
+                vec![slot(date)?, slot(reference_date)?, slot(value)?],
             ),
         };
         let mut group_by = Vec::new();
@@ -1718,14 +1777,12 @@ fn deferred_odm(expression: &Expression) -> Option<&[OdmTemplateScope]> {
         },
         E::SourceBinding { source, .. }
         | E::MappingCut { source, .. }
-        | E::StrContains { source, .. }
         | E::StrExtract { source, .. }
         | E::StrReplace { source, .. }
         | E::StrCase { source, .. }
         | E::StrPad { source, .. }
         | E::Round { source, .. } => deferred_odm(&source.expression),
         E::Extreme { operands, .. }
-        | E::StrConcat { operands, .. }
         | E::StrTemplate { operands, .. }
         | E::Imputation { operands, .. }
         | E::Temporal { operands, .. } => operands
@@ -1832,6 +1889,7 @@ fn discriminators(check: &Check) -> Vec<usize> {
         Check::Inventory {
             scope: Some(scope), ..
         } => vec![scope.discriminator],
+        Check::Mandatory(Some(scope)) => vec![scope.discriminator],
         _ => Vec::new(),
     }
 }
@@ -1839,6 +1897,7 @@ fn discriminators(check: &Check) -> Vec<usize> {
 fn check_family(check: &Check) -> CheckFamily {
     match check {
         Check::NotMissing => CheckFamily::NotMissing,
+        Check::Mandatory(_) => CheckFamily::Mandatory,
         Check::AllowedValues(_) => CheckFamily::AllowedValues,
         Check::Codelist { .. } => CheckFamily::Codelist,
         Check::ValueCodelists { .. } => CheckFamily::ValueCodelists,
@@ -1858,4 +1917,14 @@ fn check_family(check: &Check) -> CheckFamily {
         Check::WideRowCount { .. } => CheckFamily::WideRowCount,
         Check::ScopedRowCount(_) => CheckFamily::ScopedRowCount,
     }
+}
+
+/// The bound reads of a function's arguments, in argument order.
+fn argument_reads(arguments: &[FunctionArgument]) -> impl Iterator<Item = &BoundRead> {
+    arguments
+        .iter()
+        .filter_map(|argument| match &argument.input {
+            FunctionInput::Read(read) => Some(read),
+            _ => None,
+        })
 }

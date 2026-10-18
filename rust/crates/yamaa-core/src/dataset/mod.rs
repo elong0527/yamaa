@@ -54,10 +54,10 @@ pub use joined::JoinedRead;
 mod rounding;
 pub use rounding::{InvalidDigits, Rounding};
 mod imputation;
-pub(crate) use imputation::date_policy_findings;
+pub(crate) use imputation::completion_policy_findings;
 pub use imputation::{
-    date_policy, DatePolicyError, DayDeclaration, DayRule, Imputation, ImputationKind,
-    ImputationStep, PartialDate, TimeRule,
+    completion_policy, Completion, DatePolicyError, DayDeclaration, DayRule, FlagPart, Imputation,
+    ImputationKind, ImputationStep, Pending, TemporalType, TimeRule,
 };
 mod duration;
 mod temporal;
@@ -94,15 +94,6 @@ pub enum Expression {
     Extreme {
         operands: Vec<Assignment>,
         largest: bool,
-    },
-    StrConcat {
-        operands: Vec<Assignment>,
-        missing: Option<Value>,
-        path: String,
-    },
-    StrContains {
-        source: std::boxed::Box<Assignment>,
-        operation: StringExtract,
     },
     StrTemplate {
         operands: Vec<Assignment>,
@@ -143,12 +134,17 @@ pub enum Expression {
         lookup: Lookup,
         filter: Option<BoundPredicate>,
         selection: Option<SourceSelection>,
+        /// The read's answer for a row without a record: a source binding's,
+        /// or an operand's.
+        absence: Option<JoinAbsence>,
     },
     /// A qualified source keeps its filter and stable choice on its declared port.
     JoinedSource {
         read: std::boxed::Box<JoinedRead>,
         filter: Option<BoundPredicate>,
         selection: Option<SourceSelection>,
+        /// The source binding's answer for a row without a record.
+        absence: Option<JoinAbsence>,
     },
     /// One condition selects a raw true/false/UNKNOWN literal.
     Flag(Flag),
@@ -228,6 +224,36 @@ pub enum Keep {
 pub struct SourceSelection {
     pub order_by: Vec<OrderTerm>,
     pub keep: Keep,
+}
+
+/// How a read through an implicit join answers a row whose match finds no
+/// record, or whose match value is missing (LOOKUP-24): a `source` binding
+/// with its declared `absent` value and `require_match`, and an operand bound
+/// to the join with neither. A formula's reads carry none; their owner gives
+/// the read's site when it reads.
+#[derive(Clone, Debug, PartialEq)]
+pub struct JoinAbsence {
+    /// The read's path, owning the `absent` count and failure.
+    pub path: String,
+    /// The declared `absent` literal; `None` gives missing by default.
+    pub absent: Option<Value>,
+    /// `require_match: true` fails the row as `unmatched_key` instead.
+    pub require_match: bool,
+}
+impl JoinAbsence {
+    /// An operand's answer: missing by default, counted at its path.
+    pub fn operand(path: &str) -> Self {
+        Self {
+            path: path.into(),
+            absent: None,
+            require_match: false,
+        }
+    }
+    /// Whether the read fails instead of answering, given whether its input
+    /// declares `require_match: true`: a declared `absent` always answers.
+    pub fn requires_match(&self, input_requires_match: bool) -> bool {
+        self.absent.is_none() && (self.require_match || input_requires_match)
+    }
 }
 
 /// One named secondary relation with a stable schema and source-list position.
@@ -313,6 +339,9 @@ pub struct RowTemplate {
 pub enum Check {
     /// Presence of the owning completed column, before later derivations.
     NotMissing,
+    /// Presence required by the column's resolved `mandatory`. Without a scope
+    /// every row is checked; a scope selects rows by their completed discriminator.
+    Mandatory(Option<CodeScope>),
     /// Already converted, present permitted values for the owning column.
     AllowedValues(Vec<Value>),
     /// Fixed environment terminology at the owning column's checkpoint.
@@ -348,7 +377,7 @@ pub enum Check {
     /// An exact authored maximum that is wider than the machine count.
     WideMaxLength(RowCountBound),
     /// Search the portable pattern as written over each present string.
-    Matches(crate::regex::Pattern),
+    Matches(crate::portable_regex::Pattern),
     /// A core-owned declaration finding deferred until dataset verification.
     InvalidDiagnostic(crate::diagnostic::Diagnostic),
     /// A compiler finding evaluated in declaration order after output keys.
@@ -377,6 +406,22 @@ pub enum Check {
     },
     /// Count filtered rows in each constructed-output group.
     ScopedRowCount(RowCount),
+}
+
+/// Rows selected by their completed discriminator value: the listed codes when
+/// `include`, and every other row, a missing discriminator included, otherwise.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CodeScope {
+    pub discriminator: usize,
+    pub codes: Vec<String>,
+    pub include: bool,
+}
+impl CodeScope {
+    pub fn selects(&self, row: &[Value]) -> bool {
+        let listed =
+            matches!(&row[self.discriminator], Value::Str(code) if self.codes.contains(code));
+        listed == self.include
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -521,6 +566,8 @@ pub struct DatasetPlan {
     conversion_handlers: Vec<ConversionHandler>,
     conversion_sites: BTreeMap<String, usize>,
     output_order: Vec<OrderTerm>,
+    /// Inputs whose every implicit join must find a record (LOOKUP-24).
+    required_matches: std::collections::BTreeSet<String>,
 }
 
 /// Validate nonempty, unique, bound column lists without reading table cells.
@@ -850,11 +897,10 @@ fn key_expression(expression: &Expression) -> bool {
                 | SelectionRead::Collect { .. } => true,
             })
         }
-        Expression::Extreme { operands, .. } | Expression::StrConcat { operands, .. } => operands
+        Expression::Extreme { operands, .. } => operands
             .iter()
             .all(|source| key_expression(&source.expression)),
-        Expression::StrContains { source, .. }
-        | Expression::StrCase { source, .. }
+        Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }
         | Expression::StrExtract { source, .. }
         | Expression::StrReplace { source, .. }
@@ -992,11 +1038,10 @@ fn current_record_read(
                 SelectionRead::Column(_) | SelectionRead::Collect { .. } => false,
             })
         }
-        Expression::Extreme { operands, .. } | Expression::StrConcat { operands, .. } => operands
+        Expression::Extreme { operands, .. } => operands
             .iter()
             .any(|source| current_record_read(&source.expression, intermediates, scope)),
-        Expression::StrContains { source, .. }
-        | Expression::StrCase { source, .. }
+        Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }
         | Expression::StrExtract { source, .. }
         | Expression::StrReplace { source, .. }
@@ -1418,6 +1463,7 @@ impl DatasetPlan {
             conversion_handlers: Vec::new(),
             conversion_sites: BTreeMap::new(),
             output_order: Vec::new(),
+            required_matches: Default::default(),
         })
     }
 }
@@ -1439,6 +1485,17 @@ impl DatasetPlan {
     /// Presentation occurs only after all keys and verifications succeed.
     pub fn output_order(&self) -> &[OrderTerm] {
         &self.output_order
+    }
+    /// Name the inputs declaring `require_match: true`: a read through an
+    /// implicit join to one of them that finds no record fails, unless the
+    /// read declares its own `absent` answer (LOOKUP-24).
+    pub fn with_required_matches(mut self, inputs: impl IntoIterator<Item = String>) -> Self {
+        self.required_matches = inputs.into_iter().collect();
+        self
+    }
+    /// Whether every implicit join through this input must find a record.
+    pub fn requires_match(&self, input: &str) -> bool {
+        self.required_matches.contains(input)
     }
     /// Severity belongs to admitted check declarations, never host issue rows.
     pub fn with_warning_verifications(mut self, paths: Vec<String>) -> Result<Self, PlanError> {
@@ -1497,6 +1554,7 @@ impl DatasetPlan {
                 if !matches!(
                     verification.check,
                     Check::NotMissing
+                        | Check::Mandatory(_)
                         | Check::AllowedValues(_)
                         | Check::Codelist { .. }
                         | Check::ValueCodelists { .. }
@@ -1531,6 +1589,22 @@ impl DatasetPlan {
                             .iter()
                             .enumerate()
                             .any(|(index, code)| codes[..index].contains(code))
+                    {
+                        return Err(PlanError::InvalidColumns);
+                    }
+                }
+                if let Check::Mandatory(Some(scope)) = &verification.check {
+                    if self
+                        .output
+                        .columns()
+                        .get(scope.discriminator)
+                        .is_none_or(|column| column.kind != crate::value::ColumnType::Str)
+                        || scope.codes.is_empty()
+                        || scope
+                            .codes
+                            .iter()
+                            .enumerate()
+                            .any(|(index, code)| scope.codes[..index].contains(code))
                     {
                         return Err(PlanError::InvalidColumns);
                     }
@@ -1708,7 +1782,7 @@ fn validate_operand_assignment(
             operands,
             operation,
         } => {
-            if operands.len() != 1 + operation.bounds().count() {
+            if operands.len() != operation.operands().count() {
                 return Err(PlanError::InvalidColumns);
             }
             for operand in operands {
@@ -1747,9 +1821,6 @@ fn validate_operand_assignment(
         }
         | Expression::StrReplace {
             source: operand, ..
-        }
-        | Expression::StrContains {
-            source: operand, ..
         } => {
             if operand.column != assignment.column {
                 return Err(PlanError::InvalidColumns);
@@ -1771,7 +1842,7 @@ fn validate_operand_assignment(
                 available[assignment.column] = false;
             }
         }
-        Expression::Extreme { operands, .. } | Expression::StrConcat { operands, .. } => {
+        Expression::Extreme { operands, .. } => {
             for operand in operands {
                 if operand.column != assignment.column {
                     return Err(PlanError::InvalidColumns);
@@ -2011,8 +2082,15 @@ fn validate_direct_assignment(
             read,
             filter,
             selection,
+            absence,
         } => {
             read.validate(source, secondary, output, available, mode)?;
+            if absence
+                .as_ref()
+                .is_some_and(|absence| absence.path.is_empty())
+            {
+                return Err(PlanError::EmptyPath);
+            }
             let width = read.schema.columns().len();
             if let Some(filter) = filter {
                 filter
@@ -2084,11 +2162,18 @@ fn validate_direct_assignment(
             lookup: bound,
             filter,
             selection,
+            absence,
         } => {
             // Implicit source joins use completed output keys in every row
             // mode. Their ownership and availability are admitted below; they
             // do not borrow a raw record from the enclosing driver.
             lookup::validate_source(bound, secondary, available, output)?;
+            if absence
+                .as_ref()
+                .is_some_and(|absence| absence.path.is_empty())
+            {
+                return Err(PlanError::EmptyPath);
+            }
             let width = secondary[bound.source].schema.columns().len();
             if let Some(filter) = filter {
                 filter
@@ -2227,6 +2312,7 @@ fn validate_plan_verifications(
         }
         match &verification.check {
             Check::NotMissing
+            | Check::Mandatory(_)
             | Check::AllowedValues(_)
             | Check::Codelist { .. }
             | Check::ValueCodelists { .. }

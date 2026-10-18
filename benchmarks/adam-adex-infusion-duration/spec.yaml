@@ -58,7 +58,7 @@ columns:
     derivation:
       value:
         source: EXSTDTC
-      unconvertible: null
+      unconvertible: {literal: null}
 
   - name: AENDTM
     type: datetime
@@ -66,7 +66,7 @@ columns:
     derivation:
       value:
         source: EXENDTC
-      unconvertible: null
+      unconvertible: {literal: null}
 
   # Elapsed minutes from start to end, seconds kept as a fraction of a
   # minute: nothing is added or rounded. Empty when either end has no time.
@@ -74,7 +74,8 @@ columns:
     type: float
     label: Duration from Start and End (min)
     derivation:
-      datetime_diff:
+      diff:
+        type: datetime
         start: ASTDTM
         end: AENDTM
         unit: minute
@@ -89,7 +90,7 @@ columns:
       duration_value:
         source: EXDUR
         unit: minute
-        invalid: null
+        invalid: {literal: null}
 
   # A readable collected duration wins, even when it disagrees with the
   # start and end; CALCDUR keeps the computed value beside it.

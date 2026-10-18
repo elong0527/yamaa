@@ -67,9 +67,9 @@ see the [contributor guide](../../CONTRIBUTING.md).
 - The [repository README](../../README.md#example) shows a complete
   specification, and the [benchmarks](https://elong0527.github.io/yamaa/benchmark/)
   provide many more.
-- Language contracts: [project files](../../rules/specification/project.md),
-  [resource paths](../../rules/storage/resources.md),
-  [SAS sources](../../rules/storage/sas.md) and
-  [submission documents](../../rules/README.md#submission).
+- Language contracts: [project files](../../rules/profiles/project.md),
+  [resource paths](../../rules/reference/files.md),
+  [SAS sources](../../rules/reference/sas.md) and
+  [submission documents](../../rules/README.md#rule-files).
 - [Release guidance](../../docs/release.md): supported platforms,
   [resource limits](../../docs/release.md#resource-limits) and migration.

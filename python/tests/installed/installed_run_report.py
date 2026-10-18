@@ -112,11 +112,13 @@ class RunReport(unittest.TestCase):
                 self.assertEqual(view.schema, types)
                 self.assertTrue(view.equals(golden))
             # Each public view is a fresh host copy of privately owned bytes.
+            # The report has a row for the run, its input, its rows, two
+            # columns and three checks.
             changed = run.report.replace_column(
-                0, pl.Series("ARTIFACT", ["changed"] * 9)
+                0, pl.Series("ARTIFACT", ["changed"] * 8)
             )
-            self.assertEqual(changed["ARTIFACT"].to_list(), ["changed"] * 9)
-            self.assertEqual(run.report["ARTIFACT"].to_list(), [OUTPUT] * 9)
+            self.assertEqual(changed["ARTIFACT"].to_list(), ["changed"] * 8)
+            self.assertEqual(run.report["ARTIFACT"].to_list(), [OUTPUT] * 8)
             for name in NAMES:
                 self.assertFalse((case / name).exists())
             entry.unlink()
@@ -134,7 +136,7 @@ class RunReport(unittest.TestCase):
             held = run.report
             del run
             gc.collect()
-            self.assertEqual(held.height, 9)
+            self.assertEqual(held.height, 8)
             checks = held.filter(pl.col("KIND") == "check")
             self.assertEqual(
                 checks["TOTAL"].to_list(),

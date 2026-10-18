@@ -108,15 +108,11 @@ def benchmark_has_spec(benchmark):
 
 
 def linked_specs(spec):
-    """Return the files a spec names as parents or as input producers."""
+    """Return the files a spec names as its parent or as input producers."""
     if not isinstance(spec, dict):
         return []
-    parents = spec.get("parents", [])
-    if isinstance(parents, str):
-        parents = [parents]
-    if not isinstance(parents, list):
-        parents = []
-    linked = [parent for parent in parents if isinstance(parent, str) and parent]
+    parent = spec.get("parent")
+    linked = [parent] if isinstance(parent, str) and parent else []
     inputs = spec.get("input", {})
     if isinstance(inputs, dict):
         linked.extend(
@@ -130,14 +126,20 @@ def linked_specs(spec):
 
 
 def sibling_producers(benchmark, spec):
-    """Return the spec files beside the entry that it reads through `schema`."""
+    """Return the producers the entry reads through `schema` that the benchmark
+    builds itself: spec files beside the entry or other declared entries."""
     inputs = spec.get("input", {}) if isinstance(spec, dict) else {}
+    built = set(benchmark_spec_files(benchmark))
+    built.update(
+        benchmark / call["specification"]
+        for call in benchmark_entries(benchmark)["python"]
+    )
     producers = []
     for source in inputs.values() if isinstance(inputs, dict) else ():
         if not isinstance(source, dict) or not isinstance(source.get("schema"), str):
             continue
         candidate = benchmark / source["schema"]
-        if candidate in benchmark_spec_files(benchmark):
+        if candidate in built:
             producers.append(candidate)
     return producers
 
@@ -329,6 +331,9 @@ def render_files(paths, group, benchmark, derived, labels):
                 count = "raw CSV"
         if table is None:
             try:
+                # A SAS transport file can decode as ASCII; it is still binary.
+                if path.suffix.lower() == ".xpt":
+                    raise UnicodeError
                 table = f'<pre class="plain-file"><code>{escape(path.read_text(encoding="utf-8"))}</code></pre>'
             except UnicodeError:
                 table = '<p class="no-rows">Binary fixture; inspect it in the benchmark source.</p>'
@@ -572,7 +577,11 @@ def render_spec_pane(filename, text, slug, single, edit_url=None):
 
 
 def benchmark_code(benchmark):
-    """Render public calls from the same ordered metadata as conformance."""
+    """Render public calls from the same ordered metadata as conformance.
+
+    Every call before the last saves its artifact, so a later entry reads it
+    at the path its `schema` link types; the last call shows its output.
+    """
     if benchmark.name.startswith("negative-"):
         return []
     entries = benchmark_entries(benchmark)
@@ -582,7 +591,7 @@ def benchmark_code(benchmark):
         ("python", "Python", "import yamaa", "yamaa.spec", "yamaa.project", "."),
     ):
         calls = []
-        for entry in entries[host]:
+        for index, entry in enumerate(entries[host], 1):
             if entry["environment"] is None:
                 opened = f"{spec}({json.dumps(entry['specification'])})"
             else:
@@ -592,7 +601,8 @@ def benchmark_code(benchmark):
                     f"{project}({json.dumps(entry['environment'])})"
                     f"{member}spec({json.dumps(name)})"
                 )
-            calls.append(f"{opened}{member}run(){member}output")
+            final = "output" if index == len(entries[host]) else "save()"
+            calls.append(f"{opened}{member}run(){member}{final}")
         result.append((title, opening + "\n\n" + "\n".join(calls) + "\n"))
     return result
 
@@ -674,7 +684,31 @@ def render_material_pane(key, title, provenance, picker_label, documents):
     )
 
 
-def render_materials(benchmark, spec, define, code_snippets, edit_base):
+def project_codelists(benchmark):
+    """The codelists a benchmark's root project file declares, or None.
+
+    A codelist source is inline or a path relative to the project file.
+    """
+    candidate = benchmark / "project.yaml"
+    if not candidate.is_file():
+        return None
+    project = yaml.safe_load(candidate.read_text(encoding="utf-8"))
+    sources = project.get("codelists") if isinstance(project, dict) else None
+    codelists = []
+    for source in sources if isinstance(sources, list) else []:
+        if isinstance(source, str):
+            path = candidate.parent / source
+            source = (
+                yaml.safe_load(path.read_text(encoding="utf-8"))
+                if path.is_file()
+                else None
+            )
+        if isinstance(source, dict) and isinstance(source.get("codelists"), list):
+            codelists.extend(c for c in source["codelists"] if isinstance(c, dict))
+    return {"codelists": codelists} if codelists else None
+
+
+def render_materials(benchmark, spec, document, code_snippets, edit_base):
     """Tabs and panes for the assessment materials shown beside Comments.
 
     None of them is under review: the mapping spec is generated from the YAML,
@@ -683,7 +717,7 @@ def render_materials(benchmark, spec, define, code_snippets, edit_base):
     benchmark lacks has no tab.
     """
     materials = []
-    sheets = mapping_doc.render_mapping_sheets(spec, define)
+    sheets = mapping_doc.render_mapping_sheets(spec, document)
     if sheets:
         materials.append(
             (
@@ -1042,14 +1076,8 @@ def render_benchmark(benchmark, previous=None, next=None):
         spec_code = "".join(panes)
         spec_file_header = ""
     code_snippets = benchmark_code(benchmark)
-    define_path = benchmark / "define.yaml"
-    define = (
-        yaml.safe_load(define_path.read_text(encoding="utf-8"))
-        if define_path.is_file()
-        else None
-    )
     material_tabs, material_panes = render_materials(
-        benchmark, spec, define, code_snippets, edit_base
+        benchmark, spec, project_codelists(benchmark), code_snippets, edit_base
     )
     template = Template((HERE / "dashboard.html").read_text(encoding="utf-8"))
     result = template.substitute(

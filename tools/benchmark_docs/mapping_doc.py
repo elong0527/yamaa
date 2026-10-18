@@ -1,14 +1,14 @@
 """Render the "Mapping spec" pane of a benchmark dashboard.
 
-The pane is generated from the benchmark's spec.yaml and, when present,
-define.yaml as a familiar Excel specification: one row per output column. The
-header layout follows the sponsor's SDTM and ADaM variable sheets, so a
-reviewer reads the derived spec in the same shape they author it. Rendering is
-deterministic: unchanged inputs produce identical HTML.
+The pane is generated from the benchmark's spec.yaml and, when present, the
+codelists of its study environment, as a familiar Excel specification: one row
+per output column. The header layout follows the sponsor's SDTM and ADaM
+variable sheets, so a reviewer reads the derived spec in the same shape they
+author it. Rendering is deterministic: unchanged inputs produce identical HTML.
 
 Values come from each column's `submission:` block when present -- `core`,
 `length`, `codelist`, `data_type`, `origin.type`, `method`, `comment` -- and from
-the study document's codelists. The derivation supplies a plain-language
+the study environment's codelists. The derivation supplies a plain-language
 conversion rule and a Define-XML 2.1 origin classification (Assigned,
 Collected, Derived, Not Available, Other, Predecessor, Protocol).
 
@@ -71,6 +71,18 @@ class SpecContext:
             if isinstance(template, dict)
             for name in (template.get("derivations") or {})
         }
+        # Inputs whose every implicit join must find a record (LOOKUP-24);
+        # the base is read as the row's own record, never joined.
+        inputs = spec.get("input")
+        self.required_inputs = {
+            str(name)
+            for name, declaration in (
+                inputs.items() if isinstance(inputs, dict) else ()
+            )
+            if isinstance(declaration, dict)
+            and declaration.get("require_match") is True
+            and name != spec.get("base")
+        }
 
     def lookup(self, name):
         return self.lookups.get(name)
@@ -84,8 +96,21 @@ def context(ctx):
 
 
 def literal_text(value):
-    """A declared literal as a reviewer reads it; a null handler is a blank cell."""
+    """A declared literal as a reviewer reads it; the missing value is a blank cell.
+
+    `{literal: null}` is the one spelling of a missing substitute (COLUMN-10).
+    """
+    if isinstance(value, dict) and set(value) == {"literal"}:
+        value = value["literal"]
     return "blank" if value is None else '"' + str(value) + '"'
+
+
+def declared(node, field):
+    """Whether a handler or substitute field is declared.
+
+    A YAML null leaves the field absent (LAYER-9), exactly as an omitted field.
+    """
+    return isinstance(node, dict) and node.get(field) is not None
 
 
 def join_and(parts):
@@ -176,8 +201,6 @@ def match_clauses(node, ctx=None, depth=0):
         )
     elif isinstance(key, list):
         clauses.append("matching on " + join_and([str(k) for k in key]))
-    elif isinstance(key, str):
-        clauses.append("matching on " + key)
     else:
         # An omitted key matches on the output keys the donor dataset also
         # carries (REQ-0150), so the reviewer is told a join still happens.
@@ -224,19 +247,22 @@ def no_match_phrase(lookup, depth=0):
     """What an unmatched row yields, as a trailing clause.
 
     A sponsor's variable sheet is written in sentences, so this is worded as
-    one rather than bracketed like a code comment. An absent `no_match` makes
-    an unmatched row fatal (REQ-0124), which is the reviewable fact -- not an
-    omission to render as a blank cell. A lookup reached through another
-    lookup answers in the shorter form, so its clause cannot be mistaken for
-    the outer lookup's own answer at the end of the sentence.
+    one rather than bracketed like a code comment. `require_match: true` makes
+    an unmatched row fatal (LOOKUP-13), which is the reviewable fact; without
+    it the declared `no_match` answers, or a blank when none is declared. A
+    lookup reached through another lookup answers in the shorter form, so its
+    clause cannot be mistaken for the outer lookup's own answer at the end of
+    the sentence.
     """
-    if "no_match" not in lookup:
+    if isinstance(lookup, dict) and lookup.get("require_match") is True:
         return (
             ", an error when unmatched"
             if depth
             else ", and a row with no match is an error"
         )
-    answer = literal_text(lookup["no_match"])
+    answer = (
+        literal_text(lookup["no_match"]) if declared(lookup, "no_match") else "blank"
+    )
     if depth:
         return ", " + answer + " when unmatched"
     return ", and no match yields " + answer
@@ -289,6 +315,15 @@ def describe_variable(variable, ctx=None, depth=0):
     )
 
 
+def variable_name(variable, ctx=None):
+    """A variable named again in the same rule: a lookup reference keeps only
+    its column, its donor record having been spelt out at the first mention."""
+    head, tail = split_reference(variable)
+    if head and context(ctx).lookup(head) is not None:
+        return tail
+    return str(variable)
+
+
 def value_phrase(derivation, ctx=None, depth=0):
     """A derivation as a noun phrase, for reuse inside a larger sentence.
 
@@ -335,12 +370,18 @@ def describe_expression_text(text, ctx=None, depth=0):
     return rewritten + ", with " + join_and(origins)
 
 
+REQUIRED_RECORD = "; a row with no matching record is an error"
+
+
 def describe_reference(variable, ctx=None, depth=0):
     """A column that is one value copied in, from this row or another dataset."""
     head, tail = split_reference(variable)
     lookup = context(ctx).lookup(head) if head else None
     if lookup is None:
-        return "Copy value from " + str(variable) + "."
+        required = head in context(ctx).required_inputs
+        return sentence(
+            "Copy value from " + str(variable) + (REQUIRED_RECORD if required else "")
+        )
     return sentence(
         "Take "
         + tail
@@ -375,7 +416,7 @@ def with_window(text, node, ctx=None, depth=0):
 
 def handler_phrase(node, field, label):
     """'; missing input -> "X"' for one declared handler, or nothing."""
-    if field not in node:
+    if not declared(node, field):
         return ""
     return "; " + label + " " + ARROW + " " + literal_text(node[field])
 
@@ -424,7 +465,15 @@ def describe_source(src, ctx=None, depth=0):
     text = "Copy value from " + str(variable)
     if selection:
         text += " " + ", ".join(selection)
-    return sentence(text + handler_phrase(src, "absent", "an absent source"))
+    # A declared `absent` answers before any required match (LOOKUP-24).
+    required = src.get("require_match") is True or (
+        not declared(src, "absent") and head in context(ctx).required_inputs
+    )
+    return sentence(
+        text
+        + handler_phrase(src, "absent", "an absent source")
+        + (REQUIRED_RECORD if required else "")
+    )
 
 
 def describe_mapping(mapping, ctx=None, depth=0):
@@ -440,9 +489,11 @@ def describe_mapping(mapping, ctx=None, depth=0):
         # A dictionary kept in a project file is named rather than inlined.
         rule = " using the dictionary in " + dictionary
     else:
+        # A null entry is absent (LAYER-9); `{literal: null}` recodes to missing.
         rule = ": " + ", ".join(
-            '"' + str(k) + '" ' + ARROW + ' "' + str(v) + '"'
+            '"' + str(k) + '" ' + ARROW + " " + literal_text(v)
             for k, v in dictionary.items()
+            if v is not None
         )
     absent = describe_mapping_handler(mapping, "missing")
     unlisted = describe_mapping_handler(mapping, "unmapped")
@@ -461,9 +512,11 @@ def describe_mapping_handler(mapping, handler):
     Each event has its own handler, and an omitted handler makes the event
     fatal (REQ-0344).
     """
-    if handler not in mapping:
+    if not declared(mapping, handler):
         return "are errors"
     value = mapping[handler]
+    if isinstance(value, dict) and set(value) == {"literal"}:
+        value = value["literal"]
     return "stay missing" if value is None else ARROW + ' "' + str(value) + '"'
 
 
@@ -509,14 +562,14 @@ def describe_flag(node, ctx=None, depth=0):
             + "; blank otherwise."
         )
     condition = describe_expression_text(node.get("condition"), ctx, depth)
-    true_value = literal_text(node.get("true_value", "Y"))
+    # A null value leaves the field absent, so `true_value` keeps its default.
+    true_value = literal_text(
+        node["true_value"] if declared(node, "true_value") else "Y"
+    )
     false_value = literal_text(node.get("false_value"))
     text = true_value + " when " + condition + "; " + false_value + " otherwise"
     # An unknown condition never falls through to false_value (REQ-1257).
-    if "missing" in node:
-        text += "; " + literal_text(node["missing"]) + " when the condition is unknown"
-    else:
-        text += "; blank when the condition is unknown"
+    text += "; " + literal_text(node.get("missing")) + " when the condition is unknown"
     return sentence(text)
 
 
@@ -546,7 +599,8 @@ def describe_extreme(node, word, ctx=None, depth=0):
 def describe_aggregate(node, ctx=None, depth=0):
     """A summary over donor records, with the records it summarises named."""
     if not isinstance(node, dict):
-        return "Aggregate " + describe_expression_text(node, ctx, depth) + "."
+        # A lone formula is the shorthand for {expr: ...}.
+        node = {"expr": node}
     text = "Aggregate " + describe_expression_text(node.get("expr"), ctx, depth)
     clauses = []
     groups = node.get("group_by")
@@ -582,8 +636,7 @@ def describe_odm(node):
     ):
         value = node.get(field)
         if value:
-            names = value if isinstance(value, list) else [value]
-            text += " " + label + join_and([str(n) for n in names])
+            text += " " + label + join_and([str(n) for n in value])
     if node.get("filter"):
         text += " where " + str(node["filter"])
     return sentence(text + "; no identified record yields blank")
@@ -629,40 +682,76 @@ def describe_cut(node, ctx=None, depth=0):
     return sentence(text + handler_phrase(node, "missing", "a missing source"))
 
 
-def describe_date_diff(node, ctx=None, depth=0):
+def is_datetime(node):
+    """The temporal verbs read their declared `type`, never the data."""
+    return node.get("type") == "datetime"
+
+
+def describe_diff(node, ctx=None, depth=0):
+    """Whole calendar units between two dates, or the elapsed time between
+    two datetimes."""
     unit = str(node.get("unit", ""))
+    start = describe_variable(node.get("start"), ctx, depth)
+    end = describe_variable(node.get("end"), ctx, depth)
+    if is_datetime(node):
+        text = (
+            ("Whole seconds" if unit == "second" else "Elapsed " + unit + "s")
+            + " from "
+            + start
+            + " to "
+            + end
+            + ", negative when "
+            + end
+            + " is earlier"
+        )
+        return sentence(text if unit == "second" else text + ", not rounded")
     bounds = str(node.get("bounds") or "exclusive")
     counted = {
         "exclusive": "counting the end date but not the start",
         "inclusive": "counting both endpoints",
         "between": "counting neither endpoint",
     }.get(bounds, "counting " + bounds)
+    return sentence("Whole " + unit + "s from " + start + " to " + end + ", " + counted)
+
+
+def describe_shift(node, ctx=None, depth=0):
+    """A date moved by whole days, or a datetime by an elapsed amount.
+
+    Worded as the value the column holds, so it reads the same as a rule and
+    inside a case branch.
+    """
+    if is_datetime(node):
+        noun, amount, unit = "datetime", node.get("amount"), str(node.get("unit", ""))
+    else:
+        noun, amount, unit = "date", node.get("days"), "day"
+    source = describe_variable(node.get("source"), ctx, depth)
+    if isinstance(amount, bool) or not isinstance(amount, (int, float)):
+        # A variable amount is signed, so adding it moves either way.
+        return sentence(
+            "The "
+            + noun
+            + " "
+            + source
+            + " plus "
+            + describe_variable(amount, ctx, depth)
+            + " "
+            + unit
+            + "s"
+        )
+    if amount == 0:
+        return sentence("The same " + noun + " as " + source)
+    size = abs(amount)
     return sentence(
-        "Whole "
+        "The "
+        + noun
+        + " "
+        + str(size)
+        + " "
         + unit
-        + "s from "
-        + describe_variable(node.get("start"), ctx, depth)
-        + " to "
-        + describe_variable(node.get("end"), ctx, depth)
-        + ", "
-        + counted
+        + ("" if size == 1 else "s")
+        + (" after " if amount > 0 else " before ")
+        + source
     )
-
-
-def describe_datetime_diff(node, ctx=None, depth=0):
-    unit = str(node.get("unit", ""))
-    end = describe_variable(node.get("end"), ctx, depth)
-    text = (
-        ("Whole seconds" if unit == "second" else "Elapsed " + unit + "s")
-        + " from "
-        + describe_variable(node.get("start"), ctx, depth)
-        + " to "
-        + end
-        + ", negative when "
-        + end
-        + " is earlier"
-    )
-    return sentence(text if unit == "second" else text + ", not rounded")
 
 
 def describe_study_day(node, ctx=None, depth=0):
@@ -676,8 +765,11 @@ def describe_study_day(node, ctx=None, depth=0):
 
 
 def describe_to_date(node, ctx=None, depth=0):
+    # A comma, not a semicolon: the rule often sits inside a case branch.
     return sentence(
-        "Take the date part of " + describe_variable(node.get("source"), ctx, depth)
+        "Take the date part of "
+        + describe_variable(node.get("source"), ctx, depth)
+        + ", blank for a year or a year and month alone"
     )
 
 
@@ -687,63 +779,133 @@ def describe_to_epoch_day(node, ctx=None, depth=0):
     )
 
 
-PRECISION_CODES = {
-    "date": "D for a complete date, M for year and month, Y for a year alone",
+def invalid_text_phrase(node):
+    """What text that is not a date yields; with no handler it is fatal."""
+    if "invalid" in node:
+        return handler_phrase(node, "invalid", "invalid text")
+    return "; invalid text is an error"
+
+
+# The collected precision words, finest first. A date's precision stops at
+# day; "none" belongs to a value taken whole from an imputation fallback.
+PRECISION_WORDS = {
+    "date": (
+        '"day" for a complete date, "month" for a year and month, "year" for '
+        'a year alone, "none" for an entirely imputed date'
+    ),
     "datetime": (
-        "S through the second, M through the minute, H through the hour, "
-        "D for a date alone"
+        '"second" through the second, "minute" through the minute, "hour" '
+        'through the hour, "day" for a date alone, "month" for a year and '
+        'month, "year" for a year alone, "none" for an entirely imputed '
+        "datetime"
     ),
 }
 
 
-def describe_precision(node, word, ctx=None, depth=0):
+def describe_precision(node, ctx=None, depth=0):
+    kind = "datetime" if is_datetime(node) else "date"
     text = (
         "Collected "
-        + word
+        + kind
         + " precision of "
         + describe_variable(node.get("source"), ctx, depth)
         + ": "
-        + PRECISION_CODES[word]
+        + PRECISION_WORDS[kind]
     )
-    text += handler_phrase(node, "missing", "a missing source")
-    return sentence(text + handler_phrase(node, "invalid", "invalid text"))
+    return sentence(text + invalid_text_phrase(node))
 
 
-def describe_date_impute(node, ctx=None, depth=0):
-    bits = []
-    if node.get("month") is not None:
-        bits.append("month=" + str(node["month"]))
-    if node.get("day") is not None:
-        bits.append("day=" + str(node["day"]))
+# What a minimum source precision leaves uncompleted; year, the default,
+# completes every truncated source.
+UNCOMPLETED_SOURCES = {
+    "month": "a year alone gives blank",
+    "day": "a source without a complete date gives blank",
+}
+
+
+def describe_impute(node, ctx=None, depth=0):
+    """Truncated collected text completed to the declared type.
+
+    A bound moves only what imputation supplied, so one outside the collected
+    period is ignored, and not_after wins when the two bounds cross.
+    """
+    kind = "datetime" if is_datetime(node) else "date"
     text = (
-        "Impute incomplete date from "
+        "Impute incomplete "
+        + kind
+        + " from "
         + describe_variable(node.get("source"), ctx, depth)
-        + ", defaulting "
-        + ", ".join(bits)
     )
-    if node.get("not_before"):
-        text += ", never before " + str(node["not_before"])
-    if node.get("not_after"):
-        text += ", never after " + str(node["not_after"])
-    text += handler_phrase(node, "missing", "a missing source")
-    text += handler_phrase(node, "invalid", "invalid text")
-    if "missing" not in node and "invalid" not in node:
-        text += "; missing or invalid input yields null"
-    return sentence(text)
+    defaults = [
+        field + "=" + str(node[field])
+        for field in ("month", "day")
+        if node.get(field) is not None
+    ]
+    if defaults:
+        text += ", defaulting " + ", ".join(defaults)
+    if kind == "datetime":
+        edge = "earliest" if str(node.get("time", "")) == "first" else "latest"
+        text += ", giving each time part the source lacks its " + edge + " value"
+    before = node.get("not_before")
+    after = node.get("not_after")
+    if before:
+        text += ", never before " + describe_variable(before, ctx, depth)
+    if after:
+        text += ", never after " + describe_variable(after, ctx, depth)
+    if before or after:
+        text += "; a bound outside the collected period is ignored"
+    if before and after:
+        text += (
+            ", and "
+            + variable_name(after, ctx)
+            + " wins over a later "
+            + variable_name(before, ctx)
+        )
+    uncompleted = UNCOMPLETED_SOURCES.get(str(node.get("minimum_source_precision")))
+    if uncompleted:
+        text += "; " + uncompleted
+    if node.get("fallback"):
+        text += (
+            "; a missing source takes "
+            + describe_variable(node["fallback"], ctx, depth)
+            + ", counted as entirely imputed"
+        )
+    return sentence(text + invalid_text_phrase(node))
 
 
-def describe_datetime_impute(node, ctx=None, depth=0):
-    time = str(node.get("time", ""))
-    edge = "earliest" if time == "first" else "latest"
-    text = (
-        "Impute incomplete datetime from "
+# The ADaM date (--DTF) and time (--TMF) imputation flag codes, read from the
+# collected precision of the imputed value.
+IMPUTATION_FLAG_CODES = {
+    "date": (
+        '"Y" when the whole date was imputed, "M" when the month and day '
+        'were, "D" when only the day was; blank when the date was collected '
+        "in full"
+    ),
+    "time": (
+        '"H" when the whole time was imputed, "M" when the minutes and '
+        'seconds were, "S" when only the seconds were; blank when the time '
+        "was collected to the second"
+    ),
+}
+# A study that does not collect seconds never imputes them alone.
+MINUTE_TIME_FLAG_CODES = (
+    '"H" when the whole time was imputed, "M" when the minutes were; blank '
+    "when the minutes were collected, since the study does not collect seconds"
+)
+
+
+def describe_imputation_flag(node, ctx=None, depth=0):
+    part = "time" if node.get("part") == "time" else "date"
+    codes = IMPUTATION_FLAG_CODES[part]
+    if part == "time" and node.get("seconds_collected", True) is False:
+        codes = MINUTE_TIME_FLAG_CODES
+    return sentence(
+        part.capitalize()
+        + " imputation flag for "
         + describe_variable(node.get("source"), ctx, depth)
-        + ", giving each time part the source lacks its "
-        + edge
-        + " value"
+        + ": "
+        + codes
     )
-    text += handler_phrase(node, "missing", "a missing source")
-    return sentence(text + handler_phrase(node, "invalid", "invalid text"))
 
 
 def describe_round(node, ctx=None, depth=0):
@@ -818,32 +980,6 @@ def describe_str_replace(node, ctx=None, depth=0):
     return sentence(text + handler_phrase(node, "missing", "a missing source"))
 
 
-def describe_str_contains(node, ctx=None, depth=0):
-    text = (
-        "True when "
-        + describe_variable(node.get("source"), ctx, depth)
-        + " matches "
-        + str(node.get("pattern"))
-        + " anywhere, false when it does not"
-    )
-    return sentence(text + handler_phrase(node, "missing", "a missing source"))
-
-
-def describe_str_concat(node, ctx=None, depth=0):
-    parts = []
-    for part in node.get("sources") or []:
-        if isinstance(part, dict) and "literal" in part:
-            parts.append('"' + str(part["literal"]) + '"')
-        elif isinstance(part, dict) and "source" in part:
-            parts.append(describe_variable(part["source"], ctx, depth))
-        elif isinstance(part, dict):
-            parts.append(value_phrase(part, ctx, depth))
-        else:
-            parts.append(describe_variable(part, ctx, depth))
-    text = "Concatenate " + join_and(parts)
-    return sentence(text + handler_phrase(node, "missing", "a missing part"))
-
-
 def describe_str_template(node, ctx=None, depth=0):
     if isinstance(node, str):
         node = {"template": node}
@@ -895,19 +1031,12 @@ def describe_row_value(node, ctx=None, depth=0):
     return sentence(with_window(text, node, ctx, depth))
 
 
-def describe_previous_non_missing(node, ctx=None, depth=0):
-    text = (
-        "Most recent non-missing "
-        + describe_variable(node.get("source"), ctx, depth)
-        + " from an earlier row"
-    )
-    return sentence(with_window(text, node, ctx, depth))
-
-
 def describe_locf(node, ctx=None, depth=0):
-    text = "Last observation carried forward from " + describe_variable(
-        node.get("source"), ctx, depth
-    )
+    source = describe_variable(node.get("source"), ctx, depth)
+    if node.get("include_current", True) is False:
+        text = "Most recent non-missing " + source + " from an earlier row"
+    else:
+        text = "Last observation carried forward from " + source
     return sentence(with_window(text, node, ctx, depth))
 
 
@@ -919,12 +1048,18 @@ def describe_baseline_flag(node, ctx=None, depth=0):
         else " within each group of "
         + ", ".join(str(g) for g in window.get("group_by", []))
     )
+    value = " and a non-missing " + str(node["value"]) if node.get("value") else ""
+    bound = " before " if node.get("inclusive") is False else " on or before "
+    ordering = order_terms([node.get("date"), *(node.get("tie_break") or [])])
     return (
         '"Y" for the last record with '
         + str(node.get("date"))
-        + " on or before "
+        + bound
         + str(node.get("reference_date"))
+        + value
         + scope
+        + ", ordered by "
+        + ordering
         + "; blank otherwise."
     )
 
@@ -946,12 +1081,11 @@ DERIVATION_DESCRIBERS = {
     "cut": describe_cut,
     "compute": describe_compute,
     "round_half_away_from_zero": describe_round,
-    "date_diff": describe_date_diff,
-    "datetime_diff": describe_datetime_diff,
-    "date_impute": describe_date_impute,
-    "date_precision": lambda n, c, d: describe_precision(n, "date", c, d),
-    "datetime_impute": describe_datetime_impute,
-    "datetime_precision": lambda n, c, d: describe_precision(n, "datetime", c, d),
+    "diff": describe_diff,
+    "shift": describe_shift,
+    "impute": describe_impute,
+    "precision": describe_precision,
+    "imputation_flag": describe_imputation_flag,
     "to_date": describe_to_date,
     "to_epoch_day": describe_to_epoch_day,
     "study_day": describe_study_day,
@@ -959,13 +1093,10 @@ DERIVATION_DESCRIBERS = {
     "str_pad": describe_str_pad,
     "str_extract": describe_str_extract,
     "str_replace": describe_str_replace,
-    "str_contains": describe_str_contains,
-    "str_concat": describe_str_concat,
     "str_template": describe_str_template,
     "row_number": describe_row_number,
     "rank": describe_rank,
     "row_value": describe_row_value,
-    "previous_non_missing": describe_previous_non_missing,
     "locf": describe_locf,
     "baseline_flag": describe_baseline_flag,
 }
@@ -981,7 +1112,7 @@ def describe_derivation(derivation, ctx=None, depth=0):
     # conversion yields (REQ-1148).
     if "value" in derivation:
         text = clause(describe_derivation(derivation["value"], ctx, depth))
-        if "unconvertible" in derivation:
+        if declared(derivation, "unconvertible"):
             text += (
                 "; a value that cannot be converted "
                 + ARROW
@@ -1221,12 +1352,10 @@ def define_comment(col):
 
 
 def allowed_value_codelists(columns):
-    """Fallback terminology when a benchmark has no study document."""
+    """Fallback terminology when a benchmark declares no codelists."""
     out = []
     for col in columns:
         checks = col.get("verifications") or []
-        if isinstance(checks, dict):
-            checks = [checks]
         if not isinstance(checks, list):
             checks = []
         for check in checks:
@@ -1240,7 +1369,7 @@ def allowed_value_codelists(columns):
 
 
 def document_codelists(define):
-    """The study document's codelists in declaration order."""
+    """The study environment's codelists in declaration order."""
     if not isinstance(define, dict):
         return []
     codelists = define.get("codelists")
@@ -1339,6 +1468,17 @@ REVISION_HISTORY_HEADERS = [
 # entry whenever a change alters the text of a rendered cell. Reviewer and
 # Sign-off stay empty -- those are the reviewer's to fill, not the build's.
 RENDERER_REVISIONS = [
+    (
+        "1.5",
+        "2026-10-17",
+        (
+            "Name collected precision in words instead of letter codes; state "
+            "imputation fallbacks, minimum source precision, bounds ignored "
+            "outside the collected period, and invalid text with no handler "
+            "as an error; describe date and datetime shifts, imputation flag "
+            "codes, and partial text giving no date part"
+        ),
+    ),
     (
         "1.4",
         "2026-10-15",

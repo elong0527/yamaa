@@ -164,8 +164,6 @@ rows:
           expr: "ONLY(ODM.Value)"
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, VISITNUM]
   - row_count:
       min: 8
       max: 8

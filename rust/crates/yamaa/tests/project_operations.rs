@@ -333,12 +333,7 @@ fn a_user_interrupt_stops_the_project_run() {
         .unwrap();
     // TWO never builds, so no more project code runs after the interrupt.
     assert_eq!(run.names(), ["ONE"]);
-    assert!(run
-        .get("ONE")
-        .unwrap()
-        .build()
-        .project_interrupt()
-        .is_some());
+    assert!(run.get("ONE").unwrap().build().interrupt().is_some());
     assert_eq!(functions.0.load(Ordering::Relaxed), 1);
 }
 

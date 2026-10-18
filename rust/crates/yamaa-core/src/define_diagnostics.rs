@@ -34,9 +34,8 @@ pub fn creation_refusal(detail: &str) -> Finding {
 pub enum TargetRelation {
     Independent,
     ArtifactOutsidePackage,
-    DatasetJsonOutsidePackage,
     ArtifactCollision,
-    DatasetJsonCollision,
+    TransportCollision,
 }
 /// Project the entered platform comparison, preserving the original detail
 /// spelling and declaring position. No path is canonicalized or hashed here.
@@ -44,9 +43,8 @@ pub fn admit_relation(relation: TargetRelation, path: &str, detail: &str) -> Res
     let code = match relation {
         TargetRelation::Independent => return Ok(()),
         TargetRelation::ArtifactOutsidePackage => ConditionCode::DefineArtifactOutsidePackage,
-        TargetRelation::DatasetJsonOutsidePackage => ConditionCode::DefineDatasetJsonOutsidePackage,
         TargetRelation::ArtifactCollision => ConditionCode::DefineArtifactCollision,
-        TargetRelation::DatasetJsonCollision => ConditionCode::DefineDatasetJsonCollision,
+        TargetRelation::TransportCollision => ConditionCode::DefineTransportCollision,
     };
     Err(Finding::cause(code, path, detail))
 }

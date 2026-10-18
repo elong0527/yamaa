@@ -87,7 +87,8 @@ if(nzchar(report_directory)) {
 }
 held <- built$report
 rm(built);invisible(gc())
-stopifnot(nrow(held)==9L,identical(held$TOTAL[held$KIND=="check"],truth$TOTAL[truth$KIND=="check"]))
+# One row each for the run, its input, its rows, two columns and three checks.
+stopifnot(nrow(held)==8L,identical(held$TOTAL[held$KIND=="check"],truth$TOTAL[truth$KIND=="check"]))
 cat(case_name,"public domain complete Rust run report and successful save observations passed\n")
 
 # A failed run keeps its report: the checks it evaluated, up to the violated

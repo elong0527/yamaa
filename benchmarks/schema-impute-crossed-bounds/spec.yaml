@@ -1,0 +1,95 @@
+schema_version: "1.0"
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE: input/ae.csv
+  ADSL: {path: input/adsl.csv, types: {TRTSDT: date}}
+base: AE
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AETERM, AESTDTC, AEENDTC, TRTSDT, ASTDT,
+            ASTDTF, AENDT]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation: AE.AETERM
+
+  - name: AESTDTC
+    type: str
+    label: Start Date/Time of Adverse Event
+    derivation: AE.AESTDTC
+
+  - name: AEENDTC
+    type: str
+    label: End Date/Time of Adverse Event
+    derivation: AE.AEENDTC
+
+  - name: TRTSDT
+    type: date
+    label: Date of First Exposure to Treatment
+    derivation: ADSL.TRTSDT
+
+  # A partial end takes the last day of its month, or 31 December.
+  - name: AENDT
+    type: date
+    label: Analysis End Date
+    derivation:
+      impute:
+        type: date
+        source: AEENDTC
+        month: 12
+        day: last
+
+  # A partial start takes the first day it allows, moved up to first
+  # exposure and back to the analysis end where either falls inside the
+  # collected month or year. When both do and the exposure date is the
+  # later, the end wins.
+  - name: ASTDT
+    type: date
+    label: Analysis Start Date
+    derivation:
+      impute:
+        type: date
+        source: AESTDTC
+        month: 1
+        day: first
+        not_before: TRTSDT
+        not_after: AENDT
+
+  - name: ASTDTF
+    type: str
+    label: Analysis Start Date Imputation Flag
+    derivation:
+      imputation_flag:
+        source: ASTDT
+        part: date
+    verifications:
+      - allowed_values:
+          values: [D, M]
+
+verifications:
+  - row_count:
+      min: 6
+      max: 6
+  - assert:
+      id: imputation-flag-requires-an-analysis-date
+      when: "ASTDTF IS NOT NULL"
+      require: "ASTDT IS NOT NULL"

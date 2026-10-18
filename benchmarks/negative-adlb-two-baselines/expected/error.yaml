@@ -1,7 +1,7 @@
 phase: verification
 condition: row_count_failed
 spec_paths:
-  - verifications[1].row_count
+  - verifications[0].row_count
 requirement: REQ-0385
 context:
   verification_id: one-baseline-record-per-subject-and-parameter

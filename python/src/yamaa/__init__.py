@@ -125,7 +125,7 @@ class ProjectRun:
 
 
 class Submission:
-    """define.xml and Dataset-JSON for each selected section."""
+    """define.xml and each selected section's Dataset-JSON or SAS Transport files."""
 
     def __init__(self, native):
         self._native = native

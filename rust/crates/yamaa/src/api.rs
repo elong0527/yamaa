@@ -494,7 +494,7 @@ impl Engine {
         if !plan.refusal().is_empty() {
             return Ok(ProjectRun::refused(plan.refusal().to_vec()));
         }
-        let mut held = yamaa_adapters::file_producer_build::HeldArtifacts::new();
+        let mut held = yamaa_adapters::file_resources::HeldArtifacts::new();
         // Per listing: whether its run succeeded, once it ran.
         let mut succeeded = vec![None; read.listed().len()];
         let mut steps = Vec::with_capacity(plan.steps().len());
@@ -519,8 +519,7 @@ impl Engine {
             }
             // A user interrupt in project code stops the run here, so no
             // later specification builds or calls project code.
-            let interrupted =
-                build.project_interrupt().is_some() || build.producer_interrupt().is_some();
+            let interrupted = build.interrupt().is_some();
             steps.push(ProjectStep {
                 name: listed.name().map(str::to_owned),
                 identity: listed.identity().to_owned(),

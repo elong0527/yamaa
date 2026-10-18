@@ -239,7 +239,7 @@ class ParquetOriginalOutput(unittest.TestCase):
             "schema_version": "1.0",
             "domain": "TEST",
             "base": "FIRST",
-            "input": {name: {"path": name + ".parquet"} for name in aliases},
+            "input": {name: name + ".parquet" for name in aliases},
             "keys": ["ID"],
             "columns": [
                 {
@@ -306,7 +306,7 @@ class ParquetOriginalOutput(unittest.TestCase):
             .read_bytes()
             .replace(
                 TRUTH["floating_input_override"].encode("utf-8"),
-                b"path: input/lb.parquet",
+                b"input/lb.parquet",
             )
         )
         result = self.build(
@@ -360,7 +360,7 @@ class ParquetOriginalOutput(unittest.TestCase):
             "schema_version": "1.0",
             "domain": "TEST",
             "base": "SRC",
-            "input": {"SRC": {"path": "input.parquet"}},
+            "input": {"SRC": "input.parquet"},
             "keys": ["ID"],
             "columns": [
                 {"name": "ID", "type": "int", "derivation": {"compute": {"expr": "1"}}}
@@ -658,7 +658,7 @@ class PublicDomains(unittest.TestCase):
                 elif variant == "unread_branch":
                     case["specification"] = case["specification"].replace(
                         "derivation: LOOK.VAL",
-                        "derivation: {case: [{when: 'FALSE', then: {source: LOOK.VAL}}, {otherwise: {literal: ok}}]}",
+                        "derivation: {case: [{when: 'FALSE', then: LOOK.VAL}, {otherwise: {literal: ok}}]}",
                     )
                 if variant == "boolean_missing":
                     case["specification"] = case["specification"].replace(
@@ -997,7 +997,7 @@ class PublicDomains(unittest.TestCase):
             for name, path, source, actual in [
                 (
                     "negative-date-diff-endpoints",
-                    "columns.SURVDD.derivation.date_diff.start",
+                    "columns.SURVDD.derivation.diff.start",
                     "RFSTDTM",
                     "datetime",
                 ),
@@ -1015,7 +1015,7 @@ class PublicDomains(unittest.TestCase):
                 ),
                 (
                     "negative-date-diff-units",
-                    "columns.TRTDURM.derivation.date_diff.bounds",
+                    "columns.TRTDURM.derivation.diff.bounds",
                     None,
                     None,
                 ),
@@ -1189,15 +1189,13 @@ class PublicDomains(unittest.TestCase):
             source = source.replace("to: upper, missing: MiXeD", "to: upper")
             entry.write_text(source)
             (root / "input.csv").write_bytes(b"ID,TEXT\nrow1,\n")
-            rejected = yamaa.spec(entry).run()
+            # Without `missing`, a missing source gives missing (COLUMN-10).
+            answered = yamaa.spec(entry).run()
             expected = json.loads((ROOT / "text-case-reference.json").read_text())[
                 "missing"
-            ][0]
-            expected = dict(expected, spec_paths=["columns.UP.derivation.str_case"])
-            self.assertEqual(issues(rejected), [expected])
-            self.assertIsNone(rejected.output)
-            with self.assertRaises(yamaa.Error):
-                rejected.save()
+            ]
+            self.assertEqual(issues(answered), expected)
+            self.assertEqual(answered.output.rows(), [("row1", None, None, None, None)])
             with (ROOT / "text-case-diagnostics.tsv").open() as stream:
                 failures = list(csv.DictReader(stream, delimiter="\t"))
             self.assertEqual(len(failures), 2)
@@ -1973,7 +1971,7 @@ columns:
     def test_public_check_without_study_and_save_retry(self):
         import yamaa
 
-        source = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: absent/output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: {source: SRC.ID}}\n"
+        source = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: absent/output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n"
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             entry = root / "spec.yaml"
@@ -2127,11 +2125,7 @@ columns:
             )
             for name in tuple(TRUTH["section_case_files"]):
                 (root / name).unlink()
-            entry.write_text(
-                body.replace(
-                    "SECTION: {literal: first}", "SECTION: {source: {variable: P.K}}"
-                )
-            )
+            entry.write_text(body.replace("SECTION: {literal: first}", "SECTION: P.K"))
             for checked in (yamaa.spec(entry).check(), yamaa.spec(entry).run()):
                 records = checked.issues.select(FIELDS).to_dicts()
                 for record in records:

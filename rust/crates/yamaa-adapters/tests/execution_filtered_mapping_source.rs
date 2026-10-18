@@ -96,7 +96,7 @@ fn adsl_specification(source: &str) -> String {
          \x20 - {{name: SEX, type: str, derivation: {{mapping: {{source: {source}, \
          case_sensitive: false, \
          dict: {{M: Male, F: Female, Male: Male, Female: Female, Intersex: Intersex}}, \
-         missing: null, unmapped: null}}}}}}\n"
+         missing: {{literal: null}}, unmapped: {{literal: null}}}}}}}}\n"
     )
 }
 

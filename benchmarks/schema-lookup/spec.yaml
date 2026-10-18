@@ -21,12 +21,12 @@ intermediates:
     filter: "AE.AEOUT = 'FATAL'"
     order_by: [AE.AEDY]
     keep: last
-    no_match: null
+    no_match: {literal: null}
 
   - id: MEDDRA_PT
     dataset: MEDDRA
     key: {LLTNAME: DTHCAUS}
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: USUBJID
@@ -53,7 +53,3 @@ columns:
     type: str
     label: Cause of Death Preferred Term
     derivation: MEDDRA_PT.PTNAME
-
-verifications:
-  - unique:
-      columns: [USUBJID]

@@ -12,24 +12,24 @@ reference table carrying test code, sex, and upper limit
 
 - `ANRHI` would be the upper limit of normal for that test and
   sex, read from the reference table where the collected test code
-  and sex match a table entry. A collected test and sex with no
-  table entry has no stated answer. Leaving the limit missing would
-  hide that the result was never checked against a range, so the
-  run is rejected with no artifact accepted.
+  and sex match a table entry. Every result is required to find an
+  entry: leaving the limit missing would hide that the result was
+  never checked against a range, so a collected test and sex with
+  no table entry rejects the run with no artifact accepted.
 
 ## How to fix
 
 Add the governed `AST/M` reference range to the reference table when one
 exists. If the analysis intentionally leaves the limit missing when a complete
-key is not in the table, declare that missing-value answer:
+key is not in the table, drop `require_match: true` so the lookup answers with
+missing:
 
 ```yaml
 intermediates:
   - id: LBREF_LOOKUP
     dataset: LBREF
     key: {LBTESTCD: PARAMCD, SEX: SEX}
-    no_match: null
 ```
 
 The same answer also covers a result whose test code or sex is blank: both
-find no entry (REQ-0129, REQ-0131).
+find no entry (LOOKUP-13), and the run counts each under `no_match`.

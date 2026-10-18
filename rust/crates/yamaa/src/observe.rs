@@ -93,14 +93,6 @@ impl Outcome {
     }
 }
 
-/// The observed graph node, borrowed only for the observer call.
-#[non_exhaustive]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Node<'a> {
-    pub index: usize,
-    pub identity: &'a str,
-}
-
 /// A classified native limit refusal payload.
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -121,7 +113,6 @@ impl Refusal {
             Core::OutputRows => "output_rows",
             Core::OutputCells => "output_cells",
             Core::OutputColumns => "output_columns",
-            Core::RegexWork => "regex_work",
         };
         Self {
             resource,
@@ -134,74 +125,33 @@ impl Refusal {
 /// One progress event, the public form of the observer event.
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Event<'a> {
-    Phase {
-        node: Option<Node<'a>>,
-        phase: Phase,
-    },
-    FunctionCall {
-        node: Option<Node<'a>>,
-        stage: CallStage,
-    },
-    Exit {
-        node: Option<Node<'a>>,
-        phase: Phase,
-        outcome: Outcome,
-    },
-    FunctionReturn {
-        node: Option<Node<'a>>,
-        stage: CallStage,
-        outcome: Outcome,
-    },
-    Refusal {
-        node: Option<Node<'a>>,
-        phase: Phase,
-        refusal: Refusal,
-    },
+pub enum Event {
+    Phase { phase: Phase },
+    FunctionCall { stage: CallStage },
+    Exit { phase: Phase, outcome: Outcome },
+    FunctionReturn { stage: CallStage, outcome: Outcome },
+    Refusal { phase: Phase, refusal: Refusal },
 }
 
-impl<'a> Event<'a> {
-    pub(crate) fn from_core(event: yamaa_core::application_observer::Event<'a>) -> Self {
+impl Event {
+    pub(crate) fn from_core(event: yamaa_core::application_observer::Event) -> Self {
         use yamaa_core::application_observer::Event as Core;
-        let map_node = |node: Option<yamaa_core::application_observer::Node<'a>>| {
-            node.map(|node| Node {
-                index: node.index,
-                identity: node.identity,
-            })
-        };
         match event {
-            Core::Phase { node, phase } => Self::Phase {
-                node: map_node(node),
+            Core::Phase { phase } => Self::Phase {
                 phase: Phase::from_core(phase),
             },
-            Core::FunctionCall { node, stage } => Self::FunctionCall {
-                node: map_node(node),
+            Core::FunctionCall { stage } => Self::FunctionCall {
                 stage: CallStage::from_core(stage),
             },
-            Core::Exit {
-                node,
-                phase,
-                outcome,
-            } => Self::Exit {
-                node: map_node(node),
+            Core::Exit { phase, outcome } => Self::Exit {
                 phase: Phase::from_core(phase),
                 outcome: Outcome::from_core(outcome),
             },
-            Core::FunctionReturn {
-                node,
-                stage,
-                outcome,
-            } => Self::FunctionReturn {
-                node: map_node(node),
+            Core::FunctionReturn { stage, outcome } => Self::FunctionReturn {
                 stage: CallStage::from_core(stage),
                 outcome: Outcome::from_core(outcome),
             },
-            Core::Refusal {
-                node,
-                phase,
-                refusal,
-            } => Self::Refusal {
-                node: map_node(node),
+            Core::Refusal { phase, refusal } => Self::Refusal {
                 phase: Phase::from_core(phase),
                 refusal: Refusal::from_core(refusal),
             },
@@ -213,7 +163,7 @@ impl<'a> Event<'a> {
 /// callback state, invoke project code or publish artifacts.
 pub trait Progress: Send + Sync {
     /// Observe one progress event on the calling thread of the operation.
-    fn observe(&self, event: Event<'_>);
+    fn observe(&self, event: Event);
 }
 
 #[cfg(test)]
@@ -225,7 +175,7 @@ mod tests {
     }
 
     impl Progress for Sink {
-        fn observe(&self, event: Event<'_>) {
+        fn observe(&self, event: Event) {
             let name = match event {
                 Event::Phase { .. } => "phase",
                 Event::FunctionCall { .. } => "call",
@@ -246,11 +196,9 @@ mod tests {
             events: std::sync::Mutex::new(Vec::new()),
         };
         sink.observe(Event::from_core(CoreEvent::Phase {
-            node: None,
             phase: CorePhase::Preparation,
         }));
         sink.observe(Event::from_core(CoreEvent::Exit {
-            node: None,
             phase: CorePhase::Finished,
             outcome: CoreOutcome::Succeeded,
         }));

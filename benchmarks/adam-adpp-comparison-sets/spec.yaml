@@ -18,12 +18,14 @@ intermediates:
   - id: COMP01
     dataset: COMPARE
     key: {COMPNO: {literal: 1}}
+    require_match: true
     verifications:
       - unique: [COMPNO]
 
   - id: COMP02
     dataset: COMPARE
     key: {COMPNO: {literal: 2}}
+    require_match: true
     verifications:
       - unique: [COMPNO]
 
@@ -117,8 +119,8 @@ columns:
     derivation:
       flag: "AVAL > 0 AND PAVAL1 > 0"
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
   - name: ANL02FL
     type: str
@@ -126,12 +128,10 @@ columns:
     derivation:
       flag: "AVAL > 0 AND PAVAL2 > 0"
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, PARAMCD, APERIOD]
   - row_count:
       min: 20
       max: 20

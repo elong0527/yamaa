@@ -28,9 +28,9 @@ columns:
     type: str
     label: Parameter Code
     verifications:
-      allowed_values:
-        values: [F101, F102, F103, F104, F201, F202, S01, S02, G01, G02,
-                 F1SCORE, F2SCORE, SSCORE, GSCORE]
+      - allowed_values:
+          values: [F101, F102, F103, F104, F201, F202, S01, S02, G01, G02,
+                   F1SCORE, F2SCORE, SSCORE, GSCORE]
 
   - name: PARAM
     type: str
@@ -69,9 +69,9 @@ columns:
     type: float
     label: Analysis Value
     verifications:
-      range:
-        min: 0
-        max: 100
+      - range:
+          min: 0
+          max: 100
 
 rows:
   # Every questionnaire item record, answered or not.
@@ -209,8 +209,6 @@ rows:
           - otherwise: {literal: null}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, VISIT, PARAMCD]
   - row_count:
       min: 22
       max: 22

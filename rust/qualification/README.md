@@ -12,11 +12,9 @@ plain fixtures are discovered by glob.
 
 `python -m tools.conformance.public_conformance complete-reports` compares every
 complete authored report under `crates/yamaa-adapters/tests/fixtures/specs/`
-with retained actual installed Python and R file runs. It also compares the
-original producer's complete reports before and after two Save calls with
-`producer-cohort/` truth. Complete-report objects are discovered from their
-files; malformed report objects fail, while array-shaped partial diagnostic
-fixtures belong to their direct native tests.
+with retained actual installed Python and R file runs. Complete-report objects
+are discovered from their files; malformed report objects fail, while
+array-shaped partial diagnostic fixtures belong to their direct native tests.
 
 One inventory retains both installed owners, unchanged authored truth and all
 complete observations. Comparisons cover values, types, exact float bits,
@@ -33,7 +31,7 @@ python -m tools.conformance.public_conformance complete-reports \
   --source-revision REVISION
 ```
 
-The output directory must be fresh and outside both authored fixture trees.
+The output directory must be fresh and outside the authored fixture tree.
 The revision must equal the reviewed checkout and both installed owners' actual
 source revision. Comparator unit fixtures are deliberately marked unqualified;
 their successful mutation controls never establish installed release evidence.
@@ -71,8 +69,8 @@ the R runner needs base R and the installed package.
 The plan also generates two metamorphic variants of each entry, built by the
 same runners on staged copies and judged by the comparator against the entry's
 own build rather than against `expected/`: an empty child
-(`{schema_version: "1.0", parents: <entry>}`, REQ-0627) must reproduce its
-parent, and for eligible positive entries (no `rows`, no `parents`, at least
+(`{schema_version: "1.0", parent: <entry>}`, REQ-0627) must reproduce its
+parent, and for eligible positive entries (no `rows`, no `parent`, at least
 two key columns reading one input field or a literal) a JSON control copy and
 a copy with the key columns moved to the front in reverse key order must agree
 (REQ-0060, REQ-0062, REQ-0220). Positive variants must report no issues with

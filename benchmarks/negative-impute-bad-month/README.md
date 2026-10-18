@@ -25,7 +25,8 @@ Use a calendar month from 1 through 12. Because this benchmark describes
 earliest imputation, January is the consistent correction:
 
 ```yaml
-date_impute:
+impute:
+  type: date
   source: AE.AESTDTC
   month: 1
   day: 1

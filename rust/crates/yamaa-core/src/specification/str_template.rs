@@ -14,7 +14,7 @@ impl Prepared {
         let mut operations = BTreeMap::new();
         walk(d, &mut |payload, path, rows| {
             let operation = StringTemplate::new(
-                template(d, payload)?.into(),
+                text(d, field(d, payload, "template")?)?.into(),
                 path.into(),
                 d.field(payload, "missing")
                     .map(|id| literal(d, id, &format!("{path}.missing")))
@@ -50,13 +50,6 @@ impl Prepared {
             Ok(())
         })?;
         Ok(Self(operations))
-    }
-}
-fn template(d: &Document, payload: usize) -> Result<&str, PrepareError> {
-    if matches!(d.nodes()[payload], N::Text(_)) {
-        text(d, payload)
-    } else {
-        text(d, field(d, payload, "template")?)
     }
 }
 fn walk(
@@ -111,21 +104,6 @@ fn walk(
                     field(d, field(d, binding, "derivation")?, "value")?,
                     &format!("{path}.aggregate.derive[{index}].derivation"),
                     true,
-                    depth + 1,
-                    visit,
-                )?;
-            }
-        }
-        if let Some(payload) = d.field(id, "str_concat") {
-            for (index, &child) in sequence(d, field(d, payload, "sources")?)?
-                .iter()
-                .enumerate()
-            {
-                expression(
-                    d,
-                    child,
-                    &format!("{path}.str_concat.sources[{index}]"),
-                    rows,
                     depth + 1,
                     visit,
                 )?;

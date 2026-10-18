@@ -15,10 +15,7 @@ pub(super) struct Declaration {
     item_oid: String,
     path: String,
     selectors: [Option<Vec<String>>; 3],
-    filter: Option<(
-        String,
-        Result<crate::predicate::Plan, crate::predicate_compiler::Error>,
-    )>,
+    filter: Option<(String, Result<CompiledExpression, CompileError>)>,
 }
 
 pub(super) fn prepare(
@@ -26,24 +23,16 @@ pub(super) fn prepare(
     payload: usize,
     path: &str,
 ) -> Result<Declaration, PrepareError> {
-    let item = if matches!(d.nodes()[payload], N::Text(_)) {
-        text(d, payload)?
-    } else {
-        text(d, field(d, payload, "item")?)?
-    };
+    let item = text(d, field(d, payload, "item")?)?;
     let (dataset, item_oid) = item.split_once('.').ok_or(PrepareError::Internal)?;
     let selectors = ["event", "form", "item_group"].map(|name| {
         d.field(payload, name)
             .filter(|&node| !matches!(d.nodes()[node], N::Null))
             .map(|node| {
-                if let N::Text(text) = &d.nodes()[node] {
-                    Ok(vec![text.clone()])
-                } else {
-                    sequence(d, node)?
-                        .iter()
-                        .map(|&node| text(d, node).map(String::from))
-                        .collect()
-                }
+                sequence(d, node)?
+                    .iter()
+                    .map(|&node| text(d, node).map(String::from))
+                    .collect()
             })
             .transpose()
     });
@@ -53,26 +42,15 @@ pub(super) fn prepare(
         .filter(|&node| !matches!(d.nodes()[node], N::Null))
         .map(|node| {
             let expression = text(d, node)?;
-            let compiled =
-                crate::predicate_compiler::compile(expression, &format!("{path}.filter"));
+            let compiled = compile(
+                expression,
+                ExpressionContext::Predicate,
+                &format!("{path}.filter"),
+            );
             match &compiled {
-                Ok(_)
-                | Err(crate::predicate_compiler::Error::Parse(
-                    crate::predicate_parser::ParseError::Grammar { .. },
-                )) => (),
-                Err(crate::predicate_compiler::Error::Parse(
-                    crate::predicate_parser::ParseError::UnsupportedRegex { .. },
-                )) => {
-                    return Err(PrepareError::Unsupported(vec![UnsupportedFeature {
-                        operation: "predicate_regex".into(),
-                        path: format!("{path}.filter"),
-                    }]))
-                }
-                Err(crate::predicate_compiler::Error::Internal) => {
-                    return Err(PrepareError::Internal)
-                }
+                Ok(_) | Err(CompileError::Invalid { .. }) => (),
                 Err(error) => {
-                    return Err(PrepareError::predicate(
+                    return Err(PrepareError::expression(
                         error.clone(),
                         Some(&format!("{path}.filter")),
                     ))
@@ -128,19 +106,18 @@ pub(super) fn bind(
     let filter = if let Some((expression, compiled)) = &declaration.filter {
         let plan = match compiled {
             Ok(plan) => plan,
-            Err(crate::predicate_compiler::Error::Parse(
-                crate::predicate_parser::ParseError::Grammar {
-                    position, failure, ..
-                },
-            )) => {
-                findings.push(BindFinding::Predicate(failure.original_diagnostic(
+            Err(CompileError::Invalid {
+                position, failure, ..
+            }) => {
+                findings.push(BindFinding::Predicate(failure.diagnostic(
+                    ExpressionContext::Predicate,
                     &format!("{}.filter", declaration.path),
                     expression,
                     position.character,
                 )));
                 return Ok(None);
             }
-            Err(error) => return Err(BindError::PredicatePolicy(error.clone())),
+            Err(error) => return Err(BindError::ExpressionPolicy(error.clone())),
         };
         let mut bindings = Vec::new();
         let mut seen = BTreeSet::new();
@@ -174,10 +151,9 @@ pub(super) fn bind(
             }
         }
         if findings.len() == before {
-            Some(
-                BoundPredicate::new(plan.clone(), bindings)
-                    .map_err(BindError::InvalidPredicateBinding)?,
-            )
+            let typed =
+                plan.typed(|name| crate::result_type::ResultType::declared(catalog.type_of(name)));
+            Some(BoundPredicate::new(typed, bindings).map_err(BindError::InvalidPredicateBinding)?)
         } else {
             None
         }
@@ -338,11 +314,7 @@ pub(super) fn context_findings(
                     );
                 }
                 if let Some(payload) = d.field(node, "odm") {
-                    let item = if matches!(d.nodes()[payload], N::Text(_)) {
-                        text(d, payload)?
-                    } else {
-                        text(d, field(d, payload, "item")?)?
-                    };
+                    let item = text(d, field(d, payload, "item")?)?;
                     let (dataset, _) = item.split_once('.').ok_or(PrepareError::Internal)?;
                     sites.push(Site {
                         payload,
@@ -514,7 +486,7 @@ pub(super) fn context_findings(
         {
             let path = format!("{}.filter", site.path);
             let expression = text(d, filter)?;
-            match crate::predicate_compiler::compile(expression, &path) {
+            match compile(expression, ExpressionContext::Predicate, &path) {
                 Ok(plan) => {
                     let mut seen = BTreeSet::new();
                     for identifier in plan.identifiers() {
@@ -540,12 +512,11 @@ pub(super) fn context_findings(
                         ));
                     }
                 }
-                Err(crate::predicate_compiler::Error::Parse(
-                    crate::predicate_parser::ParseError::Grammar {
-                        position, failure, ..
-                    },
-                )) => {
-                    findings.push(PreflightFinding::Odm(failure.original_diagnostic(
+                Err(CompileError::Invalid {
+                    position, failure, ..
+                }) => {
+                    findings.push(PreflightFinding::Odm(failure.diagnostic(
+                        ExpressionContext::Predicate,
                         &path,
                         expression,
                         position.character,
@@ -576,11 +547,7 @@ pub(super) fn inputs(d: &Document) -> Result<BTreeSet<&str>, PrepareError> {
         match &d.nodes()[node] {
             N::Mapping(fields) => {
                 if let Some(payload) = d.field(node, "odm") {
-                    let item = if matches!(d.nodes()[payload], N::Text(_)) {
-                        text(d, payload)?
-                    } else {
-                        text(d, field(d, payload, "item")?)?
-                    };
+                    let item = text(d, field(d, payload, "item")?)?;
                     if let Some((dataset, _)) = item.split_once('.') {
                         found.insert(dataset);
                     }

@@ -154,21 +154,6 @@ fn collect_calls(
             )?;
         }
     }
-    if let Some(payload) = d.field(value, "str_concat") {
-        for (index, &child) in sequence(d, field(d, payload, "sources")?)?
-            .iter()
-            .enumerate()
-        {
-            collect_calls(
-                d,
-                child,
-                &format!("{path}.str_concat.sources[{index}]"),
-                depth + 1,
-                contextual,
-                requests,
-            )?;
-        }
-    }
     if let Some(case) = d.field(value, "case") {
         let branches = sequence(d, case)?;
         for (index, &branch) in branches.iter().enumerate() {

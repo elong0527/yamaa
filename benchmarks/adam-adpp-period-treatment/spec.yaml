@@ -22,7 +22,7 @@ intermediates:
   - id: DOSE
     dataset: EX
     key: {STUDYID: PP.STUDYID, USUBJID: PP.USUBJID, EXSTDTC: PP.PPRFTDTC}
-    no_match: null
+    no_match: {literal: null}
     derivations:
       PERIODNO:
         type: int
@@ -96,8 +96,6 @@ columns:
     derivation: PP.PPSTRESU
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, PARCAT1, PARAMCD, PPRFTDTC]
   - row_count:
       min: 18
       max: 18

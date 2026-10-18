@@ -133,11 +133,6 @@ pub(super) fn template_references(
             }
         }
     }
-    if let Some(payload) = d.field(value, "str_concat") {
-        for &child in sequence(d, field(d, payload, "sources")?)? {
-            template_references(d, child, templates, names, depth + 1)?;
-        }
-    }
     Ok(())
 }
 
@@ -237,10 +232,10 @@ impl<'a> FirstTemplate<'a> {
         if operation == "case" {
             for (index, &branch) in sequence(d, payload)?.iter().enumerate() {
                 if let Some(condition) = d.field(branch, "when") {
-                    if let Ok(parsed) =
-                        crate::predicate_parser::parse_predicate(text(d, condition)?)
+                    if let Ok(compiled) =
+                        compile(text(d, condition)?, ExpressionContext::Predicate, "")
                     {
-                        for name in parsed.identifiers() {
+                        for name in compiled.identifiers() {
                             self.register(name.into(), &format!("{path}[{index}].when"));
                         }
                     }
@@ -256,15 +251,6 @@ impl<'a> FirstTemplate<'a> {
                     };
                     self.visit(child, &format!("{path}[{index}].{alternative}"), depth + 1)?;
                 }
-            }
-            return Ok(());
-        }
-        if operation == "str_concat" {
-            for (index, &child) in sequence(d, field(d, payload, "sources")?)?
-                .iter()
-                .enumerate()
-            {
-                self.visit(child, &format!("{path}.sources[{index}]"), depth + 1)?;
             }
             return Ok(());
         }

@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: ADQS
 keys: [STUDYID, USUBJID, VISIT, PARAMCD]
 input:
-  QS: {path: input/qs.csv}
+  QS: input/qs.csv
 
 output:
   path: adqs.csv

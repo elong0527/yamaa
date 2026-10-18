@@ -221,14 +221,10 @@ mod execution {
                 &mut host,
             )
             .unwrap();
-            assert_eq!(host.reads, ["spec_organization.yaml", "spec_compound.yaml"]);
+            assert_eq!(host.reads, ["spec_compound.yaml", "spec_organization.yaml"]);
             assert_eq!(
                 host.resolutions,
-                [
-                    "spec_organization.yaml",
-                    "spec_compound.yaml",
-                    "spec_organization.yaml"
-                ]
+                ["spec_compound.yaml", "spec_organization.yaml"]
             );
             assert_eq!(
                 prepared
@@ -310,8 +306,9 @@ mod execution {
                     ],
                 ]
             );
-            assert_eq!(execution.verifications.len(), 1);
-            assert_eq!(execution.verifications[0].failed_count, 0);
+            // The organization level declares no verification: its `unique`
+            // repeated the study's keys, which output-key validation asserts.
+            assert!(execution.verifications.is_empty());
             assert_eq!(
                 yamaa_adapters::csv_artifact::render(&execution.dataset, &[0, 1, 2, 3], None)
                     .unwrap(),
@@ -347,7 +344,7 @@ mod execution {
                     &mut host,
                 )
                 .unwrap();
-            assert_eq!(host.reads, ["spec_organization.yaml", "spec_compound.yaml"]);
+            assert_eq!(host.reads, ["spec_compound.yaml", "spec_organization.yaml"]);
             assert_eq!(captured.parents().len(), 2);
             for parent in captured.parents() {
                 assert_eq!(
@@ -703,9 +700,9 @@ mod execution {
                 "SRC: {path: nested/data.csv, types: {ID: int}}",
             ] {
                 for child_path in [None, Some("child.csv")] {
-                    let mut entry = String::from("schema_version: '1.0'\nparents: parent.yaml\ndomain: TEST\nkeys: [ID]\noutput: {path: result.csv, columns: [ID]}\ncolumns: [{name: ID, type: int, derivation: {source: SRC.ID}}]\n");
+                    let mut entry = String::from("schema_version: '1.0'\nparent: parent.yaml\ndomain: TEST\nkeys: [ID]\noutput: {path: result.csv, columns: [ID]}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\n");
                     if let Some(path) = child_path {
-                        entry.push_str(&format!("input: {{SRC: {{path: {path}}}}}\n"));
+                        entry.push_str(&format!("input: {{SRC: {path}}}\n"));
                     }
                     let parent = format!("schema_version: '1.0'\ninput: {{{declaration}}}\n");
                     let document = yamaa_adapters::shipped_schema::prepare(
@@ -927,7 +924,7 @@ mod execution {
             replay_source_selection_truth(
                 include_str!("fixtures/original_not_missing.json"),
                 "column-check",
-                10,
+                9,
             );
         }
 
@@ -1066,7 +1063,7 @@ mod execution {
             replay_source_selection_truth(
                 include_str!("fixtures/odm_deferred.json"),
                 "odm-deferred",
-                8,
+                7,
             );
         }
 
@@ -1095,7 +1092,7 @@ mod execution {
             replay_source_selection_truth(
                 include_str!("fixtures/row_column_checks.json"),
                 "row-column",
-                48,
+                47,
             );
         }
 
@@ -1416,7 +1413,7 @@ mod execution {
                 }
                 count += 1;
             }
-            assert_eq!(count, 21);
+            assert_eq!(count, 20);
         }
 
         #[test]

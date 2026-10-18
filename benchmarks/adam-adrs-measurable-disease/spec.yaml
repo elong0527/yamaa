@@ -21,7 +21,7 @@ intermediates:
       AND TU.TUSTRESC = 'TARGET'
     order_by: [TU.TUSEQ]
     keep: first
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: STUDYID
@@ -73,8 +73,6 @@ columns:
           max: 1
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, PARAMCD]
   - row_count:
       min: 6
       max: 6

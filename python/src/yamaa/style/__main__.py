@@ -33,7 +33,7 @@ def _names(text: str | None) -> set[str] | None:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m yamaa.style",
-        description="Check yamaa specifications against the style contract.",
+        description="Check yamaa specifications against the style guide.",
     )
     parser.add_argument("paths", nargs="+", type=Path, metavar="PATH")
     parser.add_argument(
@@ -53,7 +53,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("--select names no style finding")
     if arguments.ignore is not None and not ignore:
         parser.error("--ignore names no style finding")
-    unknown = sorted(((select or set()) | ignore) - FINDINGS.keys())
+    unknown = sorted(((select or set()) | ignore) - set(FINDINGS))
     if unknown:
         parser.error(f"unknown style finding: {', '.join(unknown)}")
     chosen = (select if select is not None else set(FINDINGS)) - ignore

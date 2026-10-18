@@ -1,7 +1,5 @@
 //! Shared build request and original metadata admission. Study and publication
 //! authority enter only after the selected checked capability is complete.
-use crate::schema::{Document, DocumentNode};
-
 pub struct Request<'a> {
     pub specification: &'a str,
     pub environment: Option<&'a str>,
@@ -88,66 +86,37 @@ pub enum SelectionFailure<E> {
     Snapshot { identity: String, error: E },
 }
 
-/// Sealed metadata decision retained beside the exact captured entry. It grants
-/// no compilation, activation, study or publication capability on its own.
-pub struct EntrySelection {
-    producer: bool,
-}
-impl EntrySelection {
-    pub fn is_producer(&self) -> bool {
-        self.producer
-    }
-}
-
 /// Complete admission and whole original-input inspection precede selection.
 /// Opaque refusal and changed-snapshot payloads retain their original identity.
-pub fn select_entry<P: MetadataAdmissionPort>(
-    document: &Document,
+pub fn verify_entry<P: MetadataAdmissionPort>(
     port: &mut P,
-) -> Result<EntrySelection, SelectionFailure<P::Error>> {
-    let mut producer = false;
-    if let Some(input) = document.field(document.root(), "input") {
-        if let DocumentNode::Mapping(entries) = &document.nodes()[input] {
-            for &(_, declaration) in entries {
-                producer |= crate::producer_admission::is_producer_input(document, declaration);
-            }
-        }
-    }
+) -> Result<(), SelectionFailure<P::Error>> {
     port.verify_metadata()
-        .map_err(|(identity, error)| SelectionFailure::Snapshot { identity, error })?;
-    Ok(EntrySelection { producer })
+        .map_err(|(identity, error)| SelectionFailure::Snapshot { identity, error })
 }
 
 /// Complete metadata capabilities. Construction and compilation accept no study
-/// or publication authority; the engine selects a route from the held entry.
-pub enum Prepared<S, P, G> {
+/// or publication authority; an explicit environment selects the project route.
+pub enum Prepared<S, P> {
     Plain(S),
     Ordinary(P),
-    Producer(G),
 }
 
 pub trait PreparationPort {
     type Entry;
     type Plain;
     type Project;
-    type Producer;
     type Failure;
 
     /// Capture the optional environment and original entry through one resource
     /// reader. Root limits precede environment IO; absence captures nothing.
     fn capture(&mut self, request: Request<'_>) -> Result<Self::Entry, Self::Failure>;
-    fn selection(entry: &Self::Entry) -> &EntrySelection;
     fn plain(&mut self, entry: Self::Entry) -> Result<Self::Plain, Self::Failure>;
     fn project(&mut self, entry: Self::Entry) -> Result<Self::Project, Self::Failure>;
-    fn producer(&mut self, entry: Self::Entry) -> Result<Self::Producer, Self::Failure>;
 }
 
 pub type Preparation<P> = Result<
-    Prepared<
-        <P as PreparationPort>::Plain,
-        <P as PreparationPort>::Project,
-        <P as PreparationPort>::Producer,
-    >,
+    Prepared<<P as PreparationPort>::Plain, <P as PreparationPort>::Project>,
     <P as PreparationPort>::Failure,
 >;
 
@@ -157,16 +126,14 @@ pub fn prepare<P: PreparationPort>(request: Request<'_>, port: &mut P) -> Prepar
     select(entry, explicit_environment, port)
 }
 
-/// Resource-owning callers use the same sealed selection without reopening the
-/// entry or reconstructing a request from captured canonical identities.
+/// Resource-owning callers use the same selection without reopening the entry
+/// or reconstructing a request from captured canonical identities.
 pub fn select<P: PreparationPort>(
     entry: P::Entry,
     explicit_environment: bool,
     port: &mut P,
 ) -> Preparation<P> {
-    if P::selection(&entry).is_producer() {
-        port.producer(entry).map(Prepared::Producer)
-    } else if explicit_environment {
+    if explicit_environment {
         port.project(entry).map(Prepared::Ordinary)
     } else {
         port.plain(entry).map(Prepared::Plain)
@@ -181,7 +148,6 @@ pub fn select<P: PreparationPort>(
 pub trait Ports {
     type Plain;
     type Project;
-    type Producer;
     type CheckResult;
     type BuildResult;
     type Failure;
@@ -191,10 +157,6 @@ pub trait Ports {
     fn check_project(
         &mut self,
         prepared: Self::Project,
-    ) -> Result<Self::CheckResult, Self::Failure>;
-    fn check_producer(
-        &mut self,
-        prepared: Self::Producer,
     ) -> Result<Self::CheckResult, Self::Failure>;
     fn build_plain(
         &mut self,
@@ -206,23 +168,15 @@ pub trait Ports {
         prepared: &Self::Project,
         scope: crate::application_observer::Scope<'_>,
     ) -> Result<Self::BuildResult, Self::Failure>;
-    fn build_producer(
-        &mut self,
-        prepared: &Self::Producer,
-        scope: crate::application_observer::Scope<'_>,
-    ) -> Result<Self::BuildResult, Self::Failure>;
 }
 
-pub type PreparedRequest<P> = Result<
-    Prepared<<P as Ports>::Plain, <P as Ports>::Project, <P as Ports>::Producer>,
-    <P as Ports>::Failure,
->;
+pub type PreparedRequest<P> =
+    Result<Prepared<<P as Ports>::Plain, <P as Ports>::Project>, <P as Ports>::Failure>;
 
 pub fn check<P: Ports>(request: Request<'_>, port: &mut P) -> Result<P::CheckResult, P::Failure> {
     match port.prepare(request)? {
         Prepared::Plain(prepared) => port.check_plain(prepared),
         Prepared::Ordinary(prepared) => port.check_project(prepared),
-        Prepared::Producer(prepared) => port.check_producer(prepared),
     }
 }
 
@@ -264,7 +218,7 @@ pub fn compile<P: Ports>(
 /// The Build and Finished half of a build: one run that borrows the prepared
 /// value, so the same value can serve the next run unchanged.
 pub fn run<P: Ports>(
-    prepared: &Prepared<P::Plain, P::Project, P::Producer>,
+    prepared: &Prepared<P::Plain, P::Project>,
     port: &mut P,
     scope: crate::application_observer::Scope<'_>,
 ) -> Result<P::BuildResult, P::Failure> {
@@ -275,7 +229,6 @@ pub fn run<P: Ports>(
     let result = match prepared {
         Prepared::Plain(prepared) => port.build_plain(prepared, scope),
         Prepared::Ordinary(prepared) => port.build_project(prepared, scope),
-        Prepared::Producer(prepared) => port.build_producer(prepared, scope),
     };
     scope.exit(Phase::Build, Outcome::from_result(&result));
     finish(scope);

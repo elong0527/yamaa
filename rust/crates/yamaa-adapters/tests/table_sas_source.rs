@@ -941,14 +941,14 @@ mod table {
             assert_eq!(value.to_string(), "2024-03-02");
             assert_eq!(
                 value.collected_precision(),
-                yamaa_core::temporal::DatePrecision::Day
+                yamaa_core::temporal::Precision::Day
             );
             let ValueRef::DateTime(value) = table.cell(0, 3).unwrap() else {
                 panic!()
             };
             assert_eq!(
                 value.collected_precision(),
-                yamaa_core::temporal::DateTimePrecision::Second
+                yamaa_core::temporal::Precision::Second
             );
             assert_eq!(table.cell(0, 4).unwrap(), ValueRef::Str("0012"));
             assert_eq!(table.cell(1, 0).unwrap(), ValueRef::Missing);

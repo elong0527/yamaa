@@ -814,9 +814,7 @@ class Resolve(unittest.TestCase):
             "output: {path: result.csv, columns: [ID]}\n",
             encoding="utf-8",
         )
-        child.write_text(
-            "schema_version: '1.0'\nparents: base.yaml\n", encoding="utf-8"
-        )
+        child.write_text("schema_version: '1.0'\nparent: base.yaml\n", encoding="utf-8")
         direct = yamaa.spec(base).resolve()["entries"][0]["origins"]
         inherited = yamaa.spec(child).resolve()["entries"][0]["origins"]
         pointer = "/columns/0/derivation/value/mapping/case_sensitive"
@@ -831,7 +829,7 @@ class Resolve(unittest.TestCase):
             encoding="utf-8",
         )
         child.write_text(
-            "schema_version: '1.0'\nparents: base.yaml\n"
+            "schema_version: '1.0'\nparent: base.yaml\n"
             "columns: [{name: N, type: int, derivation: {row_number: {window: W}}}]\n"
             "output: {path: result.csv, columns: [ID, N]}\n",
             encoding="utf-8",
@@ -910,7 +908,7 @@ class Resolve(unittest.TestCase):
             ],
         )
 
-    def test_two_studies_keep_producer_entry_bindings_used_by_run(self):
+    def test_two_studies_keep_schema_link_bindings_used_by_run(self):
         (self.root / "shared").mkdir()
         (self.root / "shared/producer.yaml").write_text(
             "schema_version: '1.0'\ndomain: PRODUCER\nkeys: [ID]\n"
@@ -933,28 +931,38 @@ class Resolve(unittest.TestCase):
                 f"ID\n{identifier}\n", encoding="utf-8"
             )
             (study / "spec.yaml").write_text(
-                "schema_version: '1.0'\nparents: ../shared/consumer.yaml\n",
+                "schema_version: '1.0'\nparent: ../shared/consumer.yaml\n",
                 encoding="utf-8",
             )
             (study / "producer.yaml").write_text(
-                "schema_version: '1.0'\nparents: ../shared/producer.yaml\n",
+                "schema_version: '1.0'\nparent: ../shared/producer.yaml\n",
                 encoding="utf-8",
             )
             spec = yamaa.spec(study / "spec.yaml")
-            root_entry, producer = spec.resolve()["entries"]
+            # A linked producer is type metadata, not a resolved entry.
+            (root_entry,) = spec.resolve()["entries"]
+            self.assertNotIn("producers", root_entry)
+            schema = next(
+                item
+                for item in root_entry["resources"]
+                if item["role"] == "producer_schema"
+            )
             self.assertEqual(
-                root_entry["producers"], {"P": (study / "producer.yaml").as_posix()}
+                schema["location"]["path"], (study / "producer.yaml").as_posix()
             )
-            resource = next(
-                item for item in producer["resources"] if item["role"] == "input_data"
+            source = next(
+                item for item in root_entry["resources"] if item["role"] == "input_data"
             )
             self.assertEqual(
-                resource["location"]["path"], (study / "input/raw.csv").as_posix()
+                source["location"]["path"], (study / "output/produced.csv").as_posix()
             )
+            # Callers build and save each study's producer first.
+            (study / "output").mkdir()
+            yamaa.spec(study / "producer.yaml").run().save()
             result = spec.run()
             self.assertTrue(result.issues.is_empty(), result.issues)
             self.assertEqual(result.output["ID"].to_list(), [identifier])
-            self.assertFalse((study / "output").exists())
+            self.assertFalse((study / "output/final.csv").exists())
 
     def test_resolve_returns_owned_facts_and_raises_for_an_unreadable_spec(self):
         spec = self.root / "spec.yaml"

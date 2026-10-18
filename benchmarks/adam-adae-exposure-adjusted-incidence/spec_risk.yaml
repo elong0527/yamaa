@@ -44,10 +44,11 @@ intermediates:
   - ADAE.ASTDT
   - ADAE.ASEQ
   keep: first
-  no_match: null
+  no_match: {literal: null}
   derivations:
     POSTDAYS:
-      date_diff:
+      diff:
+        type: date
         start: ADSL.TRTEDT
         end: ASTDT
         unit: day
@@ -90,7 +91,8 @@ columns:
   type: int
   label: Full Collection Window Days
   derivation:
-    date_diff:
+    diff:
+      type: date
       start: ADSL.TRTSDT
       end: ADSL.TRTEDT
       unit: day
@@ -100,7 +102,8 @@ columns:
   type: int
   label: Days to First Eligible Onset
   derivation:
-    date_diff:
+    diff:
+      type: date
       start: ADSL.TRTSDT
       end: FIRSTDT
       unit: day
@@ -117,8 +120,8 @@ columns:
         compute:
           expr: FULLDAYS + 30
   verifications:
-    range:
-      min: 1
+    - range:
+        min: 1
 
 rows:
 - id: diarrhoea
@@ -132,11 +135,6 @@ rows:
     AEDECOD: {literal: HEADACHE}
 
 verifications:
-- unique:
-    columns:
-    - STUDYID
-    - USUBJID
-    - AEDECOD
 - assert:
     id: event-status-agrees-with-onset
     require: (EVENTN = 1 AND FIRSTDT IS NOT NULL)

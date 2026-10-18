@@ -6,24 +6,36 @@ mod source {
         use yamaa_core::{csv_precision::fixed_point, value::FiniteFloat};
 
         #[test]
-        fn genuine_binary64_ties_and_adjacent_values_match_independent_text() {
+        fn ties_and_near_ties_round_away_from_zero_with_independent_text() {
+            // Scaled distances below the tie are from the exact binary64 value;
+            // REQ-0418 counts anything within 2^-26 (about 1.49e-8) as a tie.
             for (value, digits, expected) in [
                 (0.125, 2, "0.13"),
                 (-0.125, 2, "-0.13"),
-                (2.675, 2, "2.67"),
+                // 1.8e-14, 1.1e-14 and 2.4e-15 below the tie.
+                (2.675, 2, "2.68"),
+                (-2.675, 2, "-2.68"),
+                (1.005, 2, "1.01"),
+                (0.285, 2, "0.29"),
+                // 1.0e-8 below the tie is inside the window; 1.0e-7 is not.
+                (1.0049999999, 2, "1.01"),
+                (1.004999999, 2, "1.00"),
                 (25.0, 4, "25.0000"),
                 (0.03125, 4, "0.0313"),
                 (0.5, 0, "1"),
                 (1.5, 0, "2"),
                 (-0.5, 0, "-1"),
+                // A value that rounds to zero is written without a sign.
                 (-0.004, 2, "0.00"),
+                (-0.4, 0, "0"),
                 (0.0, 3, "0.000"),
                 (-0.0, 3, "0.000"),
                 (1.234, 2, "1.23"),
                 (2.345, 2, "2.35"),
-                (f64::from_bits(0x3fbf_ffff_ffff_ffff), 2, "0.12"),
+                // The binary64 values adjacent to 0.125: 1.4e-15 below, and above.
+                (f64::from_bits(0x3fbf_ffff_ffff_ffff), 2, "0.13"),
                 (f64::from_bits(0x3fc0_0000_0000_0001), 2, "0.13"),
-                (-f64::from_bits(0x3fbf_ffff_ffff_ffff), 2, "-0.12"),
+                (-f64::from_bits(0x3fbf_ffff_ffff_ffff), 2, "-0.13"),
                 (9.999, 2, "10.00"),
             ] {
                 let finite = FiniteFloat::new(value).unwrap();
@@ -1752,7 +1764,7 @@ mod source {
     mod table {
         use yamaa_core::{
             table::{Column, SchemaError, TableSchema, ValueRef},
-            temporal::{Date, DatePrecision, DateTime, DateTimePrecision},
+            temporal::{Date, DateTime, Precision},
             value::{ColumnType, Value},
         };
 
@@ -1793,8 +1805,8 @@ mod source {
         #[test]
         /// Prove borrowed text ownership and exact scalar/temporal metadata.
         fn borrowing_retains_text_backing_exact_values_and_temporal_precision() {
-            let date = Date::new(2025, 1, 1, DatePrecision::Year).unwrap();
-            let datetime = DateTime::new(date, 0, 0, 0, DateTimePrecision::Day).unwrap();
+            let date = Date::new(2025, 1, 1, Precision::Year).unwrap();
+            let datetime = DateTime::new(date, 0, 0, 0, Precision::Day).unwrap();
             let values = [
                 Value::Missing,
                 Value::Str("text\0\u{1f980}".into()),
@@ -1823,11 +1835,11 @@ mod source {
             let ValueRef::Date(date) = views[6] else {
                 panic!("date required")
             };
-            assert_eq!(date.collected_precision(), DatePrecision::Year);
+            assert_eq!(date.collected_precision(), Precision::Year);
             let ValueRef::DateTime(datetime) = views[7] else {
                 panic!("datetime required")
             };
-            assert_eq!(datetime.collected_precision(), DateTimePrecision::Day);
+            assert_eq!(datetime.collected_precision(), Precision::Day);
         }
     }
     mod typed_csv {

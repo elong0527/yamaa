@@ -18,20 +18,21 @@ conditions:
   assert_failed: {phases: [verification]}
   bare_derivation_scalar: {phases: [validation]}
   codelist_duplicate_value: {phases: [validation]}
+  codelist_extended_alias: {phases: [validation]}
   codelist_extension_not_admitted: {phases: [validation]}
   codelist_partial_item_field: {phases: [validation]}
   codelist_shape_invalid: {phases: [validation]}
   codelist_type_mismatch: {phases: [validation]}
-  codelist_values_conflict: {phases: [validation]}
+  conflicting_absence_policy: {phases: [validation]}
   conflicting_row_construction: {phases: [validation]}
   # REQ-1167
   conflicting_value_metadata: {phases: [validation]}
-  conversion_failed: {phases: [convert]}
+  conversion_failed: {phases: [convert, validation]}
   core_mandatory_conflict: {phases: [validation]}
   correlated_derivation_with_unique_verification: {phases: [validation]}
   correlated_filter_with_unique_verification: {phases: [validation]}
-  dataset_json_path_collision: {phases: [validation]}
-  dataset_json_without_data: {phases: [validation]}
+  day_not_permitted: {phases: [validation]}
+  day_required: {phases: [validation]}
   decimals_not_applicable: {phases: [validation]}
   declared_length_conflict: {phases: [validation]}
   dependency_cycle: {phases: [validation]}
@@ -44,7 +45,7 @@ conditions:
   duplicate_intermediate_records: {phases: [verification]}
   duplicate_key: {phases: [output]}
   duplicate_order_term: {phases: [validation]}
-  # REQ-1338
+  # PROJECT-5
   duplicate_specification_name: {phases: [validation]}
   empty_string_present_unsupported: {phases: [validation]}
   engine_rejected: {phases: [engine]}
@@ -52,35 +53,29 @@ conditions:
   forward_reference: {phases: [validation]}
   function_call_failed: {phases: [derivation, validation]}
   function_conformance_failed: {phases: [validation]}
-  function_contract_mismatch: {phases: [validation]}
   incomparable_range_types: {phases: [validation]}
   incomparable_sources: {phases: [validation]}
   incompatible_input_type: {phases: [validation]}
-  incomplete_output_row: {phases: [derivation]}
   inheritance_cycle: {phases: [validation]}
-  integer_overflow: {phases: [derivation, parse, validation]}
+  integer_overflow: {phases: [derivation, validation]}
   internal_column_in_keys: {phases: [validation]}
   invalid_aggregate_context: {phases: [validation]}
-  invalid_aggregate_expression: {phases: [validation]}
   invalid_calendar_date: {phases: [impute]}
   invalid_clear: {phases: [validation]}
   invalid_date_text: {phases: [impute, validation]}
-  invalid_datetime_text: {phases: [impute]}
   invalid_declaration: {phases: [validation]}
   # REQ-1189, REQ-1191 and REQ-1242
   invalid_derive_step: {phases: [validation]}
   invalid_duration_text: {phases: [impute]}
+  invalid_expression: {phases: [validation]}
   invalid_field_type: {phases: [validation]}
   invalid_function_argument: {phases: [derivation, validation]}
   invalid_function_result: {phases: [derivation]}
   invalid_intermediate_driver: {phases: [validation]}
-  invalid_mapping_dictionary: {phases: [validation]}
-  invalid_numeric_expression: {phases: [validation]}
   invalid_odm_context: {phases: [validation]}
   invalid_operation_count: {phases: [validation]}
   invalid_parent_path: {phases: [validation]}
   invalid_power: {phases: [derivation]}
-  invalid_predicate: {phases: [validation]}
   invalid_producer_contract: {phases: [validation]}
   invalid_regex: {phases: [validation]}
   invalid_size: {phases: [validation]}
@@ -90,13 +85,12 @@ conditions:
   key_dependency: {phases: [validation]}
   length_failed: {phases: [verification]}
   ln_of_nonpositive: {phases: [derivation]}
-  mandatory_not_enforced: {phases: [validation]}
   matches_failed: {phases: [verification]}
   method_missing: {phases: [validation]}
   minimum_length: {phases: [validation]}
   missing_aggregate_keys: {phases: [validation]}
   missing_derivation: {phases: [validation]}
-  missing_input: {phases: [cut, impute, mapping]}
+  missing_input: {phases: [mapping]}
   missing_key: {phases: [output]}
   missing_report: {phases: [validation]}
   missing_required_field: {phases: [validation]}
@@ -127,10 +121,11 @@ conditions:
   parent_not_found: {phases: [validation]}
   pattern_mismatch: {phases: [validation]}
   phase_boundary: {phases: [validation]}
+  predecessor_label_mismatch: {phases: [validation]}
   producer_contract_mismatch: {phases: [validation]}
-  # REQ-1345
+  # PROJECT-11
   producer_not_completed: {phases: [validation]}
-  producer_output_path_mismatch: {phases: [validation]}
+  # PROJECT-8
   producer_workflow_cycle: {phases: [validation]}
   prohibited_construct: {phases: [validation]}
   prohibited_function: {phases: [validation]}
@@ -139,7 +134,9 @@ conditions:
   publication_failed: {phases: [output]}
   qualified_identifier: {phases: [validation]}
   range_failed: {phases: [verification]}
+  redundant_declaration: {phases: [validation]}
   redundant_field_type: {phases: [validation]}
+  redundant_long_form: {phases: [validation]}
   reference_data_repeating_conflict: {phases: [validation]}
   # REQ-1168
   refuted_value_origin: {phases: [validation]}
@@ -150,11 +147,8 @@ conditions:
   resource_path_missing: {phases: [validation]}
   resource_path_not_normalized: {phases: [validation]}
   resource_path_not_regular_file: {phases: [validation]}
-  resource_path_not_relative: {phases: [validation]}
-  resource_path_outside_project: {phases: [validation]}
   resource_path_symlink: {phases: [validation]}
   resource_path_uri_scheme: {phases: [validation]}
-  row_count_changed: {phases: [derivation]}
   row_count_failed: {phases: [verification]}
   runtime_artifact_mismatch: {phases: [validation]}
   sas_name_too_long: {phases: [validation]}
@@ -182,6 +176,10 @@ conditions:
   submission_length_not_applicable: {phases: [validation]}
   submission_metadata_missing: {phases: [validation]}
   submission_not_output_column: {phases: [validation]}
+  transport_dataset_empty: {phases: [output]}
+  transport_label_invalid: {phases: [validation]}
+  transport_path_collision: {phases: [validation]}
+  transport_text_invalid: {phases: [output]}
   undeclared_column: {phases: [validation]}
   ungrouped_driver_field: {phases: [validation]}
   unique_failed: {phases: [verification]}
@@ -195,25 +193,20 @@ conditions:
   unknown_operation: {phases: [validation]}
   unknown_project_function: {phases: [validation]}
   unknown_reference: {phases: [validation]}
-  # REQ-1339
+  # PROJECT-6
   unknown_specification_name: {phases: [validation]}
   unknown_standard: {phases: [validation]}
   unknown_standard_family: {phases: [validation]}
   unknown_window: {phases: [validation]}
-  # REQ-1344
+  # PROJECT-10
   unlinked_producer: {phases: [validation]}
-  unmapped_key: {phases: [mapping]}
   unmapped_value: {phases: [mapping]}
   unmatched_key: {phases: [join]}
   unmatched_pattern: {phases: [mapping]}
   unpaired_fields: {phases: [validation]}
-  unreferenced_codelist: {phases: [validation]}
   unresolvable_name: {phases: [validation]}
   unsupported_operation: {phases: [planning]}
-  unsupported_regex_engine: {phases: [validation]}
-  unsupported_text_contract: {phases: [validation]}
   untransportable_text: {phases: [validation]}
-  unwritable_value: {phases: [output]}
   # REQ-1166
   value_metadata_not_output_column: {phases: [validation]}
   # REQ-1164
@@ -225,4 +218,8 @@ conditions:
   value_not_permitted: {phases: [validation]}
   window_order_by_forbidden: {phases: [validation]}
   window_order_by_required: {phases: [validation]}
+  xpt_display_format_invalid: {phases: [validation]}
+  xpt_file_too_large: {phases: [output]}
+  xpt_last_row_blank: {phases: [output]}
+  xpt_value_out_of_range: {phases: [output]}
   zero_offset: {phases: [validation]}

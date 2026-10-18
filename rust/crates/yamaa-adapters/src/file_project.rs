@@ -23,6 +23,8 @@ pub enum Error {
 pub struct FileProject {
     run: Arc<PreparedRun>,
     resources: Resources,
+    /// Inputs a project run may serve from artifacts it already built.
+    linked: Vec<crate::file_resources::LinkedInput>,
 }
 /// Ordinary compilation rejection beside the original native resource owner.
 /// Projection refusal and file deletion never consume or replace this evidence.
@@ -70,18 +72,20 @@ impl FileProject {
     /// Consume only the complete sealed native capture. No externally supplied
     /// standalone document or replacement environment can enter this transfer.
     pub(crate) fn from_workflow(
-        entry: crate::file_graph::CapturedEntry,
+        entry: crate::file_entry::CapturedEntry,
     ) -> Result<Self, Box<RejectedOrdinary>> {
-        let (resources, entry, document, environment) = entry.into_ordinary_parts();
+        let (resources, entry, document, links, environment) = entry.into_parts();
+        let linked = crate::file_resources::linked_inputs(&resources, &document, &links);
         match PreparedRun::prepare_with_profile_inspection(
             document,
+            &links,
             environment,
             |document, dataset, path| {
                 crate::source_profile_inspection::inspect(document, &resources, dataset, path)
             },
         )
         .and_then(|run| {
-            let findings = crate::run_report::location_findings(&resources, &run);
+            let findings = crate::run_report::location_findings(&resources, &run, &links);
             if findings.is_empty() {
                 Ok(run)
             } else {
@@ -94,6 +98,7 @@ impl FileProject {
                 Ok(Self {
                     run: Arc::new(run),
                     resources,
+                    linked,
                 })
             }
             Err(run) => Err(Box::new(RejectedOrdinary {
@@ -129,15 +134,24 @@ impl FileProject {
             &document.source().identity,
         )
         .map_err(Error::Document)?;
+        let links = file_preparation::capture_links(
+            &mut resources,
+            &document,
+            Some(&specification_schema),
+            &mut None,
+        )
+        .map_err(Error::Document)?;
+        let linked = crate::file_resources::linked_inputs(&resources, &document, &links);
         let run = PreparedRun::prepare_with_profile_inspection(
             document,
+            &links,
             environment,
             |document, dataset, path| {
                 crate::source_profile_inspection::inspect(document, &resources, dataset, path)
             },
         )
         .map_err(Error::Compile)?;
-        let findings = crate::run_report::location_findings(&resources, &run);
+        let findings = crate::run_report::location_findings(&resources, &run, &links);
         if !findings.is_empty() {
             return Err(Error::Compile(run.reject(
                 yamaa_core::specification::PrepareError::Invalid(findings),
@@ -146,6 +160,7 @@ impl FileProject {
         Ok(Self {
             run: Arc::new(run),
             resources,
+            linked,
         })
     }
     pub fn run(&self) -> &PreparedRun {
@@ -192,8 +207,8 @@ impl FileProject {
         activation: &mut A,
         scope: Scope<'_>,
     ) -> Attempt<ResourceError, A::Error> {
-        self.run
-            .execute_with_ports(activation, run.resources_mut(), scope)
+        let mut port = crate::file_resources::HeldPort::new(run, &self.linked);
+        self.run.execute_with_ports(activation, &mut port, scope)
     }
     /// Let an installed port borrow the exact retained lock without copying it
     /// or exposing study authority. Port construction performs no activation.
@@ -204,8 +219,9 @@ impl FileProject {
         scope: Scope<'_>,
     ) -> Attempt<ResourceError, A::Error> {
         let mut activation = factory(&self.run);
+        let mut port = crate::file_resources::HeldPort::new(run, &self.linked);
         self.run
-            .execute_with_ports(&mut activation, run.resources_mut(), scope)
+            .execute_with_ports(&mut activation, &mut port, scope)
     }
 }
 

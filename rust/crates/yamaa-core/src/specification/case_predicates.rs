@@ -3,7 +3,6 @@ use super::*;
 use crate::{
     bound_expression::BoundPredicate,
     dataset::{Intermediate, SecondarySource},
-    predicate::Plan,
 };
 
 fn unknown(path: &str, name: &str) -> BindFinding {
@@ -63,7 +62,7 @@ pub(super) fn retain_reference_owner(
 #[allow(clippy::too_many_arguments)]
 pub(super) fn bind(
     spec: &PreparedSpecification,
-    plan: &Plan,
+    plan: &CompiledExpression,
     column: usize,
     catalog: &Catalog,
     secondary: &[SecondarySource],
@@ -152,23 +151,22 @@ pub(super) fn bind(
             findings.push(unknown(plan.spec_path(), name));
         }
     }
-    let kinds = plan
-        .identifiers()
-        .into_iter()
-        .map(|name| {
-            static_types::kind(name, &spec.intermediates, catalog, secondary, intermediates)
-                .map(|kind| (name, kind))
-        })
-        .collect::<Result<BTreeMap<_, _>, _>>()?;
-    findings.extend(
-        static_types::predicate_kinds(plan, |name| kinds.get(name).copied().flatten())
-            .into_iter()
-            .map(BindFinding::Predicate),
-    );
+    static_types::predicate(
+        plan,
+        &spec.intermediates,
+        catalog,
+        secondary,
+        intermediates,
+        findings,
+    )?;
     if findings.len() != start {
         return Ok(None);
     }
-    BoundPredicate::new_contextual(plan.clone(), bindings, collected)
-        .map(Some)
-        .map_err(BindError::InvalidPredicateBinding)
+    BoundPredicate::new_contextual(
+        static_types::typed(plan, &spec.intermediates, catalog, secondary, intermediates),
+        bindings,
+        collected,
+    )
+    .map(Some)
+    .map_err(BindError::InvalidPredicateBinding)
 }

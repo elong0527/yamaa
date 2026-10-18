@@ -5,9 +5,10 @@ mod execution {
     mod numeric_lifecycle {
         use std::{collections::BTreeMap, convert::Infallible};
         use yamaa_core::conversion::ConversionError;
-        use yamaa_core::evaluation::{EvaluationErrorKind, NumericCondition, NumericResolver};
+        use yamaa_core::expression::{
+            compile, Condition, Context, ErrorKind, Resolver as NumericResolver,
+        };
         use yamaa_core::numeric::ArithmeticErrorKind;
-        use yamaa_core::numeric_compiler::compile_numeric;
         use yamaa_core::numeric_lifecycle::{
             HandlerCounter, HandlerKind, LiteralHandler, NumericDerivation, NumericLifecycleError,
         };
@@ -119,7 +120,7 @@ mod execution {
             handler: Option<Value>,
         ) -> NumericDerivation {
             NumericDerivation::new(
-                compile_numeric(expression, EXPRESSION).unwrap(),
+                compile(expression, Context::Compute, EXPRESSION).unwrap(),
                 target,
                 COLUMN,
                 handler.map(|value| LiteralHandler {
@@ -167,29 +168,22 @@ mod execution {
                     Ok(result) => encoded(&result),
                     Err(failure) => match *failure {
                         NumericLifecycleError::Evaluation(error) => {
-                            assert!(fields[1]
-                                .get(error.source_span.start..error.source_span.end)
-                                .is_some());
-                            assert_eq!(error.evaluation.location.expression, fields[1]);
-                            path = error.evaluation.location.spec_path;
-                            let EvaluationErrorKind::Numeric(condition) = error.evaluation.kind
-                            else {
-                                panic!("infallible resolver");
-                            };
+                            let span = error.source_span.expect("formula span");
+                            assert!(fields[1].get(span.start..span.end).is_some());
+                            assert_eq!(error.expression, fields[1]);
+                            path = error.spec_path;
+                            let ErrorKind::Condition(condition) = error.kind;
                             context = match &condition {
-                                NumericCondition::UnknownField { identifier } => {
+                                Condition::NumericUnknownField { identifier } => {
                                     format!("identifier:{identifier}")
                                 }
-                                NumericCondition::IncompatibleInput { identifier, actual } => {
+                                Condition::NumericInput { identifier, actual } => {
                                     assert_eq!(*actual, ValueType::Str);
                                     format!("source:{identifier}:str")
                                 }
-                                NumericCondition::Arithmetic(
-                                    ArithmeticErrorKind::IntegerOverflow { value },
-                                ) => format!("integer:{value}"),
-                                NumericCondition::Arithmetic(
-                                    ArithmeticErrorKind::InvalidRoundingDigits,
-                                ) => "digits:float".into(),
+                                Condition::Arithmetic(ArithmeticErrorKind::IntegerOverflow {
+                                    value,
+                                }) => format!("integer:{value}"),
                                 _ => "-".into(),
                             };
                             format!(
@@ -259,7 +253,7 @@ mod execution {
         fn accounting_retains_zero_declarations_and_prior_firings_on_failure() {
             let good = derivation("A", ColumnType::Int, Some(Value::Int(7)));
             let bad = NumericDerivation::new(
-                compile_numeric("A", EXPRESSION).unwrap(),
+                compile("A", Context::Compute, EXPRESSION).unwrap(),
                 ColumnType::Int,
                 "columns.B",
                 Some(LiteralHandler {
@@ -330,14 +324,12 @@ mod execution {
             let NumericLifecycleError::Evaluation(error) = *failure else {
                 panic!("evaluation failure")
             };
-            assert_eq!(
-                &"NULL + BROKEN + LATER"[error.source_span.start..error.source_span.end],
-                "BROKEN"
-            );
-            let EvaluationErrorKind::Resolution {
+            let span = error.source_span.unwrap();
+            assert_eq!(&"NULL + BROKEN + LATER"[span.start..span.end], "BROKEN");
+            let ErrorKind::Resolution {
                 identifier,
                 error: Opaque(payload),
-            } = error.evaluation.kind
+            } = error.kind
             else {
                 panic!("opaque resolution failure")
             };
@@ -351,7 +343,12 @@ mod execution {
         fn dependent_reads_converted_handler_value() {
             let first = derivation("RAW", ColumnType::Int, Some(Value::Str("7".into())));
             let next = NumericDerivation::new(
-                compile_numeric("A + 1", "columns.B.derivation.value.compute").unwrap(),
+                compile(
+                    "A + 1",
+                    Context::Compute,
+                    "columns.B.derivation.value.compute",
+                )
+                .unwrap(),
                 ColumnType::Int,
                 "columns.B",
                 None,
@@ -386,7 +383,7 @@ mod execution {
                 RelationPredicate, RowMode, RowTemplate, SecondarySource, SourceSchemas,
                 SourceSelection,
             },
-            predicate_compiler,
+            expression::{compile, Context},
             table::{CellError, TableAccess, TableSchema, ValueRef},
             value::{ColumnType as T, Value},
         };
@@ -504,12 +501,13 @@ mod execution {
                 });
             }
             let correlated = matches!(mode, Mode::Correlated);
-            let predicate = predicate_compiler::compile(
+            let predicate = compile(
                 if correlated {
                     "DONOR.ACTIVE = BASE.ACTIVE"
                 } else {
                     "DONOR.ACTIVE = 1"
                 },
+                Context::Predicate,
                 "intermediates[0].filter",
             )
             .unwrap();
@@ -553,6 +551,7 @@ mod execution {
                     keep,
                 }),
                 no_match: Some(Value::Missing),
+                require_match: false,
                 unique: vec![],
                 derivations: None,
                 pending_schema: None,
@@ -846,7 +845,7 @@ mod execution {
                 else {
                     panic!("source-only filter keeps its original failure")
                 };
-                let yamaa_core::predicate::ErrorKind::Resolution {
+                let yamaa_core::expression::ErrorKind::Resolution {
                     error: CellError::Access(original),
                     ..
                 } = error.kind
@@ -909,10 +908,10 @@ mod execution {
         use yamaa_core::json::Value as JsonValue;
         use yamaa_core::{
             bound_expression::{Binding, BoundPredicate, Read},
-            diagnostic::PredicateDiagnosticError,
-            predicate::{Comparison, ErrorKind, Node, Plan, Scalar},
+            diagnostic::EvaluationDiagnosticError as PredicateDiagnosticError,
+            expression::{compile, Context, ErrorKind},
             table::{CellError, Column, TableAccess, TableSchema, ValueRef},
-            value::{ColumnType, Value},
+            value::ColumnType,
         };
 
         // Neither Clone nor Debug is available to diagnostic code.
@@ -950,17 +949,12 @@ mod execution {
                 reads: RefCell::default(),
             }
         }
-        fn plan(schema: &TableSchema, right: Value) -> DatasetPlan {
+        fn plan(schema: &TableSchema, right: &str) -> DatasetPlan {
             let filter = BoundPredicate::new(
-                Plan::new(
-                    vec![Node::Compare {
-                        operator: Comparison::Equal,
-                        left: Scalar::Identifier("A".into()),
-                        right: Scalar::Literal(right),
-                    }],
-                    0,
-                    "rows[0].filter".into(),
-                    "A = original\0🙂".into(),
+                compile(
+                    &format!("A = {right}"),
+                    Context::Predicate,
+                    "rows[0].filter",
                 )
                 .unwrap(),
                 vec![Binding {
@@ -992,7 +986,7 @@ mod execution {
             let payload = Opaque(Box::new(91));
             let address = &*payload.0 as *const u8;
             let table = source(Some(payload));
-            let plan = plan(&table.schema, Value::Int(7));
+            let plan = plan(&table.schema, "7");
             assert!(table.reads.borrow().is_empty());
             let Err(failure) = plan
                 .execute(
@@ -1010,7 +1004,7 @@ mod execution {
             };
             assert_eq!(*source_row, 0);
             assert_eq!(error.spec_path, "rows[0].filter");
-            assert_eq!(error.expression, "A = original\0🙂");
+            assert_eq!(error.expression, "A = 7");
             for _ in 0..3 {
                 let Err(PredicateDiagnosticError::Resolution(CellError::Access(payload))) =
                     error.diagnostic()
@@ -1033,7 +1027,7 @@ mod execution {
         #[test]
         fn semantic_filter_failure_precedes_assignments_and_the_next_source_record() {
             let table = source(None);
-            let plan = plan(&table.schema, Value::Str("incompatible".into()));
+            let plan = plan(&table.schema, "'incompatible'");
             let Err(failure) = plan
                 .execute(
                     &table,
@@ -1156,6 +1150,7 @@ mod execution {
                 filter: None,
                 selection: None,
                 no_match: None,
+                require_match: true,
                 unique: Vec::new(),
                 derivations: None,
                 pending_schema: None,
@@ -1316,7 +1311,12 @@ mod execution {
                 failure: None,
             };
             let filter = BoundPredicate::new(
-                yamaa_core::predicate_compiler::compile("N > 1", "row.filter").unwrap(),
+                yamaa_core::expression::compile(
+                    "N > 1",
+                    yamaa_core::expression::Context::Predicate,
+                    "row.filter",
+                )
+                .unwrap(),
                 vec![Binding {
                     name: "N".into(),
                     read: Read::Column(1),
@@ -1420,7 +1420,12 @@ mod execution {
                 payload: Rc::from("filter source was revisited"),
             };
             let filter = BoundPredicate::new(
-                yamaa_core::predicate_compiler::compile("KEEP > 0", "row.filter").unwrap(),
+                yamaa_core::expression::compile(
+                    "KEEP > 0",
+                    yamaa_core::expression::Context::Predicate,
+                    "row.filter",
+                )
+                .unwrap(),
                 vec![Binding {
                     name: "KEEP".into(),
                     read: Read::Column(1),
@@ -1532,7 +1537,12 @@ mod execution {
                 })
             };
             let filter = BoundPredicate::new(
-                yamaa_core::predicate_compiler::compile("ID > 1", "row.filter").unwrap(),
+                yamaa_core::expression::compile(
+                    "ID > 1",
+                    yamaa_core::expression::Context::Predicate,
+                    "row.filter",
+                )
+                .unwrap(),
                 vec![Binding {
                     name: "ID".into(),
                     read: Read::Column(0),
@@ -1651,7 +1661,12 @@ mod execution {
             let output = schema(&[("ID", ColumnType::Int), ("RESULT", ColumnType::Str)]);
             let path = "rows[0].derivations.RESULT.case[0].then.first_available";
             let predicate = BoundPredicate::new(
-                yamaa_core::predicate_compiler::compile("ID > 0", "row.case.when").unwrap(),
+                yamaa_core::expression::compile(
+                    "ID > 0",
+                    yamaa_core::expression::Context::Predicate,
+                    "row.case.when",
+                )
+                .unwrap(),
                 vec![Binding {
                     name: "ID".into(),
                     read: Read::Column(0),
@@ -1659,6 +1674,7 @@ mod execution {
             )
             .unwrap();
             let selection = Expression::FirstAvailable(Box::new(FirstAvailable::new(
+                path.to_string(),
                 [1, 2]
                     .iter()
                     .enumerate()
@@ -1731,7 +1747,12 @@ mod execution {
                 failure: None,
             };
             let predicate = BoundPredicate::new(
-                yamaa_core::predicate_compiler::compile("ID < 0", "case.when").unwrap(),
+                yamaa_core::expression::compile(
+                    "ID < 0",
+                    yamaa_core::expression::Context::Predicate,
+                    "case.when",
+                )
+                .unwrap(),
                 vec![Binding {
                     name: "ID".into(),
                     read: Read::Column(0),
@@ -1913,6 +1934,7 @@ mod execution {
                         assign(
                             2,
                             Expression::FirstAvailable(Box::new(FirstAvailable::new(
+                                "row.SELECTED".into(),
                                 vec![SelectionSource {
                                     path: "row.SELECTED.sources[0]".into(),
                                     read: SelectionRead::Expression(Box::new(assign(
@@ -1997,6 +2019,7 @@ mod execution {
             )
             .unwrap();
             let selection = Expression::FirstAvailable(Box::new(FirstAvailable::new(
+                "row.RESULT".into(),
                 vec![
                     SelectionSource {
                         path: "row.RESULT.sources[0]".into(),
@@ -2016,8 +2039,9 @@ mod execution {
                                     Expression::Case(vec![CaseBranch {
                                         when: Some(
                                             BoundPredicate::new(
-                                                yamaa_core::predicate_compiler::compile(
+                                                yamaa_core::expression::compile(
                                                     "1 = 1",
+                                                    yamaa_core::expression::Context::Predicate,
                                                     "row.RESULT.case.when",
                                                 )
                                                 .unwrap(),
@@ -2088,7 +2112,6 @@ mod execution {
                 Assignment, DatasetPlan, Expression, Intermediate, IntermediateKey, MatchRead,
                 MatchValue, RowMode, RowTemplate, SecondarySource, SourceSchemas,
             },
-            predicate::{Comparison, Node, Scalar},
             schema::{Document, DocumentNode as N, SpecificationDocument},
             specification::{PreparedSpecification, SourceDeclaration},
             table::{CellError, TableAccess, TableSchema, ValueRef},
@@ -2152,15 +2175,10 @@ mod execution {
         }
         fn filter(value: &str) -> BoundPredicate {
             BoundPredicate::new(
-                yamaa_core::predicate::Plan::new(
-                    vec![Node::Compare {
-                        operator: Comparison::Equal,
-                        left: Scalar::Identifier("SRC.KEEP".into()),
-                        right: Scalar::Literal(Value::Str(value.into())),
-                    }],
-                    0,
-                    "rows.filter".into(),
-                    format!("SRC.KEEP = '{value}'"),
+                yamaa_core::expression::compile(
+                    &format!("SRC.KEEP = '{value}'"),
+                    yamaa_core::expression::Context::Predicate,
+                    "rows.filter",
                 )
                 .unwrap(),
                 vec![Binding {
@@ -2243,6 +2261,7 @@ mod execution {
                     filter: None,
                     selection: None,
                     no_match: absence.then_some(Value::Missing),
+                    require_match: !absence,
                     unique: Vec::new(),
                     derivations: None,
                     pending_schema: None,
@@ -2490,7 +2509,10 @@ mod execution {
                         ("id", Tree::text("P")),
                         ("dataset", Tree::text("DONOR")),
                         ("key", Tree::map(vec![("K", Tree::text("KEY"))])),
-                        ("no_match", Tree::Scalar(N::Null)),
+                        (
+                            "no_match",
+                            Tree::map(vec![("literal", Tree::Scalar(N::Null))]),
+                        ),
                     ])]),
                 ),
                 (

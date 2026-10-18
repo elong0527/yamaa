@@ -37,8 +37,7 @@ rows:
       STUDYID: EX.STUDYID
       USUBJID: EX.USUBJID
       TRTSDT:
-        aggregate:
-          expr: "MIN(EX.EXSTDTC)"
+        aggregate: "MIN(EX.EXSTDTC)"
       DOSEORD:
         row_number:
           window:

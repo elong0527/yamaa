@@ -76,8 +76,8 @@ mod execution {
         const BODY: &str = r#"schema_version: "1.0"
 domain: TEST
 input:
-  SRC: {path: src.csv}
-  OTHER: {path: other.csv}
+  SRC: src.csv
+  OTHER: other.csv
 keys: [ID, SECTION]
 output: {path: result.csv, columns: [ID, SECTION, K, SEQ, V, FINAL, FIRST]}
 intermediates:
@@ -93,7 +93,7 @@ intermediates:
     filter: "SECTION = 'first'"
     order_by: [SEQ]
     keep: last
-    no_match: null
+    no_match: {literal: null}
 columns:
   - {name: ID, type: str, derivation: SRC.ID}
   - {name: SECTION, type: str}
@@ -148,10 +148,7 @@ rows:
         #[test]
         fn first_template_read_preserves_full_phase_context_before_study_access() {
             let fixture = Fixture::new();
-            let body = BODY.replace(
-                "SECTION: {literal: first}",
-                "SECTION: {source: {variable: P.K}}",
-            );
+            let body = BODY.replace("SECTION: {literal: first}", "SECTION: P.K");
             assert_eq!(
                 issues(fixture.run(&body)),
                 vec![yamaa_adapters::json!({
@@ -203,10 +200,8 @@ rows:
         #[test]
         fn reserved_input_collision_and_missing_row_phase_are_refused_before_study_access() {
             let fixture = Fixture::new();
-            let collision = BODY.replace(
-                "  OTHER: {path: other.csv}",
-                "  OTHER: {path: other.csv}\n  SELF: {path: self.csv}",
-            );
+            let collision =
+                BODY.replace("  OTHER: other.csv", "  OTHER: other.csv\n  SELF: self.csv");
             assert_eq!(
                 issues(fixture.run(&collision)),
                 vec![
@@ -236,7 +231,7 @@ rows:
         #[test]
         fn hidden_first_template_alternative_preserves_its_authored_phase_path() {
             let fixture = Fixture::new();
-            let body = BODY.replace("SECTION: {literal: first}", "SECTION: {case: [{when: \"SRC.ID = 'absent'\", then: {source: {variable: P.K}}}, {otherwise: {literal: first}}]}");
+            let body = BODY.replace("SECTION: {literal: first}", "SECTION: {case: [{when: \"SRC.ID = 'absent'\", then: P.K}, {otherwise: {literal: first}}]}");
             assert_eq!(
                 issues(fixture.run(&body)),
                 vec![yamaa_adapters::json!({
@@ -251,17 +246,17 @@ rows:
         fn aggregate_first_template_proof_keeps_full_references_including_record_star() {
             for (replacement, identifier, path) in [
                 (
-                    "SECTION: {aggregate: {expr: 'SUM(P.V)'}}",
+                    "SECTION: {aggregate: 'SUM(P.V)'}",
                     "P.V",
                     "rows[0].derivations.SECTION.aggregate",
                 ),
                 (
-                    "SECTION: {aggregate: {expr: 'COUNT(P.*)'}}",
+                    "SECTION: {aggregate: 'COUNT(P.*)'}",
                     "P.*",
                     "rows[0].derivations.SECTION.aggregate",
                 ),
                 (
-                    "SECTION: {case: [{when: 'TRUE', then: {aggregate: {expr: 'COUNT(P.*)'}}}]}",
+                    "SECTION: {case: [{when: 'TRUE', then: {aggregate: 'COUNT(P.*)'}}]}",
                     "P.*",
                     "rows[0].derivations.SECTION.case[0].then.aggregate",
                 ),
@@ -302,7 +297,7 @@ rows:
     derivations: {ID: ALT.ID}
 columns:
   - {name: ID, type: int}
-  - {name: TOTAL, type: int, derivation: {aggregate: {expr: 'SUM(D.V)'}}}
+  - {name: TOTAL, type: int, derivation: {aggregate: 'SUM(D.V)'}}
 "#;
             let mut result = fixture.run(body).unwrap();
             assert!(result.issues().is_empty(), "{:?}", result.issues());
@@ -846,7 +841,7 @@ rows:
             copy_dir(&root.join(benchmark), &case);
             fs::write(
                 case.join("__child.yaml"),
-                "schema_version: \"1.0\"\nparents: spec.yaml\n",
+                "schema_version: \"1.0\"\nparent: spec.yaml\n",
             )
             .unwrap();
             let parent = first_issue(&case.join("spec.yaml"));
@@ -972,7 +967,7 @@ rows:
                 .unwrap();
                 fs::write(
                     fixture.0.join("child.yaml"),
-                    "schema_version: '1.0'\nparents: parent.yaml\n",
+                    "schema_version: '1.0'\nparent: parent.yaml\n",
                 )
                 .unwrap();
                 for entry in ["parent.yaml", "child.yaml"] {
@@ -1067,7 +1062,7 @@ rows:
                 let lookup = "intermediates:\n  - {id: REF, dataset: REF, filter: \"REF.TRT = 'DRUG A'\", no_match: NONE}\n";
                 fs::write(fixture.0.join("parent.yaml"), parent).unwrap();
                 let entry = if inherited {
-                    format!("schema_version: '1.0'\nparents: parent.yaml\n{lookup}")
+                    format!("schema_version: '1.0'\nparent: parent.yaml\n{lookup}")
                 } else {
                     format!("{parent}{lookup}")
                 };
@@ -1179,7 +1174,7 @@ rows:
             .unwrap();
                     fs::write(
                         fixture.0.join("child.yaml"),
-                        "schema_version: '1.0'\nparents: parent.yaml\n",
+                        "schema_version: '1.0'\nparent: parent.yaml\n",
                     )
                     .unwrap();
                     let mut parent_issues = None;
@@ -1281,13 +1276,13 @@ rows:
                 fs::write(
             fixture.0.join("parent.yaml"),
             format!(
-                "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\nbase: OBS\ninput: {{OBS: obs.csv, UNUSED: absent.csv}}\noutput: {{path: result.csv, columns: [ID]}}\nintermediates:\n  - id: UNREAD\n    dataset: UNUSED\n{verifications}columns:\n  - {{name: ID, type: str, derivation: OBS.ID}}\n"
+                "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\nbase: OBS\ninput: {{OBS: obs.csv, UNUSED: absent.csv}}\noutput: {{path: result.csv, columns: [ID]}}\nintermediates:\n  - id: UNREAD\n    dataset: UNUSED\n    require_match: true\n{verifications}columns:\n  - {{name: ID, type: str, derivation: OBS.ID}}\n"
             ),
         )
         .unwrap();
                 fs::write(
                     fixture.0.join("child.yaml"),
-                    "schema_version: '1.0'\nparents: parent.yaml\n",
+                    "schema_version: '1.0'\nparent: parent.yaml\n",
                 )
                 .unwrap();
                 let mut result = fixture.build("child.yaml");
@@ -1305,8 +1300,8 @@ rows:
             }
         }
     }
-    mod inherited_key_shorthand {
-        //! Inherited key shorthand retains its internal current-row dependencies.
+    mod inherited_lookup_keys {
+        //! An inherited lookup key retains its internal current-row dependencies.
         use std::{
             fs,
             path::PathBuf,
@@ -1363,8 +1358,8 @@ rows:
             }
         }
         #[test]
-        fn lookup_and_aggregate_shorthands_survive_pruning_in_plain_case_and_row_derivations() {
-            for key in ["CODE", "[CODE]", "{CODE: CODE}"] {
+        fn lookup_and_aggregate_keys_survive_pruning_in_plain_case_and_row_derivations() {
+            for key in ["[CODE]", "{CODE: CODE}"] {
                 for shape in ["lookup", "case", "row", "aggregate"] {
                     let fixture = Fixture::new();
                     fs::write(fixture.0.join("obs.csv"), "ID,CODE\n1,A\n2,B\n").unwrap();
@@ -1385,7 +1380,7 @@ rows:
                     fs::write(fixture.0.join("parent.yaml"), parent).unwrap();
                     fs::write(
                         fixture.0.join("child.yaml"),
-                        "schema_version: '1.0'\nparents: parent.yaml\n",
+                        "schema_version: '1.0'\nparent: parent.yaml\n",
                     )
                     .unwrap();
                     for entry in ["parent.yaml", "child.yaml"] {
@@ -1515,10 +1510,10 @@ rows:
             (format!("  - {{name: N, type: int, derivation: {{literal: {written}}}}}"), "columns.N.derivation.literal"),
             (format!("  - {{name: N, type: float, derivation: {{literal: {written}}}}}"), "columns.N.derivation.literal"),
             (format!("  - {{name: N, type: str, derivation: {{literal: {written}}}}}"), "columns.N.derivation.literal"),
-            (format!("  - {{name: N, type: int, derivation: DM.AGE, verifications: {{allowed_values: {{values: [34, {written}]}}}}}}"), "columns.N.verifications[0].allowed_values.values[1]"),
-            (format!("  - {{name: N, type: int, derivation: DM.AGE, verifications: {{range: {{min: {written}}}}}}}"), "columns.N.verifications[0].range.min"),
-            (format!("  - {{name: N, type: int, derivation: DM.AGE, verifications: {{range: {{max: {written}}}}}}}"), "columns.N.verifications[0].range.max"),
-            (format!("  - {{name: N, type: str, derivation: DM.USUBJID, verifications: {{max_length: {{max: {written}}}}}}}"), "columns.N.verifications[0].max_length.max"),
+            (format!("  - {{name: N, type: int, derivation: DM.AGE, verifications: [{{allowed_values: {{values: [34, {written}]}}}}]}}"), "columns.N.verifications[0].allowed_values.values[1]"),
+            (format!("  - {{name: N, type: int, derivation: DM.AGE, verifications: [{{range: {{min: {written}}}}}]}}"), "columns.N.verifications[0].range.min"),
+            (format!("  - {{name: N, type: int, derivation: DM.AGE, verifications: [{{range: {{max: {written}}}}}]}}"), "columns.N.verifications[0].range.max"),
+            (format!("  - {{name: N, type: str, derivation: DM.USUBJID, verifications: [{{max_length: {{max: {written}}}}}]}}"), "columns.N.verifications[0].max_length.max"),
             (format!("  - {{name: N, type: int, derivation: {{value: {{source: DM.AGE}}, unconvertible: {written}}}}}"), "columns.N.derivation.unconvertible"),
         ];
                 for (column, path) in cases {
@@ -1546,7 +1541,7 @@ rows:
             fs::rename(case.0.join("spec.yaml"), case.0.join("parent.yaml")).unwrap();
             fs::write(
                 case.0.join("spec.yaml"),
-                "schema_version: '1.0'\nparents: parent.yaml\n",
+                "schema_version: '1.0'\nparent: parent.yaml\n",
             )
             .unwrap();
             assert_overflow(&case, "columns.N.derivation.case[0].then.literal", wide);
@@ -2259,7 +2254,7 @@ rows:
             }
         }
         #[test]
-        fn nested_case_and_concat_windows_use_the_full_completed_context() {
+        fn nested_case_windows_use_the_full_completed_context() {
             let study = Study::new(
                 "I,G,O,V\n1,A,2,a2\n2,A,1,a1\n3,A,3,a3\n4,B,1,b1\n",
                 r#"schema_version: '1.0'
@@ -2275,16 +2270,16 @@ columns:
         - when: 'I > 1'
           then: {row_number: {window: {group_by: [SRC.G], order_by: [SRC.O]}}}
         - otherwise: {literal: -1}
-  - name: C
+  - name: P
     type: str
     derivation:
-      str_concat:
-        sources:
-          - {literal: 'prior='}
-          - case:
-              - when: 'I = 3'
-                then: {row_value: {source: SRC.V, offset: -1, window: {group_by: [SRC.G], order_by: [SRC.O]}}}
-              - otherwise: {literal: skip}
+      case:
+        - when: 'I = 3'
+          then: {row_value: {source: SRC.V, offset: -1, window: {group_by: [SRC.G], order_by: [SRC.O]}}}
+        - otherwise: {literal: skip}
+  - name: C
+    type: str
+    derivation: {str_template: 'prior={P}'}
 output: {path: out.csv, columns: [I, N, C]}
 "#,
             );
@@ -2368,7 +2363,7 @@ columns:
     derivation:
       case:
         - when: 'I < 0'
-          then: {baseline_flag: {date: D, reference_date: D}}
+          then: {baseline_flag: {date: D, reference_date: D, value: I}}
         - otherwise: {literal: skipped}
 output: {path: out.csv, columns: [I, B]}
 "#;
@@ -2425,7 +2420,7 @@ columns:
     derivation:
       case:
         - when: "G = 'A'"
-          then: {baseline_flag: {date: D, reference_date: D, window: {group_by: [G]}}}
+          then: {baseline_flag: {date: D, reference_date: D, value: I, window: {group_by: [G]}}}
         - otherwise: {literal: skipped}
 output: {path: out.csv, columns: [I, B]}
 "#,
@@ -2605,7 +2600,7 @@ output: {path: out.csv, columns: [I, V]}
                 study.write(
             "spec.yaml",
             &json!({
-                "schema_version":"1.0", "parents":"parent.yaml",
+                "schema_version":"1.0", "parent":"parent.yaml",
                 "columns":[{"name":"PREV","derivation":{"row_value":{"window":replacement}}}]
             }),
         );
@@ -2622,7 +2617,7 @@ output: {path: out.csv, columns: [I, V]}
             study.write("parent.yaml", &document());
             study.write(
                 "spec.yaml",
-                &json!({"schema_version":"1.0","parents":"parent.yaml","windows":null}),
+                &json!({"schema_version":"1.0","parent":"parent.yaml","windows":null}),
             );
             let issues = study.refused();
             assert_eq!(issues[0].condition, "unknown_window");
@@ -2652,6 +2647,7 @@ output: {path: out.csv, columns: [I, V]}
                 if operation == "baseline_flag" {
                     payload["date"] = "SEQ".into();
                     payload["reference_date"] = "SEQ".into();
+                    payload["value"] = "SEQ".into();
                 }
                 authored["columns"][4]["type"] = kind.into();
                 authored["columns"][4]["derivation"] = json!({operation:payload});
@@ -2702,7 +2698,7 @@ output: {path: out.csv, columns: [I, V]}
                 let input_source = if output.iter().any(|name| name == "VAL") {
                     json!({"path":"input.csv","types":{"VAL":"int"}})
                 } else {
-                    json!({"path":"input.csv"})
+                    json!("input.csv")
                 };
                 let document = json!({
                     "schema_version":"1.0", "domain":"OUT", "base":"SRC",
@@ -2998,6 +2994,258 @@ output: {path: out.csv, columns: [I, V]}
                         }
                     }
                 }
+            }
+        }
+    }
+    mod missing_order {
+        //! Every order term places an undeclared missing value lowest: first
+        //! ascending and last descending. A declared `nulls` never flips.
+        use std::{
+            fs,
+            path::PathBuf,
+            sync::atomic::{AtomicUsize, Ordering},
+        };
+        use yamaa_adapters::{file_application, specification_report::Identity};
+        use yamaa_core::domain_entry::Request;
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+        struct Study(PathBuf);
+        impl Study {
+            fn new(input: &str, specification: &str) -> Self {
+                let path = std::env::temp_dir().join(format!(
+                    "yamaa-missing-order-{}-{}",
+                    std::process::id(),
+                    NEXT.fetch_add(1, Ordering::Relaxed)
+                ));
+                fs::create_dir(&path).unwrap();
+                fs::write(path.join("input.csv"), input).unwrap();
+                fs::write(path.join("spec.yaml"), specification).unwrap();
+                Self(fs::canonicalize(path).unwrap())
+            }
+            fn saved(&self) -> String {
+                let path = self.0.join("spec.yaml").to_str().unwrap().to_owned();
+                let mut result = file_application::domain(
+                    yamaa_core::project_function::Language::Python,
+                    Request {
+                        specification: &path,
+                        environment: None,
+                    },
+                    Identity {
+                        runtime: "test",
+                        runtime_version: "test",
+                        engine_version: yamaa_core::VERSION,
+                        example: "missing-order",
+                        specification: &path,
+                        base_directory: ".",
+                    },
+                )
+                .unwrap_or_else(|_| panic!("valid missing-order study"));
+                assert!(result.issues().is_empty(), "{:?}", result.issues());
+                assert!(result.save().unwrap());
+                fs::read_to_string(self.0.join("out.csv")).unwrap()
+            }
+        }
+        impl Drop for Study {
+            fn drop(&mut self) {
+                fs::remove_dir_all(&self.0).unwrap();
+            }
+        }
+
+        #[test]
+        fn windows_and_presentation_sort_an_undeclared_missing_value_lowest() {
+            let specification = r#"schema_version: '1.0'
+domain: TEST
+keys: [I]
+input: {SRC: {path: input.csv, types: {I: int, D: int}}}
+columns:
+  - {name: I, type: int, derivation: SRC.I}
+  - {name: D, type: int, derivation: SRC.D}
+  - name: ASC
+    type: int
+    derivation: {row_number: {window: {order_by: [D]}}}
+  - name: DESC
+    type: int
+    derivation: {row_number: {window: {order_by: [{variable: D, direction: desc}]}}}
+  - name: LAST
+    type: int
+    derivation: {row_number: {window: {order_by: [{variable: D, nulls: last}]}}}
+  - name: FIRST
+    type: int
+    derivation:
+      row_number: {window: {order_by: [{variable: D, direction: desc, nulls: first}]}}
+output: {path: out.csv, columns: [I, D, ASC, DESC, LAST, FIRST], order_by: [D]}
+"#;
+            let input = "I,D\n1,3\n2,\n3,1\n";
+            assert_eq!(
+                Study::new(input, specification).saved(),
+                "I,D,ASC,DESC,LAST,FIRST\n2,,1,3,3,1\n3,1,2,2,1,3\n1,3,3,1,2,2\n"
+            );
+            let descending = specification.replace(
+                "order_by: [D]}\n",
+                "order_by: [{variable: D, direction: desc}]}\n",
+            );
+            assert_ne!(descending, specification);
+            assert_eq!(
+                Study::new(input, &descending).saved(),
+                "I,D,ASC,DESC,LAST,FIRST\n1,3,3,1,2,2\n3,1,2,2,1,3\n2,,1,3,3,1\n"
+            );
+        }
+
+        #[test]
+        fn source_and_lookup_selection_sort_an_undeclared_missing_value_lowest() {
+            let study = Study::new(
+                "G,D,S\nA,3,a3\nA,,amiss\nA,1,a1\nB,2,b2\nB,,bmiss\n",
+                r#"schema_version: '1.0'
+domain: TEST
+keys: [G]
+input: {SRC: {path: input.csv, types: {D: int}}}
+base: SRC
+intermediates:
+  - id: LATEST
+    dataset: SRC
+    order_by: [{variable: SRC.D, direction: desc}]
+    keep: last
+columns:
+  - {name: G, type: str, derivation: SRC.G}
+  - name: LOWEST
+    type: str
+    derivation: {source: {variable: SRC.S, order_by: [SRC.D], keep: first}}
+  - name: HIGHEST
+    type: str
+    derivation:
+      source: {variable: SRC.S, order_by: [{variable: SRC.D, direction: desc}], keep: first}
+  - name: DATED
+    type: str
+    derivation:
+      source: {variable: SRC.S, order_by: [{variable: SRC.D, nulls: last}], keep: first}
+  - {name: TRAILING, type: str, derivation: LATEST.S}
+output: {path: out.csv, columns: [G, LOWEST, HIGHEST, DATED, TRAILING]}
+"#,
+            );
+            assert_eq!(
+                study.saved(),
+                "G,LOWEST,HIGHEST,DATED,TRAILING\nA,amiss,a3,a1,amiss\nB,bmiss,b2,b2,bmiss\n"
+            );
+        }
+    }
+    mod baseline_operands {
+        //! baseline_flag binds its value and tie-break operands at their own
+        //! paths, and still refuses window.order_by beside them.
+        use std::{
+            fs,
+            sync::atomic::{AtomicUsize, Ordering},
+        };
+        use yamaa_adapters::{file_application, specification_report::Identity};
+        use yamaa_core::domain_entry::Request;
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+        const INPUT: &str = "I,G,D,R,V,SEQ\n1,A,2025-01-03,2025-01-05,10,2\n\
+                             2,A,2025-01-03,2025-01-05,11,1\n3,A,2025-01-05,2025-01-05,12,3\n";
+        const SPECIFICATION: &str = r#"schema_version: '1.0'
+domain: TEST
+keys: [I]
+input: {SRC: {path: input.csv, types: {I: int, D: date, R: date, V: int, SEQ: int}}}
+columns:
+  - {name: I, type: int, derivation: SRC.I}
+  - {name: G, type: str, derivation: SRC.G}
+  - {name: D, type: date, derivation: SRC.D}
+  - {name: R, type: date, derivation: SRC.R}
+  - {name: V, type: int, derivation: SRC.V}
+  - {name: SEQ, type: int, derivation: SRC.SEQ}
+  - name: BLFL
+    type: str
+    derivation:
+      baseline_flag:
+        date: D
+        reference_date: R
+        value: V
+        inclusive: false
+        tie_break: [SEQ]
+        window: {group_by: [G]}
+output: {path: out.csv, columns: [I, BLFL]}
+"#;
+        /// The first issue's condition, paths and identifier context, or the saved CSV.
+        fn run(specification: &str) -> Result<String, (String, Vec<String>, String)> {
+            let root = std::env::temp_dir().join(format!(
+                "yamaa-baseline-operands-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            fs::create_dir(&root).unwrap();
+            let root = fs::canonicalize(root).unwrap();
+            fs::write(root.join("input.csv"), INPUT).unwrap();
+            fs::write(root.join("spec.yaml"), specification).unwrap();
+            let path = root.join("spec.yaml").to_str().unwrap().to_owned();
+            let outcome = file_application::domain(
+                yamaa_core::project_function::Language::Python,
+                Request {
+                    specification: &path,
+                    environment: None,
+                },
+                Identity {
+                    runtime: "test",
+                    runtime_version: "test",
+                    engine_version: yamaa_core::VERSION,
+                    example: "baseline-operands",
+                    specification: &path,
+                    base_directory: ".",
+                },
+            );
+            let issues = match outcome {
+                Ok(mut result) if result.issues().is_empty() => {
+                    assert!(result.save().unwrap());
+                    let saved = fs::read_to_string(root.join("out.csv")).unwrap();
+                    fs::remove_dir_all(&root).unwrap();
+                    return Ok(saved);
+                }
+                Ok(result) => result.issues(),
+                Err(issues) => issues,
+            };
+            fs::remove_dir_all(&root).unwrap();
+            let first = issues.first().expect("a failed run reports an issue");
+            Err((
+                first.condition.clone(),
+                first.spec_paths.clone(),
+                first.context["identifier"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_owned(),
+            ))
+        }
+
+        #[test]
+        fn value_and_tie_break_bind_at_their_paths_and_window_order_stays_forbidden() {
+            // Strictly before January 5, the two January 3 rows are ordered by SEQ.
+            assert_eq!(run(SPECIFICATION).unwrap(), "I,BLFL\n1,Y\n2,\n3,\n");
+            let path = "columns.BLFL.derivation.baseline_flag";
+            for (before, after, condition, at, identifier) in [
+                (
+                    "value: V",
+                    "value: ABSENT",
+                    "unknown_field",
+                    format!("{path}.value"),
+                    "ABSENT",
+                ),
+                (
+                    "tie_break: [SEQ]",
+                    "tie_break: [I, ABSENT]",
+                    "unknown_field",
+                    format!("{path}.tie_break[1]"),
+                    "ABSENT",
+                ),
+                (
+                    "window: {group_by: [G]}",
+                    "window: {group_by: [G], order_by: [SEQ]}",
+                    "window_order_by_forbidden",
+                    format!("{path}.window.order_by"),
+                    "",
+                ),
+            ] {
+                let changed = SPECIFICATION.replace(before, after);
+                assert_ne!(changed, SPECIFICATION);
+                assert_eq!(
+                    run(&changed).unwrap_err(),
+                    (condition.to_owned(), vec![at], identifier.to_owned()),
+                    "{after}"
+                );
             }
         }
     }

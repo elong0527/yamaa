@@ -324,6 +324,7 @@ fn terminology_diagnostic<'a, B: Project<'a>>(
         Fault::DuplicateValue { .. } => C::CodelistDuplicateValue,
         Fault::PartialDecode | Fault::PartialRank => C::CodelistPartialItemField,
         Fault::ExtensionNotAdmitted { .. } => C::CodelistExtensionNotAdmitted,
+        Fault::ExtendedAlias { .. } => C::CodelistExtendedAlias,
     };
     let mut d = project.start(code, "codelists")?;
     project.index(&mut d, finding.source)?;
@@ -345,20 +346,28 @@ fn terminology_diagnostic<'a, B: Project<'a>>(
         Fault::PartialRank => project.context(&mut d, "field", "rank")?,
         Fault::InvalidValue { item }
         | Fault::DuplicateValue { item }
-        | Fault::ExtensionNotAdmitted { item } => {
-            let value = &list
+        | Fault::ExtensionNotAdmitted { item }
+        | Fault::ExtendedAlias { item } => {
+            let entry = list
                 .items
                 .as_deref()
                 .and_then(|i| i.get(item))
-                .ok_or(Error::InvalidIndex)?
-                .value;
+                .ok_or(Error::InvalidIndex)?;
+            let value = &entry.value;
             project.append(&mut d, ".items")?;
             project.index(&mut d, item)?;
-            if matches!(finding.fault, Fault::ExtensionNotAdmitted { .. }) {
-                project.append(&mut d, ".extended")?;
-            } else {
-                project.append(&mut d, ".value")?;
-                project.scalar(&mut d, "value", value)?;
+            match finding.fault {
+                Fault::ExtensionNotAdmitted { .. } => project.append(&mut d, ".extended")?,
+                Fault::ExtendedAlias { .. } => {
+                    project.append(&mut d, ".alias")?;
+                    project.scalar(&mut d, "value", value)?;
+                    let alias = entry.alias.as_deref().ok_or(Error::InvalidIndex)?;
+                    project.context(&mut d, "alias", alias)?;
+                }
+                _ => {
+                    project.append(&mut d, ".value")?;
+                    project.scalar(&mut d, "value", value)?;
+                }
             }
         }
     }

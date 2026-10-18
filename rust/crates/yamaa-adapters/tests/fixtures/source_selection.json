@@ -15,7 +15,7 @@
   ],
   "cases": {
     "scalar-output-selection": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: input.csv}\noutput: {path: result.csv, columns: [ID, BASE, FIRST, LAST]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: BASE, type: int, derivation: SRC.V}\n  - {name: FIRST, type: int, derivation: {source: {variable: BASE, order_by: [SRC.ID], keep: first}}}\n  - {name: LAST, type: int, derivation: {source: {variable: BASE, order_by: [SRC.ID], keep: last}}}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: input.csv\noutput: {path: result.csv, columns: [ID, BASE, FIRST, LAST]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: BASE, type: int, derivation: SRC.V}\n  - {name: FIRST, type: int, derivation: {source: {variable: BASE, order_by: [SRC.ID], keep: first}}}\n  - {name: LAST, type: int, derivation: {source: {variable: BASE, order_by: [SRC.ID], keep: last}}}\n",
       "inputs": {
         "input.csv": "ID,V\na,-9223372036854775808\nb,9223372036854775807\n"
       },
@@ -73,7 +73,7 @@
       "csv": "ID,BASE,FIRST,LAST\na,-9223372036854775808,-9223372036854775808,-9223372036854775808\nb,9223372036854775807,9223372036854775807,9223372036854775807\n"
     },
     "already-selected-intermediate": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: input.csv}\n  DONOR: {path: donor.csv, types: {SEQ: int}}\noutput: {path: result.csv, columns: [ID, A, B]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: {ID: ID}\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: A, type: str, derivation: {source: {variable: P.A, order_by: [DONOR.SEQ], keep: last}}}\n  - {name: B, type: str, derivation: {source: {variable: P.B, order_by: [DONOR.SEQ], keep: first, absent: fallback}}}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: input.csv\n  DONOR: {path: donor.csv, types: {SEQ: int}}\noutput: {path: result.csv, columns: [ID, A, B]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: {ID: ID}\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: A, type: str, derivation: {source: {variable: P.A, order_by: [DONOR.SEQ], keep: last}}}\n  - {name: B, type: str, derivation: {source: {variable: P.B, order_by: [DONOR.SEQ], keep: first, absent: fallback}}}\n",
       "inputs": {
         "input.csv": "ID\na\n",
         "donor.csv": "ID,SEQ,A,B\na,1,first,\na,1,second,present\n"
@@ -174,7 +174,13 @@
       },
       "issues": [],
       "check_issues": [],
-      "handlers": [],
+      "handlers": [
+        {
+          "spec_path": "columns.ID.derivation.first_available.missing",
+          "handler": "missing",
+          "count": 1
+        }
+      ],
       "source_reads": [
         "input.csv"
       ],
@@ -211,7 +217,7 @@
       "csv": "ID,VALUE\na,-9223372036854775808\nbackup-b,20\nbackup-c,30\nFINAL,9223372036854775807\n"
     },
     "absent-key-full-int64": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: input.csv}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: int, derivation: {source: {variable: SRC.ABSENT, absent: -9223372036854775808}}}\n  - {name: VALUE, type: str, derivation: SRC.V}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: input.csv\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: int, derivation: {source: {variable: SRC.ABSENT, absent: -9223372036854775808}}}\n  - {name: VALUE, type: str, derivation: SRC.V}\n",
       "inputs": {
         "input.csv": "V\nconstant\nconstant\n"
       },
@@ -248,13 +254,19 @@
       "csv": "ID,VALUE\n-9223372036854775808,constant\n"
     },
     "key-first-available-earlier": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, K]\ninput:\n  SRC: {path: input.csv}\noutput: {path: result.csv, columns: [ID, K, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: K, type: str, derivation: {first_available: {sources: [ID, SRC.OTHER]}}}\n  - {name: VALUE, type: int, derivation: SRC.V}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, K]\ninput:\n  SRC: input.csv\noutput: {path: result.csv, columns: [ID, K, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: K, type: str, derivation: {first_available: {sources: [ID, SRC.OTHER]}}}\n  - {name: VALUE, type: int, derivation: SRC.V}\n",
       "inputs": {
         "input.csv": "ID,OTHER,V\na,unused,10\nb,unused,20\n"
       },
       "issues": [],
       "check_issues": [],
-      "handlers": [],
+      "handlers": [
+        {
+          "spec_path": "columns.K.derivation.first_available.missing",
+          "handler": "missing",
+          "count": 0
+        }
+      ],
       "source_reads": [
         "input.csv"
       ],
@@ -289,7 +301,7 @@
       "csv": "ID,K,VALUE\na,a,10\nb,b,20\n"
     },
     "secondary-ordered-key": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, K]\ninput:\n  SRC: {path: input.csv}\n  D: {path: donor.csv, types: {SEQ: int}}\noutput: {path: result.csv, columns: [ID, K, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: K, type: str, derivation: {source: {variable: D.NEWKEY, order_by: [D.SEQ], keep: last}}}\n  - {name: VALUE, type: int, derivation: SRC.V}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, K]\ninput:\n  SRC: input.csv\n  D: {path: donor.csv, types: {SEQ: int}}\noutput: {path: result.csv, columns: [ID, K, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: K, type: str, derivation: {source: {variable: D.NEWKEY, order_by: [D.SEQ], keep: last}}}\n  - {name: VALUE, type: int, derivation: SRC.V}\n",
       "inputs": {
         "input.csv": "ID,V\na,10\na,10\n",
         "donor.csv": "ID,SEQ,NEWKEY\na,1,first\na,1,second\n"
@@ -301,6 +313,11 @@
           "spec_path": "columns.K.derivation.source.multiple_matches",
           "handler": "multiple_matches",
           "count": 2
+        },
+        {
+          "spec_path": "columns.K.derivation.source.absent",
+          "handler": "absent",
+          "count": 0
         }
       ],
       "source_reads": [
@@ -333,14 +350,25 @@
       "csv": "ID,K,VALUE\na,second,10\n"
     },
     "secondary-filtered-key-first": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, K]\ninput:\n  SRC: {path: input.csv}\n  D: {path: donor.csv, types: {SEQ: int}}\noutput: {path: result.csv, columns: [ID, K, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: K, type: str, derivation: {first_available: {sources: [{variable: D.NEWKEY, filter: 'D.SEQ = 2'}, SRC.BACKUP]}}}\n  - {name: VALUE, type: int, derivation: SRC.V}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, K]\ninput:\n  SRC: input.csv\n  D: {path: donor.csv, types: {SEQ: int}}\noutput: {path: result.csv, columns: [ID, K, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: K, type: str, derivation: {first_available: {sources: [{variable: D.NEWKEY, filter: 'D.SEQ = 2'}, SRC.BACKUP]}}}\n  - {name: VALUE, type: int, derivation: SRC.V}\n",
       "inputs": {
         "input.csv": "ID,BACKUP,V\na,local-a,10\nb,local-b,20\n",
         "donor.csv": "ID,SEQ,NEWKEY\na,1,first\na,2,second\n"
       },
       "issues": [],
       "check_issues": [],
-      "handlers": [],
+      "handlers": [
+        {
+          "spec_path": "columns.K.derivation.first_available.missing",
+          "handler": "missing",
+          "count": 0
+        },
+        {
+          "spec_path": "columns.K.derivation.first_available.sources[0].absent",
+          "handler": "absent",
+          "count": 1
+        }
+      ],
       "source_reads": [
         "input.csv",
         "donor.csv"
@@ -376,7 +404,7 @@
       "csv": "ID,K,VALUE\na,second,10\nb,local-b,20\n"
     },
     "named-key-candidates-choice": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, A, B]\ninput:\n  SRC: {path: input.csv, types: {CUT: int}}\n  DONOR: {path: donor.csv, types: {SEQ: int}}\noutput: {path: result.csv, columns: [ID, A, B, C]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: {ID: ID}\n    filter: 'DONOR.SEQ > SRC.CUT'\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: null\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: A, type: str, derivation: {first_available: {sources: [P.A, SRC.BACKUP]}}}\n  - {name: B, type: str, derivation: {source: {variable: P.B, order_by: [DONOR.SEQ], keep: last}}}\n  - {name: C, type: str, derivation: P.C}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, A, B]\ninput:\n  SRC: {path: input.csv, types: {CUT: int}}\n  DONOR: {path: donor.csv, types: {SEQ: int}}\noutput: {path: result.csv, columns: [ID, A, B, C]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: {ID: ID}\n    filter: 'DONOR.SEQ > SRC.CUT'\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: A, type: str, derivation: {first_available: {sources: [P.A, SRC.BACKUP]}}}\n  - {name: B, type: str, derivation: {source: {variable: P.B, order_by: [DONOR.SEQ], keep: last}}}\n  - {name: C, type: str, derivation: P.C}\n",
       "inputs": {
         "input.csv": "ID,CUT,BACKUP\na,0,unused\nb,1,unused\n",
         "donor.csv": "ID,SEQ,A,B,C\na,1,a1,b1,c1\na,2,a2,b2,c2\nb,1,a1,b1,c1\nb,2,a2,b2,c2\n"
@@ -384,6 +412,11 @@
       "issues": [],
       "check_issues": [],
       "handlers": [
+        {
+          "spec_path": "columns.A.derivation.first_available.missing",
+          "handler": "missing",
+          "count": 0
+        },
         {
           "spec_path": "columns.B.derivation.source.multiple_matches",
           "handler": "multiple_matches",
@@ -497,7 +530,7 @@
       ]
     },
     "unpaired-keep": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: input.csv}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {source: {variable: SRC.V, keep: first}}}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: input.csv\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {source: {variable: SRC.V, keep: first}}}\n",
       "inputs": {
         "input.csv": "ID,V\na,value\n"
       },
@@ -545,7 +578,7 @@
       ]
     },
     "unpaired-order": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: input.csv}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {source: {variable: SRC.V, order_by: [SRC.V]}}}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: input.csv\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {source: {variable: SRC.V, order_by: [SRC.V]}}}\n",
       "inputs": {
         "input.csv": "ID,V\na,value\n"
       },
@@ -641,7 +674,7 @@
       ]
     },
     "resource-failure-first": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: input.csv}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {source: {variable: SRC.V, keep: first}}}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: input.csv\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {source: {variable: SRC.V, keep: first}}}\n",
       "inputs": {},
       "issues": [
         {
@@ -680,7 +713,7 @@
       "source_reads": []
     },
     "key-nonkey-dep-forbidden": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: input.csv}\noutput: {path: result.csv, columns: [VALUE, ID]}\ncolumns:\n  - {name: VALUE, type: int, derivation: {literal: 7}}\n  - {name: ID, type: int, derivation: {first_available: {sources: [VALUE]}}}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: input.csv\noutput: {path: result.csv, columns: [VALUE, ID]}\ncolumns:\n  - {name: VALUE, type: int, derivation: {literal: 7}}\n  - {name: ID, type: int, derivation: {first_available: {sources: [VALUE]}}}\n",
       "inputs": {
         "input.csv": "ID\na\n"
       },
@@ -705,7 +738,7 @@
       ]
     },
     "scalar-filter-stays-prohibited": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: input.csv}\noutput: {path: result.csv, columns: [ID, BASE, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: BASE, type: str, derivation: SRC.V}\n  - {name: VALUE, type: str, derivation: {source: {variable: BASE, filter: 'TRUE', order_by: [SRC.ID], keep: first}}}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: input.csv\noutput: {path: result.csv, columns: [ID, BASE, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: BASE, type: str, derivation: SRC.V}\n  - {name: VALUE, type: str, derivation: {source: {variable: BASE, filter: 'TRUE', order_by: [SRC.ID], keep: first}}}\n",
       "inputs": {
         "input.csv": "ID,V\na,value\n"
       },

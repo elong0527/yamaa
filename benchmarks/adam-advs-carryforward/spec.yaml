@@ -24,7 +24,7 @@ intermediates:
   - id: COLLECTED
     dataset: VS
     key: {STUDYID: STUDYID, USUBJID: USUBJID, VSTESTCD: PARAMCD, VSDTC: ADT}
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: STUDYID
@@ -63,13 +63,15 @@ columns:
     derivation: COLLECTED.VSSTRESN
 
   # The closest earlier collected value for the same subject and parameter,
-  # in date then planned order; the current row is never a candidate.
+  # in date then planned order; with include_current false the current row
+  # is never a candidate.
   - name: AVALPREV
     type: float
     label: Previous Non-Missing Analysis Value
     derivation:
-      previous_non_missing:
+      locf:
         source: AVALCOL
+        include_current: false
         window:
           group_by: [STUDYID, USUBJID, PARAMCD]
           order_by: [ADT, ASEQ]
@@ -107,6 +109,7 @@ columns:
           group_by: [STUDYID, USUBJID]
         date: HGTDT
         reference_date: TRTSDT
+        value: AVALCOL
 
   # The flagged height, repeated on every row of the subject; missing when
   # no height is flagged.
@@ -120,8 +123,6 @@ columns:
         expr: "ONLY(AVALCOL)"
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, ASEQ]
   - row_count:
       min: 21
       max: 21

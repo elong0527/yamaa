@@ -3133,9 +3133,11 @@ functions:
             assert_eq!(activation.values, [7, i64::MIN, 10, 10, 40]);
         }
 
+        /// A function's declared result type is its derived field's type
+        /// (EXPR-14), so an intermediate exposing it drives rows (ROW-2).
         #[test]
-        fn callback_derived_fields_are_not_exposed_as_inferred_row_driver_types() {
-            let raw = "schema_version: '1.0'\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int}}}\nkeys: [ID]\nintermediates:\n  - id: DON\n    dataset: SRC\n    derivations:\n      V: {function: {name: id, args: {x: SRC.ID}}}\ncolumns:\n  - {name: ID, type: int}\nrows:\n  - id: records\n    dataset: DON\n    derivations: {ID: DON.ID}\noutput: {path: output.csv, columns: [ID]}\n";
+        fn callback_derived_fields_expose_their_declared_result_type_to_row_drivers() {
+            let raw = "schema_version: '1.0'\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int}}}\nkeys: [ID]\nintermediates:\n  - id: DON\n    dataset: SRC\n    derivations:\n      V: {function: {name: id, args: {x: SRC.ID}}}\ncolumns:\n  - {name: ID, type: int}\n  - {name: VALUE, type: int}\nrows:\n  - id: records\n    dataset: DON\n    derivations: {ID: DON.ID, VALUE: DON.V}\noutput: {path: output.csv, columns: [ID, VALUE]}\n";
             let document = schemas::domain_schema()
                 .prepare_standalone(source("study/domain.yaml", raw.as_bytes()))
                 .unwrap();
@@ -3144,25 +3146,14 @@ functions:
             let (mut activation, mut study) = ports();
             study.bytes = Arc::from(b"ID\n1\n".as_slice());
             let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
-            let error = attempt.dataset.result.unwrap_err();
-            let PortError::Run(yamaa_core::specification_run::RunError::Bind(
-                yamaa_core::specification::BindError::Invalid(findings),
-            )) = error
-            else {
-                panic!("{error:?}")
-            };
-            let diagnostics = findings
-                .iter()
-                .flat_map(|finding| finding.diagnostics(run.compiled().source()).unwrap())
-                .collect::<Vec<_>>();
-            assert!(
-                diagnostics.iter().any(|d| d.definition().condition
-                    == "unknown_intermediate_driver_type"
-                    && d.definition().requirement == Some("REQ-1262")
-                    && d.spec_paths == ["rows[0].dataset"]),
-                "{diagnostics:?}"
-            );
-            assert_eq!(activation.values, [7, i64::MIN]);
+            assert!(attempt.boundary.is_ok());
+            let entered = attempt
+                .dataset
+                .result
+                .unwrap_or_else(|error| panic!("{error:?}"));
+            let result = entered.result.unwrap_or_else(|error| panic!("{error:?}"));
+            assert_eq!(result.dataset.rows(), &[vec![Value::Int(1), Value::Int(1)]]);
+            assert_eq!(activation.values, [7, i64::MIN, 1]);
         }
     }
 }

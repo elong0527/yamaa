@@ -64,8 +64,8 @@ IMPUTATION_CASES = (
     "negative-date-conversion",
     "negative-impute-bad-source",
     "negative-precision-bad-source",
-    "negative-datetime-impute-bad-source",
-    "negative-datetime-precision-bad-source",
+    "negative-impute-datetime-text",
+    "negative-precision-datetime-text",
 )
 TEXT_CASES = (
     "schema-sentence-case",
@@ -338,7 +338,7 @@ def stage_temporal_imputation_truth(destination: Path):
             "validation",
             "month_out_of_range",
             "REQ-0608",
-            "columns.ASTDT.derivation.date_impute.month",
+            "columns.ASTDT.derivation.impute.month",
             {"month": 15},
         ),
         (
@@ -346,7 +346,7 @@ def stage_temporal_imputation_truth(destination: Path):
             "validation",
             "month_not_permitted",
             "REQ-0592",
-            "columns.ASTDT.derivation.date_impute.month",
+            "columns.ASTDT.derivation.impute.month",
             {"month": 6},
         ),
         (
@@ -354,7 +354,7 @@ def stage_temporal_imputation_truth(destination: Path):
             "validation",
             "month_required",
             "REQ-0592",
-            "columns.ASTDT.derivation.date_impute.month",
+            "columns.ASTDT.derivation.impute.month",
             {"minimum_source_precision": "year"},
         ),
         (
@@ -362,7 +362,7 @@ def stage_temporal_imputation_truth(destination: Path):
             "validation",
             "value_not_permitted",
             "REQ-0609",
-            "columns.ASTDT.derivation.date_impute.day",
+            "columns.ASTDT.derivation.impute.day",
             {"value": "mid", "permitted": ["first", "last"]},
         ),
         (
@@ -370,7 +370,7 @@ def stage_temporal_imputation_truth(destination: Path):
             "impute",
             "invalid_calendar_date",
             "REQ-0608",
-            "columns.AENDT.derivation.date_impute",
+            "columns.AENDT.derivation.impute",
             {
                 "value": "2023-04",
                 "completed": "2023-04-31",
@@ -494,6 +494,28 @@ def stage_text_pad_truth(destination: Path):
     )
     shutil.copy2(original, destination / "text-pad-reference.json")
     capture = json.loads(original.read_text(encoding="utf-8"))
+    # Each successful case's complete handler ledger, as the report writes it.
+    with (destination / "text-pad-handlers.tsv").open(
+        "w", newline="", encoding="ascii"
+    ) as stream:
+        writer = csv.writer(
+            stream,
+            delimiter="\t",
+            lineterminator="\n",
+            quoting=csv.QUOTE_NONE,
+            quotechar=None,
+        )
+        writer.writerow(("case", "handlers"))
+        for name, case in capture.items():
+            if "handlers" in case:
+                writer.writerow(
+                    (
+                        name,
+                        json.dumps(
+                            case["handlers"], sort_keys=True, separators=(",", ":")
+                        ),
+                    )
+                )
     root = destination / "text-pad-cases"
     root.mkdir()
     with (destination / "text-pad-findings.tsv").open(
@@ -883,8 +905,6 @@ def stage_inheritance_replay(destination: Path):
         )
         writer.writeheader()
         for case in cases:
-            if case["case"] == "diamond_alias":
-                continue  # The complete original document qualifies successful composition.
             request = json.loads(case["request"])
             expected = json.loads(case["expected"])
             expected["protocol"] = "specification/prototype"

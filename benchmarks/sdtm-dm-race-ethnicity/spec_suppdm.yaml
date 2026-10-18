@@ -4,8 +4,9 @@ keys: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM]
 
 input:
   ODM: input/odm.csv
-  # DM is built by spec_dm.yaml in the same run, so the subjects that get
-  # supplemental race records are exactly the ones DM calls MULTIPLE.
+  # DM is the artifact spec_dm.yaml saves before this entry is built, so the
+  # subjects that get supplemental race records are exactly the ones DM calls
+  # MULTIPLE.
   DM:
     path: dm.csv
     schema: spec_dm.yaml
@@ -20,6 +21,7 @@ intermediates:
   - id: DMREC
     dataset: DM
     key: {STUDYID: ODM.StudyOID, USUBJID: ODM.SubjectKey}
+    require_match: true
 
 columns:
   - name: STUDYID
@@ -44,8 +46,6 @@ columns:
     type: str
     label: Identifying Variable Value
     derivation: USUBJID
-    verifications:
-      not_missing: {}
 
   - name: ITEMOID
     type: str
@@ -82,8 +82,8 @@ columns:
     derivation:
       str_template: "RACE{RACENUMC}"
     verifications:
-      matches:
-        pattern: "^RACE[1-9][0-9]*$"
+      - matches:
+          pattern: "^RACE[1-9][0-9]*$"
 
   - name: QLABEL
     type: str
@@ -108,7 +108,7 @@ columns:
           "Other, specify: Fijian": OTHER
           "Not reported": NOT REPORTED
           "Subject refused": UNKNOWN
-        missing: null
+        missing: {literal: null}
     verifications:
       - not_missing: {}
       - allowed_values:
@@ -143,8 +143,6 @@ rows:
       DMRACE: DMREC.RACE
 
 verifications:
-  - unique:
-      columns: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM]
   - row_count:
       min: 11
       max: 11

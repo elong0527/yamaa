@@ -1,6 +1,3 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADAE
-validation:
-  rule: R004
-  validator: predicate

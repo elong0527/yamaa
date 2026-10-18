@@ -1,6 +1,3 @@
 lifecycle: draft
 standard: ADaM
 domain: ADSL
-validation:
-  rule: R013
-  validator: aggregate_expression

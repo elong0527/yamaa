@@ -4,9 +4,8 @@
 //! literal replacement text are owned here.
 use crate::{
     diagnostic::Diagnostic,
-    regex,
     table::ValueRef,
-    text_extract::{self, AdmissionError, StringExtract},
+    text_extract::{AdmissionError, StringExtract},
     value::Value,
 };
 
@@ -16,6 +15,8 @@ pub struct StringReplace {
     replacement: String,
 }
 /// Matched spans borrow the subject; `render` joins them with the replacement.
+/// `Recovered` is a missing source, answered by the declared `missing` or by
+/// the default missing value.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Step<'a> {
     Matched {
@@ -23,14 +24,11 @@ pub enum Step<'a> {
         spans: Vec<(usize, usize)>,
     },
     Recovered,
-    Missing,
 }
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum Error {
     #[error("text replace diagnostic: {0:?}")]
     Diagnostic(Diagnostic),
-    #[error("text replace regex: {0:?}")]
-    Regex(regex::MatchError),
 }
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum RenderError {
@@ -69,20 +67,17 @@ impl StringReplace {
     pub fn missing(&self) -> Option<&Value> {
         self.search.handler("missing")
     }
-    /// Scan the whole subject before anything is copied. A step refusal cannot
-    /// be mistaken for a subject without matches.
+    /// The declared `missing` literal, or missing when it is omitted.
+    pub fn missing_substitute(&self) -> Value {
+        self.search.substitute("missing")
+    }
+    /// Scan the whole subject before anything is copied.
     pub fn apply<'a>(&self, value: ValueRef<'a>) -> Result<Step<'a>, Error> {
         if let Some(diagnostic) = self.search.declaration_diagnostic() {
             return Err(Error::Diagnostic(diagnostic.clone()));
         }
         let subject = match value {
-            ValueRef::Missing => {
-                return Ok(if self.missing().is_some() {
-                    Step::Recovered
-                } else {
-                    Step::Missing
-                });
-            }
+            ValueRef::Missing => return Ok(Step::Recovered),
             ValueRef::Str(subject) => subject,
             other => {
                 return Err(Error::Diagnostic(self.search.input_diagnostic(
@@ -101,8 +96,7 @@ impl StringReplace {
             .search
             .admitted()
             .expect("admitted pattern")
-            .search_all(subject)
-            .map_err(Error::Regex)?;
+            .search_all(subject);
         Ok(Step::Matched { subject, spans })
     }
     /// The unmatched text, in order, with each match replaced by the literal text.
@@ -121,10 +115,6 @@ impl StringReplace {
         }
         output.push_str(&subject[kept..]);
         Ok(output)
-    }
-    /// The missing-source failure, with the same facts extraction reports.
-    pub fn missing_diagnostic(&self) -> Option<Diagnostic> {
-        self.search.failure_diagnostic(text_extract::Step::Missing)
     }
 }
 
@@ -176,7 +166,8 @@ mod tests {
             ("x", "-", "abc", "abc"),
             ("^a", "", "aaa", "aa"),
             ("a$", "", "aaa", "aa"),
-            ("(?<=a)a", "-", "aaa", "a--"),
+            // An assertion at the resumed position still sees the scalar before it.
+            (r"\Ba", "-", "aaa", "a--"),
             (r"\bAE\b", "X", "AE AEX AE", "X AEX X"),
         ] {
             assert_eq!(
@@ -235,12 +226,13 @@ mod tests {
             let declared = operation("a", "b", Some(handler.clone()));
             assert_eq!(declared.apply(ValueRef::Missing), Ok(Step::Recovered));
             assert_eq!(declared.missing(), Some(&handler));
+            assert_eq!(declared.missing_substitute(), handler);
         }
+        // An omitted handler answers a missing source with missing (COLUMN-10).
         let op = operation("a", "b", None);
-        assert_eq!(op.apply(ValueRef::Missing), Ok(Step::Missing));
-        let missing = op.missing_diagnostic().unwrap();
-        assert_eq!(missing.code, ConditionCode::StrCaseMissing);
-        assert_eq!(missing.spec_paths, ["columns.TEXT.derivation.str_replace"]);
+        assert_eq!(op.apply(ValueRef::Missing), Ok(Step::Recovered));
+        assert_eq!(op.missing(), None);
+        assert_eq!(op.missing_substitute(), Value::Missing);
         let Err(Error::Diagnostic(input)) = op.apply(ValueRef::Int(1)) else {
             panic!("non-string source")
         };
@@ -267,15 +259,10 @@ mod tests {
     }
 
     #[test]
-    fn the_whole_scan_shares_one_step_guard() {
-        // Each empty match costs at least one start and one step, so a scan
-        // longer than the guard is refused rather than returned partly replaced.
-        let subject = "a".repeat(crate::limits::Limits::REGEX_STEPS);
-        assert!(matches!(
-            operation("x*", "-", None).apply(ValueRef::Str(&subject)),
-            Err(Error::Regex(_))
-        ));
-        assert_eq!(replaced("x*", "-", &"a".repeat(1000)).len(), 1000 + 1001);
+    fn a_long_scan_completes_without_a_step_budget() {
+        // A million and one empty matches, which the retired step guard refused.
+        let subject = "a".repeat(1_000_000);
+        assert_eq!(replaced("x*", "-", &subject).len(), 2 * subject.len() + 1);
     }
 
     #[test]

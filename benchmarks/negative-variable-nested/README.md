@@ -40,5 +40,5 @@ uppercasing step:
 
 Keep the helper column out of the artifact by leaving it off the artifact
 column list. A subject with both entries blank then stops the run; if that can
-happen, add `missing: null` beside `source: COUNTRYSRC` to leave that
-subject's country blank instead.
+happen, add `missing: {literal: null}` beside `source: COUNTRYSRC` to leave
+that subject's country blank instead.

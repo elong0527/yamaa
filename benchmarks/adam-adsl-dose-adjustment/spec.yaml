@@ -38,8 +38,7 @@ columns:
     type: int
     label: Record Count in EX
     derivation:
-      aggregate:
-        expr: "COUNT(EX.USUBJID)"
+      aggregate: "COUNT(EX.USUBJID)"
 
   - name: EC_ADJ_CNT
     type: int
@@ -53,8 +52,7 @@ columns:
     type: int
     label: Record Count in EC
     derivation:
-      aggregate:
-        expr: "COUNT(EC.USUBJID)"
+      aggregate: "COUNT(EC.USUBJID)"
 
   - name: FA_ADJ_CNT
     type: int
@@ -70,8 +68,7 @@ columns:
     type: int
     label: Record Count in FA
     derivation:
-      aggregate:
-        expr: "COUNT(FA.USUBJID)"
+      aggregate: "COUNT(FA.USUBJID)"
 
   # Y on any reported adjustment; N when the subject has records but none
   # reports one. A subject in none of the three sources stays empty.
@@ -85,5 +82,5 @@ columns:
         - when: "EX_ANY_CNT > 0 OR EC_ANY_CNT > 0 OR FA_ANY_CNT > 0"
           then: {literal: "N"}
     verifications:
-      allowed_values:
-        values: ["Y", "N"]
+      - allowed_values:
+          values: ["Y", "N"]

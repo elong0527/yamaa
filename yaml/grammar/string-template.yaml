@@ -1,10 +1,9 @@
-# Machine-readable grammar for R012's string template language.
+# Machine-readable grammar for the string template language.
 #
 # This file is the single source for the closed grammar written in
-# `str_template.template`. R012's `## Grammar` block is rendered from
-# `productions`, and every implementation's parser is checked against
-# `cases`, so the rule, the R parser, and the Python parser cannot drift
-# apart without failing validation.
+# `str_template.template`. The grammar block in the Text rules is rendered
+# from `productions`, and the shared parser is checked against `cases`, so
+# the rule and the parser cannot drift apart without failing validation.
 #
 # A template is scanned from left to right, and the brace pairs take
 # precedence over a single brace, so a case's shape records the literal text
@@ -15,7 +14,7 @@
 schema_version: "1.0"
 contract: string-template
 contract_version: "1.0.0"
-rule: operations/text
+rule: text
 start: template
 productions:
   - name: template
@@ -30,7 +29,7 @@ productions:
   - name: text
     prose: true
     definition: |-
-      one or more R019 scalar values other than "{" and "}"
+      one or more Unicode scalar values other than "{" and "}"
 imports:
   variable: schema
 vocabulary: {}

@@ -18,8 +18,8 @@ pub trait PathPort: InheritanceSourcePort {
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error<E> {
-    #[error("inheritance preparation parents required")]
-    ParentsRequired,
+    #[error("inheritance preparation parent required")]
+    ParentRequired,
     #[error("inheritance preparation traversal: {0:?}")]
     Traversal(inheritance::Error<E>),
     #[error("inheritance preparation path: {0:?}")]
@@ -185,17 +185,14 @@ pub fn prepare<P: PathPort>(
     entry_document: Document,
     port: &mut P,
 ) -> Result<PreparedInheritance, Error<P::Error>> {
-    if entry_document
-        .field(entry_document.root(), "parents")
-        .is_none()
-    {
-        return Err(Error::ParentsRequired);
+    if !inheritance::declares_parent(&entry_document) {
+        return Err(Error::ParentRequired);
     }
     let mut layers = inheritance::traverse(schema, entry.clone(), entry_document, port)
         .map_err(Error::Traversal)?;
-    // Input members merge immediate fields. Select the final explicit base
+    // Input members merge field by field. Select the final explicit base
     // before rebasing any contributing path, including a path whose base is
-    // overridden by a later layer independently from its written spelling.
+    // overridden or cleared by a later layer independently from its spelling.
     let mut input_bases = std::collections::BTreeMap::new();
     for layer in &layers {
         let document = &layer.document;

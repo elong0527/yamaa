@@ -120,11 +120,9 @@ rows:
   derivations:
     OPERATIONID: {literal: COUNT}
     NSUBJ:
-      aggregate:
-        expr: SUM(SUBJECT.EVENTN)
+      aggregate: SUM(SUBJECT.EVENTN)
     DENOM:
-      aggregate:
-        expr: COUNT(SUBJECT.USUBJID)
+      aggregate: COUNT(SUBJECT.USUBJID)
 
 - id: percent
   dataset: SUBJECT
@@ -135,19 +133,11 @@ rows:
   derivations:
     OPERATIONID: {literal: PERCENT}
     NSUBJ:
-      aggregate:
-        expr: SUM(SUBJECT.EVENTN)
+      aggregate: SUM(SUBJECT.EVENTN)
     DENOM:
-      aggregate:
-        expr: COUNT(SUBJECT.USUBJID)
+      aggregate: COUNT(SUBJECT.USUBJID)
 
 verifications:
-- unique:
-    columns:
-    - STUDYID
-    - ANALYSISID
-    - GROUPORDER
-    - OPERATIONID
 - assert:
     id: incidence-count-and-denominator
     require: DENOM > 0 AND NSUBJ >= 0 AND NSUBJ <= DENOM

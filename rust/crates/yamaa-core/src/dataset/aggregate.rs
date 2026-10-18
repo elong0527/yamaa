@@ -1,6 +1,6 @@
 //! Immutable aggregate relation and field bindings, admitted without study cells.
 use super::*;
-use crate::aggregate_compiler::CompiledAggregate;
+use crate::expression::CompiledExpression;
 use crate::value::ColumnType;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -96,7 +96,7 @@ pub struct AggregateRowContext {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct BoundAggregate {
-    expression: CompiledAggregate,
+    expression: CompiledExpression,
     relation: AggregateRelation,
     bindings: Vec<AggregateBinding>,
     filter: Option<BoundPredicate>,
@@ -116,7 +116,7 @@ pub struct AggregateDerivation {
 }
 impl BoundAggregate {
     pub fn new(
-        expression: CompiledAggregate,
+        expression: CompiledExpression,
         relation: AggregateRelation,
         mut bindings: Vec<AggregateBinding>,
         filter: Option<BoundPredicate>,
@@ -177,7 +177,7 @@ impl BoundAggregate {
     pub fn derived_schema(&self) -> Option<&TableSchema> {
         self.derived_schema.as_ref()
     }
-    pub fn expression(&self) -> &CompiledAggregate {
+    pub fn expression(&self) -> &CompiledExpression {
         &self.expression
     }
     pub fn relation(&self) -> &AggregateRelation {

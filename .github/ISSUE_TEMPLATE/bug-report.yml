@@ -41,7 +41,7 @@ body:
         dm.csv: two rows with USUBJID "DUP". Run: yamaa.spec("spec.yaml").run()
 
         Inconsistency example:
-        rules/specification/structure.md names the condition `foo_bar`,
+        rules/specification.md names the condition `foo_bar`,
         but yaml/conditions.yaml has no entry for it.
     validations:
       required: true
@@ -75,5 +75,5 @@ body:
     id: references
     attributes:
       label: "Links and references"
-      description: "REQ IDs, rule files, benchmarks or URLs that pin down the relevant spec, plus the impact or a suspected cause if you know it."
-      placeholder: "REQ-0075, rules/execution/lifecycle.md, benchmarks/adam-adsl-demographics"
+      description: "Rule IDs, rule files, benchmarks or URLs that pin down the relevant spec, plus the impact or a suspected cause if you know it."
+      placeholder: "COLUMN-2, rules/columns.md, benchmarks/adam-adsl-demographics"

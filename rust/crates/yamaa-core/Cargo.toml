@@ -16,6 +16,11 @@ ryu = { version = "1.0.20", default-features = false }
 libm = { version = "=0.2.16", default-features = false }
 # Exact decimal rounding intermediates.
 num-bigint = { version = "0.5.1", default-features = false }
+# Linear-time matching for the portable regex subset. Unicode tables stay off:
+# the validator spells \d, \w, \s, \b and . as explicit sets. The lazy DFA,
+# one-pass DFA and bounded backtracker are faster crate-internal engines with
+# the same leftmost-first results and no further dependencies.
+regex = { version = "1.13.1", default-features = false, features = ["std", "perf-dfa", "perf-onepass", "perf-backtrack"] }
 
 [lints]
 workspace = true

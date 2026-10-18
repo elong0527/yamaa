@@ -1,0 +1,26 @@
+schema_version: "1.0"
+parent: spec_shared.yaml
+
+# Merged into the inherited DM input: the study adds the type of the field
+# only it collects, and keeps the inherited path and the inherited AGE type.
+input:
+  DM:
+    types:
+      HEIGHTCM: float
+
+output:
+  path: adsl.csv
+  columns: [USUBJID, AGEGR1, HTGR1]
+
+columns:
+  - name: HTGR1
+    type: str
+    label: Pooled Height Group 1
+    derivation:
+      cut:
+        source: DM.HEIGHTCM
+        breaks: [170]
+        labels: ['<170', '>=170']
+
+metadata:
+  scope: study

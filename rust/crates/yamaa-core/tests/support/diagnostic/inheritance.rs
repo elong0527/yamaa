@@ -14,7 +14,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             },
             "invalid_parent_path",
             "REQ-0653",
-            "parents",
+            "parent",
             vec![
                 ("reason", "remote_reference"),
                 ("source", "child"),
@@ -28,7 +28,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             },
             "parent_not_found",
             "REQ-0654",
-            "parents",
+            "parent",
             vec![("path", "../missing.yaml"), ("source", "child")],
         ),
         (
@@ -38,7 +38,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             },
             "inheritance_cycle",
             "REQ-0655",
-            "parents",
+            "parent",
             vec![
                 ("reason", "parent_chain_returns_to_entry"),
                 ("source", "base"),
@@ -54,7 +54,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             },
             "schema_version_mismatch",
             "REQ-0656",
-            "parents",
+            "parent",
             vec![
                 ("source", "base"),
                 ("entry", "entry"),

@@ -1,7 +1,7 @@
 {
   "root_class": [
     "schema_version",
-    "parents",
+    "parent",
     "domain",
     "keys",
     "input",
@@ -23,7 +23,8 @@
     "encoding",
     "schema",
     "empty_string",
-    "ordinal"
+    "ordinal",
+    "require_match"
   ],
   "output_class": [
     "path",
@@ -43,6 +44,7 @@
     "keep",
     "columns",
     "no_match",
+    "require_match",
     "derivations",
     "verifications"
   ],

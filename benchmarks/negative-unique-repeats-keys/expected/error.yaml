@@ -1,0 +1,8 @@
+phase: validation
+condition: redundant_declaration
+spec_paths:
+  - verifications[0].unique
+requirement: REQ-0381
+context:
+  columns: [STUDYID, USUBJID]
+  stated_by: keys

@@ -55,8 +55,8 @@ columns:
         - when: "ADY BETWEEN 8 AND 22"
           then: {literal: WEEK 2}
     verifications:
-      allowed_values:
-        values: [WEEK 2]
+      - allowed_values:
+          values: [WEEK 2]
 
   - name: AWTARGET
     type: int
@@ -73,8 +73,8 @@ columns:
       compute:
         expr: "ABS(ADY - AWTARGET)"
     verifications:
-      range:
-        min: 0
+      - range:
+          min: 0
 
   # Within each subject, parameter, and visit: closest to the target first,
   # then the later study day, then the lower sequence number. ANL01FL marks
@@ -99,8 +99,6 @@ columns:
       flag: "ARNK = 1"
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, PARAMCD, LBSEQ]
   - row_count:
       min: 11
       max: 11

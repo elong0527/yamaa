@@ -15,15 +15,20 @@ the actual arm names a treatment, TRT01A is "NOT TREATED". TRTSDT is the
 date of the earliest qualifying exposure start, and TRTSDTM is that start
 as a date and time, with the date and time joined by a T and a start
 collected without a time given the time 00:00:00. TRTSDT and TRTSDTM have
-no value when the subject has no qualifying exposure record. TRTSTMF is
-"H" when the first exposure start was collected without a time, and has
-no value otherwise. TRTEDT is the date of the latest exposure end among
-the subject's records naming "VITAMIN D3" or "PLACEBO", whether or not
-that record carries a start, and TRTEDTM is that end as a date and time,
-with the date and time joined by a T and an end collected without a time
-given the time 23:59:59. TRTEDT and TRTEDTM have no value when no record
-naming "VITAMIN D3" or "PLACEBO" has an end. TRTETMF is "H" when the last
-exposure end was collected without a time, and has no value otherwise.
+no value when the subject has no qualifying exposure record. TRTSTMF
+records which part of the first exposure start's time was supplied: "H"
+when the start was collected without a time, "M" when its time stops at
+the hour, and "S" when its time stops at the minute. TRTSTMF has no
+value when that time was collected to the second or when there is no
+start. TRTEDT is the date of the latest exposure end among the subject's
+records naming "VITAMIN D3" or "PLACEBO", whether or not that record
+carries a start, and TRTEDTM is that end as a date and time, with the
+date and time joined by a T and an end collected without a time given
+the time 23:59:59. TRTEDT and TRTEDTM have no value when no record
+naming "VITAMIN D3" or "PLACEBO" has an end. TRTETMF records which part
+of the last exposure end's time was supplied, as TRTSTMF does for the
+start, and has no value when that time was collected to the second or
+when there is no end.
 TRTDURD is the number of days from TRTSDT to TRTEDT counting both the
 first and the last day, so a single treatment day gives one, and it has
 no value when either date has no value. SAFFL is "Y" when the subject has

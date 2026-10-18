@@ -3,8 +3,8 @@ domain: ADAE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
   AE: {path: input/ae.csv, types: {AESEQ: int}}
-  ADSL: {path: input/adsl.csv}
-  CQTERM: {path: input/cqterm.csv}
+  ADSL: input/adsl.csv
+  CQTERM: input/cqterm.csv
 
 output:
   path: adae.csv

@@ -2,6 +2,7 @@
 use super::*;
 use crate::{
     bound_expression::Binding,
+    expression::{compile, Context as ExpressionContext},
     function_signature::{FunctionIdentity, InvocationPlan, Parameter, Presence},
     table::Column,
     value::{ColumnType, ValueType},
@@ -46,13 +47,18 @@ fn model(expression: Expression) -> Result<DatasetPlan, PlanError> {
         vec![Some(ColumnType::Int); 3],
     )
 }
-fn predicate() -> crate::predicate::Plan {
-    crate::predicate_compiler::compile("LATER > 0", "donor.when").unwrap()
+fn predicate() -> crate::expression::CompiledExpression {
+    compile("LATER > 0", ExpressionContext::Predicate, "donor.when").unwrap()
 }
 fn numeric(column: usize) -> Expression {
     Expression::Compute(
         BoundNumeric::new(
-            crate::numeric_compiler::compile_numeric("LATER + 1", "donor.compute.expr").unwrap(),
+            compile(
+                "LATER + 1",
+                ExpressionContext::Compute,
+                "donor.compute.expr",
+            )
+            .unwrap(),
             vec![Binding {
                 name: "LATER".into(),
                 read: Read::Source(column),
@@ -198,6 +204,7 @@ fn ranged_donor(
             ),
             columns: Some(vec![1]),
             no_match: Some(Value::Missing),
+            require_match: false,
             unique: vec![],
             derivations: None,
             pending_schema: None,

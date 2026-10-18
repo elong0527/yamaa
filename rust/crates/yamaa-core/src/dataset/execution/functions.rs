@@ -90,6 +90,7 @@ fn supplied<T: TableAccess + ?Sized>(
             let value = joined::read(
                 table,
                 read,
+                lookup::JoinSite::Operand(&context.assignment.path),
                 context.assignment,
                 candidate,
                 context.plan,
@@ -201,7 +202,6 @@ pub(super) fn admit<E>(
             }
         }
         Expression::Extreme { operands, .. }
-        | Expression::StrConcat { operands, .. }
         | Expression::StrTemplate { operands, .. }
         | Expression::Temporal { operands, .. }
         | Expression::Imputation { operands, .. } => {
@@ -209,8 +209,7 @@ pub(super) fn admit<E>(
                 admit(&operand.expression, functions)?;
             }
         }
-        Expression::StrContains { source, .. }
-        | Expression::StrExtract { source, .. }
+        Expression::StrExtract { source, .. }
         | Expression::StrReplace { source, .. }
         | Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }

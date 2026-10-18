@@ -2,20 +2,33 @@
 
 use std::{cmp::Ordering, fmt, str::FromStr};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DatePrecision {
+/// One collected-precision ladder for both temporal types: the finest field
+/// the collected source supplied. `None` marks a value no collected field
+/// supplied, such as an imputation fallback. A date is at most `Day`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Precision {
+    None,
     Year,
     Month,
-    Day,
-}
-
-/// The last field a datetime's collected source carried: day, hour, minute or second.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DateTimePrecision {
     Day,
     Hour,
     Minute,
     Second,
+}
+
+impl Precision {
+    /// The ladder's word, as `precision` returns it.
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Year => "year",
+            Self::Month => "month",
+            Self::Day => "day",
+            Self::Hour => "hour",
+            Self::Minute => "minute",
+            Self::Second => "second",
+        }
+    }
 }
 
 /// Construction errors are mapped to the consuming operation's condition.
@@ -35,27 +48,27 @@ pub struct Date {
     year: u16,
     month: u8,
     day: u8,
-    precision: DatePrecision,
+    precision: Precision,
+}
+
+/// Days in a month of the proleptic Gregorian calendar, or None outside 1 to 12.
+pub fn month_length(year: u16, month: u8) -> Option<u8> {
+    let leap = year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400));
+    Some(match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if leap => 29,
+        2 => 28,
+        _ => return None,
+    })
 }
 
 impl Date {
-    /// Validate complete calendar fields and attach the supplied collected precision.
-    pub fn new(
-        year: u16,
-        month: u8,
-        day: u8,
-        precision: DatePrecision,
-    ) -> Result<Self, TemporalError> {
-        let leap =
-            year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400));
-        let days = match month {
-            1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
-            4 | 6 | 9 | 11 => 30,
-            2 if leap => 29,
-            2 => 28,
-            _ => return Err(TemporalError::InvalidDate),
-        };
-        if !(1..=9999).contains(&year) || day == 0 || day > days {
+    /// Validate complete calendar fields and attach the supplied collected
+    /// precision, which is at most `Day` for a date.
+    pub fn new(year: u16, month: u8, day: u8, precision: Precision) -> Result<Self, TemporalError> {
+        let days = month_length(year, month).ok_or(TemporalError::InvalidDate)?;
+        if !(1..=9999).contains(&year) || day == 0 || day > days || precision > Precision::Day {
             return Err(TemporalError::InvalidDate);
         }
         Ok(Self {
@@ -72,8 +85,16 @@ impl Date {
     }
 
     /// Return the finest field supplied by collection, excluding imputed fields.
-    pub fn collected_precision(self) -> DatePrecision {
+    pub fn collected_precision(self) -> Precision {
         self.precision
+    }
+
+    /// The same day with another collected precision, capped at `Day`.
+    pub fn with_precision(self, precision: Precision) -> Self {
+        Self {
+            precision: precision.min(Precision::Day),
+            ..self
+        }
     }
 }
 
@@ -127,7 +148,7 @@ fn parse_date(bytes: &[u8]) -> Result<Date, TemporalError> {
         digits(&bytes[..4])?,
         digits(&bytes[5..7])? as u8,
         digits(&bytes[8..])? as u8,
-        DatePrecision::Day,
+        Precision::Day,
     )
 }
 
@@ -146,18 +167,19 @@ pub struct DateTime {
     hour: u8,
     minute: u8,
     second: u8,
-    precision: DateTimePrecision,
+    precision: Precision,
 }
 
 impl DateTime {
-    /// Construct complete fields with explicitly supplied datetime precision.
+    /// Construct complete fields with explicitly supplied datetime precision;
+    /// the date's own collected precision is not consulted.
     /// This is not the prohibited column conversion from date to datetime.
     pub fn new(
         date: Date,
         hour: u8,
         minute: u8,
         second: u8,
-        precision: DateTimePrecision,
+        precision: Precision,
     ) -> Result<Self, TemporalError> {
         if hour > 23 || minute > 59 || second > 59 {
             return Err(TemporalError::InvalidTime);
@@ -169,6 +191,16 @@ impl DateTime {
             second,
             precision,
         })
+    }
+
+    /// The same moment with another collected precision.
+    pub fn with_precision(self, precision: Precision) -> Self {
+        Self { precision, ..self }
+    }
+
+    /// The calendar date of this moment, with collected precision capped at `Day`.
+    pub fn date(self) -> Date {
+        self.date.with_precision(self.precision)
     }
 
     /// Return civil fields in most-significant-first chronological order.
@@ -184,7 +216,7 @@ impl DateTime {
     }
 
     /// Return the finest field supplied by collection, excluding imputed fields.
-    pub fn collected_precision(self) -> DateTimePrecision {
+    pub fn collected_precision(self) -> Precision {
         self.precision
     }
 }
@@ -247,7 +279,7 @@ impl FromStr for DateTime {
             digits(&bytes[11..13])? as u8,
             digits(&bytes[14..16])? as u8,
             second,
-            DateTimePrecision::Second,
+            Precision::Second,
         )
     }
 }

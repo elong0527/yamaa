@@ -20,7 +20,7 @@ fn inspection_round_trip_requires_no_yaml_or_parquet_reader() {
           "/examples/0":{"declaring_source":"/held/spec.yaml","source_kind":"authored","generated":false},
           "/examples/1":{"declaring_source":"/held/spec.yaml","source_kind":"authored","generated":false}
         },
-        "layers":["/held/spec.yaml"], "resources":[], "producers":{}
+        "layers":["/held/spec.yaml"], "resources":[]
       }]
     }"#;
     let artifact = ResolvedArtifact::from_json(TEXT).unwrap();

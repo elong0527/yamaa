@@ -11,8 +11,6 @@ pub enum Error {
     Collision,
     #[error("source ordinal invalid name")]
     InvalidName,
-    #[error("source ordinal invalid table")]
-    InvalidTable,
     #[error(
         "source ordinal resource limit: resource={resource:?}, limit={limit:?}, actual={actual:?}"
     )]
@@ -26,21 +24,6 @@ impl Error {
     pub fn finding<'a>(self, dataset: &'a str, field: &'a str) -> Option<SourceFinding<'a>> {
         (self == Self::Collision).then_some(SourceFinding::OrdinalCollision { dataset, field })
     }
-}
-/// Producer contracts describe stored fields before the admitted generated field.
-pub fn stored_fields<'a>(
-    schema: &'a TableSchema,
-    name: Option<&str>,
-) -> Result<&'a [Column], Error> {
-    let fields = schema.columns();
-    let Some(name) = name else { return Ok(fields) };
-    let Some((generated, stored)) = fields.split_last() else {
-        return Err(Error::InvalidTable);
-    };
-    if generated.name != name || generated.kind != ColumnType::Int {
-        return Err(Error::InvalidTable);
-    }
-    Ok(stored)
 }
 /// The generated field is admitted once, before any physical allocation.
 pub struct Ordinal {

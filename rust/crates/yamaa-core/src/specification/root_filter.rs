@@ -4,19 +4,15 @@ use crate::json::Value as JsonValue;
 use crate::{
     bound_expression::BoundPredicate,
     diagnostic::{ConditionCode, Diagnostic},
-    predicate_compiler,
 };
 
 #[derive(Debug)]
 pub(super) struct RootFilter {
     expression: String,
-    compiled: Result<crate::predicate::Plan, predicate_compiler::Error>,
+    compiled: Result<CompiledExpression, CompileError>,
 }
 impl RootFilter {
-    pub(super) fn prepare(
-        d: &Document,
-        extra: &mut Vec<UnsupportedFeature>,
-    ) -> Result<Option<Self>, PrepareError> {
+    pub(super) fn prepare(d: &Document) -> Result<Option<Self>, PrepareError> {
         let Some(id) = d
             .field(d.root(), "filter")
             .filter(|&id| !matches!(d.nodes()[id], N::Null))
@@ -24,17 +20,9 @@ impl RootFilter {
             return Ok(None);
         };
         let expression = text(d, id)?;
-        let compiled = predicate_compiler::compile(expression, "filter");
-        match &compiled {
-            Ok(_)
-            | Err(predicate_compiler::Error::Parse(
-                crate::predicate_parser::ParseError::Grammar { .. },
-            )) => (),
-            Err(predicate_compiler::Error::Parse(
-                crate::predicate_parser::ParseError::UnsupportedRegex { .. },
-            )) => reject(extra, "predicate_regex", "filter".into()),
-            Err(predicate_compiler::Error::Internal) => return Err(PrepareError::Internal),
-            Err(error) => return Err(PrepareError::predicate(error.clone(), Some("filter"))),
+        let compiled = compile(expression, ExpressionContext::Predicate, "filter");
+        if let Err(error @ CompileError::Limit { .. }) = &compiled {
+            return Err(PrepareError::expression(error.clone(), Some("filter")));
         }
         Ok(Some(Self {
             expression: expression.into(),
@@ -49,11 +37,9 @@ impl RootFilter {
     ) -> Result<Option<BoundPredicate>, BindError> {
         let plan = match &self.compiled {
             Ok(plan) => plan,
-            Err(predicate_compiler::Error::Parse(
-                crate::predicate_parser::ParseError::Grammar {
-                    position, failure, ..
-                },
-            )) => {
+            Err(CompileError::Invalid {
+                position, failure, ..
+            }) => {
                 findings.push(BindFinding::Lookup(LookupFinding::grammar(
                     "filter",
                     &self.expression,
@@ -62,7 +48,7 @@ impl RootFilter {
                 )));
                 return Ok(None);
             }
-            Err(error) => return Err(BindError::PredicatePolicy(error.clone())),
+            Err(error) => return Err(BindError::ExpressionPolicy(error.clone())),
         };
         let start = findings.len();
         let mut seen = std::collections::BTreeSet::new();
@@ -111,7 +97,17 @@ impl RootFilter {
         if findings.len() != start {
             return Ok(None);
         }
-        BoundPredicate::new(plan.clone(), bindings)
+        let typed = plan.typed(|name| {
+            crate::result_type::ResultType::declared(
+                name.split_once('.')
+                    .filter(|(dataset, _)| *dataset == driver)
+                    .and_then(|(_, field)| {
+                        source.columns().iter().find(|column| column.name == field)
+                    })
+                    .map(|column| column.kind),
+            )
+        });
+        BoundPredicate::new(typed, bindings)
             .map(Some)
             .map_err(BindError::InvalidPredicateBinding)
     }

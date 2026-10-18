@@ -25,7 +25,7 @@ intermediates:
       value: ADY
       lower: AWLO
       upper: AWHI
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: STUDYID
@@ -116,12 +116,10 @@ columns:
     derivation:
       flag: "AWRANK = 1"
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, PARAMCD, VSSEQ]
   - row_count:
       min: 16
       max: 16

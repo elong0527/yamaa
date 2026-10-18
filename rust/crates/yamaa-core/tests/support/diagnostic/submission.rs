@@ -9,7 +9,7 @@ pub(crate) use yamaa_core::{
     project_environment::Submission,
     project_terminology as ct,
     submission_composition::{self as composition, Finding, Input, Study},
-    submission_document, submission_json, submission_xml,
+    submission_document, submission_transport, submission_xml, submission_xpt,
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
     value::{ColumnType, Value},
 };
@@ -129,21 +129,35 @@ pub(crate) fn compose(
     installed: &str,
     created: &str,
 ) -> Result<Study, Vec<Finding>> {
+    compose_study(project, docs, Vec::new(), catalogue, installed, created)
+}
+/// Compose the first section; `others` are the specifications the study's
+/// other submission sections list.
+pub(crate) fn compose_study(
+    project: Tree,
+    docs: Vec<Tree>,
+    others: Vec<Tree>,
+    catalogue: &ct::Catalogue,
+    installed: &str,
+    created: &str,
+) -> Result<Study, Vec<Finding>> {
     let project = project.document();
     let declared = submission_document::decode(&project, project.root()).unwrap();
     let docs: Vec<_> = docs.into_iter().map(Tree::document).collect();
+    let others: Vec<_> = others.into_iter().map(Tree::document).collect();
+    let others: Vec<_> = others.iter().collect();
     let inputs: Vec<_> = docs
         .iter()
         .map(|document| Input {
             document,
             source: "d0.yaml",
             artifact: "d0.csv",
-            href: "d0.csv",
+            href: Some("d0.csv"),
         })
         .collect();
     let section = &declared.sections()[0];
     let required = composition::Required::admit(declared.study(), Some(section), section.family)?;
-    composition::compose(required, catalogue, &inputs, installed, created)
+    composition::compose(required, catalogue, &inputs, &others, installed, created)
 }
 pub(crate) fn one(
     project: Tree,
@@ -251,9 +265,9 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             3,
         ),
         (
-            SubmissionMandatoryUnenforced,
-            "mandatory_not_enforced",
-            "REQ-0916",
+            VerificationNotMissingRedundant,
+            "redundant_declaration",
+            "REQ-0375",
             4,
         ),
         (SubmissionAdamField, "value_not_permitted", "REQ-0917", 5),
@@ -319,9 +333,9 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             16,
         ),
         (
-            SubmissionAllowedValuesLiteral,
+            SubmissionKeyMandatory,
             "value_not_permitted",
-            "REQ-0955",
+            "REQ-0881",
             17,
         ),
         (
@@ -349,9 +363,9 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             21,
         ),
         (
-            SubmissionDatasetJsonNoData,
-            "dataset_json_without_data",
-            "REQ-1227",
+            SubmissionLabelInvalid,
+            "transport_label_invalid",
+            "XPT-5",
             22,
         ),
         (
@@ -366,6 +380,43 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             "REQ-0909",
             24,
         ),
+        (SubmissionClassFamily, "value_not_permitted", "REQ-0882", 25),
+        (
+            VerificationUniqueRedundant,
+            "redundant_declaration",
+            "REQ-0381",
+            26,
+        ),
+        (
+            CodelistAllowedValuesRedundant,
+            "redundant_declaration",
+            "REQ-0955",
+            27,
+        ),
+        (
+            SubmissionMandatoryRedundant,
+            "redundant_declaration",
+            "REQ-0916",
+            28,
+        ),
+        (
+            SubmissionDisplayFormatConflict,
+            "value_not_permitted",
+            "SUB-25",
+            29,
+        ),
+        (
+            XptDisplayFormatInvalid,
+            "xpt_display_format_invalid",
+            "XPT-9",
+            30,
+        ),
+        (
+            SubmissionTransportDecimals,
+            "decimals_not_applicable",
+            "JSON-5",
+            31,
+        ),
     ] {
         let mut project = project();
         let mut spec = specification();
@@ -379,10 +430,11 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 *spec.at(&["domain"]) = Tree::text("LONGDOMAIN");
             }
             3 => spec.remove(&["columns", "0", "submission", "core"]),
-            4 => {
-                *spec.at(&["keys"]) = Tree::list(vec![]);
-                spec.at(&meta).set(&["mandatory"], Tree::boolean(true));
-            }
+            // A key column is mandatory on every row; a `not_missing` restates it.
+            4 => spec.set(
+                &["columns", "0", "verifications"],
+                Tree::list(vec![Tree::map(vec![("not_missing", Tree::map(vec![]))])]),
+            ),
             5 => {
                 project = Tree::Map(match project {
                     Tree::Map(mut fields) => {
@@ -404,11 +456,11 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             8 => {
                 *spec.at(&["columns", "0", "submission", "origin", "type"]) = Tree::text("Derived")
             }
+            // A bare literal refutes Derived: the value is read from no input.
             9 => {
-                *spec.at(&["columns", "0", "submission", "origin", "type"]) =
-                    Tree::text("Collected");
-                *spec.at(&["columns", "0", "submission", "origin", "source"]) =
-                    Tree::text("Vendor");
+                *spec.at(&["columns", "0", "submission", "origin", "type"]) = Tree::text("Derived");
+                spec.at(&meta)
+                    .set(&["method"], Tree::text("Independent algorithm"));
             }
             10 | 11 => {
                 *spec.at(&["columns", "0", "submission", "origin", "type"]) =
@@ -440,20 +492,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                     Tree::map(vec![("max", Tree::integer("4"))]),
                 )])]),
             ),
-            17 => {
-                lists = catalogue(false, Value::Str("X".into()));
-                spec.at(&meta).set(&["codelist"], Tree::text("LIST"));
-                spec.set(
-                    &["columns", "0", "verifications"],
-                    Tree::list(vec![Tree::map(vec![(
-                        "allowed_values",
-                        Tree::map(vec![(
-                            "values",
-                            Tree::list(vec![Tree::map(vec![("nested", Tree::text("X"))])]),
-                        )]),
-                    )])]),
-                );
-            }
+            17 => spec.at(&meta).set(&["mandatory"], Tree::boolean(false)),
             18 => spec.at(&meta).set(
                 &["origin", "documents"],
                 Tree::list(vec![Tree::text("UNKNOWN")]),
@@ -466,15 +505,99 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 *spec.at(&["submission", "repeating"]) = Tree::boolean(true);
                 spec.set(&["submission", "reference_data"], Tree::boolean(true));
             }
-            21 | 22 => {
-                spec.set(&["submission", "has_no_data"], Tree::boolean(true));
-                if change == 22 {
-                    project.set(&["sdtm", "datasets"], Tree::text("json"));
-                    spec.set(&["submission", "comment"], Tree::text("No data collected"));
-                }
+            21 => spec.set(&["submission", "has_no_data"], Tree::boolean(true)),
+            // A transport carries labels of at most 40 printable characters.
+            22 => {
+                project.set(&["sdtm", "datasets"], Tree::text("xpt"));
+                *spec.at(&["submission", "label"]) =
+                    Tree::text("An independent dataset label beyond forty characters");
             }
             23 => *spec.at(&["keys"]) = Tree::list(vec![Tree::text("MISSING")]),
             24 => *spec.at(&["output", "columns"]) = Tree::list(vec![]),
+            25 => *spec.at(&["submission", "class"]) = Tree::text("BASIC DATA STRUCTURE"),
+            // Composition reads the canonical class of the `unique` shorthand.
+            26 => spec.set(
+                &["verifications"],
+                Tree::list(vec![Tree::map(vec![(
+                    "unique",
+                    Tree::map(vec![("columns", Tree::list(vec![Tree::text("VALUE")]))]),
+                )])]),
+            ),
+            27 => {
+                lists = catalogue(false, Value::Str("X".into()));
+                spec.at(&meta).set(&["codelist"], Tree::text("LIST"));
+                spec.set(
+                    &["columns", "0", "verifications"],
+                    Tree::list(vec![Tree::map(vec![(
+                        "allowed_values",
+                        Tree::map(vec![("values", Tree::list(vec![Tree::text("X")]))]),
+                    )])]),
+                );
+            }
+            // A declared `mandatory: true` on a non-key column already requires
+            // every value; a `not_missing` beside it restates it.
+            28 => {
+                let mut extra = column("EXTRA");
+                extra
+                    .at(&["submission"])
+                    .set(&["mandatory"], Tree::boolean(true));
+                extra.set(
+                    &["verifications"],
+                    Tree::list(vec![Tree::map(vec![("not_missing", Tree::map(vec![]))])]),
+                );
+                *spec.at(&["columns"]) = Tree::list(vec![column("VALUE"), extra]);
+                *spec.at(&["output", "columns"]) =
+                    Tree::list(vec![Tree::text("VALUE"), Tree::text("EXTRA")]);
+            }
+            // An ADaM date travels as a SAS date with its one display format.
+            29 => {
+                project = Tree::Map(match project {
+                    Tree::Map(mut fields) => {
+                        fields[1].0 = "adam".into();
+                        fields
+                    }
+                    _ => unreachable!(),
+                });
+                *project.at(&["adam", "standard", "name"]) = Tree::text("ADaMIG");
+                *spec.at(&["submission", "class"]) = Tree::text("SUBJECT LEVEL ANALYSIS DATASET");
+                spec.at(&meta).set(&["mandatory"], Tree::boolean(true));
+                let mut date = column("ADT");
+                *date.at(&["type"]) = Tree::text("date");
+                date.remove(&["submission", "length"]);
+                date.at(&["submission"])
+                    .set(&["mandatory"], Tree::boolean(false));
+                date.at(&["submission"])
+                    .set(&["display_format"], Tree::text("YYMMDD10."));
+                date.set(
+                    &["derivation"],
+                    Tree::map(vec![("source", Tree::text("SRC.ADT"))]),
+                );
+                *spec.at(&["columns"]) = Tree::list(vec![column("VALUE"), date]);
+                *spec.at(&["output", "columns"]) =
+                    Tree::list(vec![Tree::text("VALUE"), Tree::text("ADT")]);
+            }
+            // A numeric display format under xpt must be a SAS format.
+            30 => {
+                project.set(&["sdtm", "datasets"], Tree::text("xpt"));
+                let mut number = column("NUMBER");
+                *number.at(&["type"]) = Tree::text("int");
+                number.set(
+                    &["derivation"],
+                    Tree::map(vec![("literal", Tree::integer("1"))]),
+                );
+                number
+                    .at(&["submission"])
+                    .set(&["display_format"], Tree::text("8,2"));
+                *spec.at(&["columns"]) = Tree::list(vec![column("VALUE"), number]);
+                *spec.at(&["output", "columns"]) =
+                    Tree::list(vec![Tree::text("VALUE"), Tree::text("NUMBER")]);
+            }
+            // A transport re-reads the artifact, so its display digits would
+            // become the submitted values.
+            31 => {
+                project.set(&["sdtm", "datasets"], Tree::text("json"));
+                spec.set(&["output", "decimals"], Tree::integer("2"));
+            }
             _ => unreachable!(),
         }
         let findings = one(project, spec, &lists).unwrap_err();
@@ -486,7 +609,63 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             condition,
             requirement,
         );
+        if change == 31 {
+            assert_eq!(findings.len(), 1, "{findings:?}");
+            assert_eq!(findings[0].path, "sdtm.specs[0].output.decimals");
+            for (key, value) in [
+                ("dataset", JsonValue::String("D0".into())),
+                ("specification", JsonValue::String("d0.yaml".into())),
+                (
+                    "decimals",
+                    JsonValue::Number(("2").parse().expect("canonical integer")),
+                ),
+            ] {
+                assert_eq!(findings[0].context[key], value, "{key}");
+            }
+        }
     }
+    // DEFINE-4 and CT-6: under Submission every published item of a CDISC/NCI
+    // list carries its NCI code, and a sponsor-extended item, which has none,
+    // carries no alias.
+    let epoch = |alias: Option<&str>| {
+        let item = |value: &str, alias: Option<&str>, extended| ct::Item {
+            value: Value::Str(value.into()),
+            decode: None,
+            rank: None,
+            alias: alias.map(String::from),
+            extended,
+        };
+        ct::Catalogue::admit(vec![ct::Source {
+            standard: Some(ct::Standard {
+                name: "CDISC/NCI".into(),
+                publishing_set: "SDTM".into(),
+                version: "2026-09-30".into(),
+            }),
+            codelists: vec![ct::Codelist {
+                id: "LIST".into(),
+                name: "Independent list".into(),
+                data_type: ct::DataType::Text,
+                extensible: true,
+                alias: Some("C99079".into()),
+                format_name: None,
+                external: None,
+                items: Some(vec![item("SCREENING", alias, false), item("X", None, true)]),
+            }],
+        }])
+        .unwrap()
+    };
+    let mut env = project();
+    env.set(&["sdtm", "context"], Tree::text("Submission"));
+    let mut spec = specification();
+    spec.set(
+        &["columns", "0", "submission", "codelist"],
+        Tree::text("LIST"),
+    );
+    assert!(one(env.clone(), spec.clone(), &epoch(Some("C48262"))).is_ok());
+    let findings = one(env, spec, &epoch(None)).unwrap_err();
+    assert_eq!(findings.len(), 1, "{findings:?}");
+    assert_eq!(findings[0].code, SubmissionCdiscAliasMissing);
+    assert_eq!(findings[0].path, "codelists.LIST");
     for (code, condition, requirement, change) in [
         (
             SubmissionValueTestcdMissing,
@@ -557,13 +736,16 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                     "row 1",
                     "CODE",
                     "VALUE",
-                    Tree::map(vec![(
-                        "origin",
-                        Tree::map(vec![
-                            ("type", Tree::text("Collected")),
-                            ("source", Tree::text("Vendor")),
-                        ]),
-                    )]),
+                    Tree::map(vec![
+                        (
+                            "origin",
+                            Tree::map(vec![
+                                ("type", Tree::text("Derived")),
+                                ("source", Tree::text("Sponsor")),
+                            ]),
+                        ),
+                        ("method", Tree::text("Independent algorithm")),
+                    ]),
                     true,
                 )
             }
@@ -585,11 +767,59 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 ("row", "row 1"),
                 ("testcd", "CODE"),
                 ("derivation_kind", "literal"),
-                ("origin_type", "Collected"),
+                ("origin_type", "Derived"),
             ] {
                 assert_eq!(finding.context[key], JsonValue::String(value.into()));
             }
         }
+    }
+    // A Predecessor that keeps its predecessor's name keeps its label, wherever
+    // another section of the study declares that column.
+    let mut spec = specification();
+    spec.set(&["input"], Tree::map(vec![("P0", Tree::text("p0.csv"))]));
+    *spec.at(&["columns", "0", "derivation"]) = Tree::map(vec![("source", Tree::text("P0.VALUE"))]);
+    *spec.at(&["columns", "0", "submission", "origin"]) = Tree::map(vec![
+        ("type", Tree::text("Predecessor")),
+        ("description", Tree::text("P0.VALUE")),
+    ]);
+    let mut predecessor = specification();
+    *predecessor.at(&["domain"]) = Tree::text("P0");
+    *predecessor.at(&["columns", "0", "label"]) = Tree::text("Predecessor column");
+    let created = "2026-09-30T00:00:00";
+    assert!(compose_study(
+        project(),
+        vec![spec.clone()],
+        vec![],
+        &empty,
+        "1.0",
+        created
+    )
+    .is_ok());
+    let findings = compose_study(
+        project(),
+        vec![spec],
+        vec![predecessor],
+        &empty,
+        "1.0",
+        created,
+    )
+    .unwrap_err();
+    reached_finding(
+        &mut reached,
+        &findings,
+        SubmissionPredecessorLabel,
+        "validation",
+        "predecessor_label_mismatch",
+        "SUB-20",
+    );
+    assert_eq!(findings.len(), 1, "{findings:?}");
+    assert_eq!(findings[0].path, "sdtm.specs[0].columns.VALUE.label");
+    for (key, value) in [
+        ("predecessor", "P0.VALUE"),
+        ("label", "Independent column"),
+        ("predecessor_label", "Predecessor column"),
+    ] {
+        assert_eq!(findings[0].context[key], JsonValue::String(value.into()));
     }
     for (code, condition, requirement, change) in [
         (
@@ -634,6 +864,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             "REQ-1004",
             6,
         ),
+        (SubmissionDefineName, "value_not_permitted", "DEFINE-2", 7),
     ] {
         let mut project = project();
         let mut spec = specification();
@@ -666,6 +897,11 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                     &["columns", "0", "submission", "codelist"],
                     Tree::text("LIST"),
                 );
+            }
+            // A transport file sits beside a document named define.xml.
+            7 => {
+                project.set(&["sdtm", "datasets"], Tree::text("json"));
+                *project.at(&["sdtm", "define"]) = Tree::text("out/metadata.xml");
             }
             _ => unreachable!(),
         }
@@ -724,7 +960,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         .unwrap(),
         value: Value::Bool(true),
     };
-    let finding = submission_json::admit(&study, &study.datasets()[0], &table).unwrap_err();
+    let finding = submission_transport::admit(&study, &study.datasets()[0], &table).unwrap_err();
     reached_finding(
         &mut reached,
         &[finding],
@@ -747,7 +983,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         .unwrap(),
         value: Value::Str("UNKNOWN_DATASET".into()),
     };
-    let finding = submission_json::admit(&study, &study.datasets()[0], &table).unwrap_err();
+    let finding = submission_transport::admit(&study, &study.datasets()[0], &table).unwrap_err();
     reached_finding(
         &mut reached,
         std::slice::from_ref(&finding),
@@ -777,6 +1013,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         finding.context["key_values"],
         JsonValue::Array(vec![JsonValue::String("UNKNOWN_DATASET".into())])
     );
+    transport_refusals(&mut reached, &empty);
     for valid in ["sdtm", "adam", "send"] {
         assert!(define_diagnostics::standard_name(valid).is_ok());
     }
@@ -829,7 +1066,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         DefineCreatedInvalid,
         "validation",
         "value_not_permitted",
-        "REQ-1072",
+        "REQ-0962",
     );
     assert!(define_diagnostics::admit_relation(
         TargetRelation::Independent,
@@ -845,21 +1082,15 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             "REQ-1021",
         ),
         (
-            TargetRelation::DatasetJsonOutsidePackage,
-            DefineDatasetJsonOutsidePackage,
-            "artifact_outside_document",
-            "REQ-1229",
-        ),
-        (
             TargetRelation::ArtifactCollision,
             DefineArtifactCollision,
             "artifact_path_collision",
             "REQ-1195",
         ),
         (
-            TargetRelation::DatasetJsonCollision,
-            DefineDatasetJsonCollision,
-            "dataset_json_path_collision",
+            TargetRelation::TransportCollision,
+            DefineTransportCollision,
+            "transport_path_collision",
             "REQ-1226",
         ),
     ] {
@@ -888,4 +1119,127 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         );
     }
     reached
+}
+
+/// Held rows of one typed column; a declared row count may exceed the cells
+/// when only the file geometry is inspected.
+pub(crate) struct Rows {
+    pub(crate) schema: TableSchema,
+    pub(crate) rows: usize,
+    pub(crate) values: Vec<Value>,
+}
+impl TableAccess for Rows {
+    type Error = Infallible;
+    fn schema(&self) -> &TableSchema {
+        &self.schema
+    }
+    fn row_count(&self) -> usize {
+        self.rows
+    }
+    fn cell(&self, row: usize, column: usize) -> Result<ValueRef<'_>, CellError<Infallible>> {
+        match self.values.get(row) {
+            Some(value) if column == 0 => Ok(value.into()),
+            _ => Err(CellError::OutOfBounds { row, column }),
+        }
+    }
+}
+fn rows(kind: ColumnType, values: Vec<Value>) -> Rows {
+    Rows {
+        schema: TableSchema::new(vec![Column {
+            name: "VALUE".into(),
+            kind,
+        }])
+        .unwrap(),
+        rows: values.len(),
+        values,
+    }
+}
+/// XPT-7, XPT-8, XPT-10 and JSON-3 over held published rows.
+fn transport_refusals(reached: &mut BTreeSet<ConditionCode>, empty: &ct::Catalogue) {
+    use ConditionCode::*;
+    let mut project = project();
+    project.set(&["sdtm", "datasets"], Tree::text("xpt"));
+    let study = one(project.clone(), specification(), empty).unwrap();
+    let dataset = &study.datasets()[0];
+    let finding = submission_transport::admit(
+        &study,
+        dataset,
+        &rows(ColumnType::Str, vec![Value::Str("caf\u{e9}".into())]),
+    )
+    .unwrap_err();
+    assert_eq!(finding.path, "datasets.D0.columns.VALUE");
+    assert_eq!(finding.context["cause"], JsonValue::String("ascii".into()));
+    assert_eq!(finding.context["row"], JsonValue::from(0usize));
+    reached_finding(
+        reached,
+        &[finding],
+        TransportTextInvalid,
+        "output",
+        "transport_text_invalid",
+        "XPT-7",
+    );
+    let finding =
+        submission_transport::admit(&study, dataset, &rows(ColumnType::Str, vec![])).unwrap_err();
+    assert_eq!(finding.path, "datasets.D0.artifact");
+    reached_finding(
+        reached,
+        &[finding],
+        SubmissionTransportEmpty,
+        "output",
+        "transport_dataset_empty",
+        "JSON-3",
+    );
+    let mut spec = specification();
+    *spec.at(&["columns", "0", "type"]) = Tree::text("int");
+    *spec.at(&["columns", "0", "derivation"]) = Tree::map(vec![("literal", Tree::integer("1"))]);
+    let numeric = one(project.clone(), spec, empty).unwrap();
+    let finding = submission_transport::admit(
+        &numeric,
+        &numeric.datasets()[0],
+        &rows(ColumnType::Int, vec![Value::Int((1 << 53) + 1)]),
+    )
+    .unwrap_err();
+    assert_eq!(
+        finding.context["cause"],
+        JsonValue::String("integer".into())
+    );
+    reached_finding(
+        reached,
+        &[finding],
+        XptValueOutOfRange,
+        "output",
+        "xpt_value_out_of_range",
+        "XPT-8",
+    );
+    let mut measured = one(project, specification(), empty).unwrap();
+    let held = rows(
+        ColumnType::Str,
+        vec![Value::Str("A".into()), Value::Missing],
+    );
+    submission_transport::measure(&mut measured, &[Some(&held)]).unwrap();
+    let document = submission_xpt::document(&measured, &measured.datasets()[0]);
+    assert_eq!(document.variables[0].width, 1);
+    let finding = submission_xpt::admit(&document, &measured.datasets()[0], &held).unwrap_err();
+    assert_eq!(finding.context["row"], JsonValue::from(1usize));
+    reached_finding(
+        reached,
+        &[finding],
+        XptLastRowBlank,
+        "output",
+        "xpt_last_row_blank",
+        "XPT-10",
+    );
+    let wide = Rows {
+        rows: 5_000_000_000 / document.observation(),
+        ..rows(ColumnType::Str, vec![])
+    };
+    let finding = submission_xpt::admit(&document, &measured.datasets()[0], &wide).unwrap_err();
+    reached_finding(
+        reached,
+        &[finding],
+        XptFileTooLarge,
+        "output",
+        "xpt_file_too_large",
+        "XPT-10",
+    );
 }

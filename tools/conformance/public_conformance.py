@@ -77,6 +77,7 @@ def plan(fixtures):
             "name": case.name,
             "entries": entries,
             "excluded": metadata.get("conformance", {}).get("excluded"),
+            "define": metadata.get("define"),
         }
         example["variants"], _ = example_variants(fixtures, example)
         examples.append(example)
@@ -102,11 +103,15 @@ def json_round_trippable(value):
 def key_order_texts(document):
     """JSON control/permuted texts for the key-order check, or None.
 
-    Eligible documents have no `rows` and no `parents`, at least two keys,
+    Eligible documents have no `rows` and no `parent`, at least two keys,
     and every key column reading one input field or a literal, so key columns
     may be declared in any order (REQ-0060, REQ-0062, REQ-0220).
     """
-    if not isinstance(document, dict) or "rows" in document or "parents" in document:
+    if (
+        not isinstance(document, dict)
+        or "rows" in document
+        or document.get("parent") is not None
+    ):
         return None
     keys = document.get("keys") or []
     columns = document.get("columns") or []
@@ -152,7 +157,9 @@ def example_variants(fixtures, example):
     if example["excluded"]:
         return descriptors, contents
     case = fixtures / example["name"]
-    negative = (case / "expected" / "error.yaml").exists()
+    # A Define benchmark's domain builds succeed; its expected failure, if
+    # any, belongs to the Define call the fixed-time Define suites run.
+    negative = (case / "expected" / "error.yaml").exists() and not example.get("define")
     for runtime in ("python", "r"):
         for index, entry in enumerate(example["entries"][runtime]):
             spec = Path(entry["specification"])
@@ -160,7 +167,7 @@ def example_variants(fixtures, example):
             descriptors[runtime].append(
                 {"kind": "empty_child", "entry": index, "specification": child}
             )
-            contents[child] = f'schema_version: "1.0"\nparents: {spec.name}\n'
+            contents[child] = f'schema_version: "1.0"\nparent: {spec.name}\n'
             if negative:
                 continue
             try:
@@ -289,10 +296,8 @@ def declarations(path, active=()):
     if not isinstance(data, dict):
         raise TypeError("specification declarations are not a mapping")
     types, output = {}, {}
-    parents = data.get("parents", [])
-    if isinstance(parents, str):
-        parents = [parents]
-    for parent in parents:
+    parent = data.get("parent")
+    if parent is not None:
         inherited_types, inherited_output = declarations(
             path.parent / parent, (*active, path.resolve())
         )
@@ -420,10 +425,11 @@ def expected_table(path, types):
 
 
 def reported_table(table, decimals):
-    """Independently project binary64 using REQ-0747, with no tolerance.
+    """Independently project binary64 using REQ-0747 and REQ-0418's interval.
 
     Committed precision CSVs contain reported values. Use integer ratios so
-    ties round away from zero exactly, rather than a host round() builtin.
+    ties, and near ties within 2^-26 below a scaled tie, round away from zero
+    exactly, rather than a host round() builtin.
     """
     if table is None:
         return None
@@ -437,7 +443,8 @@ def reported_table(table, decimals):
             number = struct.unpack(">d", bytes.fromhex(value))[0]
             numerator, denominator = number.as_integer_ratio()
             rounded, remainder = divmod(abs(numerator) * 10**decimals, denominator)
-            rounded += 2 * remainder >= denominator
+            # remainder / denominator >= 1/2 - 2^-26
+            rounded += remainder * 2**26 >= denominator * (2**25 - 1)
             digits = str(rounded).zfill(decimals + 1)
             text = (
                 digits
@@ -706,14 +713,15 @@ def compare_example(example, runtime, record, fixtures, observed, expectations=N
         result["not_compared"].append(
             {"artifact": "spec_resolved.yaml", "reason": RESOLVED_REASON}
         )
-    for filename in ("define.xml", "dm.json"):
-        if (case / "expected" / filename).exists():
-            result["not_compared"].append(
-                {
-                    "artifact": filename,
-                    "reason": "Define not compared by domain runner; fixed-time public Define suite is separate",
-                }
-            )
+    if example.get("define"):
+        for truth in sorted((case / "expected").iterdir()):
+            if truth.suffix in {".xml", ".json", ".xpt"} or truth.name == "error.yaml":
+                result["not_compared"].append(
+                    {
+                        "artifact": truth.name,
+                        "reason": "Define not compared by domain runner; fixed-time public Define suite is separate",
+                    }
+                )
     entries = example["entries"][runtime]
     if record.get("error"):
         result["findings"].append(record["error"])
@@ -767,7 +775,7 @@ def compare_example(example, runtime, record, fixtures, observed, expectations=N
         )
         return finish()
     negative = case / "expected/error.yaml"
-    if negative.exists():
+    if negative.exists() and not example.get("define"):
         want = load_yaml(negative)
         if not issues or not diagnostic_matches(want, issues[0]):
             result["findings"].append(
@@ -778,17 +786,9 @@ def compare_example(example, runtime, record, fixtures, observed, expectations=N
                 }
             )
         if want.get("phase") == "validation":
-            # Metadata registers the owning case, while expected/error.yaml is
-            # independent diagnostic truth. Keep the retired repository
-            # validator's complete-path controls here, against observations
-            # from actual installed public hosts.
-            registration = load_metadata(case).get("validation")
-            if registration is None:
-                result["findings"].append("validation fixture lacks case registration")
-            elif "blocked_by" in registration:
-                result["findings"].append(
-                    "validation fixture still declares a release blocker"
-                )
+            # expected/error.yaml is independent diagnostic truth. Keep the
+            # complete-path controls here, against observations from actual
+            # installed public hosts.
             paths = want["spec_paths"]
 
             def matches_path(actual, expected):
@@ -1027,14 +1027,10 @@ def main(argv=None):
             parser.error(
                 "complete report truth requires the reviewed benchmark checkout"
             )
-        if args.output.exists() or any(
-            args.output.resolve().is_relative_to(directory.resolve())
-            for directory in (
-                args.fixtures,
-                ROOT / "rust/qualification/producer-cohort",
-            )
+        if args.output.exists() or args.output.resolve().is_relative_to(
+            args.fixtures.resolve()
         ):
-            parser.error("output must be fresh and outside the authored fixture trees")
+            parser.error("output must be fresh and outside the authored fixture tree")
         actual = subprocess.check_output(
             ["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True
         ).strip()

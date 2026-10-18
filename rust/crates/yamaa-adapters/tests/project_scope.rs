@@ -1,8 +1,7 @@
 #![cfg(feature = "yaml")]
 //! Project-scope contracts in the adapters: listed names, run-scope plans,
-//! saved producer links, report-only saves and the whole-scope preflight.
+//! held producer artifacts, report-only saves and the whole-scope preflight.
 use std::{
-    convert::Infallible,
     fs,
     path::PathBuf,
     sync::{
@@ -11,23 +10,16 @@ use std::{
     },
 };
 use yamaa_adapters::{
-    file_application::Domain,
-    file_producer_build::HeldArtifacts,
-    file_workflow::{self, Producers},
+    file_application::{self, Domain},
+    file_resources::HeldArtifacts,
+    file_workflow,
     issue_rows::Issue,
-    producer_result::{prepare_owned_classified, RootResult},
     project_scope::{Preflight, Project},
     specification_report::Identity,
 };
 use yamaa_core::{
-    function_invocation::{Argument, HostError},
-    function_signature::{LogicalSignature, ProjectFunctionIdentity},
-    json::Value,
-    project_activation::ActivationPort,
-    project_environment::{LockReference, Submission},
-    project_function::Language,
+    json::Value, project_environment::Submission, project_function::Language,
     specification_run::SourceOrigin,
-    value::Value as Scalar,
 };
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
@@ -55,30 +47,6 @@ impl Study {
 impl Drop for Study {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.0);
-    }
-}
-
-struct NoActivation;
-impl ActivationPort for NoActivation {
-    type Handle = ();
-    type Error = Infallible;
-    fn verify_lock(
-        &mut self,
-        _: Language,
-        _: &LockReference,
-        _: &[ProjectFunctionIdentity],
-    ) -> Result<(), Infallible> {
-        unreachable!("no project function")
-    }
-    fn bind(
-        &mut self,
-        _: &ProjectFunctionIdentity,
-        _: &LogicalSignature,
-    ) -> Result<(), Infallible> {
-        unreachable!("no project function")
-    }
-    fn invoke(&mut self, _: &(), _: &[Argument<'_>]) -> Result<Scalar, HostError<Infallible>> {
-        unreachable!("no project function")
     }
 }
 
@@ -330,18 +298,18 @@ fn unlinked_inputs_cycles_and_collisions_are_project_findings() {
     );
 }
 
-/// Build ADSL alone with its DM link saved, offering `held` artifacts.
+/// Build ADSL alone, offering `held` artifacts for its DM link. A link
+/// supplies only the contract; the input is read from its own path.
 fn saved_build(
     study: &Study,
     held: Option<HeldArtifacts>,
 ) -> (bool, Option<SourceOrigin>, Vec<Issue>) {
-    let yamaa_core::build::Prepared::Producer(graph) = file_workflow::select_request_mode(
+    let yamaa_core::build::Prepared::Plain(prepared) = file_workflow::select_request(
         yamaa_core::build::Request {
             specification: &study.path("adam/adsl.yaml"),
             environment: None,
         },
         Language::Python,
-        Producers::Saved,
     )
     .unwrap_or_else(|error| {
         panic!(
@@ -349,26 +317,26 @@ fn saved_build(
             yamaa_adapters::project_application::selection_failure(&error)
         )
     }) else {
-        panic!("a producer-linked entry")
+        panic!("a plain entry")
     };
-    let metadata = graph.metadata();
-    assert_eq!(metadata.nodes().len(), 1, "the producer is not a node");
-    assert_eq!(metadata.nodes()[0].saved().len(), 1);
-    assert!(metadata.nodes()[0].producers().is_empty());
-    let build = graph.build();
-    let mut run = build.run_scope(None);
-    if let Some(held) = held {
-        run.hold(Arc::new(held));
-    }
-    let owned = build.build_owned_reported(&mut run, &mut NoActivation, id(), scope());
-    let origin = owned
-        .graph
-        .nodes
+    let held = held.map(Arc::new);
+    let run = || {
+        let mut run = prepared.run_scope(None);
+        if let Some(held) = &held {
+            run.hold(held.clone());
+        }
+        run
+    };
+    let origin = prepared
+        .build(&mut run(), scope())
+        .sources
         .first()
-        .and_then(|node| node.dataset.sources.first())
         .and_then(|source| source.read.origin);
-    let result = prepare_owned_classified(&owned, id(), &[]).unwrap();
-    (owned.accepted(), origin, result.issues().to_vec())
+    let issues = match file_application::plain(&prepared, &mut run(), id(), scope()) {
+        Ok(domain) => domain.issues(),
+        Err(issues) => issues,
+    };
+    (issues.is_empty(), origin, issues)
 }
 
 #[test]
@@ -415,24 +383,6 @@ fn domain(study: &Study, name: &str) -> Domain {
     .unwrap_or_else(|issues| panic!("{issues:?}"))
 }
 
-fn root(study: &Study) -> RootResult {
-    let yamaa_core::build::Prepared::Producer(graph) = file_workflow::select_request_mode(
-        yamaa_core::build::Request {
-            specification: &study.path("adam/adsl.yaml"),
-            environment: None,
-        },
-        Language::Python,
-        Producers::Saved,
-    )
-    .unwrap_or_else(|_| panic!("a saved-link graph")) else {
-        panic!("a producer-linked entry")
-    };
-    let build = graph.build();
-    let owned =
-        build.build_owned_reported(&mut build.run_scope(None), &mut NoActivation, id(), scope());
-    prepare_owned_classified(&owned, id(), &[]).unwrap()
-}
-
 #[test]
 fn report_only_saves_write_the_report_file_and_no_primary_artifact() {
     let study = study();
@@ -444,7 +394,7 @@ fn report_only_saves_write_the_report_file_and_no_primary_artifact() {
     assert!(dm.save().unwrap());
     assert_eq!(fs::read(study.0.join("out/dm.csv")).unwrap(), b"ID\n1\n2\n");
 
-    let mut adsl = root(&study);
+    let mut adsl = domain(&study, "adam/adsl.yaml");
     assert!(adsl.output().is_some(), "{:?}", adsl.issues());
     assert!(adsl.save_report().unwrap());
     assert!(study.0.join("out/adsl.csv.report.csv").exists());
@@ -478,9 +428,9 @@ fn the_preflight_refuses_two_results_that_write_one_file() {
     preflight.admit_domain(&ae, true).unwrap();
     // ADSL fails without DM's saved artifact; only its report file is a
     // target, and it names its own location.
-    let adsl = root(&study);
+    let adsl = domain(&study, "adam/adsl.yaml");
     assert!(adsl.output().is_none());
-    preflight.admit_root(&adsl, false).unwrap();
+    preflight.admit_domain(&adsl, false).unwrap();
     // A result whose report file is one already admitted is refused.
     study.write(
         "sdtm/ae.yaml",

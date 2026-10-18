@@ -1,10 +1,9 @@
 """Editorial validators shared by the validity gate and the docs gate.
 
-Extracted from validate_repository.py (issue #184) without behavior
-changes: the six prose-oriented validators plus their leaf helpers and
-constants. This module imports only the standard library and PyYAML and
-must never import validate_repository (cycle risk). validate_repository.py
-re-exports every public name defined here for backward compatibility.
+The prose-oriented validators plus their leaf helpers and constants. This
+module imports only the standard library and PyYAML and must never import
+validate_repository (cycle risk). Rule files have their own checks in
+tools.rules.check.
 """
 
 import copy
@@ -198,61 +197,6 @@ def validate_example_readmes(root: Path):
                     f"ERROR: {label}: expected columns not described: "
                     + ", ".join(missing)
                 )
-    return errors
-
-
-def rule_identity_errors(meta: dict, stem: str, label: str) -> list[str]:
-    errors = []
-    if meta.get("id") != stem:
-        errors.append(f"ERROR: {label}: id must be {stem!r}, got {meta.get('id')!r}")
-    if meta.get("status") != "normative":
-        errors.append(f"ERROR: {label}: maintained rule status must be 'normative'")
-    return errors
-
-
-def validate_rule_metadata(root: Path):
-    if any((root / "rules").glob("*/*.md")):
-        from tools.validation.check_rule_rewrite import check
-
-        return check(root)[0]
-    errors = []
-    rules_dir = root / "rules"
-    index_path = rules_dir / "README.md"
-    if not rules_dir.is_dir() or not index_path.is_file():
-        return errors
-    index = index_path.read_text(encoding="utf-8")
-
-    for rule_path in sorted(rules_dir.glob("R[0-9][0-9][0-9]-*.md")):
-        label = rule_path.relative_to(root)
-        text = rule_path.read_text(encoding="utf-8")
-        match = re.match(r"\A---\n(.*?)\n---\n", text, re.DOTALL)
-        if match is None:
-            errors.append(f"ERROR: {label}: missing YAML front matter")
-            continue
-        try:
-            metadata = yaml.load(match.group(1), Loader=UniqueKeyLoader)
-        except yaml.YAMLError as exc:
-            errors.append(f"ERROR: {label}: invalid front matter: {exc}")
-            continue
-        if not isinstance(metadata, dict):
-            errors.append(f"ERROR: {label}: front matter must be a mapping")
-            continue
-
-        expected_id = rule_path.name[:4]
-        errors.extend(rule_identity_errors(metadata, expected_id, label))
-
-        index_row = re.search(
-            rf"^\| {re.escape(expected_id)} \|.*?\| ([^|]+) \|",
-            index,
-            re.MULTILINE,
-        )
-        if index_row is None:
-            errors.append(f"ERROR: {label}: rule is absent from rules/README.md")
-        elif index_row.group(1).strip() != "normative":
-            errors.append(
-                f"ERROR: rules/README.md: {expected_id} status must be 'normative'"
-            )
-
     return errors
 
 

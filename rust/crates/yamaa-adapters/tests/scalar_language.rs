@@ -128,7 +128,6 @@ mod scalar {
             for name in [
                 "negative-greatest-mixed",
                 "negative-least-mixed",
-                "negative-str-contains-bool-result",
                 "negative-str-contains-invalid-regex",
                 "negative-usubjid-length",
             ] {
@@ -147,19 +146,6 @@ mod scalar {
                     "{name}"
                 );
             }
-            let fixture = Fixture::new("schema-str-contains-missing");
-            let mut result = fixture.run();
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            let observed = result.observations();
-            assert_eq!(
-                observed["handler_counts"][0]["count"],
-                yamaa_adapters::json!(2)
-            );
-            assert!(result.save().unwrap());
-            assert_eq!(
-                fs::read(fixture.0.join("adae.csv")).unwrap(),
-                fs::read(fixture.0.join("expected/adae.csv")).unwrap()
-            );
         }
         fn spec(derivation: &str, result_type: &str) -> String {
             format!("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: {{path: input.csv, types: {{I: int, F: float, D: date}}}}}}\noutput: {{path: output.csv, columns: [ID, RESULT]}}\ncolumns:\n  - {{name: ID, type: str, derivation: SRC.ID}}\n  - {{name: RESULT, type: {result_type}, derivation: {derivation}}}\n")
@@ -197,119 +183,8 @@ mod scalar {
             }
         }
         #[test]
-        fn nested_concat_keeps_order_and_handler_counts_and_stops_at_missing() {
-            let derivation="{str_concat: {sources: [{literal: '['}, {str_case: {source: SRC.TEXT, to: upper, missing: absent}}, {str_concat: {sources: [{literal: ']'}, {source: SRC.PEER}], missing: fallback}}]}}";
-            let fixture = bespoke(
-        &spec(derivation, "str"),
-        b"ID,I,F,D,TEXT,PEER\na,1,1,2025-01-01,abc,z\nb,1,1,2025-01-01,,q\nc,1,1,2025-01-01,xyz,\n",
-    );
-            let mut result = fixture.run();
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            assert_eq!(
-                fs::read(fixture.0.join("output.csv")).unwrap(),
-                b"ID,RESULT\na,[ABC]z\nb,[absent]q\nc,[XYZfallback\n"
-            );
-            let observed = result.observations();
-            let counts = observed["handler_counts"].as_array().unwrap();
-            assert!(counts.iter().any(|row| row["spec_path"]
-                == "columns.RESULT.derivation.str_concat.sources[1].str_case.missing"
-                && row["count"] == 1));
-            assert!(counts.iter().any(|row| row["spec_path"]
-                == "columns.RESULT.derivation.str_concat.sources[2].str_concat.missing"
-                && row["count"] == 1));
-            let fixture = bespoke(
-        &spec(
-            "{str_concat: {sources: [{source: SRC.TEXT}, {literal: 42}], missing: fallback}}",
-            "str",
-        ),
-        b"ID,I,F,D,TEXT\na,1,1,2025-01-01,\n",
-    );
-            let mut result = fixture.run();
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            assert_eq!(
-                fs::read(fixture.0.join("output.csv")).unwrap(),
-                b"ID,RESULT\na,fallback\n"
-            );
-        }
-
-        #[test]
-        fn concat_missing_fallback_keeps_an_earlier_nested_absent_handler() {
-            // Preserve the distinct REQ-0361 case from the retired Python expression
-            // control: a later missing value must retain the earlier source's handler.
-            let fixture = bespoke(
-        &spec(
-            "{str_concat: {sources: [{source: {variable: SRC.ABSENT, absent: NA}}, {source: SRC.B}], missing: '?' }}",
-            "str",
-        ),
-        b"ID,I,F,D,B\na,1,1,2025-01-01,\n",
-    );
-            let mut result = fixture.run();
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            let counts = yamaa_adapters::json!([
-                {"spec_path": "columns.RESULT.derivation.str_concat.missing", "handler": "missing", "count": 1},
-                {"spec_path": "columns.RESULT.derivation.str_concat.sources[0].source.absent", "handler": "absent", "count": 1},
-            ]);
-            assert_eq!(result.observations()["handler_counts"], counts);
-            assert_eq!(result.observations()["nodes"][0]["handler_counts"], counts);
-            assert!(result.save().unwrap());
-            assert_eq!(
-                fs::read(fixture.0.join("output.csv")).unwrap(),
-                b"ID,RESULT\na,?\n"
-            );
-        }
-
-        #[test]
-        fn concat_input_diagnostic_preserves_operand_path_and_blocks_publication() {
-            let fixture = bespoke(
-                &spec(
-                    "{str_concat: {sources: [{literal: x}, {literal: 42}]}}",
-                    "str",
-                ),
-                b"ID,I,F,D\na,1,1,2025-01-01\n",
-            );
-            let result = fixture.run();
-            assert_eq!(result.issues().len(), 1);
-            assert_eq!(
-                issue_json(&result.issues()[0]),
-                yamaa_adapters::json!({"phase":"validation","condition":"incompatible_input_type","requirement":"REQ-0308","spec_paths":["columns.RESULT.derivation.str_concat.sources[1]"],"context":{"source":"sources[1]","expected":"str","actual":"int"}})
-            );
-            assert!(!fixture.0.join("output.csv").exists());
-        }
-        #[test]
-        fn contains_returns_false_and_true_with_single_result_conversion() {
-            for (pattern, subject, expected) in [
-                ("z", "abc", false),
-                ("()", "abc", true),
-                ("a|z", "abc", true),
-            ] {
-                let fixture = bespoke(
-                    &spec(
-                        &format!("{{str_contains: {{source: SRC.TEXT, pattern: '{pattern}'}}}}"),
-                        "str",
-                    ),
-                    format!("ID,I,F,D,TEXT\na,1,1,2025-01-01,{subject}\n").as_bytes(),
-                );
-                let result = fixture.run();
-                let issue = &result.issues()[0];
-                assert_eq!(
-                    (
-                        issue.phase.as_str(),
-                        issue.condition.as_str(),
-                        issue.requirement.as_deref()
-                    ),
-                    ("convert", "conversion_failed", Some("REQ-0013"))
-                );
-                assert_eq!(
-                    issue_json(issue)["context"]["value"],
-                    yamaa_adapters::json!(expected)
-                );
-            }
-        }
-        #[test]
         fn row_scalar_derivations_share_the_same_raw_contract() {
-            let source="schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {I: int, F: float}}}\noutput: {path: output.csv, columns: [ID, RESULT, MAXIMUM]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: RESULT, type: str}\n  - {name: MAXIMUM, type: int}\nrows:\n  - id: values\n    derivations:\n      ID: SRC.ID\n      RESULT: {str_concat: {sources: [{literal: '['}, {source: SRC.TEXT}, {literal: ']'}]}}\n      MAXIMUM: {greatest: {sources: [SRC.I, SRC.F]}}\n";
+            let source="schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {I: int, F: float}}}\noutput: {path: output.csv, columns: [ID, RESULT, MAXIMUM]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: RESULT, type: str}\n  - {name: MAXIMUM, type: int}\nrows:\n  - id: values\n    derivations:\n      ID: SRC.ID\n      RESULT: {str_template: '[{SRC.TEXT}]'}\n      MAXIMUM: {greatest: {sources: [SRC.I, SRC.F]}}\n";
             let fixture = bespoke(source, b"ID,I,F,TEXT\na,3,2,abc\n");
             let mut result = fixture.run();
             assert!(result.issues().is_empty(), "{:?}", result.issues());
@@ -320,21 +195,30 @@ mod scalar {
             );
         }
 
+        /// A Boolean converts to no column type, so a row derivation that can
+        /// only return one fails before any record is read (VALUE-24).
         #[test]
-        fn row_contains_keeps_boolean_conversion_failure_and_refuses_every_save() {
-            for (pattern, expected) in [("z", false), ("a", true)] {
+        fn row_boolean_is_refused_at_validation_and_refuses_every_save() {
+            for literal in ["false", "true"] {
                 let source = format!(
-            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: input.csv}}\noutput: {{path: output.csv, columns: [ID, RESULT]}}\ncolumns:\n  - {{name: ID, type: str}}\n  - {{name: RESULT, type: str}}\nrows:\n  - id: values\n    derivations:\n      ID: SRC.ID\n      RESULT: {{str_contains: {{source: SRC.TEXT, pattern: '{pattern}'}}}}\n"
+            "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: input.csv}}\noutput: {{path: output.csv, columns: [ID, RESULT]}}\ncolumns:\n  - {{name: ID, type: str}}\n  - {{name: RESULT, type: str}}\nrows:\n  - id: values\n    derivations:\n      ID: SRC.ID\n      RESULT: {{literal: {literal}}}\n"
         );
                 let fixture = bespoke(&source, b"ID,TEXT\na,abc\n");
                 let mut result = fixture.run();
                 let issues = result.issues();
                 assert_eq!(issues.len(), 1);
                 let issue = issue_json(&issues[0]);
-                assert_eq!(issue["phase"], "convert");
+                assert_eq!(issue["phase"], "validation");
                 assert_eq!(issue["condition"], "conversion_failed");
-                assert_eq!(issue["requirement"], "REQ-0013");
-                assert_eq!(issue["context"]["value"], yamaa_adapters::json!(expected));
+                assert_eq!(issue["requirement"], "VALUE-24");
+                assert_eq!(
+                    issue["spec_paths"],
+                    yamaa_adapters::json!(["columns.RESULT"])
+                );
+                assert_eq!(
+                    issue["context"],
+                    yamaa_adapters::json!({"from": "bool", "to": "str"})
+                );
                 assert!(result.output().is_none());
                 for _ in 0..2 {
                     assert!(result.save().is_err());
@@ -373,12 +257,6 @@ mod scalar {
             "str_extract.group",
             "regex_group_out_of_range",
             "REQ-0816",
-        ),
-        (
-            "{str_contains: {source: SRC.TEXT, pattern: 'a)|(b'}}",
-            "str_contains.pattern",
-            "invalid_regex",
-            "REQ-0827",
         ),
         (
             "{case: [{when: 'SRC.I > 0', then: {str_extract: {source: SRC.TEXT, pattern: 'a)|(b'}}}, {otherwise: {literal: x}}]}",
@@ -499,7 +377,7 @@ mod scalar {
                 let fixture = Fixture::new();
                 fs::write(fixture.0.join("a.csv"), "ID,N\n1,10\n2,20\n3,30\n").unwrap();
                 fs::write(fixture.0.join("b.csv"), "ID,N\n2,40\n1,50\n3,60\n").unwrap();
-                fs::write(fixture.0.join("spec.yaml"), format!("schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {{path: a.csv, types: {{ID: int, N: int}}}}\n  B: {{path: b.csv, types: {{ID: int, N: int}}}}\ncolumns:\n  - {{name: ID, type: int, derivation: {{source: {{variable: {driver}.ID}}}}}}\n  - {{name: VALUE, type: int}}\nrows:\n  - id: selected\n    dataset: {driver}\n    filter: '{filter}'\n    derivations:\n      VALUE: {{literal: 0}}\noutput: {{path: result.csv, columns: [ID, VALUE]}}\n")).unwrap();
+                fs::write(fixture.0.join("spec.yaml"), format!("schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {{path: a.csv, types: {{ID: int, N: int}}}}\n  B: {{path: b.csv, types: {{ID: int, N: int}}}}\ncolumns:\n  - {{name: ID, type: int, derivation: {driver}.ID}}\n  - {{name: VALUE, type: int}}\nrows:\n  - id: selected\n    dataset: {driver}\n    filter: '{filter}'\n    derivations:\n      VALUE: {{literal: 0}}\noutput: {{path: result.csv, columns: [ID, VALUE]}}\n")).unwrap();
                 assert_eq!(fixture.saved(), expected.as_bytes());
             }
             let fixture = Fixture::new();
@@ -530,13 +408,13 @@ mod scalar {
                 b"ID,D,TEXT\nb,2020-01-01,poison1\nb,2020-01-01,poison2\na,2020-01-01,Lower\n",
             )
             .unwrap();
-            fs::write(fixture.0.join("spec.yaml"),"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {A: {path: a.csv, types: {D: date}}, B: {path: b.csv, types: {D: date}}}\nbase: A\noutput: {path: result.csv, columns: [ID, TEXT, DAYS]}\ncolumns:\n  - {name: ID, type: str, derivation: A.ID}\n  - {name: TEXT, type: str}\n  - {name: DAYS, type: int}\nrows:\n  - id: records\n    dataset: A\n    derivations:\n      TEXT: {case: [{when: \"A.USE = 'Y'\", then: {str_case: {source: B.TEXT, to: upper, missing: null}}}, {otherwise: {literal: SKIP}}]}\n      DAYS: {case: [{when: \"A.USE = 'Y'\", then: {date_diff: {start: B.D, end: A.D, unit: day}}}, {otherwise: {literal: 0}}]}\n").unwrap();
+            fs::write(fixture.0.join("spec.yaml"),"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {A: {path: a.csv, types: {D: date}}, B: {path: b.csv, types: {D: date}}}\nbase: A\noutput: {path: result.csv, columns: [ID, TEXT, DAYS]}\ncolumns:\n  - {name: ID, type: str, derivation: A.ID}\n  - {name: TEXT, type: str}\n  - {name: DAYS, type: int}\nrows:\n  - id: records\n    dataset: A\n    derivations:\n      TEXT: {case: [{when: \"A.USE = 'Y'\", then: {str_case: {source: B.TEXT, to: upper, missing: {literal: null}}}}, {otherwise: {literal: SKIP}}]}\n      DAYS: {case: [{when: \"A.USE = 'Y'\", then: {diff: {type: date, start: B.D, end: A.D, unit: day}}}, {otherwise: {literal: 0}}]}\n").unwrap();
             assert_eq!(fixture.saved(), b"ID,TEXT,DAYS\na,LOWER,2\nb,SKIP,0\nc,,\n");
             let original = fs::read_to_string(fixture.0.join("spec.yaml")).unwrap();
             fs::write(
                 fixture.0.join("spec.yaml"),
                 original.replace(
-                    "{str_case: {source: B.TEXT, to: upper, missing: null}}",
+                    "{str_case: {source: B.TEXT, to: upper, missing: {literal: null}}}",
                     "{first_available: {sources: [B.TEXT], missing: NONE}}",
                 ),
             )
@@ -592,10 +470,10 @@ mod scalar {
             )
             .unwrap();
             fs::write(fixture.0.join("b.csv"), b"ID,N\nb,2\na,1\nc,3\n").unwrap();
-            fs::write(fixture.0.join("spec.yaml"),"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {A: {path: a.csv}, B: {path: b.csv, types: {N: int}}}\nbase: A\noutput: {path: result.csv, columns: [ID, TEXT, FLAG]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: TEXT, type: str}\n  - {name: FLAG, type: str, derivation: {flag: \"A.USE = 'Y'\"}}\nrows:\n  - id: beta\n    dataset: B\n    derivations:\n      ID: B.ID\n      TEXT: {str_case: {source: A.TEXT, to: upper, missing: null}}\n").unwrap();
+            fs::write(fixture.0.join("spec.yaml"),"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {A: a.csv, B: {path: b.csv, types: {N: int}}}\nbase: A\noutput: {path: result.csv, columns: [ID, TEXT, FLAG]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: TEXT, type: str}\n  - {name: FLAG, type: str, derivation: {flag: \"A.USE = 'Y'\"}}\nrows:\n  - id: beta\n    dataset: B\n    derivations:\n      ID: B.ID\n      TEXT: {str_case: {source: A.TEXT, to: upper, missing: {literal: null}}}\n").unwrap();
             assert_eq!(fixture.saved(), b"ID,TEXT,FLAG\nb,MIXED,\na,LOWER,Y\nc,,\n");
             let original = fs::read_to_string(fixture.0.join("spec.yaml")).unwrap();
-            fs::write(fixture.0.join("spec.yaml"),original.replace("TEXT: {str_case: {source: A.TEXT, to: upper, missing: null}}",
+            fs::write(fixture.0.join("spec.yaml"),original.replace("TEXT: {str_case: {source: A.TEXT, to: upper, missing: {literal: null}}}",
         "TEXT: {source: {variable: A.TEXT, filter: \"A.USE = 'Y'\", order_by: [A.ID], keep: first}}" )).unwrap();
             assert_eq!(fixture.saved(), b"ID,TEXT,FLAG\nb,,\na,lower,Y\nc,,\n");
         }
@@ -604,7 +482,7 @@ mod scalar {
             let fixture = Fixture::new();
             fs::write(fixture.0.join("a.csv"), b"ID,TEXT\na,valid\n").unwrap();
             fs::write(fixture.0.join("b.csv"), b"ID,N\na,1\n").unwrap();
-            fs::write(fixture.0.join("spec.yaml"),"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {A: {path: a.csv}, B: {path: b.csv, types: {N: int}}}\nbase: A\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: A.ID}\n  - {name: VALUE, type: int}\nrows:\n  - id: alpha\n    dataset: A\n    derivations:\n      VALUE: {compute: {expr: 'B.N + 1'}}\n").unwrap();
+            fs::write(fixture.0.join("spec.yaml"),"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {A: a.csv, B: {path: b.csv, types: {N: int}}}\nbase: A\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: A.ID}\n  - {name: VALUE, type: int}\nrows:\n  - id: alpha\n    dataset: A\n    derivations:\n      VALUE: {compute: {expr: 'B.N + 1'}}\n").unwrap();
             let issues = match fixture.run() {
                 Ok(mut domain) => {
                     assert!(domain.output().is_none());
@@ -668,7 +546,7 @@ mod scalar {
                 r#"schema_version: '1.0'
 domain: TEST
 keys: [ID]
-input: {A: {path: a.csv}, B: {path: b.csv, types: {SEQ: int}}}
+input: {A: a.csv, B: {path: b.csv, types: {SEQ: int}}}
 base: A
 output: {path: result.csv, columns: [ID, TEXT, FIRST, MAP, ABSENT]}
 columns:
@@ -750,7 +628,7 @@ rows:
             }
             let original = fs::read_to_string(fixture.0.join("spec.yaml")).unwrap();
             fs::write(fixture.0.join("spec.yaml"),original.replace("then: {source: {variable: B.TEXT, filter: \"B.USE = 'Y'\", order_by: [B.SEQ], keep: last}}",
-        "then: {str_concat: {sources: [{source: {variable: B.TEXT, filter: \"B.USE = 'Y'\", order_by: [B.SEQ], keep: first}}], missing: null}}" )).unwrap();
+        "then: {source: {variable: B.TEXT, filter: \"B.USE = 'Y'\", order_by: [B.SEQ], keep: first}}" )).unwrap();
             assert_eq!(
         fixture.saved(),
         b"ID,TEXT,FIRST,MAP,ABSENT\na,early,late,20,EDGE\nb,SKIP,SKIP,0,SKIP\nc,,fallback,0,EDGE\n"
@@ -775,7 +653,7 @@ rows:
 domain: TEST
 keys: [ID]
 base: A
-input: {A: {path: a.csv}, B: {path: b.csv}}
+input: {A: a.csv, B: b.csv}
 output: {path: result.csv, columns: [ID, RN, PRIMARY, SECONDARY]}
 columns:
   - {name: ID, type: str}
@@ -883,8 +761,8 @@ rows:
             let mut result = study.build(&raw);
             assert!(result.issues().is_empty());
             assert!(result.output().is_some());
-            // One run, input and base row, two column rows and four check rows.
-            assert_eq!(result.report_table().rows(), 9);
+            // One run, input and base row, two column rows and three check rows.
+            assert_eq!(result.report_table().rows(), 8);
             assert_eq!(
                 result.observations()["artifacts"],
                 yamaa_adapters::json!([])
@@ -1119,7 +997,7 @@ rows:
                      out.csv,rows,rows[0],SRC,,,,,,,3,4,,{{}}\n\
                      out.csv,rows,rows[1],SRC,,,,,,,2,4,,{{}}\n\
                      out.csv,handler,rows[0].derivations.N.unconvertible,unconvertible,,N,REQ-0013,,,,1,,,{{}}\n\
-                     out.csv,handler,rows[0].derivations.LABEL.mapping.missing,missing,,LABEL,REQ-0334,,,,1,,,{{}}\n\
+                     out.csv,handler,rows[0].derivations.LABEL.mapping.missing,missing,,LABEL,,,,,1,,,{{}}\n\
                      out.csv,handler,rows[0].derivations.LABEL.mapping.unmapped,unmapped,,LABEL,REQ-0334,,,,1,,,{{}}\n\
                      out.csv,column,columns.ID,ID,,,,,,,0,5,,\"{{\"\"max_length\"\":2}}\"\n\
                      out.csv,column,columns.KIND,KIND,,,,,,,0,5,,\"{{\"\"max_length\"\":5}}\"\n\
@@ -1193,41 +1071,42 @@ columns:
   - {name: ID, type: int, derivation: SRC.ID}
   - name: START
     type: date
-    derivation: {date_impute: {source: SRC.DTC, month: 1, day: first, missing: null, invalid: null}}
+    derivation: {impute: {type: date, source: SRC.DTC, day: first, minimum_source_precision: month, invalid: {literal: null}}}
   - name: STAMP
     type: datetime
-    derivation: {datetime_impute: {source: SRC.DTM, time: first, missing: null, invalid: null}}
+    derivation: {impute: {type: datetime, source: SRC.DTM, minimum_source_precision: day, time: first, invalid: {literal: null}}}
   - name: SPAN
     type: float
-    derivation: {duration_value: {source: SRC.DUR, unit: day, invalid: null}}
+    derivation: {duration_value: {source: SRC.DUR, unit: day, invalid: {literal: null}}}
   - name: PR
     type: str
-    derivation: {datetime_precision: {source: STAMP, missing: null}}
+    derivation: {precision: {type: datetime, source: SRC.DTM, invalid: {literal: null}}}
 "#,
             );
             assert!(result.issues().is_empty(), "{:?}", result.issues());
             assert!(result.save().unwrap());
-            // Each handler answers the condition its operation raises without
-            // it: record 2's missing date and record 3's missing datetime, the
-            // text no reader accepts, and both records whose datetime was
-            // answered to missing before its precision was read.
+            // A missing source raises no condition, so its handler cites no
+            // rule; text no reader accepts cites the rule its operation
+            // raises without the handler: record 2's text for STAMP, SPAN
+            // and PR, and record 3's text for START.
             assert_eq!(
                 saved_report(&study, "report.csv"),
                 format!(
                     "{HEADER}out.csv,run,output,,,,,,succeeded,,3,,,{{}}\n\
                      out.csv,input,input.SRC,SRC,,,,,,,3,,,\"{{\"\"bytes\"\":68,\"\"path\"\":\"\"input/input.csv\"\",\"\"profile\"\":\"\"csv\"\"}}\"\n\
                      out.csv,rows,base,SRC,,,,,,,3,3,,{{}}\n\
-                     out.csv,handler,columns.START.derivation.date_impute.missing,missing,,START,REQ-0588,,,,1,,,{{}}\n\
-                     out.csv,handler,columns.START.derivation.date_impute.invalid,invalid,,START,REQ-0588,,,,1,,,{{}}\n\
-                     out.csv,handler,columns.STAMP.derivation.datetime_impute.missing,missing,,STAMP,REQ-1182,,,,1,,,{{}}\n\
-                     out.csv,handler,columns.STAMP.derivation.datetime_impute.invalid,invalid,,STAMP,REQ-1182,,,,1,,,{{}}\n\
+                     out.csv,handler,columns.START.derivation.impute.missing,missing,,START,,,,,1,,,{{}}\n\
+                     out.csv,handler,columns.START.derivation.impute.invalid,invalid,,START,REQ-0588,,,,1,,,{{}}\n\
+                     out.csv,handler,columns.STAMP.derivation.impute.missing,missing,,STAMP,,,,,1,,,{{}}\n\
+                     out.csv,handler,columns.STAMP.derivation.impute.invalid,invalid,,STAMP,REQ-0588,,,,1,,,{{}}\n\
                      out.csv,handler,columns.SPAN.derivation.duration_value.invalid,invalid,,SPAN,REQ-1301,,,,1,,,{{}}\n\
-                     out.csv,handler,columns.PR.derivation.datetime_precision.missing,missing,,PR,REQ-1183,,,,2,,,{{}}\n\
+                     out.csv,handler,columns.PR.derivation.precision.missing,missing,,PR,,,,,1,,,{{}}\n\
+                     out.csv,handler,columns.PR.derivation.precision.invalid,invalid,,PR,REQ-0588,,,,1,,,{{}}\n\
                      out.csv,column,columns.ID,ID,,,,,,,0,3,,{{}}\n\
                      out.csv,column,columns.START,START,,,,,,,2,3,,{{}}\n\
                      out.csv,column,columns.STAMP,STAMP,,,,,,,2,3,,{{}}\n\
                      out.csv,column,columns.SPAN,SPAN,,,,,,,1,3,,{{}}\n\
-                     out.csv,column,columns.PR,PR,,,,,,,2,3,,\"{{\"\"max_length\"\":1}}\"\n"
+                     out.csv,column,columns.PR,PR,,,,,,,2,3,,\"{{\"\"max_length\"\":6}}\"\n"
                 )
             );
         }
@@ -1247,7 +1126,7 @@ columns:
                 .find(|a| a["name"] == "checks")
                 .unwrap();
             assert_eq!(artifact["profile"], "parquet");
-            assert_eq!(artifact["row_count"], 9);
+            assert_eq!(artifact["row_count"], 8);
             assert_eq!(artifact["content"], "");
             let table = result.report_table();
             for column in [10, 11] {

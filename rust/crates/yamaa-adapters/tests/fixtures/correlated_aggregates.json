@@ -1533,8 +1533,8 @@
     "artifact": ""
   },
   {
-    "case": "scalar_key",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: {expr: 'SUM(SRC.V)', key: ID}}\n",
+    "case": "single_column_key",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: {expr: 'SUM(SRC.V)', key: [ID]}}\n",
     "input": "ID,G,V\na,g,2\na,g,3\n",
     "expected": {
       "artifacts": [
@@ -1565,7 +1565,7 @@
       "diagnostics": [],
       "engine_version": "fixture-engine",
       "error": null,
-      "example": "correlated-aggregate-scalar_key",
+      "example": "correlated-aggregate-single_column_key",
       "handler_counts": [],
       "nodes": [
         {
@@ -1814,7 +1814,7 @@
   },
   {
     "case": "eager_row_only",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, R, Q, M]}\ncolumns:\n  - {name: ID, type: str, label: ID}\n  - {name: G, type: str, label: G}\n  - {name: R, type: int, label: R}\n  - {name: Q, type: int, label: Q, derivation: {aggregate: 'COUNT(SRC.*)'}}\n  - {name: M, type: float, label: M, derivation: {aggregate: {expr: 'MEAN(R)', group_by: [G]}}}\nrows:\n  - id: total\n    group_by: [SRC.ID, SRC.G]\n    derivations:\n      ID: SRC.ID\n      G: SRC.G\n      R: {aggregate: 'COALESCE(1, ONLY(SRC.V))'}\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, R, Q, M]}\ncolumns:\n  - {name: ID, type: str, label: ID}\n  - {name: G, type: str, label: G}\n  - {name: R, type: int, label: R}\n  - {name: Q, type: int, label: Q, derivation: {aggregate: 'COUNT(SRC.*)'}}\n  - {name: M, type: float, label: M, derivation: {aggregate: {expr: 'MEAN(R)', group_by: [G]}}}\nrows:\n  - id: total\n    group_by: [SRC.ID, SRC.G]\n    derivations:\n      ID: SRC.ID\n      G: SRC.G\n      R: {aggregate: 'NULL + ONLY(SRC.V)'}\n",
     "input": "ID,G,V\na,g,2\na,g,3\n",
     "expected": {
       "artifacts": [],
@@ -1824,7 +1824,7 @@
         {
           "condition": "aggregate_multiple_records",
           "context": {
-            "expr": "COALESCE(1, ONLY(SRC.V))",
+            "expr": "NULL + ONLY(SRC.V)",
             "group": {
               "G": "g",
               "ID": "a"
@@ -1850,7 +1850,7 @@
             {
               "condition": "aggregate_multiple_records",
               "context": {
-                "expr": "COALESCE(1, ONLY(SRC.V))",
+                "expr": "NULL + ONLY(SRC.V)",
                 "group": {
                   "G": "g",
                   "ID": "a"

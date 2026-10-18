@@ -2,8 +2,8 @@
 
 use super::{
     scalar_diagnostic_label, ComposedValue, CompositionOrigin, Document, DocumentNode as N,
-    NormalizationError, NormalizationResource, SchemaContext, SchemaDiagnostic, SchemaField,
-    SchemaOrigin, SchemaSource, SchemaStructure, ValidationError,
+    NormalizationError, NormalizationResource, SchemaContext, SchemaDiagnostic, SchemaOrigin,
+    SchemaSource, SchemaStructure, ValidationError,
 };
 use crate::diagnostic::ConditionCode;
 use std::vec;
@@ -93,20 +93,21 @@ impl<'a> Site<'a> {
     }
 }
 #[derive(Clone, Copy)]
-enum Boundary<'a> {
-    Root,
-    Member {
-        fields: &'a [SchemaField],
-        compose: bool,
-        identity: Option<&'a str>,
-    },
-}
-#[derive(Clone, Copy)]
 enum Change {
     Value(usize),
     Keep,
     Remove,
 }
+
+/// The keyed root collections and the field identifying a member of a list.
+/// `input` and `windows` are mappings keyed by name.
+const COLLECTIONS: [(&str, Option<&str>); 5] = [
+    ("input", None),
+    ("windows", None),
+    ("intermediates", Some("id")),
+    ("columns", Some("name")),
+    ("rows", Some("id")),
+];
 
 struct Run<'a, 'c> {
     schema: &'a SchemaStructure,
@@ -124,13 +125,6 @@ impl Run<'_, '_> {
             });
         }
         Ok(())
-    }
-    fn join(&mut self, prefix: &str, name: &str) -> Result<String, NormalizationError> {
-        Ok(if prefix.is_empty() {
-            name.into()
-        } else {
-            format!("{prefix}.{name}")
-        })
     }
     fn find<'a>(
         &mut self,
@@ -179,7 +173,7 @@ impl Run<'_, '_> {
     fn import(
         &mut self,
         composed: ComposedValue,
-        old: Site<'_>,
+        old: Option<Site<'_>>,
         new: Site<'_>,
     ) -> Result<usize, NormalizationError> {
         let offset = self.nodes.len();
@@ -195,14 +189,11 @@ impl Run<'_, '_> {
                 value => value.clone(),
             };
             let source = composed.origins[index];
-            self.push(
-                value,
-                if source.input == 0 {
-                    old.child(source.node).origin()
-                } else {
-                    new.child(source.node).origin()
-                },
-            );
+            let origin = match old {
+                Some(old) if source.input == 0 => old.child(source.node).origin(),
+                _ => new.child(source.node).origin(),
+            };
+            self.push(value, origin);
         }
         Ok(offset + composed.document.root())
     }
@@ -214,28 +205,25 @@ impl Run<'_, '_> {
         ));
         Ok(())
     }
-    fn boundary(
+    /// Root fields: keyed collections compose member by member; every other
+    /// field replaces whole, and a null clears it. `parent` is never contributed.
+    fn root(
         &mut self,
-        old: Option<Site<'_>>,
+        old: Site<'_>,
         new: Site<'_>,
-        kind: Boundary<'_>,
-        path: &str,
         depth: usize,
     ) -> Result<usize, NormalizationError> {
         self.step(depth)?;
-        let before = old.map(Site::mapping).transpose()?.unwrap_or(&[]);
+        let before = old.mapping()?;
         let after = new.mapping()?;
         let capacity = before.len().saturating_add(after.len());
         let mut changes = Vec::with_capacity(after.len());
-        let fields = match kind {
-            Boundary::Root => &self.schema.root_class().fields,
-            Boundary::Member { fields, .. } => fields,
-        };
+        let fields = &self.schema.root_class().fields;
         // Compute updates in contribution order, independently of inherited field positions.
         for &(key, value) in after {
             let name = new.child(key).text()?;
             let value = new.child(value);
-            if matches!(kind, Boundary::Root) && name == "parents" {
+            if name == "parent" {
                 changes.push(Change::Remove);
                 continue;
             }
@@ -243,55 +231,34 @@ impl Run<'_, '_> {
                 .iter()
                 .find(|field| field.name == name)
                 .ok_or(ValidationError::InvalidDescriptor)?;
-            let previous = match old {
-                Some(site) => self.find(site, name)?,
-                None => None,
-            };
-            let logical = self.join(path, name)?;
+            let previous = self.find(old, name)?;
             if matches!(value.value(), N::Null) {
-                let identity = matches!(kind,Boundary::Member{identity:Some(id),..} if id==name);
-                if identity
+                if name == "schema_version"
                     || self.schema.descriptors()[field.descriptor]
                         .descriptor
                         .required()
-                    || name == "schema_version" && matches!(kind, Boundary::Root)
                 {
-                    self.invalid_clear(&logical, name)?;
+                    self.invalid_clear(name, name)?;
                     changes.push(Change::Keep);
-                } else if previous.is_none() {
-                    // A first declaration is a value, including a literal missing
-                    // handler. Only a null over an inherited value is a clear.
-                    self.diagnostics.extend(self.schema.validate_descriptor(
-                        field.descriptor,
-                        value.document,
-                        value.node,
-                        &logical,
-                        false,
-                    )?);
-                    changes.push(Change::Value(self.copy(value, depth + 1)?));
                 } else {
                     changes.push(Change::Remove);
                 }
                 continue;
             }
-            let value = match kind {
-                Boundary::Root => self.root_value(name, previous, value, &logical, depth + 1)?,
-                Boundary::Member { compose: true, .. } if previous.is_some() => {
-                    let previous = previous.expect("checked");
-                    let composed = self.schema.compose_descriptor_at(
-                        field.descriptor,
-                        (previous.document, previous.node),
-                        (value.document, value.node),
-                    )?;
-                    self.import(composed, previous, value)?
+            let previous = previous.filter(|site| !matches!(site.value(), N::Null));
+            let value = match COLLECTIONS
+                .iter()
+                .find(|(collection, _)| *collection == name)
+            {
+                Some(&(_, identity)) => {
+                    self.collection(field.descriptor, identity, previous, value, depth + 1)?
                 }
-                Boundary::Member { .. } => self.copy(value, depth + 1)?,
+                None => self.copy(value, depth + 1)?,
             };
             changes.push(Change::Value(value));
         }
         let mut output = Vec::with_capacity(capacity);
         for &(key, value) in before {
-            let old = old.expect("nonempty before");
             let name = old.child(key).text()?;
             let mut change = Change::Keep;
             for (index, &(candidate, _)) in after.iter().enumerate() {
@@ -309,106 +276,14 @@ impl Run<'_, '_> {
         }
         for (index, &(key, _)) in after.iter().enumerate() {
             let name = new.child(key).text()?;
-            if let Some(old) = old {
-                if self.find(old, name)?.is_some() {
-                    continue;
-                }
+            if self.find(old, name)?.is_some() {
+                continue;
             }
             if let Change::Value(value) = changes[index] {
                 output.push((self.copy(new.child(key), depth + 1)?, value));
             }
         }
-        Ok(self.push(N::Mapping(output), old.unwrap_or(new).origin()))
-    }
-    fn root_value(
-        &mut self,
-        name: &str,
-        old: Option<Site<'_>>,
-        new: Site<'_>,
-        path: &str,
-        depth: usize,
-    ) -> Result<usize, NormalizationError> {
-        // An invalid introducing null has already been diagnosed; a later
-        // collection value still replaces it without treating it as a collection.
-        let old = old.filter(|site| !matches!(site.value(), N::Null));
-        match name {
-            "windows" => self.named(old, new, None, path, depth),
-            "input" => self.named(old, new, Some("dataset_class"), path, depth),
-            "columns" => self.keyed(old, new, "name", "column_class", path, depth),
-            "rows" => self.keyed(old, new, "id", "row_class", path, depth),
-            "intermediates" => self.keyed(old, new, "id", "intermediate_class", path, depth),
-            _ => self.copy(new, depth),
-        }
-    }
-    fn named(
-        &mut self,
-        old: Option<Site<'_>>,
-        new: Site<'_>,
-        class: Option<&str>,
-        path: &str,
-        depth: usize,
-    ) -> Result<usize, NormalizationError> {
-        self.step(depth)?;
-        let before = old.map(Site::mapping).transpose()?.unwrap_or(&[]);
-        let after = new.mapping()?;
-        let capacity = before.len().saturating_add(after.len());
-        let mut changed = Vec::with_capacity(after.len());
-        for &(key, value) in after {
-            let name = new.child(key).text()?;
-            let incoming = new.child(value);
-            incoming.mapping()?;
-            let previous = match old {
-                Some(old) => self.find(old, name)?,
-                None => None,
-            };
-            let logical = self.join(path, name)?;
-            changed.push(if let Some(class) = class {
-                let fields = &self
-                    .schema
-                    .class_named(class)
-                    .ok_or(ValidationError::InvalidDescriptor)?
-                    .fields;
-                self.boundary(
-                    previous,
-                    incoming,
-                    Boundary::Member {
-                        fields,
-                        compose: false,
-                        identity: None,
-                    },
-                    &logical,
-                    depth + 1,
-                )?
-            } else {
-                self.copy(incoming, depth + 1)?
-            });
-        }
-        let mut output = Vec::with_capacity(capacity);
-        for &(key, value) in before {
-            let old = old.expect("nonempty before");
-            let name = old.child(key).text()?;
-            let mut selected = None;
-            for (index, &(candidate, _)) in after.iter().enumerate() {
-                if name == new.child(candidate).text()? {
-                    selected = Some(changed[index]);
-                    break;
-                }
-            }
-            let value = match selected {
-                Some(value) => value,
-                None => self.copy(old.child(value), depth + 1)?,
-            };
-            output.push((self.copy(old.child(key), depth + 1)?, value));
-        }
-        for (index, &(key, _)) in after.iter().enumerate() {
-            if let Some(old) = old {
-                if self.find(old, new.child(key).text()?)?.is_some() {
-                    continue;
-                }
-            }
-            output.push((self.copy(new.child(key), depth + 1)?, changed[index]));
-        }
-        Ok(self.push(N::Mapping(output), old.unwrap_or(new).origin()))
+        Ok(self.push(N::Mapping(output), old.origin()))
     }
     fn identity<'a>(
         &mut self,
@@ -419,89 +294,94 @@ impl Run<'_, '_> {
             .ok_or(ValidationError::InvalidDescriptor)?
             .text()
     }
-    fn keyed(
+    /// One merge rule for every keyed member: a new identifier appends in
+    /// contribution order, and a matching identifier keeps its first position and
+    /// merges recursively by kind with the member it inherits (LAYER-5, LAYER-6).
+    fn collection(
         &mut self,
+        descriptor: usize,
+        identity: Option<&str>,
         old: Option<Site<'_>>,
         new: Site<'_>,
-        identity: &str,
-        class: &str,
-        path: &str,
         depth: usize,
     ) -> Result<usize, NormalizationError> {
         self.step(depth)?;
-        let before = old.map(Site::sequence).transpose()?.unwrap_or(&[]);
-        let after = new.sequence()?;
-        let capacity = before.len().saturating_add(after.len());
-        let fields = &self
-            .schema
-            .class_named(class)
-            .ok_or(ValidationError::InvalidDescriptor)?
-            .fields;
+        // Each member pairs its identifier with its key occurrence in a mapping.
+        let members = |run: &mut Self,
+                       site: Site<'_>|
+         -> Result<Vec<(String, Option<usize>, usize)>, NormalizationError> {
+            let mut result = Vec::new();
+            match identity {
+                Some(identity) => {
+                    for &node in site.sequence()? {
+                        let name = run.identity(site.child(node), identity)?.to_string();
+                        if result.iter().any(|(prior, _, _)| *prior == name) {
+                            return Err(ValidationError::InvalidDescriptor.into());
+                        }
+                        result.push((name, None, node));
+                    }
+                }
+                None => {
+                    for &(key, node) in site.mapping()? {
+                        site.child(node).mapping()?;
+                        result.push((site.child(key).text()?.to_string(), Some(key), node));
+                    }
+                }
+            }
+            Ok(result)
+        };
+        let before = match old {
+            Some(old) => members(self, old)?,
+            None => Vec::new(),
+        };
+        let after = members(self, new)?;
         let mut changed = Vec::with_capacity(after.len());
-        for (index, &node) in after.iter().enumerate() {
-            let incoming = new.child(node);
-            let name = self.identity(incoming, identity)?;
-            for &prior in &after[..index] {
-                let prior = self.identity(new.child(prior), identity)?;
-                if prior == name {
-                    return Err(ValidationError::InvalidDescriptor.into());
-                }
-            }
-            let mut previous = None;
-            for &node in before {
-                let candidate = old.expect("nonempty before").child(node);
-                let candidate_name = self.identity(candidate, identity)?;
-                if candidate_name == name {
-                    previous = Some(candidate);
-                    break;
-                }
-            }
-            let logical = self.join(path, name)?;
-            changed.push(self.boundary(
-                previous,
-                incoming,
-                Boundary::Member {
-                    fields,
-                    compose: class == "column_class",
-                    identity: Some(identity),
-                },
-                &logical,
-                depth + 1,
-            )?);
+        for (name, _, node) in &after {
+            let incoming = new.child(*node);
+            let previous = before
+                .iter()
+                .find(|(candidate, _, _)| candidate == name)
+                .map(|&(_, _, node)| old.expect("nonempty before").child(node));
+            let composed = self.schema.compose_member_at(
+                descriptor,
+                previous.map(|site| (site.document, site.node)),
+                (incoming.document, incoming.node),
+            )?;
+            changed.push(self.import(composed, previous, incoming)?);
         }
-        let mut output = Vec::with_capacity(capacity);
-        for &node in before {
-            let site = old.expect("nonempty before").child(node);
-            let name = self.identity(site, identity)?;
-            let mut selected = None;
-            for (index, &node) in after.iter().enumerate() {
-                let candidate = self.identity(new.child(node), identity)?;
-                if candidate == name {
-                    selected = Some(changed[index]);
-                    break;
-                }
-            }
-            output.push(match selected {
-                Some(node) => node,
-                None => self.copy(site, depth + 1)?,
-            });
+        let mut entries = Vec::with_capacity(before.len().saturating_add(after.len()));
+        for (name, key, node) in &before {
+            let site = old.expect("nonempty before");
+            let value = match after.iter().position(|(candidate, _, _)| candidate == name) {
+                Some(index) => changed[index],
+                None => self.copy(site.child(*node), depth + 1)?,
+            };
+            let key = match key {
+                Some(key) => Some(self.copy(site.child(*key), depth + 1)?),
+                None => None,
+            };
+            entries.push((key, value));
         }
-        for (index, &node) in after.iter().enumerate() {
-            let name = self.identity(new.child(node), identity)?;
-            let mut seen = false;
-            for &node in before {
-                let candidate =
-                    self.identity(old.expect("nonempty before").child(node), identity)?;
-                if candidate == name {
-                    seen = true;
-                    break;
-                }
+        for (index, (name, key, _)) in after.iter().enumerate() {
+            if before.iter().any(|(candidate, _, _)| candidate == name) {
+                continue;
             }
-            if !seen {
-                output.push(changed[index]);
-            }
+            let key = match key {
+                Some(key) => Some(self.copy(new.child(*key), depth + 1)?),
+                None => None,
+            };
+            entries.push((key, changed[index]));
         }
-        Ok(self.push(N::Sequence(output), old.unwrap_or(new).origin()))
+        let value = match identity {
+            Some(_) => N::Sequence(entries.into_iter().map(|(_, value)| value).collect()),
+            None => N::Mapping(
+                entries
+                    .into_iter()
+                    .map(|(key, value)| Ok((key.ok_or(ValidationError::InvalidDescriptor)?, value)))
+                    .collect::<Result<Vec<_>, NormalizationError>>()?,
+            ),
+        };
+        Ok(self.push(value, old.unwrap_or(new).origin()))
     }
 }
 
@@ -610,9 +490,10 @@ fn provenance(
 }
 
 impl SchemaStructure {
-    /// Compose already admitted, normalized layers in contribution order.
-    /// Parent traversal/path rebasing precede this operation. Defaults, pruning and
-    /// complete validation follow it. Clearing diagnostics retain contribution order.
+    /// Compose already admitted, normalized layers in contribution order, root
+    /// ancestor first. Parent traversal/path rebasing precede this operation.
+    /// Defaults, pruning and complete validation follow it. Clear markers never
+    /// survive, and clearing diagnostics retain contribution order.
     pub fn compose_layer_fragments(
         &self,
         layers: &[Document],
@@ -628,21 +509,19 @@ impl SchemaStructure {
                 nodes: Vec::new(),
                 origins: Vec::new(),
             };
-            let root = run.boundary(
-                Some(Site {
+            let root = run.root(
+                Site {
                     document: &document,
                     node: document.root(),
                     origins: Some(&origins),
                     layer: 0,
-                }),
+                },
                 Site {
                     document: input,
                     node: input.root(),
                     origins: None,
                     layer,
                 },
-                Boundary::Root,
-                "",
                 0,
             )?;
             document = Document::new(run.nodes, root).map_err(NormalizationError::Document)?;

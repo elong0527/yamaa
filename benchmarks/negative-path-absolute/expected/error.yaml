@@ -1,8 +1,0 @@
-phase: validation
-condition: resource_path_not_relative
-spec_paths:
-  - input.LBREF.path
-requirement: REQ-0781
-context:
-  dataset: LBREF
-  path: /shared/reference/lbref.csv

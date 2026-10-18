@@ -1,8 +1,5 @@
 lifecycle: draft
 standard: ADaM
 domain: ADSL
-validation:
-  rule: R007
-  validator: expression_contract
 covers:
 - round_half_away_from_zero

@@ -1,13 +1,11 @@
-"""Compare actual installed complete reports and repeated producer Save evidence.
+"""Compare actual installed complete reports with committed authored truth.
 
 Authored report truth, complete installed observations and saved bytes remain
 independent inputs. No candidate engine or reference evaluator is imported.
 """
 
-import copy
 import json
 import shutil
-from pathlib import Path, PurePosixPath
 
 from tools.conformance import report_values as reports
 from tools.paths import ROOT
@@ -40,34 +38,12 @@ def public_cases(checkout=ROOT):
 
 COHORT = public_cases()
 
-PRODUCER = "shared-producer-parquet"
 TRUTH_PATHS = {
     name: f"rust/crates/yamaa-adapters/tests/fixtures/specs/{name}.json"
     for name in COHORT
 }
-TRUTH_PATHS[PRODUCER] = (
-    "rust/qualification/producer-cohort/shared-producer-parquet/reference.json"
-)
 PROTOCOL = "installed-complete-reports/1"
 TRUTH_KIND = "committed-authored-report-truth"
-
-
-TARGETS = ("produced.parquet", "out.csv")
-
-
-def exact_json(left, right):
-    """Compare raw protocol values without Python's bool/int equivalence."""
-    if type(left) is not type(right):
-        return False
-    if isinstance(left, dict):
-        return left.keys() == right.keys() and all(
-            exact_json(left[key], right[key]) for key in left
-        )
-    if isinstance(left, list):
-        return len(left) == len(right) and all(
-            exact_json(a, b) for a, b in zip(left, right)
-        )
-    return left == right
 
 
 def write(path, value):
@@ -223,144 +199,6 @@ def require_same_run(python_record, r_record):
         raise ValueError("public owners must share their actual core and Actions run")
 
 
-def relative_identity(value, case):
-    # Compare lexical canonical identities across the host OS. The saved case
-    # may no longer exist, and Windows reports are also audited on Linux.
-    return PurePosixPath(value).relative_to(PurePosixPath(case)).as_posix()
-
-
-def project_report(raw, case):
-    fields = set(reports.ExampleReport.model_fields)
-    if set(raw) != fields | {"entry", "activation", "environment"}:
-        raise ValueError("unknown or incomplete native producer report fields")
-    if (
-        raw["backend"] != "rust"
-        or raw["example"] != "domain"
-        or raw["error"] is not None
-    ):
-        raise ValueError("actual successful public producer report required")
-    if raw["entry"] != "spec.yaml" or raw["activation"] != {
-        "lock": "not_requested",
-        "bindings": [],
-        "tests": [],
-    }:
-        raise ValueError("unexpected producer entry or activation ledger")
-    # The report's environment section names the project file the owner
-    # passed and the lock its linked environment file declares, both beside
-    # the retained case.
-    environment = raw["environment"]
-    parent = PurePosixPath(case).parent
-    lock = "uv.lock" if raw["runtime"] == "python" else "renv.lock"
-    if environment != {
-        "source": (parent / "project.yaml").as_posix(),
-        "lock_source": (parent / lock).as_posix(),
-    }:
-        raise ValueError(
-            "producer project or lock is not from its actual retained owner"
-        )
-    protocol = copy.deepcopy({key: raw[key] for key in fields})
-    protocol["example"] = PRODUCER
-    for group in ("nodes", "tables", "verifications", "callbacks"):
-        for observation in protocol[group]:
-            observation["specification"] = relative_identity(
-                observation["specification"], case
-            )
-    for observation in protocol["source_reads"]:
-        if relative_identity(observation.pop("specification"), case) != "producer.yaml":
-            raise ValueError(
-                "seed resource request is not owned by its original producer"
-            )
-        observation["base_directory"] = relative_identity(
-            observation["base_directory"], case
-        )
-    owners = {"produced": "producer.yaml", "out": "spec.yaml"}
-    for artifact in protocol["artifacts"]:
-        if (
-            relative_identity(artifact.pop("specification"), case)
-            != owners[artifact["name"]]
-        ):
-            raise ValueError("artifact does not belong to its actual node")
-    return reports.parse_report(json.dumps(protocol))
-
-
-def require_parity(reference, candidate, label):
-    verdict = reports.compare_reports(reference, candidate)
-    if not verdict.passed:
-        raise ValueError(label + ": " + verdict.model_dump_json())
-    return verdict
-
-
-def retain_producer(directory, runtime, record, expected, output):
-    source = directory / "public-reports/producer-cohort" / runtime / PRODUCER
-    provenance = read(source / "provenance.json")
-    if provenance != {
-        "scope": "supplemental_suites",
-        "evidence": record["evidence"],
-        "installation": record["installation"],
-    }:
-        raise ValueError("producer owner source/artifact provenance differs")
-    raw_directory = output / "raw" / runtime / PRODUCER
-    shutil.copytree(source, raw_directory)
-    case = (raw_directory / "case-directory.txt").read_text(encoding="utf-8")
-    before = read(raw_directory / "before.json")
-    if "publication" in before:
-        raise ValueError("Build unexpectedly contains a publication attempt")
-    before_report = project_report(before, case)
-    require_report_owner(before_report, record, runtime)
-    require_parity(expected, before_report, runtime + " original complete Build report")
-    snapshots = []
-    comparisons = []
-    for attempt in (1, 2):
-        saved = raw_directory / f"after-{attempt}"
-        after = read(saved / "report.json")
-        publication = after.pop("publication")
-        if not exact_json(
-            publication,
-            {
-                "status": "success",
-                "error": None,
-                "entered": [
-                    {"node": 1, "published": True},
-                    {"node": 0, "published": True},
-                ],
-            },
-        ):
-            raise ValueError(
-                "producer publication does not retain its exact successful prefix"
-            )
-        if not exact_json(after, before):
-            raise ValueError("Save changed original execution or source evidence")
-        projected = project_report(after, case)
-        comparisons.append(
-            require_parity(expected, projected, runtime + " complete Save report")
-        )
-        actual = {name: (saved / name).read_bytes() for name in TARGETS}
-        artifacts = {artifact.name: artifact for artifact in projected.artifacts}
-        for name, payload in actual.items():
-            artifact = artifacts[Path(name).stem]
-            if len(payload) != artifact.byte_length:
-                raise ValueError(
-                    "saved artifact length differs from its actual held output"
-                )
-            if artifact.profile == "csv" and payload != artifact.content.encode(
-                "utf-8"
-            ):
-                raise ValueError("saved CSV bytes differ from actual held output")
-        published_fixture = output / "published" / runtime / str(attempt)
-        (published_fixture / "expected").mkdir(parents=True)
-        for name, payload in actual.items():
-            (published_fixture / "expected" / name).write_bytes(payload)
-        verdict = reports.compare_example(projected, published_fixture)
-        if not verdict.passed:
-            raise ValueError("saved producer bytes: " + verdict.model_dump_json())
-        snapshots.append(actual)
-    if snapshots[0] != snapshots[1]:
-        raise ValueError("repeat Save changed held artifact bytes")
-    report_directory = output / "reports" / runtime
-    reports.write_report(projected, report_directory)
-    return comparisons
-
-
 def installed_owner(directory, runtime, revision):
     supplemental = directory / "supplemental" if runtime == "python" else directory
     record = read(supplemental / "supplemental.json")
@@ -369,7 +207,7 @@ def installed_owner(directory, runtime, revision):
     suites = {suite["id"]: suite for suite in record["suites"]}
     # The run-report suite owns schema-verification-log, the cohort case
     # that declares output.report; the original suite owns the others.
-    for suffix in ("original-specifications", "run-report", "producer-cohort"):
+    for suffix in ("original-specifications", "run-report"):
         suite = suites.get(runtime + "/" + suffix)
         if suite is None:
             raise ValueError(f"installed public suite is missing: {runtime}/{suffix}")
@@ -380,18 +218,12 @@ def installed_owner(directory, runtime, revision):
             raise ValueError("skipped public execution cannot qualify complete reports")
         if runtime != "r":
             continue
-        if suffix == "producer-cohort":
-            witnesses = [
-                PRODUCER
-                + " actual installed public owner and repeated held-byte Save evidence passed"
-            ]
-        else:
-            witnesses = [
-                name
-                + " public domain complete Rust run report and successful save observations passed"
-                for name in COHORT
-                if (name == "schema-verification-log") == (suffix == "run-report")
-            ]
+        witnesses = [
+            name
+            + " public domain complete Rust run report and successful save observations passed"
+            for name in COHORT
+            if (name == "schema-verification-log") == (suffix == "run-report")
+        ]
         for witness in witnesses:
             if witness not in log:
                 raise ValueError("missing installed R complete-run witness: " + witness)
@@ -440,24 +272,8 @@ def compare_owners(
             )
             rows.append(coverage_row(name, host, truth_identity, relative, verdicts))
             comparisons.extend(verdicts)
-    truth, truth_identity = retain_truth(checkout, output, PRODUCER, revision)
-    shutil.copytree(
-        checkout / "rust/qualification/producer-cohort", output / "fixtures"
-    )
-    for host, directory in directories.items():
-        verdicts = retain_producer(directory, host, owners[host], truth, output)
-        rows.append(
-            coverage_row(
-                PRODUCER,
-                host,
-                truth_identity,
-                f"reports/{host}/{PRODUCER}.{host}.rust.json",
-                verdicts,
-            )
-        )
-        comparisons.extend(verdicts)
     batches = [batch(owners[host], host, "reports/" + host) for host in directories]
-    result = inventory(revision, (*COHORT, PRODUCER), batches, rows)
+    result = inventory(revision, COHORT, batches, rows)
     write(output / "coverage.json", result)
     write(
         output / "complete-comparisons.json",

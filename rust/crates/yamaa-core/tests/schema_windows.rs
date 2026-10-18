@@ -351,14 +351,7 @@ mod schema {
             use yamaa_core::json::Value as JsonValue;
             use yamaa_core::{diagnostic::ConditionCode, specification::PreflightFinding};
 
-            for operation in [
-                "row_number",
-                "rank",
-                "row_value",
-                "previous_non_missing",
-                "locf",
-                "baseline_flag",
-            ] {
+            for operation in ["row_number", "rank", "row_value", "locf", "baseline_flag"] {
                 for variable in ["SRC.ID", "ID"] {
                     let mut fields = vec![(
                         "window",
@@ -369,12 +362,11 @@ mod schema {
                             fields.push(("source", Tree::text(variable)));
                             fields.push(("offset", Tree::Scalar(N::Integer("-1".into()))));
                         }
-                        "previous_non_missing" | "locf" => {
-                            fields.push(("source", Tree::text(variable)))
-                        }
+                        "locf" => fields.push(("source", Tree::text(variable))),
                         "baseline_flag" => {
                             fields.push(("date", Tree::text(variable)));
                             fields.push(("reference_date", Tree::text(variable)));
+                            fields.push(("value", Tree::text(variable)));
                         }
                         _ => {}
                     }
@@ -408,13 +400,6 @@ mod schema {
                                 ]),
                             )]),
                             format!(".case[1].otherwise.{operation}"),
-                        ),
-                        (
-                            Tree::map(vec![(
-                                "str_concat",
-                                Tree::map(vec![("sources", Tree::List(vec![window.clone()]))]),
-                            )]),
-                            format!(".str_concat.sources[0].{operation}"),
                         ),
                     ] {
                         let document = operation_document(
@@ -524,7 +509,7 @@ mod schema {
         fn case_grammar_findings_retain_their_original_nested_paths() {
             let prepared = PreparedSpecification::prepare(&case_document("ID >", "1")).unwrap();
             let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
-                panic!("predicate grammar finding")
+                panic!("a predicate expression finding")
             };
             let diagnostics = findings[0].diagnostics(prepared.source()).unwrap();
             assert_eq!(
@@ -535,7 +520,7 @@ mod schema {
             let prepared =
                 PreparedSpecification::prepare(&case_document("ID > 0", "ID +")).unwrap();
             let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
-                panic!("numeric grammar finding")
+                panic!("a compute expression finding")
             };
             let diagnostics = findings[0].diagnostics(prepared.source()).unwrap();
             assert_eq!(
@@ -773,7 +758,8 @@ mod schema {
             assert!(window.group_by.is_empty());
             assert_eq!(window.order_by[0].column, 0);
             assert!(!window.order_by[0].descending);
-            assert!(!window.order_by[0].nulls_first);
+            // Missing sorts lowest, so an ascending term places it first.
+            assert!(window.order_by[0].nulls_first);
             assert_eq!(
                 window.filter.as_ref().unwrap().plan().spec_path(),
                 "columns.VALUE.derivation.row_number.window.filter"
@@ -812,7 +798,13 @@ mod schema {
                         };
                         assert_eq!(window.kind, kind);
                         assert_eq!(window.order_by[0].descending, direction == Some("desc"));
-                        assert_eq!(window.order_by[0].nulls_first, nulls == Some("first"));
+                        // An omitted placement sorts missing lowest; a declared one
+                        // is absolute whatever the direction.
+                        let nulls_first = match nulls {
+                            Some(placement) => placement == "first",
+                            None => direction != Some("desc"),
+                        };
+                        assert_eq!(window.order_by[0].nulls_first, nulls_first);
                     }
                 }
             }
@@ -831,7 +823,6 @@ mod schema {
                     N::Text("λ,\"quoted\"".into()),
                     Value::Str("λ,\"quoted\"".into()),
                 ),
-                (N::Boolean(true), Value::Bool(true)),
                 (N::Float(1.5), Value::float(1.5)),
                 (
                     N::Integer("9223372036854775807".into()),
@@ -849,6 +840,31 @@ mod schema {
                 assert_eq!(plan.output().columns()[1].kind, ColumnType::Int);
                 assert_eq!(plan.keys(), [0]);
             }
+            // A Boolean converts to no column type (VALUE-3), so its int column
+            // is refused before any record is read (VALUE-24).
+            let prepared =
+                PreparedSpecification::prepare(&literal_document(N::Boolean(true))).unwrap();
+            let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
+                panic!("a Boolean literal cannot fill an int column")
+            };
+            let diagnostics = findings
+                .iter()
+                .flat_map(|finding| finding.diagnostics(prepared.source()).unwrap())
+                .collect::<Vec<_>>();
+            assert_eq!(diagnostics, prepared.check_declaration_diagnostics());
+            assert_eq!(
+                diagnostics
+                    .iter()
+                    .map(|diagnostic| (
+                        diagnostic.definition().condition,
+                        diagnostic.spec_paths.as_slice()
+                    ))
+                    .collect::<Vec<_>>(),
+                [(
+                    "conversion_failed",
+                    ["columns.VALUE".to_string()].as_slice()
+                )]
+            );
         }
 
         #[test]
@@ -1099,10 +1115,10 @@ mod schema {
                 let diagnostic = finding.diagnostic();
                 assert_eq!(
                     diagnostic.code,
-                    yamaa_core::diagnostic::ConditionCode::PredicateIntegerOverflow
+                    yamaa_core::diagnostic::ConditionCode::LiteralIntegerOverflow
                 );
                 assert_eq!(diagnostic.spec_paths, ["rows[0].filter"]);
-                assert_eq!(diagnostic.definition().phase, "parse");
+                assert_eq!(diagnostic.definition().phase, "validation");
                 assert_eq!(diagnostic.definition().requirement, Some("REQ-0014"));
                 assert_eq!(diagnostic.context.len(), 2);
                 assert_eq!(
@@ -1173,7 +1189,7 @@ mod schema {
                 let diagnostic = finding.diagnostic();
                 assert_eq!(
                     diagnostic.code,
-                    yamaa_core::diagnostic::ConditionCode::PredicateInvalidExpression
+                    yamaa_core::diagnostic::ConditionCode::ExpressionInvalid
                 );
                 assert_eq!(diagnostic.spec_paths, [path]);
                 assert_eq!(
@@ -1255,9 +1271,9 @@ mod schema {
             let diagnostic = finding.diagnostic();
             assert_eq!(
                 diagnostic.code,
-                yamaa_core::diagnostic::ConditionCode::PredicateIntegerOverflow
+                yamaa_core::diagnostic::ConditionCode::LiteralIntegerOverflow
             );
-            assert_eq!(diagnostic.definition().phase, "parse");
+            assert_eq!(diagnostic.definition().phase, "validation");
             assert_eq!(diagnostic.definition().requirement, Some("REQ-0014"));
             assert_eq!(
                 diagnostic.spec_paths,
@@ -1295,7 +1311,7 @@ mod schema {
             let diagnostic = finding.diagnostic();
             assert_eq!(
                 diagnostic.code,
-                yamaa_core::diagnostic::ConditionCode::PredicateInvalidExpression
+                yamaa_core::diagnostic::ConditionCode::ExpressionInvalid
             );
             assert_eq!(
                 diagnostic.spec_paths,
@@ -1316,65 +1332,42 @@ mod schema {
                     ("keep", Tree::text("first")),
                 ],
             ] {
-                for concat in [false, true] {
-                    let mut fields = fields.clone();
-                    let absent_handler = fields.iter().any(|(name, _)| *name == "absent");
-                    fields.insert(0, ("variable", Tree::text("SRC.ID")));
-                    let value = Tree::map(vec![("source", Tree::map(fields))]);
-                    let (operation, payload, path) = if concat {
-                        (
-                            "str_concat",
-                            Tree::map(vec![("sources", Tree::List(vec![value]))]),
-                            "columns.VALUE.derivation.str_concat.sources[0].source",
-                        )
-                    } else {
-                        (
-                            "case",
-                            Tree::List(vec![
-                                Tree::map(vec![("when", Tree::text("ID = 1")), ("then", value)]),
-                                Tree::map(vec![(
-                                    "otherwise",
-                                    Tree::map(vec![(
-                                        "literal",
-                                        Tree::Scalar(N::Integer("0".into())),
-                                    )]),
-                                )]),
-                            ]),
-                            "columns.VALUE.derivation.case[0].then.source",
-                        )
-                    };
-                    let document = operation_document(operation, payload, "input.csv");
-                    let prepared = PreparedSpecification::prepare(&document).unwrap();
-                    let plan = prepared.bind(&source()).unwrap();
-                    let expression = if let Expression::StrConcat { operands, .. } =
-                        &plan.columns()[0].expression
-                    {
-                        &operands[0].expression
-                    } else if let Expression::Case(branches) = &plan.columns()[0].expression {
-                        &branches[0].assignment.expression
-                    } else {
-                        panic!("nested source operation")
-                    };
-                    let Expression::SourceBinding {
-                        source,
-                        absent,
-                        variable_absent,
-                        path: bound_path,
-                        ..
-                    } = expression
-                    else {
-                        panic!("source options lost")
-                    };
-                    assert_eq!(bound_path, path);
-                    assert!(!variable_absent);
-                    if absent_handler {
-                        assert_eq!(absent, &Some(Value::Int(7)));
-                    } else {
-                        assert_eq!(absent, &None);
-                        assert!(
-                            matches!(&source.expression, Expression::Collect { selection: Some(selection), .. } if selection.keep == yamaa_core::dataset::Keep::First && selection.order_by.len()==1)
-                        );
-                    }
+                let mut fields = fields.clone();
+                let absent_handler = fields.iter().any(|(name, _)| *name == "absent");
+                fields.insert(0, ("variable", Tree::text("SRC.ID")));
+                let value = Tree::map(vec![("source", Tree::map(fields))]);
+                let payload = Tree::List(vec![
+                    Tree::map(vec![("when", Tree::text("ID = 1")), ("then", value)]),
+                    Tree::map(vec![(
+                        "otherwise",
+                        Tree::map(vec![("literal", Tree::Scalar(N::Integer("0".into())))]),
+                    )]),
+                ]);
+                let document = operation_document("case", payload, "input.csv");
+                let prepared = PreparedSpecification::prepare(&document).unwrap();
+                let plan = prepared.bind(&source()).unwrap();
+                let Expression::Case(branches) = &plan.columns()[0].expression else {
+                    panic!("nested source operation")
+                };
+                let Expression::SourceBinding {
+                    source,
+                    absent,
+                    variable_absent,
+                    path: bound_path,
+                    ..
+                } = &branches[0].assignment.expression
+                else {
+                    panic!("source options lost")
+                };
+                assert_eq!(bound_path, "columns.VALUE.derivation.case[0].then.source");
+                assert!(!variable_absent);
+                if absent_handler {
+                    assert_eq!(absent, &Some(Value::Int(7)));
+                } else {
+                    assert_eq!(absent, &None);
+                    assert!(
+                        matches!(&source.expression, Expression::Collect { selection: Some(selection), .. } if selection.keep == yamaa_core::dataset::Keep::First && selection.order_by.len()==1)
+                    );
                 }
             }
         }
@@ -1513,7 +1506,7 @@ mod schema {
             ));
             assert!(
                 matches!(&plan.verifications()[1].check, yamaa_core::dataset::Check::InvalidDiagnostic(d)
-        if d.code == yamaa_core::diagnostic::ConditionCode::PredicateInvalidExpression)
+        if d.code == yamaa_core::diagnostic::ConditionCode::ExpressionInvalid)
             );
         }
 

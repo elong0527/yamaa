@@ -224,12 +224,13 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             context,
         ));
     }
+    // Model documents hold the canonical class of the `unique` shorthand.
     let unique = || {
         (
             "verifications",
             Tree::List(vec![Tree::map(vec![(
                 "unique",
-                Tree::List(vec![Tree::text("ID")]),
+                Tree::map(vec![("columns", Tree::List(vec![Tree::text("ID")]))]),
             )])]),
         )
     };
@@ -311,13 +312,13 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
                 "verifications",
                 Tree::List(vec![Tree::map(vec![(
                     "unique",
-                    Tree::List(vec![Tree::text("ABSENT")]),
+                    Tree::map(vec![("columns", Tree::List(vec![Tree::text("ABSENT")]))]),
                 )])]),
             )],
             false,
             "unknown_field",
             "REQ-1245",
-            "intermediates[0].verifications[0].unique[0]",
+            "intermediates[0].verifications[0].unique.columns[0]",
             vec![
                 ("intermediate", text("P")),
                 ("identifier", text("D.ABSENT")),
@@ -351,6 +352,8 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             ],
         ),
         (
+            // A case selecting an int or a string has a type decided per
+            // value (EXPR-14), so no driver layout is known for it.
             vec![
                 (
                     "derivations",
@@ -359,8 +362,17 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
                         Tree::map(vec![(
                             "value",
                             Tree::map(vec![(
-                                "compute",
-                                Tree::map(vec![("expr", Tree::text("X + 1"))]),
+                                "case",
+                                Tree::List(vec![
+                                    Tree::map(vec![
+                                        ("when", Tree::text("X > 0")),
+                                        ("then", Tree::map(vec![("literal", Tree::integer(1))])),
+                                    ]),
+                                    Tree::map(vec![(
+                                        "otherwise",
+                                        Tree::map(vec![("literal", Tree::text("none"))]),
+                                    )]),
+                                ]),
                             )]),
                         )]),
                     )]),
@@ -415,6 +427,54 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             path,
             context,
         ));
+    }
+    // A driver is admitted whenever each field it exposes has one result type
+    // (EXPR-14): a formula over integers is an integer, padding is text.
+    for (name, value, kind) in [
+        (
+            "NEXT",
+            Tree::map(vec![(
+                "compute",
+                Tree::map(vec![("expr", Tree::text("X + 1"))]),
+            )]),
+            ColumnType::Int,
+        ),
+        (
+            "PADDED",
+            Tree::map(vec![(
+                "str_pad",
+                Tree::map(vec![
+                    ("source", Tree::text("X")),
+                    ("width", Tree::integer(3)),
+                ]),
+            )]),
+            ColumnType::Str,
+        ),
+    ] {
+        let driven = model(
+            vec![
+                (
+                    "derivations",
+                    Tree::map(vec![(name, Tree::map(vec![("value", value)]))]),
+                ),
+                (
+                    "columns",
+                    Tree::List(vec![Tree::text("ID"), Tree::text(name)]),
+                ),
+            ],
+            true,
+        );
+        let plan = PreparedSpecification::prepare(&driven)
+            .unwrap()
+            .bind_sources(&[&src, &donor])
+            .unwrap_or_else(|error| panic!("{name}: {error:?}"));
+        let item = &plan.intermediates()[0];
+        let derived = item.derivations.as_ref().unwrap();
+        assert_eq!(
+            derived.column_kind(donor.columns().len()),
+            Some(kind),
+            "{name}"
+        );
     }
     let prepared = PreparedSpecification::prepare(&model(vec![unique()], false)).unwrap();
     let plan = prepared.bind_sources(&[&src, &donor]).unwrap();

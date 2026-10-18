@@ -84,7 +84,6 @@ pub enum Resource {
     OutputRows,
     OutputCells,
     OutputColumns,
-    RegexWork,
 }
 
 /// Complete owned rows are exposed only after output identity and checks succeed.
@@ -228,7 +227,7 @@ pub enum ExecutionError<E> {
         identity: Option<RowIdentity>,
     },
     Numeric {
-        error: crate::numeric_compiler::CompiledEvaluationError<Infallible>,
+        error: crate::expression::EvaluationError<Infallible>,
         identity: Option<RowIdentity>,
     },
     HandlerAccounting(HandlerCountOverflow),
@@ -246,6 +245,9 @@ pub enum ExecutionError<E> {
         intermediate: String,
         matched_key: Vec<(String, Value)>,
         identity: Option<RowIdentity>,
+        /// A read through an implicit join failed, rather than a named
+        /// intermediate.
+        implicit_join: bool,
     },
     SecondaryCell {
         path: String,
@@ -273,12 +275,12 @@ pub enum ExecutionError<E> {
         records: Vec<CheckRecord>,
     },
     VerificationPredicate {
-        error: crate::predicate::EvaluationError<CellError<Infallible>>,
+        error: crate::expression::EvaluationError<CellError<Infallible>>,
         records: Vec<CheckRecord>,
     },
     Predicate {
         source_row: usize,
-        error: crate::predicate::EvaluationError<CellError<E>>,
+        error: crate::expression::EvaluationError<CellError<E>>,
     },
     Limit {
         resource: Resource,
@@ -359,14 +361,6 @@ fn own(value: ValueRef<'_>) -> Value {
         ValueRef::Bool(value) => Value::Bool(value),
         ValueRef::Date(value) => Value::Date(value),
         ValueRef::DateTime(value) => Value::DateTime(value),
-    }
-}
-
-fn regex_limit<E>(error: crate::regex::MatchError) -> ExecutionError<E> {
-    ExecutionError::Limit {
-        resource: Resource::RegexWork,
-        limit: error.limit,
-        required: None,
     }
 }
 
@@ -458,12 +452,22 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
         );
     }
     if let Expression::Joined(read) = &assignment.expression {
-        return joined::read(table, read, assignment, candidate, plan, row, state);
+        return joined::read(
+            table,
+            read,
+            lookup::JoinSite::Operand(&assignment.path),
+            assignment,
+            candidate,
+            plan,
+            row,
+            state,
+        );
     }
     if let Expression::JoinedSource {
         read,
         filter,
         selection,
+        absence,
     } = &assignment.expression
     {
         return joined::read_options(
@@ -471,6 +475,10 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
             read,
             filter.as_ref(),
             selection.as_ref(),
+            absence.as_ref().map_or(
+                lookup::JoinSite::Uncounted(&assignment.path),
+                lookup::JoinSite::Read,
+            ),
             assignment,
             candidate,
             plan,
@@ -519,7 +527,7 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
                     let truth = case_predicates::evaluate(
                         when, table, candidate, plan, row, assignment, state,
                     )?;
-                    truth == crate::predicate::Truth::True
+                    truth == crate::expression::Truth::True
                 }
             };
             if selected {
@@ -554,10 +562,7 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
     {
         return str_template::evaluate(operands, operation, table, candidate, plan, row, state);
     }
-    if matches!(
-        &assignment.expression,
-        Expression::Extreme { .. } | Expression::StrConcat { .. } | Expression::StrContains { .. }
-    ) {
+    if matches!(&assignment.expression, Expression::Extreme { .. }) {
         return scalar::evaluate(assignment, table, candidate, plan, row, state);
     }
     if let Expression::StrExtract { source, operation } = &assignment.expression {
@@ -760,7 +765,7 @@ impl DatasetPlan {
                     }),
             )
         {
-            scalar::register(assignment, handlers);
+            scalar::register(assignment, self, handlers);
             imputation::register(&assignment.expression, handlers);
             str_case::register(&assignment.expression, handlers);
             str_extract::register(&assignment.expression, handlers);
@@ -1141,12 +1146,14 @@ impl DatasetPlan {
                         source_row,
                         &candidate.values,
                     )
-                    .map_err(|error| match error.kind {
-                        crate::predicate::ErrorKind::Regex(limit) => Box::new(regex_limit(limit)),
-                        _ => Box::new(ExecutionError::Predicate { source_row, error }),
+                    .map_err(|error| {
+                        Box::new(ExecutionError::Predicate {
+                            source_row,
+                            error: *error,
+                        })
                     })?
                 };
-                if truth != crate::predicate::Truth::True {
+                if truth != crate::expression::Truth::True {
                     continue;
                 }
             }
@@ -1269,12 +1276,14 @@ impl DatasetPlan {
                     source_row,
                     &candidate.values,
                 )
-                .map_err(|error| match error.kind {
-                    crate::predicate::ErrorKind::Regex(limit) => Box::new(regex_limit(limit)),
-                    _ => Box::new(ExecutionError::Predicate { source_row, error }),
+                .map_err(|error| {
+                    Box::new(ExecutionError::Predicate {
+                        source_row,
+                        error: *error,
+                    })
                 })?
             };
-            if truth == crate::predicate::Truth::True {
+            if truth == crate::expression::Truth::True {
                 candidates.swap(retained, row);
                 retained += 1;
             }
@@ -1441,6 +1450,7 @@ impl DatasetPlan {
         for verification in self.verifications() {
             let record = match &verification.check {
                 Check::NotMissing
+                | Check::Mandatory(_)
                 | Check::AllowedValues(_)
                 | Check::Codelist { .. }
                 | Check::ValueCodelists { .. }
@@ -1622,6 +1632,7 @@ impl DatasetPlan {
                 if group.checks.iter().any(|verification| {
                     matches!(&verification.check, Check::ValueCodelists { discriminator, .. }
                         if !completed[*discriminator]) || matches!(&verification.check, Check::Inventory { scope: Some(scope), .. } if !completed[scope.discriminator]) || matches!(&verification.check, Check::ValueMaxLength { discriminator, .. } if !completed[*discriminator])
+                        || matches!(&verification.check, Check::Mandatory(Some(scope)) if !completed[scope.discriminator])
                 }) {
                     return Ok(());
                 }
@@ -1643,6 +1654,7 @@ impl DatasetPlan {
                             }));
                         }
                         Check::NotMissing
+                        | Check::Mandatory(_)
                         | Check::AllowedValues(_)
                         | Check::Codelist { .. }
                         | Check::ValueCodelists { .. }
@@ -1700,6 +1712,9 @@ impl DatasetPlan {
                                                 let matches = matches!(&candidate.values[*discriminator], Value::Str(code) if codes.contains(code));
                                                 matches == *include
                                             },
+                                            (Check::Mandatory(Some(scope)), _) => {
+                                                scope.selects(&candidate.values)
+                                            }
                                             _ => true,
                                         };
                                         selected.then_some(index)
@@ -1721,25 +1736,6 @@ impl DatasetPlan {
                                         .collect()
                                 } else if let Check::Matches(pattern) = &verification.check {
                                     crate::dataset_checks::matches_offenders(pattern, values)
-                                        .map_err(|error| {
-                                            let ExecutionError::Limit {
-                                                resource,
-                                                limit,
-                                                required,
-                                            } = regex_limit::<E>(error)
-                                            else {
-                                                unreachable!("predicate resource limit")
-                                            };
-                                            Box::new(ExecutionError::ScopedLimit {
-                                                resource,
-                                                limit,
-                                                required,
-                                                spec_paths: vec![format!(
-                                                    "{}.pattern",
-                                                    verification.path
-                                                )],
-                                            })
-                                        })?
                                 } else {
                                     crate::dataset_checks::column_offenders(
                                         &verification.check,
@@ -1948,8 +1944,8 @@ impl<E: std::fmt::Debug> std::fmt::Display for ExecutionError<E> {
 }
 impl<E: std::fmt::Debug> std::error::Error for ExecutionError<E> {}
 
-/// Return the first present operand of a first-available selection,
-/// or its declared missing value when every operand is missing.
+/// Return the first present operand of a first-available selection, or its
+/// declared missing value, missing by default, when every operand is missing.
 #[allow(clippy::too_many_arguments)]
 fn evaluate_first_available<T: TableAccess + ?Sized>(
     table: &T,
@@ -2020,6 +2016,11 @@ fn evaluate_first_available<T: TableAccess + ?Sized>(
             return Ok(value);
         }
     }
+    // Declared or by default, the answer for sources all missing is counted.
+    state
+        .handlers
+        .record(&selection.missing_path(), HandlerKind::Missing)
+        .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))?;
     Ok(selection.missing().clone())
 }
 
@@ -2103,8 +2104,6 @@ fn evaluate_leaf<T: TableAccess + ?Sized>(
         }
         Expression::Literal(value) => value.clone(),
         Expression::Extreme { .. }
-        | Expression::StrConcat { .. }
-        | Expression::StrContains { .. }
         | Expression::Flag(_)
         | Expression::Compute(_)
         | Expression::Aggregate(_)
@@ -2162,11 +2161,13 @@ fn evaluate_leaf<T: TableAccess + ?Sized>(
             lookup: bound,
             filter,
             selection,
+            absence,
         } => lookup::read_source(
             secondary[bound.source],
             bound,
             filter.as_ref(),
             selection.as_ref(),
+            absence.as_ref(),
             &lookup::Context {
                 assignment,
                 candidate,

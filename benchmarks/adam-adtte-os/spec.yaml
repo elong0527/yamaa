@@ -25,7 +25,7 @@ intermediates:
       AND ADRS.ANL01FL = 'Y' AND ADRS.ADT IS NOT NULL"
     order_by: [ADRS.ADT, ADRS.ASEQ]
     keep: first
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: STUDYID
@@ -84,7 +84,8 @@ columns:
     type: int
     label: Analysis Value
     derivation:
-      date_diff:
+      diff:
+        type: date
         start: STARTDT
         end: ADT
         unit: day

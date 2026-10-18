@@ -100,7 +100,7 @@ writeLines(c("schema_version: '1.0'", "domain: TEST", "keys: [ID]",
   "  - {name: T, type: datetime, derivation: {function: {name: datetime_value, args: {x: SRC.T}}}}",
   "  - {name: M, type: int, derivation: {function: {name: maybe_int, args: {x: SRC.M}}}}",
   "  - name: P", "    type: float", "    derivation:", "      function:", "        name: project_ratio",
-  "        args: {numerator: SRC.F, denominator: 4.0, adjust: null, as_percent: true}",
+  "        args: {numerator: SRC.F, denominator: 4.0, adjust: {literal: null}, as_percent: true}",
   "output: {path: output.csv, columns: [ID, I, F, S, D, T, M, P]}"), "spec.yaml")
 writeBin(charToRaw(enc2utf8(paste0("ID,I,F,S,D,T,M\n",
   "1,7,2.5,\u00e9t\u00e9,2024-02-29,2024-02-29T12:30:45,5\n",

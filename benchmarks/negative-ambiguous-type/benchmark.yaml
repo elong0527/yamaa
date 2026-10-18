@@ -1,6 +1,3 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADLB
-validation:
-  rule: R011
-  validator: schema

@@ -107,7 +107,7 @@ mod runs {
     #[derive(Default)]
     struct Events(Mutex<Vec<String>>);
     impl Progress for Events {
-        fn observe(&self, event: Event<'_>) {
+        fn observe(&self, event: Event) {
             self.0.lock().unwrap().push(format!("{event:?}"));
         }
     }
@@ -255,17 +255,14 @@ mod runs {
         assert_eq!(
             separate,
             [
-                "Phase { node: None, phase: Preparation }",
-                "Exit { node: None, phase: Preparation, outcome: Succeeded }",
+                "Phase { phase: Preparation }",
+                "Exit { phase: Preparation, outcome: Succeeded }",
             ]
         );
         plan.run(&RunRequest::new(), &token).unwrap();
         separate.extend(events.take());
         assert_eq!(built, separate);
-        assert_eq!(
-            built.last().unwrap(),
-            "Phase { node: None, phase: Finished }"
-        );
+        assert_eq!(built.last().unwrap(), "Phase { phase: Finished }");
         // A run's own observer replaces the engine's for that run.
         let own = Arc::new(Events::default());
         plan.run(&RunRequest::new().with_observer(own.clone()), &token)
@@ -311,9 +308,6 @@ mod runs {
         assert_eq!(compile_and_runs.len(), build_events.len() + 1);
         compile_and_runs.pop();
         assert_eq!(compile_and_runs, build_events);
-        assert_eq!(
-            build_events.last().unwrap(),
-            "Phase { node: None, phase: Finished }"
-        );
+        assert_eq!(build_events.last().unwrap(), "Phase { phase: Finished }");
     }
 }

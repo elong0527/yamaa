@@ -57,7 +57,9 @@ mod execution {
                 assert_eq!(error.spec_path, "verifications[1].assert.require");
                 assert!(matches!(
                     error.kind,
-                    predicate::ErrorKind::Condition(predicate::Condition::IncompatiblePair { .. })
+                    expression::ErrorKind::Condition(
+                        expression::Condition::IncompatiblePair { .. }
+                    )
                 ));
                 assert_eq!(records.len(), 1);
                 assert_eq!(records[0].failed_count, 1);
@@ -121,7 +123,7 @@ mod execution {
             };
             assert_eq!(
                 error.kind,
-                predicate::ErrorKind::Condition(predicate::Condition::DanglingEscape)
+                expression::ErrorKind::Condition(expression::Condition::DanglingEscape)
             );
             assert_eq!(records.len(), 1);
             assert_eq!(records[0].failed_count, 0);
@@ -634,12 +636,10 @@ mod execution {
                 (
                     ColumnType::Date,
                     vec![
-                        Value::Date(Date::new(2024, 1, 1, DatePrecision::Year).unwrap()),
-                        Value::Date(Date::new(2024, 1, 1, DatePrecision::Day).unwrap()),
+                        Value::Date(Date::new(2024, 1, 1, Precision::Year).unwrap()),
+                        Value::Date(Date::new(2024, 1, 1, Precision::Day).unwrap()),
                     ],
-                    Some(Value::Date(
-                        Date::new(2024, 1, 1, DatePrecision::Year).unwrap(),
-                    )),
+                    Some(Value::Date(Date::new(2024, 1, 1, Precision::Year).unwrap())),
                 ),
                 (
                     ColumnType::Str,
@@ -686,7 +686,7 @@ mod execution {
                             assert_eq!(v.get().to_bits(), (-0.0_f64).to_bits());
                         }
                         if let Value::Date(v) = &result.dataset.rows()[0][1] {
-                            assert_eq!(v.collected_precision(), DatePrecision::Year);
+                            assert_eq!(v.collected_precision(), Precision::Year);
                         }
                     }
                 }
@@ -844,9 +844,9 @@ mod execution {
 
         #[test]
         fn numbering_ignores_temporal_precision_for_ties_and_handles_empty_scope() {
-            let a = Date::new(2024, 1, 1, DatePrecision::Year).unwrap();
-            let b = Date::new(2024, 1, 1, DatePrecision::Day).unwrap();
-            let c = Date::new(2023, 1, 1, DatePrecision::Day).unwrap();
+            let a = Date::new(2024, 1, 1, Precision::Year).unwrap();
+            let b = Date::new(2024, 1, 1, Precision::Day).unwrap();
+            let c = Date::new(2023, 1, 1, Precision::Day).unwrap();
             let mut source = table(
                 &[
                     ("ID", ColumnType::Int),
@@ -1197,7 +1197,8 @@ mod execution {
             );
         }
 
-        /// Offsets include missing donors; previous/LOCF cross gaps while retaining every output position.
+        /// Offsets include missing donors; LOCF with or without the current row crosses gaps while
+        /// retaining every output position.
         #[test]
         fn value_windows_distinguish_neighbor_reads_previous_present_and_current_present() {
             use yamaa_core::dataset::WindowKind;
@@ -1235,11 +1236,17 @@ mod execution {
                     vec![None, None, Some(9), None, None],
                 ),
                 (
-                    WindowKind::PreviousNonMissing { column: 2 },
+                    WindowKind::Locf {
+                        column: 2,
+                        include_current: false,
+                    },
                     vec![None, Some(7), Some(7), Some(7), Some(9)],
                 ),
                 (
-                    WindowKind::Locf { column: 2 },
+                    WindowKind::Locf {
+                        column: 2,
+                        include_current: true,
+                    },
                     vec![Some(7), Some(7), Some(7), Some(9), Some(9)],
                 ),
             ] {
@@ -1350,8 +1357,14 @@ mod execution {
                     column: 2,
                     offset: 0,
                 },
-                WindowKind::Locf { column: 3 },
-                WindowKind::PreviousNonMissing { column: 99 },
+                WindowKind::Locf {
+                    column: 3,
+                    include_current: true,
+                },
+                WindowKind::Locf {
+                    column: 99,
+                    include_current: false,
+                },
             ] {
                 assert_eq!(
                     value_window_plan(&source, kind, None),
@@ -1383,7 +1396,7 @@ mod execution {
         #[test]
         fn value_window_donors_preserve_temporal_and_unicode_representation() {
             use yamaa_core::dataset::WindowKind;
-            let date = Date::new(2024, 1, 1, DatePrecision::Year).unwrap();
+            let date = Date::new(2024, 1, 1, Precision::Year).unwrap();
             let source = table(
                 &[
                     ("ID", ColumnType::Int),
@@ -1395,7 +1408,11 @@ mod execution {
                     vec![Value::Int(2), Value::Missing, Value::Missing],
                 ],
             );
-            let result = value_window_plan(&source, WindowKind::Locf { column: 2 }, None)
+            let locf = WindowKind::Locf {
+                column: 2,
+                include_current: true,
+            };
+            let result = value_window_plan(&source, locf, None)
                 .unwrap()
                 .execute(
                     &source,
@@ -1408,7 +1425,7 @@ mod execution {
             let Value::Date(donor) = result.dataset.rows()[1][3] else {
                 panic!("retained date donor")
             };
-            assert_eq!(donor.collected_precision(), DatePrecision::Year);
+            assert_eq!(donor.collected_precision(), Precision::Year);
             let source = table(
                 &[
                     ("ID", ColumnType::Int),
@@ -1420,7 +1437,7 @@ mod execution {
                     vec![Value::Int(2), Value::Missing, Value::Missing],
                 ],
             );
-            let plan = value_window_plan(&source, WindowKind::Locf { column: 2 }, None).unwrap();
+            let plan = value_window_plan(&source, locf, None).unwrap();
             assert_eq!(
                 plan.execute(
                     &source,
@@ -1436,9 +1453,9 @@ mod execution {
             );
         }
 
-        /// Previous-present selection crosses a long run of missing values.
+        /// Earlier-present selection, excluding the current row, crosses a long run of missing values.
         #[test]
-        fn previous_non_missing_crosses_long_gaps() {
+        fn locf_excluding_current_crosses_long_gaps() {
             use yamaa_core::dataset::WindowKind;
             let source = table(
                 &[
@@ -1460,17 +1477,23 @@ mod execution {
                     })
                     .collect(),
             );
-            let result =
-                value_window_plan(&source, WindowKind::PreviousNonMissing { column: 2 }, None)
-                    .unwrap()
-                    .execute(
-                        &source,
-                        &[],
-                        &mut yamaa_core::function_invocation::NoFunctions::new(),
-                        None,
-                    )
-                    .result
-                    .unwrap();
+            let result = value_window_plan(
+                &source,
+                WindowKind::Locf {
+                    column: 2,
+                    include_current: false,
+                },
+                None,
+            )
+            .unwrap()
+            .execute(
+                &source,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None,
+            )
+            .result
+            .unwrap();
             assert_eq!(result.dataset.rows()[0][3], Value::Missing);
             assert!(result.dataset.rows()[1..]
                 .iter()
@@ -1480,7 +1503,7 @@ mod execution {
         /// Baseline compares each candidate to its own reference and skips either missing operand.
         #[test]
         fn baseline_uses_row_specific_reference_and_missing_candidates() {
-            let date = |day| Value::Date(Date::new(2025, 1, day, DatePrecision::Day).unwrap());
+            let date = |day| Value::Date(Date::new(2025, 1, day, Precision::Day).unwrap());
             let source = table(
                 &[
                     ("ID", ColumnType::Int),
@@ -1533,7 +1556,7 @@ mod execution {
         /// Excluded later rows and excluded ties cannot take a baseline or make it ambiguous.
         #[test]
         fn baseline_filters_exclude_later_rows_and_ties_without_dropping_output() {
-            let date = |day| Value::Date(Date::new(2025, 1, day, DatePrecision::Day).unwrap());
+            let date = |day| Value::Date(Date::new(2025, 1, day, Precision::Day).unwrap());
             // Original expressions/test_windows.py inputs: excluding January 6 must
             // leave January 2 flagged; excluding its January 6 twin must remove the tie.
             for first in [2, 6] {
@@ -1583,7 +1606,7 @@ mod execution {
         /// Missing, post-reference and filter-excluded rows never end the partition scan.
         #[test]
         fn baseline_search_keeps_original_candidate_and_row_specific_reference_rules() {
-            let date = |day| Value::Date(Date::new(2025, 1, day, DatePrecision::Day).unwrap());
+            let date = |day| Value::Date(Date::new(2025, 1, day, Precision::Day).unwrap());
             // Original expressions/test_windows.py cases preserve their January dates
             // and expected flags, including equality with a row's own reference.
             for (pairs, eligible, expected) in [
@@ -1660,8 +1683,8 @@ mod execution {
         /// Equal represented dates tie despite collected precision; diagnostics identify partitions.
         #[test]
         fn baseline_ties_count_all_matches_and_keep_partition_identity() {
-            let year = Date::new(2025, 1, 1, DatePrecision::Year).unwrap();
-            let day = Date::new(2025, 1, 1, DatePrecision::Day).unwrap();
+            let year = Date::new(2025, 1, 1, Precision::Year).unwrap();
+            let day = Date::new(2025, 1, 1, Precision::Day).unwrap();
             let source = table(
                 &[
                     ("ID", ColumnType::Int),
@@ -1700,7 +1723,7 @@ mod execution {
                 } => {
                     assert_eq!(path, "columns.C4.derivation");
                     assert_eq!(column, "BLFL");
-                    assert_eq!(date.collected_precision(), DatePrecision::Year);
+                    assert_eq!(date.collected_precision(), Precision::Year);
                     assert_eq!(match_count, 3);
                     assert_eq!(
                         partition,
@@ -1724,6 +1747,216 @@ mod execution {
             assert!(
                 matches!(*baseline_plan(&source, vec![], None).execute(&source, &[], &mut yamaa_core::function_invocation::NoFunctions::new(), None).result.unwrap_err(), ExecutionError::BaselineAmbiguity { partition, .. } if partition.is_empty())
             );
+        }
+
+        /// A missing value makes a row ineligible, and an exclusive bound drops the reference day.
+        #[test]
+        fn baseline_requires_a_present_value_and_honors_an_exclusive_reference() {
+            let date = |day| Value::Date(Date::new(2025, 1, day, Precision::Day).unwrap());
+            let source = table(
+                &[
+                    ("ID", ColumnType::Int),
+                    ("G", ColumnType::Str),
+                    ("D", ColumnType::Date),
+                    ("R", ColumnType::Date),
+                    ("V", ColumnType::Float),
+                ],
+                vec![
+                    vec![
+                        Value::Int(1),
+                        Value::Str("a".into()),
+                        date(2),
+                        date(5),
+                        Value::float(10.0),
+                    ],
+                    vec![
+                        Value::Int(2),
+                        Value::Str("a".into()),
+                        date(4),
+                        date(5),
+                        Value::Missing,
+                    ],
+                    vec![
+                        Value::Int(3),
+                        Value::Str("b".into()),
+                        date(3),
+                        date(5),
+                        Value::float(7.0),
+                    ],
+                    vec![
+                        Value::Int(4),
+                        Value::Str("b".into()),
+                        date(5),
+                        date(5),
+                        Value::float(8.0),
+                    ],
+                ],
+            );
+            let flag = Value::Str("Y".into());
+            for (value, inclusive, expected) in [
+                // The key is never missing, so the later dated row of "a" wins.
+                (0, true, [None, Some(()), None, Some(())]),
+                // The analysis value is missing on that row, so the earlier one wins.
+                (4, true, [Some(()), None, None, Some(())]),
+                // Strictly before the reference: the reference-day row of "b" drops out.
+                (4, false, [Some(()), None, Some(()), None]),
+            ] {
+                let result =
+                    baseline_options_plan(&source, vec![1], None, value, inclusive, vec![])
+                        .execute(
+                            &source,
+                            &[],
+                            &mut yamaa_core::function_invocation::NoFunctions::new(),
+                            None,
+                        )
+                        .result
+                        .unwrap();
+                assert_eq!(
+                    result
+                        .dataset
+                        .rows()
+                        .iter()
+                        .map(|row| row[5].clone())
+                        .collect::<Vec<_>>(),
+                    expected
+                        .iter()
+                        .map(|marked| marked.map_or(Value::Missing, |()| flag.clone()))
+                        .collect::<Vec<_>>(),
+                    "value {value}, inclusive {inclusive}"
+                );
+            }
+        }
+
+        /// Tie-break terms order same-date rows, each with its own direction and
+        /// missing placement; rows still equal on every term stay ambiguous.
+        #[test]
+        fn baseline_tie_break_terms_pick_the_last_same_date_row_or_fail_when_still_tied() {
+            use yamaa_core::dataset::OrderTerm;
+            let date = |day| Value::Date(Date::new(2025, 1, day, Precision::Day).unwrap());
+            let rows = |times: [Value; 3]| {
+                times
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, time)| {
+                        vec![
+                            Value::Int(index as i64 + 1),
+                            Value::Str("a".into()),
+                            date(3),
+                            date(5),
+                            time,
+                            Value::Int(3 - index as i64),
+                        ]
+                    })
+                    .chain(std::iter::once(vec![
+                        Value::Int(4),
+                        Value::Str("a".into()),
+                        date(1),
+                        date(5),
+                        Value::Int(2300),
+                        Value::Int(9),
+                    ]))
+                    .collect::<Vec<_>>()
+            };
+            let columns = [
+                ("ID", ColumnType::Int),
+                ("G", ColumnType::Str),
+                ("D", ColumnType::Date),
+                ("R", ColumnType::Date),
+                ("TM", ColumnType::Int),
+                ("SEQ", ColumnType::Int),
+            ];
+            let term = |column, descending, nulls_first| OrderTerm {
+                column,
+                descending,
+                nulls_first,
+            };
+            let timed = [Value::Int(900), Value::Int(800), Value::Missing];
+            for (terms, flagged) in [
+                // The latest time wins; a missing time sorts lowest.
+                (vec![term(4, false, true)], 1),
+                // Descending prefers the smallest time, and missing stays lowest,
+                // which is now last.
+                (vec![term(4, true, false)], 3),
+                // A declared absolute placement puts the missing time last.
+                (vec![term(4, false, false)], 3),
+                // A sequence number instead of a time.
+                (vec![term(5, false, true)], 1),
+                (vec![term(5, true, false)], 3),
+            ] {
+                let source = table(&columns, rows(timed.clone()));
+                let result = baseline_options_plan(&source, vec![1], None, 0, true, terms)
+                    .execute(
+                        &source,
+                        &[],
+                        &mut yamaa_core::function_invocation::NoFunctions::new(),
+                        None,
+                    )
+                    .result
+                    .unwrap();
+                assert_eq!(
+                    result
+                        .dataset
+                        .rows()
+                        .iter()
+                        .map(|row| row[6].clone())
+                        .collect::<Vec<_>>(),
+                    (1..=4)
+                        .map(|id| if id == flagged {
+                            Value::Str("Y".into())
+                        } else {
+                            Value::Missing
+                        })
+                        .collect::<Vec<_>>()
+                );
+            }
+            // Two same-date rows equal on every declared term remain a tie;
+            // declaring the sequence as a further term breaks it.
+            let tied = table(
+                &columns,
+                rows([Value::Int(900), Value::Int(900), Value::Int(800)]),
+            );
+            match *baseline_options_plan(&tied, vec![1], None, 0, true, vec![term(4, false, true)])
+                .execute(
+                    &tied,
+                    &[],
+                    &mut yamaa_core::function_invocation::NoFunctions::new(),
+                    None,
+                )
+                .result
+                .unwrap_err()
+            {
+                ExecutionError::BaselineAmbiguity {
+                    date, match_count, ..
+                } => {
+                    assert_eq!(date, date_value(3));
+                    assert_eq!(match_count, 2);
+                }
+                other => panic!("unexpected {other:?}"),
+            }
+            let broken = baseline_options_plan(
+                &tied,
+                vec![1],
+                None,
+                0,
+                true,
+                vec![term(4, false, true), term(5, false, true)],
+            )
+            .execute(
+                &tied,
+                &[],
+                &mut yamaa_core::function_invocation::NoFunctions::new(),
+                None,
+            )
+            .result
+            .unwrap();
+            assert_eq!(
+                broken.dataset.rows()[0][6],
+                Value::Str("Y".into()),
+                "the higher sequence of the two 9:00 rows"
+            );
+            fn date_value(day: u8) -> Value {
+                Value::Date(Date::new(2025, 1, day, Precision::Day).unwrap())
+            }
         }
 
         /// Filtering removes bad keys and conflicting values while preserving source memberships.

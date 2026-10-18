@@ -12,10 +12,10 @@ pub mod arrow_temporal;
 pub mod file_define;
 pub mod json_wire;
 pub mod public_table;
-mod report_publication;
 pub mod report_storage;
 mod storage_api;
 pub mod submission_json;
+pub mod submission_xpt;
 
 pub mod scalar_bytes;
 
@@ -54,10 +54,9 @@ pub mod typed_csv;
 pub mod canonical_path;
 pub mod file_application;
 pub mod file_configuration;
-pub mod file_graph;
+pub mod file_entry;
 mod file_metadata;
 pub mod file_preparation;
-pub mod file_producer_build;
 pub mod file_project;
 #[cfg(unix)]
 pub mod file_publication;
@@ -93,15 +92,6 @@ pub mod project_activation_diagnostics;
 
 pub mod project_activation_observations;
 
-pub mod producer_admission;
-pub mod producer_attempt;
-pub mod producer_check;
-mod producer_diagnostics;
-pub mod producer_graph;
-pub mod producer_publication;
-pub mod producer_report;
-mod producer_report_publication;
-pub mod producer_result;
 pub mod project_application;
 pub mod project_check;
 pub mod project_scope;

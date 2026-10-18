@@ -79,8 +79,8 @@ columns:
         - when: "LBORRES IS NULL"
           then: {literal: NOT DONE}
     verifications:
-      allowed_values:
-        values: [NOT DONE]
+      - allowed_values:
+          values: [NOT DONE]
 
 rows:
   # Only for a subject whose cohort is recorded and is not NONAD.
@@ -97,8 +97,6 @@ rows:
       LBORRES: BX_RAW.NLESRES
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, LBSEQ]
   - row_count:
       min: 5
       max: 5

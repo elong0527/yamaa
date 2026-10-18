@@ -12,14 +12,13 @@ use super::*;
 use crate::dataset::Verification;
 use crate::{
     bound_expression::{Binding, BoundPredicate, Read},
-    predicate_compiler,
     reference_scope::{self, Phase, Reach, Scope},
 };
 
 #[derive(Debug)]
 enum RowOperation {
     Shared(cases::Branch),
-    ProjectFunction(usize),
+    ProjectFunction { call: usize, returns: ColumnType },
     Output(String),
     Source(String),
 }
@@ -27,11 +26,25 @@ impl RowOperation {
     fn calls(&self) -> Vec<usize> {
         let mut calls = Vec::new();
         match self {
-            Self::ProjectFunction(call) => calls.push(*call),
+            Self::ProjectFunction { call, .. } => calls.push(*call),
             Self::Shared(branch) => derivations::calls(&branch.operation, &mut calls),
             _ => (),
         }
         calls
+    }
+    /// EXPR-14: the row derivation's result type; a bare source has its
+    /// variable's type.
+    fn result_type(
+        &self,
+        input: &dyn Fn(&str) -> crate::result_type::ResultType,
+    ) -> crate::result_type::ResultType {
+        match self {
+            Self::Shared(branch) => branch.operation.result_type(input),
+            &Self::ProjectFunction { call, returns } => {
+                Operation::ProjectFunction { call, returns }.result_type(input)
+            }
+            Self::Output(name) | Self::Source(name) => input(name),
+        }
     }
 }
 #[derive(Debug)]
@@ -50,11 +63,6 @@ impl RowDeclaration {
                 Operation::Case(branches) => {
                     branches.iter().any(|branch| nested(&branch.operation))
                 }
-                Operation::Scalar(operation) => matches!(
-                    operation.as_ref(),
-                    scalar::Declaration::Concat { sources, .. }
-                        if sources.iter().any(|source| nested(&source.operation))
-                ),
                 _ => false,
             }
         }
@@ -75,10 +83,7 @@ struct Template {
     driver: String,
     groups: Option<Vec<String>>,
     declarations: Vec<SharedDeclaration>,
-    filter: Option<(
-        String,
-        Result<crate::predicate::Plan, predicate_compiler::Error>,
-    )>,
+    filter: Option<(String, Result<CompiledExpression, CompileError>)>,
 }
 fn deferred_odm_contexts(
     declarations: &[Template],
@@ -148,13 +153,16 @@ fn declaration(
     let op = text(d, op)?;
     let path = format!("{prefix}.{op}");
     let operation = match op {
-        "function" if project.is_some() => RowOperation::ProjectFunction(
-            *project
-                .unwrap()
-                .nodes
-                .get(&payload)
-                .ok_or(PrepareError::Internal)?,
-        ),
+        "function" if project.is_some() => {
+            let project = project.unwrap();
+            RowOperation::ProjectFunction {
+                call: *project.nodes.get(&payload).ok_or(PrepareError::Internal)?,
+                returns: *project
+                    .returns
+                    .get(&payload)
+                    .ok_or(PrepareError::Internal)?,
+            }
+        }
         "function" if project.is_none() => return Err(unsupported("function", &path)),
         "source" if mapping(d, payload)?.len() == 1 => {
             closed_fields(d, payload, &["variable"], &path)?;
@@ -248,17 +256,9 @@ fn default_reads(
                 None,
             ));
         }
-        if [
-            "row_number",
-            "rank",
-            "row_value",
-            "previous_non_missing",
-            "locf",
-            "baseline_flag",
-            "window",
-        ]
-        .iter()
-        .any(|operation| d.field(value, operation).is_some())
+        if ["row_number", "rank", "row_value", "locf", "baseline_flag"]
+            .iter()
+            .any(|operation| d.field(value, operation).is_some())
         {
             return Ok(true);
         }
@@ -270,13 +270,6 @@ fn default_reads(
                             return Ok(true);
                         }
                     }
-                }
-            }
-        }
-        if let Some(concat) = d.field(value, "str_concat") {
-            for &child in sequence(d, field(d, concat, "sources")?)? {
-                if contains_window(d, child, depth + 1)? {
-                    return Ok(true);
                 }
             }
         }
@@ -310,20 +303,8 @@ fn default_reads(
     };
     match operation {
         "literal" => {}
-        "greatest"
-        | "least"
-        | "str_concat"
-        | "str_contains"
-        | "case"
-        | "first_available"
-        | "mapping"
-        | "cut"
-        | "row_number"
-        | "rank"
-        | "row_value"
-        | "previous_non_missing"
-        | "locf"
-        | "baseline_flag" => {
+        "greatest" | "least" | "case" | "first_available" | "mapping" | "cut" | "row_number"
+        | "rank" | "row_value" | "locf" | "baseline_flag" => {
             let mut names = Vec::new();
             derivations::references(d, value, project, &mut names, 0)?;
             for name in names {
@@ -340,10 +321,9 @@ fn default_reads(
             }
         }
         "round_half_away_from_zero" => reference(text(d, field(d, payload, "source")?)?),
-        "date_diff" | "study_day" | "to_epoch_day" | "date_shift" | "datetime_diff"
-        | "datetime_shift" | "duration_value" | "duration_text" => {
+        "diff" | "study_day" | "to_epoch_day" | "shift" | "duration_value" => {
             for &name in temporal::fields(operation) {
-                if let N::Text(source) = &d.nodes()[field(d, payload, name)?] {
+                if let Some(N::Text(source)) = d.field(payload, name).map(|id| &d.nodes()[id]) {
                     reference(source);
                 }
             }
@@ -363,44 +343,30 @@ fn default_reads(
             }
         }
         "flag" => {
-            let condition = if matches!(d.nodes()[payload], N::Text(_)) {
-                payload
-            } else {
-                field(d, payload, "condition")?
-            };
-            match crate::predicate_parser::parse_predicate(text(d, condition)?) {
-                Ok(parsed) => {
-                    for name in parsed.identifiers() {
+            let condition = field(d, payload, "condition")?;
+            match compile(text(d, condition)?, ExpressionContext::Predicate, "") {
+                Ok(compiled) => {
+                    for name in compiled.identifiers() {
                         reference(name);
                     }
                 }
-                Err(crate::predicate_parser::ParseError::Grammar { .. }) => (),
-                Err(error) => return Err(PrepareError::predicate_parse(error, None)),
+                Err(CompileError::Invalid { .. }) => (),
+                Err(error) => return Err(PrepareError::expression(error, None)),
             }
         }
         "compute" => {
             let expression = text(d, field(d, payload, "expr")?)?;
-            match crate::numeric_parser::parse_numeric(expression) {
-                Ok(parsed) => {
-                    for name in parsed.identifiers() {
+            match compile(expression, ExpressionContext::Compute, "") {
+                Ok(compiled) => {
+                    for name in compiled.identifiers() {
                         reference(name);
                     }
                 }
-                Err(crate::numeric_parser::ParseError::Grammar { .. }) => {}
-                Err(error) => return Err(PrepareError::numeric_parse(error, None)),
+                Err(CompileError::Invalid { .. }) => {}
+                Err(error) => return Err(PrepareError::expression(error, None)),
             }
         }
-        "aggregate" | "lookup" | "window" => {
-            return Ok((
-                false,
-                reads,
-                Some(match operation {
-                    "aggregate" => "aggregate",
-                    "lookup" => "lookup",
-                    _ => "window",
-                }),
-            ));
-        }
+        "aggregate" => return Ok((false, reads, Some("aggregate"))),
         _ => {
             return Ok((
                 !self_default,
@@ -604,7 +570,7 @@ fn validate_row_phases(
                     output,
                     &mut sites,
                 ),
-                RowOperation::ProjectFunction(call) => {
+                RowOperation::ProjectFunction { call, .. } => {
                     let call = &project
                         .ok_or(PrepareError::Internal)?
                         .calls
@@ -697,8 +663,9 @@ fn bind_assignment(
     secondary: &[crate::dataset::SecondarySource],
     intermediates: &[Option<crate::dataset::Intermediate>],
 ) -> Result<Option<Assignment>, BindError> {
+    let start = findings.len();
     let expression = match &declaration.operation {
-        RowOperation::ProjectFunction(call) => {
+        RowOperation::ProjectFunction { call, .. } => {
             let project = project.ok_or(BindError::Internal)?;
             match crate::project_call_binding::bind(
                 project,
@@ -833,6 +800,25 @@ fn bind_assignment(
             }
         }
     };
+    // VALUE-24 once per column: a default shared by several templates states
+    // one derivation.
+    if expression.is_some() && findings.len() == start && declaration.handler.is_none() {
+        let input =
+            |name: &str| static_types::result_type(name, named, catalog, secondary, intermediates);
+        let column = &output.columns()[declaration.column];
+        if let Some(finding) = result_types::conversion_finding(
+            &format!("columns.{}", column.name),
+            declaration.operation.result_type(&input),
+            column.kind,
+        ) {
+            if !findings
+                .iter()
+                .any(|prior| matches!(prior, BindFinding::Scalar(prior) if *prior == finding))
+            {
+                findings.push(BindFinding::Scalar(finding));
+            }
+        }
+    }
     Ok(expression.map(|expression| Assignment {
         column: declaration.column,
         expression,
@@ -842,7 +828,7 @@ fn bind_assignment(
 
 #[allow(clippy::too_many_arguments)]
 fn bind_template_filter(
-    predicate: Option<&crate::predicate::Plan>,
+    predicate: Option<&crate::expression::CompiledExpression>,
     grouped: bool,
     template: &Template,
     filter_path: &str,
@@ -956,7 +942,13 @@ fn bind_template_filter(
         None
     } else {
         predicate
-            .map(|plan| BoundPredicate::new_contextual(plan.clone(), bindings, Vec::new()))
+            .map(|plan| {
+                BoundPredicate::new_contextual(
+                    static_types::typed(plan, named, row_catalog, secondary, intermediates),
+                    bindings,
+                    Vec::new(),
+                )
+            })
             .transpose()
             .map_err(BindError::InvalidPredicateBinding)?
     };
@@ -1103,11 +1095,9 @@ fn bind_template(
     let predicate = match &template.filter {
         Some((
             text,
-            Err(predicate_compiler::Error::Parse(crate::predicate_parser::ParseError::Grammar {
-                position,
-                failure,
-                ..
-            })),
+            Err(CompileError::Invalid {
+                position, failure, ..
+            }),
         )) => {
             findings.push(BindFinding::Lookup(LookupFinding::grammar(
                 &filter_path,
@@ -1117,7 +1107,7 @@ fn bind_template(
             )));
             None
         }
-        Some((_, Err(error))) => return Err(BindError::PredicatePolicy(error.clone())),
+        Some((_, Err(error))) => return Err(BindError::ExpressionPolicy(error.clone())),
         Some((_, Ok(plan))) => Some(plan),
         None => None,
     };
@@ -1125,11 +1115,7 @@ fn bind_template(
     // Qualified grouped-filter failures precede derivation binding, as in reference planning.
     if let Some(plan) = predicate.filter(|_| grouped) {
         let mut seen = std::collections::BTreeSet::new();
-        for identifier in plan
-            .identifiers()
-            .into_iter()
-            .filter(|name| name.contains('.'))
-        {
+        for identifier in plan.identifiers().filter(|name| name.contains('.')) {
             if !seen.insert(identifier) {
                 continue;
             }
@@ -1264,10 +1250,7 @@ fn bind_template(
     }))
 }
 
-type RowFilterDeclaration = Option<(
-    String,
-    Result<crate::predicate::Plan, predicate_compiler::Error>,
-)>;
+type RowFilterDeclaration = Option<(String, Result<CompiledExpression, CompileError>)>;
 
 fn prepare_row_filters(
     d: &Document,
@@ -1282,20 +1265,11 @@ fn prepare_row_filters(
                 .map(|id| {
                     let expression = text(d, id)?;
                     let path = format!("rows[{index}].filter");
-                    let compiled = predicate_compiler::compile(expression, &path);
+                    let compiled = compile(expression, ExpressionContext::Predicate, &path);
                     match &compiled {
-                        Ok(_)
-                        | Err(predicate_compiler::Error::Parse(
-                            crate::predicate_parser::ParseError::Grammar { .. },
-                        )) => {}
-                        Err(predicate_compiler::Error::Parse(
-                            crate::predicate_parser::ParseError::UnsupportedRegex { .. },
-                        )) => return Err(unsupported("predicate_regex", &path)),
-                        Err(predicate_compiler::Error::Internal) => {
-                            return Err(PrepareError::Internal)
-                        }
+                        Ok(_) | Err(CompileError::Invalid { .. }) => {}
                         Err(error) => {
-                            return Err(PrepareError::predicate(error.clone(), Some(&path)))
+                            return Err(PrepareError::expression(error.clone(), Some(&path)))
                         }
                     }
                     Ok((String::from(expression), compiled))
@@ -1514,13 +1488,7 @@ impl Rows {
             };
             if matches!(
                 text(d, operation)?,
-                "row_number"
-                    | "rank"
-                    | "row_value"
-                    | "previous_non_missing"
-                    | "locf"
-                    | "baseline_flag"
-                    | "window"
+                "row_number" | "rank" | "row_value" | "locf" | "baseline_flag"
             ) {
                 // An output-key window default spans the complete constructed
                 // dataset. Selection identity cannot make it template-local.
@@ -1591,12 +1559,9 @@ impl Rows {
                         "row_number"
                             | "rank"
                             | "row_value"
-                            | "previous_non_missing"
                             | "locf"
                             | "baseline_flag"
-                            | "window"
                             | "aggregate"
-                            | "lookup"
                             | "mapping"
                     ) {
                         continue;
@@ -2141,6 +2106,51 @@ impl Rows {
 
 impl Rows {
     pub(super) fn check_findings(
+        &self,
+        output: &TableSchema,
+        input: &dyn Fn(&str) -> crate::result_type::ResultType,
+        sources: &[SourceDeclaration],
+        named: &intermediates::Declarations,
+        findings: &mut Vec<BindFinding>,
+    ) -> Result<(), BindError> {
+        self.declaration_findings(sources, named, findings)?;
+        // Static types in binding order: each template's derivations, then the
+        // column-phase defaults, a shared default stating one derivation.
+        for declaration in self
+            .templates
+            .iter()
+            .flat_map(|template| &template.declarations)
+            .chain(&self.columns)
+        {
+            let start = findings.len();
+            if let RowOperation::Shared(branch) = &declaration.operation {
+                static_checks::derivation_types(&branch.operation, input, findings);
+            }
+            let column = &output.columns()[declaration.column];
+            if let Some(finding) = declaration
+                .handler
+                .is_none()
+                .then(|| {
+                    result_types::conversion_finding(
+                        &format!("columns.{}", column.name),
+                        declaration.operation.result_type(input),
+                        column.kind,
+                    )
+                })
+                .flatten()
+                .filter(|_| findings.len() == start)
+            {
+                if !findings
+                    .iter()
+                    .any(|prior| matches!(prior, BindFinding::Scalar(prior) if *prior == finding))
+                {
+                    findings.push(BindFinding::Scalar(finding));
+                }
+            }
+        }
+        Ok(())
+    }
+    fn declaration_findings(
         &self,
         sources: &[SourceDeclaration],
         named: &intermediates::Declarations,

@@ -18,7 +18,7 @@ intermediates:
   - id: LB_MAP
     dataset: LB_MAPPING
     key: {ItemOID: ODM.ItemOID}
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: DOMAIN
@@ -40,8 +40,6 @@ columns:
     type: int
     label: Sequence Number
     derivation: ODM.ItemGroupRepeatKey
-    verifications:
-      not_missing: {}
 
   - name: LBTESTCD
     type: str
@@ -109,12 +107,9 @@ rows:
       LBTESTCD: LB_MAP.LBTESTCD
       LBSPEC: LB_MAP.LBSPEC
       LBORRES:
-        aggregate:
-          expr: "ONLY(ODM.Value)"
+        aggregate: "ONLY(ODM.Value)"
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, LBSEQ]
   - row_count:
       min: 14
       max: 14

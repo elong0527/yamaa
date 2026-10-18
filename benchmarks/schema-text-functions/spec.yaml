@@ -19,7 +19,7 @@ output:
     - TEXTSEQ
     - MINTXT
     - MAXTXT
-  order_by: [RAWTXT, USUBJID]
+  order_by: [{variable: RAWTXT, nulls: last}, USUBJID]
 
 columns:
   - name: STUDYID
@@ -37,8 +37,8 @@ columns:
     label: Raw Text
     derivation: DM.RAWTXT
     verifications:
-      max_length:
-        max: 6
+      - max_length:
+          max: 6
 
   - name: PEERTXT
     type: str
@@ -117,7 +117,7 @@ columns:
     derivation:
       row_number:
         window:
-          order_by: [RAWTXT, USUBJID]
+          order_by: [{variable: RAWTXT, nulls: last}, USUBJID]
 
   - name: MINTXT
     type: str
@@ -138,8 +138,6 @@ columns:
         key: [STUDYID]
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID]
   - row_count:
       min: 8
       max: 8

@@ -84,12 +84,10 @@ columns:
     derivation:
       flag: "NMEAS = NTARGET"
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, AVISIT]
   - row_count:
       min: 9
       max: 9

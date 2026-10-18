@@ -11,9 +11,9 @@ end of treatment (`TRTEDT`).
 - `REVIEWFL` would contain `Y` when the onset is no more than 30 days
   after treatment ended, otherwise `N`.
 
-**Note:** the condition adds 30 days to the treatment end date instead
-of comparing named values, so the run is rejected before any data is
-read and no artifact is accepted.
+**Note:** the condition adds 30 to the treatment end date, but
+arithmetic takes numbers and `TRTEDT` is a date, so the run is rejected
+before any data is read and no artifact is accepted.
 
 ## How to fix
 
@@ -24,7 +24,8 @@ Carry the day count in its own column and compare the named value:
   type: int
   label: Days from Treatment End to Onset
   derivation:
-    date_diff:
+    diff:
+      type: date
       start: TRTEDT
       end: ASTDT
       unit: day

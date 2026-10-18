@@ -2,7 +2,7 @@
 use super::*;
 use crate::{
     dataset::{Intermediate, IntermediateKey, Keep, OrderTerm, SecondarySource, SourceSelection},
-    predicate_compiler,
+    result_type::ResultType,
     value::Value,
 };
 
@@ -15,10 +15,11 @@ struct Declaration {
     source: self_relations::Relation,
     keys: Option<Vec<(String, match_values::Declaration)>>,
     filter_text: Option<String>,
-    filter: Option<Result<crate::predicate::Plan, predicate_compiler::Error>>,
+    filter: Option<Result<CompiledExpression, CompileError>>,
     order: Vec<(String, bool, bool)>,
     keep: Option<Keep>,
     no_match: Option<Value>,
+    require_match: bool,
     range: Option<intermediate_range::Declaration>,
     columns: Option<Vec<String>>,
     unique: UniqueDeclarations,
@@ -87,11 +88,9 @@ fn finish_item(
             }
             filter
         }
-        Some(Err(predicate_compiler::Error::Parse(
-            crate::predicate_parser::ParseError::Grammar {
-                position, failure, ..
-            },
-        ))) => {
+        Some(Err(CompileError::Invalid {
+            position, failure, ..
+        })) => {
             findings.push(BindFinding::Lookup(LookupFinding::grammar(
                 &format!("{}.filter", item.path),
                 item.filter_text.as_deref().expect("written predicate"),
@@ -101,7 +100,7 @@ fn finish_item(
             // A syntax rejection does not remove the declaration's schema.
             None
         }
-        Some(Err(error)) => return Err(BindError::PredicatePolicy(error.clone())),
+        Some(Err(error)) => return Err(BindError::ExpressionPolicy(error.clone())),
         None => None,
     };
     let mut order_by = Vec::new();
@@ -354,15 +353,14 @@ fn bind_one(
     let pairs_declared = item.keys.as_ref().unwrap_or(&default_keys);
     // Result types and donor fields precede expression declarations and reads.
     for (field, declaration) in pairs_declared {
-        if let (Some(donor), Some(expected)) = (
-            schema
-                .columns()
-                .iter()
-                .position(|column| column.name == *field)
-                .and_then(donor_kind),
-            declaration.result_type(&catalog),
-        ) {
-            if !crate::key_relation::comparable(expected, donor.into()) {
+        if let Some(donor) = schema
+            .columns()
+            .iter()
+            .position(|column| column.name == *field)
+            .and_then(donor_kind)
+        {
+            let expected = declaration.result_type(&catalog);
+            if !expected.comparable(donor.into()) {
                 findings.push(BindFinding::Lookup(LookupFinding::key_type(
                     &format!("{}.key", item.path),
                     &item.name,
@@ -485,6 +483,7 @@ fn bind_one(
         filter,
         selection: item.keep.map(|keep| SourceSelection { order_by, keep }),
         no_match: item.no_match.clone(),
+        require_match: item.require_match,
         unique,
         derivations,
         pending_schema,
@@ -646,6 +645,8 @@ impl Declarations {
             findings.push(BindFinding::Lookup(finding));
             return Ok(());
         }
+        // A driver is admitted whenever each field it exposes has one result
+        // type (EXPR-14): its rows then carry the declared layout.
         if let Some(derived) = &item.derivations {
             let schema = item.source_schema(secondary).ok_or(BindError::Internal)?;
             let unknown = schema
@@ -655,10 +656,7 @@ impl Declarations {
                 .filter(|(column, _)| {
                     item.admits_column(*column)
                         && *column >= derived.stored_columns
-                        && derived
-                            .driver_kinds
-                            .get(*column - derived.stored_columns)
-                            .is_none_or(Option::is_none)
+                        && derived.column_kind(*column).is_none()
                 })
                 .map(|(_, column)| column.name.as_str())
                 .collect::<Vec<_>>();
@@ -735,25 +733,12 @@ impl Declarations {
                         )]));
                     }
                 }
-                let names = if matches!(d.nodes()[payload], N::Sequence(_)) {
-                    payload
-                } else {
-                    field(d, payload, "columns")?
-                };
-                let columns = sequence(d, names)?
+                let columns = sequence(d, field(d, payload, "columns")?)?
                     .iter()
                     .enumerate()
                     .map(|(index, &id)| {
-                        text(d, id).map(|name| {
-                            (
-                                name.into(),
-                                if names == payload {
-                                    format!("{check_path}[{index}]")
-                                } else {
-                                    format!("{check_path}.columns[{index}]")
-                                },
-                            )
-                        })
+                        text(d, id)
+                            .map(|name| (name.into(), format!("{check_path}.columns[{index}]")))
                     })
                     .collect::<Result<_, _>>()?;
                 unique.push((check_path, columns, identity));
@@ -838,16 +823,11 @@ impl Declarations {
                 .field(id, "key")
                 .filter(|&id| !matches!(d.nodes()[id], N::Null))
             {
-                if !matches!(d.nodes()[key], N::Text(_) | N::Mapping(_) | N::Sequence(_)) {
+                if !matches!(d.nodes()[key], N::Mapping(_) | N::Sequence(_)) {
                     reject(extra, "intermediate_key", format!("{path}.key"));
                     continue;
                 }
-                if let N::Text(name) = &d.nodes()[key] {
-                    Some(vec![(
-                        name.clone(),
-                        match_values::Declaration::Variable(name.clone()),
-                    )])
-                } else if matches!(d.nodes()[key], N::Sequence(_)) {
+                if matches!(d.nodes()[key], N::Sequence(_)) {
                     let fields = sequence(d, key)?;
                     if fields.len() > crate::limits::Limits::KEYS {
                         return Err(PrepareError::limit(
@@ -916,20 +896,15 @@ impl Declarations {
             {
                 let expression = text(d, filter)?;
                 filter_text = Some(expression.into());
-                let compiled = predicate_compiler::compile(expression, &format!("{path}.filter"));
+                let compiled = compile(
+                    expression,
+                    ExpressionContext::Predicate,
+                    &format!("{path}.filter"),
+                );
                 match &compiled {
-                    Err(predicate_compiler::Error::Parse(
-                        crate::predicate_parser::ParseError::Grammar { .. },
-                    ))
-                    | Ok(_) => {}
-                    Err(predicate_compiler::Error::Parse(
-                        crate::predicate_parser::ParseError::UnsupportedRegex { .. },
-                    )) => {
-                        reject(extra, "predicate_regex", format!("{path}.filter"));
-                    }
-                    Err(predicate_compiler::Error::Internal) => return Err(PrepareError::Internal),
+                    Err(CompileError::Invalid { .. }) | Ok(_) => {}
                     Err(error) => {
-                        return Err(PrepareError::predicate(
+                        return Err(PrepareError::expression(
                             error.clone(),
                             Some(&format!("{path}.filter")),
                         ))
@@ -965,42 +940,33 @@ impl Declarations {
                     ));
                 }
                 for &term in terms {
-                    let (name, descending, nulls_first) = if let N::Text(name) = &d.nodes()[term] {
-                        (name.as_str(), false, false)
-                    } else {
-                        (
-                            text(d, field(d, term, "variable")?)?,
-                            d.field(term, "direction")
-                                .map(|id| text(d, id))
-                                .transpose()?
-                                .unwrap_or("asc")
-                                == "desc",
-                            d.field(term, "nulls")
-                                .map(|id| text(d, id))
-                                .transpose()?
-                                .unwrap_or("last")
-                                == "first",
-                        )
-                    };
-                    order.push((name.into(), descending, nulls_first));
+                    order.push(order_term(d, term)?);
                 }
             }
             let no_match = d
                 .field(id, "no_match")
                 .map(|value| literal(d, value, &format!("{path}.no_match")))
                 .transpose()?;
+            let require_match = requires_match(d, id);
             let unique = Self::prepare_unique_checks(d, id, &path)?;
-            let driver_prohibited = ["key", "between", "order_by", "keep", "no_match"]
-                .into_iter()
-                .filter(|name| {
-                    if *name == "no_match" {
-                        d.field(id, name).is_some()
-                    } else {
-                        present(d, id, name)
-                    }
-                })
-                .map(String::from)
-                .collect();
+            let driver_prohibited = [
+                "key",
+                "between",
+                "order_by",
+                "keep",
+                "no_match",
+                "require_match",
+            ]
+            .into_iter()
+            .filter(|name| {
+                if *name == "no_match" {
+                    d.field(id, name).is_some()
+                } else {
+                    present(d, id, name)
+                }
+            })
+            .map(String::from)
+            .collect();
             let derivations = intermediate_derivations::prepare(
                 d, id, &path, dataset, project, extraction, templates, &result,
             )?;
@@ -1016,6 +982,7 @@ impl Declarations {
                     order,
                     keep,
                     no_match,
+                    require_match,
                     range,
                     columns,
                     unique,
@@ -1182,23 +1149,37 @@ impl Declarations {
             })
             .collect::<Vec<_>>();
         let catalog = Catalog::compile(&output_fields, &datasets).map_err(BindError::Catalog)?;
-        let mut known = BTreeMap::<String, Option<ColumnType>>::new();
+        // Before capture, a stored field has its declared type; an undeclared
+        // field may not exist, so its type waits for binding.
+        let stored = |owner: &str, field: &str| {
+            sources
+                .iter()
+                .find(|source| source.name == owner)
+                .and_then(|source| source.declared_type(field))
+        };
+        // Fields of earlier intermediates: derived names, and the input each
+        // one reads for its stored fields.
+        let mut known = BTreeMap::<String, ResultType>::new();
+        let mut inputs = BTreeMap::<&str, &str>::new();
         for declaration in self.0.iter() {
             let dataset = match declaration.source {
                 self_relations::Relation::Input(index) => sources[index].name.as_str(),
                 self_relations::Relation::SelfRows => "SELF",
             };
             let mut donor = match declaration.source {
-                self_relations::Relation::Input(index) => sources[index]
-                    .types
-                    .iter()
-                    .map(|(name, kind)| (name.clone(), Some(*kind)))
-                    .collect::<BTreeMap<_, _>>(),
+                self_relations::Relation::Input(_) => BTreeMap::new(),
                 self_relations::Relation::SelfRows => output
                     .columns()
                     .iter()
-                    .map(|column| (column.name.clone(), Some(column.kind)))
-                    .collect(),
+                    .map(|column| (column.name.clone(), ResultType::column(column.kind)))
+                    .collect::<BTreeMap<_, _>>(),
+            };
+            let donor_type = |donor: &BTreeMap<String, ResultType>, field: &str| {
+                donor.get(field).copied().or_else(|| {
+                    matches!(declaration.source, self_relations::Relation::Input(_))
+                        .then(|| stored(dataset, field).map(ResultType::column))
+                        .flatten()
+                })
             };
             if let (Some(expression), Some(compiled)) =
                 (&declaration.filter_text, &declaration.filter)
@@ -1212,25 +1193,20 @@ impl Declarations {
             }
             for derived in &declaration.derivations {
                 static_checks::branch(&derived.branch, findings)?;
-                let kind = derived.result_kind(&|name| {
+                let input = |name: &str| {
                     let (owner, field) = name.split_once('.').unwrap_or((dataset, name));
                     if owner == dataset {
-                        donor.get(field).copied().flatten()
+                        donor_type(&donor, field).unwrap_or(ResultType::UNKNOWN)
                     } else if let Some(kind) = known.get(name) {
                         *kind
                     } else {
-                        sources
-                            .iter()
-                            .find(|source| source.name == owner)
-                            .and_then(|source| {
-                                source
-                                    .types
-                                    .iter()
-                                    .find(|(name, _)| name == field)
-                                    .map(|(_, kind)| *kind)
-                            })
+                        ResultType::declared(stored(inputs.get(owner).unwrap_or(&owner), field))
                     }
-                });
+                };
+                if let Some(finding) = derived.conversion_finding(&input) {
+                    findings.push(BindFinding::Scalar(finding));
+                }
+                let kind = derived.field_type(&input);
                 donor.insert(derived.name.clone(), kind);
             }
             if let Some(Ok(filter)) = &declaration.filter {
@@ -1240,15 +1216,9 @@ impl Declarations {
                             .split_once('.')
                             .or_else(|| (dataset == "SELF").then_some((dataset, name)))?;
                         if owner == dataset {
-                            donor.get(field).copied().flatten().map(Into::into)
+                            donor_type(&donor, field)?.single()
                         } else {
-                            sources
-                                .iter()
-                                .find(|source| source.name == owner)
-                                .and_then(|source| {
-                                    source.types.iter().find(|(name, _)| name == field)
-                                })
-                                .map(|(_, kind)| (*kind).into())
+                            stored(owner, field).map(Into::into)
                         }
                     })
                     .into_iter()
@@ -1256,11 +1226,9 @@ impl Declarations {
                 );
             }
             for (field, value) in declaration.keys.iter().flatten() {
-                if let (Some(actual), Some(expected)) = (
-                    donor.get(field).copied().flatten(),
-                    value.result_type(&catalog),
-                ) {
-                    if !crate::key_relation::comparable(expected, actual.into()) {
+                if let Some(actual) = donor_type(&donor, field).and_then(ResultType::column_type) {
+                    let expected = value.result_type(&catalog);
+                    if !expected.comparable(actual.into()) {
                         findings.push(BindFinding::Lookup(LookupFinding::key_type(
                             &format!("{}.key", declaration.path),
                             &declaration.name,
@@ -1273,6 +1241,9 @@ impl Declarations {
             }
             for (field, kind) in donor {
                 known.insert(format!("{}.{field}", declaration.name), kind);
+            }
+            if matches!(declaration.source, self_relations::Relation::Input(_)) {
+                inputs.insert(&declaration.name, dataset);
             }
         }
         Ok(())

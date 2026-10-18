@@ -98,8 +98,8 @@ columns:
     label: Analysis Value (C)
     derivation: {literal: null}
     verifications:
-      allowed_values:
-        values: ["Y", "N"]
+      - allowed_values:
+          values: ["Y", "N"]
 
 rows:
   # One change record per subject and visit with both systolic readings;
@@ -191,7 +191,7 @@ rows:
         flag:
           condition: "SYSBP_CHG <= -20 OR DIABP_CHG <= -10"
           false_value: "N"
-          missing: null
+          missing: {literal: null}
 
   # A rise of 30 beats/min or more; no record when the change is missing.
   - id: orthostatic_tachycardia
@@ -214,11 +214,9 @@ rows:
         flag:
           condition: "HR_CHG >= 30"
           false_value: "N"
-          missing: null
+          missing: {literal: null}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, AVISIT, PARAMCD]
   - row_count:
       min: 15
       max: 15

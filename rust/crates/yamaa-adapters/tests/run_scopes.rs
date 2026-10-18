@@ -1,23 +1,21 @@
 #![cfg(feature = "yaml")]
 //! One prepared value runs many times, each run in its own scope (#2821 step 1).
 //!
-//! Every route's prepared value -- plain, project and producer -- runs twice
-//! on different studies, fails and then succeeds, and never sees a snapshot an
-//! earlier run captured. Expected artifacts are written here from the authored
+//! Every route's prepared value -- plain, project, and plain with an input
+//! typed through a `schema` link -- runs twice on different studies, fails and
+//! then succeeds, and never sees a snapshot an earlier run captured. Expected artifacts are written here from the authored
 //! inputs: the output declares exactly the input's columns, so each study's
 //! saved CSV is its input text.
 use std::sync::Arc;
 
 use yamaa_adapters::{
     file_application::{self, Domain},
-    file_graph::FileGraph,
     file_preparation::FileSpecification,
     file_project::FileProject,
     file_resources::RunScope,
     file_workflow,
     host_resources::{MemoryResolver, Resolver},
     issue_rows::Issue,
-    producer_result::{self, RootResult},
     project_report,
     specification_report::Identity,
 };
@@ -56,28 +54,30 @@ fn identity() -> Identity<'static> {
 enum Route {
     Plain,
     Project,
-    Producer,
+    /// A plain specification whose input is typed by its producing
+    /// specification; the producer is metadata and never runs.
+    Linked,
 }
 
 impl Route {
-    /// The declaring identity of the one study input.
-    fn input_owner(self) -> &'static str {
-        if self == Route::Producer {
-            "/producer.yaml"
+    /// The one study input: its dataset name and authored path.
+    fn input(self) -> (&'static str, &'static str) {
+        if self == Route::Linked {
+            ("P", "produced.csv")
         } else {
-            "/spec.yaml"
+            ("RAW", "raw.csv")
         }
     }
     /// The saved artifacts a successful run publishes, in Save order.
     fn targets(self) -> &'static [&'static str] {
         match self {
-            Route::Producer => &["memory:/produced.csv", "memory:/final.csv"],
+            Route::Linked => &["memory:/final.csv"],
             _ => &["memory:/out.csv"],
         }
     }
     fn compile_resolver(self) -> Arc<MemoryResolver> {
         let resolver = Arc::new(MemoryResolver::default());
-        if self == Route::Producer {
+        if self == Route::Linked {
             resolver.insert("/", "spec.yaml", "spec:1", Arc::from(CONSUMER));
             resolver.insert(
                 "/spec.yaml",
@@ -95,7 +95,7 @@ impl Route {
     }
     fn study(self, reference: &str, bytes: &'static [u8]) -> Arc<MemoryResolver> {
         let resolver = Arc::new(MemoryResolver::default());
-        resolver.insert(self.input_owner(), "raw.csv", reference, Arc::from(bytes));
+        resolver.insert("/spec.yaml", self.input().1, reference, Arc::from(bytes));
         resolver
     }
     fn compile(self, resolver: Arc<MemoryResolver>) -> Compiled {
@@ -109,9 +109,10 @@ impl Route {
         )
         .unwrap_or_else(|error| panic!("compile refused: {error:?}"));
         match (self, selected) {
-            (Route::Plain, Prepared::Plain(prepared)) => Compiled::Plain(Box::new(prepared)),
+            (Route::Plain | Route::Linked, Prepared::Plain(prepared)) => {
+                Compiled::Plain(Box::new(prepared))
+            }
             (Route::Project, Prepared::Ordinary(prepared)) => Compiled::Project(prepared),
-            (Route::Producer, Prepared::Producer(prepared)) => Compiled::Producer(prepared),
             _ => panic!("unexpected route"),
         }
     }
@@ -121,13 +122,11 @@ impl Route {
 enum Compiled {
     Plain(Box<FileSpecification>),
     Project(Box<FileProject>),
-    Producer(Box<FileGraph>),
 }
 
 /// One run's public result, whichever route produced it.
 enum Outcome {
-    Domain(Domain),
-    Root(RootResult),
+    Domain(Box<Domain>),
     Refused(Vec<Issue>),
 }
 
@@ -135,21 +134,18 @@ impl Outcome {
     fn issues(&self) -> Vec<Issue> {
         match self {
             Outcome::Domain(domain) => domain.issues(),
-            Outcome::Root(root) => root.issues().to_vec(),
             Outcome::Refused(issues) => issues.clone(),
         }
     }
     fn has_output(&self) -> bool {
         match self {
             Outcome::Domain(domain) => domain.output().is_some(),
-            Outcome::Root(root) => root.output().is_some(),
             Outcome::Refused(_) => false,
         }
     }
     fn save(&mut self) -> bool {
         match self {
             Outcome::Domain(domain) => domain.save().unwrap(),
-            Outcome::Root(root) => root.save().unwrap(),
             Outcome::Refused(_) => panic!("a refused run cannot save"),
         }
     }
@@ -181,7 +177,6 @@ impl Compiled {
         match self {
             Compiled::Plain(prepared) => prepared.run_scope(resolver),
             Compiled::Project(project) => project.run_scope(resolver),
-            Compiled::Producer(graph) => graph.build().run_scope(resolver),
         }
     }
     /// Run once in `run`, borrowing this prepared value.
@@ -189,7 +184,7 @@ impl Compiled {
         match self {
             Compiled::Plain(prepared) => {
                 match file_application::plain(prepared, run, identity(), Scope::default()) {
-                    Ok(domain) => Outcome::Domain(domain),
+                    Ok(domain) => Outcome::Domain(Box::new(domain)),
                     Err(issues) => Outcome::Refused(issues),
                 }
             }
@@ -197,25 +192,15 @@ impl Compiled {
                 let attempt = project.build(run, &mut NoActivation, Scope::default());
                 let result = project_report::build_result(project.run(), &attempt, identity(), &[])
                     .unwrap_or_else(|_| panic!("project projection refused"));
-                Outcome::Domain(Domain::from_project(result, project, run).unwrap())
-            }
-            Compiled::Producer(graph) => {
-                let owned = graph.build().build_owned_reported(
-                    run,
-                    &mut NoActivation,
-                    identity(),
-                    Scope::default(),
-                );
-                match producer_result::prepare_owned_classified(&owned, identity(), &[]) {
-                    Ok(root) => Outcome::Root(root),
-                    Err(error) => panic!("producer projection refused: {error:?}"),
-                }
+                Outcome::Domain(Box::new(
+                    Domain::from_project(result, project, run).unwrap(),
+                ))
             }
         }
     }
 }
 
-const ROUTES: [Route; 3] = [Route::Plain, Route::Project, Route::Producer];
+const ROUTES: [Route; 3] = [Route::Plain, Route::Project, Route::Linked];
 
 /// A run that saved returns exactly its study's text at every target.
 fn assert_saved(route: Route, resolver: &MemoryResolver, study: &[u8]) {
@@ -264,10 +249,11 @@ fn each_route_fails_a_run_then_succeeds_on_the_same_prepared_value() {
         assert_eq!(issue.phase, "validation");
         assert_eq!(issue.condition, "resource_path_missing");
         assert_eq!(issue.requirement.as_deref(), Some("REQ-0785"));
-        assert_eq!(issue.spec_paths, ["input.RAW.path"]);
+        let (dataset, path) = route.input();
+        assert_eq!(issue.spec_paths, [format!("input.{dataset}.path")]);
         assert_eq!(
             issue.context,
-            yamaa_adapters::json!({"dataset": "RAW", "path": "raw.csv"})
+            yamaa_adapters::json!({"dataset": dataset, "path": path})
         );
         assert!(route
             .targets()
@@ -285,7 +271,7 @@ fn each_route_fails_a_run_then_succeeds_on_the_same_prepared_value() {
 fn a_second_run_through_the_compile_authority_holds_no_snapshot_of_the_first() {
     for route in ROUTES {
         let resolver = route.compile_resolver();
-        resolver.insert(route.input_owner(), "raw.csv", "data:1", Arc::from(STUDY_A));
+        resolver.insert("/spec.yaml", route.input().1, "data:1", Arc::from(STUDY_A));
         let compiled = route.compile(resolver.clone());
         let mut first = compiled.run_scope(None);
         let mut outcome = compiled.run(&mut first);
@@ -293,7 +279,7 @@ fn a_second_run_through_the_compile_authority_holds_no_snapshot_of_the_first() {
         assert!(outcome.save());
         assert_saved(route, &resolver, STUDY_A);
         // A new object version replaces the study input behind the same path.
-        resolver.insert(route.input_owner(), "raw.csv", "data:2", Arc::from(STUDY_B));
+        resolver.insert("/spec.yaml", route.input().1, "data:2", Arc::from(STUDY_B));
         // The first run's scope still holds its snapshot, so building in it
         // again refuses the replacement instead of reading it (REQ-0788).
         let stale = compiled.run(&mut first);

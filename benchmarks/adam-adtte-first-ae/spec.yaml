@@ -19,9 +19,9 @@ intermediates:
   # no onset date sorts last.
   - id: AE_REC
     dataset: ADAE
-    order_by: [ADAE.ASTDT, ADAE.AESEQ]
+    order_by: [{variable: ADAE.ASTDT, nulls: last}, ADAE.AESEQ]
     keep: first
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: STUDYID
@@ -79,7 +79,8 @@ columns:
     type: int
     label: Analysis Value
     derivation:
-      date_diff:
+      diff:
+        type: date
         start: STARTDT
         end: ADT
         unit: day

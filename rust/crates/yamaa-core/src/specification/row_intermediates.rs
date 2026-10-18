@@ -34,16 +34,23 @@ pub(super) fn common_driver<'a>(
                 })
                 .ok_or(PrepareError::Internal)?;
             let selected = text(d, field(d, *declaration, "dataset")?)?;
-            let mut prohibited = ["key", "between", "order_by", "keep", "no_match"]
-                .into_iter()
-                .filter(|field| {
-                    if *field == "no_match" {
-                        d.field(*declaration, field).is_some()
-                    } else {
-                        present(d, *declaration, field)
-                    }
-                })
-                .collect::<Vec<_>>();
+            let mut prohibited = [
+                "key",
+                "between",
+                "order_by",
+                "keep",
+                "no_match",
+                "require_match",
+            ]
+            .into_iter()
+            .filter(|field| {
+                if *field == "no_match" {
+                    d.field(*declaration, field).is_some()
+                } else {
+                    present(d, *declaration, field)
+                }
+            })
+            .collect::<Vec<_>>();
             if !inputs
                 .iter()
                 .any(|&(id, _)| text(d, id).is_ok_and(|name| name == selected))
@@ -295,11 +302,9 @@ pub(super) fn bind(
             .columns()
             .get(key.source_column)
             .ok_or(BindError::Internal)?;
-        if let (Some(kind), Some(donor_kind)) = (
-            key.value.result_type(read_kind),
-            item.source_kind(secondary, key.source_column),
-        ) {
-            if !crate::key_relation::comparable(kind, donor_kind.into()) {
+        let kind = key.value.result_type(read_kind);
+        if let Some(donor_kind) = item.source_kind(secondary, key.source_column) {
+            if !kind.comparable(donor_kind.into()) {
                 let name = if key.value.is_expression() {
                     format!("key[{}]", field.name)
                 } else {

@@ -4,10 +4,25 @@ import csv
 from pathlib import Path, PurePosixPath
 
 import yaml
+from tools.benchmark import entries
 from tools.validation._repository_yaml import UniqueKeyLoader
 from tools.validation.editorial import example_spec_paths
 
 KEY_COLUMN_ORDER = ("DOMAIN", "STUDYID", "USUBJID")
+
+
+def built_spec_paths(example: Path):
+    """Root specification files plus every other declared entry, such as a
+    producer kept beside the inputs it reads."""
+    paths = set(example_spec_paths(example))
+    try:
+        calls = entries(example)
+    except ValueError:
+        # The manifest checks report absent or malformed metadata.
+        calls = {}
+    for host in calls.values():
+        paths.update(example / call["specification"] for call in host)
+    return sorted(paths)
 
 
 def _key_column_order_errors(names, label):
@@ -42,7 +57,7 @@ def validate_key_column_order(root: Path):
     for ex_dir in sorted(examples_dir.iterdir()):
         if not ex_dir.is_dir() or ex_dir.name.startswith("."):
             continue
-        for spec_path in example_spec_paths(ex_dir):
+        for spec_path in built_spec_paths(ex_dir):
             try:
                 with open(spec_path, "r", encoding="utf-8") as handle:
                     spec = yaml.load(handle, Loader=UniqueKeyLoader)
@@ -109,7 +124,7 @@ def validate_examples_csv(root: Path):
             continue
         declarations = {}
         inherited = False
-        for path in example_spec_paths(example):
+        for path in built_spec_paths(example):
             try:
                 document = yaml.load(
                     path.read_text(encoding="utf-8"), Loader=UniqueKeyLoader
@@ -118,7 +133,7 @@ def validate_examples_csv(root: Path):
                 continue
             if not isinstance(document, dict):
                 continue
-            inherited |= bool(document.get("parents"))
+            inherited |= document.get("parent") is not None
             output = document.get("output")
             if not isinstance(output, dict):
                 continue
@@ -148,7 +163,7 @@ def validate_examples_csv(root: Path):
                         f"ERROR: {label}:{number}: expected {len(header)} fields, got {len(row)}"
                     )
             if inherited:
-                # Resolving parents is a language operation owned by the Rust suite.
+                # Resolving a parent chain is a language operation owned by the Rust suite.
                 continue
             if path.name not in declarations:
                 errors.append(

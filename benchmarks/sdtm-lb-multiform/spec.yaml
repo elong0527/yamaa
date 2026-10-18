@@ -18,8 +18,8 @@ columns:
     label: Domain Abbreviation
     derivation: {literal: LB}
     verifications:
-      allowed_values:
-        values: [LB]
+      - allowed_values:
+          values: [LB]
 
   - name: STUDYID
     type: str
@@ -43,8 +43,8 @@ columns:
           SE.NCT00789880.D21: DAY 21
           SE.NCT00789880.UNSCH: UNSCHEDULED
     verifications:
-      allowed_values:
-        values: [SCREENING, BASELINE, DAY 21, UNSCHEDULED]
+      - allowed_values:
+          values: [SCREENING, BASELINE, DAY 21, UNSCHEDULED]
 
   # The form occurrence number inside the study event. Unscheduled visits
   # have no planned number, so this feeds VISITNUM's per-occurrence
@@ -74,15 +74,15 @@ columns:
             compute:
               expr: "2 + FORMREPEAT / 100"
     verifications:
-      allowed_values:
-        values: [1, 2, 3, 2.01, 2.02]
+      - allowed_values:
+          values: [1, 2, 3, 2.01, 2.02]
 
   - name: LBTESTCD
     type: str
     label: Lab Test or Examination Short Name
     verifications:
-      allowed_values:
-        values: [VITD25OH, IL13, CAMPPRO]
+      - allowed_values:
+          values: [VITD25OH, IL13, CAMPPRO]
 
   - name: LBTEST
     type: str
@@ -96,15 +96,15 @@ columns:
     type: str
     label: Specimen Material Type
     verifications:
-      allowed_values:
-        values: [SERUM, SKIN BIOPSY, SALIVA, TAPE STRIP]
+      - allowed_values:
+          values: [SERUM, SKIN BIOPSY, SALIVA, TAPE STRIP]
 
   - name: LBLOC
     type: str
     label: Location Used for Measurement
     verifications:
-      allowed_values:
-        values: [LESIONAL, NON-LESIONAL]
+      - allowed_values:
+          values: [LESIONAL, NON-LESIONAL]
 
   # The collected entry, exactly as reported; the text 'NOT DONE' marks a
   # test that was not done. The result columns below read this raw value so
@@ -139,10 +139,10 @@ columns:
     label: Numeric Result/Finding in Standard Units
     derivation:
       value: {source: LBORRES}
-      unconvertible: null
+      unconvertible: {literal: null}
     verifications:
-      range:
-        min: 0
+      - range:
+          min: 0
 
   - name: LBSTRESU
     type: str
@@ -156,8 +156,8 @@ columns:
         - when: "RAWORRES = 'NOT DONE'"
           then: {literal: NOT DONE}
     verifications:
-      allowed_values:
-        values: [NOT DONE]
+      - allowed_values:
+          values: [NOT DONE]
 
   - name: LBDTC
     type: date
@@ -357,8 +357,6 @@ rows:
           expr: "ONLY(ODM.Value)"
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, LBSEQ]
   - row_count:
       min: 18
       max: 18

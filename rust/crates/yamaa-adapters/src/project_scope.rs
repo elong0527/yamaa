@@ -4,9 +4,8 @@
 //! Specifications still check and build through the ordinary entry one at a
 //! time; this module reads only the project file and specification metadata.
 use crate::{
-    file_resources::{Error as ResourceError, Resources},
+    file_resources::{same_location, Error as ResourceError, Resources},
     issue_rows::Issue,
-    producer_publication::same_location,
     public_table::PublicTable,
     resource_publication::Publisher,
 };
@@ -460,8 +459,7 @@ fn read_listing(
     ) else {
         return listed;
     };
-    let locate = |resources: &Resources,
-                  origin: yamaa_core::producer_admission::WrittenPath<'_>| {
+    let locate = |resources: &Resources, origin: yamaa_core::resource::WrittenPath<'_>| {
         resources
             .location_from(origin.base_source, origin.written)
             .ok()
@@ -584,15 +582,6 @@ impl Preflight {
         report_only: bool,
     ) -> Result<(), Vec<Issue>> {
         self.admit(domain.publishers(report_only)?)
-    }
-    /// Admit the files a producer-linked run would write; only its report
-    /// files with `report_only`.
-    pub fn admit_root(
-        &mut self,
-        root: &crate::producer_result::RootResult,
-        report_only: bool,
-    ) -> Result<(), Vec<Issue>> {
-        self.admit(root.publishers(report_only)?)
     }
     /// Admit the files a submission section would write, so no two sections
     /// write one file.

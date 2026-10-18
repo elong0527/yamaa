@@ -1,8 +1,0 @@
-lifecycle: reviewed
-standard: ADaM
-domain: ADLB
-validation:
-  rule: R021
-  validator: resource_path
-conformance:
-  excluded: reference-only path history (#1905)

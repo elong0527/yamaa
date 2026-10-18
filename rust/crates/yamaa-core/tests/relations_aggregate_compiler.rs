@@ -2,13 +2,19 @@
 #[allow(dead_code)]
 mod support;
 mod relations {
-    mod aggregate_compiler {
+    mod aggregate_expressions {
         use yamaa_core::{
-            aggregate_compiler::{compile_aggregate, AggregateOperand, AggregateResult},
-            evaluation::NumericResolver,
+            expression::{
+                compile, AggregateResult, CompileError, CompiledExpression, Context, Failure,
+                ReductionOperand, Resolver as ExpressionResolver,
+            },
             numeric::Number,
             value::{Selection, Value},
         };
+
+        fn compile_aggregate(text: &str, path: &str) -> Result<CompiledExpression, CompileError> {
+            compile(text, Context::Aggregate, path)
+        }
 
         struct Resolver {
             calls: Vec<String>,
@@ -29,79 +35,73 @@ mod relations {
             let plan = compile_aggregate(&expression, path).unwrap();
             assert_eq!(plan.reductions().len(), 512);
             for reduction in plan.reductions() {
-                let AggregateOperand::Numeric(operand) = &reduction.operand else {
-                    panic!("numeric aggregate operand")
-                };
-                assert_eq!(operand.expression(), expression);
-                assert_eq!(operand.spec_path(), path);
+                assert_eq!(reduction.operand, ReductionOperand::Numeric);
             }
+            assert_eq!(plan.expression(), expression);
+            assert_eq!(plan.spec_path(), path);
             assert_eq!(expression.matches("SUM(").count(), 512);
         }
 
         #[test]
         fn a_bare_identifier_outside_reduction_uses_numeric_coercion() {
             let plan = compile_aggregate("A", "columns.VALUE.aggregate").unwrap();
-            let AggregateResult::Numeric(result) = plan.result() else {
-                panic!("outer expressions use the numeric language")
-            };
+            assert_eq!(plan.result(), AggregateResult::Numeric);
             assert_eq!(
-                result
-                    .evaluate(&mut Resolver { calls: Vec::new() })
+                plan.evaluate_aggregate(&mut Resolver { calls: Vec::new() }, &[])
                     .unwrap(),
                 Number::Int(7)
             );
             assert_eq!(plan.ungrouped_identifiers().collect::<Vec<_>>(), ["A"]);
         }
-        impl NumericResolver for Resolver {
+        impl ExpressionResolver for Resolver {
             type Error = std::convert::Infallible;
             fn resolve(&mut self, name: &str) -> Result<Selection, Self::Error> {
                 self.calls.push(name.into());
                 Ok(Selection::Present(Value::Int(match name {
                     "EX.DOSE" => 3,
-                    "SUM(EX.DOSE * 2)" => 6,
-                    "MAX(EX.DOSE)" => 4,
                     "A" => 7,
                     _ => panic!("unbound aggregate resolver identity {name}"),
                 })))
             }
         }
 
+        /// Reductions reach the arithmetic as values, never as resolver names.
         #[test]
         fn outer_and_per_record_arithmetic_share_the_numeric_evaluator_without_rewriting() {
             let expression = "POWER(SUM(EX.DOSE * 2), 2) + MAX(EX.DOSE)";
             let plan = compile_aggregate(expression, "columns.VALUE.derivation.aggregate").unwrap();
             assert_eq!(plan.identifiers().collect::<Vec<_>>(), ["EX.DOSE"]);
-            let AggregateOperand::Numeric(operand) = &plan.reductions()[0].operand else {
-                panic!()
-            };
+            assert_eq!(plan.reductions()[0].operand, ReductionOperand::Numeric);
+            assert_eq!(plan.reductions()[0].reference, "SUM(EX.DOSE * 2)");
             let mut resolver = Resolver { calls: Vec::new() };
-            assert_eq!(operand.evaluate(&mut resolver).unwrap(), Number::Int(6));
-            assert_eq!(operand.expression(), expression);
-            let AggregateResult::Numeric(result) = plan.result() else {
-                panic!()
-            };
-            assert_eq!(result.evaluate(&mut resolver).unwrap(), Number::float(40.0));
             assert_eq!(
-                resolver.calls,
-                ["EX.DOSE", "SUM(EX.DOSE * 2)", "MAX(EX.DOSE)"]
+                plan.evaluate_operand(0, &mut resolver).unwrap(),
+                Number::Int(6)
             );
-            assert_eq!(result.expression(), expression);
+            assert_eq!(plan.result(), AggregateResult::Numeric);
+            assert_eq!(
+                plan.evaluate_aggregate(&mut resolver, &[Value::Int(6), Value::Int(4)])
+                    .unwrap(),
+                Number::float(40.0)
+            );
+            assert_eq!(resolver.calls, ["EX.DOSE"]);
+            assert_eq!(plan.expression(), expression);
         }
 
         #[test]
         fn bare_reducers_retain_typed_reads_and_record_stars() {
             let plan =
                 compile_aggregate("(ONLY(EX.TEXT))", "rows[0].derivations.TEXT.aggregate").unwrap();
-            assert_eq!(plan.result(), &AggregateResult::Reduction(0));
+            assert_eq!(plan.result(), AggregateResult::Reduction(0));
             assert_eq!(
                 plan.reductions()[0].operand,
-                AggregateOperand::Value("EX.TEXT".into())
+                ReductionOperand::Value("EX.TEXT".into())
             );
             let count = compile_aggregate("COUNT(EX.*)", "columns.N.aggregate").unwrap();
             assert_eq!(count.record_relations().collect::<Vec<_>>(), ["EX"]);
             assert_eq!(
                 count.reductions()[0].operand,
-                AggregateOperand::Records("EX".into())
+                ReductionOperand::Records("EX".into())
             );
             let group = compile_aggregate("KEY + SUM(EX.DOSE)", "columns.X.aggregate").unwrap();
             assert_eq!(group.ungrouped_identifiers().collect::<Vec<_>>(), ["KEY"]);
@@ -111,24 +111,23 @@ mod relations {
         fn failures_preserve_full_authored_expression_and_inner_span() {
             let expression = "SUM(A / 0) + 1";
             let plan = compile_aggregate(expression, "columns.X.aggregate").unwrap();
-            let AggregateOperand::Numeric(operand) = &plan.reductions()[0].operand else {
-                panic!()
-            };
-            let error = operand
-                .evaluate(&mut Resolver { calls: Vec::new() })
+            assert_eq!(plan.reductions()[0].operand, ReductionOperand::Numeric);
+            let error = plan
+                .evaluate_operand(0, &mut Resolver { calls: Vec::new() })
                 .unwrap_err();
-            assert_eq!(error.evaluation.location.expression, expression);
-            assert_eq!(
-                &expression[error.source_span.start..error.source_span.end],
-                "A / 0"
-            );
-            assert_eq!(error.evaluation.location.spec_path, "columns.X.aggregate");
+            assert_eq!(error.expression, expression);
+            let span = error.source_span.unwrap();
+            assert_eq!(&expression[span.start..span.end], "A / 0");
+            assert_eq!(error.spec_path, "columns.X.aggregate");
             let complete = compile_aggregate("SUM(A + B) + SUM(C)", "columns.X.aggregate").unwrap();
             assert_eq!(complete.reductions().len(), 2);
             assert_eq!(complete.identifiers().collect::<Vec<_>>(), ["A", "B", "C"]);
             assert!(matches!(
                 compile_aggregate("SUM(MEAN(A))", "columns.X.aggregate"),
-                Err(yamaa_core::aggregate_parser::ParseError::Grammar { .. })
+                Err(CompileError::Invalid {
+                    failure: Failure::NestedReduction { .. },
+                    ..
+                })
             ));
         }
     }
@@ -389,7 +388,7 @@ mod relations {
             assert!(matches!(
                 compile_dataset(declaration(compute("ID +", "ID", Read::Column(0)))),
                 Err(Error::Numeric(
-                    yamaa_core::numeric_parser::ParseError::Grammar { .. }
+                    yamaa_core::expression::CompileError::Invalid { .. }
                 ))
             ));
             assert!(matches!(
@@ -444,7 +443,8 @@ mod relations {
             };
             assert!(matches!(
                 compile_dataset(declaration(D::Number(window(WindowKind::Locf {
-                    column: 0
+                    column: 0,
+                    include_current: true,
                 })))),
                 Err(Error::Plan(PlanError::InvalidWindow))
             ));
@@ -650,6 +650,7 @@ mod relations {
                 },
                 filter: None,
                 selection: None,
+                absence: None,
             };
             for mode in [RowMode::Records, RowMode::Groups(vec![0])] {
                 for completed in [true, false] {
@@ -704,7 +705,12 @@ mod relations {
             for mode in [RowMode::Records, RowMode::Groups(vec![0]), RowMode::Keys] {
                 for column in [1, usize::MAX] {
                     let filter = BoundPredicate::new(
-                        yamaa_core::predicate_compiler::compile("F > 0", "row.filter").unwrap(),
+                        yamaa_core::expression::compile(
+                            "F > 0",
+                            yamaa_core::expression::Context::Predicate,
+                            "row.filter",
+                        )
+                        .unwrap(),
                         vec![Binding {
                             name: "F".into(),
                             read: Read::Column(column),
@@ -745,7 +751,12 @@ mod relations {
             for mode in [RowMode::Records, RowMode::Groups(vec![0])] {
                 for column in [0, 1, 2] {
                     let filter = BoundPredicate::new(
-                        yamaa_core::predicate_compiler::compile("F > 0", "row.filter").unwrap(),
+                        yamaa_core::expression::compile(
+                            "F > 0",
+                            yamaa_core::expression::Context::Predicate,
+                            "row.filter",
+                        )
+                        .unwrap(),
                         vec![Binding {
                             name: "F".into(),
                             read: Read::Column(column),
@@ -806,6 +817,7 @@ mod relations {
             };
             let selection = |expression| {
                 Expression::FirstAvailable(Box::new(FirstAvailable::new(
+                    "columns.V.derivation.first_available".into(),
                     vec![SelectionSource {
                         path: "columns.V.derivation.first_available.sources[0]".into(),
                         read: SelectionRead::Expression(Box::new(assign(1, expression))),
@@ -879,7 +891,12 @@ mod relations {
             };
             assert!(make(window.clone()).is_ok());
             let predicate = BoundPredicate::new(
-                yamaa_core::predicate_compiler::compile("ID > 0", "case.when").unwrap(),
+                yamaa_core::expression::compile(
+                    "ID > 0",
+                    yamaa_core::expression::Context::Predicate,
+                    "case.when",
+                )
+                .unwrap(),
                 vec![Binding {
                     name: "ID".into(),
                     read: Read::Column(0),
@@ -1083,7 +1100,7 @@ mod relations {
             )
             .is_ok());
             assert!(make(ColumnType::Str, Check::MaxLength(1)).is_ok());
-            let pattern = yamaa_core::regex::Pattern::compile("b").unwrap();
+            let pattern = yamaa_core::portable_regex::Pattern::compile("b").unwrap();
             assert_eq!(
                 make(ColumnType::Int, Check::Matches(pattern.clone())),
                 Err(PlanError::InvalidColumns)
@@ -1294,6 +1311,7 @@ mod relations {
                     vec![assign(
                         1,
                         Expression::FirstAvailable(Box::new(FirstAvailable::new(
+                            "columns.V.derivation.first_available".into(),
                             sources,
                             Value::Int(99),
                         ))),
@@ -1337,8 +1355,11 @@ mod relations {
                 }]),
                 Err(PlanError::EmptyPath)
             );
-            let selection =
-                Expression::FirstAvailable(Box::new(FirstAvailable::new(vec![], Value::Int(1))));
+            let selection = Expression::FirstAvailable(Box::new(FirstAvailable::new(
+                "columns.V.derivation.first_available".into(),
+                vec![],
+                Value::Int(1),
+            )));
             assert!(DatasetPlan::new(
                 source.clone(),
                 output.clone(),
@@ -1421,7 +1442,7 @@ mod relations {
         #[test]
 
         fn raw_truth_literals_presence_null_and_complete_name_map() {
-            let plan = predicate_compiler::compile("ID = 1", "flag.condition").unwrap();
+            let plan = compile("ID = 1", Context::Predicate, "flag.condition").unwrap();
             let bindings = vec![FlagBinding {
                 name: "ID".into(),
                 read: FlagRead::Read(Read::Column(0)),
@@ -1465,7 +1486,7 @@ mod relations {
                 [
                     C::FlagMissingValueRequired,
                     C::PredicateUnknownField,
-                    C::PredicateInvalidExpression,
+                    C::ExpressionInvalid,
                     C::FlagMissingValueRequired
                 ]
             );
@@ -1474,7 +1495,11 @@ mod relations {
             let f = diagnostics(vec![(
                 "A",
                 "str",
-                flag("ABSENT = 1", Some(Tree::Scalar(N::Null)), None),
+                flag(
+                    "ABSENT = 1",
+                    Some(Tree::map(vec![("literal", Tree::Scalar(N::Null))])),
+                    None,
+                ),
             )]);
             assert_eq!(f[0].code, C::FlagMissingValueRequired);
         }
@@ -1500,7 +1525,7 @@ mod relations {
                     .map(|d| d.code)
                     .collect::<Vec<_>>(),
                 [
-                    C::PredicateInvalidExpression,
+                    C::ExpressionInvalid,
                     C::FlagMissingValueRequired,
                     C::PredicateUnknownField
                 ]
@@ -1520,7 +1545,7 @@ mod relations {
             assert_eq!(first, second);
             assert_eq!(
                 first.iter().map(|d| d.code).collect::<Vec<_>>(),
-                [C::PredicateInvalidExpression, C::PredicateUnknownField]
+                [C::ExpressionInvalid, C::PredicateUnknownField]
             );
             assert_eq!(first[0].spec_paths, ["columns.A.derivation.flag.condition"]);
             assert_eq!(first[1].spec_paths, ["columns.B.derivation.flag.condition"]);
@@ -1536,6 +1561,7 @@ mod relations {
                 spec_path: "flag.condition".into(),
                 expression: "original".into(),
                 route: vec![Route::Value],
+                source_span: None,
                 kind: ErrorKind::Condition(condition),
             };
             let diagnostic = yamaa_core::dataset::flag_condition_diagnostic(&error).unwrap();
@@ -1557,7 +1583,7 @@ mod relations {
                         flag(
                             "TRUE",
                             Some(Tree::text("x".repeat(10_000))),
-                            Some(Tree::Scalar(N::Null)),
+                            Some(Tree::map(vec![("literal", Tree::Scalar(N::Null))])),
                         ),
                     )
                 })
@@ -1619,7 +1645,22 @@ mod relations {
             };
             let when = branches[0].when.as_ref().unwrap();
             assert_eq!(when.bindings().len(), 1);
-            assert_eq!(when.plan().identifiers(), ["ID", "ID"]);
+            assert_eq!(when.plan().identifiers().collect::<Vec<_>>(), ["ID"]);
+            // The subject is one written operand, resolved again for each comparison.
+            struct Trace(Vec<String>);
+            impl yamaa_core::expression::Resolver for Trace {
+                type Error = std::convert::Infallible;
+                fn resolve(
+                    &mut self,
+                    name: &str,
+                ) -> Result<yamaa_core::value::Selection, Self::Error> {
+                    self.0.push(name.into());
+                    Ok(yamaa_core::value::Selection::Present(Value::Int(1)))
+                }
+            }
+            let mut trace = Trace(Vec::new());
+            assert_eq!(when.plan().evaluate_truth(&mut trace).unwrap(), Truth::True);
+            assert_eq!(trace.0, ["ID", "ID"]);
         }
     }
     mod dependency_analysis {
@@ -1763,7 +1804,10 @@ mod relations {
                         ("id", Tree::text("LOOK")),
                         ("dataset", Tree::text("TAB")),
                         ("key", key),
-                        ("no_match", Tree::Scalar(N::Null)),
+                        (
+                            "no_match",
+                            Tree::map(vec![("literal", Tree::Scalar(N::Null))]),
+                        ),
                     ])]),
                 ),
                 (
@@ -1913,6 +1957,91 @@ mod relations {
                     vec!["intermediates[0].key.K.str_pad.width".into()]
                 )]
             );
+        }
+        /// LOOKUP-6 compares each key expression's result type (EXPR-14) with
+        /// its key column before matching: a fixed, parameter or input type
+        /// alike, and a type decided per value at run time.
+        #[test]
+        fn key_expressions_compare_by_their_one_result_type_before_matching() {
+            let compute = |expr: &str| {
+                Tree::map(vec![(
+                    "compute",
+                    Tree::map(vec![("expr", Tree::text(expr))]),
+                )])
+            };
+            let mapping = |entries: Vec<(&str, Tree)>| {
+                Tree::map(vec![(
+                    "mapping",
+                    Tree::map(vec![
+                        ("source", Tree::text("SRC.ID")),
+                        ("dict", Tree::map(entries)),
+                    ]),
+                )])
+            };
+            let greatest = |sources: &[&str]| {
+                Tree::map(vec![(
+                    "greatest",
+                    Tree::map(vec![(
+                        "sources",
+                        Tree::List(sources.iter().map(Tree::text).collect()),
+                    )]),
+                )])
+            };
+            let refused = |field: &str, value: Tree| {
+                let prepared =
+                    PreparedSpecification::prepare(&doc(Tree::map(vec![(field, value)]))).unwrap();
+                let (src, tab) = schemas();
+                let Err(BindError::Invalid(findings)) = prepared.bind_sources(&[&src, &tab]) else {
+                    panic!("{field}: a key whose type cannot compare is refused")
+                };
+                let diagnostic = findings
+                    .iter()
+                    .flat_map(|f| f.diagnostics(prepared.source()).unwrap())
+                    .next()
+                    .unwrap();
+                (
+                    diagnostic.definition().condition,
+                    diagnostic.spec_paths,
+                    diagnostic.context["expected"].clone(),
+                    diagnostic.context["actual"].clone(),
+                )
+            };
+            let text = |value: &str| yamaa_core::json::Value::String(value.into());
+            for (field, value, expected) in [
+                ("K", compute("N + 1"), "int"),
+                ("K", compute("N / 2"), "float"),
+                ("K", mapping(vec![("one", Tree::integer(1))]), "int"),
+                ("K", greatest(&["N", "SRC.N"]), "int"),
+                ("KINT", mapping(vec![("one", Tree::text("1"))]), "str"),
+            ] {
+                assert_eq!(
+                    refused(field, value),
+                    (
+                        "incompatible_input_type",
+                        vec!["intermediates[0].key".to_string()],
+                        text(expected),
+                        text(if field == "K" { "str" } else { "int" }),
+                    ),
+                    "{field}"
+                );
+            }
+            for (field, value) in [
+                ("KINT", compute("N + 1")),
+                ("KNUM", compute("N + 1")),
+                ("KNUM", greatest(&["N", "SRC.N"])),
+                // An int or a string, decided per value: compared when matched.
+                (
+                    "KINT",
+                    mapping(vec![("one", Tree::integer(1)), ("two", Tree::text("2"))]),
+                ),
+            ] {
+                let prepared =
+                    PreparedSpecification::prepare(&doc(Tree::map(vec![(field, value)]))).unwrap();
+                let (src, tab) = schemas();
+                prepared
+                    .bind_sources(&[&src, &tab])
+                    .unwrap_or_else(|error| panic!("{field}: {error:?}"));
+            }
         }
         #[test]
         fn literal_text_is_not_a_reference_and_boolean_family_is_not_coerced() {
@@ -2069,9 +2198,10 @@ mod relations {
                 expression.assignment.path,
                 "intermediates[0].key.KINT.greatest"
             );
-            assert!(
-                expression.result_type.is_none(),
-                "greatest retains runtime comparability"
+            assert_eq!(
+                expression.result_type,
+                yamaa_core::result_type::ResultType::INT,
+                "greatest returns the type its sources share (EXPR-14)"
             );
             assert!(!expression.windowed);
         }
@@ -2350,66 +2480,6 @@ mod relations {
             assert_eq!(validate_field(&catalog, "é", target), None);
         }
     }
-    mod match_value {
-        use yamaa_core::{
-            key_relation::ComparableType,
-            match_value::{result_type, Expression, LiteralKind},
-            reference_binding::{Catalog, Field},
-            value::ColumnType,
-        };
-
-        /// Unknown names defer comparison without changing the immutable catalog's known types.
-        #[test]
-        fn unknown_results_do_not_poison_catalog() {
-            let catalog = Catalog::compile(
-                &[Field {
-                    name: "A",
-                    column_type: ColumnType::Int,
-                }],
-                &[],
-            )
-            .unwrap();
-            assert_eq!(result_type(&catalog, Expression::Source("éé")), None);
-            assert_eq!(result_type(&catalog, Expression::Source("xxx")), None);
-            assert_eq!(
-                result_type(&catalog, Expression::Source("A")),
-                Some(ColumnType::Int.into())
-            );
-            assert_eq!(
-                result_type(&catalog, Expression::Literal(LiteralKind::Bool)),
-                Some(ComparableType::Boolean)
-            );
-            assert_eq!(
-                result_type(&catalog, Expression::Literal(LiteralKind::Missing)),
-                None
-            );
-        }
-
-        #[test]
-        fn operations_outside_the_complete_req1259_table_defer_comparison() {
-            let catalog = Catalog::compile(&[], &[]).unwrap();
-            for name in [
-                "date_shift",
-                "datetime_shift",
-                "datetime_diff",
-                "duration_text",
-                "duration_value",
-                "row_value",
-                "locf",
-                "previous_non_missing",
-                "mapping",
-                "case",
-                "greatest",
-                "least",
-            ] {
-                assert_eq!(
-                    result_type(&catalog, Expression::Operation(name)),
-                    None,
-                    "{name}"
-                );
-            }
-        }
-    }
     mod primary_intermediates {
         //! Primary donor metadata must describe the already admitted original input.
         use crate::support::id_value_schema as schema;
@@ -2448,6 +2518,7 @@ mod relations {
                 filter: None,
                 selection: None,
                 no_match: Some(Value::Missing),
+                require_match: false,
                 unique: Vec::new(),
                 derivations: None,
                 pending_schema: None,

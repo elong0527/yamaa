@@ -42,6 +42,30 @@ class DefineStage(unittest.TestCase):
             dataset["records"] = -1
             with self.assertRaises(ValidationError):
                 validator.validate(dataset)
+            # Every staged Define benchmark: positive goldens are schema valid,
+            # and a negative case carries its expected first issue.
+            benchmarks = destination / "benchmarks"
+            manifest = json.loads((benchmarks / "manifest.json").read_bytes())
+            cases = {case["name"]: case for case in manifest["cases"]}
+            self.assertEqual(cases["sdtm-dm-xpt"]["expected"], ["define.xml", "dm.xpt"])
+            self.assertEqual(cases["adam-adsl-xpt"]["standard"], "adam")
+            self.assertEqual(cases["adam-adsl-xpt"]["project"], "project.yaml")
+            self.assertEqual(
+                cases["negative-transport-empty-string"]["published"], ["dm.parquet"]
+            )
+            for name, case in cases.items():
+                if case["error"] is not None:
+                    self.assertTrue(name.startswith("negative-"), name)
+                    self.assertTrue(
+                        {"phase", "condition", "spec_paths"} <= set(case["error"])
+                    )
+                    continue
+                expected = benchmarks / name / "expected"
+                xml_schema.assertValid(
+                    etree.parse(str(expected / "define.xml"), parser)
+                )
+                for document in expected.glob("*.json"):
+                    validator.validate(json.loads(document.read_bytes()))
 
 
 if __name__ == "__main__":

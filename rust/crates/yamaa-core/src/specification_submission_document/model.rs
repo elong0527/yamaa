@@ -69,11 +69,46 @@ impl ColumnType {
             Self::Datetime => DataType::Datetime,
         }
     }
+    /// Admission on the specification alone, before a document names the
+    /// family: a date or datetime admits its own type and the `integer` an
+    /// `adam` document submits it as (SUB-6, SUB-25).
     pub fn admits_data_type(self, data_type: DataType) -> bool {
-        if self == Self::String {
-            !matches!(data_type, DataType::Integer | DataType::Float)
+        match self {
+            Self::String => !matches!(data_type, DataType::Integer | DataType::Float),
+            Self::Date | Self::Datetime => {
+                data_type == self.default_data_type() || data_type == DataType::Integer
+            }
+            Self::Integer | Self::Float => data_type == self.default_data_type(),
+        }
+    }
+    /// Whether the column type is `date` or `datetime`.
+    pub fn temporal(self) -> bool {
+        matches!(self, Self::Date | Self::Datetime)
+    }
+    /// The display format of a date or datetime an `adam` document submits as
+    /// a SAS numeric date, or None when the column keeps its own form (SUB-25).
+    pub fn numeric_date_format(self, adam: bool) -> Option<&'static str> {
+        match self {
+            Self::Date if adam => Some("DATE9."),
+            Self::Datetime if adam => Some("DATETIME20."),
+            _ => None,
+        }
+    }
+    /// The default submission data type once the family is known.
+    pub fn family_data_type(self, adam: bool) -> DataType {
+        if self.numeric_date_format(adam).is_some() {
+            DataType::Integer
         } else {
-            data_type == self.default_data_type()
+            self.default_data_type()
+        }
+    }
+    /// Admission once the family is known: a date or datetime admits exactly
+    /// the one type its family submits it as.
+    pub fn admits_family_data_type(self, data_type: DataType, adam: bool) -> bool {
+        if self.temporal() {
+            data_type == self.family_data_type(adam)
+        } else {
+            self.admits_data_type(data_type)
         }
     }
 }
@@ -90,6 +125,62 @@ vocabulary!(DatasetClass {
     Occurrence => "OCCURRENCE DATA STRUCTURE", Reference => "REFERENCE DATA STRUCTURE", Relationship => "RELATIONSHIP",
     SpecialPurpose => "SPECIAL PURPOSE", StudyReference => "STUDY REFERENCE", SubjectLevel => "SUBJECT LEVEL ANALYSIS DATASET", TrialDesign => "TRIAL DESIGN"
 });
+impl DatasetClass {
+    /// The classes the tabulation families (`sdtm`, `send`) publish. Every other
+    /// class is an analysis class, where `core` never derives `mandatory`.
+    pub fn tabulation(self) -> bool {
+        matches!(
+            self,
+            Self::Events
+                | Self::Findings
+                | Self::FindingsAbout
+                | Self::Interventions
+                | Self::Relationship
+                | Self::SpecialPurpose
+                | Self::StudyReference
+                | Self::TrialDesign
+        )
+    }
+    /// Read a written class name; a name outside the vocabulary is not tabulation.
+    pub fn tabulation_name(name: &str) -> bool {
+        Self::VALUES
+            .iter()
+            .any(|(text, class)| *text == name && class.tabulation())
+    }
+}
+impl Core {
+    /// Read a written core designation.
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::VALUES
+            .iter()
+            .find(|(text, _)| *text == name)
+            .map(|(_, core)| *core)
+    }
+}
+impl OriginType {
+    /// Read a written origin type.
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::VALUES
+            .iter()
+            .find(|(text, _)| *text == name)
+            .map(|(_, kind)| *kind)
+    }
+    /// Every origin type, in the vocabulary's published order.
+    pub fn all() -> impl Iterator<Item = Self> {
+        Self::VALUES.iter().map(|(_, kind)| *kind)
+    }
+}
+/// The one `mandatory` resolution shared by the domain build and composition: a
+/// key column is mandatory; otherwise a declared value wins, and without one a
+/// tabulation class gives true for `Req` and false for every other designation.
+pub fn resolve_mandatory(
+    key: bool,
+    declared: Option<bool>,
+    core: Option<Core>,
+    tabulation: bool,
+) -> bool {
+    key || declared.unwrap_or(tabulation && core == Some(Core::Required))
+}
 vocabulary!(DatasetSubclass {
     AdverseEvent => "ADVERSE EVENT", MedicalDeviceTimeToEvent => "MEDICAL DEVICE TIME-TO-EVENT",
     NonCompartmental => "NON-COMPARTMENTAL ANALYSIS", PopulationPharmacokinetic => "POPULATION PHARMACOKINETIC ANALYSIS", TimeToEvent => "TIME-TO-EVENT"

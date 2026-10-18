@@ -31,7 +31,7 @@ pub trait InheritanceSourcePort {
     fn read(&mut self, source: &Source) -> Result<Document, SourceError<Self::Error>>;
 }
 
-/// A normalized contribution, retained in deterministic postorder with its source identity.
+/// A normalized contribution, retained in contribution order with its source identity.
 #[derive(Debug, PartialEq)]
 pub struct Layer {
     pub source: Source,
@@ -121,8 +121,7 @@ impl<E> Error<E> {
 
 struct Frame {
     layer: Layer,
-    parents: Vec<String>,
-    next: usize,
+    parent: Option<String>,
 }
 
 /// URI syntax is rejected before granting filesystem authority. Drive-rooted paths stay local.
@@ -146,6 +145,14 @@ pub fn is_local_parent(value: &str) -> bool {
         }
     }
     true
+}
+
+/// A specification inherits when its raw entry declares a non-null `parent`;
+/// a null parent is absent, and the entry is then a composition of one layer.
+pub fn declares_parent(document: &Document) -> bool {
+    document
+        .field(document.root(), "parent")
+        .is_some_and(|node| !matches!(document.nodes()[node], N::Null))
 }
 
 fn text_field<'a>(document: &'a Document, name: &str) -> Option<&'a str> {
@@ -190,40 +197,35 @@ fn admit<E>(
             is_entry,
         });
     }
-    let mut parents = Vec::new();
-    if let Some(node) = normalized
+    // A null parent is absent: the layer has no parent.
+    let parent = match normalized
         .document
-        .field(normalized.document.root(), "parents")
+        .field(normalized.document.root(), "parent")
+        .map(|node| &normalized.document.nodes()[node])
     {
-        let N::Sequence(items) = &normalized.document.nodes()[node] else {
+        None | Some(N::Null) => None,
+        Some(N::Text(parent)) => Some(parent.clone()),
+        Some(_) => {
             return Err(Error::UnsupportedControlField {
                 source: source.identity,
-                field: "parents",
-            });
-        };
-        for &child in items {
-            let N::Text(parent) = &normalized.document.nodes()[child] else {
-                return Err(Error::UnsupportedControlField {
-                    source: source.identity,
-                    field: "parents",
-                });
-            };
-            parents.push(parent.clone());
+                field: "parent",
+            })
         }
-    }
+    };
     Ok(Frame {
         layer: Layer {
             source,
             document: normalized.document,
             origins: normalized.origins,
         },
-        parents,
-        next: 0,
+        parent,
     })
 }
 
-/// Visit normalized parents left-to-right, admit each unique layer before reading its parents,
-/// and return once-only postorder contributions. The caller supplies the already captured entry.
+/// Follow each layer's single parent from the entry, admitting each layer before
+/// reading its parent, and return the chain in contribution order: the root
+/// ancestor first and the entry last. Reaching a layer already on the chain is a
+/// cycle. The caller supplies the already captured entry.
 pub fn traverse<P: InheritanceSourcePort>(
     schema: &SchemaStructure,
     entry: Source,
@@ -234,21 +236,16 @@ pub fn traverse<P: InheritanceSourcePort>(
         return Err(Error::InvalidIdentity);
     }
     let entry_identity = entry.identity.clone();
-    let mut active = vec![admit(schema, &entry_identity, entry, entry_document)?];
-    let mut completed: Vec<Layer> = Vec::new();
+    let mut chain = vec![admit(schema, &entry_identity, entry, entry_document)?];
     let mut parent_occurrences = 0;
-    while let Some(frame) = active.last_mut() {
-        if frame.next == frame.parents.len() {
-            completed.push(active.pop().expect("active frame").layer);
-            continue;
-        }
+    loop {
+        let frame = chain.last_mut().expect("chain holds the entry");
+        let Some(written) = frame.parent.take() else {
+            break;
+        };
         parent_occurrences += 1;
         crate::limits::Limits::parent_occurrences(parent_occurrences)?;
-        // Each written occurrence is visited, including already captured parents.
-        let written = &frame.parents[frame.next];
-        let written = written.clone();
         let declaring = frame.layer.source.identity.clone();
-        frame.next += 1;
         if !is_local_parent(&written) {
             return Err(Error::InvalidParent {
                 declaring,
@@ -268,12 +265,12 @@ pub fn traverse<P: InheritanceSourcePort>(
         if source.identity.is_empty() || source.display_path.is_empty() {
             return Err(Error::InvalidIdentity);
         }
-        if let Some(first) = active
+        if let Some(first) = chain
             .iter()
             .position(|f| f.layer.source.identity == source.identity)
         {
             let mut path = Vec::new();
-            for frame in &active[first..] {
+            for frame in &chain[first..] {
                 path.push(frame.layer.source.identity.clone());
             }
             let returns_to_entry = source.identity == entry_identity;
@@ -282,12 +279,6 @@ pub fn traverse<P: InheritanceSourcePort>(
                 path,
                 returns_to_entry,
             });
-        }
-        if completed
-            .iter()
-            .any(|layer| layer.source.identity == source.identity)
-        {
-            continue;
         }
         let input = match port.read(&source) {
             Ok(input) => input,
@@ -299,9 +290,9 @@ pub fn traverse<P: InheritanceSourcePort>(
             }
             Err(SourceError::Raised(error)) => return Err(Error::Host(error)),
         };
-        active.push(admit(schema, &entry_identity, source, input)?);
+        chain.push(admit(schema, &entry_identity, source, input)?);
     }
-    Ok(completed)
+    Ok(chain.into_iter().rev().map(|frame| frame.layer).collect())
 }
 
 impl<E: std::fmt::Debug> std::fmt::Display for Error<E> {

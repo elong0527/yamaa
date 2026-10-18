@@ -30,8 +30,9 @@ An object with four methods:
     \code{$save()}; \code{runs[["ADSL"]]} is one specification's run, with
     \code{$output}, \code{$issues} and \code{$report}.}
   \item{\code{$submission(section = NULL, created = NULL)}}{define.xml, and
-    Dataset-JSON where a section asks for it, with \code{$issues} and
-    \code{$save()}.}
+    a Dataset-JSON or SAS Transport version 5 file per dataset where a section
+    sets \code{datasets: json} or \code{datasets: xpt}, with \code{$issues}
+    and \code{$save()}.}
 }
 A failure raises a condition of class \code{yamaa_error} whose \code{issues}
 data frame says why.

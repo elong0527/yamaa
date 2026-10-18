@@ -109,7 +109,7 @@ pub struct Date {
 impl Date {
     /// Validate complete civil fields with day precision.
     pub fn new(year: u16, month: u8, day: u8) -> Option<Self> {
-        yamaa_core::temporal::Date::new(year, month, day, yamaa_core::temporal::DatePrecision::Day)
+        yamaa_core::temporal::Date::new(year, month, day, yamaa_core::temporal::Precision::Day)
             .ok()
             .map(|inner| Self { inner })
     }
@@ -127,11 +127,8 @@ impl Date {
     /// The date `days` whole days after 1970-01-01, when it lies within
     /// the civil years 1 to 9999.
     pub fn from_epoch_days(days: i64) -> Option<Self> {
-        yamaa_adapters::arrow_temporal::date_from_days(
-            days,
-            yamaa_core::temporal::DatePrecision::Day,
-        )
-        .map(Self::from_core)
+        yamaa_adapters::arrow_temporal::date_from_days(days, yamaa_core::temporal::Precision::Day)
+            .map(Self::from_core)
     }
 
     pub(crate) fn from_core(value: yamaa_core::temporal::Date) -> Self {
@@ -159,7 +156,7 @@ impl DateTime {
                 hour,
                 minute,
                 second,
-                yamaa_core::temporal::DateTimePrecision::Second,
+                yamaa_core::temporal::Precision::Second,
             )
             .ok()
             .map(|inner| Self { inner })
@@ -182,7 +179,7 @@ impl DateTime {
     pub fn from_epoch_seconds(seconds: i64) -> Option<Self> {
         yamaa_adapters::arrow_temporal::datetime_from_seconds(
             seconds,
-            yamaa_core::temporal::DateTimePrecision::Second,
+            yamaa_core::temporal::Precision::Second,
         )
         .map(Self::from_core)
     }

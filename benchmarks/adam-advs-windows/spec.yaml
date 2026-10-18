@@ -25,7 +25,7 @@ intermediates:
     filter: "SELF.AVISIT IN ('SCREENING', 'BASELINE', 'WEEK 2', 'WEEK 4')"
     order_by: [SELF.VSSEQ]
     keep: last
-    no_match: null
+    no_match: {literal: null}
 
   # The collected record with the highest sequence number for the study,
   # subject, and parameter; expected records continue the numbering past
@@ -104,10 +104,10 @@ columns:
         breaks: [0, 2, 22, 43]
         labels: [SCREENING, BASELINE, WEEK 2, WEEK 4, POST-TREATMENT]
         right: false
-        missing: null
+        missing: {literal: null}
     verifications:
-      allowed_values:
-        values: [SCREENING, BASELINE, WEEK 2, WEEK 4, POST-TREATMENT]
+      - allowed_values:
+          values: [SCREENING, BASELINE, WEEK 2, WEEK 4, POST-TREATMENT]
 
   - name: AVISITN
     type: int
@@ -121,7 +121,7 @@ columns:
           WEEK 2: 2
           WEEK 4: 4
           POST-TREATMENT: 99
-        missing: null
+        missing: {literal: null}
 
   # Within each subject, parameter, and window: earliest study day first,
   # then the lower sequence number. ANL01FL marks rank 1; a record with no
@@ -178,8 +178,8 @@ rows:
             BASELINE: BASELINE
             WEEK 2: WEEK 2
             WEEK 4: WEEK 4
-          missing: null
-          unmapped: null
+          missing: {literal: null}
+          unmapped: {literal: null}
       EXPECTED_ORDER:
         row_number:
           window:
@@ -190,8 +190,6 @@ rows:
           expr: "PRIOR_MAX.VSSEQ + EXPECTED_ORDER"
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, PARAMCD, VSSEQ]
   # Pins the 19-row fixture: the 14 original collected rows, the new
   # subject's collected baseline record, and the four expected records
   # (one uncovered screening window and one subject missing screening,

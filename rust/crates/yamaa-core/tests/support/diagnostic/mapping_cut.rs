@@ -3,7 +3,7 @@ pub(crate) use std::collections::BTreeSet;
 pub(crate) use yamaa_core::json::Value as V;
 pub(crate) use yamaa_core::{
     diagnostic::{ConditionCode, Diagnostic},
-    mapping_cut::{AdmissionError, Cut, Mapping},
+    mapping_cut::{AdmissionError, Cut, Mapping, Selected, SelectedValue},
     table::ValueRef,
     value::Value,
 };
@@ -30,6 +30,19 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         None,
     )
     .unwrap();
+    // A missing source gives missing, counted under `missing` (COLUMN-10).
+    for selected in [
+        mapping.select(ValueRef::Missing),
+        cut.select(ValueRef::Missing),
+    ] {
+        assert_eq!(
+            selected,
+            Ok(Selected {
+                value: SelectedValue::Missing,
+                handler: Some("missing"),
+            })
+        );
+    }
     let AdmissionError::Diagnostic(collision) = Mapping::new(
         "SRC.V".into(),
         "columns.V.derivation.mapping".into(),
@@ -82,14 +95,6 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             ],
         ),
         (
-            mapping.select(ValueRef::Missing).unwrap_err(),
-            "mapping",
-            "missing_input",
-            "REQ-0334",
-            "columns.V.derivation.mapping",
-            vec![("variable", text("SRC.V"))],
-        ),
-        (
             mapping.select(ValueRef::Str("unlisted")).unwrap_err(),
             "mapping",
             "unmapped_value",
@@ -108,14 +113,6 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 ("expected", text("numeric")),
                 ("actual", text("str")),
             ],
-        ),
-        (
-            cut.select(ValueRef::Missing).unwrap_err(),
-            "cut",
-            "missing_input",
-            "REQ-0334",
-            "columns.C.derivation.cut",
-            vec![("variable", text("AGE"))],
         ),
         (
             declaration,

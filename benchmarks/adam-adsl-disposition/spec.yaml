@@ -22,7 +22,7 @@ intermediates:
       AND DS.DSSTDTC IS NOT NULL"
     order_by: [DS.DSSTDTC, DS.DSSEQ]
     keep: last
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: STUDYID
@@ -39,7 +39,8 @@ columns:
   # latest DSSTDTC, then higher DSSEQ on the same day. Treatment records
   # (EPOCH = 'TREATMENT') belong to the end-of-treatment track below and
   # never count here. The date guard matters for the term and reason: an
-  # undated record would sort last and be kept.
+  # undated record sorts first, so without it a subject whose only record
+  # is undated would keep that record.
   - name: EOSDT
     type: date
     label: End of Study Date
@@ -84,8 +85,8 @@ columns:
           then: {literal: DISCONTINUED}
         - otherwise: {literal: ONGOING}
     verifications:
-      allowed_values:
-        values: [COMPLETED, DISCONTINUED, ONGOING]
+      - allowed_values:
+          values: [COMPLETED, DISCONTINUED, ONGOING]
 
   - name: DCSREAS
     type: str
@@ -118,8 +119,8 @@ columns:
           then: {literal: DISCONTINUED}
         - otherwise: {literal: ONGOING}
     verifications:
-      allowed_values:
-        values: [COMPLETED, DISCONTINUED, ONGOING]
+      - allowed_values:
+          values: [COMPLETED, DISCONTINUED, ONGOING]
 
   - name: DCTREAS
     type: str
@@ -140,8 +141,6 @@ columns:
           then: LASTTRT.DSTERM
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID]
   - row_count:
       min: 7
       max: 7

@@ -110,6 +110,7 @@ impl Run<'_> {
                     (expression, expression.root()),
                     value,
                     true,
+                    super::validation::NullPolicy::Absent,
                     &self.active,
                 )? {
                     continue;
@@ -344,8 +345,15 @@ impl SchemaStructure {
                 .iter()
                 .find(|field| field.name == "windows")
                 .ok_or(ValidationError::InvalidDescriptor)?;
-            let diagnostics =
-                self.validate_descriptor(field.descriptor, input, value, "windows", false)?;
+            // Window expansion reads a normalized or composed document.
+            let diagnostics = self.validate_canonical_descriptor(
+                field.descriptor,
+                input,
+                value,
+                "windows",
+                false,
+                super::validation::NullPolicy::Value,
+            )?;
             if !diagnostics.is_empty() {
                 return Err(NormalizationError::Invalid(diagnostics));
             }

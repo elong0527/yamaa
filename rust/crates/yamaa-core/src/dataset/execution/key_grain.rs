@@ -21,14 +21,13 @@ pub(super) fn construct<T: TableAccess + ?Sized>(
     for row in 0..rows {
         if let Some(filter) = &plan.templates()[0].filter {
             let truth = crate::dataset::execution::predicates::evaluate(filter, table, row, &[])
-                .map_err(|error| match error.kind {
-                    crate::predicate::ErrorKind::Regex(limit) => Box::new(regex_limit(limit)),
-                    _ => Box::new(ExecutionError::Predicate {
+                .map_err(|error| {
+                    Box::new(ExecutionError::Predicate {
                         source_row: row,
-                        error,
-                    }),
+                        error: *error,
+                    })
                 })?;
-            if truth != crate::predicate::Truth::True {
+            if truth != crate::expression::Truth::True {
                 continue;
             }
         }
@@ -199,11 +198,13 @@ pub(super) fn collect_bound<T: TableAccess + ?Sized>(
         for &source_row in &candidate.members {
             let truth =
                 crate::dataset::execution::predicates::evaluate(filter, table, source_row, &[])
-                    .map_err(|error| match error.kind {
-                        crate::predicate::ErrorKind::Regex(limit) => Box::new(regex_limit(limit)),
-                        _ => Box::new(ExecutionError::Predicate { source_row, error }),
+                    .map_err(|error| {
+                        Box::new(ExecutionError::Predicate {
+                            source_row,
+                            error: *error,
+                        })
                     })?;
-            if truth == crate::predicate::Truth::True {
+            if truth == crate::expression::Truth::True {
                 retained.push(source_row);
             }
         }

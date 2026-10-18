@@ -63,6 +63,7 @@ columns:
           group_by: [STUDYID, USUBJID, PARAMCD]
         date: ADT
         reference_date: TRTSDT
+        value: AVAL
 
   - name: BASE
     type: float
@@ -130,8 +131,6 @@ rows:
       AVALU: LB.LBSTRESU
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, PARAMCD, ADT, ASEQ]
   - row_count:
       min: 20
       max: 20

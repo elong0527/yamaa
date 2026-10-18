@@ -100,6 +100,30 @@ fn independent_case_types_survive_an_unknown_operand() {
 }
 
 #[test]
+fn predicate_arithmetic_operands_are_typed_as_in_compute() {
+    let case = |when: &str| {
+        Tree::map(vec![(
+            "case",
+            Tree::List(vec![Tree::map(vec![
+                ("when", Tree::text(when)),
+                ("then", literal(N::Integer("1".into()))),
+            ])]),
+        )])
+    };
+    // Each non-numeric operand of arithmetic is reported once, and arithmetic
+    // over a faulty operand adds no comparison finding of its own.
+    assert_eq!(
+        binding_codes(
+            case("TERM + 1 > 0 OR DAY - 1 < COUNT OR TERM * 2 = 1"),
+            None
+        ),
+        vec![C::NumericInputType, C::NumericInputType]
+    );
+    let spec = PreparedSpecification::prepare(&document(case("COUNT * 2 > ID - 1"), None)).unwrap();
+    assert!(spec.bind(&source()).is_ok());
+}
+
+#[test]
 fn compute_and_reduction_reject_known_text_without_evaluation() {
     assert_eq!(
         binding_codes(
@@ -123,31 +147,73 @@ fn compute_and_reduction_reject_known_text_without_evaluation() {
     );
 }
 
+/// EXPR-14: `compute` and `aggregate` take their type from their operands by
+/// VALUE-10 and FORMULA-23, int while every operator and operand keeps int.
 #[test]
-fn numeric_and_aggregate_result_kinds_are_native_metadata() {
-    let numeric =
-        crate::numeric_compiler::compile_numeric("A + POWER(B, 2) / -3", "result").unwrap();
-    assert_eq!(numeric.result_type(), ColumnType::Float);
-    let aggregate = crate::aggregate_compiler::compile_aggregate(
-        "SUM(EX.DOSE) / NULLIF(EX.PLANDOSE, 0)",
-        "result",
-    )
-    .unwrap();
-    assert_eq!(aggregate.numeric_result_type(), Some(ColumnType::Float));
-    let bare = crate::aggregate_compiler::compile_aggregate("MIN(EX.TERM)", "result").unwrap();
-    assert_eq!(bare.numeric_result_type(), None);
+fn numeric_and_aggregate_result_types_follow_their_operands() {
+    use crate::expression::{compile, Context};
+    use crate::result_type::ResultType;
+    let kinds = |name: &str| match name {
+        "A" | "EX.COUNT" => ResultType::INT,
+        "B" | "EX.DOSE" => ResultType::FLOAT,
+        "EX.TERM" => ResultType::STR,
+        _ => ResultType::UNKNOWN,
+    };
+    let result = |text: &str, context| compile(text, context, "result").unwrap().result_type(kinds);
+    assert_eq!(result("A + 1", Context::Compute), ResultType::INT);
+    assert_eq!(
+        result("ABS(A) * MOD(A, 3)", Context::Compute),
+        ResultType::INT
+    );
+    assert_eq!(result("A + B", Context::Compute), ResultType::FLOAT);
+    assert_eq!(result("A / 1", Context::Compute), ResultType::FLOAT);
+    assert_eq!(result("FLOOR(A)", Context::Compute), ResultType::FLOAT);
+    assert_eq!(
+        result("A + POWER(B, 2) / -3", Context::Compute),
+        ResultType::FLOAT
+    );
+    assert_eq!(result("NULLIF(A, 0)", Context::Compute), ResultType::INT);
+    assert_eq!(result("NULLIF(A, B)", Context::Compute), ResultType::FLOAT);
+    assert_eq!(result("NULLIF(B, A)", Context::Compute), ResultType::FLOAT);
+    assert_eq!(result("NULLIF(A, NULL)", Context::Compute), ResultType::INT);
+    assert_eq!(result("A + NULL", Context::Compute), ResultType::MISSING);
+    assert_eq!(result("UNTYPED + 1", Context::Compute), ResultType::NUMBER);
+    assert_eq!(result("SUM(EX.COUNT)", Context::Aggregate), ResultType::INT);
+    assert_eq!(result("COUNT(EX.*)", Context::Aggregate), ResultType::INT);
+    assert_eq!(
+        result("MEAN(EX.COUNT)", Context::Aggregate),
+        ResultType::FLOAT
+    );
+    assert_eq!(result("MIN(EX.TERM)", Context::Aggregate), ResultType::STR);
+    assert_eq!(
+        result("ONLY(EX.DOSE)", Context::Aggregate),
+        ResultType::FLOAT
+    );
+    assert_eq!(
+        result("SUM(EX.DOSE) / NULLIF(EX.COUNT, 0)", Context::Aggregate),
+        ResultType::FLOAT
+    );
+    assert_eq!(
+        result("SUM(EX.COUNT) - COUNT(EX.*)", Context::Aggregate),
+        ResultType::INT
+    );
 }
 
 #[test]
 fn independent_calendar_findings_keep_first_error_priority() {
     use crate::{
-        dataset::{date_policy, date_policy_findings, DatePolicyError, DayDeclaration},
-        temporal::DatePrecision,
+        dataset::{
+            completion_policy, completion_policy_findings, DatePolicyError, DayDeclaration,
+            TemporalType,
+        },
+        temporal::Precision,
     };
-    let findings = date_policy_findings(
+    let findings = completion_policy_findings(
+        TemporalType::Date,
         Some("13"),
-        DayDeclaration::Number("0"),
-        DatePrecision::Year,
+        Some(DayDeclaration::Number("0")),
+        Precision::Year,
+        None,
         "date",
     )
     .unwrap()
@@ -159,10 +225,12 @@ fn independent_calendar_findings_keep_first_error_priority() {
             .collect::<Vec<_>>(),
         vec![C::ImputationMonthRange, C::ImputationDayRange]
     );
-    let DatePolicyError::Diagnostic(first) = date_policy(
+    let DatePolicyError::Diagnostic(first) = completion_policy(
+        TemporalType::Date,
         Some("13"),
-        DayDeclaration::Number("0"),
-        DatePrecision::Year,
+        Some(DayDeclaration::Number("0")),
+        Precision::Year,
+        None,
         "date",
     )
     .unwrap_err() else {
@@ -170,8 +238,9 @@ fn independent_calendar_findings_keep_first_error_priority() {
     };
     assert_eq!(first, findings[0]);
     let invalid = operation(
-        "date_impute",
+        "impute",
         vec![
+            ("type", Tree::text("date")),
             ("source", Tree::text("TERM")),
             ("month", Tree::Scalar(N::Integer("13".into()))),
             ("day", Tree::Scalar(N::Integer("0".into()))),
@@ -246,7 +315,9 @@ fn repeated_type_findings_keep_the_complete_ordered_context() {
             .collect();
     }
     let expression = terms.pop().unwrap();
-    let plan = crate::numeric_compiler::compile_numeric(&expression, "result").unwrap();
+    let plan =
+        crate::expression::compile(&expression, crate::expression::Context::Compute, "result")
+            .unwrap();
     let findings = numeric_kinds(&plan, |_| Some(crate::value::ValueType::Str));
     assert_eq!(findings.len(), 1024);
     for (index, finding) in findings.iter().enumerate() {

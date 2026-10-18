@@ -17,11 +17,10 @@ from tools.paths import ROOT
 
 REPOSITORY = ROOT
 CONTRACTS = {
-    "aggregate": "operations/aggregation",
-    "numeric": "operations/computation",
-    "predicate": "operations/predicates",
-    "string-template": "operations/text",
+    "expression": "formulas",
+    "string-template": "text",
 }
+CONTEXTS = ("predicate", "compute", "aggregate")
 
 
 def documents(root=REPOSITORY):
@@ -34,92 +33,93 @@ def documents(root=REPOSITORY):
 
 
 def cases(root=REPOSITORY):
-    """Expand vocabulary boundaries without importing a reference evaluator."""
+    """Yield every authored case, then the expression vocabulary boundaries."""
     docs = dict(documents(root))
     for contract, document in docs.items():
         for case in document["cases"]:
             yield contract, case
-        if contract in {"numeric", "aggregate"}:
-            for name, arity in docs["numeric"]["vocabulary"]["function"].items():
-                lower, upper = arity["min_arguments"], arity["max_arguments"]
-                counts = {0, lower - 1, lower, lower + 1, 8}
-                if upper is not None:
-                    counts.add(upper + 1)
-                for count in sorted(counts):
-                    yield (
-                        contract,
-                        {
-                            "id": f"arity-{name}-{count}",
-                            "text": f"{name.lower()}({', '.join(['A'] * count)})",
-                            "parse": "accept"
-                            if count >= lower and (upper is None or count <= upper)
-                            else "reject",
-                            "condition": "prohibited_function",
-                        },
-                    )
-            for word in docs["numeric"]["prohibited"]:
-                yield (
-                    contract,
-                    {
-                        "id": "prohibited-" + word,
-                        "text": "A " + word.lower() + " B",
-                        "parse": "reject",
-                        "condition": "prohibited_construct",
-                    },
-                )
-                yield (
-                    contract,
-                    {"id": "qualified-" + word, "text": "A." + word, "parse": "accept"},
-                )
-        if contract == "aggregate":
-            for name, declaration in document["vocabulary"]["reducer"].items():
-                for argument in ("A", "A+1", "ABS(A)", "D.*", "", "A,B", "SUM(A)"):
-                    accepted = argument in {"A", "A+1", "ABS(A)"} or (
-                        argument == "D.*" and "star" in declaration["argument"]
-                    )
-                    yield (
-                        contract,
-                        {
-                            "id": f"reducer-{name}-{argument}",
-                            "text": f"{name.lower()}({argument})",
-                            "parse": "accept" if accepted else "reject",
-                            "condition": "nested_reduction"
-                            if argument == "SUM(A)"
-                            else "invalid_aggregate_expression",
-                        },
-                    )
-        if contract == "predicate":
-            for word in document["reserved"]:
-                yield (
-                    contract,
-                    {
-                        "id": "reserved-" + word,
-                        "text": word.lower() + " = 1",
-                        "parse": "accept" if word == "NULL" else "reject",
-                        "condition": "invalid_predicate",
-                        "identifiers": [],
-                    },
-                )
-                yield (
-                    contract,
-                    {
-                        "id": "qualified-" + word,
-                        "text": "D." + word + " = 1",
-                        "parse": "accept",
-                    },
-                )
-            production = next(
-                p for p in document["productions"] if p["name"] == "compare"
+    for case in expansions(docs["expression"]):
+        yield "expression", case
+
+
+def expansions(document):
+    """Expand the closed vocabularies into acceptance boundaries in each context.
+
+    The typed core replay expands the same document the same way; no reference
+    evaluator is imported to decide an outcome.
+    """
+    expanded = []
+
+    def case(context, text, accepted, condition):
+        expanded.append(
+            {
+                "id": f"{context}: {text}",
+                "context": context,
+                "text": text,
+                "parse": "accept" if accepted else "reject",
+                "condition": condition,
+            }
+        )
+
+    for name, arity in document["vocabulary"]["function"].items():
+        lower, upper = arity["min_arguments"], arity["max_arguments"]
+        numeric = arity["result"] == "numeric"
+        counts = {0, lower - 1, lower, lower + 1, 8}
+        if upper is not None:
+            counts.add(upper + 1)
+        for count in sorted(counts):
+            fits = count >= lower and (upper is None or count <= upper)
+
+            def call(pattern):
+                arguments = [
+                    "'a'" if pattern and index > 0 else "A" for index in range(count)
+                ]
+                return f"{name.lower()}({', '.join(arguments)})"
+
+            for context in CONTEXTS:
+                if context == "predicate":
+                    # A numeric call is a comparison operand; a truth-valued call
+                    # is the predicate, and its pattern is a string literal.
+                    text = f"{call(False)} = 1" if numeric else call(True)
+                    case(context, text, fits, "prohibited_function")
+                else:
+                    case(context, call(False), fits and numeric, "prohibited_function")
+    for word in document["reserved"]:
+        literal = word == "NULL"
+        truth = word in {"TRUE", "FALSE"}
+        case("predicate", f"{word.lower()} = 1", literal, "invalid_expression")
+        case("predicate", f"D.{word} = 1", True, "")
+        for context in ("compute", "aggregate"):
+            case(
+                context,
+                f"1 + {word.lower()}",
+                literal,
+                "prohibited_construct" if truth else "invalid_expression",
             )
-            for operator in re.findall(r'"([^"]*)"', production["definition"]):
-                yield (
-                    contract,
-                    {
-                        "id": "comparison-" + operator,
-                        "text": "A " + operator + " 1",
-                        "parse": "accept",
-                    },
-                )
+            case(context, f"D.{word} + 1", True, "")
+    production = next(p for p in document["productions"] if p["name"] == "compare")
+    for operator in re.findall(r'"([^"]*)"', production["definition"]):
+        case("predicate", f"A {operator} 1", True, "")
+        for context in ("compute", "aggregate"):
+            case(context, f"A {operator} 1", False, "prohibited_construct")
+    for name, declaration in document["vocabulary"]["reducer"].items():
+        star = "star" in declaration["argument"]
+        for argument in ("A", "A+1", "ABS(A)", "D.*", "", "A,B", "SUM(A)"):
+            text = f"{name.lower()}({argument})"
+            syntax = argument in {"", "A,B"} or (argument == "D.*" and not star)
+
+            def condition(admitted):
+                return "invalid_expression" if syntax else admitted
+
+            case(
+                "aggregate",
+                text,
+                not syntax and argument != "SUM(A)",
+                condition("nested_reduction"),
+            )
+            case("compute", text, False, condition("prohibited_function"))
+            case("predicate", f"{text} = 1", False, condition("prohibited_function"))
+    return expanded
 
 
 def specification(contract, case):
@@ -142,24 +142,24 @@ def specification(contract, case):
         "columns": [{"name": "ID", "type": "str", "derivation": {"literal": "one"}}],
         "output": {"path": "unwritten.csv", "columns": ["ID", "RESULT"]},
     }
+    field = contract if contract == "string-template" else case["context"]
     column = {
         "name": "RESULT",
-        "type": "str" if contract in {"predicate", "string-template"} else "float",
+        "type": "str" if field in {"predicate", "string-template"} else "float",
     }
-    if contract == "predicate":
+    if field == "predicate":
         column["derivation"] = {
             "case": [
                 {"when": case["text"], "then": {"literal": "yes"}},
                 {"otherwise": {"literal": "no"}},
             ]
         }
+    elif field == "compute":
+        column["derivation"] = {"compute": {"expr": case["text"]}}
     else:
-        key, field = {
-            "numeric": ("compute", "expr"),
-            "aggregate": ("aggregate", "expr"),
-            "string-template": ("str_template", "template"),
-        }[contract]
-        column["derivation"] = {key: {field: case["text"]}}
+        # A formula or template alone is written as its shorthand.
+        key = {"aggregate": "aggregate", "string-template": "str_template"}[field]
+        column["derivation"] = {key: case["text"]}
     spec["columns"].append(column)
     return spec
 
@@ -176,6 +176,7 @@ def stage(destination, root=REPOSITORY):
         writer.writerow(
             (
                 "contract",
+                "context",
                 "id",
                 "specification",
                 "parse",
@@ -197,7 +198,15 @@ def stage(destination, root=REPOSITORY):
                 else condition
             )
             writer.writerow(
-                (contract, case["id"], path, case["parse"], condition, public_condition)
+                (
+                    contract,
+                    case.get("context", ""),
+                    case["id"],
+                    path,
+                    case["parse"],
+                    condition,
+                    public_condition,
+                )
             )
 
 

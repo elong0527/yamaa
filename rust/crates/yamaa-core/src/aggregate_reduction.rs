@@ -1,6 +1,6 @@
 //! Shared typed reducer results; collection and relation selection belong to callers.
 use crate::{
-    aggregate_parser::Reducer,
+    expression::Reducer,
     numeric::Number,
     reduction::{count_values, reduce_numeric, NumericReducer, ReductionError},
     table::ValueRef,

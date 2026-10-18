@@ -121,10 +121,8 @@ output: {{path: output.csv, columns: [I, S]}}
                 let dataset::ExecutionError::Numeric { error, identity } = *error else {
                     panic!("unexpected {error:?}")
                 };
-                assert_eq!(error.evaluation.location.spec_path, path);
-                let EvaluationErrorKind::Numeric(actual) = error.evaluation.kind else {
-                    panic!("not numeric")
-                };
+                assert_eq!(error.spec_path, path);
+                let EvaluationErrorKind::Condition(actual) = error.kind;
                 assert_eq!(actual.condition(), condition);
                 assert_eq!(actual.requirement(), requirement);
                 assert_eq!(
@@ -244,11 +242,8 @@ output: {{path: output.csv, columns: [I, S]}}
             use yamaa_adapters::specification_source::Error;
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
-            for raw in [
-                b"parents: null".as_slice(),
-                b"parents: []",
-                b"parents: [parent.yaml]",
-            ] {
+            // Any written non-null parent, valid or not, selects inheritance.
+            for raw in [b"parent: parent.yaml".as_slice(), b"parent: [parent.yaml]"] {
                 assert!(matches!(
                     schema.prepare_standalone(Source {
                         identity: "child.yaml".into(),
@@ -257,6 +252,11 @@ output: {{path: output.csv, columns: [I, S]}}
                     Err(Error::InheritanceRequired)
                 ));
             }
+            // A null parent is absent, so the entry takes the standalone route.
+            let standalone =
+                std::fs::read_to_string(root.join("benchmarks/negative-zero-division/spec.yaml"))
+                    .unwrap();
+            prepare(&schema, format!("{standalone}\nparent: null\n").as_bytes());
         }
 
         #[test]
@@ -447,8 +447,8 @@ output: {{path: output.csv, columns: [I, S]}}
             for (expr, condition, requirement, context) in [
                 (
                     "AVAL +",
-                    "invalid_numeric_expression",
-                    Some("REQ-0439"),
+                    "invalid_expression",
+                    Some("REQ-0188"),
                     json!({"expr":"AVAL +"}),
                 ),
                 (
@@ -998,7 +998,7 @@ output: {{path: output.csv, columns: [I, S]}}
             assert_eq!(first.get().to_bits(), 0.6000000000000001f64.to_bits());
             assert_eq!(second.get().to_bits(), 0.6f64.to_bits());
             assert_eq!(result.dataset.rows()[16][values], Value::Missing);
-            assert_eq!(result.verifications.len(), 2);
+            assert_eq!(result.verifications.len(), 1);
             assert!(result.verifications.iter().all(|v| v.failed_count == 0));
         }
 
@@ -1038,8 +1038,8 @@ output: {{path: output.csv, columns: [I, S]}}
                 ),
                 (
                     "SUM(",
-                    "invalid_aggregate_expression",
-                    "REQ-0499",
+                    "invalid_expression",
+                    "REQ-0188",
                     json!({"expr":"SUM("}),
                 ),
                 (
@@ -1050,8 +1050,8 @@ output: {{path: output.csv, columns: [I, S]}}
                 ),
                 (
                     "SUM(LB.LBSTRESN, LB.LBSTRESN)",
-                    "invalid_aggregate_expression",
-                    "REQ-0499",
+                    "invalid_expression",
+                    "REQ-0188",
                     json!({"expr":"SUM(LB.LBSTRESN, LB.LBSTRESN)"}),
                 ),
             ] {
@@ -1225,22 +1225,23 @@ output: {{path: output.csv, columns: [I, S]}}
             let attempt = run.execute_with_port(&mut port, Scope::default());
             let actual =
                 specification_report::complete(&run, &attempt, id(), &mut publisher).unwrap();
-            let diagnostic = json!({"phase":"verification","condition":"row_count_failed","requirement":"REQ-0385","spec_paths":["verifications[1].row_count"],"context":{"count":17,"failure_count":1,"keys":[{}]}});
+            let diagnostic = json!({"phase":"verification","condition":"row_count_failed","requirement":"REQ-0385","spec_paths":["verifications[0].row_count"],"context":{"count":17,"failure_count":1,"keys":[{}]}});
             expected["diagnostics"] = json!([diagnostic.clone()]);
             expected["nodes"][0]["diagnostics"] = expected["diagnostics"].clone();
             let mut failure = diagnostic;
             failure["severity"] = json!("error");
             failure["offending_keys"] = json!([{}]);
             failure["log_context"] = failure["context"].clone();
-            expected["verifications"][1]["failure"] = failure;
+            expected["verifications"][0]["failure"] = failure;
             assert_eq!(actual, expected);
             assert_eq!(publisher.calls, 2);
             // All checks execute despite an earlier data failure; output diagnostics
             // remain later than verification and no derived/accepted artifact is exposed.
+            // A `unique` over a non-key column comes first and fails on repeats.
             let written = raw
                 .replace(
-                    "columns: [STUDYID, USUBJID, PARAMCD, AVISIT]",
-                    "columns: [USUBJID]",
+                    "verifications:\n",
+                    "verifications:\n  - unique: [USUBJID]\n",
                 )
                 .replace("path: adlb.csv", "path: adlb.bad");
             let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
@@ -1265,9 +1266,16 @@ output: {{path: output.csv, columns: [I, S]}}
             failure["offending_keys"] = json!(keys);
             failure["log_context"] = failure["context"].clone();
             failure["log_context"]["keys"] = failure["offending_keys"].clone();
-            expected["verifications"][0]["evaluated_count"] = json!(5);
-            expected["verifications"][0]["failure"] = failure;
-            expected["verifications"][1]["failure"] = Json::Null;
+            let mut count = expected["verifications"][0].clone();
+            count["spec_path"] = json!("verifications[1].row_count");
+            count["failure"] = Json::Null;
+            let mut unique = count.clone();
+            unique["check"] = json!("unique");
+            unique["requirement"] = json!("REQ-0381");
+            unique["spec_path"] = json!("verifications[0].unique");
+            unique["evaluated_count"] = json!(5);
+            unique["failure"] = failure;
+            expected["verifications"] = json!([unique, count]);
             assert_eq!(actual, expected);
             assert_eq!(publisher.calls, 2);
             std::fs::remove_dir_all(directory).unwrap();
@@ -1335,14 +1343,14 @@ output: {{path: output.csv, columns: [I, S]}}
             // the later declaration is the execution diagnostic (REQ-1177).
             for (declaration, condition, requirement, suffix, reason) in [
                 (
-                    "unique: {columns: []}",
+                    "unique: []",
                     "invalid_declaration",
                     "REQ-0397",
                     "unique",
                     "columns names at least one column",
                 ),
                 (
-                    "unique: {columns: [ABSENT]}",
+                    "unique: [ABSENT]",
                     "unknown_field",
                     "REQ-0405",
                     "unique.columns",
@@ -1772,7 +1780,7 @@ output: {{path: output.csv, columns: [I, S]}}
             );
             let bad = raw.replace(
                 "label: Analysis Value\n",
-                "label: Analysis Value\n    derivation: {aggregate: {expr: 'SUM(LB.LBSTRESN)'}}\n",
+                "label: Analysis Value\n    derivation: {aggregate: 'SUM(LB.LBSTRESN)'}\n",
             );
             let error = PreparedRun::prepare(prepare(&schema, bad.as_bytes()))
                 .expect_err("dataset aggregate is not a row default");
@@ -1865,8 +1873,7 @@ output: {{path: output.csv, columns: [I, S]}}
                         std::fs::read(case.join("expected/adsl.csv")).unwrap()
                     );
                     assert_eq!(bytes.len(), 138);
-                    assert_eq!(execution.verifications.len(), 1);
-                    assert_eq!(execution.verifications[0].failed_count, 0);
+                    assert!(execution.verifications.is_empty());
                     let actual = attempt
                         .handler_counts
                         .iter()
@@ -2183,7 +2190,9 @@ output: {{path: output.csv, columns: [I, S]}}
                 let plan = prepared.bind_sources(&schemas).unwrap();
                 let order = &plan.intermediates()[0].selection.as_ref().unwrap().order_by[0];
                 assert_eq!(order.descending, !omit_direction);
-                assert_eq!(order.nulls_first, !omit_nulls);
+                // An omitted placement sorts missing lowest: first ascending and
+                // last descending. The declared `nulls: first` never flips.
+                assert_eq!(order.nulls_first, !omit_nulls || omit_direction);
             }
         }
 

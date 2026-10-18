@@ -6,7 +6,7 @@
     "diagnostics": [
       {
         "phase": "validation",
-        "condition": "invalid_predicate",
+        "condition": "invalid_expression",
         "requirement": "REQ-0188",
         "spec_paths": [
           "intermediates[0].filter"
@@ -357,9 +357,9 @@
     "handler_counts": []
   },
   {
-    "name": "no_match",
-    "before": "    no_match: null\n",
-    "after": "",
+    "name": "require_match",
+    "before": "    no_match: {literal: null}\n",
+    "after": "    require_match: true\n",
     "diagnostics": [
       {
         "phase": "join",

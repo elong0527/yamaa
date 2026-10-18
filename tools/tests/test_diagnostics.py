@@ -389,9 +389,47 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
             any("undefined requirement REQ-999999" in e for e in self.errors())
         )
 
+    def card_file(self):
+        self.write(
+            "rules/inheritance.md",
+            '# Inheritance\n\n<a id="layer-1"></a>\n\n'
+            "### LAYER-1. Layers compose in one order\n\n"
+            "Layers compose depth first.\n\nReplaces: REQ-0002.\n",
+        )
+
+    def test_registry_accepts_card_and_replaced_requirement_ids(self):
+        self.card_file()
+        path = self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs"
+        for requirement in ("LAYER-1", "REQ-0002"):
+            with self.subTest(requirement=requirement):
+                path.write_text(
+                    path.read_text().replace(
+                        'Some("REQ-0001")', f'Some("{requirement}")'
+                    )
+                )
+                self.assertEqual(self.errors(), [])
+                path.write_text(
+                    path.read_text().replace(
+                        f'Some("{requirement}")', 'Some("REQ-0001")'
+                    )
+                )
+
+    def test_undefined_card_id_and_unknown_prefix_are_rejected(self):
+        self.card_file()
+        self.write(
+            "rust/crates/yamaa-core/src/unknown.rs", 'const RULE: &str = "LAYER-99";\n'
+        )
+        self.assertTrue(
+            any("undefined requirement LAYER-99" in e for e in self.errors())
+        )
+        (self.root / "rust/crates/yamaa-core/src/unknown.rs").unlink()
+        path = self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs"
+        path.write_text(path.read_text().replace('Some("REQ-0001")', 'Some("RULE-1")'))
+        self.assertTrue(any("unrecognized cause" in e for e in self.errors()))
+
     def test_missing_rules_and_sources_do_not_pass(self):
         (self.root / "rules/values.md").unlink()
-        self.assertEqual(self.errors(), ["no normative requirement definitions found"])
+        self.assertEqual(self.errors(), ["no rule definitions found"])
         self.write("rules/values.md", "**REQ-0001.** Required.\n")
         (self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs").unlink()
         self.assertEqual(self.errors(), ["no Rust crate sources found"])

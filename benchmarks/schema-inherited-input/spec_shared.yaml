@@ -1,0 +1,30 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [USUBJID]
+
+# Every study reads its demographics file under this name, with AGE stored as
+# an integer.
+input:
+  DM:
+    path: input/dm.csv
+    types:
+      AGE: int
+base: DM
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  - name: AGEGR1
+    type: str
+    label: Pooled Age Group 1
+    derivation:
+      cut:
+        source: DM.AGE
+        breaks: [65]
+        labels: ['<65', '>=65']
+
+metadata:
+  scope: shared

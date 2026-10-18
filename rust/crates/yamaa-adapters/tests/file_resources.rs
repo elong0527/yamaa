@@ -19,7 +19,7 @@ mod file {
                 fs::write(study.0.join(name).join("input/data.csv"), bytes).unwrap();
                 fs::write(
                     study.0.join(name).join("spec.yaml"),
-                    "schema_version: '1.0'\nparents: ../shared/base.yaml\ndomain: STUDY\n",
+                    "schema_version: '1.0'\nparent: ../shared/base.yaml\ndomain: STUDY\n",
                 )
                 .unwrap();
                 let path = study.text(&format!("{name}/spec.yaml"));
@@ -72,7 +72,7 @@ mod file {
                 ("declaring", "../shared/data.csv"),
                 ("null", "../shared/data.csv"),
             ] {
-                fs::write(study.0.join("entry/spec.yaml"), format!("schema_version: '1.0'\nparents: ../shared/base.yaml\ninput: {{SRC: {{relative_to: {mode}}}}}\n")).unwrap();
+                fs::write(study.0.join("entry/spec.yaml"), format!("schema_version: '1.0'\nparent: ../shared/base.yaml\ninput: {{SRC: {{relative_to: {mode}}}}}\n")).unwrap();
                 let (resources, entry) =
                     file_configuration::resources(&study.text("entry/spec.yaml")).unwrap();
                 let prepared = FileSpecification::prepare(resources, &entry).unwrap();
@@ -146,10 +146,10 @@ mod file {
             for inherited_base in ["", "relative_to: entry, "] {
                 let study = Study::new();
                 fs::write(study.0.join("shared/base.yaml"), format!("schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {{SRC: {{path: data.csv, types: {{ID: int}}}}}}\ncolumns: [{{name: ID, type: int, derivation: SRC.ID}}]\noutput: {{path: ignored.csv, {inherited_base}columns: [ID], report: ignored-report.csv}}\n")).unwrap();
-                fs::write(study.0.join("shared/replacement.yaml"), "schema_version: '1.0'\nparents: base.yaml\noutput: {path: result.csv, columns: [ID], report: report.csv}\n").unwrap();
+                fs::write(study.0.join("shared/replacement.yaml"), "schema_version: '1.0'\nparent: base.yaml\noutput: {path: result.csv, columns: [ID], report: report.csv}\n").unwrap();
                 fs::write(
                     study.0.join("entry/spec.yaml"),
-                    "schema_version: '1.0'\nparents: ../shared/replacement.yaml\n",
+                    "schema_version: '1.0'\nparent: ../shared/replacement.yaml\n",
                 )
                 .unwrap();
                 fs::write(study.0.join("shared/data.csv"), b"ID\n7\n").unwrap();
@@ -231,7 +231,7 @@ mod file {
                 fs::write(
                     study.0.join("entry/spec.yaml"),
                     format!(
-                        "schema_version: '1.0'\nparents: ../shared/base.yaml\noutput: {output}\n"
+                        "schema_version: '1.0'\nparent: ../shared/base.yaml\noutput: {output}\n"
                     ),
                 )
                 .unwrap();
@@ -396,7 +396,7 @@ mod file {
         fn inherited_parent_keeps_its_own_input_and_output_locations_without_configuration() {
             let study = Study::new();
             let parent = "schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {SRC: data.csv}\noutput: {path: ../outputs/out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
-            let child = "schema_version: '1.0'\nparents: ../shared/base.yaml\ndomain: CHILD\n";
+            let child = "schema_version: '1.0'\nparent: ../shared/base.yaml\ndomain: CHILD\n";
             fs::write(study.0.join("entry/child.yaml"), child).unwrap();
             fs::write(study.0.join("shared/base.yaml"), parent).unwrap();
             fs::write(study.0.join("entry/data.csv"), b"ID\n999\n").unwrap();
@@ -625,7 +625,7 @@ mod file {
             fs::write(temp.0.join("parents/base.yaml"), parent).unwrap();
             fs::write(
                 temp.0.join("children/spec.yaml"),
-                "schema_version: '1.0'\nparents: ../parents/base.yaml\n",
+                "schema_version: '1.0'\nparent: ../parents/base.yaml\n",
             )
             .unwrap();
             let project = fs::read_to_string(temp.0.join("project.yaml"))
@@ -741,7 +741,8 @@ mod file {
                     .find(&format!("<ItemDef OID=\"IT.LB.LBORRESU.{code}\""))
                     .unwrap();
                 let item = &xml[begin..begin + xml[begin..].find("</ItemDef>").unwrap()];
-                assert!(item.contains("Length=\"8\""));
+                // Every unit of both test codes is `mg/dL`, five bytes (SUB-24).
+                assert!(item.contains("Length=\"5\""), "{item}");
                 assert!(
                     item.contains(&format!("CodeListOID=\"CL.{list}\"")),
                     "{item}"
@@ -749,6 +750,31 @@ mod file {
                 assert!(item.contains(&format!("Source=\"{source}\"")));
                 assert!(xml.contains(&format!("<CheckValue>{code}</CheckValue>")));
             }
+            // SDTMIG's required variables are mandatory, the pivoted result and
+            // collection date are collected, and the numeric standard result
+            // is derived by its method.
+            for reference in [
+                "<ItemRef ItemOID=\"IT.LB.DOMAIN\" OrderNumber=\"1\" Mandatory=\"Yes\"/>",
+                "<ItemRef ItemOID=\"IT.LB.LBTESTCD\" OrderNumber=\"5\" Mandatory=\"Yes\"/>",
+                "<ItemRef ItemOID=\"IT.LB.LBTEST\" OrderNumber=\"6\" Mandatory=\"Yes\"/>",
+                "<ItemRef ItemOID=\"IT.LB.LBORRES\" OrderNumber=\"7\" Mandatory=\"No\"/>",
+                "<ItemRef ItemOID=\"IT.LB.LBSTRESN\" OrderNumber=\"9\" Mandatory=\"No\" MethodOID=\"MT.LB.LBSTRESN\"/>",
+                "<ItemRef ItemOID=\"IT.LB.LBDTC\" OrderNumber=\"11\" Mandatory=\"No\"/>",
+            ] {
+                assert!(xml.contains(reference), "{reference}");
+            }
+            for (column, origin) in [
+                ("LBORRES", "Type=\"Collected\" Source=\"Vendor\""),
+                ("LBSTRESN", "Type=\"Derived\" Source=\"Sponsor\""),
+                ("LBDTC", "Type=\"Collected\" Source=\"Vendor\""),
+            ] {
+                let begin = xml
+                    .find(&format!("<ItemDef OID=\"IT.LB.{column}\""))
+                    .unwrap();
+                let item = &xml[begin..begin + xml[begin..].find("</ItemDef>").unwrap()];
+                assert!(item.contains(&format!("<def:Origin {origin}/>")), "{item}");
+            }
+            assert_eq!(xml.matches("<MethodDef ").count(), 2);
             assert!(!temp.0.join("input").exists());
             let reads = run.capture_reads();
             for file in ["spec.yaml", "submission-spec.yaml", "project.yaml"] {
@@ -984,7 +1010,7 @@ mod file {
                         fs::rename(temp.0.join("spec.yaml"), temp.0.join("base.yaml")).unwrap();
                         fs::write(
                             temp.0.join("spec.yaml"),
-                            "schema_version: '1.0'\nparents: base.yaml\n",
+                            "schema_version: '1.0'\nparent: base.yaml\n",
                         )
                         .unwrap();
                     }
@@ -1055,6 +1081,12 @@ mod file {
                 assert_eq!(xml.matches("<ItemDef ").count(), count);
                 assert_eq!(xml.contains("<def:AnnotatedCRF>"), has_acrf);
                 assert!(xml.contains(&format!("OID=\"CL.{codelist}\"")));
+                if id == "AE" {
+                    // SDTMIG requires the dictionary-derived term.
+                    assert!(xml.contains(
+                        "<ItemRef ItemOID=\"IT.AE.AEDECOD\" OrderNumber=\"6\" Mandatory=\"Yes\""
+                    ));
+                }
                 assert!(!temp
                     .0
                     .join(format!("{}.csv", id.to_ascii_lowercase()))
@@ -1099,29 +1131,27 @@ mod file {
             );
         }
         #[test]
-        fn case_alias_targets_are_refused_before_overwriting_a_sentinel() {
+        fn transport_targets_equal_after_lowercasing_are_refused_before_overwriting_a_sentinel() {
             let temp = Temp::fixture("sdtm-dm-metadata", true);
             let target = temp.0.join("dm.json");
             fs::write(&target, b"original publication sentinel").unwrap();
-            if !temp.0.join("DM.JSON").exists() {
-                // This witness concerns an actual case-insensitive volume; distinct
-                // names on case-sensitive volumes are distinct publication targets.
-                return;
-            }
+            // Under Other a lower-case dataset name is admitted, and its
+            // transport file is named for it in lower case beside the document.
             let project = temp.0.join("project.yaml");
             fs::write(
                 &project,
                 fs::read_to_string(&project)
                     .unwrap()
-                    .replace("  - spec.yaml", "  - spec.yaml\n  - second.yaml"),
+                    .replace("  - spec.yaml", "  - spec.yaml\n  - second.yaml")
+                    .replace("context: Submission", "context: Other"),
             )
             .unwrap();
             fs::write(
                 temp.0.join("second.yaml"),
                 fs::read_to_string(temp.0.join("spec.yaml"))
                     .unwrap()
-                    .replace("domain: DM", "domain: DM2")
-                    .replace("path: dm.csv", "path: DM.csv"),
+                    .replace("domain: DM", "domain: dm")
+                    .replace("path: dm.csv", "path: second.csv"),
             )
             .unwrap();
             fs::write(temp.0.join("define.xml"), b"original Define sentinel").unwrap();
@@ -1134,12 +1164,10 @@ mod file {
             assert_eq!(result.issues().len(), 1, "{:?}", result.issues());
             let issue = &result.issues()[0];
             assert_eq!(issue.phase, "validation");
-            assert_eq!(issue.condition, "dataset_json_path_collision");
+            assert_eq!(issue.condition, "transport_path_collision");
             assert_eq!(issue.requirement.as_deref(), Some("REQ-1226"));
-            assert!(
-                yamaa_adapters::json_wire::encode(&issue.context).contains("dm.json")
-                    && yamaa_adapters::json_wire::encode(&issue.context).contains("DM.json")
-            );
+            assert_eq!(issue.spec_paths, ["sdtm.specs[1]"]);
+            assert!(yamaa_adapters::json_wire::encode(&issue.context).contains("dm.json"));
             let reads = result.capture_reads();
             assert!(result.save().is_err());
             assert_eq!(reads, result.capture_reads());
@@ -1190,7 +1218,7 @@ mod file {
             fs::write(temp.0.join("parents/base.yaml"), parent).unwrap();
             fs::write(
                 temp.0.join("children/spec.yaml"),
-                "schema_version: '1.0'\nparents: ../parents/base.yaml\n",
+                "schema_version: '1.0'\nparent: ../parents/base.yaml\n",
             )
             .unwrap();
             let project = fs::read_to_string(temp.0.join("project.yaml"))
@@ -1219,21 +1247,37 @@ mod file {
         }
         #[test]
         fn mutual_references_and_published_contract_fail_before_any_publication() {
-            // REQ1206/1229 forbid a JSON-to-Define reference needing parent traversal.
-            let temp = Temp::fixture("sdtm-dm-metadata", false);
+            // JSON-1 places the transport file beside the document wherever the
+            // artifact is published, so the pair always references one directory.
+            let temp = Temp::fixture("sdtm-dm-metadata", true);
             fs::create_dir(temp.0.join("artifacts")).unwrap();
+            fs::rename(temp.0.join("dm.csv"), temp.0.join("artifacts/dm.csv")).unwrap();
             let spec = fs::read_to_string(temp.0.join("spec.yaml"))
                 .unwrap()
                 .replace("path: dm.csv", "path: artifacts/dm.csv");
             fs::write(temp.0.join("spec.yaml"), spec).unwrap();
             let mut run = temp.run("2026-09-11T00:00:00");
+            assert!(run.issues().is_empty(), "{:?}", run.issues());
+            let xml = std::str::from_utf8(run.artifacts().nth(1).unwrap().1).unwrap();
+            assert!(xml.contains("xlink:href=\"dm.json\""));
+            assert!(run.save().unwrap());
+            assert!(temp.0.join("dm.json").is_file());
+            assert!(!temp.0.join("artifacts/dm.json").exists());
+            // Without a transport the leaf names the artifact, which must stay
+            // inside the document's directory (DEFINE-16).
+            let environment = fs::read_to_string(temp.0.join("project.yaml"))
+                .unwrap()
+                .replace("  datasets: json\n", "")
+                .replace("define: define.xml", "define: package/define.xml");
+            fs::write(temp.0.join("project.yaml"), environment).unwrap();
+            let mut run = temp.run("2026-09-11T00:00:00");
             assert!(run
                 .issues()
                 .iter()
                 .any(|i| i.condition == "artifact_outside_document"
-                    && i.requirement.as_deref() == Some("REQ-1229")));
+                    && i.requirement.as_deref() == Some("REQ-1021")));
             assert!(run.save().is_err());
-            assert!(!temp.0.join("dm.json").exists());
+            assert!(!temp.0.join("package").exists());
             // REQ1230 assigns a stale output contract to REQ0535, before JSON schema.
             let temp = Temp::fixture("sdtm-dm-metadata", true);
             let csv = fs::read_to_string(temp.0.join("dm.csv")).unwrap();
@@ -1320,14 +1364,15 @@ mod file {
         fn independent_metadata_refutations_preserve_shared_conditions_and_zero_writes() {
             for (from, to, condition, requirement) in [
                 (
-                    "values: [F, M, U]",
-                    "values: [F, M]",
-                    "codelist_values_conflict",
+                    "derivation: DM_RAW.SEX\n",
+                    "derivation: DM_RAW.SEX\n    verifications:\n      - allowed_values:\n          values: [F, M, U]\n",
+                    "redundant_declaration",
                     "REQ-0955",
                 ),
+                // USUBJID assembles collected identifiers, which refutes Protocol.
                 (
-                    "type: Collected",
                     "type: Derived",
+                    "type: Protocol",
                     "origin_contradicts_derivation",
                     "REQ-0922",
                 ),
@@ -1354,24 +1399,294 @@ mod file {
                 assert!(!temp.0.join("define.xml").exists());
                 assert!(!temp.0.join("dm.json").exists());
             }
-            let temp = Temp::fixture("sdtm-ae-coding", false);
-            let spec = fs::read_to_string(temp.0.join("spec.yaml"))
+            // The coded terms are a plain dictionary lookup, which copies the
+            // record it selects and refutes no origin; a lookup that derives
+            // fields computes what it exposes and refutes Collected.
+            for (derives, refuted) in [(false, false), (true, true)] {
+                let temp = Temp::fixture("sdtm-ae-coding", false);
+                let mut spec = fs::read_to_string(temp.0.join("spec.yaml"))
+                    .unwrap()
+                    .replace(
+                    "codelist: MEDDRA\n      origin:\n        type: Assigned\n        source: Sponsor",
+                    "codelist: MEDDRA\n      origin:\n        type: Collected\n        source: Vendor",
+                );
+                if derives {
+                    spec = spec.replace(
+                        "    no_match: NOT CODED\n",
+                        "    no_match: NOT CODED\n    derivations:\n      LLTUPPER: {str_case: {source: LLTNAME, to: upper}}\n",
+                    );
+                }
+                fs::write(temp.0.join("spec.yaml"), spec).unwrap();
+                let result = temp.run("2026-09-30T00:00:00");
+                assert_eq!(
+                    result
+                        .issues()
+                        .iter()
+                        .any(|i| i.condition == "origin_contradicts_derivation"
+                            && i.spec_paths[0].contains("AEDECOD")),
+                    refuted,
+                    "{:?}",
+                    result.issues()
+                );
+            }
+        }
+        /// Rewrite the DM fixture's metadata-only environment for one section.
+        fn metadata_only(temp: &Temp, section: &str, context: &str) {
+            let environment = fs::read_to_string(temp.0.join("project.yaml"))
                 .unwrap()
+                .replace("  datasets: json\n", "")
+                .replace("context: Submission", &format!("context: {context}"))
                 .replace(
-                "codelist: MEDDRA\n      origin:\n        type: Assigned\n        source: Sponsor",
-                "codelist: MEDDRA\n      origin:\n        type: Collected\n        source: Vendor",
-            );
-            fs::write(temp.0.join("spec.yaml"), spec).unwrap();
-            let result = temp.run("2026-09-30T00:00:00");
+                    "sdtm:\n  standard:\n    name: SDTMIG",
+                    &format!(
+                        "{section}:\n  standard:\n    name: {}",
+                        if section == "send" {
+                            "SENDIG"
+                        } else {
+                            "SDTMIG"
+                        }
+                    ),
+                );
+            fs::write(temp.0.join("project.yaml"), environment).unwrap();
+        }
+        fn replace_spec(temp: &Temp, from: &str, to: &str) {
+            let spec = fs::read_to_string(temp.0.join("spec.yaml")).unwrap();
+            assert!(spec.contains(from), "{from}");
+            fs::write(temp.0.join("spec.yaml"), spec.replacen(from, to, 1)).unwrap();
+        }
+        fn item<'a>(xml: &'a str, oid: &str) -> &'a str {
+            let begin = xml.find(&format!("<ItemDef OID=\"{oid}\"")).unwrap();
+            &xml[begin..begin + xml[begin..].find("</ItemDef>").unwrap()]
+        }
+        #[test]
+        fn collected_origins_name_their_form_page_under_submission() {
+            // SITEID is collected by the investigator on the first form page.
+            let paged = "role: Record Qualifier\n      length: 10\n      origin:\n        type: Collected\n        source: Investigator\n        documents:\n          - document: acrf\n            pages: {type: PhysicalRef, refs: \"1\"}\n";
+            let pageless = "role: Record Qualifier\n      length: 10\n      origin:\n        type: Collected\n        source: Investigator\n";
+            let unpaged = format!("{pageless}        documents: [acrf]\n");
+            for (replacement, context, path) in [
+                (pageless, "Submission", Some("SITEID.submission.origin")),
+                (
+                    unpaged.as_str(),
+                    "Submission",
+                    Some("SITEID.submission.origin.documents"),
+                ),
+                (pageless, "Other", None),
+                (unpaged.as_str(), "Other", None),
+            ] {
+                let temp = Temp::fixture("sdtm-dm-metadata", false);
+                replace_spec(&temp, paged, replacement);
+                metadata_only(&temp, "sdtm", context);
+                let mut run = temp.run("2026-09-11T00:00:00");
+                if let Some(path) = path {
+                    assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
+                    let issue = &run.issues()[0];
+                    assert_eq!(
+                        (
+                            issue.phase.as_str(),
+                            issue.condition.as_str(),
+                            issue.requirement.as_deref()
+                        ),
+                        ("validation", "origin_document_missing", Some("REQ-0893"))
+                    );
+                    assert_eq!(issue.spec_paths, [format!("sdtm.specs[0].columns.{path}")]);
+                    assert!(run.save().is_err());
+                    assert!(!temp.0.join("define.xml").exists());
+                } else {
+                    // Under Other the reference to the form needs no page.
+                    assert!(run.issues().is_empty(), "{:?}", run.issues());
+                    let xml = std::str::from_utf8(run.artifacts().next().unwrap().1).unwrap();
+                    assert!(xml.contains("def:Context=\"Other\""));
+                    assert!(
+                        item(xml, "IT.DM.SITEID").contains("<def:DocumentRef leafID=\"LF.acrf\"/>")
+                    );
+                }
+            }
+        }
+        #[test]
+        fn not_available_and_send_sources_follow_the_family_pairs() {
+            let assigned =
+                "codelist: AGEU\n      origin:\n        type: Assigned\n        source: Sponsor\n";
+            let not_available = "codelist: AGEU\n      origin:\n        type: Not Available\n        description: Age units were not collected.\n";
+            // An sdtm Not Available declares no source and says why.
+            let temp = Temp::fixture("sdtm-dm-metadata", false);
+            replace_spec(&temp, assigned, not_available);
+            metadata_only(&temp, "sdtm", "Submission");
+            let run = temp.run("2026-09-11T00:00:00");
+            assert!(run.issues().is_empty(), "{:?}", run.issues());
+            let xml = std::str::from_utf8(run.artifacts().next().unwrap().1).unwrap();
+            let ageu = item(xml, "IT.DM.AGEU");
             assert!(
-                result
-                    .issues()
-                    .iter()
-                    .any(|i| i.condition == "origin_contradicts_derivation"
-                        && i.spec_paths[0].contains("AEDECOD")),
-                "{:?}",
-                result.issues()
+                ageu.contains("<def:Origin Type=\"Not Available\">"),
+                "{ageu}"
             );
+            assert!(ageu.contains(">Age units were not collected.</TranslatedText>"));
+            let temp = Temp::fixture("sdtm-dm-metadata", false);
+            replace_spec(
+                &temp,
+                assigned,
+                &not_available.replace("description", "source: Sponsor\n        description"),
+            );
+            metadata_only(&temp, "sdtm", "Submission");
+            let run = temp.run("2026-09-11T00:00:00");
+            assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
+            assert_eq!(run.issues()[0].condition, "origin_source_not_admitted");
+            assert_eq!(
+                run.issues()[0].spec_paths,
+                ["sdtm.specs[0].columns.AGEU.submission.origin"]
+            );
+            // send takes the sources the sdtm table admits, or none.
+            let send = |temp: &Temp| {
+                Define::prepare(
+                    temp.0.join("project.yaml").to_str().unwrap(),
+                    "send",
+                    Some("2026-09-11T00:00:00"),
+                    "0.3.0",
+                    Language::Python,
+                )
+            };
+            let temp = Temp::fixture("sdtm-dm-metadata", false);
+            metadata_only(&temp, "send", "Submission");
+            let run = send(&temp);
+            assert!(run.issues().is_empty(), "{:?}", run.issues());
+            let xml = std::str::from_utf8(run.artifacts().next().unwrap().1).unwrap();
+            assert!(item(xml, "IT.DM.SITEID")
+                .contains("<def:Origin Type=\"Collected\" Source=\"Investigator\">"));
+            let temp = Temp::fixture("sdtm-dm-metadata", false);
+            metadata_only(&temp, "send", "Submission");
+            replace_spec(
+                &temp,
+                assigned,
+                "codelist: AGEU\n      origin:\n        type: Assigned\n",
+            );
+            let run = send(&temp);
+            assert!(run.issues().is_empty(), "{:?}", run.issues());
+            let xml = std::str::from_utf8(run.artifacts().next().unwrap().1).unwrap();
+            assert!(item(xml, "IT.DM.AGEU").contains("<def:Origin Type=\"Assigned\"/>"));
+            for origin in [
+                "codelist: AGEU\n      origin:\n        type: Assigned\n        source: Investigator\n",
+                not_available.replace("description", "source: Sponsor\n        description").as_str(),
+            ] {
+                let temp = Temp::fixture("sdtm-dm-metadata", false);
+                metadata_only(&temp, "send", "Submission");
+                replace_spec(&temp, assigned, origin);
+                let run = send(&temp);
+                assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
+                assert_eq!(run.issues()[0].condition, "origin_source_not_admitted");
+                assert_eq!(
+                    run.issues()[0].spec_paths,
+                    ["send.specs[0].columns.AGEU.submission.origin"]
+                );
+            }
+        }
+        const STUDY_LB: &str = "schema_version: '1.0'\ndomain: LB\nkeys: [USUBJID, LBTESTCD]\ninput: {RAW: raw.csv}\noutput: {path: lb.csv, columns: [USUBJID, LBTESTCD]}\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: RAW.USUBJID\n    submission: {core: Req, length: 20, origin: {type: Assigned, source: Sponsor}}\n  - name: LBTESTCD\n    type: str\n    label: Lab Test or Examination Short Name\n    derivation: RAW.LBTESTCD\n    submission: {core: Req, length: 8, origin: {type: Assigned, source: Sponsor}}\nsubmission: {label: Laboratory Test Results, class: FINDINGS, structure: One record per lab test per subject, repeating: true}\n";
+        const STUDY_ADLB: &str = "schema_version: '1.0'\ndomain: ADLB\nkeys: [USUBJID, PARAMCD]\ninput: {LB: lb.csv}\noutput: {path: adlb.csv, columns: [USUBJID, PARAMCD, SRCDOM]}\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: LB.USUBJID\n    submission: {core: Req, mandatory: true, length: 20, origin: {type: Predecessor, description: LB.USUBJID}}\n  - name: PARAMCD\n    type: str\n    label: Parameter Code\n    derivation: LB.LBTESTCD\n    submission: {core: Req, mandatory: true, length: 8, origin: {type: Predecessor, description: LB.LBTESTCD}}\n  - name: SRCDOM\n    type: str\n    label: Source Data\n    derivation: {literal: LB}\n    submission: {core: Perm, mandatory: false, length: 8, inventory_vocabulary: true, origin: {type: Assigned}}\nsubmission: {label: Laboratory Analysis Dataset, class: BASIC DATA STRUCTURE, structure: One record per subject per parameter, repeating: true}\n";
+        const STUDY_SDTM: &str = "sdtm:\n  standard: {name: SDTMIG, version: '3.4', status: Final}\n  specs: [sdtm/lb.yaml]\n  define: sdtm/define.xml\n";
+        const STUDY_ADAM: &str = "schema_version: '1.0'\nstudy: {id: STUDY, name: Study, description: Cross-section witness, protocol_name: Protocol}\nadam:\n  standard: {name: ADaMIG, version: '1.3', status: Final}\n  specs: [adlb.yaml]\n  define: define.xml\n  datasets: json\n  source_system_version: '1.0'\n";
+        fn cross_section(adlb: &str, published: &str, sdtm: bool) -> (Temp, Define) {
+            let temp = Temp::new();
+            fs::create_dir(temp.0.join("sdtm")).unwrap();
+            fs::write(temp.0.join("sdtm/lb.yaml"), STUDY_LB).unwrap();
+            fs::write(temp.0.join("adlb.yaml"), adlb).unwrap();
+            fs::write(temp.0.join("adlb.csv"), published).unwrap();
+            let environment = if sdtm {
+                format!("{STUDY_ADAM}{STUDY_SDTM}")
+            } else {
+                STUDY_ADAM.into()
+            };
+            fs::write(temp.0.join("project.yaml"), environment).unwrap();
+            let run = Define::prepare(
+                temp.0.join("project.yaml").to_str().unwrap(),
+                "adam",
+                Some("2026-09-30T00:00:00"),
+                "0.3.0",
+                Language::Python,
+            );
+            (temp, run)
+        }
+        #[test]
+        fn predecessor_labels_and_the_dataset_inventory_span_every_section() {
+            // ADLB copies LB from the sdtm section: USUBJID keeps its name and
+            // label, PARAMCD renames LBTESTCD with its own label, and SRCDOM
+            // names the sdtm section's LB.
+            let published = "USUBJID,PARAMCD,SRCDOM\nS01-001,GLUC,LB\n";
+            let (temp, mut run) = cross_section(STUDY_ADLB, published, true);
+            assert!(run.issues().is_empty(), "{:?}", run.issues());
+            let artifacts: Vec<_> = run
+                .artifacts()
+                .map(|(name, bytes, _)| (name.to_owned(), bytes.to_vec()))
+                .collect();
+            assert_eq!(
+                artifacts.iter().map(|a| a.0.as_str()).collect::<Vec<_>>(),
+                ["adlb.json", "define.xml"]
+            );
+            let xml = std::str::from_utf8(&artifacts[1].1).unwrap();
+            let paramcd = item(xml, "IT.ADLB.PARAMCD");
+            assert!(paramcd.contains(">Parameter Code</TranslatedText>"));
+            assert!(
+                paramcd.contains("<def:Origin Type=\"Predecessor\">"),
+                "{paramcd}"
+            );
+            assert!(paramcd.contains(">LB.LBTESTCD</TranslatedText>"));
+            assert!(
+                !xml.contains("IG.LB"),
+                "the sdtm section is read, not represented"
+            );
+            assert!(run.save().unwrap());
+            assert!(temp.0.join("adlb.json").is_file());
+            assert!(!temp.0.join("sdtm/define.xml").exists());
+            // A copy that keeps the predecessor's name keeps its label.
+            let (temp, mut run) = cross_section(
+                &STUDY_ADLB.replacen(
+                    "label: Unique Subject Identifier",
+                    "label: Subject Identifier",
+                    1,
+                ),
+                published,
+                true,
+            );
+            assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
+            let issue = &run.issues()[0];
+            assert_eq!(
+                (
+                    issue.phase.as_str(),
+                    issue.condition.as_str(),
+                    issue.requirement.as_deref()
+                ),
+                ("validation", "predecessor_label_mismatch", Some("SUB-20"))
+            );
+            assert_eq!(issue.spec_paths, ["adam.specs[0].columns.USUBJID.label"]);
+            assert_eq!(
+                issue.context,
+                yamaa_adapters::json!({"detail": "USUBJID", "label": "Subject Identifier", "predecessor": "LB.USUBJID", "predecessor_label": "Unique Subject Identifier"})
+            );
+            assert!(run.save().is_err());
+            assert!(!temp.0.join("define.xml").exists());
+            // A name outside the study's inventory fails the published recheck.
+            let (_, run) = cross_section(STUDY_ADLB, &published.replace(",LB\n", ",XX\n"), true);
+            assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
+            assert_eq!(
+                (
+                    run.issues()[0].condition.as_str(),
+                    run.issues()[0].requirement.as_deref()
+                ),
+                ("allowed_values_failed", Some("REQ-1156"))
+            );
+            assert_eq!(run.issues()[0].context["value"], "XX");
+            // Without the sdtm section, LB names no dataset of the study and
+            // no predecessor column is declared to compare.
+            let (_, run) = cross_section(
+                &STUDY_ADLB.replacen(
+                    "label: Unique Subject Identifier",
+                    "label: Subject Identifier",
+                    1,
+                ),
+                published,
+                false,
+            );
+            assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
+            assert_eq!(run.issues()[0].condition, "allowed_values_failed");
+            assert_eq!(run.issues()[0].context["value"], "LB");
         }
     }
 }

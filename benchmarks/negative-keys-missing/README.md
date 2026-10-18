@@ -45,8 +45,7 @@ rows:
   - id: windowed
     filter: "ADVS_RAW.ADY IS NOT NULL"
     derivations:
-      AVAL:
-        source: ADVS_RAW.AVAL
+      AVAL: ADVS_RAW.AVAL
 ```
 
 If it is one record per collected record, identify rows by the collected

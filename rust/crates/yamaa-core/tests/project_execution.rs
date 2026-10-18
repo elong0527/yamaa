@@ -46,41 +46,14 @@ mod project {
         #[derive(Default)]
         struct Stages(RefCell<Vec<Stage>>);
         impl yamaa_core::application_observer::Observer for Stages {
-            fn observe(&self, event: yamaa_core::application_observer::Event<'_>) {
+            fn observe(&self, event: yamaa_core::application_observer::Event) {
                 use yamaa_core::application_observer::Event;
                 self.0.borrow_mut().push(match event {
-                    Event::Phase { node, phase } => {
-                        assert_eq!(node, None);
-                        Stage::Phase(phase)
-                    }
-                    Event::FunctionCall { node, stage } => {
-                        assert_eq!(node, None);
-                        Stage::Call(stage)
-                    }
-                    Event::Exit {
-                        node,
-                        phase,
-                        outcome,
-                    } => {
-                        assert_eq!(node, None);
-                        Stage::Exit(phase, outcome)
-                    }
-                    Event::FunctionReturn {
-                        node,
-                        stage,
-                        outcome,
-                    } => {
-                        assert_eq!(node, None);
-                        Stage::Return(stage, outcome)
-                    }
-                    Event::Refusal {
-                        node,
-                        phase,
-                        refusal,
-                    } => {
-                        assert_eq!(node, None);
-                        Stage::Refusal(phase, refusal)
-                    }
+                    Event::Phase { phase } => Stage::Phase(phase),
+                    Event::FunctionCall { stage } => Stage::Call(stage),
+                    Event::Exit { phase, outcome } => Stage::Exit(phase, outcome),
+                    Event::FunctionReturn { stage, outcome } => Stage::Return(stage, outcome),
+                    Event::Refusal { phase, refusal } => Stage::Refusal(phase, refusal),
                 });
             }
         }
@@ -504,7 +477,7 @@ mod project {
         }
 
         #[test]
-        fn concat_function_signature_is_admitted_before_any_table_access() {
+        fn nested_function_signature_is_admitted_before_any_table_access() {
             struct Untouched;
             impl TableAccess for Untouched {
                 type Error = Payload;
@@ -518,21 +491,23 @@ mod project {
                     panic!("signature admission must precede cell access")
                 }
             }
+            let integer =
+                |value: &str| Tree::Scalar(yamaa_core::schema::DocumentNode::Integer(value.into()));
             let spec = specification(vec![(
                 "VALUE",
-                "str",
+                "int",
                 Tree::map(vec![(
-                    "str_concat",
-                    Tree::map(vec![(
-                        "sources",
-                        Tree::List(vec![call(
-                            "id",
-                            vec![(
-                                "x",
-                                Tree::Scalar(yamaa_core::schema::DocumentNode::Integer("7".into())),
-                            )],
+                    "case",
+                    Tree::List(vec![
+                        Tree::map(vec![
+                            ("when", Tree::text("ID > 0")),
+                            ("then", call("id", vec![("x", integer("7"))])),
+                        ]),
+                        Tree::map(vec![(
+                            "otherwise",
+                            Tree::map(vec![("literal", integer("0"))]),
                         )]),
-                    )]),
+                    ]),
                 )]),
             )]);
             let checked = domain::check_with_project(&spec, &[function("id")]).unwrap();
@@ -623,7 +598,17 @@ mod project {
                 &mut yamaa_core::function_invocation::NoFunctions::new(),
                 None,
             );
-            assert!(attempt.handler_counts.is_empty() && attempt.retained_verifications.is_empty());
+            // The selection's default substitution is registered at zero; the
+            // failing operand read is never answered by it.
+            assert_eq!(
+                attempt
+                    .handler_counts
+                    .iter()
+                    .map(|count| (count.spec_path.as_str(), count.count))
+                    .collect::<Vec<_>>(),
+                [("columns.VALUE.derivation.first_available.missing", 0)]
+            );
+            assert!(attempt.retained_verifications.is_empty());
             let ExecutionError::Cell {
                 path,
                 source_row,
@@ -1292,11 +1277,11 @@ mod project {
     mod project_function_result {
         use yamaa_core::{
             project_function_result::results_match,
-            temporal::{Date, DatePrecision},
+            temporal::{Date, Precision},
             value::Value,
         };
         #[test]
-        fn exact_decimal_ties_go_away_from_zero_without_round_interval_tolerance() {
+        fn ties_and_near_ties_go_away_from_zero_with_the_one_rounding_interval() {
             for (actual, expected, decimals, matches) in [
                 (0.5, 1.0, 0, true),
                 (-0.5, -1.0, 0, true),
@@ -1305,9 +1290,16 @@ mod project {
                 (1.23445, 1.2345, 4, true),
                 (-1.23445, -1.2345, 4, true),
                 (1.23444, 1.2345, 4, false),
-                (2.675, 2.67, 2, true),
-                (2.675, 2.68, 2, false),
+                // The exact binary64 2.675 is 1.8e-14 below the scaled tie,
+                // inside REQ-0418's 2^-26 interval, so its copy is 2.68.
+                (2.675, 2.67, 2, false),
+                (2.675, 2.68, 2, true),
+                (-2.675, -2.68, 2, true),
                 (2.685, 2.69, 2, true),
+                // 1.0e-8 below the scaled tie is inside the interval; 1.0e-7 is not.
+                (1.0049999999, 1.01, 2, true),
+                (1.004999999, 1.00, 2, true),
+                (1.004999999, 1.01, 2, false),
             ] {
                 assert_eq!(
                     results_match(&Value::float(actual), &Value::float(expected), decimals),
@@ -1368,8 +1360,8 @@ mod project {
                     &Value::Int(i64::MAX),
                     digits
                 ));
-                let full = Value::Date(Date::new(2024, 1, 1, DatePrecision::Day).unwrap());
-                let collected = Value::Date(Date::new(2024, 1, 1, DatePrecision::Year).unwrap());
+                let full = Value::Date(Date::new(2024, 1, 1, Precision::Day).unwrap());
+                let collected = Value::Date(Date::new(2024, 1, 1, Precision::Year).unwrap());
                 assert!(results_match(&full, &collected, digits));
             }
             assert!(!results_match(&Value::Int(1), &Value::Int(1), -1));
@@ -1652,6 +1644,26 @@ mod project {
             }
         }
         #[test]
+        fn extended_items_carry_no_published_alias() {
+            // A sponsor addition has no published code: the published item
+            // keeps its alias and the extended one may declare none.
+            let mut list = list();
+            list.extensible = true;
+            list.alias = Some("C66731".into());
+            let items = list.items.as_mut().unwrap();
+            items[0].alias = Some("C16576".into());
+            items[1].extended = true;
+            assert!(validate(&[published(source(list.clone()))]).is_empty());
+            list.items.as_mut().unwrap()[1].alias = Some("C20197".into());
+            assert_eq!(
+                validate(&[published(source(list))])
+                    .iter()
+                    .map(|f| &f.fault)
+                    .collect::<Vec<_>>(),
+                vec![&Fault::ExtendedAlias { item: 1 }]
+            );
+        }
+        #[test]
         fn numeric_equality_is_exact_at_i64_and_binary64_boundaries() {
             let mut list = list();
             list.data_type = DataType::Float;
@@ -1688,55 +1700,43 @@ mod project {
             assert_eq!(catalogue.enforced_items("SEX").unwrap().len(), 4);
         }
         #[test]
-        fn binding_checks_exact_column_type_and_item_sets() {
+        fn binding_checks_exact_column_type_and_rejects_restated_item_sets() {
             let catalogue = Catalogue::admit(vec![source(list())]).unwrap();
             assert_eq!(
-                catalogue.bind("unknown", ColumnType::Str, None),
+                catalogue.bind("unknown", ColumnType::Str, false),
                 vec![BindingFinding::UnknownCodelist]
             );
             assert_eq!(
-                catalogue.bind("SEX", ColumnType::Int, Some(&[Value::Str("F".into())])),
+                catalogue.bind("SEX", ColumnType::Int, true),
                 vec![
                     BindingFinding::TypeMismatch {
                         expected: ColumnType::Str,
                         actual: ColumnType::Int
                     },
-                    BindingFinding::ValuesConflict
+                    BindingFinding::RedundantAllowedValues
                 ]
             );
-            assert!(catalogue
-                .bind(
-                    "SEX",
-                    ColumnType::Str,
-                    Some(&[
-                        Value::Str("M".into()),
-                        Value::Str("F".into()),
-                        Value::Str("F".into())
-                    ])
-                )
-                .is_empty());
-            for external in [false, true] {
-                let mut list = list();
-                if external {
-                    list.items = None;
-                    list.external = Some(External {
-                        dictionary: "d".into(),
-                        version: "1".into(),
-                        href: Some("relative/path".into()),
-                    });
-                } else {
-                    list.extensible = true;
-                }
-                let catalogue = Catalogue::admit(vec![source(list)]).unwrap();
-                assert!(catalogue
-                    .bind(
-                        "SEX",
-                        ColumnType::Str,
-                        Some(&[Value::Str("anything".into())])
-                    )
-                    .is_empty());
-                assert_eq!(catalogue.enforced_items("SEX"), None);
-            }
+            assert!(catalogue.bind("SEX", ColumnType::Str, false).is_empty());
+            // An extensible list of items is enforced like any other list; only
+            // an external dictionary leaves values and verifications unchecked.
+            let mut extensible = list();
+            extensible.extensible = true;
+            let catalogue = Catalogue::admit(vec![source(extensible)]).unwrap();
+            assert_eq!(
+                catalogue.bind("SEX", ColumnType::Str, true),
+                vec![BindingFinding::RedundantAllowedValues]
+            );
+            assert_eq!(catalogue.enforced_items("SEX").unwrap().len(), 2);
+            let mut external = list();
+            external.items = None;
+            external.external = Some(External {
+                dictionary: "d".into(),
+                version: "1".into(),
+                href: Some("relative/path".into()),
+            });
+            let catalogue = Catalogue::admit(vec![source(external)]).unwrap();
+            assert!(catalogue.bind("SEX", ColumnType::Str, true).is_empty());
+            assert_eq!(catalogue.enforced_items("SEX"), None);
         }
         #[test]
         fn invalid_shapes_and_missing_boolean_fractional_item_types_are_rejected() {
@@ -1919,22 +1919,25 @@ mod project {
             }
         }
         #[test]
-        fn compiler_projects_unknown_type_and_conflicting_sets_as_static_preflight_causes() {
-            for (doc, condition, requirement) in [
+        fn compiler_projects_unknown_type_and_redundant_sets_as_static_preflight_causes() {
+            for (doc, condition, requirement, path) in [
                 (
                     spec("UNKNOWN", "str", None, false, None),
                     "unknown_codelist",
                     "REQ-0953",
+                    "columns.CODE.submission.codelist",
                 ),
                 (
                     spec("SEX", "int", None, false, None),
                     "codelist_type_mismatch",
                     "REQ-0954",
+                    "columns.CODE.submission.codelist",
                 ),
                 (
-                    spec("SEX", "str", Some("M"), false, None),
-                    "codelist_values_conflict",
+                    spec("SEX", "str", Some("F"), false, None),
+                    "redundant_declaration",
                     "REQ-0955",
+                    "columns.CODE.verifications[0].allowed_values",
                 ),
             ] {
                 let Err(PrepareError::Invalid(findings)) =
@@ -1952,18 +1955,39 @@ mod project {
                     ),
                     ("validation", condition, Some(requirement))
                 );
-                assert_eq!(d.spec_paths[0], "columns.CODE.submission.codelist");
+                assert_eq!(d.spec_paths, [path]);
             }
         }
         #[test]
-        fn extensible_catalogue_does_not_replace_the_ordinary_allowed_values_check() {
-            let doc = spec("SEX", "str", Some("M"), false, None);
-            let prepared =
-                PreparedSpecification::prepare_with_environment(&doc, &environment(true)).unwrap();
+        fn extensible_catalogue_is_enforced_and_states_the_value_set_once() {
+            let prepared = PreparedSpecification::prepare_with_environment(
+                &spec("SEX", "str", None, false, None),
+                &environment(true),
+            )
+            .unwrap();
             let plan = prepared.bind(&schema()).unwrap();
             assert_eq!(plan.column_verifications()[0].checks.len(), 1);
             assert!(
-                matches!(&plan.column_verifications()[0].checks[0].check,Check::AllowedValues(values) if values==&[Value::Str("M".into())])
+                matches!(&plan.column_verifications()[0].checks[0].check,Check::Codelist {id,values} if id=="SEX" && values==&[Value::Str("F".into())])
+            );
+            let Err(PrepareError::Invalid(findings)) =
+                PreparedSpecification::prepare_with_environment(
+                    &spec("SEX", "str", Some("M"), false, None),
+                    &environment(true),
+                )
+            else {
+                panic!("allowed values beside a listing codelist")
+            };
+            assert_eq!(findings.len(), 1);
+            let d = findings[0].diagnostic();
+            assert_eq!(d.definition().condition, "redundant_declaration");
+            assert_eq!(
+                d.spec_paths,
+                ["columns.CODE.verifications[0].allowed_values"]
+            );
+            assert_eq!(
+                d.context["stated_by"],
+                yamaa_core::json::Value::String("columns.CODE.submission.codelist".into())
             );
         }
         #[test]

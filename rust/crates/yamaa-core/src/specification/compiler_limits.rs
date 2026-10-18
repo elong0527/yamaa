@@ -25,76 +25,30 @@ impl PrepareError {
     }
 }
 
-pub(super) fn parse_resource(resource: crate::numeric_parser::ParseResource) -> &'static str {
-    use crate::numeric_parser::ParseResource;
-    match resource {
-        ParseResource::Depth => "semantic_depth",
-    }
-}
-pub(super) fn regex_resource(resource: crate::regex::Resource) -> &'static str {
-    use crate::regex::Resource;
+pub(super) fn regex_resource(resource: crate::portable_regex::Resource) -> &'static str {
+    use crate::portable_regex::Resource;
     match resource {
         Resource::Depth => "semantic_depth",
-        Resource::Work => "regex_steps",
+        Resource::Size => "regex_size",
     }
 }
 impl PrepareError {
-    pub(super) fn numeric_parse(
-        error: crate::numeric_parser::ParseError,
-        path: Option<&str>,
-    ) -> Self {
+    /// A resource refusal of the expression compiler; a language finding is
+    /// retained for binding instead and never reaches this projection.
+    pub(super) fn expression(error: crate::expression::CompileError, path: Option<&str>) -> Self {
+        use crate::expression::{CompileError, Resource};
         match error {
-            crate::numeric_parser::ParseError::Limit {
-                resource, limit, ..
-            } => Self::limit(parse_resource(resource), limit, None, path),
-            _ => Self::Internal,
-        }
-    }
-    pub(super) fn aggregate_parse(
-        error: crate::aggregate_parser::ParseError,
-        path: Option<&str>,
-    ) -> Self {
-        match error {
-            crate::aggregate_parser::ParseError::Limit {
-                resource, limit, ..
-            } => Self::limit(parse_resource(resource), limit, None, path),
-            _ => Self::Internal,
-        }
-    }
-    pub(super) fn predicate_parse(
-        error: crate::predicate_parser::ParseError,
-        path: Option<&str>,
-    ) -> Self {
-        use crate::predicate_parser::ParseError;
-        match error {
-            ParseError::Limit {
-                resource, limit, ..
-            } => Self::limit(parse_resource(resource), limit, None, path),
-            ParseError::RegexLimit {
-                resource, limit, ..
-            } => Self::limit(regex_resource(resource), limit, None, path),
-            ParseError::UnsupportedRegex { .. } => Self::Unsupported(vec![UnsupportedFeature {
-                operation: "predicate_regex".into(),
-                path: path.unwrap_or("").into(),
-            }]),
-            _ => Self::Internal,
-        }
-    }
-    pub(super) fn predicate(error: crate::predicate_compiler::Error, path: Option<&str>) -> Self {
-        use crate::{predicate::PlanError, predicate_compiler::Error};
-        match error {
-            Error::Parse(error) => Self::predicate_parse(error, path),
-            Error::Plan(PlanError::Limit(error)) => {
-                Self::limit(error.resource, error.limit, error.actual, path)
-            }
-            Error::Plan(PlanError::Regex {
-                error:
-                    crate::regex::CompileError::Limit {
-                        resource, limit, ..
-                    },
+            CompileError::Limit {
+                resource: Resource::Depth,
+                limit,
                 ..
-            }) => Self::limit(regex_resource(resource), limit, None, path),
-            _ => Self::Internal,
+            } => Self::limit("semantic_depth", limit, None, path),
+            CompileError::Limit {
+                resource: Resource::Regex(resource),
+                limit,
+                ..
+            } => Self::limit(regex_resource(resource), limit, None, path),
+            CompileError::Invalid { .. } => Self::Internal,
         }
     }
 }

@@ -173,7 +173,7 @@
       ],
       "define": "define.xml",
       "datasets": "json",
-      "context": "Submission",
+      "context": "Other",
       "xml_lang": "en",
       "file_oid": "READERS.1",
       "metadata_version": {

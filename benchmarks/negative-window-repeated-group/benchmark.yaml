@@ -1,6 +1,3 @@
 lifecycle: draft
 standard: ADaM
 domain: ADAE
-validation:
-  rule: R007
-  validator: window_contract

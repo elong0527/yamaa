@@ -20,7 +20,7 @@ intermediates:
     filter: "AE.AEDECOD = 'COVID-19'"
     order_by: [AE.AESTDTC, AE.AESEQ]
     keep: first
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: STUDYID
@@ -59,8 +59,6 @@ columns:
             (ASTDT = FIRSTIDX.AESTDTC AND AESEQ > FIRSTIDX.AESEQ)
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
       min: 11
       max: 11

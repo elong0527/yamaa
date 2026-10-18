@@ -6,18 +6,13 @@ from tools.paths import WORKSPACE
 
 SOURCE = WORKSPACE.parent / "yaml"
 TARGET = WORKSPACE / "crates/yamaa-adapters/src/shipped_schema/data.rs"
-SEPARATE_ROOTS = {
-    "schema_define.yaml",
-    "schema_environment.yaml",
-    "schema_project.yaml",
-}
+SEPARATE_ROOTS = {"schema_environment.yaml", "schema_project.yaml"}
 
 
 def render():
     """Keep the entry first and preserve every module's exact UTF-8 bytes."""
-    # Project, environment and submission are separate roots. Shared bundle
-    # admission rejects missing or unused modules, so closure drift fails
-    # native tests.
+    # Project and environment are separate roots. Shared bundle admission
+    # rejects missing or unused modules, so closure drift fails native tests.
     modules = [SOURCE / "schema.yaml"] + sorted(
         p for p in SOURCE.glob("schema_*.yaml") if p.name not in SEPARATE_ROOTS
     )

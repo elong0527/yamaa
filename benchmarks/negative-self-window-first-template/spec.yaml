@@ -60,8 +60,7 @@ rows:
     group_by: [VITALS.USUBJID]
     derivations:
       VSDY:
-        aggregate:
-          expr: "MAX(VITALS.VSDY)"
+        aggregate: "MAX(VITALS.VSDY)"
       VSCAT: {literal: FOLLOW-UP}
       VSSTRESN: {literal: null}
       VISIT: LATESTWIN.NAME

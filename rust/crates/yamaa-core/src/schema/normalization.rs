@@ -1,9 +1,10 @@
 //! Validated schema normalization with request-wide storage and traversal policies.
 
 use super::{
-    validation::matches_member, DefaultDiagnostics, Document, DocumentError, DocumentNode as N,
-    SchemaAliasKind, SchemaDiagnostic, SchemaField, SchemaShape, SchemaStructure, TypeExpression,
-    TypeNode, ValidationError,
+    validation::{matches_member, shorthand_field, NullPolicy, MAPPING_MEMBERS, SOURCE_SHORTHAND},
+    DefaultDiagnostics, Document, DocumentError, DocumentNode as N, SchemaAliasKind,
+    SchemaDiagnostic, SchemaField, SchemaShape, SchemaStructure, TypeExpression, TypeNode,
+    ValidationError,
 };
 use std::vec;
 
@@ -69,6 +70,10 @@ struct Site<'a> {
     scope: usize,
     depth: usize,
     fragment: bool,
+    /// The specification root, whose mapping-keyed collections hold members.
+    root: bool,
+    /// A mapping whose entries are keyed members rather than clearable fields.
+    members: bool,
 }
 impl Site<'_> {
     fn origin(self) -> SchemaOrigin {
@@ -88,11 +93,16 @@ impl Site<'_> {
         Self {
             value,
             depth: self.depth + 1,
+            root: false,
+            members: false,
             ..self
         }
     }
     fn deeper(self) -> Self {
-        self.child(self.value)
+        Self {
+            depth: self.depth + 1,
+            ..self
+        }
     }
 }
 
@@ -124,6 +134,7 @@ struct Run<'a> {
     origins: Vec<SchemaOrigin>,
     active: Vec<(usize, usize, usize)>,
     next_scope: usize,
+    nulls: NullPolicy,
 }
 impl Run<'_> {
     fn step(&mut self, site: Site<'_>) -> Result<(), NormalizationError> {
@@ -191,6 +202,7 @@ impl Run<'_> {
             (member.expression, member.node),
             site.value,
             site.fragment,
+            self.nulls,
             &active,
         )?)
     }
@@ -225,6 +237,8 @@ impl Run<'_> {
                 }),
                 depth: site.depth + 1,
                 fragment: false,
+                root: false,
+                members: false,
             },
         )
     }
@@ -241,8 +255,21 @@ impl Run<'_> {
         for field in fields {
             let present = items.iter().find(|(key, _)| matches!(&site.input.nodes()[*key], N::Text(name) if *name == field.name));
             if let Some(&(key, value)) = present {
+                if self.nulls.clears() && matches!(site.input.nodes()[value], N::Null) {
+                    // A null field is absent; a layer keeps it as its clear marker.
+                    if self.nulls == NullPolicy::Clear {
+                        let key = self.copy(site.child(key))?;
+                        let value = self.copy(site.child(value))?;
+                        result.push((key, value));
+                    }
+                    continue;
+                }
                 let key = self.copy(site.child(key))?;
-                let value = self.descriptor(field.descriptor, site.child(value))?;
+                let mut child = site.child(value);
+                child.members = site.root
+                    && self.nulls.clears()
+                    && MAPPING_MEMBERS.contains(&field.name.as_str());
+                let value = self.descriptor(field.descriptor, child)?;
                 result.push((key, value));
             } else if !site.fragment
                 && self.schema.descriptors()[field.descriptor]
@@ -263,55 +290,16 @@ impl Run<'_> {
         site: Site<'_>,
     ) -> Result<usize, NormalizationError> {
         self.step(site)?;
-        if members.len() == 2 {
-            for member in members {
-                let TypeNode::List(inner) = member.expression.nodes()[member.node] else {
-                    continue;
-                };
-                let inner = member.child(inner);
-                if !members.iter().any(|m| m.text() == inner.text()) {
-                    continue;
-                }
-                if self.matches(*member, site)? {
-                    return self.single(*member, site.deeper());
-                }
-                if self.matches(inner, site)? {
-                    let value = self.members(&[inner], site.deeper())?;
-                    return Ok(self.emit(
-                        N::Sequence(vec![value]),
-                        SchemaOrigin {
-                            generated: true,
-                            ..site.origin()
-                        },
-                    ));
-                }
-            }
+        if members.len() >= 2 {
             let schema = self.schema;
             for class_member in members {
                 let Some(class) = schema.class_named(class_member.text()) else {
                     continue;
                 };
-                let mut required = class
-                    .fields
-                    .iter()
-                    .filter(|f| schema.descriptors()[f.descriptor].descriptor.required());
-                let Some(field) = required.next() else {
-                    continue;
-                };
-                if required.next().is_some() {
-                    continue;
-                }
-                let types = schema.descriptors()[field.descriptor].descriptor.members();
-                if types.len() != 1 {
-                    continue;
-                }
                 for member in members {
-                    if member.text() == class_member.text()
-                        || schema.class_named(member.text()).is_some()
-                        || member.text() != Member::root(&types[0]).text()
-                    {
+                    let Some(field) = shorthand_field(schema, class, member.text()) else {
                         continue;
-                    }
+                    };
                     if !self.matches(*member, site)? {
                         continue;
                     }
@@ -367,6 +355,12 @@ impl Run<'_> {
                 };
                 let mut result = Vec::with_capacity(items.len());
                 for &(k, v) in items {
+                    let absent = self.nulls.clears()
+                        && !site.members
+                        && matches!(site.input.nodes()[v], N::Null);
+                    if absent && self.nulls == NullPolicy::Absent {
+                        continue;
+                    }
                     let k = self.members(
                         &[member.child(*key)],
                         Site {
@@ -374,7 +368,12 @@ impl Run<'_> {
                             ..site.child(k)
                         },
                     )?;
-                    let v = self.members(&[member.child(*value)], site.child(v))?;
+                    let v = if absent {
+                        // A layer keeps a null entry as its clear marker.
+                        self.copy(site.child(v))?
+                    } else {
+                        self.members(&[member.child(*value)], site.child(v))?
+                    };
                     result.push((k, v));
                 }
                 Ok(self.emit(N::Mapping(result), site.origin()))
@@ -409,17 +408,15 @@ impl Run<'_> {
         match kind {
             SchemaAliasKind::Descriptor(descriptor) => {
                 let members = schema.descriptors()[descriptor].descriptor.members();
-                if matches!(
-                    name,
-                    "derivation" | "untyped_intermediate_derivation" | "case_result"
-                ) {
+                if SOURCE_SHORTHAND.contains(&name) {
                     let members: Vec<_> = members
                         .iter()
                         .map(Member::root)
                         .filter(|m| m.text() != "str")
                         .collect();
                     if let N::Text(text) = &site.input.nodes()[site.value] {
-                        let generated = self.derivation(text, name != "case_result")?;
+                        // A bare string is only ever a source reference (EXPR-5).
+                        let generated = self.source(text)?;
                         let scope = self.scope()?;
                         return self.members(
                             &members,
@@ -463,43 +460,16 @@ impl Run<'_> {
             }
         }
     }
-    fn derivation(&mut self, text: &str, calls: bool) -> Result<Document, NormalizationError> {
-        let trimmed =
-            text.trim_matches(|c: char| c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c));
-        let call = if calls {
-            trimmed.split_once('(').and_then(|(name, tail)| {
-                let argument = tail.strip_suffix(')')?;
-                if name.is_empty()
-                    || !name.as_bytes()[0].is_ascii_alphabetic() && name.as_bytes()[0] != b'_'
-                    || !name.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_')
-                    || argument.contains(['(', ')'])
-                {
-                    return None;
-                }
-                Some((
-                    name,
-                    argument.trim_matches(|c: char| {
-                        c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c)
-                    }),
-                ))
-            })
-        } else {
-            None
-        };
-        let argument = call.map_or(text, |(_, argument)| argument);
-        let mut nodes = vec![
-            N::Text("source".into()),
-            N::Text(argument.into()),
-            N::Mapping(vec![(0, 1)]),
-        ];
-        let root = if let Some((operation, _)) = call {
-            nodes.push(N::Text(operation.into()));
-            nodes.push(N::Mapping(vec![(3, 2)]));
-            4
-        } else {
-            2
-        };
-        Document::new(nodes, root).map_err(NormalizationError::Document)
+    fn source(&mut self, text: &str) -> Result<Document, NormalizationError> {
+        Document::new(
+            vec![
+                N::Text("source".into()),
+                N::Text(text.into()),
+                N::Mapping(vec![(0, 1)]),
+            ],
+            2,
+        )
+        .map_err(NormalizationError::Document)
     }
     fn finish(self, root: usize) -> Result<NormalizedDocument, NormalizationError> {
         let document = Document::new(self.nodes, root).map_err(NormalizationError::Document)?;
@@ -531,6 +501,8 @@ impl SchemaStructure {
             scope: 0,
             depth: 0,
             fragment,
+            root: false,
+            members: false,
         };
         let mut run = Run {
             schema: self,
@@ -538,6 +510,7 @@ impl SchemaStructure {
             origins: Vec::new(),
             active: Vec::new(),
             next_scope: 0,
+            nulls: NullPolicy::Value,
         };
         let root = run.members(&types.iter().map(Member::root).collect::<Vec<_>>(), site)?;
         run.finish(root)
@@ -558,23 +531,33 @@ impl SchemaStructure {
         &self,
         input: &Document,
     ) -> Result<NormalizedDocument, NormalizationError> {
-        self.normalize_document_mode(input, false)
+        self.normalize_document_mode(input, false, NullPolicy::Value)
+    }
+    /// Normalize a specification, dropping every null field and mapping entry (LAYER-9).
+    pub fn normalize_specification(
+        &self,
+        input: &Document,
+    ) -> Result<NormalizedDocument, NormalizationError> {
+        self.normalize_document_mode(input, false, NullPolicy::Absent)
     }
     /// Normalize the final composed specification with resolved-output citation ownership.
     pub fn normalize_resolved_document(
         &self,
         input: &Document,
     ) -> Result<NormalizedDocument, NormalizationError> {
-        self.normalize_document_mode(input, true)
+        self.normalize_document_mode(input, true, NullPolicy::Absent)
     }
     fn normalize_document_mode(
         &self,
         input: &Document,
         resolved_output: bool,
+        nulls: NullPolicy,
     ) -> Result<NormalizedDocument, NormalizationError> {
         self.normalization_defaults()?;
         let findings = if resolved_output {
             self.validate_resolved_document(input)?
+        } else if nulls.clears() {
+            self.validate_specification(input)?
         } else {
             self.validate_document(input)?
         };
@@ -588,6 +571,8 @@ impl SchemaStructure {
             scope: 0,
             depth: 0,
             fragment: false,
+            root: true,
+            members: false,
         };
         let mut run = Run {
             schema: self,
@@ -595,6 +580,7 @@ impl SchemaStructure {
             origins: Vec::new(),
             active: Vec::new(),
             next_scope: 0,
+            nulls,
         };
         let root = run.class(&self.root_class().fields, site)?;
         run.finish(root)
@@ -607,9 +593,60 @@ impl SchemaStructure {
         value: usize,
         fragment: bool,
     ) -> Result<NormalizedDocument, NormalizationError> {
+        self.normalize_descriptor_with(descriptor, input, value, fragment, NullPolicy::Value)
+    }
+    /// Normalize a descriptor value under an explicit null policy, as a specification field.
+    pub fn normalize_descriptor_with(
+        &self,
+        descriptor: usize,
+        input: &Document,
+        value: usize,
+        fragment: bool,
+        nulls: NullPolicy,
+    ) -> Result<NormalizedDocument, NormalizationError> {
+        self.normalize_descriptor_mode(descriptor, input, value, fragment, nulls, true)
+    }
+    /// Normalize a descriptor value of a canonical document, such as a composed
+    /// member, whose long forms restate shorthand an earlier pass expanded.
+    pub(super) fn normalize_canonical_descriptor(
+        &self,
+        descriptor: usize,
+        input: &Document,
+        value: usize,
+        fragment: bool,
+        nulls: NullPolicy,
+    ) -> Result<NormalizedDocument, NormalizationError> {
+        self.normalize_descriptor_mode(descriptor, input, value, fragment, nulls, false)
+    }
+    fn normalize_descriptor_mode(
+        &self,
+        descriptor: usize,
+        input: &Document,
+        value: usize,
+        fragment: bool,
+        nulls: NullPolicy,
+        written: bool,
+    ) -> Result<NormalizedDocument, NormalizationError> {
         self.normalization_defaults()?;
-        let findings =
-            self.validate_descriptor(descriptor, input, value, "<normalization>", fragment)?;
+        let findings = if written {
+            self.validate_descriptor_with(
+                descriptor,
+                input,
+                value,
+                "<normalization>",
+                fragment,
+                nulls,
+            )?
+        } else {
+            self.validate_canonical_descriptor(
+                descriptor,
+                input,
+                value,
+                "<normalization>",
+                fragment,
+                nulls,
+            )?
+        };
         if !findings.is_empty() {
             return Err(NormalizationError::Invalid(findings));
         }
@@ -620,6 +657,8 @@ impl SchemaStructure {
             scope: 0,
             depth: 0,
             fragment,
+            root: false,
+            members: false,
         };
         let mut run = Run {
             schema: self,
@@ -627,6 +666,7 @@ impl SchemaStructure {
             origins: Vec::new(),
             active: Vec::new(),
             next_scope: 0,
+            nulls,
         };
         let root = run.descriptor(descriptor, site)?;
         run.finish(root)

@@ -2545,7 +2545,7 @@
   },
   {
     "case": "mean_after_reduction",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: float, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: grouped\n    group_by: [SRC.ID]\n    filter: \"V > 2\"\n    derivations:\n      ID: SRC.ID\n      V: {aggregate: {expr: \"MEAN(SRC.V)\"}}\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: float, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: grouped\n    group_by: [SRC.ID]\n    filter: \"V > 2\"\n    derivations:\n      ID: SRC.ID\n      V: {aggregate: \"MEAN(SRC.V)\"}\n",
     "input": "ID,V\na,2\na,4\nb,1\n",
     "expected": {
       "artifacts": [
@@ -2685,7 +2685,7 @@
   },
   {
     "case": "count_after_reduction",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: str}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V, verifications: [{not_missing: {id: present}}]}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: grouped\n    group_by: [SRC.ID]\n    filter: \"V = 0\"\n    derivations:\n      ID: SRC.ID\n      V: {aggregate: {expr: \"COUNT(SRC.V)\"}}\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: str}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V, verifications: [{not_missing: {id: present}}]}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: grouped\n    group_by: [SRC.ID]\n    filter: \"V = 0\"\n    derivations:\n      ID: SRC.ID\n      V: {aggregate: \"COUNT(SRC.V)\"}\n",
     "input": "ID,V\na,\nb,x\n",
     "expected": {
       "artifacts": [
@@ -2827,7 +2827,7 @@
   },
   {
     "case": "grouped_source_phase",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: grouped\n    group_by: [SRC.ID]\n    filter: \"SRC.V > 2\"\n    derivations:\n      ID: SRC.ID\n      V: {aggregate: {expr: \"COUNT(SRC.V)\"}}\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: grouped\n    group_by: [SRC.ID]\n    filter: \"SRC.V > 2\"\n    derivations:\n      ID: SRC.ID\n      V: {aggregate: \"COUNT(SRC.V)\"}\n",
     "input": "ID,V\na,1\n",
     "expected": {
       "artifacts": [],
@@ -2924,7 +2924,7 @@
   },
   {
     "case": "grouped_inherited_default",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: grouped\n    group_by: [SRC.ID]\n    filter: \"LATER > 1\"\n    derivations:\n      ID: SRC.ID\n      V: {aggregate: {expr: \"COUNT(SRC.V)\"}}\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: grouped\n    group_by: [SRC.ID]\n    filter: \"LATER > 1\"\n    derivations:\n      ID: SRC.ID\n      V: {aggregate: \"COUNT(SRC.V)\"}\n",
     "input": "ID,V\na,1\n",
     "expected": {
       "artifacts": [
@@ -3044,7 +3044,7 @@
   },
   {
     "case": "grouped_unknown_phase",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: grouped\n    group_by: [SRC.ID]\n    filter: \"UNKNOWN > 1\"\n    derivations:\n      ID: SRC.ID\n      V: {aggregate: {expr: \"COUNT(SRC.V)\"}}\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: grouped\n    group_by: [SRC.ID]\n    filter: \"UNKNOWN > 1\"\n    derivations:\n      ID: SRC.ID\n      V: {aggregate: \"COUNT(SRC.V)\"}\n",
     "input": "ID,V\na,1\n",
     "expected": {
       "artifacts": [],
@@ -3266,7 +3266,7 @@
       "callbacks": [],
       "diagnostics": [
         {
-          "condition": "invalid_predicate",
+          "condition": "invalid_expression",
           "context": {
             "position": 4,
             "predicate": "ID >"
@@ -3286,7 +3286,7 @@
         {
           "diagnostics": [
             {
-              "condition": "invalid_predicate",
+              "condition": "invalid_expression",
               "context": {
                 "position": 4,
                 "predicate": "ID >"
@@ -3371,7 +3371,7 @@
   },
   {
     "case": "group_and_filter_order",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: grouped\n    group_by: [SRC.MISSING]\n    filter: \"SRC.V > 2\"\n    derivations:\n      ID: {literal: a}\n      V: {aggregate: {expr: \"COUNT(SRC.V)\"}}\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, V, LATER]}\ncolumns: [{name: ID, type: str, label: ID}, {name: V, type: int, label: V}, {name: LATER, type: int, label: LATER, derivation: {literal: 2}}]\nrows:\n  - id: grouped\n    group_by: [SRC.MISSING]\n    filter: \"SRC.V > 2\"\n    derivations:\n      ID: {literal: a}\n      V: {aggregate: \"COUNT(SRC.V)\"}\n",
     "input": "ID,V\na,1\n",
     "expected": {
       "artifacts": [],

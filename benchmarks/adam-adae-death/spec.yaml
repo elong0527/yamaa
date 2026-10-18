@@ -17,7 +17,7 @@ intermediates:
     filter: "AE.AEOUT = 'FATAL'"
     order_by: [AE.ASTDT, AE.AESEQ]
     keep: last
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: STUDYID
@@ -71,12 +71,10 @@ columns:
     derivation:
       flag: "DTHDT IS NOT NULL"
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
       min: 10
       max: 10

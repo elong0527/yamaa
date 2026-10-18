@@ -64,7 +64,7 @@ impl JoinedRead {
                     .get(key.output_column)
                     .ok_or(PlanError::InvalidLookup)?
             };
-            if !crate::key_relation::comparable(field.kind.into(), current.kind.into())
+            if !crate::result_type::ResultType::from(field.kind).comparable(current.kind.into())
                 || self.keys[..index]
                     .iter()
                     .any(|prior| prior.source_column == key.source_column)
@@ -141,7 +141,6 @@ pub(super) fn validate_sources(
             }
         }
         Expression::Extreme { operands, .. }
-        | Expression::StrConcat { operands, .. }
         | Expression::StrTemplate { operands, .. }
         | Expression::Temporal { operands, .. }
         | Expression::Imputation { operands, .. } => {
@@ -154,7 +153,6 @@ pub(super) fn validate_sources(
         | Expression::StrCase { source, .. }
         | Expression::StrExtract { source, .. }
         | Expression::StrReplace { source, .. }
-        | Expression::StrContains { source, .. }
         | Expression::MappingCut { source, .. }
         | Expression::SourceBinding { source, .. } => {
             validate_sources(&source.expression, primary, secondary)?

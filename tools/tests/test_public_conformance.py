@@ -144,7 +144,7 @@ class PublicConformance(unittest.TestCase):
             self.assertFalse((tree / "run.R").exists())
             self.assertEqual(
                 (tree / "__child_spec.yaml").read_text(),
-                'schema_version: "1.0"\nparents: spec.yaml\n',
+                'schema_version: "1.0"\nparent: spec.yaml\n',
             )
         (staged / "result.csv").write_bytes(b"original\n")
         (variants / "result.csv").write_bytes(b"variant\n")
@@ -189,9 +189,6 @@ class PublicConformance(unittest.TestCase):
             "phase: validation\ncondition: dependency_cycle\n"
             "spec_paths: [columns.A.derivation, columns.B.derivation]\n"
             "requirement: REQ-0072\ncontext: {cycle: [A, B, A]}\n"
-        )
-        (self.case / "benchmark.yaml").write_text(
-            METADATA + "validation: {rule: R001, validator: dependency_graph}\n"
         )
         cycle = {
             "phase": "validation",
@@ -258,14 +255,40 @@ class PublicConformance(unittest.TestCase):
         self.assertEqual(self.verdict()["verdict"], "mismatch")
 
     def test_define_and_resolved_spec_have_explicit_dispositions(self):
-        for name in ["define.xml", "dm.json", "spec_resolved.yaml"]:
+        (self.case / "submission-project.yaml").write_text("schema_version: '1.0'\n")
+        (self.case / "benchmark.yaml").write_text(
+            METADATA
+            + "define:\n  environment: submission-project.yaml\n  standard: sdtm\n"
+            "  created: '2026-09-11T00:00:00'\n"
+        )
+        self.example = judge.plan(self.fixtures)["examples"][0]
+        for name in ["define.xml", "dm.json", "dm.xpt", "spec_resolved.yaml"]:
             (self.case / "expected" / name).write_text("independent truth")
         verdict = self.verdict()
         self.assertEqual(verdict["verdict"], "pass")
         self.assertEqual(
             {r["artifact"] for r in verdict["not_compared"]},
-            {"define.xml", "dm.json", "spec_resolved.yaml"},
+            {"define.xml", "dm.json", "dm.xpt", "spec_resolved.yaml"},
         )
+        # A Define benchmark's expected failure belongs to its Define call: the
+        # domain build must still pass and save, and the error is not compared.
+        (self.case / "expected/error.yaml").write_text(
+            "phase: validation\ncondition: value_not_permitted\n"
+            "spec_paths: [sdtm.define]\n"
+        )
+        verdict = self.verdict()
+        self.assertEqual(verdict["verdict"], "pass", verdict)
+        self.assertIn("error.yaml", {r["artifact"] for r in verdict["not_compared"]})
+        self.build["issues"] = [
+            {"phase": "validation", "condition": "value_not_permitted"}
+        ]
+        self.assertEqual(self.verdict()["verdict"], "mismatch")
+
+    def test_define_files_without_a_define_call_are_not_dispositioned(self):
+        (self.case / "expected/define.xml").write_text("independent truth")
+        verdict = self.verdict()
+        self.assertEqual(verdict["verdict"], "pass")
+        self.assertEqual(verdict["not_compared"], [])
 
     def test_missing_record_errors_and_deliberately_broken_output_fails_gate(self):
         inventory = self.root / "inventory.json"
@@ -578,6 +601,22 @@ class PublicConformance(unittest.TestCase):
             ),
             {"columns": [["N", "float"]], "rows": [["0000000000000000"]]},
         )
+        # 2.675 is stored 1.8e-14 below the scaled tie, inside the 2^-26
+        # interval, so it reports 2.68; 1.004999999 is 1.0e-7 below and
+        # reports 1.00.
+        self.assertEqual(
+            judge.reported_table(
+                {
+                    "columns": [["N", "float"]],
+                    "rows": [["4005666666666666"], ["3ff0147ae102f5e5"]],
+                },
+                2,
+            ),
+            {
+                "columns": [["N", "float"]],
+                "rows": [["400570a3d70a3d71"], ["3ff0000000000000"]],
+            },
+        )
 
     def test_metadata_entries_and_explicit_projects_are_preserved(self):
         for name in ("spec_one.yaml", "spec_two.yaml"):
@@ -724,9 +763,11 @@ class PublicConformance(unittest.TestCase):
             [c["name"] for c in judge.json.loads(permuted)["columns"]],
             ["VALUE", "ID", "OTHER"],
         )
+        # A null parent names no parent, so the document stays standalone.
+        self.assertIsNotNone(judge.key_order_texts({**document, "parent": None}))
         for ineligible in (
             {**document, "rows": []},
-            {**document, "parents": ["base.yaml"]},
+            {**document, "parent": "base.yaml"},
             {**document, "keys": ["ID"]},
             {
                 **document,
@@ -737,6 +778,25 @@ class PublicConformance(unittest.TestCase):
             },
         ):
             self.assertIsNone(judge.key_order_texts(ineligible))
+
+    def test_declarations_follow_the_single_parent_chain(self):
+        (self.case / "layers").mkdir()
+        (self.case / "layers/base.yaml").write_text(SPEC)
+        (self.case / "middle.yaml").write_text(
+            'schema_version: "1.0"\nparent: layers/base.yaml\n'
+            "columns:\n  - {name: VALUE, type: int}\n"
+        )
+        (self.case / "entry.yaml").write_text(
+            'schema_version: "1.0"\nparent: middle.yaml\noutput: {decimals: 2}\n'
+        )
+        types, output = judge.declarations(self.case / "entry.yaml")
+        self.assertEqual(types, {"ID": "int", "VALUE": "int"})
+        self.assertEqual((output["path"], output["decimals"]), ("result.csv", 2))
+        (self.case / "layers/base.yaml").write_text(
+            'schema_version: "1.0"\nparent: ../entry.yaml\n'
+        )
+        with self.assertRaisesRegex(ValueError, "cyclic declarations"):
+            judge.declarations(self.case / "entry.yaml")
 
     def test_metamorphic_key_order_permutation_compares_against_control(self):
         fixtures = self.root / "fixtures2"
@@ -835,10 +895,7 @@ class PublicConformance(unittest.TestCase):
             names["sdtm-lb-metadata"]["entries"]["python"][0]["environment"]
         )
         self.assertIsNone(names["schema-inheritance-project-root"]["excluded"])
-        self.assertEqual(
-            {n for n, e in names.items() if e["excluded"]},
-            {"negative-path-absolute", "negative-path-parent-escape"},
-        )
+        self.assertEqual({n for n, e in names.items() if e["excluded"]}, set())
 
     def test_corpus_metamorphic_plan_and_expectations_follow_each_entry(self):
         corpus = judge.plan(ROOT / "benchmarks")

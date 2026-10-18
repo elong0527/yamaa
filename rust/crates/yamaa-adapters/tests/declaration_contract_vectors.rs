@@ -5,21 +5,17 @@ mod support;
 mod declaration {
     mod contract_vectors {
         //! Direct native checks of unchanged authored grammar, regex and rounding truth.
-        use a::Reducer;
-        use n::NumericFunction;
         use std::collections::BTreeSet;
         use yamaa_adapters::json;
         use yamaa_adapters::yaml_decode::decode_yaml;
-        use yamaa_core::json::Value as Json;
-        use yamaa_core::schema::{Document, DocumentNode};
-        use yamaa_core::{
-            aggregate_parser as a,
-            numeric::{BinaryOperator, UnaryOperator},
-            numeric_parser as n,
-            predicate::Comparison,
-            predicate_parser as p,
-            text_template::{Part, StringTemplate},
+        use yamaa_core::expression::{
+            compile, Comparison, CompileError, CompiledExpression, Context, Function, NodeKind,
+            Reducer, TemporalKind, RESERVED,
         };
+        use yamaa_core::json::Value as Json;
+        use yamaa_core::numeric::{BinaryOperator, UnaryOperator};
+        use yamaa_core::schema::{Document, DocumentNode};
+        use yamaa_core::text_template::{Part, StringTemplate};
 
         // Exhaustive matches force a new native variant to enter the YAML inventory.
         macro_rules! vocabulary {
@@ -33,8 +29,8 @@ mod declaration {
     };
 }
         vocabulary!(
-            numeric_vocabulary,
-            NumericFunction,
+            function_vocabulary,
+            Function,
             [
                 Abs,
                 Ceil,
@@ -45,15 +41,12 @@ mod declaration {
                 Exp,
                 Ln,
                 Mod,
-                Greatest,
-                Least,
                 NullIf,
-                Coalesce,
-                RoundHalfAwayFromZero
+                StrContains
             ]
         );
         vocabulary!(
-            aggregate_vocabulary,
+            reducer_vocabulary,
             Reducer,
             [Sum, Count, Min, Max, Mean, Only]
         );
@@ -77,147 +70,64 @@ mod declaration {
                 UnaryOperator::Abs => unreachable!("ABS is a call"),
             }
         }
-        fn numeric(parsed: &n::ParsedNumeric, id: usize) -> String {
-            let node = &parsed.nodes()[id];
-            let text = &parsed.expression()[node.span.start..node.span.end];
-            match &node.kind {
-                n::ParsedKind::Number { fractional } => {
-                    format!("({} {text})", if *fractional { "float" } else { "int" })
-                }
-                n::ParsedKind::Null => "null".into(),
-                n::ParsedKind::Identifier => format!("(id {text})"),
-                n::ParsedKind::Group { operand } => numeric(parsed, *operand),
-                n::ParsedKind::Unary { operator, operand } => {
-                    format!("({} {})", unary(*operator), numeric(parsed, *operand))
-                }
-                n::ParsedKind::Binary {
-                    operator,
-                    left,
-                    right,
-                } => format!(
-                    "({} {} {})",
-                    binary(*operator),
-                    numeric(parsed, *left),
-                    numeric(parsed, *right)
-                ),
-                n::ParsedKind::Call {
-                    function,
-                    arguments,
-                    ..
-                } => format!(
-                    "(call {} {})",
-                    function.name(),
-                    arguments
-                        .iter()
-                        .map(|&id| numeric(parsed, id))
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                ),
+        fn comparison(op: Comparison) -> &'static str {
+            match op {
+                Comparison::Equal => "=",
+                Comparison::NotEqual => "<>",
+                Comparison::Less => "<",
+                Comparison::LessEqual => "<=",
+                Comparison::Greater => ">",
+                Comparison::GreaterEqual => ">=",
             }
         }
-        fn aggregate(parsed: &a::ParsedAggregate, id: usize) -> String {
-            let node = &parsed.nodes()[id];
-            let text = &parsed.expression()[node.span.start..node.span.end];
-            match &node.kind {
-                a::ParsedKind::Number { fractional } => {
+        /// The README's fully parenthesized prefix form of one admitted parse.
+        fn shape(compiled: &CompiledExpression, id: usize) -> String {
+            let syntax = compiled.syntax();
+            let text = syntax.text(id);
+            let child = |id| shape(compiled, id);
+            match &syntax.nodes()[id].kind {
+                NodeKind::Number { fractional, text } => {
                     format!("({} {text})", if *fractional { "float" } else { "int" })
                 }
-                a::ParsedKind::Null => "null".into(),
-                a::ParsedKind::Identifier => format!("(id {text})"),
-                a::ParsedKind::Star => format!("(star {})", text.strip_suffix(".*").unwrap()),
-                a::ParsedKind::Group { operand } => aggregate(parsed, *operand),
-                a::ParsedKind::Unary { operator, operand } => {
-                    format!("({} {})", unary(*operator), aggregate(parsed, *operand))
-                }
-                a::ParsedKind::Binary {
-                    operator,
-                    left,
-                    right,
-                } => format!(
-                    "({} {} {})",
-                    binary(*operator),
-                    aggregate(parsed, *left),
-                    aggregate(parsed, *right)
-                ),
-                a::ParsedKind::Call {
-                    function,
-                    arguments,
-                    ..
-                } => format!(
-                    "(call {} {})",
-                    function.name(),
-                    arguments
-                        .iter()
-                        .map(|&id| aggregate(parsed, id))
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                ),
-                a::ParsedKind::Reduction {
-                    reducer, operand, ..
-                } => format!(
-                    "(reduce {} {})",
-                    reducer.name(),
-                    aggregate(parsed, *operand)
-                ),
-            }
-        }
-        fn predicate(parsed: &p::ParsedPredicate, id: usize) -> String {
-            let node = &parsed.nodes()[id];
-            let text = &parsed.expression()[node.span.start..node.span.end];
-            let child = |id| predicate(parsed, id);
-            match &node.kind {
-                p::ParsedKind::Number { fractional } => {
-                    format!("({} {text})", if *fractional { "float" } else { "int" })
-                }
-                p::ParsedKind::String(value) => format!("(str {})", quote(value)),
-                p::ParsedKind::Temporal { kind, value } => format!(
+                NodeKind::String(value) => format!("(str {})", quote(value)),
+                NodeKind::Temporal { kind, value } => format!(
                     "({} {})",
                     match kind {
-                        p::TemporalKind::Date => "date",
-                        p::TemporalKind::DateTime => "datetime",
+                        TemporalKind::Date => "date",
+                        TemporalKind::DateTime => "datetime",
                     },
                     quote(value)
                 ),
-                p::ParsedKind::Null => "null".into(),
-                p::ParsedKind::Identifier => format!("(id {text})"),
-                p::ParsedKind::Boolean(value) => value.to_string(),
-                p::ParsedKind::Group(id) => child(*id),
-                p::ParsedKind::Not(id) => format!("(not {})", child(*id)),
-                p::ParsedKind::And(left, right) => {
-                    format!("(and {} {})", child(*left), child(*right))
-                }
-                p::ParsedKind::Or(left, right) => {
-                    format!("(or {} {})", child(*left), child(*right))
-                }
-                p::ParsedKind::Compare {
+                NodeKind::Boolean(value) => value.to_string(),
+                NodeKind::Null => "null".into(),
+                NodeKind::Identifier => format!("(id {text})"),
+                NodeKind::Star => format!("(star {})", text.strip_suffix(".*").unwrap()),
+                NodeKind::Group(inner) => child(*inner),
+                NodeKind::Not(inner) => format!("(not {})", child(*inner)),
+                NodeKind::And(left, right) => format!("(and {} {})", child(*left), child(*right)),
+                NodeKind::Or(left, right) => format!("(or {} {})", child(*left), child(*right)),
+                NodeKind::Compare {
                     operator,
                     left,
                     right,
                 } => format!(
                     "({} {} {})",
-                    match operator {
-                        Comparison::Equal => "=",
-                        Comparison::NotEqual => "<>",
-                        Comparison::Less => "<",
-                        Comparison::LessEqual => "<=",
-                        Comparison::Greater => ">",
-                        Comparison::GreaterEqual => ">=",
-                    },
+                    comparison(*operator),
                     child(*left),
                     child(*right)
                 ),
-                p::ParsedKind::IsNull { value, negated } => format!(
+                NodeKind::IsNull { value, negated } => format!(
                     "({} {})",
                     if *negated { "is-not-null" } else { "is-null" },
                     child(*value)
                 ),
-                p::ParsedKind::In {
+                NodeKind::In {
                     value,
                     items,
                     negated,
                 } => format!(
                     "({} {} {})",
-                    if *negated { "not-in" } else { "in" },
+                    negated_name(*negated, "in"),
                     child(*value),
                     items
                         .iter()
@@ -225,35 +135,59 @@ mod declaration {
                         .collect::<Vec<_>>()
                         .join(" ")
                 ),
-                p::ParsedKind::Between {
+                NodeKind::Between {
                     value,
                     lower,
                     upper,
                     negated,
                 } => format!(
                     "({} {} {} {})",
-                    if *negated { "not-between" } else { "between" },
+                    negated_name(*negated, "between"),
                     child(*value),
                     child(*lower),
                     child(*upper)
                 ),
-                p::ParsedKind::Like {
+                NodeKind::Like {
                     value,
                     pattern,
                     escape,
                     negated,
                 } => format!(
                     "({} {} {}{})",
-                    if *negated { "not-like" } else { "like" },
+                    negated_name(*negated, "like"),
                     child(*value),
                     child(*pattern),
                     escape
                         .map(|c| format!(" (escape {})", quote(&c.to_string())))
                         .unwrap_or_default()
                 ),
-                p::ParsedKind::Contains { source, pattern } => {
-                    format!("(call STR_CONTAINS {} {})", child(*source), child(*pattern))
+                NodeKind::Unary { operator, operand } => {
+                    format!("({} {})", unary(*operator), child(*operand))
                 }
+                NodeKind::Binary {
+                    operator,
+                    left,
+                    right,
+                } => format!("({} {} {})", binary(*operator), child(*left), child(*right)),
+                NodeKind::Call { name, arguments } => format!(
+                    "(call {} {})",
+                    syntax.slice(*name).to_ascii_uppercase(),
+                    arguments
+                        .iter()
+                        .map(|&id| child(id))
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                ),
+                NodeKind::Reduction {
+                    reducer, operand, ..
+                } => format!("(reduce {} {})", reducer.name(), child(*operand)),
+            }
+        }
+        fn negated_name(negated: bool, name: &str) -> String {
+            if negated {
+                format!("not-{name}")
+            } else {
+                name.into()
             }
         }
         fn template(parsed: &StringTemplate) -> String {
@@ -314,34 +248,31 @@ mod declaration {
             value(&decoded.document, decoded.document.root())
         }
 
-        fn observation(contract: &str, text: &str) -> Result<(String, Vec<String>), String> {
+        fn context(name: &str) -> Context {
+            match name {
+                "predicate" => Context::Predicate,
+                "compute" => Context::Compute,
+                "aggregate" => Context::Aggregate,
+                _ => panic!("unknown expression context: {name}"),
+            }
+        }
+
+        fn observation(
+            contract: &str,
+            field: Option<&str>,
+            text: &str,
+        ) -> Result<(String, Vec<String>), String> {
             let (shape, mut identifiers) = match contract {
-                "numeric" => match n::parse_numeric(text) {
-                    Ok(parsed) => (
-                        numeric(&parsed, parsed.root()),
-                        parsed.identifiers().map(String::from).collect::<Vec<_>>(),
+                "expression" => match compile(
+                    text,
+                    context(field.expect("an expression case states its context")),
+                    "columns.RESULT.derivation.expr",
+                ) {
+                    Ok(compiled) => (
+                        shape(&compiled, compiled.syntax().root()),
+                        compiled.identifiers().map(String::from).collect::<Vec<_>>(),
                     ),
-                    Err(n::ParseError::Grammar { failure, .. }) => {
-                        return Err(failure.condition().into())
-                    }
-                    Err(error) => panic!("grammar vector exceeds resource policy: {error:?}"),
-                },
-                "aggregate" => match a::parse_aggregate(text) {
-                    Ok(parsed) => (
-                        aggregate(&parsed, parsed.root()),
-                        parsed.identifiers().map(String::from).collect::<Vec<_>>(),
-                    ),
-                    Err(a::ParseError::Grammar { failure, .. }) => {
-                        return Err(failure.condition().into())
-                    }
-                    Err(error) => panic!("grammar vector exceeds resource policy: {error:?}"),
-                },
-                "predicate" => match p::parse_predicate(text) {
-                    Ok(parsed) => (
-                        predicate(&parsed, parsed.root()),
-                        parsed.identifiers().map(String::from).collect::<Vec<_>>(),
-                    ),
-                    Err(p::ParseError::Grammar { failure, .. }) => {
+                    Err(CompileError::Invalid { failure, .. }) => {
                         return Err(failure.condition().into())
                     }
                     Err(error) => panic!("grammar vector exceeds resource policy: {error:?}"),
@@ -370,7 +301,7 @@ mod declaration {
                 "{contract}/{}",
                 yamaa_adapters::json_wire::encode(&case["id"])
             );
-            let actual = observation(contract, text);
+            let actual = observation(contract, case["context"].as_str(), text);
             if case["parse"] == "reject" {
                 assert_eq!(
                     actual.unwrap_err(),
@@ -398,140 +329,197 @@ mod declaration {
             }
         }
 
-        #[test]
-        fn unchanged_shared_grammars_have_exact_shapes_dependencies_decisions_and_vocabularies() {
-            let documents = [
-                ("numeric", "operations/computation"),
-                ("aggregate", "operations/aggregation"),
-                ("predicate", "operations/predicates"),
-                ("string-template", "operations/text"),
-            ]
-            .map(|(contract, rule)| {
-                let document = yaml(&format!("yaml/grammar/{contract}.yaml"));
-                assert_eq!(document["contract"], contract);
-                assert_eq!(document["rule"], rule);
-                (contract, document)
-            });
-            let numeric_doc = &documents[0].1;
-            let vocabulary = |key: &str| {
-                documents
-                    .iter()
-                    .find_map(|(contract, doc)| (*contract == key).then_some(doc))
-                    .unwrap()
+        /// Expand the closed vocabularies into independent acceptance boundaries.
+        /// The same expansion is staged for the installed host suites.
+        fn expansions(document: &Json) -> Vec<Json> {
+            let mut cases = Vec::new();
+            let mut case = |context: &str, text: String, accepted: bool, condition: &str| {
+                cases.push(json!({"id":format!("{context}: {text}"), "context":context, "text":text, "parse":if accepted { "accept" } else { "reject" }, "condition":condition}));
             };
+            let contexts = ["predicate", "compute", "aggregate"];
+            for (name, arity) in document["vocabulary"]["function"].as_object().unwrap() {
+                let lower = arity["min_arguments"].as_u64().unwrap() as usize;
+                let upper = arity["max_arguments"].as_u64().map(|value| value as usize);
+                let numeric = arity["result"] == "numeric";
+                let mut counts = BTreeSet::from([0, lower - 1, lower, lower + 1, 8]);
+                if let Some(upper) = upper {
+                    counts.insert(upper + 1);
+                }
+                for count in counts {
+                    let fits = count >= lower && upper.is_none_or(|upper| count <= upper);
+                    let call = |pattern: bool| {
+                        let arguments = (0..count)
+                            .map(|index| if pattern && index > 0 { "'a'" } else { "A" })
+                            .collect::<Vec<_>>();
+                        format!("{}({})", name.to_ascii_lowercase(), arguments.join(", "))
+                    };
+                    for context in contexts {
+                        match (context, numeric) {
+                            ("predicate", true) => case(
+                                context,
+                                format!("{} = 1", call(false)),
+                                fits,
+                                "prohibited_function",
+                            ),
+                            ("predicate", false) => {
+                                case(context, call(true), fits, "prohibited_function")
+                            }
+                            (_, true) => case(context, call(false), fits, "prohibited_function"),
+                            (_, false) => case(context, call(false), false, "prohibited_function"),
+                        }
+                    }
+                }
+            }
+            for word in document["reserved"].as_array().unwrap() {
+                let word = word.as_str().unwrap();
+                let literal = word == "NULL";
+                let truth = matches!(word, "TRUE" | "FALSE");
+                case(
+                    "predicate",
+                    format!("{} = 1", word.to_ascii_lowercase()),
+                    literal,
+                    "invalid_expression",
+                );
+                case("predicate", format!("D.{word} = 1"), true, "");
+                for context in ["compute", "aggregate"] {
+                    case(
+                        context,
+                        format!("1 + {}", word.to_ascii_lowercase()),
+                        literal,
+                        if truth {
+                            "prohibited_construct"
+                        } else {
+                            "invalid_expression"
+                        },
+                    );
+                    case(context, format!("D.{word} + 1"), true, "");
+                }
+            }
+            let compare = document["productions"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|value| value["name"] == "compare")
+                .unwrap();
+            for operator in compare["definition"]
+                .as_str()
+                .unwrap()
+                .split('"')
+                .skip(1)
+                .step_by(2)
+            {
+                case("predicate", format!("A {operator} 1"), true, "");
+                for context in ["compute", "aggregate"] {
+                    case(
+                        context,
+                        format!("A {operator} 1"),
+                        false,
+                        "prohibited_construct",
+                    );
+                }
+            }
+            for (name, declaration) in document["vocabulary"]["reducer"].as_object().unwrap() {
+                let star = declaration["argument"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|value| value == "star");
+                for argument in ["A", "A+1", "ABS(A)", "D.*", "", "A,B", "SUM(A)"] {
+                    let text = format!("{}({argument})", name.to_ascii_lowercase());
+                    let syntax = matches!(argument, "" | "A,B") || (argument == "D.*" && !star);
+                    let condition = |admitted: &'static str| {
+                        if syntax {
+                            "invalid_expression"
+                        } else {
+                            admitted
+                        }
+                    };
+                    case(
+                        "aggregate",
+                        text.clone(),
+                        !syntax && argument != "SUM(A)",
+                        condition("nested_reduction"),
+                    );
+                    case(
+                        "compute",
+                        text.clone(),
+                        false,
+                        condition("prohibited_function"),
+                    );
+                    case(
+                        "predicate",
+                        format!("{text} = 1"),
+                        false,
+                        condition("prohibited_function"),
+                    );
+                }
+            }
+            cases
+        }
+
+        #[test]
+        fn shared_grammars_have_exact_shapes_dependencies_decisions_and_vocabularies() {
+            let documents = [("expression", "formulas"), ("string-template", "text")].map(
+                |(contract, rule)| {
+                    let document = yaml(&format!("yaml/grammar/{contract}.yaml"));
+                    assert_eq!(document["contract"], contract);
+                    assert_eq!(document["rule"], rule);
+                    (contract, document)
+                },
+            );
             for (contract, document) in &documents {
                 for case in document["cases"].as_array().unwrap() {
                     grammar_case(contract, case);
                 }
-                if matches!(*contract, "numeric" | "aggregate") {
-                    for (name, arity) in numeric_doc["vocabulary"]["function"].as_object().unwrap()
-                    {
-                        let lower = arity["min_arguments"].as_u64().unwrap() as usize;
-                        let upper = arity["max_arguments"].as_u64().map(|value| value as usize);
-                        let mut counts = BTreeSet::from([0, lower - 1, lower, lower + 1, 8]);
-                        if let Some(upper) = upper {
-                            counts.insert(upper + 1);
-                        }
-                        for count in counts {
-                            let accepted =
-                                count >= lower && upper.is_none_or(|upper| count <= upper);
-                            grammar_case(
-                                contract,
-                                &json!({
-                                    "id":format!("arity-{name}-{count}"),
-                                    "text":format!("{}({})", name.to_ascii_lowercase(), vec!["A"; count].join(", ")),
-                                    "parse": if accepted { "accept" } else { "reject" },
-                                    "condition":"prohibited_function"
-                                }),
-                            );
-                        }
-                    }
-                    for word in numeric_doc["prohibited"].as_object().unwrap().keys() {
-                        grammar_case(
-                            contract,
-                            &json!({"id":format!("prohibited-{word}"), "text":format!("A {} B",word.to_ascii_lowercase()), "parse":"reject", "condition":"prohibited_construct"}),
-                        );
-                        grammar_case(
-                            contract,
-                            &json!({"id":format!("qualified-{word}"), "text":format!("A.{word}"), "parse":"accept"}),
-                        );
-                    }
-                }
-                if *contract == "aggregate" {
-                    for (name, declaration) in
-                        document["vocabulary"]["reducer"].as_object().unwrap()
-                    {
-                        for argument in ["A", "A+1", "ABS(A)", "D.*", "", "A,B", "SUM(A)"] {
-                            let accepted = matches!(argument, "A" | "A+1" | "ABS(A)")
-                                || (argument == "D.*"
-                                    && declaration["argument"]
-                                        .as_array()
-                                        .unwrap()
-                                        .iter()
-                                        .any(|value| value == "star"));
-                            grammar_case(
-                                contract,
-                                &json!({"id":format!("reducer-{name}-{argument}"), "text":format!("{}({argument})",name.to_ascii_lowercase()), "parse":if accepted { "accept" } else { "reject" }, "condition":if argument == "SUM(A)" { "nested_reduction" } else { "invalid_aggregate_expression" }}),
-                            );
-                        }
-                    }
-                }
-                if *contract == "predicate" {
-                    for word in document["reserved"].as_array().unwrap() {
-                        let word = word.as_str().unwrap();
-                        grammar_case(
-                            contract,
-                            &json!({"id":format!("reserved-{word}"), "text":format!("{} = 1",word.to_ascii_lowercase()), "parse":if word == "NULL" { "accept" } else { "reject" }, "condition":"invalid_predicate", "identifiers":[]}),
-                        );
-                        grammar_case(
-                            contract,
-                            &json!({"id":format!("qualified-{word}"), "text":format!("D.{word} = 1"), "parse":"accept"}),
-                        );
-                    }
-                    let comparison = document["productions"]
-                        .as_array()
-                        .unwrap()
-                        .iter()
-                        .find(|value| value["name"] == "compare")
-                        .unwrap();
-                    for operator in comparison["definition"]
-                        .as_str()
-                        .unwrap()
-                        .split('"')
-                        .skip(1)
-                        .step_by(2)
-                    {
-                        grammar_case(
-                            contract,
-                            &json!({"id":format!("comparison-{operator}"), "text":format!("A {operator} 1"), "parse":"accept"}),
-                        );
-                    }
-                }
             }
-            for (contract, key, names) in [
-                ("numeric", "function", numeric_vocabulary()),
-                ("aggregate", "reducer", aggregate_vocabulary()),
+            let expression = &documents[0].1;
+            for case in expansions(expression) {
+                grammar_case("expression", &case);
+            }
+            for (key, names) in [
+                ("function", function_vocabulary()),
+                ("reducer", reducer_vocabulary()),
             ] {
                 let actual = names.into_iter().collect::<BTreeSet<_>>();
-                let declared = vocabulary(contract)["vocabulary"][key]
+                let declared = expression["vocabulary"][key]
                     .as_object()
                     .unwrap()
                     .keys()
                     .map(String::as_str)
                     .collect::<BTreeSet<_>>();
-                assert_eq!(actual, declared, "{contract} closed native vocabulary");
+                assert_eq!(actual, declared, "{key}: closed native vocabulary");
             }
+            for function in Function::ALL {
+                let declared = &expression["vocabulary"]["function"][function.name()];
+                assert_eq!(declared["min_arguments"], function.arity() as u64);
+                assert_eq!(declared["max_arguments"], function.arity() as u64);
+                assert_eq!(
+                    declared["result"],
+                    if function.is_numeric() {
+                        "numeric"
+                    } else {
+                        "boolean"
+                    }
+                );
+            }
+            let reserved = expression["reserved"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|name| name.as_str().unwrap())
+                .collect::<Vec<_>>();
+            assert_eq!(reserved, RESERVED);
         }
 
         fn regex_observation(pattern: &str, subject: &str) -> Json {
-            use yamaa_core::regex::{CompileError, Pattern};
+            use yamaa_core::portable_regex::{CompileError, Pattern};
             match Pattern::compile(pattern) {
                 Err(CompileError::Invalid { .. }) => json!({"accepted":false}),
                 Err(error) => panic!("regex truth exceeds compile policy: {error:?}"),
                 Ok(pattern) => {
-                    let found = pattern.search(subject).unwrap();
-                    let full = pattern.full_match(subject).unwrap();
-                    json!({"accepted":true, "group_count":pattern.group_count(), "full_match":full.is_some(), "match":found.map(|found|found.groups)})
+                    let found = pattern.search(subject);
+                    assert_eq!(found.is_some(), pattern.is_match(subject), "{subject:?}");
+                    json!({"accepted":true, "group_count":pattern.group_count(), "full_match":pattern.is_full_match(subject), "match":found.map(|found|found.groups)})
                 }
             }
         }
@@ -560,7 +548,7 @@ mod declaration {
         fn unchanged_regex_documents_and_authored_capture_controls_run_directly() {
             let document = yaml("yaml/conformance/regex.yaml");
             assert_eq!(document["contract"], "regex");
-            assert_eq!(document["contract_version"], "2.0.0");
+            assert_eq!(document["contract_version"], "3.0.0");
             assert!(document.get("engine").is_none());
             let mut ids = BTreeSet::new();
             let mut covered = BTreeSet::new();
@@ -749,26 +737,8 @@ mod declaration {
         }
 
         #[test]
-        fn unchanged_independent_rational_rounding_corpus_matches_current_compiler() {
-            use std::convert::Infallible;
-            use yamaa_core::{
-                evaluation::NumericResolver,
-                numeric::Number,
-                numeric_compiler::compile_numeric,
-                value::{Selection, Value},
-            };
-            struct Inputs(f64, i64);
-            impl NumericResolver for Inputs {
-                type Error = Infallible;
-                fn resolve(&mut self, name: &str) -> Result<Selection, Self::Error> {
-                    Ok(Selection::Present(match name {
-                        "A" => Value::float(self.0),
-                        "D" => Value::Int(self.1),
-                        _ => panic!("unexpected rounding operand"),
-                    }))
-                }
-            }
-            let plan = compile_numeric("ROUND_HALF_AWAY_FROM_ZERO(A, D)", "rounding").unwrap();
+        fn unchanged_independent_rational_rounding_corpus_matches_the_rounding_operation() {
+            use yamaa_core::{dataset::Rounding, table::ValueRef, value::Value};
             // Original cb34f38a3:rust/tools/assess_rounding.py, using
             // Fraction(abs(value)) and the exact REQ-0418 half-minus-2^-26 threshold.
             // All 2,936 unchanged boundary/range/seed-1585 inputs and expected bits
@@ -782,11 +752,14 @@ mod declaration {
                 assert_eq!(fields.len(), 4);
                 assert!(seen.insert(fields[0]));
                 let value = f64::from_bits(u64::from_str_radix(fields[1], 16).unwrap());
-                let digits = fields[2].parse().unwrap();
-                let actual = match plan.evaluate(&mut Inputs(value, digits)).unwrap() {
-                    Number::Missing => "missing".into(),
-                    Number::Float(value) => format!("{:016x}", value.get().to_bits()),
-                    Number::Int(_) => panic!("rounding must retain float output"),
+                let rounding = Rounding::new("A", "rounding", fields[2]).unwrap();
+                let actual = match rounding
+                    .apply(ValueRef::from(&Value::float(value)))
+                    .unwrap()
+                {
+                    Value::Missing => "missing".into(),
+                    Value::Float(value) => format!("{:016x}", value.get().to_bits()),
+                    other => panic!("rounding must retain float output: {other:?}"),
                 };
                 assert_eq!(actual, fields[3], "{}", fields[0]);
             }
@@ -914,9 +887,10 @@ mod declaration {
         }
 
         #[test]
-        fn original_closed_keyword_metadata_keeps_native_construct_classes() {
-            let predicate_doc = yaml("yaml/grammar/predicate.yaml");
-            let reserved = predicate_doc["reserved"]
+        fn closed_keywords_and_refused_constructs_keep_their_names() {
+            let document = yaml("yaml/grammar/expression.yaml");
+            assert!(document.get("prohibited").is_none());
+            let reserved = document["reserved"]
                 .as_array()
                 .unwrap()
                 .iter()
@@ -925,11 +899,10 @@ mod declaration {
             assert_eq!(
                 reserved,
                 BTreeSet::from([
-                    "AND", "BETWEEN", "DATE", "DATETIME", "ESCAPE", "FALSE", "IN", "IS", "LIKE",
-                    "NOT", "NULL", "OR", "TRUE"
+                    "AND", "BETWEEN", "FALSE", "IN", "IS", "LIKE", "NOT", "NULL", "OR", "TRUE"
                 ])
             );
-            let comparison = predicate_doc["productions"]
+            let comparison = document["productions"]
                 .as_array()
                 .unwrap()
                 .iter()
@@ -945,25 +918,38 @@ mod declaration {
                     .collect::<Vec<_>>(),
                 ["=", "<>", "<", "<=", ">", ">="]
             );
-            let numeric_doc = yaml("yaml/grammar/numeric.yaml");
-            let prohibited = json!({"AND":"boolean", "BETWEEN":"comparison", "CASE":"conditional", "ELSE":"conditional", "END":"conditional", "FALSE":"boolean", "IN":"comparison", "IS":"comparison", "LIKE":"comparison", "NOT":"boolean", "OR":"boolean", "OVER":"window", "THEN":"conditional", "TRUE":"boolean", "WHEN":"conditional"});
-            assert_eq!(numeric_doc["prohibited"], prohibited);
-            for (word, construct) in prohibited.as_object().unwrap() {
+            for (text, construct) in [
+                ("A AND B", "boolean"),
+                ("A OR B", "boolean"),
+                ("NOT A", "boolean"),
+                ("TRUE", "boolean"),
+                ("A = B", "comparison"),
+                ("A IN (1)", "comparison"),
+                ("A NOT BETWEEN 1 AND 2", "comparison"),
+                ("A LIKE B", "comparison"),
+                ("A IS NOT NULL", "comparison"),
+                ("'text'", "string"),
+                ("DATE '2025-06-01'", "temporal"),
+            ] {
                 for family in ["numeric", "aggregate"] {
-                    let actual =
-                        syntax_outcome(family, &format!("A {} B", word.to_ascii_lowercase()));
-                    assert_eq!(actual["condition"], "prohibited_construct");
-                    assert_eq!(&actual["context"]["construct"], construct);
+                    let actual = syntax_outcome(family, text);
+                    assert_eq!(
+                        actual["condition"], "prohibited_construct",
+                        "{family}: {text}"
+                    );
+                    assert_eq!(
+                        actual["context"]["construct"], construct,
+                        "{family}: {text}"
+                    );
                 }
             }
-            let aggregate_doc = yaml("yaml/grammar/aggregate.yaml");
-            for (name, declaration) in aggregate_doc["vocabulary"]["reducer"].as_object().unwrap() {
+            for (name, declaration) in document["vocabulary"]["reducer"].as_object().unwrap() {
                 assert_eq!(
                     declaration["argument"],
                     if name == "COUNT" {
-                        json!(["expr", "star"])
+                        json!(["expression", "star"])
                     } else {
-                        json!(["expr"])
+                        json!(["expression"])
                     }
                 );
             }
@@ -1003,11 +989,11 @@ mod declaration {
             let schema = shipped_schema::capture().unwrap();
             for width in [40, 64, 1024] {
                 let parent = case_parent(width);
-                let child = b"schema_version: '1.0'\nparents: [parent.yaml]\n";
-                let grandchild = b"schema_version: '1.0'\nparents: [child.yaml]\n";
+                let child = b"schema_version: '1.0'\nparent: parent.yaml\n";
+                let grandchild = b"schema_version: '1.0'\nparent: child.yaml\n";
                 for (name, bytes) in [
                     ("parent", parent.clone()),
-                    ("explicit", [parent.as_slice(), b"parents: []\n"].concat()),
+                    ("explicit", [parent.as_slice(), b"parent: null\n"].concat()),
                     ("child", child.to_vec()),
                     ("grandchild", grandchild.to_vec()),
                 ] {
@@ -1035,10 +1021,15 @@ mod declaration {
         }
 
         #[test]
-        fn repeated_parent_occurrences_cannot_bypass_the_traversal_request_bound() {
-            let parents = vec!["parent.yaml"; 8193].join(", ");
-            let entry = format!("schema_version: '1.0'\nparents: [{parents}]\n").into_bytes();
+        fn long_parent_chains_cannot_bypass_the_traversal_request_bound() {
+            let entry = b"schema_version: '1.0'\nparent: p1.yaml\n".to_vec();
             let mut host = new_host(VALID.as_bytes());
+            for index in 1..=8193 {
+                host.bytes.insert(
+                    format!("p{index}.yaml"),
+                    format!("schema_version: '1.0'\nparent: p{}.yaml\n", index + 1).into_bytes(),
+                );
+            }
             let result = shipped_schema::prepare(source(entry), "entry.yaml".into(), &mut host);
             let Err(InheritanceError::Preparation { error, .. }) = result else {
                 panic!("pathological parent occurrences must be refused");
@@ -1058,7 +1049,7 @@ mod declaration {
                     .iter()
                     .filter(|call| call.starts_with("capture:"))
                     .count(),
-                1
+                8192
             );
             assert_eq!(
                 host.calls
@@ -1184,7 +1175,7 @@ mod declaration {
         }
         #[test]
         fn actual_entry_and_parent_snapshots_are_moved_once_with_raw_positions_and_defaults() {
-            let root = format!("{VALID}parents: [parent.yaml, parent.yaml]\n").into_bytes();
+            let root = format!("{VALID}parent: parent.yaml\n").into_bytes();
             let root_pointer = root.as_ptr();
             let mut host = new_host(b"schema_version: '1.0'\n");
             let parent_pointer = host.bytes["parent.yaml"].as_ptr();
@@ -1211,7 +1202,7 @@ mod declaration {
                     .iter()
                     .filter(|s| s.starts_with("resolve:"))
                     .count(),
-                2
+                1
             );
             assert_eq!(
                 host.calls
@@ -1245,7 +1236,7 @@ mod declaration {
                     allocation,
                 });
                 host.fail_at = fail_at;
-                let root = format!("{VALID}parents: parent.yaml\n");
+                let root = format!("{VALID}parent: parent.yaml\n");
                 let Err(InheritanceError::Preparation {
                     error,
                     captured_parents,
@@ -1271,7 +1262,7 @@ mod declaration {
         }
         #[test]
         fn raw_parent_overruns_refuse_before_codec_and_keep_existing_capture_category() {
-            let root = format!("{VALID}parents: parent.yaml\n");
+            let root = format!("{VALID}parent: parent.yaml\n");
             let parent = b"schema_version: '1.0'\n";
             let mut host = new_host(&vec![b' '; yamaa_core::limits::Limits::SPEC_BYTES + 1]);
             let error = match shipped_schema::prepare(
@@ -1476,12 +1467,13 @@ mod declaration {
                 assert!(prepared
                     .model()
                     .document()
-                    .field(prepared.model().document().root(), "parents")
+                    .field(prepared.model().document().root(), "parent")
                     .is_none());
+                // Each chain from the entry upward, which is also the capture order.
                 let parent_names: &[&str] = if name == "schema-inherited-output" {
                     &["spec_shared.yaml"]
                 } else {
-                    &["spec_organization.yaml", "spec_compound.yaml"]
+                    &["spec_compound.yaml", "spec_organization.yaml"]
                 };
                 let expected_parents: Vec<_> = parent_names
                     .iter()
@@ -1495,7 +1487,7 @@ mod declaration {
                         .collect::<Vec<_>>(),
                     expected_parents.iter().collect::<Vec<_>>()
                 );
-                let mut expected_layers = expected_parents.clone();
+                let mut expected_layers: Vec<_> = expected_parents.iter().rev().cloned().collect();
                 expected_layers.push(entry.to_str().unwrap().into());
                 assert_eq!(
                     prepared
@@ -1508,12 +1500,14 @@ mod declaration {
                     expected_layers.iter().collect::<Vec<_>>()
                 );
                 let mut tape = Vec::new();
+                let mut declaring = entry.clone();
                 for (index, parent) in prepared.parents().iter().enumerate() {
                     let parent_name = parent_names[index];
                     tape.push(Event::Resolve(
-                        entry.to_str().unwrap().into(),
+                        declaring.to_str().unwrap().into(),
                         parent_name.into(),
                     ));
+                    declaring = root.join(parent_name);
                     tape.push(Event::Capture(
                         parent.source().identity.clone(),
                         parent.source().identity.clone(),
@@ -1531,12 +1525,6 @@ mod declaration {
                         parent.raw().locations.len(),
                         parent.raw().document.nodes().len()
                     );
-                }
-                if name != "schema-inherited-output" {
-                    tape.push(Event::Resolve(
-                        root.join("spec_compound.yaml").to_str().unwrap().into(),
-                        "spec_organization.yaml".into(),
-                    ));
                 }
                 let rebases: &[(&str, &str)] = match name {
                     "schema-inheritance" => &[
@@ -1601,7 +1589,7 @@ mod declaration {
                 let report = specification_diagnostics::inheritance_failure(error).unwrap();
                 assert_eq!(
                     yamaa_adapters::json_wire::decode(&report).unwrap(),
-                    json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[{"phase":"validation","condition":"parent_not_found","requirement":"REQ-0654","spec_paths":["parents"],"context":{"path":parent_names[0],"source":entry.to_str().unwrap()}}]}})
+                    json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[{"phase":"validation","condition":"parent_not_found","requirement":"REQ-0654","spec_paths":["parent"],"context":{"path":parent_names[0],"source":entry.to_str().unwrap()}}]}})
                 );
                 assert_eq!(
                     missing.events,
@@ -1614,10 +1602,10 @@ mod declaration {
         }
 
         #[test]
-        fn complete_window_model_keeps_parent_definition_child_override_and_schema_defaults() {
+        fn complete_window_model_merges_parent_definition_with_child_fields_and_schema_defaults() {
             let mut parent = window();
             parent["windows"]["UNUSED"] = json!({"group_by":["NOT_A_COLUMN"]});
-            let child = json!({"schema_version":"1.0","parents":"parent.yaml","windows":{"VISITS":{"order_by":[{"variable":"SEQ","direction":"desc"}]}}});
+            let child = json!({"schema_version":"1.0","parent":"parent.yaml","windows":{"VISITS":{"order_by":[{"variable":"SEQ","nulls":"first"}]}}});
             let mut host = new_host(yamaa_adapters::json_wire::encode(&parent).as_bytes());
             let prepared = shipped_schema::prepare(
                 source(yamaa_adapters::json_wire::encode(&child).into_bytes()),
@@ -1631,9 +1619,10 @@ mod declaration {
                 "output":{"path":"out.csv","relative_to":"declaring","columns":["ID","PREV"]},
                 "columns":[
                     {"name":"ID","type":"str","label":"ID","derivation":{"value":{"source":{"variable":"SRC.ID"}}}},
+                    {"name":"G","type":"str","label":"G","derivation":{"value":{"source":{"variable":"SRC.G"}}}},
                     {"name":"SEQ","type":"int","label":"SEQ","derivation":{"value":{"source":{"variable":"SRC.SEQ"}}}},
                     {"name":"VAL","type":"int","label":"VAL","derivation":{"value":{"source":{"variable":"SRC.VAL"}}}},
-                    {"name":"PREV","type":"int","label":"Previous value","derivation":{"value":{"row_value":{"source":"VAL","offset":-1,"window":{"order_by":[{"variable":"SEQ","direction":"desc","nulls":"last"}]}}}}}
+                    {"name":"PREV","type":"int","label":"Previous value","derivation":{"value":{"row_value":{"source":"VAL","offset":-1,"window":{"group_by":["G"],"order_by":[{"variable":"SEQ","direction":"asc","nulls":"first"}]}}}}}
                 ]
             });
             let document = prepared.model().document();
@@ -1654,6 +1643,10 @@ mod declaration {
                 .provenance()
                 .iter()
                 .any(|origin| origin.path == "windows.VISITS.order_by" && origin.layer == 1));
+            assert!(inherited
+                .provenance()
+                .iter()
+                .any(|origin| origin.path == "windows.VISITS.group_by" && origin.layer == 0));
             let previous = *sequence(document, path(document, &["columns"]))
                 .last()
                 .unwrap();
@@ -1663,17 +1656,17 @@ mod declaration {
             let window = document.field(expression, "window").unwrap();
             let order = document.field(window, "order_by").unwrap();
             let term = sequence(document, order)[0];
-            let nulls = document.field(term, "nulls").unwrap();
-            // Earlier layer materialization has already supplied nulls. Preserve the
-            // actual normalization-input authority; do not infer a Default descriptor
-            // origin from the equal text in a different schema arena.
-            assert_eq!(prepared.origins()[nulls].source, SchemaSource::Input);
+            let direction = document.field(term, "direction").unwrap();
+            // Earlier layer materialization has already supplied direction. Preserve
+            // the actual normalization-input authority; do not infer a Default
+            // descriptor origin from the equal text in a different schema arena.
+            assert_eq!(prepared.origins()[direction].source, SchemaSource::Input);
             assert_eq!(
-                prepared.normalization_input().nodes()[prepared.origins()[nulls].node],
-                N::Text("last".into())
+                prepared.normalization_input().nodes()[prepared.origins()[direction].node],
+                N::Text("asc".into())
             );
             assert_eq!(
-                prepared.declaring_source("windows.VISITS.order_by[0].nulls"),
+                prepared.declaring_source("windows.VISITS.order_by[0].direction"),
                 Some("entry.yaml")
             );
             assert_eq!(
@@ -1688,18 +1681,18 @@ mod declaration {
         #[test]
         fn count_dependency_pruning_keeps_complete_normalized_application_model() {
             let authored = json!({
-                "schema_version":"1.0","parents":[],"domain":"OUT","keys":["ID"],
+                "schema_version":"1.0","domain":"OUT","keys":["ID"],
                 "input":{"DM":"dm.csv","EX":"ex.csv","DEAD":"never-read.csv"}, "base":"DM",
                 "output":{"path":"out.csv","columns":["ID","N"]},
                 "columns":[
                     {"name":"ID","type":"str","derivation":"DM.ID"},
-                    {"name":"N","type":"int","derivation":{"aggregate":{"expr":"COUNT(EX.*)"}}},
-                    {"name":"UNUSED","type":"int","derivation":{"aggregate":{"expr":"COUNT(DEAD.*)"}}}
+                    {"name":"N","type":"int","derivation":{"aggregate":"COUNT(EX.*)"}},
+                    {"name":"UNUSED","type":"int","derivation":{"aggregate":"COUNT(DEAD.*)"}}
                 ]
             });
-            let mut host = new_host(b"unused");
+            let mut host = new_host(yamaa_adapters::json_wire::encode(&authored).as_bytes());
             let prepared = shipped_schema::prepare(
-                source(yamaa_adapters::json_wire::encode(&authored).into_bytes()),
+                source(b"schema_version: '1.0'\nparent: parent.yaml\n".to_vec()),
                 "entry.yaml".into(),
                 &mut host,
             )
@@ -1719,10 +1712,12 @@ mod declaration {
             assert_eq!(
                 host.calls,
                 [
-                    "rebase:entry.yaml:entry.yaml:never-read.csv",
-                    "rebase:entry.yaml:entry.yaml:dm.csv",
-                    "rebase:entry.yaml:entry.yaml:ex.csv",
-                    "rebase:entry.yaml:entry.yaml:out.csv"
+                    "resolve:entry.yaml:parent.yaml",
+                    "capture:parent.yaml",
+                    "rebase:parent.yaml:entry.yaml:never-read.csv",
+                    "rebase:parent.yaml:entry.yaml:dm.csv",
+                    "rebase:parent.yaml:entry.yaml:ex.csv",
+                    "rebase:parent.yaml:entry.yaml:out.csv"
                 ]
             );
             assert_eq!(prepared.written_source_path("DM"), Some("dm.csv"));
@@ -1730,10 +1725,10 @@ mod declaration {
         }
 
         #[test]
-        fn explicit_null_handler_and_raw_origin_remain_distinct_from_inherited_clear() {
+        fn explicit_missing_handler_and_raw_origin_remain_distinct_from_inherited_clear() {
             let mut authored = window();
             authored["intermediates"] =
-                json!([{"id":"LOOK","dataset":"SRC","key":["ID"],"no_match":null}]);
+                json!([{"id":"LOOK","dataset":"SRC","key":["ID"],"no_match":{"literal":null}}]);
             // Pruning (REQ-0638) keeps only declarations a resolved column
             // reads: LK reads LOOK and is itself an output column, so the
             // intermediate under test survives standalone preparation.
@@ -1746,7 +1741,7 @@ mod declaration {
             let raw_pointer = source.bytes.as_ptr();
             let mut host = new_host(b"unused");
             let prepared = shipped_schema::prepare(source, "entry.yaml".into(), &mut host)
-                .unwrap_or_else(|_| panic!("standalone literal null"));
+                .unwrap_or_else(|_| panic!("standalone missing literal"));
             assert_eq!(prepared.source().bytes.as_ptr(), raw_pointer);
             assert!(host.calls.is_empty());
             let document = prepared.model().document();
@@ -1762,14 +1757,14 @@ mod declaration {
                         {"name":"SEQ","type":"int","label":"SEQ","derivation":{"value":{"source":{"variable":"SRC.SEQ"}}}},
                         {"name":"VAL","type":"int","label":"VAL","derivation":{"value":{"source":{"variable":"SRC.VAL"}}}},
                         {"name":"LK","type":"int","label":"Lookup value","derivation":{"value":{"source":{"variable":"LOOK.VAL"}}}},
-                        {"name":"PREV","type":"int","label":"Previous value","derivation":{"value":{"row_value":{"source":"VAL","offset":-1,"window":{"group_by":["G"],"order_by":[{"variable":"SEQ","direction":"asc","nulls":"last"}]}}}}}
+                        {"name":"PREV","type":"int","label":"Previous value","derivation":{"value":{"row_value":{"source":"VAL","offset":-1,"window":{"group_by":["G"],"order_by":[{"variable":"SEQ","direction":"asc"}]}}}}}
                     ],
-                    "intermediates":[{"id":"LOOK","dataset":"SRC","key":["ID"],"no_match":null}]
+                    "intermediates":[{"id":"LOOK","dataset":"SRC","key":["ID"],"no_match":{"literal":null}}]
                 })
             );
             let intermediate = sequence(document, path(document, &["intermediates"]))[0];
             let null = document.field(intermediate, "no_match").unwrap();
-            assert_eq!(document.nodes()[null], N::Null);
+            assert!(matches!(&document.nodes()[null], N::Mapping(items) if items.len() == 1));
             let raw = &prepared.raw().document;
             let raw_intermediate = sequence(raw, path(raw, &["intermediates"]))[0];
             assert_eq!(prepared.origins()[null].source, SchemaSource::Input);
@@ -1793,7 +1788,7 @@ mod declaration {
             let window = document.field(expression, "window").unwrap();
             let order = document.field(window, "order_by").unwrap();
             let term = sequence(document, order)[0];
-            let nulls = document.field(term, "nulls").unwrap();
+            let direction = document.field(term, "direction").unwrap();
             let descriptor = prepared
                 .schema()
                 .structure()
@@ -1801,42 +1796,45 @@ mod declaration {
                 .unwrap()
                 .fields
                 .iter()
-                .find(|field| field.name == "nulls")
+                .find(|field| field.name == "direction")
                 .unwrap()
                 .descriptor;
             let admitted = &prepared.schema().structure().descriptors()[descriptor];
             assert_eq!(
-                prepared.origins()[nulls].source,
+                prepared.origins()[direction].source,
                 SchemaSource::Default {
                     module: admitted.module,
                     descriptor
                 }
             );
             assert_eq!(
-                prepared.origins()[nulls].node,
+                prepared.origins()[direction].node,
                 admitted.descriptor.default_node().unwrap()
             );
             assert_eq!(
                 prepared.schema().structure().modules()[admitted.module]
                     .document
-                    .nodes()[prepared.origins()[nulls].node],
-                N::Text("last".into())
+                    .nodes()[prepared.origins()[direction].node],
+                N::Text("asc".into())
             );
+            // An omitted placement stays absent: its meaning depends on direction.
+            assert!(document.field(term, "nulls").is_none());
         }
 
         #[test]
-        fn introducing_null_handler_survives_explicit_composition_and_empty_child() {
+        fn introducing_missing_handler_survives_composition_and_empty_child() {
             let mut parent = window();
             parent["intermediates"] =
-                json!([{"id":"LOOK","dataset":"SRC","key":["ID"],"no_match":null}]);
+                json!([{"id":"LOOK","dataset":"SRC","key":["ID"],"no_match":{"literal":null}}]);
             parent["columns"][4]["derivation"] = json!("LOOK.VAL");
             for empty_child in [false, true] {
                 let mut host = new_host(yamaa_adapters::json_wire::encode(&parent).as_bytes());
                 let authored = if empty_child {
-                    json!({"schema_version":"1.0","parents":"parent.yaml"})
+                    json!({"schema_version":"1.0","parent":"parent.yaml"})
                 } else {
+                    // A null parent is absent: the same document standalone.
                     let mut authored = parent.clone();
-                    authored["parents"] = json!([]);
+                    authored["parent"] = json!(null);
                     authored
                 };
                 let prepared = shipped_schema::prepare(
@@ -1844,12 +1842,12 @@ mod declaration {
                     "entry.yaml".into(),
                     &mut host,
                 )
-                .unwrap_or_else(|_| panic!("introducing null is a value"));
+                .unwrap_or_else(|_| panic!("a missing literal is a value"));
                 let document = prepared.model().document();
                 let intermediate = sequence(document, path(document, &["intermediates"]))[0];
                 assert_eq!(
-                    document.nodes()[document.field(intermediate, "no_match").unwrap()],
-                    N::Null
+                    tree(document, document.field(intermediate, "no_match").unwrap()),
+                    json!({"literal": null})
                 );
                 assert_eq!(
                     prepared.declaring_source("intermediates.LOOK.no_match"),
@@ -1863,14 +1861,14 @@ mod declaration {
         }
 
         #[test]
-        fn inherited_null_or_literal_handler_is_still_cleared() {
-            for inherited in [json!(null), json!("UNKNOWN")] {
+        fn inherited_missing_or_literal_handler_is_cleared() {
+            for inherited in [json!({"literal": null}), json!("UNKNOWN")] {
                 let mut parent = window();
                 parent["intermediates"] =
                     json!([{"id":"LOOK","dataset":"SRC","key":["ID"],"no_match":inherited}]);
                 parent["columns"][4]["derivation"] = json!("LOOK.VAL");
                 let mut host = new_host(yamaa_adapters::json_wire::encode(&parent).as_bytes());
-                let child = json!({"schema_version":"1.0","parents":"parent.yaml","intermediates":[{"id":"LOOK","no_match":null}]});
+                let child = json!({"schema_version":"1.0","parent":"parent.yaml","intermediates":[{"id":"LOOK","no_match":null}]});
                 let prepared = shipped_schema::prepare(
                     source(yamaa_adapters::json_wire::encode(&child).into_bytes()),
                     "entry.yaml".into(),
@@ -1884,29 +1882,47 @@ mod declaration {
         }
 
         #[test]
-        fn introduced_invalid_nulls_keep_their_schema_constraints() {
-            for (field, condition) in [("label", "invalid_field_type"), ("type", "invalid_clear")] {
-                let mut authored = window();
-                authored["parents"] = json!([]);
-                authored["columns"][0][field] = json!(null);
-                let mut host = new_host(b"unused");
-                let error = shipped_schema::prepare(
-                    source(yamaa_adapters::json_wire::encode(&authored).into_bytes()),
-                    "entry.yaml".into(),
-                    &mut host,
-                )
-                .expect_err("invalid column field");
-                let report = outcome(error);
-                assert_eq!(report["outcome"]["diagnostics"][0]["condition"], condition);
-                assert_eq!(
-                    report["outcome"]["diagnostics"][0]["spec_paths"][0],
-                    format!("columns.ID.{field}")
-                );
+        fn nulls_are_absent_but_a_required_field_cannot_be_cleared() {
+            for inherited in [false, true] {
+                for field in ["label", "type"] {
+                    let mut authored = window();
+                    if inherited {
+                        authored["parent"] = json!("parent.yaml");
+                    }
+                    authored["columns"][0][field] = json!(null);
+                    let mut host = new_host(b"schema_version: '1.0'\n");
+                    let result = shipped_schema::prepare(
+                        source(yamaa_adapters::json_wire::encode(&authored).into_bytes()),
+                        "entry.yaml".into(),
+                        &mut host,
+                    );
+                    if field == "label" {
+                        let Ok(prepared) = result else {
+                            panic!("a null optional field is absent")
+                        };
+                        let document = prepared.model().document();
+                        let column = sequence(document, path(document, &["columns"]))[0];
+                        assert!(document.field(column, "label").is_none());
+                        continue;
+                    }
+                    let Err(error) = result else {
+                        panic!("a required field cannot be cleared")
+                    };
+                    let report = outcome(error);
+                    assert_eq!(
+                        report["outcome"]["diagnostics"][0]["condition"],
+                        "invalid_clear"
+                    );
+                    assert_eq!(
+                        report["outcome"]["diagnostics"][0]["spec_paths"][0],
+                        "columns.ID.type"
+                    );
+                }
             }
         }
 
         #[test]
-        fn distinct_written_aliases_keep_first_canonical_arena_and_complete_authored_model() {
+        fn a_written_alias_keeps_its_canonical_arena_and_complete_authored_model() {
             struct Aliases(Host);
             impl InheritancePort for Aliases {
                 type Error = Payload;
@@ -1939,7 +1955,7 @@ mod declaration {
             }
             let original = yamaa_adapters::json_wire::encode(&json!({"schema_version":"1.0","domain":"OUT","keys":["ID"],"input":{"DM":"data.csv"},"base":"DM","output":{"path":"out.csv","columns":["ID"]},"columns":[{"name":"ID","type":"str","derivation":"DM.ID"}]})).into_bytes();
             let pointer = original.as_ptr();
-            let entry = b"schema_version: '1.0'\nparents: [base.yaml, alias.yaml]\n".to_vec();
+            let entry = b"schema_version: '1.0'\nparent: alias.yaml\n".to_vec();
             let mut host = Aliases(Host {
                 bytes: [("canonical/base.yaml".into(), original)]
                     .into_iter()
@@ -1957,9 +1973,8 @@ mod declaration {
             assert_eq!(
                 host.0.calls,
                 [
-                    "resolve:entry.yaml:base.yaml".to_owned(),
-                    "capture:canonical/base.yaml".to_owned(),
                     "resolve:entry.yaml:alias.yaml".to_owned(),
+                    "capture:canonical/base.yaml".to_owned(),
                     "rebase:canonical/base.yaml:entry.yaml:data.csv".to_owned(),
                     "rebase:canonical/base.yaml:entry.yaml:out.csv".to_owned()
                 ]
@@ -1977,7 +1992,7 @@ mod declaration {
             );
             assert_eq!(
                 inherited.layers()[0].source.display_path,
-                "written/base.yaml"
+                "written/alias.yaml"
             );
             let origin = prepared.written_input_origin("DM", "path").unwrap();
             assert_eq!(
@@ -2030,7 +2045,7 @@ mod declaration {
                 }
                 let mut host = new_host(&parent);
                 let error = shipped_schema::prepare(
-                    source(b"schema_version: '1.0'\nparents: parent.yaml\n".to_vec()),
+                    source(b"schema_version: '1.0'\nparent: parent.yaml\n".to_vec()),
                     "entry.yaml".into(),
                     &mut host,
                 )
@@ -2285,10 +2300,27 @@ mod declaration {
                 "id":"DS_EOS", "dataset":"DS",
                 "verifications":[
                     {"unique":["STUDYID","USUBJID"]},
-                    {"unique":{"id":"one-row-per-subject","columns":["USUBJID"]}}
+                    {"unique":{"id":"one-row-per-subject","columns":["USUBJID"]}},
+                    // A null id is absent, never a value (LAYER-9).
+                    {"unique":{"id":null,"columns":["STUDYID"]}}
                 ]
             });
             assert!(study.check(intermediate).is_empty());
+            // A mapping holding only the columns restates the list (SCHEMA-15).
+            let issues = study.check(json!({
+                "id":"DS_EOS", "dataset":"DS",
+                "verifications":[{"unique":{"columns":["STUDYID"]}}]
+            }));
+            assert_eq!(issues.len(), 1, "{issues:?}");
+            assert_eq!(issues[0].condition, "redundant_long_form");
+            assert_eq!(
+                issues[0].spec_paths,
+                ["intermediates.DS_EOS.verifications[0].unique"]
+            );
+            assert_eq!(
+                issues[0].context,
+                json!({"field":"columns","shorthand":"[\"STUDYID\"]"})
+            );
         }
 
         #[test]
@@ -2298,7 +2330,6 @@ mod declaration {
                 json!({"unique":[]}),
                 json!({"unique":{"columns":[]}}),
                 json!({"unique":{"columns":["STUDYID"],"severity":"warning"}}),
-                json!({"unique":{"id":null,"columns":["STUDYID"]}}),
                 json!({"assert":{"require":"TRUE"}}),
             ] {
                 let issues = study.check(json!({
@@ -2335,8 +2366,9 @@ mod declaration {
 
         #[test]
         fn original_absent_intermediate_verifications_remain_optional() {
+            // `require_match` keeps the lookup from restating the implicit join.
             assert!(Study::new()
-                .check(json!({"id":"DS_EOS","dataset":"DS"}))
+                .check(json!({"id":"DS_EOS","dataset":"DS","require_match":true}))
                 .is_empty());
         }
     }
@@ -2546,7 +2578,7 @@ mod declaration {
         fn physical_decode_and_source_boundary_precede_lifecycle() {
             let schema = schema();
             assert!(matches!(
-                schema.dispatch(source("parents: null\n[unterminated")),
+                schema.dispatch(source("parent: null\n[unterminated")),
                 Err(Error::Decode {
                     error: DecodeFailure::InvalidYaml { .. },
                     ..
@@ -2665,18 +2697,18 @@ mod declaration {
             fn native_raw_absent_null_empty_and_scalar_routes_preserve_independent_complete_reports(
             ) {
                 let study = Study::new();
-                let standalone = study.prepare(VALID).unwrap();
-                assert!(standalone.run().document().inheritance().is_none());
-                assert_eq!(standalone.capture_reads(), 1);
-                let inherited = study.prepare(&format!("{VALID}parents: []\n")).unwrap();
-                assert!(inherited.run().document().inheritance().is_some());
-                assert_eq!(inherited.capture_reads(), 1);
-                for parents in ["null", "7"] {
+                for text in [VALID.to_string(), format!("{VALID}parent: null\n")] {
+                    // An absent or null parent is a composition of one layer.
+                    let standalone = study.prepare(&text).unwrap();
+                    assert!(standalone.run().document().inheritance().is_none());
+                    assert_eq!(standalone.capture_reads(), 1);
+                }
+                for (parent, actual) in [("7", "int"), ("[]", "sequence")] {
                     assert_eq!(
-                        study.report(&format!("{VALID}parents: {parents}\n")),
+                        study.report(&format!("{VALID}parent: {parent}\n")),
                         invalid(json!([{
-                            "phase":"validation","condition":"invalid_field_type","requirement":"REQ-0287","spec_paths":["parents"],
-                            "context":{"expected":"path","actual":if parents=="null" {json!("null")} else {json!("int")},"source":study.identity("entry/root.yaml"),"entry":study.identity("entry/root.yaml")}
+                            "phase":"validation","condition":"invalid_field_type","requirement":"REQ-0287","spec_paths":["parent"],
+                            "context":{"expected":"path","actual":actual,"source":study.identity("entry/root.yaml"),"entry":study.identity("entry/root.yaml")}
                         }]))
                     );
                 }
@@ -2687,7 +2719,7 @@ mod declaration {
                 let root = study.identity("entry/root.yaml");
                 assert_eq!(
                     study.report(&format!(
-                        "{}parents: absent.yaml\n",
+                        "{}parent: absent.yaml\n",
                         VALID.replace("'1.0'", "'99.0'")
                     )),
                     invalid(json!([{
@@ -2695,9 +2727,9 @@ mod declaration {
                     }]))
                 );
                 assert_eq!(
-                    study.report(&format!("{VALID}parents: absent.yaml\n")),
+                    study.report(&format!("{VALID}parent: absent.yaml\n")),
                     invalid(json!([{
-                        "phase":"validation","condition":"parent_not_found","requirement":"REQ-0654","spec_paths":["parents"],"context":{"path":"absent.yaml","source":root}
+                        "phase":"validation","condition":"parent_not_found","requirement":"REQ-0654","spec_paths":["parent"],"context":{"path":"absent.yaml","source":root}
                     }]))
                 );
                 fs::write(
@@ -2706,28 +2738,30 @@ mod declaration {
                 )
                 .unwrap();
                 assert_eq!(
-                    study.report(&format!("{VALID}parents: ../parent/base.yaml\n")),
+                    study.report(&format!("{VALID}parent: ../parent/base.yaml\n")),
                     invalid(json!([{
                         "phase":"validation","condition":"pattern_mismatch","requirement":"REQ-0287","spec_paths":["domain"],"context":{"value":"bad-name","pattern":"^[A-Za-z_][A-Za-z0-9_]*$","source":study.identity("parent/base.yaml"),"entry":root}
                     }]))
                 );
             }
             #[test]
-            fn native_diamond_retains_first_capture_order_postorder_and_one_snapshot_per_physical_input(
+            fn native_chain_retains_capture_order_contribution_order_and_one_snapshot_per_physical_input(
             ) {
                 let study = Study::new();
                 fs::write(study.0.join("parent/common.yaml"), VALID).unwrap();
                 fs::write(
                     study.0.join("parent/a.yaml"),
-                    "schema_version: '1.0'\nparents: [common.yaml]\n",
+                    "schema_version: '1.0'\nparent: ./common.yaml\n",
                 )
                 .unwrap();
                 fs::write(
                     study.0.join("parent/b.yaml"),
-                    "schema_version: '1.0'\nparents: [./common.yaml,common.yaml]\n",
+                    "schema_version: '1.0'\nparent: ../parent/./a.yaml\n",
                 )
                 .unwrap();
-                let prepared=study.prepare("schema_version: '1.0'\nparents: [../parent/a.yaml, ../parent/b.yaml, ../parent/./a.yaml]\n").unwrap();
+                let prepared = study
+                    .prepare("schema_version: '1.0'\nparent: ../parent/b.yaml\n")
+                    .unwrap();
                 let document = prepared.run().document();
                 assert_eq!(
                     document
@@ -2736,9 +2770,9 @@ mod declaration {
                         .map(|p| p.source().identity.as_str())
                         .collect::<Vec<_>>(),
                     [
+                        study.identity("parent/b.yaml"),
                         study.identity("parent/a.yaml"),
-                        study.identity("parent/common.yaml"),
-                        study.identity("parent/b.yaml")
+                        study.identity("parent/common.yaml")
                     ]
                 );
                 assert_eq!(

@@ -12,7 +12,7 @@ mod execution {
         };
         use yamaa_core::{
             bound_expression::{Binding, BoundPredicate, Read},
-            predicate_compiler,
+            expression::{compile, Context},
             table::{CellError, TableAccess, TableSchema, ValueRef},
             value::{ColumnType, Value},
         };
@@ -75,8 +75,12 @@ mod execution {
         }
         fn predicate() -> BoundPredicate {
             BoundPredicate::new_contextual(
-                predicate_compiler::compile("SRC.FLAG > 0", "columns.V.derivation.case[0].when")
-                    .unwrap(),
+                compile(
+                    "SRC.FLAG > 0",
+                    Context::Predicate,
+                    "columns.V.derivation.case[0].when",
+                )
+                .unwrap(),
                 vec![Binding {
                     name: "SRC.FLAG".into(),
                     read: Read::Source(1),
@@ -122,8 +126,9 @@ mod execution {
                             CaseBranch {
                                 when: Some(
                                     BoundPredicate::new(
-                                        predicate_compiler::compile(
+                                        compile(
                                             "FALSE",
+                                            Context::Predicate,
                                             "columns.V.derivation.case[1].when",
                                         )
                                         .unwrap(),
@@ -281,8 +286,9 @@ mod execution {
         fn false_boolean_operand_keeps_the_written_eager_source_read_and_original_error() {
             let source = source();
             let when = BoundPredicate::new_contextual(
-                predicate_compiler::compile(
+                compile(
                     "FALSE AND SRC.BAD = 'bad'",
+                    Context::Predicate,
                     "columns.V.derivation.case[0].when",
                 )
                 .unwrap(),
@@ -329,7 +335,7 @@ mod execution {
                 IntermediateDerivations, IntermediateKey, IntermediateSource, MatchRead,
                 MatchValue, RowMode, RowTemplate, SecondarySource, SourceSchemas, Verification,
             },
-            predicate_compiler,
+            expression::{compile, Context},
             table::{CellError, TableAccess, TableSchema, ValueRef},
             value::{ColumnType as T, Value},
         };
@@ -398,12 +404,14 @@ mod execution {
             }
         }
         fn predicate(text: &str, part: &str) -> BoundPredicate {
-            let compiled =
-                predicate_compiler::compile(text, &format!("verifications[1].assert.{part}"))
-                    .unwrap();
+            let compiled = compile(
+                text,
+                Context::Predicate,
+                &format!("verifications[1].assert.{part}"),
+            )
+            .unwrap();
             let bindings = compiled
                 .identifiers()
-                .into_iter()
                 .collect::<std::collections::BTreeSet<_>>()
                 .into_iter()
                 .map(|name| Binding {
@@ -474,6 +482,7 @@ mod execution {
                     filter: None,
                     selection: None,
                     no_match: no_match.then_some(Value::Missing),
+                    require_match: !no_match,
                     unique: vec![],
                     derivations: derived,
                     pending_schema: None,
@@ -659,6 +668,7 @@ mod execution {
                 intermediate,
                 matched_key,
                 identity: Some(identity),
+                implicit_join: false,
             } = *attempt.result.unwrap_err()
             else {
                 panic!("native selected-record no-match condition")
@@ -691,7 +701,7 @@ mod execution {
             assert_eq!(error.spec_path, "verifications[1].assert.require");
             assert!(matches!(
                 error.kind,
-                yamaa_core::predicate::ErrorKind::Condition(_)
+                yamaa_core::expression::ErrorKind::Condition(_)
             ));
             assert_eq!(records.len(), 1);
             assert_eq!(records[0].evaluated_count, 0);
@@ -751,7 +761,6 @@ mod execution {
                 plan: Rc::new(nested),
                 current: vec![],
                 stored_columns: 1,
-                driver_kinds: vec![],
                 typed_columns: vec![],
             };
             let plan = build_plan(
@@ -801,7 +810,7 @@ mod execution {
         use std::cell::RefCell;
         use yamaa_core::{
             bound_expression::{Binding, BoundPredicate, Read},
-            predicate_compiler,
+            expression::{compile, Context},
         };
         use yamaa_core::{
             dataset::{
@@ -890,7 +899,7 @@ mod execution {
             };
             let filter = RelationPredicate::new(
                 BoundPredicate::new(
-                    predicate_compiler::compile(text, "intermediates[0].filter").unwrap(),
+                    compile(text, Context::Predicate, "intermediates[0].filter").unwrap(),
                     vec![
                         Binding {
                             name: "D.TIME".into(),
@@ -934,6 +943,7 @@ mod execution {
                     keep: Keep::Last,
                 }),
                 no_match: Some(Value::Missing),
+                require_match: false,
                 unique: Vec::new(),
                 derivations: None,
                 pending_schema: None,
@@ -1695,8 +1705,8 @@ mod execution {
         use yamaa_core::dataset::*;
         use yamaa_core::json::Value as V;
         use yamaa_core::{
-            aggregate_compiler::compile_aggregate,
             diagnostic::ConditionCode as C,
+            expression::{compile, Context},
             table::{CellError, Column, TableAccess, TableSchema, ValueRef},
             value::{ColumnType, Value},
         };
@@ -1767,7 +1777,12 @@ mod execution {
         ) -> Expression {
             Expression::Aggregate(Box::new(
                 BoundAggregate::new(
-                    compile_aggregate(text, "columns.RESULT.derivation.aggregate.expr").unwrap(),
+                    compile(
+                        text,
+                        Context::Aggregate,
+                        "columns.RESULT.derivation.aggregate.expr",
+                    )
+                    .unwrap(),
                     relation,
                     bindings
                         .iter()
@@ -1795,7 +1810,12 @@ mod execution {
             ]);
             donor.fail = Some((1, 1));
             let predicate = BoundPredicate::new(
-                yamaa_core::predicate_compiler::compile("S.V > 0", "aggregate.filter").unwrap(),
+                yamaa_core::expression::compile(
+                    "S.V > 0",
+                    yamaa_core::expression::Context::Predicate,
+                    "aggregate.filter",
+                )
+                .unwrap(),
                 vec![Binding {
                     name: "S.V".into(),
                     read: Read::Source(1),
@@ -1803,7 +1823,7 @@ mod execution {
             )
             .unwrap();
             let bound = BoundAggregate::new(
-                compile_aggregate("SUM(S.V)", "aggregate").unwrap(),
+                compile("SUM(S.V)", Context::Aggregate, "aggregate").unwrap(),
                 AggregateRelation::Matched {
                     source: AggregateSource::Secondary(0),
                     keys: vec![IntermediateKey {
@@ -2168,7 +2188,7 @@ mod execution {
         }
 
         #[test]
-        fn only_is_eager_and_retains_complete_group_context_before_outer_coalesce() {
+        fn only_is_eager_and_retains_complete_group_context_behind_outer_missing() {
             let source = table(vec![
                 vec![Value::Int(1), Value::Missing],
                 vec![Value::Int(1), Value::Missing],
@@ -2183,7 +2203,7 @@ mod execution {
                         assignment(
                             1,
                             aggregate(
-                                "COALESCE(1, ONLY(D.V))",
+                                "NULL + ONLY(D.V)",
                                 AggregateRelation::CurrentGroup,
                                 &[("D.V", 1)],
                                 AggregatePhase::RowConstruction,
@@ -2227,7 +2247,7 @@ mod execution {
             assert_eq!(
                 diagnostic.context,
                 [
-                    ("expr".into(), V::String("COALESCE(1, ONLY(D.V))".into())),
+                    ("expr".into(), V::String("NULL + ONLY(D.V)".into())),
                     ("reducer".into(), V::String("ONLY".into())),
                     (
                         "record_count".into(),
@@ -2319,7 +2339,7 @@ mod execution {
             };
             let plan_for = |group_by: Vec<usize>| {
                 let bound = BoundAggregate::new(
-                    compile_aggregate("SUM(S.V)", "aggregate").unwrap(),
+                    compile("SUM(S.V)", Context::Aggregate, "aggregate").unwrap(),
                     AggregateRelation::Matched {
                         source: AggregateSource::Secondary(0),
                         keys: vec![IntermediateKey {
@@ -2426,7 +2446,7 @@ mod execution {
                 )
                 .unwrap();
                 let bound = BoundAggregate::new(
-                    compile_aggregate("SUM(S.V)", "aggregate").unwrap(),
+                    compile("SUM(S.V)", Context::Aggregate, "aggregate").unwrap(),
                     AggregateRelation::Matched {
                         source: AggregateSource::Secondary(0),
                         keys: vec![IntermediateKey {
@@ -2507,7 +2527,7 @@ mod execution {
             use yamaa_core::{
                 reduction::NumericReducer,
                 table::{CellError, TableAccess, TableSchema, ValueRef},
-                temporal::{Date, DatePrecision},
+                temporal::{Date, Precision},
                 value::{ColumnType, Value, ValueType},
             };
 
@@ -2527,7 +2547,7 @@ mod execution {
                         ("missing".into(), Value::Missing),
                     ]
                 };
-                let date = Value::Date(Date::new(2024, 2, 29, DatePrecision::Month).unwrap());
+                let date = Value::Date(Date::new(2024, 2, 29, Precision::Month).unwrap());
                 let faults: Vec<ExecutionError<Payload>> = vec![
                     ExecutionError::MultipleValues {
                         path: "columns.A.source".into(),
@@ -2541,6 +2561,15 @@ mod execution {
                         intermediate: "I".into(),
                         matched_key: observed(),
                         identity: identity(),
+                        implicit_join: false,
+                    },
+                    ExecutionError::UnmatchedKey {
+                        path: "columns.A.derivation.source".into(),
+                        dataset: "DM".into(),
+                        intermediate: "intermediate(DM)".into(),
+                        matched_key: observed(),
+                        identity: identity(),
+                        implicit_join: true,
                     },
                     ExecutionError::MultipleMatches {
                         path: "columns.A.source".into(),
@@ -2565,10 +2594,14 @@ mod execution {
                         actual: ValueType::Str,
                     },
                 ];
-                for (error, requirement) in faults
-                    .iter()
-                    .zip(["REQ-0075", "REQ-0124", "REQ-0127", "REQ-0322", "REQ-0510"])
-                {
+                for (error, requirement) in faults.iter().zip([
+                    "REQ-0075",
+                    "REQ-0124",
+                    "LOOKUP-24",
+                    "REQ-0127",
+                    "REQ-0322",
+                    "REQ-0510",
+                ]) {
                     let finding = error.diagnostic().unwrap().unwrap();
                     assert_eq!(finding.definition().requirement, Some(requirement));
                     assert_eq!(error.diagnostic(), Ok(Some(finding)));

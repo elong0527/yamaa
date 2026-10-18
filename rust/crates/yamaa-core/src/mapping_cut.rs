@@ -15,16 +15,28 @@ pub enum AdmissionError {
     #[error("mapping cut diagnostic: {0:?}")]
     Diagnostic(Diagnostic),
 }
-/// A selected result borrows its declared literal or label.
+/// A selected result borrows its declared literal or label. `Missing` is the
+/// default substitution for a missing source without a declared `missing`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum SelectedValue<'a> {
     Literal(&'a Value),
     Label(&'a str),
+    Missing,
 }
+/// `handler` names the handler path a substitution is counted under, whether
+/// the handler is declared or its default substitution answers.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Selected<'a> {
     pub value: SelectedValue<'a>,
     pub handler: Option<&'static str>,
+}
+/// A missing source takes the declared `missing` literal, or missing by
+/// default, and is counted under `missing` either way (COLUMN-10).
+fn missing_source(missing: Option<&Value>) -> Selected<'_> {
+    Selected {
+        value: missing.map_or(SelectedValue::Missing, SelectedValue::Literal),
+        handler: Some("missing"),
+    }
 }
 #[derive(Clone, Debug, PartialEq)]
 pub struct Mapping {
@@ -128,20 +140,7 @@ impl Mapping {
     }
     pub fn select(&self, value: ValueRef<'_>) -> Result<Selected<'_>, Diagnostic> {
         match value {
-            ValueRef::Missing => self
-                .missing
-                .as_ref()
-                .map(|value| Selected {
-                    value: SelectedValue::Literal(value),
-                    handler: Some("missing"),
-                })
-                .ok_or_else(|| {
-                    diagnostic(
-                        C::MappingMissing,
-                        &self.path,
-                        [("variable", text(&self.source))],
-                    )
-                }),
+            ValueRef::Missing => Ok(missing_source(self.missing.as_ref())),
             ValueRef::Str(input) => {
                 for (key, value) in &self.entries {
                     let matches = if self.case_sensitive {
@@ -244,20 +243,7 @@ impl Cut {
     }
     pub fn select(&self, value: ValueRef<'_>) -> Result<Selected<'_>, Diagnostic> {
         if matches!(value, ValueRef::Missing) {
-            return self
-                .missing
-                .as_ref()
-                .map(|value| Selected {
-                    value: SelectedValue::Literal(value),
-                    handler: Some("missing"),
-                })
-                .ok_or_else(|| {
-                    diagnostic(
-                        C::CutMissing,
-                        &self.path,
-                        [("variable", text(&self.source))],
-                    )
-                });
+            return Ok(missing_source(self.missing.as_ref()));
         }
         if !matches!(value, ValueRef::Int(_) | ValueRef::Float(_)) {
             return Err(self.input_diagnostic(actual(value)));
@@ -332,6 +318,20 @@ impl MappingCut {
                 kind,
                 crate::value::ColumnType::Int | crate::value::ColumnType::Float
             ),
+        }
+    }
+    /// EXPR-14: a mapping returns the type its dictionary values share and a
+    /// cut its text labels, before any `missing` or `unmapped` replacement.
+    pub fn result_type(&self) -> crate::result_type::ResultType {
+        use crate::result_type::ResultType;
+        match self {
+            Self::Mapping(item) => item
+                .entries
+                .iter()
+                .fold(ResultType::MISSING, |kind, (_, value)| {
+                    kind.or(ResultType::of_value(value))
+                }),
+            Self::Cut(_) => ResultType::STR,
         }
     }
 }

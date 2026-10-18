@@ -1,4 +1,4 @@
-"""Verify completed CodeRabbit coverage of the current main pull-request head.
+"""Verify completed CodeRabbit coverage of a current main or release PR head.
 
 The default command is read-only. Only the trusted default-branch workflow uses
 --publish to update the review-completion commit status. No PR code, comments,
@@ -240,13 +240,13 @@ def status_url(repository, head):
     return f"https://api.github.com/repos/{repository}/statuses/{head}"
 
 
-def main_pull(api, pull):
+def target_pull(api, pull):
     require(isinstance(pull, dict), "invalid pull request response")
     base = pull.get("base") or {}
     repository = base.get("repo") or {}
     return (
         pull.get("state") == "open"
-        and base.get("ref") == "main"
+        and coverage.target_base(base.get("ref"))
         and repository.get("id") == api.repository_id
         and repository.get("full_name") == api.repository
     )
@@ -257,7 +257,7 @@ def current_pull(api, number):
     pull = api.pull(number)
     require(isinstance(pull, dict), "invalid pull request response")
     require(pull.get("number") == number, "pull request identity differs")
-    if not main_pull(api, pull):
+    if not target_pull(api, pull):
         return None
     head = (pull.get("head") or {}).get("sha")
     require(isinstance(head, str) and SHA.fullmatch(head), "invalid pull request head")
@@ -471,8 +471,8 @@ def ordinary_review(api, number, pull, review):
 
 def linked_targets(api, numbers):
     targets = set()
-    for pull in api.pages("pulls?state=open&base=main"):
-        if not main_pull(api, pull):
+    for pull in api.pages("pulls?state=open"):
+        if not target_pull(api, pull):
             continue
         try:
             batches = coverage.batch_numbers(pull.get("body"))
@@ -506,7 +506,7 @@ def candidates(api, event_name, event):
             require(isinstance(pull, dict), "invalid associated PR response")
             if (pull.get("head") or {}).get("sha") != head:
                 continue
-            if main_pull(api, pull):
+            if target_pull(api, pull):
                 targets.add(pull["number"])
             elif coverage.same_repository(api, (pull.get("base") or {}).get("repo")):
                 chunks.add(pull["number"])
@@ -527,8 +527,8 @@ def candidates(api, event_name, event):
         require(positive_integer(number), "event has no valid pull request number")
         return sorted({number} | linked_targets(api, {number}))
     elif event_name in {"schedule", "workflow_dispatch"}:
-        pulls = api.pages("pulls?state=open&base=main")
-        return sorted({pull["number"] for pull in pulls if main_pull(api, pull)})
+        pulls = api.pages("pulls?state=open")
+        return sorted({pull["number"] for pull in pulls if target_pull(api, pull)})
     else:
         raise GateError("unsupported review gate event")
     require(positive_integer(number), "event has no valid pull request number")
@@ -589,7 +589,8 @@ def main(argv=None):
             continue
         if verdict is None:
             require(
-                args.publish, "PR is not open against this repository's main branch"
+                args.publish,
+                "PR is not open against this repository's main or release branch",
             )
             continue
         print(f"PR #{number} {verdict.head}: {verdict.state}: {verdict.description}")

@@ -1,13 +1,13 @@
 """Authoring lints that read the specification value, not only its layout.
 
-REQ-1288, REQ-1289, and REQ-1290 name departures that leave the parsed
-value unchanged only when the author rewrites them: a uniform row-template
-derivation that belongs at column level, a named intermediate equivalent
-to the implicit join, and an output column without a label. A finding is
-not a validation diagnostic; the specification stays valid and runs the
-same way. No fix is offered: moving a derivation, removing an
-intermediate, or writing a label changes the written text of a value, so
-its author corrects it.
+`repeated_row_derivation`, `redundant_intermediate`, and `missing_label`
+name departures that leave the parsed value unchanged only when the author
+rewrites them: a uniform row-template derivation that belongs at column
+level, a named intermediate equivalent to the implicit join, and an output
+column without a label. A finding is not a validation diagnostic; the
+specification stays valid and runs the same way. No fix is offered: moving
+a derivation, removing an intermediate, or writing a label changes the
+written text of a value, so its author corrects it.
 """
 
 from __future__ import annotations
@@ -65,7 +65,6 @@ _DATASET_LEVEL_OPERATIONS = frozenset(
         "row_number",
         "rank",
         "row_value",
-        "previous_non_missing",
         "locf",
         "baseline_flag",
     }
@@ -303,10 +302,10 @@ def _intermediate_id_key(
 
 
 def missing_labels(document: Document, value: Mapping) -> Iterator[Departure]:
-    """REQ-1290: every output column declares `label:`."""
+    """`missing_label`: every output column declares `label:`."""
     if not isinstance(value.get("output"), Mapping):
         return
-    if "parents" in value:
+    if value.get("parent") is not None:
         # A child layer inherits labels; only a standalone file owns them.
         return
     output_columns = value["output"].get("columns")
@@ -347,7 +346,7 @@ def missing_labels(document: Document, value: Mapping) -> Iterator[Departure]:
 
 
 def repeated_row_derivations(document: Document, value: Mapping) -> Iterator[Departure]:
-    """REQ-1288: a derivation identical in every row template belongs up top.
+    """`repeated_row_derivation`: a uniform row-template derivation belongs up top.
 
     Only row-local derivations are reported: dataset-level operations,
     named-intermediate reads, and reads of non-row-local columns stay in
@@ -430,8 +429,6 @@ def repeated_row_derivations(document: Document, value: Mapping) -> Iterator[Dep
 def _key_equals_output_keys(key: object, output_keys: Sequence[str]) -> bool:
     """True when an explicit key states exactly the output keys."""
     wanted = set(output_keys)
-    if isinstance(key, str):
-        return {key} == wanted
     if isinstance(key, list):
         return all(isinstance(item, str) for item in key) and set(key) == wanted
     if isinstance(key, Mapping):
@@ -449,14 +446,15 @@ def _intermediate_is_read(value: Mapping, identifier: str) -> bool:
 
 
 def redundant_intermediates(document: Document, value: Mapping) -> Iterator[Departure]:
-    """REQ-1289: a named intermediate equivalent to the implicit join.
+    """`redundant_intermediate`: a named intermediate equal to the implicit join.
 
     A simple intermediate with no filter, selection, custom key, or handler
     that changes behavior reads what `DATASET.COLUMN` already reads. The
     check reports only explicit keys that restate the output keys; an
-    omitted key with `no_match: null` fails validation as
-    `rename_only_intermediate` instead, and an intermediate without
-    `no_match` requires a match the implicit join cannot state.
+    omitted key fails validation as `rename_only_intermediate` instead, and
+    `require_match: true` requires a match the implicit join cannot state.
+    An input declaring `require_match: true` makes its implicit join fail
+    where the intermediate answers, so neither replaces the other.
     """
     keys = value.get("keys")
     if not isinstance(keys, list) or not all(isinstance(k, str) for k in keys):
@@ -464,12 +462,18 @@ def redundant_intermediates(document: Document, value: Mapping) -> Iterator[Depa
     raw_intermediates = value.get("intermediates")
     if not isinstance(raw_intermediates, list):
         return
+    inputs = value.get("input")
+    required = {
+        name
+        for name, declaration in (inputs.items() if isinstance(inputs, Mapping) else ())
+        if isinstance(declaration, Mapping) and declaration.get("require_match") is True
+    }
     for index, entry in _indexed_entries(value, "intermediates"):
         identifier = entry.get("id")
         dataset = entry.get("dataset")
         if not isinstance(identifier, str) or not isinstance(dataset, str):
             continue
-        if dataset == "SELF":
+        if dataset == "SELF" or dataset in required:
             continue
         if any(
             entry.get(field) is not None
@@ -491,9 +495,13 @@ def redundant_intermediates(document: Document, value: Mapping) -> Iterator[Depa
             else {}
         )
         assert isinstance(raw, Mapping)
-        if "no_match" not in raw or raw["no_match"] is not None:
-            # Absent requires a match; a literal answers where the join
-            # yields missing. Only `no_match: null` matches the join.
+        if raw.get("require_match") is True or raw.get("no_match") not in (
+            None,
+            {"literal": None},
+        ):
+            # A required match fails where the join yields missing, and
+            # another literal answers there. Omitted, cleared by a bare null
+            # or `{literal: null}`, the answer is the join's missing value.
             continue
         key = entry.get("key")
         if key is None:
@@ -518,7 +526,7 @@ def redundant_intermediates(document: Document, value: Mapping) -> Iterator[Depa
 
 
 def check_authoring(document: Document) -> list[Departure]:
-    """Every REQ-1288 to REQ-1290 departure in `document`."""
+    """Every authoring lint departure in `document`."""
     value = spec_value(document)
     if value is None:
         return []

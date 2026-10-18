@@ -1,5 +1,5 @@
 phase: validation
-condition: invalid_predicate
+condition: invalid_expression
 spec_paths:
   - columns.AESEV.derivation.case[0].when
 requirement: REQ-1244

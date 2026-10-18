@@ -42,7 +42,7 @@ columns:
             str_case:
               source: AE.AESEV
               to: upper
-              missing: null
+              missing: {literal: null}
     verifications:
       - allowed_values:
           values: [MILD, MODERATE, SEVERE, LIFE-THREATENING]
@@ -53,7 +53,7 @@ columns:
     derivation:
       mapping:
         source: ASEV
-        missing: null
+        missing: {literal: null}
         dict:
           MILD: 1
           MODERATE: 2
@@ -65,8 +65,6 @@ columns:
           max: 4
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
       min: 6
       max: 6

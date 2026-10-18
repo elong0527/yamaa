@@ -55,7 +55,7 @@ pub use functions::{
     FunctionIdentity, HostLanguage, LockContext, LockKind, Parameter, ProjectFunctions, RenvLock,
     Signature,
 };
-pub use observe::{CallStage, DatasetPhase, Event, Node, Outcome, Phase, Progress, Refusal};
+pub use observe::{CallStage, DatasetPhase, Event, Outcome, Phase, Progress, Refusal};
 pub use odm::{read_odm, OdmOptions, ODM_COLUMNS};
 pub use plan::{Plan, RunRequest};
 pub use resolver::{

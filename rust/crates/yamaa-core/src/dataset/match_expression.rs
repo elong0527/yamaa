@@ -1,13 +1,14 @@
 //! Lookup scalar expressions reuse the ordinary bound IR on resolved operands.
 use super::*;
-use crate::key_relation::ComparableType;
+use crate::result_type::ResultType;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct MatchExpression {
     pub assignment: Assignment,
     pub reads: Vec<MatchRead>,
     pub schema: TableSchema,
-    pub result_type: Option<ComparableType>,
+    /// The expression's result type (EXPR-14), compared with the key column.
+    pub result_type: ResultType,
     /// A relation window retains its original completed-row coordinates.
     pub windowed: bool,
 }
@@ -16,7 +17,7 @@ impl MatchExpression {
         mut assignment: Assignment,
         reads: Vec<MatchRead>,
         schema: TableSchema,
-        result_type: Option<ComparableType>,
+        result_type: ResultType,
     ) -> Result<Self, PlanError> {
         let windowed = contains_window(&assignment.expression, 0)?;
         if !windowed {
@@ -126,14 +127,12 @@ fn normalize(expression: &mut Expression, reads: &[MatchRead]) -> Result<(), Pla
         }
         Expression::SourceBinding { source, .. }
         | Expression::MappingCut { source, .. }
-        | Expression::StrContains { source, .. }
         | Expression::StrExtract { source, .. }
         | Expression::StrReplace { source, .. }
         | Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }
         | Expression::Round { source, .. } => normalize(&mut source.expression, reads)?,
         Expression::Extreme { operands, .. }
-        | Expression::StrConcat { operands, .. }
         | Expression::StrTemplate { operands, .. }
         | Expression::Imputation { operands, .. }
         | Expression::Temporal { operands, .. } => {
@@ -167,19 +166,17 @@ fn contains_window(expression: &Expression, depth: usize) -> Result<bool, PlanEr
     match expression {
         Expression::Window(_) | Expression::ContextWindow(_) => Ok(true),
         Expression::Case(_) => Err(PlanError::InvalidIntermediate),
-        Expression::Imputation { operation, .. } if operation.bounds().next().is_some() => {
+        Expression::Imputation { operation, .. } if operation.has_conditional_operands() => {
             Err(PlanError::InvalidIntermediate)
         }
         Expression::SourceBinding { source, .. }
         | Expression::MappingCut { source, .. }
-        | Expression::StrContains { source, .. }
         | Expression::StrExtract { source, .. }
         | Expression::StrReplace { source, .. }
         | Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }
         | Expression::Round { source, .. } => contains_window(&source.expression, depth + 1),
         Expression::Extreme { operands, .. }
-        | Expression::StrConcat { operands, .. }
         | Expression::StrTemplate { operands, .. }
         | Expression::Imputation { operands, .. }
         | Expression::Temporal { operands, .. } => {

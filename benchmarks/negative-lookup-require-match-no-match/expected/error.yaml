@@ -1,0 +1,8 @@
+phase: validation
+condition: conflicting_absence_policy
+spec_paths:
+  - intermediates[0].no_match
+  - intermediates[0].require_match
+requirement: LOOKUP-13
+context:
+  intermediate: REFRANGE

@@ -11,7 +11,7 @@ use yamaa_core::{
     limits::Limits,
     specification::{SourceDeclaration, SourceProfile},
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
-    temporal::{DatePrecision, DateTimePrecision},
+    temporal::Precision,
     value::{ColumnType, Value},
 };
 
@@ -269,12 +269,12 @@ fn numeric(value: f64, kind: ColumnType) -> Option<Value> {
     match kind {
         ColumnType::Int => Some(Value::Int(integer)),
         ColumnType::Date => {
-            crate::arrow_temporal::date_from_days(integer.checked_sub(3653)?, DatePrecision::Day)
+            crate::arrow_temporal::date_from_days(integer.checked_sub(3653)?, Precision::Day)
                 .map(Value::Date)
         }
         ColumnType::DateTime => crate::arrow_temporal::datetime_from_seconds(
             integer.checked_sub(315_619_200)?,
-            DateTimePrecision::Second,
+            Precision::Second,
         )
         .map(Value::DateTime),
         ColumnType::Str | ColumnType::Float => None,

@@ -34,8 +34,8 @@ columns:
         source: USUBJID
         pattern: '^YAMAA-([^-]+)-[0-9]{4}$'
         group: 1
-        missing: null
-        no_match: null
+        missing: {literal: null}
+        no_match: {literal: null}
 
   - name: SITEID
     type: str
@@ -45,7 +45,7 @@ columns:
         sources: [SITEIDP, DM.SITEID]
         missing: UNKNOWN
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   # SITEID is never missing, so UNKNOWN here means SUBJID is missing.
   - name: SUBJREF
@@ -56,11 +56,9 @@ columns:
         template: "{SITEID}:{SUBJID}"
         missing: UNKNOWN
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID]
   - row_count:
       min: 8
       max: 8

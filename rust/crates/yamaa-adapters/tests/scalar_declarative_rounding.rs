@@ -273,7 +273,7 @@ mod scalar {
                     .replace("source: VAL1", "source: SOURCE.VAL1"),
                 false,
             );
-            let source = POSITIVE.replace("SOURCE: input/adsl.csv", "SOURCE: input/adsl.csv\n  LOOKUP: {path: input/lookup.csv, types: {VAL1: float}}\nbase: SOURCE\nintermediates:\n  - id: SELECTED\n    dataset: LOOKUP\n    key: [STUDYID, USUBJID]\n    no_match: null").replace("source: VAL1", "source: SELECTED.VAL1");
+            let source = POSITIVE.replace("SOURCE: input/adsl.csv", "SOURCE: input/adsl.csv\n  LOOKUP: {path: input/lookup.csv, types: {VAL1: float}}\nbase: SOURCE\nintermediates:\n  - id: SELECTED\n    dataset: LOOKUP\n    key: [STUDYID, USUBJID]\n    no_match: {literal: null}").replace("source: VAL1", "source: SELECTED.VAL1");
             qualified(&source, true);
         }
         #[test]
@@ -617,8 +617,8 @@ mod scalar {
     ],
     "handler_counts": []
   },
-  "bare-default-date_diff": {
-    "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types:\n      D: date\n      E: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation:\n    literal: '1970-01-01'\n- name: EP\n  type: int\nrows:\n- id: dates\n  derivations:\n    EP:\n      date_diff:\n        start: D1\n        end: D2\n        unit: day\n        bounds: exclusive\n",
+  "bare-default-diff": {
+    "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types:\n      D: date\n      E: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation:\n    literal: '1970-01-01'\n- name: EP\n  type: int\nrows:\n- id: dates\n  derivations:\n    EP:\n      diff:\n        type: date\n        start: D1\n        end: D2\n        unit: day\n        bounds: exclusive\n",
     "inputs": {
       "src.csv": "ID,D,E\na,1970-01-01,1970-01-02\nb,2000-01-01,2000-01-02\n"
     },
@@ -626,8 +626,8 @@ mod scalar {
     "handler_counts": [],
     "csv": "ID,D1,D2,EP\na,1970-01-01,1970-01-01,0\nb,2000-01-01,1970-01-01,-10957\n"
   },
-  "missing-input-row-invalid-date_diff": {
-    "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types: {}\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation:\n    literal: '1970-01-01'\n- name: EP\n  type: int\nrows:\n- id: dates\n  derivations:\n    EP:\n      date_diff:\n        start: SRC.D\n        end: SRC.D\n        unit: day\n        bounds: exclusive\n",
+  "missing-input-row-invalid-diff": {
+    "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types: {}\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation:\n    literal: '1970-01-01'\n- name: EP\n  type: int\nrows:\n- id: dates\n  derivations:\n    EP:\n      diff:\n        type: date\n        start: SRC.D\n        end: SRC.D\n        unit: day\n        bounds: exclusive\n",
     "inputs": {},
     "findings": [
       {
@@ -645,8 +645,8 @@ mod scalar {
     ],
     "handler_counts": []
   },
-  "row-invalid-date_diff": {
-    "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types: {}\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation:\n    literal: '1970-01-01'\n- name: EP\n  type: int\nrows:\n- id: dates\n  derivations:\n    EP:\n      date_diff:\n        start: SRC.D\n        end: SRC.D\n        unit: day\n        bounds: exclusive\n",
+  "row-invalid-diff": {
+    "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types: {}\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation:\n    literal: '1970-01-01'\n- name: EP\n  type: int\nrows:\n- id: dates\n  derivations:\n    EP:\n      diff:\n        type: date\n        start: SRC.D\n        end: SRC.D\n        unit: day\n        bounds: exclusive\n",
     "inputs": {
       "src.csv": "ID,D,E\na,1970-01-01,1970-01-02\nb,2000-01-01,2000-01-02\n"
     },
@@ -655,7 +655,7 @@ mod scalar {
         "phase": "validation",
         "condition": "incompatible_input_type",
         "spec_paths": [
-          "rows[0].derivations.EP.date_diff.start"
+          "rows[0].derivations.EP.diff.start"
         ],
         "requirement": "REQ-0606",
         "context": {
@@ -668,7 +668,7 @@ mod scalar {
         "phase": "validation",
         "condition": "incompatible_input_type",
         "spec_paths": [
-          "rows[0].derivations.EP.date_diff.end"
+          "rows[0].derivations.EP.diff.end"
         ],
         "requirement": "REQ-0606",
         "context": {
@@ -698,8 +698,8 @@ mod scalar {
     "handler_counts": [],
     "csv": "ID,D1,D2,EP,NEXT\na,1970-01-01,1970-01-01,1,2\nb,2000-01-01,1970-01-01,-10957,-10956\n"
   },
-  "nested-default-date_diff": {
-    "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types:\n      D: date\n      E: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\n  - NEXT\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation:\n    literal: '1970-01-01'\n- name: EP\n  type: int\n  derivation:\n    date_diff:\n      start: D1\n      end: D2\n      unit: day\n      bounds: exclusive\n- name: NEXT\n  type: int\nrows:\n- id: dates\n  derivations:\n    NEXT:\n      compute:\n        expr: EP + 1\n",
+  "nested-default-diff": {
+    "specification": "schema_version: '1.0'\ndomain: TEST\nkeys:\n- ID\ninput:\n  SRC:\n    path: src.csv\n    types:\n      D: date\n      E: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - D1\n  - D2\n  - EP\n  - NEXT\ncolumns:\n- name: ID\n  type: str\n  derivation: SRC.ID\n- name: D1\n  type: date\n  derivation: SRC.D\n- name: D2\n  type: date\n  derivation:\n    literal: '1970-01-01'\n- name: EP\n  type: int\n  derivation:\n    diff:\n      type: date\n      start: D1\n      end: D2\n      unit: day\n      bounds: exclusive\n- name: NEXT\n  type: int\nrows:\n- id: dates\n  derivations:\n    NEXT:\n      compute:\n        expr: EP + 1\n",
     "inputs": {
       "src.csv": "ID,D,E\na,1970-01-01,1970-01-02\nb,2000-01-01,2000-01-02\n"
     },
@@ -935,8 +935,8 @@ mod scalar {
             for name in [
                 "negative-impute-bad-source",
                 "negative-precision-bad-source",
-                "negative-datetime-impute-bad-source",
-                "negative-datetime-precision-bad-source",
+                "negative-impute-datetime-text",
+                "negative-precision-datetime-text",
             ] {
                 let fixture = Fixture::new(name);
                 let result = fixture.run();
@@ -975,7 +975,7 @@ columns:
   - {name: DTM, type: datetime}
   - name: PR
     type: str
-    derivation: {datetime_precision: {source: DTM, missing: null}}
+    derivation: {precision: {type: datetime, source: DTM}}
   - name: DATE
     type: date
     derivation: {to_date: {source: DTM}}
@@ -984,7 +984,7 @@ rows:
     dataset: SRC
     derivations:
       ID: SRC.ID
-      DTM: {datetime_impute: {source: SRC.TEXT, time: last, missing: null, invalid: null}}
+      DTM: {impute: {type: datetime, source: SRC.TEXT, minimum_source_precision: day, time: last, invalid: {literal: null}}}
 "#,
             )
             .unwrap();
@@ -996,7 +996,7 @@ rows:
             let mut result = fixture.run();
             assert!(result.issues().is_empty(), "{:?}", result.issues());
             assert!(result.save().unwrap());
-            assert_eq!(fs::read(fixture.0.join("output.csv")).unwrap(),b"ID,DTM,PR,DATE\n1,2024-02-29T23:59:59,D,2024-02-29\n2,2024-02-29T12:13:59,M,2024-02-29\n3,,,\n4,2024-02-29T12:59:59,H,2024-02-29\n5,2024-02-29T12:13:14,S,2024-02-29\n");
+            assert_eq!(fs::read(fixture.0.join("output.csv")).unwrap(),b"ID,DTM,PR,DATE\n1,2024-02-29T23:59:59,day,2024-02-29\n2,2024-02-29T12:13:59,minute,2024-02-29\n3,,,\n4,2024-02-29T12:59:59,hour,2024-02-29\n5,2024-02-29T12:13:14,second,2024-02-29\n");
         }
         #[test]
         fn nested_case_conversion_reads_only_its_selected_completed_datetime() {
@@ -1012,15 +1012,15 @@ columns:
   - {name: ID, type: int, derivation: SRC.ID}
   - name: DTM
     type: datetime
-    derivation: {datetime_impute: {source: SRC.TEXT, time: last, missing: null, invalid: null}}
+    derivation: {impute: {type: datetime, source: SRC.TEXT, minimum_source_precision: day, time: last, invalid: {literal: null}}}
   - name: PR
     type: str
-    derivation: {datetime_precision: {source: DTM, missing: null}}
+    derivation: {precision: {type: datetime, source: DTM}}
   - name: DATE
     type: date
     derivation:
       case:
-        - when: "PR = 'D'"
+        - when: "PR = 'day'"
           then: {to_date: {source: DTM}}
         - otherwise: {literal: null}
 "#,
@@ -1036,7 +1036,7 @@ columns:
             assert!(result.save().unwrap());
             assert_eq!(
         fs::read(fixture.0.join("output.csv")).unwrap(),
-        b"ID,DTM,PR,DATE\n1,2024-02-29T23:59:59,D,2024-02-29\n2,2024-02-29T12:13:59,M,\n3,,,\n"
+        b"ID,DTM,PR,DATE\n1,2024-02-29T23:59:59,day,2024-02-29\n2,2024-02-29T12:13:59,minute,\n3,,,\n"
     );
         }
         fn issue_rows(fixture: &Fixture) -> yamaa_core::json::Value {
@@ -1077,7 +1077,7 @@ columns:
                 .collect()
         }
         #[test]
-        fn upper_and_paired_bounds_complete_within_the_collected_interval() {
+        fn upper_and_paired_bounds_ignore_outside_bounds_and_resolve_crossings_to_not_after() {
             let fixture = Fixture::new("schema-birth-date");
             fs::write(
                 fixture.0.join("spec.yaml"),
@@ -1091,24 +1091,24 @@ columns:
   - name: END
     type: date
     derivation:
-      date_impute:
+      impute:
+        type: date
         source: SRC.TEXT
         month: 12
         day: last
         not_after: SRC.HIGH
-        missing: null
-        invalid: null
+        invalid: {literal: null}
   - name: BOTH
     type: date
     derivation:
-      date_impute:
+      impute:
+        type: date
         source: SRC.TEXT
         month: 6
         day: 15
         not_before: SRC.LOW
         not_after: SRC.HIGH
-        missing: null
-        invalid: null
+        invalid: {literal: null}
 "#,
             )
             .unwrap();
@@ -1125,8 +1125,8 @@ columns:
             assert_eq!(
                 fs::read(fixture.0.join("output.csv")).unwrap(),
                 b"ID,END,BOTH\n1,2025-03-12,2025-03-12\n2,2025-03-28,2025-03-28\n\
-3,2025-03-31,2025-03-15\n4,2025-02-10,2025-02-10\n5,,\n6,2025-03-25,2025-03-20\n\
-7,2025-03-10,\n8,,\n"
+3,2025-03-31,2025-03-15\n4,2025-02-10,2025-02-10\n5,2025-05-31,2025-05-15\n\
+6,2025-03-25,2025-03-20\n7,2025-03-10,2025-03-10\n8,,\n"
             );
         }
         #[test]
@@ -1144,13 +1144,13 @@ columns:
   - name: END
     type: date
     derivation:
-      date_impute:
+      impute:
+        type: date
         source: SRC.TEXT
         month: 12
         day: last
         not_after: SRC.HIGH
-        missing: null
-        invalid: null
+        invalid: {literal: null}
 "#,
             )
             .unwrap();
@@ -1161,7 +1161,7 @@ columns:
                     "phase": "validation",
                     "condition": "incompatible_input_type",
                     "requirement": "REQ-0606",
-                    "spec_paths": ["columns.END.derivation.date_impute.not_after"],
+                    "spec_paths": ["columns.END.derivation.impute.not_after"],
                     "context": {"source": "SRC.HIGH", "expected": "date", "actual": "int"},
                 }])
             );
@@ -1184,7 +1184,7 @@ intermediates:
   - id: LOOK
     dataset: RIGHT
     key:
-      M: {date_impute: {source: A, day: first, not_after: B, month: 1}}
+      M: {impute: {type: date, source: A, day: first, not_after: B, month: 1}}
 "#,
             )
             .unwrap();
@@ -1196,7 +1196,7 @@ intermediates:
                     "phase": "planning",
                     "condition": "unsupported_operation",
                     "requirement": null,
-                    "spec_paths": ["intermediates[0].key.M.date_impute.not_after"],
+                    "spec_paths": ["intermediates[0].key.M.impute.not_after"],
                     "context": {"operation": "not_after"},
                 }])
             );
@@ -1371,9 +1371,9 @@ output: {path: output.csv, columns: [ID, UP, LOW, SENT, TITLE]}
 columns:
   - {name: ID, type: str, derivation: SRC.ID}
   - {name: UP, type: str, derivation: {str_case: {source: SRC.TEXT, to: upper, missing: MiXeD}}}
-  - {name: LOW, type: str, derivation: {str_case: {source: SRC.TEXT, to: lower, missing: null}}}
-  - {name: SENT, type: str, derivation: {str_case: {source: SRC.TEXT, to: sentence, missing: null}}}
-  - {name: TITLE, type: str, derivation: {str_case: {source: SRC.TEXT, to: title, missing: null}}}
+  - {name: LOW, type: str, derivation: {str_case: {source: SRC.TEXT, to: lower, missing: {literal: null}}}}
+  - {name: SENT, type: str, derivation: {str_case: {source: SRC.TEXT, to: sentence, missing: {literal: null}}}}
+  - {name: TITLE, type: str, derivation: {str_case: {source: SRC.TEXT, to: title, missing: {literal: null}}}}
 "#,
                 "ID,TEXT\n1,FOLLOW-UP\n2,\u{00df}\u{0130}\u{00e9}\u{1f642}AbC\n3,a\0BC\n4,\n"
                     .as_bytes(),
@@ -1393,16 +1393,28 @@ columns:
   - {name: TEXT, type: str, derivation: {str_case: {source: SRC.TEXT, to: upper}}}
 "#;
         #[test]
-        fn runtime_missing_retains_complete_independent_reference_context_and_keys() {
+        fn runtime_missing_gives_missing_and_counts_the_default_substitution() {
             let fixture = bespoke(MISSING_SPEC, b"ID,TEXT\nrow1,\n");
-            let result = fixture.run();
-            assert!(result.output().is_none());
-            assert_eq!(result.issues().len(), 1);
+            let mut result = fixture.run();
             let reference: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(
                 include_str!("fixtures/text_case_reference.json"),
             )
             .unwrap();
-            assert_eq!(issue_json(&result.issues()[0]), reference["missing"][0]);
+            assert_eq!(
+                yamaa_adapters::json!(result.issues().iter().map(issue_json).collect::<Vec<_>>()),
+                reference["missing"]
+            );
+            assert_eq!(
+                result.observations()["handler_counts"],
+                yamaa_adapters::json!([
+                    {"spec_path":"columns.TEXT.derivation.str_case.missing","handler":"missing","count":1}
+                ])
+            );
+            assert!(result.save().unwrap());
+            assert_eq!(
+                fs::read(fixture.0.join("output.csv")).unwrap(),
+                b"ID,TEXT\nrow1,\n"
+            );
         }
         #[test]
         fn row_substitution_and_selected_nested_case_preserve_scope_and_branch_effects() {
@@ -1415,13 +1427,13 @@ output: {path: output.csv, columns: [ID, TEXT, RESULT]}
 columns:
   - {name: ID, type: str}
   - {name: TEXT, type: str}
-  - {name: RESULT, type: str, derivation: {str_case: {source: TEXT, to: sentence, missing: null}}}
+  - {name: RESULT, type: str, derivation: {str_case: {source: TEXT, to: sentence, missing: {literal: null}}}}
 rows:
   - id: records
     dataset: SRC
     derivations:
       ID: SRC.ID
-      TEXT: {str_case: {source: SRC.TEXT, to: title, missing: null}}
+      TEXT: {str_case: {source: SRC.TEXT, to: title, missing: {literal: null}}}
 "#,
                 b"ID,TEXT\n1,FOLLOW-UP\n2,\n",
             );
@@ -2591,25 +2603,25 @@ columns:
         /// Host epochs cover the entire civil range and drop precision at this boundary.
         #[test]
         fn temporal_host_epochs_have_exact_values() {
-            use yamaa_core::temporal::{Date, DatePrecision, DateTime, DateTimePrecision};
+            use yamaa_core::temporal::{Date, DateTime, Precision};
             for (year, month, day, days) in [
                 (1, 1, 1, -719162.0_f64),
                 (1970, 1, 1, 0.0),
                 (2000, 2, 29, 11016.0),
                 (9999, 12, 31, 2932896.0),
             ] {
-                let date = Date::new(year, month, day, DatePrecision::Year).unwrap();
+                let date = Date::new(year, month, day, Precision::Year).unwrap();
                 let bytes = encode(Value::Date(date));
                 assert_eq!(bytes.tag, 5);
                 assert_eq!(bytes.payload, days.to_le_bytes());
                 let Value::Date(decoded) = decode(5, &bytes.payload).unwrap() else {
                     panic!("date")
                 };
-                assert_eq!(decoded.collected_precision(), DatePrecision::Day);
+                assert_eq!(decoded.collected_precision(), Precision::Day);
                 assert_eq!(
                     decode(5, &bytes.payload),
                     Ok(Value::Date(
-                        Date::new(year, month, day, DatePrecision::Day).unwrap()
+                        Date::new(year, month, day, Precision::Day).unwrap()
                     ))
                 );
             }
@@ -2619,21 +2631,19 @@ columns:
                 (1970, 1, 1, 0, 0, 0, 0.0),
                 (9999, 12, 31, 23, 59, 59, 253402300799.0),
             ] {
-                let date = Date::new(year, month, day, DatePrecision::Day).unwrap();
-                let value =
-                    DateTime::new(date, hour, minute, second, DateTimePrecision::Day).unwrap();
+                let date = Date::new(year, month, day, Precision::Day).unwrap();
+                let value = DateTime::new(date, hour, minute, second, Precision::Day).unwrap();
                 let bytes = encode(Value::DateTime(value));
                 assert_eq!(bytes.tag, 6);
                 assert_eq!(bytes.payload, epoch.to_le_bytes());
                 let Value::DateTime(decoded) = decode(6, &bytes.payload).unwrap() else {
                     panic!("datetime")
                 };
-                assert_eq!(decoded.collected_precision(), DateTimePrecision::Second);
+                assert_eq!(decoded.collected_precision(), Precision::Second);
                 assert_eq!(
                     decode(6, &bytes.payload),
                     Ok(Value::DateTime(
-                        DateTime::new(date, hour, minute, second, DateTimePrecision::Second)
-                            .unwrap()
+                        DateTime::new(date, hour, minute, second, Precision::Second).unwrap()
                     ))
                 );
             }

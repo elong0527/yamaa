@@ -292,7 +292,9 @@ class PublicEnvironment(unittest.TestCase):
                 ["project.yaml", "spec.yaml"],
             )
 
-    def test_selected_functionless_producer_failure_retains_actual_source_prefix(self):
+    def test_functionless_link_reads_its_missing_artifact_without_running_the_producer(
+        self,
+    ):
         os.chdir(self.directory)
         (self.directory / "producer.yaml").write_text(
             "schema_version: '1.0'\ndomain: PROD\nkeys: [ID]\n"
@@ -311,24 +313,22 @@ class PublicEnvironment(unittest.TestCase):
             checked = spec.check()
             failed = spec.run()
         self.assertTrue(checked.issues.is_empty(), checked.issues)
+        # The producer never runs: the consumer reads its own linked path, and
+        # that stored artifact does not exist yet.
         self.assertEqual(
             failed.issues["condition"].to_list(), ["resource_path_missing"]
         )
-        self.assertEqual(failed.issues["spec_paths"].to_list(), [["input.RAW.path"]])
+        self.assertEqual(failed.issues["spec_paths"].to_list(), [["input.P.path"]])
         report = self.report(failed)
         self.assertEqual(report["outcome"], "failure")
         self.assertEqual(report["source_reads"], [])
-        # The entry never ran, so the producer graph returns no run report.
-        self.assertIsNone(failed.report)
         self.assertIsNone(failed.output)
         with self.assertRaises(yamaa.Error):
             failed.save()
         self.assertFalse((self.directory / "produced.csv").exists())
         self.assertFalse((self.directory / "consumer.csv").exists())
 
-    def test_original_recursive_graph_checks_diagnostics_without_activation_or_data(
-        self,
-    ):
+    def test_linked_checks_report_only_the_entry_without_activation_or_data(self):
         os.chdir(self.directory)
 
         def document(input, base, output, invalid=False):
@@ -349,7 +349,7 @@ class PublicEnvironment(unittest.TestCase):
             document("{RAW: ../never-read.csv}", "RAW", "../leaf.csv", True)
         )
         Path("leaf.yaml").write_text(
-            "schema_version: '1.0'\nparents: [parents/base.yaml]\ndomain: LEAF\n"
+            "schema_version: '1.0'\nparent: parents/base.yaml\ndomain: LEAF\n"
         )
         Path("left.yaml").write_text(
             document(TRUTH["aliased_leaf_reference"], "P", "left.csv")
@@ -363,43 +363,28 @@ class PublicEnvironment(unittest.TestCase):
         spec = yamaa.spec("spec.yaml")
         with no_activation():
             for _ in range(2):
+                # Linked producers supply output contracts only: their own
+                # findings are never compiled, and only the entry is checked.
                 rows = spec.check().issues.to_dicts()
-                self.assertEqual(len(rows), 2)
-                for row, source in zip(rows, ("spec.yaml", "leaf.yaml"), strict=True):
-                    context = {
-                        "entry": Path("spec.yaml").resolve().as_posix(),
-                        "pattern": "\u00e9(",
-                        "source": Path(source).resolve().as_posix(),
-                    }
-                    if source == "leaf.yaml":
-                        context["declaring_sources"] = [
-                            Path("parents/base.yaml").resolve().as_posix()
-                        ]
-                    self.assertEqual(
-                        row,
+                self.assertEqual(
+                    rows,
+                    [
                         issue(
                             "invalid_regex",
                             "REQ-0827",
                             [TRUTH["verification_pattern_path"]],
-                            context,
-                        ),
-                    )
-            # The original authored mismatch is admitted independently of any
-            # absent serialized artifact. Checking never opens the CSV paths.
+                            {"pattern": "\u00e9("},
+                        )
+                    ],
+                )
+            # A link types whatever file the consumer names; a path that differs
+            # from the producer's own output is admitted. Checking never opens
+            # the CSV paths.
             Path("spec.yaml").write_text(
                 document(TRUTH["wrong_leaf_reference"], "P", "consumer.csv")
             )
             rows = spec.check().issues.to_dicts()
-            self.assertEqual(
-                [(r["condition"], r["requirement"], r["spec_paths"]) for r in rows],
-                [
-                    (
-                        "producer_output_path_mismatch",
-                        "REQ-0534",
-                        ["input.P.path", "input.P.schema"],
-                    )
-                ],
-            )
+            self.assertEqual(rows, [])
             Path("spec.yaml").write_text(
                 document(TRUTH["incompatible_leaf_reference"], "P", "consumer.csv")
             )
@@ -423,7 +408,7 @@ class PublicEnvironment(unittest.TestCase):
             "adam: {specs: [../entry/spec.yaml]}\n"
         )
         Path("entry/spec.yaml").write_text(
-            "schema_version: '1.0'\nparents: ../shared/base.yaml\ndomain: CHILD\n"
+            "schema_version: '1.0'\nparent: ../shared/base.yaml\ndomain: CHILD\n"
         )
         Path("shared/base.yaml").write_text(
             "schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {SRC: data.csv}\n"
@@ -560,11 +545,13 @@ class PublicEnvironment(unittest.TestCase):
         self.assertEqual(runs.issues.to_dicts(), checked)
         self.assertFalse(Path("outputs/ids.csv").exists())
 
-    def test_matching_budget_has_the_same_owner_and_bound_with_and_without_a_project(
+    def test_catastrophic_pattern_fails_the_same_check_with_and_without_a_project(
         self,
     ):
+        # Matching is linear: a nested repetition that cannot match is an
+        # ordinary verification failure, not an exhausted step budget.
         os.chdir(self.directory)
-        truth = TRUTH["regex_budget"]
+        truth = TRUTH["catastrophic_pattern"]
         Path("spec.yaml").write_text(truth["specification"])
         Path("input.csv").write_text(truth["source"])
         Path("environment.yaml").write_text("schema_version: '1.0'\n")
@@ -964,9 +951,7 @@ class PublicEnvironment(unittest.TestCase):
                         {
                             "id": "records",
                             "dataset": "SOURCE",
-                            "derivations": {
-                                "RESULT": {"value": copy.deepcopy(expression)}
-                            },
+                            "derivations": {"RESULT": copy.deepcopy(expression)},
                         }
                     ]
                 if context == "case":

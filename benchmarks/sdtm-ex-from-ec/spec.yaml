@@ -25,7 +25,7 @@ intermediates:
   - id: KITMAP
     dataset: KITLIST
     key: [KIT]
-    no_match: null
+    no_match: {literal: null}
 
   # Body weight is collected on the VS form at the same visit. The lookup
   # is keyed at the visit level; the weight item filter is what makes the
@@ -37,6 +37,7 @@ intermediates:
       SubjectKey: ODM.SubjectKey
       StudyEventOID: ODM.StudyEventOID
     filter: "ODM.ItemOID = 'IT.VS.WEIGHT'"
+    require_match: true
 
   # Nothing reads this lookup. It checks that no EC form carries two
   # occurrence items, so the row template below, which builds a record from
@@ -50,6 +51,7 @@ intermediates:
       FormOID: ODM.FormOID
       FormRepeatKey: ODM.FormRepeatKey
     filter: "ODM.FormOID = 'FO.EC' AND ODM.ItemOID = 'IT.EC.ECOCCUR'"
+    require_match: true
     verifications:
       - unique: [StudyOID, SubjectKey, StudyEventOID, FormOID, FormRepeatKey]
 
@@ -63,6 +65,7 @@ intermediates:
       FormOID: ODM.FormOID
       FormRepeatKey: ODM.FormRepeatKey
     filter: "ODM.ItemOID = 'IT.EC.FORM'"
+    require_match: true
 
   - id: EC_ECTRT
     dataset: ODM
@@ -73,6 +76,7 @@ intermediates:
       FormOID: ODM.FormOID
       FormRepeatKey: ODM.FormRepeatKey
     filter: "ODM.ItemOID = 'IT.EC.ECTRT'"
+    require_match: true
 
   - id: EC_TABLETS
     dataset: ODM
@@ -83,7 +87,7 @@ intermediates:
       FormOID: ODM.FormOID
       FormRepeatKey: ODM.FormRepeatKey
     filter: "ODM.ItemOID = 'IT.EC.TABLETS'"
-    no_match: null
+    no_match: {literal: null}
 
   - id: EC_STRENGTHMG
     dataset: ODM
@@ -94,7 +98,7 @@ intermediates:
       FormOID: ODM.FormOID
       FormRepeatKey: ODM.FormRepeatKey
     filter: "ODM.ItemOID = 'IT.EC.STRENGTHMG'"
-    no_match: null
+    no_match: {literal: null}
 
   - id: EC_DOSEMKG
     dataset: ODM
@@ -105,7 +109,7 @@ intermediates:
       FormOID: ODM.FormOID
       FormRepeatKey: ODM.FormRepeatKey
     filter: "ODM.ItemOID = 'IT.EC.DOSEMKG'"
-    no_match: null
+    no_match: {literal: null}
 
   - id: EC_AUCTARGET
     dataset: ODM
@@ -116,7 +120,7 @@ intermediates:
       FormOID: ODM.FormOID
       FormRepeatKey: ODM.FormRepeatKey
     filter: "ODM.ItemOID = 'IT.EC.AUCTARGET'"
-    no_match: null
+    no_match: {literal: null}
 
   - id: EC_KIT
     dataset: ODM
@@ -127,7 +131,7 @@ intermediates:
       FormOID: ODM.FormOID
       FormRepeatKey: ODM.FormRepeatKey
     filter: "ODM.ItemOID = 'IT.EC.KIT'"
-    no_match: null
+    no_match: {literal: null}
 
   - id: EC_ECSTDTC
     dataset: ODM
@@ -138,6 +142,7 @@ intermediates:
       FormOID: ODM.FormOID
       FormRepeatKey: ODM.FormRepeatKey
     filter: "ODM.ItemOID = 'IT.EC.ECSTDTC'"
+    require_match: true
 
   - id: EC_ECENDTC
     dataset: ODM
@@ -148,6 +153,7 @@ intermediates:
       FormOID: ODM.FormOID
       FormRepeatKey: ODM.FormRepeatKey
     filter: "ODM.ItemOID = 'IT.EC.ECENDTC'"
+    require_match: true
 
 columns:
   - name: DOMAIN
@@ -251,8 +257,8 @@ columns:
           then: {literal: AUC}
         - otherwise: {literal: mg}
     verifications:
-      allowed_values:
-        values: [mg, AUC]
+      - allowed_values:
+          values: [mg, AUC]
 
   - name: EXSTDTC
     type: date
@@ -280,8 +286,6 @@ rows:
     derivations: {}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, EXSEQ]
   - row_count:
       min: 6
       max: 6

@@ -1,6 +1,3 @@
 lifecycle: draft
 standard: ADaM
 domain: ADSL
-validation:
-  rule: R001
-  validator: window_contract

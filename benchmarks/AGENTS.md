@@ -21,7 +21,6 @@ tracker, one work item per root cause.
         spec.yaml                  # one entry specification
         spec_<name>.yaml ...       # alternatives, parents or producers
         project.yaml               # environments, terminology and sections
-        define.yaml                # when the entry generates a document
         input/                     # independently authored source files
         expected/                  # exact output, logs, documents or error
         python/environment.yaml    # when Python calls a project function
@@ -67,8 +66,31 @@ entries:
       environment: null
 ```
 
+A case whose project composes a submission section declares that project
+submission in `define`, so the fixed-time Define suites and `tools.benchmark`
+run it over the case's published tables and compare `expected/` byte for byte.
+Its `environment` names the project file, as an entry's does, and its
+`standard` the section the submission composes:
+
+```yaml
+define:
+  environment: project.yaml
+  standard: sdtm
+  created: '2026-09-11T00:00:00'
+```
+
+`expected/` then holds the Define-XML document and each transport file the
+section's `datasets` requests (`.xpt` for `xpt`, `.json` for `json`) beside
+the published tables, or, for a negative case, `expected/error.yaml` with the
+submission's first issue; its domain build must still succeed. `.xpt` goldens
+are written by `python -m tools.conformance.xpt_goldens` from the
+hand-authored tables there.
+
 `sdtm-dm-race-ethnicity` is the worked producer/consumer example. Each producer
-commits its own expected artifact beside the entry's. Multi-level inheritance
+commits its own expected artifact beside the entry's. A `schema` link only types
+the stored artifact; a consumer never runs its producer. List each producer
+before its consumers: the runners build and save every entry in order, so a
+later entry reads the artifact an earlier entry saved. Multi-level inheritance
 and alternative specifications also declare their entries; source files are
 not guessed from a parent graph. The metadata is the shared owner for native
 conformance and the dashboard's generated Python and R usage snippets. Do not
@@ -167,18 +189,9 @@ An expected failure before a dataset is completed replaces the CSV with
 contract. A failure over a completed dataset carries both the expected CSV and
 `expected/error.yaml`.
 
-A positive inherited benchmark also carries the exact resolved YAML data tree.
-Use `expected/resolved.yaml` with `spec.yaml`, or
-`expected/resolved_<variant>.yaml` with `spec_<variant>.yaml`. This fixture
-must be complete, canonical, minimal, and free of `parents`; the repository
-validator requires it and compares it with the resolved specification. Only
-the retained historical benchmarks named in `HISTORICAL_RESOLVED_FIXTURES`
-(`../tools/validation/repository_artifacts.py`) are exempt;
-every new positive inherited benchmark needs one.
-
 A multi-level benchmark keeps each inheritance level beside the entry as
 `spec_<level>.yaml` and carries no top-level `spec.yaml`. The level no other
-file names in `parents` is the entry: it declares the complete `output`, and
+file names as its `parent` is the entry: it declares the complete `output`, and
 the chain resolves to `expected/spec_resolved.yaml`, which the dashboard shows
 in its specification dropdown (the default view) rather than as an expected
 dataset. Reserve this layout for benchmarks whose point is the layering itself;
@@ -230,7 +243,7 @@ no expression or field names, no `output.columns`, and none of the words
 
     - counting neither the last day of period one nor the first day of period
       two, so consecutive periods give zero
-    + `date_diff` with `bounds: between`
+    + `diff` with `bounds: between`
 
     - A subject who never entered period two has no exposure records there
     + Its period-two right side is empty after filtering, treated as
@@ -333,16 +346,19 @@ lifecycle could not complete. A failure involving several authored units names
 each one once, in specification order. Do not add a parent or an absent field
 merely because changing it would be another possible repair.
 
-When the [schema language](../rules/reference/schema-language.md) makes
-a scalar and a one-field class interchangeable shorthand, the
-path names the operation: it is the narrowest authored unit shared by both
-spellings, and normalization must not invent a deeper location.
+A [schema language](../rules/reference/schema-language.md) shorthand is the
+only spelling of the value its long form would merely restate, and it expands
+to its canonical class before the operation is prepared. A failure inside a
+written shorthand names the operation or the field of that class the operation
+reports: a bare string derivation fails at `derivation.source`, a lone
+aggregate formula at `aggregate` and a lone flag condition at
+`flag.condition`. Normalization never invents a location outside the expanded
+class, and a written long form that only restates its shorthand fails at its
+own path as `redundant_long_form`.
 
-Every validation-phase negative case declares `validation` in `benchmark.yaml`:
-`rule` plus exactly one `validator` family or open `blocked_by: "#N"` issue.
-The primary condition and specification paths stay solely in the independent
-`expected/error.yaml`. Implemented validators must emit that condition at every
-expected path. Add `covers: [operation, "verify:operation"]` to the metadata for
+The primary condition and specification paths of a negative case stay solely
+in the independent `expected/error.yaml`; `benchmark.yaml` carries no
+validation block. Add `covers: [operation, "verify:operation"]` to the metadata for
 vocabulary failure coverage; shared installed refusals declare `covers` beside
 their existing cases in the shared host fixture owner.
 
@@ -359,17 +375,14 @@ the same point say so the same way. Whole-run evaluation failures use:
 | `verification` | a declared assertion |
 
 A condition that an operation could have answered locally uses the stage in
-the [local-handlers contract](../rules/execution/handlers.md):
+the [local-handlers contract](../rules/columns.md#local-handlers):
 
 | Phase | Rejects |
 |---|---|
 | `bind` | an absent source variable or ODM item |
-| `join` | an unresolved multiple match, or an intermediate that selects no record |
-| `mapping` | a missing or unmapped lookup input |
-| `cut` | a missing numeric classification input |
-| `extract` | a missing string or unmatched pattern |
-| `template` | a missing placeholder value |
-| `impute` | a missing or unusable partial-date input |
+| `join` | an unresolved multiple match, or a read that finds no record under a `require_match` its lookup, source or input declares |
+| `mapping` | an unmapped lookup input, a pattern that matches nowhere, or a missing placeholder value |
+| `impute` | invalid collected date or duration text |
 | `convert` | a result that cannot take its declared type |
 | `final` | a failed final replacement |
 
@@ -395,7 +408,8 @@ check merely to make the sample pass.
 
 Use the supported setup and repository checks in [CONTRIBUTING.md](../CONTRIBUTING.md).
 From the repository root, run a positive case through its declared Python
-entries without publishing any output files:
+entries in a staged copy. Each entry is saved there before the next is built;
+nothing is published into the checkout:
 
 ```sh
 uv run --project python --no-sync python -m tools.benchmark benchmarks/<name>
@@ -416,7 +430,6 @@ uv run --project python --no-sync pytest evaluations/harbor/tests
    files, the input
    data, and either the expected output or the expected error. Add an expected
    CSV beside an error when it makes a blocked or rejected result concrete.
-   For a positive inherited benchmark, also write its expected resolved YAML.
 2. Write the README to the contract above. A negative benchmark must include its
    `## How to fix` section.
 3. Once the README of a positive `sdtm-*` or `adam-*` benchmark is
@@ -447,14 +460,14 @@ numeric grammar once rather than registering `add`, `subtract`, and `divide`.
 
 Prefer widening an existing entry to adding a new one -- but the test is the
 kind of value, not the saving in YAML. Widen when the new behavior returns the
-same kind of value, as `date_diff`'s `bounds` still returns a count. Add an
+same kind of value, as `diff`'s `bounds` still returns a count. Add an
 entry when it does not: `study_day` returns an ordinal on a calendar with no
-zero, and folding it into `date_diff` would have allowed `unit: week` with it.
+zero, and folding it into `diff` would have allowed `unit: week` with it.
 
 After registering one, update every place that enumerates the vocabulary: the
 expression registry in the owning `../yaml/schema_*.yaml` module and the
 generated schema-fields reference it feeds (see `../rules/README.md`), the
 owning operation contract's type
-behavior, and the [local-handlers contract](../rules/execution/handlers.md)
+behavior, and the [local-handlers contract](../rules/columns.md#local-handlers)
 if it declares handlers. Then delete the gap it closed from its work item in the
 issue tracker, and close the work item when its last gap closes.

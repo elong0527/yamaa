@@ -1,6 +1,3 @@
 lifecycle: draft
 standard: ADaM
 domain: ADVS
-validation:
-  rule: R001
-  validator: dependency_graph

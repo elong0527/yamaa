@@ -210,8 +210,8 @@ busy or poisoned owners, conversion failures and caught native panics are typed
 boundary refusals using the shared `ApplicationRejected` classification; they
 do not invent a language requirement. Native unwinds and R longjmps must not
 cross the host boundary. Ordinary callback exceptions/conditions stay rooted on
-their originating attempt and can be inspected after projection failure.
-Formatting a secondary error must not replace that original object.
+their originating attempt. Formatting a secondary error must not replace that
+original object.
 
 Version refusal uses the bootstrap mapping above. Ordinary callable boundary
 failures use the negotiated imported records directly. Argument failures before
@@ -238,7 +238,7 @@ Handles are process-local, host-local and kind checked. Do not serialize them,
 use them after finalization, exchange them between Python/R or treat an address
 as authority. Access during an existing mutable borrow or after poisoning
 returns a refusal. Result accessors own their outputs; dropping the parent
-cannot invalidate an acquired producer owner, copied record or exported table.
+cannot invalidate a copied record or exported table.
 Inspection and evidence access grant no Save capability. Save uses the held
 build's ordered publication path and reports operational refusal separately from
 attempting to save a failed build.

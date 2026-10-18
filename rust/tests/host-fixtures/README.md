@@ -19,22 +19,17 @@ including quoting, trailing zeros and final newlines.
 The R assertions share `context.R` to compare decoded JSON contexts with key
 order ignored at every level. Array order and scalar types remain exact.
 
-The public producer suites share the `producer-graph` section. The
-function contract has an explicit `HOST_CALLABLE` slot because the installed
-Python and R programs have different callable names. Each host's environments
-entry, lock, ABI handles and callbacks remain host-owned. Public-contract data
-retains the different Python and R i64 vectors: R's plain doubles refuse the
-values beyond 2^53, while both hosts save the held bytes.
+Each host's environments entry, lock, ABI handles and callbacks remain
+host-owned. Public-contract data retains the different Python and R i64
+vectors: R's plain doubles refuse the values beyond 2^53, while both hosts save
+the held bytes.
 
 | Paired family | Shared data and existing owners |
 | --- | --- |
-| public-producer-builds | Producer/consumer YAML, function cases, exact rounded CSV, aliases, retained sources and refusal variants |
-| producer-cohort | `project-original/shared-producer-parquet`, source filenames and exact output CSV |
 | original-specifications | Original case selection, lookup/ordering/casing inputs and exact CSV; existing independent TSV/JSON reports |
 | file-resources | Named lookup paths, issue columns, exact alias context and entry-relative programs that declare `output.report`; existing inspection/capture reports |
-| public-environment | Original case selection, graph references, quota/version inputs, exact callback CSV and the project-relative inherited and codelist files |
+| public-environment | Original case selection, schema link references, quota/version inputs, exact callback CSV and the project-relative inherited and codelist files |
 | verification-logs | `specification-original/schema-verification-log`, evaluated counts and fatal outcomes, now checked in the run report |
-| producer-logs | Decimal i64 keys, aliased/diamond inputs and offending keys |
 | public-define | Existing Define input/XML/JSON owners, creation time, issue columns, column schemas, numeric metadata variants and spec/project text mutations |
 | public-contract | Shared YAML, issue and report columns, argument/member/read-only view names and defaults, shared messages, typed plain values and the failed run's report bytes; distinct host i64 vectors |
 | public-grammar | Shared condition families; existing `grammar-original/cases.tsv` decisions |
@@ -88,11 +83,12 @@ authored conversion inputs, expected CSV bytes, refusal conditions and reached
 handler counts with the Rust adapter execution controls. Python and R exercise
 the same typed bindings through their installed public entry points.
 The `original-specifications.temporal_arithmetic` vectors likewise share
-PK relative times, civil shifts, duration parsing/formatting, static refusals,
+PK relative times, civil shifts, duration parsing, static refusals,
 range failures and reached `invalid` handler counts across Rust, Python and R.
 The `original-specifications.inheritance_nulls` cases share authored layers,
 missing-lookup CSV bytes, reached `no_match` counts and refusal conditions for
-introducing null values, empty children and inherited clears in both hosts.
+`{literal: null}` handlers, nulls that leave a field absent, empty children and
+inherited clears in both hosts.
 
 ## Public conformance mapping
 
@@ -114,8 +110,6 @@ owners while adding host or private lifecycle assertions:
 - Define controls continue to use `define-fixtures` and its independent schemas,
   JSON/XML/CSV owners. Grammar decisions continue to use `grammar-original` and
   its independently authored case table.
-- `shared-producer-parquet` is an additional installed ownership/publication
-  control, rather than an active public-conformance benchmark name.
 
 Unpaired scalar and project-function controls retain their existing owners.
 

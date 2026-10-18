@@ -20,11 +20,7 @@ CLASSES = (
 def render():
     classes = {}
     for source in sorted((ROOT / "yaml").glob("schema*.yaml")):
-        if source.name in {
-            "schema_define.yaml",
-            "schema_environment.yaml",
-            "schema_project.yaml",
-        }:
+        if source.name in {"schema_environment.yaml", "schema_project.yaml"}:
             continue
         classes.update(
             (name, value)

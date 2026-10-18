@@ -9,16 +9,16 @@ pub(crate) enum Error {
 
 use crate::json;
 use yamaa_core::json::Value;
-use yamaa_core::{regex, schema::*};
+use yamaa_core::{portable_regex, schema::*};
 
 pub(crate) fn limit(phase: &str, resource: &str, limit: usize) -> Value {
     json!({"status":"resource_limit","phase":phase,"resource":resource,"limit":limit})
 }
-fn regex_resource(resource: regex::Resource) -> &'static str {
-    use regex::Resource::*;
+fn regex_resource(resource: portable_regex::Resource) -> &'static str {
+    use portable_regex::Resource::*;
     match resource {
         Depth => "semantic_depth",
-        Work => "regex_steps",
+        Size => "regex_size",
     }
 }
 fn document_resource(resource: DocumentResource) -> &'static str {
@@ -54,9 +54,6 @@ pub(crate) fn validation(error: ValidationError) -> Result<Value, Error> {
         ),
         ValidationError::InvalidDescriptor => return Err(Error::InvalidQuery),
         ValidationError::Depth { limit: maximum } => limit("validation", "semantic_depth", maximum),
-        ValidationError::Constraint(ConstraintError::Regex(error)) => {
-            limit("regex_match", regex_resource(error.resource), error.limit)
-        }
     })
 }
 pub(crate) fn normalization(error: NormalizationError) -> Result<Value, Error> {
@@ -87,17 +84,27 @@ pub(crate) fn normalization(error: NormalizationError) -> Result<Value, Error> {
 }
 /// Dependency discovery never turns a resource refusal into a missing edge.
 pub(crate) fn inheritance_dependencies(error: InheritanceDependencyError) -> Result<Value, Error> {
-    use yamaa_core::{aggregate_parser as a, numeric_parser as n, predicate_parser as p};
+    use yamaa_core::expression::{CompileError, Resource};
     use InheritanceDependencyError as E;
     use InheritanceReferenceError as R;
-    fn syntax_limit(phase: &str, resource: n::ParseResource, maximum: usize) -> Value {
-        limit(
-            phase,
-            match resource {
-                n::ParseResource::Depth => "semantic_depth",
-            },
-            maximum,
-        )
+    /// An expression field's own boundary, or its regular-expression literal's.
+    fn syntax_limit(field: &str, error: &CompileError) -> Option<Value> {
+        let CompileError::Limit {
+            resource,
+            limit: maximum,
+            ..
+        } = error
+        else {
+            return None;
+        };
+        Some(match resource {
+            Resource::Depth => limit(&format!("inheritance_{field}"), "semantic_depth", *maximum),
+            Resource::Regex(resource) => limit(
+                &format!("inheritance_{field}_regex"),
+                regex_resource(*resource),
+                *maximum,
+            ),
+        })
     }
     Ok(match error {
         E::Normalization(error) | E::Reference(R::Normalization(error)) => {
@@ -111,32 +118,15 @@ pub(crate) fn inheritance_dependencies(error: InheritanceDependencyError) -> Res
                 .collect::<Vec<_>>();
             json!({"status":"invalid","diagnostics":translated})
         }
-        E::Reference(R::Numeric(n::ParseError::Limit {
-            resource, limit, ..
-        })) => syntax_limit("inheritance_numeric", resource, limit),
-        E::Reference(R::Aggregate(a::ParseError::Limit {
-            resource, limit, ..
-        })) => syntax_limit("inheritance_aggregate", resource, limit),
-        E::Reference(R::Predicate(p::ParseError::Limit {
-            resource, limit, ..
-        })) => syntax_limit("inheritance_predicate", resource, limit),
-        E::Reference(R::Predicate(p::ParseError::RegexLimit {
-            resource,
-            limit: maximum,
-            ..
-        })) => limit(
-            "inheritance_predicate_regex",
-            regex_resource(resource),
-            maximum,
-        ),
-        E::Reference(R::Predicate(p::ParseError::UnsupportedRegex {
-            feature,
-            byte,
-            position,
-        })) => {
-            json!({"status":"unsupported","phase":"inheritance_predicate_regex","feature":feature,"pattern_byte":byte,"position":{"byte":position.byte,"character":position.character}})
+        E::Reference(R::Numeric(error)) => {
+            syntax_limit("numeric", &error).ok_or(Error::Internal)?
+        }
+        E::Reference(R::Aggregate(error)) => {
+            syntax_limit("aggregate", &error).ok_or(Error::Internal)?
         }
         // Grammar failures deliberately contribute no edges, then survive for final validation.
-        E::Reference(_) => return Err(Error::Internal),
+        E::Reference(R::Predicate(error)) => {
+            syntax_limit("predicate", &error).ok_or(Error::Internal)?
+        }
     })
 }

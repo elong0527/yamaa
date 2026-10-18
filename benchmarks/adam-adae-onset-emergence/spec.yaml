@@ -69,8 +69,8 @@ columns:
           then: {literal: "Y"}
         - otherwise: {literal: null}
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
   # Occurrence sequencing needs an orderable onset; a treatment-emergent
   # event with a missing onset is flagged but cannot be sequenced.
@@ -90,12 +90,10 @@ columns:
     derivation:
       flag: "AOCCSEQ = 1"
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
       min: 10
       max: 10

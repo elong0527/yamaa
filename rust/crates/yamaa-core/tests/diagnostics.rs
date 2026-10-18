@@ -9,11 +9,16 @@ mod diagnostics {
         use yamaa_core::{
             conversion::convert,
             diagnostic::CONDITIONS,
-            evaluation::{EvaluationErrorKind, NumericResolver},
-            numeric_compiler::compile_numeric,
-            numeric_parser::SourceSpan,
+            expression::{
+                compile, CompileError, CompiledExpression, Context,
+                ErrorKind as EvaluationErrorKind, Resolver as NumericResolver, SourceSpan,
+            },
             value::{ColumnType, Selection, Value},
         };
+
+        fn compile_numeric(text: &str, path: &str) -> Result<CompiledExpression, CompileError> {
+            compile(text, Context::Compute, path)
+        }
 
         struct Bindings;
         use crate::support::project_environment;
@@ -151,12 +156,6 @@ mod diagnostics {
                 ("MISSING", "validation", "unknown_field", "REQ-0443"),
                 ("TEXT", "validation", "incompatible_input_type", "REQ-0444"),
                 (
-                    "ROUND_HALF_AWAY_FROM_ZERO(1, 1.0)",
-                    "validation",
-                    "incompatible_input_type",
-                    "REQ-0418",
-                ),
-                (
                     "9223372036854775807 + 1",
                     "derivation",
                     "integer_overflow",
@@ -168,7 +167,7 @@ mod diagnostics {
                 ("POWER(-1, 0.5)", "derivation", "invalid_power", "REQ-0433"),
             ] {
                 let plan = compile_numeric(expression, "columns.X.compute").unwrap();
-                let error = plan.evaluate(&mut Bindings).unwrap_err();
+                let error = plan.evaluate_number(&mut Bindings).unwrap_err();
                 let diagnostic = error.diagnostic().unwrap();
                 let definition = diagnostic.definition();
                 assert_eq!(
@@ -287,6 +286,7 @@ mod diagnostics {
             reached.extend(project_activation::reached());
             reached.extend(project_functions::reached());
             reached.extend(project_environment::reached());
+            reached.extend(project_environment::extended_alias_reached());
             reached.extend(project_lock::reached());
             reached.extend(project_scope::reached());
             let lock = yamaa_core::application_issue::lock_mismatch(
@@ -321,6 +321,7 @@ mod diagnostics {
             reached.extend(binding::window_reached());
             reached.extend(binding::lookup_reached());
             reached.extend(binding::source_filter_reached());
+            reached.extend(binding::source_match_reached());
             reached.extend(binding::implicit_source_reached());
             reached.extend(binding::verification_reached());
             reached.extend(binding::verification_declarations_reached());
@@ -359,6 +360,13 @@ mod diagnostics {
             .is_none());
             reached.insert(diagnostic.code);
             for (check, values, offending, condition, requirement) in [
+                (
+                    yamaa_core::dataset::Check::Mandatory(None),
+                    vec![Value::Int(1), Value::Missing, Value::Str(String::new())],
+                    vec![1],
+                    "not_missing_failed",
+                    "REQ-0885",
+                ),
                 (
                     yamaa_core::dataset::Check::AllowedValues(vec![Value::Int(1)]),
                     vec![Value::Int(1), Value::Missing, Value::Int(2)],
@@ -426,7 +434,7 @@ mod diagnostics {
                 .is_none());
                 reached.insert(diagnostic.code);
             }
-            let pattern = yamaa_core::regex::Pattern::compile("b").unwrap();
+            let pattern = yamaa_core::portable_regex::Pattern::compile("b").unwrap();
             let rows = yamaa_core::dataset_checks::matches_offenders(
                 &pattern,
                 &[
@@ -434,8 +442,7 @@ mod diagnostics {
                     Value::Missing,
                     Value::Str("xxx".into()),
                 ],
-            )
-            .unwrap();
+            );
             assert_eq!(rows, [2]);
             let diagnostic = yamaa_core::dataset_checks::column_diagnostic(
                 &yamaa_core::dataset::Check::Matches(pattern),
@@ -459,8 +466,8 @@ mod diagnostics {
             );
             reached.insert(diagnostic.code);
             assert!(matches!(
-                yamaa_core::regex::Pattern::compile("("),
-                Err(yamaa_core::regex::CompileError::Invalid { .. })
+                yamaa_core::portable_regex::Pattern::compile("("),
+                Err(yamaa_core::portable_regex::CompileError::Invalid { .. })
             ));
             let diagnostic = yamaa_core::dataset_checks::invalid_pattern_diagnostic(
                 "columns.V.verifications[0].matches.pattern".into(),
@@ -517,6 +524,7 @@ mod diagnostics {
             reached.extend(csv::typing_reached());
             reached.extend(parquet::reached());
             reached.extend(sas::reached());
+            reached.extend(result_types::reached());
             let check = yamaa_core::dataset::Check::Codelist {
                 id: "SEX".into(),
                 values: vec![Value::Str("F".into())],
@@ -576,22 +584,23 @@ mod diagnostics {
         }
 
         #[test]
-        fn column_pattern_searches_reuse_the_plan_after_a_fixed_work_refusal() {
-            use yamaa_core::{dataset_checks::matches_offenders, regex};
-            let pattern = regex::Pattern::compile("z").unwrap();
+        fn column_pattern_searches_reuse_the_plan_without_a_work_budget() {
+            use yamaa_core::{dataset_checks::matches_offenders, portable_regex::Pattern};
+            let pattern = Pattern::compile("z").unwrap();
             let values = [Value::Str("é".into()), Value::Missing];
             for _ in 0..3 {
-                assert_eq!(matches_offenders(&pattern, &values).unwrap(), [0]);
+                assert_eq!(matches_offenders(&pattern, &values), [0]);
             }
+            // A million-scalar subject, which the retired step budget refused,
+            // is searched to completion and simply has no match.
             let long = [Value::Str("é".repeat(1_000_000))];
+            assert_eq!(matches_offenders(&pattern, &long), [0]);
+            let catastrophic = Pattern::compile("(a+)+b").unwrap();
             assert_eq!(
-                matches_offenders(&pattern, &long),
-                Err(regex::MatchError {
-                    resource: regex::Resource::Work,
-                    limit: 1_000_000,
-                })
+                matches_offenders(&catastrophic, &[Value::Str("a".repeat(100_000))]),
+                [0]
             );
-            assert_eq!(matches_offenders(&pattern, &values).unwrap(), [0]);
+            assert_eq!(matches_offenders(&pattern, &values), [0]);
         }
 
         /// A later nested error keeps its own span/route and full integer diagnostic,
@@ -601,7 +610,7 @@ mod diagnostics {
             let expression = "1 + (9223372036854775807 + 1)";
             let error = compile_numeric(expression, "columns.X.compute")
                 .unwrap()
-                .evaluate(&mut Bindings)
+                .evaluate_number(&mut Bindings)
                 .unwrap_err();
             let diagnostic = error.diagnostic().unwrap();
             assert_eq!(
@@ -615,14 +624,22 @@ mod diagnostics {
             );
             assert_eq!(diagnostic.context["minimum"], JsonValue::from(i64::MIN));
             assert_eq!(diagnostic.context["maximum"], JsonValue::from(i64::MAX));
-            let literal = compile_numeric("9223372036854775808", "columns.Y.compute")
-                .unwrap()
-                .evaluate(&mut Bindings)
-                .unwrap_err()
-                .diagnostic()
-                .unwrap();
-            assert_eq!(literal.code, diagnostic.code);
-            assert_eq!(literal.context["value"], diagnostic.context["value"]);
+            // A literal outside the int range is refused before any value is read.
+            let Err(CompileError::Invalid {
+                position, failure, ..
+            }) = compile_numeric("9223372036854775808", "columns.Y.compute")
+            else {
+                panic!("an overflowing literal is refused")
+            };
+            let literal = failure.diagnostic(
+                Context::Compute,
+                "columns.Y.compute",
+                "9223372036854775808",
+                position.character,
+            );
+            assert_eq!(literal.definition().phase, "validation");
+            assert_eq!(literal.definition().condition, "integer_overflow");
+            assert_eq!(literal.definition().requirement, Some("REQ-0014"));
         }
 
         #[test]
@@ -665,14 +682,14 @@ mod diagnostics {
             };
             let error = compile_numeric("BAD + LATER", "columns.X")
                 .unwrap()
-                .evaluate(&mut resolver)
+                .evaluate_number(&mut resolver)
                 .unwrap_err();
-            assert!(error.diagnostic().is_none());
+            assert!(error.diagnostic().is_err());
             assert_eq!(resolver.calls, ["BAD"]);
             let EvaluationErrorKind::Resolution {
                 identifier,
                 error: Failure(value),
-            } = error.evaluation.kind
+            } = error.kind
             else {
                 panic!("opaque failure replaced")
             };

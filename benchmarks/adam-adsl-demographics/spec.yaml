@@ -65,7 +65,7 @@ columns:
           BLACK OR AFRICAN AMERICAN: 2
           ASIAN: 3
           MULTIPLE: 4
-        missing: null
+        missing: {literal: null}
         unmapped: 99
 
   # A collected age that is not a whole number (text, or 34.5) cannot become
@@ -76,7 +76,7 @@ columns:
     derivation:
       value:
         source: DM.AGE
-      unconvertible: null
+      unconvertible: {literal: null}
     verifications:
       - range:
           min: 0
@@ -95,8 +95,6 @@ columns:
         missing: UNKNOWN
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID]
   - row_count:
       min: 11
       max: 11

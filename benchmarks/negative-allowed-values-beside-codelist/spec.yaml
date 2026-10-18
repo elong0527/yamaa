@@ -1,0 +1,34 @@
+schema_version: "1.0"
+domain: DM
+keys: [STUDYID, USUBJID]
+input:
+  DM_RAW: input/dm_raw.csv
+
+output:
+  path: dm.csv
+  columns: [STUDYID, USUBJID, SEX]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM_RAW.USUBJID
+
+  # The bound list already names every accepted code; the list of values
+  # beside it states the same codes a second time.
+  - name: SEX
+    type: str
+    label: Sex
+    derivation: DM_RAW.SEX
+    verifications:
+      - allowed_values:
+          values: [F, M, U]
+    submission:
+      codelist: SEX
+      origin:
+        type: Collected

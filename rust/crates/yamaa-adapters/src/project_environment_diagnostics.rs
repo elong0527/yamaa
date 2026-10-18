@@ -183,20 +183,13 @@ fn resource_limit(bound: yamaa_core::limits::LimitExceeded, declaration: &str) -
 fn validation_limit(
     error: &yamaa_core::schema::ValidationError,
 ) -> Option<yamaa_core::limits::LimitExceeded> {
-    use yamaa_core::{regex, schema::*};
+    use yamaa_core::schema::*;
     let (resource, limit) = match error {
         ValidationError::Depth { limit }
         | ValidationError::Type(TypeError::Limit {
             resource: TypeResource::Depth,
             limit,
         }) => ("semantic_depth", *limit),
-        ValidationError::Constraint(ConstraintError::Regex(error)) => (
-            match error.resource {
-                regex::Resource::Depth => "semantic_depth",
-                regex::Resource::Work => "regex_steps",
-            },
-            error.limit,
-        ),
         _ => return None,
     };
     Some(yamaa_core::limits::LimitExceeded {

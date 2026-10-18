@@ -35,7 +35,7 @@ intermediates:
     filter: "QS.ADT IS NOT NULL AND QS.AVAL IS NOT NULL"
     order_by: [QS.ADT, QS.QSSEQ]
     keep: first
-    no_match: null
+    no_match: {literal: null}
 
   # The first deteriorated assessment: dated after the baseline assessment
   # with a score at least 10 points below the baseline score. The cutoff is
@@ -49,7 +49,7 @@ intermediates:
       AND QS.AVAL <= QS.CUTOFF"
     order_by: [QS.ADT, QS.QSSEQ]
     keep: first
-    no_match: null
+    no_match: {literal: null}
     derivations:
       BASELINEDT: BASELINE.ADT
       CUTOFF: {compute: {expr: "BASELINE.AVAL - 10"}}
@@ -65,7 +65,7 @@ intermediates:
       'STUDY DISCONTINUATION', 'WITHDRAWAL OF CONSENT')"
     order_by: [DS.DSDTC, DS.DSSEQ]
     keep: first
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: STUDYID
@@ -181,7 +181,8 @@ columns:
     type: int
     label: Analysis Value
     derivation:
-      date_diff:
+      diff:
+        type: date
         start: STARTDT
         end: ADT
         unit: month

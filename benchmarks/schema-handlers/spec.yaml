@@ -52,14 +52,13 @@ columns:
     derivation:
       value:
         source: VS.VSSTRESN
-      unconvertible: null
+      unconvertible: {literal: null}
 
   # A dosing record with no dose never qualifies; among the dosed
-  # records the later start date wins. A subject with no dosing
-  # record keeps the dose blank. Multiple matches fail by default;
-  # `order_by` + `keep` selects the later start date instead. The
-  # stated `absent` answers a variable absent from context; every
-  # row here reads a present variable, so no row takes it.
+  # records the later start date wins. Multiple matches fail by default;
+  # `order_by` + `keep` selects the later start date instead. A subject
+  # with no dosed record takes the stated `absent`, keeping the dose
+  # blank; `absent` would also answer a variable absent from context.
   - name: LASTDOSE
     type: float
     label: Latest Dose
@@ -69,4 +68,4 @@ columns:
         filter: "EX.EXDOSE IS NOT NULL"
         order_by: [EX.EXSTDTC]
         keep: last
-        absent: null
+        absent: {literal: null}

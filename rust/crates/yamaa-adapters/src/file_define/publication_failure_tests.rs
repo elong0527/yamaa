@@ -107,7 +107,7 @@ fn changed_define_metadata_uses_original_project_environment_spec_parent_and_dic
         let spec = match changed {
             "base.yaml" => {
                 fs::write(directory.join("base.yaml"), SPEC).unwrap();
-                "schema_version: '1.0'\nparents: [base.yaml]\n".to_owned()
+                "schema_version: '1.0'\nparent: base.yaml\n".to_owned()
             }
             "dict.yaml" => {
                 fs::write(directory.join("dict.yaml"), b"A: answer\n").unwrap();
@@ -154,7 +154,7 @@ fn changed_define_metadata_uses_original_project_environment_spec_parent_and_dic
             "project.yaml" => ("environment", environment_written.as_str()),
             "python/environment.yaml" => ("environments.python", "python/environment.yaml"),
             "spec.yaml" => ("sdtm.specs[0]", "spec.yaml"),
-            "base.yaml" => ("parents[0]", "base.yaml"),
+            "base.yaml" => ("parent", "base.yaml"),
             "dict.yaml" => ("columns.ID.derivation.mapping.dict", "dict.yaml"),
             _ => unreachable!(),
         };
@@ -211,7 +211,8 @@ fn later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_re
     assert!(result.issues().is_empty(), "{:?}", result.issues());
     let held = result.artifacts().next().unwrap().1.to_vec();
     let reads = result.capture_reads();
-    let later_target = directory.join("second.json");
+    // Each transport file is named for its dataset beside the document.
+    let later_target = directory.join("dm2.json");
     result.ports.after_publish = Some(Box::new(move |written| {
         if written == "dm.json" {
             fs::create_dir(&later_target).unwrap();

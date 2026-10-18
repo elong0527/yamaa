@@ -1,8 +1,8 @@
 //! Finish composed column fields only after every contribution has been applied.
 
 use super::{
-    ComposedLayers, Document, DocumentNode as N, LayerNodeOrigin, NormalizationError,
-    NormalizationResource, SchemaStructure, ValidationError,
+    validation::NullPolicy, ComposedLayers, Document, DocumentNode as N, LayerNodeOrigin,
+    NormalizationError, NormalizationResource, SchemaStructure, ValidationError,
 };
 use std::collections::BTreeMap;
 
@@ -113,10 +113,37 @@ fn copy(
 }
 
 impl SchemaStructure {
-    /// Merge admitted normalized layers, then materialize supplied column fields once.
-    /// Missing whole column fields and other incomplete declarations remain for later
-    /// pruning and complete-document validation. Written provenance excludes defaults.
-    /// No document is returned when a clear or normalization diagnostic is present.
+    /// The class of a keyed collection's members: the `T` of a `list[T]` or
+    /// `dict[K, T]` root field, or the class member of a union `T`.
+    pub(super) fn member_class(&self, collection: usize) -> Option<&super::SchemaClass> {
+        let [expression] = self.descriptors().get(collection)?.descriptor.members() else {
+            return None;
+        };
+        let member = match &expression.nodes()[expression.root()] {
+            super::TypeNode::List(inner) => *inner,
+            super::TypeNode::Dictionary { value, .. } => *value,
+            super::TypeNode::Name(_) => return None,
+        };
+        let name = expression.node_text(member)?;
+        if let Some(class) = self.class_named(name) {
+            return Some(class);
+        }
+        let (_, alias) = self.alias_named(name)?;
+        let super::SchemaAliasKind::Descriptor(id) = alias.kind else {
+            return None;
+        };
+        self.descriptors()[id]
+            .descriptor
+            .members()
+            .iter()
+            .find_map(|member| self.class_named(member.node_text(member.root())?))
+    }
+
+    /// Merge admitted normalized layers, then materialize the fields every keyed
+    /// member carries once. Missing whole member fields and other incomplete
+    /// declarations remain for later pruning and complete-document validation.
+    /// Written provenance excludes defaults. No document is returned when a clear
+    /// or normalization diagnostic is present.
     pub fn compose_layers(
         &self,
         layers: &[Document],
@@ -139,58 +166,99 @@ impl SchemaStructure {
         result.node_origins = origins;
         let document = &result.document;
         let mut replacements = BTreeMap::new();
-        if let Some(columns) = document.field(document.root(), "columns") {
-            let N::Sequence(columns) = &document.nodes()[columns] else {
-                return Err(ValidationError::InvalidDescriptor.into());
+        for field in &self.root_class().fields {
+            let identity = match field.name.as_str() {
+                "input" | "windows" => None,
+                "columns" => Some("name"),
+                "rows" | "intermediates" => Some("id"),
+                _ => continue,
+            };
+            let Some(collection) = document.field(document.root(), &field.name) else {
+                continue;
+            };
+            let members: Vec<(String, usize)> = match (&document.nodes()[collection], identity) {
+                (N::Sequence(items), Some(identity)) => items
+                    .iter()
+                    .map(|&member| {
+                        let name = document
+                            .field(member, identity)
+                            .and_then(|id| match &document.nodes()[id] {
+                                N::Text(name) => Some(name.clone()),
+                                _ => None,
+                            })
+                            .ok_or(ValidationError::InvalidDescriptor)?;
+                        Ok((name, member))
+                    })
+                    .collect::<Result<_, ValidationError>>()?,
+                (N::Mapping(items), None) => items
+                    .iter()
+                    .map(|&(key, member)| match &document.nodes()[key] {
+                        N::Text(name) => Ok((name.clone(), member)),
+                        _ => Err(ValidationError::InvalidDescriptor),
+                    })
+                    .collect::<Result<_, ValidationError>>()?,
+                _ => return Err(ValidationError::InvalidDescriptor.into()),
             };
             let fields = &self
-                .class_named("column_class")
+                .member_class(field.descriptor)
                 .ok_or(ValidationError::InvalidDescriptor)?
                 .fields;
-            for &column in columns {
-                let N::Mapping(_) = &document.nodes()[column] else {
+            for (name, member) in members {
+                let N::Mapping(_) = &document.nodes()[member] else {
                     return Err(ValidationError::InvalidDescriptor.into());
                 };
-                for field in fields {
-                    if let Some(value) = document.field(column, &field.name) {
-                        if matches!(document.nodes()[value], N::Null) {
-                            continue;
-                        }
-                        // Normalize in schema field order, preserving failure precedence.
-                        let normalized = match self.normalize_descriptor(
-                            field.descriptor,
+                for member_field in fields {
+                    let Some(value) = document.field(member, &member_field.name) else {
+                        continue;
+                    };
+                    // Normalize in schema field order, preserving failure precedence.
+                    let path = format!("{}.{name}.{}", field.name, member_field.name);
+                    // The composed document holds normalized contributions.
+                    let findings = self.validate_canonical_descriptor(
+                        member_field.descriptor,
+                        document,
+                        value,
+                        &path,
+                        false,
+                        NullPolicy::Absent,
+                    )?;
+                    let normalized = if findings.is_empty() {
+                        self.normalize_canonical_descriptor(
+                            member_field.descriptor,
                             document,
                             value,
                             false,
-                        ) {
-                            Ok(normalized) => normalized,
-                            Err(error) => {
-                                return Err(LayerCompositionError {
-                                    context_document: if matches!(
-                                        error,
-                                        NormalizationError::Invalid(_)
-                                    ) {
-                                        Some(result.document)
-                                    } else {
-                                        None
-                                    },
-                                    error,
-                                })
-                            }
-                        };
-                        let origins = normalized
-                            .origins
-                            .iter()
-                            .map(|&origin| LayerNodeOrigin::through(origin, &result.node_origins))
-                            .collect();
-                        replacements.insert(
-                            value,
-                            Materialized {
-                                document: normalized.document,
-                                origins,
-                            },
-                        );
-                    }
+                            NullPolicy::Absent,
+                        )
+                    } else {
+                        Err(NormalizationError::Invalid(findings))
+                    };
+                    let normalized = match normalized {
+                        Ok(normalized) => normalized,
+                        Err(error) => {
+                            return Err(LayerCompositionError {
+                                context_document: if matches!(error, NormalizationError::Invalid(_))
+                                {
+                                    Some(result.document)
+                                } else {
+                                    None
+                                },
+                                error,
+                            })
+                        }
+                    };
+                    let origins = normalized
+                        .origins
+                        .iter()
+                        .map(|&origin| LayerNodeOrigin::through(origin, &result.node_origins))
+                        .collect();
+                    replacements.insert(
+                        value,
+                        Materialized {
+                            document: normalized.document,
+                            origins,
+                        },
+                    );
                 }
             }
         }

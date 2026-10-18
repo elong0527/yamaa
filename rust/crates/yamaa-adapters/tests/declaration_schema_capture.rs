@@ -423,7 +423,7 @@ mod declaration {
                 bytes: text.as_bytes().to_vec(),
             }
         }
-        const VALID: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: {source: SRC.ID}}\n";
+        const VALID: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
 
         #[test]
         fn shipped_closure_retains_every_authoritative_byte_and_admits_without_a_directory() {
@@ -437,7 +437,7 @@ mod declaration {
                 .filter(|p| {
                     !matches!(
                         p.as_str(),
-                        "schema_define.yaml" | "schema_environment.yaml" | "schema_project.yaml"
+                        "schema_environment.yaml" | "schema_project.yaml"
                     )
                 })
                 .collect::<Vec<_>>();
@@ -546,9 +546,18 @@ mod declaration {
                 malformed,
                 Err(InheritanceError::Entry(Error::Decode { .. }))
             ));
-            // Presence selects inheritance even for an invalid null field; no fallback.
+            // A null parent is absent: the entry takes the standalone route.
+            let standalone = shipped_schema::prepare(
+                source(&(VALID.to_owned() + "parent: null\n")),
+                "domain.yaml".into(),
+                &mut NoParents,
+            )
+            .unwrap();
+            assert!(standalone.inheritance().is_none());
+            assert!(standalone.parents().is_empty());
+            // Any other written parent selects inheritance even when invalid; no fallback.
             let inherited = shipped_schema::prepare(
-                source(&(VALID.to_owned() + "parents: null\n")),
+                source(&(VALID.to_owned() + "parent: [parent.yaml]\n")),
                 "domain.yaml".into(),
                 &mut NoParents,
             );
@@ -780,7 +789,7 @@ mod declaration {
             use yamaa_adapters::json;
             use yamaa_adapters::specification_diagnostics::inheritance_failure;
             use yamaa_core::json::Value;
-            let entry = format!("{VALID}parents: parent.yaml\n");
+            let entry = format!("{VALID}parent: parent.yaml\n");
             let invalid_parent = "schema_version: '1.0'\ndomain: bad-name\n";
             let outcome: Value = yamaa_adapters::json_wire::decode(
                 &inheritance_failure(inherited_error(&entry, invalid_parent)).unwrap(),
@@ -807,7 +816,10 @@ mod declaration {
                 json!({"status":"invalid","diagnostics":[{"phase":"validation","condition":"missing_required_field","requirement":"REQ-0285","spec_paths":["domain"],"context":{"field":"domain","class":"root_class"}}]})
             );
             let unknown = inherited_error(
-                &entry.replace("source: SRC.ID", "compute: {expr: UNKNOWN}"),
+                &entry.replace(
+                    "derivation: SRC.ID",
+                    "derivation: {compute: {expr: UNKNOWN}}",
+                ),
                 empty_parent,
             );
             let outcome: Value =
@@ -1028,13 +1040,13 @@ mod declaration {
         #[test]
         fn physical_decode_and_source_boundary_precede_lifecycle() {
             let schema = schema();
-            let text = VALID.to_owned() + "parents: null\n";
+            let text = VALID.to_owned() + "parent: parent.yaml\n";
             assert!(matches!(
                 schema.prepare_standalone(source(&text)),
                 Err(Error::InheritanceRequired)
             ));
             assert!(matches!(
-                schema.prepare_standalone(source("parents: null\n[unterminated")),
+                schema.prepare_standalone(source("parent: parent.yaml\n[unterminated")),
                 Err(Error::Decode {
                     error: DecodeFailure::InvalidYaml { .. },
                     ..
@@ -1131,31 +1143,31 @@ mod declaration {
                 (
                     "",
                     "{compute: {expr: '2 +'}}",
-                    "invalid_numeric_expression",
+                    "invalid_expression",
                     "columns.V.derivation.compute.expr",
                 ),
                 (
                     "",
                     "{aggregate: 'SUM(DM.V) +'}",
-                    "invalid_aggregate_expression",
+                    "invalid_expression",
                     "columns.V.derivation.aggregate",
                 ),
                 (
                     "",
-                    "{flag: {condition: 'DM.V != 1'}}",
-                    "invalid_predicate",
+                    "{flag: 'DM.V != 1'}",
+                    "invalid_expression",
                     "columns.V.derivation.flag.condition",
                 ),
                 (
                     "filter: 'DM.V != 1'",
                     "{literal: 1}",
-                    "invalid_predicate",
+                    "invalid_expression",
                     "filter",
                 ),
                 (
                     "",
                     "{source: {variable: DM.V, filter: 'DM.V != 1'}}",
-                    "invalid_predicate",
+                    "invalid_expression",
                     "columns.V.derivation.source.filter",
                 ),
                 (
@@ -1173,7 +1185,7 @@ mod declaration {
                 (
                     "",
                     "{case: [{when: 'DM.V != 1', then: {literal: 1}}, {otherwise: {literal: 2}}]}",
-                    "invalid_predicate",
+                    "invalid_expression",
                     "columns.V.derivation.case[0].when",
                 ),
             ] {
@@ -1186,53 +1198,38 @@ mod declaration {
         }
 
         #[test]
-        fn arithmetic_predicates_share_the_structured_context_and_suggestion() {
+        fn arithmetic_predicates_are_admitted_at_every_predicate_site() {
             // The three predicate sites from #2204: a case `when`, a root `filter`
-            // and an `assert.require`. Each reports invalid_predicate (REQ-0188)
-            // with the same {position, predicate, suggestion} context; the
-            // assert.require site no longer substitutes a prose `reason`.
+            // and an `assert.require`. Arithmetic over numeric operands belongs to
+            // the one expression language, so none of them is refused.
             let head = "schema_version: '1.0'\ndomain: ADVS\nkeys: [USUBJID]\ninput: {VS: {path: never-read.csv, types: {SBPSUP: float, SBPSTD: float}}}\noutput: {path: advs.csv, columns: [USUBJID, OHYPO]}\ncolumns:\n  - {name: USUBJID, type: str, derivation: VS.USUBJID}\n  - {name: SBPSUP, type: float, derivation: VS.SBPSUP}\n  - {name: SBPSTD, type: float, derivation: VS.SBPSTD}\n";
-            let suggestion = "derive the value as a column with compute, then compare that column";
-            for (extra, path, predicate, position) in [
-        (
-            "  - name: OHYPO\n    type: str\n    derivation:\n      case:\n        - {when: 'SBPSTD - SBPSUP <= -20', then: {literal: 'Y'}}\n        - {otherwise: {literal: 'N'}}\n",
-            "columns.OHYPO.derivation.case[0].when",
-            "SBPSTD - SBPSUP <= -20",
-            7,
-        ),
-        (
-            "  - {name: OHYPO, type: str, derivation: {literal: 'N'}}\nfilter: 'VS.SBPSTD - VS.SBPSUP < 0'\n",
-            "filter",
-            "VS.SBPSTD - VS.SBPSUP < 0",
-            10,
-        ),
-        (
-            "  - {name: OHYPO, type: str, derivation: {literal: 'N'}}\nverifications:\n  - {assert: {when: \"OHYPO = 'Y'\", require: 'SBPSTD - SBPSUP <= -20'}}\n",
-            "verifications[0].assert.require",
-            "SBPSTD - SBPSUP <= -20",
-            7,
-        ),
-    ] {
-        let document = shipped_schema::capture()
-            .unwrap()
-            .prepare_standalone(Source {
-                identity: "spec.yaml".into(),
-                bytes: format!("{head}{extra}").into_bytes(),
-            })
-            .unwrap();
-        let run = PreparedRun::prepare(document).unwrap();
-        let rows = specification_check::issue_rows(&run).unwrap();
-        assert_eq!(rows.len(), 1, "{path}: {rows:?}");
-        assert_eq!(rows[0].condition, "invalid_predicate", "{path}");
-        assert_eq!(rows[0].requirement.as_deref(), Some("REQ-0188"), "{path}");
-        assert_eq!(rows[0].spec_paths, [path], "{path}");
-        let context: yamaa_core::json::Value = rows[0].context.clone();
-        assert_eq!(
-            context,
-            yamaa_adapters::json!({"position": position, "predicate": predicate, "suggestion": suggestion}),
-            "{path}"
-        );
-    }
+            let rows = |extra: &str| {
+                let document = shipped_schema::capture()
+                    .unwrap()
+                    .prepare_standalone(Source {
+                        identity: "spec.yaml".into(),
+                        bytes: format!("{head}{extra}").into_bytes(),
+                    })
+                    .unwrap();
+                specification_check::issue_rows(&PreparedRun::prepare(document).unwrap()).unwrap()
+            };
+            for (extra, path) in [
+                (
+                    "  - name: OHYPO\n    type: str\n    derivation:\n      case:\n        - {when: 'SBPSTD - SBPSUP <= -20', then: {literal: 'Y'}}\n        - {otherwise: {literal: 'N'}}\n",
+                    "columns.OHYPO.derivation.case[0].when",
+                ),
+                (
+                    "  - {name: OHYPO, type: str, derivation: {literal: 'N'}}\nfilter: 'VS.SBPSTD - VS.SBPSUP < 0'\n",
+                    "filter",
+                ),
+                (
+                    "  - {name: OHYPO, type: str, derivation: {literal: 'N'}}\nverifications:\n  - {assert: {when: \"OHYPO = 'Y'\", require: 'SBPSTD - SBPSUP <= -20'}}\n",
+                    "verifications[0].assert.require",
+                ),
+            ] {
+                let rows = rows(extra);
+                assert!(rows.is_empty(), "{path}: {rows:?}");
+            }
         }
 
         #[test]
@@ -1493,16 +1490,16 @@ mod declaration {
         }
 
         #[test]
-        fn environment_parents_language_and_retired_runtime_fields_are_complete_schema_findings() {
+        fn environment_parent_language_and_retired_runtime_fields_are_complete_schema_findings() {
             let schema = environment_schema();
             // The project key states the language; the environment file declares none.
             let findings = captured_findings(
         &schema,
-        "schema_version: '1.0'\nparents: [base.yaml]\nlanguage: python\nruntime: {language: python}\nversion: old\n",
+        "schema_version: '1.0'\nparent: base.yaml\nlanguage: python\nruntime: {language: python}\nversion: old\n",
     );
             assert_eq!(
                 findings[0],
-                finding("parents", "unknown_field", "parents", "environment_class")
+                finding("parent", "unknown_field", "parent", "environment_class")
             );
             assert_eq!(findings.len(), 4);
             for (finding, field) in findings[1..].iter().zip(["language", "runtime", "version"]) {
@@ -1555,7 +1552,7 @@ mod declaration {
                 assert_eq!(
                     captured_findings(
                         &schema,
-                        "schema_version: '99.0'\nparents: [base.yaml]\nruntime: {}\n"
+                        "schema_version: '99.0'\nparent: base.yaml\nruntime: {}\n"
                     ),
                     vec![SchemaDiagnostic {
                         path: "schema_version".into(),
@@ -1790,7 +1787,7 @@ mod declaration {
             use yamaa_core::{
                 project_function::{Case, Definition, Function, Language, Parameter},
                 project_function_document,
-                temporal::{Date, DatePrecision},
+                temporal::{Date, Precision},
                 value::{ColumnType, Value, ValueType},
             };
             let schema =
@@ -1803,7 +1800,7 @@ mod declaration {
             let document = &captured.normalized().document;
             let decoded =
                 project_function_document::decode(document, document.root(), "identity").unwrap();
-            let date = Value::Date(Date::new(2024, 2, 29, DatePrecision::Day).unwrap());
+            let date = Value::Date(Date::new(2024, 2, 29, Precision::Day).unwrap());
             assert_eq!(
                 decoded,
                 Definition {
@@ -1848,7 +1845,7 @@ mod declaration {
         fn scalar_decoder_keeps_exact_int_float_boolean_nul_and_temporal_defaults() {
             use yamaa_core::{
                 project_function_document,
-                temporal::{Date, DatePrecision, DateTime, DateTimePrecision},
+                temporal::{Date, DateTime, Precision},
                 value::Value,
             };
             let schema =
@@ -1858,7 +1855,7 @@ mod declaration {
             let captured = schema.prepare_class(source("function.yaml", text)).unwrap();
             let doc = &captured.normalized().document;
             let decoded = project_function_document::decode(doc, doc.root(), "defaults").unwrap();
-            let date = Date::new(2024, 2, 29, DatePrecision::Day).unwrap();
+            let date = Date::new(2024, 2, 29, Precision::Day).unwrap();
             assert_eq!(
                 decoded
                     .params
@@ -1872,7 +1869,7 @@ mod declaration {
                     Some(Value::Str("a\0b\u{96ea}".into())),
                     Some(Value::Date(date)),
                     Some(Value::DateTime(
-                        DateTime::new(date, 8, 30, 0, DateTimePrecision::Second).unwrap()
+                        DateTime::new(date, 8, 30, 0, Precision::Second).unwrap()
                     )),
                     Some(Value::Missing),
                 ]
@@ -2330,9 +2327,9 @@ mod declaration {
         fn live_root_full_reports_preserve_original_source_and_stop_before_every_dependency() {
             let schemas = candidate_schemas();
             for (text,expected) in [
-        ("schema_version: '99.0'\nparents: [parent.yaml]\nenvironments: {python: environment.yaml}\ncodelists: [bad.yaml]\n",json!([{ "phase":"validation","condition":"schema_version_mismatch","requirement":"REQ-0281","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":"99.0","source":"study/project.yaml","entry":"study/project.yaml","environment_path":"$"}}])),
-        ("schema_version: '1.0'\nparents: [base.yaml]\nlanguage: python\nruntime: {language: python}\nversion: old\n",json!([
-            {"phase":"validation","condition":"unknown_field","requirement":"REQ-0285","spec_paths":["parents"],"context":{"field":"parents","class":"project_class","source":"study/project.yaml","entry":"study/project.yaml","environment_path":"$"}},
+        ("schema_version: '99.0'\nparent: parent.yaml\nenvironments: {python: environment.yaml}\ncodelists: [bad.yaml]\n",json!([{ "phase":"validation","condition":"schema_version_mismatch","requirement":"REQ-0281","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":"99.0","source":"study/project.yaml","entry":"study/project.yaml","environment_path":"$"}}])),
+        ("schema_version: '1.0'\nparent: base.yaml\nlanguage: python\nruntime: {language: python}\nversion: old\n",json!([
+            {"phase":"validation","condition":"unknown_field","requirement":"REQ-0285","spec_paths":["parent"],"context":{"field":"parent","class":"project_class","source":"study/project.yaml","entry":"study/project.yaml","environment_path":"$"}},
             {"phase":"validation","condition":"unknown_field","requirement":"REQ-0285","spec_paths":["language"],"context":{"field":"language","class":"project_class","source":"study/project.yaml","entry":"study/project.yaml","environment_path":"$"}},
             {"phase":"validation","condition":"unknown_field","requirement":"REQ-0285","spec_paths":["runtime"],"context":{"field":"runtime","class":"project_class","source":"study/project.yaml","entry":"study/project.yaml","environment_path":"$"}},
             {"phase":"validation","condition":"unknown_field","requirement":"REQ-0285","spec_paths":["version"],"context":{"field":"version","class":"project_class","source":"study/project.yaml","entry":"study/project.yaml","environment_path":"$"}}

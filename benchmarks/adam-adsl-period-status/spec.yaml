@@ -19,12 +19,12 @@ intermediates:
   - id: P01DS
     dataset: DS
     filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH = 'TREATMENT 1'"
-    no_match: null
+    no_match: {literal: null}
 
   - id: P02DS
     dataset: DS
     filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.EPOCH = 'TREATMENT 2'"
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: STUDYID
@@ -80,8 +80,8 @@ columns:
         - when: "P01EXN IS NOT NULL"
           then: {literal: ONGOING}
     verifications:
-      allowed_values:
-        values: [COMPLETED, DISCONTINUED, ONGOING]
+      - allowed_values:
+          values: [COMPLETED, DISCONTINUED, ONGOING]
 
   # The reason is the standardized term, not the reported text.
   - name: DCP01RS
@@ -104,8 +104,8 @@ columns:
         - when: "P02EXN IS NOT NULL"
           then: {literal: ONGOING}
     verifications:
-      allowed_values:
-        values: [COMPLETED, DISCONTINUED, ONGOING]
+      - allowed_values:
+          values: [COMPLETED, DISCONTINUED, ONGOING]
 
   - name: DCP02RS
     type: str
@@ -116,8 +116,6 @@ columns:
           then: P02DECOD
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID]
   - row_count:
       min: 7
       max: 7

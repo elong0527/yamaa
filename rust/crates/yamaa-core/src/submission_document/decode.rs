@@ -471,7 +471,7 @@ impl<'a> Parser<'a> {
             self.choice(
                 datasets_origin,
                 path.field(FieldName::Datasets),
-                &[("json", DatasetFormat::Json)],
+                &[("json", Transport::DatasetJson), ("xpt", Transport::Xpt)],
                 None,
             )?
         } else {

@@ -4,9 +4,9 @@ use crate::bound_expression::BoundPredicate;
 use crate::dataset::execution as dataset;
 use crate::{
     bound_expression::{Binding, Read},
-    predicate::{ErrorKind, Truth},
+    expression::{Condition, ErrorKind, Truth},
     table::TableAccess,
-    temporal::{Date, DatePrecision, DateTime, DateTimePrecision},
+    temporal::{Date, DateTime, Precision},
     value::{ColumnType, Value},
 };
 
@@ -16,14 +16,14 @@ fn sample(kind: ColumnType) -> Value {
         ColumnType::Str => Value::Str("sample".into()),
         ColumnType::Int => Value::Int(0),
         ColumnType::Float => Value::float(0.0),
-        ColumnType::Date => Value::Date(Date::new(2000, 1, 1, DatePrecision::Day).unwrap()),
+        ColumnType::Date => Value::Date(Date::new(2000, 1, 1, Precision::Day).unwrap()),
         ColumnType::DateTime => Value::DateTime(
             DateTime::new(
-                Date::new(2000, 1, 1, DatePrecision::Day).unwrap(),
+                Date::new(2000, 1, 1, Precision::Day).unwrap(),
                 0,
                 0,
                 0,
-                DateTimePrecision::Second,
+                Precision::Second,
             )
             .unwrap(),
         ),
@@ -57,17 +57,17 @@ fn validate_predicate<E>(
     }
     let sample_predicate = BoundPredicate::new(predicate.plan().clone(), bindings)
         .expect("admitted verification names");
-    crate::dataset::execution::predicates::evaluate(&sample_predicate, dataset, 0, &samples)
-        .map_err(|error| {
-            Box::new(match error.kind {
-                ErrorKind::Regex(limit) => dataset::regex_limit(limit),
-                _ => ExecutionError::VerificationPredicate {
-                    error,
-                    records: std::mem::take(records),
-                },
-            })
-        })?;
-    Ok(())
+    match crate::dataset::execution::predicates::evaluate(&sample_predicate, dataset, 0, &samples) {
+        // Samples expose type faults; an arithmetic failure depends on values.
+        Err(error) if matches!(error.kind, ErrorKind::Condition(Condition::Arithmetic(_))) => {
+            Ok(())
+        }
+        Err(error) => Err(Box::new(ExecutionError::VerificationPredicate {
+            error: *error,
+            records: std::mem::take(records),
+        })),
+        Ok(_) => Ok(()),
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -94,12 +94,9 @@ fn evaluate_predicate<T: TableAccess + ?Sized>(
             &candidate.values,
         )
         .map_err(|error| {
-            Box::new(match error.kind {
-                ErrorKind::Regex(limit) => dataset::regex_limit(limit),
-                _ => ExecutionError::VerificationPredicate {
-                    error,
-                    records: std::mem::take(records),
-                },
+            Box::new(ExecutionError::VerificationPredicate {
+                error: *error,
+                records: std::mem::take(records),
             })
         });
     }
@@ -109,10 +106,11 @@ fn evaluate_predicate<T: TableAccess + ?Sized>(
     .map_err(|error| match *error {
         ExecutionError::Predicate { source_row, error } => match error.kind {
             ErrorKind::Condition(condition) => Box::new(ExecutionError::VerificationPredicate {
-                error: crate::predicate::EvaluationError {
+                error: crate::expression::EvaluationError {
                     spec_path: error.spec_path,
                     expression: error.expression,
                     route: error.route,
+                    source_span: error.source_span,
                     kind: ErrorKind::Condition(condition),
                 },
                 records: std::mem::take(records),

@@ -1,60 +1,20 @@
-//! Private typed parser observations for independent differential fixtures.
+//! Private typed predicate observations for independent differential fixtures.
+use super::syntax_spans as spans;
 use yamaa_adapters::json;
+use yamaa_core::expression::{Comparison, CompiledExpression, Context, NodeKind, TemporalKind};
 use yamaa_core::json::Value;
-use yamaa_core::{
-    predicate::Comparison,
-    predicate_parser::{
-        parse_predicate, ParseError, ParseResource, ParsedKind, ParsedPredicate, TemporalKind,
-    },
-    regex::Resource,
-};
+use yamaa_core::numeric::{BinaryOperator, UnaryOperator};
+
 pub fn observe(expression: &str) -> Value {
-    let outcome = match parse_predicate(expression) {
-        Ok(parsed) => {
-            json!({"status":"parsed","ast":ast(&parsed,parsed.root()),"identifiers":parsed.identifiers().collect::<Vec<_>>()})
+    let outcome = match spans::compiled(Context::Predicate, expression) {
+        Ok(compiled) => {
+            json!({"status":"parsed","ast":ast(&compiled,compiled.syntax().root()),"identifiers":compiled.identifiers().collect::<Vec<_>>()})
         }
-        Err(ParseError::Grammar {
-            position,
-            failure,
-            message,
-        }) => {
-            let issue = yamaa_adapters::issue_rows::Issue::from_core(failure.syntax_diagnostic())
-                .expect("typed syntax diagnostic");
-            let context: Value = issue.context.clone();
-            json!({"status":"invalid","message":message,"condition":failure.condition(),"requirement":failure.requirement(),"position":{"byte":position.byte,"character":position.character},"context":context})
-        }
-        Err(ParseError::Limit {
-            position,
-            resource,
-            limit,
-        }) => {
-            json!({"status":"resource_limit","phase":"parse","resource":match resource {ParseResource::Depth=>"depth"},"limit":limit,"position":{"byte":position.byte,"character":position.character}})
-        }
-        Err(ParseError::RegexLimit {
-            position,
-            resource,
-            limit,
-        }) => {
-            json!({"status":"resource_limit","phase":"regex_compile","resource":regex_resource(resource),"limit":limit,"position":{"byte":position.byte,"character":position.character}})
-        }
-        Err(ParseError::UnsupportedRegex {
-            position,
-            byte,
-            feature,
-        }) => {
-            json!({"status":"unsupported","feature":feature,"pattern_byte":byte,"position":{"byte":position.byte,"character":position.character}})
-        }
+        Err(error) => spans::refusal(&error, true),
     };
     json!({"outcome":outcome})
 }
 
-/// Preserve the exact owning regex policy name rather than calling it invalid syntax.
-fn regex_resource(resource: Resource) -> &'static str {
-    match resource {
-        Resource::Depth => "depth",
-        Resource::Work => "work",
-    }
-}
 /// Temporal spelling is syntax metadata, not a conversion or precision policy.
 fn temporal_name(kind: TemporalKind) -> &'static str {
     match kind {
@@ -65,66 +25,84 @@ fn temporal_name(kind: TemporalKind) -> &'static str {
 
 /// Emit the existing portable AST vocabulary, retaining operand/call character sites.
 /// Parser-built children are unique occurrences, not a caller-controlled DAG.
-fn ast(parsed: &ParsedPredicate, id: usize) -> Value {
-    let node = &parsed.nodes()[id];
-    let text = &parsed.expression()[node.span.start..node.span.end];
-    let position = parsed.expression()[..node.span.start].chars().count();
+fn ast(compiled: &CompiledExpression, id: usize) -> Value {
+    let syntax = compiled.syntax();
+    let node = &syntax.nodes()[id];
+    let text = syntax.text(id);
+    let position = syntax.expression()[..node.span.start].chars().count();
+    let child = |id| ast(compiled, id);
     match &node.kind {
-        ParsedKind::Number { fractional } => {
+        NodeKind::Number { fractional, text } => {
             json!({"kind":"literal","type":if *fractional {"float"} else {"int"},"value":text,"position":position})
         }
-        ParsedKind::String(text) => {
+        NodeKind::String(text) => {
             json!({"kind":"literal","type":"str","value":text,"position":position})
         }
-        ParsedKind::Temporal { kind, value } => {
+        NodeKind::Temporal { kind, value } => {
             json!({"kind":"literal","type":temporal_name(*kind),"value":value,"position":position})
         }
-        ParsedKind::Null => json!({"kind":"literal","type":null,"value":null,"position":position}),
-        ParsedKind::Identifier => json!({"kind":"identifier","name":text,"position":position}),
-        ParsedKind::Boolean(value) => json!({"kind":"boolean","value":value}),
-        ParsedKind::Group(child) => ast(parsed, *child),
-        ParsedKind::Not(child) => json!({"kind":"not","value":ast(parsed,*child)}),
-        ParsedKind::And(left, right) | ParsedKind::Or(left, right) => {
-            json!({"kind":if matches!(node.kind,ParsedKind::And(..)) {"and"} else {"or"},"left":ast(parsed,*left),"right":ast(parsed,*right)})
+        NodeKind::Null => json!({"kind":"literal","type":null,"value":null,"position":position}),
+        NodeKind::Identifier => json!({"kind":"identifier","name":text,"position":position}),
+        NodeKind::Boolean(value) => json!({"kind":"boolean","value":value}),
+        NodeKind::Group(inner) => child(*inner),
+        NodeKind::Not(inner) => json!({"kind":"not","value":child(*inner)}),
+        NodeKind::And(left, right) | NodeKind::Or(left, right) => {
+            json!({"kind":if matches!(node.kind,NodeKind::And(..)) {"and"} else {"or"},"left":child(*left),"right":child(*right)})
         }
-        ParsedKind::Compare {
+        NodeKind::Compare {
             operator,
             left,
             right,
         } => {
-            json!({"kind":"comparison","operator":match operator {Comparison::Equal=>"=",Comparison::NotEqual=>"<>",Comparison::Less=>"<",Comparison::LessEqual=>"<=",Comparison::Greater=>">",Comparison::GreaterEqual=>">="},"left":ast(parsed,*left),"right":ast(parsed,*right)})
+            json!({"kind":"comparison","operator":match operator {Comparison::Equal=>"=",Comparison::NotEqual=>"<>",Comparison::Less=>"<",Comparison::LessEqual=>"<=",Comparison::Greater=>">",Comparison::GreaterEqual=>">="},"left":child(*left),"right":child(*right)})
         }
-        ParsedKind::IsNull { value, negated } => {
-            json!({"kind":"null_test","value":ast(parsed,*value),"negated":negated})
+        NodeKind::IsNull { value, negated } => {
+            json!({"kind":"null_test","value":child(*value),"negated":negated})
         }
-        ParsedKind::In {
+        NodeKind::In {
             value,
             items,
             negated,
         } => {
-            json!({"kind":"in","value":ast(parsed,*value),"values":items.iter().map(|&id|ast(parsed,id)).collect::<Vec<_>>(),"negated":negated})
+            json!({"kind":"in","value":child(*value),"values":items.iter().map(|&id|child(id)).collect::<Vec<_>>(),"negated":negated})
         }
-        ParsedKind::Between {
+        NodeKind::Between {
             value,
             lower,
             upper,
             negated,
         } => {
-            json!({"kind":"between","value":ast(parsed,*value),"lower":ast(parsed,*lower),"upper":ast(parsed,*upper),"negated":negated})
+            json!({"kind":"between","value":child(*value),"lower":child(*lower),"upper":child(*upper),"negated":negated})
         }
-        ParsedKind::Like {
+        NodeKind::Like {
             value,
             pattern,
             escape,
             negated,
         } => {
-            json!({"kind":"like","value":ast(parsed,*value),"pattern":ast(parsed,*pattern),"escape":escape.map(|c|c.to_string()),"negated":negated})
+            json!({"kind":"like","value":child(*value),"pattern":child(*pattern),"escape":escape.map(|c|c.to_string()),"negated":negated})
         }
-        ParsedKind::Contains { source, pattern } => {
-            let ParsedKind::String(pattern) = &parsed.nodes()[*pattern].kind else {
+        NodeKind::Call { name, arguments }
+            if syntax.slice(*name).eq_ignore_ascii_case("str_contains") =>
+        {
+            let NodeKind::String(pattern) = &syntax.nodes()[arguments[1]].kind else {
                 unreachable!("admitted string literal")
             };
-            json!({"kind":"call","function":"str_contains","source":ast(parsed,*source),"pattern":pattern,"position":position})
+            json!({"kind":"call","function":"str_contains","source":child(arguments[0]),"pattern":pattern,"position":position})
         }
+        NodeKind::Call { name, arguments } => {
+            json!({"kind":"call","function":syntax.slice(*name).to_ascii_uppercase(),"arguments":arguments.iter().map(|&id|child(id)).collect::<Vec<_>>(),"position":position})
+        }
+        NodeKind::Unary { operator, operand } => {
+            json!({"kind":"unary","operator":match operator {UnaryOperator::Plus=>"+",UnaryOperator::Negate=>"-",UnaryOperator::Abs=>unreachable!("ABS parses as a call")},"value":child(*operand)})
+        }
+        NodeKind::Binary {
+            operator,
+            left,
+            right,
+        } => {
+            json!({"kind":"binary","operator":match operator {BinaryOperator::Add=>"+",BinaryOperator::Subtract=>"-",BinaryOperator::Multiply=>"*",BinaryOperator::Divide=>"/",BinaryOperator::Modulo=>unreachable!("MOD parses as a call")},"left":child(*left),"right":child(*right)})
+        }
+        other => unreachable!("a predicate admits no {other:?}"),
     }
 }

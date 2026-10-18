@@ -1,4 +1,4 @@
-"""Installed width boundaries for compiler, file and producer source admission."""
+"""Installed width boundaries for compiler, file and linked-artifact admission."""
 
 import json
 import tempfile
@@ -32,19 +32,21 @@ class ColumnCeilings(unittest.TestCase):
         names = ["ID", *[f"C{index:04d}" for index in range(1, columns)]]
         header = ["ID", *[f"F{index:04d}" for index in range(1, fields)]]
         values = {field: ["S-001" if field == "ID" else "x"] for field in header}
-        source = {"path": f"input.{source_format}"}
+        path = f"input.{source_format}"
         if source_format == "parquet":
-            pq.write_table(pa.table(values), root / source["path"])
+            pq.write_table(pa.table(values), root / path)
         else:
-            (root / source["path"]).write_text(
+            (root / path).write_text(
                 ",".join(header)
                 + "\n"
                 + ",".join(value[0] for value in values.values())
                 + "\n",
                 encoding="ascii",
             )
+        # A dataset is written as its bare path unless it also types fields.
+        source = path
         if typed:
-            source["types"] = {field: "str" for field in header}
+            source = {"path": path, "types": {field: "str" for field in header}}
         document = {
             "schema_version": "1.0",
             "domain": "TEST",
@@ -210,16 +212,17 @@ class ColumnCeilings(unittest.TestCase):
                 }
                 parent = root / "parent.yaml"
                 parent.write_text(json.dumps(document), encoding="ascii")
-                document["parents"] = []
+                # A null parent names no parent: the entry stays standalone.
+                document["parent"] = None
                 explicit = root / "explicit.yaml"
                 explicit.write_text(json.dumps(document), encoding="ascii")
                 child = root / "child.yaml"
                 child.write_text(
-                    "schema_version: '1.0'\nparents: [parent.yaml]\n", encoding="ascii"
+                    "schema_version: '1.0'\nparent: parent.yaml\n", encoding="ascii"
                 )
                 grandchild = root / "grandchild.yaml"
                 grandchild.write_text(
-                    "schema_version: '1.0'\nparents: [child.yaml]\n", encoding="ascii"
+                    "schema_version: '1.0'\nparent: child.yaml\n", encoding="ascii"
                 )
                 expected = [
                     (
@@ -245,14 +248,17 @@ class ColumnCeilings(unittest.TestCase):
                             (root / "out.csv").read_bytes(), expected_bytes
                         )
 
-    def test_pathological_repeated_parents_are_still_refused(self):
-        parent = self.write_case("repeated-parents")
-        child = parent.with_name("child.yaml")
-        child.write_text(
-            json.dumps({"schema_version": "1.0", "parents": [parent.name] * 8193}),
-            encoding="ascii",
-        )
-        for result in self.routes(child):
+    def test_pathological_parent_chain_is_still_refused(self):
+        # Each layer names one parent, so only a chain of 8,193 distinct layers
+        # reaches the occurrence bound; without the bound it would reach the base.
+        base = self.write_case("long-parent-chain")
+        for index in range(8193):
+            base.with_name(f"layer-{index}.yaml").write_text(
+                f"schema_version: '1.0'\nparent: layer-{index + 1}.yaml\n",
+                encoding="ascii",
+            )
+        base.with_name("layer-8193.yaml").write_bytes(base.read_bytes())
+        for result in self.routes(base.with_name("layer-0.yaml")):
             self.assert_refusal(result)
             self.assertEqual(result.issues.height, 1)
             self.assertEqual(
@@ -294,36 +300,44 @@ class ColumnCeilings(unittest.TestCase):
         spec = self.write_case("refuse-parquet", fields=1025, source_format="parquet")
         self.assert_refusal(yamaa.spec(spec).run())
 
-    def test_producer_source_fields(self):
+    def linked_consumer(self, producer):
+        """A consumer that types the producer's stored artifact through its link."""
+        document = json.loads(producer.read_text(encoding="ascii"))
+        document["input"]["SRC"] = {"path": "out.csv", "schema": "spec.yaml"}
+        document["columns"] = document["columns"][:1]
+        document["output"] = {"path": "consumer.csv", "columns": ["ID"]}
+        consumer = producer.with_name("consumer.yaml")
+        consumer.write_text(json.dumps(document), encoding="ascii")
+        return consumer
+
+    def test_producer_contract_fields(self):
         for width in (1024, 1025):
             with self.subTest(width=width):
                 producer = self.write_case(f"producer-{width}", columns=width)
-                document = json.loads(producer.read_text(encoding="ascii"))
-                document["input"]["SRC"] = {"path": "out.csv", "schema": "spec.yaml"}
-                document["columns"] = document["columns"][:1]
-                document["output"] = {"path": "consumer.csv", "columns": ["ID"]}
-                consumer = producer.with_name("consumer.yaml")
-                consumer.write_text(json.dumps(document), encoding="ascii")
+                consumer = self.linked_consumer(producer)
                 if width == 1024:
+                    # Callers build and save the producer before its consumer.
+                    yamaa.spec(producer).run().save()
                     self.assert_build(consumer)
                 else:
                     for result in self.routes(consumer):
                         self.assert_refusal(result)
 
-    def test_in_range_producer_refuses_overwide_runtime_input(self):
-        # Producer metadata stays admissible; only its raw source width changes.
-        # The direct Rust decoder control separately pins producer_source_fields.
+    def test_in_range_contract_refuses_overwide_stored_artifact(self):
+        # The link's metadata stays admissible; only the stored artifact's width
+        # changes. The direct Rust decoder control separately pins the contract.
         for width in (1024, 1025):
             with self.subTest(width=width):
-                producer = self.write_case(
-                    f"producer-input-{width}", columns=1024, fields=width
+                producer = self.write_case(f"producer-input-{width}", columns=1024)
+                consumer = self.linked_consumer(producer)
+                header = ["ID", *[f"C{index:04d}" for index in range(1, width)]]
+                producer.with_name("out.csv").write_text(
+                    ",".join(header)
+                    + "\n"
+                    + ",".join(["S-001"] + ["x"] * (width - 1))
+                    + "\n",
+                    encoding="ascii",
                 )
-                document = json.loads(producer.read_text(encoding="ascii"))
-                document["input"]["SRC"] = {"path": "out.csv", "schema": "spec.yaml"}
-                document["columns"] = document["columns"][:1]
-                document["output"] = {"path": "consumer.csv", "columns": ["ID"]}
-                consumer = producer.with_name("consumer.yaml")
-                consumer.write_text(json.dumps(document), encoding="ascii")
                 self.assertEqual(yamaa.spec(consumer).check().issues.height, 0)
                 if width == 1024:
                     self.assert_build(consumer)

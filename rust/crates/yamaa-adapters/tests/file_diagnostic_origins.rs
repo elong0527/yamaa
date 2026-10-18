@@ -58,7 +58,7 @@ mod file {
             "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: input.csv}}\noutput: {{path: out.csv, columns: [ID]}}\ncolumns: [{{name: ID, type: str}}]\nrows:\n  - {{id: clean, dataset: SRC, derivations: {{ID: SRC.ID}}}}\n  - {{id: '{id}', dataset: SRC, filter: 'ID >', derivations: {{ID: SRC.ID}}}}\n")).unwrap();
                 fs::write(
                     study.0.join("spec.yaml"),
-                    "schema_version: '1.0'\nparents: parent/base.yaml\n",
+                    "schema_version: '1.0'\nparent: parent/base.yaml\n",
                 )
                 .unwrap();
                 let owner = file_workflow::select_with_optional_resources(
@@ -104,7 +104,7 @@ mod file {
                     yamaa_adapters::specification_check::issue_rows(prepared.run()).unwrap();
                 assert_eq!(issues.len(), 1);
                 assert_eq!(issues[0].phase, "validation");
-                assert_eq!(issues[0].condition, "invalid_predicate");
+                assert_eq!(issues[0].condition, "invalid_expression");
                 assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0188"));
                 assert_eq!(issues[0].spec_paths, ["rows[1].filter"]);
                 assert_eq!(
@@ -132,7 +132,7 @@ mod file {
         "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - name: ID\n    type: str\n    label: Identifier\n    derivation: SRC.ID\n    verifications: [{matches: {pattern: '('}}]\n").unwrap();
             fs::write(
                 study.0.join("spec.yaml"),
-                "schema_version: '1.0'\nparents: parent/base.yaml\n",
+                "schema_version: '1.0'\nparent: parent/base.yaml\n",
             )
             .unwrap();
             let owner = file_workflow::select_with_optional_resources(
@@ -196,7 +196,7 @@ mod file {
         use yamaa_core::application_observer::Scope;
         use yamaa_core::domain_entry::Request;
         static NEXT: AtomicUsize = AtomicUsize::new(0);
-        const VALID: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: {source: SRC.ID}}\n";
+        const VALID: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
         struct Study(PathBuf);
         impl Study {
             fn new() -> Self {
@@ -337,10 +337,7 @@ mod file {
             assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0694"));
             fs::write(
                 study.0.join("spec.yaml"),
-                VALID.replace(
-                    "input: {SRC: input.csv}",
-                    "input: {SRC: {path: input.unknown}}",
-                ),
+                VALID.replace("input: {SRC: input.csv}", "input: {SRC: input.unknown}"),
             )
             .unwrap();
             let path = study.text("spec.yaml");
@@ -727,8 +724,8 @@ mod file {
                 ("group_keys", 64, 65, "rows[0].group_by"),
                 // No row_columns case: after pruning (REQ-0638) a row's
                 // derivations survive only for live columns, and 1025 live
-                // columns refuse at the columns capacity first — a composed
-                // specification (parents: []) behaves identically, so the
+                // columns refuse at the columns capacity first — an inherited
+                // specification behaves identically, so the
                 // row_columns limit cannot be isolated here.
             ] {
                 let study = Study::new();
@@ -767,7 +764,7 @@ mod file {
                         body = body
                             .replace("input: {SRC: input.csv}", &format!("input: {{{inputs}}}"))
                             .replace(
-                                "derivation: {source: SRC.ID}",
+                                "derivation: SRC.ID",
                                 &format!(
                                     "derivation: {{first_available: {{sources: [{sources}]}}}}"
                                 ),
@@ -791,9 +788,9 @@ mod file {
                     }
                     "source_operands" => {
                         body = body.replace(
-                            "{source: SRC.ID}",
+                            "derivation: SRC.ID",
                             &format!(
-                                "{{first_available: {{sources: [{}]}}}}",
+                                "derivation: {{first_available: {{sources: [{}]}}}}",
                                 vec!["SRC.ID"; actual].join(", ")
                             ),
                         );
@@ -1067,13 +1064,13 @@ mod file {
                 };
                 fs::write(
                     study.0.join(format!("layer-{index}.yaml")),
-                    format!("schema_version: '1.0'\nparents: [{parent}]\n"),
+                    format!("schema_version: '1.0'\nparent: {parent}\n"),
                 )
                 .unwrap();
             }
             fs::write(
                 study.0.join("spec.yaml"),
-                "schema_version: '1.0'\nparents: [layer-0.yaml]\n",
+                "schema_version: '1.0'\nparent: layer-0.yaml\n",
             )
             .unwrap();
             let spec = study.text("spec.yaml");
@@ -1149,27 +1146,31 @@ mod file {
         }
 
         #[test]
-        fn matching_budget_refusal_retains_pattern_path_and_applied_bound() {
+        fn catastrophic_pattern_is_an_ordinary_verification_failure() {
             let study = Study::new();
-            fs::write(study.0.join("spec.yaml"), "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, TERM]}\ncolumns:\n  - {name: ID, type: int, derivation: {source: SRC.ID}}\n  - name: TERM\n    type: str\n    derivation: {source: SRC.TERM}\n    verifications: {matches: {pattern: '(a+)+b'}}\n").unwrap();
+            fs::write(study.0.join("spec.yaml"), "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, TERM]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: TERM\n    type: str\n    derivation: SRC.TERM\n    verifications: [{matches: {pattern: '(a+)+b'}}]\n").unwrap();
             fs::write(
                 study.0.join("input.csv"),
                 format!("ID,TERM\n1,{}\n", "a".repeat(32)),
             )
             .unwrap();
+            // (a+)+b cannot match a run of a's. Matching is linear, so the value
+            // simply fails the check rather than exhausting a step budget.
             let result = study.build();
             assert!(result.output().is_none());
             let findings = result.issues();
             assert_eq!(findings.len(), 1);
-            assert_eq!(findings[0].condition, "engine_rejected");
+            assert_eq!(findings[0].phase, "verification");
+            assert_eq!(findings[0].condition, "matches_failed");
+            assert_eq!(findings[0].requirement.as_deref(), Some("REQ-0379"));
             assert_eq!(
                 findings[0].spec_paths,
-                ["columns.TERM.verifications[0].matches.pattern"]
+                ["columns.TERM.verifications[0].matches"]
             );
             let context: yamaa_core::json::Value = findings[0].context.clone();
             assert_eq!(
                 context,
-                yamaa_adapters::json!({"code":"execution_limit","stage":"execute","resource":"regex_steps","limit":1_000_000})
+                yamaa_adapters::json!({"column":"TERM","failure_count":1,"keys":[{"ID":1}]})
             );
             assert!(!study.0.join("output.csv").exists());
         }
@@ -1180,7 +1181,7 @@ mod file {
                 study.0.join("spec.yaml"),
                 format!(
                     "{}rows:\n  - id: selected\n    dataset: SRC\n    filter: SRC.A LIKE SRC.B\n    derivations: {{ID: SRC.ID}}\n",
-                    VALID.replace(", derivation: {source: SRC.ID}", "")
+                    VALID.replace(", derivation: SRC.ID", "")
                 ),
             )
             .unwrap();
@@ -1203,32 +1204,34 @@ mod file {
             assert_eq!(fs::read(study.0.join("output.csv")).unwrap(), b"ID\n1\n");
         }
     }
-    mod file_graph {
+    mod file_entry {
+        //! Entry capture reads each `schema`-linked producing specification once,
+        //! as metadata. No producer is compiled, executed or followed further.
         use std::{
             collections::BTreeMap,
             fs,
             path::PathBuf,
-            sync::{
-                atomic::{AtomicUsize, Ordering},
-                Arc,
-            },
+            sync::atomic::{AtomicUsize, Ordering},
         };
         use yamaa_adapters::{
-            file_graph::{Error, FileGraph, RejectedGraph},
+            file_entry::{Error, RejectedEntry},
+            file_preparation::{Error as DocumentError, FileSpecification, RejectedPlain},
             file_resources::{Error as ResourceError, Resources},
-            producer_graph::Error as GraphError,
-            project_source::{self, OwnedEnvironment, ProjectCapturePort, Reply, Request},
+            file_workflow::{self, SelectionError},
+            resolved_artifact::model::{Location, ResourceRole},
             shipped_schema,
-            specification_source::Source,
         };
-        use yamaa_core::{producer_graph::Error as CoreError, project_function::Language};
+        use yamaa_core::{
+            build::Prepared, project_function::Language, specification::PrepareError,
+            value::ColumnType,
+        };
 
         static NEXT: AtomicUsize = AtomicUsize::new(0);
         struct Study(PathBuf);
         impl Study {
             fn new() -> Self {
                 let root = std::env::temp_dir().join(format!(
-                    "yamaa-native-graph-{}-{}",
+                    "yamaa-native-entry-{}-{}",
                     std::process::id(),
                     NEXT.fetch_add(1, Ordering::Relaxed)
                 ));
@@ -1249,13 +1252,8 @@ mod file {
             fn resources(&self) -> Resources {
                 Resources::new(&self.path(""), &self.path(""), &[]).unwrap()
             }
-            fn graph(&self) -> Result<FileGraph, Box<RejectedGraph>> {
-                FileGraph::prepare(
-                    self.resources(),
-                    "root.yaml",
-                    environment(),
-                    shipped_schema::capture().unwrap(),
-                )
+            fn select(&self) -> Result<yamaa_adapters::file_workflow::Selected, SelectionError> {
+                select(self.resources())
             }
         }
         impl Drop for Study {
@@ -1263,26 +1261,44 @@ mod file {
                 fs::remove_dir_all(&self.0).unwrap();
             }
         }
-        struct NoMetadata;
-        impl ProjectCapturePort for NoMetadata {
-            type Error = ();
-            fn capture(&mut self, _: Request<'_>) -> Result<Reply, ()> {
-                panic!("no project dependency declared");
+        fn select(
+            resources: Resources,
+        ) -> Result<yamaa_adapters::file_workflow::Selected, SelectionError> {
+            file_workflow::select_with_optional_resources(
+                resources,
+                "root.yaml",
+                None,
+                Language::Python,
+                shipped_schema::capture().unwrap(),
+                shipped_schema::capture_project().unwrap(),
+            )
+        }
+        fn plain(
+            result: Result<yamaa_adapters::file_workflow::Selected, SelectionError>,
+        ) -> FileSpecification {
+            match result {
+                Ok(Prepared::Plain(prepared)) => prepared,
+                Ok(Prepared::Ordinary(_)) => panic!("plain owner"),
+                Err(error) => panic!("plain preparation: {error:?}"),
             }
         }
-        /// A held project that links no environment file and declares nothing.
-        fn environment() -> OwnedEnvironment {
-            project_source::prepare(
-                shipped_schema::capture_project().unwrap(),
-                Source {
-                    identity: "held-project.yaml".into(),
-                    bytes: b"schema_version: '1.0'\n".to_vec(),
-                },
-                Language::Python,
-                &mut NoMetadata,
-            )
-            .unwrap()
-            .into_owned()
+        fn rejected_entry(
+            result: Result<yamaa_adapters::file_workflow::Selected, SelectionError>,
+        ) -> Box<RejectedEntry> {
+            match result {
+                Err(SelectionError::Preparation(file_workflow::Error::Entry(error))) => error,
+                Ok(_) => panic!("expected an entry rejection"),
+                Err(error) => panic!("expected an entry rejection: {error:?}"),
+            }
+        }
+        fn rejected_plain(
+            result: Result<yamaa_adapters::file_workflow::Selected, SelectionError>,
+        ) -> Box<RejectedPlain> {
+            match result {
+                Err(SelectionError::Plain(error)) => error,
+                Ok(_) => panic!("expected a compilation rejection"),
+                Err(error) => panic!("expected a compilation rejection: {error:?}"),
+            }
         }
         fn yaml(input: &str, base: &str, output: &str) -> String {
             format!("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\nbase: {base}\ninput: {input}\ncolumns:\n  - {{name: ID, type: int, label: Identifier, derivation: {base}.ID}}\n  - {{name: VALUE, type: float, label: Reported value, derivation: {base}.VALUE}}\noutput: {{path: {output}, columns: [ID, VALUE], decimals: 2}}\n")
@@ -1293,15 +1309,21 @@ mod file {
                 &yaml("{RAW: never-read.csv}", "RAW", "leaf.csv"),
             );
         }
-        fn rejected(result: Result<FileGraph, Box<RejectedGraph>>) -> Box<RejectedGraph> {
-            match result {
-                Ok(_) => panic!("expected rejection"),
-                Err(error) => error,
-            }
+        fn schema_locations(prepared: &FileSpecification) -> BTreeMap<String, String> {
+            let artifact = prepared.resolved_specification().unwrap();
+            artifact.entries()[0]
+                .resources
+                .iter()
+                .filter(|resource| resource.role == ResourceRole::ProducerSchema)
+                .map(|resource| {
+                    let Location::Local { path } = &resource.location;
+                    (resource.spec_path.clone(), path.clone())
+                })
+                .collect()
         }
 
         #[test]
-        fn native_diamond_aliases_own_one_canonical_document_and_no_artifact_authority() {
+        fn aliased_links_share_one_document_and_producer_links_are_not_followed() {
             let study = Study::new();
             leaf(&study);
             study.write(
@@ -1320,31 +1342,39 @@ mod file {
                     "right.csv",
                 ),
             );
-            // VALUE reads all three producer datasets so pruning (REQ-0638)
-            // keeps every link of the diamond in the resolved model.
+            // VALUE reads all three linked datasets so pruning (REQ-0638) keeps
+            // every link in the resolved model.
             let root = yaml("{RIGHT: {path: right.csv, schema: right.yaml}, LEFT: {path: left.csv, schema: left.yaml}, AGAIN: {path: left.csv, schema: './left.yaml'}}", "RIGHT", "root.csv")
                 .replace(
                     "derivation: RIGHT.VALUE",
                     "derivation: {first_available: {sources: [RIGHT.VALUE, LEFT.VALUE, AGAIN.VALUE]}}",
                 );
             study.write("root.yaml", &root);
-            let graph = study.graph().unwrap();
-            assert_eq!(graph.capture_reads(), 4);
-            let nodes = graph.nodes();
-            assert_eq!(nodes.len(), 4);
-            assert_eq!(nodes[0].document.source().bytes, root.as_bytes());
-            assert_eq!(graph.metadata().order(), [3, 1, 2, 0]);
-            assert!(Arc::ptr_eq(
-                &nodes[0].producers[1].document,
-                &nodes[0].producers[2].document
-            ));
-            assert!(Arc::ptr_eq(
-                &nodes[1].producers[0].document,
-                &nodes[2].producers[0].document
-            ));
-            assert_eq!(graph.metadata().nodes()[0].dependencies(), [1, 2, 2]);
-            let paths = graph.captured_sources().map(|(p, _)| p).collect::<Vec<_>>();
-            assert!(paths.iter().all(|p| p.ends_with(".yaml")));
+            let prepared = plain(study.select());
+            // The entry and its two distinct producers; the producers' own
+            // `schema` link to leaf.yaml is never read.
+            assert_eq!(prepared.capture_reads(), 3);
+            let paths = prepared.resolved_specification().unwrap().entries().len();
+            assert_eq!(paths, 1);
+            let compiled = prepared.run().compiled();
+            for (index, source) in compiled.sources().iter().enumerate() {
+                assert_eq!(
+                    source.types,
+                    [
+                        ("ID".to_owned(), ColumnType::Int),
+                        ("VALUE".to_owned(), ColumnType::Float)
+                    ]
+                );
+                assert!(compiled.source_contract(index).is_some());
+            }
+            assert_eq!(
+                schema_locations(&prepared),
+                BTreeMap::from([
+                    ("input.AGAIN.schema".to_owned(), study.path("left.yaml")),
+                    ("input.LEFT.schema".to_owned(), study.path("left.yaml")),
+                    ("input.RIGHT.schema".to_owned(), study.path("right.yaml")),
+                ])
+            );
             for path in [
                 "never-read.csv",
                 "leaf.csv",
@@ -1357,7 +1387,7 @@ mod file {
         }
 
         #[test]
-        fn inherited_schema_input_and_output_origins_resolve_independently() {
+        fn inherited_schema_and_input_origins_resolve_independently() {
             let study = Study::new();
             study.write(
                 "origins/schema.yaml",
@@ -1367,128 +1397,49 @@ mod file {
                     "unused.csv",
                 ),
             );
+            // The chain contributes origins/schema.yaml, then origins/path.yaml,
+            // then the entry.
             study.write(
                 "origins/path.yaml",
-                &yaml("{P: {path: ../data/p.csv}}", "P", "root.csv"),
+                &yaml("{P: ../data/p.csv}", "P", "root.csv").replacen(
+                    "schema_version: '1.0'\n",
+                    "schema_version: '1.0'\nparent: schema.yaml\n",
+                    1,
+                ),
             );
             study.write(
                 "producer/base.yaml",
-                &yaml("{RAW: never-read.csv}", "RAW", "../data/p.csv"),
+                &yaml("{RAW: never-read.csv}", "RAW", "elsewhere.csv"),
             );
             study.write(
                 "producer/p.yaml",
-                "schema_version: '1.0'\nparents: [base.yaml]\ndomain: PRODUCER\n",
+                "schema_version: '1.0'\nparent: base.yaml\ndomain: PRODUCER\n",
             );
-            study.write(
-        "root.yaml",
-        "schema_version: '1.0'\nparents: [origins/schema.yaml, origins/path.yaml]\ndomain: ROOT\n",
-    );
-            let graph = study.graph().unwrap();
-            let p = &graph.nodes()[0].producers[0];
-            let declaration = &graph.metadata().nodes()[0].producers()[0];
-            assert_eq!(p.schema_identity, study.path("producer/p.yaml"));
-            assert_eq!(p.source_identity, study.path("data/p.csv"));
-            assert_eq!(p.output_identity, study.path("data/p.csv"));
-            assert_eq!(
-                declaration.schema_origin().declaring_source(),
-                study.path("origins/schema.yaml")
-            );
-            assert_eq!(
-                declaration.input_origin().declaring_source(),
-                study.path("origins/path.yaml")
-            );
-            assert_eq!(
-                declaration.output_origin().declaring_source(),
-                study.path("producer/base.yaml")
-            );
-            assert_eq!(declaration.schema_origin().written(), "../producer/p.yaml");
-            assert_eq!(graph.capture_reads(), 5);
-            assert!(!study.0.join("data").exists());
-        }
-
-        #[test]
-        fn mismatch_preserves_portable_req_0534_and_original_metadata_after_files_disappear() {
-            let study = Study::new();
-            leaf(&study);
-            let root = yaml(
-                "{P: {path: different.csv, schema: leaf.yaml}}",
-                "P",
-                "root.csv",
-            );
-            study.write("root.yaml", &root);
-            let failure = rejected(study.graph());
-            match failure.error() {
-                Error::Graph(GraphError::Graph(CoreError::Admission {
-                    node: 0,
-                    error: yamaa_core::producer_admission::Error::Invalid(diagnostics),
-                })) => {
-                    assert_eq!(
-                        diagnostics[0].code,
-                        yamaa_core::diagnostic::ConditionCode::ProducerOutputPathMismatch
-                    );
-                    assert!(diagnostics[0].spec_paths.contains(&"input.P.path".into()));
-                }
-                other => panic!("unexpected error: {other:?}"),
-            }
-            let prefix = failure
-                .captured_sources()
-                .map(|(p, b)| (p, b.to_vec()))
-                .collect::<BTreeMap<_, _>>();
-            fs::remove_file(study.0.join("root.yaml")).unwrap();
-            fs::remove_file(study.0.join("leaf.yaml")).unwrap();
-            assert_eq!(prefix[&study.path("root.yaml")], root.as_bytes());
-            assert_eq!(
-                failure
-                    .captured_sources()
-                    .map(|(p, b)| (p, b.to_vec()))
-                    .collect::<BTreeMap<_, _>>(),
-                prefix
-            );
-            assert_eq!(failure.documents().len(), 2);
-            assert_eq!(
-                failure.environment().root().source().bytes,
-                b"schema_version: '1.0'\n"
-            );
-        }
-
-        #[test]
-        fn cycle_captures_each_node_once_and_retains_full_authored_route() {
-            let study = Study::new();
             study.write(
                 "root.yaml",
-                &yaml(
-                    "{NEXT: {path: next.csv, schema: next.yaml}}",
-                    "NEXT",
-                    "root.csv",
-                ),
+                "schema_version: '1.0'\nparent: origins/path.yaml\ndomain: ROOT\n",
             );
-            study.write(
-                "next.yaml",
-                &yaml(
-                    "{ROOT: {path: root.csv, schema: './root.yaml'}}",
-                    "ROOT",
-                    "next.csv",
-                ),
-            );
-            let failure = rejected(study.graph());
-            match failure.error() {
-                Error::Graph(GraphError::Graph(CoreError::Cycle {
-                    node: 1,
-                    diagnostic,
-                })) => {
-                    assert_eq!(
-                        diagnostic.code,
-                        yamaa_core::diagnostic::ConditionCode::ProducerWorkflowCycle
-                    );
-                    assert_eq!(diagnostic.spec_paths, ["input.ROOT.schema"]);
-                    let rendered = format!("{:?}", diagnostic.context);
-                    assert!(rendered.contains(&study.path("root.yaml")));
-                    assert!(rendered.contains(&study.path("next.yaml")));
-                }
-                other => panic!("unexpected error: {other:?}"),
-            }
-            assert_eq!(failure.capture_reads(), 2);
-            assert_eq!(failure.documents().len(), 2);
+            let prepared = plain(study.select());
+            assert_eq!(prepared.capture_reads(), 5);
+            let artifact = prepared.resolved_specification().unwrap();
+            let resources = &artifact.entries()[0].resources;
+            let schema = resources
+                .iter()
+                .find(|resource| resource.spec_path == "input.P.schema")
+                .unwrap();
+            assert_eq!(schema.declaring_source, study.path("origins/schema.yaml"));
+            assert_eq!(schema.written, "../producer/p.yaml");
+            let Location::Local { path } = &schema.location;
+            assert_eq!(path, &study.path("producer/p.yaml"));
+            let input = resources
+                .iter()
+                .find(|resource| resource.spec_path == "input.P.path")
+                .unwrap();
+            assert_eq!(input.declaring_source, study.path("origins/path.yaml"));
+            // The producer's own output path is not consulted.
+            let compiled = prepared.run().compiled();
+            assert_eq!(compiled.sources()[0].types.len(), 2);
+            assert!(!study.0.join("data").exists());
         }
 
         #[test]
@@ -1502,19 +1453,27 @@ mod file {
                     "root.csv",
                 ),
             );
-            let failure = rejected(study.graph());
-            assert!(matches!(
-                failure.error(),
-                Error::Resource(ResourceError::Missing)
-            ));
-            assert_eq!(failure.origin().unwrap().document, 0);
+            let failure = rejected_entry(study.select());
+            let Error::Document(DocumentError::ResourceFinding { error, diagnostic }) =
+                failure.error()
+            else {
+                panic!("classified link failure: {:?}", failure.error());
+            };
+            assert_eq!(*error, ResourceError::Missing);
+            assert_eq!(diagnostic.definition().condition, "resource_path_missing");
+            assert_eq!(diagnostic.spec_paths, ["input.P.schema"]);
+            assert_eq!(
+                diagnostic.context["path"],
+                yamaa_core::json::Value::String("missing.yaml".into())
+            );
             assert_eq!(failure.origin().unwrap().dataset, "P");
-            assert_eq!(failure.documents().len(), 1);
+            assert!(failure.document().is_some());
+            assert_eq!(failure.entry(), "root.yaml");
             assert_eq!(failure.capture_reads(), 1);
         }
 
         #[test]
-        fn malformed_entry_and_failed_parent_raw_bytes_survive_without_a_prepared_node() {
+        fn malformed_entry_and_failed_parent_raw_bytes_survive_without_a_prepared_document() {
             for parent in [false, true] {
                 let study = Study::new();
                 let malformed = "schema_version: '1.0'\ndomain: [\n";
@@ -1523,13 +1482,13 @@ mod file {
                 if parent {
                     study.write(
                         "root.yaml",
-                        "schema_version: '1.0'\nparents: [broken.yaml]\ndomain: ROOT\n",
+                        "schema_version: '1.0'\nparent: broken.yaml\ndomain: ROOT\n",
                     );
                 }
-                let failure = rejected(study.graph());
+                let failure = rejected_entry(study.select());
                 assert!(matches!(failure.error(), Error::Document(_)));
-                assert_eq!(failure.entry(), Some("root.yaml"));
-                assert!(failure.documents().is_empty());
+                assert_eq!(failure.entry(), "root.yaml");
+                assert!(failure.document().is_none());
                 assert_eq!(failure.capture_reads(), if parent { 2 } else { 1 });
                 let captures = failure.captured_sources().collect::<BTreeMap<_, _>>();
                 assert_eq!(captures[&study.path(bad)], malformed.as_bytes());
@@ -1558,7 +1517,7 @@ mod file {
             );
             study.write(
                 "fallback/p.yaml",
-                &yaml("{RAW: never-read.csv}", "RAW", "p.csv"),
+                &yaml("{RAW: never-read.csv}", "RAW", "elsewhere.csv"),
             );
             let resources = Resources::new(
                 &study.path(""),
@@ -1566,22 +1525,13 @@ mod file {
                 &[study.path("fallback")],
             )
             .unwrap();
-            let graph = FileGraph::prepare(
-                resources,
-                "root.yaml",
-                environment(),
-                shipped_schema::capture().unwrap(),
-            )
-            .unwrap();
-            assert_eq!(
-                graph.nodes()[0].producers[0].schema_identity,
-                study.path("fallback/p.yaml")
-            );
-            assert_eq!(
-                graph.nodes()[0].producers[0].output_identity,
-                study.path("fallback/p.csv")
-            );
-            assert_eq!(graph.capture_reads(), 2);
+            // The producing specification is found through the metadata
+            // fallback; the consumer still reads its own declared artifact path.
+            let prepared = plain(select(resources));
+            let compiled = prepared.run().compiled();
+            assert!(compiled.source_contract(0).is_some());
+            assert_eq!(compiled.sources()[0].path, "../fallback/p.csv");
+            assert_eq!(prepared.capture_reads(), 2);
             assert!(!study.0.join("fallback/p.csv").exists());
         }
 
@@ -1593,16 +1543,9 @@ mod file {
             let mut resources = study.resources();
             resources.capture_metadata("root.yaml").unwrap();
             study.write("root.yaml", &before.replace("TEST", "NEXT"));
-            let failure = rejected(FileGraph::prepare(
-                resources,
-                "root.yaml",
-                environment(),
-                shipped_schema::capture().unwrap(),
-            ));
-            let Error::Document(yamaa_adapters::file_preparation::Error::ResourceFinding {
-                error,
-                diagnostic,
-            }) = failure.error()
+            let failure = rejected_entry(select(resources));
+            let Error::Document(DocumentError::ResourceFinding { error, diagnostic }) =
+                failure.error()
             else {
                 panic!(
                     "changed metadata retains its original native cause and authored diagnostic"
@@ -1628,7 +1571,7 @@ mod file {
         }
 
         #[test]
-        fn producer_and_consumer_compilation_failures_keep_the_complete_raw_graph() {
+        fn producer_derivations_are_never_compiled_but_consumer_failures_remain() {
             for producer in [false, true] {
                 let study = Study::new();
                 leaf(&study);
@@ -1641,25 +1584,26 @@ mod file {
                     "{function: {name: missing, args: {x: 1}}}",
                 );
                 study.write(path, &bad);
-                let failure = rejected(study.graph());
-                assert!(matches!(
-                    failure.error(),
-                    Error::Graph(GraphError::Graph(CoreError::Compilation { .. }))
-                        | Error::Graph(GraphError::Graph(CoreError::Admission {
-                            error: yamaa_core::producer_admission::Error::Compilation(_),
-                            ..
-                        }))
-                ));
-                assert_eq!(failure.documents().len(), 2);
-                assert_eq!(failure.capture_reads(), 2);
-                assert_eq!(
-                    failure
-                        .captured_sources()
-                        .find(|(p, _)| p == &study.path(path))
-                        .unwrap()
-                        .1,
-                    bad.as_bytes()
-                );
+                let result = study.select();
+                if producer {
+                    // Only the output contract is read from a linked producer.
+                    let prepared = plain(result);
+                    assert_eq!(prepared.capture_reads(), 2);
+                } else {
+                    let failure = rejected_plain(result);
+                    let DocumentError::Compile(yamaa_adapters::specification_run::Error::Prepare(
+                        PrepareError::Invalid(findings),
+                    )) = failure.error()
+                    else {
+                        panic!("consumer compilation: {:?}", failure.error());
+                    };
+                    assert!(findings.iter().any(|finding| finding
+                        .diagnostic()
+                        .definition()
+                        .condition
+                        == "unknown_project_function"));
+                    assert_eq!(failure.capture_reads(), 2);
+                }
                 assert!(!study.0.join("never-read.csv").exists());
                 assert!(!study.0.join("leaf.csv").exists());
                 assert!(!study.0.join("root.csv").exists());
@@ -1667,7 +1611,7 @@ mod file {
         }
 
         #[test]
-        fn original_redundant_types_keep_req_0523_after_native_closure_capture() {
+        fn original_redundant_types_keep_req_0523_after_link_capture() {
             let study = Study::new();
             leaf(&study);
             study.write(
@@ -1678,18 +1622,45 @@ mod file {
                     "root.csv",
                 ),
             );
-            let failure = rejected(study.graph());
-            let Error::Graph(GraphError::Graph(CoreError::Admission {
-                error: yamaa_core::producer_admission::Error::Invalid(findings),
-                ..
-            })) = failure.error()
+            let failure = rejected_plain(study.select());
+            let DocumentError::Compile(yamaa_adapters::specification_run::Error::Prepare(
+                PrepareError::Invalid(findings),
+            )) = failure.error()
             else {
                 panic!("original redundant authority");
             };
-            assert_eq!(findings[0].definition().requirement, Some("REQ-0523"));
-            assert_eq!(findings[0].spec_paths, ["input.P.types.ID"]);
+            let finding = findings[0].diagnostic();
+            assert_eq!(finding.definition().requirement, Some("REQ-0523"));
+            assert_eq!(finding.spec_paths, ["input.P.types.ID"]);
             assert_eq!(failure.capture_reads(), 2);
-            assert_eq!(failure.documents().len(), 2);
+        }
+
+        #[test]
+        fn a_link_naming_the_consuming_specification_is_refused() {
+            let study = Study::new();
+            study.write(
+                "root.yaml",
+                &yaml(
+                    "{SELF: {path: root.csv, schema: './root.yaml'}}",
+                    "SELF",
+                    "root.csv",
+                ),
+            );
+            let failure = rejected_plain(study.select());
+            let DocumentError::Compile(yamaa_adapters::specification_run::Error::Prepare(
+                PrepareError::Invalid(findings),
+            )) = failure.error()
+            else {
+                panic!("self link: {:?}", failure.error());
+            };
+            let finding = findings[0].diagnostic();
+            assert_eq!(finding.definition().condition, "invalid_producer_contract");
+            assert_eq!(finding.spec_paths, ["input.SELF.schema"]);
+            assert_eq!(
+                finding.context["reason"],
+                yamaa_core::json::Value::String("self_reference".into())
+            );
+            assert_eq!(failure.capture_reads(), 1);
         }
 
         #[cfg(unix)]
@@ -1699,10 +1670,7 @@ mod file {
             let study = Study::new();
             leaf(&study);
             symlink("leaf.yaml", study.0.join("link.yaml")).unwrap();
-            for (schema, error) in [
-                ("link.yaml", ResourceError::Symlink),
-                ("../escape.yaml", ResourceError::OutsideRoots),
-            ] {
+            for schema in ["link.yaml", "../escape.yaml"] {
                 study.write(
                     "root.yaml",
                     &yaml(
@@ -1711,8 +1679,21 @@ mod file {
                         "root.csv",
                     ),
                 );
-                let failure = rejected(study.graph());
-                assert!(matches!(failure.error(), Error::Resource(actual) if actual == &error));
+                let failure = rejected_entry(study.select());
+                match (schema, failure.error()) {
+                    (
+                        "link.yaml",
+                        Error::Document(DocumentError::ResourceFinding { error, diagnostic }),
+                    ) => {
+                        assert_eq!(*error, ResourceError::Symlink);
+                        assert_eq!(diagnostic.definition().condition, "resource_path_symlink");
+                        assert_eq!(diagnostic.spec_paths, ["input.P.schema"]);
+                    }
+                    ("../escape.yaml", Error::Document(DocumentError::Resource(error))) => {
+                        assert_eq!(*error, ResourceError::OutsideRoots);
+                    }
+                    (_, error) => panic!("terminal link failure: {error:?}"),
+                }
                 assert_eq!(failure.capture_reads(), 1);
             }
             symlink("not-present", study.0.join("leaf.csv")).unwrap();
@@ -1721,8 +1702,8 @@ mod file {
                 "root.yaml",
                 &yaml("{P: {path: leaf.csv, schema: leaf.yaml}}", "P", "root.csv"),
             );
-            let graph = study.graph().unwrap();
-            assert_eq!(graph.capture_reads(), 2);
+            let prepared = plain(study.select());
+            assert_eq!(prepared.capture_reads(), 2);
             assert!(fs::symlink_metadata(study.0.join("leaf.csv"))
                 .unwrap()
                 .file_type()
@@ -1745,12 +1726,15 @@ mod file {
                     "root.csv",
                 ),
             );
-            let graph = study.graph().unwrap();
+            let prepared = plain(study.select());
             assert_eq!(
-                graph.nodes()[0].producers[0].schema_identity,
-                root.join("leaf.yaml").to_str().unwrap()
+                schema_locations(&prepared),
+                BTreeMap::from([(
+                    "input.P.schema".to_owned(),
+                    root.join("leaf.yaml").to_str().unwrap().to_owned()
+                )])
             );
-            assert_eq!(graph.capture_reads(), 2);
+            assert_eq!(prepared.capture_reads(), 2);
         }
     }
     mod file_preparation {
@@ -1806,7 +1790,7 @@ mod file {
                 fs::remove_dir_all(&self.0).unwrap();
             }
         }
-        const VALID: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: {source: SRC.ID}}\n";
+        const VALID: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
         fn failure(study: &Study, source: &str) -> String {
             match study.prepare(source) {
                 Ok(_) => panic!("expected preparation failure"),
@@ -1872,7 +1856,7 @@ mod file {
             let actual: Value = yamaa_adapters::json_wire::decode(&failure(
                 &study,
                 &format!(
-                    "{}parents: ../outside/missing.yaml\n",
+                    "{}parent: ../outside/missing.yaml\n",
                     VALID.replace("'1.0'", "'99.0'")
                 ),
             ))
@@ -1887,12 +1871,12 @@ mod file {
             let study = Study::new();
             let actual: Value = yamaa_adapters::json_wire::decode(&failure(
                 &study,
-                &format!("{VALID}parents: absent.yaml\n"),
+                &format!("{VALID}parent: absent.yaml\n"),
             ))
             .unwrap();
             assert_eq!(
                 actual,
-                json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[{"phase":"validation","condition":"parent_not_found","requirement":"REQ-0654","spec_paths":["parents"],"context":{"path":"absent.yaml","source":study.resource_key("entry/spec.yaml")}}]}})
+                json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[{"phase":"validation","condition":"parent_not_found","requirement":"REQ-0654","spec_paths":["parent"],"context":{"path":"absent.yaml","source":study.resource_key("entry/spec.yaml")}}]}})
             );
         }
         #[test]
@@ -1905,7 +1889,7 @@ mod file {
             .unwrap();
             let actual: Value = yamaa_adapters::json_wire::decode(&failure(
                 &study,
-                &format!("{VALID}parents: ../parent/base.yaml\n"),
+                &format!("{VALID}parent: ../parent/base.yaml\n"),
             ))
             .unwrap();
             assert_eq!(
@@ -1914,12 +1898,12 @@ mod file {
             );
         }
         #[test]
-        fn inherited_paths_rebase_lexically_and_shared_parent_bytes_are_retained_once() {
+        fn inherited_paths_rebase_lexically_and_parent_bytes_are_retained_once() {
             let study = Study::new();
             fs::write(study.0.join("parent/base.yaml"), VALID).unwrap();
             let prepared = study
-        .prepare("schema_version: '1.0'\nparents: [../parent/base.yaml, ../parent/./base.yaml]\n")
-        .unwrap();
+                .prepare("schema_version: '1.0'\nparent: ../parent/./base.yaml\n")
+                .unwrap();
             assert_eq!(prepared.capture_reads(), 2);
             assert_eq!(prepared.run().document().parents().len(), 1);
             assert_eq!(
@@ -1956,14 +1940,14 @@ mod file {
             )
             .unwrap();
             assert_eq!(
-                failure(&study, &format!("{VALID}parents: link.yaml\n")),
+                failure(&study, &format!("{VALID}parent: link.yaml\n")),
                 "resource path contains a symbolic link"
             );
             let resources =
                 Resources::new(&study.text("entry"), &study.text("entry"), &[]).unwrap();
             fs::write(
                 study.0.join("entry/spec.yaml"),
-                format!("{VALID}parents: ../parent/base.yaml\n"),
+                format!("{VALID}parent: ../parent/base.yaml\n"),
             )
             .unwrap();
             let error = match FileSpecification::prepare(resources, "spec.yaml") {
@@ -1988,7 +1972,7 @@ mod file {
                 eprintln!("process bypasses DAC; unreadable-parent case not exercised");
                 return;
             }
-            let result = study.prepare(&format!("{VALID}parents: blocked.yaml\n"));
+            let result = study.prepare(&format!("{VALID}parent: blocked.yaml\n"));
             fs::set_permissions(&parent, permissions).unwrap();
             let error = match result {
                 Ok(_) => panic!("unreadable parent accepted through fallback"),
@@ -1997,7 +1981,7 @@ mod file {
             let actual: Value = yamaa_adapters::json_wire::decode(&error.into_message()).unwrap();
             assert_eq!(
                 actual,
-                json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[{"phase":"validation","condition":"parent_not_found","requirement":"REQ-0654","spec_paths":["parents"],"context":{"path":"blocked.yaml","source":study.resource_key("entry/spec.yaml")}}]}})
+                json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[{"phase":"validation","condition":"parent_not_found","requirement":"REQ-0654","spec_paths":["parent"],"context":{"path":"blocked.yaml","source":study.resource_key("entry/spec.yaml")}}]}})
             );
         }
         #[test]
@@ -2143,7 +2127,7 @@ mod file {
             fs::write(study.0.join("parent/dict.yaml"), "A: declared-parent\n").unwrap();
             fs::write(study.0.join("entry/dict.yaml"), "A: wrong-entry\n").unwrap();
             let prepared = study
-                .prepare("schema_version: '1.0'\nparents: [../parent/base.yaml]\n")
+                .prepare("schema_version: '1.0'\nparent: ../parent/base.yaml\n")
                 .unwrap();
             assert_eq!(prepared.capture_reads(), 3);
             let dictionary = prepared

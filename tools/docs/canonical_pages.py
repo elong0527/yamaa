@@ -15,12 +15,7 @@ from markdown.treeprocessors import Treeprocessor
 from mkdocs.exceptions import PluginError
 from mkdocs.structure.files import File
 
-SOURCES = {"index.md": "README.md", "articles/rules.md": "rules/README.md"}
-# Rendered from rules/ and yaml/ on every build; never committed or edited.
-GENERATED = {
-    "reference/requirements.md": "rules/reference/requirements.md",
-    "reference/schema-fields.md": "rules/reference/schema-fields.md",
-}
+from tools.docs.pages import CANONICAL, GENERATED
 
 
 def leaves_docs(page, path):
@@ -71,7 +66,7 @@ class RepositoryLinksExtension(Extension):
 
 
 def rule_references(root):
-    """Render the requirement and schema-field references from their sources."""
+    """Render the generated rule reference pages from their sources."""
     from tools.validation.generate_rule_reference import generated
 
     try:
@@ -85,7 +80,7 @@ def rule_references(root):
 
 def on_files(files, *, config):
     root = Path(config.config_file_path).parent
-    for destination, source in SOURCES.items():
+    for destination, source in CANONICAL.items():
         if files.get_file_from_path(destination) is not None:
             raise PluginError(
                 f"Edit {source}; remove the duplicate docs/{destination}."
@@ -113,7 +108,7 @@ def on_page_markdown(markdown, *, page, config, files):
         if not isinstance(extension, RepositoryLinksExtension)
     ]
     repository = config.repo_url.rstrip("/")
-    if source := SOURCES.get(page.file.src_uri) or GENERATED.get(page.file.src_uri):
+    if source := CANONICAL.get(page.file.src_uri) or GENERATED.get(page.file.src_uri):
         source_url = f"{repository}/blob/main/{source}"
         config.markdown_extensions.append(RepositoryLinksExtension(source_url))
     else:

@@ -7,8 +7,7 @@ use crate::{
 };
 use crate::{
     column_dependencies,
-    numeric_compiler::{compile_numeric, CompiledNumeric},
-    numeric_parser::ParseError,
+    expression::{compile, CompileError, CompiledExpression, Context as ExpressionContext},
     reference_binding::{self, Catalog},
     schema::{Document, DocumentNode as N, SpecificationDocument},
     table::{Column, TableSchema},
@@ -27,6 +26,7 @@ mod intermediates;
 mod lookup_diagnostics;
 mod match_values;
 mod relation_predicates;
+mod result_types;
 mod static_checks;
 mod static_types;
 pub use lookup_diagnostics::LookupFinding;
@@ -54,6 +54,7 @@ mod cases;
 mod derivations;
 mod flags;
 mod imputation;
+mod mandatory;
 mod mapping_cut;
 mod odm;
 mod rounding;
@@ -78,7 +79,7 @@ pub enum PrepareError {
     #[error("specification unsupported: {0:?}")]
     Unsupported(Vec<UnsupportedFeature>),
     #[error("specification numeric: path={path:?}, error={error:?}")]
-    Numeric { path: String, error: ParseError },
+    Numeric { path: String, error: CompileError },
     #[error("specification invalid: {0:?}")]
     Invalid(Vec<PreflightFinding>),
     #[error("specification output schema: {0:?}")]
@@ -193,8 +194,8 @@ pub enum BindError {
     InvalidDiagnostic,
     #[error("specification source count")]
     SourceCount,
-    #[error("specification predicate policy: {0:?}")]
-    PredicatePolicy(crate::predicate_compiler::Error),
+    #[error("specification expression policy: {0:?}")]
+    ExpressionPolicy(CompileError),
     #[error("specification invalid predicate binding: {0:?}")]
     InvalidPredicateBinding(crate::bound_expression::BindingError),
     #[error("specification invalid: {0:?}")]
@@ -241,7 +242,7 @@ pub enum BindFinding {
     Aggregate {
         path: String,
         expression: String,
-        error: crate::aggregate_parser::GrammarFailure,
+        error: crate::expression::Failure,
     },
     AggregateScope {
         path: String,
@@ -262,7 +263,7 @@ pub enum BindFinding {
     Numeric {
         path: String,
         expression: String,
-        error: ParseError,
+        error: CompileError,
     },
     UnknownReference {
         path: String,
@@ -330,6 +331,15 @@ impl SourceDeclaration {
     pub fn text_is_missing(&self, value: &str) -> bool {
         !self.empty_string_present && value.is_empty()
     }
+    /// A stored field's type before its schema is captured: the declared
+    /// type. An undeclared field's type, and whether it exists at all, is
+    /// known only once capture reads the stored schema (INPUT-5).
+    pub(crate) fn declared_type(&self, field: &str) -> Option<ColumnType> {
+        self.types
+            .iter()
+            .find(|(name, _)| name == field)
+            .map(|&(_, kind)| kind)
+    }
 }
 #[derive(Clone, Debug)]
 enum Operation {
@@ -337,18 +347,20 @@ enum Operation {
     Aggregate(std::boxed::Box<aggregates::Declaration>),
     MappingCut(std::boxed::Box<mapping_cut::Declaration>),
     Scalar(std::boxed::Box<scalar::Declaration>),
-    StrContains(crate::text_extract::StringExtract),
     Flag(flags::Declaration),
     StrExtract(crate::text_extract::StringExtract),
     StrReplace(crate::text_replace::StringReplace),
     StrTemplate(crate::text_template::StringTemplate),
     Case(Vec<cases::Branch>),
-    ProjectFunction(usize),
+    ProjectFunction {
+        call: usize,
+        returns: ColumnType,
+    },
     Literal(crate::value::Value),
     Window(std::boxed::Box<windows::Declaration>),
     Source(std::boxed::Box<source_expressions::Declaration>),
     FirstAvailable(std::boxed::Box<source_expressions::FirstAvailable>),
-    Compute(CompiledNumeric),
+    Compute(CompiledExpression),
     Round(crate::dataset::Rounding),
     Temporal(crate::dataset::Temporal),
     StrCase(crate::text_case::StringCase),
@@ -357,7 +369,7 @@ enum Operation {
     /// Reference planning emits formula diagnostics after source ingestion.
     InvalidNumeric {
         expression: String,
-        error: ParseError,
+        error: CompileError,
     },
 }
 #[derive(Clone, Debug)]
@@ -373,6 +385,10 @@ pub struct PreparedSpecification {
     project_calls: Option<crate::project_calls::ProjectCalls>,
     sources: Vec<SourceDeclaration>,
     source_interpretations: Vec<SourceInterpretation>,
+    /// The producing specification's output contract for each linked source.
+    source_contracts: Vec<Option<crate::producer_contract::Contract>>,
+    /// Inputs declaring `require_match: true` (LOOKUP-24).
+    required_matches: Vec<String>,
     driver: usize,
     intermediates: intermediates::Declarations,
     output: TableSchema,
@@ -437,11 +453,22 @@ fn literal_handler(
         .transpose()
 }
 
+/// `{literal: null}`, the one spelling of the missing value a handler, flag,
+/// mapping entry or function argument substitutes (COLUMN-10).
+pub(crate) fn missing_literal(d: &Document, id: usize) -> bool {
+    matches!(&d.nodes()[id], N::Mapping(items) if matches!(
+        items.as_slice(),
+        &[(key, value)] if matches!(&d.nodes()[key], N::Text(key) if key == "literal")
+            && matches!(d.nodes()[value], N::Null)
+    ))
+}
+
 /// Read an admitted scalar leaf once; rows and columns share the same boundary.
 fn literal(d: &Document, id: usize, path: &str) -> Result<crate::value::Value, PrepareError> {
     use crate::value::Value;
     Ok(match &d.nodes()[id] {
         N::Null => Value::Missing,
+        N::Mapping(_) if missing_literal(d, id) => Value::Missing,
         N::Text(value) => Value::Str(value.clone()),
         N::Boolean(value) => Value::Bool(*value),
         N::Float(value) => Value::float(*value),
@@ -484,6 +511,40 @@ fn mapping(d: &Document, id: usize) -> Result<&[(usize, usize)], PrepareError> {
 fn present(d: &Document, id: usize, name: &str) -> bool {
     d.field(id, name)
         .is_some_and(|id| !matches!(d.nodes()[id], N::Null))
+}
+/// A lookup or structured source asserts a match only with `require_match:
+/// true`; omitted or false, a row without a record is answered (LOOKUP-13).
+pub(crate) fn requires_match(d: &Document, id: usize) -> bool {
+    d.field(id, "require_match")
+        .is_some_and(|id| matches!(d.nodes()[id], N::Boolean(true)))
+}
+/// Decode one admitted order term as `(variable, descending, nulls_first)`.
+/// Every `list[order_by_term]` field uses this one reading (VALUE-22): an
+/// omitted `nulls` sorts missing lowest, first under `asc` and last under
+/// `desc`, while a declared `nulls` is absolute and never flips.
+fn order_term(d: &Document, term: usize) -> Result<(String, bool, bool), PrepareError> {
+    let (name, direction, nulls) = match &d.nodes()[term] {
+        N::Text(name) => (name.as_str(), None, None),
+        _ => (
+            text(d, field(d, term, "variable")?)?,
+            d.field(term, "direction")
+                .map(|id| text(d, id))
+                .transpose()?,
+            d.field(term, "nulls").map(|id| text(d, id)).transpose()?,
+        ),
+    };
+    let descending = match direction {
+        None | Some("asc") => false,
+        Some("desc") => true,
+        Some(_) => return Err(PrepareError::Internal),
+    };
+    let nulls_first = match nulls {
+        None => !descending,
+        Some("first") => true,
+        Some("last") => false,
+        Some(_) => return Err(PrepareError::Internal),
+    };
+    Ok((name.into(), descending, nulls_first))
 }
 fn reject(extra: &mut Vec<UnsupportedFeature>, operation: &str, path: String) {
     extra.push(UnsupportedFeature {
@@ -833,8 +894,6 @@ fn collect_source_findings<'a>(
     d: &'a Document,
     inputs: &[(usize, usize)],
     odm_inputs: &std::collections::BTreeSet<&'a str>,
-    producers: Option<&[crate::producer_admission::Declaration]>,
-    extra: &mut Vec<UnsupportedFeature>,
 ) -> Result<Vec<PreflightFinding>, PrepareError> {
     let mut source_findings = Vec::new();
     for &(name, id) in inputs {
@@ -899,9 +958,6 @@ fn collect_source_findings<'a>(
             }
             continue;
         }
-        if producers.is_none() {
-            optional_features(d, id, &["schema"], &prefix, extra);
-        }
         if profile == Some(SourceProfile::Parquet) {
             if let Some(types) = d
                 .field(id, "types")
@@ -937,14 +993,22 @@ fn collect_source_findings<'a>(
     Ok(source_findings)
 }
 
+type BuiltSources = (
+    Vec<SourceDeclaration>,
+    Vec<SourceInterpretation>,
+    Vec<Option<crate::producer_contract::Contract>>,
+);
+
 fn build_sources<'a>(
     d: &'a Document,
     inputs: &[(usize, usize)],
     odm_inputs: &std::collections::BTreeSet<&'a str>,
-    producers: Option<&[crate::producer_admission::Declaration]>,
-) -> Result<(Vec<SourceDeclaration>, Vec<SourceInterpretation>), PrepareError> {
+    contracts: Vec<(String, crate::producer_contract::Contract)>,
+) -> Result<BuiltSources, PrepareError> {
     let mut sources = Vec::new();
     let mut source_interpretations = Vec::new();
+    let mut source_contracts = Vec::new();
+    let mut contracts = contracts.into_iter().peekable();
     for &(name, selected) in inputs {
         source_interpretations.push(if odm_inputs.contains(text(d, name)?) {
             SourceInterpretation::Odm
@@ -998,21 +1062,26 @@ fn build_sources<'a>(
                 .map(|id| text(d, id).map(String::from))
                 .transpose()?,
         });
-        if let Some(producer) = producers.and_then(|p| {
-            p.iter()
-                .find(|p| p.dataset() == text(d, name).unwrap_or(""))
-        }) {
-            // A producer's selected output contract is the sole type authority.
-            // The private metadata wrapper never exposes these as file reads.
-            sources.last_mut().ok_or(PrepareError::Internal)?.types = producer
-                .contract()
+        // Admission returns contracts in authored input order, so a linked
+        // source always takes the next contract.
+        let contract = contracts
+            .next_if(|(dataset, _)| dataset == text(d, name).unwrap_or(""))
+            .map(|(_, contract)| contract);
+        if let Some(contract) = &contract {
+            // The producing specification's output contract is the sole type
+            // authority for the stored fields.
+            sources.last_mut().ok_or(PrepareError::Internal)?.types = contract
                 .fields()
                 .iter()
                 .map(|f| (f.name.clone(), f.kind))
                 .collect();
         }
+        source_contracts.push(contract);
     }
-    Ok((sources, source_interpretations))
+    if contracts.next().is_some() {
+        return Err(PrepareError::Internal);
+    }
+    Ok((sources, source_interpretations, source_contracts))
 }
 
 struct PreparedOutputDeclarations {
@@ -1046,19 +1115,7 @@ fn prepare_output_declarations(
         .map(|id| {
             sequence(d, id)?
                 .iter()
-                .map(|&term| {
-                    if let N::Text(name) = &d.nodes()[term] {
-                        return Ok((name.clone(), false, false));
-                    }
-                    let name = text(d, field(d, term, "variable")?)?.into();
-                    let descending = d.field(term, "direction").is_some_and(
-                        |id| matches!(&d.nodes()[id], N::Text(value) if value == "desc"),
-                    );
-                    let nulls_first = d.field(term, "nulls").is_some_and(
-                        |id| matches!(&d.nodes()[id], N::Text(value) if value == "first"),
-                    );
-                    Ok((name, descending, nulls_first))
-                })
+                .map(|&term| order_term(d, term))
                 .collect::<Result<Vec<_>, PrepareError>>()
         })
         .transpose()?
@@ -1185,14 +1242,11 @@ fn prepare_column_declarations(
                 )?;
                 Some(Operation::FirstAvailable(std::boxed::Box::new(selection)))
             }
-            "row_number"
-            | "rank"
-            | "row_value"
-            | "previous_non_missing"
-            | "locf"
-            | "baseline_flag" => Some(Operation::Window(std::boxed::Box::new(
-                windows::Declaration::prepare(d, payload, op, &path, extra)?,
-            ))),
+            "row_number" | "rank" | "row_value" | "locf" | "baseline_flag" => {
+                Some(Operation::Window(std::boxed::Box::new(
+                    windows::Declaration::prepare(d, payload, op, &path)?,
+                )))
+            }
             _ => match derivations::prepare_value_with_driver(
                 d,
                 field(d, derivation, "value")?,
@@ -1237,7 +1291,7 @@ impl PreparedSpecification {
     /// Reject unsupported declarations before requesting any source bytes. Effective
     /// source empty-string behavior is missing unless explicitly declared otherwise.
     pub fn prepare(spec: &SpecificationDocument) -> Result<Self, PrepareError> {
-        Self::prepare_implementation(spec, None, None, None, None, None)
+        Self::prepare_implementation(spec, None, None, Default::default(), None, None)
     }
     /// Prepare calls against statically admitted environment definitions. No
     /// project imports, lock verification, test invocation or study reads occur.
@@ -1245,33 +1299,28 @@ impl PreparedSpecification {
         spec: &SpecificationDocument,
         functions: &[crate::project_function::Function],
     ) -> Result<Self, PrepareError> {
-        Self::prepare_implementation(spec, Some(functions), None, None, None, None)
+        Self::prepare_implementation(spec, Some(functions), None, Default::default(), None, None)
     }
     /// Compile project calls and fixed terminology against the same admitted metadata.
     pub fn prepare_with_environment(
         spec: &SpecificationDocument,
         environment: &crate::project_environment::ExecutionEnvironment,
     ) -> Result<Self, PrepareError> {
-        Self::prepare_implementation(
-            spec,
-            Some(environment.functions()),
-            Some(environment.catalogue()),
-            None,
-            Some(environment.inventory()),
-            environment.undeclared_language(),
-        )
+        Self::prepare_linked(spec, Some(environment), Default::default())
     }
-    /// This representation stays inside the sealed producer metadata result.
-    pub(crate) fn prepare_producer_metadata(
+    /// Compile with the producing specifications that `schema` links name. Each
+    /// link supplies only its output contract's field names, order and types;
+    /// a linked input without supplied metadata is invalid.
+    pub fn prepare_linked(
         spec: &SpecificationDocument,
         environment: Option<&crate::project_environment::ExecutionEnvironment>,
-        producers: &[crate::producer_admission::Declaration],
+        links: crate::producer_contract::Links<'_>,
     ) -> Result<Self, PrepareError> {
         Self::prepare_implementation(
             spec,
             environment.map(|e| e.functions()),
             environment.map(|e| e.catalogue()),
-            Some(producers),
+            links,
             environment.map(|e| e.inventory()),
             environment.and_then(|e| e.undeclared_language()),
         )
@@ -1280,13 +1329,27 @@ impl PreparedSpecification {
         spec: &SpecificationDocument,
         functions: Option<&[crate::project_function::Function]>,
         catalogue: Option<&crate::project_terminology::Catalogue>,
-        producers: Option<&[crate::producer_admission::Declaration]>,
+        links: crate::producer_contract::Links<'_>,
         inventory: Option<&crate::submission_inventory::Inventory>,
         undeclared: Option<crate::project_function::Language>,
     ) -> Result<Self, PrepareError> {
         let d = spec.document();
         let root = d.root();
         check_prepare_limits(d)?;
+        // Link admission precedes every other declaration finding: a refused
+        // type authority or contract leaves nothing to compile against.
+        let contracts = crate::producer_contract::admit(spec, links).map_err(|error| {
+            use crate::producer_contract::AdmissionError;
+            match error {
+                AdmissionError::Limit(limit) => {
+                    PrepareError::limit(limit.resource, limit.limit, limit.actual, None)
+                }
+                AdmissionError::Invalid(findings) => PrepareError::Invalid(
+                    findings.into_iter().map(PreflightFinding::Scalar).collect(),
+                ),
+                AdmissionError::Boundary => PrepareError::Internal,
+            }
+        })?;
         match_values::declaration_admission(d)?;
         let mut findings = preflight(spec)?;
         findings.extend(odm::context_findings(spec)?);
@@ -1344,6 +1407,8 @@ impl PreparedSpecification {
                 Err(error) => return Err(error),
             }
         }
+        mandatory::admit(d, columns, &mut column_verifications, &mut findings)?;
+        verifications::redundant_unique(d, &mut findings)?;
         submission::admit(
             d,
             columns,
@@ -1368,8 +1433,8 @@ impl PreparedSpecification {
             .map(|id| sequence(d, id))
             .transpose()?
             .is_some_and(|rows| !rows.is_empty());
-        optional_features(d, root, &["parents"], "", &mut extra);
-        let root_filter = root_filter::RootFilter::prepare(d, &mut extra)?;
+        optional_features(d, root, &["parent"], "", &mut extra);
+        let root_filter = root_filter::RootFilter::prepare(d)?;
         let inputs = mapping(d, field(d, root, "input")?)?;
         let odm_inputs = odm::inputs(d)?;
         let driver = if has_rows {
@@ -1385,17 +1450,23 @@ impl PreparedSpecification {
             .iter()
             .position(|&(name, _)| text(d, name).is_ok_and(|name| name == driver))
             .ok_or(PrepareError::Internal)?;
-        let source_findings =
-            collect_source_findings(d, inputs, &odm_inputs, producers, &mut extra)?;
+        let source_findings = collect_source_findings(d, inputs, &odm_inputs)?;
         if !source_findings.is_empty() {
             return Err(PrepareError::Invalid(source_findings));
         }
         // Unsupported row/intermediate/metadata semantics must never reach the
         // closed no-row lowering representation, even when their shapes are valid.
-        if extra.iter().any(|feature| feature.operation == "parents") {
+        if extra.iter().any(|feature| feature.operation == "parent") {
             return Err(PrepareError::Unsupported(extra));
         }
-        let (sources, source_interpretations) = build_sources(d, inputs, &odm_inputs, producers)?;
+        let (sources, source_interpretations, source_contracts) =
+            build_sources(d, inputs, &odm_inputs, contracts)?;
+        // Every implicit join through these inputs must find a record.
+        let required_matches = inputs
+            .iter()
+            .filter(|&&(_, id)| requires_match(d, id))
+            .map(|&(name, _)| text(d, name).map(String::from))
+            .collect::<Result<Vec<_>, _>>()?;
         let PreparedOutputDeclarations {
             output_order,
             output_path,
@@ -1443,6 +1514,8 @@ impl PreparedSpecification {
                 project_calls: project.map(|p| p.calls),
                 sources,
                 source_interpretations,
+                source_contracts,
+                required_matches,
                 driver: driver_index,
                 intermediates,
                 output,
@@ -1480,6 +1553,8 @@ impl PreparedSpecification {
             project_calls: project.map(|p| p.calls),
             sources,
             source_interpretations,
+            source_contracts,
+            required_matches,
             driver: driver_index,
             intermediates,
             output,
@@ -1508,6 +1583,10 @@ impl PreparedSpecification {
     }
     pub fn source_interpretation(&self, index: usize) -> Option<SourceInterpretation> {
         self.source_interpretations.get(index).copied()
+    }
+    /// The producing specification's output contract a linked source must match.
+    pub fn source_contract(&self, index: usize) -> Option<&crate::producer_contract::Contract> {
+        self.source_contracts.get(index).and_then(Option::as_ref)
     }
     pub fn key_names(&self) -> impl Iterator<Item = &str> {
         self.keys
@@ -1822,6 +1901,7 @@ impl PreparedSpecification {
             plan.with_column_verifications(self.column_verification_groups())
                 .and_then(|plan| plan.with_warning_verifications(self.warning_verification_paths()))
                 .and_then(|plan| plan.with_output_order(self.bound_output_order()))
+                .map(|plan| plan.with_required_matches(self.required_matches.iter().cloned()))
                 .map_err(BindError::InvalidPlan)
         })
     }
@@ -1950,7 +2030,7 @@ impl PreparedSpecification {
                     findings,
                     declarations_reported,
                 )?,
-                Operation::ProjectFunction(call) => {
+                Operation::ProjectFunction { call, .. } => {
                     self.bind_project_function(*call, column, catalog, &mut edges, findings)?
                 }
                 Operation::Literal(value) => Some(Expression::Literal(value.clone())),
@@ -1988,18 +2068,6 @@ impl PreparedSpecification {
                     findings,
                 )?,
                 Operation::Scalar(operation) => scalar::bind(
-                    self,
-                    operation,
-                    column,
-                    catalog,
-                    source,
-                    secondary,
-                    intermediates,
-                    &mut edges,
-                    findings,
-                    declarations_reported,
-                )?,
-                Operation::StrContains(operation) => scalar::bind_contains(
                     self,
                     operation,
                     column,
@@ -2118,6 +2186,21 @@ impl PreparedSpecification {
                     start,
                 )?,
             };
+            if expression.is_some() && findings.len() == start && declaration.handler.is_none() {
+                let input = |name: &str| {
+                    static_types::result_type(
+                        name,
+                        &self.intermediates,
+                        catalog,
+                        secondary,
+                        intermediates,
+                    )
+                };
+                findings.extend(
+                    self.conversion_finding(column, declaration.operation.result_type(&input))
+                        .map(BindFinding::Scalar),
+                );
+            }
             // Invalid declarations remain in the graph so independent cycles and
             // key dependencies are still reported after the reference findings.
             dependencies.push(Some(edges));
@@ -2241,7 +2324,11 @@ impl PreparedSpecification {
                 }
             }
             Some(Expression::FirstAvailable(std::boxed::Box::new(
-                crate::dataset::FirstAvailable::new(operands, selection.missing.clone()),
+                crate::dataset::FirstAvailable::new(
+                    path.into(),
+                    operands,
+                    selection.missing.clone(),
+                ),
             )))
         };
         Ok(expression)
@@ -2250,7 +2337,7 @@ impl PreparedSpecification {
     #[allow(clippy::too_many_arguments)]
     fn bind_compute(
         &self,
-        compiled: &CompiledNumeric,
+        compiled: &CompiledExpression,
         reference_path: String,
         catalog: &Catalog,
         secondary: &[crate::dataset::SecondarySource],
@@ -2349,8 +2436,17 @@ impl PreparedSpecification {
             )?;
             if findings.len() == start {
                 Some(Expression::Compute(
-                    BoundNumeric::new(compiled.clone(), bindings)
-                        .map_err(BindError::InvalidNumericBinding)?,
+                    BoundNumeric::new(
+                        static_types::typed(
+                            compiled,
+                            &self.intermediates,
+                            catalog,
+                            secondary,
+                            intermediates,
+                        ),
+                        bindings,
+                    )
+                    .map_err(BindError::InvalidNumericBinding)?,
                 ))
             } else {
                 None
@@ -2449,6 +2545,7 @@ impl PreparedSpecification {
         .and_then(|plan| plan.with_column_verifications(self.column_verification_groups()))
         .and_then(|plan| plan.with_warning_verifications(self.warning_verification_paths()))
         .and_then(|plan| plan.with_output_order(self.bound_output_order()))
+        .map(|plan| plan.with_required_matches(self.required_matches.iter().cloned()))
         .and_then(|plan| {
             plan.with_conversion_handlers(
                 self.declarations

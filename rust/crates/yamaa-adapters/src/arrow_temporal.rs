@@ -1,7 +1,7 @@
 //! Civil/epoch conversion for the precision-bearing Arrow representation and
 //! the facade's epoch day and second accessors.
 
-use yamaa_core::temporal::{Date, DatePrecision, DateTime, DateTimePrecision};
+use yamaa_core::temporal::{Date, DateTime, Precision};
 
 /// Days from 0001-01-01 to 1970-01-01 in the proleptic Gregorian calendar.
 const EPOCH_ORDINAL: i64 = 719_162;
@@ -36,7 +36,7 @@ fn month_days(year: u16, month: u8) -> i64 {
 }
 
 /// Decode a bounded epoch day without timezone, float arithmetic or host dates.
-pub fn date_from_days(days: i64, precision: DatePrecision) -> Option<Date> {
+pub fn date_from_days(days: i64, precision: Precision) -> Option<Date> {
     let ordinal = days.checked_add(EPOCH_ORDINAL)?;
     if !(0..=MAX_ORDINAL).contains(&ordinal) {
         return None;
@@ -63,7 +63,7 @@ pub fn date_from_days(days: i64, precision: DatePrecision) -> Option<Date> {
 /// Convert complete civil time to integral seconds without timezone adjustment.
 pub fn datetime_seconds(value: DateTime) -> i64 {
     let (year, month, day, hour, minute, second) = value.fields();
-    let date = Date::new(year, month, day, DatePrecision::Day).expect("validated datetime");
+    let date = Date::new(year, month, day, Precision::Day).expect("validated datetime");
     i64::from(date_days(date)) * 86400
         + i64::from(hour) * 3600
         + i64::from(minute) * 60
@@ -71,8 +71,8 @@ pub fn datetime_seconds(value: DateTime) -> i64 {
 }
 
 /// Floor negative epochs into their civil day before extracting time of day.
-pub fn datetime_from_seconds(seconds: i64, precision: DateTimePrecision) -> Option<DateTime> {
-    let date = date_from_days(seconds.div_euclid(86400), DatePrecision::Day)?;
+pub fn datetime_from_seconds(seconds: i64, precision: Precision) -> Option<DateTime> {
+    let date = date_from_days(seconds.div_euclid(86400), Precision::Day)?;
     let time = seconds.rem_euclid(86400);
     DateTime::new(
         date,

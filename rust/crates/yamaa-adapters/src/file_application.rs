@@ -79,23 +79,6 @@ pub(crate) fn resource_failure_from(
 ) -> Failure {
     with_source(resource_diagnostic(stage, error), Some(source))
 }
-/// A typed limit keeps its resource facts and, when known, its owning source.
-pub(crate) fn resource_limit_from(
-    stage: &str,
-    limit: &yamaa_core::limits::LimitExceeded,
-    source: Option<&str>,
-) -> Failure {
-    with_source(limit_diagnostic(stage, limit), source)
-}
-/// An internal graph invariant names its fixed reason and, when known, the
-/// source document; it never claims a language or resource cause.
-pub(crate) fn graph_boundary(stage: &str, reason: &str, source: Option<&str>) -> Failure {
-    let mut diagnostic = yamaa_core::application_issue::rejected(stage, "graph_boundary");
-    diagnostic
-        .context
-        .insert("reason".into(), Value::String(reason.into()));
-    with_source(diagnostic, source)
-}
 fn with_source(
     mut diagnostic: yamaa_core::diagnostic::Diagnostic,
     source: Option<&str>,
@@ -583,11 +566,6 @@ pub trait RuntimePort {
     fn resolver(&self) -> Option<std::sync::Arc<dyn crate::host_resources::Resolver>> {
         None
     }
-    /// How a selected producer workflow treats its links: a project run
-    /// builds each specification alone and reads its producers' artifacts.
-    fn producers(&self) -> crate::file_workflow::Producers {
-        crate::file_workflow::Producers::Built
-    }
     fn plain(
         &mut self,
         prepared: &FileSpecification,
@@ -596,11 +574,6 @@ pub trait RuntimePort {
     fn project(
         &mut self,
         prepared: &crate::file_project::FileProject,
-        scope: Scope<'_>,
-    ) -> Result<Self::Result, Self::Error>;
-    fn producer(
-        &mut self,
-        prepared: &crate::file_graph::FileGraph,
         scope: Scope<'_>,
     ) -> Result<Self::Result, Self::Error>;
 }
@@ -615,7 +588,6 @@ pub struct Application<R> {
 impl<R: RuntimePort> yamaa_core::build::Ports for Application<R> {
     type Plain = FileSpecification;
     type Project = Box<crate::file_project::FileProject>;
-    type Producer = Box<crate::file_graph::FileGraph>;
     type CheckResult = Failure;
     type BuildResult = R::Result;
     type Failure = ApplicationError<R::Error>;
@@ -623,12 +595,11 @@ impl<R: RuntimePort> yamaa_core::build::Ports for Application<R> {
         &mut self,
         request: Request<'_>,
     ) -> Result<crate::file_workflow::Selected, Self::Failure> {
-        let producers = self.runtime.producers();
         match self.runtime.resolver() {
-            Some(resolver) => crate::file_workflow::select_with_resolver_mode(
-                request, self.host, resolver, producers,
-            ),
-            None => crate::file_workflow::select_request_mode(request, self.host, producers),
+            Some(resolver) => {
+                crate::file_workflow::select_with_resolver(request, self.host, resolver)
+            }
+            None => crate::file_workflow::select_request(request, self.host),
         }
         .map_err(ApplicationError::Preparation)
     }
@@ -638,10 +609,6 @@ impl<R: RuntimePort> yamaa_core::build::Ports for Application<R> {
     }
     fn check_project(&mut self, prepared: Self::Project) -> Result<Failure, Self::Failure> {
         Ok(crate::project_check::prepared(prepared.run())
-            .unwrap_or_else(|_| rejected("check", "issue_projection")))
-    }
-    fn check_producer(&mut self, prepared: Self::Producer) -> Result<Failure, Self::Failure> {
-        Ok(crate::producer_check::prepared(&prepared)
             .unwrap_or_else(|_| rejected("check", "issue_projection")))
     }
     fn build_plain(
@@ -660,15 +627,6 @@ impl<R: RuntimePort> yamaa_core::build::Ports for Application<R> {
     ) -> Result<R::Result, Self::Failure> {
         self.runtime
             .project(prepared, scope)
-            .map_err(ApplicationError::Runtime)
-    }
-    fn build_producer(
-        &mut self,
-        prepared: &Self::Producer,
-        scope: Scope<'_>,
-    ) -> Result<R::Result, Self::Failure> {
-        self.runtime
-            .producer(prepared, scope)
             .map_err(ApplicationError::Runtime)
     }
 }
@@ -695,13 +653,6 @@ impl RuntimePort for Native<'_> {
         _: Scope<'_>,
     ) -> Result<Domain, Failure> {
         Err(unsupported("environment", Some("environment")))
-    }
-    fn producer(
-        &mut self,
-        _: &crate::file_graph::FileGraph,
-        _: Scope<'_>,
-    ) -> Result<Domain, Failure> {
-        Err(unsupported("producer_host", None))
     }
 }
 

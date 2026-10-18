@@ -45,13 +45,12 @@ def derive_end(cmendtc, dthdt):
         flag = "M"
         period_start = date(year, 1, 1)
         period_end = completed
-    if dthdt and completed > dthdt:
-        if period_start <= dthdt <= period_end:
-            # The collected month or year also contains the death date;
-            # the flag still records what was supplied.
-            return dthdt.isoformat(), flag
-        # The whole collected month or year begins after death.
-        return "", ""
+    if dthdt and completed > dthdt and period_start <= dthdt <= period_end:
+        # The collected month or year also contains the death date;
+        # the flag still records what was supplied.
+        return dthdt.isoformat(), flag
+    # When the whole collected month or year begins after death, the last
+    # day stands.
     return completed.isoformat(), flag
 
 

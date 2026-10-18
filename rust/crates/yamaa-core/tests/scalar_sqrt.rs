@@ -43,7 +43,7 @@ mod scalar {
         }
     }
     mod temporal {
-        use yamaa_core::temporal::{Date, DatePrecision as DP, DateTime, DateTimePrecision as TP};
+        use yamaa_core::temporal::{Date, DateTime, Precision as DP, Precision as TP};
 
         #[test]
         /// Check range endpoints and the Gregorian leap-century exception.
@@ -183,7 +183,7 @@ mod scalar {
     mod temporal_arithmetic {
         use yamaa_core::{
             dataset::{ElapsedUnit as U, Temporal, TemporalKind as K, TemporalStep},
-            temporal::{Date, DatePrecision, DateTime, DateTimePrecision},
+            temporal::{Date, DateTime, Precision},
             value::Value,
         };
 
@@ -226,12 +226,12 @@ mod scalar {
                     date(expected)
                 );
             }
-            let source = Value::Date(Date::new(2024, 2, 1, DatePrecision::Month).unwrap());
+            let source = Value::Date(Date::new(2024, 2, 1, Precision::Month).unwrap());
             let Value::Date(shifted) = result(K::DateShift, &[source, Value::Int(28)]) else {
                 panic!()
             };
             assert_eq!(shifted.to_string(), "2024-02-29");
-            assert_eq!(shifted.collected_precision(), DatePrecision::Month);
+            assert_eq!(shifted.collected_precision(), Precision::Month);
         }
 
         #[test]
@@ -285,7 +285,9 @@ mod scalar {
         }
 
         #[test]
-        fn datetime_shift_scales_exact_integers_and_rounds_result_ties_even() {
+        fn datetime_shift_scales_exact_integers_and_rounds_amount_ties_away_from_zero() {
+            // 0.025 minute is exactly 1.5 seconds after binary64 scaling, a tie
+            // that rounds to 2 seconds away from zero whatever the source second.
             for (source, amount, unit, expected) in [
                 (
                     "2024-02-28T23:59:59",
@@ -321,7 +323,7 @@ mod scalar {
                     "2030-01-01T00:00:01",
                     Value::float(0.025),
                     U::Minute,
-                    "2030-01-01T00:00:02",
+                    "2030-01-01T00:00:03",
                 ),
                 (
                     "2030-01-01T00:00:00",
@@ -330,10 +332,37 @@ mod scalar {
                     "2029-12-31T23:59:58",
                 ),
                 (
+                    "2030-01-01T00:00:01",
+                    Value::float(-0.025),
+                    U::Minute,
+                    "2029-12-31T23:59:59",
+                ),
+                // 0.0249999999 minute is 1.499999994 seconds, 6.0e-9 below the
+                // tie and inside REQ-0418's 2^-26 interval; 0.024999999 minute is
+                // 1.49999994 seconds, 6.0e-8 below and outside it.
+                (
+                    "2030-01-01T00:00:00",
+                    Value::float(0.0249999999),
+                    U::Minute,
+                    "2030-01-01T00:00:02",
+                ),
+                (
+                    "2030-01-01T00:00:00",
+                    Value::float(-0.0249999999),
+                    U::Minute,
+                    "2029-12-31T23:59:58",
+                ),
+                (
+                    "2030-01-01T00:00:00",
+                    Value::float(0.024999999),
+                    U::Minute,
+                    "2030-01-01T00:00:01",
+                ),
+                (
                     "9999-12-31T00:00:01",
                     Value::float(0.025),
                     U::Minute,
-                    "9999-12-31T00:00:02",
+                    "9999-12-31T00:00:03",
                 ),
                 (
                     "0001-01-01T00:00:00",
@@ -348,68 +377,57 @@ mod scalar {
                 );
             }
             let date: Date = "2024-02-28".parse().unwrap();
-            let source = DateTime::new(date, 0, 0, 0, DateTimePrecision::Day).unwrap();
+            let source = DateTime::new(date, 0, 0, 0, Precision::Day).unwrap();
             let Value::DateTime(shifted) = result(
                 K::DateTimeShift { unit: U::Day },
                 &[Value::DateTime(source), Value::Int(1)],
             ) else {
                 panic!()
             };
-            assert_eq!(shifted.collected_precision(), DateTimePrecision::Day);
+            assert_eq!(shifted.collected_precision(), Precision::Day);
         }
 
         #[test]
         fn duration_value_reads_signed_fractional_and_week_forms_exactly() {
+            // A float in every unit: the exact seconds are rounded once to
+            // binary64, so whole seconds beyond 2^53 take the nearest float.
             for (source, unit, expected) in [
                 ("-PT15M", U::Hour, Value::float(-0.25)),
-                ("P1DT2H3M", U::Second, Value::Int(93780)),
+                ("P1DT2H3M", U::Second, Value::float(93780.0)),
                 ("P2W", U::Day, Value::float(14.0)),
-                ("PT0.5H", U::Second, Value::Int(1800)),
+                ("PT0.5H", U::Second, Value::float(1800.0)),
                 ("PT0,5H", U::Minute, Value::float(30.0)),
                 ("P0.5D", U::Hour, Value::float(12.0)),
                 ("PT0.1S", U::Second, Value::float(0.1)),
-                ("-PT0S", U::Second, Value::Int(0)),
-                ("PT9223372036854775807S", U::Second, Value::Int(i64::MAX)),
-                ("-PT9223372036854775808S", U::Second, Value::Int(i64::MIN)),
+                ("-PT0S", U::Second, Value::float(-0.0)),
+                (
+                    "PT9007199254740993S",
+                    U::Second,
+                    Value::float(9007199254740992.0),
+                ),
+                (
+                    "PT9223372036854775807S",
+                    U::Second,
+                    Value::float(9223372036854775808.0),
+                ),
+                (
+                    "-PT9223372036854775808S",
+                    U::Second,
+                    Value::float(-9223372036854775808.0),
+                ),
             ] {
-                assert_eq!(result(K::DurationValue { unit }, &[text(source)]), expected);
-            }
-        }
-
-        #[test]
-        fn duration_text_writes_canonical_days_and_exact_integer_boundaries() {
-            for (source, unit, expected) in [
-                (Value::Int(93780), U::Second, "P1DT2H3M"),
-                (Value::float(2.5), U::Hour, "PT2H30M"),
-                (Value::Int(26), U::Hour, "P1DT2H"),
-                (Value::Int(7), U::Day, "P7D"),
-                (Value::float(-0.25), U::Hour, "-PT15M"),
-                (Value::float(-0.0), U::Second, "PT0S"),
-                (Value::float(0.1), U::Second, "PT0.1S"),
-                (Value::float(0.0000001), U::Second, "PT0.0000001S"),
-                (Value::Int(0), U::Day, "PT0S"),
-            ] {
-                assert_eq!(result(K::DurationText { unit }, &[source]), text(expected));
-            }
-            for source in [
-                i64::MIN,
-                -9007199254740993,
-                -1,
-                0,
-                1,
-                9007199254740993,
-                i64::MAX,
-            ] {
-                let written = result(K::DurationText { unit: U::Second }, &[Value::Int(source)]);
                 assert_eq!(
-                    result(K::DurationValue { unit: U::Second }, &[written]),
-                    Value::Int(source)
+                    result(K::DurationValue { unit }, &[text(source)]),
+                    expected,
+                    "{source}"
                 );
             }
         }
 
         #[test]
         fn invalid_duration_text_recovers_only_when_declared() {
+            // A duration whose float is not finite is outside the numeric range.
+            let infinite = format!("PT1{}S", "0".repeat(309));
             for source in [
                 "",
                 "P",
@@ -431,7 +449,7 @@ mod scalar {
                 "PT1.S",
                 "PT1e3S",
                 "pt1s",
-                "PT9223372036854775808S",
+                infinite.as_str(),
             ] {
                 let operation = operation(K::DurationValue { unit: U::Second });
                 let error = operation
@@ -482,11 +500,6 @@ mod scalar {
                     vec![datetime("2030-01-01T00:00:00"), Value::float(f64::MAX)],
                     "REQ-1300",
                 ),
-                (
-                    K::DurationText { unit: U::Day },
-                    vec![Value::float(f64::MAX)],
-                    "REQ-1302",
-                ),
             ] {
                 let error = operation(kind).apply_values(&values).unwrap().unwrap_err();
                 assert_eq!(error.definition().condition, "conversion_failed");
@@ -502,7 +515,6 @@ mod scalar {
                     K::DateTimeShift { unit: U::Second },
                     vec![Value::Missing, Value::float(1.0)],
                 ),
-                (K::DurationText { unit: U::Second }, vec![text("1")]),
                 (K::DurationValue { unit: U::Second }, vec![Value::Int(1)]),
             ] {
                 assert_eq!(
@@ -520,7 +532,6 @@ mod scalar {
                 K::DateTimeDifference { unit: U::Hour },
                 K::DateTimeShift { unit: U::Second },
                 K::DurationValue { unit: U::Second },
-                K::DurationText { unit: U::Second },
             ] {
                 assert_eq!(
                     result(kind, &vec![Value::Missing; kind.fields().len()]),
@@ -656,7 +667,12 @@ mod scalar {
                 text_case::{Step, StringCase},
                 value::Value,
             };
-            assert_eq!(diagnostic::reached().len(), 2);
+            assert_eq!(diagnostic::reached().len(), 1);
+            // An omitted handler answers a missing source with missing.
+            let omitted =
+                StringCase::new("SRC.V".into(), "case".into(), Case::Lower, None).unwrap();
+            assert_eq!(omitted.apply(ValueRef::Missing), Ok(Step::Recovered));
+            assert_eq!(omitted.missing_substitute(), Value::Missing);
             for handler in [Value::Missing, Value::Str("MiXeD".into()), Value::Int(7)] {
                 let operation = StringCase::new(
                     "SRC.V".into(),
@@ -701,9 +717,8 @@ mod scalar {
     }
     mod text_extract {
         use yamaa_core::{
-            regex,
             table::ValueRef,
-            text_extract::{AdmissionError, Error, Step, StringExtract},
+            text_extract::{AdmissionError, Step, StringExtract},
             value::Value,
         };
         fn operation(
@@ -759,21 +774,22 @@ mod scalar {
                     Ok(Step::Capture(Some("a")))
                 );
             }
+            // An omitted `missing` still answers, with missing (COLUMN-10).
+            let omitted = operation("()", "0", None, None);
             assert_eq!(
-                operation("()", "0", None, None).apply(ValueRef::Missing),
-                Ok(Step::Missing)
+                omitted.apply(ValueRef::Missing),
+                Ok(Step::Recovered("missing"))
             );
+            assert_eq!(omitted.substitute("missing"), Value::Missing);
         }
         #[test]
-        fn per_match_step_refusal_never_becomes_no_match_or_a_recovered_value() {
+        fn long_subjects_are_searched_to_completion_before_no_match() {
+            // Half a million scalars, which the retired step budget refused.
             let op = operation("z", "0", None, Some(Value::Missing));
-            assert!(matches!(
+            assert_eq!(
                 op.apply(ValueRef::Str(&"a".repeat(500_000))),
-                Err(Error::Regex(regex::MatchError {
-                    resource: regex::Resource::Work,
-                    limit: 1_000_000
-                }))
-            ));
+                Ok(Step::Recovered("no_match"))
+            );
             assert_eq!(op.apply(ValueRef::Str("z")), Ok(Step::Capture(Some("z"))));
             assert_eq!(
                 op.apply(ValueRef::Str("x")),
@@ -821,12 +837,13 @@ mod scalar {
         use crate::support::diagnostic::text_extract as diagnostic;
         #[test]
         fn all_extraction_semantic_causes_preserve_independent_complete_facts() {
-            assert_eq!(diagnostic::reached().len(), 6);
+            // A missing source is answered, never failed (COLUMN-10).
+            assert_eq!(diagnostic::reached().len(), 5);
         }
     }
     mod text_pad {
         use yamaa_core::{
-            temporal::{Date, DatePrecision, DateTime, DateTimePrecision},
+            temporal::{Date, DateTime, Precision},
             text_pad::{DeclarationError, OutputError, StringPad},
             value::{FiniteFloat, Value},
         };
@@ -869,8 +886,8 @@ mod scalar {
         }
         #[test]
         fn temporal_text_reuses_canonical_conversion_without_precision_suffixes() {
-            let date = Date::new(2025, 7, 19, DatePrecision::Month).unwrap();
-            let time = DateTime::new(date, 12, 34, 56, DateTimePrecision::Day).unwrap();
+            let date = Date::new(2025, 7, 19, Precision::Month).unwrap();
+            let time = DateTime::new(date, 12, 34, 56, Precision::Day).unwrap();
             assert_eq!(
                 pad(&Value::Date(date), "12").unwrap(),
                 Value::Str("  2025-07-19".into())
@@ -1019,7 +1036,7 @@ mod scalar {
     }
     mod text_template {
         use yamaa_core::{
-            numeric_parser::SourceSpan,
+            expression::SourceSpan,
             text_template::{AdmissionError, MaterializeError, Part, StringTemplate},
             value::Value,
         };
@@ -1129,7 +1146,8 @@ mod scalar {
         use crate::support::diagnostic::text_template as diagnostic;
         #[test]
         fn complete_canonical_grammar_causes_are_reached() {
-            assert_eq!(diagnostic::reached().len(), 1);
+            // The grammar refusal and the missing placeholder a template still fails on.
+            assert_eq!(diagnostic::reached().len(), 2);
         }
         #[test]
         fn many_unique_names_retain_first_occurrence_indexes_without_a_work_quota() {
@@ -1157,7 +1175,7 @@ mod scalar {
     mod values {
         use std::cmp::Ordering::{Equal, Greater, Less};
         use yamaa_core::numeric::Number;
-        use yamaa_core::temporal::{Date, DatePrecision};
+        use yamaa_core::temporal::{Date, Precision};
         use yamaa_core::value::{
             compare_present, ComparisonError, FiniteFloat, Selection, Value, ValueType,
         };
@@ -1265,7 +1283,7 @@ mod scalar {
                 compare_present(&Value::Str("é".into()), &Value::Str("e\u{301}".into())),
                 Ok(Greater)
             );
-            let imputed = Date::new(2024, 2, 29, DatePrecision::Year).unwrap();
+            let imputed = Date::new(2024, 2, 29, Precision::Year).unwrap();
             let collected: Date = "2024-02-29".parse().unwrap();
             assert_eq!(
                 compare_present(&Value::Date(imputed), &Value::Date(collected)),

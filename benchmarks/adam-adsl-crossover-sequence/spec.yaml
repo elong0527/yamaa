@@ -27,6 +27,7 @@ intermediates:
   - id: ELEMENTS
     dataset: TE
     key: {STUDYID: TA.STUDYID, ETCD: TA.ETCD}
+    require_match: true
     verifications:
       - unique: [STUDYID, ETCD]
 
@@ -34,7 +35,7 @@ intermediates:
     dataset: TA
     key: {STUDYID: DM.STUDYID, ARMCD: DM.ARMCD}
     filter: "TA.TRTNUM = 1"
-    no_match: null
+    no_match: {literal: null}
     derivations:
       TRTNUM:
         row_number:
@@ -47,7 +48,7 @@ intermediates:
     dataset: TA
     key: {STUDYID: DM.STUDYID, ARMCD: DM.ARMCD}
     filter: "TA.TRTNUM = 2"
-    no_match: null
+    no_match: {literal: null}
     derivations:
       TRTNUM:
         row_number:
@@ -72,16 +73,16 @@ columns:
     label: Planned Treatment for Period 01
     derivation: PERIOD01.ELEMENT
     verifications:
-      allowed_values:
-        values: [Vitamin D3, Placebo]
+      - allowed_values:
+          values: [Vitamin D3, Placebo]
 
   - name: TRT02P
     type: str
     label: Planned Treatment for Period 02
     derivation: PERIOD02.ELEMENT
     verifications:
-      allowed_values:
-        values: [Vitamin D3, Placebo]
+      - allowed_values:
+          values: [Vitamin D3, Placebo]
 
   # The period treatments in period order; empty when they are.
   - name: TRTSEQP
@@ -90,11 +91,9 @@ columns:
     derivation:
       str_template:
         template: "{TRT01P}/{TRT02P}"
-        missing: null
+        missing: {literal: null}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID]
   - row_count:
       min: 4
       max: 4

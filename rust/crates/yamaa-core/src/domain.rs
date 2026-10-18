@@ -37,6 +37,19 @@ pub fn check_with_project(
     })
 }
 
+/// Compile with the producing specifications that `schema` links name, with or
+/// without admitted environment metadata. Links supply output contracts only;
+/// no producer is compiled, activated or executed.
+pub fn check_linked(
+    document: &SpecificationDocument,
+    environment: Option<&crate::project_environment::ExecutionEnvironment>,
+    links: crate::producer_contract::Links<'_>,
+) -> Result<CheckedSpecification, PrepareError> {
+    Ok(CheckedSpecification {
+        compiled: PreparedSpecification::prepare_linked(document, environment, links)?,
+    })
+}
+
 /// Compile against complete admitted environment metadata without host or study ports.
 pub fn check_with_environment(
     document: &SpecificationDocument,

@@ -7,12 +7,10 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 import yaml
 from tools.paths import ROOT
 from tools.validation import _repository_yaml as OWNER_REPOSITORY_YAML
-from tools.validation import check_rule_metadata as RULE_CHECK
 from tools.validation import editorial as OWNER_EDITORIAL
 from tools.validation import grammar_checks as OWNER_GRAMMAR_CHECKS
 from tools.validation import repository_artifacts as OWNER_REPOSITORY_ARTIFACTS
@@ -300,22 +298,12 @@ class TestValidationMetadata(unittest.TestCase):
             set(OWNER_REPOSITORY_MANIFESTS.validation_phase_contracts(ROOT)),
         )
 
-    def test_metadata_rejects_missing_stale_and_unregistered_declarations(self):
+    def test_unregistered_validation_conditions_fail(self):
         source = ROOT / "benchmarks/negative-unknown-window"
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             case = root / "benchmarks" / source.name
             shutil.copytree(source, case)
-            metadata_path = case / "benchmark.yaml"
-            metadata = yaml.safe_load(metadata_path.read_text())
-            original = copy.deepcopy(metadata)
-            del metadata["validation"]
-            metadata_path.write_text(yaml.safe_dump(metadata))
-            _, errors = OWNER_REPOSITORY_MANIFESTS.load_validation_fixtures(root)
-            self.assertTrue(
-                any("missing validation declaration" in error for error in errors)
-            )
-            metadata_path.write_text(yaml.safe_dump(original))
             contract_path = case / "expected/error.yaml"
             contract = yaml.safe_load(contract_path.read_text())
             contract["condition"] = "not_registered"
@@ -324,117 +312,6 @@ class TestValidationMetadata(unittest.TestCase):
             self.assertTrue(
                 any("unregistered validation condition" in error for error in errors)
             )
-            contract["phase"] = "derivation"
-            contract_path.write_text(yaml.safe_dump(contract))
-            _, errors = OWNER_REPOSITORY_MANIFESTS.load_validation_fixtures(root)
-            self.assertTrue(
-                any("stale or non-validation fixture" in error for error in errors)
-            )
-
-
-class TestRuleMetadata(unittest.TestCase):
-    def test_requires_normative_rule_and_index_status(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            rules = root / "rules"
-            rules.mkdir(parents=True)
-            (rules / "README.md").write_text(
-                "| ID | Rule | Status | Owns | Depends on |\n"
-                "|---|---|---|---|---|\n"
-                "| R001 | Rule | proposed | Topic | -- |\n"
-            )
-            (rules / "R001-rule.md").write_text(
-                "---\nid: R001\ntitle: Rule\nstatus: proposed\n---\n"
-            )
-
-            errors = OWNER_EDITORIAL.validate_rule_metadata(root)
-
-        self.assertEqual(len(errors), 2)
-        self.assertTrue(all("normative" in error for error in errors))
-
-
-class TestStableRequirementReferences(unittest.TestCase):
-    def setUp(self):
-        directory = self.enterContext(tempfile.TemporaryDirectory())
-        self.root = Path(directory)
-        self.enterContext(patch.object(RULE_CHECK, "REPO", self.root))
-        self.rule = self.root / "R001-rule.md"
-        self.error = self.root / "error.yaml"
-
-    def check_rule(self, requirements, ending=None):
-        self.rule.write_text(
-            "---\nid: R001\ntitle: Rule\nstatus: normative\n"
-            "applies_to: [root.rows]\n---\n"
-            "# Rule\n\n## Intent\n\nIntent.\n\n"
-            "## Boundaries\n\nBoundary.\n\n## Requirements\n\n"
-            + requirements
-            + "\n\n"
-            + (ending or "## Errors\n\nErrors.\n\n## Rationale\n\nReason.\n")
-        )
-        errors, found = [], set()
-        RULE_CHECK.check_rule(self.rule, errors, found)
-        return errors, found
-
-    def test_reordering_preserves_integer_and_suffix_citations(self):
-        errors, found = self.check_rule(
-            "**R001-12b.** Existing extension.\n\n"
-            "**R001-2.** Moved topic.\n\n"
-            "**R001-12a.** Existing extension.\n\n"
-            "**R001-1.** Original topic."
-        )
-        for requirement in ("R001-1", "R001-2", "R001-12a", "R001-12b"):
-            self.error.write_text(f"requirement: {requirement}\n")
-            RULE_CHECK.check_error(self.error, found, errors)
-        self.assertEqual(errors, [])
-        self.assertEqual(found, {"R001-1", "R001-2", "R001-12a", "R001-12b"})
-
-    def test_duplicate_requirement_ids_fail_including_suffixes(self):
-        for identifier in ("R001-1", "R001-12a"):
-            with self.subTest(identifier=identifier):
-                errors, _ = self.check_rule(
-                    f"**{identifier}.** First.\n\n**{identifier}.** Second."
-                )
-                self.assertTrue(any("duplicate requirements" in e for e in errors))
-
-    def test_foreign_requirement_cannot_satisfy_a_citation(self):
-        errors, found = self.check_rule("**R002-1.** Wrong owner.")
-        self.assertTrue(any("requirements of other rules" in e for e in errors))
-        self.error.write_text("requirement: R002-1\n")
-        citation_errors = []
-        RULE_CHECK.check_error(self.error, found, citation_errors)
-        self.assertTrue(
-            any("names no numbered requirement" in e for e in citation_errors)
-        )
-
-    def test_unresolved_and_malformed_citations_fail(self):
-        _, found = self.check_rule("**R001-1.** Existing requirement.")
-        for identifier in ("R001-2", "R001-1a", "R001-0", "R001-1ab"):
-            with self.subTest(identifier=identifier):
-                self.error.write_text(f"requirement: {identifier}\n")
-                errors = []
-                RULE_CHECK.check_error(self.error, found, errors)
-                self.assertEqual(len(errors), 1)
-
-    def test_numbered_forward_reference_keeps_old_citation_valid(self):
-        errors, found = self.check_rule(
-            "**R001-1.** See R011-35 for the canonical contract."
-        )
-        self.error.write_text("requirement: R001-1\n")
-        RULE_CHECK.check_error(self.error, found, errors)
-        self.assertEqual(errors, [])
-        self.assertEqual(found, {"R001-1"})
-
-    def test_topics_cannot_follow_errors_and_rationale(self):
-        errors, _ = self.check_rule(
-            "**R001-1.** Existing requirement.",
-            "## Errors\n\nErrors.\n\n## Rationale\n\nReason.\n\n"
-            "## Late topic\n\n**R001-2.** Appended topic.\n",
-        )
-        self.assertTrue(any("end with Errors and Rationale" in e for e in errors))
-
-    def test_rule_without_requirement_ids_fails(self):
-        errors, _ = self.check_rule("Unnumbered contract.")
-        self.assertTrue(any("no numbered requirements" in e for e in errors))
 
 
 class TestClosedGrammarContracts(unittest.TestCase):
@@ -462,12 +339,40 @@ class TestClosedGrammarContracts(unittest.TestCase):
         self.assertEqual(OWNER_GRAMMAR_CHECKS.validate_grammar_contracts(self.root), [])
 
     def test_every_rule_that_owns_a_grammar_has_a_contract(self):
-        for contract, rule_id in OWNER_GRAMMAR_CHECKS.GRAMMAR_CONTRACTS.items():
+        for contract in OWNER_GRAMMAR_CHECKS.GRAMMAR_CONTRACTS:
             with self.subTest(contract=contract):
                 path = self.root / "yaml" / "grammar" / f"{contract}.yaml"
                 self.assertTrue(path.is_file())
                 document = yaml.safe_load(path.read_text())
-                self.assertEqual(document["rule"], rule_id)
+                self.assertEqual(
+                    document["rule"],
+                    OWNER_GRAMMAR_CHECKS.grammar_rule_id(self.root, contract),
+                )
+
+    def test_a_marked_card_block_owns_its_grammar(self):
+        text = (
+            "### FORMULA-1. Title\n\nStatement.\n\n<!-- grammar: expression -->\n\n"
+            "```text\nexpr := term\n```\n"
+        )
+        self.assertEqual(
+            OWNER_GRAMMAR_CHECKS.rule_grammar_block(text, "expression"), "expr := term"
+        )
+        self.assertIsNone(
+            OWNER_GRAMMAR_CHECKS.rule_grammar_block(text, "string-template")
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "rules").mkdir()
+            (root / "rules" / "formulas.md").write_text(text)
+            self.assertEqual(
+                OWNER_GRAMMAR_CHECKS.grammar_rule_id(root, "expression"), "formulas"
+            )
+            self.assertEqual(
+                OWNER_GRAMMAR_CHECKS.grammar_rule_id(root, "string-template"),
+                OWNER_GRAMMAR_CHECKS.GRAMMAR_CONTRACTS["string-template"],
+            )
+            (root / "rules" / "copy.md").write_text(text)
+            self.assertIsNone(OWNER_GRAMMAR_CHECKS.grammar_rule_id(root, "expression"))
 
     def test_a_continuation_aligns_under_its_definition_or_its_bar(self):
         rendered = OWNER_GRAMMAR_CHECKS.render_grammar_block(
@@ -486,7 +391,7 @@ class TestClosedGrammarContracts(unittest.TestCase):
             root = self.contract_root(
                 temp_dir,
                 **{
-                    "rules/operations/text.md": (
+                    "rules/text.md": (
                         'placeholder := "{" variable "}"',
                         'placeholder := "{" variable "}" | variable',
                     )
@@ -496,7 +401,7 @@ class TestClosedGrammarContracts(unittest.TestCase):
                 root, "string-template"
             )
         self.assertEqual(len(errors), 1)
-        self.assertIn("operations/text.md", errors[0])
+        self.assertIn("rules/text.md", errors[0])
         self.assertIn("the grammar block is not the one", errors[0])
 
     # -- the vocabulary is one source --------------------------------------
@@ -525,15 +430,90 @@ class TestClosedGrammarContracts(unittest.TestCase):
             root = self.contract_root(
                 temp_dir,
                 **{
-                    "yaml/grammar/numeric.yaml": (
-                        "imports:\n  name: predicate\n",
-                        "imports:\n  name: string-template\n",
+                    "yaml/grammar/expression.yaml": (
+                        "imports: {}\n",
+                        "imports:\n  digits: string-template\n",
                     )
                 },
             )
-            errors = OWNER_GRAMMAR_CHECKS.validate_grammar_contract(root, "numeric")
+            errors = OWNER_GRAMMAR_CHECKS.validate_grammar_contract(root, "expression")
         self.assertEqual(len(errors), 1)
-        self.assertIn("defines no 'name' to import", errors[0])
+        self.assertIn("defines no 'digits' to import", errors[0])
+
+    # -- each case is read in a declared context ----------------------------
+
+    def test_the_expression_contexts_are_closed(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.contract_root(
+                temp_dir,
+                **{
+                    "yaml/grammar/expression.yaml": (
+                        "contexts: [predicate, compute, aggregate]\n",
+                        "contexts: [predicate, compute]\n",
+                    )
+                },
+            )
+            errors = OWNER_GRAMMAR_CHECKS.validate_grammar_contract(root, "expression")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("contexts must be", errors[0])
+
+    def test_every_case_names_a_declared_context(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.contract_root(
+                temp_dir,
+                **{
+                    "yaml/grammar/expression.yaml": (
+                        "    context: predicate\n",
+                        "    context: filter\n",
+                    )
+                },
+            )
+            errors = OWNER_GRAMMAR_CHECKS.validate_grammar_contract(root, "expression")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("context must be one of", errors[0])
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.contract_root(
+                temp_dir,
+                **{
+                    "yaml/grammar/string-template.yaml": (
+                        "  - id: ",
+                        "  - context: predicate\n    id: ",
+                    )
+                },
+            )
+            errors = OWNER_GRAMMAR_CHECKS.validate_grammar_contract(
+                root, "string-template"
+            )
+        self.assertEqual(len(errors), 1)
+        self.assertIn("read in no contexts", errors[0])
+
+    def test_a_function_declares_its_result_and_a_reducer_its_forms(self):
+        for old, new, message in (
+            (
+                "ABS: {min_arguments: 1, max_arguments: 1, result: numeric}",
+                "ABS: {min_arguments: 1, max_arguments: 1}",
+                "function ABS must declare min_arguments, max_arguments and result",
+            ),
+            (
+                "ABS: {min_arguments: 1, max_arguments: 1, result: numeric}",
+                "ABS: {min_arguments: 1, max_arguments: 1, result: text}",
+                "function ABS must return one of",
+            ),
+            (
+                "SUM: {argument: [expression]}",
+                "SUM: {argument: [expr]}",
+                "reducer SUM must declare its argument forms",
+            ),
+        ):
+            with self.subTest(new=new), tempfile.TemporaryDirectory() as temp_dir:
+                root = self.contract_root(
+                    temp_dir, **{"yaml/grammar/expression.yaml": (old, new)}
+                )
+                errors = OWNER_GRAMMAR_CHECKS.validate_grammar_contract(
+                    root, "expression"
+                )
+                self.assertEqual(len(errors), 1, errors)
+                self.assertIn(message, errors[0])
 
     def test_every_named_category_has_an_authored_case(self):
         self.assertIn(
@@ -584,7 +564,7 @@ class TestValidatorCLI(unittest.TestCase):
     def setUp(self):
         self.test_dir = tempfile.TemporaryDirectory()
         self.root_dir = Path(self.test_dir.name)
-        # Every repository carries R022's shared fixtures and the closed
+        # Every repository carries the shared regex fixtures and the closed
         # grammars, which are read against their rules, so a synthetic root
         # that expects a clean run needs all of them too.
         repository = ROOT
@@ -1041,6 +1021,40 @@ class TestValidatorCLI(unittest.TestCase):
         )
         self.assertNotIn("dm.csv: expected artifact name", message)
         self.assertNotIn("supp.csv: expected artifact name", message)
+
+    def test_csv_golden_of_a_declared_producer_entry_is_accepted(self):
+        ex_dir = self.root_dir / "benchmarks" / "producer-entry"
+        (ex_dir / "expected").mkdir(parents=True)
+        (ex_dir / "input").mkdir()
+        (ex_dir / "input" / "dm.schema.yaml").write_text(
+            "output:\n  path: dm.csv\n  columns: [a]\ncolumns:\n  - name: a\n"
+        )
+        (ex_dir / "spec.yaml").write_text(
+            "input:\n  DM: {path: input/dm.csv, schema: input/dm.schema.yaml}\n"
+            "output:\n  path: out.csv\n  columns: [b]\ncolumns:\n  - name: b\n"
+        )
+        (ex_dir / "expected" / "dm.csv").write_text("a\n1\n")
+        (ex_dir / "expected" / "out.csv").write_text("b\n2\n")
+        calls = (
+            "  - {specification: input/dm.schema.yaml, environment: null}\n"
+            "  - {specification: spec.yaml, environment: null}\n"
+        )
+        metadata = ex_dir / "benchmark.yaml"
+        metadata.write_text(
+            "lifecycle: draft\nstandard: TEST\ndomain: TEST\nentries:\n"
+            f"  python:\n{calls}  r:\n{calls}"
+        )
+
+        errors = OWNER_REPOSITORY_ARTIFACTS.validate_examples_csv(self.root_dir)
+
+        self.assertEqual(errors, [])
+        # Without the entry, nothing declares the producer's artifact.
+        metadata.write_text("lifecycle: draft\nstandard: TEST\ndomain: TEST\n")
+        errors = OWNER_REPOSITORY_ARTIFACTS.validate_examples_csv(self.root_dir)
+        self.assertIn(
+            "producer-entry/expected/dm.csv: no authored output declares this artifact",
+            "\n".join(errors),
+        )
 
     def test_layout_rejects_base_spec_mixed_with_variants(self):
         ex_dir = self.root_dir / "benchmarks" / "mixed-specs"

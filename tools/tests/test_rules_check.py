@@ -1,0 +1,561 @@
+"""Every rule check reports its failure and passes a valid repository."""
+
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+from tools.paths import ROOT
+from tools.rules.check import check
+from tools.tests.rules_fixture import write, write_repository
+
+
+class RuleCheckTests(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = write_repository(Path(directory.name))
+
+    def write(self, relative, text):
+        return write(self.root, relative, text)
+
+    def replace(self, relative, before, after):
+        path = self.root / relative
+        text = path.read_text(encoding="utf-8")
+        self.assertIn(before, text)
+        path.write_text(text.replace(before, after, 1), encoding="utf-8")
+
+    def errors(self):
+        return check(self.root).errors
+
+    def assert_error(self, expected):
+        errors = self.errors()
+        self.assertTrue(any(expected in error for error in errors), errors)
+
+    def test_valid_repository_passes_and_reports_unnamed_conditions(self):
+        report = check(self.root)
+        self.assertEqual(report.errors, [])
+        self.assertEqual(report.unnamed_conditions, ["orphan_condition"])
+
+    def test_command_line_reports_errors_and_notes(self):
+        command = [sys.executable, "-m", "tools.rules.check", "--root", str(self.root)]
+        result = subprocess.run(command, capture_output=True, text=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("NOTE:   orphan_condition", result.stdout)
+        self.assertIn("PASS: 2 cards and 2 legacy requirements", result.stdout)
+        self.replace("rules/inheritance.md", '<a id="layer-2">', '<a id="layer-9">')
+        result = subprocess.run(command, capture_output=True, text=True, check=False)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn(
+            "ERROR: rules/inheritance.md:23: LAYER-2: anchor 'layer-9' must be 'layer-2'",
+            result.stdout.splitlines(),
+        )
+
+    # -- the index ------------------------------------------------------------
+
+    def test_index_needs_its_rule_files_table(self):
+        self.replace("rules/README.md", "## Rule files", "## Files")
+        self.assertEqual(
+            self.errors(),
+            ["rules/README.md: no Rule files table (| File | Prefix | Covers |)"],
+        )
+
+    def test_every_rule_file_is_listed_once_and_exists(self):
+        self.write("rules/values/text.md", "# Text\n\n## Requirements\n")
+        self.replace(
+            "rules/README.md",
+            "| [Types](values/types.md) | REQ | Define column types. |",
+            "| [Types](values/types.md) | REQ | Define column types. |\n"
+            "| [Types](values/types.md) | REQ | Again. |\n"
+            "| [Gone](values/gone.md) | REQ | Missing. |\n"
+            "| Bad row |",
+        )
+        errors = self.errors()
+        for expected in (
+            "rules/README.md:14: values/types.md is listed twice",
+            "rules/README.md:15: values/gone.md is not a rule file",
+            "rules/README.md:16: expected | [Title](file.md) | PREFIX | Covers |",
+            "rules/values/text.md: absent from the Rule files table in rules/README.md",
+        ):
+            self.assertIn(expected, errors)
+
+    def test_prefixes_are_capitals_unique_and_match_the_file_kind(self):
+        self.write(
+            "rules/other.md",
+            '# Other\n\n<a id="layer-3"></a>\n\n### LAYER-3. Other rule\n\nA statement.\n',
+        )
+        self.replace(
+            "rules/README.md",
+            "| [Types](values/types.md) | REQ |",
+            "| [Types](values/types.md) | TYPE |",
+        )
+        self.replace(
+            "rules/README.md",
+            "| [Inheritance](inheritance.md) | LAYER | Resolve inherited layers. |",
+            "| [Inheritance](inheritance.md) | REQ | Resolve inherited layers. |\n"
+            "| [Other](other.md) | Layer | Other. |",
+        )
+        errors = self.errors()
+        self.assertIn(
+            "rules/README.md:12: inheritance.md holds cards and needs its own prefix, not REQ",
+            errors,
+        )
+        self.assertIn(
+            "rules/README.md:13: prefix 'Layer' must be capital letters", errors
+        )
+        self.assertIn(
+            "rules/README.md:14: values/types.md holds legacy requirements and is listed "
+            "with prefix REQ until it is converted",
+            errors,
+        )
+        # A malformed listed prefix is reported once, not against each card.
+        self.assertFalse(any("must use the prefix" in error for error in errors))
+        self.replace("rules/README.md", "| Layer |", "| TYPE |")
+        errors = self.errors()
+        self.assertIn(
+            "rules/README.md:14: prefix TYPE is already used by other.md", errors
+        )
+        self.assertIn(
+            "rules/other.md:5: LAYER-3: cards in other.md must use the prefix TYPE",
+            errors,
+        )
+
+    def test_listing_uses_the_file_title(self):
+        self.replace(
+            "rules/README.md", "[Types](values/types.md)", "[Kinds](values/types.md)"
+        )
+        self.assertEqual(
+            self.errors(),
+            [
+                "rules/README.md:13: values/types.md is listed as 'Kinds' but titled 'Types'"
+            ],
+        )
+
+    def test_principles_are_numbered_and_cite_rules(self):
+        self.replace("rules/README.md", "**P1.", "**P2.")
+        self.assert_error("rules/README.md:5: P2 should be P1")
+        self.replace(
+            "rules/README.md",
+            "Enforced by\n[LAYER-1](inheritance.md#layer-1) and [REQ-0001](values/types.md#req-0001).",
+            "Nothing enforces it.",
+        )
+        self.assert_error("rules/README.md:5: P2 cites no rule")
+        self.replace(
+            "rules/README.md", "**P2. Layers are ordered.**", "Layers are ordered."
+        )
+        self.assert_error("rules/README.md: no principles")
+
+    # -- rule files -----------------------------------------------------------
+
+    def test_a_file_holds_cards_or_requirements(self):
+        self.replace(
+            "rules/inheritance.md",
+            "A cycle reports its path.",
+            '<a id="req-0005"></a>\n\n**REQ-0005.** A legacy block.\n\nA cycle reports its path.',
+        )
+        self.write("rules/values/empty.md", "# Empty\n\nNothing.\n")
+        self.replace(
+            "rules/README.md",
+            "| [Types]",
+            "| [Empty](values/empty.md) | REQ | Nothing. |\n| [Types]",
+        )
+        errors = self.errors()
+        self.assertIn(
+            "rules/inheritance.md: mixes cards and legacy requirements; convert the whole file",
+            errors,
+        )
+        self.assertIn("rules/values/empty.md: defines no cards or requirements", errors)
+
+    def test_card_files_have_no_front_matter_or_other_rule_headings(self):
+        self.replace(
+            "rules/inheritance.md",
+            "# Inheritance\n",
+            "---\nid: x\n---\n# Inheritance\n",
+        )
+        self.replace(
+            "rules/inheritance.md", "## Layers\n", "## Layers\n\n### Overview\n"
+        )
+        errors = self.errors()
+        self.assertIn(
+            "rules/inheritance.md: a card file must not have front matter", errors
+        )
+        self.assert_error(
+            "rules/inheritance.md:10: '### Overview' is not a card heading ('### PREFIX-N. Title')"
+        )
+
+    def test_legacy_contract_structure(self):
+        self.replace("rules/values/types.md", "status: normative", "status: proposed")
+        self.replace("rules/values/types.md", "## Error conditions", "## Errors")
+        self.replace(
+            "rules/values/types.md", '<a id="req-0004"></a>', '<a id="req-0040"></a>'
+        )
+        self.replace(
+            "rules/values/types.md",
+            "**REQ-0001.** A column has one type.",
+            "**REQ-0001.** Retired.",
+        )
+        errors = self.errors()
+        for expected in (
+            "rules/values/types.md: expected id, title, and normative status",
+            "rules/values/types.md: incorrect contract section order",
+            "rules/values/types.md:13: retired requirement must be deleted: REQ-0001",
+            'rules/values/types.md:19: REQ-0004 needs <a id="req-0004"></a> directly above it',
+        ):
+            self.assertIn(expected, errors)
+
+    def test_legacy_requirements_are_defined_once(self):
+        self.write(
+            "rules/values/more.md",
+            "---\nid: values/more\ntitle: More\nstatus: normative\n---\n\n# More\n\n"
+            '## Requirements\n\n<a id="req-0001"></a>\n\n**REQ-0001.** Again.\n',
+        )
+        self.replace(
+            "rules/README.md",
+            "| [Types]",
+            "| [More](values/more.md) | REQ | More. |\n| [Types]",
+        )
+        self.assertIn(
+            "duplicate requirement definition: REQ-0001 (2x in values/more.md, values/types.md)",
+            self.errors(),
+        )
+
+    # -- cards ----------------------------------------------------------------
+
+    def test_card_anchor_number_prefix_heading_and_title(self):
+        self.replace("rules/inheritance.md", '<a id="layer-1"></a>\n\n', "")
+        self.replace(
+            "rules/inheritance.md",
+            '<a id="layer-2"></a>\n\n### LAYER-2. A null clears an inherited field',
+            '<a id="layer-02"></a>\n\n### LAYER-02 A null clears an inherited field.',
+        )
+        errors = self.errors()
+        for expected in (
+            'rules/inheritance.md:7: LAYER-1: needs <a id="layer-1"></a> above its heading',
+            "rules/inheritance.md:21: LAYER-02: the number must be at least 1, without leading zeros",
+            "rules/inheritance.md:21: LAYER-02: the heading must read '### LAYER-02. Title'",
+            "rules/inheritance.md:21: LAYER-02: the title must not end with a period",
+        ):
+            self.assertIn(expected, errors)
+        self.replace(
+            "rules/inheritance.md",
+            "### LAYER-1. Layers compose depth first",
+            "### TYPE-1. Untitled",
+        )
+        self.assert_error(
+            "rules/inheritance.md:7: TYPE-1: cards in inheritance.md must use the prefix LAYER"
+        )
+        self.replace("rules/inheritance.md", "### TYPE-1. Untitled", "### TYPE-1.")
+        self.assert_error("rules/inheritance.md:7: TYPE-1: has no title")
+
+    def test_card_ids_are_unique_across_files(self):
+        self.write(
+            "rules/more.md",
+            '# More\n\n<a id="layer-1"></a>\n\n### LAYER-1. Again\n\nA statement.\n',
+        )
+        self.replace(
+            "rules/README.md",
+            "| [Types]",
+            "| [More](more.md) | MORE | More. |\n| [Types]",
+        )
+        self.assert_error(
+            "duplicate card LAYER-1: rules/inheritance.md:9, rules/more.md:5"
+        )
+
+    def test_statement_is_present_and_short(self):
+        self.replace(
+            "rules/inheritance.md",
+            "A null written over an inherited field clears it; see\n[REQ-0001](values/types.md#req-0001).",
+            " ".join(["word"] * 91),
+        )
+        self.assert_error(
+            "rules/inheritance.md:25: LAYER-2: the statement has 91 words; the limit is 90"
+        )
+        self.replace(
+            "rules/inheritance.md", " ".join(["word"] * 91), "| table | only |"
+        )
+        self.assert_error(
+            "rules/inheritance.md:23: LAYER-2: has no statement paragraph after its heading"
+        )
+
+    def test_metadata_is_one_ordered_paragraph(self):
+        self.replace(
+            "rules/inheritance.md",
+            "Fails: `inheritance_cycle`.\nEvidence:",
+            "Evidence: `schema-inheritance`.\nFails: `inheritance_cycle`.\nEvidence:",
+        )
+        errors = self.errors()
+        self.assertIn("rules/inheritance.md:14: LAYER-1: repeats Evidence", errors)
+        self.assertIn(
+            "rules/inheritance.md:14: LAYER-1: metadata must be ordered Fails, Evidence, Replaces",
+            errors,
+        )
+
+    def test_metadata_outside_its_paragraph_is_reported(self):
+        self.replace(
+            "rules/inheritance.md", "layer itself.\n", "layer itself.\nFails: `x`.\n"
+        )
+        self.assert_error(
+            "rules/inheritance.md:13: LAYER-1: Fails, Evidence and Replaces must form one "
+            "paragraph directly after the statement"
+        )
+        self.replace(
+            "rules/inheritance.md", "layer itself.\nFails: `x`.\n", "layer itself.\n"
+        )
+        self.replace(
+            "rules/inheritance.md",
+            "A cycle reports its path.",
+            "A cycle.\n\nReplaces: REQ-0009.",
+        )
+        self.assert_error(
+            "rules/inheritance.md:21: LAYER-1: Fails, Evidence and Replaces"
+        )
+
+    def test_fails_names_registered_conditions(self):
+        self.replace(
+            "rules/inheritance.md",
+            "Fails: `inheritance_cycle`.",
+            "Fails: `missing_one`, cycle",
+        )
+        errors = self.errors()
+        self.assertIn(
+            "rules/inheritance.md:14: LAYER-1: the Fails line must end with a period",
+            errors,
+        )
+        self.assertIn(
+            "rules/inheritance.md:14: LAYER-1: missing_one is not registered in yaml/conditions.yaml",
+            errors,
+        )
+        self.assertIn(
+            "rules/inheritance.md:14: LAYER-1: Fails item 'cycle' is not a `condition`",
+            errors,
+        )
+
+    def test_evidence_items_exist(self):
+        cases = {
+            "`missing-benchmark`": "missing-benchmark is not a benchmark under benchmarks/",
+            "`rules/missing.md`": "rules/missing.md does not exist",
+            "`rules/values/types.md::absent_name`": "'absent_name' does not occur in rules/values/types.md",
+            "`../outside.md`": "../outside.md must be a repository-relative path",
+            "`schema-inheritance::name`": "schema-inheritance::name: a benchmark has no '::' name",
+            "`benchmarks/schema-inheritance::name`": (
+                "benchmarks/schema-inheritance is not a file that can hold 'name'"
+            ),
+            "plain": "Evidence item 'plain' is not a `benchmark` or `path`",
+        }
+        original = "Evidence: `schema-inheritance`, `rules/values/types.md::column`."
+        for item, expected in cases.items():
+            with self.subTest(item=item):
+                self.replace("rules/inheritance.md", original, f"Evidence: {item}.")
+                self.assert_error(f"rules/inheritance.md:15: LAYER-1: {expected}")
+                self.replace("rules/inheritance.md", f"Evidence: {item}.", original)
+        self.assertEqual(self.errors(), [])
+
+    def test_replaces_items_are_legacy_ids_replaced_once_and_not_still_defined(self):
+        self.replace(
+            "rules/inheritance.md",
+            "Replaces: REQ-0002,\nREQ-0003.",
+            "Replaces: REQ-0002, LAYER-2, REQ-0001.",
+        )
+        self.replace(
+            "rules/inheritance.md",
+            "[REQ-0001](values/types.md#req-0001).",
+            "[REQ-0001](values/types.md#req-0001).\n\nReplaces: REQ-0002.",
+        )
+        errors = self.errors()
+        for expected in (
+            "rules/inheritance.md:16: LAYER-1: Replaces item 'LAYER-2' is not a REQ-NNNN ID",
+            "REQ-0001 is replaced by LAYER-1 but still defined at rules/values/types.md:13",
+            "REQ-0002 is replaced more than once: LAYER-1, LAYER-2",
+        ):
+            self.assertIn(expected, errors)
+
+    def test_verification_checks_match_the_registries(self):
+        self.write(
+            "rules/verification.md",
+            "# Verification\n\n## Checks\n\n"
+            '<a id="check-1"></a>\n\n### CHECK-1. Keys are distinct\n\n'
+            "`unique` requires distinct keys.\n\n"
+            '<a id="check-2"></a>\n\n### CHECK-2. One value is present\n\n'
+            "`exactly_one` requires one value.\n",
+        )
+        self.replace(
+            "rules/README.md",
+            "| [Types]",
+            "| [Verification](verification.md) | CHECK | Checks. |\n| [Types]",
+        )
+        self.write(
+            "yaml/schema_verification.yaml",
+            'version: "1.0"\ncolumn_verifications:\n    unique:\n'
+            "        - id: {type: str, required: false}\n    row_count:\n"
+            "        - id: {type: str, required: false}\n",
+        )
+        errors = self.errors()
+        self.assertIn(
+            "verification.md: CHECK-2 defines `exactly_one`, which no "
+            "verification registry declares",
+            errors,
+        )
+        self.assertIn(
+            "schema_verification.yaml: `row_count` is registered but no "
+            "verification.md rule defines it",
+            errors,
+        )
+
+    # -- citations ------------------------------------------------------------
+
+    def test_citations_resolve_repository_wide(self):
+        self.write("yaml/schema_notes.yaml", "# See REQ-0099.\nnotes: {}\n")
+        self.write("rust/crates/core/src/lib.rs", 'const R: &str = "LAYER-7";\n')
+        self.write(
+            "rust/crates/core/tests/fixtures/data.json", '{"requirement": "REQ-0003"}\n'
+        )
+        self.write(
+            "python/module.py", "# REQ-0002 and LAYER-2 resolve; UTF-8 is no rule.\n"
+        )
+        self.write("docs/page.md", "# Page\n\nREQ-0004 resolves, LAYER-3 does not.\n")
+        self.write("build/lib/stale.py", "# REQ-0099 in build output is ignored.\n")
+        self.write("tools/tests/test_rules_check.py", "# REQ-0099 is exempt here.\n")
+        errors = self.errors()
+        self.assertEqual(
+            sorted(error for error in errors if "unresolved rule citation" in error),
+            [
+                "docs/page.md:3: unresolved rule citation LAYER-3",
+                "rust/crates/core/src/lib.rs:1: unresolved rule citation LAYER-7",
+                "yaml/schema_notes.yaml:1: unresolved rule citation REQ-0099",
+            ],
+        )
+
+    def test_negative_benchmarks_expect_a_rule_id(self):
+        path = "benchmarks/negative-case/expected/error.yaml"
+        for requirement, expected in (
+            ("REQ-0002", None),
+            ("LAYER-2", None),
+            ("~", None),
+            ("REQ-12", "requirement must be a rule ID"),
+            ("R001-1", "requirement must be a rule ID"),
+            ("REQ-0099", "unresolved rule citation REQ-0099"),
+        ):
+            with self.subTest(requirement=requirement):
+                self.write(path, f"phase: validation\nrequirement: {requirement}\n")
+                errors = self.errors()
+                if expected is None:
+                    self.assertEqual(errors, [])
+                else:
+                    self.assertTrue(any(expected in error for error in errors), errors)
+
+    # -- links ----------------------------------------------------------------
+
+    def test_links_name_existing_files_and_anchors(self):
+        self.replace(
+            "rules/inheritance.md",
+            "A cycle reports its path.",
+            "A cycle reports its [path](values/missing.md), [types](values/types.md#nowhere)"
+            " and [here](#absent).",
+        )
+        errors = self.errors()
+        for expected in (
+            "rules/inheritance.md:19: link target values/missing.md does not exist",
+            "rules/inheritance.md:19: rules/values/types.md has no anchor #nowhere",
+            "rules/inheritance.md:19: rules/inheritance.md has no anchor #absent",
+        ):
+            self.assertIn(expected, errors)
+
+    def test_links_into_rules_from_other_markdown(self):
+        self.write(
+            "yaml/README.md", "# YAML\n\n[Rules](../rules/README.md#specification)\n"
+        )
+        self.write("README.md", "# Home\n\n[Rules](rules/README.md#rule-files)\n")
+        self.assertEqual(
+            self.errors(),
+            ["yaml/README.md:3: rules/README.md has no anchor #specification"],
+        )
+
+    def test_docs_links_follow_canonical_and_generated_pages(self):
+        self.write("README.md", "# Home\n")
+        self.write(
+            "docs/articles/page.md",
+            "# Page\n\n[Rules](rules.md#rule-files) [Index](../reference/requirements.md#x)"
+            " [Dashboards](../benchmark/index.md) [Home](../index.md)"
+            " [Web](https://example.org/x.md#y)\n",
+        )
+        self.write(
+            "docs/articles/benchmark.md", "# Template\n\n[$source](missing.html)\n"
+        )
+        self.assertEqual(self.errors(), [])
+        self.replace("docs/articles/page.md", "rules.md#rule-files", "rules.md#blocks")
+        self.assertEqual(
+            self.errors(),
+            ["docs/articles/page.md:3: rules/README.md has no anchor #blocks"],
+        )
+
+    def test_a_link_whose_text_is_a_rule_id_targets_that_rule(self):
+        self.replace(
+            "rules/inheritance.md",
+            "[LAYER-2](#layer-2)",
+            "[LAYER-2](#layer-1), [REQ-0003](#layer-1), [REQ-0004](values/types.md)",
+        )
+        errors = self.errors()
+        self.assertIn(
+            "rules/inheritance.md:19: [LAYER-2] links to #layer-1, not inheritance.md#layer-2",
+            errors,
+        )
+        self.assertIn(
+            "rules/inheritance.md:19: [REQ-0004] links to values/types.md, not values/types.md#req-0004",
+            errors,
+        )
+        self.assertFalse(any("[REQ-0003]" in error for error in errors))
+
+    # -- schemas --------------------------------------------------------------
+
+    def test_schema_descriptions_cite_rules_that_resolve(self):
+        schema = "yaml/schema_shared.yaml"
+        self.write(
+            schema,
+            'version: "1.0"\n\n# See LAYER-1.\n\nliteral_value:\n    type: str\n'
+            "    description: See REQ-0002.\n",
+        )
+        self.assertEqual(self.errors(), [])
+        cases = {
+            "See LAYER-1.": None,
+            "A free description of the field, governed by LAYER-2.": None,
+            "See RULE-1.": "schema description cites RULE-1, which names no rule",
+            "Governed by REQ-0099.": "schema description cites REQ-0099, which names no rule",
+            "null": "schema description must be a string: schema_shared.yaml:literal_value.description",
+            "''": "schema description is empty",
+        }
+        for value, expected in cases.items():
+            with self.subTest(value=value):
+                self.replace(
+                    schema, "description: See REQ-0002.", f"description: {value}"
+                )
+                errors = self.errors()
+                if expected is None:
+                    self.assertEqual(errors, [])
+                else:
+                    self.assertTrue(any(expected in error for error in errors), errors)
+                self.replace(
+                    schema, f"description: {value}", "description: See REQ-0002."
+                )
+
+    def test_schema_comments_point_at_a_rule(self):
+        schema = "yaml/schema_shared.yaml"
+        self.write(schema, 'version: "1.0"\n\n# See LAYER-9.\n')
+        self.assertIn(
+            "schema comment has no canonical owner: schema_shared.yaml", self.errors()
+        )
+        self.write(schema, 'version: "1.0"\n\n# Missing values become zero.\n')
+        self.assertIn(
+            "schema comment has no canonical owner: schema_shared.yaml", self.errors()
+        )
+        self.write(schema, 'version: "1.0"\nversion: "1.0"\n')
+        self.assert_error("schema_shared.yaml: invalid schema source")
+
+    # -- the repository -------------------------------------------------------
+
+    def test_the_repository_passes(self):
+        self.assertEqual(check(ROOT).errors, [])
+
+
+if __name__ == "__main__":
+    unittest.main()

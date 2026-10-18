@@ -18,7 +18,7 @@ Keep sponsor-defined lists in a source that omits `standard`.
 |---|---|
 | Published terminology | Set `standard.name`, `standard.publishing_set`, and `standard.version` once for all lists in that source. |
 | Sponsor-defined list | Omit `standard`; supply the list and its items. |
-| Sponsor extension of a published list | Keep the published `standard`, set the list's `extensible: true`, and mark added items `extended: true`. |
+| Sponsor extension of a published list | Keep the published `standard`, set the list's `extensible: true`, and mark added items `extended: true` with no `alias`: an added value has no NCI code. |
 
 The terminology release is separate from `schema_version` and from an
 implementation-guide version such as `sdtm.standard.version` (`SDTMIG`).
@@ -78,7 +78,7 @@ List `id` and `name` must each be unique across all sources. A column binds
 the `id`, while `name` is the human-readable description. `alias` records a
 published concept identifier and is independent of the binding ID. Define-XML
 composition has additional alias requirements described in the
-[Define-XML rule](https://github.com/elong0527/yamaa/blob/main/rules/submission/define-xml.md).
+[Define-XML rule](https://github.com/elong0527/yamaa/blob/main/rules/profiles/define-xml.md).
 
 Sources may also live in local files: a project entry such as
 `codelists: [sdtm-ct.yaml, adam-ct.yaml, sponsor-codelists.yaml]` reads each file's
@@ -159,19 +159,24 @@ checking.
 
 | Bound list | What happens to completed column values |
 |---|---|
-| Non-extensible list with `items` | Every non-missing value must match an item; missing values pass. Add `not_missing` if absence must fail. |
-| Extensible list | The binding imposes no value check. An explicit `allowed_values` verification can impose a separate restriction. |
+| List with `items`, extensible or not | Every non-missing value must match a declared item; missing values pass. Declare `mandatory: true` in the column's submission metadata if absence must fail. |
 | `external` dictionary with a required version | The binding imposes no value check; yamaa does not read the dictionary. Declare `external` instead of `items`. |
 
-In this example, changing `SEX` to `INVALID` or `AGEGR1` to `OTHER` fails the
-run's value check. Changing `DTYPE` to `OTHER` is admitted because that list
-is extensible. A text list binds to `str`, an integer list to `int`, and a
-float list to `float`. For a non-extensible list with `items`, a binding and
-`allowed_values` must declare the same value set. For an extensible or external
-list, an explicit `allowed_values` verification stands alone.
+In this example, changing `SEX` to `INVALID`, `AGEGR1` to `OTHER` or `DTYPE` to
+`OTHER` fails the run's value check. `DTYPE` is extensible, which lets the
+study add a value: declare it as an item marked `extended: true`, and the
+Define-XML document marks it as an extended value. An added value has no
+published concept identifier, so it declares no `alias`, and a submission
+document requires none of it. A text list binds to `str`, an integer list to
+`int`, and a float list to `float`.
+
+A list with `items` already states its column's value set, so an
+`allowed_values` verification on the same column is rejected as a redundant
+declaration, even when the two lists agree. Beside an `external` dictionary, or
+on a column with no binding, `allowed_values` stays an ordinary check.
 
 See the [project schema](https://github.com/elong0527/yamaa/blob/main/yaml/schema_project.yaml)
-for the accepted fields and the [controlled terminology rule](https://github.com/elong0527/yamaa/blob/main/rules/submission/terminology.md)
+for the accepted fields and the [controlled terminology rule](https://github.com/elong0527/yamaa/blob/main/rules/profiles/terminology.md)
 for binding, extension, and verification requirements. The
 [DM metadata example](https://github.com/elong0527/yamaa/tree/main/benchmarks/sdtm-dm-metadata)
 shows versioned terminology sources in a complete Define-XML project.

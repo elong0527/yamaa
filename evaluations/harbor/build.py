@@ -791,8 +791,8 @@ def build_task(
     (task / "task.toml").write_text(task_text)
     (task / "instruction.md").write_text(instruction(language, prompt))
 
-    # Data files only: an input schema (`*.schema.yaml`) is yamaa's own
-    # description of how a producer builds the input, not source data.
+    # Data files only: an input schema (`*.schema.yaml`) is the yamaa
+    # specification whose output columns type the input, not source data.
     shutil.copytree(
         benchmark / "input",
         task / "environment" / "input",

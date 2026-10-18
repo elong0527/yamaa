@@ -18,8 +18,7 @@ columns:
     type: date
     label: Date of First Exposure to Treatment
     derivation:
-      aggregate:
-        expr: "MIN(EX.EXSTDTC)"
+      aggregate: "MIN(EX.EXSTDTC)"
 
   - name: SAFFL
     type: str
@@ -102,8 +101,6 @@ columns:
           order_by: [AGE, USUBJID]
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID]
   - row_count:
       min: 7
       max: 7

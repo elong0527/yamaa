@@ -6,7 +6,6 @@ mod service {
         //! Independent original-entry and admission-order controls for the shared Build boundary.
         use std::rc::Rc;
         use yamaa_core::build::{self, MetadataAdmissionPort, SelectionFailure};
-        use yamaa_core::schema::{Document, DocumentNode as N};
 
         struct Original(Rc<usize>);
         #[derive(Default)]
@@ -24,74 +23,22 @@ mod service {
                     .map_or(Ok(()), |error| Err(("original/spec.yaml".into(), error)))
             }
         }
-        fn document(producer: bool) -> Document {
-            Document::new(
-                vec![
-                    N::Text("schema".into()),
-                    if producer {
-                        N::Text("producer.yaml".into())
-                    } else {
-                        N::Null
-                    },
-                    N::Mapping(vec![(0, 1)]),
-                    N::Text("FIRST".into()),
-                    N::Text("schema".into()),
-                    N::Null,
-                    N::Mapping(vec![(4, 5)]),
-                    N::Text("SECOND".into()),
-                    N::Mapping(vec![(3, 2), (7, 6)]),
-                    N::Text("input".into()),
-                    N::Mapping(vec![(9, 8)]),
-                ],
-                10,
-            )
-            .unwrap()
-        }
-        fn select(
-            document: &Document,
-            port: &mut Port,
-        ) -> Result<build::EntrySelection, SelectionFailure<Original>> {
-            build::select_entry(document, port)
-        }
 
         #[test]
-        fn original_schema_declarations_select_producers_without_defaults_or_study_authority() {
-            for producer in [false, true] {
-                let mut port = Port::default();
-                let input = document(producer);
-                let selected = match select(&input, &mut port) {
-                    Ok(selected) => selected,
-                    Err(_) => panic!("admitted original entry"),
-                };
-                assert_eq!(selected.is_producer(), producer);
-                assert_eq!(port.events, ["verify original snapshots"]);
-            }
-        }
-
-        #[test]
-        fn root_metadata_named_schema_does_not_select_a_producer() {
-            let input = Document::new(
-                vec![
-                    N::Text("schema".into()),
-                    N::Text("producer.yaml".into()),
-                    N::Mapping(vec![(0, 1)]),
-                ],
-                2,
-            )
-            .unwrap();
+        fn admitted_entry_verifies_original_snapshots_once_without_study_authority() {
             let mut port = Port::default();
-            assert!(matches!(select(&input, &mut port), Ok(selected) if !selected.is_producer()));
+            assert!(build::verify_entry(&mut port).is_ok());
             assert_eq!(port.events, ["verify original snapshots"]);
         }
 
         #[test]
-        fn snapshot_refusal_never_returns_a_selection_and_moves_the_original_error() {
+        fn snapshot_refusal_moves_the_original_error() {
             let original = Rc::new(23);
             let mut port = Port {
                 changed: Some(Original(Rc::clone(&original))),
                 ..Default::default()
             };
-            match select(&document(true), &mut port) {
+            match build::verify_entry(&mut port) {
                 Err(SelectionFailure::Snapshot { identity, error }) => {
                     assert_eq!(identity, "original/spec.yaml");
                     assert!(Rc::ptr_eq(&original, &error.0));
@@ -110,7 +57,7 @@ mod service {
         use support::{call, specification, Tree};
         use yamaa_core::{
             application_observer::Scope,
-            build::{self, EntrySelection, MetadataAdmissionPort, PreparationPort, Prepared},
+            build::{self, MetadataAdmissionPort, PreparationPort, Prepared},
             domain_entry::{self, Ports, Request},
             function_invocation::{Argument, HostError},
             project_activation::{self, ActivationPort},
@@ -148,7 +95,6 @@ mod service {
             Output(CompleteError<&'static str, Opaque, Infallible>),
         }
         struct Entry {
-            selection: EntrySelection,
             model: SpecificationDocument,
             environment: ExecutionEnvironment,
         }
@@ -377,7 +323,6 @@ mod service {
             type Entry = Entry;
             type Plain = CheckedOwnedProject;
             type Project = CheckedOwnedProject;
-            type Producer = CheckedOwnedProject;
             type Failure = Failure;
             fn capture(&mut self, request: Request<'_>) -> Result<Entry, Failure> {
                 assert_eq!(request.environment, Some("project.yaml"));
@@ -432,16 +377,8 @@ mod service {
                     call("constant", vec![])
                 };
                 let model = specification(vec![("VALUE", "int", expression)]);
-                let selection = build::select_entry(model.document(), self)
-                    .unwrap_or_else(|_| panic!("fixture metadata admission"));
-                Ok(Entry {
-                    selection,
-                    model,
-                    environment,
-                })
-            }
-            fn selection(entry: &Entry) -> &EntrySelection {
-                &entry.selection
+                build::verify_entry(self).unwrap_or_else(|_| panic!("fixture metadata admission"));
+                Ok(Entry { model, environment })
             }
             fn plain(&mut self, _: Entry) -> Result<CheckedOwnedProject, Failure> {
                 panic!("explicit environment selects project")
@@ -451,21 +388,17 @@ mod service {
                 project_domain::check_owned(&entry.model, entry.environment)
                     .map_err(|rejection| Failure::Compile(rejection.error))
             }
-            fn producer(&mut self, _: Entry) -> Result<CheckedOwnedProject, Failure> {
-                panic!("ordinary fixture selects project")
-            }
         }
         impl Ports for Application {
             type Plain = CheckedOwnedProject;
             type Project = CheckedOwnedProject;
-            type Producer = CheckedOwnedProject;
             type CheckResult = ();
             type BuildResult = PreparedOutput<()>;
             type Failure = Failure;
             fn prepare(
                 &mut self,
                 request: Request<'_>,
-            ) -> Result<Prepared<Self::Plain, Self::Project, Self::Producer>, Failure> {
+            ) -> Result<Prepared<Self::Plain, Self::Project>, Failure> {
                 build::prepare(request, self)
             }
             fn check_plain(&mut self, _: Self::Plain) -> Result<(), Failure> {
@@ -474,9 +407,6 @@ mod service {
             fn check_project(&mut self, _: Self::Project) -> Result<(), Failure> {
                 self.log.record(Event::Observation("static check"));
                 Ok(())
-            }
-            fn check_producer(&mut self, _: Self::Producer) -> Result<(), Failure> {
-                unreachable!()
             }
             fn build_plain(
                 &mut self,
@@ -491,13 +421,6 @@ mod service {
                 _: Scope<'_>,
             ) -> Result<PreparedOutput<()>, Failure> {
                 self.run(checked)
-            }
-            fn build_producer(
-                &mut self,
-                _: &Self::Producer,
-                _: Scope<'_>,
-            ) -> Result<PreparedOutput<()>, Failure> {
-                unreachable!()
             }
         }
         fn request() -> Request<'static> {
@@ -753,14 +676,11 @@ mod service {
                 assert_eq!(written, "define.xml");
                 Ok("/project/define.xml".into())
             }
-            fn json_written(&self, _: &str) -> String {
+            fn transport_written(&self, _: &str, _: &str) -> String {
                 panic!("no dataset selected")
             }
             fn same_location(&self, left: &str, right: &str) -> bool {
                 left == right
-            }
-            fn same_parent(&self, _: &str, _: &str) -> bool {
-                panic!("no dataset selected")
             }
             fn package_reference(&self, _: &str, _: &str) -> Option<String> {
                 panic!("no dataset selected")
@@ -785,6 +705,13 @@ mod service {
                 // The fixture declares no datasets, so composition never
                 // reaches Dataset-JSON encoding.
                 Ok(Vec::new())
+            }
+            fn render_xpt<T: TableAccess>(
+                &mut self,
+                _: &yamaa_core::submission_xpt::XptDocument,
+                _: &T,
+            ) -> Result<Vec<u8>, yamaa_core::submission_composition::Finding> {
+                panic!("no dataset selected")
             }
             fn decode_parquet(&mut self, _: &[u8]) -> Result<EmptyTable, ()> {
                 panic!("no codec selected")
@@ -1285,19 +1212,17 @@ mod service {
     mod domain_entry {
         //! One request composition selects held metadata before any execution authority.
         use std::{cell::RefCell, rc::Rc};
-        use yamaa_core::schema::{Document, DocumentNode as N};
         use yamaa_core::{
             application_observer::Scope,
-            build::{self, EntrySelection, MetadataAdmissionPort, PreparationPort, Prepared},
+            build::{self, MetadataAdmissionPort, PreparationPort, Prepared},
             domain_entry::{self, Ports, Request},
         };
 
         struct Original(Rc<()>);
-        struct Entry(EntrySelection);
+        struct Entry;
         #[derive(Default)]
         struct Fake {
             events: Vec<&'static str>,
-            producer: bool,
             failure: Option<(&'static str, Original)>,
             phases: Option<Rc<RefCell<Vec<yamaa_core::application_observer::Phase>>>>,
         }
@@ -1305,15 +1230,16 @@ mod service {
             fn enter(&mut self, event: &'static str) -> Result<(), Original> {
                 if let Some(phases) = &self.phases {
                     use yamaa_core::application_observer::Phase;
-                    let expected =
-                        if self.events.iter().any(|event| {
-                            matches!(*event, "plain build" | "project build" | "graph build")
-                        }) || matches!(event, "plain build" | "project build" | "graph build")
-                        {
-                            Phase::Build
-                        } else {
-                            Phase::Preparation
-                        };
+                    let expected = if self
+                        .events
+                        .iter()
+                        .any(|event| matches!(*event, "plain build" | "project build"))
+                        || matches!(event, "plain build" | "project build")
+                    {
+                        Phase::Build
+                    } else {
+                        Phase::Preparation
+                    };
                     assert_eq!(phases.borrow().last(), Some(&expected));
                 }
                 self.events.push(event);
@@ -1349,7 +1275,6 @@ mod service {
             type Entry = Entry;
             type Plain = ();
             type Project = ();
-            type Producer = ();
             type Failure = Original;
             fn capture(&mut self, request: Request<'_>) -> Result<Entry, Original> {
                 assert_eq!(request.specification, "spec.yaml");
@@ -1359,31 +1284,10 @@ mod service {
                     self.enter("environment")?;
                 }
                 self.enter("entry")?;
-                let document = Document::new(
-                    vec![
-                        N::Text("input".into()),
-                        N::Text("SRC".into()),
-                        N::Text("schema".into()),
-                        if self.producer {
-                            N::Text("producer.yaml".into())
-                        } else {
-                            N::Null
-                        },
-                        N::Mapping(vec![(2, 3)]),
-                        N::Mapping(vec![(1, 4)]),
-                        N::Mapping(vec![(0, 5)]),
-                    ],
-                    6,
-                )
-                .unwrap();
-                let selected =
-                    build::select_entry(&document, self).map_err(|error| match error {
-                        build::SelectionFailure::Snapshot { error, .. } => error,
-                    })?;
-                Ok(Entry(selected))
-            }
-            fn selection(entry: &Entry) -> &EntrySelection {
-                &entry.0
+                build::verify_entry(self).map_err(|error| match error {
+                    build::SelectionFailure::Snapshot { error, .. } => error,
+                })?;
+                Ok(Entry)
             }
             fn plain(&mut self, _: Entry) -> Result<(), Original> {
                 self.enter("plain compilation")
@@ -1391,18 +1295,14 @@ mod service {
             fn project(&mut self, _: Entry) -> Result<(), Original> {
                 self.enter("project compilation")
             }
-            fn producer(&mut self, _: Entry) -> Result<(), Original> {
-                self.enter("graph compilation")
-            }
         }
         impl Ports for Fake {
             type Plain = ();
             type Project = ();
-            type Producer = ();
             type CheckResult = ();
             type BuildResult = ();
             type Failure = Original;
-            fn prepare(&mut self, request: Request<'_>) -> Result<Prepared<(), (), ()>, Original> {
+            fn prepare(&mut self, request: Request<'_>) -> Result<Prepared<(), ()>, Original> {
                 build::prepare(request, self)
             }
             fn check_plain(&mut self, _: ()) -> Result<(), Original> {
@@ -1411,17 +1311,11 @@ mod service {
             fn check_project(&mut self, _: ()) -> Result<(), Original> {
                 self.enter("project check")
             }
-            fn check_producer(&mut self, _: ()) -> Result<(), Original> {
-                self.enter("graph check")
-            }
             fn build_plain(&mut self, _: &(), _: Scope<'_>) -> Result<(), Original> {
                 self.execute("plain build")
             }
             fn build_project(&mut self, _: &(), _: Scope<'_>) -> Result<(), Original> {
                 self.execute("project build")
-            }
-            fn build_producer(&mut self, _: &(), _: Scope<'_>) -> Result<(), Original> {
-                self.execute("graph build")
             }
         }
         fn request(environment: bool) -> Request<'static> {
@@ -1445,128 +1339,96 @@ mod service {
                 events: RefCell<Vec<Observed>>,
             }
             impl Observer for Stages {
-                fn observe(&self, event: Event<'_>) {
-                    if let Event::Exit {
-                        node: None,
-                        phase,
-                        outcome,
-                    } = event
-                    {
+                fn observe(&self, event: Event) {
+                    if let Event::Exit { phase, outcome } = event {
                         self.events
                             .borrow_mut()
                             .push(Observed::Exit(phase, outcome));
                         return;
                     }
-                    let Event::Phase { node: None, phase } = event else {
+                    let Event::Phase { phase } = event else {
                         panic!("this request spy invokes no real function port")
                     };
                     self.phases.borrow_mut().push(phase);
                     self.events.borrow_mut().push(Observed::Entry(phase));
                 }
             }
-            for producer in [false, true] {
-                for environment in [false, true] {
-                    for failure in [None, Some("entry"), Some("study capture")] {
-                        let marker = Rc::new(());
-                        let phases = Rc::new(RefCell::new(vec![]));
-                        let observer = Stages {
-                            phases: Rc::clone(&phases),
-                            events: RefCell::new(vec![]),
-                        };
-                        let mut port = Fake {
-                            producer,
-                            failure: failure.map(|stage| (stage, Original(Rc::clone(&marker)))),
-                            phases: Some(Rc::clone(&phases)),
-                            ..Default::default()
-                        };
-                        let result = domain_entry::domain(
-                            request(environment),
-                            &mut port,
-                            Scope::new(&observer),
-                        );
-                        match failure {
-                            None => assert!(result.is_ok()),
-                            Some(stage) => {
-                                let Err(error) = result else {
-                                    panic!("scripted original failure")
-                                };
-                                assert!(Rc::ptr_eq(&marker, &error.0));
-                                assert_eq!(port.events.last(), Some(&stage));
-                            }
+            for environment in [false, true] {
+                for failure in [None, Some("entry"), Some("study capture")] {
+                    let marker = Rc::new(());
+                    let phases = Rc::new(RefCell::new(vec![]));
+                    let observer = Stages {
+                        phases: Rc::clone(&phases),
+                        events: RefCell::new(vec![]),
+                    };
+                    let mut port = Fake {
+                        failure: failure.map(|stage| (stage, Original(Rc::clone(&marker)))),
+                        phases: Some(Rc::clone(&phases)),
+                        ..Default::default()
+                    };
+                    let result = domain_entry::domain(
+                        request(environment),
+                        &mut port,
+                        Scope::new(&observer),
+                    );
+                    match failure {
+                        None => assert!(result.is_ok()),
+                        Some(stage) => {
+                            let Err(error) = result else {
+                                panic!("scripted original failure")
+                            };
+                            assert!(Rc::ptr_eq(&marker, &error.0));
+                            assert_eq!(port.events.last(), Some(&stage));
                         }
-                        let expected = if failure == Some("entry") {
-                            vec![Phase::Preparation, Phase::Finished]
-                        } else {
-                            vec![Phase::Preparation, Phase::Build, Phase::Finished]
-                        };
-                        assert_eq!(*phases.borrow(), expected);
-                        let events = observer.events.borrow();
-                        let mut expected = vec![
-                            Observed::Entry(Phase::Preparation),
+                    }
+                    let expected = if failure == Some("entry") {
+                        vec![Phase::Preparation, Phase::Finished]
+                    } else {
+                        vec![Phase::Preparation, Phase::Build, Phase::Finished]
+                    };
+                    assert_eq!(*phases.borrow(), expected);
+                    let events = observer.events.borrow();
+                    let mut expected = vec![
+                        Observed::Entry(Phase::Preparation),
+                        Observed::Exit(
+                            Phase::Preparation,
+                            if failure == Some("entry") {
+                                Outcome::Failed
+                            } else {
+                                Outcome::Succeeded
+                            },
+                        ),
+                    ];
+                    if failure != Some("entry") {
+                        expected.extend([
+                            Observed::Entry(Phase::Build),
                             Observed::Exit(
-                                Phase::Preparation,
-                                if failure == Some("entry") {
-                                    Outcome::Failed
-                                } else {
+                                Phase::Build,
+                                if failure.is_none() {
                                     Outcome::Succeeded
+                                } else {
+                                    Outcome::Failed
                                 },
                             ),
-                        ];
-                        if failure != Some("entry") {
-                            expected.extend([
-                                Observed::Entry(Phase::Build),
-                                Observed::Exit(
-                                    Phase::Build,
-                                    if failure.is_none() {
-                                        Outcome::Succeeded
-                                    } else {
-                                        Outcome::Failed
-                                    },
-                                ),
-                            ]);
-                        }
-                        expected.push(Observed::Entry(Phase::Finished));
-                        assert_eq!(*events, expected);
+                        ]);
                     }
+                    expected.push(Observed::Entry(Phase::Finished));
+                    assert_eq!(*events, expected);
                 }
             }
         }
         #[test]
-        fn both_entry_points_select_all_routes_from_the_original_held_entry() {
-            for (producer, environment, compilation, check, build) in [
+        fn both_entry_points_select_the_route_from_the_explicit_environment() {
+            for (environment, compilation, check, build) in [
+                (false, "plain compilation", "plain check", "plain build"),
                 (
-                    false,
-                    false,
-                    "plain compilation",
-                    "plain check",
-                    "plain build",
-                ),
-                (
-                    false,
                     true,
                     "project compilation",
                     "project check",
                     "project build",
                 ),
-                (
-                    true,
-                    false,
-                    "graph compilation",
-                    "graph check",
-                    "graph build",
-                ),
-                (
-                    true,
-                    true,
-                    "graph compilation",
-                    "graph check",
-                    "graph build",
-                ),
             ] {
-                let mut port = Fake {
-                    producer,
-                    ..Default::default()
-                };
+                let mut port = Fake::default();
                 assert!(domain_entry::check(request(environment), &mut port).is_ok());
                 let mut expected = vec!["root admission"];
                 if environment {
@@ -1594,51 +1456,42 @@ mod service {
         }
         #[test]
         fn every_failure_retains_its_original_payload_and_stops_later_authority() {
-            for producer in [false, true] {
-                for stage in [
-                    "root admission",
-                    "environment",
-                    "entry",
-                    "snapshot verification",
-                    if producer {
-                        "graph compilation"
-                    } else {
-                        "project compilation"
-                    },
-                    "lock",
-                    "function tests",
-                    "study capture",
-                    "decode",
-                    "execute",
-                    "encode",
-                    "report",
-                ] {
-                    let marker = Rc::new(());
-                    let mut port = Fake {
-                        producer,
-                        failure: Some((stage, Original(Rc::clone(&marker)))),
-                        ..Default::default()
-                    };
-                    let Err(error) =
-                        domain_entry::domain(request(true), &mut port, Scope::default())
-                    else {
-                        panic!("scripted failure")
-                    };
-                    assert!(Rc::ptr_eq(&marker, &error.0));
-                    assert_eq!(port.events.last(), Some(&stage));
-                    if matches!(
-                        stage,
-                        "root admission"
-                            | "environment"
-                            | "entry"
-                            | "snapshot verification"
-                            | "graph compilation"
-                            | "project compilation"
-                            | "lock"
-                            | "function tests"
-                    ) {
-                        assert!(!port.events.contains(&"study capture"));
-                    }
+            for stage in [
+                "root admission",
+                "environment",
+                "entry",
+                "snapshot verification",
+                "project compilation",
+                "lock",
+                "function tests",
+                "study capture",
+                "decode",
+                "execute",
+                "encode",
+                "report",
+            ] {
+                let marker = Rc::new(());
+                let mut port = Fake {
+                    failure: Some((stage, Original(Rc::clone(&marker)))),
+                    ..Default::default()
+                };
+                let Err(error) = domain_entry::domain(request(true), &mut port, Scope::default())
+                else {
+                    panic!("scripted failure")
+                };
+                assert!(Rc::ptr_eq(&marker, &error.0));
+                assert_eq!(port.events.last(), Some(&stage));
+                if matches!(
+                    stage,
+                    "root admission"
+                        | "environment"
+                        | "entry"
+                        | "snapshot verification"
+                        | "project compilation"
+                        | "lock"
+                        | "function tests"
+                ) {
+                    assert!(!port.events.contains(&"study capture"));
                 }
             }
         }
@@ -1664,7 +1517,14 @@ mod service {
         use crate::support::document::Tree;
 
         fn prepared() -> PreparedSpecification {
+            // The canonical document normalization admits: every shorthand is
+            // expanded to its class.
             let column = |name, operation, item| {
+                let field = if operation == "odm" {
+                    "item"
+                } else {
+                    "variable"
+                };
                 Tree::map(vec![
                     ("name", Tree::text(name)),
                     ("type", Tree::text("str")),
@@ -1672,7 +1532,10 @@ mod service {
                         "derivation",
                         Tree::map(vec![(
                             "value",
-                            Tree::map(vec![(operation, Tree::text(item))]),
+                            Tree::map(vec![(
+                                operation,
+                                Tree::map(vec![(field, Tree::text(item))]),
+                            )]),
                         )]),
                     ),
                 ])

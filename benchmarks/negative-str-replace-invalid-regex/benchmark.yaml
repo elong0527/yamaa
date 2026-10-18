@@ -1,8 +1,5 @@
 lifecycle: draft
 standard: ADaM
 domain: ADAE
-validation:
-  rule: R022
-  validator: regex
 covers:
 - str_replace

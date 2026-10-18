@@ -20,7 +20,7 @@ intermediates:
     key: {STUDYID: STUDYID, USUBJID: USUBJID, EXTRT: DRUG}
     order_by: [EX.EXSTDTC, EX.EXSEQ]
     keep: first
-    no_match: null
+    no_match: {literal: null}
 
   # The latest dose starting at or before the sample, the sample's own dose
   # time included.
@@ -30,7 +30,7 @@ intermediates:
     between: {value: ADTM, lower: EXSTDTC}
     order_by: [EX.EXSTDTC, EX.EXSEQ]
     keep: last
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: STUDYID
@@ -53,8 +53,8 @@ columns:
     label: Parameter Code
     derivation: PC.PCTESTCD
     verifications:
-      allowed_values:
-        values: [DRGX, MET1, DRGY]
+      - allowed_values:
+          values: [DRGX, MET1, DRGY]
 
   - name: ATPT
     type: str
@@ -73,16 +73,16 @@ columns:
           MET1: DRUG X
           DRGY: DRUG Y
 
-  # S or M when the collected text carries a time of day to the second or the
-  # minute, H when it stops at the hour, D when it is a date alone; text that
-  # is none of these stops the run.
+  # second or minute when the collected text carries a time of day to the
+  # second or the minute, hour when it stops at the hour, day when it is a
+  # date alone; text that is not a date or date and time stops the run.
   - name: PCDTPR
     type: str
     label: Sample Date/Time Collected Precision
     derivation:
-      datetime_precision:
+      precision:
+        type: datetime
         source: PC.PCDTC
-        missing: null
 
   # The sample's collected date and time; a sample collected without a time
   # gets none, so it has no relative times.
@@ -91,7 +91,7 @@ columns:
     label: Analysis Date/Time
     derivation:
       case:
-        - when: "PCDTPR IN ('M', 'S')"
+        - when: "PCDTPR IN ('minute', 'second')"
           then: PC.PCDTC
 
   - name: FANLDTM
@@ -116,7 +116,8 @@ columns:
     type: float
     label: Actual Relative Time from First Dose (h)
     derivation:
-      datetime_diff:
+      diff:
+        type: datetime
         start: FANLDTM
         end: ADTM
         unit: hour
@@ -125,14 +126,13 @@ columns:
     type: float
     label: Actual Relative Time from Reference Dose (h)
     derivation:
-      datetime_diff:
+      diff:
+        type: datetime
         start: PCRFTDTM
         end: ADTM
         unit: hour
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, PCSEQ]
   - row_count:
       min: 14
       max: 14

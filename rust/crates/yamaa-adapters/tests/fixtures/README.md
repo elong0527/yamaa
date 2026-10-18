@@ -64,7 +64,7 @@ The sixteen controls cover:
   validation with original operation and expression paths.
 - Scalar and list key shorthands, including repeated equal list pairs, and
   explicit empty map/list keys with their complete retained declarations.
-- Eager ONLY behind COALESCE, retaining row name, complete raw group context
+- Eager ONLY behind a missing operand, retaining row name, complete raw group context
   and record cardinality before any accepted output or publication.
 - A later column ONLY failure preserving the enclosing grouped-row context
   and the current output key identity.
@@ -194,12 +194,12 @@ asserted or ones read from the documents by hand; no Rust output generated them.
 ## odm_deferred
 # Deferred ODM defaults
 
-Eight independently authored reports and CSV artifacts retain REQ-1265 through
+Seven independently authored reports and CSV artifacts retain REQ-1265 through
 REQ-1278 semantics when a column default depends on a completed row-number window.
 They cover record occurrence scope, missing items, group hierarchy scope,
-selectors followed by source-only predicates, an unselected CASE branch,
-a nested string operand, and complete ambiguity context with the authored
-row-template identity. Record occurrences use the completed sequence key.
+selectors followed by source-only predicates, an unselected CASE branch, and
+complete ambiguity context with the authored row-template identity. Record
+occurrences use the completed sequence key.
 
 Expected reports and CSV bytes were authored independently of the evaluator.
 Each replay compares the complete report and source ledger and publishes a
@@ -281,7 +281,7 @@ column verifications remain unsupported.
 
 `original_column_matches.json` holds sixteen independently authored complete reports for raw YAML and captured CSV. Every field and six successful exact CSV artifacts were enumerated and compared with actual reference Python execution before the candidate was exercised. Candidate observations never write expected truth. Only backend and runtime/engine versions are normalized.
 
-Search is unanchored unless the authored pattern supplies anchors. Missing values pass. Unicode scalar matching, lookahead and backreferences retain the portable contract. Wrong column kinds and invalid syntax are deferred until the owning converted column checkpoint, even for empty input; earlier conversion failures take precedence. A held record survives a later conversion failure. Compound cases pin an earlier invalid pattern and a repeated verification ID before a later pattern that exceeds compilation policy: the earlier REQ-0827/REQ-0398 remains deferred at its owning checkpoint. Later declaration vocabulary is still scanned before study capture, while unreachable payload compilation stops. Invalid pattern findings contain only the original pattern at the pattern path and keep earlier completed records.
+Search is unanchored unless the authored pattern supplies anchors. Missing values pass. Unicode scalar matching retains the portable contract; the lookahead and backreference cases fall outside the portable subset and are deferred invalid patterns. Wrong column kinds and invalid syntax are deferred until the owning converted column checkpoint, even for empty input; earlier conversion failures take precedence. A held record survives a later conversion failure. Compound cases pin an earlier invalid pattern and a repeated verification ID before a later pattern that exceeds compilation policy: the earlier REQ-0827/REQ-0398 remains deferred at its owning checkpoint. Later declaration vocabulary is still scanned before study capture, while unreachable payload compilation stops. Invalid pattern findings contain only the original pattern at the pattern path and keep earlier completed records.
 
 An additional reference assessment found that empty patterns fail schema minimum length before source capture; it is outside this checkpoint fixture. The unchanged negative-sex-code and negative-matches-bad-pattern documents have separately authored full reports. Existing committed expected CSV and error files are unchanged.
 
@@ -306,14 +306,14 @@ Ordinary-column wrappers compile handlers into the existing core `ConversionHand
 ## original_mapping_cut
 # Original mapping and cut truth
 
-These twenty-one authored specifications and complete reports were written from
+These twenty authored specifications and complete reports were written from
 REQ-0304, REQ-0306, REQ-0334, REQ-0343 through REQ-0347, REQ-0360,
 REQ-0361, REQ-0364, REQ-0709, REQ-0710, REQ-0714, REQ-1110 and REQ-1118.
 No candidate or reference evaluator authored an expected value. The truth owns
 source bytes, typed observations, declared zero/reached handler counts, failure
 identity and geometry, and repeated exact CSV publication. It covers roots,
-row templates, lazy cases and raw nested concatenation, both interval closures,
-numeric order above 2^53, empty inputs and typed dictionary literals.
+row templates, lazy cases, both interval closures, numeric order above 2^53,
+empty inputs and typed dictionary literals.
 
 Static collision and malformed boundary diagnostics additionally have complete
 independent core/adapter checks before study ports. Dictionary file capture is
@@ -413,12 +413,12 @@ The three previously documented forms now have these statuses:
 | `STR_CONTAINS(ID, '(')` | REQ-1244, position 17; predicate/position context | Matches the new complete original report; standalone syntax retains regex byte/reason |
 | `ID = DATE '2026-02-30'` | REQ-0188, position 10; predicate/position context | Matches the new complete original report; standalone syntax retains temporal kind/error |
 
-REQ-0191 owns invalid ESCAPE literals in `rules/operations/predicates.md`, and the
+REQ-0191 owns invalid ESCAPE literals in `rules/formulas.md`, and the
 locked predicate syntax fixture already preserves that native mapping. The
 unchanged Python reference was rerun on 2026-10-11 and still reports REQ-0188.
 The delegated decision in #1973 item 6 selects REQ-0191 for new shared execution.
 This disposes of the citation difference without rewriting either locked
-observation. REQ-0192 now explicitly describes parse-time `invalid_predicate`
+observation. REQ-0192 now explicitly describes parse-time `invalid_expression`
 under REQ-0188 and retained temporal cause/standalone context, preserving the
 original rejected date's complete report. Installed qualification remains a
 separate gate; this record does not turn a pending tuple into a pass.
@@ -612,11 +612,10 @@ length, columns and types. The retired warning-log entry was removed and every
 other field is unchanged.
 
 Native and installed Python/R tests compare the complete report, including
-source reads, all source and derived cells, all four checks and the actual two
+source reads, all source and derived cells, all three checks and the actual two
 published artifacts in report and primary order. Installed tests also retain
 their actual public reports after this comparison. These witnesses qualify this
-document; they do not close the remaining public API or producer graph report
-support gates.
+document; they do not close the remaining public API report support gates.
 
 ## window_diagnostics
 # Original window diagnostic truth

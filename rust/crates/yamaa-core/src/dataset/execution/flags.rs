@@ -3,7 +3,7 @@ use super::*;
 use crate::{
     bound_expression::Read,
     dataset::{Flag, FlagRead},
-    predicate::{self, Resolver},
+    expression::{ErrorKind, Resolver},
     value::Selection,
 };
 
@@ -18,7 +18,7 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
     let truth = flag
         .condition()
-        .evaluate(&mut Context {
+        .evaluate_truth(&mut Context {
             flag,
             table,
             candidate,
@@ -28,13 +28,18 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
             state,
         })
         .map_err(|error| match error.kind {
-            predicate::ErrorKind::Resolution { error, .. } => error,
-            predicate::ErrorKind::Regex(limit) => Box::new(regex_limit(limit)),
-            predicate::ErrorKind::Condition(_) => Box::new(ExecutionError::ScalarDiagnostic(
+            ErrorKind::Resolution { error, .. } => error,
+            ErrorKind::Condition(_) => Box::new(ExecutionError::ScalarDiagnostic(
                 crate::dataset::flag_condition_diagnostic(&error)
                     .expect("condition has a core flag projection"),
             )),
         })?;
+    if truth == crate::expression::Truth::Unknown {
+        state
+            .handlers
+            .record(&flag.missing_path(), HandlerKind::Missing)
+            .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))?;
+    }
     let value = flag.value(truth);
     Ok(own(value))
 }
@@ -60,6 +65,7 @@ impl<T: TableAccess + ?Sized> Resolver for Context<'_, '_, T> {
             FlagRead::Read(Read::Joined(read)) => Some(joined::read(
                 self.table,
                 read,
+                lookup::JoinSite::Uncounted(self.flag.condition().spec_path()),
                 self.assignment,
                 self.candidate,
                 self.plan,

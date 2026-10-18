@@ -30,11 +30,9 @@ use arrow_array::{Float64Array, Int64Array, RecordBatch, StringArray};
 use yamaa_adapters::{
     arrow_table::{self, ArrowTable},
     file_application::{self, Domain, RuntimePort},
-    file_graph::FileGraph,
     file_preparation::FileSpecification,
     host_resources::MemoryResolver,
     issue_rows::Issue,
-    producer_result::RootResult,
     specification_report::Identity,
     yaml_decode::decode_yaml,
 };
@@ -450,19 +448,12 @@ fn normalize(declaring: &str, written: &str) -> String {
     parts.join("/")
 }
 
-fn parents_of(doc: &Json) -> Vec<String> {
-    match doc.get("parents") {
-        Some(Json::String(parent)) => vec![parent.clone()],
-        Some(Json::Array(items)) => items
-            .iter()
-            .filter_map(|item| item.as_str().map(str::to_owned))
-            .collect(),
-        _ => Vec::new(),
-    }
+fn parent_of(doc: &Json) -> Option<String> {
+    doc.get("parent").and_then(Json::as_str).map(str::to_owned)
 }
 
 /// Collect the source declarations reachable from one specification,
-/// walking parents and schema-linked specifications (declarations only,
+/// walking its parent chain and schema-linked specifications (declarations only,
 /// never derivations — the same walk the conformance reader performs).
 /// A later declaration refines an earlier one field by field, so a child
 /// may add `types:` to a parent's path-only declaration.
@@ -480,7 +471,7 @@ fn collect_sources(
         return out;
     };
     let doc = yaml_json(&bytes);
-    for parent in parents_of(&doc) {
+    if let Some(parent) = parent_of(&doc) {
         let parent = normalize(spec, &parent);
         merge_sources(&mut out, collect_sources(case, &parent, seen));
     }
@@ -507,16 +498,6 @@ fn collect_sources(
                 _ => (),
             }
         }
-    }
-    // A schema-linked input is produced by its schema specification; the
-    // schema specification's own inputs are sources too.
-    let linked: Vec<String> = out
-        .values()
-        .filter_map(|info| info.schema.clone())
-        .collect();
-    for schema in linked {
-        let schema = normalize(spec, &schema);
-        merge_sources(&mut out, collect_sources(case, &schema, seen));
     }
     out
 }
@@ -876,8 +857,7 @@ impl TypedTable {
 
 /// Project functions execute in a host language runtime; the adapters
 /// test embeds none, so an invocation is refused if it is ever reached.
-/// Producer graphs of pure engine derivations never invoke it, and a
-/// project run that calls no project function never enters the port.
+/// A project run that calls no project function never enters the port.
 struct NoActivation;
 
 impl ActivationPort for NoActivation {
@@ -914,48 +894,34 @@ impl ActivationPort for NoActivation {
 
 /// A built entry, whichever route the application selected. Plain and
 /// project builds share the public domain result.
-enum Built {
-    Domain(Domain),
-    Producer(RootResult),
-}
+struct Built(Domain);
 
 impl Built {
     fn issues(&self) -> Vec<Issue> {
-        match self {
-            Built::Domain(domain) => domain.issues(),
-            Built::Producer(result) => result.issues().to_vec(),
-        }
+        self.0.issues()
     }
 
     fn output_present(&self) -> bool {
-        match self {
-            Built::Domain(domain) => domain.output_table().is_some(),
-            Built::Producer(result) => result.output_table().is_some(),
-        }
+        self.0.output_table().is_some()
     }
 
     /// The host tables as Arrow IPC bytes: the output when the build has
     /// one, and the run report every build holds.
     fn table_ipc(&self, slot: &str) -> Option<&[u8]> {
-        match (self, slot) {
-            (Built::Domain(domain), "output") => domain.output(),
-            (Built::Domain(domain), "report") => Some(domain.run_report()),
-            (Built::Producer(result), "output") => result.output(),
-            (Built::Producer(result), "report") => result.run_report(),
+        match slot {
+            "output" => self.0.output(),
+            "report" => Some(self.0.run_report()),
             _ => None,
         }
     }
 
     fn save(&mut self) -> Result<bool, file_application::FailedBuild> {
-        match self {
-            Built::Domain(domain) => domain.save(),
-            Built::Producer(result) => result.save(),
-        }
+        self.0.save()
     }
 }
 
-/// The runtime port for this route: plain and producer builds run in
-/// process, and so does a project build whose run calls no project
+/// The runtime port for this route: plain builds run in process, and so
+/// does a project build whose run calls no project
 /// function, because the engine then never enters the activation port.
 /// A project build that calls one refuses, exactly like the adapters'
 /// native port, because project functions need a host language runtime.
@@ -991,7 +957,7 @@ impl RuntimePort for MemoryRuntime<'_> {
         scope: Scope<'_>,
     ) -> Result<Built, file_application::Failure> {
         let mut run_scope = prepared.run_scope(None);
-        file_application::plain(prepared, &mut run_scope, self.identity(), scope).map(Built::Domain)
+        file_application::plain(prepared, &mut run_scope, self.identity(), scope).map(Built)
     }
 
     fn project(
@@ -1014,35 +980,7 @@ impl RuntimePort for MemoryRuntime<'_> {
             &[],
         )
         .map_err(|error| error.refusal().issues())?;
-        Domain::from_project(result, project, &run_scope).map(Built::Domain)
-    }
-
-    fn producer(
-        &mut self,
-        graph: &FileGraph,
-        scope: Scope<'_>,
-    ) -> Result<Built, file_application::Failure> {
-        let build = graph.build();
-        let mut run_scope = build.run_scope(None);
-        let mut activation = NoActivation;
-        let owned =
-            build.build_owned_reported(&mut run_scope, &mut activation, self.identity(), scope);
-        match yamaa_adapters::producer_result::prepare_owned_classified(
-            &owned,
-            self.identity(),
-            &[],
-        ) {
-            Ok(result) => Ok(Built::Producer(result)),
-            Err(error) => Err(vec![Issue {
-                phase: "engine".to_string(),
-                condition: "engine_rejected".to_string(),
-                requirement: None,
-                spec_paths: Vec::new(),
-                context: yamaa_adapters::json!({"detail": format!("producer result projection failed: {error:?}").chars().take(300).collect::<String>()}),
-                source_span: None,
-                operand_route: None,
-            }]),
-        }
+        Domain::from_project(result, project, &run_scope).map(Built)
     }
 }
 
@@ -1105,6 +1043,14 @@ fn sj(value: &Json) -> Sj {
     serde_json::from_str(&yamaa_adapters::json_wire::encode(value)).unwrap_or(Sj::Null)
 }
 
+/// Whether the case's benchmark.yaml declares a Define call.
+fn declares_define(case: &Path) -> bool {
+    fs::read(case.join("benchmark.yaml"))
+        .ok()
+        .and_then(|bytes| sj(&yaml_json(&bytes)).get("define").cloned())
+        .is_some_and(|define| !define.is_null())
+}
+
 /// The authored reason a case is excluded from the file route's own
 /// conformance plan (benchmark.yaml `conformance.excluded`), if any.
 fn conformance_exclusion(case: &Path) -> Option<String> {
@@ -1123,7 +1069,7 @@ struct OutputDecl {
 }
 
 /// Independent declared types and output declarations of one entry
-/// specification, composed over `parents` exactly like the conformance
+/// specification, composed over its `parent` chain exactly like the conformance
 /// runner's `declarations` (types and output paths, never derivations).
 fn declarations_for(
     case: &Path,
@@ -1148,15 +1094,7 @@ fn declarations_for(
             report: None,
             decimals: None,
         };
-        let parents: Vec<String> = match doc.get("parents") {
-            Some(Sj::String(one)) => vec![one.clone()],
-            Some(Sj::Array(list)) => list
-                .iter()
-                .filter_map(|parent| parent.as_str().map(str::to_owned))
-                .collect(),
-            _ => Vec::new(),
-        };
-        for parent in parents {
+        if let Some(parent) = doc.get("parent").and_then(Sj::as_str) {
             let parent_path = path
                 .parent()
                 .expect("specification has a directory")
@@ -1343,12 +1281,6 @@ impl BigUint {
         }
     }
 
-    fn bit(&self, index: u32) -> bool {
-        self.0
-            .get((index / 64) as usize)
-            .is_some_and(|limb| (limb >> (index % 64)) & 1 == 1)
-    }
-
     fn shr(&mut self, bits: u32) {
         let limbs = (bits / 64) as usize;
         if limbs >= self.0.len() {
@@ -1372,9 +1304,14 @@ impl BigUint {
         }
     }
 
-    fn add_one(&mut self) {
-        let mut carry: u128 = 1;
-        for limb in &mut self.0 {
+    /// Add 2^index, extending the limbs as needed.
+    fn add_power_of_two(&mut self, index: u32) {
+        let start = (index / 64) as usize;
+        if self.0.len() <= start {
+            self.0.resize(start + 1, 0);
+        }
+        let mut carry = u128::from(1u64 << (index % 64));
+        for limb in &mut self.0[start..] {
             let total = u128::from(*limb) + carry;
             *limb = total as u64;
             carry = total >> 64;
@@ -1419,8 +1356,9 @@ impl BigUint {
 
 /// REQ-0747 reported-precision projection of one binary64 value,
 /// mirroring the runner's `reported_table`: the exact integer ratio is
-/// rounded to `decimals` places with ties away from zero, then read
-/// back as a float. No tolerance anywhere.
+/// rounded to `decimals` places under REQ-0418's interval (ties, and near
+/// ties within 2^-26 below a scaled tie, away from zero), then read back
+/// as a float.
 fn project_reported(value: f64, decimals: u32) -> f64 {
     if !value.is_finite() {
         return value;
@@ -1449,14 +1387,15 @@ fn project_reported(value: f64, decimals: u32) -> f64 {
         scaled
     } else {
         let k = (-shift) as u32;
-        // remainder * 2 >= denominator  <=>  bit (k-1) of the scaled
-        // numerator is set (the denominator is 2^k).
-        let tie_up = scaled.bit(k - 1);
+        // With denominator 2^k, remainder / 2^k >= 1/2 - 2^-26 holds exactly
+        // when remainder + 2^(k-1) + 2^(k-26) reaches 2^k. Below k = 26 the
+        // integer remainder makes the 2^(k-26) term vanish.
         let mut quotient = scaled;
-        quotient.shr(k);
-        if tie_up {
-            quotient.add_one();
+        quotient.add_power_of_two(k - 1);
+        if k >= 26 {
+            quotient.add_power_of_two(k - 26);
         }
+        quotient.shr(k);
         quotient
     };
     let digits = rounded.to_decimal();
@@ -2147,11 +2086,13 @@ fn check_positive(
                 continue;
             }
             let mut truth_bytes = fs::read(&truth_path).unwrap();
+            // An entry below the case root saves beside its own file.
+            let target = normalize(&spec, declared);
             if *slot == "report" && artifact.ends_with(".csv") {
                 truth_bytes = frame_report_text(std::str::from_utf8(&truth_bytes).unwrap(), served)
                     .into_bytes();
             }
-            let published = backend.published(&format!("memory:/{declared}"));
+            let published = backend.published(&format!("memory:/{target}"));
             match &published {
                 None => findings.push(format!(
                     "{name}: entry {spec} save did not publish {declared}"
@@ -2362,14 +2303,25 @@ fn check_case(name: &str, case: &Path) -> CaseOutcome {
         findings.push(format!("{name}: no entries planned"));
         return CaseOutcome::Findings(findings);
     }
-    let runs: Vec<EntryRun> = entries
-        .into_iter()
-        .map(|call| {
-            let outcome = run_entry_caught(case, &call, &backend);
-            EntryRun { call, outcome }
-        })
-        .collect();
-    match expected_error(case) {
+    // A Define benchmark's expected failure belongs to its Define call, as in
+    // compare_example; its domain builds are compared as a positive case.
+    let expected = expected_error(case).filter(|_| !declares_define(case));
+    let identities = spec_identities(&case_files(case));
+    let mut runs = Vec::new();
+    for call in entries {
+        let mut outcome = run_entry_caught(case, &call, &backend);
+        // Callers order builds: a successful entry saves its artifacts before
+        // the next entry reads them, exactly as the file route's runners do.
+        if expected.is_none() {
+            if let EntryOutcome::Built(built) = &mut outcome {
+                if built.issues().is_empty() && matches!(built.save(), Ok(true)) {
+                    offer_saved(case, &call, &backend, &identities);
+                }
+            }
+        }
+        runs.push(EntryRun { call, outcome });
+    }
+    match expected {
         Some(want) => check_negative(name, &sj(&want), runs, &mut findings),
         None => check_positive(name, case, &backend, &served, runs, &mut findings),
     }
@@ -2377,6 +2329,31 @@ fn check_case(name: &str, case: &Path) -> CaseOutcome {
         CaseOutcome::Pass
     } else {
         CaseOutcome::Findings(findings)
+    }
+}
+
+/// Serve an entry's saved artifacts to later entries under the same
+/// declaring identities and spellings as the authored case files.
+fn offer_saved(
+    case: &Path,
+    call: &EntryCall,
+    backend: &Arc<MemoryResolver>,
+    identities: &[String],
+) {
+    let Ok((_, output)) = declarations_for(case, &call.specification) else {
+        return;
+    };
+    for declared in [&output.path, &output.report].into_iter().flatten() {
+        let target = normalize(&call.specification, declared);
+        let Some(bytes) = backend.published(&format!("memory:/{target}")) else {
+            continue;
+        };
+        let reference = format!("object:{target}");
+        for declaring in identities {
+            for spelling in spellings(declaring, &target) {
+                backend.insert(declaring, &spelling, &reference, Arc::clone(&bytes));
+            }
+        }
     }
 }
 
@@ -2465,14 +2442,6 @@ const EXEMPTIONS: &[(&str, &str)] = &[
     // filesystem paths. A memory resolver holds references and content,
     // not paths, so the judged properties do not exist on this route.
     (
-        "negative-path-absolute",
-        "expected diagnostic resource_path_not_relative judges a path spelling; also excluded from the file route's own conformance plan (authored: reference-only path history, #1905)",
-    ),
-    (
-        "negative-path-parent-escape",
-        "expected diagnostic resource_path_outside_project judges a path spelling; also excluded from the file route's own conformance plan (authored: reference-only path history, #1905)",
-    ),
-    (
         "negative-path-directory",
         "expected diagnostic resource_path_not_regular_file: a memory resolver holds no directories; the held reference resolves as content instead",
     ),
@@ -2483,9 +2452,9 @@ const EXEMPTIONS: &[(&str, &str)] = &[
 ];
 
 /// A representative subset across every mechanism class (inheritance,
-/// schema-linked producers, metadata documents, ODM, Parquet in and
-/// out, reported precision, log artifacts, negatives of several
-/// phases), for a fast signal while iterating.
+/// schema-linked stored artifacts and ordered entries, metadata documents,
+/// ODM, Parquet in and out, reported precision, log artifacts, negatives of
+/// several phases), for a fast signal while iterating.
 const REPRESENTATIVE: &[&str] = &[
     "adam-adsl-age-group",
     "adam-adlb-reported-precision",

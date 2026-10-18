@@ -178,16 +178,19 @@ impl Walk<'_> {
                         }
                     }
                 }
-                K::MappingCut
-                | K::StrContains
-                | K::StrConcat
-                | K::SourceBinding
-                | K::SourceLookup(_)
-                | K::JoinedSource(_) => {
+                K::MappingCut | K::SourceBinding | K::SourceLookup(_) | K::JoinedSource(_) => {
                     self.tagged(expr, Walker::Scalar);
                     self.recurse(walker, expr, Value);
                 }
-                K::FirstAvailable => self.recurse(walker, expr, Selection),
+                // An implicit join's `absent` count and a formula's or flag's
+                // `missing` count register at their own node.
+                K::Joined(_) | K::Compute | K::Function | K::ProjectFunction | K::Flag => {
+                    self.tagged(expr, Walker::Scalar)
+                }
+                K::FirstAvailable => {
+                    self.tagged(expr, Walker::Scalar);
+                    self.recurse(walker, expr, Selection);
+                }
                 K::Extreme | K::Imputation | K::Temporal | K::StrTemplate => {
                     self.recurse(walker, expr, Value)
                 }
@@ -204,13 +207,11 @@ impl Walk<'_> {
                 }
                 K::StrCase
                 | K::StrPad
-                | K::StrContains
                 | K::StrExtract
                 | K::StrReplace
                 | K::MappingCut
                 | K::Round
                 | K::Extreme
-                | K::StrConcat
                 | K::StrTemplate => self.recurse(walker, expr, Value),
                 K::Case => self.recurse(walker, expr, Branch),
                 _ => (),
@@ -221,11 +222,9 @@ impl Walk<'_> {
                     self.recurse(walker, expr, Value);
                 }
                 K::Extreme
-                | K::StrConcat
                 | K::Imputation
                 | K::StrTemplate
                 | K::Temporal
-                | K::StrContains
                 | K::StrExtract
                 | K::StrReplace
                 | K::StrPad
@@ -241,7 +240,6 @@ impl Walk<'_> {
                     self.recurse(walker, expr, Value);
                 }
                 K::Extreme
-                | K::StrConcat
                 | K::Imputation
                 | K::StrTemplate
                 | K::Temporal
@@ -259,13 +257,11 @@ impl Walk<'_> {
                     self.recurse(walker, expr, Value);
                 }
                 K::Extreme
-                | K::StrConcat
                 | K::Imputation
                 | K::StrTemplate
                 | K::Temporal
                 | K::StrCase
                 | K::StrPad
-                | K::StrContains
                 | K::StrExtract
                 | K::MappingCut
                 | K::Round => self.recurse(walker, expr, Value),
@@ -278,12 +274,10 @@ impl Walk<'_> {
                     self.recurse(walker, expr, Value);
                 }
                 K::Extreme
-                | K::StrConcat
                 | K::Imputation
                 | K::Temporal
                 | K::StrCase
                 | K::StrPad
-                | K::StrContains
                 | K::StrExtract
                 | K::StrReplace
                 | K::MappingCut
@@ -360,11 +354,9 @@ fn admit(plan: &ResolvedPlan, expr: ExprId, found: &mut Vec<ExprId>) {
         K::Case => follow(OperandRole::Branch, found),
         K::FirstAvailable => follow(OperandRole::Selection, found),
         K::Extreme
-        | K::StrConcat
         | K::StrTemplate
         | K::Temporal
         | K::Imputation
-        | K::StrContains
         | K::StrExtract
         | K::StrReplace
         | K::StrCase

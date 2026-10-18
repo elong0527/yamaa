@@ -58,4 +58,4 @@ columns:
         breaks: [0, 2, 22, 43]
         labels: [SCREENING, BASELINE, WEEK 2, WEEK 4, POST-TREATMENT]
         right: false
-        missing: null
+        missing: {literal: null}

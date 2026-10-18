@@ -22,9 +22,12 @@ State the condition as a test on age:
 flag: AGE >= 65
 ```
 
-or name it inside the flag:
+Name the condition inside the flag only beside the answers it gives, such
+as `N` for a subject younger than 65:
 
 ```yaml
 flag:
   condition: AGE >= 65
+  false_value: "N"
+  missing: "N"
 ```

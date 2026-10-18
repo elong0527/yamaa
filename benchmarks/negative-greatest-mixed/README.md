@@ -27,8 +27,7 @@ carry the actual last-visit date in the source and compare two date columns:
 ```yaml
 - name: LSTVSDT
   type: date
-  derivation:
-    source: DM.LSTVSDTC
+  derivation: DM.LSTVSDTC
 
 - name: LSTALVDT
   type: date

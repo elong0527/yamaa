@@ -32,7 +32,7 @@ the window that starts later:
 intermediates:
   - id: AWIN
     dataset: AWINDOW
-    key: STUDYID
+    key: [STUDYID]
     between: {value: ADY, lower: AWLO, upper: AWHI}
     order_by: [AWINDOW.AWLO]
     keep: last

@@ -32,8 +32,7 @@ table instead of the folder that holds it:
 
 ```yaml
 input:
-  LBREF:
-    path: input/lbref/limits.csv
+  LBREF: input/lbref/limits.csv
 ```
 
 A study reads the table it was approved against, not a folder that grows.

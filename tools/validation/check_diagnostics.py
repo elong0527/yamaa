@@ -6,7 +6,8 @@ needs no core cause or separate disposition record; the vocabulary and the core
 registry are the only sources. These are static ownership checks, not a claim
 that every registered condition has executable release coverage.
 Condition and requirement literals outside the canonical registry, the generated
-shipped schema and private unit tests are refused.
+shipped schema and private unit tests are refused. A requirement is a legacy
+REQ ID or a card ID, read from the shared rules model.
 """
 
 import argparse
@@ -15,18 +16,13 @@ import re
 from pathlib import Path
 
 from tools.paths import ROOT
+from tools.rules.model import load, prose_lines
 
-DEFINITION = re.compile(r"^\*\*(REQ-[0-9]{4,})\.\*\*", re.MULTILINE)
-REQUIREMENT = re.compile(r"REQ-[0-9]{4,}\Z")
 JSON_LITERAL = re.compile(r'"(?:[^"\\]|\\.)*"')
 RAW_START = re.compile(r'(?:br|cr|r)(#*)"')
 CHARACTER = re.compile(r"'(?:[^'\\\r\n]|\\(?:u\{[0-9a-fA-F_]+\}|[^\r\n]))'")
 REGISTRATION = re.compile(
     r"^  ([a-z][a-z0-9_]*): \{phases: \[([a-z_, ]+)\]\}$", re.MULTILINE
-)
-CAUSE = re.compile(
-    r'\s*(\w+) => \("([a-z_]+)", "([a-z_]+)", '
-    r'(Some\("REQ-[0-9]{4,}"\)|None)\),\s*'
 )
 HOST_CRATES = {"yamaa-adapters", "yamaa-python", "yamaa-r"}
 CORE_CRATES = {"yamaa-core"}
@@ -35,7 +31,7 @@ SHIPPED_SCHEMA = Path("rust/crates/yamaa-adapters/src/shipped_schema/data.rs")
 PRIVATE_TEST_MODULE = Path(
     "rust/crates/yamaa-adapters/src/file_define/publication_failure_tests.rs"
 )
-NULL_POLICY = Path("rules/execution/lifecycle.md")
+NULL_POLICY = Path("rules/columns.md")
 NULL_START = "<!-- normative-null-conditions:start -->"
 NULL_END = "<!-- normative-null-conditions:end -->"
 NULL_ENTRY = re.compile(r"- `([a-z][a-z0-9_]*)` \(`([a-z_]+)`\)")
@@ -56,6 +52,14 @@ NAMED_CONDITION = re.compile(
 )
 
 
+def cause_pattern(rules) -> re.Pattern:
+    """One registry cause; its requirement is a legacy or card ID, or None."""
+    return re.compile(
+        r'\s*(\w+) => \("([a-z_]+)", "([a-z_]+)", '
+        rf'(Some\("(?:{rules.identifier.pattern})"\)|None)\),\s*'
+    )
+
+
 def rule_condition_references(source: str) -> list[tuple[int, str]]:
     """Read actual condition columns and refusal prose, not arbitrary code spans.
 
@@ -64,28 +68,7 @@ def rule_condition_references(source: str) -> list[tuple[int, str]]:
     condition column explicitly declares its cells regardless of surrounding
     headings; field/operation columns and ordinary inline code remain opaque.
     """
-    source = re.sub(
-        r"<!--.*?-->",
-        lambda match: "\n" * match[0].count("\n"),
-        source,
-        flags=re.DOTALL,
-    )
-    lines = source.splitlines()
-    fence = None
-    for index, line in enumerate(lines):
-        marker = re.match(r"^ {0,3}(`{3,}|~{3,})", line)
-        if fence is None and marker:
-            fence = (marker[1][0], len(marker[1]))
-            lines[index] = ""
-        elif fence is not None:
-            if (
-                marker
-                and marker[1][0] == fence[0]
-                and len(marker[1]) >= fence[1]
-                and not line[marker.end() :].strip()
-            ):
-                fence = None
-            lines[index] = ""
+    lines = prose_lines(source, code=True)
     result = []
     condition_column = None
     for index, line in enumerate(lines):
@@ -296,20 +279,20 @@ def embedded_json_strings(source: str) -> list[str]:
 
 
 def diagnostic_literals(
-    source: str, registered: dict[str, set[str]]
+    source: str, registered: dict[str, set[str]], requirement: re.Pattern
 ) -> dict[int, list[str]]:
     """Keep exact Rust strings or JSON values with diagnostic spellings."""
     found = {}
     for line, literal in rust_literals(source):
         candidates = (
             [literal]
-            if REQUIREMENT.fullmatch(literal) or literal in registered
+            if requirement.fullmatch(literal) or literal in registered
             else embedded_json_strings(literal)
         )
         selected = [
             value
             for value in candidates
-            if REQUIREMENT.fullmatch(value) or value in registered
+            if requirement.fullmatch(value) or value in registered
         ]
         if selected:
             found.setdefault(line, []).extend(selected)
@@ -406,7 +389,10 @@ def null_conditions(
 
 
 def registry_errors(
-    root: Path, registered: dict[str, set[str]], nullable: set[tuple[str, str]]
+    root: Path,
+    registered: dict[str, set[str]],
+    nullable: set[tuple[str, str]],
+    cause_line: re.Pattern,
 ) -> list[str]:
     path = root / REGISTRY
     try:
@@ -422,7 +408,7 @@ def registry_errors(
     for line in block[1].splitlines():
         if not line.strip() or line.lstrip().startswith("//"):
             continue
-        cause = CAUSE.fullmatch(line)
+        cause = cause_line.fullmatch(line)
         if cause is None:
             errors.append(
                 f"core diagnostic registry: unrecognized cause: {line.strip()}"
@@ -461,29 +447,29 @@ def registry_errors(
 
 def violations(root: Path) -> list[str]:
     """Check every mapping and exact existing literals outside the canonical registry."""
-    defined = {
-        identifier
-        for path in (root / "rules").rglob("*.md")
-        for identifier in DEFINITION.findall(path.read_text(encoding="utf-8"))
-    }
+    rules = load(root)
+    defined = rules.identifiers()
     if not defined:
-        return ["no normative requirement definitions found"]
+        return ["no rule definitions found"]
     sources = sorted((root / "rust/crates").glob("*/src/**/*.rs"))
     if not sources:
         return ["no Rust crate sources found"]
     registered, errors = vocabulary(root)
     nullable, null_errors = null_conditions(root, registered)
     errors.extend(null_errors)
-    errors.extend(registry_errors(root, registered, nullable))
+    errors.extend(registry_errors(root, registered, nullable, cause_pattern(rules)))
     errors.extend(rule_vocabulary_errors(root, registered))
+    requirement = rules.identifier
     for path in sources:
         relative = path.relative_to(root).as_posix()
         crate = path.relative_to(root / "rust/crates").parts[0]
         source = path.read_text(encoding="utf-8")
         test_only = private_unit_test_source(root, Path(relative))
-        for number, literals in diagnostic_literals(source, registered).items():
+        for number, literals in diagnostic_literals(
+            source, registered, requirement
+        ).items():
             for identifier in literals:
-                if REQUIREMENT.fullmatch(identifier) and identifier not in defined:
+                if requirement.fullmatch(identifier) and identifier not in defined:
                     errors.append(
                         f"{relative}:{number}: undefined requirement {identifier}"
                     )

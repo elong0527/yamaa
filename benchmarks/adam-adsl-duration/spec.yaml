@@ -36,7 +36,8 @@ columns:
     type: int
     label: Duration in Whole Weeks
     derivation:
-      date_diff:
+      diff:
+        type: date
         start: STDT
         end: ENDT
         unit: week
@@ -47,7 +48,8 @@ columns:
     type: int
     label: Duration in Whole Months
     derivation:
-      date_diff:
+      diff:
+        type: date
         start: STDT
         end: ENDT
         unit: month

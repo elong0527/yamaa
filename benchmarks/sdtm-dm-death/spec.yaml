@@ -19,14 +19,14 @@ intermediates:
     filter: "DS.DSDECOD = 'DEATH' AND DS.DSSTDTC IS NOT NULL"
     order_by: [DS.DSSTDTC]
     keep: last
-    no_match: null
+    no_match: {literal: null}
 
   - id: DTHAE
     dataset: AE
     filter: "AE.AEOUT = 'FATAL' AND AE.AEENDTC IS NOT NULL"
     order_by: [AE.AEENDTC]
     keep: last
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: DOMAIN
@@ -68,12 +68,10 @@ columns:
     derivation:
       flag: "DSDTHDT IS NOT NULL OR AEDTHDT IS NOT NULL"
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID]
   - row_count:
       min: 5
       max: 5

@@ -19,6 +19,7 @@ intermediates:
   - id: RANKED_AE
     dataset: AE
     key: [STUDYID, USUBJID, AESEQ]
+    require_match: true
     derivations:
       # Numeric severity attached to each donor record before the
       # windows below partition them. The rank window reads it bare;
@@ -26,7 +27,7 @@ intermediates:
       SEVN:
         mapping:
           source: AE.AESEV
-          missing: null
+          missing: {literal: null}
           dict: {MILD: 1, MODERATE: 2, SEVERE: 3}
       # Competition rank of the event within its subject: worst numeric
       # severity first, later onset date first. Events tied on both
@@ -91,8 +92,6 @@ columns:
     derivation: RANKED_AE.SEV_SEQ
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
       min: 9
       max: 9

@@ -1,96 +1,184 @@
-# Derivation contracts
+# Rules
 
-Every contract indexed below is normative. Files have one semantic owner;
-requirements use permanent global IDs independent of that owner's filename.
-The schema owns shape, defaults, and structural constraints. Contracts state
-shared and operation-local behavior and failure conditions. The
-[directory-derived benchmark index](../benchmarks/README.md#benchmarks) accounts for
-authored examples, public host entries, and explicit conformance exclusions.
+> A yamaa specification has exactly one execution. Where it would have two,
+> yamaa fails instead of choosing.
 
-Read the relevant block, then follow its requirement links. The blocks are
-reading order, not execution phases; [execution/lifecycle](execution/lifecycle.md)
-owns the sequence of a run.
+These rules fix that execution. Read the principles below, then the rules of
+the area you are changing. Each rule is a card: an ID, a title that states the
+rule, a short statement, the conditions it raises and the evidence that tests
+it, followed by detail for implementers. The titles and statements are written
+for review; the detail is written for implementation and must agree with
+them.
 
-## Specification
+## Principles
 
-| Contract | Status | Owns |
+Every rule serves one of these principles. A proposal that conflicts with one
+changes the principle first.
+
+**P1. Everything is declared.** Columns, types, keys, joins, row construction,
+order and checks are written in the specification. Nothing is inferred from
+data, from file contents, from a same-named field or from a host default.
+Enforced by [SPEC-4](specification.md#spec-4),
+[INPUT-5](inputs.md#input-5),
+[OUTPUT-5](output.md#output-5) and
+[INPUT-1](inputs.md#input-1).
+
+**P2. Values never convert silently.** An operation never converts its inputs.
+A value converts once, to its column's declared type, by one table, and a
+failed conversion is a named failure. Enforced by
+[VALUE-2](values.md#value-2), [VALUE-3](values.md#value-3) and
+[INPUT-7](inputs.md#input-7).
+
+**P3. Missing is a value.** Missing is distinct from every string, number and
+the empty string; no text spells it, every type admits it, and every operation
+states what it does with it. Enforced by
+[FORMULA-4](formulas.md#formula-4),
+[COLUMN-10](columns.md#column-10),
+[FORMULA-24](formulas.md#formula-24) and
+[INPUT-8](inputs.md#input-8).
+
+**P4. Ambiguity fails.** Two values for one key, several matching records
+without a declared selection, an unmapped value or text that does not parse
+fails with a named condition instead of choosing. Enforced by
+[COLUMN-2](columns.md#column-2),
+[LOOKUP-10](lookup.md#lookup-10),
+[FORMULA-20](formulas.md#formula-20) and
+[NAME-13](names.md#name-13).
+
+**P5. Order is data.** Stored record order, construction order and declared
+order terms decide every tie. No operation reorders records or chooses an
+order of its own. Enforced by [ROW-7](rows.md#row-7),
+[VALUE-23](values.md#value-23),
+[FORMULA-19](formulas.md#formula-19) and
+[INPUT-2](inputs.md#input-2).
+
+**P6. Values are exact.** Integers are exact 64-bit values and floats are
+binary64 computed exactly as written. Nothing is rounded except where a
+specification declares it. Enforced by [VALUE-7](values.md#value-7),
+[VALUE-9](values.md#value-9),
+[FORMULA-26](formulas.md#formula-26) and
+[CSV-8](reference/csv.md#csv-8).
+
+**P7. Vocabularies are closed.** Verbs, grammars, functions, column types,
+storage profiles and conditions are closed lists. Extending one is a rule
+change. Enforced by [VALUE-1](values.md#value-1),
+[EXPR-1](expressions.md#expr-1),
+[FORMULA-18](formulas.md#formula-18) and
+[COLUMN-15](columns.md#column-15).
+
+**P8. Inheritance is deterministic.** Layers compose in one fixed order, and
+the resolved specification is the same whatever spelling its layers used.
+Enforced by [LAYER-3](inheritance.md#layer-3),
+[LAYER-5](inheritance.md#layer-5) and [LAYER-14](inheritance.md#layer-14).
+
+**P9. Faults are found before data.** A fault that does not depend on data
+fails during validation, before any input record is read. Enforced by
+[LAYER-12](inheritance.md#layer-12),
+[FILE-11](reference/files.md#file-11),
+[INPUT-1](inputs.md#input-1) and
+[VALUE-24](values.md#value-24).
+
+**P10. Artifacts are reproducible.** The same specification and inputs produce
+the same artifact bytes, and an artifact is published whole or not at all.
+Enforced by [CSV-3](reference/csv.md#csv-3),
+[OUTPUT-8](output.md#output-8) and
+[DEFINE-23](profiles/define-xml.md#define-23).
+
+## Rule files
+
+Language rules live in `rules/*.md`. Format and file-handling rules move to
+`rules/reference/`, and the submission, project-file and project-function
+profiles to `rules/profiles/`. During the 0.5.0 conversion, contracts not yet
+converted keep their `REQ-NNNN` requirements and are listed with the prefix
+`REQ`.
+
+| File | Prefix | Covers |
 | --- | --- | --- |
-| [Specification structure](specification/structure.md) | normative | Declare identifiers, columns, derivation coverage, and source notation. |
-| [Specification composition](specification/composition.md) | normative | Resolve inherited layers into one minimal, ordered specification. |
-| [Name binding](specification/binding.md) | normative | Resolve input datasets, constructed output columns, and ODM item reads. |
-| [Specification style](specification/style.md) | normative | Fix one written form of a specification and report departures without changing its meaning. |
-| [Project file](specification/project.md) | normative | Link each host's environment, declare a study's terminology and submission sections once, and check, run and package the specifications its sections list. |
+| [Specification structure](specification.md) | SPEC | Declare root fields, unique identifiers, column derivation coverage, internal columns, and ASCII source. |
+| [Inheritance](inheritance.md) | LAYER | Resolve inherited layers into one minimal, ordered specification. |
+| [Name binding](names.md) | NAME | Resolve input datasets, qualified and bare names, driver reads, and ODM item reads. |
+| [Values](values.md) | VALUE | Define column types, missing values, numbers, text, dates and datetimes, conversion, and order. |
+| [Inputs](inputs.md) | INPUT | Select input profiles, keep stored record order, and type source fields without inferring values. |
+| [Row construction](rows.md) | ROW | Construct output rows from declared input records or groups, or from the distinct keys of the base records. |
+| [Column derivation](columns.md) | COLUMN | Sequence a run, order column dependencies, complete each value's lifecycle, and handle conditions at their site. |
+| [Expressions](expressions.md) | EXPR | Register and dispatch expressions, give each one result type, restrict nesting, and copy, select and classify values. |
+| [Formulas](formulas.md) | FORMULA | Read the one closed expression language in its predicate, compute and aggregate fields, and evaluate it exactly as written. |
+| [Lookup and joins](lookup.md) | LOOKUP | Match declared keys, narrow and select records, answer absence, and scope aggregates to one relation. |
+| [Windows](windows.md) | WINDOW | Declare complete named windows and compute partitions, ranks, neighbors, carried values, and baseline flags. |
+| [Text](text.md) | TEXT | Pad, change case, interpolate templates, and extract and replace with portable regular expressions. |
+| [Dates and times](temporal.md) | TIME | Compute differences and study days, complete collected dates and times, report collected precision and imputation flags, and apply civil arithmetic. |
+| [Verification](verification.md) | CHECK | Apply assertions, severity, and grouped counts to completed values, and record what each run read, counted and checked in one run report. |
+| [Output](output.md) | OUTPUT | Select artifact columns, keys, profiles, and row order, and publish complete files atomically. |
+| [File resolution](reference/files.md) | FILE | Resolve declared local paths from their base, reach one regular file, and read one immutable snapshot per physical file. |
+| [CSV profile](reference/csv.md) | CSV | Read admitted CSV spellings and write canonical CSV bytes and display precision. |
+| [Parquet profile](reference/parquet.md) | PARQUET | Read and write the closed Parquet field and value mapping. |
+| [SAS source profiles](reference/sas.md) | SAS | Read SAS datasets and Transport v5/v8 through declared encoding and explicit numeric narrowing. |
+| [Schema language](reference/schema-language.md) | SCHEMA | Define schema notation, registries, constraints, canonical shorthand expansion, and the one spelling of a written value. |
+| [Submission metadata](profiles/submission.md) | SUB | Govern dataset and column metadata, origin, methods, and document references. |
+| [Controlled terminology](profiles/terminology.md) | CT | Declare codelists once and enforce the items each binding lists. |
+| [Define-XML](profiles/define-xml.md) | DEFINE | Compose study metadata into deterministic Define-XML 2.1 documents. |
+| [Dataset-JSON](profiles/dataset-json.md) | JSON | Write a dataset and its submission metadata as one deterministic Dataset-JSON 1.1 file. |
+| [SAS Transport](profiles/xpt.md) | XPT | Write a dataset as one deterministic SAS Transport version 5 file in the public record layout. |
+| [Project functions](profiles/functions.md) | FUNC | Resolve immutable runtimes and validate function inputs, results, and activation conformance. |
+| [Project file](profiles/project.md) | PROJECT | Link each host's environment, declare a study's terminology and submission sections once, and check, run and package the specifications its sections list. |
 
-## Values
+The [requirement index](https://elong0527.github.io/yamaa/reference/requirements/),
+[rules at a glance](https://elong0527.github.io/yamaa/reference/rules-summary/)
+and [schema fields](https://elong0527.github.io/yamaa/reference/schema-fields/)
+are generated from these files and `yaml/` on every docs build. The
+[glossary](reference/glossary.md) pins one meaning per shared clinical term; it
+is informative. Closed grammars are defined in
+[yaml/grammar/](../yaml/grammar/README.md) and rendered into their rules, and
+`yaml/conditions.yaml` registers every condition an implementation may raise
+with the phases that may raise it.
 
-| Contract | Status | Owns |
-| --- | --- | --- |
-| [Types and conversion](values/types.md) | normative | Define column types, missing normalization, compatibility, and conversion. |
-| [Numeric values](values/numbers.md) | normative | Define numeric representation, promotion, conversion, and overflow. |
-| [Text values](values/text.md) | normative | Define Unicode scalar identity, preservation, equality, and order. |
-| [Temporal values](values/temporal.md) | normative | Define dates, local civil datetimes, precision, canonical text, and order. |
+## Rule cards
 
-## Execution
+A rule file has an `# Title`, an optional introduction, and `##` topic
+headings that group cards. A card is written as:
 
-| Contract | Status | Owns |
-| --- | --- | --- |
-| [Execution lifecycle](execution/lifecycle.md) | normative | Sequence resolution, row construction, dependency evaluation, value completion, and output checks. |
-| [Row construction](execution/rows.md) | normative | Construct output rows from declared input records or groups. |
-| [Ordering](execution/ordering.md) | normative | Apply ordering terms, missing placement, stable ties, and final artifact order. |
-| [Local handlers](execution/handlers.md) | normative | Handle conditions at their expression or conversion site and report substitutions. |
-| [Verification](execution/verification.md) | normative | Apply assertions, severity, and grouped counts to completed values, and record what each run read, counted and checked in one run report. |
+```markdown
+<a id="layer-3"></a>
 
-## Operations
+### LAYER-3. Layers form one chain contributed from its root ancestor to the entry, later layers taking precedence
 
-| Contract | Status | Owns |
-| --- | --- | --- |
-| [Expression evaluation](operations/expressions.md) | normative | Register and dispatch expressions, restrict nesting, and define scalar selection. |
-| [Predicates](operations/predicates.md) | normative | Evaluate the closed Boolean language using three-valued logic. |
-| [Numeric computation](operations/computation.md) | normative | Evaluate written arithmetic formulas without reassociation or presentation rounding. |
-| [Aggregation](operations/aggregation.md) | normative | Reduce eligible records in one of the three permitted key scopes. |
-| [Lookup and joins](operations/lookup.md) | normative | Match declared keys, narrow records, select a result, and answer absence. |
-| [Windows](operations/windows.md) | normative | Declare complete named windows and compute partitions, ranks, neighbors, and baseline selections. |
-| [Text operations](operations/text.md) | normative | Apply casing, inline mapping, templates, and portable regular expressions. |
-| [Temporal operations](operations/temporal.md) | normative | Compute calendar differences, study days, date completion, and precision. |
-| [Project functions](operations/functions.md) | normative | Resolve immutable runtimes and validate function inputs, results, and activation conformance. |
+Starting at the entry file, each layer's `parent` names the next layer up the
+chain, which ends at a layer without a parent. ...
 
-## Storage
+Fails: `inheritance_cycle`.
+Evidence: `schema-inheritance`.
 
-| Contract | Status | Owns |
-| --- | --- | --- |
-| [Resource resolution](storage/resources.md) | normative | Confine declared source paths and read one immutable snapshot per physical file. |
-| [Source ingestion](storage/ingestion.md) | normative | Select input profiles and assign source field types without inferring values. |
-| [CSV profile](storage/csv.md) | normative | Read admitted CSV spellings and write canonical CSV bytes and display precision. |
-| [Parquet profile](storage/parquet.md) | normative | Read and write the closed Parquet field and value mapping. |
-| [SAS source profiles](storage/sas.md) | normative | Read SAS datasets and Transport v5/v8 through declared encoding and explicit numeric narrowing. |
-| [Artifact publication](storage/publication.md) | normative | Select artifact columns and profiles and publish complete files atomically. |
+For a study entry whose parent is a compound layer whose parent is an ...
+```
 
-## Submission
+- **ID**: the file's prefix and a number. Numbers are assigned once, in the
+  order cards are added, and are never reused when a card is deleted. The
+  anchor is the lowercase ID.
+- **Title**: one sentence without a final period that states the rule.
+- **Statement**: the first paragraph, at most 90 words. It is what a reviewer
+  approves.
+- **Fails**: the registered conditions the rule raises, if any.
+- **Evidence**: benchmarks, by directory name, and repository files such as
+  tests and grammar vectors that exercise the rule.
+- **Detail**: everything after those lines. Detail is normative, holds edge
+  cases, tables and examples, and must agree with the statement.
+- **Replaces**: during the 0.5.0 conversion only, the `REQ-NNNN` IDs the card
+  absorbs, so existing citations keep resolving. It is removed before release.
 
-| Contract | Status | Owns |
-| --- | --- | --- |
-| [Submission metadata](submission/metadata.md) | normative | Govern dataset and column metadata, origin, methods, and document references. |
-| [Controlled terminology](submission/terminology.md) | normative | Declare codelists once and validate their bindings and allowed values. |
-| [Define-XML](submission/define-xml.md) | normative | Compose study metadata into deterministic Define-XML 2.1 documents. |
-| [Dataset-JSON](submission/dataset-json.md) | normative | Write a dataset and its submission metadata as one deterministic Dataset-JSON 1.1 file. |
-
-## Reference
-
-| Contract | Status | Owns |
-| --- | --- | --- |
-| [Schema language](reference/schema-language.md) | normative | Define schema notation, registries, constraints, and canonical shorthand expansion. |
+Cite a rule by ID, linked to its anchor. Normative `must`, `must not`,
+`should` and `may` have their usual requirement meanings. Rules state behavior,
+not rationale; rationale belongs in pull requests and the documentation.
 
 ## Terminology
 
-One term per concept across all rules, schema comments, and messages
-(folded here from the former `yaml/agents.md`):
+One term per concept across all rules, schema comments, and messages:
 
 - **specification** -- the YAML file under review. `study` and `document` stay
   project-level (resources and submission contracts), never names for the YAML.
 - **project file** -- the one study-level YAML a caller passes: it links each
   host language's **environment file**, which declares only that host's lock
   and project functions, and it declares the study's terminology and
-  submission sections ([Project file](specification/project.md)).
+  submission sections ([Project file](profiles/project.md)).
 - **input dataset** / **output dataset** -- state the role whenever it matters.
   Bare `dataset` appears only as a key name. `table` means a documentation
   table, never data.
@@ -104,8 +192,8 @@ One term per concept across all rules, schema comments, and messages
   (binding notation). Never `row_class.` or `root_class.`.
 - **driver** -- the source whose records drive row construction: a row
   template's `dataset`, naming an input dataset or an eligible named
-  intermediate ([REQ-0034](execution/rows.md#req-0034)), or root `base`
-  without row templates ([REQ-0042](execution/rows.md#req-0042)). Either
+  intermediate ([ROW-1](rows.md#row-1)), or root `base`
+  without row templates ([ROW-8](rows.md#row-8)). Either
   defaults to the single declared input when omitted. The term is allowed
   in normative text, schema descriptions, and user-facing messages.
 
@@ -123,42 +211,14 @@ values, so one name never covers two treatments:
 (`compute`, `aggregate`), never a predicate. `then` and `otherwise` hold
 values (`case`), never predicates.
 
-## Requirement identity
+## Changing a rule
 
-Requirements are defined once as `**REQ-0001.**`. Give every requirement a
-permanent global `REQ-NNNN` ID and list its owning contract in this index.
-IDs remain stable across
-file moves and section reordering. Allocate new IDs above the largest assigned
-number; never renumber or reuse a retired ID. Delete retired rule blocks;
-Git history preserves their former definitions and retirement decisions.
-Historical citations and retirement records remain in Git history.
-Normative `must`, `must not`, `should`, and `may` have their usual requirement
-meanings.
-Every contract has Requirements; contracts with distinct failure rules also
-have Error conditions. Topic subsections group related rules.
-
-The [requirement index](https://elong0527.github.io/yamaa/reference/requirements/) links each active ID
-to the current owning contract, derived from its definition. The docs build
-renders it from the contracts; it is not committed.
-
-The validation-condition registry (`yaml/conditions.yaml`) maps every condition an
-implementation may raise to the phases that may raise it. It no longer carries
-the old diagnostic family tags (`R001`, etc.). Author-facing citations use
-current REQ IDs; historical citations remain in Git history.
-
-[Schema fields](https://elong0527.github.io/yamaa/reference/schema-fields/) is rendered the same way
-from the current schema: it lists shapes and defaults and links to semantic
-owners. Edit the schema or owning contract, never the table.
-The [glossary](reference/glossary.md) pins one meaning per shared clinical
-term used across the contracts. It is informative, not normative: it states
-what the terms mean and adds no requirements.
-Closed syntax remains defined in [grammar/](../yaml/grammar/README.md), with
-rendered blocks in the owning contracts and shared R/Python parser vectors.
-
-## Admission and maintenance
-
-Proposals stay outside this index until schema shape, portable behavior,
-errors, and representative examples are complete. Unspecified behavior must
-be recorded explicitly rather than inferred. An editorial move must preserve
-behavior and failure conditions; a semantic change needs its own conformance
-evidence.
+- A change to a card's title or statement changes the language and needs the
+  maintainer's approval. A change to detail, evidence or tests needs ordinary
+  review.
+- New behavior needs a card with evidence. A failure needs a registered
+  condition named in `Fails`.
+- An editorial change keeps behavior and failure conditions; a semantic change
+  needs its own conformance evidence.
+- Behavior the rules do not specify stays an open question in an issue. An
+  implementation's behavior is never the specification.

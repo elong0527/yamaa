@@ -26,7 +26,7 @@ Expected benchmark data and Parquet fixtures are authored truth. Preserve their
 bytes when changing implementation or repository structure.
 
 Layer composition and null handling follow the
-[composition contract](../rules/specification/composition.md).
+[composition contract](../rules/inheritance.md).
 
 The `yamaa` facade crate forwards the adapter's independent `yaml`, `parquet`,
 `readstat` and `odm` Cargo features, all enabled by default. Python wheels,
@@ -124,7 +124,7 @@ silently narrowed.
 ## Resolved specification artifact
 
 `resolved_artifact::ResolvedArtifact` is an owned inspection format produced from
-the same prepared documents and producer graph used for direct compilation.
+the same prepared documents used for direct compilation.
 Version 1 serializes as compact UTF-8 JSON with these envelope fields:
 
 | Field | Meaning |
@@ -135,11 +135,12 @@ Version 1 serializes as compact UTF-8 JSON with these envelope fields:
 | `replay` | `inspection_only`. |
 | `entry` | Canonical identity of the requested specification entry. |
 | `project` | Explicit project identity, or null when absent. |
-| `entries` | Root first, then linked producer entries in preparation order. |
+| `entries` | Exactly one element: the requested entry. |
 
-Each entry contains `schema_version`, its complete composed normalized
-`specification`, `layers` in composition postorder, `origins`, `mapping_order`,
-`resources`, and `producers` mapping input dataset names to their producer entry.
+The entry contains `schema_version`, its complete composed normalized
+`specification`, `layers` in composition postorder, `origins`, `mapping_order`
+and `resources`. A linked producing specification is a `producer_schema`
+resource of the entry, never an entry of its own.
 Named mapping-dictionary references remain in the specification; preparation
 admits those resources as usual, and their declaring locations are recorded.
 The artifact carries no reusable executable code or activated environment.
@@ -160,7 +161,7 @@ named dictionaries and every inherited-parent reference. Each record contains
 `spec_path`, `role`, `owning_entry`, `declaring_source`, `relative_to`,
 `base_source`, `written`, and `location: {kind: local, path: ...}`. The composed
 selector governs inherited input paths and schema links; output is atomic.
-Every producer selects its own linked entry. Locations follow the existing
+Locations follow the existing
 lexical local-path policy, including absolute and parent-relative spellings.
 They state neither existence nor file-access authority. Environment internals
 are admitted through the usual environment owner and are outside this domain
@@ -333,7 +334,7 @@ pub enum SaveOutcome { Saved, NothingToSave }  // #[non_exhaustive]
   execution and conversion through the same public tables. `build` is exactly
   one `compile` followed by one `run`, with the same events, so there is one
   admission and evaluation route. The plan wraps the existing prepared values
-  of all three routes rather than a second plan type.
+  of both routes, plain and project, rather than a second plan type.
 - A refused compilation still returns a `Plan`: `report` holds its
   diagnostics, and each run returns that same failed `Build`, with its
   retained preparation sources, without resource access. Only cancellation
@@ -504,12 +505,12 @@ git/path is the distribution route.
 ### Host-usage mapping
 
 Every adapters or core module the two host crates used before they moved onto
-the facade (28 adapters modules and 11 core modules, counted from the host
-sources on 2026-10-16) maps to a facade item or is marked internal. The host
-crates now depend only on the facade and use none of these modules directly;
-the facade itself uses 33 adapters modules and 17 core modules, counted from
-`crates/yamaa/src` on 2026-10-18. Any module not listed here is internal by
-default.
+the facade (24 adapters modules and 11 core modules, counted from the host
+sources on 2026-10-16, less the removed producer-route modules) maps to a facade
+item or is marked internal. The host crates now depend only on the facade and
+use none of these modules directly; the facade itself uses 29 adapters modules
+and 17 core modules, counted from `crates/yamaa/src` after the producer route
+was removed. Any module not listed here is internal by default.
 
 | Module the hosts used | Facade disposition |
 | --- | --- |
@@ -519,19 +520,15 @@ default.
 | `callback` | Facade -- the `ProjectFunctions` trait and `FunctionError`; `BoundaryError`/`CallbackError` convert into `FunctionError`. |
 | `file_application` | Facade -- `Engine::check`, `Engine::build`, `Engine::compile` and `Plan::run`; `Application` and `ApplicationError` are internal. |
 | `file_define` | Facade -- `Engine::define` and `DefineBuild::save`; its `Failure` converts into `Error`. |
-| `file_graph` | Internal -- producer graph state behind `Build` and `Plan`; each run borrows its build owner. |
 | `file_preparation` | Internal -- `FileSpecification` is a prepared internal form behind `Build` and `Plan`. |
-| `file_producer_build` | Internal -- attempt state behind `Build`. |
 | `file_project` | Internal -- project state behind `Build` and `Plan`. |
 | `file_resources` | Internal -- its `Error` converts into `ResolverFailure`/`Error::Internal`. |
 | `file_workflow` | Internal -- `SelectionError` converts into diagnostics/`Error`. |
 | `host_resources` | Facade -- the `ResourceResolver` trait, `MemoryResolver`, and the resolver request/reply/failure types. |
 | `ipc_table` | Internal -- `TableError` converts into the facade `TableError`; `Table::ipc` is the public IPC route. |
 | `issue_rows` | Facade -- `Diagnostic` and `Report` are the public form of `Issue`; the module itself is internal. |
-| `producer_attempt` | Internal -- host-failure traversal; failures surface as `Error::Host`. |
-| `producer_result` | Facade -- `Build` is its public form (`project_owned` stays an internal constructor). |
 | `project_application` | Internal -- selection failures convert into diagnostics. |
-| `project_attempt` | Internal -- same disposition as `producer_attempt`. |
+| `project_attempt` | Internal -- host-failure traversal; failures surface as `Error::Host`. |
 | `project_lock` | Facade -- `LockFinding`/`LockReason` are the public lock-finding types and `decode_renv_lock` is the public renv admission; lock-kind detection stays internal (the engine supplies `LockKind` through `LockContext`). |
 | `project_report` | Internal -- `build_result` runs behind `Build`; `Classified` stays an internal constructor. |
 | `project_run` | Facade -- `Plan` wraps the prepared project route, `PreparedRun` included (#2821); `Attempt` and `PreparedRun` stay internal. |
@@ -620,7 +617,7 @@ Key files: `rust/crates/yamaa-core/src/dataset/execution/mod.rs`,
 | `Expression::Source(column)` | `execution/mod.rs` (`evaluate_leaf`) | `safe` | Reads `candidate.members[0]` in the active partition; cell errors translate `source_row` to `base_i + local_row`. |
 | `Expression::SourceBinding` | `execution/mod.rs` | `safe-with-combine-step` | Row evaluation delegates to `source` or returns the `absent` literal; `HandlerCounter` (`absent`, `multiple_matches`) combines across partitions by checked addition. |
 | `Expression::FirstAvailable` | `execution/mod.rs` (`evaluate_first_available`) | `safe` (row-local operands) / `safe-with-combine-step` (with `Collect` or handlers) | Evaluates operands in authored order per candidate; combines handler counts and any per-key `SelectionRead::Collect` state. |
-| Pure scalar and string/temporal expressions (`Compute`, `Round`, `Extreme`, `StrConcat`, `StrContains`, `StrTemplate`, `StrExtract`, `StrCase`, `StrPad`, `Imputation`, `Temporal`, `Flag`, `Case`) | `execution/scalar.rs`, `numeric.rs`, `flags.rs`, `imputation.rs`, `str_*.rs`, `case_predicates.rs`, `conversion.rs` | `safe` (pure) / `safe-with-combine-step` (with recovery handlers or `Collect`) | Value computation is row-local when bindings are `Read::Column` or `Read::Source`. Recovery counts (`Missing`, `Invalid`, `Unconvertible`) in `HandlerCounter` combine by checked sum in registration order. |
+| Pure scalar and string/temporal expressions (`Compute`, `Round`, `Extreme`, `StrTemplate`, `StrExtract`, `StrCase`, `StrPad`, `Imputation`, `Temporal`, `Flag`, `Case`) | `execution/scalar.rs`, `numeric.rs`, `flags.rs`, `imputation.rs`, `str_*.rs`, `case_predicates.rs`, `conversion.rs` | `safe` (pure) / `safe-with-combine-step` (with recovery handlers or `Collect`) | Value computation is row-local when bindings are `Read::Column` or `Read::Source`. Recovery counts (`Missing`, `Invalid`, `Unconvertible`) in `HandlerCounter` combine by checked sum in registration order. |
 | `Expression::Lookup`, `Expression::RowLookup`, `Expression::SourceLookup` | `execution/lookup.rs` | `safe` (no selection handler) / `safe-with-combine-step` (with `selection`) | Matches candidate keys or driver fields against the immutable whole-table `secondary[lookup.source]`. When `selection` resolves `count > 1`, `HandlerKind::MultipleMatches` combines in `HandlerCounter`. |
 | `Expression::Joined`, `Expression::JoinedSource` | `execution/joined.rs`, `lookup.rs` | `safe-with-combine-step` (`Secondary`) / `global` (`Primary`) | Secondary joins scan immutable `secondary[index]` and combine `MultipleMatches` handler counts. Primary self-joins (`AggregateSource::Primary`) scan all primary rows and are `global`. |
 | `Expression::Collect`, `Expression::Count`, `Expression::Reduce` | `execution/key_grain.rs`, `table_reduction.rs` | `safe` (`RowMode::Records`) / `safe-with-combine-step` (grouped/key-grain) | In `Records` mode `candidate.members` has length 1. Across partitions in `Keys`/`Groups` mode, `Count` sums `usize`, `Reduce` merges `Sum`/`Mean`/`Min`/`Max` accumulators, and `Collect` merges distinct present `Key` sets plus the best `(order_by, global_source_row)` extremum and `MultipleMatches` handler count. |
@@ -672,7 +669,7 @@ Key files: `rust/crates/yamaa-core/src/dataset/execution/windows.rs`,
 
 | Operation / construct | Location | Classification | Partition state and notes |
 | --- | --- | --- | --- |
-| `Expression::Window`, `Expression::ContextWindow` (`WindowKind::BaselineFlag`, `RowValue`, `PreviousNonMissing`, `Locf`, `RowNumber`, `Competition`, `Dense`) | `execution/windows.rs`, `row_windows.rs` | `global` (arbitrary partitions) / `safe-with-combine-step` (only when input partitions are disjoint on non-empty `window.group_by` and preserve within-group order) | `windows::Run::new_schema` partitions the entire candidate relation by `window.group_by` (or places all rows into one group when `group_by` is empty), sorts members by `window.order_by` with global candidate index tie-breaking (`left.cmp(&right)`), evaluates `window.filter` in sorted order, and computes ranks, row-offset lookups, carry-forward values, or `BaselineFlag` / `BaselineAmbiguity`. Over arbitrary partitions, all window kinds are `global`. |
+| `Expression::Window`, `Expression::ContextWindow` (`WindowKind::BaselineFlag`, `RowValue`, `Locf`, `RowNumber`, `Competition`, `Dense`) | `execution/windows.rs`, `row_windows.rs` | `global` (arbitrary partitions) / `safe-with-combine-step` (only when input partitions are disjoint on non-empty `window.group_by` and preserve within-group order) | `windows::Run::new_schema` partitions the entire candidate relation by `window.group_by` (or places all rows into one group when `group_by` is empty), sorts members by `window.order_by` with global candidate index tie-breaking (`left.cmp(&right)`), evaluates `window.filter` in sorted order, and computes ranks, row-offset lookups, carry-forward values, or `BaselineFlag` / `BaselineAmbiguity`. Over arbitrary partitions, all window kinds are `global`. |
 | `ordering::apply` (`DatasetPlan::output_order`) | `execution/ordering.rs`, `execution/mod.rs` | `global` (or `safe-with-combine-step` via global k-way merge after verification) | Runs after `OutputKeys` and `Verification` succeed. Sorts accepted rows by `output_order` terms using pre-sort global candidate index `left.cmp(&right)` as the final tie-breaker. |
 
 #### 6. Output key checks and verification `Check` variants
@@ -695,7 +692,7 @@ Key files: `rust/crates/yamaa-core/src/dataset/mod.rs`,
 | `Check::Range { min, max }` | Column (`execution/mod.rs`, `dataset_checks.rs`) | `safe-with-combine-step` | Row-local numeric range comparison against `min`/`max`; `CheckRecord` combines across partitions. |
 | `Check::MaxLength(usize)` | Column (`execution/mod.rs`, `dataset_checks.rs`) | `safe-with-combine-step` | Row-local Unicode scalar count check `text.chars().count() > max`; `CheckRecord` combines across partitions. |
 | `Check::WideMaxLength(RowCountBound)` | Column (`execution/mod.rs`, `dataset_checks.rs`) | `safe-with-combine-step` | Row-local `max.compare_count(text.chars().count()) == Ordering::Less`; `CheckRecord` combines across partitions. |
-| `Check::Matches(Pattern)` | Column (`execution/mod.rs`, `dataset_checks.rs`) | `safe-with-combine-step` | Row-local regex search with per-cell `Resource::RegexWork` step guard; `CheckRecord` combines across partitions (or aborts at the first `ScopedLimit`). |
+| `Check::Matches(Pattern)` | Column (`execution/mod.rs`, `dataset_checks.rs`) | `safe-with-combine-step` | Row-local linear-time regex search with no step budget; `CheckRecord` combines across partitions. |
 | `Check::InvalidDiagnostic(Diagnostic)` | Column / `Verification` (`execution/mod.rs`) | `safe` | Data-independent deferred diagnostic; fires at its declaration checkpoint with the prefix `records` accumulated before that checkpoint. |
 | `Check::InvalidDeclaration { code, reason }` | Column / `Verification` (`execution/mod.rs`) | `safe` | Data-independent deferred compiler finding; fires at its declaration checkpoint with the prefix `records` accumulated before that checkpoint. |
 | `Check::PredicateDeclaration(BoundPredicate)` | `Verification` (`execution/verification.rs`) | `safe` | Schema-only sample validation (`validate_predicate`); reads no candidate rows and emits no `CheckRecord`. |

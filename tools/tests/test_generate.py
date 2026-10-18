@@ -138,14 +138,16 @@ class DashboardTests(unittest.TestCase):
         ).decode("ascii")
         self.assertIn("Public entries: Python and R.", active)
         self.assertIn("Passing coverage requires an installed inventory.", active)
-        excluded = generate.render_benchmark(
-            generate.BENCHMARKS / "negative-path-absolute"
-        ).decode("ascii")
-        self.assertIn(
-            "Public conformance excluded: reference-only path history (#1905)", excluded
-        )
+        with tempfile.TemporaryDirectory() as temporary:
+            case = Path(temporary) / "negative-unknown-window"
+            shutil.copytree(generate.BENCHMARKS / case.name, case)
+            metadata = yaml.safe_load((case / "benchmark.yaml").read_text())
+            metadata["conformance"] = {"excluded": "a reviewed reason"}
+            (case / "benchmark.yaml").write_text(yaml.safe_dump(metadata))
+            excluded = generate.render_benchmark(case).decode("ascii")
+        self.assertIn("Public conformance excluded: a reviewed reason", excluded)
 
-    def test_mapping_uses_define_document_beside_the_benchmark(self):
+    def test_mapping_uses_project_codelists_beside_the_benchmark(self):
         benchmark = generate.BENCHMARKS / "sdtm-dm-metadata"
         page = generate.render_benchmark(benchmark).decode("ascii")
         mapping = page.split('id="mapping-spec"', 1)[1].split('role="tabpanel"', 1)[0]
@@ -743,26 +745,23 @@ class DashboardTests(unittest.TestCase):
         # RACE is a DM column: only the producer's columns can label it.
         self.assertIn('<th scope="col" class="derived" title="Race">RACE</th>', page)
 
-    def test_linked_specs_ignores_non_list_parents(self):
-        # A malformed spec whose parents is a scalar, null or a mapping
-        # names no parents. Iterating it raised TypeError, which escapes
-        # main's per-benchmark (OSError, ValueError, YAMLError) handler
-        # and aborts the whole dashboard build.
-        for parents in (42, None, 1.5, {"spec.yaml": True}):
-            with self.subTest(parents=parents):
-                self.assertEqual(generate.linked_specs({"parents": parents}), [])
-        self.assertEqual(generate.linked_specs({"parents": "a.yaml"}), ["a.yaml"])
-        self.assertEqual(
-            generate.linked_specs({"parents": ["a.yaml", 42, ""]}), ["a.yaml"]
-        )
+    def test_linked_specs_ignores_a_parent_that_is_not_a_path(self):
+        # A malformed spec whose parent is a number, null, a list, a
+        # mapping or empty names no parent. Iterating it raised TypeError,
+        # which escapes main's per-benchmark (OSError, ValueError,
+        # YAMLError) handler and aborts the whole dashboard build.
+        for parent in (42, None, 1.5, "", ["a.yaml"], {"spec.yaml": True}):
+            with self.subTest(parent=parent):
+                self.assertEqual(generate.linked_specs({"parent": parent}), [])
+        self.assertEqual(generate.linked_specs({"parent": "a.yaml"}), ["a.yaml"])
 
-    def test_scalar_parents_and_columns_do_not_abort_rendering(self):
+    def test_scalar_parent_and_columns_do_not_abort_rendering(self):
         source = generate.BENCHMARKS / "sdtm-dm-race-ethnicity"
         with tempfile.TemporaryDirectory() as directory:
             benchmark = (Path(directory) / source.name).resolve()
             shutil.copytree(source, benchmark)
             for name, key in (
-                ("spec_dm.yaml", "parents"),
+                ("spec_dm.yaml", "parent"),
                 ("spec_suppdm.yaml", "columns"),
             ):
                 path = benchmark / name
@@ -803,7 +802,11 @@ class DashboardTests(unittest.TestCase):
         )
         self.assertEqual(
             snippets["Python"],
-            'import yamaa\n\nyamaa.spec("spec_dm.yaml").run().output\nyamaa.spec("spec_suppdm.yaml").run().output\n',
+            'import yamaa\n\nyamaa.spec("spec_dm.yaml").run().save()\nyamaa.spec("spec_suppdm.yaml").run().output\n',
+        )
+        self.assertEqual(
+            snippets["R"],
+            'library(yamaa)\n\nyamaa_spec("spec_dm.yaml")$run()$save()\nyamaa_spec("spec_suppdm.yaml")$run()$output\n',
         )
         snippets = dict(
             generate.benchmark_code(generate.BENCHMARKS / "schema-functions")

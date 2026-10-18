@@ -1,7 +1,7 @@
 {
   "artifacts": [
     {
-      "byte_length": 808,
+      "byte_length": 731,
       "columns": [
         "ARTIFACT",
         "KIND",
@@ -18,7 +18,7 @@
         "KEYS",
         "DETAILS"
       ],
-      "content": "ARTIFACT,KIND,SPEC_PATH,NAME,ID,TARGET,RULE,SEVERITY,OUTCOME,CONDITION,COUNT,TOTAL,KEYS,DETAILS\nadsl.csv,run,output,,,,,,succeeded,,3,,,{}\nadsl.csv,input,input.DM,DM,,,,,,,3,,,\"{\"\"bytes\"\":66,\"\"path\"\":\"\"input/dm.csv\"\",\"\"profile\"\":\"\"csv\"\"}\"\nadsl.csv,rows,base,DM,,,,,,,3,3,,{}\nadsl.csv,column,columns.USUBJID,USUBJID,,,,,,,0,3,,\"{\"\"max_length\"\":3}\"\nadsl.csv,column,columns.AGE,AGE,,,,,,,0,3,,{}\nadsl.csv,check,columns.AGE.verifications[0].not_missing,not_missing,,AGE,REQ-0375,error,held,,0,3,,{}\nadsl.csv,check,columns.AGE.verifications[1].range,range,,AGE,REQ-0377,warning,violated,range_failed,1,3,\"[{\"\"USUBJID\"\":\"\"S-2\"\"}]\",\"{\"\"column\"\":\"\"AGE\"\"}\"\nadsl.csv,check,verifications[0].unique,unique,,,REQ-0381,error,held,,0,3,,{}\nadsl.csv,check,verifications[1].row_count,row_count,,,REQ-0385,error,held,,0,1,,{}\n",
+      "content": "ARTIFACT,KIND,SPEC_PATH,NAME,ID,TARGET,RULE,SEVERITY,OUTCOME,CONDITION,COUNT,TOTAL,KEYS,DETAILS\nadsl.csv,run,output,,,,,,succeeded,,3,,,{}\nadsl.csv,input,input.DM,DM,,,,,,,3,,,\"{\"\"bytes\"\":66,\"\"path\"\":\"\"input/dm.csv\"\",\"\"profile\"\":\"\"csv\"\"}\"\nadsl.csv,rows,base,DM,,,,,,,3,3,,{}\nadsl.csv,column,columns.USUBJID,USUBJID,,,,,,,0,3,,\"{\"\"max_length\"\":3}\"\nadsl.csv,column,columns.AGE,AGE,,,,,,,0,3,,{}\nadsl.csv,check,columns.AGE.verifications[0].not_missing,not_missing,,AGE,REQ-0375,error,held,,0,3,,{}\nadsl.csv,check,columns.AGE.verifications[1].range,range,,AGE,REQ-0377,warning,violated,range_failed,1,3,\"[{\"\"USUBJID\"\":\"\"S-2\"\"}]\",\"{\"\"column\"\":\"\"AGE\"\"}\"\nadsl.csv,check,verifications[0].row_count,row_count,,,REQ-0385,error,held,,0,1,,{}\n",
       "name": "adsl-checks",
       "profile": "csv",
       "records": [
@@ -30,10 +30,9 @@
         "adsl.csv,column,columns.AGE,AGE,,,,,,,0,3,,{}",
         "adsl.csv,check,columns.AGE.verifications[0].not_missing,not_missing,,AGE,REQ-0375,error,held,,0,3,,{}",
         "adsl.csv,check,columns.AGE.verifications[1].range,range,,AGE,REQ-0377,warning,violated,range_failed,1,3,\"[{\"\"USUBJID\"\":\"\"S-2\"\"}]\",\"{\"\"column\"\":\"\"AGE\"\"}\"",
-        "adsl.csv,check,verifications[0].unique,unique,,,REQ-0381,error,held,,0,3,,{}",
-        "adsl.csv,check,verifications[1].row_count,row_count,,,REQ-0385,error,held,,0,1,,{}"
+        "adsl.csv,check,verifications[0].row_count,row_count,,,REQ-0385,error,held,,0,1,,{}"
       ],
-      "row_count": 9,
+      "row_count": 8,
       "types": [
         "str",
         "str",
@@ -264,23 +263,12 @@
       "verification_id": null
     },
     {
-      "check": "unique",
-      "evaluated_count": 3,
-      "failure": null,
-      "requirement": "REQ-0381",
-      "severity": "error",
-      "spec_path": "verifications[0].unique",
-      "specification": "spec.yaml",
-      "target": null,
-      "verification_id": null
-    },
-    {
       "check": "row_count",
       "evaluated_count": 1,
       "failure": null,
       "requirement": "REQ-0385",
       "severity": "error",
-      "spec_path": "verifications[1].row_count",
+      "spec_path": "verifications[0].row_count",
       "specification": "spec.yaml",
       "target": null,
       "verification_id": null

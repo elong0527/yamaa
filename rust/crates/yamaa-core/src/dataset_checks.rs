@@ -123,6 +123,7 @@ fn validate_codelist(id: &str, values: &[Value], kind: ColumnType) -> Result<(),
 pub fn column_code(check: &Check) -> Option<ConditionCode> {
     Some(match check {
         Check::NotMissing => ConditionCode::VerificationNotMissingFailed,
+        Check::Mandatory(_) => ConditionCode::SubmissionMandatoryFailed,
         Check::AllowedValues(_) => ConditionCode::VerificationAllowedValuesFailed,
         Check::Codelist { .. } | Check::ValueCodelists { .. } => {
             ConditionCode::VerificationCodelistFailed
@@ -141,20 +142,17 @@ pub fn column_definition(check: &Check) -> Option<Definition> {
     column_code(check).map(ConditionCode::definition)
 }
 
-/// Missing values pass; each pattern invocation retains its fixed step guard.
+/// Missing values pass; every other value must contain a match.
 pub fn matches_offenders<'a>(
-    pattern: &crate::regex::Pattern,
+    pattern: &crate::portable_regex::Pattern,
     values: impl IntoIterator<Item = &'a Value>,
-) -> Result<Vec<usize>, crate::regex::MatchError> {
-    let mut offenders = Vec::new();
-    for (index, value) in values.into_iter().enumerate() {
-        if let Value::Str(text) = value {
-            if pattern.search(text)?.is_none() {
-                offenders.push(index);
-            }
-        }
-    }
-    Ok(offenders)
+) -> Vec<usize> {
+    values
+        .into_iter()
+        .enumerate()
+        .filter(|(_, value)| matches!(value, Value::Str(text) if !pattern.is_match(text)))
+        .map(|(index, _)| index)
+        .collect()
 }
 
 /// Pattern syntax findings retain only the authored pattern, without parser geometry.
@@ -207,7 +205,7 @@ pub fn column_offenders<'a>(
         .enumerate()
         .filter_map(|(row, value)| {
             let failed = match check {
-                Check::NotMissing => matches!(value, Value::Missing),
+                Check::NotMissing | Check::Mandatory(_) => matches!(value, Value::Missing),
                 _ if matches!(value, Value::Missing) => false,
                 Check::AllowedValues(accepted)
                 | Check::Inventory {

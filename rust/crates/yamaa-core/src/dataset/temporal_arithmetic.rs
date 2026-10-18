@@ -4,7 +4,7 @@ use crate::json::Value as JsonValue;
 use crate::{
     diagnostic::{ConditionCode as C, Diagnostic},
     table::ValueRef,
-    temporal::{Date, DateTime, DateTimePrecision},
+    temporal::{Date, DateTime, Precision},
     value::{ColumnType, Value},
 };
 use std::vec;
@@ -42,9 +42,7 @@ impl Temporal {
                 },
                 1,
             ) => "int",
-            (TemporalKind::DateTimeShift { .. }, 1) | (TemporalKind::DurationText { .. }, _) => {
-                "numeric"
-            }
+            (TemporalKind::DateTimeShift { .. }, 1) => "numeric",
             (TemporalKind::DateTimeShift { .. } | TemporalKind::DateTimeDifference { .. }, _) => {
                 "datetime"
             }
@@ -67,7 +65,6 @@ impl Temporal {
             TemporalKind::DateTimeDifference { .. } => C::DatetimeDifferenceInput,
             TemporalKind::DateTimeShift { .. } => C::DatetimeShiftInput,
             TemporalKind::DurationValue { .. } => C::DurationValueInput,
-            TemporalKind::DurationText { .. } => C::DurationTextInput,
             _ => C::TemporalOperand,
         };
         Diagnostic {
@@ -175,9 +172,6 @@ impl Temporal {
                     None => return Err(self.failure(C::DurationInvalid)),
                 }
             }
-            TemporalKind::DurationText { unit } => super::duration::write(&values[0], unit)
-                .map(Value::Str)
-                .ok_or_else(|| self.failure(C::DurationTextRange))?,
             _ => {
                 let dates: Vec<_> = values
                     .iter()
@@ -193,7 +187,7 @@ impl Temporal {
     }
 }
 
-fn date_from_ordinal(day: i64, precision: crate::temporal::DatePrecision) -> Option<Date> {
+fn date_from_ordinal(day: i64, precision: crate::temporal::Precision) -> Option<Date> {
     if !(1..=3_652_059).contains(&day) {
         return None;
     }
@@ -216,17 +210,17 @@ fn date_from_ordinal(day: i64, precision: crate::temporal::DatePrecision) -> Opt
 }
 fn civil_seconds(value: DateTime) -> i64 {
     let (year, month, day, hour, minute, second) = value.fields();
-    let date = Date::new(year, month, day, crate::temporal::DatePrecision::Day).unwrap();
+    let date = Date::new(year, month, day, crate::temporal::Precision::Day).unwrap();
     (ordinal(date) - 1) * 86400
         + i64::from(hour) * 3600
         + i64::from(minute) * 60
         + i64::from(second)
 }
-fn datetime_from_seconds(seconds: i64, precision: DateTimePrecision) -> Option<DateTime> {
+fn datetime_from_seconds(seconds: i64, precision: Precision) -> Option<DateTime> {
     if !(0..315_537_897_600).contains(&seconds) {
         return None;
     }
-    let date = date_from_ordinal(seconds / 86400 + 1, crate::temporal::DatePrecision::Day)?;
+    let date = date_from_ordinal(seconds / 86400 + 1, crate::temporal::Precision::Day)?;
     let time = seconds % 86400;
     DateTime::new(
         date,
@@ -237,16 +231,18 @@ fn datetime_from_seconds(seconds: i64, precision: DateTimePrecision) -> Option<D
     )
     .ok()
 }
+/// Resolve the binary64 amount in seconds to whole seconds with the language's
+/// one rounding (REQ-0418) at zero places, then add it to the exact source.
+/// The source second never affects the rounding. Bound before converting: an
+/// admitted magnitude has at most twelve integer digits.
 fn rounded_target(base: i64, delta: f64) -> Option<i64> {
-    // Bound before casting and add the small fraction after the exact integer,
-    // preserving ties even at year 9999. Parity belongs to the resulting second.
     if !delta.is_finite() || !(-315_537_897_601.0..=315_537_897_601.0).contains(&delta) {
         return None;
     }
-    let lower = libm::floor(delta);
-    let target = base.checked_add(lower as i64)?;
-    let fraction = delta - lower;
-    target.checked_add(i64::from(
-        fraction > 0.5 || fraction == 0.5 && target % 2 != 0,
-    ))
+    let seconds = i64::try_from(&crate::decimal_rounding::rounded_magnitude(delta, 0)).ok()?;
+    base.checked_add(if delta.is_sign_negative() {
+        -seconds
+    } else {
+        seconds
+    })
 }

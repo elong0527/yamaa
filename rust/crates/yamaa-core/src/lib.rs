@@ -4,8 +4,6 @@
 pub mod application_issue;
 pub mod json;
 
-pub mod aggregate_compiler;
-pub mod aggregate_parser;
 pub mod aggregate_reduction;
 pub mod bound_expression;
 pub mod column_dependencies;
@@ -18,29 +16,23 @@ mod decimal_rounding;
 pub mod define_diagnostics;
 pub mod dependency_analysis;
 pub mod diagnostic;
-pub mod evaluation;
+pub mod expression;
 pub mod function_signature;
 pub mod intermediate_reference;
 pub mod key_relation;
 pub mod limits;
 pub mod mapping_cut;
-pub mod match_value;
 pub mod numeric;
-pub mod numeric_compiler;
-pub mod numeric_parser;
 pub mod odm_items;
 pub mod odm_source;
 pub mod parquet_source;
-pub mod predicate;
-pub mod predicate_compiler;
-pub mod predicate_parser;
-pub mod producer_admission;
+pub mod portable_regex;
 pub mod producer_contract;
-pub mod producer_graph;
 pub mod project_scope;
 pub mod reference_binding;
 pub mod reference_scope;
 pub mod resource;
+pub mod result_type;
 pub mod run_report;
 pub mod scalar_language;
 pub mod schema;
@@ -51,7 +43,10 @@ pub mod submission_composition;
 pub mod submission_document;
 pub mod submission_inventory;
 pub mod submission_json;
+mod submission_origin;
+pub mod submission_transport;
 pub mod submission_xml;
+pub mod submission_xpt;
 pub mod temporal;
 pub mod text_case;
 pub mod text_extract;
@@ -62,8 +57,6 @@ pub mod value;
 
 /// Version of the shared core compiled into a native installation.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-
-pub mod regex;
 
 pub mod reduction;
 pub mod table;
@@ -132,8 +125,6 @@ pub mod build;
 
 pub mod table_grouping;
 
-pub mod producer_build;
-
 pub mod standalone_preparation;
 
 pub mod numeric_lifecycle;
@@ -153,8 +144,6 @@ pub mod project_activation;
 pub mod inheritance_capture;
 
 pub mod source_profile_inspection;
-
-pub mod producer_publication;
 
 #[cfg(test)]
 use crate::schema as document_schema;

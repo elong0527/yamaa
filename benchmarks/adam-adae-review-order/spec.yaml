@@ -49,8 +49,8 @@ columns:
     label: Analysis Severity/Intensity
     derivation: AE.AESEV
     verifications:
-      allowed_values:
-        values: [MILD, MODERATE, SEVERE]
+      - allowed_values:
+          values: [MILD, MODERATE, SEVERE]
 
   # Rank for the review order above.
   - name: SEVORD
@@ -59,15 +59,13 @@ columns:
     derivation:
       mapping:
         source: ASEV
-        missing: null
+        missing: {literal: null}
         dict:
           MILD: 1
           MODERATE: 2
           SEVERE: 3
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, ASEQ]
   - row_count:
       min: 11
       max: 11

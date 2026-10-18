@@ -78,8 +78,8 @@ columns:
         - when: "APERDAY = -1"
           then: {literal: "Y"}
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
   # Time-matched: the baseline record of the same subject, parameter, period
   # and nominal time. A time point the baseline day did not record has none,
@@ -113,8 +113,6 @@ columns:
       str_template: "Period {APERIODC} Baseline Day {ATPT}"
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, PARAMCD, APERIOD, APERDAY, ATPTN]
   - row_count:
       min: 17
       max: 17

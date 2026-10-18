@@ -19,5 +19,5 @@ artifact is accepted.
 ## How to fix
 
 Omit `type` to inherit it unchanged, or replace it with a
-complete valid value. Only optional immediate fields may use
-`null` to clear an inherited value.
+complete valid value. Only an optional field may use `null` to
+clear an inherited value.

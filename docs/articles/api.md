@@ -54,8 +54,9 @@ adam:
 
 A section needs only `specs` to run. The `study` block and a section's
 `standard` and `define` are needed only to create submission files, and
-`datasets: json` adds Dataset-JSON files to them, so a project can list its
-specifications before its submission metadata is ready. Relative paths in the
+`datasets` adds transport files to them, `json` for Dataset-JSON or `xpt` for
+SAS Transport version 5, so a project can list its specifications before its
+submission metadata is ready. Relative paths in the
 project file resolve from its directory.
 
 An **environment** (`environment.yaml`) holds the code one language installs:
@@ -106,9 +107,13 @@ that run built, without reading the inputs again. A failed run has no output;
 its `save()` writes only the declared run report and then raises with the
 run's issues.
 
-When an input links its producer's specification through `schema`, `run()`
-builds the producer first, in memory, and `save()` writes the producer's files
-before its consumer's.
+An input's `schema` link names the producing specification whose output
+columns and declared types type a stored artifact. The link is metadata only:
+`run()` never runs the producer. Build and save the producer first; the
+consumer then reads the artifact at its own `path` like any other input, and
+refuses a stored header or Parquet schema that differs from the producer's
+output columns. A [project run](#run-a-whole-standard) orders these builds
+itself.
 
 A specification opened this way has no project, so it cannot call project
 functions or check values against the project's codelists. Open it through its
@@ -135,8 +140,9 @@ running project code.
 
 `resolve()` returns the specification after its layers are composed: the
 complete normalized model, where each field came from, and where each resource
-is, with an entry for each linked producer. R returns a named list and Python
-a dict. It reads no study data and runs no project code.
+is. A producing specification linked through `schema` is a resource of its
+consumer, not a separate entry. R returns a named list and Python a dict. It
+reads no study data and runs no project code.
 
 === "R"
 
@@ -237,9 +243,11 @@ built no specification has nothing to write, so its `save()` raises.
 
 `submission()` composes one define.xml for the selected section, or one for
 every section that names `define`. Without `datasets`, it reads no data, so
-you can draft define.xml before any data exists. With `datasets: json`, it
-also writes each saved dataset as Dataset-JSON next to define.xml, so every
-link in define.xml names a file that exists.
+you can draft define.xml before any data exists. With `datasets: json` or
+`datasets: xpt`, it also writes each saved dataset as one Dataset-JSON or SAS
+Transport version 5 file next to define.xml, so every link in define.xml names
+a file that exists. It runs no specification: it reads the datasets a run
+already saved.
 
 === "R"
 
@@ -266,8 +274,9 @@ before you call `submission()`. `created` sets the creation time define.xml
 records, a whole-second datetime; without it, the submission uses the current
 UTC time. The same files and the same `created` give the same bytes.
 `save()` first checks that no two sections write one file, then writes the
-sections in the order `sdtm`, `adam`, `send`, and raises when a section cannot
-be written or when no section was composed.
+sections in the order `sdtm`, `adam`, `send`, each section's transport files
+before its define.xml, and raises when a section cannot be written or when no
+section was composed.
 
 ## What a result holds
 
@@ -316,7 +325,7 @@ they are Polars list columns.
 
 The run report has fourteen columns, from `ARTIFACT` and `KIND` to `KEYS` and
 `DETAILS`; the
-[run report contract](https://github.com/elong0527/yamaa/blob/main/rules/execution/verification.md#req-0392)
+[run report contract](https://github.com/elong0527/yamaa/blob/main/rules/verification.md#check-24)
 defines each one. `COUNT` and `TOTAL` are integers, doubles in R, and every
 other column is text.
 
@@ -401,7 +410,7 @@ an integer, a double in R. Every other column is text, character in R, and
 absent item (missing, `ValuePresent` `"false"`), an explicit null (`IsNull`
 `"true"`) and an empty value (`""`) apart. An `odm` expression reads eleven of
 these columns; the
-[binding contract](https://github.com/elong0527/yamaa/blob/main/rules/specification/binding.md#req-1266)
+[binding contract](https://github.com/elong0527/yamaa/blob/main/rules/names.md#name-8)
 names them.
 
 `archive_member` names the XML member to read from a TAR archive that holds
@@ -414,9 +423,10 @@ defaults are 10,000 members, 256 MiB and a depth of 64.
 Inputs can be CSV, Parquet, SAS datasets (`.sas7bdat`) or SAS transport v5/v8
 files (`.xpt`). A SAS input declares its `encoding`, for example
 `{path: input/dm.xpt, encoding: windows-1252, types: {SEQ: int}}`; the
-[SAS source contract](https://github.com/elong0527/yamaa/blob/main/rules/storage/sas.md)
+[SAS source contract](https://github.com/elong0527/yamaa/blob/main/rules/reference/sas.md)
 covers missing values, padding, encodings and dates. Outputs are CSV or
-Parquet; Dataset-JSON comes from `submission()`.
+Parquet; Dataset-JSON and SAS Transport version 5 files come from
+`submission()`.
 
 A relative path resolves from the YAML file that writes it, including an
 inherited layer. Set `relative_to: entry` on an input or on `output` to resolve
@@ -435,7 +445,7 @@ output:
 On an input, `relative_to` covers its `path` and `schema`; on `output`, the
 dataset and its report. Nothing is discovered: there is no project root or data
 root to fall back on. The
-[resource contract](https://github.com/elong0527/yamaa/blob/main/rules/storage/resources.md)
+[resource contract](https://github.com/elong0527/yamaa/blob/main/rules/reference/files.md)
 has the details.
 
 Both packages apply the same fixed
@@ -452,7 +462,7 @@ calls functions reads any study data, the package checks the installed versions
 against the environment's lock, when it declares one, and runs every test of
 each called function. In R, a function receives and returns plain values:
 character, double, logical, `Date` and UTC `POSIXct`. The
-[project functions contract](https://github.com/elong0527/yamaa/blob/main/rules/operations/functions.md)
+[project functions contract](https://github.com/elong0527/yamaa/blob/main/rules/profiles/functions.md)
 has the details.
 
 ## Check specification style
@@ -468,11 +478,9 @@ python -m yamaa.style --fix study/adsl.yaml
 python -m yamaa.style --ignore line_width study/
 ```
 
-Findings print as `path:line:column: name message (REQ-NNNN)`. The exit status
-is 0 when no finding remains, 1 when findings remain and 2 when an input cannot
-be read. The
-[style contract](https://github.com/elong0527/yamaa/blob/main/rules/specification/style.md)
-lists the checks.
+Findings print as `path:line:column: name message`. The exit status is 0 when
+no finding remains, 1 when findings remain and 2 when an input cannot be read.
+The [style guide](style.md) lists the checks.
 
 ## Quick reference
 
@@ -486,5 +494,5 @@ lists the checks.
 | Check without data | `spec$check()$issues` | `spec.check().issues` |
 | See the resolved specification | `spec$resolve()` | `spec.resolve()` |
 | Run report | `run$report` | `run.report` |
-| define.xml and Dataset-JSON | `project$submission("sdtm")$save()` | `project.submission("sdtm").save()` |
+| define.xml and transport files | `project$submission("sdtm")$save()` | `project.submission("sdtm").save()` |
 | Read ODM XML | `yamaa_read_odm(path)` | `yamaa.read_odm(path)` |

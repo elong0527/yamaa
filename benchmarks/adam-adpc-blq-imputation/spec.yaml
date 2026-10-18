@@ -94,10 +94,7 @@ columns:
     derivation: PC.PCSTRESU
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, PCSEQ]
-  - unique:
-      columns: [STUDYID, USUBJID, PARAMCD, ATPTREF, ATPTN]
+  - unique: [STUDYID, USUBJID, PARAMCD, ATPTREF, ATPTN]
   - row_count:
       min: 20
       max: 20

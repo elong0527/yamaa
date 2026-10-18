@@ -9,7 +9,7 @@ use yamaa_adapters::{
 };
 use yamaa_core::{
     table::{Column, TableSchema},
-    temporal::{Date, DatePrecision, DateTime, DateTimePrecision},
+    temporal::{Date, DateTime, Precision},
     value::ColumnType,
 };
 
@@ -66,11 +66,7 @@ fn absent_and_cancelled_resources_remain_explicit_without_captures() {
     assert_eq!(resources.capture_reads(), 0);
 }
 
-fn frame(
-    float: f64,
-    date_precision: DatePrecision,
-    timestamp_precision: DateTimePrecision,
-) -> Arc<ArrowTable> {
+fn frame(float: f64, date_precision: Precision, timestamp_precision: Precision) -> Arc<ArrowTable> {
     let date = Date::new(2026, 1, 1, date_precision).unwrap();
     let timestamp = DateTime::new(date, 0, 0, 0, timestamp_precision).unwrap();
     let logical = TableSchema::new(vec![
@@ -103,12 +99,12 @@ fn frame(
 #[test]
 fn frame_freshness_compares_signed_zero_and_collected_temporal_precision() {
     for changed in [
-        frame(-0.0, DatePrecision::Day, DateTimePrecision::Second),
-        frame(0.0, DatePrecision::Year, DateTimePrecision::Second),
-        frame(0.0, DatePrecision::Day, DateTimePrecision::Day),
+        frame(-0.0, Precision::Day, Precision::Second),
+        frame(0.0, Precision::Year, Precision::Second),
+        frame(0.0, Precision::Day, Precision::Day),
     ] {
         let backend = Arc::new(MemoryResolver::default());
-        let original = frame(0.0, DatePrecision::Day, DateTimePrecision::Second);
+        let original = frame(0.0, Precision::Day, Precision::Second);
         backend.insert_frame("/", "raw.csv", "warehouse:version-1", original);
         let mut resources = Resources::with_resolver(backend.clone(), "spec.yaml");
         assert!(resources.capture("raw.csv").unwrap().1);

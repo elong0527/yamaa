@@ -305,8 +305,6 @@ pub enum ExprKind {
     Imputation,
     Temporal,
     Extreme,
-    StrConcat,
-    StrContains,
     StrTemplate,
     StrExtract,
     StrReplace,
@@ -499,10 +497,19 @@ pub enum WindowFunction {
     RowNumber,
     Competition,
     Dense,
-    RowValue { offset: i64 },
-    PreviousNonMissing,
-    Locf,
-    BaselineFlag,
+    RowValue {
+        offset: i64,
+    },
+    /// The closest earlier present value; the current row's own present value
+    /// answers first when `include_current` is set.
+    Locf {
+        include_current: bool,
+    },
+    /// Operands: the date, the reference date and the value; the order terms
+    /// hold the declared `tie_break`.
+    BaselineFlag {
+        inclusive: bool,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -542,6 +549,7 @@ pub enum CheckFamily {
     KeyDuplicates,
     IntermediateUnique,
     NotMissing,
+    Mandatory,
     AllowedValues,
     Codelist,
     ValueCodelists,

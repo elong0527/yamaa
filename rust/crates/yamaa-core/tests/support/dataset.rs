@@ -6,7 +6,7 @@ pub(crate) use std::cell::RefCell;
 pub(crate) use yamaa_core::{
     reduction::NumericReducer,
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
-    temporal::{Date, DatePrecision},
+    temporal::{Date, Precision},
     value::{ColumnType, Value},
 };
 
@@ -99,11 +99,15 @@ pub(crate) fn record_plan(
 
 /// Compile authored arithmetic with a closed static name-to-read map.
 pub(crate) fn computed(text: &str, bindings: &[(&str, Read)]) -> Expression {
-    pub(crate) use yamaa_core::numeric_compiler::compile_numeric;
     pub(crate) use yamaa_core::{bound_expression::Binding, dataset::BoundNumeric};
     Expression::Compute(
         BoundNumeric::new(
-            compile_numeric(text, "columns.N.derivation.compute").unwrap(),
+            yamaa_core::expression::compile(
+                text,
+                yamaa_core::expression::Context::Compute,
+                "columns.N.derivation.compute",
+            )
+            .unwrap(),
             bindings
                 .iter()
                 .map(|(name, read)| Binding {
@@ -161,21 +165,164 @@ pub(crate) fn fixture(text: &str, float_column: usize) -> Table {
 pub(crate) use yamaa_core::bound_expression::{
     Binding, BindingError, BoundPredicate as Filter, Read,
 };
-pub(crate) use yamaa_core::predicate::{self, Comparison, Node, Scalar};
+pub(crate) use yamaa_core::expression::{self, Comparison, CompiledExpression};
+
+/// One authored predicate operand, written into the predicate's text.
+#[derive(Clone, Debug)]
+pub(crate) enum Scalar {
+    Literal(Value),
+    Identifier(String),
+}
+
+/// An authored predicate node; Boolean children index earlier entries.
+#[derive(Clone, Debug)]
+pub(crate) enum Node {
+    Contains {
+        value: Scalar,
+        pattern: String,
+    },
+    Boolean(bool),
+    Not(usize),
+    And(usize, usize),
+    Or(usize, usize),
+    Compare {
+        operator: Comparison,
+        left: Scalar,
+        right: Scalar,
+    },
+    IsNull {
+        value: Scalar,
+        negated: bool,
+    },
+    In {
+        value: Scalar,
+        items: Vec<Scalar>,
+        negated: bool,
+    },
+    Between {
+        value: Scalar,
+        lower: Scalar,
+        upper: Scalar,
+        negated: bool,
+    },
+    Like {
+        value: Scalar,
+        pattern: Scalar,
+        escape: Option<char>,
+        negated: bool,
+    },
+}
+
+fn quoted(text: &str) -> String {
+    format!("'{}'", text.replace('\'', "''"))
+}
+
+fn scalar_text(scalar: &Scalar) -> String {
+    match scalar {
+        Scalar::Identifier(name) => name.clone(),
+        Scalar::Literal(Value::Missing) => "NULL".into(),
+        Scalar::Literal(Value::Int(value)) => value.to_string(),
+        Scalar::Literal(Value::Float(value)) => format!("{:?}", value.get()),
+        Scalar::Literal(Value::Str(value)) => quoted(value),
+        Scalar::Literal(Value::Date(value)) => format!("DATE {}", quoted(&value.to_string())),
+        Scalar::Literal(Value::DateTime(value)) => {
+            format!("DATETIME {}", quoted(&value.to_string()))
+        }
+        Scalar::Literal(Value::Bool(_)) => panic!("a truth value is not an operand"),
+    }
+}
+
+/// Write an authored arena as the predicate text it stands for.
+pub(crate) fn predicate_text(nodes: &[Node], root: usize) -> String {
+    let negation = |negated: &bool| if *negated { "NOT " } else { "" };
+    match &nodes[root] {
+        Node::Contains { value, pattern } => {
+            format!("str_contains({}, {})", scalar_text(value), quoted(pattern))
+        }
+        Node::Boolean(value) => if *value { "TRUE" } else { "FALSE" }.into(),
+        Node::Not(child) => format!("NOT ({})", predicate_text(nodes, *child)),
+        Node::And(left, right) => format!(
+            "({}) AND ({})",
+            predicate_text(nodes, *left),
+            predicate_text(nodes, *right)
+        ),
+        Node::Or(left, right) => format!(
+            "({}) OR ({})",
+            predicate_text(nodes, *left),
+            predicate_text(nodes, *right)
+        ),
+        Node::Compare {
+            operator,
+            left,
+            right,
+        } => format!(
+            "{} {} {}",
+            scalar_text(left),
+            match operator {
+                Comparison::Equal => "=",
+                Comparison::NotEqual => "<>",
+                Comparison::Less => "<",
+                Comparison::LessEqual => "<=",
+                Comparison::Greater => ">",
+                Comparison::GreaterEqual => ">=",
+            },
+            scalar_text(right)
+        ),
+        Node::IsNull { value, negated } => {
+            format!("{} IS {}NULL", scalar_text(value), negation(negated))
+        }
+        Node::In {
+            value,
+            items,
+            negated,
+        } => format!(
+            "{} {}IN ({})",
+            scalar_text(value),
+            negation(negated),
+            items.iter().map(scalar_text).collect::<Vec<_>>().join(", ")
+        ),
+        Node::Between {
+            value,
+            lower,
+            upper,
+            negated,
+        } => format!(
+            "{} {}BETWEEN {} AND {}",
+            scalar_text(value),
+            negation(negated),
+            scalar_text(lower),
+            scalar_text(upper)
+        ),
+        Node::Like {
+            value,
+            pattern,
+            escape,
+            negated,
+        } => format!(
+            "{} {}LIKE {}{}",
+            scalar_text(value),
+            negation(negated),
+            scalar_text(pattern),
+            escape
+                .map(|escape| format!(" ESCAPE {}", quoted(&escape.to_string())))
+                .unwrap_or_default()
+        ),
+    }
+}
+
+/// Compile an authored arena through the one predicate language.
+pub(crate) fn predicate_plan(nodes: Vec<Node>, root: usize, path: &str) -> CompiledExpression {
+    yamaa_core::expression::compile(
+        &predicate_text(&nodes, root),
+        yamaa_core::expression::Context::Predicate,
+        path,
+    )
+    .unwrap()
+}
 
 /// Admit a single authored predicate and its explicit scope bindings.
 pub(crate) fn filter(node: Node, bindings: Vec<Binding>) -> Filter {
-    Filter::new(
-        predicate::Plan::new(
-            vec![node],
-            0,
-            "rows[0].filter".into(),
-            "authored predicate".into(),
-        )
-        .unwrap(),
-        bindings,
-    )
-    .unwrap()
+    Filter::new(predicate_plan(vec![node], 0, "rows[0].filter"), bindings).unwrap()
 }
 /// Bind an occurrence without guessing whether it belongs to source or candidate scope.
 pub(crate) fn binding(name: &str, read: Read) -> Binding {
@@ -198,17 +345,7 @@ pub(crate) fn positive(read: Read) -> Filter {
 
 /// Supply a verification predicate with its actual owning declaration path.
 pub(crate) fn check_predicate(node: Node, bindings: Vec<Binding>, path: &str) -> Filter {
-    Filter::new(
-        predicate::Plan::new(
-            vec![node],
-            0,
-            path.into(),
-            "authored verification predicate".into(),
-        )
-        .unwrap(),
-        bindings,
-    )
-    .unwrap()
+    Filter::new(predicate_plan(vec![node], 0, path), bindings).unwrap()
 }
 
 /// Bind no-template keys separately from later whole-column derivations.
@@ -343,13 +480,7 @@ pub(crate) fn missing_or_bad_window_predicate(and_false: bool) -> Filter {
         },
     ];
     Filter::new(
-        predicate::Plan::new(
-            nodes,
-            2,
-            "columns.SEQ.derivation.row_number".into(),
-            "V IS NULL OR V > 'x'".into(),
-        )
-        .unwrap(),
+        predicate_plan(nodes, 2, "columns.SEQ.derivation.row_number"),
         vec![binding("V", Read::Column(2))],
     )
     .unwrap()
@@ -398,17 +529,50 @@ pub(crate) fn value_window_plan(
 }
 
 /// Admit temporal baseline selection over completed dates and partition keys.
+/// Columns 2 and 3 are the date and reference; the key column is the value.
 pub(crate) fn baseline_plan(
     source: &Table,
     groups: Vec<usize>,
     filter: Option<Filter>,
 ) -> DatasetPlan {
+    baseline_options_plan(source, groups, filter, 0, true, vec![])
+}
+
+/// Admit a baseline over every source column with an explicit value, bound and
+/// tie-break terms. Columns 2 and 3 are the date and reference, and the flag
+/// is the last output column.
+pub(crate) fn baseline_options_plan(
+    source: &Table,
+    groups: Vec<usize>,
+    filter: Option<Filter>,
+    value: usize,
+    inclusive: bool,
+    tie_break: Vec<yamaa_core::dataset::OrderTerm>,
+) -> DatasetPlan {
     pub(crate) use yamaa_core::dataset::{Window, WindowKind};
     let mut fields = source.schema.columns().to_vec();
+    let flag = fields.len();
     fields.push(Column {
         name: "BLFL".into(),
         kind: ColumnType::Str,
     });
+    let mut assignments = (1..flag)
+        .map(|column| assign(column, collect(column)))
+        .collect::<Vec<_>>();
+    assignments.push(assign(
+        flag,
+        Expression::Window(Window {
+            kind: WindowKind::BaselineFlag {
+                date: 2,
+                reference_date: 3,
+                value,
+                inclusive,
+            },
+            group_by: groups,
+            order_by: tie_break,
+            filter,
+        }),
+    ));
     DatasetPlan::new(
         source.schema.clone(),
         TableSchema::new(fields).unwrap(),
@@ -417,23 +581,7 @@ pub(crate) fn baseline_plan(
             assignments: vec![assign(0, Expression::Source(0))],
             filter: None,
         }],
-        vec![
-            assign(1, collect(1)),
-            assign(2, collect(2)),
-            assign(3, collect(3)),
-            assign(
-                4,
-                Expression::Window(Window {
-                    kind: WindowKind::BaselineFlag {
-                        date: 2,
-                        reference_date: 3,
-                    },
-                    group_by: groups,
-                    order_by: vec![],
-                    filter,
-                }),
-            ),
-        ],
+        assignments,
         vec![0],
         vec![],
     )
@@ -633,6 +781,7 @@ pub(crate) fn named_item() -> yamaa_core::dataset::Intermediate {
             keep: Keep::Last,
         }),
         no_match: Some(Value::Missing),
+        require_match: false,
         unique: Vec::new(),
         derivations: None,
         pending_schema: None,

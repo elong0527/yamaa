@@ -4,6 +4,7 @@ use yamaa_core::{
     diagnostic::ConditionCode,
     table::ValueRef,
     text_extract::{Error, Step, StringExtract},
+    value::Value,
 };
 pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     let path = "columns.TEXT.derivation.str_extract";
@@ -20,9 +21,11 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         .unwrap()
     };
     let op = make("(a)", "1");
-    let Error::Diagnostic(input) = op.apply(ValueRef::Int(7)).unwrap_err() else {
-        panic!("typed input")
-    };
+    // A missing source is answered with missing, never failed (COLUMN-10).
+    assert_eq!(op.apply(ValueRef::Missing), Ok(Step::Recovered("missing")));
+    assert_eq!(op.substitute("missing"), Value::Missing);
+    assert_eq!(op.failure_diagnostic(Step::Recovered("missing")), None);
+    let Error::Diagnostic(input) = op.apply(ValueRef::Int(7)).unwrap_err();
     let cases = [
         (
             input,
@@ -35,14 +38,6 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
                 ("expected", V::String("str".into())),
                 ("actual", V::String("int".into())),
             ],
-        ),
-        (
-            op.failure_diagnostic(Step::Missing).unwrap(),
-            "mapping",
-            "missing_input",
-            "REQ-0334",
-            path.into(),
-            vec![("variable", V::String("SRC.TEXT".into()))],
         ),
         (
             op.failure_diagnostic(Step::NoMatch("abc")).unwrap(),

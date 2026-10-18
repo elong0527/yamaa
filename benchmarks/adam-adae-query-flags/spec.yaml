@@ -19,19 +19,19 @@ intermediates:
     dataset: QUERY
     key: {TERM: AEDECOD}
     filter: "QUERY.PREFIX = 'SMQ01'"
-    no_match: null
+    no_match: {literal: null}
 
   - id: SMQ2
     dataset: QUERY
     key: {TERM: AEDECOD}
     filter: "QUERY.PREFIX = 'SMQ02'"
-    no_match: null
+    no_match: {literal: null}
 
   - id: CQ1
     dataset: QUERY
     key: {TERM: AEDECOD}
     filter: "QUERY.PREFIX = 'CQ01'"
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: STUDYID
@@ -74,8 +74,8 @@ columns:
     label: Standardized MedDRA Query 01 Scope
     derivation: SMQ1.SCOPE
     verifications:
-      allowed_values:
-        values: [BROAD, NARROW]
+      - allowed_values:
+          values: [BROAD, NARROW]
 
   - name: SMQ02NAM
     type: str
@@ -92,8 +92,8 @@ columns:
     label: Standardized MedDRA Query 02 Scope
     derivation: SMQ2.SCOPE
     verifications:
-      allowed_values:
-        values: [BROAD, NARROW]
+      - allowed_values:
+          values: [BROAD, NARROW]
 
   - name: CQ01NAM
     type: str
@@ -101,8 +101,6 @@ columns:
     derivation: CQ1.GRPNAME
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
       min: 10
       max: 10

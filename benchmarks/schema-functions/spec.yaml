@@ -90,7 +90,7 @@ columns:
       function:
         name: project_ratio
         args:
-          numerator: null
+          numerator: {literal: null}
           denominator: SOURCE.DEN
           decimals: 2
           adjust: 0.0

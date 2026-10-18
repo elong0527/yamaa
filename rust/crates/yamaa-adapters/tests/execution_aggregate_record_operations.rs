@@ -349,7 +349,10 @@ mod execution {
             let source = original_fieldless_count("COUNT(OTHER.*)", "{N: K}", "")
                 .replace("keys: [K]", "keys: [N]")
                 .replace("columns: [K, V]", "columns: [N, V]")
-                .replace("        key: {N: K}\n", "")
+                .replace(
+                    "      aggregate:\n        expr: 'COUNT(OTHER.*)'\n        key: {N: K}\n",
+                    "      aggregate: 'COUNT(OTHER.*)'\n",
+                )
                 .replace("name: K", "name: N");
             let fixture = fieldless_count_fixture(&source);
             let result = fixture.run().unwrap_or_else(|issues| panic!("{issues:?}"));
@@ -501,7 +504,7 @@ mod execution {
 domain: ADQS
 keys: [STUDYID, USUBJID]
 input:
-  QS: {path: input/qs.csv}
+  QS: input/qs.csv
 output:
   path: adqs.csv
   columns: [STUDYID, USUBJID, AVAL]
@@ -543,7 +546,7 @@ S1,001,PF03,SCALE,3
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
-  EX: {path: input/ex.csv}
+  EX: input/ex.csv
 output:
   path: adsl.csv
   columns: [STUDYID, USUBJID, TRTEDT]
@@ -566,11 +569,11 @@ columns:
           - name: H
             type: date
             derivation:
-              date_impute:
+              impute:
+                type: date
                 source: EX.EXENDTC
                 day: last
                 minimum_source_precision: month
-                missing: null
         expr: "MAX(H)"
 rows:
   - id: one
@@ -759,7 +762,7 @@ S1,002,2024-06
             .unwrap();
             let path = fixture.0.join("spec.yaml");
             let spec = fs::read_to_string(&path).unwrap()
-        .replace("  QS: {path: input/qs.csv}", "  QS: {path: input/qs.csv}\n  DS: {path: input/ds.csv}")
+        .replace("  QS: input/qs.csv", "  QS: input/qs.csv\n  DS: input/ds.csv")
         .replace("output:\n", &format!("intermediates:\n  - id: CAP\n    dataset: DS\n    key: [STUDYID, USUBJID]{}\noutput:\n", if keep { "\n    order_by: [DS.DSNUM]\n    keep: first" } else { "" }))
         .replace("  - id: subscale\n", "  - id: subscale\n    dataset: QS\n");
             fs::write(path, spec).unwrap();
@@ -1327,7 +1330,7 @@ S1,002,2024-06
         /// finding is decided from. `domain` reaches each of them once it reads or
         /// binds the inputs. A case that `check` starts to report fails until it
         /// leaves this list.
-        const NOT_REPORTED_BY_CHECK: [(&str, &str); 26] = [
+        const NOT_REPORTED_BY_CHECK: [(&str, &str); 25] = [
             (
                 "negative-adlb-computed-param",
                 "a cycle through an aggregate and a case",
@@ -1379,10 +1382,6 @@ S1,002,2024-06
                 "whether the input file is a symbolic link",
             ),
             (
-                "negative-review-date-text",
-                "the types compared in a flag condition",
-            ),
-            (
                 "negative-review-unknown-date",
                 "an unknown name in a flag condition",
             ),
@@ -1429,10 +1428,16 @@ S1,002,2024-06
         ];
 
         /// Validation negatives this harness does not run, with the reason.
-        const NOT_BUILT_HERE: [(&str, &str); 1] = [(
-            "negative-function-contract",
-            "domain activates its project functions only in a host",
-        )];
+        const NOT_BUILT_HERE: [(&str, &str); 2] = [
+            (
+                "negative-allowed-values-beside-codelist",
+                "the bound codelist's items come from its host environment, which this harness does not pass",
+            ),
+            (
+                "negative-function-contract",
+                "domain activates its project functions only in a host",
+            ),
+        ];
 
         /// Every committed validation-phase negative benchmark that conformance runs.
         fn validation_benchmarks() -> Vec<String> {
@@ -1446,8 +1451,11 @@ S1,002,2024-06
                     continue;
                 }
                 let metadata = expected(&entry.path().join("benchmark.yaml"));
+                // A Define benchmark fails in its study's composition, which
+                // `submission_transport` runs; its domain build succeeds.
                 if expected(&oracle)["phase"] == "validation"
                     && metadata["conformance"]["excluded"].is_null()
+                    && metadata["define"].is_null()
                 {
                     selected.push(name);
                 }
@@ -1891,7 +1899,7 @@ S1,002,2024-06
                     ],
                     &[0, 1, 3, 2],
                     2,
-                    2,
+                    1,
                 ),
                 (
                     "schema-window-functions",
@@ -1929,7 +1937,7 @@ S1,002,2024-06
                     &["USUBJID", "DTHDY", "DTHCAUS", "DTHPTERM"],
                     &[0],
                     1,
-                    1,
+                    0,
                 ),
                 (
                     "schema-inheritance",
@@ -1942,17 +1950,19 @@ S1,002,2024-06
                     &["USUBJID", "PARAMCD", "AVAL", "AVALU"],
                     &[0, 1],
                     1,
-                    1,
+                    0,
                 ),
             ];
             for (name, schemas, output, keys, templates, checks) in cases {
                 let (document, parents) = prepare(name, false);
                 // Only YAML parent captures are possible. No study bytes are supplied;
-                // binding receives independently enumerated immutable metadata.
+                // binding receives independently enumerated immutable metadata. The
+                // chain is captured from the entry upward: the compound level names
+                // the organization level.
                 assert_eq!(
                     parents.reads,
                     if name == "schema-inheritance" {
-                        vec!["spec_organization.yaml", "spec_compound.yaml"]
+                        vec!["spec_compound.yaml", "spec_organization.yaml"]
                     } else {
                         vec![]
                     }
@@ -2079,15 +2089,10 @@ S1,002,2024-06
                         );
                         assert_eq!(aggregate.expression().reductions().len(), 1);
                         let reduction = &aggregate.expression().reductions()[0];
-                        assert_eq!(
-                            reduction.reducer,
-                            yamaa_core::aggregate_parser::Reducer::Sum
-                        );
+                        assert_eq!(reduction.reducer, yamaa_core::expression::Reducer::Sum);
                         assert_eq!(
                             reduction.operand,
-                            yamaa_core::aggregate_compiler::AggregateOperand::Value(
-                                "LB.LBSTRESN".into()
-                            )
+                            yamaa_core::expression::ReductionOperand::Value("LB.LBSTRESN".into())
                         );
                     }
                     "schema-window-functions" => {
@@ -2117,11 +2122,19 @@ S1,002,2024-06
                                     column: 6,
                                     offset: -1
                                 },
-                                WindowKind::PreviousNonMissing { column: 6 },
-                                WindowKind::Locf { column: 6 },
+                                WindowKind::Locf {
+                                    column: 6,
+                                    include_current: false
+                                },
+                                WindowKind::Locf {
+                                    column: 6,
+                                    include_current: true
+                                },
                                 WindowKind::BaselineFlag {
                                     date: 4,
-                                    reference_date: 5
+                                    reference_date: 5,
+                                    value: 6,
+                                    inclusive: true
                                 }
                             ]
                         );
@@ -2242,7 +2255,7 @@ S1,002,2024-06
             assert!(position.offset < parent.source().bytes.len());
             assert_eq!(
                 parents.reads,
-                ["spec_organization.yaml", "spec_compound.yaml"]
+                ["spec_compound.yaml", "spec_organization.yaml"]
             );
         }
     }
@@ -3221,7 +3234,7 @@ S1,002,2024-06
         }
     }
     mod declarative_case_intermediates {
-        //! Complete case/concat observations use the shared scalar source binder.
+        //! Complete case observations use the shared scalar source binder.
         use std::{
             fs,
             path::{Path, PathBuf},
@@ -3292,7 +3305,7 @@ intermediates:
     dataset: DONOR
     order_by: [DONOR.SEQ]
     keep: first
-    no_match: null
+    no_match: {literal: null}
 columns:
   - {name: ID, type: int, derivation: SRC.ID}
   - {name: SELECT, type: str, derivation: SRC.SELECT}
@@ -3329,31 +3342,6 @@ columns:
                     {"spec_path":"columns.A.derivation.case[0].then.source.no_match","handler":"no_match","count":1},
                     {"spec_path":"columns.B.derivation.case[0].then.source.multiple_matches","handler":"multiple_matches","count":1},
                     {"spec_path":"columns.B.derivation.case[0].then.source.no_match","handler":"no_match","count":1},
-                ])
-            );
-        }
-        #[test]
-        fn concat_nested_case_reuses_the_same_source_binding_and_authored_operand_path() {
-            let fixture = Fixture::new();
-            fixture.populate();
-            fs::write(fixture.0.join("src.csv"), "ID,SELECT\n1,Y\n2,N\n").unwrap();
-            let prefix = BODY
-                .split("  - name: A")
-                .next()
-                .unwrap()
-                .replace("[ID, A, B]", "[ID, C]");
-            let body=format!("{prefix}  - name: C\n    type: str\n    derivation:\n      str_concat:\n        sources:\n          - {{literal: '['}}\n          - case:\n              - when: \"SELECT = 'Y'\"\n                then: P.A\n              - otherwise: {{literal: none}}\n          - {{literal: ']'}}\n");
-            let mut result = fixture.run(&body).unwrap();
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            assert_eq!(
-                fs::read(fixture.0.join("result.csv")).unwrap(),
-                b"ID,C\n1,[first]\n2,[none]\n"
-            );
-            assert_eq!(
-                result.observations()["handler_counts"],
-                yamaa_adapters::json!([
-                    {"spec_path":"columns.C.derivation.str_concat.sources[1].case[0].then.source.multiple_matches","handler":"multiple_matches","count":1}
                 ])
             );
         }

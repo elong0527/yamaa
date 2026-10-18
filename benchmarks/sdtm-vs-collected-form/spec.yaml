@@ -18,7 +18,8 @@ output:
 intermediates:
   - id: TEST
     dataset: TESTS
-    key: VSTESTCD
+    key: [VSTESTCD]
+    require_match: true
     verifications:
       - unique: [VSTESTCD]
 
@@ -119,7 +120,7 @@ columns:
     label: Numeric Result/Finding in Standard Units
     derivation:
       value: {source: VSORRES}
-      unconvertible: null
+      unconvertible: {literal: null}
 
   - name: VSSTRESC
     type: str
@@ -176,8 +177,6 @@ columns:
         window:
           group_by: [STUDYID, USUBJID]
           order_by: [VSDTC, TESTORD]
-    verifications:
-      not_missing: {}
 
 # One row template per test, so every visit form group yields one record
 # per test even when the test's items are absent. Each template names its
@@ -239,8 +238,6 @@ rows:
       VSORRESU: {odm: ODM.IT.VS.WEIGHTU}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, VSSEQ]
   - row_count:
       min: 24
       max: 24

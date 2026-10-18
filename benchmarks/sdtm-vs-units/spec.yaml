@@ -29,8 +29,6 @@ columns:
     type: int
     label: Sequence Number
     derivation: VS_RAW.VSSEQ
-    verifications:
-      not_missing: {}
 
   - name: VISIT
     type: str
@@ -42,8 +40,8 @@ columns:
     label: Vital Signs Test Short Name
     derivation: VS_RAW.VSTESTCD
     verifications:
-      allowed_values:
-        values: [HEIGHT, WEIGHT, TEMP]
+      - allowed_values:
+          values: [HEIGHT, WEIGHT, TEMP]
 
   - name: VSTEST
     type: str
@@ -65,8 +63,8 @@ columns:
         - when: "VS_RAW.VSORRES IS NOT NULL"
           then: VS_RAW.VSORRESU
     verifications:
-      allowed_values:
-        values: [cm, kg, C, LB, F]
+      - allowed_values:
+          values: [cm, kg, C, LB, F]
 
   - name: VSSTRESN
     type: float
@@ -81,8 +79,8 @@ columns:
     type: str
     label: Standard Units
     verifications:
-      allowed_values:
-        values: [cm, kg, C]
+      - allowed_values:
+          values: [cm, kg, C]
 
   - name: VSSTAT
     type: str
@@ -151,8 +149,6 @@ rows:
             then: {literal: C}
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, VSSEQ]
   # Every input record matches exactly one per-test row template, so the
   # output holds one record per input record.
   - row_count:

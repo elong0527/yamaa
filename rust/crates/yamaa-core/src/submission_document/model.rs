@@ -183,9 +183,20 @@ pub enum Context {
     Submission,
     Other,
 }
+/// The one transport file a section writes for each composed dataset.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DatasetFormat {
-    Json,
+pub enum Transport {
+    Xpt,
+    DatasetJson,
+}
+impl Transport {
+    /// The transport file's extension, after the lower-case dataset name.
+    pub fn extension(self) -> &'static str {
+        match self {
+            Self::Xpt => "xpt",
+            Self::DatasetJson => "json",
+        }
+    }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DocumentKind {
@@ -233,9 +244,9 @@ pub struct Section {
     /// Required only when Define-XML composes the section.
     pub define: Option<Field<String>>,
     pub documents: Field<Vec<DocumentReference>>,
-    /// The dataset container a submission writes beside Define-XML; absent
-    /// writes only the Define-XML document.
-    pub datasets: Option<Field<DatasetFormat>>,
+    /// The transport file a submission writes beside Define-XML for each
+    /// dataset (`json` or `xpt`); absent writes only the Define-XML document.
+    pub datasets: Option<Field<Transport>>,
     pub context: Field<Context>,
     pub xml_lang: Field<String>,
     pub file_oid: Option<Field<String>>,
@@ -275,12 +286,6 @@ pub enum VersionError {
     EmptyOverride,
 }
 impl Section {
-    /// Whether the submission writes one Dataset-JSON file per specification.
-    pub fn dataset_json(&self) -> bool {
-        self.datasets
-            .as_ref()
-            .is_some_and(|datasets| datasets.value == DatasetFormat::Json)
-    }
     /// The calling package supplies its actual installed version. Core's own
     /// crate version is never a substitute for the Python or R generator.
     pub fn source_versions<'a>(

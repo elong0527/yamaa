@@ -21,8 +21,6 @@ columns:
     type: str
     label: Domain Abbreviation
     derivation: {literal: AE}
-    verifications:
-      not_missing: {}
     submission:
       core: Req
       role: Identifier
@@ -67,6 +65,9 @@ columns:
         type: Assigned
         source: Sponsor
 
+  # SDTMIG designates AETERM Req. This coding fixture keeps one blank reported
+  # term to show the NOT CODED fallback, which a required term would refuse,
+  # so it declares Exp; a study submitting AE declares Req.
   - name: AETERM
     type: str
     label: Reported Term for the Adverse Event
@@ -78,6 +79,9 @@ columns:
       origin:
         type: Collected
         source: Investigator
+        documents:
+          - document: acrf
+            pages: {type: PhysicalRef, refs: "1"}
 
   # Both coded terms come from the dictionary row whose lowest-level term
   # equals the reported term exactly, letter case included. No such row, or
@@ -87,7 +91,7 @@ columns:
     label: Dictionary-Derived Term
     derivation: MEDDRA_CODING.PTNAME
     submission:
-      core: Exp
+      core: Req
       role: Record Qualifier
       length: 200
       codelist: MEDDRA
@@ -113,8 +117,6 @@ columns:
         AE_RAW.AETERM, and no match yields "NOT CODED".
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
       min: 8
       max: 8

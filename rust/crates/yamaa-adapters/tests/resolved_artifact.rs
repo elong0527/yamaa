@@ -1,7 +1,6 @@
-//! Independent resolution controls over original entry and producer preparation.
+//! Independent resolution controls over original entry preparation and schema links.
 #![cfg(feature = "yaml")]
 use std::{
-    collections::BTreeMap,
     fs,
     path::PathBuf,
     sync::atomic::{AtomicUsize, Ordering},
@@ -50,18 +49,18 @@ const PRODUCER: &str = "schema_version: '1.0'\ndomain: PRODUCER\nkeys: [ID]\ninp
 const CONSUMER: &str = "schema_version: '1.0'\ndomain: CONSUMER\nkeys: [ID]\ninput: {P: {path: output/produced.csv, schema: producer.yaml, relative_to: entry}}\ncolumns: [{name: ID, type: int, label: Identifier, derivation: P.ID}]\noutput: {path: output/final.csv, relative_to: entry, columns: [ID], report: output/report.csv}\n";
 
 #[test]
-fn two_studies_and_their_producers_match_the_actual_direct_preparation() {
+fn two_studies_and_their_schema_links_match_the_actual_direct_preparation() {
     let study = Study::new();
     study.write("shared/consumer.yaml", CONSUMER);
     study.write("shared/producer.yaml", PRODUCER);
     for wrapper in ["A", "B"] {
         study.write(
             &format!("{wrapper}/spec.yaml"),
-            "schema_version: '1.0'\nparents: ../shared/consumer.yaml\n",
+            "schema_version: '1.0'\nparent: ../shared/consumer.yaml\n",
         );
         study.write(
             &format!("{wrapper}/producer.yaml"),
-            "schema_version: '1.0'\nparents: ../shared/producer.yaml\n",
+            "schema_version: '1.0'\nparent: ../shared/producer.yaml\n",
         );
         let path = study.path(&format!("{wrapper}/spec.yaml"));
         let selected = file_workflow::select_request(
@@ -72,42 +71,47 @@ fn two_studies_and_their_producers_match_the_actual_direct_preparation() {
             Language::Python,
         )
         .unwrap();
-        let Prepared::Producer(graph) = selected else {
-            panic!("producer workflow")
+        let Prepared::Plain(prepared) = selected else {
+            panic!("plain route")
         };
         let artifact = study.resolve(&format!("{wrapper}/spec.yaml"));
-        assert_eq!(artifact, graph.resolved_specification().unwrap());
-        assert_eq!(artifact.entries().len(), 2);
-        for (record, node) in artifact.entries().iter().zip(graph.nodes()) {
-            let (specification, order) =
-                specification_value(node.document.model().document()).unwrap();
-            assert_eq!(record.specification, specification);
-            assert_eq!(record.mapping_order, order);
-            for resource in &record.resources {
-                assert_eq!(resource.owning_entry, node.document.source().identity);
-            }
-        }
+        assert_eq!(artifact, prepared.resolved_specification().unwrap());
+        // A linked producer is type metadata only: it is not an entry.
+        assert_eq!(artifact.entries().len(), 1);
         let consumer = &artifact.entries()[0];
-        let producer = &artifact.entries()[1];
+        let (specification, order) =
+            specification_value(prepared.run().document().model().document()).unwrap();
+        assert_eq!(consumer.specification, specification);
+        assert_eq!(consumer.mapping_order, order);
+        for resource in &consumer.resources {
+            assert_eq!(resource.owning_entry, consumer.entry);
+        }
+        let schema = consumer
+            .resources
+            .iter()
+            .find(|resource| resource.role == ResourceRole::ProducerSchema)
+            .unwrap();
+        assert_eq!(schema.spec_path, "input.P.schema");
+        assert_eq!(schema.declaring_source, study.path("shared/consumer.yaml"));
+        assert_eq!(schema.base_source, consumer.entry);
+        assert_eq!(schema.relative_to, RelativeTo::Entry);
         assert_eq!(
-            consumer.producers["P"],
-            study.path(&format!("{wrapper}/producer.yaml"))
+            schema.location,
+            Location::Local {
+                path: study.path(&format!("{wrapper}/producer.yaml"))
+            }
         );
-        assert_eq!(producer.producers, BTreeMap::new());
-        let input = producer
+        let input = consumer
             .resources
             .iter()
             .find(|resource| resource.role == ResourceRole::InputData)
             .unwrap();
-        assert_eq!(input.declaring_source, study.path("shared/producer.yaml"));
-        assert_eq!(input.base_source, producer.entry);
         assert_eq!(
             input.location,
             Location::Local {
-                path: study.path(&format!("{wrapper}/input/raw.csv"))
+                path: study.path(&format!("{wrapper}/output/produced.csv"))
             }
         );
-        assert_eq!(input.relative_to, RelativeTo::Entry);
         let output = consumer
             .resources
             .iter()
@@ -144,7 +148,7 @@ fn two_studies_and_their_producers_match_the_actual_direct_preparation() {
 fn selector_only_overrides_and_atomic_output_keep_original_paths_and_selected_roots() {
     let study = Study::new();
     study.write("shared/base.yaml", "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {RAW: {path: ../data/raw.csv, types: {ID: int}}}\ncolumns: [{name: ID, type: int, label: Original, derivation: RAW.ID}]\noutput: {path: ../data/base.csv, columns: [ID]}\n");
-    study.write("study/spec.yaml", "schema_version: '1.0'\nparents: ../shared/base.yaml\ninput: {RAW: {relative_to: entry}}\ncolumns: [{name: ID, label: Override}]\noutput: {path: ../result/final.csv, columns: [ID], relative_to: entry, report: ../result/report.csv}\n");
+    study.write("study/spec.yaml", "schema_version: '1.0'\nparent: ../shared/base.yaml\ninput: {RAW: {relative_to: entry}}\ncolumns: [{name: ID, label: Override}]\noutput: {path: ../result/final.csv, columns: [ID], relative_to: entry, report: ../result/report.csv}\n");
     let artifact = study.resolve("study/spec.yaml");
     let entry = &artifact.entries()[0];
     let input = entry
@@ -182,7 +186,7 @@ fn selector_only_overrides_and_atomic_output_keep_original_paths_and_selected_ro
     // Default declaring resolution is different from the selector-only override.
     study.write(
         "study/default.yaml",
-        "schema_version: '1.0'\nparents: ../shared/base.yaml\n",
+        "schema_version: '1.0'\nparent: ../shared/base.yaml\n",
     );
     let default = study.resolve("study/default.yaml");
     let resource = default.entries()[0]
@@ -387,6 +391,19 @@ fn wire_validation_rejects_incomplete_or_invented_ledgers_and_preserves_large_nu
             "{modification}"
         );
     }
+    // A linked producing specification is a resource, never a second entry,
+    // even when that entry is otherwise complete and self-consistent.
+    let mut value: Value = yamaa_adapters::json_wire::decode(&json).unwrap();
+    let mut second = value["entries"][0].clone();
+    second["entry"] = Value::String("/other.yaml".into());
+    second["layers"] = yamaa_adapters::json!(["/other.yaml"]);
+    second["resources"] = Value::Array(Vec::new());
+    let mut alone = value.clone();
+    alone["entry"] = Value::String("/other.yaml".into());
+    alone["entries"] = Value::Array(vec![second.clone()]);
+    assert!(ResolvedArtifact::from_json(&yamaa_adapters::json_wire::encode(&alone)).is_ok());
+    value["entries"].as_array_mut().unwrap().push(second);
+    assert!(ResolvedArtifact::from_json(&yamaa_adapters::json_wire::encode(&value)).is_err());
 }
 
 #[test]
@@ -395,7 +412,7 @@ fn inherited_defaults_and_shorthand_keep_the_original_normalization_origins() {
     study.write("mapping.yaml", "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {RAW: missing.csv}\ncolumns: [{name: ID, type: str, derivation: {mapping: {source: RAW.ID, dict: {A: Alpha}}}}]\noutput: {path: result.csv, columns: [ID]}\n");
     study.write(
         "mapping-child.yaml",
-        "schema_version: '1.0'\nparents: mapping.yaml\n",
+        "schema_version: '1.0'\nparent: mapping.yaml\n",
     );
     let direct = study.resolve("mapping.yaml");
     let inherited = study.resolve("mapping-child.yaml");
@@ -412,7 +429,7 @@ fn inherited_defaults_and_shorthand_keep_the_original_normalization_origins() {
     study.write("shorthand.yaml", "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {RAW: missing.csv}\ncolumns: [{name: ID, type: str, derivation: RAW.ID}]\noutput: {path: result.csv, columns: [ID]}\n");
     study.write(
         "shorthand-child.yaml",
-        "schema_version: '1.0'\nparents: shorthand.yaml\n",
+        "schema_version: '1.0'\nparent: shorthand.yaml\n",
     );
     let direct = study.resolve("shorthand.yaml");
     let inherited = study.resolve("shorthand-child.yaml");
@@ -440,7 +457,7 @@ fn inherited_defaults_and_shorthand_keep_the_original_normalization_origins() {
 fn named_window_descendants_keep_the_definition_origin_and_root_keeps_the_use_site() {
     let study = Study::new();
     study.write("base.yaml", "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {RAW: {path: missing.csv, types: {ID: int}}}\nwindows: {W: {order_by: [RAW.ID]}}\ncolumns: [{name: ID, type: int, derivation: RAW.ID}]\noutput: {path: result.csv, columns: [ID]}\n");
-    study.write("child.yaml", "schema_version: '1.0'\nparents: base.yaml\ncolumns: [{name: N, type: int, derivation: {row_number: {window: W}}}]\noutput: {path: result.csv, columns: [ID, N]}\n");
+    study.write("child.yaml", "schema_version: '1.0'\nparent: base.yaml\ncolumns: [{name: N, type: int, derivation: {row_number: {window: W}}}]\noutput: {path: result.csv, columns: [ID, N]}\n");
     let artifact = study.resolve("child.yaml");
     let origins = &artifact.entries()[0].origins;
     let prefix = "/columns/1/derivation/value/row_number/window";
@@ -452,10 +469,11 @@ fn named_window_descendants_keep_the_definition_origin_and_root_keeps_the_use_si
         origins[&format!("{prefix}/order_by/0/variable")].declaring_source,
         Some(study.path("base.yaml"))
     );
-    for field in ["direction", "nulls"] {
-        assert_eq!(
-            origins[&format!("{prefix}/order_by/0/{field}")].source_kind,
-            OriginKind::SchemaDefault
-        );
-    }
+    assert_eq!(
+        origins[&format!("{prefix}/order_by/0/direction")].source_kind,
+        OriginKind::SchemaDefault
+    );
+    // An omitted placement has no schema default: missing sorts lowest, so its
+    // position follows direction and the resolved term leaves it absent.
+    assert!(!origins.contains_key(&format!("{prefix}/order_by/0/nulls")));
 }

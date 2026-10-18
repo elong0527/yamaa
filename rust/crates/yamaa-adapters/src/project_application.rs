@@ -3,6 +3,7 @@
 use crate::{
     file_application::{self, Failure},
     file_project::{self, FileProject},
+    issue_rows::Issue,
     project_source::Failure as EnvironmentFailure,
     specification_source::Error as SourceError,
 };
@@ -153,11 +154,15 @@ fn environment_projection_failure(error: crate::project_environment_diagnostics:
 }
 pub fn check(specification: &str, environment: &str, host: Language) -> Failure {
     crate::issue_rows::collect(
-        match crate::file_workflow::prepare(specification, environment, host) {
-            Ok(graph) => {
-                crate::producer_check::prepared(&graph).unwrap_or_else(|_| refused("check"))
+        match crate::file_workflow::select(specification, environment, host) {
+            Ok(yamaa_core::build::Prepared::Ordinary(project)) => {
+                crate::project_check::prepared(project.run()).unwrap_or_else(|_| refused("check"))
             }
-            Err(error) => workflow_issues(&error),
+            Ok(yamaa_core::build::Prepared::Plain(prepared)) => {
+                crate::specification_check::issue_rows(prepared.run())
+                    .unwrap_or_else(|_| refused("check"))
+            }
+            Err(error) => selection_failure(&error),
         },
     )
 }
@@ -167,12 +172,10 @@ pub fn workflow_rejection(error: &crate::file_workflow::Error) -> Failure {
     crate::issue_rows::collect(workflow_issues(error))
 }
 fn workflow_issues(error: &crate::file_workflow::Error) -> Failure {
-    crate::producer_check::rejected(error).unwrap_or_else(|error| match error {
-        crate::producer_check::Error::Original(error) => workflow_failure(error),
-        crate::producer_check::Error::Projection(_) => refused("check"),
-        crate::producer_check::Error::ResourceLimit(refusal) => {
-            refusal.issues("environment", "resource_limit")
-        }
+    preparation_issues(error).unwrap_or_else(|error| match error {
+        IssueError::Original(error) => workflow_failure(error),
+        IssueError::Projection => refused("check"),
+        IssueError::ResourceLimit(refusal) => refusal.issues("environment", "resource_limit"),
     })
 }
 
@@ -229,94 +232,36 @@ fn workflow_failure(error: &crate::file_workflow::Error) -> Failure {
         }
         W::Schema(_) => file_application::rejected("prepare", "shipped_schema"),
         W::Environment(environment) => project_failure(environment.error()),
-        W::Graph(graph) => graph_failure(graph.error(), |node| {
-            graph
-                .documents()
-                .get(node)
-                .map(|document| document.source().identity.as_str())
-        }),
+        W::Entry(entry) => entry_failure(entry.error()),
     }
 }
-/// Graph failures that the static projection does not own keep their typed
-/// cause: resource and limit facts, or the named boundary and its source.
-fn graph_failure<'a>(
-    error: &crate::file_graph::Error,
-    source: impl Fn(usize) -> Option<&'a str>,
-) -> Failure {
-    use crate::{
-        file_graph::Error as G, file_preparation::Error as D, producer_admission::Error as P,
-        producer_graph::Error as A,
-    };
-    use yamaa_core::producer_graph::Error as C;
+/// Entry failures that the static projection does not own keep their typed
+/// cause: resource and limit facts, or the named boundary.
+fn entry_failure(error: &crate::file_entry::Error) -> Failure {
+    use crate::{file_entry::Error as E, file_preparation::Error as D};
     match error {
-        G::Resource(error) | G::Document(D::Resource(error)) => {
-            file_application::resource_failure("prepare", error)
-        }
-        G::Snapshot { identity, error } => {
+        E::Document(D::Resource(error)) => file_application::resource_failure("prepare", error),
+        E::Snapshot { identity, error } => {
             file_application::resource_failure_from("prepare", error, identity)
         }
-        G::Document(D::ResourceFinding { diagnostic, .. })
-        | G::Document(D::PreparationFinding { diagnostic, .. }) => {
+        E::Document(D::ResourceFinding { diagnostic, .. })
+        | E::Document(D::PreparationFinding { diagnostic, .. }) => {
             file_application::classified_resource(diagnostic)
         }
-        G::Document(D::Preparation(error)) => preparation_boundary(error),
-        G::Document(D::Compile(
+        E::Document(D::Preparation(error)) => preparation_boundary(error),
+        E::Document(D::Compile(
             error @ crate::specification_run::Error::Prepare(
                 PrepareError::Limit(_) | PrepareError::Numeric { .. },
             ),
         )) => file_application::preparation_failure(crate::specification_diagnostics::failure(
             error, None,
         )),
-        G::Document(D::Compile(_)) => refused("prepare"),
-        G::Document(D::Inventory(_)) => file_application::rejected("prepare", "inventory"),
-        G::Boundary(reason) => file_application::graph_boundary("prepare", reason, None),
-        G::Graph(A::Boundary { node, reason }) => {
-            file_application::graph_boundary("check", reason, source(*node))
-        }
-        G::Graph(A::Graph(C::Boundary { node, reason })) => {
-            file_application::graph_boundary("check", reason, node.and_then(&source))
-        }
-        G::Graph(A::Metadata {
-            node,
-            error: P::Boundary,
-        }) => file_application::graph_boundary("check", "producer_admission", source(*node)),
-        G::Graph(A::Metadata {
-            node,
-            error: P::Admission(error),
-        })
-        | G::Graph(A::Graph(C::Admission { node, error })) => {
-            admission_failure(error, source(*node))
-        }
-        G::Graph(A::Graph(C::Compilation { error, .. })) => compilation_failure(error),
-        // A cycle is a semantic finding projected by the static preflight; only
-        // a refused projection reaches this fallback.
-        G::Graph(A::Graph(C::Cycle { .. })) => refused("check"),
+        E::Document(D::Compile(_)) => refused("prepare"),
+        E::Document(D::Inventory(_)) => file_application::rejected("prepare", "inventory"),
     }
 }
-fn admission_failure(
-    error: &yamaa_core::producer_admission::Error,
-    source: Option<&str>,
-) -> Failure {
-    use yamaa_core::producer_admission::Error as E;
-    match error {
-        E::Limit(limit) => file_application::resource_limit_from("prepare", limit, source),
-        E::Boundary => file_application::graph_boundary("check", "producer_admission", source),
-        E::Compilation(error) => compilation_failure(error),
-        // Admission findings are projected by the static preflight; only a
-        // refused projection reaches this fallback.
-        E::Invalid(_) => refused("check"),
-    }
-}
-fn compilation_failure(error: &PrepareError) -> Failure {
-    match error {
-        PrepareError::Limit(_) | PrepareError::Numeric { .. } => {
-            crate::specification_diagnostics::compiler_failure(error)
-        }
-        _ => file_application::rejected("check", "compilation_boundary"),
-    }
-}
-// Semantic findings have already passed the complete producer_check preflight.
-// These entry failures encode fixed boundary codes without cloning diagnostics,
+// Semantic findings have already passed the complete static preflight. These
+// entry failures encode fixed boundary codes without cloning diagnostics,
 // source bytes or an inherited arena. Opaque transport causes remain retained.
 fn preparation_boundary(
     error: &crate::specification_source::InheritanceError<crate::file_resources::Error>,
@@ -352,6 +297,177 @@ fn preparation_boundary(
     crate::specification_diagnostics::inheritance_failure_ref(error)
         .map(file_application::preparation_failure)
         .unwrap_or_else(|_| refused("prepare"))
+}
+
+/// A static issue projection refusal retains the exact original preparation
+/// error beside it.
+#[derive(Debug)]
+pub enum IssueError<'a> {
+    Original(&'a crate::file_workflow::Error),
+    Projection,
+    ResourceLimit(crate::resource_diagnostics::Refusal),
+}
+fn invalid() -> IssueError<'static> {
+    IssueError::Projection
+}
+fn issue(diagnostic: yamaa_core::diagnostic::Diagnostic) -> Result<Issue, IssueError<'static>> {
+    Issue::from_core(diagnostic).map_err(|_| invalid())
+}
+/// Project the semantic findings of a refused environment or entry capture;
+/// any other preparation failure stays with its original owner.
+pub fn preparation_issues(
+    error: &crate::file_workflow::Error,
+) -> Result<Vec<Issue>, IssueError<'_>> {
+    use crate::file_workflow::Error as W;
+    match error {
+        W::Environment(environment) => environment_issues(error, environment.error()),
+        W::Entry(entry) => match entry.error() {
+            crate::file_entry::Error::Document(crate::file_preparation::Error::Preparation(
+                cause,
+            )) => inheritance_issues(error, cause),
+            _ => Err(IssueError::Original(error)),
+        },
+        _ => Err(IssueError::Original(error)),
+    }
+}
+
+fn environment_issues<'a>(
+    owner: &'a crate::file_workflow::Error,
+    cause: &file_project::Error,
+) -> Result<Vec<Issue>, IssueError<'a>> {
+    use crate::project_environment_diagnostics as D;
+    use crate::project_source::Failure as F;
+    use crate::specification_source::Error as S;
+    fn projection(error: D::Error) -> IssueError<'static> {
+        match error {
+            D::Error::ResourceLimit(refusal) => IssueError::ResourceLimit(refusal),
+            _ => invalid(),
+        }
+    }
+    if let file_project::Error::Resource(resource) = cause {
+        use yamaa_core::project_environment_diagnostics::ReadFailure;
+        let crate::file_workflow::Error::Environment(environment) = owner else {
+            return Err(invalid());
+        };
+        let path = environment.environment().ok_or_else(invalid)?;
+        let failure = match resource {
+            crate::file_resources::Error::Missing => ReadFailure::Missing,
+            crate::file_resources::Error::Unreadable => ReadFailure::Unreadable,
+            _ => return D::root_resource(resource, path).map_err(projection),
+        };
+        return Ok(vec![issue(failure.diagnostic(path))?]);
+    }
+    let file_project::Error::Environment(cause) = cause else {
+        return Err(IssueError::Original(owner));
+    };
+    let mut issues = Vec::new();
+    match cause {
+        F::Root(S::Findings(captured)) => {
+            issues.extend(D::schema_root(captured).map_err(|_| invalid())?)
+        }
+        F::Root(error) => {
+            let crate::file_workflow::Error::Environment(environment) = owner else {
+                return Err(invalid());
+            };
+            let written = environment.environment().ok_or_else(invalid)?;
+            issues.extend(D::root_boundary(error, written).map_err(projection)?);
+        }
+        F::RootScalar { root, findings } => {
+            issues.extend(D::scalar_root(root, findings).map_err(|_| invalid())?)
+        }
+        F::Rejected(rejected) => {
+            for rows in [
+                D::admission(rejected),
+                D::scalar_sources(rejected),
+                D::schema_sources(rejected),
+                D::capture_sources(rejected),
+            ] {
+                issues.extend(rows.map_err(projection)?);
+            }
+        }
+        _ => return Err(IssueError::Original(owner)),
+    }
+    Ok(issues)
+}
+
+fn inheritance_issues<'a>(
+    owner: &'a crate::file_workflow::Error,
+    cause: &crate::specification_source::InheritanceError<crate::file_resources::Error>,
+) -> Result<Vec<Issue>, IssueError<'a>> {
+    use crate::specification_source::{Error as S, InheritanceError as I};
+    use crate::yaml_decode::DecodeFailure;
+    use yamaa_core::{
+        dictionary_preparation::Cause,
+        inheritance::Error as G,
+        inheritance_preparation::Error as E,
+        schema::{
+            InheritanceDependencyError as D, InheritanceReferenceError as R,
+            NormalizationError as N,
+        },
+    };
+    let supported = match cause {
+        I::Entry(S::Findings(_)) => true,
+        I::Entry(S::Decode { error, .. }) => matches!(
+            error,
+            DecodeFailure::NonAscii(_)
+                | DecodeFailure::InvalidYaml { .. }
+                | DecodeFailure::InvalidText(_)
+        ),
+        I::Dictionary { error, .. } => matches!(
+            &error.cause,
+            Cause::Capture {
+                failure: Some(_),
+                ..
+            } | Cause::Admission {
+                error: N::Invalid(_),
+                ..
+            }
+        ),
+        I::Preparation { error, .. } => match error.as_ref() {
+            E::Traversal(
+                G::Unavailable { .. }
+                | G::InvalidParent { .. }
+                | G::Cycle { .. }
+                | G::Version { .. },
+            ) => true,
+            E::Traversal(G::Layer {
+                error: N::Invalid(_),
+                ..
+            }) => true,
+            E::Normalize(failure) => matches!(&failure.error, N::Invalid(_)),
+            E::Model(_) => true,
+            E::Composition(failure) => matches!(&failure.error, N::Invalid(_)),
+            E::Dependencies(failure) => matches!(
+                &failure.error,
+                D::Normalization(N::Invalid(_))
+                    | D::Reference(R::Normalization(N::Invalid(_)))
+                    | D::Invalid(_)
+            ),
+            _ => false,
+        },
+        _ => false,
+    };
+    if !supported {
+        return Err(IssueError::Original(owner));
+    }
+    let encoded = crate::specification_diagnostics::inheritance_failure_ref(cause)
+        .map_err(|_| IssueError::Original(owner))?;
+    // Typed cause selection precedes projection; this protocol check validates
+    // completeness, never chooses a preparation/execution route from error text.
+    let value: yamaa_core::json::Value =
+        crate::json_wire::decode(&encoded).map_err(|_| invalid())?;
+    let outcome = &value["outcome"];
+    if outcome["status"] != "invalid" {
+        return Err(IssueError::Original(owner));
+    }
+    let rows = outcome["diagnostics"].as_array().ok_or_else(invalid)?;
+    if rows.is_empty() {
+        return Err(invalid());
+    }
+    rows.iter()
+        .cloned()
+        .map(|row| Issue::from_diagnostic(row).map_err(|_| invalid()))
+        .collect()
 }
 
 #[cfg(all(test, feature = "yaml"))]
@@ -426,16 +542,11 @@ mod resource_tests {
     }
 
     #[test]
-    fn graph_fallbacks_keep_their_typed_cause_and_source_instead_of_a_catch_all() {
-        use crate::{
-            file_graph::Error as G, producer_admission::Error as P, producer_graph::Error as A,
-        };
-        use yamaa_core::{producer_admission::Error as Admission, producer_graph::Error as C};
-        let documents = ["/study/adsl.yaml", "/study/producer.yaml"];
-        let limit = || yamaa_core::limits::Limits::inputs(17).unwrap_err();
+    fn entry_fallbacks_keep_their_typed_cause_and_source_instead_of_a_catch_all() {
+        use crate::{file_entry::Error as E, file_preparation::Error as D};
         let cases = [
             (
-                G::Snapshot {
+                E::Snapshot {
                     identity: "/study/input/dm.csv".into(),
                     error: crate::file_resources::Error::Changed,
                 },
@@ -444,61 +555,18 @@ mod resource_tests {
                 }),
             ),
             (
-                G::Graph(A::Graph(C::Admission {
-                    node: 1,
-                    error: Admission::Limit(limit()),
-                })),
-                crate::json!({
-                    "stage":"prepare", "code":"resource_limit", "resource":"inputs",
-                    "limit":16, "actual":17, "source":"/study/producer.yaml",
-                }),
+                E::Document(D::Resource(crate::file_resources::Error::OutsideRoots)),
+                crate::json!({"stage":"prepare", "code":"resource_outside_roots"}),
             ),
             (
-                G::Graph(A::Metadata {
-                    node: 0,
-                    error: P::Admission(Admission::Limit(limit())),
-                }),
-                crate::json!({
-                    "stage":"prepare", "code":"resource_limit", "resource":"inputs",
-                    "limit":16, "actual":17, "source":"/study/adsl.yaml",
-                }),
-            ),
-            (
-                G::Graph(A::Boundary {
-                    node: 1,
-                    reason: "contradictory_snapshot",
-                }),
-                crate::json!({
-                    "stage":"check", "code":"graph_boundary", "reason":"contradictory_snapshot",
-                    "source":"/study/producer.yaml",
-                }),
-            ),
-            (
-                G::Graph(A::Graph(C::Boundary {
-                    node: None,
-                    reason: "root",
-                })),
-                crate::json!({"stage":"check", "code":"graph_boundary", "reason":"root"}),
-            ),
-            (
-                G::Graph(A::Metadata {
-                    node: 0,
-                    error: P::Boundary,
-                }),
-                crate::json!({
-                    "stage":"check", "code":"graph_boundary", "reason":"producer_admission",
-                    "source":"/study/adsl.yaml",
-                }),
-            ),
-            (
-                G::Boundary("input_origin"),
-                crate::json!({
-                    "stage":"prepare", "code":"graph_boundary", "reason":"input_origin",
-                }),
+                E::Document(D::Inventory(
+                    yamaa_core::submission_inventory::MetadataError::Shape,
+                )),
+                crate::json!({"stage":"prepare", "code":"inventory"}),
             ),
         ];
         for (error, context) in cases {
-            let rows = graph_failure(&error, |node| documents.get(node).copied());
+            let rows = entry_failure(&error);
             assert_eq!(rows.len(), 1, "{error:?}");
             assert_eq!(rows[0].phase, "engine");
             assert_eq!(
@@ -510,6 +578,22 @@ mod resource_tests {
             assert_eq!(rows[0].requirement, None);
             assert_eq!(rows[0].context.clone(), context, "{error:?}");
         }
+        // A classified link failure keeps its authored validation finding.
+        let diagnostic = yamaa_core::resource::ResourceFailure::Missing
+            .field_diagnostic("input.P.schema", "producer.yaml");
+        let rows = entry_failure(&E::Document(D::ResourceFinding {
+            error: crate::file_resources::Error::Missing,
+            diagnostic: Box::new(diagnostic),
+        }));
+        let missing = yamaa_core::diagnostic::ConditionCode::ResourceMissing.definition();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].phase, missing.phase);
+        assert_eq!(rows[0].condition, missing.condition);
+        assert_eq!(rows[0].spec_paths, ["input.P.schema"]);
+        assert_eq!(
+            rows[0].context.clone(),
+            crate::json!({"path":"producer.yaml"})
+        );
     }
 
     #[test]

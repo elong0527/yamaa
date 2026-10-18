@@ -10,10 +10,10 @@ date. A full date is left exactly as collected even when it falls
 before TRTSDT. When AESTDTC holds a year and a month only, ASTDT is
 the 15th of that month. When that 15th falls before TRTSDT and
 TRTSDT falls in the same month, ASTDT is TRTSDT instead. When the
-whole of that month falls before TRTSDT, ASTDT has no value. ASTDT
-has no value when AESTDTC holds a year only, holds text that is not
-a date, or has no value. When TRTSDT has no value, a year and a
-month is still completed to the 15th. ASTDTC is ASTDT written as
+whole of that month falls before TRTSDT, ASTDT stays on the 15th.
+ASTDT has no value when AESTDTC holds a year only, holds text that
+is not a date, or has no value. When TRTSDT has no value, a year and
+a month is still completed to the 15th. ASTDTC is ASTDT written as
 text in the form "YYYY-MM-DD", and ASTDTC has no value when ASTDT
 has no value. ASTDTF is "D" when the day of ASTDT was supplied to
 complete a year and a month, and ASTDTF has no value when AESTDTC

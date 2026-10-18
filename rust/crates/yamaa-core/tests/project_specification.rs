@@ -820,7 +820,7 @@ mod project {
         }
 
         #[test]
-        fn nested_row_case_and_concat_calls_share_activation_and_dependency_order() {
+        fn nested_row_case_calls_share_activation_and_dependency_order() {
             use yamaa_core::project_function::{Function, Language};
             let mut definition = function("format").definition().clone();
             definition.returns = ColumnType::Str;
@@ -830,37 +830,27 @@ mod project {
                 }
             }
             let formatter = Function::admit(Language::Python, definition).unwrap();
-            let case = Tree::map(vec![(
-                "case",
-                Tree::List(vec![
-                    Tree::map(vec![
-                        ("when", Tree::text("ID > 0")),
-                        ("then", call("id", vec![("x", Tree::text("C"))])),
-                    ]),
-                    Tree::map(vec![("otherwise", literal(0))]),
-                ]),
-            )]);
-            let concat = Tree::map(vec![(
-                "str_concat",
+            let case = |then: Tree, otherwise: Tree| {
                 Tree::map(vec![(
-                    "sources",
+                    "case",
                     Tree::List(vec![
-                        Tree::map(vec![("literal", Tree::text("prefix:"))]),
-                        call("format", vec![("x", Tree::text("A"))]),
+                        Tree::map(vec![("when", Tree::text("ID > 0")), ("then", then)]),
+                        Tree::map(vec![("otherwise", otherwise)]),
                     ]),
-                )]),
-            )]);
+                )])
+            };
+            let identity = case(call("id", vec![("x", Tree::text("C"))]), literal(0));
+            let formatted = case(
+                call("format", vec![("x", Tree::text("A"))]),
+                text_literal("prefix:"),
+            );
             let spec = specification_with_rows(
                 vec![
                     ("A", "int", literal(0)),
                     ("C", "int", literal(7)),
-                    (
-                        "D",
-                        "str",
-                        Tree::map(vec![("literal", Tree::text("unused"))]),
-                    ),
+                    ("D", "str", text_literal("unused")),
                 ],
-                vec![row("one", vec![("D", concat), ("A", case)], None)],
+                vec![row("one", vec![("D", formatted), ("A", identity)], None)],
             );
             let prepared = PreparedSpecification::prepare_with_project(
                 &spec,
@@ -878,12 +868,10 @@ mod project {
                     .collect::<Vec<_>>(),
                 [0, 2, 1, 3]
             );
-            let Expression::StrConcat { operands, .. } =
-                &plan.templates()[0].assignments[3].expression
-            else {
-                panic!("concat")
+            let Expression::Case(branches) = &plan.templates()[0].assignments[3].expression else {
+                panic!("case")
             };
-            let Expression::ProjectFunction(function) = &operands[1].expression else {
+            let Expression::ProjectFunction(function) = &branches[0].assignment.expression else {
                 panic!("nested function")
             };
             assert_eq!(
@@ -1324,7 +1312,7 @@ mod project {
                 cases("ID >", pad("SRC.ABSENT", "0"), pad("SRC.ID", "2")),
             )]);
             let actual = findings(&spec);
-            assert_eq!(actual[0].0.definition().condition, "invalid_predicate");
+            assert_eq!(actual[0].0.definition().condition, "invalid_expression");
             assert_eq!(actual[1].0, ConditionCode::StrPadWidth);
             assert_eq!(
                 actual.into_iter().map(|(_, path)| path).collect::<Vec<_>>(),
@@ -1373,46 +1361,12 @@ mod project {
                     .any(|(code, _)| *code == ConditionCode::StrPadWidth));
                 assert!(actual[..2]
                     .iter()
-                    .any(|(code, _)| code.definition().condition == "invalid_numeric_expression"));
+                    .any(|(code, _)| code.definition().condition == "invalid_expression"));
                 assert_eq!(
                     actual.into_iter().map(|(_, path)| path).collect::<Vec<_>>(),
                     expected
                 );
             }
-        }
-
-        #[test]
-        fn concat_retains_already_reported_operand_defects_without_panicking() {
-            let spec = specification(vec![(
-                "A",
-                "str",
-                Tree::map(vec![(
-                    "str_concat",
-                    Tree::map(vec![(
-                        "sources",
-                        Tree::List(vec![
-                            pad("SRC.ID", "0"),
-                            Tree::map(vec![(
-                                "compute",
-                                Tree::map(vec![("expr", Tree::text("ID +"))]),
-                            )]),
-                        ]),
-                    )]),
-                )]),
-            )]);
-            let actual = findings(&spec);
-            assert_eq!(actual[0].0, ConditionCode::StrPadWidth);
-            assert_eq!(
-                actual[1].0.definition().condition,
-                "invalid_numeric_expression"
-            );
-            assert_eq!(
-                actual.into_iter().map(|(_, path)| path).collect::<Vec<_>>(),
-                widths_and_sources(&[
-                    "columns.A.derivation.str_concat.sources[0].str_pad.width",
-                    "columns.A.derivation.str_concat.sources[1].compute.expr",
-                ])
-            );
         }
     }
 }

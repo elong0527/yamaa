@@ -2,8 +2,7 @@
 
 Derive ADaM datasets from SDTM with one specification per output dataset. The
 [introduction](intro.md) explains the language; the
-[style contract](https://github.com/elong0527/yamaa/blob/main/rules/specification/style.md)
-owns authoring conventions.
+[style guide](style.md) owns authoring conventions.
 
 - create exactly one spec per output dataset (e.g. `adsl.yaml`); keep temporary
   values and ordered calculation steps as derivations in that spec, not as
@@ -47,7 +46,7 @@ the yamaa spec must be built as a robust and succinct yamaa spec.
   column its derivation references.
 - **Ordered window chains stay in the dataset spec.** A later window derivation
   may read an earlier window result, including through intervening scalar
-  derivations. For example, `rank` -> `case` -> `previous_non_missing` is one
+  derivations. For example, `rank` -> `case` -> `locf` is one
   ordered derivation chain in one row template; it does not require staging
   files.
 - **ADSL is derived once and consumed downstream.** Subject-level variables
@@ -58,7 +57,7 @@ the yamaa spec must be built as a robust and succinct yamaa spec.
   line width, the canonical `{literal: X}` and bare-string source
   spellings, and the three authoring lints (uniform derivations, redundant
   intermediates, missing output-column labels) are fixed by the
-  [style contract](https://github.com/elong0527/yamaa/blob/main/rules/specification/style.md).
+  [style guide](style.md).
   Run `python -m yamaa.style --fix <spec>.yaml` with the pinned yamaa, then
   correct what it reports; it exits nonzero while a finding remains.
 - **Output naming.** Every spec's `output.path` is `adam/<ds>-yamaa.parquet`

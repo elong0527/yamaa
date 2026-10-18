@@ -391,7 +391,7 @@ failed <- yamaa_spec("spec.yaml")$run()
 stopifnot(is.null(failed$output), identical(failed$issues$condition, "division_by_zero"),
   inherits(tryCatch(failed$save(), error = identity), "yamaa_error"), !file.exists("rounded.csv"))
 cat("public R CSV precision preserves unrounded tables, exact saved bytes and failure gates\n")
-graph_dir <- file.path(work, "producer-metadata-refusal"); dir.create(graph_dir)
+graph_dir <- file.path(work, "linked-artifact-refusal"); dir.create(graph_dir)
 setwd(graph_dir)
 writeLines(c("schema_version: '1.0'", "domain: PROD", "keys: [ID]",
   "input: {RAW: never-read.csv}",
@@ -404,16 +404,17 @@ writeLines(c("schema_version: '1.0'", "domain: CONS", "keys: [ID]",
 spec <- yamaa_spec("spec.yaml")
 checked <- refuse_activation(spec$check())
 failed <- refuse_activation(spec$run())
+# The producer never runs: the consumer reads its own linked path, and that
+# stored artifact does not exist yet.
 stopifnot(nrow(checked$issues) == 0L,
   identical(failed$issues$condition, "resource_path_missing"),
-  identical(failed$issues$spec_paths, list("input.RAW.path")),
+  identical(failed$issues$spec_paths, list("input.P.path")),
   grepl('"outcome":"failure"', observations(failed), fixed = TRUE),
-  grepl('"source_reads":[]', observations(failed), fixed = TRUE),
-  # The entry never ran, so the producer graph returns no run report.
-  is.null(failed$report))
+  !grepl('"path":"never-read.csv"', observations(failed), fixed = TRUE),
+  grepl('"source_reads":[]', observations(failed), fixed = TRUE))
 stopifnot(is.null(failed$output), !file.exists("produced.csv"), !file.exists("consumer.csv"),
   inherits(tryCatch(failed$save(), error = identity), "yamaa_error"))
-cat("public R selected functionless producer failure retains its actual source prefix\n")
+cat("public R functionless link reads its missing artifact without running the producer\n")
 graph_document <- function(input, base, output, invalid = FALSE) c(
   "schema_version: '1.0'", "domain: TEST", "keys: [ID]", paste0("base: ", base),
   paste0("input: ", input), "columns:",
@@ -423,31 +424,29 @@ graph_document <- function(input, base, output, invalid = FALSE) c(
   paste0("output: {path: ", output, ", columns: [ID, VALUE]}"))
 dir.create("parents")
 writeLines(graph_document("{RAW: ../never-read.csv}", "RAW", "../leaf.csv", TRUE), "parents/base.yaml")
-writeLines(c("schema_version: '1.0'", "parents: [parents/base.yaml]", "domain: LEAF"), "leaf.yaml")
+writeLines(c("schema_version: '1.0'", "parent: parents/base.yaml", "domain: LEAF"), "leaf.yaml")
 writeLines(graph_document(host_truth[["aliased_leaf_reference"]], "P", "left.csv"), "left.yaml")
 writeLines(graph_document(host_truth[["leaf_reference"]], "P", "right.csv"), "right.yaml")
 writeLines(graph_document(host_truth[["diamond_reference"]], "L", "consumer.csv", TRUE), "spec.yaml")
 for (attempt in 1:2) {
+  # Linked producers supply output contracts only: their own findings are
+  # never compiled, and only the entry is checked.
   checked <- refuse_activation(spec$check())
-  expected <- lapply(c("spec.yaml", "leaf.yaml"), function(source) issue("invalid_regex", "REQ-0827",
-    host_truth[["verification_pattern_path"]], paste0(
-    '{', if (source == "leaf.yaml") paste0('"declaring_sources":["', normalizePath("parents/base.yaml", winslash = "/"), '"],'),
-    '"entry":"', normalizePath("spec.yaml", winslash = "/"), '","pattern":"\u00e9(","source":"',
-    normalizePath(source, winslash = "/"), '"}')))
-  same_issues(checked$issues, expected)
+  same_issues(checked$issues, list(issue("invalid_regex", "REQ-0827",
+    host_truth[["verification_pattern_path"]], '{"pattern":"\u00e9("}')))
 }
+# A link types whatever file the consumer names; a path that differs from the
+# producer's own output is admitted.
 writeLines(graph_document(host_truth[["wrong_leaf_reference"]], "P", "consumer.csv"), "spec.yaml")
 checked <- refuse_activation(spec$check())
-stopifnot(identical(checked$issues$condition, "producer_output_path_mismatch"),
-  identical(checked$issues$requirement, "REQ-0534"),
-  identical(checked$issues$spec_paths, list(c("input.P.path", "input.P.schema"))))
+stopifnot(nrow(checked$issues) == 0L)
 writeLines(graph_document(host_truth[["incompatible_leaf_reference"]], "P", "consumer.csv"), "spec.yaml")
 checked <- refuse_activation(spec$check())
 stopifnot(identical(checked$issues$condition, "redundant_field_type"),
   identical(checked$issues$requirement, "REQ-0523"),
   identical(checked$issues$spec_paths, list("input.P.types.ID")),
   !any(file.exists(fixture_strings(host_truth[["unread_graph_files"]]))))
-cat("public R original inherited diamond checks are complete with no study/publication effects\n")
+cat("public R linked checks report only the entry with no study/publication effects\n")
 # Declaring-file input/output provenance survives inheritance and publication.
 local_paths <- file.path(work, "declaring-file-paths"); dir.create(local_paths)
 setwd(local_paths)
@@ -456,7 +455,7 @@ writeLines("[invalid configuration", "yamaa-project.yaml")
 writeLines("schema_version: '1.0'", "shared/environment.yaml")
 writeLines(c("schema_version: '1.0'", "environments: {python: environment.yaml, r: environment.yaml}",
   "adam: {specs: [../entry/spec.yaml]}"), "shared/project.yaml")
-writeLines(c("schema_version: '1.0'", "parents: ../shared/base.yaml", "domain: CHILD"), "entry/spec.yaml")
+writeLines(c("schema_version: '1.0'", "parent: ../shared/base.yaml", "domain: CHILD"), "entry/spec.yaml")
 writeLines(c("schema_version: '1.0'", "domain: BASE", "keys: [ID]", "input: {SRC: data.csv}",
   "columns: [{name: ID, type: int, derivation: SRC.ID}]",
   "output: {path: ../outputs/held.csv, columns: [ID]}"), "shared/base.yaml")
@@ -656,10 +655,12 @@ qualify_intermediate_callback <- function() {
 }
 qualify_intermediate_callback()
 
-qualify_matching_budget <- function() {
+# Matching is linear: a nested repetition that cannot match is an ordinary
+# verification failure, not an exhausted step budget.
+qualify_catastrophic_pattern <- function() {
   previous <- getwd(); on.exit(setwd(previous))
-  work <- tempfile("regex-budget-"); dir.create(work); setwd(work)
-  truth <- host_truth[["regex_budget"]]
+  work <- tempfile("catastrophic-pattern-"); dir.create(work); setwd(work)
+  truth <- host_truth[["catastrophic_pattern"]]
   writeChar(truth$specification, "spec.yaml", eos = NULL, useBytes = TRUE)
   writeChar(truth$source, "input.csv", eos = NULL, useBytes = TRUE)
   writeLines("schema_version: '1.0'", "environment.yaml")
@@ -674,6 +675,6 @@ qualify_matching_budget <- function() {
       inherits(tryCatch(failed$save(), error = identity), "yamaa_error"),
       !file.exists("output.csv"))
   }
-  cat("public R matching budget has the same owner and bound with and without a project\n")
+  cat("public R catastrophic pattern fails the same check with and without a project\n")
 }
-qualify_matching_budget()
+qualify_catastrophic_pattern()

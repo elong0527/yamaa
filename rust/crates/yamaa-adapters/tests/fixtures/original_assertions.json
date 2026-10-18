@@ -1,7 +1,7 @@
 [
   {
     "case": "held",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"assert\": {\"id\": \"positive\", \"when\": \"V IS NOT NULL\", \"require\": \"V > 0\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"id\": \"positive\", \"when\": \"V IS NOT NULL\", \"require\": \"V > 0\"}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V\na,10\nb,\nc,7\n",
     "expected": {
       "artifacts": [
@@ -151,23 +151,12 @@
       "unsupported": [],
       "verifications": [
         {
-          "check": "unique",
-          "evaluated_count": 3,
-          "failure": null,
-          "requirement": "REQ-0381",
-          "severity": "error",
-          "spec_path": "verifications[0].unique",
-          "specification": "spec.yaml",
-          "target": null,
-          "verification_id": "prefix"
-        },
-        {
           "check": "assert",
           "evaluated_count": 3,
           "failure": null,
           "requirement": "REQ-0384",
           "severity": "error",
-          "spec_path": "verifications[1].assert",
+          "spec_path": "verifications[0].assert",
           "specification": "spec.yaml",
           "target": null,
           "verification_id": "positive"
@@ -178,7 +167,7 @@
           "failure": null,
           "requirement": "REQ-0385",
           "severity": "error",
-          "spec_path": "verifications[2].row_count",
+          "spec_path": "verifications[1].row_count",
           "specification": "spec.yaml",
           "target": null,
           "verification_id": null
@@ -189,7 +178,7 @@
   },
   {
     "case": "failed",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"assert\": {\"id\": \"above-eight\", \"require\": \"V > 8\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"id\": \"above-eight\", \"require\": \"V > 8\"}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V\na,10\nb,\nc,7\n",
     "expected": {
       "artifacts": [],
@@ -213,7 +202,7 @@
           "phase": "verification",
           "requirement": "REQ-0384",
           "spec_paths": [
-            "verifications[1].assert"
+            "verifications[0].assert"
           ]
         }
       ],
@@ -241,7 +230,7 @@
               "phase": "verification",
               "requirement": "REQ-0384",
               "spec_paths": [
-                "verifications[1].assert"
+                "verifications[0].assert"
               ]
             }
           ],
@@ -314,17 +303,6 @@
       "unsupported": [],
       "verifications": [
         {
-          "check": "unique",
-          "evaluated_count": 3,
-          "failure": null,
-          "requirement": "REQ-0381",
-          "severity": "error",
-          "spec_path": "verifications[0].unique",
-          "specification": "spec.yaml",
-          "target": null,
-          "verification_id": "prefix"
-        },
-        {
           "check": "assert",
           "evaluated_count": 3,
           "failure": {
@@ -365,12 +343,12 @@
             "requirement": "REQ-0384",
             "severity": "error",
             "spec_paths": [
-              "verifications[1].assert"
+              "verifications[0].assert"
             ]
           },
           "requirement": "REQ-0384",
           "severity": "error",
-          "spec_path": "verifications[1].assert",
+          "spec_path": "verifications[0].assert",
           "specification": "spec.yaml",
           "target": null,
           "verification_id": "above-eight"
@@ -381,7 +359,7 @@
           "failure": null,
           "requirement": "REQ-0385",
           "severity": "error",
-          "spec_path": "verifications[2].row_count",
+          "spec_path": "verifications[1].row_count",
           "specification": "spec.yaml",
           "target": null,
           "verification_id": null
@@ -392,7 +370,7 @@
   },
   {
     "case": "inactive",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"assert\": {\"when\": \"FALSE\", \"require\": \"FALSE\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"when\": \"FALSE\", \"require\": \"FALSE\"}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V\na,10\nb,\nc,7\n",
     "expected": {
       "artifacts": [
@@ -542,23 +520,12 @@
       "unsupported": [],
       "verifications": [
         {
-          "check": "unique",
-          "evaluated_count": 3,
-          "failure": null,
-          "requirement": "REQ-0381",
-          "severity": "error",
-          "spec_path": "verifications[0].unique",
-          "specification": "spec.yaml",
-          "target": null,
-          "verification_id": "prefix"
-        },
-        {
           "check": "assert",
           "evaluated_count": 3,
           "failure": null,
           "requirement": "REQ-0384",
           "severity": "error",
-          "spec_path": "verifications[1].assert",
+          "spec_path": "verifications[0].assert",
           "specification": "spec.yaml",
           "target": null,
           "verification_id": null
@@ -569,7 +536,7 @@
           "failure": null,
           "requirement": "REQ-0385",
           "severity": "error",
-          "spec_path": "verifications[2].row_count",
+          "spec_path": "verifications[1].row_count",
           "specification": "spec.yaml",
           "target": null,
           "verification_id": null
@@ -580,7 +547,7 @@
   },
   {
     "case": "unknown_when",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"assert\": {\"when\": \"V > 0\", \"require\": \"FALSE\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"when\": \"V > 0\", \"require\": \"FALSE\"}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V\na,10\nb,\nc,7\n",
     "expected": {
       "artifacts": [],
@@ -603,7 +570,7 @@
           "phase": "verification",
           "requirement": "REQ-0384",
           "spec_paths": [
-            "verifications[1].assert"
+            "verifications[0].assert"
           ]
         }
       ],
@@ -630,7 +597,7 @@
               "phase": "verification",
               "requirement": "REQ-0384",
               "spec_paths": [
-                "verifications[1].assert"
+                "verifications[0].assert"
               ]
             }
           ],
@@ -702,17 +669,6 @@
       ],
       "unsupported": [],
       "verifications": [
-        {
-          "check": "unique",
-          "evaluated_count": 3,
-          "failure": null,
-          "requirement": "REQ-0381",
-          "severity": "error",
-          "spec_path": "verifications[0].unique",
-          "specification": "spec.yaml",
-          "target": null,
-          "verification_id": "prefix"
-        },
         {
           "check": "assert",
           "evaluated_count": 3,
@@ -752,12 +708,12 @@
             "requirement": "REQ-0384",
             "severity": "error",
             "spec_paths": [
-              "verifications[1].assert"
+              "verifications[0].assert"
             ]
           },
           "requirement": "REQ-0384",
           "severity": "error",
-          "spec_path": "verifications[1].assert",
+          "spec_path": "verifications[0].assert",
           "specification": "spec.yaml",
           "target": null,
           "verification_id": null
@@ -768,7 +724,7 @@
           "failure": null,
           "requirement": "REQ-0385",
           "severity": "error",
-          "spec_path": "verifications[2].row_count",
+          "spec_path": "verifications[1].row_count",
           "specification": "spec.yaml",
           "target": null,
           "verification_id": null
@@ -779,7 +735,7 @@
   },
   {
     "case": "null_require",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"assert\": {\"when\": \"V IS NULL\", \"require\": \"V IS NOT NULL\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"when\": \"V IS NULL\", \"require\": \"V IS NOT NULL\"}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V\na,10\nb,\nc,7\n",
     "expected": {
       "artifacts": [],
@@ -799,7 +755,7 @@
           "phase": "verification",
           "requirement": "REQ-0384",
           "spec_paths": [
-            "verifications[1].assert"
+            "verifications[0].assert"
           ]
         }
       ],
@@ -823,7 +779,7 @@
               "phase": "verification",
               "requirement": "REQ-0384",
               "spec_paths": [
-                "verifications[1].assert"
+                "verifications[0].assert"
               ]
             }
           ],
@@ -896,17 +852,6 @@
       "unsupported": [],
       "verifications": [
         {
-          "check": "unique",
-          "evaluated_count": 3,
-          "failure": null,
-          "requirement": "REQ-0381",
-          "severity": "error",
-          "spec_path": "verifications[0].unique",
-          "specification": "spec.yaml",
-          "target": null,
-          "verification_id": "prefix"
-        },
-        {
           "check": "assert",
           "evaluated_count": 3,
           "failure": {
@@ -936,12 +881,12 @@
             "requirement": "REQ-0384",
             "severity": "error",
             "spec_paths": [
-              "verifications[1].assert"
+              "verifications[0].assert"
             ]
           },
           "requirement": "REQ-0384",
           "severity": "error",
-          "spec_path": "verifications[1].assert",
+          "spec_path": "verifications[0].assert",
           "specification": "spec.yaml",
           "target": null,
           "verification_id": null
@@ -952,7 +897,7 @@
           "failure": null,
           "requirement": "REQ-0385",
           "severity": "error",
-          "spec_path": "verifications[2].row_count",
+          "spec_path": "verifications[1].row_count",
           "specification": "spec.yaml",
           "target": null,
           "verification_id": null
@@ -963,7 +908,7 @@
   },
   {
     "case": "empty",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"assert\": {\"require\": \"V > 0\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"require\": \"V > 0\"}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V\n",
     "expected": {
       "artifacts": [
@@ -1048,23 +993,12 @@
       "unsupported": [],
       "verifications": [
         {
-          "check": "unique",
-          "evaluated_count": 0,
-          "failure": null,
-          "requirement": "REQ-0381",
-          "severity": "error",
-          "spec_path": "verifications[0].unique",
-          "specification": "spec.yaml",
-          "target": null,
-          "verification_id": "prefix"
-        },
-        {
           "check": "assert",
           "evaluated_count": 0,
           "failure": null,
           "requirement": "REQ-0384",
           "severity": "error",
-          "spec_path": "verifications[1].assert",
+          "spec_path": "verifications[0].assert",
           "specification": "spec.yaml",
           "target": null,
           "verification_id": null
@@ -1075,7 +1009,7 @@
           "failure": null,
           "requirement": "REQ-0385",
           "severity": "error",
-          "spec_path": "verifications[2].row_count",
+          "spec_path": "verifications[1].row_count",
           "specification": "spec.yaml",
           "target": null,
           "verification_id": null
@@ -1086,7 +1020,7 @@
   },
   {
     "case": "unknown_field",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"assert\": {\"when\": \"FALSE\", \"require\": \"Z > 0\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"when\": \"FALSE\", \"require\": \"Z > 0\"}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V\na,10\nb,\nc,7\n",
     "expected": {
       "artifacts": [],
@@ -1101,7 +1035,7 @@
           "phase": "validation",
           "requirement": "REQ-0405",
           "spec_paths": [
-            "verifications[1].assert.require"
+            "verifications[0].assert.require"
           ]
         }
       ],
@@ -1120,7 +1054,7 @@
               "phase": "validation",
               "requirement": "REQ-0405",
               "spec_paths": [
-                "verifications[1].assert.require"
+                "verifications[0].assert.require"
               ]
             }
           ],
@@ -1191,25 +1125,13 @@
         }
       ],
       "unsupported": [],
-      "verifications": [
-        {
-          "check": "unique",
-          "evaluated_count": 3,
-          "failure": null,
-          "requirement": "REQ-0381",
-          "severity": "error",
-          "spec_path": "verifications[0].unique",
-          "specification": "spec.yaml",
-          "target": null,
-          "verification_id": "prefix"
-        }
-      ]
+      "verifications": []
     },
     "artifact": ""
   },
   {
     "case": "qualified_field",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"assert\": {\"require\": \"SRC.V > 0\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"require\": \"SRC.V > 0\"}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V\na,10\nb,\nc,7\n",
     "expected": {
       "artifacts": [],
@@ -1224,7 +1146,7 @@
           "phase": "validation",
           "requirement": "REQ-0405",
           "spec_paths": [
-            "verifications[1].assert.require"
+            "verifications[0].assert.require"
           ]
         }
       ],
@@ -1243,7 +1165,7 @@
               "phase": "validation",
               "requirement": "REQ-0405",
               "spec_paths": [
-                "verifications[1].assert.require"
+                "verifications[0].assert.require"
               ]
             }
           ],
@@ -1314,25 +1236,13 @@
         }
       ],
       "unsupported": [],
-      "verifications": [
-        {
-          "check": "unique",
-          "evaluated_count": 3,
-          "failure": null,
-          "requirement": "REQ-0381",
-          "severity": "error",
-          "spec_path": "verifications[0].unique",
-          "specification": "spec.yaml",
-          "target": null,
-          "verification_id": "prefix"
-        }
-      ]
+      "verifications": []
     },
     "artifact": ""
   },
   {
     "case": "grammar",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"assert\": {\"require\": \"V >\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"require\": \"V >\"}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V\na,10\nb,\nc,7\n",
     "expected": {
       "artifacts": [],
@@ -1340,7 +1250,7 @@
       "callbacks": [],
       "diagnostics": [
         {
-          "condition": "invalid_predicate",
+          "condition": "invalid_expression",
           "context": {
             "position": 3,
             "predicate": "V >"
@@ -1348,7 +1258,7 @@
           "phase": "validation",
           "requirement": "REQ-0188",
           "spec_paths": [
-            "verifications[1].assert.require"
+            "verifications[0].assert.require"
           ]
         }
       ],
@@ -1360,7 +1270,7 @@
         {
           "diagnostics": [
             {
-              "condition": "invalid_predicate",
+              "condition": "invalid_expression",
               "context": {
                 "position": 3,
                 "predicate": "V >"
@@ -1368,7 +1278,7 @@
               "phase": "validation",
               "requirement": "REQ-0188",
               "spec_paths": [
-                "verifications[1].assert.require"
+                "verifications[0].assert.require"
               ]
             }
           ],
@@ -1439,25 +1349,13 @@
         }
       ],
       "unsupported": [],
-      "verifications": [
-        {
-          "check": "unique",
-          "evaluated_count": 3,
-          "failure": null,
-          "requirement": "REQ-0381",
-          "severity": "error",
-          "spec_path": "verifications[0].unique",
-          "specification": "spec.yaml",
-          "target": null,
-          "verification_id": "prefix"
-        }
-      ]
+      "verifications": []
     },
     "artifact": ""
   },
   {
     "case": "grammar_after_when",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"assert\": {\"when\": \"V > 0\", \"require\": \"V >\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"when\": \"V > 0\", \"require\": \"V >\"}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V\na,10\nb,\nc,7\n",
     "expected": {
       "artifacts": [],
@@ -1465,7 +1363,7 @@
       "callbacks": [],
       "diagnostics": [
         {
-          "condition": "invalid_predicate",
+          "condition": "invalid_expression",
           "context": {
             "position": 3,
             "predicate": "V >"
@@ -1473,7 +1371,7 @@
           "phase": "validation",
           "requirement": "REQ-0188",
           "spec_paths": [
-            "verifications[1].assert.require"
+            "verifications[0].assert.require"
           ]
         }
       ],
@@ -1485,7 +1383,7 @@
         {
           "diagnostics": [
             {
-              "condition": "invalid_predicate",
+              "condition": "invalid_expression",
               "context": {
                 "position": 3,
                 "predicate": "V >"
@@ -1493,7 +1391,7 @@
               "phase": "validation",
               "requirement": "REQ-0188",
               "spec_paths": [
-                "verifications[1].assert.require"
+                "verifications[0].assert.require"
               ]
             }
           ],
@@ -1564,25 +1462,13 @@
         }
       ],
       "unsupported": [],
-      "verifications": [
-        {
-          "check": "unique",
-          "evaluated_count": 3,
-          "failure": null,
-          "requirement": "REQ-0381",
-          "severity": "error",
-          "spec_path": "verifications[0].unique",
-          "specification": "spec.yaml",
-          "target": null,
-          "verification_id": "prefix"
-        }
-      ]
+      "verifications": []
     },
     "artifact": ""
   },
   {
     "case": "bad_when",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"assert\": {\"when\": \"V = 'bad'\", \"require\": \"TRUE\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"when\": \"V = 'bad'\", \"require\": \"TRUE\"}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V\na,10\nb,\nc,7\n",
     "expected": {
       "artifacts": [],
@@ -1598,7 +1484,7 @@
           "phase": "validation",
           "requirement": "REQ-0190",
           "spec_paths": [
-            "verifications[1].assert.when"
+            "verifications[0].assert.when"
           ],
           "operand_route": []
         }
@@ -1619,7 +1505,7 @@
               "phase": "validation",
               "requirement": "REQ-0190",
               "spec_paths": [
-                "verifications[1].assert.when"
+                "verifications[0].assert.when"
               ],
               "operand_route": []
             }
@@ -1691,25 +1577,13 @@
         }
       ],
       "unsupported": [],
-      "verifications": [
-        {
-          "check": "unique",
-          "evaluated_count": 3,
-          "failure": null,
-          "requirement": "REQ-0381",
-          "severity": "error",
-          "spec_path": "verifications[0].unique",
-          "specification": "spec.yaml",
-          "target": null,
-          "verification_id": "prefix"
-        }
-      ]
+      "verifications": []
     },
     "artifact": ""
   },
   {
     "case": "inactive_bad_require",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"assert\": {\"when\": \"FALSE\", \"require\": \"V = 'bad'\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"when\": \"FALSE\", \"require\": \"V = 'bad'\"}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V\na,10\nb,\nc,7\n",
     "expected": {
       "artifacts": [],
@@ -1725,7 +1599,7 @@
           "phase": "validation",
           "requirement": "REQ-0190",
           "spec_paths": [
-            "verifications[1].assert.require"
+            "verifications[0].assert.require"
           ],
           "operand_route": []
         }
@@ -1746,7 +1620,7 @@
               "phase": "validation",
               "requirement": "REQ-0190",
               "spec_paths": [
-                "verifications[1].assert.require"
+                "verifications[0].assert.require"
               ],
               "operand_route": []
             }
@@ -1818,25 +1692,13 @@
         }
       ],
       "unsupported": [],
-      "verifications": [
-        {
-          "check": "unique",
-          "evaluated_count": 3,
-          "failure": null,
-          "requirement": "REQ-0381",
-          "severity": "error",
-          "spec_path": "verifications[0].unique",
-          "specification": "spec.yaml",
-          "target": null,
-          "verification_id": "prefix"
-        }
-      ]
+      "verifications": []
     },
     "artifact": ""
   },
   {
     "case": "empty_bad_require",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"assert\": {\"require\": \"V = 'bad'\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"require\": \"V = 'bad'\"}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V\n",
     "expected": {
       "artifacts": [],
@@ -1852,7 +1714,7 @@
           "phase": "validation",
           "requirement": "REQ-0190",
           "spec_paths": [
-            "verifications[1].assert.require"
+            "verifications[0].assert.require"
           ],
           "operand_route": []
         }
@@ -1873,7 +1735,7 @@
               "phase": "validation",
               "requirement": "REQ-0190",
               "spec_paths": [
-                "verifications[1].assert.require"
+                "verifications[0].assert.require"
               ],
               "operand_route": []
             }
@@ -1914,25 +1776,13 @@
         }
       ],
       "unsupported": [],
-      "verifications": [
-        {
-          "check": "unique",
-          "evaluated_count": 0,
-          "failure": null,
-          "requirement": "REQ-0381",
-          "severity": "error",
-          "spec_path": "verifications[0].unique",
-          "specification": "spec.yaml",
-          "target": null,
-          "verification_id": "prefix"
-        }
-      ]
+      "verifications": []
     },
     "artifact": ""
   },
   {
     "case": "duplicate_id",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"assert\": {\"id\": \"prefix\", \"require\": \"TRUE\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"row_count\": {\"id\": \"prefix\", \"min\": 0}}, {\"assert\": {\"id\": \"prefix\", \"require\": \"TRUE\"}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V\na,10\nb,\nc,7\n",
     "expected": {
       "artifacts": [],
@@ -1942,7 +1792,7 @@
         {
           "condition": "duplicate_identifier",
           "context": {
-            "reason": "verification id 'prefix' repeats verifications[0].unique"
+            "reason": "verification id 'prefix' repeats verifications[0].row_count"
           },
           "phase": "validation",
           "requirement": "REQ-0398",
@@ -1961,7 +1811,7 @@
             {
               "condition": "duplicate_identifier",
               "context": {
-                "reason": "verification id 'prefix' repeats verifications[0].unique"
+                "reason": "verification id 'prefix' repeats verifications[0].row_count"
               },
               "phase": "validation",
               "requirement": "REQ-0398",
@@ -2039,12 +1889,12 @@
       "unsupported": [],
       "verifications": [
         {
-          "check": "unique",
-          "evaluated_count": 3,
+          "check": "row_count",
+          "evaluated_count": 1,
           "failure": null,
-          "requirement": "REQ-0381",
+          "requirement": "REQ-0385",
           "severity": "error",
-          "spec_path": "verifications[0].unique",
+          "spec_path": "verifications[0].row_count",
           "specification": "spec.yaml",
           "target": null,
           "verification_id": "prefix"
@@ -2055,7 +1905,7 @@
   },
   {
     "case": "bad_when_before_grammar",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"assert\": {\"when\": \"V = 'bad'\", \"require\": \"V >\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"when\": \"V = 'bad'\", \"require\": \"V >\"}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V\na,10\nb,\nc,7\n",
     "expected": {
       "artifacts": [],
@@ -2071,7 +1921,7 @@
           "phase": "validation",
           "requirement": "REQ-0190",
           "spec_paths": [
-            "verifications[1].assert.when"
+            "verifications[0].assert.when"
           ],
           "operand_route": []
         }
@@ -2092,7 +1942,7 @@
               "phase": "validation",
               "requirement": "REQ-0190",
               "spec_paths": [
-                "verifications[1].assert.when"
+                "verifications[0].assert.when"
               ],
               "operand_route": []
             }
@@ -2164,25 +2014,13 @@
         }
       ],
       "unsupported": [],
-      "verifications": [
-        {
-          "check": "unique",
-          "evaluated_count": 3,
-          "failure": null,
-          "requirement": "REQ-0381",
-          "severity": "error",
-          "spec_path": "verifications[0].unique",
-          "specification": "spec.yaml",
-          "target": null,
-          "verification_id": "prefix"
-        }
-      ]
+      "verifications": []
     },
     "artifact": ""
   },
   {
     "case": "bad_when_before_unknown",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"assert\": {\"when\": \"V = 'bad'\", \"require\": \"Z > 0\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"when\": \"V = 'bad'\", \"require\": \"Z > 0\"}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V\na,10\nb,\nc,7\n",
     "expected": {
       "artifacts": [],
@@ -2198,7 +2036,7 @@
           "phase": "validation",
           "requirement": "REQ-0190",
           "spec_paths": [
-            "verifications[1].assert.when"
+            "verifications[0].assert.when"
           ],
           "operand_route": []
         }
@@ -2219,7 +2057,7 @@
               "phase": "validation",
               "requirement": "REQ-0190",
               "spec_paths": [
-                "verifications[1].assert.when"
+                "verifications[0].assert.when"
               ],
               "operand_route": []
             }
@@ -2291,25 +2129,13 @@
         }
       ],
       "unsupported": [],
-      "verifications": [
-        {
-          "check": "unique",
-          "evaluated_count": 3,
-          "failure": null,
-          "requirement": "REQ-0381",
-          "severity": "error",
-          "spec_path": "verifications[0].unique",
-          "specification": "spec.yaml",
-          "target": null,
-          "verification_id": "prefix"
-        }
-      ]
+      "verifications": []
     },
     "artifact": ""
   },
   {
     "case": "unknown_order",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"unique\": {\"id\": \"prefix\", \"columns\": [\"ID\"]}}, {\"assert\": {\"when\": \"FALSE\", \"require\": \"Z > 0 OR A > 0\"}}, {\"row_count\": {\"min\": 0}}]\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: V, type: int, label: V, derivation: SRC.V}\nverifications: [{\"assert\": {\"when\": \"FALSE\", \"require\": \"Z > 0 OR A > 0\"}}, {\"row_count\": {\"min\": 0}}]\n",
     "input": "ID,V\na,10\nb,\nc,7\n",
     "expected": {
       "artifacts": [],
@@ -2324,7 +2150,7 @@
           "phase": "validation",
           "requirement": "REQ-0405",
           "spec_paths": [
-            "verifications[1].assert.require"
+            "verifications[0].assert.require"
           ]
         }
       ],
@@ -2343,7 +2169,7 @@
               "phase": "validation",
               "requirement": "REQ-0405",
               "spec_paths": [
-                "verifications[1].assert.require"
+                "verifications[0].assert.require"
               ]
             }
           ],
@@ -2414,19 +2240,7 @@
         }
       ],
       "unsupported": [],
-      "verifications": [
-        {
-          "check": "unique",
-          "evaluated_count": 3,
-          "failure": null,
-          "requirement": "REQ-0381",
-          "severity": "error",
-          "spec_path": "verifications[0].unique",
-          "specification": "spec.yaml",
-          "target": null,
-          "verification_id": "prefix"
-        }
-      ]
+      "verifications": []
     },
     "artifact": ""
   }

@@ -1,6 +1,6 @@
 //! Whole-request text declaration admission, then reference-owned extraction binding.
-//! `str_contains` and `str_replace` share the extraction declaration and its
-//! source binding; only the bound expression differs.
+//! `str_replace` shares the extraction declaration and its source binding; only
+//! the bound expression differs.
 use super::*;
 use crate::text_extract::{AdmissionError, StringExtract};
 use crate::text_replace::StringReplace;
@@ -60,25 +60,19 @@ impl Prepared {
             }
             .map_err(|error| match error {
                 AdmissionError::Shape => PrepareError::Internal,
-                AdmissionError::Regex(crate::regex::CompileError::Limit {
+                AdmissionError::Regex(crate::portable_regex::CompileError::Limit {
                     resource,
                     limit,
-                    ..
                 }) => PrepareError::limit(
                     compiler_limits::regex_resource(resource),
                     limit,
                     None,
                     Some(&format!("{path}.pattern")),
                 ),
-                AdmissionError::Regex(_) => PrepareError::Unsupported(vec![UnsupportedFeature {
-                    operation: if replacement.is_some() {
-                        "str_replace_pattern"
-                    } else {
-                        "str_extract_pattern"
-                    }
-                    .into(),
-                    path: format!("{path}.pattern"),
-                }]),
+                // An invalid pattern is a deferred finding, never an admission error.
+                AdmissionError::Regex(crate::portable_regex::CompileError::Invalid { .. }) => {
+                    PrepareError::Internal
+                }
             })?;
             let operation = match &admitted {
                 Admitted::Search(operation) => operation,
@@ -155,7 +149,7 @@ fn walk(
             ));
         }
 
-        for name in ["str_extract", "str_contains", "str_replace"] {
+        for name in ["str_extract", "str_replace"] {
             if let Some(payload) = d.field(id, name) {
                 visit(payload, &format!("{path}.{name}"), rows)?;
             }
@@ -188,21 +182,6 @@ fn walk(
                     field(d, field(d, binding, "derivation")?, "value")?,
                     &format!("{path}.aggregate.derive[{index}].derivation"),
                     true,
-                    depth + 1,
-                    visit,
-                )?;
-            }
-        }
-        if let Some(payload) = d.field(id, "str_concat") {
-            for (index, &child) in sequence(d, field(d, payload, "sources")?)?
-                .iter()
-                .enumerate()
-            {
-                expression(
-                    d,
-                    child,
-                    &format!("{path}.str_concat.sources[{index}]"),
-                    rows,
                     depth + 1,
                     visit,
                 )?;

@@ -91,9 +91,4 @@ rows:
       PARAMCD: {literal: LOW}
       PARAM: {literal: Lowest Result of Visit}
       AVAL:
-        aggregate:
-          expr: "MIN(LB.LBSTRESN)"
-
-verifications:
-  - unique:
-      columns: [USUBJID, VISIT, PARAMCD]
+        aggregate: "MIN(LB.LBSTRESN)"

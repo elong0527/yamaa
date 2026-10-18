@@ -244,7 +244,7 @@ directory <- tempfile("public-check-");dir.create(directory)
 entry <- file.path(directory,"spec.yaml")
 writeLines(c("schema_version: '1.0'","domain: TEST","keys: [ID]","input: {SRC: input.csv}",
              "output: {path: absent/output.csv, columns: [ID]}","columns:",
-             "  - {name: ID, type: int, derivation: {source: SRC.ID}}"),entry)
+             "  - {name: ID, type: int, derivation: SRC.ID}"),entry)
 stopifnot(nrow(check_spec(entry)$issues)==0L)
 failed <- run_spec(entry)
 stopifnot(is.null(failed$output),identical(failed$issues$condition,"resource_path_missing"),failed_save(failed))
@@ -299,7 +299,7 @@ for(late in c(FALSE,TRUE)) for(existing in c(FALSE,TRUE)) {
   entry <- file.path(directory,"spec.yaml")
   writeLines(c("schema_version: '1.0'","domain: TEST","keys: [ID]","input: {SRC: input.csv}",
                "output: {path: link/output.csv, columns: [ID]}","columns:",
-               "  - {name: ID, type: int, derivation: {source: SRC.ID}}"),entry)
+               "  - {name: ID, type: int, derivation: SRC.ID}"),entry)
   writeBin(charToRaw("ID\n1\n"),file.path(directory,"input.csv"))
   target <- file.path(outside,"output.csv")
   if(existing) writeBin(charToRaw("retained"),target)
@@ -334,7 +334,7 @@ local({
     dir.create(file.path(work,"input"))
     source <- rawToChar(rawfile(file.path(original,"spec.yaml")))
     if (input_parquet) {
-      source <- sub(host_truth[["floating_input_override"]],"path: input/lb.parquet",source,fixed=TRUE)
+      source <- sub(host_truth[["floating_input_override"]],"input/lb.parquet",source,fixed=TRUE)
       stopifnot(file.copy(file.path(root,"pq","ordered-sum.parquet"),file.path(work,"input","lb.parquet")))
     } else stopifnot(file.copy(file.path(original,"input","lb.csv"),file.path(work,"input","lb.csv")))
     if (output_parquet) source <- sub("path: adlb.csv","path: adlb.parquet",source,fixed=TRUE)
@@ -366,7 +366,7 @@ local({
   directory <- tempfile("public-parquet-refusals-"); dir.create(directory)
   on.exit(unlink(directory,recursive=TRUE))
   entry <- file.path(directory,"spec.yaml")
-  source <- '{"schema_version":"1.0","domain":"TEST","base":"SRC","input":{"SRC":{"path":"input.parquet"}},"keys":["ID"],"columns":[{"name":"ID","type":"int","derivation":{"compute":{"expr":"1"}}}],"output":{"path":"output.csv","columns":["ID"]}}'
+  source <- '{"schema_version":"1.0","domain":"TEST","base":"SRC","input":{"SRC":"input.parquet"},"keys":["ID"],"columns":[{"name":"ID","type":"int","derivation":{"compute":{"expr":"1"}}}],"output":{"path":"output.csv","columns":["ID"]}}'
   writeBin(charToRaw(source),entry)
   entry <- normalizePath(entry,winslash="/",mustWork=TRUE)
 cases <- list(
@@ -495,10 +495,10 @@ local({
       identical(rawfile(file.path(case,"adsl.csv")),rawfile(file.path(case,"expected","adsl.csv"))))
   }
   cases <- list(
-    list("negative-date-diff-endpoints","columns.SURVDD.derivation.date_diff.start","RFSTDTM","datetime"),
+    list("negative-date-diff-endpoints","columns.SURVDD.derivation.diff.start","RFSTDTM","datetime"),
     list("negative-study-day-datetime","columns.DTHDY.derivation.study_day.date","DTHDTM","datetime"),
     list("negative-epoch-day-non-date","columns.EXSTDY.derivation.to_epoch_day.source","EX.EXSTDT","str"),
-    list("negative-date-diff-units","columns.TRTDURM.derivation.date_diff.bounds",NULL,NULL))
+    list("negative-date-diff-units","columns.TRTDURM.derivation.diff.bounds",NULL,NULL))
   for(item in cases) {
     stopifnot(file.copy(file.path(root,"cases",item[[1L]]),directory,recursive=TRUE))
     case <- file.path(directory,item[[1L]]);unlink(file.path(case,"input"),recursive=TRUE)
@@ -576,13 +576,11 @@ local({
     saved(result),identical(rawfile(file.path(directory,"output.csv")),expected_bytes))
   source <- sub("to: upper, missing: MiXeD","to: upper",source,fixed=TRUE)
   writeBin(charToRaw(source),entry);writeBin(charToRaw("ID,TEXT\nrow1,\n"),file.path(directory,"input.csv"))
-  rejected <- run_spec(entry);actual <- rejected$issues
-  # The complete independent reference lives in text-case-reference.json; this
-  # literal is its mapping failure with the independently authored UP path.
-  stopifnot(nrow(actual)==1L,identical(actual$phase,"mapping"),identical(actual$condition,"missing_input"),
-    identical(actual$requirement,"REQ-0334"),identical(actual$spec_paths,list("columns.UP.derivation.str_case")),
-    identical(actual$context,'{"keys":[{"ID":"row1"}],"variable":"SRC.TEXT"}'),is.null(rejected$output),
-    failed_save(rejected))
+  # Without `missing`, a missing source gives missing and reports no finding,
+  # as the independent text-case-reference.json records.
+  answered <- run_spec(entry)
+  stopifnot(nrow(answered$issues)==0L,identical(answered$output,data.frame(ID="row1",UP=NA_character_,
+    LOW=NA_character_,SENT=NA_character_,TITLE=NA_character_,stringsAsFactors=FALSE)))
   failures <- read.delim(file.path(root,"text-case-diagnostics.tsv"),quote="",colClasses="character",check.names=FALSE)
   stopifnot(nrow(failures)==2L)
   for(index in seq_len(nrow(failures))) {
@@ -644,6 +642,7 @@ local({
   on.exit(unlink(directory,recursive=TRUE))
   cases <- file.path(root,"text-pad-cases")
   findings <- read.delim(file.path(root,"text-pad-findings.tsv"),quote="",colClasses="character",check.names=FALSE)
+  handler_truth <- read.delim(file.path(root,"text-pad-handlers.tsv"),quote="",colClasses="character",check.names=FALSE)
   for(name in list.dirs(cases,full.names=FALSE,recursive=FALSE)) {
     stopifnot(file.copy(file.path(cases,name),directory,recursive=TRUE))
     case <- file.path(directory,name);entry <- file.path(case,"spec.yaml")
@@ -671,9 +670,11 @@ local({
     if(!is.null(observed)) {
       report <- observed
       # Literal complete arrays avoid locale-dependent regexp offsets for UTF-8
-      # report bytes on Windows and retain the independent empty-ledger truth.
-      stopifnot(sum(gregexpr('"handler_counts":',report,fixed=TRUE)[[1L]]>0L)==2L,
-        sum(gregexpr('"handler_counts":[],',report,fixed=TRUE)[[1L]]>0L)==2L)
+      # report bytes on Windows and retain the independent ledger truth.
+      expected <- handler_truth$handlers[handler_truth$case==name]
+      ledger <- paste0('"handler_counts":',if(length(expected)) expected else "[]",',')
+      stopifnot(length(expected)<=1L,sum(gregexpr('"handler_counts":',report,fixed=TRUE)[[1L]]>0L)==2L,
+        sum(gregexpr(ledger,report,fixed=TRUE)[[1L]]>0L)==2L)
     }
   }
   stopifnot(file.copy(file.path(root,"cases","negative-str-pad-width"),directory,recursive=TRUE))
@@ -683,7 +684,7 @@ local({
     identical(checked$requirement,"REQ-0287"),identical(checked$spec_paths,list("columns.IDVARVAL.derivation.str_pad.width")),
     identical(checked$context,'{"actual":"str","expected":"int"}'),identical(rejected$issues,checked),
     is.null(rejected$output),!file.exists(file.path(case,"input")))
-  cat("public canonical scalar padding matches complete independent CSV and findings with missing passthrough, no handlers and original width failure before input without Python passed\n")
+  cat("public canonical scalar padding matches complete independent CSV, findings and handlers with missing passthrough and original width failure before input without Python passed\n")
 })
 
 local({
@@ -930,7 +931,7 @@ local({
       writeBin(charToRaw('K,KINT,KNUM,VAL\n"       7",,7,A\n'),file.path(case,"tab.csv"))
     if(variant=="unused") written <- gsub("derivation: LOOK.VAL","derivation: {literal: ok}",written,fixed=TRUE)
     if(variant=="unread_branch") written <- gsub("derivation: LOOK.VAL",
-      "derivation: {case: [{when: 'FALSE', then: {source: LOOK.VAL}}, {otherwise: {literal: ok}}]}",written,fixed=TRUE)
+      "derivation: {case: [{when: 'FALSE', then: LOOK.VAL}, {otherwise: {literal: ok}}]}",written,fixed=TRUE)
     if(variant=="boolean_missing") written <- sub("TAB.KINT > 'bad'","FALSE AND TAB.KINT > 'bad'",written,fixed=TRUE)
     writeBin(charToRaw(written),entry)
     result <- run_spec(entry)
@@ -1012,7 +1013,7 @@ local({
   check_handler_ledger(observed,"[{\"spec_path\":\"rows[1].derivations.V.compute.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"rows[2].derivations.V.compute.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":2},{\"spec_path\":\"columns.FINAL.derivation.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":5},{\"spec_path\":\"columns.FIRST.derivation.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":5}]")
 
   unlink(file.path(directory,fixture_strings(host_truth[["section_case_files"]])))
-  writeBin(charToRaw(sub("SECTION: {literal: first}","SECTION: {source: {variable: P.K}}",body,fixed=TRUE)),entry)
+  writeBin(charToRaw(sub("SECTION: {literal: first}","SECTION: P.K",body,fixed=TRUE)),entry)
   expected <- list(phase="validation",condition="phase_boundary",requirement="REQ-0120",spec_paths=list("rows[0].derivations.SECTION.source"),context="{\"available_phase\":\"completed_prior_row_template\",\"identifier\":\"P.K\",\"required_phase\":\"row_construction\"}")
   check_issue_frame(check_spec(entry)$issues,expected)
   rejected <- run_spec(entry);check_issue_frame(rejected$issues,expected)
@@ -1085,7 +1086,7 @@ local({
   observed <- domain_observations(result)
   check_handler_ledger(observed,"[{\"spec_path\":\"rows[0].derivations.A.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"rows[0].derivations.B.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"rows[0].derivations.A.source.no_match\",\"handler\":\"no_match\",\"count\":1},{\"spec_path\":\"rows[0].derivations.B.source.no_match\",\"handler\":\"no_match\",\"count\":1}]")
   unlink(file.path(directory,"result.csv"))
-  writeBin(charToRaw("schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: src.csv, types: {ID: int, SEQ: int, CUT: int}}\n  ALT: {path: alt.csv, types: {ID: int, SEQ: int, CUT: int}}\n  D: {path: donor.csv, types: {ID: int, TIME: int}}\noutput: {path: result.csv, columns: [ID, SEQ, A, B]}\nintermediates:\n  - id: P\n    dataset: D\n    key: [ID]\n    filter: \"D.TIME < SRC.CUT\"\n    order_by: [D.TIME]\n    keep: last\n    no_match: null\nrows:\n  - id: alternate\n    dataset: ALT\n    derivations: {ID: ALT.ID, SEQ: ALT.SEQ, A: P.A, B: P.B}\ncolumns:\n  - {name: ID, type: int}\n  - {name: SEQ, type: int}\n  - {name: A, type: str}\n  - {name: B, type: str}\n"),entry)
+  writeBin(charToRaw("schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: src.csv, types: {ID: int, SEQ: int, CUT: int}}\n  ALT: {path: alt.csv, types: {ID: int, SEQ: int, CUT: int}}\n  D: {path: donor.csv, types: {ID: int, TIME: int}}\noutput: {path: result.csv, columns: [ID, SEQ, A, B]}\nintermediates:\n  - id: P\n    dataset: D\n    key: [ID]\n    filter: \"D.TIME < SRC.CUT\"\n    order_by: [D.TIME]\n    keep: last\n    no_match: {literal: null}\nrows:\n  - id: alternate\n    dataset: ALT\n    derivations: {ID: ALT.ID, SEQ: ALT.SEQ, A: P.A, B: P.B}\ncolumns:\n  - {name: ID, type: int}\n  - {name: SEQ, type: int}\n  - {name: A, type: str}\n  - {name: B, type: str}\n"),entry)
   rejected <- run_spec(entry)
   check_issue_frame(rejected$issues,list(phase="validation",condition="unknown_field",requirement="REQ-0120",spec_paths=list("intermediates[0].filter"),context='{"identifier":"SRC.CUT","intermediate":"P"}'))
   stopifnot(is.null(rejected$output),failed_save(rejected),!file.exists(file.path(directory,"result.csv")))

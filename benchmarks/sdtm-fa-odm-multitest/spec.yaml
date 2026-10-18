@@ -50,6 +50,7 @@ intermediates:
       ItemGroupOID: ODM.ItemGroupOID
       ItemGroupRepeatKey: ODM.ItemGroupRepeatKey
     filter: ODM_SIBLING.ItemOID = 'IT.FA.FAOBJ'
+    require_match: true
 
   - id: SIBLING_FADTC
     dataset: ODM_SIBLING
@@ -61,6 +62,7 @@ intermediates:
       ItemGroupOID: ODM.ItemGroupOID
       ItemGroupRepeatKey: ODM.ItemGroupRepeatKey
     filter: ODM_SIBLING.ItemOID = 'IT.FA.FADTC'
+    require_match: true
 
 columns:
   - name: DOMAIN
@@ -94,7 +96,7 @@ columns:
     label: Object of the Observation
     derivation: SIBLING_FAOBJ.Value
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   - name: FACAT
     type: str
@@ -223,11 +225,6 @@ rows:
           missing: 99
 
 verifications:
-  - unique:
-      columns:
-        - STUDYID
-        - USUBJID
-        - FASEQ
   - row_count:
       min: 9
       max: 9

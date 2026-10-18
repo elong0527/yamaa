@@ -102,8 +102,6 @@ columns:
           order_by: [LOG.LOGDATE]
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, ECSEQ]
   - row_count:
       min: 10
       max: 10

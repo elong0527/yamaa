@@ -1,5 +1,5 @@
 schema_version: "1.0"
-parents: [spec_organization.yaml, spec_compound.yaml]
+parent: spec_compound.yaml
 domain: ADLB
 keys: [USUBJID, PARAMCD]
 
@@ -27,8 +27,8 @@ columns:
   - name: ANRIND
     derivation:
       mapping:
-        missing: null
-        unmapped: null
+        missing: {literal: null}
+        unmapped: {literal: null}
 
   # A literal replaces the inherited mapping whole.
   - name: PARCAT1

@@ -15,14 +15,15 @@ output:
 
 intermediates:
   # Each subject's last exposure record with an end date: latest end date,
-  # ties to the higher sequence number. The filter matters: a record with
-  # no end date would otherwise sort last and be the one kept.
+  # ties to the higher sequence number. A record with no end date sorts
+  # first, so only a subject without a dated record could keep one; the
+  # filter leaves it out even then.
   - id: LASTEX
     dataset: EX
     filter: "EX.EXENDTC IS NOT NULL"
     order_by: [EX.EXENDTC, EX.EXSEQ]
     keep: last
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: DOMAIN
@@ -45,15 +46,14 @@ columns:
     label: Date/Time of Informed Consent
     derivation: DM_RAW.RFICDTC
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   # MIN and MAX skip missing dates; a subject with none gets no date.
   - name: RFXSTDTC
     type: date
     label: Date/Time of First Study Treatment
     derivation:
-      aggregate:
-        expr: "MIN(EX.EXSTDTC)"
+      aggregate: "MIN(EX.EXSTDTC)"
 
   - name: RFXENDTC
     type: date
@@ -77,8 +77,7 @@ columns:
     type: date
     label: Latest Adverse Event End Date
     derivation:
-      aggregate:
-        expr: "MAX(AE.AEENDTC)"
+      aggregate: "MAX(AE.AEENDTC)"
 
   # The last date the subject is known to have participated: the latest of
   # the three dates; a missing one is skipped, and all three missing gives
@@ -102,8 +101,6 @@ columns:
         - otherwise: RFPENDTC
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID]
   - row_count:
       min: 6
       max: 6

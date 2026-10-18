@@ -31,7 +31,7 @@ columns:
     label: Date of First Exposure to Treatment
     derivation: ADSL_RAW.TRTSDT
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   # The first start of an on-treatment medication, and of an on-treatment
   # cancer-related procedure, on or after the treatment start date. A record
@@ -87,12 +87,10 @@ columns:
     derivation:
       flag: "NACTDT IS NOT NULL"
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID]
   - row_count:
       min: 7
       max: 7

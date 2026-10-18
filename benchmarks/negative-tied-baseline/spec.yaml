@@ -58,6 +58,7 @@ columns:
           group_by: [STUDYID, USUBJID, PARAMCD]
         date: ADT
         reference_date: TRTSDT
+        value: AVAL
 
   - name: BASE
     type: float

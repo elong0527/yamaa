@@ -1093,7 +1093,7 @@ mod schema {
                     document,
                     source: &sources[index],
                     artifact: &artifacts[index],
-                    href: &artifacts[index],
+                    href: Some(&artifacts[index]),
                 })
                 .collect();
             let section = &declared.sections()[0];
@@ -1106,6 +1106,7 @@ mod schema {
                 required,
                 &Catalogue::admit(vec![]).unwrap(),
                 &inputs,
+                &[],
                 "1.0",
                 "2026-09-11T00:00:00",
             )
@@ -1236,8 +1237,7 @@ mod schema {
         }
 
         use submission_document::{
-            Context, DatasetFormat, DocumentKind, FieldName as F, GuideName, GuideStatus, Kind,
-            Step,
+            Context, DocumentKind, FieldName as F, GuideName, GuideStatus, Kind, Step,
         };
 
         // Independently authored arena fixtures; no decoder or schema normalization
@@ -1395,7 +1395,6 @@ mod schema {
             assert!(send.documents.value.is_empty());
             // An absent dataset container writes only the Define-XML document.
             assert!(send.datasets.is_none());
-            assert!(!send.dataset_json());
             assert_eq!(send.context.value, Context::Submission);
             assert_eq!(send.xml_lang.value, "en");
             for origin in [
@@ -1419,10 +1418,9 @@ mod schema {
                 GuideName::AdamIgMd
             );
             let datasets = adam.datasets.as_ref().unwrap();
-            assert_eq!(datasets.value, DatasetFormat::Json);
+            assert_eq!(datasets.value, submission_document::Transport::DatasetJson);
             assert_eq!(datasets.origin.field, F::Datasets);
             assert!(datasets.origin.node.is_some() && datasets.origin.key.is_some());
-            assert!(adam.dataset_json());
             assert_eq!(adam.context.value, Context::Other);
             assert_eq!(adam.xml_lang.value, "fr-CA");
             assert_eq!(adam.file_oid.as_ref().unwrap().value, "FILE.analysis-1");
@@ -1894,7 +1892,6 @@ mod schema {
                 );
                 assert_eq!(s.specs.origin.node, Some(specs));
                 assert!(s.standard.is_none() && s.define.is_none() && s.datasets.is_none());
-                assert!(!s.dataset_json());
                 assert!(s.documents.value.is_empty());
                 assert_eq!(s.context.value, Context::Submission);
                 assert_eq!(s.xml_lang.value, "en");
@@ -2363,8 +2360,9 @@ mod schema {
                     literal
                 };
                 let derivations = a.map(vec![("LBTESTCD", literal)]);
+                // A literal refutes Derived: the value is read from no input.
                 let origin_type = if case == "refuted origin" && index == 0 {
-                    "Collected"
+                    "Derived"
                 } else {
                     "Assigned"
                 };
@@ -2428,8 +2426,9 @@ mod schema {
                     document,
                     source: "spec.yaml",
                     artifact: "lb.csv",
-                    href: "lb.csv",
+                    href: Some("lb.csv"),
                 }],
+                &[],
                 "0.3.0",
                 "2026-09-11T00:00:00",
             )

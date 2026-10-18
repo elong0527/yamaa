@@ -7,18 +7,18 @@ expressions:
         - expr:
             type: numeric_expression
             required: true
-            description: See REQ-1119.
+            description: Numeric expression over named variables in the compute field of the expression language (FORMULA-27).
     round_half_away_from_zero: # See REQ-1172.
         - source:
             type: variable
             required: true
-            description: See REQ-1172.
+            description: Numeric variable to round (FORMULA-16).
         - digits:
             type: int
             required: true
-            description: See REQ-1172.
+            description: Integer decimal places; negative rounds left of the decimal point (FORMULA-16).
 
 numeric_expression:
     type: str
     min_length: 1
-    description: See REQ-1120.
+    description: Expression in the closed expression grammar with a numeric root (FORMULA-1).

@@ -28,15 +28,13 @@ intermediates:
       upper: SEENDTC
     order_by: [SE.SESTDTC]
     keep: last
-    no_match: null
+    no_match: {literal: null}
 
 columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
     derivation: {literal: VS}
-    verifications:
-      not_missing: {}
     submission:
       core: Req
       role: Identifier
@@ -73,8 +71,6 @@ columns:
     type: int
     label: Sequence Number
     derivation: VS_RAW.VSSEQ
-    verifications:
-      not_missing: {}
     submission:
       core: Req
       role: Identifier
@@ -87,8 +83,6 @@ columns:
     type: str
     label: Vital Signs Test Short Name
     derivation: VS_RAW.VSTESTCD
-    verifications:
-      not_missing: {}
     submission:
       core: Req
       role: Topic
@@ -129,11 +123,12 @@ columns:
     type: datetime
     label: Date/Time of Measurements as a Moment
     derivation:
-      datetime_impute:
+      impute:
+        type: datetime
         source: VSDTC
+        minimum_source_precision: day
         time: first
-        missing: null
-        invalid: null
+        invalid: {literal: null}
 
   - name: EPOCH
     type: str
@@ -152,8 +147,6 @@ columns:
         SE.SESTDTC, and no match yields blank.
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, VSSEQ]
   - row_count:
       min: 10
       max: 10

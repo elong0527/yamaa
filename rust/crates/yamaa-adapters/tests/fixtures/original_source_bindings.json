@@ -41,6 +41,11 @@
           "count": 1,
           "handler": "multiple_matches",
           "spec_path": "columns.V.derivation.source.multiple_matches"
+        },
+        {
+          "count": 1,
+          "handler": "absent",
+          "spec_path": "columns.V.derivation.source.absent"
         }
       ],
       "nodes": [
@@ -51,6 +56,11 @@
               "count": 1,
               "handler": "multiple_matches",
               "spec_path": "columns.V.derivation.source.multiple_matches"
+            },
+            {
+              "count": 1,
+              "handler": "absent",
+              "spec_path": "columns.V.derivation.source.absent"
             }
           ],
           "outcome": "success",
@@ -292,6 +302,11 @@
           "count": 1,
           "handler": "multiple_matches",
           "spec_path": "columns.V.derivation.source.multiple_matches"
+        },
+        {
+          "count": 0,
+          "handler": "absent",
+          "spec_path": "columns.V.derivation.source.absent"
         }
       ],
       "nodes": [
@@ -302,6 +317,11 @@
               "count": 1,
               "handler": "multiple_matches",
               "spec_path": "columns.V.derivation.source.multiple_matches"
+            },
+            {
+              "count": 0,
+              "handler": "absent",
+              "spec_path": "columns.V.derivation.source.absent"
             }
           ],
           "outcome": "success",
@@ -465,6 +485,11 @@
           "count": 1,
           "handler": "multiple_matches",
           "spec_path": "columns.V.derivation.source.multiple_matches"
+        },
+        {
+          "count": 0,
+          "handler": "absent",
+          "spec_path": "columns.V.derivation.source.absent"
         }
       ],
       "nodes": [
@@ -475,6 +500,11 @@
               "count": 1,
               "handler": "multiple_matches",
               "spec_path": "columns.V.derivation.source.multiple_matches"
+            },
+            {
+              "count": 0,
+              "handler": "absent",
+              "spec_path": "columns.V.derivation.source.absent"
             }
           ],
           "outcome": "success",
@@ -638,6 +668,11 @@
           "count": 1,
           "handler": "multiple_matches",
           "spec_path": "columns.V.derivation.source.multiple_matches"
+        },
+        {
+          "count": 0,
+          "handler": "absent",
+          "spec_path": "columns.V.derivation.source.absent"
         }
       ],
       "nodes": [
@@ -648,6 +683,11 @@
               "count": 1,
               "handler": "multiple_matches",
               "spec_path": "columns.V.derivation.source.multiple_matches"
+            },
+            {
+              "count": 0,
+              "handler": "absent",
+              "spec_path": "columns.V.derivation.source.absent"
             }
           ],
           "outcome": "success",
@@ -827,6 +867,11 @@
           "count": 0,
           "handler": "multiple_matches",
           "spec_path": "columns.V.derivation.source.multiple_matches"
+        },
+        {
+          "count": 3,
+          "handler": "absent",
+          "spec_path": "columns.V.derivation.source.absent"
         }
       ],
       "nodes": [
@@ -837,6 +882,11 @@
               "count": 0,
               "handler": "multiple_matches",
               "spec_path": "columns.V.derivation.source.multiple_matches"
+            },
+            {
+              "count": 3,
+              "handler": "absent",
+              "spec_path": "columns.V.derivation.source.absent"
             }
           ],
           "outcome": "success",
@@ -1324,7 +1374,7 @@
   },
   {
     "case": "explicit_null",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source: {variable: DONOR.UNKNOWN, absent: null}\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source: {variable: DONOR.UNKNOWN, absent: {literal: null}}\n",
     "inputs": {
       "DONOR": "ID,V,O,F\na,10,2,Y\na,11,1,Y\nb,20,1,N\nc,30,1,Y\n",
       "SRC": "ID\na\nb\nc\n"
@@ -1783,11 +1833,23 @@
       "engine_version": "fixture-engine",
       "error": null,
       "example": "source-binding-lazy_intermediate",
-      "handler_counts": [],
+      "handler_counts": [
+        {
+          "count": 1,
+          "handler": "missing",
+          "spec_path": "columns.V.derivation.first_available.missing"
+        }
+      ],
       "nodes": [
         {
           "diagnostics": [],
-          "handler_counts": [],
+          "handler_counts": [
+            {
+              "count": 1,
+              "handler": "missing",
+              "spec_path": "columns.V.derivation.first_available.missing"
+            }
+          ],
           "outcome": "success",
           "specification": "spec.yaml",
           "unsupported": []
@@ -2002,11 +2064,33 @@
       "engine_version": "fixture-engine",
       "error": null,
       "example": "source-binding-secondary_fallback",
-      "handler_counts": [],
+      "handler_counts": [
+        {
+          "count": 1,
+          "handler": "missing",
+          "spec_path": "columns.V.derivation.first_available.missing"
+        },
+        {
+          "count": 1,
+          "handler": "absent",
+          "spec_path": "columns.V.derivation.first_available.sources[1].absent"
+        }
+      ],
       "nodes": [
         {
           "diagnostics": [],
-          "handler_counts": [],
+          "handler_counts": [
+            {
+              "count": 1,
+              "handler": "missing",
+              "spec_path": "columns.V.derivation.first_available.missing"
+            },
+            {
+              "count": 1,
+              "handler": "absent",
+              "spec_path": "columns.V.derivation.first_available.sources[1].absent"
+            }
+          ],
           "outcome": "success",
           "specification": "spec.yaml",
           "unsupported": []
@@ -2176,7 +2260,7 @@
   },
   {
     "case": "duplicate_equal",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source: DONOR.V\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation: DONOR.V\n",
     "inputs": {
       "DONOR": "ID,V\na,10\na,10\n",
       "SRC": "ID\na\n"
@@ -2214,7 +2298,13 @@
       "engine_version": "fixture-engine",
       "error": null,
       "example": "source-binding-duplicate_equal",
-      "handler_counts": [],
+      "handler_counts": [
+        {
+          "count": 0,
+          "handler": "absent",
+          "spec_path": "columns.V.derivation.source.absent"
+        }
+      ],
       "nodes": [
         {
           "diagnostics": [
@@ -2243,7 +2333,13 @@
               ]
             }
           ],
-          "handler_counts": [],
+          "handler_counts": [
+            {
+              "count": 0,
+              "handler": "absent",
+              "spec_path": "columns.V.derivation.source.absent"
+            }
+          ],
           "outcome": "failure",
           "specification": "spec.yaml",
           "unsupported": []
@@ -2332,7 +2428,7 @@
   },
   {
     "case": "no_keys",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source: DONOR.V\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: donor.csv\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation: DONOR.V\n",
     "inputs": {
       "DONOR": "OTHER,V\na,10\n",
       "SRC": "ID\na\n"
@@ -2705,7 +2801,7 @@
   },
   {
     "case": "numeric_keys_exact",
-    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {ID: int}}\n  DONOR: {path: donor.csv, types: {ID: float, V: int}}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: int, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation:\n      source: DONOR.V\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {ID: int}}\n  DONOR: {path: donor.csv, types: {ID: float, V: int}}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: int, label: ID, derivation: SRC.ID}\n  - name: V\n    type: int\n    label: V\n    derivation: DONOR.V\n",
     "inputs": {
       "DONOR": "ID,V\n1.0,10\n9007199254740992.0,20\n",
       "SRC": "ID\n1\n9007199254740993\n"
@@ -2739,11 +2835,23 @@
       "engine_version": "fixture-engine",
       "error": null,
       "example": "source-binding-numeric_keys_exact",
-      "handler_counts": [],
+      "handler_counts": [
+        {
+          "count": 1,
+          "handler": "absent",
+          "spec_path": "columns.V.derivation.source.absent"
+        }
+      ],
       "nodes": [
         {
           "diagnostics": [],
-          "handler_counts": [],
+          "handler_counts": [
+            {
+              "count": 1,
+              "handler": "absent",
+              "spec_path": "columns.V.derivation.source.absent"
+            }
+          ],
           "outcome": "success",
           "specification": "spec.yaml",
           "unsupported": []

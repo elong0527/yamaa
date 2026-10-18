@@ -2,7 +2,7 @@
 use crate::json::Value as V;
 use crate::{
     diagnostic::{ConditionCode as C, Diagnostic},
-    numeric_parser::SourceSpan,
+    expression::SourceSpan,
     table::ValueRef,
     value::Value,
 };
@@ -199,9 +199,11 @@ impl StringTemplate {
             [("identifier", V::String(source.clone()))],
         ))
     }
+    /// A template still fails on a missing placeholder without its `missing`
+    /// handler; it never gives missing by default (TEXT-4).
     pub fn missing_diagnostic(&self, index: usize) -> Option<Diagnostic> {
         Some(diagnostic(
-            C::StrCaseMissing,
+            C::TemplateMissing,
             &self.path,
             [("variable", V::String(self.identifiers.get(index)?.clone()))],
         ))

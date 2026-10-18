@@ -827,7 +827,16 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     reached
 }
 
+/// Requirement, condition, path and context of one temporal declaration finding.
+type TemporalFinding<'a> = (&'a str, &'a str, &'a str, Vec<(&'a str, V)>);
+
 pub(crate) fn temporal_reached() -> BTreeSet<ConditionCode> {
+    let derivation = |operation: &str, fields: Vec<(&str, Tree)>| {
+        Some(Tree::map(vec![(
+            "value",
+            Tree::map(vec![(operation, Tree::map(fields))]),
+        )]))
+    };
     let mut fields = base(
         "TEST",
         inputs(),
@@ -835,18 +844,53 @@ pub(crate) fn temporal_reached() -> BTreeSet<ConditionCode> {
             column("ID", Some(source())),
             column(
                 "DIFF",
-                Some(Tree::map(vec![(
-                    "value",
-                    Tree::map(vec![(
-                        "date_diff",
-                        Tree::map(vec![
-                            ("start", Tree::text("ID")),
-                            ("end", Tree::text("ID")),
-                            ("unit", Tree::text("month")),
-                            ("bounds", Tree::text("inclusive")),
-                        ]),
-                    )]),
-                )])),
+                derivation(
+                    "diff",
+                    vec![
+                        ("type", Tree::text("date")),
+                        ("start", Tree::text("ID")),
+                        ("end", Tree::text("ID")),
+                        ("unit", Tree::text("month")),
+                        ("bounds", Tree::text("inclusive")),
+                    ],
+                ),
+            ),
+            column(
+                "UNIT",
+                derivation(
+                    "diff",
+                    vec![
+                        ("type", Tree::text("date")),
+                        ("start", Tree::text("ID")),
+                        ("end", Tree::text("ID")),
+                        ("unit", Tree::text("hour")),
+                    ],
+                ),
+            ),
+            column(
+                "SHIFT",
+                derivation(
+                    "shift",
+                    vec![
+                        ("type", Tree::text("date")),
+                        ("source", Tree::text("ID")),
+                        ("amount", Tree::text("ID")),
+                        ("unit", Tree::text("day")),
+                    ],
+                ),
+            ),
+            column(
+                "IMPUTED",
+                derivation(
+                    "impute",
+                    vec![
+                        ("type", Tree::text("date")),
+                        ("source", Tree::text("ID")),
+                        ("day", Tree::text("first")),
+                        ("minimum_source_precision", Tree::text("month")),
+                        ("time", Tree::text("first")),
+                    ],
+                ),
             ),
         ],
         vec![Tree::text("ID")],
@@ -859,38 +903,93 @@ pub(crate) fn temporal_reached() -> BTreeSet<ConditionCode> {
     let Err(PrepareError::Invalid(findings)) = PreparedSpecification::prepare(&model) else {
         panic!("temporal preflight rejection")
     };
-    assert_eq!(findings.len(), 3);
-    let bounds = findings[0].diagnostic();
-    assert_eq!(bounds.definition().requirement, Some("REQ-0613"));
-    assert_eq!(
-        bounds.spec_paths,
-        ["columns.DIFF.derivation.date_diff.bounds"]
-    );
-    assert_eq!(
-        bounds.context,
-        [
-            ("value".into(), text("inclusive")),
-            ("permitted".into(), texts(&["exclusive"]))
-        ]
-        .into()
-    );
+    let findings = findings
+        .iter()
+        .map(|finding| finding.diagnostic())
+        .collect::<Vec<_>>();
+    let expected: Vec<TemporalFinding<'_>> = vec![
+        (
+            "REQ-0613",
+            "value_not_permitted",
+            "columns.DIFF.derivation.diff.bounds",
+            vec![
+                ("value", text("inclusive")),
+                ("permitted", texts(&["exclusive"])),
+            ],
+        ),
+        (
+            "REQ-0606",
+            "incompatible_input_type",
+            "columns.DIFF.derivation.diff.start",
+            vec![
+                ("source", text("ID")),
+                ("expected", text("date")),
+                ("actual", text("int")),
+            ],
+        ),
+        (
+            "REQ-0606",
+            "incompatible_input_type",
+            "columns.DIFF.derivation.diff.end",
+            vec![
+                ("source", text("ID")),
+                ("expected", text("date")),
+                ("actual", text("int")),
+            ],
+        ),
+        (
+            "TIME-4",
+            "value_not_permitted",
+            "columns.UNIT.derivation.diff.unit",
+            vec![
+                ("value", text("hour")),
+                ("permitted", texts(&["day", "week", "month", "year"])),
+            ],
+        ),
+        (
+            "TIME-1",
+            "missing_required_field",
+            "columns.SHIFT.derivation.shift.days",
+            vec![("field", text("days")), ("type", text("date"))],
+        ),
+        (
+            "TIME-1",
+            "unknown_field",
+            "columns.SHIFT.derivation.shift.amount",
+            vec![("field", text("amount")), ("type", text("date"))],
+        ),
+        (
+            "TIME-1",
+            "unknown_field",
+            "columns.SHIFT.derivation.shift.unit",
+            vec![("field", text("unit")), ("type", text("date"))],
+        ),
+        (
+            "TIME-1",
+            "unknown_field",
+            "columns.IMPUTED.derivation.impute.time",
+            vec![("field", text("time")), ("type", text("date"))],
+        ),
+    ];
+    assert_eq!(findings.len(), expected.len(), "{findings:?}");
     let mut reached = BTreeSet::new();
-    reached.insert(bounds.code);
-    for (finding, field) in findings[1..].iter().zip(["start", "end"]) {
-        let diagnostic = finding.diagnostic();
-        assert_eq!(diagnostic.definition().requirement, Some("REQ-0606"));
+    for (diagnostic, (requirement, condition, path, context)) in findings.iter().zip(expected) {
+        let definition = diagnostic.definition();
         assert_eq!(
-            diagnostic.spec_paths,
-            [format!("columns.DIFF.derivation.date_diff.{field}")]
+            (
+                definition.phase,
+                definition.condition,
+                definition.requirement
+            ),
+            ("validation", condition, Some(requirement))
         );
+        assert_eq!(diagnostic.spec_paths, [path]);
         assert_eq!(
             diagnostic.context,
-            [
-                ("source".into(), text("ID")),
-                ("expected".into(), text("date")),
-                ("actual".into(), text("int"))
-            ]
-            .into()
+            context
+                .into_iter()
+                .map(|(key, value)| (key.into(), value))
+                .collect()
         );
         reached.insert(diagnostic.code);
     }
@@ -1043,7 +1142,7 @@ pub(crate) fn intermediate_reached() -> BTreeSet<ConditionCode> {
             repeated("intermediates[0].key[3]"),
         ],
     ));
-    for variant in 0..4 {
+    for variant in 0..6 {
         let mut fields = base(
             "TEST",
             inputs(),
@@ -1052,8 +1151,9 @@ pub(crate) fn intermediate_reached() -> BTreeSet<ConditionCode> {
         );
         fields.push(("base", Tree::text("SRC")));
         let mut declaration = vec![("id", Tree::text("P")), ("dataset", Tree::text("SECOND"))];
+        let null = || Tree::map(vec![("literal", Tree::Scalar(N::Null))]);
         match variant {
-            0 => declaration.push(("no_match", Tree::Scalar(N::Null))),
+            0 => declaration.push(("no_match", null())),
             1 => declaration.push((
                 "order_by",
                 Tree::List(vec![Tree::map(vec![
@@ -1063,6 +1163,12 @@ pub(crate) fn intermediate_reached() -> BTreeSet<ConditionCode> {
                 ])]),
             )),
             2 => declaration.push(("keep", Tree::text("last"))),
+            // Omitted, the absence answer is missing, as the implicit join's is.
+            3 => (),
+            4 => {
+                declaration.push(("no_match", null()));
+                declaration.push(("require_match", Tree::boolean(true)));
+            }
             // An order with no term gives `keep` nothing to choose by.
             _ => {
                 declaration.push(("order_by", Tree::List(Vec::new())));
@@ -1070,12 +1176,22 @@ pub(crate) fn intermediate_reached() -> BTreeSet<ConditionCode> {
             }
         }
         fields.push(("intermediates", Tree::List(vec![Tree::map(declaration)])));
-        let expected = if variant == 0 {
+        let expected = if variant == 0 || variant == 3 {
             vec![(
                 "rename_only_intermediate",
                 Some("REQ-1248"),
                 vec!["intermediates[0]"],
                 vec![("intermediate", text("P")), ("dataset", text("SECOND"))],
+            )]
+        } else if variant == 4 {
+            vec![(
+                "conflicting_absence_policy",
+                Some("LOOKUP-13"),
+                vec![
+                    "intermediates[0].no_match",
+                    "intermediates[0].require_match",
+                ],
+                vec![("intermediate", text("P"))],
             )]
         } else {
             let (declared, missing) = if variant == 1 {
@@ -1136,6 +1252,7 @@ pub(crate) fn namespace_reached() -> BTreeSet<ConditionCode> {
                 Tree::List(vec![Tree::map(vec![
                     ("id", Tree::text("LOOK")),
                     ("dataset", Tree::text("ABSENT")),
+                    ("require_match", Tree::boolean(true)),
                 ])]),
             ));
             vec![(

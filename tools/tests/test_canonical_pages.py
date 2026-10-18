@@ -139,14 +139,30 @@ class CanonicalPages(unittest.TestCase):
         (self.root / "rules/values/types.md").write_text(
             "# Types\n\n**REQ-0001.** A column has one type.\n", encoding="ascii"
         )
+        (self.root / "rules/inheritance.md").write_text(
+            '# Inheritance\n\n<a id="layer-1"></a>\n\n'
+            "### LAYER-1. Layers compose depth first\n\n"
+            "Each layer contributes once; see [LAYER-1](#layer-1).\n",
+            encoding="ascii",
+        )
         self.build()
         repository = "https://github.com/elong0527/yamaa"
         index = self.page("reference/requirements/index.html")
         self.assertIn(
             f'href="{repository}/blob/main/rules/values/types.md#req-0001"', index
         )
+        self.assertIn(
+            f'href="{repository}/blob/main/rules/inheritance.md#layer-1"', index
+        )
         self.assertNotIn("/edit/main/", index)
         self.assertIn("Schema fields", self.page("reference/schema-fields/index.html"))
+        summary = self.page("reference/rules-summary/index.html")
+        self.assertIn("Rules at a glance", summary)
+        self.assertIn("LAYER-1", summary)
+        self.assertIn(
+            f'href="{repository}/blob/main/rules/inheritance.md#layer-1"', summary
+        )
+        self.assertNotIn("/edit/main/", summary)
         self.assertFalse((self.root / "rules/reference").exists())
         (self.root / "rules/values/types.md").write_text(
             "# Types\n\n**REQ-0002.** A column has one type.\n", encoding="ascii"
@@ -161,6 +177,10 @@ class CanonicalPages(unittest.TestCase):
             (
                 "reference/requirements.md",
                 "rules/reference/requirements.md is generated",
+            ),
+            (
+                "reference/rules-summary.md",
+                "rules/reference/rules-summary.md is generated",
             ),
         ):
             with self.subTest(destination=destination):

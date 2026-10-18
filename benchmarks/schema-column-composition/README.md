@@ -17,9 +17,9 @@ columns - `AVAL`, `ANRIND`, and `PARCAT1`.
   leaves an unrecognized indicator empty, states `PARCAT1` as the one
   category this study collects, and declares the complete output.
 
-Parents resolve depth-first, left to right, with later levels winning;
-the chain resolves to `expected/spec_resolved.yaml`, the default view
-in the specification dropdown.
+Each level names the one level above it, so the chain reads
+organization, then compound, then study, and a later level wins where
+two levels state the same detail.
 
 **Note:** a later level composes a column detail by detail. The added
 reference range wording joins the two the organization already lists,

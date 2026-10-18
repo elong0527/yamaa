@@ -11,11 +11,12 @@ output:
   columns: [STUDYID, USUBJID, LBSEQ, LBTESTCD, SEX, LBSTNRHI]
 
 intermediates:
-  # The limit for the result's test code and sex. With no no_match answer,
-  # a result whose test code and sex match no table row stops the run.
+  # The limit for the result's test code and sex. A match is required, so a
+  # result whose test code and sex match no table row stops the run.
   - id: REFRANGE
     dataset: LBRANGE
     key: [LBTESTCD, SEX]
+    require_match: true
 
 columns:
   - name: STUDYID

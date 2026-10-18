@@ -16,6 +16,7 @@ intermediates:
   - id: DOSING
     dataset: EX
     order_by: [EX.EXSTDTC, EX.EXSEQ]
+    require_match: true
 
 columns:
   - name: STUDYID

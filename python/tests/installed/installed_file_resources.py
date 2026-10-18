@@ -54,12 +54,22 @@ class FileResources(unittest.TestCase):
                 entry = study / "spec.yaml"
                 program = "consumer" if producer else "ordinary"
                 entry.write_text(
-                    f"schema_version: '1.0'\nparents: ../shared/{program}.yaml\n",
+                    f"schema_version: '1.0'\nparent: ../shared/{program}.yaml\n",
                     encoding="ascii",
                 )
                 (study / "producer.yaml").write_text(
                     truth["producer_entry"], encoding="ascii"
                 )
+                if producer:
+                    # A link only types the stored artifact: callers build and
+                    # save each study's producer before its consumer reads it.
+                    produced = yamaa.spec(study / "producer.yaml").run()
+                    self.assertTrue(produced.issues.is_empty(), produced.issues)
+                    self.assertIsNone(produced.save())
+                    self.assertEqual(
+                        (study / "output/produced.csv").read_bytes(),
+                        csv.encode("ascii"),
+                    )
                 spec = yamaa.spec(entry)
                 self.assertTrue(spec.check().issues.is_empty())
                 result = spec.run()

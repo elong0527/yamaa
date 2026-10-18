@@ -4,7 +4,6 @@ mod support;
 mod execution {
     mod scalar_language {
         use std::{cell::RefCell, convert::Infallible};
-        use yamaa_core::numeric_lifecycle::HandlerKind;
         use yamaa_core::{
             dataset::{Assignment, DatasetPlan, Expression, RowMode, RowTemplate},
             table::{CellError, Column, TableAccess, TableSchema, ValueRef},
@@ -45,89 +44,8 @@ mod execution {
             .unwrap()
         }
         #[test]
-        fn missing_concat_short_circuits_source_reads_and_retains_nested_handler_observations() {
-            let source = schema(&["ID", "FIRST", "LAST"]);
-            let table = Table {
-                schema: source.clone(),
-                values: vec![
-                    Value::Str("a".into()),
-                    Value::Missing,
-                    Value::Str("unread".into()),
-                ],
-                reads: RefCell::default(),
-            };
-            let path = "columns.RESULT.derivation.str_concat";
-            let expression = Expression::StrConcat {
-                operands: vec![
-                    Assignment {
-                        column: 1,
-                        path: format!("{path}.sources[0]"),
-                        expression: Expression::StrConcat {
-                            operands: vec![Assignment {
-                                column: 1,
-                                path: format!("{path}.sources[0].str_concat.sources[0]"),
-                                expression: Expression::Source(1),
-                            }],
-                            missing: Some(Value::Missing),
-                            path: format!("{path}.sources[0].str_concat"),
-                        },
-                    },
-                    Assignment {
-                        column: 1,
-                        path: format!("{path}.sources[1]"),
-                        expression: Expression::Source(2),
-                    },
-                ],
-                missing: Some(Value::Str("fallback".into())),
-                path: path.into(),
-            };
-            let plan = DatasetPlan::new(
-                source,
-                schema(&["ID", "RESULT"]),
-                vec![RowTemplate {
-                    mode: RowMode::Records,
-                    assignments: vec![
-                        Assignment {
-                            column: 0,
-                            path: "columns.ID.derivation".into(),
-                            expression: Expression::Source(0),
-                        },
-                        Assignment {
-                            column: 1,
-                            path: path.into(),
-                            expression,
-                        },
-                    ],
-                    filter: None,
-                }],
-                vec![],
-                vec![0],
-                vec![],
-            )
-            .unwrap();
-            let attempt = plan.execute(
-                &table,
-                &[],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None,
-            );
-            assert_eq!(
-                attempt.result.unwrap().dataset.rows(),
-                [vec![Value::Str("a".into()), Value::Str("fallback".into())]]
-            );
-            assert_eq!(*table.reads.borrow(), [0, 1]);
-            assert_eq!(
-                attempt
-                    .handler_counts
-                    .iter()
-                    .map(|count| (count.handler, count.count))
-                    .collect::<Vec<_>>(),
-                [(HandlerKind::Missing, 1), (HandlerKind::Missing, 1)]
-            );
-        }
-        #[test]
         fn equal_extremes_retain_the_first_dates_collected_precision() {
-            use yamaa_core::temporal::{Date, DatePrecision};
+            use yamaa_core::temporal::{Date, Precision};
             let source = schema(&["ID"]);
             let table = Table {
                 schema: source.clone(),
@@ -146,7 +64,7 @@ mod execution {
             ])
             .unwrap();
             for largest in [true, false] {
-                let operands = [DatePrecision::Month, DatePrecision::Day]
+                let operands = [Precision::Month, Precision::Day]
                     .into_iter()
                     .enumerate()
                     .map(|(index, precision)| Assignment {
@@ -193,7 +111,7 @@ mod execution {
                 let Value::Date(date) = result.dataset.rows()[0][1] else {
                     panic!("date result")
                 };
-                assert_eq!(date.collected_precision(), DatePrecision::Month);
+                assert_eq!(date.collected_precision(), Precision::Month);
             }
         }
 
@@ -408,6 +326,7 @@ mod execution {
                     keep: Keep::Last,
                 }),
                 no_match: None,
+                require_match: true,
                 unique: Vec::new(),
                 derivations: None,
                 pending_schema: None,

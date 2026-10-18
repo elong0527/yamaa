@@ -103,8 +103,6 @@ rows:
       SEQNUM: CM.CMSEQ
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, RDOMAIN, IDVAR, IDVARVAL, RELID]
   - row_count:
       min: 8
       max: 8
