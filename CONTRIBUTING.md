@@ -246,7 +246,9 @@ Edit `README.md` for the site home and `rules/README.md` for the rules index.
 MkDocs reads those canonical files through its configured hook, resolves their
 repository-relative links and preserves their edit targets. Do not create
 copies under `docs/`. Other site pages live there; the navigation links directly
-to this contributor guide.
+to this contributor guide. A site page links a repository file outside `docs/`
+by relative path, such as `../rules/storage/csv.md`: the site points it at the
+file on main, and a copy read at a release tag names that tag's file.
 
 Requirement and schema-field references are generated from `rules/` and `yaml/`
 on every build. Edit the owning contract or schema, not a generated page.
