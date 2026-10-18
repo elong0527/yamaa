@@ -146,7 +146,7 @@ compression signatures, malformed compressed data, duplicate or empty field
 names and incomplete physical framing fail before derivation.
 
 Fails: `source_sas_invalid`.
-Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/sas.rs`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::unsupported_compression_has_a_specific_retained_cause`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::counted_deletions_without_marks_are_refused_with_a_rewrite_hint`, `python/tests/installed/installed_sas_sources.py::test_bad_sources_are_not_read_by_check_and_failed_saves_have_no_output`.
+Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/sas.rs`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::unsupported_compression_has_a_specific_retained_cause`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::counted_deletions_without_marks_are_refused_with_a_rewrite_hint`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::version_8_observation_count_keeps_trailing_blank_records`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::transport_without_a_usable_count_treats_trailing_blank_records_as_padding`, `python/tests/installed/installed_sas_sources.py::test_bad_sources_are_not_read_by_check_and_failed_saves_have_no_output`.
 Replaces: REQ-1317.
 
 Cause `deleted_records` reports records deleted in place that cannot be
@@ -157,10 +157,18 @@ or a DATA step.
 Transport member descriptor chains at 80-byte boundaries are structural
 records; multiple complete chains fail, including concatenated transport
 datasets. A character value resembling a MEMBER header alone remains text.
-Transport framing contains no authoritative row count: removing a complete
-terminal record that leaves a valid smaller dataset cannot be distinguished
-from that smaller dataset. Partial physical records and non-padding partial
-rows fail.
+
+A version 8 file whose `OBSV8` header record counts its observations, in the
+fifteen characters from byte 48, yields exactly that many records, including
+trailing records made entirely of blanks. The count is admitted under
+[SAS-6](#sas-6) before any record is read. Fewer complete records than
+counted, or anything but blank padding after them, fails as `malformed`.
+
+Version 5 framing, and a version 8 count of zero, carry no authoritative row
+count. Trailing records made entirely of blanks may be padding and are not
+data, and removing a complete terminal record that leaves a valid smaller
+dataset cannot be distinguished from that smaller dataset. Partial physical
+records and non-padding partial rows fail.
 
 <a id="sas-8"></a>
 

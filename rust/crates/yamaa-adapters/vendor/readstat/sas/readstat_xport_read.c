@@ -29,7 +29,7 @@ typedef struct xport_ctx_s {
     readstat_io_t *io;
     time_t         timestamp;
 
-    int            obs_count;
+    uint64_t       obs_count; /* from OBSV8 header; 0 if unknown */
     int            var_count;
     int            row_limit;
     int            row_offset;
@@ -123,6 +123,22 @@ static readstat_error_t xport_read_header_record(xport_ctx_t *ctx, xport_header_
 
     if (matches < 2) {
         return READSTAT_ERROR_PARSE;
+    }
+
+    /* V8 files store the observation count as a 15-character field
+     * immediately after the 48-character header prefix. Older writers
+     * may leave it blank or zero, in which case it stays unknown.
+     * strtoll keeps all fifteen digits where long has 32 bits. */
+    if (strcmp(xrecord->name, "OBSV8") == 0) {
+        char obs_count[16];
+        memcpy(obs_count, &line[48], 15);
+        obs_count[15] = '\0';
+
+        char *end = NULL;
+        long long count = strtoll(obs_count, &end, 10);
+        if (end != obs_count && count > 0) {
+            ctx->obs_count = (uint64_t)count;
+        }
     }
 
     return READSTAT_OK;
@@ -642,10 +658,16 @@ static readstat_error_t xport_read_data(xport_ctx_t *ctx) {
     if (!ctx->handle.value)
         return READSTAT_OK;
 
+    /* A declared observation count is admitted before any record is read. */
+    if (ctx->obs_count > 0 && (ctx->obs_count > SIZE_MAX ||
+                !yamaa_readstat_admit((size_t)ctx->obs_count, ctx->var_count)))
+        return READSTAT_ERROR_MALLOC;
+
     readstat_error_t retval = READSTAT_OK;
     char *row = readstat_malloc(ctx->row_length);
     char *blank_row = readstat_malloc(ctx->row_length);
     int num_blank_rows = 0;
+    uint64_t rows_read = 0;
 
     if (row == NULL || blank_row == NULL) {
         retval = READSTAT_ERROR_MALLOC;
@@ -654,6 +676,9 @@ static readstat_error_t xport_read_data(xport_ctx_t *ctx) {
 
     memset(blank_row, ' ', ctx->row_length);
     while (1) {
+        if (ctx->obs_count > 0 && rows_read == ctx->obs_count)
+            break;
+
         ssize_t bytes_read = read_bytes(ctx, row, ctx->row_length);
         if (bytes_read == -1) {
             retval = READSTAT_ERROR_READ;
@@ -664,10 +689,13 @@ static readstat_error_t xport_read_data(xport_ctx_t *ctx) {
             }
             break;
         }
+        rows_read++;
 
         off_t pos = 0;
 
-        int row_is_blank = 1;
+        /* When the row count is known, blank rows are real data rather
+         * than potential end-of-file padding */
+        int row_is_blank = ctx->obs_count == 0;
 
         for (pos=0; pos<ctx->row_length; pos++) {
             if (row[pos] != ' ') {
@@ -702,6 +730,25 @@ static readstat_error_t xport_read_data(xport_ctx_t *ctx) {
 
         if (ctx->row_limit > 0 && ctx->parsed_row_count == ctx->row_limit)
             break;
+    }
+
+    /* A declared count must be met, and only blank padding may follow the
+     * records it counts. */
+    if (ctx->obs_count > 0 && ctx->row_limit == 0) {
+        if (rows_read != ctx->obs_count) {
+            retval = READSTAT_ERROR_ROW_COUNT_MISMATCH;
+            goto cleanup;
+        }
+        ssize_t bytes_read;
+        while ((bytes_read = read_bytes(ctx, row, ctx->row_length)) > 0) {
+            for (ssize_t tail = 0; tail < bytes_read; tail++) {
+                if (row[tail] != ' ') { retval = READSTAT_ERROR_READ; goto cleanup; }
+            }
+        }
+        if (bytes_read == -1) {
+            retval = READSTAT_ERROR_READ;
+            goto cleanup;
+        }
     }
 
 cleanup:

@@ -451,6 +451,89 @@ mod table {
                 );
             }
         }
+        const TEXT_FIELDS: [(&str, u16); 2] = [("A", 8), ("B", 8)];
+        /// A record of text then two blank records, padded with two more
+        /// blank 16-byte records to a whole 80-byte record.
+        fn trailing_blanks() -> Vec<u8> {
+            crate::support::xport::records(&TEXT_FIELDS, &[&["x", "y"], &["", ""], &["", ""]])
+        }
+        #[test]
+        fn version_8_observation_count_keeps_trailing_blank_records() {
+            // OBSV8 counts the observations in fifteen characters from byte
+            // 48 of its header record. With a count, records made entirely
+            // of blanks are data rather than padding.
+            use crate::support::xport::transport;
+            let mut source = declaration("built.xpt");
+            for count in [format!("{:15}", 3), "000000000000003".into()] {
+                let bytes = transport(8, &TEXT_FIELDS, &count, &trailing_blanks());
+                let table = sas_source::parse(&bytes, &source).unwrap();
+                assert_eq!(
+                    cells(&table),
+                    [
+                        [ValueRef::Str("x"), ValueRef::Str("y")],
+                        [ValueRef::Missing, ValueRef::Missing],
+                        [ValueRef::Missing, ValueRef::Missing]
+                    ],
+                    "{count:?}"
+                );
+            }
+            source.empty_string_present = true;
+            let bytes = transport(8, &TEXT_FIELDS, &format!("{:15}", 3), &trailing_blanks());
+            let table = sas_source::parse(&bytes, &source).unwrap();
+            assert_eq!(table.row_count(), 3);
+            assert_eq!(table.cell(2, 1).unwrap(), ValueRef::Str(""));
+        }
+        #[test]
+        fn transport_without_a_usable_count_treats_trailing_blank_records_as_padding() {
+            // Version 5 carries no count, and a zero version 8 count is
+            // unknown. Trailing blank records narrower than one 80-byte
+            // record may be padding, so they are not data.
+            use crate::support::xport::transport;
+            for (version, observations) in [(5, "0".repeat(30)), (8, "0".repeat(15))] {
+                let bytes = transport(version, &TEXT_FIELDS, &observations, &trailing_blanks());
+                let table = sas_source::parse(&bytes, &declaration("built.xpt")).unwrap();
+                assert_eq!(
+                    cells(&table),
+                    [[ValueRef::Str("x"), ValueRef::Str("y")]],
+                    "{version} {observations:?}"
+                );
+            }
+        }
+        #[test]
+        fn version_8_count_that_disagrees_with_the_records_is_refused() {
+            // Three text records fill 48 of 80 bytes; the blank padding holds
+            // two more 16-byte records. A count of six exceeds every record
+            // the file holds, and a count of one leaves text after it.
+            use crate::support::xport::{records, transport};
+            let data = records(&TEXT_FIELDS, &[&["x", "y"], &["p", "q"], &["r", "s"]]);
+            for count in [6, 1] {
+                let bytes = transport(8, &TEXT_FIELDS, &format!("{count:15}"), &data);
+                assert!(
+                    matches!(
+                        sas_source::parse(&bytes, &declaration("built.xpt")),
+                        Err(Error::Invalid("malformed"))
+                    ),
+                    "{count}"
+                );
+            }
+            let bytes = transport(8, &TEXT_FIELDS, &format!("{:15}", 5), &data);
+            let table = sas_source::parse(&bytes, &declaration("built.xpt")).unwrap();
+            assert_eq!(table.row_count(), 5);
+        }
+        #[test]
+        fn version_8_count_is_admitted_before_records_are_read() {
+            use crate::support::xport::transport;
+            let count = format!("{:15}", 10_000_001);
+            let bytes = transport(8, &TEXT_FIELDS, &count, &trailing_blanks());
+            assert!(matches!(
+                sas_source::parse(&bytes, &declaration("built.xpt")),
+                Err(Error::Limit {
+                    resource: "table_rows",
+                    actual: Some(10_000_001),
+                    ..
+                })
+            ));
+        }
         #[test]
         fn sas_dataset_numeric_date_formats_never_infer_and_epoch_narrowing_is_explicit() {
             let mut source = declaration("datetime.sas7bdat");
