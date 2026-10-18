@@ -243,7 +243,7 @@ def test_an_unknown_language_is_rejected():
 
 
 def test_default_selection_skips_benchmarks_without_grader_support(tmp_path):
-    names = ["adam-adsl-age-group", "adam-adsl-age-quality"]
+    names = ["adam-adsl-age-group", "schema-adsl-age-quality"]
     tasks, skipped = build.build_selection(
         names,
         languages=["r"],
@@ -253,7 +253,7 @@ def test_default_selection_skips_benchmarks_without_grader_support(tmp_path):
         strict=False,
     )
     assert [t.name for t in tasks] == ["adam-adsl-age-group-r"]
-    assert len(skipped) == 1 and skipped[0].startswith("adam-adsl-age-quality-r: ")
+    assert len(skipped) == 1 and skipped[0].startswith("schema-adsl-age-quality-r: ")
     with pytest.raises(build.BuildError):
         build.build_selection(
             names,

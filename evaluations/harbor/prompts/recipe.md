@@ -27,7 +27,7 @@ golden files.
   prompt.
 - **What is graded.** Every golden dataset the benchmark's specifications
   write, several for domains built together (DM and SUPPDM). A benchmark
-  whose golden is a warning or violation log (`adam-adsl-age-quality`) is
+  whose golden is a warning or violation log (`schema-adsl-age-quality`) is
   not built yet. A generated document (`define.xml`) is not graded; only
   its datasets are. A project function (`environment.yaml`) is the
   agent's to compute: state what the value is, as for any other column.
@@ -352,7 +352,7 @@ The prompt tests check every tier of every benchmark: the four blocks of
 the full prompt, the brief prompt against `brief.py`, the conventions
 prompt against the full prompt it narrows, the column lists and output
 paths against the graded datasets (the evaluation's own build, so a
-benchmark it does not build yet, `adam-adsl-age-quality`, is skipped), the
+benchmark it does not build yet, `schema-adsl-age-quality`, is skipped), the
 full prompt's fixed parts against `scaffold.py`, the 79-column width, the
 words a prompt never uses, and the fixture identifiers and dates and
 specification-only names it never says. The authoring tests check that the
