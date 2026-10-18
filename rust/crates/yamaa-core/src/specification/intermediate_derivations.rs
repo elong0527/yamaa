@@ -15,6 +15,13 @@ pub(super) struct Derivation {
     handler: Option<crate::conversion::LiteralHandler>,
     pub(super) references: Vec<String>,
 }
+/// The operation path of the first derivation that reads `identifier`.
+pub(super) fn reading_path<'a>(derivations: &'a [Derivation], identifier: &str) -> Option<&'a str> {
+    derivations
+        .iter()
+        .find(|derivation| derivation.references.iter().any(|name| name == identifier))
+        .map(|derivation| derivation.branch.path.as_str())
+}
 impl Derivation {
     fn assignment_path(&self) -> &str {
         if self.typed.is_some() {
