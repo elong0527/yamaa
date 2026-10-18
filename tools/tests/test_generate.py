@@ -577,7 +577,7 @@ class DashboardTests(unittest.TestCase):
         self.assertIn(
             'DTHFL is "Y" or has no value.', (prompts / "conventions.md").read_text()
         )
-        self.assertIn('<p>DTHFL is &quot;Y&quot; or has no value.</p>', page)
+        self.assertIn("<p>DTHFL is &quot;Y&quot; or has no value.</p>", page)
         for name in generate.SOLUTION_FILES:
             self.assertIn(f'data-filename="solutions/adam-adae-death/{name}"', page)
             self.assertIn(

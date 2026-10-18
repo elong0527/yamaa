@@ -419,7 +419,7 @@ def test_held_out_rejects_invalid_recomputed_reference_output(tmp_path):
     # the reference program is written internally.
     reference.write_text(
         text
-        + f"\nimport csv as _csv\n"
+        + "\nimport csv as _csv\n"
         + f"_dm_rows = list(_csv.DictReader(open({str(app / 'input/dm.csv')!r})))\n"
         + f"if len(_dm_rows) < {count}:\n"
         + f"    _out_path = {str(app / 'output/adsl.csv')!r}\n"
