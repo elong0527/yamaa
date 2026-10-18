@@ -4,6 +4,8 @@ use support::{call, function, specification, specification_with_rows, Tree};
 use yamaa_core::json::Value as JsonValue;
 use yamaa_core::{
     diagnostic::ConditionCode,
+    project_environment::{Draft, Environment},
+    project_function::Language,
     schema::DocumentNode as N,
     specification::{PrepareError, PreparedSpecification},
 };
@@ -77,6 +79,59 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         }
         reached.insert(diagnostic.code);
     }
+    // A supplied project that names no environment file for the host reports
+    // each call against that absent environment rather than the function name.
+    let undeclared = Environment::admit(
+        Language::R,
+        Draft {
+            language: None,
+            lock: None,
+            functions: None,
+            codelists: vec![],
+        },
+    )
+    .unwrap()
+    .into_execution();
+    let spec = specification(vec![(
+        "VALUE",
+        "int",
+        call("id", vec![("x", Tree::Scalar(N::Integer("7".into())))]),
+    )]);
+    let Err(PrepareError::Invalid(findings)) =
+        PreparedSpecification::prepare_with_environment(&spec, &undeclared)
+    else {
+        panic!("undeclared environment cause")
+    };
+    assert_eq!(findings.len(), 1);
+    let diagnostic = findings[0].diagnostic();
+    assert_eq!(
+        (
+            diagnostic.definition().phase,
+            diagnostic.definition().condition,
+            diagnostic.definition().requirement
+        ),
+        (
+            "validation",
+            "project_environment_missing",
+            Some("REQ-0694")
+        )
+    );
+    assert_eq!(
+        diagnostic.spec_paths,
+        ["columns.VALUE.derivation.function.name"]
+    );
+    assert_eq!(
+        diagnostic.context,
+        [
+            ("function".into(), JsonValue::String("id".into())),
+            ("language".into(), JsonValue::String("r".into())),
+            ("cause".into(), JsonValue::String("undeclared".into())),
+        ]
+        .into()
+    );
+    assert_eq!(diagnostic.source_span, None);
+    assert_eq!(diagnostic.operand_route, None);
+    reached.insert(diagnostic.code);
     let source = Tree::map(vec![(
         "source",
         Tree::map(vec![("variable", Tree::text("SRC.ID"))]),

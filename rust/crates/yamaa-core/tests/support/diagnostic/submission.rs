@@ -6,6 +6,7 @@ pub(crate) use yamaa_core::json::Value as JsonValue;
 pub(crate) use yamaa_core::{
     define_diagnostics::{self, TargetRelation},
     diagnostic::ConditionCode,
+    project_environment::Submission,
     project_terminology as ct,
     submission_composition::{self as composition, Finding, Input, Study},
     submission_document, submission_json, submission_xml,
@@ -58,7 +59,7 @@ pub(crate) fn specification() -> Tree {
         ),
     ])
 }
-pub(crate) fn environment() -> Tree {
+pub(crate) fn project() -> Tree {
     Tree::map(vec![
         (
             "study",
@@ -122,14 +123,14 @@ pub(crate) fn catalogue(standard: bool, value: Value) -> ct::Catalogue {
     .unwrap()
 }
 pub(crate) fn compose(
-    env: Tree,
+    project: Tree,
     docs: Vec<Tree>,
     catalogue: &ct::Catalogue,
     installed: &str,
     created: &str,
 ) -> Result<Study, Vec<Finding>> {
-    let env = env.document();
-    let declared = submission_document::decode(&env, env.root()).unwrap();
+    let project = project.document();
+    let declared = submission_document::decode(&project, project.root()).unwrap();
     let docs: Vec<_> = docs.into_iter().map(Tree::document).collect();
     let inputs: Vec<_> = docs
         .iter()
@@ -140,17 +141,16 @@ pub(crate) fn compose(
             href: "d0.csv",
         })
         .collect();
-    composition::compose(
-        declared.study().unwrap(),
-        &declared.sections()[0],
-        catalogue,
-        &inputs,
-        installed,
-        created,
-    )
+    let section = &declared.sections()[0];
+    let required = composition::Required::admit(declared.study(), Some(section), section.family)?;
+    composition::compose(required, catalogue, &inputs, installed, created)
 }
-pub(crate) fn one(env: Tree, spec: Tree, catalogue: &ct::Catalogue) -> Result<Study, Vec<Finding>> {
-    compose(env, vec![spec], catalogue, "1.0", "2026-09-30T00:00:00")
+pub(crate) fn one(
+    project: Tree,
+    spec: Tree,
+    catalogue: &ct::Catalogue,
+) -> Result<Study, Vec<Finding>> {
+    compose(project, vec![spec], catalogue, "1.0", "2026-09-30T00:00:00")
 }
 pub(crate) fn reached_finding(
     reached: &mut BTreeSet<ConditionCode>,
@@ -234,7 +234,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     pub(crate) use ConditionCode::*;
     let mut reached = BTreeSet::new();
     let empty = ct::Catalogue::admit(vec![]).unwrap();
-    assert!(one(environment(), specification(), &empty).is_ok());
+    assert!(one(project(), specification(), &empty).is_ok());
     for (code, condition, requirement, change) in [
         (
             SubmissionMetadataMissing,
@@ -367,7 +367,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             24,
         ),
     ] {
-        let mut env = environment();
+        let mut project = project();
         let mut spec = specification();
         let mut lists = empty.clone();
         let meta = ["columns", "0", "submission"];
@@ -375,7 +375,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             0 => spec.remove(&["columns", "0", "submission"]),
             1 => spec.remove(&["columns", "0", "submission", "origin"]),
             2 => {
-                env.set(&["sdtm", "context"], Tree::text("Submission"));
+                project.set(&["sdtm", "context"], Tree::text("Submission"));
                 *spec.at(&["domain"]) = Tree::text("LONGDOMAIN");
             }
             3 => spec.remove(&["columns", "0", "submission", "core"]),
@@ -384,14 +384,14 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 spec.at(&meta).set(&["mandatory"], Tree::boolean(true));
             }
             5 => {
-                env = Tree::Map(match env {
+                project = Tree::Map(match project {
                     Tree::Map(mut fields) => {
                         fields[1].0 = "adam".into();
                         fields
                     }
                     _ => unreachable!(),
                 });
-                *env.at(&["adam", "standard", "name"]) = Tree::text("ADaMIG");
+                *project.at(&["adam", "standard", "name"]) = Tree::text("ADaMIG");
                 *spec.at(&["submission", "class"]) = Tree::text("SUBJECT LEVEL ANALYSIS DATASET");
                 spec.at(&meta).set(&["mandatory"], Tree::boolean(false));
                 spec.at(&meta).set(&["role"], Tree::text("Identifier"));
@@ -416,7 +416,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 *spec.at(&["columns", "0", "submission", "origin", "source"]) =
                     Tree::text("Investigator");
                 if change == 11 {
-                    env.set(
+                    project.set(
                         &["sdtm", "documents"],
                         Tree::list(vec![
                             document_reference("ACRF", "annotated_crf"),
@@ -469,7 +469,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             21 | 22 => {
                 spec.set(&["submission", "has_no_data"], Tree::boolean(true));
                 if change == 22 {
-                    env.set(&["sdtm", "dataset_json"], Tree::boolean(true));
+                    project.set(&["sdtm", "datasets"], Tree::text("json"));
                     spec.set(&["submission", "comment"], Tree::text("No data collected"));
                 }
             }
@@ -477,7 +477,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             24 => *spec.at(&["output", "columns"]) = Tree::list(vec![]),
             _ => unreachable!(),
         }
-        let findings = one(env, spec, &lists).unwrap_err();
+        let findings = one(project, spec, &lists).unwrap_err();
         reached_finding(
             &mut reached,
             &findings,
@@ -569,7 +569,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             }
             _ => unreachable!(),
         }
-        let findings = one(environment(), spec, &empty).unwrap_err();
+        let findings = one(project(), spec, &empty).unwrap_err();
         reached_finding(
             &mut reached,
             &findings,
@@ -635,19 +635,19 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             6,
         ),
     ] {
-        let mut env = environment();
+        let mut project = project();
         let mut spec = specification();
         let mut lists = empty.clone();
         let mut docs = None;
         match change {
-            0 => *env.at(&["sdtm", "standard", "name"]) = Tree::text("ADaMIG"),
-            1 => *env.at(&["sdtm", "define"]) = Tree::text("define.json"),
+            0 => *project.at(&["sdtm", "standard", "name"]) = Tree::text("ADaMIG"),
+            1 => *project.at(&["sdtm", "define"]) = Tree::text("define.json"),
             2 => {}
-            3 => env.set(
+            3 => project.set(
                 &["sdtm", "documents"],
                 Tree::list(vec![document_reference("D0", "other")]),
             ),
-            4 => env.set(
+            4 => project.set(
                 &["sdtm", "documents"],
                 Tree::list(vec![
                     document_reference("A1", "annotated_crf"),
@@ -655,12 +655,12 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 ]),
             ),
             5 => {
-                *env.at(&["sdtm", "specs"]) =
+                *project.at(&["sdtm", "specs"]) =
                     Tree::list(vec![Tree::text("d0.yaml"), Tree::text("d0.yaml")]);
                 docs = Some(vec![spec.clone(), spec.clone()]);
             }
             6 => {
-                env.set(&["sdtm", "context"], Tree::text("Submission"));
+                project.set(&["sdtm", "context"], Tree::text("Submission"));
                 lists = catalogue(true, Value::Str("X".into()));
                 spec.set(
                     &["columns", "0", "submission", "codelist"],
@@ -670,7 +670,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             _ => unreachable!(),
         }
         let findings = compose(
-            env,
+            project,
             docs.unwrap_or_else(|| vec![spec]),
             &lists,
             if change == 2 { "" } else { "1.0" },
@@ -688,7 +688,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     }
     let mut spec = specification();
     *spec.at(&["columns", "0", "label"]) = Tree::text("A\tB");
-    let study = one(environment(), spec, &empty).unwrap();
+    let study = one(project(), spec, &empty).unwrap();
     let finding = submission_xml::render(&study).unwrap_err();
     reached_finding(
         &mut reached,
@@ -699,7 +699,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         "REQ-1025",
     );
     let study = compose(
-        environment(),
+        project(),
         vec![specification()],
         &empty,
         "1.0",
@@ -715,7 +715,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         "value_not_permitted",
         "REQ-1026",
     );
-    let study = one(environment(), specification(), &empty).unwrap();
+    let study = one(project(), specification(), &empty).unwrap();
     let table = Held {
         schema: TableSchema::new(vec![Column {
             name: "VALUE".into(),
@@ -738,7 +738,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         &["columns", "0", "submission", "inventory_vocabulary"],
         Tree::boolean(true),
     );
-    let study = one(environment(), spec, &empty).unwrap();
+    let study = one(project(), spec, &empty).unwrap();
     let table = Held {
         schema: TableSchema::new(vec![Column {
             name: "VALUE".into(),
@@ -789,18 +789,37 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         "value_not_permitted",
         "REQ-1074",
     );
+    // A section that lists only its specifications admits for runs. Define
+    // composition reports the study and the section's guide and target it
+    // still needs, together, before composing any dataset.
+    let mut specs_only = project();
+    specs_only.remove(&["study"]);
+    specs_only.remove(&["sdtm", "standard"]);
+    specs_only.remove(&["sdtm", "define"]);
+    let findings = one(specs_only, specification(), &empty).unwrap_err();
     assert_eq!(
-        define_diagnostics::required(Some(9), "study", "study").unwrap(),
-        9
+        findings,
+        [
+            Finding::cause(DefineRequiredDeclaration, "study", "study"),
+            Finding::cause(DefineRequiredDeclaration, "sdtm.standard", "standard"),
+            Finding::cause(DefineRequiredDeclaration, "sdtm.define", "define"),
+        ]
     );
-    let finding = define_diagnostics::required::<usize>(None, "study", "study").unwrap_err();
     reached_finding(
         &mut reached,
-        &[finding],
+        &findings,
         DefineRequiredDeclaration,
         "validation",
         "missing_required_field",
-        "REQ-1015",
+        "REQ-1336",
+    );
+    // A project without the selected family's section names that section.
+    assert_eq!(
+        composition::Required::admit(None, None, Submission::Adam).unwrap_err(),
+        [
+            Finding::cause(DefineRequiredDeclaration, "study", "study"),
+            Finding::cause(DefineRequiredDeclaration, "adam", "adam"),
+        ]
     );
     assert!(define_diagnostics::created_text("2026-09-30T00:00:00").is_ok());
     let finding = define_diagnostics::created_text("2026-09-30T00:00:00.1").unwrap_err();

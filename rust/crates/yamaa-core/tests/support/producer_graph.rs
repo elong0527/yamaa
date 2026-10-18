@@ -57,8 +57,6 @@ pub fn environment(names: &[&str]) -> ExecutionEnvironment {
             }),
             functions: Some(functions),
             codelists: vec![],
-            has_study: false,
-            submissions: vec![],
         },
     )
     .unwrap()

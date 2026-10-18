@@ -537,9 +537,11 @@ fn merge_sources(into: &mut BTreeMap<String, SourceInfo>, from: BTreeMap<String,
 }
 
 /// One planned benchmark entry, following `tools/benchmark.py` for the
-/// Python host: explicit entries win; the environment defaults to
-/// `python/environment.yaml` when an entry does not name one and that
-/// file exists; a case without entries has exactly one specification.
+/// Python host: explicit entries win; an entry that does not name a
+/// project passes the case's root `project.yaml` when that file exists,
+/// and an explicit null passes none; a case without entries has exactly
+/// one specification. The project travels as the request's `environment`
+/// argument, and its `environments` key links the Python environment file.
 #[derive(Debug, Clone)]
 struct EntryCall {
     specification: String,
@@ -548,9 +550,9 @@ struct EntryCall {
 
 fn plan_entries(case: &Path) -> Vec<EntryCall> {
     let default_environment = case
-        .join("python/environment.yaml")
+        .join("project.yaml")
         .is_file()
-        .then(|| "python/environment.yaml".to_string());
+        .then(|| "project.yaml".to_string());
     let benchmark = case.join("benchmark.yaml");
     if let Ok(bytes) = fs::read(&benchmark) {
         let doc = yaml_json(&bytes);
@@ -809,8 +811,9 @@ fn backend_for(case: &Path) -> (Arc<MemoryResolver>, BTreeMap<String, String>) {
 }
 
 /// Project functions execute in a host language runtime; the adapters
-/// test embeds none, so activation is refused if it is ever reached.
-/// Producer graphs of pure engine derivations never invoke it.
+/// test embeds none, so an invocation is refused if it is ever reached.
+/// Producer graphs of pure engine derivations never invoke it, and a
+/// project run that calls no project function never enters the port.
 struct NoActivation;
 
 impl ActivationPort for NoActivation {
@@ -845,23 +848,24 @@ impl ActivationPort for NoActivation {
     }
 }
 
-/// A built entry, whichever route the application selected.
+/// A built entry, whichever route the application selected. Plain and
+/// project builds share the public domain result.
 enum Built {
-    Plain(Domain),
+    Domain(Domain),
     Producer(RootResult),
 }
 
 impl Built {
     fn issues(&self) -> Vec<Issue> {
         match self {
-            Built::Plain(domain) => domain.issues(),
+            Built::Domain(domain) => domain.issues(),
             Built::Producer(result) => result.issues().to_vec(),
         }
     }
 
     fn output_present(&self) -> bool {
         match self {
-            Built::Plain(domain) => domain.output_table().is_some(),
+            Built::Domain(domain) => domain.output_table().is_some(),
             Built::Producer(result) => result.output_table().is_some(),
         }
     }
@@ -869,9 +873,9 @@ impl Built {
     /// The host tables as Arrow IPC bytes, one per declared slot.
     fn table_ipc(&self, slot: &str) -> Option<&[u8]> {
         match (self, slot) {
-            (Built::Plain(domain), "output") => domain.output(),
-            (Built::Plain(domain), "verification_log") => domain.verification_log(),
-            (Built::Plain(domain), "warning_log") => domain.warning_log(),
+            (Built::Domain(domain), "output") => domain.output(),
+            (Built::Domain(domain), "verification_log") => domain.verification_log(),
+            (Built::Domain(domain), "warning_log") => domain.warning_log(),
             (Built::Producer(result), "output") => result.output(),
             (Built::Producer(result), "verification_log") => result.verification_log(),
             (Built::Producer(result), "warning_log") => result.warning_log(),
@@ -881,15 +885,17 @@ impl Built {
 
     fn save(&mut self) -> Result<bool, file_application::FailedBuild> {
         match self {
-            Built::Plain(domain) => domain.save(),
+            Built::Domain(domain) => domain.save(),
             Built::Producer(result) => result.save(),
         }
     }
 }
 
 /// The runtime port for this route: plain and producer builds run in
-/// process; project builds refuse, exactly like the adapters' native
-/// port, because project functions need a host language runtime.
+/// process, and so does a project build whose run calls no project
+/// function, because the engine then never enters the activation port.
+/// A project build that calls one refuses, exactly like the adapters'
+/// native port, because project functions need a host language runtime.
 struct MemoryRuntime<'a> {
     identity: Identity<'a>,
     resolver: Arc<MemoryResolver>,
@@ -921,18 +927,29 @@ impl RuntimePort for MemoryRuntime<'_> {
         prepared: FileSpecification,
         scope: Scope<'_>,
     ) -> Result<Built, file_application::Failure> {
-        file_application::plain(prepared, self.identity(), scope).map(Built::Plain)
+        file_application::plain(prepared, self.identity(), scope).map(Built::Domain)
     }
 
     fn project(
         &mut self,
-        _: Box<yamaa_adapters::file_project::FileProject>,
-        _: Scope<'_>,
+        mut project: Box<yamaa_adapters::file_project::FileProject>,
+        scope: Scope<'_>,
     ) -> Result<Built, file_application::Failure> {
-        Err(file_application::unsupported(
-            "environment",
-            Some("environment"),
-        ))
+        if !project.run().compiled().called_functions().is_empty() {
+            return Err(file_application::unsupported(
+                "environment",
+                Some("environment"),
+            ));
+        }
+        let attempt = project.build(&mut NoActivation, scope);
+        let result = yamaa_adapters::project_report::build_result(
+            project.run(),
+            &attempt,
+            self.identity(),
+            &[],
+        )
+        .map_err(|error| error.refusal().issues())?;
+        Domain::from_project(result, &project).map(Built::Domain)
     }
 
     fn producer(
@@ -993,7 +1010,7 @@ fn run_entry(case: &Path, call: &EntryCall, backend: &Arc<MemoryResolver>) -> Ou
     match domain_entry::domain(request, &mut application, Scope::default()) {
         Ok(built) => Outcome::Built(Box::new(built)),
         Err(file_application::ApplicationError::Preparation(error)) => Outcome::Failed(
-            yamaa_adapters::project_application::selection_failure(&error, Language::Python),
+            yamaa_adapters::project_application::selection_failure(&error),
         ),
         Err(file_application::ApplicationError::Runtime(issues)) => Outcome::Failed(issues),
     }
@@ -2315,32 +2332,32 @@ fn benchmark_cases() -> Vec<(String, PathBuf)> {
 /// an exempt case that starts passing fails the test as stale, and any
 /// non-exempt case that fails is reported with its findings.
 const EXEMPTIONS: &[(&str, &str)] = &[
-    // Project environments (5): the specification calls project
-    // functions, which execute in a host language runtime. The Rust
-    // adapters route embeds none, so these cannot run here at all;
-    // most fail earlier still, because environment preparation looks
-    // for the environment's packaging lock (python/uv.lock), a
-    // host-side file the file route's hosts stage beside the
-    // environment and that exists in no benchmark directory.
+    // Project functions (5): the specification calls project functions,
+    // which execute in a host language runtime. The Rust adapters route
+    // embeds none, so these cannot run here at all; most fail earlier
+    // still, because the case's project.yaml links python/environment.yaml
+    // and that file's `lock: uv.lock` resolves from it to python/uv.lock,
+    // a host-side packaging file the file route's hosts stage beside the
+    // environment file and that exists in no benchmark directory.
     (
         "adam-adsl-bmi",
-        "calls project functions; the build reaches the environment and is refused (unsupported_operation: environment) because project functions need a host language runtime this route does not embed",
+        "calls project functions; its Python environment file declares no lock, so preparation succeeds and the project build is refused (unsupported_operation: environment) because project functions need a host language runtime this route does not embed",
     ),
     (
         "adam-advs-percentiles",
-        "calls project functions; environment preparation fails first (project_environment_invalid, REQ-0695) because the environment's uv.lock is a host-side file absent from the benchmark directory",
+        "calls project functions; project preparation fails first (project_environment_invalid, REQ-0695 at lock) because the uv.lock its Python environment file declares is a host-side file absent from the benchmark directory",
     ),
     (
         "schema-functions",
-        "calls project functions; environment preparation fails first (project_environment_invalid, REQ-0695) because the environment's uv.lock is a host-side file absent from the benchmark directory",
+        "calls project functions; project preparation fails first (project_environment_invalid, REQ-0695 at lock) because the uv.lock its Python environment file declares is a host-side file absent from the benchmark directory",
     ),
     (
         "schema-non-finite",
-        "calls project functions; environment preparation fails first (project_environment_invalid, REQ-0695) because the environment's uv.lock is a host-side file absent from the benchmark directory",
+        "calls project functions; project preparation fails first (project_environment_invalid, REQ-0695 at lock) because the uv.lock its Python environment file declares is a host-side file absent from the benchmark directory",
     ),
     (
         "negative-function-contract",
-        "calls project functions; environment preparation fails first (project_environment_invalid, REQ-0695 on the absent uv.lock), masking the expected invalid_function_argument finding (REQ-0700)",
+        "calls project functions; project preparation fails first (project_environment_invalid, REQ-0695 at lock: its Python environment file's uv.lock is absent), masking the expected invalid_function_argument finding (REQ-0700)",
     ),
     // File-ingest diagnostics (7): the expected diagnostic has phase
     // `ingest` — it is produced by decoding the input file's text. An
@@ -2439,6 +2456,30 @@ fn memory_resolver_benchmarks_representative() {
         "the in-memory route disagrees with the file route:\n{}",
         failures.join("\n")
     );
+}
+
+/// The plan passes a case's root project to every call, so the study-level
+/// cases build on the project route with their codelists, and a case with
+/// only another project file passes none.
+#[test]
+fn memory_resolver_plan_passes_the_root_project() {
+    let cases = benchmark_cases();
+    for (name, project) in [
+        ("sdtm-ae-coding", Some("project.yaml")),
+        ("sdtm-dm-metadata", Some("project.yaml")),
+        ("sdtm-vs-epoch-from-subject-elements", Some("project.yaml")),
+        ("schema-functions", Some("project.yaml")),
+        ("sdtm-lb-metadata", None),
+    ] {
+        let (_, case) = cases
+            .iter()
+            .find(|(case_name, _)| case_name == name)
+            .unwrap_or_else(|| panic!("planned case {name} not found"));
+        let calls = plan_entries(case);
+        assert_eq!(calls.len(), 1, "{name}");
+        assert_eq!(calls[0].specification, "spec.yaml", "{name}");
+        assert_eq!(calls[0].environment.as_deref(), project, "{name}");
+    }
 }
 
 #[test]

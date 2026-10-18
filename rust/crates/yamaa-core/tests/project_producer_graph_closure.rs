@@ -2757,8 +2757,6 @@ mod project {
                 }),
                 functions: Some(functions),
                 codelists: vec![],
-                has_study: false,
-                submissions: vec![],
             };
             assert!(Environment::admit(Language::Python, draft).is_ok());
         }

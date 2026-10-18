@@ -2731,8 +2731,6 @@ mod project {
                     lock: environment(&[]).lock().cloned(),
                     functions: Some(vec![definition]),
                     codelists: vec![],
-                    has_study: false,
-                    submissions: vec![],
                 },
             )
             .unwrap()
