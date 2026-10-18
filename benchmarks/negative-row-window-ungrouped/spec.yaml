@@ -1,0 +1,46 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  EX: {path: input/ex.csv, types: {EXSTDTC: date}}
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, TRTSDT, DOSEORD]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: TRTSDT
+    type: date
+    label: Date of First Exposure to Treatment
+
+  - name: DOSEORD
+    type: int
+    label: Order of First Dose in Study
+
+rows:
+  # One record per subject from the subject's exposure records. The order of
+  # first doses is taken from the exposure start date itself, which differs
+  # between the subject's administrations, so the specification is rejected
+  # before any data is read.
+  - id: subject
+    dataset: EX
+    group_by: [EX.STUDYID, EX.USUBJID]
+    derivations:
+      STUDYID: EX.STUDYID
+      USUBJID: EX.USUBJID
+      TRTSDT:
+        aggregate:
+          expr: "MIN(EX.EXSTDTC)"
+      DOSEORD:
+        row_number:
+          window:
+            group_by: [STUDYID]
+            order_by: [EX.EXSTDTC]

@@ -1,0 +1,6 @@
+lifecycle: draft
+standard: SDTM
+domain: VS
+validation:
+  rule: R003
+  validator: lookup_contract

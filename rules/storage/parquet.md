@@ -108,8 +108,9 @@ A file with no readable Parquet schema is not.
 <a id="req-1031"></a>
 
 **REQ-1031.** Every schema field name is non-empty and unique under [Text values](../values/text.md)
-equality. A field is scalar; nested, repeated, dictionary, and extension
-types are outside this profile.
+equality. A field is scalar; nested, repeated, and extension types are
+outside this profile. A dictionary in the embedded Arrow schema is a layout
+of its value type, not a type of its own ([REQ-1032](parquet.md#req-1032)).
 
 <a id="req-1032"></a>
 
@@ -124,10 +125,16 @@ this closed mapping, which is the inverse of [REQ-0734](parquet.md#req-0734):
 | `INT32` annotated `Date` | `date` |
 | `INT64` annotated `Timestamp`, microseconds, no UTC adjustment | `datetime` |
 
-The two Arrow string widths are the same physical/logical pair. A
-`BYTE_ARRAY` field annotated `String` reads as `str` whether the file's
-embedded Arrow schema names it `string` or `large_string`. Only the offset
-width differs.
+The file's embedded Arrow schema can name one physical/logical pair in
+several Arrow layouts, and the layout does not change the column type. A
+`BYTE_ARRAY` field annotated `String` reads as `str` whether that schema
+names it `string`, `large_string`, or `string_view`. A field that schema
+names as a `dictionary` reads as it would if the schema named the
+dictionary's value type, whatever the index type. A `dictionary` of
+`string` values over a `BYTE_ARRAY` field annotated `String` reads as
+`str`, and a `dictionary` of `int64` values over an `INT64` field with no
+logical type reads as `int`. Only the layout differs: the offset width,
+the string views, or the dictionary indices.
 
 <a id="req-1033"></a>
 
