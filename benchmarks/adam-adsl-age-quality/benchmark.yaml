@@ -2,4 +2,4 @@ lifecycle: draft
 standard: ADaM
 domain: ADSL
 harbor:
-  opensas_exclusion: the specification's warning log is not graded by Harbor
+  opensas_exclusion: the specification's run report is not graded by Harbor
