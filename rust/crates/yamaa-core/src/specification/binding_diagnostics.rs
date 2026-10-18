@@ -139,11 +139,11 @@ impl BindFinding {
                 // Scope raises a grouping finding only for a read qualified
                 // by the driver whose groups lack the variable, so the
                 // qualifier names that driver: the grouped row template's
-                // own `dataset`. A column-level window keeps every grouped
-                // template's groups in scope and still names the driver its
-                // read qualifies. The specification's driver is the input
-                // behind the first row template, which a later template need
-                // not share (ROW-5, NAME-4).
+                // own `dataset`. A column-level window reads only a driver
+                // every row template shares (WINDOW-11), so its grouped
+                // templates are over that driver too. The specification's
+                // driver is the input behind the first row template, which a
+                // later template need not share (ROW-5, NAME-4).
                 let driver = || name.split_once('.').map(|(driver, _)| text(driver));
                 let (code, values) = match finding {
                     reference_scope::Finding::UnknownField => (

@@ -1751,6 +1751,29 @@ impl Rows {
             return Err(PrepareError::Invalid(self_findings));
         }
         validate_row_phases(&templates, project, output)?;
+        // A column-level window spans the rows of every row template and
+        // reads a driver field at the record that built each row, so it may
+        // read only a driver they all share (WINDOW-11). The records that
+        // build rows belong to each distinct driver and, for a driver
+        // intermediate, to the input it reads.
+        let mut drivers: Vec<&str> = Vec::new();
+        for template in &templates {
+            if !drivers.contains(&template.driver.as_str()) {
+                drivers.push(&template.driver);
+            }
+        }
+        let declared_inputs = mapping(d, field(d, root, "input")?)?;
+        let mut records = drivers.clone();
+        for &name in &drivers {
+            if let Some(index) = intermediates.input(name) {
+                let (input, _) = declared_inputs.get(index).ok_or(PrepareError::Internal)?;
+                let input = text(d, *input)?;
+                if !records.contains(&input) {
+                    records.push(input);
+                }
+            }
+        }
+        let mut window_drivers = Vec::new();
         let mut lowered_columns = Vec::new();
         let mut unaddressable = Vec::new();
         for (column, &id) in columns.iter().enumerate() {
@@ -1791,6 +1814,14 @@ impl Rows {
                     string_templates,
                     intermediates,
                 )?;
+                if let RowOperation::Shared(branch) = &declaration.operation {
+                    windows::column_driver_findings(
+                        &branch.operation,
+                        &drivers,
+                        &records,
+                        &mut window_drivers,
+                    );
+                }
                 // Binding uses the driver the needing templates share; a
                 // named intermediate's unaddressable record is refused here.
                 let mut needing = templates
@@ -1819,6 +1850,15 @@ impl Rows {
                 }
                 lowered_columns.push(declaration);
             }
+        }
+        // A language refusal comes before an implementation refusal.
+        if !window_drivers.is_empty() {
+            return Err(PrepareError::Invalid(
+                window_drivers
+                    .into_iter()
+                    .map(PreflightFinding::Scalar)
+                    .collect(),
+            ));
         }
         if !unaddressable.is_empty() {
             return Err(PrepareError::Unsupported(unaddressable));

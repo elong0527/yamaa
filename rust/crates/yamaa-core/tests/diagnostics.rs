@@ -319,6 +319,7 @@ mod diagnostics {
             reached.extend(binding::reached());
             reached.extend(intermediate_scopes::reached());
             reached.extend(binding::window_reached());
+            reached.extend(binding::window_driver_reached());
             reached.extend(binding::lookup_reached());
             reached.extend(binding::source_filter_reached());
             reached.extend(binding::source_match_reached());

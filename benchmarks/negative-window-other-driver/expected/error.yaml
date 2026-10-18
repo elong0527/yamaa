@@ -1,0 +1,9 @@
+phase: validation
+condition: unknown_field
+spec_paths:
+  - columns.VSSEQ.derivation.row_number.window.order_by[0]
+requirement: WINDOW-11
+context:
+  identifier: CLINIC.VSDY
+  drivers: [CLINIC, HOME]
+  operation: row_number
