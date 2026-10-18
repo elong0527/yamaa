@@ -273,6 +273,12 @@ impl TemporalKind {
             Self::DateText { depth } => &DATE_PARTS[..usize::from(depth)],
         }
     }
+    /// Whether the operands are read in order up to the first missing one:
+    /// `dtc` reads no part after its first missing part (TIME-19). Every
+    /// other operation reads each of its operands.
+    pub fn stops_at_missing(self) -> bool {
+        matches!(self, Self::DateText { .. })
+    }
 }
 fn leap(year: i64) -> bool {
     year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)

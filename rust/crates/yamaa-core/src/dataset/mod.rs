@@ -345,14 +345,14 @@ pub enum Check {
     /// Presence of the owning completed column, before later derivations.
     NotMissing,
     /// Presence required by the column's resolved `mandatory`. Without a scope
-    /// every row is checked; a scope selects rows by their completed discriminator.
-    Mandatory(Option<CodeScope>),
+    /// every row is checked; a scope selects rows by value-level where clauses.
+    Mandatory(Option<RowScope>),
     /// The ISO 8601 form a `str` column's date or time submission data type
     /// names (SUB-26). Without a scope every row is checked; a scope selects
-    /// rows by their completed discriminator.
+    /// rows by value-level where clauses.
     DataType {
         form: crate::iso8601::Form,
-        scope: Option<CodeScope>,
+        scope: Option<RowScope>,
     },
     /// Already converted, present permitted values for the owning column.
     AllowedValues(Vec<Value>),
@@ -362,23 +362,31 @@ pub enum Check {
         id: String,
         values: Vec<Value>,
     },
-    /// Several inherited/value-level bindings share one declaration path.
-    /// Selection uses the completed discriminator, never a donor row or template.
+    /// The column's and its value-level entries' bindings share one
+    /// declaration path. Selection reads completed where columns, never a
+    /// donor row or template: each binding checks the rows its clauses select,
+    /// and the column's binding every row no `overrides` clause selects.
     ValueCodelists {
-        discriminator: usize,
-        overrides: Vec<String>,
+        overrides: Vec<WhereClause>,
         bindings: Vec<ValueCodelist>,
     },
     Inventory {
         values: Vec<Value>,
         scope: Option<InventoryScope>,
     },
-    /// Effective per-value metadata length, selected by its completed owner.
+    /// A value-level length bound over the rows its scope selects.
     ValueMaxLength {
         max: RowCountBound,
-        discriminator: usize,
-        codes: Vec<String>,
-        include: bool,
+        scope: RowScope,
+    },
+    /// Each row matches at most one of a column's value-level entries, named
+    /// by their identifiers.
+    ValueEntries(Vec<(String, WhereClause)>),
+    /// A value-level entry, named by its identifier, matches at least one
+    /// row; checked at `warning`.
+    ValueEntryMatch {
+        id: String,
+        clause: WhereClause,
     },
     Range {
         min: Option<Value>,
@@ -420,40 +428,90 @@ pub enum Check {
     ScopedRowCount(RowCount),
 }
 
-/// Rows selected by their completed discriminator value: the listed codes when
-/// `include`, and every other row, a missing discriminator included, otherwise.
+/// One value-level where clause over completed `str` columns: a row is
+/// selected when every term's column holds one of the term's values. A
+/// missing value matches no term.
 #[derive(Clone, Debug, PartialEq)]
-pub struct CodeScope {
-    pub discriminator: usize,
-    pub codes: Vec<String>,
-    pub include: bool,
+pub struct WhereClause {
+    pub terms: Vec<(usize, Vec<String>)>,
 }
-impl CodeScope {
+impl WhereClause {
     pub fn selects(&self, row: &[Value]) -> bool {
-        let listed =
-            matches!(&row[self.discriminator], Value::Str(code) if self.codes.contains(code));
-        listed == self.include
+        self.terms.iter().all(
+            |(column, values)| matches!(&row[*column], Value::Str(value) if values.contains(value)),
+        )
+    }
+    /// The columns the clause reads.
+    pub fn columns(&self) -> impl Iterator<Item = usize> + '_ {
+        self.terms.iter().map(|(column, _)| *column)
     }
 }
 
+/// Rows selected by where clauses: the rows any clause selects when
+/// `include`, and every other row otherwise.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RowScope {
+    pub clauses: Vec<WhereClause>,
+    pub include: bool,
+}
+impl RowScope {
+    pub fn selects(&self, row: &[Value]) -> bool {
+        self.clauses.iter().any(|clause| clause.selects(row)) == self.include
+    }
+}
+
+/// A column's inventory vocabulary resolved per row: the first override whose
+/// clause selects the row decides, and `default` decides every other row.
 #[derive(Clone, Debug, PartialEq)]
 pub struct InventoryScope {
-    pub discriminator: usize,
     pub default: bool,
-    pub overrides: Vec<(String, bool)>,
+    pub overrides: Vec<(WhereClause, bool)>,
+}
+impl InventoryScope {
+    pub fn selects(&self, row: &[Value]) -> bool {
+        self.overrides
+            .iter()
+            .find(|(clause, _)| clause.selects(row))
+            .map_or(self.default, |(_, enabled)| *enabled)
+    }
 }
 #[derive(Clone, Debug, PartialEq)]
 pub struct ValueCodelist {
     pub id: String,
     pub values: Vec<Value>,
-    pub codes: Vec<String>,
+    /// The clauses of the entries binding this codelist.
+    pub clauses: Vec<WhereClause>,
+    /// Whether the column itself binds this codelist.
     pub default: bool,
     /// The authored path of the first declaration binding this codelist: the
-    /// column's own `submission.codelist` or a row template's per-value one.
+    /// column's own `submission.codelist` or a value-level entry's.
     pub path: String,
 }
 
 impl Check {
+    /// The where clauses a value-level check selects its rows by.
+    pub fn clauses(&self) -> Vec<&WhereClause> {
+        match self {
+            Self::Mandatory(Some(scope))
+            | Self::DataType {
+                scope: Some(scope), ..
+            }
+            | Self::ValueMaxLength { scope, .. } => scope.clauses.iter().collect(),
+            Self::ValueCodelists {
+                overrides,
+                bindings,
+            } => overrides
+                .iter()
+                .chain(bindings.iter().flat_map(|binding| &binding.clauses))
+                .collect(),
+            Self::Inventory {
+                scope: Some(scope), ..
+            } => scope.overrides.iter().map(|(clause, _)| clause).collect(),
+            Self::ValueEntries(entries) => entries.iter().map(|(_, clause)| clause).collect(),
+            Self::ValueEntryMatch { clause, .. } => vec![clause],
+            _ => Vec::new(),
+        }
+    }
     /// Resolve a retained terminology observation against its admitted binding.
     pub fn codelist(&self, identifier: &str) -> Option<(&str, &[Value])> {
         match self {
@@ -1574,6 +1632,8 @@ impl DatasetPlan {
                         | Check::ValueCodelists { .. }
                         | Check::Inventory { .. }
                         | Check::ValueMaxLength { .. }
+                        | Check::ValueEntries(_)
+                        | Check::ValueEntryMatch { .. }
                         | Check::Range { .. }
                         | Check::MaxLength(_)
                         | Check::WideMaxLength(_)
@@ -1587,99 +1647,51 @@ impl DatasetPlan {
                     &verification.check,
                     self.output.columns()[group.column].kind,
                 )?;
-                if let Check::ValueMaxLength {
-                    discriminator,
-                    codes,
-                    ..
-                } = &verification.check
-                {
-                    if self
-                        .output
-                        .columns()
-                        .get(*discriminator)
-                        .is_none_or(|column| column.kind != crate::value::ColumnType::Str)
-                        || codes.is_empty()
-                        || codes
-                            .iter()
-                            .enumerate()
-                            .any(|(index, code)| codes[..index].contains(code))
-                    {
-                        return Err(PlanError::InvalidColumns);
-                    }
+                // A value-level check selects rows by where clauses over
+                // other completed `str` columns, each term listing values.
+                let clauses = verification.check.clauses();
+                if clauses.iter().any(|clause| {
+                    clause.terms.is_empty()
+                        || clause.terms.iter().any(|(column, values)| {
+                            *column == group.column
+                                || values.is_empty()
+                                || self.output.columns().get(*column).is_none_or(|column| {
+                                    column.kind != crate::value::ColumnType::Str
+                                })
+                        })
+                }) {
+                    return Err(PlanError::InvalidColumns);
                 }
-                if let Check::Mandatory(Some(scope))
-                | Check::DataType {
-                    scope: Some(scope), ..
-                } = &verification.check
-                {
-                    if self
-                        .output
-                        .columns()
-                        .get(scope.discriminator)
-                        .is_none_or(|column| column.kind != crate::value::ColumnType::Str)
-                        || scope.codes.is_empty()
-                        || scope
-                            .codes
-                            .iter()
-                            .enumerate()
-                            .any(|(index, code)| scope.codes[..index].contains(code))
-                    {
-                        return Err(PlanError::InvalidColumns);
+                let scoped = match &verification.check {
+                    Check::Mandatory(Some(scope))
+                    | Check::DataType {
+                        scope: Some(scope), ..
                     }
-                }
-                if let Check::Inventory {
-                    scope: Some(scope), ..
-                } = &verification.check
-                {
-                    if self
-                        .output
-                        .columns()
-                        .get(scope.discriminator)
-                        .is_none_or(|column| column.kind != crate::value::ColumnType::Str)
-                        || scope
-                            .overrides
-                            .iter()
-                            .enumerate()
-                            .any(|(index, (code, _))| {
-                                scope.overrides[..index]
+                    | Check::ValueMaxLength { scope, .. } => !scope.clauses.is_empty(),
+                    Check::ValueCodelists {
+                        overrides,
+                        bindings,
+                    } => {
+                        !overrides.is_empty()
+                            && bindings.iter().filter(|binding| binding.default).count() <= 1
+                            && bindings.iter().all(|binding| {
+                                binding
+                                    .clauses
                                     .iter()
-                                    .any(|(prior, _)| prior == code)
+                                    .all(|clause| overrides.contains(clause))
                             })
-                    {
-                        return Err(PlanError::InvalidColumns);
                     }
-                }
-                if let Check::ValueCodelists {
-                    discriminator,
-                    overrides,
-                    bindings,
-                } = &verification.check
-                {
-                    if self
-                        .output
-                        .columns()
-                        .get(*discriminator)
-                        .is_none_or(|column| column.kind != crate::value::ColumnType::Str)
-                        || overrides.is_empty()
-                        || overrides
-                            .iter()
-                            .enumerate()
-                            .any(|(index, code)| overrides[..index].contains(code))
-                        || bindings.iter().filter(|binding| binding.default).count() > 1
-                        || bindings.iter().enumerate().any(|(index, binding)| {
-                            binding.codes.iter().enumerate().any(|(code_index, code)| {
-                                binding.codes[..code_index].contains(code)
-                                    || bindings[..index]
-                                        .iter()
-                                        .any(|prior| prior.codes.contains(code))
+                    Check::ValueEntries(entries) => {
+                        !entries.is_empty()
+                            && entries.iter().enumerate().all(|(index, (id, _))| {
+                                !id.is_empty()
+                                    && !entries[..index].iter().any(|(prior, _)| prior == id)
                             })
-                        })
-                        || bindings.iter().any(|binding| {
-                            binding.codes.iter().any(|code| !overrides.contains(code))
-                        })
-                    {
-                        return Err(PlanError::InvalidColumns);
                     }
+                    _ => true,
+                };
+                if !scoped {
+                    return Err(PlanError::InvalidColumns);
                 }
             }
         }
@@ -2403,6 +2415,8 @@ fn validate_plan_verifications(
             | Check::ValueCodelists { .. }
             | Check::Inventory { .. }
             | Check::ValueMaxLength { .. }
+            | Check::ValueEntries(_)
+            | Check::ValueEntryMatch { .. }
             | Check::Range { .. }
             | Check::MaxLength(_)
             | Check::WideMaxLength(_)

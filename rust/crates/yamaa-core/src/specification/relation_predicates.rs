@@ -147,17 +147,85 @@ pub(super) fn bind(
     ))
 }
 
-/// A globally declared filter is checked against each context that actually reads it.
-/// A chained `between` value runs the selector it names for the same row; the
-/// range values themselves are admitted with every other lookup's range
-/// ([`lookup_range::admit`]).
+/// The named intermediates that predicates read, as reads [`admit_reads`] and
+/// [`lookup_range::admit`] visit. A row filter reads them for its own row
+/// template, and a dataset verification for every completed row, as a column
+/// derivation does.
+pub(super) fn predicate_reads<'a>(
+    predicates: impl IntoIterator<Item = &'a BoundPredicate>,
+) -> Vec<Expression> {
+    predicates
+        .into_iter()
+        .flat_map(BoundPredicate::bindings)
+        .filter_map(|binding| match binding.read {
+            Read::Intermediate { index, column } => {
+                Some(Expression::Intermediate { index, column })
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// The predicates a bound dataset verification evaluates over completed rows.
+pub(super) fn verification_predicates(
+    verifications: &[crate::dataset::Verification],
+) -> impl Iterator<Item = &BoundPredicate> {
+    use crate::dataset::Check;
+    verifications
+        .iter()
+        .flat_map(|verification| match &verification.check {
+            Check::Assert { when, require } => vec![when.as_ref(), Some(require)],
+            Check::ScopedRowCount(check) => vec![check.filter.as_ref(), check.when.as_ref()],
+            Check::PredicateDeclaration(predicate) => vec![Some(predicate)],
+            _ => Vec::new(),
+        })
+        .flatten()
+}
+
+/// Two read-context findings are one when they report the same diagnostic.
+pub(super) fn same_finding(left: &BindFinding, right: &BindFinding) -> bool {
+    matches!((left, right), (BindFinding::Lookup(left), BindFinding::Lookup(right))
+        if left.diagnostic() == right.diagnostic())
+}
+
+/// The row that reads a lookup: the reading row template's id and driver.
+/// A column derivation or dataset verification without row templates has none.
+pub(super) type ReadingRow<'a> = Option<(&'a str, &'a str)>;
+
+/// A globally declared lookup is checked against each context that actually
+/// reads it: its key match values, its correlated filter fields and its
+/// derivations' current-record fields read the reading row's own driver
+/// record, and in grouped construction only its group keys. A chained
+/// `between` value runs the selector it names for the same row; the range
+/// values themselves are admitted with every other lookup's range
+/// ([`lookup_range::admit`]), and only their group keys are checked here.
+///
+/// `source` is the reading row's driver port: 0 for the specification's
+/// driver, or one past a secondary input's position.
 pub(super) fn admit_reads<'a>(
     expressions: impl IntoIterator<Item = &'a Expression>,
     items: &[Option<Intermediate>],
+    named: &intermediates::Declarations,
     source: usize,
     mode: &RowMode,
+    row: ReadingRow<'_>,
     findings: &mut Vec<BindFinding>,
 ) {
+    // In grouped construction a driver field is one value of the row only
+    // when it is a group key; any other field varies within the group and
+    // names no single value (LOOKUP-2, LOOKUP-8, ROW-5).
+    let ungrouped = |column: usize| matches!(mode.local_mode(), RowMode::Groups(keys) if !keys.contains(&column));
+    let grouped = |path: &str, identifier: &str, intermediate: &str| {
+        let mut finding =
+            LookupFinding::new(path, crate::diagnostic::ConditionCode::GroupedRowReference);
+        finding.text("identifier", identifier);
+        if let Some((row, dataset)) = row {
+            finding.text("row", row);
+            finding.text("dataset", dataset);
+        }
+        finding.text("intermediate", intermediate);
+        BindFinding::Lookup(finding)
+    };
     let mut seen = std::collections::BTreeSet::new();
     for expression in expressions {
         crate::dataset::relation_predicates::visit(expression, &mut |mut index| loop {
@@ -178,21 +246,27 @@ pub(super) fn admit_reads<'a>(
                     )));
                 }
                 for read in key.value.reads() {
-                    if let crate::dataset::MatchRead::SecondaryRecord {
-                        source: owner,
-                        identifier,
-                        ..
-                    } = read
-                    {
-                        if owner + 1 != source {
-                            findings.push(BindFinding::Lookup(LookupFinding::reference(
-                                &key.path,
-                                identifier,
-                                Some(&item.identifier),
-                                ReferenceCause::OutputKey,
-                                None,
-                            )));
-                        }
+                    // A record match value reads the reading row's own driver
+                    // record (LOOKUP-5).
+                    let (own, column) = match read {
+                        crate::dataset::MatchRead::SecondaryRecord {
+                            source: owner,
+                            column,
+                            ..
+                        } => (owner + 1 == source, *column),
+                        crate::dataset::MatchRead::Record { column, .. } => (source == 0, *column),
+                        crate::dataset::MatchRead::Output { .. } => continue,
+                    };
+                    if !own {
+                        findings.push(BindFinding::Lookup(LookupFinding::reference(
+                            &key.path,
+                            read.identifier(),
+                            Some(&item.identifier),
+                            ReferenceCause::OutputKey,
+                            None,
+                        )));
+                    } else if ungrouped(column) {
+                        findings.push(grouped(&key.path, read.identifier(), &item.identifier));
                     }
                 }
             }
@@ -203,9 +277,7 @@ pub(super) fn admit_reads<'a>(
                         column,
                     } = field.read
                     {
-                        if driver != source
-                            || matches!(mode.local_mode(), RowMode::Groups(keys) if !keys.contains(&column))
-                        {
+                        if driver != source || ungrouped(column) {
                             findings.push(BindFinding::Lookup(LookupFinding::reference(
                                 filter.plan().spec_path(),
                                 &field.identifier,
@@ -217,9 +289,46 @@ pub(super) fn admit_reads<'a>(
                     }
                 }
             }
+            // A derivation reads the current record in the scope of a
+            // correlated filter (LOOKUP-15).
+            for field in item.derivations.iter().flat_map(|derived| &derived.current) {
+                if let CurrentRead::Record {
+                    source: driver,
+                    column,
+                } = field.read
+                {
+                    let path = named
+                        .derivation_path(index, &field.identifier)
+                        .unwrap_or(&item.path);
+                    if driver != source {
+                        let mut finding = LookupFinding::new(
+                            path,
+                            crate::diagnostic::ConditionCode::IntermediateDerivationReference,
+                        );
+                        finding.text("intermediate", &item.identifier);
+                        finding.text("identifier", &field.identifier);
+                        findings.push(BindFinding::Lookup(finding));
+                    } else if ungrouped(column) {
+                        findings.push(grouped(path, &field.identifier, &item.identifier));
+                    }
+                }
+            }
             let Some(range) = &item.range else {
                 return;
             };
+            if let CurrentRead::Record {
+                source: driver,
+                column,
+            } = range.current().read
+            {
+                if driver == source && ungrouped(column) {
+                    findings.push(grouped(
+                        &format!("{}.value", range.path()),
+                        &range.current().identifier,
+                        &item.identifier,
+                    ));
+                }
+            }
             let CurrentRead::Intermediate { index: chained, .. } = range.current().read else {
                 return;
             };

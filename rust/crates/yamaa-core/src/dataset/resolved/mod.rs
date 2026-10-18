@@ -556,6 +556,8 @@ pub enum CheckFamily {
     ValueCodelists,
     Inventory,
     ValueMaxLength,
+    ValueEntries,
+    ValueEntryMatch,
     Range,
     MaxLength,
     WideMaxLength,

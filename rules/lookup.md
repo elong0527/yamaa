@@ -155,7 +155,7 @@ relation, whichever it reduces. A filter on a construct with no records to
 select among fails.
 
 Fails: `unknown_field`, `prohibited_construct`.
-Evidence: `schema-lookup-filters`, `negative-source-missing-field`, `negative-source-trivial-filter`, `schema-aggregation`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`, `rust/crates/yamaa-adapters/tests/fixtures/row_reductions.json`.
+Evidence: `schema-lookup-filters`, `negative-source-missing-field`, `negative-source-trivial-filter`, `negative-row-filter-lookup-scope`, `schema-aggregation`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-adapters/tests/fixtures/row_reductions.json`.
 Replaces: REQ-0132, REQ-0133, REQ-0148, REQ-0471.
 
 For an input dataset, `order_by` names qualified fields of that dataset only,
@@ -163,7 +163,9 @@ For an input dataset, `order_by` names qualified fields of that dataset only,
 current row's driver is root `base` (or the sole input) without explicit rows,
 or the enclosing `rows[].dataset` during row construction. During column
 derivation the qualifier must be the driver of every row template that the
-expression can evaluate on. The row driver may be an eligible named
+expression can evaluate on. A row template's `filter` reads its lookups for
+that template's rows, and a dataset verification for the rows of every
+template, as a column derivation does. The row driver may be an eligible named
 intermediate under [ROW-2](rows.md#row-2). Other datasets,
 intermediates that are not the current driver, and unqualified output names
 are not filter scopes. The filter of a structured source or a qualified
@@ -378,7 +380,7 @@ keys ([LOOKUP-1](#lookup-1)). A lookup names at least one pair, every column
 must exist, and every match value must read a known current-row value.
 
 Fails: `invalid_field_type`, `no_applicable_keys`, `unknown_field`, `invalid_aggregate_context`.
-Evidence: `negative-lookup-mismatched`, `negative-lookup-unknown-key`, `negative-lookup-repeated-key`, `negative-row-aggregate-keys`, `sdtm-lb-lab-specific-ranges`, `rust/crates/yamaa-adapters/tests/fixtures/intermediate_key_reference.json`, `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`.
+Evidence: `negative-lookup-mismatched`, `negative-lookup-unknown-key`, `negative-lookup-repeated-key`, `negative-lookup-key-other-template`, `negative-verification-lookup-key`, `negative-row-aggregate-keys`, `sdtm-lb-lab-specific-ranges`, `rust/crates/yamaa-adapters/tests/fixtures/intermediate_key_reference.json`, `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`.
 Replaces: REQ-0115, REQ-0116, REQ-0117, REQ-0118, REQ-0140, REQ-0141, REQ-0142,
 REQ-0305.
 
@@ -418,6 +420,14 @@ as `unknown_field`. `SELF` names donor rows and is never a current-row scope,
 so a match value written `SELF.field` names no current-row value and fails the
 same way; when the current row carries `field`, the diagnostic suggests that
 bare name.
+
+A match value read from an input's record names the driver of every row that
+reads the lookup, wherever the lookup is read: in a row template's derivations
+or row `filter`, that template's driver ([LOOKUP-2](#lookup-2)), and in a
+column derivation or a dataset verification, the driver of every row template
+the read can evaluate on. A match value reading the record of another input
+names no value of those rows and fails as `unknown_field` at `key`, once for
+the lookup.
 
 Each pair compares its match value with its column in the match step
 ([LOOKUP-9](#lookup-9)): the two types must be mutually comparable under
@@ -528,7 +538,7 @@ match value must be available in the row phase; one available only in a later
 phase fails.
 
 Fails: `ungrouped_driver_field`, `unknown_field`, `phase_boundary`.
-Evidence: `rust/crates/yamaa-core/tests/relations_reference_scope.rs`, `adam-adlb-supplb-padded-key`, `schema-lookup-source-range-driver`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`.
+Evidence: `negative-grouped-lookup-ungrouped-key`, `negative-grouped-range-ungrouped-value`, `negative-lookup-key-column-phase`, `negative-lookup-match-column-phase`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs`, `adam-adlb-supplb-padded-key`, `schema-lookup-source-range-driver`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-adapters/tests/execution_row_phase_reads.rs`.
 Replaces: REQ-0126, REQ-0156, REQ-0157.
 
 In ungrouped row construction each retained input record builds one candidate
@@ -553,13 +563,23 @@ A `between` value has the same availability as a match value
 the template's driver record, qualified by the driver, or a column the same
 template derives; during grouped row construction a driver field it reads must
 be a group key of the template, or it fails as `ungrouped_driver_field`.
+During grouped row construction a named intermediate's key match value, and a
+derivation of the intermediate that reads the current record
+([LOOKUP-15](#lookup-15)), fail the same way when they read a driver field
+outside the group keys. Each finding is at that value, names the field, the
+intermediate, the row template and its driver, and is reported once whichever
+reads of the intermediate reach it.
 
 During grouped row construction, every variable a lookup matches on must be
 derived by the row template that reads the lookup. The exceptions are the
 template's group keys and, for an ungrouped template, the driver record's own
 fields. [Column derivation](columns.md) orders row derivations
 before column derivation, and a match value available only in a later phase
-fails as `phase_boundary`.
+fails as `phase_boundary`. The finding is at the row template's read of the
+lookup, in a derivation or the row `filter`, and names the value, the lookup
+and the row template, whether the value is a `key` match value, the lookup's
+`between` value, or a match value of another lookup that a `between` value
+reads.
 
 ## Named intermediates
 
@@ -767,7 +787,7 @@ record before matching, `filter`, `order_by` selection and `columns`
 projection, and behave there like stored fields.
 
 Fails: `unknown_field`, `duplicate_derivation`.
-Evidence: `schema-lookup-intermediate-derived-filter`, `schema-lookup-intermediate-correlated-derive`, `schema-window-intermediate-rank`.
+Evidence: `schema-lookup-intermediate-derived-filter`, `schema-lookup-intermediate-correlated-derive`, `schema-window-intermediate-rank`, `negative-lookup-derivation-scope`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`.
 Replaces: REQ-1185.
 
 Each entry is either an untyped expression, including its
@@ -803,7 +823,10 @@ under the same scope as a correlated `filter` ([LOOKUP-8](#lookup-8)), or
 another named intermediate under [LOOKUP-16](#lookup-16). A reference to an
 unrelated input dataset, a derivation declared later in the same map, or an
 unknown field fails as `unknown_field`; a derived name that shadows a stored
-column fails as `duplicate_derivation`.
+column fails as `duplicate_derivation`. A current-record read is checked in
+every context that reads the intermediate: when a row reading it is built from
+another input's record, the read names no value of that row and fails as
+`unknown_field` at the derivation, once.
 
 Derivations that read only donor records are computed once per record. When
 any derivation reads the current input record, the map evaluates for each

@@ -766,6 +766,7 @@ fn bind_assignment(
                     intermediates,
                     output,
                     catalog,
+                    row,
                     available,
                     edges,
                     findings,
@@ -868,6 +869,7 @@ fn bind_template_filter(
                             intermediates,
                             output,
                             row_catalog,
+                            Some(&template.id),
                             Some(available),
                             &mut edges,
                             findings,
@@ -1651,14 +1653,7 @@ impl Rows {
             closed_fields(
                 d,
                 row,
-                &[
-                    "id",
-                    "dataset",
-                    "group_by",
-                    "derivations",
-                    "filter",
-                    "submission",
-                ],
+                &["id", "dataset", "group_by", "derivations", "filter"],
                 &path,
             )?;
             let row_driver = d
@@ -1885,9 +1880,8 @@ impl Rows {
             .map(|(driver, group)| (*driver, group.as_slice()))
             .collect::<Vec<_>>();
         let mut templates = Vec::new();
-        // The declaration of each bound template, which names the columns it
-        // derives itself.
-        let mut declarations = Vec::new();
+        // The declared template behind each bound one, by position.
+        let mut declared = Vec::new();
         for (index, template) in self.templates.iter().enumerate() {
             if let Some(bound) = bind_template(
                 template,
@@ -1903,7 +1897,7 @@ impl Rows {
                 &mut findings,
             )? {
                 templates.push(bound);
-                declarations.push(template);
+                declared.push(template);
             }
         }
         let mut odm_contexts: Option<std::rc::Rc<[crate::dataset::OdmTemplateScope]>> = None;
@@ -2031,14 +2025,22 @@ impl Rows {
             });
         }
         // A column derivation evaluates only for the rows of the templates that
-        // leave the column to the column phase, and a template's own
-        // derivations for its rows only (LOOKUP-8, LOOKUP-9).
+        // leave the column to the column phase, a dataset verification for the
+        // rows of every template, and a template's own derivations and row
+        // filter for its rows only (LOOKUP-8, LOOKUP-9).
         let leaves = |template: &Template, column: usize| {
             !template
                 .declarations
                 .iter()
                 .any(|declaration| declaration.column == column)
         };
+        let verification_reads = relation_predicates::predicate_reads(
+            relation_predicates::verification_predicates(verifications),
+        );
+        let filter_reads = templates
+            .iter()
+            .map(|template| relation_predicates::predicate_reads(template.filter.as_ref()))
+            .collect::<Vec<_>>();
         lookup_range::admit(
             columns
                 .iter()
@@ -2047,26 +2049,42 @@ impl Rows {
                         vec![&assignment.expression],
                         templates
                             .iter()
-                            .zip(&declarations)
+                            .zip(&declared)
                             .filter(|(_, declaration)| leaves(declaration, assignment.column))
                             .map(|(template, _)| template.mode.source_index())
                             .collect(),
                     )
                 })
-                .chain(templates.iter().map(|template| {
-                    (
-                        template
-                            .assignments
-                            .iter()
-                            .map(|assignment| &assignment.expression)
-                            .collect(),
-                        vec![template.mode.source_index()],
-                    )
-                })),
+                .chain(std::iter::once((
+                    verification_reads.iter().collect(),
+                    templates
+                        .iter()
+                        .map(|template| template.mode.source_index())
+                        .collect(),
+                )))
+                .chain(
+                    templates
+                        .iter()
+                        .zip(&filter_reads)
+                        .map(|(template, filter)| {
+                            (
+                                template
+                                    .assignments
+                                    .iter()
+                                    .map(|assignment| &assignment.expression)
+                                    .chain(filter)
+                                    .collect(),
+                                vec![template.mode.source_index()],
+                            )
+                        }),
+                ),
             &intermediates,
             &mut findings,
         );
-        for (template, declaration) in templates.iter().zip(&declarations) {
+        let mut admitted = Vec::new();
+        for ((template, declaration), filter) in templates.iter().zip(&declared).zip(&filter_reads)
+        {
+            let mut template_findings = Vec::new();
             relation_predicates::admit_reads(
                 template
                     .assignments
@@ -2076,13 +2094,28 @@ impl Rows {
                             .iter()
                             .filter(|assignment| leaves(declaration, assignment.column)),
                     )
-                    .map(|assignment| &assignment.expression),
+                    .map(|assignment| &assignment.expression)
+                    .chain(filter)
+                    .chain(&verification_reads),
                 &intermediates,
+                named,
                 template.mode.source_index(),
                 &template.mode,
-                &mut findings,
+                Some((&declaration.id, &declaration.driver)),
+                &mut template_findings,
             );
+            // A read that several templates make the same way is one authored
+            // read: its failure is reported once.
+            for finding in template_findings {
+                if !admitted
+                    .iter()
+                    .any(|prior| relation_predicates::same_finding(prior, &finding))
+                {
+                    admitted.push(finding);
+                }
+            }
         }
+        findings.extend(admitted);
         if !findings.is_empty() {
             return Err(BindError::Invalid(findings));
         }

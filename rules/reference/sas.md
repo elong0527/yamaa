@@ -146,21 +146,66 @@ compression signatures, malformed compressed data, duplicate or empty field
 names and incomplete physical framing fail before derivation.
 
 Fails: `source_sas_invalid`.
-Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/sas.rs`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::unsupported_compression_has_a_specific_retained_cause`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::records_deleted_in_place_are_refused_with_a_rewrite_hint`, `python/tests/installed/installed_sas_sources.py::test_bad_sources_are_not_read_by_check_and_failed_saves_have_no_output`.
+Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/sas.rs`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::unsupported_compression_has_a_specific_retained_cause`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::counted_deletions_without_marks_are_refused_with_a_rewrite_hint`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::version_8_observation_count_keeps_trailing_blank_records`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::transport_without_a_usable_count_treats_trailing_blank_records_as_padding`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::blank_records_at_least_one_record_wide_are_never_padding`, `python/tests/installed/installed_sas_sources.py::test_bad_sources_are_not_read_by_check_and_failed_saves_have_no_output`.
 Replaces: REQ-1317.
 
-A SAS dataset that retains records deleted in place fails with cause
-`deleted_records` when a data or mix page is flagged as holding deleted records
-or the row-size subheader records a non-zero deleted-record count; a reader
-never returns a deleted record. That finding's context adds a `hint` to rewrite
-the dataset first, for example with PROC COPY or a DATA step. In compressed
-storage a deleted record carries an unsupported compression code and fails as
-`compression` first.
+Cause `deleted_records` reports records deleted in place that cannot be
+reconciled with the dataset's count of them ([SAS-8](#sas-8)). That finding's
+context adds a `hint` to rewrite the dataset first, for example with PROC COPY
+or a DATA step.
 
 Transport member descriptor chains at 80-byte boundaries are structural
 records; multiple complete chains fail, including concatenated transport
 datasets. A character value resembling a MEMBER header alone remains text.
-Transport framing contains no authoritative row count: removing a complete
-terminal record that leaves a valid smaller dataset cannot be distinguished
-from that smaller dataset. Partial physical records and non-padding partial
-rows fail.
+
+A version 8 file whose `OBSV8` header record counts its observations, in the
+fifteen characters from byte 48, yields exactly that many records, including
+trailing records made entirely of blanks. The count is admitted under
+[SAS-6](#sas-6) before any record is read. Fewer complete records than
+counted, or anything but blank padding after them, fails as `malformed`.
+
+Version 5 framing, and a version 8 count of zero, carry no authoritative row
+count. A trailing record made entirely of blanks is data when it is at least
+80 bytes wide; a narrower one may be padding and is not data. Removing a
+complete terminal record that leaves a valid smaller dataset cannot be
+distinguished from that smaller dataset. Partial physical records and
+non-padding partial rows fail.
+
+<a id="sas-8"></a>
+
+### SAS-8. A SAS dataset yields only its live records, each at its stored position
+
+A `sas7bdat` input yields its live records in stored order. A record that SAS
+deleted in place, marked in its page's deleted-record bitmap or by a deletion
+code on its compressed row, is skipped. A compressed record that SAS moved to
+another page is read where the reference that replaced it stands. Each record
+that the dataset's header counts as deleted must be found marked deleted, and
+no more may be marked; otherwise ingestion fails with cause `deleted_records`.
+
+Fails: `source_sas_invalid`.
+Evidence: `rust/crates/yamaa-adapters/tests/table_sas_source.rs::records_deleted_in_place_are_skipped_in_the_independent_haven_fixture`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::deleted_records_after_the_last_live_record_are_found_on_later_pages`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::deleted_record_counts_that_disagree_with_their_marks_are_refused`, `rust/tests/host-fixtures/sas-cases.json::deleted-record-skipped`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::moved_records_are_read_at_their_reference`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::moved_records_deleted_later_count_as_deleted`.
+
+SAS keeps a record deleted in place, for example by `PROC SQL DELETE` or a DATA
+step `MODIFY` with `REMOVE`, until the dataset is rewritten. The row-size
+subheader counts the stored records, deleted ones included, and counts the
+deleted ones separately. A data or mix page that holds deleted records carries
+the page-type flag `0x0080` and, after its rows and free space, a bitmap with
+one bit per stored record, most significant bit first. A compressed row's
+subheader pointer marks a deleted record with code `0x05`, and a moved record
+deleted later with code `0x09` or `0x0d`.
+
+A reader reads past the last live record until it has found every counted
+deletion. A deleted count above the stored count, a mark beyond the count, a
+counted deletion never found, a bitmap that does not fit its page, or a page
+row beyond the records its bitmap covers fails with cause `deleted_records`
+([SAS-7](#sas-7)). The bitmap covers the page's records, and no more than the
+dataset stores.
+
+In compressed storage SAS can move an updated record that no longer fits its
+slot to another page. The slot then holds a reference, code `0x03`, whose
+offset and length fields hold the one-based page and subheader indices of the
+moved record. That record carries code `0x02` when stored uncompressed and
+`0x06` when compressed, and is read only through its reference. A reference
+that does not reach such a record on a page with subheaders fails as
+`malformed`, or as `compression` when it reaches a subheader with another
+compression code.

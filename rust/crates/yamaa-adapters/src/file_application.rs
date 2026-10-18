@@ -71,6 +71,32 @@ pub(crate) fn classified_resource(diagnostic: &yamaa_core::diagnostic::Diagnosti
 pub(crate) fn resource_failure(stage: &str, error: &crate::file_resources::Error) -> Failure {
     with_source(resource_diagnostic(stage, error), None)
 }
+/// Verify a compiled value's held metadata at the start of a run, before
+/// activation or any study read. Every snapshot is captured again through the
+/// compile authority and compared with its held reference and bytes. A file
+/// that changed or disappeared refuses the run with its own condition,
+/// `resource_path_content_changed` or `resource_path_missing`, naming the field
+/// that declared it and the path as written (FILE-10); `declared` finds that
+/// declaration from the held identity. A resolver failure that is neither
+/// stays the opaque resource refusal. Nothing is recompiled.
+pub(crate) fn verify_held(
+    resources: &crate::file_resources::Resources,
+    declared: impl FnOnce(
+        &str,
+        yamaa_core::resource::ResourceFailure,
+    ) -> Option<yamaa_core::diagnostic::Diagnostic>,
+) -> Result<(), Failure> {
+    use yamaa_core::resource::ResourceFailure as R;
+    resources.verify_held().map_err(|(identity, error)| {
+        crate::file_resources::resource_failure(&error)
+            .filter(|failure| matches!(failure, R::ContentChanged | R::Missing))
+            .and_then(|failure| declared(&identity, failure))
+            .map_or_else(
+                || resource_failure_from("prepare", &error, &identity),
+                |diagnostic| classified_resource(&diagnostic),
+            )
+    })
+}
 /// A failure observed on an already captured file also names that file.
 pub(crate) fn resource_failure_from(
     stage: &str,

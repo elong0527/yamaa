@@ -1,0 +1,30 @@
+{
+  "datasetJSONCreationDateTime": "2026-09-11T00:00:00",
+  "datasetJSONVersion": "1.1.0",
+  "fileOID": "CATH.adam.Define-XML_2.1.ADLB",
+  "sourceSystem": {"name": "yamaa", "version": "1.0"},
+  "studyOID": "STDY.CATH",
+  "metaDataVersionOID": "MDV.CATH.adam",
+  "metaDataRef": "define.xml",
+  "itemGroupOID": "IG.ADLB",
+  "records": 6,
+  "name": "ADLB",
+  "label": "Laboratory Analysis Dataset",
+  "columns": [
+    {"itemOID": "IT.ADLB.STUDYID", "name": "STUDYID", "label": "Study Identifier", "dataType": "string", "length": 4, "keySequence": 1},
+    {"itemOID": "IT.ADLB.USUBJID", "name": "USUBJID", "label": "Unique Subject Identifier", "dataType": "string", "length": 8, "keySequence": 2},
+    {"itemOID": "IT.ADLB.PARAMCD", "name": "PARAMCD", "label": "Parameter Code", "dataType": "string", "length": 5, "keySequence": 3},
+    {"itemOID": "IT.ADLB.PARAM", "name": "PARAM", "label": "Parameter", "dataType": "string", "length": 23},
+    {"itemOID": "IT.ADLB.AVAL", "name": "AVAL", "label": "Analysis Value", "dataType": "float", "length": 8},
+    {"itemOID": "IT.ADLB.AVALC", "name": "AVALC", "label": "Analysis Value (C)", "dataType": "string", "length": 8},
+    {"itemOID": "IT.ADLB.AVALU", "name": "AVALU", "label": "Analysis Value Unit", "dataType": "string", "length": 6}
+  ],
+  "rows": [
+    ["CATH", "CATH-001", "GLUC", "Glucose (mg/dL)", 95, "95", "mg/dL"],
+    ["CATH", "CATH-001", "CREAT", "Creatinine (umol/L)", 79.6, "79.6", "umol/L"],
+    ["CATH", "CATH-001", "HCG", "Choriogonadotropin Beta", null, "NEGATIVE", null],
+    ["CATH", "CATH-002", "GLUC", "Glucose (mg/dL)", 101, "101", "mg/dL"],
+    ["CATH", "CATH-002", "CREAT", "Creatinine (umol/L)", 88.4, "88.4", "umol/L"],
+    ["CATH", "CATH-002", "HCG", "Choriogonadotropin Beta", null, "POSITIVE", null]
+  ]
+}
