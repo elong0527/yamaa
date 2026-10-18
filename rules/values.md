@@ -89,7 +89,35 @@ canonical fields but not its collected precision. Ingestion uses the same
 `str` row for a field's declared type ([INPUT-7](inputs.md#input-7)). The
 `unconvertible` handler is [Column derivation](columns.md)'s, and an
 unanswered failure is fatal under the
-[Column derivation](columns.md).
+[Column derivation](columns.md). A derivation whose every result would meet
+a `fail` cell is refused before any record is read ([VALUE-24](#value-24)).
+
+<a id="value-24"></a>
+
+### VALUE-24. A derivation whose result type can never convert to its declared type fails validation
+
+A derivation fails validation with `conversion_failed`, before any record is
+read, when no non-missing result of its expression's result type
+([EXPR-14](expressions.md#expr-14)) can convert to its declared type: every
+type the result can take meets a `fail` cell of [VALUE-3](#value-3)'s table.
+Column and row derivations, typed intermediate derivations and aggregate
+derive bindings are checked. A derivation declaring `unconvertible` is not
+refused, as its literal answers each failure, and a result that is always
+missing converts to every type.
+
+Fails: `conversion_failed`.
+Evidence: `negative-study-day-date-column`, `rust/crates/yamaa-core/tests/support/diagnostic/result_types.rs`, `rust/crates/yamaa-adapters/tests/fixtures/column_literals.json`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::row_boolean_is_refused_at_validation_and_refuses_every_save`.
+
+The failure names the column whose lifecycle cannot complete, as a
+conversion failure does, or the typed intermediate derivation or derive
+binding, and reports `from`, the result type, and `to`, the declared type. A
+`str` result can always parse, and an `int` or `float` result can convert to
+either number, so neither is refused here; a value that fails still fails at
+conversion under [VALUE-3](#value-3). A study day declared `date`, a date
+difference declared `datetime` and a Boolean literal in any column are
+refused. `yamaa check` reports the refusal wherever the declared types
+establish it; a result type taken from an undeclared stored field is known
+only once binding captures the field.
 
 ## Missing values
 
@@ -242,7 +270,7 @@ widening each `int` operand first under [VALUE-8](#value-8); there is no
 integer division. `SQRT`, `POWER`, `EXP`, `LN`, `CEIL`, `FLOOR` and `TRUNC`
 return `float`.
 
-Evidence: `schema-numeric-functions`, `rust/crates/yamaa-core/tests/fixtures/numeric_math.tsv`, `rust/crates/yamaa-core/tests/fixtures/numeric_integral.tsv`.
+Evidence: `schema-numeric-functions`, `rust/crates/yamaa-core/tests/fixtures/numeric_math.tsv`, `rust/crates/yamaa-core/tests/fixtures/numeric_integral.tsv`, `rust/crates/yamaa-adapters/tests/intermediate_result_kinds.rs::nullif_widens_its_int_result_when_the_float_argument_is_missing`.
 Replaces: REQ-0420, REQ-0421, REQ-0422, REQ-0423, REQ-0424.
 
 The quotient is the binary64 quotient of the widened operands, including when
@@ -260,7 +288,15 @@ completed result under [VALUE-7](#value-7).
 `NULLIF` compares its arguments exactly under [VALUE-19](#value-19),
 including a mixed `int` and `float` pair. Thus
 `NULLIF(9007199254740993, 9007199254740992.0)` returns `9007199254740993`
-promoted to `float`, which is `9007199254740992.0`.
+promoted to `float`, which is `9007199254740992.0`. An argument's type is its
+declared type, also where its value is missing: `NULLIF(x, y)` with an `int`
+`x` and a `float` `y` is a `float`, and where `y` is missing it returns `x`
+widened under [VALUE-8](#value-8), so `9007199254740993` again returns
+`9007199254740992.0`. Only over two `int` arguments, or a `NULL` `y`, does it
+return `x` as an `int`.
+
+These types, applied to the declared types of the operands, give `compute` and
+`aggregate` their result type ([EXPR-14](expressions.md#expr-14)).
 
 ## Text
 
