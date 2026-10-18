@@ -29,12 +29,8 @@
   list(capabilities$verify, capabilities$resolve, .project_condition_details)
 }
 
-.read_only <- function(object, name, get) {
-  makeActiveBinding(name, function(value) {
-    if (!missing(value)) stop(sprintf("`%s` is read only", name), call. = FALSE)
-    get()
-  }, object)
-}
+# Locked bindings refuse assignment, so a binding only reads.
+.read_only <- function(object, name, get) makeActiveBinding(name, function() get(), object)
 
 .object <- function(object, class) {
   lockEnvironment(object, bindings = TRUE)
@@ -58,6 +54,13 @@
   .read_only(object, "report", function() .reply(.native_run_report(handle)))
   object$save <- function() invisible(.reply(.native_run_save(handle)))
   .object(object, "yamaa_run")
+}
+
+# Private installed-run evidence for qualification suites, as Python's
+# `run._native.observations()`.
+.run_observations <- function(run, include_measurements = FALSE) {
+  handle <- get(".handle", envir = run, inherits = FALSE)
+  .reply(.native_run_observations(handle, include_measurements))
 }
 
 .spec <- function(path, project) {

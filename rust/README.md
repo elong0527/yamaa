@@ -129,7 +129,7 @@ Version 1 serializes as compact UTF-8 JSON with these envelope fields:
 | `model_kind` | `normalized_with_named_dictionary_references`. |
 | `replay` | `inspection_only`. |
 | `entry` | Canonical identity of the requested specification entry. |
-| `environment` | Explicit environment identity, or null when absent. |
+| `project` | Explicit project identity, or null when absent. |
 | `entries` | Root first, then linked producer entries in preparation order. |
 
 Each entry contains `schema_version`, its complete composed normalized

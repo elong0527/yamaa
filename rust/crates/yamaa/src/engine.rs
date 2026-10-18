@@ -422,7 +422,7 @@ impl Engine {
     ///         .resolve_specification(&Request::new(entry.to_str().unwrap()))
     ///         .unwrap();
     ///     assert!(resolved.entry().ends_with("spec.yaml"));
-    ///     assert_eq!(resolved.environment(), None);
+    ///     assert_eq!(resolved.project(), None);
     ///     let roundtrip =
     ///         ResolvedSpecification::from_json(&resolved.to_json().unwrap()).unwrap();
     ///     assert_eq!(roundtrip.entry(), resolved.entry());
@@ -1000,9 +1000,9 @@ impl ResolvedSpecification {
         self.inner.entry()
     }
 
-    /// Borrow the explicit environment identity, when present.
-    pub fn environment(&self) -> Option<&str> {
-        self.inner.environment()
+    /// Borrow the explicit project identity, when present.
+    pub fn project(&self) -> Option<&str> {
+        self.inner.project()
     }
 }
 
