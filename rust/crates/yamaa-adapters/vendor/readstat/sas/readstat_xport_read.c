@@ -251,12 +251,17 @@ static readstat_error_t xport_read_namestr_header_record(xport_ctx_t *ctx) {
     }
 
     ctx->var_count = xrecord.num2;
-    if (!yamaa_readstat_admit(0, ctx->var_count))
-        return READSTAT_ERROR_MALLOC;
-    ctx->variables = readstat_calloc(ctx->var_count, sizeof(readstat_variable_t *));
-    if (ctx->variables == NULL) {
-        retval = READSTAT_ERROR_MALLOC;
-        goto cleanup;
+    /* As in the SAS7BDAT reader, a member that declares no variables, or a
+     * negative count, allocates no variable table: the metadata handler sees
+     * the declared count instead of an empty allocation failing. */
+    if (ctx->var_count > 0) {
+        if (!yamaa_readstat_admit(0, ctx->var_count))
+            return READSTAT_ERROR_MALLOC;
+        ctx->variables = readstat_calloc(ctx->var_count, sizeof(readstat_variable_t *));
+        if (ctx->variables == NULL) {
+            retval = READSTAT_ERROR_MALLOC;
+            goto cleanup;
+        }
     }
 
     if (ctx->handle.metadata) {
