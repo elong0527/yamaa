@@ -46,14 +46,22 @@ pub struct Node {
     compiled: PreparedSpecification,
     producers: Vec<Declaration>,
     dependencies: Vec<usize>,
+    saved: Vec<Declaration>,
     activation_slots: Vec<usize>,
 }
 impl Node {
     pub fn identity(&self) -> &str {
         &self.identity
     }
+    /// Producer links this graph builds, aligned with [`Node::dependencies`].
     pub fn producers(&self) -> &[Declaration] {
         &self.producers
+    }
+    /// Producer links this graph does not build: the consumer reads each
+    /// artifact from a held or saved copy and still checks it against the
+    /// producer's output contract. Only [`prepare_saved`] admits them.
+    pub fn saved(&self) -> &[Declaration] {
+        &self.saved
     }
     /// One entry per authored producer declaration, including shared aliases.
     pub fn dependencies(&self) -> &[usize] {
@@ -142,6 +150,28 @@ pub fn prepare(
     supplied: &[SuppliedNode<'_>],
     environment: ExecutionEnvironment,
 ) -> Result<PreparedGraph, Error> {
+    prepare_graph(root_identity, supplied, environment, false)
+}
+
+/// Prepare a graph whose producer links may name producers it does not build.
+/// A candidate whose producer is not a supplied node becomes a saved link: it
+/// adds no dependency, and the consumer reads that producer's artifact from a
+/// held or saved copy checked against the same output contract. A project run
+/// builds each specification of its scope this way, once.
+pub fn prepare_saved(
+    root_identity: &str,
+    supplied: &[SuppliedNode<'_>],
+    environment: ExecutionEnvironment,
+) -> Result<PreparedGraph, Error> {
+    prepare_graph(root_identity, supplied, environment, true)
+}
+
+fn prepare_graph(
+    root_identity: &str,
+    supplied: &[SuppliedNode<'_>],
+    environment: ExecutionEnvironment,
+    saved_links: bool,
+) -> Result<PreparedGraph, Error> {
     if supplied.is_empty() {
         return Err(boundary(None, "empty_graph"));
     }
@@ -157,16 +187,21 @@ pub fn prepare(
         .ok_or_else(|| boundary(None, "missing_root"))?;
     for (index, node) in supplied.iter().enumerate() {
         for candidate in node.producers {
-            let producer = identities
-                .get(candidate.producer_identity)
-                .copied()
-                .ok_or_else(|| boundary(Some(index), "missing_producer_node"))?;
+            let Some(&producer) = identities.get(candidate.producer_identity) else {
+                if saved_links {
+                    continue;
+                }
+                return Err(boundary(Some(index), "missing_producer_node"));
+            };
             if !std::ptr::eq(candidate.document, supplied[producer].document) {
                 return Err(boundary(Some(index), "contradictory_producer_document"));
             }
         }
     }
     let mut declarations = Vec::with_capacity(supplied.len());
+    // Per node, the positions in its declarations of the links this graph
+    // builds; every other declaration is a saved link.
+    let mut built = Vec::with_capacity(supplied.len());
     let mut dependencies = Vec::with_capacity(supplied.len());
     for (index, node) in supplied.iter().enumerate() {
         let has_producer = node
@@ -196,12 +231,19 @@ pub fn prepare(
         } else {
             Vec::new()
         };
+        let linked = producers
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| identities.contains_key(p.producer_identity()))
+            .map(|(position, _)| position)
+            .collect::<Vec<_>>();
         dependencies.push(
-            producers
+            linked
                 .iter()
-                .map(|p| identities[p.producer_identity()])
+                .map(|&position| identities[producers[position].producer_identity()])
                 .collect::<Vec<_>>(),
         );
+        built.push(linked);
         declarations.push(producers);
     }
     // A shared predecessor has one output location and contract across all
@@ -253,7 +295,7 @@ pub fn prepare(
                         code: ConditionCode::ProducerWorkflowCycle,
                         spec_paths: vec![format!(
                             "input.{}.schema",
-                            declarations[node][next].dataset()
+                            declarations[node][built[node][next]].dataset()
                         )],
                         context: [("cycle".into(), JsonValue::Array(cycle))]
                             .into_iter()
@@ -271,10 +313,11 @@ pub fn prepare(
     }
     let mut nodes = Vec::with_capacity(supplied.len());
     let mut selected = Vec::new();
-    for (index, ((node, producers), dependencies)) in supplied
+    for (index, (((node, producers), dependencies), linked)) in supplied
         .iter()
         .zip(declarations)
         .zip(dependencies)
+        .zip(built)
         .enumerate()
     {
         let compiled = if producers.is_empty() {
@@ -288,11 +331,16 @@ pub fn prepare(
         }
         .map_err(|error| Error::Compilation { node: index, error })?;
         selected.extend_from_slice(compiled.called_functions());
+        let (producers, saved): (Vec<_>, Vec<_>) = producers
+            .into_iter()
+            .enumerate()
+            .partition(|(position, _)| linked.contains(position));
         nodes.push(Node {
             identity: node.identity.into(),
             compiled,
-            producers,
+            producers: producers.into_iter().map(|(_, link)| link).collect(),
             dependencies,
+            saved: saved.into_iter().map(|(_, link)| link).collect(),
             activation_slots: Vec::new(),
         });
     }

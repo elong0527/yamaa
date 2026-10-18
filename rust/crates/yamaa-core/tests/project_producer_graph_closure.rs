@@ -59,6 +59,65 @@ mod project {
                 })
             ));
         }
+
+        #[test]
+        fn saved_links_keep_their_contract_without_building_or_depending_on_the_producer() {
+            let root = document(&[("FIRST", Some("/p")), ("SECOND", Some("/q"))], None);
+            let p = document(&[("RAW", None)], None);
+            let q = document(&[("RAW", None)], None);
+            // FIRST is built in the graph; SECOND names a producer the graph
+            // does not hold, which only a saved-link graph admits.
+            let links = [
+                candidate("/root", "FIRST", "/p", &p),
+                candidate("/root", "SECOND", "/q", &q),
+            ];
+            let supplied = [node("/p", &p, &[]), node("/root", &root, &links)];
+            assert!(matches!(
+                producer_graph::prepare("/root", &supplied, environment(&[])),
+                Err(Error::Boundary {
+                    reason: "missing_producer_node",
+                    ..
+                })
+            ));
+            let checked =
+                producer_graph::prepare_saved("/root", &supplied, environment(&[])).unwrap();
+            assert_eq!(checked.order(), [0, 1]);
+            let consumer = &checked.nodes()[1];
+            assert_eq!(consumer.dependencies(), [0]);
+            assert_eq!(
+                consumer
+                    .producers()
+                    .iter()
+                    .map(|link| link.dataset())
+                    .collect::<Vec<_>>(),
+                ["FIRST"]
+            );
+            let saved = consumer.saved();
+            assert_eq!(saved.len(), 1);
+            assert_eq!(saved[0].dataset(), "SECOND");
+            assert_eq!(saved[0].producer_identity(), "/q");
+            assert_eq!(saved[0].artifact_identity(), "/produced.csv");
+            assert_eq!(
+                saved[0]
+                    .contract()
+                    .fields()
+                    .iter()
+                    .map(|field| field.name.as_str())
+                    .collect::<Vec<_>>(),
+                ["ID", "VALUE"]
+            );
+            // A root whose every link is saved is a graph of one node.
+            let alone = producer_graph::prepare_saved(
+                "/root",
+                &[node("/root", &root, &links)],
+                environment(&[]),
+            )
+            .unwrap();
+            assert_eq!(alone.order(), [0]);
+            assert!(alone.nodes()[0].dependencies().is_empty());
+            assert!(alone.nodes()[0].producers().is_empty());
+            assert_eq!(alone.nodes()[0].saved().len(), 2);
+        }
     }
     mod producer_metadata {
         use crate::support::producer as support;
