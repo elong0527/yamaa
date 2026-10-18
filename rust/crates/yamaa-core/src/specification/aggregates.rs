@@ -1471,7 +1471,7 @@ pub(super) fn late_reads(plan: &crate::dataset::DatasetPlan) -> Vec<BindFinding>
                         }
                         crate::dataset::CurrentRead::Record { .. } => None,
                     };
-                    if read.is_some_and(&late) {
+                    if read.is_some_and(late) {
                         refuse(
                             "aggregate_range_window_read",
                             format!("{}.value", range.path()),
