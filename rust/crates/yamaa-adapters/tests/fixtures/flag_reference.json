@@ -53,7 +53,23 @@
         }
       ],
       "result_type": "ExecutionSuccess",
-      "handlers": [],
+      "handlers": [
+        {
+          "spec_path": "columns.AOCCFL.derivation.flag.missing",
+          "handler": "missing",
+          "count": 4
+        },
+        {
+          "spec_path": "columns.AOCCSFL.derivation.flag.missing",
+          "handler": "missing",
+          "count": 4
+        },
+        {
+          "spec_path": "columns.AOCCPFL.derivation.flag.missing",
+          "handler": "missing",
+          "count": 4
+        }
+      ],
       "findings": [],
       "csv": "STUDYID,USUBJID,AESEQ,AEBODSYS,AEDECOD,ASTDT,TRTEMFL,AOCCFL,AOCCSFL,AOCCPFL\nCATH-01,CATH-01-001,1,NERVOUS SYSTEM DISORDERS,HEADACHE,2024-01-05,,,,\nCATH-01,CATH-01-001,2,NERVOUS SYSTEM DISORDERS,HEADACHE,2024-01-10,Y,Y,Y,Y\nCATH-01,CATH-01-001,3,GASTROINTESTINAL DISORDERS,NAUSEA,2024-01-10,Y,,Y,Y\nCATH-01,CATH-01-001,4,NERVOUS SYSTEM DISORDERS,HEADACHE,2024-01-12,Y,,,\nCATH-01,CATH-01-001,5,SKIN AND SUBCUTANEOUS TISSUE DISORDERS,RASH,2024-01-21,,,,\nCATH-01,CATH-01-002,1,NERVOUS SYSTEM DISORDERS,HEADACHE,2024-02-01,Y,Y,Y,Y\nCATH-01,CATH-01-002,2,NERVOUS SYSTEM DISORDERS,HEADACHE,2024-02-01,Y,,,\nCATH-01,CATH-01-003,1,NERVOUS SYSTEM DISORDERS,DIZZINESS,2024-03-04,Y,Y,Y,Y\nCATH-01,CATH-01-004,1,GASTROINTESTINAL DISORDERS,DIARRHOEA,2024-04-02,,,,\nCATH-01,CATH-01-004,2,NERVOUS SYSTEM DISORDERS,HEADACHE,2024-04-09,,,,\n"
     },
@@ -203,7 +219,13 @@
         }
       ],
       "result_type": "ExecutionSuccess",
-      "handlers": [],
+      "handlers": [
+        {
+          "spec_path": "columns.DOSREDFL.derivation.flag.missing",
+          "handler": "missing",
+          "count": 5
+        }
+      ],
       "findings": [],
       "csv": "STUDYID,USUBJID,EXSEQ,EXSTDTM,EXDOSE,DOSREDFL\nYAMAA-01,YAMAA-01-101,1,2024-01-08T08:00:00.000000,200.0,\nYAMAA-01,YAMAA-01-101,2,2024-01-15T08:00:00.000000,200.0,\nYAMAA-01,YAMAA-01-101,3,2024-01-22T08:00:00.000000,150.0,Y\nYAMAA-01,YAMAA-01-101,4,2024-01-29T08:00:00.000000,0.0,\nYAMAA-01,YAMAA-01-101,5,2024-02-05T08:00:00.000000,150.0,\nYAMAA-01,YAMAA-01-101,6,2024-02-12T08:00:00.000000,,\nYAMAA-01,YAMAA-01-101,7,2024-02-19T08:00:00.000000,100.0,\nYAMAA-01,YAMAA-01-101,8,2024-02-26T08:00:00.000000,80.0,Y\nYAMAA-01,YAMAA-01-102,1,2024-01-10T08:00:00.000000,250.0,\nYAMAA-01,YAMAA-01-103,1,2024-01-09T08:00:00.000000,200.0,\nYAMAA-01,YAMAA-01-103,2,2024-01-09T08:00:00.000000,120.0,Y\nYAMAA-01,YAMAA-01-104,1,2024-01-11T08:00:00.000000,0.0,\nYAMAA-01,YAMAA-01-104,2,2024-01-18T08:00:00.000000,100.0,\n"
     },
@@ -217,13 +239,19 @@
         }
       ],
       "result_type": "ExecutionSuccess",
-      "handlers": [],
+      "handlers": [
+        {
+          "spec_path": "columns.ANL01FL.derivation.flag.missing",
+          "handler": "missing",
+          "count": 2
+        }
+      ],
       "findings": [],
       "csv": "STUDYID,USUBJID,PARAMCD,LBSEQ,ADT,ADY,AVAL,AVISIT,AWTARGET,ADIST,ANL01FL\nCATH,CATH-UCSD-0001,ALT,1,2025-01-17,10,22.0,WEEK 2,15,5.0,\nCATH,CATH-UCSD-0001,ALT,2,2025-01-27,20,26.0,WEEK 2,15,5.0,Y\nCATH,CATH-UCSD-0001,ALT,3,2025-02-06,30,24.0,,,,\nCATH,CATH-UCSD-0002,ALT,1,2025-02-19,12,31.0,WEEK 2,15,3.0,\nCATH,CATH-UCSD-0002,ALT,2,2025-02-23,16,29.0,WEEK 2,15,1.0,Y\nCATH,CATH-UCSD-0002,AST,1,2025-02-21,14,27.0,WEEK 2,15,1.0,Y\nCATH,CATH-UCSD-0003,ALT,1,2025-03-15,8,18.0,WEEK 2,15,7.0,Y\nCATH,CATH-UCSD-0004,ALT,1,2025-04-09,22,33.0,WEEK 2,15,7.0,Y\nCATH,CATH-UCSD-0005,ALT,1,2025-04-30,15,21.0,WEEK 2,15,0.0,Y\nCATH,CATH-UCSD-0005,ALT,2,2025-04-30,15,23.0,WEEK 2,15,0.0,\nCATH,CATH-UCSD-0006,ALT,1,2025-05-12,,28.0,,,,\n"
     },
     "adam-adlb-end-of-treatment": {
       "specification_path": "benchmarks/adam-adlb-end-of-treatment/spec.yaml",
-      "specification": "schema_version: \"1.0\"\ndomain: ADLB\nkeys: [STUDYID, USUBJID, LBSEQ]\ninput:\n  LB: {path: input/lb.csv, types: {LBSEQ: int, VISITNUM: int, LBSTRESN: float}}\n  SUPPLB: input/supplb.csv\nbase: LB\n\noutput:\n  path: adlb.csv\n  columns: [STUDYID, USUBJID, LBSEQ, LBTESTCD, VISITNUM, AVAL, ENDPOINT, EOTFL]\n\nintermediates:\n  # The protocol endpoint qualifier, one supplemental record per\n  # laboratory record. The supplemental key is the laboratory sequence\n  # number written as eight-character, space-padded text.\n  - id: SUPP_EP\n    dataset: SUPPLB\n    key:\n      STUDYID: LB.STUDYID\n      USUBJID: LB.USUBJID\n      IDVARVAL: {str_pad: {source: LB.LBSEQ, width: 8}}\n    filter: \"SUPPLB.QNAM = 'ENDPOINT'\"\n    no_match: {literal: null}\n    verifications:\n      - unique: [STUDYID, USUBJID, IDVARVAL]\n\n  # Every laboratory record carries its own endpoint qualifier before the\n  # window ranks the records of each subject and test: the endpoint\n  # record first, then the latest visit.\n  - id: EOT_RANK\n    dataset: LB\n    key: [STUDYID, USUBJID, LBSEQ]\n    derivations:\n      ENDPOINT: SUPP_EP.QVAL\n      EOT_SEQ:\n        row_number:\n          window:\n            group_by: [LB.USUBJID, LB.LBTESTCD]\n            order_by:\n              - {variable: ENDPOINT, direction: desc}\n              - {variable: LB.VISITNUM, direction: desc}\n\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: LB.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: LB.USUBJID\n\n  - name: LBSEQ\n    type: int\n    label: Sequence Number\n    derivation: LB.LBSEQ\n\n  - name: LBTESTCD\n    type: str\n    label: Lab Test or Examination Short Name\n    derivation: LB.LBTESTCD\n\n  - name: VISITNUM\n    type: int\n    label: Visit Number\n    derivation: LB.VISITNUM\n\n  - name: AVAL\n    type: float\n    label: Analysis Value\n    derivation: LB.LBSTRESN\n\n  - name: ENDPOINT\n    type: str\n    label: Protocol Endpoint Record\n    derivation: EOT_RANK.ENDPOINT\n\n  - name: EOTFL\n    type: str\n    label: End of Treatment Record Flag\n    derivation:\n      flag: \"EOT_RANK.EOT_SEQ = 1\"\n\nverifications:\n  - row_count:\n      min: 12\n      max: 12\n",
+      "specification": "schema_version: \"1.0\"\ndomain: ADLB\nkeys: [STUDYID, USUBJID, LBSEQ]\ninput:\n  LB: {path: input/lb.csv, types: {LBSEQ: int, VISITNUM: int, LBSTRESN: float}}\n  SUPPLB: input/supplb.csv\nbase: LB\n\noutput:\n  path: adlb.csv\n  columns: [STUDYID, USUBJID, LBSEQ, LBTESTCD, VISITNUM, AVAL, ENDPOINT, EOTFL]\n\nintermediates:\n  # The protocol endpoint qualifier, one supplemental record per\n  # laboratory record. The supplemental key is the laboratory sequence\n  # number written as eight-character, space-padded text.\n  - id: SUPP_EP\n    dataset: SUPPLB\n    key:\n      STUDYID: LB.STUDYID\n      USUBJID: LB.USUBJID\n      IDVARVAL: {str_pad: {source: LB.LBSEQ, width: 8}}\n    filter: \"SUPPLB.QNAM = 'ENDPOINT'\"\n    no_match: {literal: null}\n    verifications:\n      - unique: [STUDYID, USUBJID, IDVARVAL]\n\n  # Every laboratory record carries its own endpoint qualifier before the\n  # window ranks the records of each subject and test: the endpoint\n  # record first, then the latest visit.\n  - id: EOT_RANK\n    dataset: LB\n    key: [STUDYID, USUBJID, LBSEQ]\n    require_match: true\n    derivations:\n      ENDPOINT: SUPP_EP.QVAL\n      EOT_SEQ:\n        row_number:\n          window:\n            group_by: [LB.USUBJID, LB.LBTESTCD]\n            order_by:\n              - {variable: ENDPOINT, direction: desc}\n              - {variable: LB.VISITNUM, direction: desc}\n\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: LB.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: LB.USUBJID\n\n  - name: LBSEQ\n    type: int\n    label: Sequence Number\n    derivation: LB.LBSEQ\n\n  - name: LBTESTCD\n    type: str\n    label: Lab Test or Examination Short Name\n    derivation: LB.LBTESTCD\n\n  - name: VISITNUM\n    type: int\n    label: Visit Number\n    derivation: LB.VISITNUM\n\n  - name: AVAL\n    type: float\n    label: Analysis Value\n    derivation: LB.LBSTRESN\n\n  - name: ENDPOINT\n    type: str\n    label: Protocol Endpoint Record\n    derivation: EOT_RANK.ENDPOINT\n\n  - name: EOTFL\n    type: str\n    label: End of Treatment Record Flag\n    derivation:\n      flag: \"EOT_RANK.EOT_SEQ = 1\"\n\nverifications:\n  - row_count:\n      min: 12\n      max: 12\n",
       "occurrences": [
         {
           "path": "columns[7].derivation.flag",
@@ -282,6 +310,11 @@
       ],
       "result_type": "ExecutionSuccess",
       "handlers": [
+        {
+          "spec_path": "columns.COMPLFL.derivation.flag.missing",
+          "handler": "missing",
+          "count": 0
+        },
         {
           "spec_path": "columns.COMPREC.derivation.source.no_match",
           "handler": "no_match",
@@ -688,7 +721,18 @@
         }
       ],
       "result_type": "ExecutionSuccess",
-      "handlers": [],
+      "handlers": [
+        {
+          "spec_path": "columns.CRIT1FL.derivation.flag.missing",
+          "handler": "missing",
+          "count": 1
+        },
+        {
+          "spec_path": "columns.DERMFL.derivation.flag.missing",
+          "handler": "missing",
+          "count": 1
+        }
+      ],
       "findings": [],
       "csv": "STUDYID,USUBJID,AESEQ,AEDECOD,CRIT1FL,DERMFL\nCATH-01,CATH-01-001,1,HEADACHE,,\nCATH-01,CATH-01-001,2,APPLICATION SITE DERMATITIS,Y,Y\nCATH-01,CATH-01-001,3,NAUSEA,,\nCATH-01,CATH-01-001,4,ERYTHEMA,Y,Y\nCATH-01,CATH-01-002,1,BLISTER,Y,\nCATH-01,CATH-01-002,2,VOMITING,,\nCATH-01,CATH-01-003,1,,,\n"
     },
@@ -703,6 +747,16 @@
       ],
       "result_type": "ExecutionSuccess",
       "handlers": [
+        {
+          "spec_path": "columns.DTHDTC.derivation.first_available.missing",
+          "handler": "missing",
+          "count": 1
+        },
+        {
+          "spec_path": "columns.DTHFL.derivation.flag.missing",
+          "handler": "missing",
+          "count": 0
+        },
         {
           "spec_path": "columns.DSDTHDT.derivation.source.no_match",
           "handler": "no_match",
@@ -845,7 +899,13 @@
       },
       "result_type": "ExecutionSuccess",
       "findings": [],
-      "handlers": [],
+      "handlers": [
+        {
+          "spec_path": "columns.F.derivation.flag.missing",
+          "handler": "missing",
+          "count": 1
+        }
+      ],
       "csv": "ID,AGE,F\na,70,Y\nb,5,N\nc,,U\n",
       "effects": [
         {
@@ -864,7 +924,13 @@
       },
       "result_type": "ExecutionSuccess",
       "findings": [],
-      "handlers": [],
+      "handlers": [
+        {
+          "spec_path": "columns.F.derivation.flag.missing",
+          "handler": "missing",
+          "count": 1
+        }
+      ],
       "csv": "ID,AGE,F\na,70,Y\nb,5,\nc,,\n",
       "effects": [
         {
@@ -883,7 +949,13 @@
       },
       "result_type": "ExecutionSuccess",
       "findings": [],
-      "handlers": [],
+      "handlers": [
+        {
+          "spec_path": "columns.F.derivation.flag.missing",
+          "handler": "missing",
+          "count": 1
+        }
+      ],
       "csv": "ID,AGE,F\na,70,Y\nb,5,N\nc,,\n",
       "effects": [
         {
@@ -1096,7 +1168,13 @@
       },
       "result_type": "ExecutionSuccess",
       "findings": [],
-      "handlers": [],
+      "handlers": [
+        {
+          "spec_path": "columns.F.derivation.flag.missing",
+          "handler": "missing",
+          "count": 1
+        }
+      ],
       "csv": "ID,AGE,F\na,70,Y\nb,5,N\nc,,U\n",
       "effects": [
         {
@@ -1121,6 +1199,11 @@
           "spec_path": "columns.F.derivation.unconvertible",
           "handler": "unconvertible",
           "count": 1
+        },
+        {
+          "spec_path": "columns.F.derivation.flag.missing",
+          "handler": "missing",
+          "count": 1
         }
       ],
       "csv": "ID,AGE,F\na,70,99\nb,5,2\nc,,3\n",
@@ -1141,7 +1224,13 @@
       },
       "result_type": "ExecutionSuccess",
       "findings": [],
-      "handlers": [],
+      "handlers": [
+        {
+          "spec_path": "rows[0].derivations.F.flag.missing",
+          "handler": "missing",
+          "count": 1
+        }
+      ],
       "csv": "ID,AGE,F\na,70,Y\nb,5,N\nc,,U\n",
       "effects": [
         {
@@ -1192,7 +1281,13 @@
       },
       "result_type": "ExecutionSuccess",
       "findings": [],
-      "handlers": [],
+      "handlers": [
+        {
+          "spec_path": "rows[0].derivations.F.flag.missing",
+          "handler": "missing",
+          "count": 0
+        }
+      ],
       "csv": "ID,AGE,F\na,70,Y\nb,70,N\nc,70,N\n",
       "effects": [
         {
@@ -1283,7 +1378,13 @@
           }
         }
       ],
-      "handlers": [],
+      "handlers": [
+        {
+          "spec_path": "columns.F.derivation.flag.missing",
+          "handler": "missing",
+          "count": 0
+        }
+      ],
       "effects": [
         {
           "event": "capture_sources",

@@ -32,6 +32,7 @@ intermediates:
       ItemGroupOID: ODM.ItemGroupOID
       ItemGroupRepeatKey: ODM.ItemGroupRepeatKey
     filter: "ODM.ItemOID = 'IT.LB.LBTESTCD'"
+    require_match: true
 
   - id: LB_LBNAM
     dataset: ODM
@@ -42,6 +43,7 @@ intermediates:
       ItemGroupOID: ODM.ItemGroupOID
       ItemGroupRepeatKey: ODM.ItemGroupRepeatKey
     filter: "ODM.ItemOID = 'IT.LB.LBNAM'"
+    require_match: true
 
   - id: LB_STRESN
     dataset: ODM
@@ -52,17 +54,20 @@ intermediates:
       ItemGroupOID: ODM.ItemGroupOID
       ItemGroupRepeatKey: ODM.ItemGroupRepeatKey
     filter: "ODM.ItemOID = 'IT.LB.LBSTRESN'"
+    require_match: true
 
   # Subject-level demographics from the DM form.
   - id: DM_SEX
     dataset: ODM
     key: {StudyOID: ODM.StudyOID, SubjectKey: ODM.SubjectKey}
     filter: "ODM.ItemOID = 'IT.DM.SEX'"
+    require_match: true
 
   - id: DM_BRTHDTC
     dataset: ODM
     key: {StudyOID: ODM.StudyOID, SubjectKey: ODM.SubjectKey}
     filter: "ODM.ItemOID = 'IT.DM.BRTHDTC'"
+    require_match: true
 
   # Reference-range entry for the lab, test, sex and age band that was in
   # effect on the collection date. The row is anchored on the IT.LB.LBDTC

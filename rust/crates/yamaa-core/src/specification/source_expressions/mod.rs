@@ -16,7 +16,9 @@ pub(super) struct Declaration {
     order: Vec<(String, bool, bool)>,
     keep: Option<crate::dataset::Keep>,
     absent: Option<Value>,
-    declaration_finding: Option<Diagnostic>,
+    require_match: bool,
+    /// Declaration defects, reported before any field is bound.
+    declaration_findings: Vec<Diagnostic>,
 }
 #[derive(Clone, Debug)]
 struct Filter {
@@ -61,7 +63,7 @@ impl Declaration {
         phase: crate::reference_scope::Phase<'_>,
         findings: &mut Vec<BindFinding>,
     ) -> bool {
-        if self.filter.is_none() || self.declaration_finding.is_some() {
+        if self.filter.is_none() || !self.declaration_findings.is_empty() {
             return false;
         }
         let scalar = self.is_group_key(driver, phase);
@@ -118,12 +120,22 @@ impl Declaration {
                 order: Vec::new(),
                 keep: None,
                 absent: None,
-                declaration_finding: None,
+                require_match: false,
+                declaration_findings: Vec::new(),
             });
         }
         for &(name, _) in mapping(d, payload)? {
             let name = text(d, name)?;
-            if !["variable", "filter", "order_by", "keep", "absent"].contains(&name) {
+            if ![
+                "variable",
+                "filter",
+                "order_by",
+                "keep",
+                "absent",
+                "require_match",
+            ]
+            .contains(&name)
+            {
                 reject(extra, name, format!("{path}.{name}"));
             }
         }
@@ -180,7 +192,8 @@ impl Declaration {
                 order.push(order_term(d, term)?);
             }
         }
-        let declaration_finding = (order.is_empty() != keep.is_none()).then(|| {
+        let mut declaration_findings = Vec::new();
+        declaration_findings.extend((order.is_empty() != keep.is_none()).then(|| {
             let (declared, missing) = if keep.is_some() {
                 ("keep", "order_by")
             } else {
@@ -204,18 +217,30 @@ impl Declaration {
                 source_span: None,
                 operand_route: None,
             }
-        });
+        }));
         let absent = d
             .field(payload, "absent")
             .map(|id| literal(d, id, &format!("{path}.absent")))
             .transpose()?;
+        let require_match = requires_match(d, payload);
+        // Asserting a match and answering its absence are two absence policies.
+        if require_match && absent.is_some() {
+            declaration_findings.push(Diagnostic {
+                code: C::SourceAbsenceConflict,
+                spec_paths: vec![format!("{path}.absent"), format!("{path}.require_match")],
+                context: [("variable".into(), JsonValue::String(variable.clone()))].into(),
+                source_span: None,
+                operand_route: None,
+            });
+        }
         Ok(Self {
             variable,
             filter,
             order,
             keep,
             absent,
-            declaration_finding,
+            require_match,
+            declaration_findings,
         })
     }
     /// Scope checks precede source field resolution. Every occurrence is admitted,
@@ -443,6 +468,50 @@ impl Declaration {
         }
         Some(crate::dataset::SourceSelection { order_by, keep })
     }
+    /// Report every declaration defect; true when there was one.
+    fn report_declaration(&self, findings: &mut Vec<BindFinding>) -> bool {
+        findings.extend(
+            self.declaration_findings
+                .iter()
+                .map(|finding| BindFinding::Source(SourceFinding(finding.clone()))),
+        );
+        !self.declaration_findings.is_empty()
+    }
+    /// A source binding's answer for a row its implicit join finds no record
+    /// for. The concise `DATASET.VARIABLE` is shorthand for the binding, so it
+    /// answers the same way, with the default (LOOKUP-24).
+    fn absence(&self, path: &str) -> crate::dataset::JoinAbsence {
+        crate::dataset::JoinAbsence {
+            path: path.into(),
+            absent: self.absent.clone(),
+            require_match: self.require_match,
+        }
+    }
+    /// `require_match` asserts what only an implicit join can miss; on a read
+    /// of the driver, an output column or a named intermediate it states
+    /// nothing and is refused (LOOKUP-24). True when refused.
+    fn refuse_require_match(
+        &self,
+        path: &str,
+        expression: &Expression,
+        findings: &mut Vec<BindFinding>,
+    ) -> bool {
+        let refused = self.require_match
+            && !matches!(
+                expression,
+                Expression::SourceLookup { .. }
+                    | Expression::Joined(_)
+                    | Expression::JoinedSource { .. }
+            );
+        if refused {
+            findings.push(BindFinding::Source(SourceFinding::new(
+                C::SourceRequireMatchScope,
+                &format!("{path}.require_match"),
+                &[("identifier", &self.variable)],
+            )));
+        }
+        refused
+    }
     fn wrap(
         &self,
         expression: Expression,
@@ -524,8 +593,7 @@ pub(super) fn bind(
     edges: &mut Vec<usize>,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<Expression>, BindError> {
-    if let Some(finding) = &declaration.declaration_finding {
-        findings.push(BindFinding::Source(SourceFinding(finding.clone())));
+    if declaration.report_declaration(findings) {
         return Ok(None);
     }
     let name = &declaration.variable;
@@ -628,6 +696,7 @@ pub(super) fn bind(
                             },
                             filter,
                             selection,
+                            absence: Some(declaration.absence(path)),
                         })
                     }
                     crate::key_relation::Inference::NoApplicableKeys => {
@@ -757,6 +826,12 @@ pub(super) fn bind(
             None
         }
     };
+    if expression
+        .as_ref()
+        .is_some_and(|expression| declaration.refuse_require_match(path, expression, findings))
+    {
+        return Ok(None);
+    }
     Ok(expression.map(|expression| declaration.wrap(expression, column, path, variable_absent)))
 }
 
@@ -832,6 +907,8 @@ pub(super) fn bind_implicit(
                     output_column,
                 });
             }
+            // An operand answers a row without a record with missing, counted
+            // at its path (LOOKUP-24).
             Ok(Some(Expression::SourceLookup {
                 lookup: crate::dataset::Lookup {
                     source: index,
@@ -840,6 +917,7 @@ pub(super) fn bind_implicit(
                 },
                 filter: None,
                 selection: None,
+                absence: Some(crate::dataset::JoinAbsence::operand(path)),
             }))
         }
         crate::key_relation::Inference::NoApplicableKeys => {
@@ -981,8 +1059,7 @@ impl Declaration {
         path: &str,
         findings: &mut Vec<BindFinding>,
     ) -> Result<(), BindError> {
-        if let Some(finding) = &self.declaration_finding {
-            findings.push(BindFinding::Source(SourceFinding(finding.clone())));
+        if self.report_declaration(findings) {
             return Ok(());
         }
         if let Some(filter) = &self.filter {

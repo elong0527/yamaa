@@ -31,6 +31,7 @@ intermediates:
   - id: EOT_RANK
     dataset: LB
     key: [STUDYID, USUBJID, LBSEQ]
+    require_match: true
     derivations:
       ENDPOINT: SUPP_EP.QVAL
       EOT_SEQ:

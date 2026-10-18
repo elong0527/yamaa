@@ -1367,16 +1367,28 @@ columns:
   - {name: TEXT, type: str, derivation: {str_case: {source: SRC.TEXT, to: upper}}}
 "#;
         #[test]
-        fn runtime_missing_retains_complete_independent_reference_context_and_keys() {
+        fn runtime_missing_gives_missing_and_counts_the_default_substitution() {
             let fixture = bespoke(MISSING_SPEC, b"ID,TEXT\nrow1,\n");
-            let result = fixture.run();
-            assert!(result.output().is_none());
-            assert_eq!(result.issues().len(), 1);
+            let mut result = fixture.run();
             let reference: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(
                 include_str!("fixtures/text_case_reference.json"),
             )
             .unwrap();
-            assert_eq!(issue_json(&result.issues()[0]), reference["missing"][0]);
+            assert_eq!(
+                yamaa_adapters::json!(result.issues().iter().map(issue_json).collect::<Vec<_>>()),
+                reference["missing"]
+            );
+            assert_eq!(
+                result.observations()["handler_counts"],
+                yamaa_adapters::json!([
+                    {"spec_path":"columns.TEXT.derivation.str_case.missing","handler":"missing","count":1}
+                ])
+            );
+            assert!(result.save().unwrap());
+            assert_eq!(
+                fs::read(fixture.0.join("output.csv")).unwrap(),
+                b"ID,TEXT\nrow1,\n"
+            );
         }
         #[test]
         fn row_substitution_and_selected_nested_case_preserve_scope_and_branch_effects() {

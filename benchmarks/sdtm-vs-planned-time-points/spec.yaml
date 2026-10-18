@@ -20,6 +20,7 @@ intermediates:
     dataset: ODM
     key: {StudyOID: STUDYID, SubjectKey: USUBJID}
     filter: "ODM.FormOID = 'FO.EX' AND ODM.ItemOID = 'IT.EX.EXSTDTC'"
+    require_match: true
 
   - id: VS_MAP
     dataset: VS_MAPPING

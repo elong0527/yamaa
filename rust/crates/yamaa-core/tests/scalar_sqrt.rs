@@ -667,7 +667,12 @@ mod scalar {
                 text_case::{Step, StringCase},
                 value::Value,
             };
-            assert_eq!(diagnostic::reached().len(), 2);
+            assert_eq!(diagnostic::reached().len(), 1);
+            // An omitted handler answers a missing source with missing.
+            let omitted =
+                StringCase::new("SRC.V".into(), "case".into(), Case::Lower, None).unwrap();
+            assert_eq!(omitted.apply(ValueRef::Missing), Ok(Step::Recovered));
+            assert_eq!(omitted.missing_substitute(), Value::Missing);
             for handler in [Value::Missing, Value::Str("MiXeD".into()), Value::Int(7)] {
                 let operation = StringCase::new(
                     "SRC.V".into(),
@@ -769,10 +774,13 @@ mod scalar {
                     Ok(Step::Capture(Some("a")))
                 );
             }
+            // An omitted `missing` still answers, with missing (COLUMN-10).
+            let omitted = operation("()", "0", None, None);
             assert_eq!(
-                operation("()", "0", None, None).apply(ValueRef::Missing),
-                Ok(Step::Missing)
+                omitted.apply(ValueRef::Missing),
+                Ok(Step::Recovered("missing"))
             );
+            assert_eq!(omitted.substitute("missing"), Value::Missing);
         }
         #[test]
         fn long_subjects_are_searched_to_completion_before_no_match() {
@@ -829,7 +837,8 @@ mod scalar {
         use crate::support::diagnostic::text_extract as diagnostic;
         #[test]
         fn all_extraction_semantic_causes_preserve_independent_complete_facts() {
-            assert_eq!(diagnostic::reached().len(), 6);
+            // A missing source is answered, never failed (COLUMN-10).
+            assert_eq!(diagnostic::reached().len(), 5);
         }
     }
     mod text_pad {
@@ -1137,7 +1146,8 @@ mod scalar {
         use crate::support::diagnostic::text_template as diagnostic;
         #[test]
         fn complete_canonical_grammar_causes_are_reached() {
-            assert_eq!(diagnostic::reached().len(), 1);
+            // The grammar refusal and the missing placeholder a template still fails on.
+            assert_eq!(diagnostic::reached().len(), 2);
         }
         #[test]
         fn many_unique_names_retain_first_occurrence_indexes_without_a_work_quota() {

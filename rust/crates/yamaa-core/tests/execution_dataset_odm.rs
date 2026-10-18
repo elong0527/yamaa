@@ -836,11 +836,17 @@ mod execution {
                     vec![Value::Int(3), Value::Int(3)]
                 ]
             );
-            assert_eq!(attempt.handler_counts.len(), 1);
-            assert_eq!(attempt.handler_counts[0].count, 1);
+            // The UNKNOWN row takes the declared `missing` and is counted there.
             assert_eq!(
-                attempt.handler_counts[0].spec_path,
-                "columns.C1.derivation.unconvertible"
+                attempt
+                    .handler_counts
+                    .iter()
+                    .map(|count| (count.spec_path.as_str(), count.count))
+                    .collect::<Vec<_>>(),
+                [
+                    ("columns.C1.derivation.unconvertible", 1),
+                    ("columns.C1.derivation.flag.missing", 1)
+                ]
             );
             assert_eq!(
                 *table.reads.borrow(),
@@ -872,7 +878,14 @@ mod execution {
             assert_eq!(source_row, 0);
             assert_eq!(&*payload as *const u8, address);
             assert!(Rc::ptr_eq(&marker, &retained));
-            assert!(attempt.handler_counts.is_empty());
+            assert_eq!(
+                attempt
+                    .handler_counts
+                    .iter()
+                    .map(|count| (count.spec_path.as_str(), count.count))
+                    .collect::<Vec<_>>(),
+                [("columns.C1.derivation.flag.missing", 0)]
+            );
             assert_eq!(*table.reads.borrow(), [(0, 0), (0, 1)]);
         }
         #[test]
@@ -918,6 +931,7 @@ mod execution {
                     filter: None,
                     selection: None,
                     no_match: Some(Value::Missing),
+                    require_match: false,
                     unique: Vec::new(),
                     derivations: None,
                     pending_schema: None,
@@ -950,7 +964,15 @@ mod execution {
                     vec![Value::Int(3), Value::Int(3)]
                 ]
             );
-            assert!(attempt.handler_counts.is_empty());
+            // Predicate reads suppress `no_match`; the UNKNOWN condition counts.
+            assert_eq!(
+                attempt
+                    .handler_counts
+                    .iter()
+                    .map(|count| (count.spec_path.as_str(), count.count))
+                    .collect::<Vec<_>>(),
+                [("columns.C1.derivation.flag.missing", 1)]
+            );
             assert_eq!(
                 donor.reads.borrow().iter().filter(|(_, c)| *c == 1).count(),
                 4
@@ -1029,7 +1051,14 @@ mod execution {
             let identity = identity.unwrap();
             assert_eq!(identity.position, 0);
             assert_eq!(identity.values, [Value::Int(1)]);
-            assert!(attempt.handler_counts.is_empty());
+            assert_eq!(
+                attempt
+                    .handler_counts
+                    .iter()
+                    .map(|count| (count.spec_path.as_str(), count.count))
+                    .collect::<Vec<_>>(),
+                [("columns.C1.derivation.flag.missing", 0)]
+            );
             assert_eq!(
                 table
                     .reads
@@ -1042,7 +1071,7 @@ mod execution {
             );
         }
         #[test]
-        fn constant_flag_needs_only_identity_reads_and_has_no_handlers() {
+        fn constant_flag_needs_only_identity_reads_and_never_counts_unknown() {
             let table = table();
             let constant = Expression::Flag(
                 Flag::new(
@@ -1081,7 +1110,14 @@ mod execution {
                     vec![Value::Int(3), Value::Str("Y".into())],
                 ]
             );
-            assert!(attempt.handler_counts.is_empty());
+            assert_eq!(
+                attempt
+                    .handler_counts
+                    .iter()
+                    .map(|count| (count.spec_path.as_str(), count.count))
+                    .collect::<Vec<_>>(),
+                [("flag.missing", 0)]
+            );
             assert_eq!(*table.reads.borrow(), [(0, 0), (1, 0), (2, 0)]);
         }
         fn named_plan(table: &Table, donor: &Table, filtered: bool) -> DatasetPlan {
@@ -1119,6 +1155,7 @@ mod execution {
                     filter: filter.map(Into::into),
                     selection: None,
                     no_match: Some(Value::Missing),
+                    require_match: false,
                     unique: Vec::new(),
                     derivations: None,
                     pending_schema: None,
@@ -1203,7 +1240,14 @@ mod execution {
                 };
                 assert_eq!(&*failure.0 as *const u8, address);
                 assert!(Rc::ptr_eq(&failure.1, &marker));
-                assert!(attempt.handler_counts.is_empty());
+                assert_eq!(
+                    attempt
+                        .handler_counts
+                        .iter()
+                        .map(|count| (count.spec_path.as_str(), count.count))
+                        .collect::<Vec<_>>(),
+                    [("columns.C1.derivation.flag.missing", 0)]
+                );
             }
         }
     }
@@ -1304,6 +1348,7 @@ mod execution {
                 filter: None,
                 selection: None,
                 no_match: Some(Value::Missing),
+                require_match: false,
                 unique: Vec::new(),
                 derivations: None,
                 pending_schema: None,

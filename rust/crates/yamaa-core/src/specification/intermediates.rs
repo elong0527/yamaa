@@ -19,6 +19,7 @@ struct Declaration {
     order: Vec<(String, bool, bool)>,
     keep: Option<Keep>,
     no_match: Option<Value>,
+    require_match: bool,
     range: Option<intermediate_range::Declaration>,
     columns: Option<Vec<String>>,
     unique: UniqueDeclarations,
@@ -482,6 +483,7 @@ fn bind_one(
         filter,
         selection: item.keep.map(|keep| SourceSelection { order_by, keep }),
         no_match: item.no_match.clone(),
+        require_match: item.require_match,
         unique,
         derivations,
         pending_schema,
@@ -932,18 +934,26 @@ impl Declarations {
                 .field(id, "no_match")
                 .map(|value| literal(d, value, &format!("{path}.no_match")))
                 .transpose()?;
+            let require_match = requires_match(d, id);
             let unique = Self::prepare_unique_checks(d, id, &path)?;
-            let driver_prohibited = ["key", "between", "order_by", "keep", "no_match"]
-                .into_iter()
-                .filter(|name| {
-                    if *name == "no_match" {
-                        d.field(id, name).is_some()
-                    } else {
-                        present(d, id, name)
-                    }
-                })
-                .map(String::from)
-                .collect();
+            let driver_prohibited = [
+                "key",
+                "between",
+                "order_by",
+                "keep",
+                "no_match",
+                "require_match",
+            ]
+            .into_iter()
+            .filter(|name| {
+                if *name == "no_match" {
+                    d.field(id, name).is_some()
+                } else {
+                    present(d, id, name)
+                }
+            })
+            .map(String::from)
+            .collect();
             let derivations = intermediate_derivations::prepare(
                 d, id, &path, dataset, project, extraction, templates, &result,
             )?;
@@ -959,6 +969,7 @@ impl Declarations {
                     order,
                     keep,
                     no_match,
+                    require_match,
                     range,
                     columns,
                     unique,

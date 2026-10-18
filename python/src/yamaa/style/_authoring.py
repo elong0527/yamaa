@@ -451,9 +451,10 @@ def redundant_intermediates(document: Document, value: Mapping) -> Iterator[Depa
     A simple intermediate with no filter, selection, custom key, or handler
     that changes behavior reads what `DATASET.COLUMN` already reads. The
     check reports only explicit keys that restate the output keys; an
-    omitted key with `no_match: {literal: null}` fails validation as
-    `rename_only_intermediate` instead, and an intermediate without
-    `no_match` requires a match the implicit join cannot state.
+    omitted key fails validation as `rename_only_intermediate` instead, and
+    `require_match: true` requires a match the implicit join cannot state.
+    An input declaring `require_match: true` makes its implicit join fail
+    where the intermediate answers, so neither replaces the other.
     """
     keys = value.get("keys")
     if not isinstance(keys, list) or not all(isinstance(k, str) for k in keys):
@@ -461,12 +462,18 @@ def redundant_intermediates(document: Document, value: Mapping) -> Iterator[Depa
     raw_intermediates = value.get("intermediates")
     if not isinstance(raw_intermediates, list):
         return
+    inputs = value.get("input")
+    required = {
+        name
+        for name, declaration in (inputs.items() if isinstance(inputs, Mapping) else ())
+        if isinstance(declaration, Mapping) and declaration.get("require_match") is True
+    }
     for index, entry in _indexed_entries(value, "intermediates"):
         identifier = entry.get("id")
         dataset = entry.get("dataset")
         if not isinstance(identifier, str) or not isinstance(dataset, str):
             continue
-        if dataset == "SELF":
+        if dataset == "SELF" or dataset in required:
             continue
         if any(
             entry.get(field) is not None
@@ -488,10 +495,13 @@ def redundant_intermediates(document: Document, value: Mapping) -> Iterator[Depa
             else {}
         )
         assert isinstance(raw, Mapping)
-        if raw.get("no_match") != {"literal": None}:
-            # Absent (or cleared by a bare null) requires a match; another
-            # literal answers where the join yields missing. Only
-            # `no_match: {literal: null}` matches the join.
+        if raw.get("require_match") is True or raw.get("no_match") not in (
+            None,
+            {"literal": None},
+        ):
+            # A required match fails where the join yields missing, and
+            # another literal answers there. Omitted, cleared by a bare null
+            # or `{literal: null}`, the answer is the join's missing value.
             continue
         key = entry.get("key")
         if key is None:

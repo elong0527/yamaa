@@ -22,16 +22,16 @@ stated.
 ## How to fix
 
 Recover and correct the missing sex when possible. If the intended result is a
-missing reference limit whenever any lookup input is missing, declare the
-lookup's missing-value answer:
+missing reference limit whenever any lookup input is missing, drop
+`require_match: true` so the lookup answers with missing:
 
 ```yaml
 intermediates:
   - id: LBREF_LOOKUP
     dataset: LBREF
     key: {LBTESTCD: PARAMCD, SEX: SEX}
-    no_match: {literal: null}
 ```
 
 That one answer also covers a complete test and sex that the reference table
-does not list: both find no entry (REQ-0129, REQ-0131).
+does not list: both find no entry (LOOKUP-13), and the run counts each under
+`no_match`.

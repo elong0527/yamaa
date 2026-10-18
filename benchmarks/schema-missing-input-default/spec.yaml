@@ -1,0 +1,84 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, SITEID, AGE, AGEGR1, SEX, SEXN, RACE, COUNTRY]
+
+# None of the single-input operations below declares `missing`. A missing
+# input gives a missing result, and each one is counted under the operation's
+# `missing` path for review.
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  # The number in a collected site code such as SITE-012.
+  - name: SITEID
+    type: str
+    label: Study Site Identifier
+    derivation:
+      str_extract:
+        source: DM.SITECODE
+        pattern: '^SITE-([0-9]+)$'
+        group: 1
+
+  - name: AGE
+    type: int
+    label: Age
+    derivation: DM.AGE
+
+  - name: AGEGR1
+    type: str
+    label: Pooled Age Group 1
+    derivation:
+      cut:
+        source: AGE
+        breaks: [65]
+        labels: ["<65", ">=65"]
+
+  - name: SEX
+    type: str
+    label: Sex
+    derivation: DM.SEX
+
+  - name: SEXN
+    type: int
+    label: Sex (N)
+    derivation:
+      mapping:
+        source: DM.SEX
+        dict: {M: 1, F: 2}
+
+  # The collected race joins its words with underscores.
+  - name: RACE
+    type: str
+    label: Race
+    derivation:
+      str_replace:
+        source: DM.RACE
+        pattern: "_"
+        replacement: " "
+
+  - name: COUNTRY
+    type: str
+    label: Country
+    derivation:
+      str_case:
+        source: DM.COUNTRY
+        to: upper
+
+verifications:
+  - row_count:
+      min: 4
+      max: 4

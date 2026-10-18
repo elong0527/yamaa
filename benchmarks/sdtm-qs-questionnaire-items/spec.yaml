@@ -18,10 +18,12 @@ intermediates:
   - id: VISIT
     dataset: VISITS
     key: {SubjectKey: VISIT_SUBJECT, StudyEventOID: VISIT_EVENT}
+    require_match: true
 
   - id: ITEM
     dataset: ITEMS
     key: {ItemOID: ITEM_OID}
+    require_match: true
 
 columns:
   - name: DOMAIN

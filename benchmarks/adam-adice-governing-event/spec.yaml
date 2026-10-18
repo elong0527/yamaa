@@ -49,6 +49,7 @@ intermediates:
   key:
   - STUDYID
   - USUBJID
+  require_match: true
 
 - id: GOVERN
   dataset: ICE_RAW
@@ -60,6 +61,7 @@ intermediates:
   - ICE_RAW.ICEDTC
   - ICE_RAW.ICESEQ
   keep: first
+  require_match: true
   derivations:
     PRIORITY:
       mapping:

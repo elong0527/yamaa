@@ -25,11 +25,13 @@ pub enum AdmissionError {
     #[error("text extract regex: {0:?}")]
     Regex(portable_regex::CompileError),
 }
+/// `Recovered` names the handler that answers: `missing` for a missing source,
+/// declared or by default, and a declared `no_match` for present text the
+/// pattern matches nowhere. `NoMatch` is that text without its handler.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Step<'a> {
     Capture(Option<&'a str>),
     Recovered(&'static str),
-    Missing,
     NoMatch(&'a str),
 }
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
@@ -144,6 +146,11 @@ impl StringExtract {
             _ => None,
         }
     }
+    /// The value a recovered step substitutes: the declared literal, or
+    /// missing for a missing source whose `missing` is omitted (COLUMN-10).
+    pub fn substitute(&self, name: &str) -> Value {
+        self.handler(name).cloned().unwrap_or(Value::Missing)
+    }
     pub fn unknown_diagnostic(&self) -> Diagnostic {
         diagnostic(
             C::ExtractUnknown,
@@ -168,13 +175,7 @@ impl StringExtract {
             return Err(Error::Diagnostic(diagnostic.clone()));
         }
         let subject = match value {
-            ValueRef::Missing => {
-                return Ok(if self.missing.is_some() {
-                    Step::Recovered("missing")
-                } else {
-                    Step::Missing
-                });
-            }
+            ValueRef::Missing => return Ok(Step::Recovered("missing")),
             ValueRef::Str(subject) => subject,
             other => {
                 return Err(Error::Diagnostic(self.input_diagnostic(match other {
@@ -198,27 +199,19 @@ impl StringExtract {
             None => Ok(Step::NoMatch(subject)),
         }
     }
+    /// Present text the pattern matches nowhere is the only failing step.
     pub fn failure_diagnostic(&self, step: Step<'_>) -> Option<Diagnostic> {
-        let subject = match step {
-            Step::NoMatch(subject) => Some(subject),
-            Step::Missing => None,
-            _ => return None,
+        let Step::NoMatch(subject) = step else {
+            return None;
         };
-        Some(match subject {
-            Some(subject) => diagnostic(
-                C::ExtractNoMatch,
-                &self.path,
-                [
-                    ("value", V::String(subject.into())),
-                    ("pattern", V::String(self.pattern.clone())),
-                ],
-            ),
-            None => diagnostic(
-                C::StrCaseMissing,
-                &self.path,
-                [("variable", V::String(self.source.clone()))],
-            ),
-        })
+        Some(diagnostic(
+            C::ExtractNoMatch,
+            &self.path,
+            [
+                ("value", V::String(subject.into())),
+                ("pattern", V::String(self.pattern.clone())),
+            ],
+        ))
     }
 }
 fn decimal(text: &str) -> bool {

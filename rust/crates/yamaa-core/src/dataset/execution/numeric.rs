@@ -95,6 +95,7 @@ impl<T: TableAccess + ?Sized> ExpressionResolver for Resolver<'_, '_, T> {
                 return joined::read(
                     self.table,
                     read,
+                    lookup::JoinSite::Operand(&self.assignment.path),
                     self.assignment,
                     self.candidate,
                     self.plan,

@@ -19,14 +19,22 @@ pub struct SelectionSource {
     pub read: SelectionRead,
 }
 
+/// `missing` is the declared value, or missing when none is declared; sources
+/// that are all missing are counted at the operation's `missing` path either
+/// way (EXPR-9).
 #[derive(Clone, Debug, PartialEq)]
 pub struct FirstAvailable {
+    path: String,
     sources: Vec<SelectionSource>,
     missing: Value,
 }
 impl FirstAvailable {
-    pub fn new(sources: Vec<SelectionSource>, missing: Value) -> Self {
-        Self { sources, missing }
+    pub fn new(path: String, sources: Vec<SelectionSource>, missing: Value) -> Self {
+        Self {
+            path,
+            sources,
+            missing,
+        }
     }
     pub fn sources(&self) -> &[SelectionSource] {
         &self.sources
@@ -37,12 +45,18 @@ impl FirstAvailable {
     pub fn missing(&self) -> &Value {
         &self.missing
     }
+    pub fn missing_path(&self) -> String {
+        std::format!("{}.missing", self.path)
+    }
     pub(super) fn validate(
         &self,
         source: &TableSchema,
         available: &[bool],
         mode: &RowMode,
     ) -> Result<(), PlanError> {
+        if self.path.is_empty() {
+            return Err(PlanError::EmptyPath);
+        }
         for operand in &self.sources {
             if operand.path.is_empty() {
                 return Err(PlanError::EmptyPath);

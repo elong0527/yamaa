@@ -19,6 +19,7 @@ intermediates:
   - id: MH_MAP
     dataset: MH_ITEMS
     key: {ItemOID: ODM.ItemOID}
+    require_match: true
 
 columns:
   - name: DOMAIN

@@ -359,13 +359,17 @@ columns:
         }
 
         #[test]
-        fn false_when_still_resolves_require_lookup_and_refuses_an_unhandled_absence() {
+        fn false_when_still_resolves_require_lookup_and_refuses_a_required_match() {
             let (fixture, body) = lookup_fixture("assert_lookup_only");
             for pattern in ["    no_match: {literal: null}\n", "when: 'P.X IS NOT NULL'"] {
                 assert!(body.contains(pattern), "fixture drifted: {pattern}");
             }
+            // An omitted `no_match` answers with missing; `require_match` refuses.
             let body = body
-                .replace("    no_match: {literal: null}\n", "")
+                .replace(
+                    "    no_match: {literal: null}\n",
+                    "    require_match: true\n",
+                )
                 .replace("when: 'P.X IS NOT NULL'", "when: 'FALSE'");
             let mut result = fixture.run(&body).unwrap();
             assert!(
@@ -1765,10 +1769,14 @@ columns:
                 fs::read(f.0.join("result.csv")).unwrap(),
                 b"ID,SEQ,X,A,B\n2,1,3,Y,Y\n"
             );
-            // Predicate normalization retains the literal value and discards recovery sites.
+            // Predicate normalization retains the literal value and discards recovery
+            // sites; each flag's UNKNOWN answer is registered and never reached.
             assert_eq!(
                 result.observations()["handler_counts"],
-                yamaa_adapters::json!([])
+                yamaa_adapters::json!([
+                    {"spec_path":"columns.A.derivation.flag.missing","handler":"missing","count":0},
+                    {"spec_path":"columns.B.derivation.flag.missing","handler":"missing","count":0}
+                ])
             );
         }
 

@@ -22,6 +22,7 @@ intermediates:
     dataset: AWINDOW
     key: [STUDYID]
     between: {value: ADY, lower: AWLO, upper: AWHI}
+    require_match: true
 
 columns:
   - name: STUDYID

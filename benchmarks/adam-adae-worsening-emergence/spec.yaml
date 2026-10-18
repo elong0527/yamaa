@@ -26,6 +26,7 @@ intermediates:
   - id: EVENT
     dataset: AE
     key: [STUDYID, USUBJID, AELNKID]
+    require_match: true
 
 columns:
   - name: STUDYID

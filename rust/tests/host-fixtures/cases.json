@@ -718,13 +718,13 @@
             "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n"
           },
           "check_condition": null,
-          "run_condition": "unmatched_key",
-          "csv": null,
-          "no_match_count": 0
+          "run_condition": null,
+          "csv": "ID,CODE,LABEL\n1,A,Alpha\n2,B,Beta\n3,Z,\n",
+          "no_match_count": 1
         },
         {
           "name": "clear_inherited_missing",
-          "spec": "schema_version: '1.0'\nparent: parent.yaml\nintermediates: [{id: LOOK, no_match: null}]\n",
+          "spec": "schema_version: '1.0'\nparent: parent.yaml\nintermediates: [{id: LOOK, no_match: null, require_match: true}]\n",
           "parents": {
             "parent.yaml": "schema_version: '1.0'\ndomain: NC\nkeys: [ID]\nbase: OBS\ninput:\n  OBS: {path: obs.csv, types: {ID: int}}\n  REF: ref.csv\noutput: {path: result.csv, columns: [ID, CODE, LABEL]}\nintermediates:\n  - id: LOOK\n    dataset: REF\n    key: {CODE: CODE}\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: OBS.ID}\n  - {name: CODE, type: str, label: Code, derivation: OBS.CODE}\n  - {name: LABEL, type: str, label: Label, derivation: LOOK.LABEL}\n"
           },
@@ -854,7 +854,7 @@
         },
         {
           "name": "lookup_domain_collision",
-          "specification": "schema_version: '1.0'\ndomain: OUT\ninput: {SRC: input.csv}\nbase: SRC\nkeys: [ID]\noutput: {path: out.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: V, type: str, derivation: OUT.ID}\nintermediates: [{id: OUT, dataset: SRC}]\n",
+          "specification": "schema_version: '1.0'\ndomain: OUT\ninput: {SRC: input.csv}\nbase: SRC\nkeys: [ID]\noutput: {path: out.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: V, type: str, derivation: OUT.ID}\nintermediates: [{id: OUT, dataset: SRC, require_match: true}]\n",
           "issues": [
             {
               "phase": "validation",
@@ -872,7 +872,7 @@
         },
         {
           "name": "unknown_lookup_dataset",
-          "specification": "schema_version: '1.0'\ndomain: OUT\ninput: {SRC: input.csv}\nbase: SRC\nkeys: [ID]\noutput: {path: out.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: V, type: str, derivation: LOOK.VAL}\nintermediates: [{id: LOOK, dataset: MISSING}]\n",
+          "specification": "schema_version: '1.0'\ndomain: OUT\ninput: {SRC: input.csv}\nbase: SRC\nkeys: [ID]\noutput: {path: out.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: V, type: str, derivation: LOOK.VAL}\nintermediates: [{id: LOOK, dataset: MISSING, require_match: true}]\n",
           "issues": [
             {
               "phase": "validation",
@@ -890,7 +890,7 @@
         },
         {
           "name": "duplicate_lookup",
-          "specification": "schema_version: '1.0'\ndomain: OUT\ninput: {SRC: input.csv}\nbase: SRC\nkeys: [ID]\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\nintermediates: [{id: LOOK, dataset: SRC}, {id: LOOK, dataset: SRC}]\n",
+          "specification": "schema_version: '1.0'\ndomain: OUT\ninput: {SRC: input.csv}\nbase: SRC\nkeys: [ID]\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\nintermediates: [{id: LOOK, dataset: SRC, require_match: true}, {id: LOOK, dataset: SRC, require_match: true}]\n",
           "issues": [
             {
               "phase": "validation",
@@ -907,7 +907,7 @@
         },
         {
           "name": "lookup_input_collision",
-          "specification": "schema_version: '1.0'\ndomain: OUT\ninput: {SRC: input.csv}\nbase: SRC\nkeys: [ID]\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\nintermediates: [{id: SRC, dataset: SRC}]\n",
+          "specification": "schema_version: '1.0'\ndomain: OUT\ninput: {SRC: input.csv}\nbase: SRC\nkeys: [ID]\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\nintermediates: [{id: SRC, dataset: SRC, require_match: true}]\n",
           "issues": [
             {
               "phase": "validation",
@@ -1923,7 +1923,7 @@
         },
         {
           "name": "all_filters_precede_all_when",
-          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"base\":\"SRC\",\"keys\":[\"STUDYID\",\"USUBJID\"],\"input\":{\"SRC\":\"source.csv\",\"DONOR\":{\"path\":\"donor.csv\",\"types\":{\"ADT\":\"date\"}},\"WHEN\":\"when.csv\"},\"columns\":[{\"name\":\"STUDYID\",\"type\":\"str\",\"derivation\":\"SRC.STUDYID\"},{\"name\":\"USUBJID\",\"type\":\"str\",\"derivation\":\"SRC.USUBJID\"}],\"intermediates\":[{\"id\":\"VISIT\",\"dataset\":\"DONOR\",\"key\":[\"STUDYID\",\"USUBJID\"]},{\"id\":\"NOW\",\"dataset\":\"WHEN\",\"key\":[\"STUDYID\",\"USUBJID\"]}],\"output\":{\"path\":\"out.csv\",\"columns\":[\"STUDYID\",\"USUBJID\"]},\"verifications\":[{\"row_count\":{\"filter\":\"VISIT.KEEP = 'Y'\",\"min\":1,\"max\":1,\"when\":\"NOW.KEEP = 'Y'\"}}]}",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"TEST\",\"base\":\"SRC\",\"keys\":[\"STUDYID\",\"USUBJID\"],\"input\":{\"SRC\":\"source.csv\",\"DONOR\":{\"path\":\"donor.csv\",\"types\":{\"ADT\":\"date\"}},\"WHEN\":\"when.csv\"},\"columns\":[{\"name\":\"STUDYID\",\"type\":\"str\",\"derivation\":\"SRC.STUDYID\"},{\"name\":\"USUBJID\",\"type\":\"str\",\"derivation\":\"SRC.USUBJID\"}],\"intermediates\":[{\"id\":\"VISIT\",\"dataset\":\"DONOR\",\"key\":[\"STUDYID\",\"USUBJID\"],\"require_match\":true},{\"id\":\"NOW\",\"dataset\":\"WHEN\",\"key\":[\"STUDYID\",\"USUBJID\"],\"require_match\":true}],\"output\":{\"path\":\"out.csv\",\"columns\":[\"STUDYID\",\"USUBJID\"]},\"verifications\":[{\"row_count\":{\"filter\":\"VISIT.KEEP = 'Y'\",\"min\":1,\"max\":1,\"when\":\"NOW.KEEP = 'Y'\"}}]}",
           "inputs": {
             "source.csv": "STUDYID,USUBJID\nS,S-1\nS,S-2\n",
             "donor.csv": "STUDYID,USUBJID,KEEP,ADT\nS,S-1,Y,2025-01-01\n",
@@ -2546,7 +2546,13 @@
           "check_issues": [],
           "issues": [],
           "csv": "K,V\n1,hit1\n2,hit2\n",
-          "handlers": []
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "missing",
+              "spec_path": "intermediates[0].key.M.str_case.missing"
+            }
+          ]
         },
         {
           "name": "date-from-datetime",
@@ -2696,7 +2702,13 @@
           "check_issues": [],
           "issues": [],
           "csv": "K,V\n1,hit1\n2,hit2\n",
-          "handlers": []
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "missing",
+              "spec_path": "intermediates[0].key.M.mapping.missing"
+            }
+          ]
         },
         {
           "name": "greatest-date-operands",
@@ -2732,7 +2744,13 @@
           "check_issues": [],
           "issues": [],
           "csv": "K,V\n1,hit1\n2,hit2\n",
-          "handlers": []
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "missing",
+              "spec_path": "intermediates[0].key.M.cut.missing"
+            }
+          ]
         },
         {
           "name": "string-template-adjacent-placeholders",
@@ -2756,7 +2774,13 @@
           "check_issues": [],
           "issues": [],
           "csv": "K,V\n1,hit1\n2,hit2\n",
-          "handlers": []
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "missing",
+              "spec_path": "intermediates[0].key.M.str_extract.missing"
+            }
+          ]
         },
         {
           "name": "string-template",
@@ -2948,6 +2972,11 @@
           "issues": [],
           "csv": "K,V\n1,hit1\n2,hit2\n",
           "handlers": [
+            {
+              "count": 0,
+              "handler": "missing",
+              "spec_path": "intermediates[0].key.M.mapping.missing"
+            },
             {
               "count": 1,
               "handler": "unmapped",
@@ -3327,7 +3356,13 @@
           },
           "check_issues": [],
           "issues": [],
-          "handlers": [],
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "missing",
+              "spec_path": "intermediates[0].key.K.str_case.missing"
+            }
+          ],
           "csv": "ID,V\nroot1,one\nroot2,one\nroot3,one\na,one\nb,two\nc,three\n"
         },
         {
@@ -3340,7 +3375,13 @@
           },
           "check_issues": [],
           "issues": [],
-          "handlers": [],
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "missing",
+              "spec_path": "intermediates[0].key.K.str_case.missing"
+            }
+          ],
           "csv": "ID,V\nroot-only,one\na,one\nb,two\nc,three\n"
         },
         {
@@ -3353,7 +3394,13 @@
           },
           "check_issues": [],
           "issues": [],
-          "handlers": [],
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "missing",
+              "spec_path": "rows[1].derivations.K.str_case.missing"
+            }
+          ],
           "csv": "ID,V\nroot-only,one\na,one\nb,two\nc,three\n"
         },
         {
@@ -3366,7 +3413,13 @@
           },
           "check_issues": [],
           "issues": [],
-          "handlers": [],
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "missing",
+              "spec_path": "intermediates[0].key.K.str_case.missing"
+            }
+          ],
           "csv": "ID,V\nroot-only,one\na,one\nb,two\nc,three\n"
         },
         {
@@ -3379,7 +3432,13 @@
           },
           "check_issues": [],
           "issues": [],
-          "handlers": [],
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "missing",
+              "spec_path": "intermediates[0].key.K.str_case.missing"
+            }
+          ],
           "csv": "ID,V\nroot-only,one\na,one\nb,two\nc,three\n"
         },
         {
@@ -3392,7 +3451,13 @@
           },
           "check_issues": [],
           "issues": [],
-          "handlers": [],
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "missing",
+              "spec_path": "intermediates[0].key.K.str_case.missing"
+            }
+          ],
           "csv": "ID,V\nroot-only,one\nb,two\nc,three\n"
         },
         {
@@ -3405,7 +3470,13 @@
           },
           "check_issues": [],
           "issues": [],
-          "handlers": [],
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "missing",
+              "spec_path": "intermediates[0].key.K.str_case.missing"
+            }
+          ],
           "csv": "ID,V\na,one\nb,two\nc,three\n"
         },
         {
@@ -3418,7 +3489,13 @@
           },
           "check_issues": [],
           "issues": [],
-          "handlers": [],
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "missing",
+              "spec_path": "intermediates[0].key.K.str_case.missing"
+            }
+          ],
           "csv": "ID,V\na,one\nb,two\nc,three\n"
         },
         {
@@ -3431,7 +3508,13 @@
           },
           "check_issues": [],
           "issues": [],
-          "handlers": [],
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "missing",
+              "spec_path": "intermediates[0].key.K.str_case.missing"
+            }
+          ],
           "csv": "ID,V\nb,two\nc,three\n"
         },
         {
@@ -3444,7 +3527,13 @@
           },
           "check_issues": [],
           "issues": [],
-          "handlers": [],
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "missing",
+              "spec_path": "intermediates[0].key.K.str_case.missing"
+            }
+          ],
           "csv": "ID,V\na,one\nb,two\nc,three\n"
         },
         {
@@ -3457,7 +3546,13 @@
           },
           "check_issues": [],
           "issues": [],
-          "handlers": [],
+          "handlers": [
+            {
+              "count": 0,
+              "handler": "missing",
+              "spec_path": "intermediates[0].key.K.str_case.missing"
+            }
+          ],
           "csv": "ID,V\nroot,ROOT\na,one\nb,two\nc,three\n"
         },
         {

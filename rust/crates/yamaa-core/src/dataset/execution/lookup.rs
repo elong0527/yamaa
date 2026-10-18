@@ -32,11 +32,42 @@ pub(super) fn read<E>(
             plan,
             row,
         },
-        None,
-        None,
-        None,
+        Options::uncounted(&assignment.path),
         None,
     )
+}
+
+/// Where a read through an implicit join is made, and so what answers a row
+/// the join finds no record for (LOOKUP-24).
+#[derive(Clone, Copy)]
+pub(super) enum JoinSite<'a> {
+    /// A source binding or a bound operand: its own answer, counted at its
+    /// path unless it fails.
+    Read(&'a crate::dataset::JoinAbsence),
+    /// A formula operand read at this path: missing, counted under `absent`.
+    Operand(&'a str),
+    /// A read made while a predicate is evaluated, or a plan-level lookup:
+    /// missing, uncounted; the path locates an `unmatched_key` failure.
+    Uncounted(&'a str),
+}
+
+/// A source binding's options on its implicit join; an operand that is not a
+/// source binding has only its site.
+struct Options<'a> {
+    filter: Option<&'a crate::bound_expression::BoundPredicate>,
+    selection: Option<&'a SourceSelection>,
+    site: JoinSite<'a>,
+    donor_name: Option<&'a str>,
+}
+impl<'a> Options<'a> {
+    fn uncounted(path: &'a str) -> Self {
+        Self {
+            filter: None,
+            selection: None,
+            site: JoinSite::Uncounted(path),
+            donor_name: None,
+        }
+    }
 }
 
 /// Keep assignment provenance and optional completed output identity independent of match keys.
@@ -74,26 +105,77 @@ pub(super) fn read_row<T: TableAccess + ?Sized>(
         lookup.column,
         &keys,
         context,
-        None,
-        None,
-        None,
+        Options::uncounted(&context.assignment.path),
         None,
     )
 }
 
+/// Answer a row whose match finds no record or reads a missing match value
+/// (LOOKUP-24): a source binding's declared `absent` value, or missing by
+/// default, counted at the read's path except during a predicate; or
+/// `unmatched_key` when the read, or its input, requires a match and the read
+/// declares no `absent`.
+fn absent_record<E>(
+    table: &dyn TableAccess<Error = E>,
+    source: usize,
+    keys: &[(usize, ValueRef<'_>)],
+    context: &Context<'_>,
+    options: &Options<'_>,
+    handlers: Option<&mut HandlerCounter>,
+) -> Result<Value, Box<ExecutionError<E>>> {
+    let dataset = options
+        .donor_name
+        .unwrap_or_else(|| context.plan.secondary()[source].name.as_str());
+    let input = context.plan.requires_match(dataset);
+    let (path, answer, required, counted) = match options.site {
+        JoinSite::Read(absence) => (
+            absence.path.as_str(),
+            absence.absent.as_ref(),
+            absence.requires_match(input),
+            true,
+        ),
+        JoinSite::Operand(path) => (path, None, input, true),
+        JoinSite::Uncounted(path) => (path, None, input, false),
+    };
+    if required {
+        return Err(Box::new(ExecutionError::UnmatchedKey {
+            path: path.into(),
+            intermediate: std::format!("intermediate({dataset})"),
+            dataset: dataset.into(),
+            matched_key: keys
+                .iter()
+                .map(|(column, value)| {
+                    (table.schema().columns()[*column].name.clone(), own(*value))
+                })
+                .collect(),
+            identity: failure_identity(context.candidate, context.plan.keys(), context.row)?,
+            implicit_join: true,
+        }));
+    }
+    if let (true, Some(counter)) = (counted, handlers) {
+        counter
+            .record(&std::format!("{path}.absent"), HandlerKind::Absent)
+            .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))?;
+    }
+    Ok(answer.cloned().unwrap_or(Value::Missing))
+}
+
 /// Count all matching records before donor access, preserving raw match-key evidence.
-#[allow(clippy::too_many_arguments)]
 fn read_matching<E>(
     table: &dyn TableAccess<Error = E>,
     source: usize,
     column: usize,
     keys: &[(usize, ValueRef<'_>)],
     context: &Context<'_>,
-    filter: Option<&crate::bound_expression::BoundPredicate>,
-    selection: Option<&SourceSelection>,
+    options: Options<'_>,
     mut handlers: Option<&mut HandlerCounter>,
-    donor_name: Option<&str>,
 ) -> Result<Value, Box<ExecutionError<E>>> {
+    let Options {
+        filter,
+        selection,
+        donor_name,
+        ..
+    } = options;
     // Complete the authored eligibility expression before inspecting match keys.
     let mut eligible = Vec::new();
     if let Some(filter) = filter {
@@ -118,7 +200,7 @@ fn read_matching<E>(
         .iter()
         .any(|(_, value)| matches!(value, ValueRef::Missing))
     {
-        return Ok(Value::Missing);
+        return absent_record(table, source, keys, context, &options, handlers);
     }
     let mut count = 0_usize;
     let mut matching = Vec::new();
@@ -150,7 +232,7 @@ fn read_matching<E>(
         }
     }
     if count == 0 {
-        return Ok(Value::Missing);
+        return absent_record(table, source, keys, context, &options, handlers);
     }
     if count > 1 && selection.is_some() {
         chosen = select(
@@ -228,6 +310,7 @@ pub(super) fn read_source<E>(
     lookup: &Lookup,
     filter: Option<&crate::bound_expression::BoundPredicate>,
     selection: Option<&SourceSelection>,
+    absence: Option<&crate::dataset::JoinAbsence>,
     context: &Context<'_>,
     handlers: &mut HandlerCounter,
 ) -> Result<Value, Box<ExecutionError<E>>> {
@@ -247,10 +330,16 @@ pub(super) fn read_source<E>(
         lookup.column,
         &keys,
         context,
-        filter,
-        selection,
+        Options {
+            filter,
+            selection,
+            site: absence.map_or(
+                JoinSite::Uncounted(&context.assignment.path),
+                JoinSite::Read,
+            ),
+            donor_name: None,
+        },
         Some(handlers),
-        None,
     )
 }
 
@@ -297,6 +386,7 @@ pub(super) fn read_joined<T: TableAccess + ?Sized>(
     row: usize,
     filter: Option<&crate::bound_expression::BoundPredicate>,
     selection: Option<&SourceSelection>,
+    site: JoinSite<'_>,
     handlers: &mut HandlerCounter,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
     let mut keys = Vec::new();
@@ -327,9 +417,12 @@ pub(super) fn read_joined<T: TableAccess + ?Sized>(
             plan,
             row,
         },
-        filter,
-        selection,
+        Options {
+            filter,
+            selection,
+            site,
+            donor_name: Some(&joined.name),
+        },
         Some(handlers),
-        Some(&joined.name),
     )
 }

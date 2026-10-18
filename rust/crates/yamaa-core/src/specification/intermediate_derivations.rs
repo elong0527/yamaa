@@ -774,6 +774,7 @@ fn unused_slot_placeholder(
         range: None,
         columns: None,
         no_match: Some(Value::Missing),
+        require_match: false,
         unique: Vec::new(),
         derivations: None,
         pending_schema: None,

@@ -2403,7 +2403,7 @@ mod file {
                 "schema_version: '1.0'\nparent: producer/base.yaml\ndomain: LEAF\n",
             );
             let parent = yaml("{P: {path: ../leaf.csv, schema: ../leaf.yaml}, Q: {path: ../leaf.csv, schema: '../leaf.yaml'}}", "P", "../root.csv", false)
-        .replace("columns:\n", "intermediates: [{id: Q_REFERENCE, dataset: Q}]\ncolumns:\n")
+        .replace("columns:\n", "intermediates: [{id: Q_REFERENCE, dataset: Q, require_match: true}]\ncolumns:\n")
         .replace("output:", "  - {name: OTHER, type: str, label: Other, derivation: Q_REFERENCE.VALUE}\noutput:")
         .replace("columns: [ID, VALUE]", "columns: [ID, VALUE, OTHER]");
             study.write("parents/base.yaml", &parent);
@@ -2867,7 +2867,7 @@ mod file {
                 ),
             );
             let parent = yaml("{L: {path: ../left.csv, schema: ../left.yaml}, R: {path: ../right.csv, schema: ../right.yaml}, Q: {path: ../right.csv, schema: '../right.yaml'}}", "L", "../root.csv", true)
-        .replace("columns:\n", "intermediates: [{id: RIGHT, dataset: R}, {id: ALIAS, dataset: Q}]\ncolumns:\n")
+        .replace("columns:\n", "intermediates: [{id: RIGHT, dataset: R, require_match: true}, {id: ALIAS, dataset: Q, require_match: true}]\ncolumns:\n")
         .replace("output:", "  - {name: RIGHT_VALUE, type: str, label: Right value, derivation: RIGHT.VALUE}\n  - {name: ALIAS_VALUE, type: str, label: Alias value, derivation: ALIAS.VALUE}\noutput:")
         .replace("columns: [ID, VALUE]", "columns: [ID, VALUE, RIGHT_VALUE, ALIAS_VALUE]");
             study.write("parents/base.yaml", &parent);

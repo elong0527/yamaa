@@ -17,8 +17,7 @@ pub(in crate::specification) fn bind(
     secondary: &[crate::dataset::SecondarySource],
     intermediates: &[Option<crate::dataset::Intermediate>],
 ) -> Result<Option<Expression>, BindError> {
-    if let Some(finding) = &declaration.declaration_finding {
-        findings.push(BindFinding::Source(SourceFinding(finding.clone())));
+    if declaration.report_declaration(findings) {
         return Ok(None);
     }
     if declaration.reject_group_key_filter(path, driver, phase, findings) {
@@ -120,31 +119,35 @@ pub(in crate::specification) fn bind(
             rounding::bind_row_operand(
                 name, path, catalog, driver, row, phase, available, edges, findings,
             )?
-            .map(|expression| {
-                if filter.is_some() || selection.is_some() {
-                    match expression {
-                        Expression::Joined(read) => Expression::JoinedSource {
-                            read,
-                            filter,
-                            selection,
-                        },
-                        Expression::Source(column) => Expression::Collect {
-                            column,
-                            identifier: name.clone(),
-                            filter,
-                            selection,
-                        },
-                        _ => expression,
+            .map(|expression| match expression {
+                // A source binding keeps its options and absence answer on the
+                // implicit join (LOOKUP-24).
+                Expression::Joined(read) => Expression::JoinedSource {
+                    read,
+                    filter,
+                    selection,
+                    absence: Some(declaration.absence(path)),
+                },
+                Expression::Source(column) if filter.is_some() || selection.is_some() => {
+                    Expression::Collect {
+                        column,
+                        identifier: name.clone(),
+                        filter,
+                        selection,
                     }
-                } else {
-                    expression
                 }
+                expression => expression,
             })
         }
     };
-    Ok(if findings.len() != before {
-        None
-    } else {
-        expression.map(|expression| declaration.wrap(expression, column, path, variable_absent))
-    })
+    if findings.len() != before {
+        return Ok(None);
+    }
+    if expression
+        .as_ref()
+        .is_some_and(|expression| declaration.refuse_require_match(path, expression, findings))
+    {
+        return Ok(None);
+    }
+    Ok(expression.map(|expression| declaration.wrap(expression, column, path, variable_absent)))
 }

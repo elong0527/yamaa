@@ -34,16 +34,23 @@ pub(super) fn common_driver<'a>(
                 })
                 .ok_or(PrepareError::Internal)?;
             let selected = text(d, field(d, *declaration, "dataset")?)?;
-            let mut prohibited = ["key", "between", "order_by", "keep", "no_match"]
-                .into_iter()
-                .filter(|field| {
-                    if *field == "no_match" {
-                        d.field(*declaration, field).is_some()
-                    } else {
-                        present(d, *declaration, field)
-                    }
-                })
-                .collect::<Vec<_>>();
+            let mut prohibited = [
+                "key",
+                "between",
+                "order_by",
+                "keep",
+                "no_match",
+                "require_match",
+            ]
+            .into_iter()
+            .filter(|field| {
+                if *field == "no_match" {
+                    d.field(*declaration, field).is_some()
+                } else {
+                    present(d, *declaration, field)
+                }
+            })
+            .collect::<Vec<_>>();
             if !inputs
                 .iter()
                 .any(|&(id, _)| text(d, id).is_ok_and(|name| name == selected))

@@ -34,6 +34,12 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
                     .expect("condition has a core flag projection"),
             )),
         })?;
+    if truth == crate::expression::Truth::Unknown {
+        state
+            .handlers
+            .record(&flag.missing_path(), HandlerKind::Missing)
+            .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))?;
+    }
     let value = flag.value(truth);
     Ok(own(value))
 }
@@ -59,6 +65,7 @@ impl<T: TableAccess + ?Sized> Resolver for Context<'_, '_, T> {
             FlagRead::Read(Read::Joined(read)) => Some(joined::read(
                 self.table,
                 read,
+                lookup::JoinSite::Uncounted(self.flag.condition().spec_path()),
                 self.assignment,
                 self.candidate,
                 self.plan,

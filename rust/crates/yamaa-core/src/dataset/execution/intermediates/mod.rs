@@ -636,13 +636,11 @@ fn read_with_observations<T: TableAccess + ?Sized>(
             own(cell(table, item, row, column)?),
             multiple.then_some(HandlerKind::MultipleMatches),
         ),
-        Choice::Absent => {
-            let value = item
-                .no_match
-                .as_ref()
-                .expect("absence handler was admitted before caching");
-            (value.clone(), Some(HandlerKind::NoMatch))
-        }
+        // The declared literal, or missing by default; counted either way.
+        Choice::Absent => (
+            item.no_match.clone().unwrap_or(Value::Missing),
+            Some(HandlerKind::NoMatch),
+        ),
     };
     if let Some(handler) = handler.filter(|_| observe_handlers) {
         state
@@ -1014,7 +1012,7 @@ fn resolve_choice<T: TableAccess + ?Sized>(
             row,
             multiple: count > 1,
         }
-    } else if item.no_match.is_some() {
+    } else if !item.require_match {
         Choice::Absent
     } else {
         return Err(Box::new(ExecutionError::UnmatchedKey {
@@ -1023,6 +1021,7 @@ fn resolve_choice<T: TableAccess + ?Sized>(
             intermediate: item.identifier.clone(),
             matched_key: matched_key(table, &keys)?,
             identity: failure_identity(candidate, plan.keys(), row)?,
+            implicit_join: false,
         }));
     };
 

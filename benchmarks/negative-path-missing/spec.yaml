@@ -15,6 +15,7 @@ intermediates:
   - id: LBREF_LOOKUP
     dataset: LBREF
     key: {LBTESTCD: PARAMCD, SEX: SEX}
+    require_match: true
 
 columns:
   - name: STUDYID

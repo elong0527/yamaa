@@ -910,7 +910,7 @@ pub(super) fn bind_selection(
     }
     Ok(
         (findings.len() == before).then_some(Expression::FirstAvailable(std::boxed::Box::new(
-            crate::dataset::FirstAvailable::new(operands, selection.missing.clone()),
+            crate::dataset::FirstAvailable::new(path.into(), operands, selection.missing.clone()),
         ))),
     )
 }

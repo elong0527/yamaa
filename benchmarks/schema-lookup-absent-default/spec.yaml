@@ -1,0 +1,53 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+  EX: {path: input/ex.csv, types: {EXSEQ: int, EXSTDTC: date, EXDOSE: float}}
+  DS: {path: input/ds.csv, types: {DSSEQ: int, DSSTDTC: date}}
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, TRTSDT, DTHDT]
+
+intermediates:
+  # The death disposition record. A subject without one selects nothing;
+  # with no `no_match` declared, every read gives missing and is counted.
+  - id: DEATH
+    dataset: DS
+    filter: "DS.DSDECOD = 'DEATH'"
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  # The earliest exposure with a dose above zero. A subject with no such
+  # record finds none; with no `absent` declared, the date is missing and the
+  # row is counted under `absent`.
+  - name: TRTSDT
+    type: date
+    label: Date of First Exposure to Treatment
+    derivation:
+      source:
+        variable: EX.EXSTDTC
+        filter: "EX.EXDOSE > 0"
+        order_by: [EX.EXSTDTC]
+        keep: first
+
+  - name: DTHDT
+    type: date
+    label: Date of Death
+    derivation: DEATH.DSSTDTC
+
+verifications:
+  - row_count:
+      min: 3
+      max: 3

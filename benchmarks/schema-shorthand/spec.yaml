@@ -21,6 +21,7 @@ intermediates:
     key: [USUBJID]
     order_by: [WT.WTDTC]
     keep: last
+    require_match: true
 
 columns:
   - name: STUDYID

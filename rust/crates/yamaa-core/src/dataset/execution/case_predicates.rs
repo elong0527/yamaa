@@ -72,6 +72,7 @@ impl<T: TableAccess + ?Sized> Resolver for Context<'_, '_, T> {
             Read::Joined(ref read) => Some(joined::read(
                 self.table,
                 read,
+                lookup::JoinSite::Uncounted(self.predicate.plan().spec_path()),
                 self.assignment,
                 self.candidate,
                 self.plan,

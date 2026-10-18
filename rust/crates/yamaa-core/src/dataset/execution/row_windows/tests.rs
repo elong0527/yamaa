@@ -196,6 +196,7 @@ fn grouped_postwindow_filters_use_contextual_join_and_named_lookup_reads_lazily(
             range: None,
             columns: None,
             no_match: None,
+            require_match: true,
             unique: Vec::new(),
             derivations: None,
             pending_schema: None,

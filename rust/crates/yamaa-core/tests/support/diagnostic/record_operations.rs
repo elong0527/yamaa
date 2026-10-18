@@ -75,6 +75,7 @@ fn document(operation: T, grouped: Option<bool>, intermediate: bool) -> Specific
             T::List(vec![T::map(vec![
                 ("id", T::text("CAP")),
                 ("dataset", T::text("SRC")),
+                ("require_match", T::boolean(true)),
             ])]),
         ));
     }

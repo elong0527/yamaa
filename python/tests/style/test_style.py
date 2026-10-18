@@ -1134,11 +1134,20 @@ def test_redundant_intermediate_keeps_narrowing_lookups(
         "    key: [USUBJID]",
     )
     assert _names(_spec(tmp_path, custom)) == []
-    required = REDUNDANT.replace("\n    no_match: {literal: null}", "")
+    required = REDUNDANT.replace("no_match: {literal: null}", "require_match: true")
     assert "redundant_intermediate" not in _names(_spec(tmp_path, required))
-    # A bare null clears the handler, so the lookup still requires a match.
+    # Omitted or cleared by a bare null, the answer is missing, as the join's.
+    omitted = REDUNDANT.replace("\n    no_match: {literal: null}", "")
+    assert "redundant_intermediate" in _names(_spec(tmp_path, omitted))
     cleared = REDUNDANT.replace("no_match: {literal: null}", "no_match: null")
-    assert "redundant_intermediate" not in _names(_spec(tmp_path, cleared))
+    assert "redundant_intermediate" in _names(_spec(tmp_path, cleared))
+    # An input requiring a match fails its implicit join where the
+    # intermediate answers with missing.
+    input_required = REDUNDANT.replace(
+        "  ADSL: input/adsl.csv",
+        "  ADSL: {path: input/adsl.csv, require_match: true}",
+    )
+    assert "redundant_intermediate" not in _names(_spec(tmp_path, input_required))
     rename_only = REDUNDANT.replace(
         "    key: [STUDYID, USUBJID]\n    no_match: {literal: null}",
         "    no_match: {literal: null}",

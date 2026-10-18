@@ -446,13 +446,11 @@ local({
     identical(result$save(),TRUE),identical(rawfile(file.path(directory,"output.csv")),expected_bytes))
   source <- sub("to: upper, missing: MiXeD","to: upper",source,fixed=TRUE)
   writeBin(charToRaw(source),entry);writeBin(charToRaw("ID,TEXT\nrow1,\n"),file.path(directory,"input.csv"))
-  rejected <- yamaa_domain(entry);actual <- rejected$issues
-  # The complete independent reference lives in text-case-reference.json; this
-  # literal is its mapping failure with the independently authored UP path.
-  stopifnot(nrow(actual)==1L,identical(actual$phase,"mapping"),identical(actual$condition,"missing_input"),
-    identical(actual$requirement,"REQ-0334"),identical(actual$spec_paths,list("columns.UP.derivation.str_case")),
-    identical(actual$context,'{"keys":[{"ID":"row1"}],"variable":"SRC.TEXT"}'),is.null(rejected$output),
-    inherits(tryCatch(rejected$save(),error=identity),"yamaa_domain_error"))
+  # Without `missing`, a missing source gives missing and reports no finding,
+  # as the independent text-case-reference.json records.
+  answered <- yamaa_domain(entry)
+  stopifnot(nrow(answered$issues)==0L,identical(answered$output,data.frame(ID="row1",UP=NA_character_,
+    LOW=NA_character_,SENT=NA_character_,TITLE=NA_character_,stringsAsFactors=FALSE)))
   failures <- read.delim(file.path(root,"text-case-diagnostics.tsv"),quote="",colClasses="character",check.names=FALSE)
   stopifnot(nrow(failures)==2L)
   for(index in seq_len(nrow(failures))) {
@@ -514,6 +512,7 @@ local({
   on.exit(unlink(directory,recursive=TRUE))
   cases <- file.path(root,"text-pad-cases")
   findings <- read.delim(file.path(root,"text-pad-findings.tsv"),quote="",colClasses="character",check.names=FALSE)
+  handler_truth <- read.delim(file.path(root,"text-pad-handlers.tsv"),quote="",colClasses="character",check.names=FALSE)
   for(name in list.dirs(cases,full.names=FALSE,recursive=FALSE)) {
     stopifnot(file.copy(file.path(cases,name),directory,recursive=TRUE))
     case <- file.path(directory,name);entry <- file.path(case,"spec.yaml")
@@ -541,9 +540,11 @@ local({
     if(!is.null(observed)) {
       report <- rawToChar(observed)
       # Literal complete arrays avoid locale-dependent regexp offsets for UTF-8
-      # report bytes on Windows and retain the independent empty-ledger truth.
-      stopifnot(sum(gregexpr('"handler_counts":',report,fixed=TRUE)[[1L]]>0L)==2L,
-        sum(gregexpr('"handler_counts":[],',report,fixed=TRUE)[[1L]]>0L)==2L)
+      # report bytes on Windows and retain the independent ledger truth.
+      expected <- handler_truth$handlers[handler_truth$case==name]
+      ledger <- paste0('"handler_counts":',if(length(expected)) expected else "[]",',')
+      stopifnot(length(expected)<=1L,sum(gregexpr('"handler_counts":',report,fixed=TRUE)[[1L]]>0L)==2L,
+        sum(gregexpr(ledger,report,fixed=TRUE)[[1L]]>0L)==2L)
     }
   }
   stopifnot(file.copy(file.path(root,"cases","negative-str-pad-width"),directory,recursive=TRUE))
@@ -553,7 +554,7 @@ local({
     identical(checked$requirement,"REQ-0287"),identical(checked$spec_paths,list("columns.IDVARVAL.derivation.str_pad.width")),
     identical(checked$context,'{"actual":"str","expected":"int"}'),identical(rejected$issues,checked),
     is.null(rejected$output),!file.exists(file.path(case,"input")))
-  cat("public canonical scalar padding matches complete independent CSV and findings with missing passthrough, no handlers and original width failure before input without Python passed\n")
+  cat("public canonical scalar padding matches complete independent CSV, findings and handlers with missing passthrough and original width failure before input without Python passed\n")
 })
 
 local({

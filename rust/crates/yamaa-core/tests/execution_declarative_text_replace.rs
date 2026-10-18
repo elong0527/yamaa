@@ -3,8 +3,7 @@
 mod support;
 use support::text_schema as schema;
 use yamaa_core::{
-    dataset::{Assignment, DatasetPlan, ExecutionError, Expression, RowMode, RowTemplate},
-    diagnostic::ConditionCode,
+    dataset::{Assignment, DatasetPlan, Expression, RowMode, RowTemplate},
     function_invocation::NoFunctions,
     numeric_lifecycle::HandlerKind,
     table::{CellError, TableAccess, TableSchema, ValueRef},
@@ -121,18 +120,34 @@ fn replaced_values_and_the_missing_handler_count_once_per_row() {
     }
 }
 #[test]
-fn missing_source_without_handler_keeps_the_row_identity() {
+fn missing_source_without_handler_gives_missing_counted_as_the_default() {
+    // A single-input verb answers a missing source with missing and counts
+    // the default substitution under `missing` (COLUMN-10, COLUMN-14).
     let attempt =
         plan("a", "b", None).execute(&table(Value::Missing), &[], &mut NoFunctions::new(), None);
-    let ExecutionError::SemanticDiagnostic {
-        diagnostic,
-        identity,
-    } = *attempt.result.unwrap_err()
-    else {
-        panic!("missing source")
-    };
-    assert_eq!(diagnostic.code, ConditionCode::StrCaseMissing);
-    assert_eq!(identity.unwrap().values, [Value::Str("row1".into())]);
+    assert_eq!(
+        attempt.result.unwrap().dataset.rows(),
+        [vec![Value::Str("row1".into()), Value::Missing]]
+    );
+    assert_eq!(
+        attempt
+            .handler_counts
+            .iter()
+            .map(|count| (count.spec_path.as_str(), count.handler, count.count))
+            .collect::<Vec<_>>(),
+        [(
+            "columns.TEXT.derivation.str_replace.missing",
+            HandlerKind::Missing,
+            1
+        )]
+    );
+    let present = plan("a", "b", None).execute(
+        &table(Value::Str("a".into())),
+        &[],
+        &mut NoFunctions::new(),
+        None,
+    );
+    assert_eq!(present.handler_counts[0].count, 0);
 }
 #[test]
 fn a_catastrophic_pattern_without_a_match_leaves_the_value_unchanged() {

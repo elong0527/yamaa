@@ -1,0 +1,35 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+  EX: {path: input/ex.csv, types: {EXSEQ: int, EXSTDTC: date, EXDOSE: float}}
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, TRTSDT]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  # Every subject must have received a dose, so the earliest exposure with a
+  # dose above zero is required. Subject 103's only exposure has a zero dose.
+  - name: TRTSDT
+    type: date
+    label: Date of First Exposure to Treatment
+    derivation:
+      source:
+        variable: EX.EXSTDTC
+        filter: "EX.EXDOSE > 0"
+        order_by: [EX.EXSTDTC]
+        keep: first
+        require_match: true

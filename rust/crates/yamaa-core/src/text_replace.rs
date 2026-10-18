@@ -5,7 +5,7 @@
 use crate::{
     diagnostic::Diagnostic,
     table::ValueRef,
-    text_extract::{self, AdmissionError, StringExtract},
+    text_extract::{AdmissionError, StringExtract},
     value::Value,
 };
 
@@ -15,6 +15,8 @@ pub struct StringReplace {
     replacement: String,
 }
 /// Matched spans borrow the subject; `render` joins them with the replacement.
+/// `Recovered` is a missing source, answered by the declared `missing` or by
+/// the default missing value.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Step<'a> {
     Matched {
@@ -22,7 +24,6 @@ pub enum Step<'a> {
         spans: Vec<(usize, usize)>,
     },
     Recovered,
-    Missing,
 }
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum Error {
@@ -66,19 +67,17 @@ impl StringReplace {
     pub fn missing(&self) -> Option<&Value> {
         self.search.handler("missing")
     }
+    /// The declared `missing` literal, or missing when it is omitted.
+    pub fn missing_substitute(&self) -> Value {
+        self.search.substitute("missing")
+    }
     /// Scan the whole subject before anything is copied.
     pub fn apply<'a>(&self, value: ValueRef<'a>) -> Result<Step<'a>, Error> {
         if let Some(diagnostic) = self.search.declaration_diagnostic() {
             return Err(Error::Diagnostic(diagnostic.clone()));
         }
         let subject = match value {
-            ValueRef::Missing => {
-                return Ok(if self.missing().is_some() {
-                    Step::Recovered
-                } else {
-                    Step::Missing
-                });
-            }
+            ValueRef::Missing => return Ok(Step::Recovered),
             ValueRef::Str(subject) => subject,
             other => {
                 return Err(Error::Diagnostic(self.search.input_diagnostic(
@@ -116,10 +115,6 @@ impl StringReplace {
         }
         output.push_str(&subject[kept..]);
         Ok(output)
-    }
-    /// The missing-source failure, with the same facts extraction reports.
-    pub fn missing_diagnostic(&self) -> Option<Diagnostic> {
-        self.search.failure_diagnostic(text_extract::Step::Missing)
     }
 }
 
@@ -231,12 +226,13 @@ mod tests {
             let declared = operation("a", "b", Some(handler.clone()));
             assert_eq!(declared.apply(ValueRef::Missing), Ok(Step::Recovered));
             assert_eq!(declared.missing(), Some(&handler));
+            assert_eq!(declared.missing_substitute(), handler);
         }
+        // An omitted handler answers a missing source with missing (COLUMN-10).
         let op = operation("a", "b", None);
-        assert_eq!(op.apply(ValueRef::Missing), Ok(Step::Missing));
-        let missing = op.missing_diagnostic().unwrap();
-        assert_eq!(missing.code, ConditionCode::StrCaseMissing);
-        assert_eq!(missing.spec_paths, ["columns.TEXT.derivation.str_replace"]);
+        assert_eq!(op.apply(ValueRef::Missing), Ok(Step::Recovered));
+        assert_eq!(op.missing(), None);
+        assert_eq!(op.missing_substitute(), Value::Missing);
         let Err(Error::Diagnostic(input)) = op.apply(ValueRef::Int(1)) else {
             panic!("non-string source")
         };

@@ -357,9 +357,9 @@
     "handler_counts": []
   },
   {
-    "name": "no_match",
+    "name": "require_match",
     "before": "    no_match: {literal: null}\n",
-    "after": "",
+    "after": "    require_match: true\n",
     "diagnostics": [
       {
         "phase": "join",

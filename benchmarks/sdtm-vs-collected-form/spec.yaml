@@ -19,6 +19,7 @@ intermediates:
   - id: TEST
     dataset: TESTS
     key: [VSTESTCD]
+    require_match: true
     verifications:
       - unique: [VSTESTCD]
 

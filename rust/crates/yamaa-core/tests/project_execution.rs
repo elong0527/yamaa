@@ -598,7 +598,17 @@ mod project {
                 &mut yamaa_core::function_invocation::NoFunctions::new(),
                 None,
             );
-            assert!(attempt.handler_counts.is_empty() && attempt.retained_verifications.is_empty());
+            // The selection's default substitution is registered at zero; the
+            // failing operand read is never answered by it.
+            assert_eq!(
+                attempt
+                    .handler_counts
+                    .iter()
+                    .map(|count| (count.spec_path.as_str(), count.count))
+                    .collect::<Vec<_>>(),
+                [("columns.VALUE.derivation.first_available.missing", 0)]
+            );
+            assert!(attempt.retained_verifications.is_empty());
             let ExecutionError::Cell {
                 path,
                 source_row,

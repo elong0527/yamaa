@@ -90,6 +90,7 @@ fn supplied<T: TableAccess + ?Sized>(
             let value = joined::read(
                 table,
                 read,
+                lookup::JoinSite::Operand(&context.assignment.path),
                 context.assignment,
                 candidate,
                 context.plan,
