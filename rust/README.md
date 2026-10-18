@@ -17,8 +17,10 @@ schema-owner controls are described in the [contributor guide](../CONTRIBUTING.m
 [Installed package checks](qualification/README.md) compare actual Python and R
 results with authored expected data. The workflow recipes in
 [.github/workflows/](../.github/workflows/) define the platform matrix and
-packaging checks. Host usage and installation commands live in
-[python/README.md](../python/README.md) and [R/yamaa/README.md](../R/yamaa/README.md).
+packaging checks. Python usage lives in the
+[Python package documentation](../docs/articles/python.md) and its installation
+commands in [python/README.md](../python/README.md);
+[R/yamaa/README.md](../R/yamaa/README.md) covers both for R.
 
 Expected benchmark data and Parquet fixtures are authored truth. Preserve their
 bytes when changing implementation or repository structure.

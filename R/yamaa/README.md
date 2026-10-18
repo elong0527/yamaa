@@ -90,8 +90,8 @@ provide many more.
 - Package help: `?yamaa_domain`, `?yamaa_define`, `?yamaa_resource_resolver`,
   `?yamaa_resolve_specification` and `?int64_vector_conversions`.
 - Behavior shared with Python:
-  [host resources](../../python/README.md#host-resources),
-  [diagnostics](../../python/README.md#diagnostics),
+  [host resources](../../docs/articles/python.md#host-resources),
+  [diagnostics](../../docs/articles/python.md#diagnostics),
   [Arrow handoff](../../rust/README.md#arrow-host-handoff) and
   [resolved specification artifacts](../../rust/README.md#resolved-specification-artifact).
 - Language contracts: [resource paths](../../rules/storage/resources.md),

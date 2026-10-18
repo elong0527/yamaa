@@ -101,8 +101,8 @@ python -m pip install ./yamaa-0.4.0-<wheel-tags>.whl
 ```
 
 The release also provides a standalone Python source archive. See the
-[Python package guide](https://github.com/elong0527/yamaa/blob/main/python/README.md)
-for supported platforms, source prerequisites and checkout development builds.
+[Python package README](https://github.com/elong0527/yamaa/blob/main/python/README.md)
+for source prerequisites, development setup and supported platforms.
 
 R engine:
 
