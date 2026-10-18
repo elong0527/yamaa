@@ -199,7 +199,9 @@ subject to run-time comparability when it is used as a match operand.
 <a id="req-0119"></a>
 
 **REQ-0119.** `order_by` and `keep` are declared together or not at all.
-Declaring one without the other fails as `unpaired_fields`.
+Declaring one without the other fails as `unpaired_fields`. An `order_by`
+that lists no term orders nothing, so `keep` beside it fails the same way,
+with `order_by` reported missing.
 
 <a id="req-0120"></a>
 
