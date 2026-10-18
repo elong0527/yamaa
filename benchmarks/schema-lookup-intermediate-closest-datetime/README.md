@@ -13,10 +13,15 @@ result.
 **Variables:**
 
 - `ADTM`: the ECG date and time; empty when none was recorded.
-- `PCSEQ`, `PCDTM`, `PCCONC`: the subject's sample closest in time to the
-  ECG. Of two samples equally close, the one taken before the ECG is
-  chosen, whatever their sequence numbers; of two taken at the same time,
-  the one with the lower sequence number.
+- `PCSEQ`: the sequence number of the subject's sample closest in time to
+  the ECG; empty when no eligible sample exists. Of two samples equally
+  close, the one taken before the ECG is chosen, whatever their sequence
+  numbers; of two taken at the same time, the one with the lower sequence
+  number.
+- `PCDTM`: the date and time of that selected sample; empty when no eligible
+  sample exists.
+- `PCCONC`: the concentration of that selected sample; empty when no
+  eligible sample exists.
 - `PCDIST`: hours between `PCDTM` and `ADTM`, without direction and not
   rounded.
 
