@@ -23,15 +23,15 @@ This contract owns column selection; [Ordering](../execution/ordering.md) owns a
 
 **REQ-0193.** The **primary artifact** is the dataset this specification derives.
 Its columns are exactly the declared columns listed by `output.columns`, in
-that order. Its rows are the rows [Row construction](../execution/rows.md) constructs. A specification may
-also produce [Verification](../execution/verification.md)'s governed warning sidecar. That log reports
-the run, not a second derivation target or source within this specification.
+that order. Its rows are the rows [Row construction](../execution/rows.md) constructs. Every run also
+builds [Verification](../execution/verification.md)'s run report. The report describes
+the run and is neither a second derivation target nor a source within this
+specification.
 
 <a id="req-0195"></a>
 
-**REQ-0195.** Serialization follows the [CSV](csv.md) and [Parquet](parquet.md) profiles. `output.path` names the primary
-file, and `output.warning_log` and `output.verification_log`, when
-present, name [Verification](../execution/verification.md)'s sidecars. Each
+**REQ-0195.** Serialization follows the [CSV](csv.md) and [Parquet](parquet.md) profiles. `output.path` and, when
+present, `output.report` name the files this contract publishes, and each
 extension selects `parquet` or `csv`. The format profiles own their containers and bytes; this contract owns
 publication. Everything below concerns the primary values and their order,
 which the profiles carry rather than decide.
@@ -98,17 +98,18 @@ the separate uniqueness check changes it.
 <a id="req-0715"></a>
 
 **REQ-0715.** `output.path` is required and names the primary file; it has no
-default. `output.warning_log` and
-`output.verification_log` name [Verification](../execution/verification.md)'s
-sidecars when the specification declares them. `output.relative_to` selects the
-base for all three targets under [Resource resolution](resources.md#req-0780);
-`entry` lets a shared output declaration publish separately for each study.
+default. `output.report` names the file
+[Verification](../execution/verification.md)'s run report is written to when
+the specification declares it. `output.relative_to` selects the base for both
+targets under [Resource resolution](resources.md#req-0780); `entry` lets a
+shared output declaration publish separately for each study.
 
 <a id="req-0716"></a>
 
 **REQ-0716.** The case-insensitive extension of `output.path` selects the
-profile from the closed mapping below. An unmapped extension fails validation;
-the run must not infer a profile from file contents or use a default.
+profile from the closed mapping below, and `output.report` selects its own the
+same way. An unmapped extension fails validation; the run must not infer a
+profile from file contents or use a default.
 
 | Extension | Profile | Container | What two runtimes must agree on |
 |---|---|---|---|
@@ -153,8 +154,8 @@ re-encoding, and rounding are prohibited.
 <a id="req-1237"></a>
 
 **REQ-1237.** A derivation run publishes only the primary artifact and the
-declared sidecars of [REQ-0193](#req-0193). Conversion to a transport container
-is a separate packaging step outside this language.
+report file `output.report` declares under [REQ-0715](#req-0715). Conversion to
+a transport container is a separate packaging step outside this language.
 
 <a id="req-1233"></a>
 
@@ -211,57 +212,76 @@ after every value's lifecycle, key validation, and verification under [Execution
 after its rows are ordered. Rows are not streamed to the target as they are
 constructed.
 
-### Warning-log publication
+### Report publication
 
 <a id="req-0756"></a>
 
-**REQ-0756.** `output.path` and `output.warning_log` must differ. Reusing one
-path fails validation with `artifact_path_collision` and reports both fields.
-Each path's extension independently selects its profile under [REQ-0716](publication.md#req-0716); the
-primary may be Parquet while its log is CSV, or the reverse.
-
-<a id="req-0757"></a>
-
-**REQ-0757.** When a successful run has a warning log, a publisher renders
-and validates both complete artifacts before touching either target. It
-publishes the log before the primary artifact (after the verification log
-when one is declared, per [REQ-1181](publication.md#req-1181)), applying [REQ-0752](publication.md#req-0752) through
-[REQ-0754](publication.md#req-0754) to each file. A successful publication therefore never exposes a new
-primary artifact without its completed log already visible.
-
-<a id="req-0758"></a>
-
-**REQ-0758.** Warning violations do not prevent publication. Failure to render
-or replace the log is an output failure, not a warning: the primary target is
-not touched. If replacing the primary fails after the log was replaced, the
-publication fails and the prior primary remains; the complete log may remain as
-the record of the completed candidate run. Atomic replacement is guaranteed per
-file, not simultaneously across two paths.
-
-### Verification-log publication
+**REQ-0756.** `output.path` and `output.report` must name different files,
+and in a producer graph no node's `output.report` may name the file of another
+node's `output.path` or `output.report` ([REQ-1330](publication.md#req-1330)).
+Two of these paths that name one file, including two spellings that resolve to
+the same file, fail validation with `artifact_path_collision` and report both
+fields. The comparison uses the resolved locations without requiring either
+file or its parent to exist.
 
 <a id="req-1180"></a>
 
-**REQ-1180.** `output.verification_log` must differ from both
-`output.path` and `output.warning_log`. Reusing a path fails validation with
-`artifact_path_collision` and reports both fields. Its extension selects its
-profile under [REQ-0716](publication.md#req-0716) independently of the other
-two, and an extension the mapping does not name fails validation with
-`unknown_artifact_profile`, the condition
-[REQ-0760](publication.md#req-0760) raises for `output.path`.
+**REQ-1180.** Each path's extension selects its profile under
+[REQ-0716](publication.md#req-0716) independently of the other: the primary may
+be Parquet while the report is CSV, or the reverse. A report extension the
+mapping does not name fails validation with `unknown_artifact_profile`, the
+condition [REQ-0760](publication.md#req-0760) raises for `output.path`.
+
+<a id="req-0757"></a>
+
+**REQ-0757.** A successful run renders and validates every file it publishes
+before touching any target. It publishes the declared report file first, then
+the primary artifact, applying [REQ-0752](publication.md#req-0752) through
+[REQ-0754](publication.md#req-0754) to each file. A successful publication
+therefore never exposes a new primary artifact without its completed report
+already visible. A run that declares no report file publishes only its primary
+artifact.
 
 <a id="req-1181"></a>
 
-**REQ-1181.** The verification log [Verification](../execution/verification.md) fixes is diagnostic output,
-not one of [REQ-0193](publication.md#req-0193)'s artifacts. A successful run
-renders and validates it with the other files before touching any target and
-publishes it first, then the warning log, then the primary artifact,
-applying [REQ-0752](publication.md#req-0752) through
-[REQ-0754](publication.md#req-0754) to each file. A failed run publishes
-neither a primary artifact nor a warning log and replaces the verification log alone: it is the
-only file a failed run writes, and writing it accepts nothing. Failure to
-render or replace the verification log is an output failure that leaves every other
-target untouched.
+**REQ-1181.** A failed run publishes no primary artifact and replaces only its
+declared report file, the diagnostic output of
+[REQ-1177](../execution/verification.md#req-1177): it is the only file a failed
+run writes, and writing it accepts nothing.
+
+<a id="req-0758"></a>
+
+**REQ-0758.** Warning violations do not prevent publication. A report that
+cannot be rendered has already refused the build under
+[REQ-0396](../execution/verification.md#req-0396), before publication. Failure
+to replace the report file is an output failure that leaves every other target
+untouched. If replacing the primary artifact fails after the report was
+replaced, the publication fails and the prior primary artifact remains; the
+complete report may remain as the record of the completed candidate run.
+Atomic replacement is guaranteed per file, not simultaneously across paths.
+
+### Producer-graph publication
+
+<a id="req-1330"></a>
+
+**REQ-1330.** An entry specification and every producer its `schema` links
+reach under [REQ-0521](ingestion.md#req-0521) run as one producer graph, in
+node order: every producer before each specification that reads it, and the
+entry specification last. Each node is its own run and builds its own run
+report. A node that fails stops the graph: no later node runs, and a node that
+never ran builds no report. The host result exposes the entry specification's
+report. [REQ-0756](publication.md#req-0756) compares the report paths of every
+node, and an input that reads a producer's held artifact records that
+artifact's byte length under [REQ-1176](../execution/verification.md#req-1176).
+
+Save validates every target of the graph before touching any of them, then
+publishes node by node in node order: a node that declares `output.report`
+publishes its report immediately before its own primary artifact, as
+[REQ-0757](publication.md#req-0757) orders the files of one specification. A
+failed graph publishes no primary artifact; it replaces, in node order, the
+report file of every node that ran and declares one, the failed node's
+included. A failure while replacing one file stops the publication there: the
+files already replaced remain, and no later target is touched.
 
 ### Interface behavior
 
@@ -274,8 +294,7 @@ target untouched.
 | `output_class.path` | File this specification produces; [Artifact publication](publication.md) selects the serialization profile from its extension. |
 | `output_class.decimals` | Fixed display digits for every float column of a csv artifact; [CSV profile](csv.md) defines the rounding and rejects it for parquet. |
 | `output_class.columns` | Declared columns selected for the artifact, in the order this contract requires. |
-| `output_class.warning_log` | Sidecar dataset recording warning-level verification violations; [Verification](../execution/verification.md) fixes its schema and [Artifact publication](publication.md) serializes it. |
-| `output_class.verification_log` | Sidecar dataset recording the outcome of every declared verification; [Verification](../execution/verification.md) fixes its schema and [Artifact publication](publication.md) serializes it. |
+| `output_class.report` | File the run report is written to; [Verification](../execution/verification.md) fixes the report's schema and requires the file when any verification is a warning, and [Artifact publication](publication.md) selects its profile and publishes it. |
 | `output_class.order_by` | Terms ordering artifact rows after every verification; omission keeps [Execution lifecycle](../execution/lifecycle.md) construction order. |
 
 ## Error conditions

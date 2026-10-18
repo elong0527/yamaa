@@ -330,7 +330,7 @@ file that is not there yet, which is [REQ-0757](../storage/publication.md#req-07
 **REQ-1222.** A failure at any point publishes nothing further and leaves
 every untouched target as it was. Atomic replacement is guaranteed per file
 and not across the package, exactly as [REQ-0758](../storage/publication.md#req-0758) states for a primary artifact
-and its log.
+and its report file.
 
 ### Reading
 

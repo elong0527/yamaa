@@ -441,9 +441,11 @@ as `unmatched_key` on a row that did not read it.
 
 <a id="req-0139"></a>
 
-**REQ-0139.** Handler accounting follows [Local handlers](../execution/handlers.md): a `keep` that chose among
-surviving records counts one `multiple_matches` handling, and a declared
-`no_match` that answered an absence counts one `no_match` handling.
+**REQ-0139.** Handler accounting follows
+[REQ-0361](../execution/handlers.md#req-0361), whose counts are `handler` rows
+of the run report: a `keep` that chose among surviving records counts one
+`multiple_matches` handling, and a declared `no_match` that answered an absence
+counts one `no_match` handling.
 
 <a id="req-1185"></a>
 
