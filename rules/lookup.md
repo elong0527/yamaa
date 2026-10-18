@@ -109,9 +109,9 @@ lookup, wherever the lookup is read: in a row template, that template's driver
 template the read can evaluate on. A value naming nothing the current row
 holds, such as a field of another input or of the lookup's own relation, fails
 as `unknown_field` at `between.value`, once per range, whichever kind of
-lookup declares it. Such a field is never read through the implicit join
-([LOOKUP-1](#lookup-1)); bring it onto the row as a column first, and name the
-column:
+lookup declares it. A field of another input is never read through the
+implicit join ([LOOKUP-1](#lookup-1)); bring it onto the row as a column
+first, and name the column:
 
 ```yaml
 columns:
@@ -484,10 +484,10 @@ columns:
 The driver's qualifier reads the input or intermediate record that built the
 row. A `between` value is not a scalar source and never joins: it reads the
 current row alone ([LOOKUP-9](#lookup-9)). An applicable key compares its two
-sides as the match step does, and
-[VALUE-2](values.md#value-2) performs no implicit conversion: a key whose left
-and right types are not mutually comparable fails as `incompatible_input_type`,
-reporting both types ([LOOKUP-9](#lookup-9)). With no applicable key the
+sides as the match step does, and [VALUE-2](values.md#value-2) performs no
+implicit conversion: a key whose left and right types are not mutually
+comparable fails as `incompatible_input_type`, reporting both types
+([LOOKUP-9](#lookup-9)). With no applicable key the
 intended match is unclear, and the read fails as `no_applicable_keys`
 ([LOOKUP-5](#lookup-5)). The author then states the match with a named
 intermediate declaring its `key`, the same explicit form that serves whenever
