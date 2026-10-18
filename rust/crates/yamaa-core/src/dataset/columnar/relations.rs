@@ -830,14 +830,7 @@ fn correlated<E>(
                 }
                 BoundRead::Column(slot) => {
                     let field = &self.filter.current()[slot];
-                    current_value(
-                        self.run,
-                        self.cx,
-                        self.site,
-                        field,
-                        path,
-                        Some(self.row),
-                    )?
+                    current_value(self.run, self.cx, self.site, field, path, Some(self.row))?
                 }
                 BoundRead::Intermediate { .. } | BoundRead::Joined(_) => {
                     unreachable!("relation predicate uses explicit current metadata")
@@ -942,7 +935,10 @@ pub(super) fn current_value<E>(
                 // Admission forbids named reads during destination-free probes.
                 return Err(Box::new(ExecutionError::SchemaMismatch));
             };
-            let relation = run.plan.named(cx.region, index);
+            let relation = run
+                .plan
+                .named(cx.region, index)
+                .expect("a current field reads its region's intermediate");
             named_value(run, cx, site, relation, column, row, false)
         }
     }

@@ -556,7 +556,8 @@ pub(super) fn verify_output<'a, E>(
                     entries: None,
                 }
             }
-            Check::ScopedRowCount(count) => row_count_check(run, frame, secondary, &dataset, check, count, &path, records,
+            Check::ScopedRowCount(count) => row_count_check(
+                run, frame, secondary, &dataset, check, count, &path, records,
             )?,
             check_declared @ (Check::RowCount { .. } | Check::WideRowCount { .. }) => {
                 let failed = !check_declared.row_count_accepts(rows).unwrap_or(false);
@@ -624,7 +625,9 @@ fn validate_predicate<E>(
         let kind = match binding.read {
             BoundRead::Column(column) => Some(region.output.columns()[column].kind),
             BoundRead::Intermediate { index, column } => {
-                let relation = plan.named(RegionId::DATASET, index);
+                let relation = plan
+                    .named(RegionId::DATASET, index)
+                    .expect("a verification reads a declared intermediate");
                 super::relations::item(plan, relation).source_kind(&region.secondary, column)
             }
             _ => unreachable!(
