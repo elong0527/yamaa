@@ -1,0 +1,9 @@
+phase: validation
+condition: ungrouped_driver_field
+spec_paths:
+  - rows[1].derivations.VSSTRESN.source
+requirement: REQ-0067
+context:
+  identifier: HOME.SYSBP
+  row: home
+  dataset: HOME
