@@ -256,12 +256,13 @@ field treats missing as equal to missing. `ItemOID`, `Value` and every field
 outside the hierarchy never narrow a scope, so a row built for one item reads
 the other items of its own item group occurrence.
 
-Evidence: `schema-odm-item-sample`, `schema-odm-form-items`, `schema-odm-item-subject`.
+Evidence: `schema-odm-item-sample`, `schema-odm-form-items`, `schema-odm-item-subject`, `schema-window-key-odm-records`.
 Replaces: REQ-1269.
 
 | The row was built by | Its ODM scope |
 | --- | --- |
 | no `rows`, with the ODM input as the base | the records its key combination was derived from ([ROW-8](rows.md#row-8)) |
+| no `rows`, with the ODM input as the base and a key derived by a window | the records equal to the row's one record on all eight hierarchy fields ([ROW-8](rows.md#row-8)) |
 | a row template grouped over the ODM input | the records equal to the row on every hierarchy field in the template's `group_by` |
 | a record-driven row template over the ODM input | the records equal to the driver record on all eight hierarchy fields |
 

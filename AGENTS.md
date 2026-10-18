@@ -26,13 +26,15 @@ their prerequisites. Local targets and CI share the owned scripts under
 
 ## Hard rules
 
-- **Breaking a user-facing interface is a decision.** 0.4.0 has users. A
-  change that breaks the specification language, the Python or R API, saved
-  outputs or diagnostic identity needs an owner decision on its issue and a
-  migration note in the next release's notes under `docs/releases/`.
-  Internal interfaces, including the unpublished Rust crates, may change
-  freely. Remove obsolete interfaces and callers together instead of adding
-  compatibility aliases.
+- **Breaking a user-facing interface is a decision.** Until 1.0.0, a change
+  that breaks the specification language, the Python or R API, saved outputs
+  or diagnostic identity follows a decision recorded on #3030 or an owner
+  decision on its own issue. It gets a one-line entry in the next release's
+  notes under `docs/releases/` and no step-by-step migration text. Internal
+  interfaces, including the unpublished Rust crates, may change freely.
+  Remove obsolete interfaces and callers together instead of adding
+  compatibility aliases. From 1.0.0, the stability contract of #3030
+  section 2.11 applies.
 - **Complete review before merging.** On the exact final PR head, require
   CodeRabbit's explicit completed review, or complete bounded reviews proved
   by the review gate, and resolve every actionable finding. Pending, missing,
@@ -76,10 +78,9 @@ their prerequisites. Local targets and CI share the owned scripts under
 
 ## Pull requests
 
-- One issue per pull request, referenced with `Closes #N`. Branch from the
-  pull request's base: `main`, or the release integration branch
-  (`release/<version>`) while main is frozen for a release. The release's
-  planning issue says which.
+- One issue per pull request, referenced with `Closes #N`. Branch from and
+  target `main`; `release/1.0.0` is cut only to qualify release candidates.
+  The planning issues are #3050 for the current milestone and #3030 for 1.0.0.
 - Before merging, bring the branch up to date with its base and wait for
   green CI on that exact head. A pull request that is green against an older
   base can still fail to compile against the current one.

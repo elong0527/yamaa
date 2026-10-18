@@ -4,9 +4,10 @@ Start with [AGENTS.md](AGENTS.md), the repository map and hard rules for people
 and coding agents. Language behavior belongs in [rules/](rules/README.md) and
 [yaml/](yaml/README.md). Independently authored benchmark expectations are the
 test oracle; reproduce a discrepancy independently before changing that truth.
-A change that breaks a user-facing interface needs an owner decision and a
-migration note (see AGENTS.md). Remove obsolete interfaces and their callers
-together instead of keeping compatibility aliases.
+Until 1.0.0, a change that breaks a user-facing interface needs an owner
+decision and a one-line release-note entry (see AGENTS.md). Remove obsolete
+interfaces and their callers together instead of keeping compatibility
+aliases. From 1.0.0, the stability contract of #3030 applies.
 
 ## Where changes belong
 
