@@ -160,6 +160,11 @@ pub fn check(specification: &str, environment: &str, host: Language) -> Failure 
         },
     )
 }
+/// The issues of a refused workflow preparation, such as a project file that
+/// cannot be captured, exactly as a check of a specification reports them.
+pub fn workflow_rejection(error: &crate::file_workflow::Error) -> Failure {
+    crate::issue_rows::collect(workflow_issues(error))
+}
 fn workflow_issues(error: &crate::file_workflow::Error) -> Failure {
     crate::producer_check::rejected(error).unwrap_or_else(|error| match error {
         crate::producer_check::Error::Original(error) => workflow_failure(error),

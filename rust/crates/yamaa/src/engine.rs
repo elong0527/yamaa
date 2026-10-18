@@ -298,9 +298,43 @@ impl Engine {
             request.environment,
             token,
             &measurements,
+            None,
         )?;
         measurements.complete(outcome_accepted(&outcome));
         Ok(Build::from_outcome(outcome, measurements, &self.shared))
+    }
+
+    /// Build one project-run specification: its producer links read held or
+    /// saved artifacts instead of building their producers.
+    pub(crate) fn build_in_project(
+        &self,
+        request: &Request<'_>,
+        held: Arc<yamaa_adapters::file_producer_build::HeldArtifacts>,
+        token: &CancellationToken,
+    ) -> Result<Build, Error> {
+        let measurements = Arc::new(yamaa_adapters::application_measurements::Measurements::new());
+        let outcome = run_build(
+            &self.shared,
+            request.specification,
+            request.environment,
+            token,
+            &measurements,
+            Some(held),
+        )?;
+        measurements.complete(outcome_accepted(&outcome));
+        Ok(Build::from_outcome(outcome, measurements, &self.shared))
+    }
+
+    /// A project-run specification that did not build, with the findings
+    /// that explain why.
+    pub(crate) fn refused_build(&self, issues: Vec<yamaa_adapters::issue_rows::Issue>) -> Build {
+        let measurements = Arc::new(yamaa_adapters::application_measurements::Measurements::new());
+        measurements.complete(false);
+        Build::from_outcome(BuildOutcome::Refused { issues }, measurements, &self.shared)
+    }
+
+    pub(crate) fn shared(&self) -> &EngineShared {
+        &self.shared
     }
 
     /// Compose submission metadata without running a specification.
@@ -561,6 +595,85 @@ impl Build {
     /// Borrow the build report with every diagnostic.
     pub fn report(&self) -> &Report {
         &self.report
+    }
+
+    /// The build's issue rows, live from its current state.
+    pub(crate) fn issue_rows(&self) -> Vec<yamaa_adapters::issue_rows::Issue> {
+        crate::internal::outcome_issues(&self.state)
+    }
+
+    /// The accepted primary artifact's serialized bytes, shared, for the
+    /// consumers a project run builds later.
+    pub(crate) fn artifact(&self) -> Option<Arc<[u8]>> {
+        match &self.state {
+            BuildOutcome::Plain { result: Ok(domain) }
+            | BuildOutcome::Project {
+                result: Ok(domain), ..
+            } => domain.artifact(),
+            BuildOutcome::Producer {
+                attempt,
+                projection,
+            } => {
+                projection.result.as_ref().ok()?.output()?;
+                let root = attempt.provenance.metadata().root();
+                attempt
+                    .graph
+                    .nodes
+                    .iter()
+                    .find(|entered| entered.node == root)
+                    .and_then(|entered| entered.output.as_ref().ok())
+                    .and_then(Option::as_ref)
+                    .and_then(|output| output.artifact())
+                    .map(|artifact| artifact.retained_bytes())
+            }
+            _ => None,
+        }
+    }
+
+    /// Open, without writing, every file `save` would write, or only the
+    /// report file with `report_only`, against the files already admitted.
+    pub(crate) fn preflight(
+        &self,
+        preflight: &mut yamaa_adapters::project_scope::Preflight,
+        report_only: bool,
+    ) -> Result<(), Vec<yamaa_adapters::issue_rows::Issue>> {
+        match &self.state {
+            BuildOutcome::Plain { result: Ok(domain) }
+            | BuildOutcome::Project {
+                result: Ok(domain), ..
+            } => preflight.admit_domain(domain, report_only),
+            BuildOutcome::Producer { projection, .. } => match &projection.result {
+                Ok(root) => preflight.admit_root(root, report_only),
+                Err(_) => Ok(()),
+            },
+            _ => Ok(()),
+        }
+    }
+
+    /// Publish only the declared report file, as a failed build saves.
+    /// `Ok(true)` published it, `Ok(false)` refused the publication with
+    /// issues, and `Err` means the build holds no report file to write.
+    pub(crate) fn save_report(&mut self) -> Result<bool, ()> {
+        let saved = match &mut self.state {
+            BuildOutcome::Plain { result: Ok(domain) }
+            | BuildOutcome::Project {
+                result: Ok(domain), ..
+            } => domain.save_report().map_err(drop),
+            BuildOutcome::Producer { projection, .. } => match &mut projection.result {
+                Ok(root) => root.save_report().map_err(drop),
+                Err(_) => Err(()),
+            },
+            _ => Err(()),
+        };
+        if saved.is_ok() {
+            self.measurements.save_entered();
+            self.measurements.save_completed(match saved {
+                Ok(true) => "succeeded",
+                _ => "refused",
+            });
+        }
+        self.refresh();
+        saved
     }
 
     /// Publish the held report file and output. A failed build publishes only

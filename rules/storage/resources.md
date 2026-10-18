@@ -124,7 +124,9 @@ The producing specification that `schema` names already exists. Its
 `output.path`, resolved with the producer's own selected base, must name the same
 artifact location. Workflow execution consumes held serialized producer bytes;
 explicit Save publishes those bytes under
-[REQ-1330](publication.md#req-1330).
+[REQ-1330](publication.md#req-1330). In a project run, a producer outside the
+run scope is not executed, and the artifact path names the saved file the
+consumer reads under [REQ-1343](../specification/project.md#req-1343).
 
 <a id="req-0782"></a>
 

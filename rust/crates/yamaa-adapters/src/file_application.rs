@@ -376,6 +376,35 @@ impl Domain {
             |report| report.observations_json(false),
         )
     }
+    /// The accepted primary artifact's serialized bytes; a project run hands
+    /// them to the consumers it builds later. Absent when the build failed.
+    pub fn artifact(&self) -> Option<std::sync::Arc<[u8]>> {
+        self.result.artifact()
+    }
+    /// Open the publisher of every file a save would write, the report file
+    /// alone with `report_only`, without writing any of them.
+    pub(crate) fn publishers(
+        &self,
+        report_only: bool,
+    ) -> Result<Vec<crate::resource_publication::Publisher>, Failure> {
+        let diagnostic = report_only || self.result.output().is_none();
+        let mut items = self.result.publication_items();
+        if diagnostic {
+            items.truncate(usize::from(self.result.report_file()));
+        }
+        let Some(targets) = self.targets.as_ref() else {
+            return Err(self.publication_issues.clone());
+        };
+        targets
+            .iter()
+            .zip(&items)
+            .map(|(target, (path, _, _))| {
+                target
+                    .publisher(path)
+                    .map_err(|error| publication_failure(&error))
+            })
+            .collect()
+    }
     /// Preflight the complete target set before writing held report/primary
     /// bytes. Failed builds may publish their declared report file on explicit
     /// Save and still raise the original failed-build result. Build itself
@@ -383,8 +412,36 @@ impl Domain {
     pub fn save(&mut self) -> Result<bool, FailedBuild> {
         self.save_with(|publisher, path, bytes| publisher.publish(path, bytes))
     }
+    /// Publish the declared report file alone, as a failed build saves, even
+    /// when the build succeeded. `Err` means there is no report file to write.
+    pub fn save_report(&mut self) -> Result<bool, FailedBuild> {
+        if !self.result.report_file() {
+            return Err(FailedBuild);
+        }
+        let failed = self.result.output().is_none();
+        match self.save_mode(true, |publisher, path, bytes| {
+            publisher.publish(path, bytes)
+        }) {
+            // A failed build reports its failure after the report was written.
+            Err(FailedBuild) if failed => Ok(self.publication_attempt.failure.is_none()
+                && self.publication_attempt.unwind.is_none()
+                && self.publication_issues.is_empty()),
+            outcome => outcome,
+        }
+    }
     fn save_with(
         &mut self,
+        publish: impl FnMut(
+            &mut crate::resource_publication::Publisher,
+            &str,
+            &[u8],
+        ) -> Result<(), crate::file_publication::Error>,
+    ) -> Result<bool, FailedBuild> {
+        self.save_mode(false, publish)
+    }
+    fn save_mode(
+        &mut self,
+        report_only: bool,
         mut publish: impl FnMut(
             &mut crate::resource_publication::Publisher,
             &str,
@@ -392,15 +449,20 @@ impl Domain {
         ) -> Result<(), crate::file_publication::Error>,
     ) -> Result<bool, FailedBuild> {
         let failed = self.result.output().is_none();
-        if failed && !self.result.report_file() {
-            return Err(FailedBuild);
+        let diagnostic = failed || report_only;
+        if diagnostic && !self.result.report_file() {
+            return if failed { Err(FailedBuild) } else { Ok(false) };
         }
         self.published = None;
         self.publication_attempt = Default::default();
         let Some(targets) = self.targets.as_ref() else {
             return if failed { Err(FailedBuild) } else { Ok(false) };
         };
-        let items = self.result.publication_items();
+        let mut items = self.result.publication_items();
+        if diagnostic {
+            // The report file comes first; a diagnostic save writes it alone.
+            items.truncate(1);
+        }
         // Own one complete report and both at-most-two artifact entries before
         // publication. Every prefix fits the admitted complete encoded report;
         // its artifact slots are reserved before the first publisher. Later
@@ -424,7 +486,7 @@ impl Domain {
                 return if failed { Err(FailedBuild) } else { Ok(false) };
             }
         };
-        let fields = [("report", self.result.report_file()), ("path", !failed)]
+        let fields = [("report", self.result.report_file()), ("path", !diagnostic)]
             .into_iter()
             .filter_map(|(field, present)| present.then_some(field))
             .collect::<Vec<_>>();
@@ -517,6 +579,11 @@ pub trait RuntimePort {
     fn resolver(&self) -> Option<std::sync::Arc<dyn crate::host_resources::Resolver>> {
         None
     }
+    /// How a selected producer workflow treats its links: a project run
+    /// builds each specification alone and reads its producers' artifacts.
+    fn producers(&self) -> crate::file_workflow::Producers {
+        crate::file_workflow::Producers::Built
+    }
     fn plain(
         &mut self,
         prepared: FileSpecification,
@@ -552,11 +619,12 @@ impl<R: RuntimePort> yamaa_core::build::Ports for Application<R> {
         &mut self,
         request: Request<'_>,
     ) -> Result<crate::file_workflow::Selected, Self::Failure> {
+        let producers = self.runtime.producers();
         match self.runtime.resolver() {
-            Some(resolver) => {
-                crate::file_workflow::select_with_resolver(request, self.host, resolver)
-            }
-            None => crate::file_workflow::select_request(request, self.host),
+            Some(resolver) => crate::file_workflow::select_with_resolver_mode(
+                request, self.host, resolver, producers,
+            ),
+            None => crate::file_workflow::select_request_mode(request, self.host, producers),
         }
         .map_err(ApplicationError::Preparation)
     }

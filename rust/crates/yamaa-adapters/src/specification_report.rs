@@ -464,6 +464,13 @@ impl BuildResult {
     pub(crate) fn report_file(&self) -> bool {
         self.report.file().is_some()
     }
+    /// The accepted primary artifact's serialized bytes, shared, not copied.
+    pub(crate) fn artifact(&self) -> Option<std::sync::Arc<[u8]>> {
+        self.output()?;
+        self.prepared
+            .artifact()
+            .map(yamaa_core::specification_output::Artifact::retained_bytes)
+    }
     /// Failed results have only an explicit diagnostic publication capability:
     /// the declared report file. The primary artifact requires the accepted
     /// primary owner.

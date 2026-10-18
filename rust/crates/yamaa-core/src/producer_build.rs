@@ -27,6 +27,18 @@ pub trait StudyPort {
     ) -> Option<Arc<dyn std::any::Any + Send + Sync>> {
         None
     }
+    /// The serialized artifact of a saved link's producer when the caller
+    /// already holds it, as a project run holds the artifacts it built. A held
+    /// artifact is read without a study request; otherwise the source reads the
+    /// saved file its `path` names. Either way it meets the producer contract.
+    fn held(
+        &self,
+        _node: &Node,
+        _source: &SourceDeclaration,
+        _producer: &crate::producer_admission::Declaration,
+    ) -> Option<Arc<[u8]>> {
+        None
+    }
     fn resource_failure(&self, error: &Self::Error) -> Option<ResourceFailure>;
     fn inspect(&mut self, node: &Node, source: &SourceDeclaration) -> Result<(), Self::Error>;
     fn capture_reads(&self) -> usize;
@@ -311,6 +323,7 @@ impl<D: SourceDecoder> SourceDecoder for NodeDecoder<'_, D> {
             self.node
                 .producers()
                 .iter()
+                .chain(self.node.saved())
                 .all(|producer| producer.dataset() != source.name),
             "producer-linked source offered an owned table"
         );
@@ -336,6 +349,7 @@ impl<D: SourceDecoder> SourceDecoder for NodeDecoder<'_, D> {
             .node
             .producers()
             .iter()
+            .chain(self.node.saved())
             .find(|producer| producer.dataset() == source.name);
         let table = self
             .decoder
@@ -423,6 +437,20 @@ impl<P: StudyPort, D, T: TableAccess, R, RE, CE> Sources<'_, P, D, T, R, RE, CE>
             .and_then(PreparedOutput::artifact)
             .ok_or(CaptureError::ProducerUnavailable { producer })
     }
+    /// A saved link's artifact the caller holds; `None` reads the saved file.
+    fn held(&self, source: &SourceDeclaration) -> Option<Arc<[u8]>> {
+        self.node
+            .saved()
+            .iter()
+            .find(|declaration| declaration.dataset() == source.name)
+            .and_then(|declaration| self.external.held(self.node, source, declaration))
+    }
+    fn is_saved(&self, source: &SourceDeclaration) -> bool {
+        self.node
+            .saved()
+            .iter()
+            .any(|declaration| declaration.dataset() == source.name)
+    }
 }
 impl<P: StudyPort, D, T: TableAccess, R, RE, CE> SpecificationSourcePort
     for Sources<'_, P, D, T, R, RE, CE>
@@ -432,7 +460,7 @@ impl<P: StudyPort, D, T: TableAccess, R, RE, CE> SpecificationSourcePort
         &self,
         source: &SourceDeclaration,
     ) -> Option<Arc<dyn std::any::Any + Send + Sync>> {
-        if self.producer(source).is_some() {
+        if self.producer(source).is_some() || self.is_saved(source) {
             None
         } else {
             self.external.owned_table(self.node, source)
@@ -447,6 +475,7 @@ impl<P: StudyPort, D, T: TableAccess, R, RE, CE> SpecificationSourcePort
     fn inspect(&mut self, source: &SourceDeclaration) -> Result<(), Self::Error> {
         match self.producer(source) {
             Some(producer) => self.artifact(producer).map(|_| ()),
+            None if self.held(source).is_some() => Ok(()),
             None => self
                 .external
                 .inspect(self.node, source)
@@ -461,18 +490,19 @@ impl<P: StudyPort, D, T: TableAccess, R, RE, CE> SpecificationSourcePort
         source: &SourceDeclaration,
         origin: &mut Option<run::SourceOrigin>,
     ) -> Result<Arc<[u8]>, Self::Error> {
-        match self.producer(source) {
-            Some(producer) => {
-                *origin = Some(run::SourceOrigin::Generated);
-                self.artifact(producer)
-                    .map(output::Artifact::retained_bytes)
-            }
-            None => {
-                *origin = Some(run::SourceOrigin::Resource);
-                self.external
-                    .capture(self.node, source)
-                    .map_err(CaptureError::External)
-            }
+        if let Some(producer) = self.producer(source) {
+            *origin = Some(run::SourceOrigin::Generated);
+            return self
+                .artifact(producer)
+                .map(output::Artifact::retained_bytes);
         }
+        if let Some(bytes) = self.held(source) {
+            *origin = Some(run::SourceOrigin::Generated);
+            return Ok(bytes);
+        }
+        *origin = Some(run::SourceOrigin::Resource);
+        self.external
+            .capture(self.node, source)
+            .map_err(CaptureError::External)
     }
 }

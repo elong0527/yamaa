@@ -44,6 +44,8 @@ conditions:
   duplicate_intermediate_records: {phases: [verification]}
   duplicate_key: {phases: [output]}
   duplicate_order_term: {phases: [validation]}
+  # REQ-1338
+  duplicate_specification_name: {phases: [validation]}
   empty_string_present_unsupported: {phases: [validation]}
   engine_rejected: {phases: [engine]}
   field_parse_failed: {phases: [ingest]}
@@ -126,6 +128,7 @@ conditions:
   pattern_mismatch: {phases: [validation]}
   phase_boundary: {phases: [validation]}
   producer_contract_mismatch: {phases: [validation]}
+  # REQ-1345
   producer_not_completed: {phases: [validation]}
   producer_output_path_mismatch: {phases: [validation]}
   producer_workflow_cycle: {phases: [validation]}
@@ -192,9 +195,13 @@ conditions:
   unknown_operation: {phases: [validation]}
   unknown_project_function: {phases: [validation]}
   unknown_reference: {phases: [validation]}
+  # REQ-1339
+  unknown_specification_name: {phases: [validation]}
   unknown_standard: {phases: [validation]}
   unknown_standard_family: {phases: [validation]}
   unknown_window: {phases: [validation]}
+  # REQ-1344
+  unlinked_producer: {phases: [validation]}
   unmapped_key: {phases: [mapping]}
   unmapped_value: {phases: [mapping]}
   unmatched_key: {phases: [join]}

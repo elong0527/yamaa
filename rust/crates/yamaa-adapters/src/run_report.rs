@@ -541,6 +541,14 @@ pub(crate) fn prepare(
     })
 }
 
+/// The run report's columns without rows, the stacked report of runs of
+/// which none built a report.
+pub(crate) fn empty_table() -> Result<PublicTable, Error> {
+    let table = core::assemble(Vec::new());
+    let projection = (0..table.schema().columns().len()).collect::<Vec<_>>();
+    PublicTable::from_table(&table, &projection).map_err(|_| Error::InvalidObservation)
+}
+
 /// Compare the primary and report locations without requiring parent or
 /// target existence. Operational path refusal remains at the publication gate.
 pub(crate) fn location_findings(

@@ -41,6 +41,10 @@ impl Table {
         Self { inner: table }
     }
 
+    pub(crate) fn public(&self) -> &yamaa_adapters::public_table::PublicTable {
+        &self.inner
+    }
+
     /// Borrow the public Arrow fields in declaration order.
     pub fn columns(&self) -> &Fields {
         self.inner.columns()
