@@ -5,8 +5,8 @@
 # 1. The R package is not standalone in this repository: R/yamaa only
 #    becomes a buildable source package after the shared Rust crates are
 #    staged into it, so the staged tree is what gets built and checked.
-# 2. DESCRIPTION requires R >= 4.6.1 and a Rust toolchain (cargo /
-#    rustc >= 1.90), so dplyr's oldrel-* matrix entries cannot run here;
+# 2. DESCRIPTION requires R >= 4.6.1 and a Rust toolchain (Cargo and
+#    rustc 1.99.1), so dplyr's oldrel-* matrix entries cannot run here;
 #    the matrix keeps release on all three operating systems plus devel
 #    on Ubuntu, and installs the pinned Rust toolchain before checking.
 # 3. Like the native qualification in native.yml, this runs as a

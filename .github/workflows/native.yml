@@ -252,6 +252,10 @@ jobs:
         os: [ubuntu-24.04, macos-15, windows-latest]
         python: ['3.12', '3.13', '3.14', '3.15']
         form: [wheel, source]
+    env:
+      # A wheel lane installs its own host's wheel. Every source lane installs
+      # the Linux-built source archive, the one a release publishes.
+      ARCHIVE_HOST: ${{ matrix.form == 'source' && 'ubuntu-24.04' || matrix.os }}
     steps:
       - name: Preserve fixture bytes and symlinks on Windows
         if: runner.os == 'Windows'
@@ -282,7 +286,7 @@ jobs:
       # report identify exactly what was installed.
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: native-python-${{ matrix.os }}-${{ env.NATIVE_BUILD_PYTHON }}
+          name: native-python-${{ env.ARCHIVE_HOST }}-${{ env.NATIVE_BUILD_PYTHON }}
           path: ${{ runner.temp }}/native-dist
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -352,7 +356,7 @@ jobs:
           YAMAA_PUBLIC_REPORT_DIR="${RUNNER_TEMP}/qualification/${FORM}/public-reports" python -I -m tools.commands.installed run \
             --output "qualification/${FORM}/supplemental" --runtime python --staged-root "${RUNNER_TEMP}" \
             --source-revision "${QUALIFICATION_SOURCE_REVISION}" --package-form "${FORM}" \
-            --artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-python-${{ matrix.os }}-${{ env.NATIVE_BUILD_PYTHON }}/$(basename "${archives[0]}")" \
+            --artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-python-${{ env.ARCHIVE_HOST }}-${{ env.NATIVE_BUILD_PYTHON }}/$(basename "${archives[0]}")" \
             --host-artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-reference-${{ matrix.os }}-${{ env.NATIVE_BUILD_PYTHON }}/$(basename reference-dist/*.whl)" \
             --evidence "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
       - name: Preserve native qualification reports
@@ -390,9 +394,52 @@ jobs:
       - name: Compare every candidate bit across the native matrix
         run: python -m tools.numeric.check_math_portability math-assessments
 
+  r-dist:
+    name: native-r-dist (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        # A release publishes the R source archive built here, and every
+        # native-r lane installs these same bytes.
+        os: [ubuntu-24.04]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install repository tools
+        run: |
+          python -m pip install --no-deps -e .
+          python -m tools.ci.toolchain
+      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+        with:
+          r-version: '4.6.1'
+          use-public-rspm: true
+      - name: Install Rust
+        run: python -m tools.ci.toolchain --install
+      - name: Install the shared grammar and benchmark metadata codecs
+        run: python -m pip install py-yaml12==0.2.0 pyyaml==6.0.3
+      - name: Stage standalone R package
+        run: python -m tools.staging.stage_r_package "${RUNNER_TEMP}/native-stage/yamaa"
+      - name: Build R source package
+        working-directory: ${{ runner.temp }}
+        run: |
+          R CMD build --no-build-vignettes --no-manual native-stage/yamaa
+          python -m tools.packaging.check_cargo_lock yamaa_0.5.0.tar.gz
+      - name: Preserve source archive
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: native-r-${{ matrix.os }}
+          path: ${{ runner.temp }}/yamaa_0.5.0.tar.gz
+          if-no-files-found: error
+
   r:
 
     name: native-r (${{ matrix.os }})
+    needs: r-dist
     runs-on: ${{ matrix.os }}
     timeout-minutes: ${{ matrix.os == 'windows-latest' && 40 || 20 }}
     strategy:
@@ -457,14 +504,18 @@ jobs:
         run: cargo clippy --locked --target x86_64-pc-windows-gnu -p yamaa-r -- -D warnings
       - name: Install the shared grammar and benchmark metadata codecs
         run: python -m pip install py-yaml12==0.2.0 pyyaml==6.0.3
-      - name: Stage standalone R package
-        run: python -m tools.staging.stage_r_package "${RUNNER_TEMP}/native-stage/yamaa"
-      - name: Build and install R outside checkout
+      # Every lane installs the Linux-built archive that a release publishes,
+      # not one built on its own host.
+      - name: Download the published R source archive
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: native-r-ubuntu-24.04
+          path: ${{ runner.temp }}
+      - name: Install R outside checkout
         id: r_install
         working-directory: ${{ runner.temp }}
         run: |
           mkdir -p native-r-library
-          R CMD build --no-build-vignettes --no-manual native-stage/yamaa
           python -m tools.packaging.check_cargo_lock --output-dir "${RUNNER_TEMP}/rust-dependencies" yamaa_0.5.0.tar.gz
           R CMD INSTALL --library="${RUNNER_TEMP}/native-r-library" "${GITHUB_WORKSPACE}/rust/tests/project-programs/r"
           R CMD INSTALL --library="${RUNNER_TEMP}/native-r-library" yamaa_0.5.0.tar.gz
@@ -526,7 +577,7 @@ jobs:
           YAMAA_PUBLIC_REPORT_DIR="${RUNNER_TEMP}/qualification/r-source/public-reports" R_LIBS="${RUNNER_TEMP}/native-r-library" python -I -m tools.commands.installed run \
             --output qualification/r-source --runtime r --staged-root "${RUNNER_TEMP}" \
             --source-revision "$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD)" --package-form source \
-            --artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-r-${{ matrix.os }}/yamaa_0.5.0.tar.gz" \
+            --artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-r-ubuntu-24.04/yamaa_0.5.0.tar.gz" \
             --evidence "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
       - name: Check R source package outside checkout
         id: r_package_check
@@ -569,11 +620,6 @@ jobs:
           name: rust-dependencies-r-${{ matrix.os }}
           path: ${{ runner.temp }}/rust-dependencies
           if-no-files-found: error
-      - name: Preserve source archive
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
-        with:
-          name: native-r-${{ matrix.os }}
-          path: ${{ runner.temp }}/yamaa_0.5.0.tar.gz
 
   public-cohort:
     name: public-cohort-complete-runs

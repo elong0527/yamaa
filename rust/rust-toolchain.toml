@@ -1,4 +1,5 @@
+# Both source packages carry this file, so it names only what a build needs.
+# Repository checks add Clippy and rustfmt (tools/ci/toolchain.py).
 [toolchain]
 channel = "1.99.1"
 profile = "minimal"
-components = ["clippy", "rustfmt"]

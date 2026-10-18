@@ -274,9 +274,10 @@ Download the wheel for your supported OS from the selected
 [GitHub release](https://github.com/elong0527/yamaa/releases), then run
 `python -m pip install ./yamaa-0.4.0-<wheel-tags>.whl`. The standalone source
 asset installs with `python -m pip install ./yamaa-0.4.0.tar.gz`; source builds
-need Rust 1.90 or later with Cargo, a C compiler and GNU make. Release wheels are the exact
-qualified artifacts; the attached source archive is the tested Linux archive.
-The other OS source lanes independently build and qualify their own archives.
+use your default Rust toolchain, which must be Rust 1.90 or later, with Cargo, a C
+compiler and GNU make. Release wheels are the exact qualified artifacts; the
+attached source archive is built on Linux, and native qualification installs it on
+Linux, macOS and Windows.
 GitHub distribution does not imply publication to PyPI.
 
 For repository setup and verification, follow the

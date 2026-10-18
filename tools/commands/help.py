@@ -6,6 +6,7 @@ HELP = """yamaa repository commands (run from the repository root)
                     Needs uv, the pinned Rust toolchain and a platform C compiler.
   check             Run the five PR checks below, in the same order locally.
   check-lint        Ruff, cargo fmt and workspace Clippy (requires R as well).
+                    Needs Clippy and rustfmt added to the pinned Rust toolchain.
   check-repository  Repository/rule validation and a strict generated docs build.
   test-rust         cargo test --locked --workspace, including both host bindings.
                     Needs the selected Python interpreter and R 4.6.1.

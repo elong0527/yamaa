@@ -174,16 +174,16 @@ After downloading the tarball from the selected release:
 install.packages("yamaa_0.4.0.tar.gz", repos = NULL, type = "source")
 ```
 
-The release asset is the unchanged source archive tested on Linux. Native
-qualification also builds, installs and checks each host's own source archive
-on macOS and Windows. Checkout builds are development candidates; release
-downloads are selected by the complete native qualification workflow.
+The release asset is the unchanged source archive built on Linux, which native
+qualification installs and checks on Linux, macOS and Windows. Checkout builds
+are development candidates; release downloads are selected by the complete
+native qualification workflow.
 
 Supported source-build targets are R 4.6.1 on Linux x86_64, macOS arm64 and Windows
 x64. Install Rust 1.90 or later with Cargo, the platform's C compiler and GNU
 make first. Under rustup, the archive's `rust-toolchain.toml` selects the release
-toolchain, Rust 1.99.1. Windows builds require Rtools45 and the
-`x86_64-pc-windows-gnu` Rust target.
+toolchain, Rust 1.99.1, in rustup's minimal profile without Clippy or rustfmt.
+Windows builds require Rtools45 and the `x86_64-pc-windows-gnu` Rust target.
 The archive contains the
 complete Rust workspace and the unchanged canonical Cargo lock. Compilation uses
 `cargo build --locked`; no checkout, Python runtime or new dependency resolution
@@ -195,8 +195,9 @@ targets documented by `make help` and the [contributor guide](../../CONTRIBUTING
 Direct installation of the `R/yamaa/` template omits the shared Rust sources;
 install a staged source archive instead. Staging refuses an existing destination.
 
-The source archive carries unchanged authored grammar documents and independent
-installed test inputs. Native qualification installs packages outside the
+The source archive carries unchanged authored grammar documents and the
+independent test inputs that its installed suites read, each third-party SAS
+fixture with its license beside it. Native qualification installs packages outside the
 checkout and requires `Status: OK` from strict `R CMD check` on each supported
 platform. [Installed package checks](../../rust/qualification/README.md) describe
 that separate qualification route.

@@ -138,9 +138,10 @@ comparisons and strict R package checks to have passed. Branch dispatches cannot
 release.
 
 The workflow downloads the qualified artifacts and publishes their unchanged
-bytes: one wheel per supported OS, the tested Linux Python sdist and the tested
-Linux R source tarball. Other native source lanes qualify their own host-built
-archives. Missing, expired or ambiguous artifacts fail publication; an existing
+bytes: one wheel per supported OS, the Linux-built Python sdist and the
+Linux-built R source tarball. Every native source lane, on Linux, macOS and
+Windows, installs and tests those same two archives. Missing, expired or
+ambiguous artifacts fail publication; an existing
 release is never overwritten. Re-running failed jobs or all jobs keeps a run
 eligible: earlier attempts' artifacts stay on the run, and the workflow takes
 only the copy that its uploading job created during the execution the run's
@@ -162,6 +163,18 @@ ReadStat installation. The [ReadStat integration](https://github.com/elong0527/y
 and [YAML parser provenance](https://github.com/elong0527/yamaa/blob/main/rust/vendor/saphyr-parser/PROVENANCE.md)
 own their source inventories, patches and licenses. Both parser authors' MIT
 notices remain in the distributed `LICENSE-YAML.txt`.
+
+Both source packages carry `rust/rust-toolchain.toml` unchanged. It names Rust
+1.99.1 in rustup's minimal profile and no other component, so a source
+installation never adds Clippy or rustfmt. The R package runs Cargo inside its
+bundled workspace, so under rustup it builds with Rust 1.99.1, as its
+`DESCRIPTION` states; a build without rustup needs Rust 1.90 or later. pip
+builds the Python source archive from its root, outside that declaration, with
+the caller's default toolchain, which must also be Rust 1.90 or later.
+
+The installed R package carries only the test inputs that its installed suites
+read, and each third-party SAS fixture keeps its license beside it.
+`tools/staging/stage_r_package.py` lists the staged inputs it leaves out.
 
 Native qualification exercises the static source bridge on every supported
 platform and compares both installed hosts with independently authored binary
