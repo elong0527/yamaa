@@ -4,59 +4,94 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build ADTR: sum of target lesion diameters per subject and assessment.
 
-import polars as pl
+Reads TR, TRVISIT and TU from /app/input and writes /app/output/adtr.csv
+with one record per subject and scheduled tumor assessment (from TRVISIT).
+"""
 
-trvisit = pl.read_csv("/app/input/trvisit.csv", infer_schema=False, null_values="").with_columns(
-    pl.col("AVISITN").cast(pl.Int64, strict=False),
-    pl.col("ADT").str.to_date(strict=False),
-)
-tr = pl.read_csv("/app/input/tr.csv", infer_schema=False, null_values="").with_columns(
-    pl.col("TRSTRESN").cast(pl.Float64, strict=False),
-)
-tu = pl.read_csv("/app/input/tu.csv", infer_schema=False, null_values="")
+import pandas as pd
 
-# Lesions selected as target at study entry: the same count at every
-# assessment of the subject.
-ntarget = (
-    tu.filter(pl.col("TUGRPID") == "TARGET")
-    .group_by(["STUDYID", "USUBJID"])
-    .agg(NTARGET=pl.len())
-)
+INPUT_DIR = "/app/input"
+OUTPUT_PATH = "/app/output/adtr.csv"
 
-# Target longest diameters at each assessment. A record with no result
-# contributes nothing, while a zero counts as measured.
-agg = (
-    tr.filter((pl.col("TRGRPID") == "TARGET") & (pl.col("TRTESTCD") == "LDIAM"))
-    .group_by(["STUDYID", "USUBJID", "AVISIT"])
-    .agg(
-        __sum=pl.col("TRSTRESN").sum(),
-        __cnt=pl.col("TRSTRESN").count(),
+PARAMCD = "SDIAM"
+PARAM = "Sum of Target Lesion Diameters (mm)"
+
+
+def format_number(value):
+    """Render a number without a trailing .0 when it is integral."""
+    if pd.isna(value):
+        return ""
+    number = float(value)
+    if number == int(number):
+        return str(int(number))
+    return repr(number)
+
+
+def main():
+    tr = pd.read_csv(f"{INPUT_DIR}/tr.csv", dtype=str, keep_default_na=False)
+    trvisit = pd.read_csv(
+        f"{INPUT_DIR}/trvisit.csv", dtype=str, keep_default_na=False
     )
-)
+    tu = pd.read_csv(f"{INPUT_DIR}/tu.csv", dtype=str, keep_default_na=False)
 
-adtr = (
-    trvisit.join(agg, on=["STUDYID", "USUBJID", "AVISIT"], how="left", maintain_order="left")
-    .join(ntarget, on=["STUDYID", "USUBJID"], how="left")
-    .with_columns(
-        AVAL=pl.when(pl.col("__cnt") == 0)
-        .then(None)
-        .otherwise(pl.col("__sum")),
-        NMEAS=pl.col("__cnt"),
-        PARAMCD=pl.lit("SDIAM"),
-        PARAM=pl.lit("Sum of Target Lesion Diameters (mm)"),
+    # Numeric result; blank text becomes missing.
+    tr["TRSTRESN_NUM"] = pd.to_numeric(tr["TRSTRESN"], errors="coerce")
+
+    # Target longest-diameter records only.
+    target = tr[(tr["TRGRPID"] == "TARGET") & (tr["TRTESTCD"] == "LDIAM")]
+
+    # Number of target lesions selected at study entry, per subject.
+    ntarget = (
+        tu[tu["TUGRPID"] == "TARGET"]
+        .groupby(["STUDYID", "USUBJID"])
+        .size()
+        .rename("NTARGET")
     )
-    .with_columns(
-        ANL01FL=pl.when(
-            pl.col("NMEAS").is_not_null()
-            & pl.col("NTARGET").is_not_null()
-            & (pl.col("NMEAS") == pl.col("NTARGET"))
+
+    rows = []
+    for _, visit in trvisit.iterrows():
+        key = (visit["STUDYID"], visit["USUBJID"], visit["AVISIT"])
+        records = target[
+            (target["STUDYID"] == key[0])
+            & (target["USUBJID"] == key[1])
+            & (target["AVISIT"] == key[2])
+        ]
+        n_target = int(ntarget.get((key[0], key[1]), 0))
+
+        if len(records) == 0:
+            # No target longest-diameter records at this assessment.
+            aval = ""
+            nmeas = ""
+        else:
+            measured = records["TRSTRESN_NUM"].dropna()
+            nmeas = str(len(measured))
+            # A missing result contributes nothing; no measured lesion
+            # means the sum has no value. A zero result counts as measured.
+            aval = format_number(measured.sum()) if len(measured) > 0 else ""
+
+        anl01fl = "Y" if nmeas != "" and int(nmeas) == n_target else ""
+
+        rows.append(
+            {
+                "STUDYID": visit["STUDYID"],
+                "USUBJID": visit["USUBJID"],
+                "AVISIT": visit["AVISIT"],
+                "AVISITN": format_number(
+                    pd.to_numeric(visit["AVISITN"], errors="coerce")
+                ),
+                "ADT": visit["ADT"],
+                "PARAMCD": PARAMCD,
+                "PARAM": PARAM,
+                "AVAL": aval,
+                "NMEAS": nmeas,
+                "NTARGET": str(n_target),
+                "ANL01FL": anl01fl,
+            }
         )
-        .then(pl.lit("Y"))
-        .otherwise(None),
-    )
-    .select(
+
+    columns = [
         "STUDYID",
         "USUBJID",
         "AVISIT",
@@ -68,9 +103,16 @@ adtr = (
         "NMEAS",
         "NTARGET",
         "ANL01FL",
+    ]
+    adtr = pd.DataFrame(rows, columns=columns)
+    adtr["_VISITN_NUM"] = pd.to_numeric(adtr["AVISITN"], errors="coerce")
+    adtr = adtr.sort_values(["USUBJID", "_VISITN_NUM"]).drop(
+        columns="_VISITN_NUM"
     )
-    .sort(["USUBJID", "AVISITN"])
-)
+    adtr = adtr.reset_index(drop=True)
+    adtr.to_csv(OUTPUT_PATH, index=False)
+    print(adtr.to_string(index=False))
 
-Path("/app/output").mkdir(parents=True, exist_ok=True)
-adtr.write_csv("/app/output/adtr.csv", null_value="")
+
+if __name__ == "__main__":
+    main()

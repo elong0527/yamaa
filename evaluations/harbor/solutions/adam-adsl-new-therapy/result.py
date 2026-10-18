@@ -4,63 +4,125 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build ADSL with new anticancer therapy (NACT) derivations.
 
-import polars as pl
+Reads ADSL, CM and PR from /app/input and writes /app/output/adsl.csv
+with one record per subject and columns STUDYID, USUBJID, TRTSDT,
+NACTDT, NACTDY, NACTFL.
 
-adsl_raw = pl.read_csv("/app/input/adsl.csv", infer_schema=False, null_values="").with_columns(
-    TRTSDT=pl.col("TRTSDT").str.to_date(strict=False),
-)
-cm = pl.read_csv("/app/input/cm.csv", infer_schema=False, null_values="").with_columns(
-    CMSTDTC_IMP=pl.col("CMSTDTC_IMP").str.to_date(strict=False),
-)
-pr = pl.read_csv("/app/input/pr.csv", infer_schema=False, null_values="").with_columns(
-    PRSTDTC=pl.col("PRSTDTC").str.to_date(strict=False),
-)
+A medication record qualifies when CMCAT is "ON TREATMENT"; a procedure
+record qualifies when PRCAT is "CANCER RELATED" and PRSCAT is
+"ON TREATMENT". A qualifying record counts only when its start date is
+on or after the subject's TRTSDT, and a qualifying record with no start
+date never counts. A medication start recorded as year and month only
+is taken as the 15th of that month; a full recorded start date stands
+as recorded. NACTDT is the earlier of the earliest qualifying
+medication and procedure start dates, NACTDY its study day counted
+from TRTSDT, and NACTFL is "Y" exactly when NACTDT has a value.
+"""
 
-# A qualifying medication starts on or after treatment start; a record
-# with no start date is skipped. The completed start fills a year-month
-# to the 15th, so the IMP column is the comparison date.
-cm_min = (
-    cm.join(adsl_raw.select("STUDYID", "USUBJID", "TRTSDT"), on=["STUDYID", "USUBJID"], how="left")
-    .filter(
-        (pl.col("CMCAT") == "ON TREATMENT")
-        & pl.col("CMSTDTC_IMP").is_not_null()
-        & (pl.col("CMSTDTC_IMP") >= pl.col("TRTSDT"))
+import os
+from datetime import date
+
+import pandas as pd
+
+
+def parse_med_start(raw):
+    """Medication start: full date as recorded; YYYY-MM -> the 15th."""
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+    parts = raw.split("-")
+    if len(parts) == 3:
+        return date(int(parts[0]), int(parts[1]), int(parts[2]))
+    if len(parts) == 2:
+        return date(int(parts[0]), int(parts[1]), 15)
+    return None
+
+
+def parse_full_date(raw):
+    """Full ISO date, or None when absent or not a full date."""
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+    parts = raw.split("-")
+    if len(parts) == 3:
+        return date(int(parts[0]), int(parts[1]), int(parts[2]))
+    return None
+
+
+def main():
+    adsl = pd.read_csv("/app/input/adsl.csv", dtype=str, keep_default_na=False)
+    cm = pd.read_csv("/app/input/cm.csv", dtype=str, keep_default_na=False)
+    pr = pd.read_csv("/app/input/pr.csv", dtype=str, keep_default_na=False)
+
+    trtsdt = {}
+    for _, row in adsl.iterrows():
+        trtsdt[(row["STUDYID"], row["USUBJID"])] = parse_full_date(row["TRTSDT"])
+
+    earliest = {}
+
+    def consider(key, start):
+        if key not in earliest or start < earliest[key]:
+            earliest[key] = start
+
+    for _, row in cm.iterrows():
+        if row["CMCAT"] != "ON TREATMENT":
+            continue
+        key = (row["STUDYID"], row["USUBJID"])
+        start = parse_med_start(row["CMSTDTC"])
+        ref = trtsdt.get(key)
+        if start is not None and ref is not None and start >= ref:
+            consider(key, start)
+
+    for _, row in pr.iterrows():
+        if row["PRCAT"] != "CANCER RELATED" or row["PRSCAT"] != "ON TREATMENT":
+            continue
+        key = (row["STUDYID"], row["USUBJID"])
+        start = parse_full_date(row["PRSTDTC"])
+        ref = trtsdt.get(key)
+        if start is not None and ref is not None and start >= ref:
+            consider(key, start)
+
+    rows = []
+    for _, row in adsl.iterrows():
+        key = (row["STUDYID"], row["USUBJID"])
+        nactdt = earliest.get(key)
+        if nactdt is None:
+            rows.append(
+                {
+                    "STUDYID": row["STUDYID"],
+                    "USUBJID": row["USUBJID"],
+                    "TRTSDT": row["TRTSDT"],
+                    "NACTDT": "",
+                    "NACTDY": "",
+                    "NACTFL": "",
+                }
+            )
+        else:
+            ref = trtsdt[key]
+            if nactdt >= ref:
+                nactdy = (nactdt - ref).days + 1
+            else:
+                nactdy = (nactdt - ref).days
+            rows.append(
+                {
+                    "STUDYID": row["STUDYID"],
+                    "USUBJID": row["USUBJID"],
+                    "TRTSDT": row["TRTSDT"],
+                    "NACTDT": nactdt.isoformat(),
+                    "NACTDY": nactdy,
+                    "NACTFL": "Y",
+                }
+            )
+
+    out = pd.DataFrame(
+        rows,
+        columns=["STUDYID", "USUBJID", "TRTSDT", "NACTDT", "NACTDY", "NACTFL"],
     )
-    .group_by(["STUDYID", "USUBJID"])
-    .agg(CMNACTDT=pl.col("CMSTDTC_IMP").min())
-)
+    os.makedirs("/app/output", exist_ok=True)
+    out.to_csv("/app/output/adsl.csv", index=False)
 
-# A qualifying procedure is cancer related and on treatment, also on or
-# after treatment start.
-pr_min = (
-    pr.join(adsl_raw.select("STUDYID", "USUBJID", "TRTSDT"), on=["STUDYID", "USUBJID"], how="left")
-    .filter(
-        (pl.col("PRCAT") == "CANCER RELATED")
-        & (pl.col("PRSCAT") == "ON TREATMENT")
-        & pl.col("PRSTDTC").is_not_null()
-        & (pl.col("PRSTDTC") >= pl.col("TRTSDT"))
-    )
-    .group_by(["STUDYID", "USUBJID"])
-    .agg(PRNACTDT=pl.col("PRSTDTC").min())
-)
 
-adsl = (
-    adsl_raw.join(cm_min, on=["STUDYID", "USUBJID"], how="left")
-    .join(pr_min, on=["STUDYID", "USUBJID"], how="left")
-    .with_columns(
-        NACTDT=pl.min_horizontal("CMNACTDT", "PRNACTDT"),
-    )
-    .with_columns(
-        NACTDY=(pl.col("NACTDT") - pl.col("TRTSDT")).dt.total_days() + 1,
-        NACTFL=pl.when(pl.col("NACTDT").is_not_null())
-        .then(pl.lit("Y"))
-        .otherwise(None),
-    )
-    .select("STUDYID", "USUBJID", "TRTSDT", "NACTDT", "NACTDY", "NACTFL")
-    .sort("USUBJID")
-)
-
-Path("/app/output").mkdir(parents=True, exist_ok=True)
-adsl.write_csv("/app/output/adsl.csv", null_value="")
+if __name__ == "__main__":
+    main()

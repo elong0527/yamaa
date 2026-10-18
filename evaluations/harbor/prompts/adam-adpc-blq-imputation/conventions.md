@@ -1,5 +1,5 @@
-Following CDISC ADaM standards, use the provided PC dataset to create an
-ADPC dataset with one record per sample.
+Following CDISC ADaM standards, use the provided PC dataset to create an ADPC
+dataset with one record per sample.
 
 The output dataset should contain the following columns in this order:
 STUDYID, USUBJID, PCSEQ, PARAMCD, ATPTREF, ATPT, ATPTN, AVAL, AVALU

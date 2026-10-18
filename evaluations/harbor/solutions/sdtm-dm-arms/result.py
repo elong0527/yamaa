@@ -4,79 +4,119 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+import csv
+import os
 
-import polars as pl
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-rand = pl.read_csv("/app/input/rand.csv", infer_schema=False)
-ex = pl.read_csv("/app/input/ex.csv", infer_schema=False)
 
-# The planned arm follows randomization; the actual arm follows exposure.
-# PLACEBO was the PBO arm and VITAMIN D3 the TRT arm.
-planned = {"PLACEBO": ("PBO", "Placebo"), "VITAMIN D3": ("TRT", "Vitamin D3")}
+def read_rows(path):
+    with open(path, newline="", encoding="utf-8") as f:
+        return list(csv.DictReader(f))
 
-exposure = (
-    ex.group_by(["STUDYID", "USUBJID"])
-    .agg(EXTRT=pl.col("EXTRT").filter(pl.col("EXTRT").fill_null("") != "").first())
-    .with_columns(EXTRT=pl.col("EXTRT").fill_null(""))
-)
 
-subjects = (
-    rand.select("STUDYID", "USUBJID", "RANDCD", "RAND", "SCRNFL")
-    .join(exposure, on=["STUDYID", "USUBJID"], how="full", coalesce=True)
-)
+def clean(value):
+    return (value or "").strip()
 
-rows = []
-for record in subjects.to_dicts():
-    studyid = record["STUDYID"]
-    usubjid = record["USUBJID"]
-    randcd = (record.get("RANDCD") or "").strip() or None
-    randdesc = (record.get("RAND") or "").strip() or None
-    extrt = (record.get("EXTRT") or "").strip() or None
-    scrnfl = (record.get("SCRNFL") or "").strip()
-    # Never randomized leaves the planned arm empty; never treated or a
-    # treatment matching no planned arm leaves the actual arm empty.
-    armcd = randcd if randcd else None
-    arm = randdesc if randcd else None
-    actcd, act = planned.get(extrt, (None, None))
-    # A treated subject carries the other planned arm when that is what
-    # the exposure says; the reason for a blank arm depends on why both
-    # are blank, or on never being treated.
-    if arm is None and act is None:
-        armnrs = "SCREEN FAILURE" if scrnfl == "Y" else "NOT ASSIGNED"
-    elif arm is not None and act is None and extrt is None:
-        armnrs = "NOT TREATED"
-    else:
-        armnrs = None
-    armud = extrt if (extrt is not None and extrt not in planned) else None
-    rows.append(
-        {
-            "DOMAIN": "DM",
-            "STUDYID": studyid,
-            "USUBJID": usubjid,
-            "ARMCD": armcd,
-            "ARM": arm,
-            "ACTARMCD": actcd,
-            "ACTARM": act,
-            "ARMNRS": armnrs,
-            "ACTARMUD": armud,
-        }
-    )
 
-dm = pl.DataFrame(
-    rows,
-    schema={
-        "DOMAIN": pl.String,
-        "STUDYID": pl.String,
-        "USUBJID": pl.String,
-        "ARMCD": pl.String,
-        "ARM": pl.String,
-        "ACTARMCD": pl.String,
-        "ACTARM": pl.String,
-        "ARMNRS": pl.String,
-        "ACTARMUD": pl.String,
-    },
-).sort("USUBJID")
+def main():
+    rand_rows = read_rows(os.path.join(INPUT_DIR, "rand.csv"))
+    ex_rows = read_rows(os.path.join(INPUT_DIR, "ex.csv"))
 
-Path("/app/output").mkdir(exist_ok=True)
-dm.write_csv("/app/output/dm.csv")
+    # Planned arms as they appear in the randomization records, keyed by
+    # upper-cased description and by upper-cased code.
+    arms_by_desc = {}
+    arms_by_code = {}
+    for row in rand_rows:
+        code = clean(row.get("RANDCD"))
+        desc = clean(row.get("RAND"))
+        if code and desc:
+            arms_by_desc.setdefault(desc.upper(), (code, desc))
+            arms_by_code.setdefault(code.upper(), (code, desc))
+
+    # One record per subject: randomization order first, then any
+    # exposure-only subjects in exposure order.
+    subjects = []
+    seen = set()
+    rand_by_subject = {}
+    for row in rand_rows:
+        key = (clean(row.get("STUDYID")), clean(row.get("USUBJID")))
+        if key not in seen:
+            seen.add(key)
+            subjects.append(key)
+        rand_by_subject.setdefault(key, row)
+
+    # Treatment received per subject (first exposure record).
+    treatment = {}
+    for row in ex_rows:
+        key = (clean(row.get("STUDYID")), clean(row.get("USUBJID")))
+        if key not in seen:
+            seen.add(key)
+            subjects.append(key)
+        if key not in treatment:
+            treatment[key] = clean(row.get("EXTRT"))
+
+    out_rows = []
+    for studyid, usubjid in subjects:
+        key = (studyid, usubjid)
+        rand = rand_by_subject.get(key, {})
+        armcd = clean(rand.get("RANDCD"))
+        arm = clean(rand.get("RAND")) if armcd else ""
+        scrnfl = clean(rand.get("SCRNFL"))
+
+        trt = treatment.get(key, "")
+        actarmcd = ""
+        actarm = ""
+        actarmud = ""
+        if trt:
+            match = arms_by_desc.get(trt.upper()) or arms_by_code.get(
+                trt.upper()
+            )
+            if match:
+                actarmcd, actarm = match
+            else:
+                actarmud = trt
+
+        armnrs = ""
+        if not armcd and not actarmcd and not trt:
+            armnrs = "SCREEN FAILURE" if scrnfl == "Y" else "NOT ASSIGNED"
+        elif armcd and not trt:
+            armnrs = "NOT TREATED"
+
+        out_rows.append(
+            {
+                "DOMAIN": "DM",
+                "STUDYID": studyid,
+                "USUBJID": usubjid,
+                "ARMCD": armcd,
+                "ARM": arm,
+                "ACTARMCD": actarmcd,
+                "ACTARM": actarm,
+                "ARMNRS": armnrs,
+                "ACTARMUD": actarmud,
+            }
+        )
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    fieldnames = [
+        "DOMAIN",
+        "STUDYID",
+        "USUBJID",
+        "ARMCD",
+        "ARM",
+        "ACTARMCD",
+        "ACTARM",
+        "ARMNRS",
+        "ACTARMUD",
+    ]
+    with open(
+        os.path.join(OUTPUT_DIR, "dm.csv"), "w", newline="", encoding="utf-8"
+    ) as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+
+if __name__ == "__main__":
+    main()

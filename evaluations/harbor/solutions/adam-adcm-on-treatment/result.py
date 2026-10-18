@@ -4,56 +4,71 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Create ADCM (one record per concomitant medication) from ADSL and CM.
 
-import polars as pl
+ONTRTFL is "Y" when the medication's dates overlap the subject's treatment
+period [TRTSDT, TRTEDT]; boundary contact counts as overlap. A missing
+medication start or end date is treated as overlapping unless the known
+dates rule overlap out. A missing TRTEDT leaves the period open-ended.
+A subject with no TRTSDT is never flagged.
+"""
 
-cm = pl.read_csv("/app/input/cm.csv", infer_schema=False).with_columns(
-    pl.col("CMSEQ").cast(pl.Int64)
-)
-adsl = pl.read_csv("/app/input/adsl.csv", infer_schema=False).select(
-    "USUBJID", "TRTSDT", "TRTEDT"
-)
+import pandas as pd
 
-adcm = cm.join(adsl, on="USUBJID", how="left").with_columns(
-    ASTDT=pl.col("CMSTDTC"), AENDT=pl.col("CMENDTC")
-)
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-# The medication overlaps the treatment period. A missing medication date is
-# assumed to overlap unless the known dates rule it out; a missing treatment
-# end leaves the period open, while no treatment start is never flagged.
-# ISO dates sort as text.
-adcm = (
-    adcm.with_columns(
-        ONTRTFL=pl.when(pl.col("TRTSDT").is_null() | (pl.col("TRTSDT") == ""))
-        .then(None)
-        .when(
-            pl.col("AENDT").is_not_null()
-            & (pl.col("AENDT") != "")
-            & (pl.col("AENDT") < pl.col("TRTSDT"))
-        )
-        .then(None)
-        .when(
-            pl.col("ASTDT").is_not_null()
-            & (pl.col("ASTDT") != "")
-            & pl.col("TRTEDT").is_not_null()
-            & (pl.col("TRTEDT") != "")
-            & (pl.col("ASTDT") > pl.col("TRTEDT"))
-        )
-        .then(None)
-        .otherwise(pl.lit("Y"))
-    ).select(
-        "STUDYID",
-        "USUBJID",
-        "CMSEQ",
-        "CMTRT",
-        "ASTDT",
-        "AENDT",
-        "TRTSDT",
-        "TRTEDT",
-        "ONTRTFL",
+
+def to_date(series):
+    return pd.to_datetime(series, errors="coerce")
+
+
+def fmt_date(series):
+    return series.dt.strftime("%Y-%m-%d").fillna("")
+
+
+def main():
+    adsl = pd.read_csv(f"{INPUT_DIR}/adsl.csv", dtype=str, keep_default_na=False)
+    cm = pd.read_csv(f"{INPUT_DIR}/cm.csv", dtype=str, keep_default_na=False)
+
+    adsl["TRTSDT_D"] = to_date(adsl["TRTSDT"])
+    adsl["TRTEDT_D"] = to_date(adsl["TRTEDT"])
+
+    trt = adsl.set_index(["STUDYID", "USUBJID"])[["TRTSDT_D", "TRTEDT_D"]]
+    cm = cm.join(trt, on=["STUDYID", "USUBJID"])
+
+    cm["ASTDT_D"] = to_date(cm["CMSTDTC"])
+    cm["AENDT_D"] = to_date(cm["CMENDTC"])
+
+    def ontrtfl(row):
+        tsdt, tedt = row["TRTSDT_D"], row["TRTEDT_D"]
+        if pd.isna(tsdt):
+            return ""
+        astdt, aendt = row["ASTDT_D"], row["AENDT_D"]
+        # Known dates rule overlap out only in these two cases.
+        if pd.notna(aendt) and aendt < tsdt:
+            return ""
+        if pd.notna(astdt) and pd.notna(tedt) and astdt > tedt:
+            return ""
+        return "Y"
+
+    cm["ONTRTFL"] = cm.apply(ontrtfl, axis=1)
+
+    out = pd.DataFrame(
+        {
+            "STUDYID": cm["STUDYID"],
+            "USUBJID": cm["USUBJID"],
+            "CMSEQ": cm["CMSEQ"],
+            "CMTRT": cm["CMTRT"],
+            "ASTDT": fmt_date(cm["ASTDT_D"]),
+            "AENDT": fmt_date(cm["AENDT_D"]),
+            "TRTSDT": fmt_date(cm["TRTSDT_D"]),
+            "TRTEDT": fmt_date(cm["TRTEDT_D"]),
+            "ONTRTFL": cm["ONTRTFL"],
+        }
     )
-)
+    out.to_csv(f"{OUTPUT_DIR}/adcm.csv", index=False)
 
-Path("/app/output").mkdir(exist_ok=True)
-adcm.write_csv("/app/output/adcm.csv")
+
+if __name__ == "__main__":
+    main()

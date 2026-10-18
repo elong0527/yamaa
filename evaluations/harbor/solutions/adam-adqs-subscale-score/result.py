@@ -4,53 +4,64 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+import csv
+from collections import OrderedDict
 
-import polars as pl
+INPUT_QS = "/app/input/qs.csv"
+OUTPUT_ADQS = "/app/output/adqs.csv"
 
-qs = pl.read_csv("/app/input/qs.csv", infer_schema=False).with_columns(
-    pl.col("QSSEQ").cast(pl.Int64),
-    pl.col("QSSTRESN").cast(pl.Float64),
-)
+ITEM_CODES = ("PF01", "PF02", "PF03", "PF04")
+SCORE_PARAMCD = "PFSCORE"
+SCORE_PARAM = "Physical Functioning Subscale Score"
 
-# Each physical functioning item response, on its zero to four scale.
-items = (
-    qs.filter(pl.col("QSTESTCD").is_in(["PF01", "PF02", "PF03", "PF04"]))
-    .with_columns(
-        PARAMCD=pl.col("QSTESTCD"), PARAM=pl.col("QSTEST"), AVAL=pl.col("QSSTRESN")
-    )
-    .select("STUDYID", "USUBJID", "VISIT", "PARAMCD", "PARAM", "AVAL")
-)
 
-# One score record per visit with a PF01 item record: the mean of the
-# answered items on a zero to one hundred scale, with no value when fewer
-# than three of the four items were answered.
-visits = items.filter(pl.col("PARAMCD") == "PF01").select(
-    "STUDYID", "USUBJID", "VISIT"
-).unique(maintain_order=True)
+def fmt(value):
+    if value is None:
+        return ""
+    if value == int(value):
+        return str(int(value))
+    return repr(value)
 
-stats = items.group_by(["STUDYID", "USUBJID", "VISIT"]).agg(
-    n_answered=pl.col("AVAL").drop_nulls().len(),
-    mean_answered=pl.col("AVAL").mean(),
-)
 
-scores = (
-    visits.join(stats, on=["STUDYID", "USUBJID", "VISIT"], how="left")
-    .with_columns(
-        AVAL=pl.when(pl.col("n_answered") >= 3)
-        .then(pl.col("mean_answered") * 25)
-        .otherwise(None)
-    )
-    .with_columns(
-        PARAMCD=pl.lit("PFSCORE"),
-        PARAM=pl.lit("Physical Functioning Subscale Score"),
-    )
-    .select("STUDYID", "USUBJID", "VISIT", "PARAMCD", "PARAM", "AVAL")
-)
+def main():
+    with open(INPUT_QS, newline="") as f:
+        rows = list(csv.DictReader(f))
 
-adqs = pl.concat([items, scores], how="diagonal").sort(
-    ["STUDYID", "USUBJID", "VISIT", "PARAMCD"]
-)
+    # Item records: the physical functioning records (PF01..PF04).
+    items = [r for r in rows if r["QSTESTCD"] in ITEM_CODES]
 
-Path("/app/output").mkdir(exist_ok=True)
-adqs.write_csv("/app/output/adqs.csv")
+    # Group item records by subject and visit, preserving input order.
+    groups = OrderedDict()
+    for r in items:
+        key = (r["STUDYID"], r["USUBJID"], r["VISIT"])
+        groups.setdefault(key, []).append(r)
+
+    out = []
+    for (studyid, usubjid, visit), recs in groups.items():
+        answered = []
+        for r in recs:
+            raw = (r["QSSTRESN"] or "").strip()
+            aval = float(raw) if raw != "" else None
+            if aval is not None:
+                answered.append(aval)
+            out.append(
+                [studyid, usubjid, visit, r["QSTESTCD"], r["QSTEST"], fmt(aval)]
+            )
+        # Every visit with a PF01 item record also has a score record.
+        if any(r["QSTESTCD"] == "PF01" for r in recs):
+            if len(answered) >= 3:
+                score = sum(answered) / len(answered) * 25
+            else:
+                score = None
+            out.append(
+                [studyid, usubjid, visit, SCORE_PARAMCD, SCORE_PARAM, fmt(score)]
+            )
+
+    with open(OUTPUT_ADQS, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["STUDYID", "USUBJID", "VISIT", "PARAMCD", "PARAM", "AVAL"])
+        writer.writerows(out)
+
+
+if __name__ == "__main__":
+    main()

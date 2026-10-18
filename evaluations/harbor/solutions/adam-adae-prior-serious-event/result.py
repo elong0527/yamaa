@@ -4,69 +4,61 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+import csv
 
-import polars as pl
+IN = "/app/input/ae.csv"
+OUT = "/app/output/adae.csv"
 
-ae = pl.read_csv("/app/input/ae.csv", infer_schema=False).with_columns(
-    pl.col("AESEQ").cast(pl.Int64)
-)
+with open(IN, newline="") as f:
+    rows = list(csv.DictReader(f))
 
-records = []
-for subject, group in ae.sort(["USUBJID", "AESEQ"]).group_by("USUBJID", maintain_order=True):
-    rows = group.sort("AESEQ").to_dicts()
-    serious_seqs = [r["AESEQ"] for r in rows if r["AESER"] == "Y"]
-    first_seq = min(serious_seqs) if serious_seqs else None
-    first_term = next(
-        (r["AEDECOD"] for r in rows if r["AESEQ"] == first_seq), None
-    )
-    by_seq = {r["AESEQ"]: r for r in rows}
-    for row in rows:
-        seq = row["AESEQ"]
-        earlier_serious = [s for s in serious_seqs if s < seq]
-        prior_seq = max(earlier_serious) if earlier_serious else None
-        prior_term = by_seq.get(prior_seq, {}).get("AEDECOD") if prior_seq else None
-        earlier_all = [r["AESEQ"] for r in rows if r["AESEQ"] < seq]
-        prev_seq = max(earlier_all) if earlier_all else None
-        prev_term = by_seq.get(prev_seq, {}).get("AEDECOD") if prev_seq else None
-        is_nonserious = row["AESER"] == "N"
-        # Only an explicit N receives prior and first serious-event fields. A
-        # serious event with no coded term still counts for the flag and
-        # the sequence number, while the term fields stay empty.
-        records.append(
-            {
-                "STUDYID": row["STUDYID"],
-                "USUBJID": row["USUBJID"],
-                "AESEQ": seq,
-                "AEDECOD": row["AEDECOD"],
-                "AESER": row["AESER"],
-                "PRIOR_SAEFL": None
-                if not is_nonserious or prior_seq is None
-                else "Y",
-                "PRIOR_SAEDECOD": None if not is_nonserious else prior_term,
-                "PRIOR_SAESEQ": None if not is_nonserious else prior_seq,
-                "FIRST_SAEDECOD": None if not is_nonserious else first_term,
-                "FIRST_SAESEQ": None if not is_nonserious else first_seq,
-                "PREV_AEDECOD": prev_term,
-            }
-        )
+for r in rows:
+    r["AESEQ"] = int(r["AESEQ"])
+    if r["AEDECOD"] == "":
+        r["AEDECOD"] = None
 
-adae = pl.DataFrame(
-    records,
-    schema={
-        "STUDYID": pl.String,
-        "USUBJID": pl.String,
-        "AESEQ": pl.Int64,
-        "AEDECOD": pl.String,
-        "AESER": pl.String,
-        "PRIOR_SAEFL": pl.String,
-        "PRIOR_SAEDECOD": pl.String,
-        "PRIOR_SAESEQ": pl.Int64,
-        "FIRST_SAEDECOD": pl.String,
-        "FIRST_SAESEQ": pl.Int64,
-        "PREV_AEDECOD": pl.String,
-    },
-)
+rows.sort(key=lambda r: (r["USUBJID"], r["AESEQ"]))
 
-Path("/app/output").mkdir(exist_ok=True)
-adae.write_csv("/app/output/adae.csv")
+out = []
+by_subj = {}
+for r in rows:
+    by_subj.setdefault(r["USUBJID"], []).append(r)
+
+for subj, evs in by_subj.items():
+    serious = [e for e in evs if e["AESER"] == "Y"]
+    first = serious[0] if serious else None
+    prev_decod = None
+    for i, e in enumerate(evs):
+        row = {
+            "STUDYID": e["STUDYID"],
+            "USUBJID": e["USUBJID"],
+            "AESEQ": e["AESEQ"],
+            "AEDECOD": e["AEDECOD"] or "",
+            "AESER": e["AESER"],
+            "PRIOR_SAEFL": "",
+            "PRIOR_SAEDECOD": "",
+            "PRIOR_SAESEQ": "",
+            "FIRST_SAEDECOD": "",
+            "FIRST_SAESEQ": "",
+            "PREV_AEDECOD": prev_decod or "",
+        }
+        if e["AESER"] != "Y":
+            earlier = [s for s in serious if s["AESEQ"] < e["AESEQ"]]
+            if earlier:
+                most_recent = earlier[-1]
+                row["PRIOR_SAEFL"] = "Y"
+                row["PRIOR_SAEDECOD"] = most_recent["AEDECOD"] or ""
+                row["PRIOR_SAESEQ"] = most_recent["AESEQ"]
+            if first is not None:
+                row["FIRST_SAEDECOD"] = first["AEDECOD"] or ""
+                row["FIRST_SAESEQ"] = first["AESEQ"]
+        out.append(row)
+        prev_decod = e["AEDECOD"]
+
+cols = ["STUDYID", "USUBJID", "AESEQ", "AEDECOD", "AESER", "PRIOR_SAEFL",
+        "PRIOR_SAEDECOD", "PRIOR_SAESEQ", "FIRST_SAEDECOD", "FIRST_SAESEQ",
+        "PREV_AEDECOD"]
+with open(OUT, "w", newline="") as f:
+    w = csv.DictWriter(f, fieldnames=cols)
+    w.writeheader()
+    w.writerows(out)

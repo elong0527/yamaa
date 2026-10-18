@@ -4,63 +4,58 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Create ADAE occurrence flags (AOCCFL, AOCCSFL, AOCCPFL) from ADAE_RAW.
 
-import polars as pl
+An event is treatment-emergent when TRTEMFL is "Y"; only such events can
+be flagged. Within each grouping, the first treatment-emergent event is
+the one with the earliest ASTDT, with the lower AESEQ breaking a tie.
+"""
 
-ae = pl.read_csv("/app/input/adae_raw.csv", infer_schema=False).with_columns(
-    pl.col("AESEQ").cast(pl.Int64)
-)
+import pandas as pd
 
-# The first treatment-emergent event at each level: the earliest start
-# date, with the lower AESEQ breaking ties on the same day. ISO dates
-# sort as text.
-first_overall = (
-    ae.filter(pl.col("TRTEMFL") == "Y")
-    .sort(["USUBJID", "ASTDT", "AESEQ"], nulls_last=True)
-    .unique("USUBJID", keep="first", maintain_order=True)
-    .select("USUBJID", FIRST_SEQ="AESEQ")
-)
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-first_soc = (
-    ae.filter(pl.col("TRTEMFL") == "Y")
-    .sort(["USUBJID", "AEBODSYS", "ASTDT", "AESEQ"], nulls_last=True)
-    .unique(["USUBJID", "AEBODSYS"], keep="first", maintain_order=True)
-    .select("USUBJID", "AEBODSYS", SOC_SEQ="AESEQ")
-)
+COLUMNS = [
+    "STUDYID",
+    "USUBJID",
+    "AESEQ",
+    "AEBODSYS",
+    "AEDECOD",
+    "ASTDT",
+    "TRTEMFL",
+    "AOCCFL",
+    "AOCCSFL",
+    "AOCCPFL",
+]
 
-first_pt = (
-    ae.filter(pl.col("TRTEMFL") == "Y")
-    .sort(["USUBJID", "AEBODSYS", "AEDECOD", "ASTDT", "AESEQ"], nulls_last=True)
-    .unique(["USUBJID", "AEBODSYS", "AEDECOD"], keep="first", maintain_order=True)
-    .select("USUBJID", "AEBODSYS", "AEDECOD", PT_SEQ="AESEQ")
-)
 
-adae = (
-    ae.join(first_overall, on="USUBJID", how="left")
-    .join(first_soc, on=["USUBJID", "AEBODSYS"], how="left")
-    .join(first_pt, on=["USUBJID", "AEBODSYS", "AEDECOD"], how="left")
-    .with_columns(
-        AOCCFL=pl.when(pl.col("FIRST_SEQ").is_not_null() & (pl.col("AESEQ") == pl.col("FIRST_SEQ")))
-        .then(pl.lit("Y")),
-        AOCCSFL=pl.when(pl.col("SOC_SEQ").is_not_null() & (pl.col("AESEQ") == pl.col("SOC_SEQ")))
-        .then(pl.lit("Y")),
-        AOCCPFL=pl.when(pl.col("PT_SEQ").is_not_null() & (pl.col("AESEQ") == pl.col("PT_SEQ")))
-        .then(pl.lit("Y")),
+def first_event_index(df, group_cols):
+    """Index of the first treatment-emergent event within each group."""
+    te = df[df["TRTEMFL"] == "Y"].copy()
+    te["_seq"] = te["AESEQ"].astype(int)
+    te = te.sort_values(["ASTDT", "_seq"], kind="mergesort")
+    return set(te.groupby(group_cols, sort=False).head(1).index)
+
+
+def main():
+    df = pd.read_csv(
+        f"{INPUT_DIR}/adae_raw.csv", dtype=str, keep_default_na=False
     )
-    .select(
-        "STUDYID",
-        "USUBJID",
-        "AESEQ",
-        "AEBODSYS",
-        "AEDECOD",
-        "ASTDT",
-        "TRTEMFL",
-        "AOCCFL",
-        "AOCCSFL",
-        "AOCCPFL",
-    )
-)
 
-Path("/app/output").mkdir(exist_ok=True)
-adae.write_csv("/app/output/adae.csv")
+    first_subject = first_event_index(df, ["STUDYID", "USUBJID"])
+    first_bodsys = first_event_index(df, ["STUDYID", "USUBJID", "AEBODSYS"])
+    first_pt = first_event_index(
+        df, ["STUDYID", "USUBJID", "AEBODSYS", "AEDECOD"]
+    )
+
+    df["AOCCFL"] = ["Y" if i in first_subject else "" for i in df.index]
+    df["AOCCSFL"] = ["Y" if i in first_bodsys else "" for i in df.index]
+    df["AOCCPFL"] = ["Y" if i in first_pt else "" for i in df.index]
+
+    out = df[COLUMNS]
+    out.to_csv(f"{OUTPUT_DIR}/adae.csv", index=False)
+
+
+if __name__ == "__main__":
+    main()

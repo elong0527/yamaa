@@ -4,43 +4,65 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Create ADVS from VS with PREVAVALC, the closest earlier non-blank
+AVALC for the same subject and series.
 
-import polars as pl
+Rows are grouped by subject and series (rows with no SERIES value share
+one series). Within a series, rows are ordered by AVISITN with a missing
+AVISITN last; rows sharing an AVISITN, or both missing one, keep their
+collected order. PREVAVALC is the most recent non-blank AVALC earlier in
+that order, never the row's own AVALC, and blank when no earlier row in
+the series has a non-blank AVALC.
+"""
 
-vs = pl.read_csv("/app/input/vs.csv", infer_schema=False).with_columns(
-    pl.col("VSSEQ").cast(pl.Int64, strict=False),
-    pl.col("AVISITN").cast(pl.Int64, strict=False),
-)
+import pandas as pd
 
-# Rows with no series value share one series within each subject; order
-# within a series by visit number with missing numbers last, keeping the
-# collected order (input row order) for ties.
-ordered = vs.sort(
-    ["STUDYID", "USUBJID", "SERIES", "AVISITN"],
-    nulls_last=True,
-    maintain_order=True,
-)
+INPUT_VS = "/app/input/vs.csv"
+OUTPUT_ADVS = "/app/output/advs.csv"
 
-# The closest earlier result with a value in the same subject and series.
-prev_by_key: dict[tuple, str | None] = {}
-last_seen: dict[tuple, str | None] = {}
-for record in ordered.iter_rows(named=True):
-    key = (record["STUDYID"], record["USUBJID"], record["SERIES"])
-    prev_by_key[(record["STUDYID"], record["USUBJID"], record["VSSEQ"])] = last_seen.get(key)
-    if record["AVALC"] is not None:
-        last_seen[key] = record["AVALC"]
+COLUMNS = ["STUDYID", "USUBJID", "VSSEQ", "SERIES", "AVISITN", "AVALC"]
 
-advs = (
-    vs.with_columns(
-        PREVAVALC=pl.struct(["STUDYID", "USUBJID", "VSSEQ"]).map_elements(
-            lambda s: prev_by_key.get((s["STUDYID"], s["USUBJID"], s["VSSEQ"])),
-            return_dtype=pl.String,
-        )
-    )
-    .sort(["USUBJID", "VSSEQ"])
-    .select("STUDYID", "USUBJID", "VSSEQ", "SERIES", "AVISITN", "AVALC", "PREVAVALC")
-)
 
-Path("/app/output").mkdir(parents=True, exist_ok=True)
-advs.write_csv("/app/output/advs.csv")
+def is_blank(value):
+    return value is None or str(value).strip() == ""
+
+
+def visit_key(row):
+    """Sort key: AVISITN ascending, missing AVISITN last."""
+    avisitn = row["AVISITN"]
+    if is_blank(avisitn):
+        return (1, 0.0)
+    return (0, float(avisitn))
+
+
+def main():
+    vs = pd.read_csv(INPUT_VS, dtype=str, keep_default_na=False)
+    for column in COLUMNS:
+        if column not in vs.columns:
+            vs[column] = ""
+    vs = vs[COLUMNS].copy()
+    vs["_collected"] = range(len(vs))
+
+    prev = [""] * len(vs)
+
+    # Group by subject and series; blank SERIES values share one series.
+    for _, group in vs.groupby(["STUDYID", "USUBJID", "SERIES"],
+                               sort=False):
+        # Stable sort keeps collected order within equal AVISITN keys.
+        # groupby preserves collected order within the group, and
+        # sorted() is stable, so ties on AVISITN (or both missing) keep
+        # their collected order.
+        ordered = sorted(group.to_dict("records"), key=visit_key)
+        last_non_blank = ""
+        for row in ordered:
+            prev[row["_collected"]] = last_non_blank
+            if not is_blank(row["AVALC"]):
+                last_non_blank = row["AVALC"]
+
+    vs["PREVAVALC"] = prev
+    out = vs[COLUMNS + ["PREVAVALC"]]
+    out.to_csv(OUTPUT_ADVS, index=False)
+
+
+if __name__ == "__main__":
+    main()

@@ -4,70 +4,83 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Create ADPP from EX and PP: collected PK parameters plus dose-normalized
+records for CMAX, AUCLST, and AUCIFO, normalized by the dose (mg) of the
+subject's administration starting at the profile's reference time."""
 
-import polars as pl
+import csv
+import os
+
+INPUT = "/app/input"
+OUTPUT = "/app/output"
+
+NORMALIZED = {
+    "CMAX": ("CMAXD", "Max Conc Norm by Dose", "ng/mL/mg"),
+    "AUCLST": ("AUCLSTD", "AUC to Last Nonzero Conc Norm by Dose", "h*ng/mL/mg"),
+    "AUCIFO": ("AUCIFOD", "AUC Infinity Obs Norm by Dose", "h*ng/mL/mg"),
+}
 
 COLUMNS = ["STUDYID", "USUBJID", "VISIT", "PARAMCD", "PARAM", "AVAL", "AVALU"]
 
-# The three exposure parameters that get a dose-normalized record.
-NORMALIZED = pl.DataFrame(
-    {
-        "PPTESTCD": ["CMAX", "AUCLST", "AUCIFO"],
-        "NEWCD": ["CMAXD", "AUCLSTD", "AUCIFOD"],
-        "NEWPARAM": [
-            "Max Conc Norm by Dose",
-            "AUC to Last Nonzero Conc Norm by Dose",
-            "AUC Infinity Obs Norm by Dose",
-        ],
-    }
-)
-MG_PER_UNIT = pl.DataFrame({"EXDOSU": ["mg", "ug"], "MGDIV": [1.0, 1000.0]})
 
-pp = pl.read_csv("/app/input/pp.csv", infer_schema=False).with_columns(
-    pl.col("PPSTRESN").cast(pl.Float64)
-)
-ex = pl.read_csv("/app/input/ex.csv", infer_schema=False).with_columns(
-    pl.col("EXDOSE").cast(pl.Float64)
-)
+def read_csv(name):
+    with open(os.path.join(INPUT, name), newline="") as f:
+        return list(csv.DictReader(f))
 
-# Every PP record as collected.
-kept = pp.select(
-    "STUDYID",
-    "USUBJID",
-    "VISIT",
-    PARAMCD=pl.col("PPTESTCD"),
-    PARAM=pl.col("PPTEST"),
-    AVAL=pl.col("PPSTRESN"),
-    AVALU=pl.col("PPSTRESU"),
-)
 
-# The one administration that starts at each profile's reference time, its
-# dose in mg (a dose in ug is a thousandth of a mg).
-dose = ex.join(MG_PER_UNIT, on="EXDOSU", how="left").select(
-    "STUDYID",
-    "USUBJID",
-    PPRFTDTC=pl.col("EXSTDTC"),
-    DOSEMG=pl.col("EXDOSE") / pl.col("MGDIV"),
-)
+def dose_mg(ex_row):
+    dose = float(ex_row["EXDOSE"])
+    unit = ex_row["EXDOSU"].strip()
+    if unit == "mg":
+        return dose
+    if unit in ("ug", "µg", "mcg"):
+        return dose / 1000.0
+    return dose
 
-added = (
-    pp.join(NORMALIZED, on="PPTESTCD", how="inner")
-    .filter(pl.col("PPSTRESN").is_not_null())
-    .join(dose, on=["STUDYID", "USUBJID", "PPRFTDTC"], how="inner")
-    .filter(pl.col("DOSEMG").is_not_null() & (pl.col("DOSEMG") != 0))
-    .select(
-        "STUDYID",
-        "USUBJID",
-        "VISIT",
-        PARAMCD=pl.col("NEWCD"),
-        PARAM=pl.col("NEWPARAM"),
-        AVAL=pl.col("PPSTRESN") / pl.col("DOSEMG"),
-        AVALU=pl.col("PPSTRESU") + "/mg",
-    )
-)
 
-adpp = pl.concat([kept, added]).select(COLUMNS)
+def main():
+    ex = read_csv("ex.csv")
+    pp = read_csv("pp.csv")
 
-Path("/app/output").mkdir(exist_ok=True)
-adpp.write_csv("/app/output/adpp.csv")
+    # One administration per subject per start time.
+    dose_by_key = {}
+    for row in ex:
+        dose_by_key[(row["USUBJID"], row["EXSTDTC"])] = dose_mg(row)
+
+    out = []
+    for rec in pp:
+        base = {
+            "STUDYID": rec["STUDYID"],
+            "USUBJID": rec["USUBJID"],
+            "VISIT": rec["VISIT"],
+            "PARAMCD": rec["PPTESTCD"],
+            "PARAM": rec["PPTEST"],
+            "AVAL": rec["PPSTRESN"],
+            "AVALU": rec["PPSTRESU"],
+        }
+        out.append(base)
+
+        spec = NORMALIZED.get(rec["PPTESTCD"])
+        if spec is None or rec["PPSTRESN"] == "":
+            continue
+        dose = dose_by_key.get((rec["USUBJID"], rec["PPRFTDTC"]))
+        if dose is None or dose == 0:
+            continue
+        paramcd, param, avalu = spec
+        aval = float(rec["PPSTRESN"]) / dose
+        added = dict(base)
+        added["PARAMCD"] = paramcd
+        added["PARAM"] = param
+        added["AVAL"] = repr(aval)
+        added["AVALU"] = avalu
+        out.append(added)
+
+    os.makedirs(OUTPUT, exist_ok=True)
+    with open(os.path.join(OUTPUT, "adpp.csv"), "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=COLUMNS)
+        writer.writeheader()
+        writer.writerows(out)
+
+
+if __name__ == "__main__":
+    main()

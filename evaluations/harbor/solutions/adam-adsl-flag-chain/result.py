@@ -4,69 +4,61 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+import csv
+from collections import defaultdict
 
-import polars as pl
+INPUT = "/app/input"
+OUTPUT = "/app/output"
 
-dm = pl.read_csv("/app/input/dm.csv", infer_schema=False).with_columns(
-    pl.col("RANDDT").str.to_date(strict=False),
-    pl.col("AGE").cast(pl.Int64, strict=False),
-)
-ex = pl.read_csv("/app/input/ex.csv", infer_schema=False).with_columns(
-    pl.col("EXSTDTC").str.to_date(strict=False),
-)
+with open(f"{INPUT}/dm.csv", newline="") as f:
+    dm = list(csv.DictReader(f))
 
-first_exposure = ex.group_by(["STUDYID", "USUBJID"]).agg(
-    TRTSDT=pl.col("EXSTDTC").min()
-)
+with open(f"{INPUT}/ex.csv", newline="") as f:
+    ex = list(csv.DictReader(f))
 
-adsl = (
-    dm.join(first_exposure, on=["STUDYID", "USUBJID"], how="left", maintain_order="left")
-    .with_columns(
-        SAFFL=pl.when(pl.col("TRTSDT").is_not_null())
-        .then(pl.lit("Y"))
-        .otherwise(pl.lit("N")),
-        RANDFL=pl.when(pl.col("RANDDT").is_not_null())
-        .then(pl.lit("Y"))
-        .otherwise(pl.lit("N")),
-    )
-    .with_columns(
-        ITTFL=pl.when(pl.col("RANDFL") == "Y")
-        .then(pl.lit("Y"))
-        .otherwise(pl.lit("N")),
-    )
-    .with_columns(
-        POPFL=pl.when((pl.col("SAFFL") == "Y") & (pl.col("ITTFL") == "Y"))
-        .then(pl.lit("Y"))
-        .otherwise(pl.lit("N")),
-        AGEGR1=pl.when(pl.col("AGE") < 65)
-        .then(pl.lit("<65"))
-        .when(pl.col("AGE") >= 65)
-        .then(pl.lit(">=65"))
-        .otherwise(None),
-    )
-)
+# Earliest dated exposure start per subject
+trtsdt = {}
+for row in ex:
+    dtc = (row.get("EXSTDTC") or "").strip()
+    if not dtc:
+        continue
+    subj = row["USUBJID"]
+    if subj not in trtsdt or dtc < trtsdt[subj]:
+        trtsdt[subj] = dtc
 
-# Rank by age within the study, youngest first, USUBJID breaking ties.
-ranked = (
-    adsl.with_columns(__idx=pl.int_range(pl.len()))
-    .sort(["STUDYID", "AGE", "USUBJID"], nulls_last=True)
-    .with_columns(AGERNK=pl.int_range(1, pl.len() + 1).over("STUDYID"))
-    .sort("__idx")
-    .drop("__idx")
-    .select(
-        "POPFL",
-        "SAFFL",
-        "ITTFL",
-        "TRTSDT",
-        "RANDDT",
-        "AGEGR1",
-        "AGERNK",
-        "STUDYID",
-        "USUBJID",
-        "AGE",
-    )
-)
+rows = []
+for subj in dm:
+    usubjid = subj["USUBJID"]
+    randdt = (subj.get("RANDDT") or "").strip()
+    age = int(subj["AGE"])
+    saffl = "Y" if usubjid in trtsdt else "N"
+    ittfl = "Y" if randdt else "N"
+    popfl = "Y" if (saffl == "Y" and ittfl == "Y") else "N"
+    rows.append({
+        "POPFL": popfl,
+        "SAFFL": saffl,
+        "ITTFL": ittfl,
+        "TRTSDT": trtsdt.get(usubjid, ""),
+        "RANDDT": randdt,
+        "AGEGR1": "<65" if age < 65 else ">=65",
+        "STUDYID": subj["STUDYID"],
+        "USUBJID": usubjid,
+        "AGE": subj["AGE"],
+        "_age": age,
+    })
 
-Path("/app/output").mkdir(exist_ok=True)
-ranked.write_csv("/app/output/adsl.csv")
+# Rank by AGE within study, ties broken by USUBJID
+by_study = defaultdict(list)
+for r in rows:
+    by_study[r["STUDYID"]].append(r)
+for study_rows in by_study.values():
+    for rank, r in enumerate(sorted(study_rows, key=lambda x: (x["_age"], x["USUBJID"])), start=1):
+        r["AGERNK"] = rank
+
+fieldnames = ["POPFL", "SAFFL", "ITTFL", "TRTSDT", "RANDDT", "AGEGR1",
+              "AGERNK", "STUDYID", "USUBJID", "AGE"]
+with open(f"{OUTPUT}/adsl.csv", "w", newline="") as f:
+    w = csv.DictWriter(f, fieldnames=fieldnames)
+    w.writeheader()
+    for r in rows:
+        w.writerow({k: r[k] for k in fieldnames})

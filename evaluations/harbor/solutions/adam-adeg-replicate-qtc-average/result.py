@@ -4,54 +4,79 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+import csv
+from collections import OrderedDict
 
-import polars as pl
+INPUT = "/app/input"
+OUTPUT = "/app/output"
 
-eg = pl.read_csv("/app/input/eg.csv", infer_schema=False).with_columns(
-    RESULT=pl.col("EGSTRESN").cast(pl.Float64, strict=False),
-    TPTNUM=pl.col("EGTPTNUM").cast(pl.Float64, strict=False),
-)
-ecg_keys = ["STUDYID", "USUBJID", "TPTNUM", "EGREPNUM"]
-point_keys = ["STUDYID", "USUBJID", "TPTNUM", "EGTPT"]
-
-qt = eg.filter(pl.col("EGTESTCD") == "QTAG")
-rr = eg.filter(pl.col("EGTESTCD") == "RRAG")
-
-# One ECG is one replicate number at a time point: its QT pairs with the RR
-# of the same replicate number, never by collection time.
-pairs = qt.select(*point_keys, "EGREPNUM", QT="RESULT").join(
-    rr.select(*ecg_keys, RR="RESULT"), on=ecg_keys, how="left"
-)
-# Fridericia's correction of each ECG: QT over the cube root of RR in seconds.
-pairs = pairs.with_columns(
-    QTCF=pl.col("QT") / (pl.col("RR") / 1000).pow(1 / 3)
-)
+PARAMS = [
+    ("QTAG", "QT Interval, Aggregate (msec)"),
+    ("RRAG", "RR Interval, Aggregate (msec)"),
+    ("QTCF", "QTcF Interval, Aggregate (msec)"),
+]
 
 
-def averages(frame: pl.DataFrame, value: str, paramcd: str, param: str):
-    # The mean over the ECGs that have a value; no value, no record.
-    return (
-        frame.filter(pl.col(value).is_not_null())
-        .group_by(point_keys, maintain_order=True)
-        .agg(AVAL=pl.col(value).mean())
-        .with_columns(PARAMCD=pl.lit(paramcd), PARAM=pl.lit(param))
-    )
+def main():
+    with open(f"{INPUT}/eg.csv", newline="") as f:
+        rows = list(csv.DictReader(f))
+
+    # Group rows by subject and planned time point, preserving input order.
+    groups = OrderedDict()
+    for row in rows:
+        key = (row["STUDYID"], row["USUBJID"], row["EGTPT"], row["EGTPTNUM"])
+        groups.setdefault(key, []).append(row)
+
+    out = []
+    for (studyid, usubjid, atpt, atptn), grows in groups.items():
+        qt = {}  # EGREPNUM -> QT result (msec)
+        rr = {}  # EGREPNUM -> RR result (msec)
+        for row in grows:
+            value = row["EGSTRESN"].strip()
+            if value == "":
+                # A test that was not done has no result.
+                continue
+            if row["EGTESTCD"] == "QTAG":
+                qt[row["EGREPNUM"]] = float(value)
+            elif row["EGTESTCD"] == "RRAG":
+                rr[row["EGREPNUM"]] = float(value)
+
+        values = {}
+        if qt:
+            values["QTAG"] = sum(qt.values()) / len(qt)
+        if rr:
+            values["RRAG"] = sum(rr.values()) / len(rr)
+        corrected = []
+        for repnum, qtval in qt.items():
+            if repnum in rr and rr[repnum] != 0:
+                corrected.append(qtval / (rr[repnum] / 1000.0) ** (1.0 / 3.0))
+        if corrected:
+            values["QTCF"] = sum(corrected) / len(corrected)
+
+        for paramcd, param in PARAMS:
+            if paramcd not in values:
+                # A parameter with no value at a time point has no record.
+                continue
+            out.append(
+                {
+                    "STUDYID": studyid,
+                    "USUBJID": usubjid,
+                    "PARAMCD": paramcd,
+                    "PARAM": param,
+                    "ATPT": atpt,
+                    "ATPTN": atptn,
+                    "DTYPE": "AVERAGE",
+                    "AVAL": repr(values[paramcd]),
+                }
+            )
+
+    columns = ["STUDYID", "USUBJID", "PARAMCD", "PARAM", "ATPT", "ATPTN",
+               "DTYPE", "AVAL"]
+    with open(f"{OUTPUT}/adeg.csv", "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=columns)
+        writer.writeheader()
+        writer.writerows(out)
 
 
-adeg = pl.concat(
-    [
-        averages(qt, "RESULT", "QTAG", "QT Interval, Aggregate (msec)"),
-        averages(rr, "RESULT", "RRAG", "RR Interval, Aggregate (msec)"),
-        averages(pairs, "QTCF", "QTCF", "QTcF Interval, Aggregate (msec)"),
-    ]
-).with_columns(
-    ATPT=pl.col("EGTPT"),
-    ATPTN=pl.col("TPTNUM"),
-    DTYPE=pl.lit("AVERAGE"),
-).sort(["STUDYID", "USUBJID", "PARAMCD", "ATPTN"]).select(
-    "STUDYID", "USUBJID", "PARAMCD", "PARAM", "ATPT", "ATPTN", "DTYPE", "AVAL"
-)
-
-Path("/app/output").mkdir(exist_ok=True)
-adeg.write_csv("/app/output/adeg.csv")
+if __name__ == "__main__":
+    main()

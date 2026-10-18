@@ -4,62 +4,104 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Create ADRS (EASI-75 composite response) from ADRS_RAW and ADSL.
 
-import polars as pl
+One record per subject and analysis visit from ADRS_RAW, enriched with the
+subject-level SAEFL and DCSREAS from ADSL. A subject flagged by the safety
+or discontinuation rule is a non-responder whatever the percent change;
+otherwise a missing percent change is not evaluable, a percent change of
+-75 or less is a responder, and anything else is a non-responder.
+"""
 
-adsl = pl.read_csv("/app/input/adsl.csv", infer_schema=False)
-raw = pl.read_csv("/app/input/adrs_raw.csv", infer_schema=False).with_columns(
-    pl.col("PCHG").cast(pl.Float64)
-)
+import csv
+import os
 
-base = raw.join(adsl.select("USUBJID", "SAEFL", "DCSREAS"), on="USUBJID", how="left")
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-# The checks apply in a fixed order: a safety or discontinuation rule
-# first, then a missing component, then the 75% reduction threshold.
-safety = (pl.col("SAEFL") == "Y") | (
-    pl.col("DCSREAS").is_not_null() & (pl.col("DCSREAS") != "")
-)
-avalc = (
-    pl.when(safety)
-    .then(pl.lit("NON-RESPONDER"))
-    .when(pl.col("PCHG").is_null())
-    .then(pl.lit("NOT EVALUABLE"))
-    .when(pl.col("PCHG") <= -75)
-    .then(pl.lit("RESPONDER"))
-    .otherwise(pl.lit("NON-RESPONDER"))
-)
-arsn = (
-    pl.when(safety)
-    .then(pl.lit("SAFETY OR DISCONTINUATION RULE"))
-    .when(pl.col("PCHG").is_null())
-    .then(pl.lit("COMPONENT MISSING"))
-    .when(pl.col("PCHG") <= -75)
-    .then(pl.lit("THRESHOLD MET"))
-    .otherwise(pl.lit("THRESHOLD NOT MET"))
-)
 
-adrs = (
-    base.with_columns(
-        PARAMCD=pl.lit("RESP75"),
-        PARAM=pl.lit("EASI-75 Response"),
-        AVALC=avalc,
-        ARSN=arsn,
-    )
-    .with_columns(
-        AVAL=pl.when(pl.col("AVALC") == "RESPONDER")
-        .then(1)
-        .when(pl.col("AVALC") == "NON-RESPONDER")
-        .then(0)
-        .otherwise(None)
-        .cast(pl.Int64)
-    )
-    .select(
-        "STUDYID", "USUBJID", "PARAMCD", "PARAM", "AVISIT", "PCHG",
-        "SAEFL", "DCSREAS", "AVALC", "ARSN", "AVAL",
-    )
-    .sort(["USUBJID", "AVISIT"])
-)
+def read_csv(path):
+    with open(path, newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
 
-Path("/app/output").mkdir(exist_ok=True)
-adrs.write_csv("/app/output/adrs.csv")
+
+def main():
+    raw = read_csv(os.path.join(INPUT_DIR, "adrs_raw.csv"))
+    adsl = read_csv(os.path.join(INPUT_DIR, "adsl.csv"))
+
+    subjects = {}
+    for row in adsl:
+        subjects[(row["STUDYID"], row["USUBJID"])] = row
+
+    out_rows = []
+    for row in raw:
+        key = (row["STUDYID"], row["USUBJID"])
+        subject = subjects.get(key, {})
+        saefl = subject.get("SAEFL", "") or ""
+        dcsreas = subject.get("DCSREAS", "") or ""
+
+        pchg_text = row["PCHG"]
+        pchg = None
+        if pchg_text is not None and pchg_text.strip() != "":
+            pchg = float(pchg_text)
+
+        if saefl == "Y" or dcsreas != "":
+            avalc = "NON-RESPONDER"
+            arsn = "SAFETY OR DISCONTINUATION RULE"
+        elif pchg is None:
+            avalc = "NOT EVALUABLE"
+            arsn = "COMPONENT MISSING"
+        elif pchg <= -75:
+            avalc = "RESPONDER"
+            arsn = "THRESHOLD MET"
+        else:
+            avalc = "NON-RESPONDER"
+            arsn = "THRESHOLD NOT MET"
+
+        if avalc == "RESPONDER":
+            aval = "1"
+        elif avalc == "NON-RESPONDER":
+            aval = "0"
+        else:
+            aval = ""
+
+        out_rows.append(
+            {
+                "STUDYID": row["STUDYID"],
+                "USUBJID": row["USUBJID"],
+                "PARAMCD": "RESP75",
+                "PARAM": "EASI-75 Response",
+                "AVISIT": row["AVISIT"],
+                "PCHG": pchg_text,
+                "SAEFL": saefl,
+                "DCSREAS": dcsreas,
+                "AVALC": avalc,
+                "ARSN": arsn,
+                "AVAL": aval,
+            }
+        )
+
+    fieldnames = [
+        "STUDYID",
+        "USUBJID",
+        "PARAMCD",
+        "PARAM",
+        "AVISIT",
+        "PCHG",
+        "SAEFL",
+        "DCSREAS",
+        "AVALC",
+        "ARSN",
+        "AVAL",
+    ]
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    with open(
+        os.path.join(OUTPUT_DIR, "adrs.csv"), "w", newline="", encoding="utf-8"
+    ) as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+
+if __name__ == "__main__":
+    main()

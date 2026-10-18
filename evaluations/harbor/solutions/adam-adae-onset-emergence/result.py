@@ -4,84 +4,101 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Create the ADAE dataset (one record per adverse event) from ADSL and AE.
 
-import polars as pl
+Treatment emergence is decided at second precision against the window from
+first exposure (TRTSDTM) through 30 days after last exposure (TEENDDTM).
+"""
 
-ae = pl.read_csv("/app/input/ae.csv", infer_schema=False).with_columns(
-    pl.col("AESEQ").cast(pl.Int64)
-)
-adsl = pl.read_csv("/app/input/adsl.csv", infer_schema=False)
+import os
+from datetime import timedelta
+
+import pandas as pd
+
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
 
-def complete_seconds(frame: pl.DataFrame, name: str, out: str) -> pl.DataFrame:
-    # Datetimes collected without seconds are completed to the second so
-    # the onset and the first exposure compare at the moment, not the day.
-    return frame.with_columns(
-        pl.when(pl.col(name).str.contains(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$"))
-        .then(pl.col(name) + ":00")
-        .otherwise(pl.col(name))
-        .alias(out)
+def to_datetime(series):
+    """Parse ISO datetime text; empty text and unparseable values are NaT.
+
+    A value collected without seconds (e.g. '2025-03-04T11:45') parses with
+    seconds taken as zero.
+    """
+    return pd.to_datetime(series.replace("", None), errors="coerce", format="mixed")
+
+
+def fmt_datetime(value):
+    if pd.isna(value):
+        return ""
+    return value.strftime("%Y-%m-%dT%H:%M:%S")
+
+
+def main():
+    adsl = pd.read_csv(
+        os.path.join(INPUT_DIR, "adsl.csv"), dtype=str, keep_default_na=False
+    )
+    ae = pd.read_csv(
+        os.path.join(INPUT_DIR, "ae.csv"), dtype=str, keep_default_na=False
     )
 
+    adsl["TRTSDTM_DT"] = to_datetime(adsl["TRTSDTM"])
+    adsl["TRTENDTM_DT"] = to_datetime(adsl["TRTENDTM"])
+    adsl["TEENDDTM_DT"] = to_datetime(adsl["TEENDDTM"])
+    # TEENDDTM is 30 days after last exposure when not supplied directly.
+    missing_end = adsl["TEENDDTM_DT"].isna() & adsl["TRTENDTM_DT"].notna()
+    adsl.loc[missing_end, "TEENDDTM_DT"] = adsl.loc[
+        missing_end, "TRTENDTM_DT"
+    ] + timedelta(days=30)
 
-ae = complete_seconds(ae, "AESTDTC", "ASTDTM").select(
-    "STUDYID", "USUBJID", "AESEQ", "AETERM", "ASTDTM"
-)
-adsl = (
-    complete_seconds(adsl, "TRTSDTM", "TRTSDTM")
-    .pipe(complete_seconds, "TEENDDTM", "TEENDDTM")
-    .select("USUBJID", "TRTSDTM", "TEENDDTM")
-)
-
-# The window rule: onset inside [first exposure, window end] is
-# treatment-emergent. A missing onset cannot be ruled pre-treatment,
-# so a treated subject's event with a missing onset is flagged Y; an
-# untreated subject (no first exposure) is never treatment-emergent.
-adae = ae.join(adsl, on="USUBJID", how="left", maintain_order="left").with_columns(
-    TRTEMFL=pl.when(pl.col("TRTSDTM").is_null())
-    .then(None)
-    .when(pl.col("ASTDTM").is_null())
-    .then(pl.lit("Y"))
-    .when(
-        (pl.col("ASTDTM") >= pl.col("TRTSDTM"))
-        & (pl.col("ASTDTM") <= pl.col("TEENDDTM"))
+    df = ae.merge(
+        adsl[["STUDYID", "USUBJID", "TRTSDTM_DT", "TEENDDTM_DT"]],
+        on=["STUDYID", "USUBJID"],
+        how="left",
     )
-    .then(pl.lit("Y"))
-    .otherwise(None)
-)
+    df["ASTDTM_DT"] = to_datetime(df["AESTDTC"])
 
-# The subject's earliest treatment-emergent event with a known onset,
-# ordered by onset moment with the lower AESEQ settling ties at the
-# same second. ISO datetimes sort as text once seconds are completed.
-first = (
-    adae.filter(
-        (pl.col("TRTEMFL") == "Y") & pl.col("ASTDTM").is_not_null()
-    )
-    .sort(["USUBJID", "ASTDTM", "AESEQ"], nulls_last=True)
-    .unique("USUBJID", keep="first", maintain_order=True)
-    .select("USUBJID", FIRST_SEQ="AESEQ")
-)
+    def trtemfl(row):
+        if pd.isna(row["TRTSDTM_DT"]):
+            return ""
+        if pd.isna(row["ASTDTM_DT"]):
+            return "Y"
+        if row["ASTDTM_DT"] < row["TRTSDTM_DT"]:
+            return ""
+        if pd.notna(row["TEENDDTM_DT"]) and row["ASTDTM_DT"] > row["TEENDDTM_DT"]:
+            return ""
+        return "Y"
 
-adae = (
-    adae.join(first, on="USUBJID", how="left")
-    .with_columns(
-        AOCCFL=pl.when(
-            pl.col("FIRST_SEQ").is_not_null() & (pl.col("AESEQ") == pl.col("FIRST_SEQ"))
-        ).then(pl.lit("Y"))
-    )
-    .select(
-        "STUDYID",
-        "USUBJID",
-        "AESEQ",
-        "AETERM",
-        "ASTDTM",
-        "TRTSDTM",
-        "TEENDDTM",
-        "TRTEMFL",
-        "AOCCFL",
-    )
-)
+    df["TRTEMFL"] = df.apply(trtemfl, axis=1)
 
-Path("/app/output").mkdir(exist_ok=True)
-adae.write_csv("/app/output/adae.csv")
+    # AOCCFL flags each subject's earliest treatment-emergent event by onset
+    # moment; ties on the same onset second go to the lower AESEQ. A
+    # treatment-emergent event with no onset moment is never flagged.
+    df["AOCCFL"] = ""
+    df["AESEQ_NUM"] = pd.to_numeric(df["AESEQ"], errors="coerce")
+    emergent = df[(df["TRTEMFL"] == "Y") & df["ASTDTM_DT"].notna()].sort_values(
+        ["STUDYID", "USUBJID", "ASTDTM_DT", "AESEQ_NUM"]
+    )
+    first_idx = emergent.groupby(["STUDYID", "USUBJID"]).head(1).index
+    df.loc[first_idx, "AOCCFL"] = "Y"
+
+    out = pd.DataFrame(
+        {
+            "STUDYID": df["STUDYID"],
+            "USUBJID": df["USUBJID"],
+            "AESEQ": df["AESEQ"],
+            "AETERM": df["AETERM"],
+            "ASTDTM": df["ASTDTM_DT"].map(fmt_datetime),
+            "TRTSDTM": df["TRTSDTM_DT"].map(fmt_datetime),
+            "TEENDDTM": df["TEENDDTM_DT"].map(fmt_datetime),
+            "TRTEMFL": df["TRTEMFL"],
+            "AOCCFL": df["AOCCFL"],
+        }
+    )
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    out.to_csv(os.path.join(OUTPUT_DIR, "adae.csv"), index=False)
+
+
+if __name__ == "__main__":
+    main()

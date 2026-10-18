@@ -4,26 +4,40 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Create the ADVS dataset from the VS dataset with LOCF imputation.
 
-import polars as pl
+One record per subject per parameter per analysis visit. AVAL is the
+collected value when the record has one; otherwise it is the value from
+the closest earlier visit, in visit-number order, that has one, for the
+same subject and parameter. A gap before the first collected value has
+no value. A collected value of zero is carried like any other value.
+"""
 
-vs = pl.read_csv("/app/input/vs.csv", infer_schema=False).with_columns(
-    pl.col("AVISITN").cast(pl.Int64, strict=False),
-    pl.col("AVALCOL").cast(pl.Float64, strict=False),
-)
+import pandas as pd
 
-# The collected value, otherwise the closest earlier visit with one, in
-# visit-number order; a gap before the first stays missing.
-advs = (
-    vs.sort(["USUBJID", "PARAMCD", "AVISITN"])
-    .with_columns(
-        AVAL=pl.col("AVALCOL")
-        .fill_null(strategy="forward")
-        .over(["USUBJID", "PARAMCD"])
-    )
-    .select("USUBJID", "PARAMCD", "AVISITN", "AVAL")
-)
+INPUT_VS = "/app/input/vs.csv"
+OUTPUT_ADVS = "/app/output/advs.csv"
 
-Path("/app/output").mkdir(parents=True, exist_ok=True)
-advs.write_csv("/app/output/advs.csv")
+
+def main() -> None:
+    vs = pd.read_csv(INPUT_VS, dtype=str, keep_default_na=False)
+    vs["AVISITN"] = vs["AVISITN"].astype(int)
+    vs = vs.sort_values(
+        ["USUBJID", "PARAMCD", "AVISITN"], kind="stable"
+    ).reset_index(drop=True)
+
+    last_value = {}
+    aval = []
+    for row in vs.itertuples(index=False):
+        key = (row.USUBJID, row.PARAMCD)
+        if row.AVALCOL != "":
+            last_value[key] = row.AVALCOL
+        aval.append(last_value.get(key, ""))
+    vs["AVAL"] = aval
+
+    advs = vs[["USUBJID", "PARAMCD", "AVISITN", "AVAL"]]
+    advs.to_csv(OUTPUT_ADVS, index=False)
+
+
+if __name__ == "__main__":
+    main()

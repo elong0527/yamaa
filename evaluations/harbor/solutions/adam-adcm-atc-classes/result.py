@@ -4,72 +4,50 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Create ADCM with ATC class codes and names from FACM and ATC_DICT."""
 
-import polars as pl
+import pandas as pd
 
-cm = pl.read_csv("/app/input/cm.csv", infer_schema=False).with_columns(
-    pl.col("CMSEQ").cast(pl.Int64)
-)
-facm = pl.read_csv("/app/input/facm.csv", infer_schema=False).with_columns(
-    pl.col("CMSEQ").cast(pl.Int64, strict=False)
-)
-atcdict = pl.read_csv("/app/input/atc_dict.csv", infer_schema=False)
+INPUT_DIR = "/app/input"
+OUTPUT_PATH = "/app/output/adcm.csv"
 
-levels = ["ATC1", "ATC2", "ATC3", "ATC4"]
+KEYS = ["STUDYID", "USUBJID", "CMSEQ"]
+LEVELS = ["ATC1", "ATC2", "ATC3", "ATC4"]
 
-# One ATC level per finding row; rows naming no level from ATC1 to ATC4, or
-# pointing at no medication record, change nothing.
-codes = (
-    facm.filter(pl.col("FATESTCD").is_in(levels))
-    .pivot(
-        index=["USUBJID", "CMSEQ"],
-        on="FATESTCD",
-        values="FAORRES",
-        aggregate_function="first",
-    )
-    .rename({level: f"{level}CD" for level in levels})
-)
 
-lookup = atcdict.select("ATCCODE", "ATCNAME")
-
-adcm = cm.join(codes, on=["USUBJID", "CMSEQ"], how="left")
-
-# A medication with no coded name keeps every ATC column empty.
-uncoded = pl.col("CMDECOD").is_null() | (pl.col("CMDECOD") == "")
-for level in levels:
-    code = f"{level}CD"
-    if code not in adcm.columns:
-        adcm = adcm.with_columns(pl.lit(None).cast(pl.String).alias(code))
-    adcm = adcm.with_columns(
-        pl.when(uncoded).then(None).otherwise(pl.col(code)).alias(code)
+def main() -> None:
+    cm = pd.read_csv(f"{INPUT_DIR}/cm.csv", dtype=str, keep_default_na=False)
+    facm = pd.read_csv(f"{INPUT_DIR}/facm.csv", dtype=str, keep_default_na=False)
+    atc_dict = pd.read_csv(
+        f"{INPUT_DIR}/atc_dict.csv", dtype=str, keep_default_na=False
     )
 
-for level in levels:
-    code, name = f"{level}CD", level
-    adcm = (
-        adcm.join(
-            lookup.rename({"ATCCODE": code, "ATCNAME": name}),
-            on=code,
-            how="left",
-        )
-    )
+    # Code for each level: FAORRES on the medication's FACM rows whose
+    # FATESTCD is that level, matched by STUDYID, USUBJID, and CMSEQ.
+    codes = {}
+    relevant = facm[facm["FATESTCD"].isin(LEVELS)]
+    for _, row in relevant.iterrows():
+        key = (row["STUDYID"], row["USUBJID"], row["CMSEQ"])
+        codes.setdefault(key, {})[row["FATESTCD"]] = row["FAORRES"]
 
-adcm = adcm.select(
-    "STUDYID",
-    "USUBJID",
-    "CMSEQ",
-    "CMTRT",
-    "CMDECOD",
-    "ATC1",
-    "ATC2",
-    "ATC3",
-    "ATC4",
-    "ATC1CD",
-    "ATC2CD",
-    "ATC3CD",
-    "ATC4CD",
-)
+    # Class name for each code: ATCNAME in the ATC_DICT row with that code.
+    names = dict(zip(atc_dict["ATCCODE"], atc_dict["ATCNAME"]))
 
-Path("/app/output").mkdir(exist_ok=True)
-adcm.write_csv("/app/output/adcm.csv")
+    records = []
+    for _, med in cm.iterrows():
+        key = (med["STUDYID"], med["USUBJID"], med["CMSEQ"])
+        med_codes = codes.get(key, {})
+        record = {col: med[col] for col in KEYS + ["CMTRT", "CMDECOD"]}
+        for level in LEVELS:
+            code = med_codes.get(level, "")
+            record[f"{level}CD"] = code
+            record[level] = names.get(code, "") if code else ""
+        records.append(record)
+
+    columns = KEYS + ["CMTRT", "CMDECOD"] + LEVELS + [f"{lv}CD" for lv in LEVELS]
+    adcm = pd.DataFrame(records, columns=columns)
+    adcm.to_csv(OUTPUT_PATH, index=False)
+
+
+if __name__ == "__main__":
+    main()

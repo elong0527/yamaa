@@ -4,56 +4,51 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+import pandas as pd
 
-import polars as pl
+COLUMNS = [
+    "STUDYID",
+    "USUBJID",
+    "AESEQ",
+    "AEBODSYS",
+    "AEDECOD",
+    "ASTDT",
+    "AESEV",
+    "TRTEMFL",
+    "ASEVN",
+    "AOCCPIFL",
+]
 
-adae_raw = (
-    pl.read_csv("/app/input/adae_raw.csv", infer_schema=False)
-    .with_columns(
-        pl.col("AESEQ").cast(pl.Int64),
-        pl.col("ASTDT").str.to_date(strict=False),
+SEVERITY_RANK = {"MILD": 1, "MODERATE": 2, "SEVERE": 3}
+
+
+def main() -> None:
+    df = pd.read_csv("/app/input/adae_raw.csv", dtype=str, keep_default_na=False)
+
+    df["ASEVN"] = df["AESEV"].map(SEVERITY_RANK)
+
+    eligible = (df["TRTEMFL"] == "Y") & df["ASEVN"].notna()
+
+    df["AOCCPIFL"] = ""
+    if eligible.any():
+        cand = df.loc[eligible].copy()
+        cand["_astdt_key"] = cand["ASTDT"].replace("", "9999-12-31")
+        cand["_aeseq_key"] = pd.to_numeric(cand["AESEQ"])
+        # Worst severity first, then earliest start date, then lowest AESEQ.
+        cand = cand.sort_values(
+            ["USUBJID", "AEDECOD", "ASEVN", "_astdt_key", "_aeseq_key"],
+            ascending=[True, True, False, True, True],
+            kind="mergesort",
+        )
+        winners = cand.drop_duplicates(subset=["USUBJID", "AEDECOD"], keep="first")
+        df.loc[winners.index, "AOCCPIFL"] = "Y"
+
+    out = df[COLUMNS].copy()
+    out["ASEVN"] = out["ASEVN"].apply(
+        lambda v: "" if pd.isna(v) else str(int(v))
     )
-)
+    out.to_csv("/app/output/adae.csv", index=False)
 
-adae = adae_raw.with_columns(
-    ASEVN=pl.when(pl.col("AESEV") == "MILD")
-    .then(1)
-    .when(pl.col("AESEV") == "MODERATE")
-    .then(2)
-    .when(pl.col("AESEV") == "SEVERE")
-    .then(3)
-    .otherwise(None)
-    .cast(pl.Int64)
-)
 
-# The eligible event with the greatest rank per subject and term; ties break
-# by earliest date, then lowest sequence. Only a treatment-emergent event
-# with a graded severity is eligible. ISO dates sort as text.
-best = (
-    adae.filter(pl.col("TRTEMFL") == "Y", pl.col("ASEVN").is_not_null())
-    .sort(["ASEVN", "ASTDT", "AESEQ"], descending=[True, False, False], nulls_last=True)
-    .unique(["USUBJID", "AEDECOD"], keep="first", maintain_order=True)
-    .select("USUBJID", "AEDECOD", "AESEQ")
-    .with_columns(BEST=pl.lit("Y"))
-)
-
-adae = (
-    adae.join(best, on=["USUBJID", "AEDECOD", "AESEQ"], how="left")
-    .with_columns(AOCCPIFL=pl.col("BEST"))
-    .select(
-        "STUDYID",
-        "USUBJID",
-        "AESEQ",
-        "AEBODSYS",
-        "AEDECOD",
-        "ASTDT",
-        "AESEV",
-        "TRTEMFL",
-        "ASEVN",
-        "AOCCPIFL",
-    )
-)
-
-Path("/app/output").mkdir(exist_ok=True)
-adae.write_csv("/app/output/adae.csv")
+if __name__ == "__main__":
+    main()

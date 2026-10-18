@@ -4,72 +4,116 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Create ADPP from PC and PP: pre-dose carryover exclusion flag.
 
-import polars as pl
+One record per subject, period, and pharmacokinetic parameter (from PP).
+PRECONC is the concentration of the period's pre-dose PC sample (planned
+"PREDOSE", matched to the parameter by reference dose time); a character
+result beginning with "<" counts as 0. PREPCMAX is PRECONC as a
+percentage of the period's Cmax. ANL01FL is blank on every parameter of
+a period whose PREPCMAX is greater than 5, and "Y" otherwise.
+"""
 
-pp = pl.read_csv("/app/input/pp.csv", infer_schema=False).with_columns(
-    pl.col("PPSTRESN").cast(pl.Float64, strict=False),
-    pl.col("VISITNUM").cast(pl.Int64),
-)
-pc = pl.read_csv("/app/input/pc.csv", infer_schema=False).with_columns(
-    pl.col("PCSTRESN").cast(pl.Float64, strict=False),
-)
+import csv
+import os
 
-# The period's pre-dose sample: planned at PREDOSE, with the parameter's
-# reference dose time. A below-limit result ("<" and the limit) counts as 0;
-# a sample not done has no result and gives no value.
-predose = (
-    pc.filter(pl.col("PCTPT") == "PREDOSE")
-    .with_columns(
-        PRECONC=pl.when(pl.col("PCSTRESC").fill_null("").str.starts_with("<"))
-        .then(pl.lit(0.0))
-        .otherwise(pl.col("PCSTRESN"))
-    )
-    .select(
-        "STUDYID", "USUBJID", pl.col("PCRFTDTC").alias("PPRFTDTC"), "PRECONC"
-    )
-)
-if predose.select(["STUDYID", "USUBJID", "PPRFTDTC"]).is_duplicated().any():
-    raise SystemExit("more than one pre-dose sample in a period")
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-# The same subject's Cmax in the same period.
-cmax = pp.filter(pl.col("PPTESTCD") == "CMAX").select(
-    "STUDYID", "USUBJID", "PPRFTDTC", pl.col("PPSTRESN").alias("CMAX")
-)
-if cmax.select(["STUDYID", "USUBJID", "PPRFTDTC"]).is_duplicated().any():
-    raise SystemExit("more than one Cmax in a period")
 
-keys = ["STUDYID", "USUBJID", "PPRFTDTC"]
-adpp = (
-    pp.join(predose, on=keys, how="left", maintain_order="left")
-    .join(cmax, on=keys, how="left", maintain_order="left")
-    .with_columns(
-        PREPCMAX=pl.when(pl.col("CMAX") != 0).then(
-            100 * pl.col("PRECONC") / pl.col("CMAX")
+def read_csv(name):
+    with open(os.path.join(INPUT_DIR, name), newline="") as f:
+        return list(csv.DictReader(f))
+
+
+def fmt(value):
+    """Format a float for CSV: integers without a decimal point."""
+    if value is None:
+        return ""
+    if value == int(value):
+        return str(int(value))
+    return repr(value)
+
+
+def main():
+    pc = read_csv("pc.csv")
+    pp = read_csv("pp.csv")
+
+    # Pre-dose concentrations keyed by (subject, reference dose time).
+    preconc = {}
+    for row in pc:
+        if row["PCTPT"] != "PREDOSE":
+            continue
+        key = (row["USUBJID"], row["PCRFTDTC"])
+        if row["PCSTAT"] == "NOT DONE":
+            preconc[key] = None
+        elif row["PCSTRESC"].startswith("<"):
+            preconc[key] = 0.0
+        elif row["PCSTRESN"]:
+            preconc[key] = float(row["PCSTRESN"])
+        else:
+            preconc[key] = None
+
+    # Cmax (AVAL of the period's CMAX parameter) per (subject, visit).
+    cmax = {}
+    for row in pp:
+        if row["PPTESTCD"] == "CMAX":
+            cmax[(row["USUBJID"], row["VISITNUM"])] = float(row["PPSTRESN"])
+
+    # Period-level values: PRECONC, PREPCMAX, ANL01FL per (subject, visit).
+    period = {}
+    for row in pp:
+        key = (row["USUBJID"], row["VISITNUM"])
+        if key in period:
+            continue
+        pre = preconc.get((row["USUBJID"], row["PPRFTDTC"]))
+        c = cmax.get(key)
+        if pre is None or c is None or c == 0:
+            prepct = None
+        else:
+            prepct = 100.0 * pre / c
+        if prepct is not None and prepct > 5:
+            anl01fl = ""
+        else:
+            anl01fl = "Y"
+        period[key] = (pre, prepct, anl01fl)
+
+    out_rows = []
+    for row in pp:
+        pre, prepct, anl01fl = period[(row["USUBJID"], row["VISITNUM"])]
+        out_rows.append(
+            {
+                "STUDYID": row["STUDYID"],
+                "USUBJID": row["USUBJID"],
+                "VISITNUM": row["VISITNUM"],
+                "VISIT": row["VISIT"],
+                "PARAMCD": row["PPTESTCD"],
+                "PARAM": row["PPTEST"],
+                "AVAL": fmt(float(row["PPSTRESN"])),
+                "PRECONC": fmt(pre),
+                "PREPCMAX": fmt(prepct),
+                "ANL01FL": anl01fl,
+            }
         )
-    )
-    .with_columns(
-        # Left out only when the percentage is known and above 5.
-        ANL01FL=pl.when(
-            pl.col("PREPCMAX").is_not_null() & (pl.col("PREPCMAX") > 5)
-        )
-        .then(pl.lit(None, dtype=pl.String))
-        .otherwise(pl.lit("Y"))
-    )
-    .select(
+
+    fieldnames = [
         "STUDYID",
         "USUBJID",
         "VISITNUM",
         "VISIT",
-        pl.col("PPTESTCD").alias("PARAMCD"),
-        pl.col("PPTEST").alias("PARAM"),
-        pl.col("PPSTRESN").alias("AVAL"),
+        "PARAMCD",
+        "PARAM",
+        "AVAL",
         "PRECONC",
         "PREPCMAX",
         "ANL01FL",
-    )
-)
+    ]
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    with open(os.path.join(OUTPUT_DIR, "adpp.csv"), "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(out_rows)
 
-Path("/app/output").mkdir(exist_ok=True)
-adpp.write_csv("/app/output/adpp.csv")
+
+if __name__ == "__main__":
+    main()

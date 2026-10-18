@@ -4,98 +4,92 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build the SDTM VS dataset from VS_RAW with unit standardization.
 
-import polars as pl
+Reads /app/input/vs_raw.csv and writes /app/output/vs.csv with one
+record per collected vital-signs measurement. Standard units: cm for
+height, kg for weight, C for temperature.
+"""
 
+import csv
+import os
 
-def fmt_text(x: float | None) -> str | None:
-    if x is None:
-        return None
-    import math
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-    if isinstance(x, float) and (math.isnan(x) or math.isinf(x)):
-        return None
-    fx = float(x)
-    if fx.is_integer():
-        return str(int(fx))
-    text = f"{fx:.15g}"
-    return text
+STANDARD_UNIT = {"HEIGHT": "cm", "WEIGHT": "kg", "TEMP": "C"}
+LB_TO_KG = 0.45359237
 
-
-def fmt_orres(x: str | None) -> str | None:
-    if x is None or x == "":
-        return None
-    try:
-        return fmt_text(float(x))
-    except ValueError:
-        return x
+COLUMNS = [
+    "DOMAIN", "STUDYID", "USUBJID", "VSSEQ", "VISIT", "VSTESTCD",
+    "VSTEST", "VSORRES", "VSORRESU", "VSSTRESN", "VSSTRESC",
+    "VSSTRESU", "VSSTAT",
+]
 
 
-raw = pl.read_csv("/app/input/vs_raw.csv", infer_schema=False).with_columns(
-    pl.col("VSSEQ").cast(pl.Int64),
-)
+def format_number(value):
+    """Write a number as text, dropping trailing zeros (72.50 -> 72.5)."""
+    rounded = round(value, 10)
+    if rounded == int(rounded):
+        return str(int(rounded))
+    return repr(rounded)
 
-rows = raw.to_dicts()
-for row in rows:
-    orres = row["VSORRES"]
-    has_result = orres is not None and orres != ""
-    test = row["VSTESTCD"]
-    unit = row["VSORRESU"]
-    if not has_result:
-        row["VSORRES"] = None
-        row["VSORRESU"] = None
-        row["VSSTRESN"] = None
-        row["VSSTRESC"] = None
-        row["VSSTRESU"] = None
-        row["VSSTAT"] = "NOT DONE"
-        continue
-    row["VSORRES"] = fmt_orres(orres)
-    value = float(orres)
-    if test == "HEIGHT":
-        std = value
-        std_unit = "cm"
-    elif test == "WEIGHT":
-        std = value * 0.45359237 if unit == "LB" else value
-        std_unit = "kg"
-    else:
-        std = (value - 32) * 5 / 9 if unit == "F" else value
-        std_unit = "C"
-    row["VSSTRESN"] = std
-    row["VSSTRESC"] = fmt_text(std)
-    row["VSSTRESU"] = std_unit
-    # Original unit is empty when no result was collected; otherwise as
-    # collected.
-    row["VSORRESU"] = unit
-    row["VSSTAT"] = None
 
-vs = (
-    pl.DataFrame(rows)
-    .with_columns(
-        DOMAIN=pl.lit("VS"),
-        _ord=pl.col("VSTESTCD").replace_strict(
-            {"HEIGHT": 1, "WEIGHT": 2, "TEMP": 3},
-            default=9,
-            return_dtype=pl.Int64,
-        ),
-    )
-    .sort(["_ord", "USUBJID", "VSSEQ"])
-    .select(
-        "DOMAIN",
-        "STUDYID",
-        "USUBJID",
-        "VSSEQ",
-        "VISIT",
-        "VSTESTCD",
-        "VSTEST",
-        "VSORRES",
-        "VSORRESU",
-        "VSSTRESN",
-        "VSSTRESC",
-        "VSSTRESU",
-        "VSSTAT",
-    )
-)
+def standardize(testcd, value, unit):
+    """Return the result as a number in the test's standard unit."""
+    if testcd == "WEIGHT" and unit == "LB":
+        return value * LB_TO_KG
+    if testcd == "TEMP" and unit == "F":
+        return (value - 32) * 5 / 9
+    return value
 
-Path("/app/output").mkdir(exist_ok=True)
-vs.write_csv("/app/output/vs.csv")
+
+def main():
+    with open(os.path.join(INPUT_DIR, "vs_raw.csv"), newline="") as f:
+        rows = list(csv.DictReader(f))
+
+    out_rows = []
+    for row in rows:
+        collected = row["VSORRES"].strip()
+        testcd = row["VSTESTCD"]
+        if collected:
+            value = float(collected)
+            std_value = standardize(testcd, value, row["VSORRESU"])
+            orres = format_number(value)
+            orresu = row["VSORRESU"]
+            stresn = format_number(std_value)
+            stresc = stresn
+            stresu = STANDARD_UNIT[testcd]
+            stat = ""
+        else:
+            orres = ""
+            orresu = ""
+            stresn = ""
+            stresc = ""
+            stresu = ""
+            stat = "NOT DONE"
+        out_rows.append({
+            "DOMAIN": "VS",
+            "STUDYID": row["STUDYID"],
+            "USUBJID": row["USUBJID"],
+            "VSSEQ": row["VSSEQ"],
+            "VISIT": row["VISIT"],
+            "VSTESTCD": testcd,
+            "VSTEST": row["VSTEST"],
+            "VSORRES": orres,
+            "VSORRESU": orresu,
+            "VSSTRESN": stresn,
+            "VSSTRESC": stresc,
+            "VSSTRESU": stresu,
+            "VSSTAT": stat,
+        })
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    with open(os.path.join(OUTPUT_DIR, "vs.csv"), "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=COLUMNS)
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+
+if __name__ == "__main__":
+    main()

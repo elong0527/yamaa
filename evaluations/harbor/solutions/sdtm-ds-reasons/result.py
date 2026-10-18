@@ -4,71 +4,82 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build the SDTM DS dataset from the ODM extract.
 
-import polars as pl
+One record per subject for each of the two milestones: end of treatment
+(StudyEventOID EOT, DSSEQ 1) and end of study (EOS, DSSEQ 2). The
+completion flag, reason text, controlled code, and start date of a
+milestone are collected as separate ODM items; the record for the
+milestone carries the values of that milestone's items.
+"""
 
-odm = pl.read_csv("/app/input/odm.csv", infer_schema=False)
+import pandas as pd
 
-wide = (
-    odm.group_by("StudyOID", "SubjectKey", "StudyEventOID")
-    .agg(
-        pl.col("Value").filter(pl.col("ItemOID") == "IT.DS.DTC").first().alias("DTC"),
-        pl.col("Value").filter(pl.col("ItemOID") == "IT.DS.COMP").first().alias("COMP"),
-        pl.col("Value").filter(pl.col("ItemOID") == "IT.DS.REASON").first().alias("REASON"),
-        pl.col("Value")
-        .filter(pl.col("ItemOID") == "IT.DS.REASONCD")
-        .first()
-        .alias("REASONCD"),
-    )
-    .filter(pl.col("StudyEventOID").is_in(["EOT", "EOS"]))
-)
+INPUT_ODM = "/app/input/odm.csv"
+OUTPUT_DS = "/app/output/ds.csv"
 
-MILESTONE = {"EOT": ("STUDY TREATMENT", 1), "EOS": ("STUDY", 2)}
+ITEM_COMPLETION = "IT.DS.COMP"
+ITEM_REASON = "IT.DS.REASON"
+ITEM_REASON_CODE = "IT.DS.REASONCD"
+ITEM_START_DATE = "IT.DS.DTC"
 
-records: list[dict] = []
-for row in wide.to_dicts():
-    study = row["StudyOID"]
-    subj = row["SubjectKey"]
-    event = row["StudyEventOID"]
-    sscat, seq = MILESTONE[event]
-    comp = row["COMP"] or ""
-    reason = row["REASON"] or ""
-    reasoncd = row["REASONCD"] or ""
-    dtc = row["DTC"] or ""
-    if comp == "COMPLETED":
-        term, decod = "COMPLETED", "COMPLETED"
-    else:
-        term, decod = (reason or None), (reasoncd or None)
-    usubjid = subj
-    records.append(
-        {
-            "DOMAIN": "DS",
-            "STUDYID": study,
-            "USUBJID": usubjid,
-            "DSSEQ": seq,
-            "DSCAT": "DISPOSITION EVENT",
-            "DSSCAT": sscat,
-            "DSTERM": term,
-            "DSDECOD": decod,
-            "DSSTDTC": dtc or None,
-        }
-    )
+# (StudyEventOID, DSSEQ, DSSCAT) in output order.
+MILESTONES = [
+    ("EOT", 1, "STUDY TREATMENT"),
+    ("EOS", 2, "STUDY"),
+]
 
-ds = pl.DataFrame(
-    records,
-    schema={
-        "DOMAIN": pl.String,
-        "STUDYID": pl.String,
-        "USUBJID": pl.String,
-        "DSSEQ": pl.Int64,
-        "DSCAT": pl.String,
-        "DSSCAT": pl.String,
-        "DSTERM": pl.String,
-        "DSDECOD": pl.String,
-        "DSSTDTC": pl.String,
-    },
-).sort(["USUBJID", "DSSEQ"])
+COLUMNS = [
+    "DOMAIN",
+    "STUDYID",
+    "USUBJID",
+    "DSSEQ",
+    "DSCAT",
+    "DSSCAT",
+    "DSTERM",
+    "DSDECOD",
+    "DSSTDTC",
+]
 
-Path("/app/output").mkdir(exist_ok=True)
-ds.write_csv("/app/output/ds.csv")
+
+def main() -> None:
+    odm = pd.read_csv(INPUT_ODM, dtype=str, keep_default_na=False)
+
+    records = []
+    for subject_key in sorted(odm["SubjectKey"].unique()):
+        subject_rows = odm[odm["SubjectKey"] == subject_key]
+        study_id = subject_rows["StudyOID"].iloc[0]
+        for event_oid, dsseq, dsscat in MILESTONES:
+            milestone_rows = subject_rows[
+                subject_rows["StudyEventOID"] == event_oid
+            ]
+            items = dict(
+                zip(milestone_rows["ItemOID"], milestone_rows["Value"])
+            )
+            completion = items.get(ITEM_COMPLETION, "")
+            if completion == "COMPLETED":
+                dsterm = "COMPLETED"
+                dsdecod = "COMPLETED"
+            else:
+                dsterm = items.get(ITEM_REASON, "")
+                dsdecod = items.get(ITEM_REASON_CODE, "")
+            records.append(
+                {
+                    "DOMAIN": "DS",
+                    "STUDYID": study_id,
+                    "USUBJID": subject_key,
+                    "DSSEQ": dsseq,
+                    "DSCAT": "DISPOSITION EVENT",
+                    "DSSCAT": dsscat,
+                    "DSTERM": dsterm,
+                    "DSDECOD": dsdecod,
+                    "DSSTDTC": items.get(ITEM_START_DATE, ""),
+                }
+            )
+
+    ds = pd.DataFrame.from_records(records, columns=COLUMNS)
+    ds.to_csv(OUTPUT_DS, index=False)
+
+
+if __name__ == "__main__":
+    main()

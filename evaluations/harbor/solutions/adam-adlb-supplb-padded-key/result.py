@@ -4,34 +4,47 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+import csv
 
-import polars as pl
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-lb = pl.read_csv("/app/input/lb.csv", infer_schema=False).with_columns(
-    pl.col("LBSEQ").cast(pl.Int64, strict=False)
-)
-supp = pl.read_csv("/app/input/supplb.csv", infer_schema=False)
 
-# The qualifier value whose IDVARVAL is the laboratory sequence number as
-# eight characters, right-aligned and space-padded. Zero-padded keys do
-# not match; a supplemental record with no laboratory record adds no row.
-lb_keys = lb.with_columns(
-    PADDED_KEY=pl.col("LBSEQ").cast(pl.String).str.pad_start(8, " ")
-)
+def main():
+    with open(f"{INPUT_DIR}/lb.csv", newline="") as f:
+        lb_rows = list(csv.DictReader(f))
+    with open(f"{INPUT_DIR}/supplb.csv", newline="") as f:
+        supp_rows = list(csv.DictReader(f))
 
-adlb = (
-    lb_keys.join(
-        supp.select("STUDYID", "USUBJID", "IDVARVAL", QVAL="QVAL"),
-        left_on=["STUDYID", "USUBJID", "PADDED_KEY"],
-        right_on=["STUDYID", "USUBJID", "IDVARVAL"],
-        how="left",
-        maintain_order="left",
-    )
-    .with_columns(QVAL_NAMED=pl.col("QVAL"))
-    .select("STUDYID", "USUBJID", "LBSEQ", "QVAL", "QVAL_NAMED")
-    .sort(["LBSEQ", "USUBJID"])
-)
+    # Index SUPPLB by (STUDYID, USUBJID, IDVARVAL) exactly as collected:
+    # IDVARVAL must equal the LBSEQ padded with spaces to eight characters.
+    supp = {}
+    for row in supp_rows:
+        key = (row["STUDYID"], row["USUBJID"], row["IDVARVAL"])
+        supp[key] = row["QVAL"]
 
-Path("/app/output").mkdir(exist_ok=True)
-adlb.write_csv("/app/output/adlb.csv")
+    out_rows = []
+    for row in lb_rows:
+        padded = row["LBSEQ"].rjust(8)
+        key = (row["STUDYID"], row["USUBJID"], padded)
+        qval = supp.get(key, "")
+        out_rows.append(
+            {
+                "STUDYID": row["STUDYID"],
+                "USUBJID": row["USUBJID"],
+                "LBSEQ": row["LBSEQ"],
+                "QVAL": qval,
+                "QVAL_NAMED": qval,
+            }
+        )
+
+    with open(f"{OUTPUT_DIR}/adlb.csv", "w", newline="") as f:
+        writer = csv.DictWriter(
+            f, fieldnames=["STUDYID", "USUBJID", "LBSEQ", "QVAL", "QVAL_NAMED"]
+        )
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+
+if __name__ == "__main__":
+    main()

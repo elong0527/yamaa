@@ -4,79 +4,93 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build the SDTM CM dataset from ODM, CODING_OUTPUT and WHODRUG_EXTRACT.
 
-import polars as pl
+One output record per reported medication (the IT.CM.CMTRT item in the
+ODM long-format extract).  Each reported medication is joined to the
+coder's output on STUDYID, USUBJID and CMSEQ to obtain the chosen drug
+record and ATC code, and then to the WHODrug extract on that drug
+record together with that ATC code to obtain the preferred name and
+the ATC class for the assigned use.  Medications with no coding row
+are not yet coded, so CMDECOD, CMCLAS and CMCLASCD stay blank.
+"""
 
-odm = pl.read_csv("/app/input/odm.csv", infer_schema=False)
-coding = pl.read_csv("/app/input/coding_output.csv", infer_schema=False).with_columns(
-    pl.col("CMSEQ").cast(pl.Int64)
-)
-whodrug = pl.read_csv("/app/input/whodrug_extract.csv", infer_schema=False)
+import pandas as pd
 
-# One record per reported medication; the repeat number is the sequence
-# number. The preferred name comes from the drug record the coder chose,
-# and the class from the ATC code assigned for this use, so the same drug
-# record can give a different class on different records. No coding, or a
-# code not in the extract, leaves the coded variables empty.
-reported = (
-    odm.filter(pl.col("ItemGroupOID") == "IG.CM")
-    .pivot(
-        index=["StudyOID", "SubjectKey", "ItemGroupRepeatKey"],
-        on="ItemOID",
-        values="Value",
-        aggregate_function="first",
+INPUT_DIR = "/app/input"
+OUTPUT_FILE = "/app/output/cm.csv"
+
+COLUMNS = [
+    "DOMAIN",
+    "STUDYID",
+    "USUBJID",
+    "CMSEQ",
+    "CMTRT",
+    "CMDECOD",
+    "CMCLAS",
+    "CMCLASCD",
+]
+
+
+def read_csv(name):
+    return pd.read_csv(
+        f"{INPUT_DIR}/{name}", dtype=str, keep_default_na=False
     )
-    .with_columns(
-        STUDYID=pl.col("StudyOID"),
-        USUBJID=pl.col("SubjectKey"),
-        CMSEQ=pl.col("ItemGroupRepeatKey").cast(pl.Int64),
-        CMTRT=pl.col("IT.CM.CMTRT"),
-    )
-    .select("STUDYID", "USUBJID", "CMSEQ", "CMTRT")
-)
 
-cm = (
-    reported.join(coding, on=["STUDYID", "USUBJID", "CMSEQ"], how="left")
-    .join(
-        whodrug,
-        left_on=["DRUG_RECORD_NO", "ATC_CODE"],
-        right_on=["DRUG_RECORD_NO", "ATC_CODE"],
+
+def main():
+    odm = read_csv("odm.csv")
+    coding = read_csv("coding_output.csv")
+    whodrug = read_csv("whodrug_extract.csv")
+
+    # One record per reported medication: the CMTRT item of each IG.CM
+    # item-group repeat.  The repeat key is the CM sequence number and
+    # the reported name is kept exactly as written.
+    reported = odm.loc[odm["ItemOID"] == "IT.CM.CMTRT"].copy()
+    cm = pd.DataFrame(
+        {
+            "DOMAIN": "CM",
+            "STUDYID": reported["StudyOID"],
+            "USUBJID": reported["SubjectKey"],
+            "CMSEQ": reported["ItemGroupRepeatKey"],
+            "CMTRT": reported["Value"],
+        }
+    )
+
+    # The drug record and ATC code the coder assigned to each record.
+    cm = cm.merge(
+        coding[["STUDYID", "USUBJID", "CMSEQ", "DRUG_RECORD_NO", "ATC_CODE"]],
+        on=["STUDYID", "USUBJID", "CMSEQ"],
         how="left",
     )
-    .with_columns(
-        DOMAIN=pl.lit("CM"),
-        CMDECOD=pl.when(pl.col("PREFERRED_NAME").is_null())
-        .then(None)
-        .otherwise(pl.col("PREFERRED_NAME")),
-        CMCLAS=pl.col("ATC_CLASS_NAME"),
-        CMCLASCD=pl.col("ATC_CLASS_CODE"),
-    )
-    .with_columns(
-        CMDECOD=pl.when(
-            pl.col("DRUG_RECORD_NO").fill_null("") == ""
-        )
-        .then(None)
-        .otherwise(pl.col("CMDECOD")),
-        CMCLAS=pl.when(pl.col("CMDECOD").is_null())
-        .then(None)
-        .otherwise(pl.col("CMCLAS")),
-        CMCLASCD=pl.when(pl.col("CMDECOD").is_null())
-        .then(None)
-        .otherwise(pl.col("CMCLASCD")),
-    )
-    .sort(["USUBJID", "CMSEQ"])
-    .select(
-        "DOMAIN",
-        "STUDYID",
-        "USUBJID",
-        "CMSEQ",
-        "CMTRT",
-        "CMDECOD",
-        "CMCLAS",
-        "CMCLASCD",
-    )
-)
 
-Path("/app/output").mkdir(exist_ok=True)
-cm.write_csv("/app/output/cm.csv")
+    # Preferred name and ATC class for the chosen drug record under the
+    # assigned ATC code (the same drug record can carry a different
+    # class under a different ATC code).
+    cm = cm.merge(
+        whodrug[
+            [
+                "DRUG_RECORD_NO",
+                "ATC_CODE",
+                "PREFERRED_NAME",
+                "ATC_CLASS_NAME",
+                "ATC_CLASS_CODE",
+            ]
+        ],
+        on=["DRUG_RECORD_NO", "ATC_CODE"],
+        how="left",
+    )
+
+    cm = cm.rename(
+        columns={
+            "PREFERRED_NAME": "CMDECOD",
+            "ATC_CLASS_NAME": "CMCLAS",
+            "ATC_CLASS_CODE": "CMCLASCD",
+        }
+    )
+    cm = cm[COLUMNS].fillna("")
+    cm.to_csv(OUTPUT_FILE, index=False)
+
+
+if __name__ == "__main__":
+    main()

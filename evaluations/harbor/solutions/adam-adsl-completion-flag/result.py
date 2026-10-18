@@ -4,33 +4,48 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Create ADSL with a completion flag from ADSL_RAW and DS.
 
-import polars as pl
+COMPLFL is "Y" when the subject has a disposition record with category
+"DISPOSITION EVENT" in the "FOLLOW-UP" epoch whose standardized outcome
+(DSDECOD) is "COMPLETED"; the record counts whether or not its
+collection date (DSDTC) was recorded. Otherwise COMPLFL is "N".
+"""
 
-adsl_raw = pl.read_csv("/app/input/adsl_raw.csv", infer_schema=False)
-ds = pl.read_csv("/app/input/ds.csv", infer_schema=False)
+import csv
 
-completed = (
-    ds.filter(
-        (pl.col("DSCAT") == "DISPOSITION EVENT")
-        & (pl.col("EPOCH") == "FOLLOW-UP")
-        & (pl.col("DSDECOD") == "COMPLETED")
-    )
-    .select("STUDYID", "USUBJID")
-    .unique()
-    .with_columns(__completed=pl.lit("Y"))
-)
+INPUT_DIR = "/app/input"
+OUTPUT_PATH = "/app/output/adsl.csv"
 
-adsl = (
-    adsl_raw.join(completed, on=["STUDYID", "USUBJID"], how="left", maintain_order="left")
-    .with_columns(
-        COMPLFL=pl.when(pl.col("__completed") == "Y")
-        .then(pl.lit("Y"))
-        .otherwise(pl.lit("N"))
-    )
-    .select("STUDYID", "USUBJID", "TRTSDT", "COMPLFL")
-)
 
-Path("/app/output").mkdir(parents=True, exist_ok=True)
-adsl.write_csv("/app/output/adsl.csv")
+def main():
+    with open(f"{INPUT_DIR}/adsl_raw.csv", newline="") as f:
+        subjects = list(csv.DictReader(f))
+
+    completed = set()
+    with open(f"{INPUT_DIR}/ds.csv", newline="") as f:
+        for row in csv.DictReader(f):
+            if (
+                row["DSCAT"] == "DISPOSITION EVENT"
+                and row["EPOCH"] == "FOLLOW-UP"
+                and row["DSDECOD"] == "COMPLETED"
+            ):
+                completed.add((row["STUDYID"], row["USUBJID"]))
+
+    with open(OUTPUT_PATH, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["STUDYID", "USUBJID", "TRTSDT", "COMPLFL"])
+        for subject in subjects:
+            key = (subject["STUDYID"], subject["USUBJID"])
+            writer.writerow(
+                [
+                    subject["STUDYID"],
+                    subject["USUBJID"],
+                    subject["TRTSDT"],
+                    "Y" if key in completed else "N",
+                ]
+            )
+
+
+if __name__ == "__main__":
+    main()

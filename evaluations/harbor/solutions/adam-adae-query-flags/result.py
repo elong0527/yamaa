@@ -4,47 +4,79 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build ADAE with query grouping columns (SMQ01, SMQ02, CQ01).
 
-import polars as pl
+Reads AE and QUERIES from /app/input and writes /app/output/adae.csv.
+Membership of an event in a grouping is decided by its AEDECOD: the
+QUERIES dictionary lists coded terms under query groupings, identified
+by PREFIX (SMQ01 = first standardized query, SMQ02 = second standardized
+query, CQ01 = sponsor-defined customized query).
+"""
 
-ae = pl.read_csv("/app/input/ae.csv", infer_schema=False).with_columns(
-    pl.col("AESEQ").cast(pl.Int64)
-)
-queries = pl.read_csv("/app/input/queries.csv", infer_schema=False).with_columns(
-    pl.col("GRPID").cast(pl.Int64)
-)
+import pandas as pd
 
-# Each standardized slot shows its grouping name, dictionary code, and
-# scope together; the sponsor slot shows the grouping name only. Two
-# events with the same coded term always show the same entries.
-smq01 = queries.filter(pl.col("PREFIX") == "SMQ01").select(
-    "TERM", SMQ01NAM="GRPNAME", SMQ01CD="GRPID", SMQ01SC="SCOPE"
-)
-smq02 = queries.filter(pl.col("PREFIX") == "SMQ02").select(
-    "TERM", SMQ02NAM="GRPNAME", SMQ02CD="GRPID", SMQ02SC="SCOPE"
-)
-cq01 = queries.filter(pl.col("PREFIX") == "CQ01").select("TERM", CQ01NAM="GRPNAME")
+INPUT_DIR = "/app/input"
+OUTPUT_PATH = "/app/output/adae.csv"
 
-adae = (
-    ae.join(smq01, left_on="AEDECOD", right_on="TERM", how="left", maintain_order="left")
-    .join(smq02, left_on="AEDECOD", right_on="TERM", how="left", maintain_order="left")
-    .join(cq01, left_on="AEDECOD", right_on="TERM", how="left", maintain_order="left")
-    .select(
-        "STUDYID",
-        "USUBJID",
-        "AESEQ",
-        "AETERM",
-        "AEDECOD",
-        "SMQ01NAM",
-        "SMQ01CD",
-        "SMQ01SC",
-        "SMQ02NAM",
-        "SMQ02CD",
-        "SMQ02SC",
-        "CQ01NAM",
+COLUMNS = [
+    "STUDYID",
+    "USUBJID",
+    "AESEQ",
+    "AETERM",
+    "AEDECOD",
+    "SMQ01NAM",
+    "SMQ01CD",
+    "SMQ01SC",
+    "SMQ02NAM",
+    "SMQ02CD",
+    "SMQ02SC",
+    "CQ01NAM",
+]
+
+
+def main() -> None:
+    ae = pd.read_csv(
+        f"{INPUT_DIR}/ae.csv", dtype=str, keep_default_na=False
     )
-)
+    queries = pd.read_csv(
+        f"{INPUT_DIR}/queries.csv", dtype=str, keep_default_na=False
+    )
 
-Path("/app/output").mkdir(exist_ok=True)
-adae.write_csv("/app/output/adae.csv")
+    # Index the dictionary by (prefix, coded term).
+    lookup = {}
+    for row in queries.itertuples(index=False):
+        lookup[(row.PREFIX, row.TERM)] = (row.GRPNAME, row.GRPID, row.SCOPE)
+
+    def grouping(decod: str, prefix: str):
+        if decod == "":
+            return ("", "", "")
+        return lookup.get((prefix, decod), ("", "", ""))
+
+    records = []
+    for row in ae.itertuples(index=False):
+        smq01 = grouping(row.AEDECOD, "SMQ01")
+        smq02 = grouping(row.AEDECOD, "SMQ02")
+        cq01 = grouping(row.AEDECOD, "CQ01")
+        records.append(
+            {
+                "STUDYID": row.STUDYID,
+                "USUBJID": row.USUBJID,
+                "AESEQ": row.AESEQ,
+                "AETERM": row.AETERM,
+                "AEDECOD": row.AEDECOD,
+                "SMQ01NAM": smq01[0],
+                "SMQ01CD": smq01[1],
+                "SMQ01SC": smq01[2],
+                "SMQ02NAM": smq02[0],
+                "SMQ02CD": smq02[1],
+                "SMQ02SC": smq02[2],
+                "CQ01NAM": cq01[0],
+            }
+        )
+
+    adae = pd.DataFrame.from_records(records, columns=COLUMNS)
+    adae.to_csv(OUTPUT_PATH, index=False)
+
+
+if __name__ == "__main__":
+    main()

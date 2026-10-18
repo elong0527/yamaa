@@ -4,44 +4,69 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build the SDTM DM dataset (one record per subject) with death date/flag.
 
-import polars as pl
+Death date (DTHDTC) derivation, in priority order:
+1. Latest DSSTDTC among the subject's disposition records whose decoded
+   term (DSDECOD) is "DEATH" and that carry a start date.
+2. Otherwise, latest AEENDTC among the subject's adverse events whose
+   outcome (AEOUT) is "FATAL" and that carry an end date.
+3. Otherwise, no value.
 
-dm_raw = pl.read_csv("/app/input/dm_raw.csv", infer_schema=False)
-ds = pl.read_csv("/app/input/ds.csv", infer_schema=False)
-ae = pl.read_csv("/app/input/ae.csv", infer_schema=False)
+DTHFL is "Y" when either source supplies a death date, else blank.
+"""
 
-ds_death = (
-    ds.filter(pl.col("DSDECOD") == "DEATH")
-    .with_columns(pl.col("DSSTDTC").str.to_date(strict=False))
-    .filter(pl.col("DSSTDTC").is_not_null())
-    .group_by("STUDYID", "USUBJID")
-    .agg(pl.col("DSSTDTC").max().alias("DS_DTH"))
-)
+import pandas as pd
 
-ae_fatal = (
-    ae.filter(pl.col("AEOUT") == "FATAL")
-    .with_columns(pl.col("AEENDTC").str.to_date(strict=False))
-    .filter(pl.col("AEENDTC").is_not_null())
-    .group_by("STUDYID", "USUBJID")
-    .agg(pl.col("AEENDTC").max().alias("AE_DTH"))
-)
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-dm = (
-    dm_raw.join(ds_death, on=["STUDYID", "USUBJID"], how="left")
-    .join(ae_fatal, on=["STUDYID", "USUBJID"], how="left")
-    .with_columns(
-        DOMAIN=pl.lit("DM"),
-        DTHDTC=pl.coalesce("DS_DTH", "AE_DTH"),
+
+def read_csv(name):
+    return pd.read_csv(f"{INPUT_DIR}/{name}", dtype=str, keep_default_na=False)
+
+
+def latest_date_by_subject(df, subject_col, date_col, mask):
+    """Return {USUBJID: latest non-blank date string} for masked rows."""
+    selected = df.loc[mask & (df[date_col].str.strip() != "")]
+    result = {}
+    for usubjid, dates in selected.groupby(subject_col)[date_col]:
+        # ISO 8601 date text sorts chronologically.
+        result[usubjid] = max(dates)
+    return result
+
+
+def main():
+    dm_raw = read_csv("dm_raw.csv")
+    ds = read_csv("ds.csv")
+    ae = read_csv("ae.csv")
+
+    ds_death = latest_date_by_subject(
+        ds, "USUBJID", "DSSTDTC", ds["DSDECOD"] == "DEATH"
     )
-    .with_columns(
-        DTHFL=pl.when(pl.col("DTHDTC").is_not_null())
-        .then(pl.lit("Y"))
-        .otherwise(None)
+    ae_fatal = latest_date_by_subject(
+        ae, "USUBJID", "AEENDTC", ae["AEOUT"] == "FATAL"
     )
-    .select("DOMAIN", "STUDYID", "USUBJID", "DTHDTC", "DTHFL")
-)
 
-Path("/app/output").mkdir(exist_ok=True)
-dm.write_csv("/app/output/dm.csv")
+    rows = []
+    for _, subject in dm_raw.iterrows():
+        usubjid = subject["USUBJID"]
+        dthdtc = ds_death.get(usubjid) or ae_fatal.get(usubjid) or ""
+        rows.append(
+            {
+                "DOMAIN": "DM",
+                "STUDYID": subject["STUDYID"],
+                "USUBJID": usubjid,
+                "DTHDTC": dthdtc,
+                "DTHFL": "Y" if dthdtc else "",
+            }
+        )
+
+    dm = pd.DataFrame(
+        rows, columns=["DOMAIN", "STUDYID", "USUBJID", "DTHDTC", "DTHFL"]
+    )
+    dm.to_csv(f"{OUTPUT_DIR}/dm.csv", index=False)
+
+
+if __name__ == "__main__":
+    main()

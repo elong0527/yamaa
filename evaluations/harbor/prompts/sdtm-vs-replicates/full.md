@@ -1,32 +1,30 @@
-Following CDISC SDTM standards, use the provided ODM dataset to create a
-VS dataset with one record per blood pressure reading and one mean record
-per test and visit.
+Following CDISC SDTM standards, use the provided ODM dataset to create a VS
+dataset with one record per reading, plus one record per test and visit
+holding the mean of the readings actually taken.
 
 The output dataset should contain the following columns in this order:
-DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSREPNUM,
-VSORRES, VSORRESU, VSSTRESN, VSSTRESC, VSDRVFL
+DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSREPNUM, VSORRES,
+VSORRESU, VSSTRESN, VSSTRESC, VSDRVFL
 
-STUDYID is the ODM StudyOID and USUBJID is the SubjectKey, each as given.
-
-VISIT is VISIT 1 for study event SE.VISIT1 and VISIT 2 for SE.VISIT2.
-VSTESTCD and VSTEST are SYSBP and Systolic Blood Pressure, or DIABP and
-Diastolic Blood Pressure, from the collected item. VSSEQ numbers every
-record of a subject from 1, by visit name, then test code (DIABP before
-SYSBP): each test's readings in replicate order, then its mean record.
-VSREPNUM is the item-group repeat key numbering the readings of one test
-at one visit, and has no value on the mean record.
-
-VSORRES is the reading written as text, and the mean on the mean record;
-a whole number is written without a decimal point. VSORRESU is mmHg for
-every record. VSSTRESN is the reading itself on a reading record, and the
-mean of the readings actually taken on the mean record. VSSTRESC is the
-same value written as text, so it always agrees with the numeric result.
-VSDRVFL marks the mean record with Y and has no value on the reading
-records.
-
-A reading that was not taken, whether its record is absent or its value is
-blank, gives no reading record, and the visit mean is taken over the
-readings present.
+DOMAIN is "VS". STUDYID is the ODM study OID and USUBJID is the ODM subject
+key, each as given. VISIT is the name of the visit the reading was collected
+at, "VISIT 1" or "VISIT 2". VSTESTCD is "SYSBP" or "DIABP" and VSTEST is
+"Systolic Blood Pressure" or "Diastolic Blood Pressure", the test code and
+name of the collected item. Each reading taken gives one record, and
+VSREPNUM is the reading's item-group repeat key: it numbers the readings of
+one test at one visit. A reading that was not taken, whether its record is
+absent or its value is blank, gives no reading record. VSORRES is the
+reading written as text from its numeric value, so trailing zeros are
+dropped (a collected 82.50 reads 82.5). VSSTRESN is the reading itself on a
+reading record. VSSTRESC is the numeric result written as text, so it
+always agrees with VSSTRESN. VSORRESU is "mmHg" for every record. Each test
+at each visit also gives one derived record holding the mean of the
+readings actually taken at that visit: on that record VSSTRESN is the mean,
+VSORRES carries the mean written as text, and VSREPNUM has no value.
+VSDRVFL is "Y" on the derived record and has no value on the reading
+records. VSSEQ numbers each subject's records from 1 by visit name, then
+by test code (DIABP before SYSBP): each test's readings in replicate order,
+then its mean record.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/vs.csv.

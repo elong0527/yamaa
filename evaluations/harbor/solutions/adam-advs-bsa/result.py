@@ -4,55 +4,62 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+import math
 
-import polars as pl
+import pandas as pd
 
-raw = pl.read_csv("/app/input/advs.csv", infer_schema=False).with_columns(
-    pl.col("AVAL").cast(pl.Float64, strict=False)
-)
+INPUT = "/app/input"
+OUTPUT = "/app/output"
 
-# Every collected record stays in place.
-collected = raw.select(
-    "STUDYID", "USUBJID", "PARAMCD", "PARAM", "AVAL", "VISIT",
-    DTYPE=pl.lit(None, dtype=pl.String),
-)
+COLUMNS = ["STUDYID", "USUBJID", "PARAMCD", "PARAM", "AVAL", "VISIT", "DTYPE"]
 
-# The visit's height and weight results; a zero result still counts.
-heights = (
-    raw.filter(
-        (pl.col("PARAMCD") == "HEIGHT") & pl.col("AVAL").is_not_null()
-    )
-    .group_by(["STUDYID", "USUBJID", "VISIT"])
-    .agg(HEIGHT_VAL=pl.col("AVAL").first())
-)
-weights = (
-    raw.filter(
-        (pl.col("PARAMCD") == "WEIGHT") & pl.col("AVAL").is_not_null()
-    )
-    .group_by(["STUDYID", "USUBJID", "VISIT"])
-    .agg(WEIGHT_VAL=pl.col("AVAL").first())
-)
 
-# One body surface area record for each visit with both results.
-bsa = (
-    heights.join(weights, on=["STUDYID", "USUBJID", "VISIT"], how="inner")
-    .with_columns(AVAL=(pl.col("HEIGHT_VAL") * pl.col("WEIGHT_VAL") / 3600).sqrt())
-    .select(
-        "STUDYID",
-        "USUBJID",
-        "AVAL",
-        "VISIT",
-        PARAMCD=pl.lit("BSA"),
-        PARAM=pl.lit("Body Surface Area (m^2)"),
-        DTYPE=pl.lit("CALCULATION"),
-    )
-    .select("STUDYID", "USUBJID", "PARAMCD", "PARAM", "AVAL", "VISIT", "DTYPE")
-)
+def main():
+    advs = pd.read_csv(f"{INPUT}/advs.csv", dtype={"AVAL": float})
 
-advs = pl.concat([collected, bsa], how="diagonal").sort(
-    ["USUBJID", "VISIT", "PARAMCD"]
-)
+    # Collect non-missing results per subject and visit.
+    results = {}
+    for _, row in advs.iterrows():
+        key = (row["STUDYID"], row["USUBJID"], row["VISIT"])
+        results.setdefault(key, {})
+        if not pd.isna(row["AVAL"]):
+            results[key][row["PARAMCD"]] = row["AVAL"]
 
-Path("/app/output").mkdir(parents=True, exist_ok=True)
-advs.write_csv("/app/output/advs.csv")
+    records = []
+    emitted = set()
+    rows = list(advs.iterrows())
+    for i, (_, row) in enumerate(rows):
+        rec = {col: row[col] for col in COLUMNS if col != "DTYPE"}
+        rec["DTYPE"] = ""
+        records.append(rec)
+
+        key = (row["STUDYID"], row["USUBJID"], row["VISIT"])
+        # Emit the BSA record after the last collected record of its group.
+        last_of_group = i == len(rows) - 1 or (
+            rows[i + 1][1]["STUDYID"],
+            rows[i + 1][1]["USUBJID"],
+            rows[i + 1][1]["VISIT"],
+        ) != key
+        if last_of_group and key not in emitted:
+            emitted.add(key)
+            vals = results[key]
+            if "HEIGHT" in vals and "WEIGHT" in vals:
+                bsa = math.sqrt(vals["HEIGHT"] * vals["WEIGHT"] / 3600.0)
+                records.append(
+                    {
+                        "STUDYID": key[0],
+                        "USUBJID": key[1],
+                        "PARAMCD": "BSA",
+                        "PARAM": "Body Surface Area (m^2)",
+                        "AVAL": bsa,
+                        "VISIT": key[2],
+                        "DTYPE": "CALCULATION",
+                    }
+                )
+
+    out = pd.DataFrame(records, columns=COLUMNS)
+    out.to_csv(f"{OUTPUT}/advs.csv", index=False)
+
+
+if __name__ == "__main__":
+    main()

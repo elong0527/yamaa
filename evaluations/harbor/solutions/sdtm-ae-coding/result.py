@@ -4,35 +4,68 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Create the SDTM AE dataset by coding reported terms against MedDRA 26.1.
 
-import polars as pl
+Reads AE_RAW and MEDDRA_26_1 from /app/input and writes /app/output/ae.csv
+with one record per adverse event. AEDECOD is the preferred term of the
+dictionary entry whose lowest-level term equals AETERM exactly (including
+letter case); AEBODSYS is that entry's body system. A reported term with
+no exact match, or a blank AETERM, gives "NOT CODED" in both columns.
+"""
 
-ae_raw = pl.read_csv("/app/input/ae_raw.csv", infer_schema=False).with_columns(
-    pl.col("AESEQ").cast(pl.Int64)
-)
-meddra = pl.read_csv("/app/input/meddra_26_1.csv", infer_schema=False)
+import pandas as pd
 
-# The preferred term and body system of the entry whose lowest-level term
-# equals the reported term exactly, including letter case. A blank term or
-# one with no exact match is not coded.
-ae = (
-    ae_raw.join(meddra, left_on="AETERM", right_on="LLTNAME", how="left")
-    .with_columns(
-        AEDECOD=pl.when(
-            (pl.col("AETERM").fill_null("") == "") | pl.col("PTNAME").is_null()
-        )
-        .then(pl.lit("NOT CODED"))
-        .otherwise(pl.col("PTNAME")),
-        AEBODSYS=pl.when(
-            (pl.col("AETERM").fill_null("") == "") | pl.col("SOCNAME").is_null()
-        )
-        .then(pl.lit("NOT CODED"))
-        .otherwise(pl.col("SOCNAME")),
-        DOMAIN=pl.lit("AE"),
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
+
+NOT_CODED = "NOT CODED"
+
+
+def main() -> None:
+    ae_raw = pd.read_csv(
+        f"{INPUT_DIR}/ae_raw.csv", dtype=str, keep_default_na=False
     )
-    .select("DOMAIN", "STUDYID", "USUBJID", "AESEQ", "AETERM", "AEDECOD", "AEBODSYS")
-)
+    meddra = pd.read_csv(
+        f"{INPUT_DIR}/meddra_26_1.csv", dtype=str, keep_default_na=False
+    )
 
-Path("/app/output").mkdir(exist_ok=True)
-ae.write_csv("/app/output/ae.csv")
+    # Exact, case-sensitive lookup on the lowest-level term.
+    lookup = {
+        row.LLTNAME: (row.PTNAME, row.SOCNAME)
+        for row in meddra.itertuples(index=False)
+    }
+
+    records = []
+    for row in ae_raw.itertuples(index=False):
+        term = row.AETERM
+        if term and term in lookup:
+            ptname, socname = lookup[term]
+        else:
+            ptname, socname = NOT_CODED, NOT_CODED
+        records.append(
+            {
+                "DOMAIN": "AE",
+                "STUDYID": row.STUDYID,
+                "USUBJID": row.USUBJID,
+                "AESEQ": row.AESEQ,
+                "AETERM": term,
+                "AEDECOD": ptname,
+                "AEBODSYS": socname,
+            }
+        )
+
+    columns = [
+        "DOMAIN",
+        "STUDYID",
+        "USUBJID",
+        "AESEQ",
+        "AETERM",
+        "AEDECOD",
+        "AEBODSYS",
+    ]
+    ae = pd.DataFrame(records, columns=columns)
+    ae.to_csv(f"{OUTPUT_DIR}/ae.csv", index=False)
+
+
+if __name__ == "__main__":
+    main()

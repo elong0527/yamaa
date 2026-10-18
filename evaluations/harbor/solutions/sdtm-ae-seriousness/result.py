@@ -4,36 +4,52 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build the SDTM AE dataset from AE_RAW.
 
-import polars as pl
+One record per adverse event. AESER is "Y" when any of the seriousness
+criteria (AESDTH, AESLIFE, AESHOSP, AESDISAB, AESCONG, AESMIE) is "Y",
+and "N" when no criterion is "Y" (including when every criterion is
+empty). Criterion flags keep their collected values; an empty flag
+stays empty rather than becoming "N".
+"""
 
-ae_raw = pl.read_csv("/app/input/ae_raw.csv", infer_schema=False).with_columns(
-    pl.col("AESEQ").cast(pl.Int64)
-)
+import pandas as pd
 
-criteria = ["AESDTH", "AESLIFE", "AESHOSP", "AESDISAB", "AESCONG", "AESMIE"]
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-# Serious when any criterion is Y; otherwise not serious, even when every
-# criterion is empty. The criterion flags stay as collected.
-ae = (
-    ae_raw.with_columns(
-        AESER=pl.when(
-            pl.any_horizontal(pl.col(criteria) == "Y")
-        )
-        .then(pl.lit("Y"))
-        .otherwise(pl.lit("N")),
-        DOMAIN=pl.lit("AE"),
-    ).select(
-        "DOMAIN",
-        "STUDYID",
-        "USUBJID",
-        "AESEQ",
-        "AETERM",
-        "AESER",
-        *criteria,
+CRITERIA = ["AESDTH", "AESLIFE", "AESHOSP", "AESDISAB", "AESCONG", "AESMIE"]
+COLUMNS = [
+    "DOMAIN",
+    "STUDYID",
+    "USUBJID",
+    "AESEQ",
+    "AETERM",
+    "AESER",
+] + CRITERIA
+
+
+def main() -> None:
+    ae_raw = pd.read_csv(
+        f"{INPUT_DIR}/ae_raw.csv", dtype=str, keep_default_na=False
     )
-)
 
-Path("/app/output").mkdir(exist_ok=True)
-ae.write_csv("/app/output/ae.csv")
+    ae = pd.DataFrame()
+    ae["STUDYID"] = ae_raw["STUDYID"]
+    ae["USUBJID"] = ae_raw["USUBJID"]
+    ae["AESEQ"] = ae_raw["AESEQ"]
+    ae["AETERM"] = ae_raw["AETERM"]
+    ae["DOMAIN"] = "AE"
+    ae["AESER"] = [
+        "Y" if any(row[col] == "Y" for col in CRITERIA) else "N"
+        for _, row in ae_raw.iterrows()
+    ]
+    for col in CRITERIA:
+        ae[col] = ae_raw[col]
+
+    ae = ae[COLUMNS]
+    ae.to_csv(f"{OUTPUT_DIR}/ae.csv", index=False)
+
+
+if __name__ == "__main__":
+    main()

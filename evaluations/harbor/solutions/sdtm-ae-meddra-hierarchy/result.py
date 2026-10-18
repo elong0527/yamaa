@@ -4,56 +4,64 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+import pandas as pd
 
-import polars as pl
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-ae_raw = pl.read_csv("/app/input/ae_raw.csv", infer_schema=False).with_columns(
-    pl.col("AESEQ").cast(pl.Int64)
-)
-meddra = pl.read_csv("/app/input/meddra_synthetic.csv", infer_schema=False)
-
-# Every hierarchy field comes from the primary path for the coder-assigned
-# code; the extract marks it with PRIMARY_SOC Y. An unknown or absent code
-# leaves the hierarchy empty, but the assigned code stays in AELLTCD.
-primary = meddra.filter(pl.col("PRIMARY_SOC") == "Y")
-
-ae = (
-    ae_raw.join(primary, left_on="AELLTCD", right_on="LLTCD", how="left")
-    .with_columns(
-        DOMAIN=pl.lit("AE"),
-        AELLT=pl.col("LLTNAME"),
-        AEDECOD=pl.col("PTNAME"),
-        AEPTCD=pl.col("PTCD"),
-        AEHLT=pl.col("HLTNAME"),
-        AEHLTCD=pl.col("HLTCD"),
-        AEHLGT=pl.col("HLGTNAME"),
-        AEHLGTCD=pl.col("HLGTCD"),
-        AEBODSYS=pl.col("SOCNAME"),
-        AEBODSCD=pl.col("SOCCD"),
-        AESOC=pl.col("SOCNAME"),
-        AESOCCD=pl.col("SOCCD"),
-    )
-    .select(
-        "DOMAIN",
-        "STUDYID",
-        "USUBJID",
-        "AESEQ",
-        "AETERM",
-        "AELLT",
-        "AELLTCD",
-        "AEDECOD",
-        "AEPTCD",
-        "AEHLT",
-        "AEHLTCD",
-        "AEHLGT",
-        "AEHLGTCD",
-        "AEBODSYS",
-        "AEBODSCD",
-        "AESOC",
-        "AESOCCD",
-    )
+ae = pd.read_csv(f"{INPUT_DIR}/ae_raw.csv", dtype=str, keep_default_na=False)
+meddra = pd.read_csv(
+    f"{INPUT_DIR}/meddra_synthetic.csv", dtype=str, keep_default_na=False
 )
 
-Path("/app/output").mkdir(exist_ok=True)
-ae.write_csv("/app/output/ae.csv")
+# Keep only the primary path for each LLT code.
+primary = meddra[meddra["PRIMARY_SOC"] == "Y"]
+hierarchy = {}
+for _, row in primary.iterrows():
+    hierarchy[row["LLTCD"]] = row
+
+COLUMNS = [
+    "DOMAIN", "STUDYID", "USUBJID", "AESEQ", "AETERM", "AELLT", "AELLTCD",
+    "AEDECOD", "AEPTCD", "AEHLT", "AEHLTCD", "AEHLGT", "AEHLGTCD",
+    "AEBODSYS", "AEBODSCD", "AESOC", "AESOCCD",
+]
+
+records = []
+for _, event in ae.iterrows():
+    code = event["AELLTCD"]
+    record = {
+        "DOMAIN": "AE",
+        "STUDYID": event["STUDYID"],
+        "USUBJID": event["USUBJID"],
+        "AESEQ": event["AESEQ"],
+        "AETERM": event["AETERM"],
+        "AELLT": "",
+        "AELLTCD": code,
+        "AEDECOD": "",
+        "AEPTCD": "",
+        "AEHLT": "",
+        "AEHLTCD": "",
+        "AEHLGT": "",
+        "AEHLGTCD": "",
+        "AEBODSYS": "",
+        "AEBODSCD": "",
+        "AESOC": "",
+        "AESOCCD": "",
+    }
+    if code and code in hierarchy:
+        path = hierarchy[code]
+        record["AELLT"] = path["LLTNAME"]
+        record["AEDECOD"] = path["PTNAME"]
+        record["AEPTCD"] = path["PTCD"]
+        record["AEHLT"] = path["HLTNAME"]
+        record["AEHLTCD"] = path["HLTCD"]
+        record["AEHLGT"] = path["HLGTNAME"]
+        record["AEHLGTCD"] = path["HLGTCD"]
+        record["AEBODSYS"] = path["SOCNAME"]
+        record["AEBODSCD"] = path["SOCCD"]
+        record["AESOC"] = path["SOCNAME"]
+        record["AESOCCD"] = path["SOCCD"]
+    records.append(record)
+
+out = pd.DataFrame(records, columns=COLUMNS)
+out.to_csv(f"{OUTPUT_DIR}/ae.csv", index=False)

@@ -4,23 +4,24 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Create the ADAE dataset from the AE and SUPP datasets.
 
-import polars as pl
+One record per adverse event in AE. AESEV is the severity recorded in
+SUPP, matched to an event on STUDYID, USUBJID, and AESEQ together.
+AESEV has no value when the event has no supplemental record, or when
+its supplemental record carries no severity. A supplemental record for
+an event that was never collected creates no row.
+"""
 
-ae = pl.read_csv("/app/input/ae.csv", infer_schema=False).with_columns(
-    pl.col("AESEQ").cast(pl.Int64)
-)
-supp = pl.read_csv("/app/input/supp.csv", infer_schema=False).with_columns(
-    pl.col("AESEQ").cast(pl.Int64)
-).select("STUDYID", "USUBJID", "AESEQ", "AESEV")
+import pandas as pd
 
-# Severity is matched on the study and subject identifiers together with
-# the event sequence number. An event with no supplemental record, or a
-# record carrying no severity, has no value.
-adae = ae.join(
-    supp, on=["STUDYID", "USUBJID", "AESEQ"], how="left", maintain_order="left"
-).select("STUDYID", "USUBJID", "AESEQ", "AEDECOD", "AESEV")
+AE = pd.read_csv("/app/input/ae.csv", dtype=str, keep_default_na=False)
+SUPP = pd.read_csv("/app/input/supp.csv", dtype=str, keep_default_na=False)
 
-Path("/app/output").mkdir(exist_ok=True)
-adae.write_csv("/app/output/adae.csv")
+KEYS = ["STUDYID", "USUBJID", "AESEQ"]
+
+adae = AE.merge(SUPP[KEYS + ["AESEV"]], on=KEYS, how="left", sort=False)
+adae["AESEV"] = adae["AESEV"].fillna("")
+
+adae = adae[["STUDYID", "USUBJID", "AESEQ", "AEDECOD", "AESEV"]]
+adae.to_csv("/app/output/adae.csv", index=False)
