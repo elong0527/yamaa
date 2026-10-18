@@ -1,0 +1,8 @@
+phase: validation
+condition: unknown_field
+spec_paths:
+  - intermediates[0].between.value
+requirement: REQ-0121
+context:
+  identifier: DM.AGE
+  intermediate: REFRANGE

@@ -7,16 +7,30 @@ open gates live in GitHub issues and pull requests, not here.
 ## Supported platforms
 
 - CPython 3.12, 3.13, 3.14 and 3.15 wheels and source builds on Linux
-  x86_64, macOS arm64 and Windows x64.
+  x86_64, macOS arm64 and Windows x64. The Linux wheel is `manylinux_2_34`
+  and needs glibc 2.34 or later, for example RHEL 9, Ubuntu 22.04 or
+  Debian 12; older systems build from the Python source archive.
 - R 4.6.1 source builds on the same three hosts, each passing strict
   `R CMD check` with **Status: OK**.
 - Other runtimes and architectures, free-threaded Python, musl and R binary
   packages are not supported. R is distributed as a GitHub source tarball;
   CRAN and r-universe are later work.
 
+Source builds compile the Rust workspace, so they need Rust 1.90.0 or later
+with Cargo, a C compiler and GNU make. Cargo downloads the locked crates from
+crates.io, and pip's build isolation fetches `maturin` 1.9.6. An offline build
+needs those crates already in the Cargo cache; an offline Python build also
+needs `maturin` installed for `pip install --no-build-isolation`. Windows R
+builds also need Rtools45 and the GNU Rust target on the pinned toolchain, as
+[Supported dependency combinations](#supported-dependency-combinations)
+describes.
+
 `.github/workflows/native.yml` builds, installs and tests every supported
-combination nightly on main and on manual dispatch. A release is cut
-from a commit whose complete native run passed.
+combination on manual dispatch. A release is cut from a commit whose complete
+native run passed. Development PRs do not run the release lanes, so before a
+release also dispatch R-CMD-check, Optional format features and Dependency
+graphs on the candidate, and CI for its minimum toolchain, Python 3.15 and
+minimum saved artifact reader lanes.
 
 Python, R and Cargo versions move together;
 `tools.packaging.check_shared_release_versions` checks that they agree. The
@@ -33,13 +47,13 @@ The minimum supported independent readers are:
 | R arrow | 23.0.1 | CSV text and Parquet |
 | Python standard library | Supported CPython above | Dataset-JSON 1.1 |
 | R jsonlite | 2.0.0 | Dataset-JSON 1.1, with `bigint_as_char = TRUE` |
-| Python lxml | 6.1.0 (6.1.2 on CPython 3.15) | Define-XML 2.1 |
+| Python lxml | 6.1.3 | Define-XML 2.1 |
 
 Python package dependencies and R package `Suggests` declare these floors.
 The R readers are optional: public Build and Save use the shared native codecs.
 CSV carries text rather than an embedded schema; controls supply an explicit
 text schema and check exact authored CSV bytes. Its empty-field ingestion
-semantics are described in the [CSV profile](https://github.com/elong0527/yamaa/blob/main/rules/storage/csv.md).
+semantics are described in the [CSV profile](../rules/storage/csv.md).
 Parquet checks every logical type, nullable field, zone-free microsecond
 timestamp, field and row order, full signed-i64 values, exact finite double
 bits and empty-table schema. Read R integer columns through Arrow arrays, or
@@ -69,23 +83,42 @@ API.
 
 ## Supported dependency combinations
 
-The Rust workspace declares MSRV 1.90 and builds with Rust 1.99.1; a CI job
-checks and lints it with Rust 1.90.0. Canonical
+The Rust workspace declares MSRV 1.90 and builds with Rust 1.99.1, the
+toolchain that `rust/rust-toolchain.toml` pins; a CI job checks and lints it
+with Rust 1.90.0. The R source package runs Cargo inside its bundled
+workspace, so under rustup it builds with the pinned toolchain and ignores a
+Rust target added to another one: Windows R builds need
+`rustup toolchain install 1.99.1 --target x86_64-pc-windows-gnu`. Canonical
 release builds use `rust/Cargo.lock`, including unchanged copies in both source
 packages. Arrow and Parquet are supported at exactly 57.3.0 with flatbuffers
-25.12.19, so an embedder whose graph holds Arrow 57.3 builds the engine
+25.12.19, so an embedder whose graph holds Arrow 57.3.0 builds the engine
 unchanged. Other Arrow and Parquet releases are unsupported: the adapter's
 version-specific APIs, confined to `storage_api.rs`, are adapted and qualified
 for 57.3.0 only. Broadening that range requires separate adapter and
 installed-host qualification first. The direct storage codec floors are brotli
 8.0.4 and lz4_flex 0.13.1. Portable libm remains exactly 0.2.16, and the
-reviewed local saphyr-parser patch remains part of every graph. The Python
-binding builds with PyO3 0.27.2 through 0.30; the lock selects 0.30.1, and the
-minimum dependency graph tests 0.27.2.
+reviewed local saphyr-parser patch remains part of every graph this workspace
+builds. Cargo reads `[patch]` only from the root of the workspace being built,
+so a Rust embedder adds the patch to its own workspace, as the
+[Rust guide](../rust/README.md#distribution) shows; without it, the
+embedder's graph takes the unpatched `saphyr-parser` from crates.io.
+The Python binding builds with PyO3 0.27.2 through 0.30; the lock selects
+0.30.1, and the minimum dependency graph tests 0.27.2.
+
+The engine deliberately links two versions of four crates, because yamaa's
+direct floors differ from Parquet 57.3.0's: lz4_flex 0.13 beside Parquet's
+0.12, zstd 0.14 beside 0.13, base64 0.23 beside 0.22, and num-bigint 0.5
+beside the 0.4 that Parquet and arrow-buffer use. Aligning them would lower
+yamaa's floors or move Parquet off its exact pin; Parquet 57.3.1 requires the
+same versions as 57.3.0. Both zstd copies, through zstd-safe 7 and 8, build
+one `zstd-sys`, so the engine links a single zstd library. The other duplicate
+versions that `cargo tree -d` lists add no second linked copy: syn serves
+procedural macros, and the extra getrandom and r-efi versions serve build
+tools or other targets.
 
 Python supports CPython 3.12 through 3.15 with the runtime ranges in
 `python/pyproject.toml`. On CPython 3.12 to 3.14, their declared floors are
-lxml 6.1.0, Polars 1.35.2, py-yaml12 0.2, PyArrow 23.0.1, Pydantic 2.12.4,
+lxml 6.1.3, Polars 1.35.2, py-yaml12 0.2, PyArrow 23.0.1, Pydantic 2.12.4,
 packaging 25 and PyYAML 6.0.3.
 The Parquet 57.3.0 writer records only type-defined column orders, which
 Polars 1.35.2 reads; the IEEE 754 total-order form that later writers record
@@ -93,20 +126,22 @@ for floating-point columns needs Polars 1.43.2. R uses R 4.6.1 and the shared
 Rust graph; its host qualification readers are the `Suggests` dependencies in
 `R/yamaa/DESCRIPTION`.
 
-Four of these floors do not work on CPython 3.15, so on 3.15 the declared
-floors are the oldest releases that do: Polars 2.0.0, PyArrow 26.0.0, lxml
-6.1.2 and Pydantic 2.14.0. Environment markers split these four requirements by
+Three of these floors do not work on CPython 3.15, so on 3.15 the declared
+floors are the oldest releases that do: Polars 2.0.0, PyArrow 26.0.0 and
+Pydantic 2.14.0. Environment markers split these three requirements by
 interpreter, and CPython 3.12 to 3.14 keep the floors that embedders hold.
 Polars before 2.0.0 installs, but its Series methods that forward to
 expressions, such as `implode`, return `None`: 3.15 no longer stores a
 function's implicit `None` return in `co_consts`, which those releases use to
-find the methods. PyArrow 23.0.1, lxml 6.1.0 and pydantic-core 2.41.5, which
-Pydantic 2.12.4 requires, publish no 3.15 wheels, and their source builds need
-Arrow C++, the libxml2 and libxslt headers, or a PyO3 release that accepts
-3.15. PyYAML publishes no 3.15 wheels either, but builds from its source
-archive, so its floor is the same on every interpreter.
+find the methods. PyArrow 23.0.1 and pydantic-core 2.41.5, which Pydantic
+2.12.4 requires, publish no 3.15 wheels, and their source builds need Arrow C++
+or a PyO3 release that accepts 3.15. PyYAML publishes no 3.15 wheels either,
+but builds from its source archive, so its floor is the same on every
+interpreter. So is lxml's: 6.1.3 is the first release that loads no external
+parameter entities by default, and 6.1.1 patched the libxslt that its Linux
+wheels bundle.
 
-The continuous [dependency graph lanes](https://github.com/elong0527/yamaa/blob/main/CONTRIBUTING.md#ci-and-release-qualification)
+The [dependency graph lanes](../CONTRIBUTING.md#ci-and-release-qualification)
 test declared direct minima and newest compatible selections on Linux with
 CPython 3.12, 3.14 and 3.15, all with R 4.6.1; on 3.15 the minima are its own
 floors. Cargo transitive dependencies use the newest
@@ -116,14 +151,47 @@ Python transitives are resolved compatibly. These isolated graphs do not change
 `rust/Cargo.lock` or `python/uv.lock`. The full native matrix separately qualifies
 the locked release across supported platforms and Python versions.
 
-The same workflow checks both locks against security advisories:
-`cargo deny check advisories` reads `rust/Cargo.lock` with `rust/deny.toml`,
-and `pip-audit` reads every package locked in `python/uv.lock`. An ignored Rust
-advisory names its id, a reason and a review date in `rust/deny.toml`. The
-scanners do not cover vendored source: the ReadStat C sources under
-`rust/crates/yamaa-adapters/vendor/readstat` are reviewed against upstream
-releases when they are updated, and the vendored `saphyr-parser` patch is
-replaced by a published release under #2583.
+The same workflow checks both locks against security advisories.
+`cargo deny check advisories` reads `rust/Cargo.lock` against RustSec with
+`rust/deny.toml`, `pip-audit` reads every package locked in `python/uv.lock`
+against the PyPI advisory database, and OSV-Scanner reads both locks against
+OSV with `osv-scanner.toml`. OSV also carries GitHub's reviewed advisories,
+which the other two databases can lack. An ignored advisory names its id, a
+reason and a review date in the file of each scanner that reports it. An
+OSV-Scanner ignore lapses on its review date, so the check fails again until
+the advisory is reviewed.
+
+### Components outside the advisory scanners
+
+The scanners match locked registry packages by name and version, so they do
+not cover vendored source or native libraries bundled inside a package. These
+components are tracked by hand:
+
+- `saphyr-parser` 0.2.1 with the reviewed compact-flow patch, a path
+  dependency in `rust/vendor/saphyr-parser`. #2583 replaces it with a
+  published release.
+- The ReadStat 1.1.9 SAS reader subset in
+  `rust/crates/yamaa-adapters/vendor/readstat`. #2927 tracks the upstream
+  fixes since 1.1.9.
+- zstd 1.5.7, the C library that `zstd-sys` bundles into the engine.
+- libxml2 and libxslt, bundled in the `lxml` wheels. The lxml 6.1.3 Windows
+  wheels bundle libxml2 2.11.9, an end-of-life branch that lxml describes as
+  security-patched.
+
+## Release checklist
+
+Before pushing the release tag, confirm on the final commit:
+
+1. Its complete native qualification passed.
+2. Its Dependency graphs run passed, including the three advisory checks.
+3. Every ignored advisory in `rust/deny.toml` and `osv-scanner.toml` still
+   matches a locked package, and its reason still holds. Remove any ignore
+   that fails either test.
+4. Every [component outside the advisory scanners](#components-outside-the-advisory-scanners)
+   was compared with its upstream releases and security advisories since the
+   previous release, and each fix that applies is taken or has an issue.
+
+Record the outcome on the release's planning issue.
 
 ## Publication
 
@@ -139,8 +207,12 @@ The workflow downloads the qualified artifacts and publishes their unchanged
 bytes: one wheel per supported OS, the tested Linux Python sdist and the tested
 Linux R source tarball. Other native source lanes qualify their own host-built
 archives. Missing, expired or ambiguous artifacts fail publication; an existing
-release is never overwritten. The release includes committed notes from
-`docs/releases/<version>.md` and identifies the native run and selected artifacts.
+release is never overwritten. Re-running failed jobs or all jobs keeps a run
+eligible: earlier attempts' artifacts stay on the run, and the workflow takes
+only the copy that its uploading job created during the execution the run's
+final attempt lists. The release body is the committed notes from
+`docs/releases/<version>.md`, then a "Qualified native artifacts" section that
+links the native run attempt and lists the selected artifacts.
 This route uses the workflow's GitHub token and needs no package-index
 credentials. The workflow has no PyPI step: 0.4.0 is distributed as GitHub
 release assets only, and those assets do not establish PyPI publication. PyPI
@@ -152,14 +224,35 @@ the GitHub release assets remain the documented standalone download route.
 Python and R source packages carry the same Rust workspace, static ReadStat
 bridge and patched YAML parser. SAS and Transport decoding runs in the shared
 adapter over captured source bytes; it needs no host reader fallback or dynamic
-ReadStat installation. The [ReadStat integration](https://github.com/elong0527/yamaa/blob/main/rust/crates/yamaa-adapters/vendor/readstat/README.md)
-and [YAML parser provenance](https://github.com/elong0527/yamaa/blob/main/rust/vendor/saphyr-parser/PROVENANCE.md)
+ReadStat installation. The [ReadStat integration](../rust/crates/yamaa-adapters/vendor/readstat/README.md)
+and [YAML parser provenance](../rust/vendor/saphyr-parser/PROVENANCE.md)
 own their source inventories, patches and licenses. Both parser authors' MIT
 notices remain in the distributed `LICENSE-YAML.txt`.
 
+Every package carries the project license and the third-party notices: each
+wheel in its `.dist-info/licenses/` directory, the Python source archive at its
+root, and the R source package in `inst/`, which R installs at the package
+root. `LICENSE.txt` is the project's MIT license. `LICENSE-THIRD-PARTY.txt`
+reproduces the license, copyright and NOTICE texts of every third-party crate
+in the normal and build dependency closure of the shipped Python and R
+binding crates, for every platform, and names the license relied on where a
+crate offers a choice. `LICENSE-READSTAT.txt`,
+`LICENSE-UNICODE.txt` and `LICENSE-YAML.txt` cover the vendored ReadStat
+sources, the Unicode data in yamaa's own tables and the vendored YAML parser.
+The R package keeps its `MIT + file LICENSE` declaration, and its `Copyright`
+field names these files. The Python License-Expression,
+`MIT AND Apache-2.0 AND BSD-3-Clause AND Unicode-3.0`, covers the project and
+the crates linked into the wheels.
+
+`tools.packaging.generate_third_party_notices` generates the crate notices
+from `rust/Cargo.lock` and derives that expression. The repository check fails
+when the locked graph gains or loses a crate without a matching notice entry.
+Native qualification and the release selector require every wheel and source
+package to carry each notice unchanged.
+
 Native qualification exercises the static source bridge on every supported
 platform and compares both installed hosts with independently authored binary
-fixtures and exact saved bytes. The [SAS source contract](https://github.com/elong0527/yamaa/blob/main/rules/storage/sas.md)
+fixtures and exact saved bytes. The [SAS source contract](../rules/storage/sas.md)
 owns decoding behavior.
 
 ## Approved decisions
@@ -208,7 +301,7 @@ owns decoding behavior.
   predicates, conversions and saved bytes may differ from historical platform
   math. This promises neither universal correct rounding nor historical bit
   compatibility. The golden values live in
-  [portable_math.tsv](https://github.com/elong0527/yamaa/blob/main/rust/crates/yamaa-core/tests/fixtures/portable_math.tsv).
+  [portable_math.tsv](../rust/crates/yamaa-core/tests/fixtures/portable_math.tsv).
 - Keep canonical Cargo locking and unchanged source-package copies. Runtime,
   contract, cache and resource identities use references, canonical forms or
   bytes; only packaging-tool lockfiles carry their own checksum fields.
@@ -221,7 +314,7 @@ owns decoding behavior.
   templates that need it and column-phase for the rest, and a candidate a
   template filter suppresses never reads a lookup it does not need.
 - Pin Arrow and Parquet to exactly 57.3.0, with brotli 8.0.4 and lz4_flex
-  0.13.1 floors, so embedders on Arrow 57.3 build the engine unchanged. The
+  0.13.1 floors, so embedders on Arrow 57.3.0 build the engine unchanged. The
   57.3.0 writer's type-defined column orders return the Python Polars floor to
   1.35.2, with no vendored Parquet writer.
 - Ship the reviewed vendored `saphyr-parser` compact-flow patch in every
@@ -237,10 +330,20 @@ owns decoding behavior.
   release.
 - Distribute 0.4.0 as GitHub release assets only; `release.yml` has no PyPI
   step.
+- Refuse a SAS7BDAT dataset that holds records deleted in place as
+  `source_sas_invalid` with cause `deleted_records`. Reading only its live
+  records is 0.5.0 work (#2924).
+- A qualified `between.value`, in a named intermediate or an aggregate, reads
+  the record of the input that drives the row. Any other input fails
+  validation as `unknown_field`; it is never read through the implicit join
+  (#2925).
 
-Host behavior and source installation commands live in the
-[Python](https://github.com/elong0527/yamaa/blob/main/python/README.md) and
-[R](https://github.com/elong0527/yamaa/blob/main/R/yamaa/README.md) guides.
+The [Python package documentation](articles/python.md) describes Python host
+behavior, and the
+[Python README](../python/README.md#installation)
+its installation commands. The
+[R guide](../R/yamaa/README.md)
+covers both for R.
 
 ## Resource refusals
 
@@ -322,10 +425,12 @@ Indexed and scanned lookups keep the same diagnostics and ordering.
 | R `cdiscbuilder` package | The `yamaa` R package. |
 | A dead declaration with an invalid reference fails a file without `parents` | The declaration is removed before validation and the file builds. To keep a declaration validated, name the column in `output.columns`, `keys` or `output.order_by`, or read it from a live derivation or verification. |
 | An input that no column reads is the implied driver | The input is removed too; name it in `base`. |
-| `parents: []` added only to enable pruning | Every specification is pruned; remove the line. |
-| Rust code depending on `yamaa-adapters` or `yamaa-core` | Depend on the `yamaa` facade crate by path or git. |
-| `datetime_precision` of minute text (`2025-03-04T08:30`) is `S`; `datetime_impute` with `time: last` gives `08:30:00`; hour text (`T08`) is invalid | `M`, `08:30:59`, and hour text is accepted (`H`). A condition that tested `= 'S'` for a collected time tests `IN ('M', 'S')`. |
+| `parents: []` added only to enable pruning | Every specification is pruned, so the line no longer affects pruning. Any `parents` field, even an empty one, still orders resolved columns by dependency; without one, declaration order is the resolved order ([REQ-0060](../rules/execution/lifecycle.md#req-0060), [REQ-0643](../rules/specification/composition.md#req-0643)). Remove the line only once no column reads a column declared after it; otherwise the specification fails with `forward_reference` ([REQ-0071](../rules/execution/lifecycle.md#req-0071)). |
+| Rust code depending on `yamaa-adapters` or `yamaa-core` | Depend on the `yamaa` facade crate by path or git and, with its default `yaml` feature, add the `saphyr-parser` patch that the [Rust guide](../rust/README.md#distribution) shows. |
+| `datetime_precision` of minute text (`2025-03-04T08:30`) is `S`; `datetime_impute` with `time: last` gives `08:30:00`; hour text (`T08`) is invalid | `M`, `08:30:59`, and hour text is accepted (`H`). `IN ('M', 'S')` selects what `= 'S'` selected in 0.3.0, and only those forms convert directly to a `datetime`. A condition meaning "a time was collected" tests `IN ('H', 'M', 'S')`, because hour text also carries a collected time ([REQ-1327](../rules/operations/temporal.md#req-1327)). Complete hour text with `datetime_impute`; it is not a `datetime` ([REQ-1329](../rules/operations/temporal.md#req-1329)). |
 | Lock pins an earlier yamaa | Regenerate the project lock for 0.4.0 before using project functions; each applicable build checks the runtime version. |
+| A `between.value` qualified by an input that does not drive the row reads a wrong value with no message | It fails validation as `unknown_field`. Derive the value into a column, for example `AGE` from `DM.AGE`, and name that column. |
+| A `.sas7bdat` input that holds records deleted in place returns them as rows | It fails as `source_sas_invalid` with cause `deleted_records`. Rewrite the dataset first, for example with `PROC COPY`. |
 
 The `issues` table is unchanged. Code that parses its JSON-text `context` can
 read the `diagnostics` records instead: structured `context`, `source_span`
@@ -346,6 +451,6 @@ The 0.4.0 upgrade also includes language and environment changes made before
 | Data roots or `yamaa-project.yaml` | Relative resources resolve from the YAML file that declares them, including inherited layers. |
 | Symbolic link below the entry directory | Copy or hard-link the input; the resource policy refuses symbolic links. |
 
-The normative contracts are [verification](https://github.com/elong0527/yamaa/blob/main/rules/execution/verification.md),
-[functions and project environments](https://github.com/elong0527/yamaa/blob/main/rules/operations/functions.md) and
-[resources](https://github.com/elong0527/yamaa/blob/main/rules/storage/resources.md).
+The normative contracts are [verification](../rules/execution/verification.md),
+[functions and project environments](../rules/operations/functions.md) and
+[resources](../rules/storage/resources.md).

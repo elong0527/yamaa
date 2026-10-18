@@ -17,8 +17,10 @@ schema-owner controls are described in the [contributor guide](../CONTRIBUTING.m
 [Installed package checks](qualification/README.md) compare actual Python and R
 results with authored expected data. The workflow recipes in
 [.github/workflows/](../.github/workflows/) define the platform matrix and
-packaging checks. Host usage and installation commands live in
-[python/README.md](../python/README.md) and [R/yamaa/README.md](../R/yamaa/README.md).
+packaging checks. Python usage lives in the
+[Python package documentation](../docs/articles/python.md) and its installation
+commands in [python/README.md](../python/README.md);
+[R/yamaa/README.md](../R/yamaa/README.md) covers both for R.
 
 Expected benchmark data and Parquet fixtures are authored truth. Preserve their
 bytes when changing implementation or repository structure.
@@ -26,14 +28,20 @@ bytes when changing implementation or repository structure.
 Layer composition and null handling follow the
 [composition contract](../rules/specification/composition.md).
 
-The adapter enables independent `yaml`, `parquet` and `readstat` Cargo features
-by default. Python wheels, Python source installations and R source packages use
-that default and retain every supported format. Rust embedders can select only
-the physical formats they need:
+The `yamaa` facade crate forwards the adapter's independent `yaml`, `parquet`
+and `readstat` Cargo features, all enabled by default. Python wheels, Python
+source installations and R source packages use that default and retain every
+supported format. Rust embedders depend on the facade, never on
+`yamaa-adapters`, and can select only the physical formats they need. This
+selection admits YAML specifications and reads CSV and Parquet, and it omits
+the bundled ReadStat C build, so it reads no SAS input:
 
 ```toml
-yamaa-adapters = { path = "rust/crates/yamaa-adapters", default-features = false, features = ["yaml"] }
+yamaa = { path = "<yamaa checkout>/rust/crates/yamaa", default-features = false, features = ["yaml", "parquet"] }
 ```
+
+[Distribution](#distribution) shows the git form and the `saphyr-parser` patch
+that an embedder with `yaml` adds.
 
 | Feature | Dependency edge and capability |
 | --- | --- |
@@ -181,8 +189,8 @@ The supported API lives in one new crate, `rust/crates/yamaa` (package name
 `yamaa`), a small facade over `yamaa-adapters` and `yamaa-core`. The owner
 decided this on 2026-10-16: a separate facade crate, not a module inside
 `yamaa-adapters`. Host crates depend only on the facade (plus their language
-runtime), so the compiler enforces the boundary: the 64 `pub mod`s of
-`yamaa-adapters` and the 103 of `yamaa-core` stay internal and cannot be
+runtime), so the compiler enforces the boundary: the 66 `pub mod`s of
+`yamaa-adapters` and the 104 of `yamaa-core` stay internal and cannot be
 reached past the facade. The facade re-exports no adapters or core type; every
 public type below is facade-owned, and adapters/core types are converted at
 the boundary. Core keeps its current boundary (no I/O, no `unsafe`, no Arrow).
@@ -240,10 +248,32 @@ impl Engine {
     pub fn check(&self, request: &Request<'_>, token: &CancellationToken) -> Report;
     pub fn build(&self, request: &Request<'_>, token: &CancellationToken)
         -> Result<Build, Error>;
+    pub fn compile(&self, request: &Request<'_>, token: &CancellationToken)
+        -> Result<Plan, Error>;
     pub fn define(&self, request: &DefineRequest<'_>, token: &CancellationToken)
         -> Result<DefineBuild, Error>;
     pub fn resolve_specification(&self, request: &Request<'_>)
         -> Result<ResolvedSpecification, Error>;
+}
+
+#[derive(Clone)]
+pub struct Plan { /* shared engine configuration and compiled state */ }
+impl Plan {
+    pub fn run(&self, request: &RunRequest, token: &CancellationToken) -> Result<Build, Error>;
+    pub fn report(&self) -> &Report;  // a refused compilation; empty when compiled
+}
+
+#[non_exhaustive]
+#[derive(Clone, Default)]
+pub struct RunRequest {
+    pub resolver: Option<Arc<dyn ResourceResolver>>,  // inputs and Save targets
+    pub observer: Option<Arc<dyn Progress>>,          // this run's events
+}
+
+impl RunRequest {
+    pub fn new() -> Self;
+    pub fn with_resolver(mut self, resolver: Arc<dyn ResourceResolver>) -> Self;
+    pub fn with_observer(mut self, observer: Arc<dyn Progress>) -> Self;
 }
 
 #[non_exhaustive]
@@ -278,10 +308,10 @@ impl DefineBuild {
 pub enum SaveOutcome { Saved, NothingToSave }  // #[non_exhaustive]
 ```
 
-- `EngineOptions`, `Request` and `DefineRequest` are `#[non_exhaustive]`, so
-  external crates cannot use struct literals; the `new` plus `with_*`
-  constructors above are the only way to build them, which keeps additive
-  field changes non-breaking.
+- `EngineOptions`, `Request`, `DefineRequest` and `RunRequest` are
+  `#[non_exhaustive]`, so external crates cannot use struct literals; the
+  `new` plus `with_*` constructors above are the only way to build them, which
+  keeps additive field changes non-breaking.
 - `check` is infallible at the boundary, as today's `check_with_resolver` is:
   admission and preparation failures come back as diagnostics in the returned
   `Report`, never as a second error channel.
@@ -294,12 +324,24 @@ pub enum SaveOutcome { Saved, NothingToSave }  // #[non_exhaustive]
 - `resolve_specification` stays public, as decided for 0.4.0 in #2725. The
   facade type is `ResolvedSpecification`; the internal `ResolvedArtifact`
   (above) is its implementation and wire format, not a public type.
-- `compile` and `run` are reserved names, not part of the first surface. They
-  land with the reusable plan handle (#2654, #2679-#2682) as
-  `Engine::compile(&self, &Request<'_>) -> Result<Plan, Error>` and
-  `Plan::run(&self, &RunRequest<'_>, &CancellationToken) -> Result<Build, Error>`,
-  wrapping the existing `project_run::PreparedRun` instead of inventing a
-  second plan type.
+- `compile` and `run` are the reusable plan handle (#2821). `compile` is the
+  preparation half of `build`: it captures and admits the metadata through
+  the engine's resolver and compiles the selected route, reading no study
+  data. `Plan::run` is the rest: activation, input capture, binding,
+  execution and conversion through the same public tables. `build` is exactly
+  one `compile` followed by one `run`, with the same events, so there is one
+  admission and evaluation route. The plan wraps the existing prepared values
+  of all three routes rather than a second plan type.
+- A refused compilation still returns a `Plan`: `report` holds its
+  diagnostics, and each run returns that same failed `Build`, with its
+  retained preparation sources, without resource access. Only cancellation
+  fails `compile` or `run` itself; each token belongs to one call.
+- Each run opens its own resource scope. Without a run resolver it reads
+  inputs and targets Save where compilation did; a `RunRequest` resolver
+  serves the inputs at the same declaring identities and receives the run's
+  Save targets. Nothing a run captures, activates or produces stays in the
+  plan, so a failed run leaves the plan ready for the next. A `Build` owns its
+  run and outlives the plan.
 
 ### Handles, ownership and thread safety
 
@@ -307,7 +349,8 @@ pub enum SaveOutcome { Saved, NothingToSave }  // #[non_exhaustive]
 | --- | --- | --- | --- | --- |
 | `Engine` | Owned, cheap to clone (shared `Arc` state) | Yes | Yes | Operations take `&self`; concurrent calls are independent attempts. |
 | `Build`, `DefineBuild` | Owned, one attempt | Yes | No | `save(&mut self)` publishes once, as today. |
-| `Plan` (future, #2654) | Owned, reusable | Yes | Yes | `run` takes `&self`; each run is an independent attempt. |
+| `Plan` | Owned, reusable, cheap to clone (shared `Arc` state) | Yes | Yes | `run` takes `&self`; each run is an independent attempt in its own resource scope. The plan lives until its last clone drops, independently of the `Engine`. |
+| `RunRequest` | Owned | Yes | Yes | Concurrent runs pass their own observer; progress events carry no run identity. |
 | `Table` | Owned, immutable batches | Yes | Yes | Borrowed views share buffers with the owning table. |
 | `ResolvedSpecification` | Owned, immutable | Yes | Yes | No source access after construction. |
 | `MemoryResolver` | Owned, interior-mutable | Yes | Yes | Mirrors today's `host_resources::MemoryResolver`. |
@@ -437,11 +480,26 @@ today: the stable codes (`yaml_reader_unavailable`,
 ### Distribution
 
 All crates, including the facade, stay `publish = false` for 0.4.0. Embedders
-depend on the facade by git or path dependency:
+depend on the facade by git or path dependency. Cargo reads `[patch]` only from
+the root of the workspace being built, so this workspace's `[patch.crates-io]`
+entry for the vendored `saphyr-parser` does not reach an embedder, whose graph
+takes the unpatched parser from crates.io instead. The facade then reports valid
+compact-flow YAML, such as `verifications: [row_count: {min: 3, max: 3}]`, as
+`invalid_yaml`, while the Python and R packages accept it (#2929). Until #2583
+lands, an embedder that enables `yaml` adds the patch next to the facade
+dependency, from the same tag or checkout:
 
 ```toml
-yamaa = { path = "rust/crates/yamaa", default-features = false, features = ["yaml"] }
+[dependencies]
+yamaa = { git = "https://github.com/elong0527/yamaa", tag = "yamaa-v0.4.0", default-features = false, features = ["yaml", "parquet"] }
+
+[patch.crates-io]
+saphyr-parser = { git = "https://github.com/elong0527/yamaa", tag = "yamaa-v0.4.0" }
+# or, with path dependencies on a checkout:
+# saphyr-parser = { path = "<yamaa checkout>/rust/vendor/saphyr-parser" }
 ```
+
+`cargo tree -i saphyr-parser` then shows the vendored `saphyr-parser v0.2.1`.
 
 Publishing to crates.io is not decided here. It depends on #2583 -- the
 workspace `[patch.crates-io]` vendored `saphyr-parser` cannot be published as
@@ -450,23 +508,26 @@ Until #2583 lands, git/path is the distribution route.
 
 ### Host-usage mapping
 
-Every adapters or core module the two host crates use today (28 adapters
-modules, 11 core modules, counted from the host sources on 2026-10-16) maps to
-a facade item or is marked internal. Any module not listed here is internal by
+Every adapters or core module the two host crates used before they moved onto
+the facade (28 adapters modules and 11 core modules, counted from the host
+sources on 2026-10-16) maps to a facade item or is marked internal. The host
+crates now depend only on the facade and use none of these modules directly;
+the facade itself uses 29 adapters modules and 14 core modules, counted from
+`crates/yamaa/src` on 2026-10-18. Any module not listed here is internal by
 default.
 
-| Module used today | Facade disposition |
+| Module the hosts used | Facade disposition |
 | --- | --- |
 | `application_measurements` | Internal -- a host-side timing helper; the facade `Report` carries no measurements in the first surface. |
 | `arrow_bridge` | Facade -- `Table::stream` and stream import on `Table`; the FFI types themselves are not re-exported. |
 | `arrow_table` | Internal -- the engine's table representation; `Table` is the public form. |
 | `callback` | Facade -- the `ProjectFunctions` trait and `FunctionError`; `BoundaryError`/`CallbackError` convert into `FunctionError`. |
-| `file_application` | Facade -- `Engine::check`/`Engine::build`; `Application` and `ApplicationError` are internal. |
+| `file_application` | Facade -- `Engine::check`, `Engine::build`, `Engine::compile` and `Plan::run`; `Application` and `ApplicationError` are internal. |
 | `file_define` | Facade -- `Engine::define` and `DefineBuild::save`; its `Failure` converts into `Error`. |
-| `file_graph` | Internal -- producer graph state behind `Build` and the future `Plan`. |
-| `file_preparation` | Internal -- `FileSpecification` is a prepared internal form. |
+| `file_graph` | Internal -- producer graph state behind `Build` and `Plan`; each run borrows its build owner. |
+| `file_preparation` | Internal -- `FileSpecification` is a prepared internal form behind `Build` and `Plan`. |
 | `file_producer_build` | Internal -- attempt state behind `Build`. |
-| `file_project` | Internal -- project state behind `Build` and the future `Plan`. |
+| `file_project` | Internal -- project state behind `Build` and `Plan`. |
 | `file_resources` | Internal -- its `Error` converts into `ResolverFailure`/`Error::Internal`. |
 | `file_workflow` | Internal -- `SelectionError` converts into diagnostics/`Error`. |
 | `host_resources` | Facade -- the `ResourceResolver` trait, `MemoryResolver`, and the resolver request/reply/failure types. |
@@ -478,7 +539,7 @@ default.
 | `project_attempt` | Internal -- same disposition as `producer_attempt`. |
 | `project_lock` | Facade -- `LockFinding`/`LockReason` are the public lock-finding types and `decode_renv_lock` is the public renv admission; lock-kind detection stays internal (the engine supplies `LockKind` through `LockContext`). |
 | `project_report` | Internal -- `build_result` runs behind `Build`; `Classified` stays an internal constructor. |
-| `project_run` | Facade (future) -- `Plan` wraps `PreparedRun` (#2679); `Attempt`/`PreparedRun` stay internal in the first surface. |
+| `project_run` | Facade -- `Plan` wraps the prepared project route, `PreparedRun` included (#2821); `Attempt` and `PreparedRun` stay internal. |
 | `public_table` | Facade -- `Table`. |
 | `resolved_artifact` | Facade -- `ResolvedSpecification` (#2725). |
 | `scalar_bytes` | Internal -- scalar decoding is a conversion detail; project functions exchange facade `Scalar` values. |

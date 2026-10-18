@@ -1,7 +1,7 @@
 //! Whole-graph native builds retain original evidence and explicit Save authority.
 //! Original metadata and attempts remain owned after this resource owner drops.
 use crate::{
-    file_resources::{Error as ResourceError, Resources, RetainedSources},
+    file_resources::{Error as ResourceError, Resources, RetainedSources, RunScope},
     project_source::CapturedEnvironment,
     project_source_decoder::{Decoder, Snapshot},
     specification_source::PreparedDocument,
@@ -154,6 +154,9 @@ impl<E> OwnedAttempt<E> {
         self.publication_refusal
     }
 }
+/// The whole graph's build owner: its provenance and the compile-time
+/// metadata authority. Study snapshots, retained study sources and Save
+/// targets belong to each build's [`RunScope`].
 pub struct FileBuild {
     provenance: Arc<Provenance>,
     resources: Resources,
@@ -182,10 +185,21 @@ impl FileBuild {
     pub fn provenance(&self) -> &Arc<Provenance> {
         &self.provenance
     }
+    pub(crate) fn resources(&self) -> &Resources {
+        &self.resources
+    }
+    /// Open one build's study scope; see [`Resources::run_scope`].
+    pub fn run_scope(
+        &self,
+        resolver: Option<Arc<dyn crate::host_resources::Resolver>>,
+    ) -> RunScope {
+        self.resources.run_scope(resolver)
+    }
     /// Use complete native original-document reports as the ordinary output
     /// gate. Returned attempts own every report and all original typed failures.
     pub fn build_reported<A: ActivationPort>(
-        &mut self,
+        &self,
+        run: &mut RunScope,
         activation: &mut A,
         id: crate::specification_report::Identity<'_>,
         scope: yamaa_core::application_observer::Scope<'_>,
@@ -193,24 +207,26 @@ impl FileBuild {
     {
         let provenance = Arc::clone(&self.provenance);
         let mut report = crate::producer_report::NativeReport::new(&provenance, id);
-        self.build(activation, &mut report, scope)
+        self.build(run, activation, &mut report, scope)
     }
     /// Seal only the actual boundary. Failed graphs retain their original
     /// evidence and any completed V capability, with primary/W authority revoked.
     pub fn build_owned_reported<A: ActivationPort>(
-        &mut self,
+        &self,
+        run: &mut RunScope,
         activation: &mut A,
         id: crate::specification_report::Identity<'_>,
         scope: yamaa_core::application_observer::Scope<'_>,
     ) -> OwnedAttempt<A::Error> {
         let provenance = Arc::clone(&self.provenance);
         let mut report = crate::producer_report::NativeReport::new(&provenance, id);
-        let (attempt, publication) = self.build_actual(activation, &mut report, scope);
+        let (attempt, publication) = self.build_actual(run, activation, &mut report, scope);
         let logs: Arc<[crate::producer_report::NodeLogs]> = report.take_logs().into();
         let logged = self
             .provenance
             .report_views()
             .any(|view| view.compiled().output_logs().declared());
+        // Save targets resolve from this build's scope.
         let (log_publication, publication, publication_refusal) = if logged {
             (
                 Some(Arc::new(
@@ -218,7 +234,7 @@ impl FileBuild {
                         &attempt,
                         publication,
                         Arc::clone(&logs),
-                        &self.resources,
+                        run.resources(),
                     ),
                 )),
                 None,
@@ -232,7 +248,7 @@ impl FileBuild {
                         crate::producer_publication::Publication::from_build(
                             prepared,
                             &self.provenance,
-                            &self.resources,
+                            run.resources(),
                         ),
                     )),
                     None,
@@ -250,19 +266,23 @@ impl FileBuild {
             publication_refusal,
         }
     }
-    /// Fresh native scope and union activation on every attempt. Only the initial
-    /// metadata prefix is verified before activation; cached study snapshots are
-    /// inspected/reread by declared study requests after whole-graph activation.
+    /// Union activation on every attempt. Only the compile-time metadata prefix
+    /// is verified before activation, through the compile authority; study
+    /// snapshots are inspected and read by declared study requests in `run`
+    /// after whole-graph activation. Snapshots a scope already holds are
+    /// compared by value, so builds sharing one scope refuse a changed study.
     pub fn build<A: ActivationPort, R: ReportPort>(
-        &mut self,
+        &self,
+        run: &mut RunScope,
         activation: &mut A,
         report: &mut R,
         scope: yamaa_core::application_observer::Scope<'_>,
     ) -> Attempt<A::Error, R::Report, R::Error> {
-        self.build_actual(activation, report, scope).0
+        self.build_actual(run, activation, report, scope).0
     }
     fn build_actual<A: ActivationPort, R: ReportPort>(
-        &mut self,
+        &self,
+        run: &mut RunScope,
         activation: &mut A,
         report: &mut R,
         scope: yamaa_core::application_observer::Scope<'_>,
@@ -288,7 +308,7 @@ impl FileBuild {
                     engine::Ports {
                         activation,
                         study: &mut Study {
-                            resources: &mut self.resources,
+                            resources: run.resources_mut(),
                         },
                         decoder: &mut Decoder::<A::Error>::default(),
                         report,
@@ -302,7 +322,7 @@ impl FileBuild {
                 Err(error) => Err(BoundaryFailure::Unwind(error)),
             },
         };
-        attempt.resources = self.resources.retain_sources();
+        attempt.resources = run.retained_sources();
         (attempt, publication)
     }
 }

@@ -12,9 +12,11 @@ import subprocess
 import tarfile
 import tomllib
 import zipfile
+from datetime import datetime
 from pathlib import Path, PurePosixPath
 
 from tools.ci import native
+from tools.packaging import check_package_notices
 from tools.packaging.check_shared_release_versions import violations
 from tools.paths import ROOT
 
@@ -26,6 +28,18 @@ def require(condition, message):
 
 def positive_integer(value):
     return type(value) is int and value > 0
+
+
+def github_time(value, subject):
+    """Parse a GitHub API timestamp, which is UTC to the second."""
+    require(
+        isinstance(value, str)
+        and re.fullmatch(
+            r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z", value
+        ),
+        f"{subject}: missing or malformed GitHub timestamp",
+    )
+    return datetime.fromisoformat(value)
 
 
 def release_version(root, tag):
@@ -114,6 +128,11 @@ def run_coverage(run, repository, revision):
 
 
 def required_jobs(coverage):
+    """Map each native job a release requires to the steps it must complete.
+
+    These names, and the artifacts in `release_artifacts`, are the only copy:
+    `tools/tests/test_native_workflow.py` checks them against native.yml.
+    """
     jobs = {
         "portable-math-exact": (
             "Compare every candidate bit across the native matrix",
@@ -143,6 +162,25 @@ def required_jobs(coverage):
             "Check R source package outside checkout",
         )
     return jobs
+
+
+def release_artifacts(coverage):
+    """Map each release artifact to the required job that uploads it.
+
+    Also return the Linux platform whose source archives are published.
+    """
+    linux = [
+        platform for platform in coverage["r"]["os"] if platform.startswith("ubuntu-")
+    ]
+    require(len(linux) == 1, "canonical Linux source platform is ambiguous")
+    producers = {
+        f"native-python-{lane['os']}-{lane['python']}": (
+            f"native-dist ({lane['os']}, {lane['python']})"
+        )
+        for lane in coverage["build"]["include"]
+    }
+    producers[f"native-r-{linux[0]}"] = f"native-r ({linux[0]})"
+    return producers, linux[0]
 
 
 def validate_jobs(jobs, coverage, run):
@@ -178,21 +216,32 @@ def validate_jobs(jobs, coverage, run):
                 and matches[0].get("conclusion") == "success",
                 f"{name}: required step did not succeed: {required}",
             )
+    return by_name
 
 
-def select_artifacts(artifacts, coverage, run, repository):
-    names = [
-        f"native-python-{lane['os']}-{lane['python']}"
-        for lane in coverage["build"]["include"]
-    ]
-    linux = [
-        platform for platform in coverage["r"]["os"] if platform.startswith("ubuntu-")
-    ]
-    require(len(linux) == 1, "canonical Linux source platform is ambiguous")
-    names.append(f"native-r-{linux[0]}")
+def select_artifacts(artifacts, coverage, run, repository, jobs):
+    """Select the artifact each producing job uploaded for the qualifying attempt.
+
+    `jobs` maps names to the qualifying attempt's jobs. Artifacts carry no
+    attempt number, and a re-run keeps every earlier attempt's artifacts on
+    the run, so a name can appear once per attempt. The qualifying attempt
+    lists each job with the start and completion of the execution it counts:
+    the job's own re-run, or the earlier execution it carried over. A run is
+    re-run only after it completes, so executions of one job never overlap,
+    and the artifact created while its producer ran is the one that attempt
+    qualified.
+    """
+    producers, linux = release_artifacts(coverage)
     selected = []
-    for name in names:
-        matches = [artifact for artifact in artifacts if artifact.get("name") == name]
+    for name, producer in producers.items():
+        started = github_time(jobs[producer].get("started_at"), producer)
+        completed = github_time(jobs[producer].get("completed_at"), producer)
+        matches = [
+            artifact
+            for artifact in artifacts
+            if artifact.get("name") == name
+            and started <= github_time(artifact.get("created_at"), name) <= completed
+        ]
         require(len(matches) == 1, f"missing or ambiguous native artifact: {name}")
         artifact = matches[0]
         owner = artifact.get("workflow_run", {})
@@ -210,7 +259,7 @@ def select_artifacts(artifacts, coverage, run, repository):
         len({artifact["id"] for artifact in selected}) == len(selected),
         "artifact IDs are ambiguous",
     )
-    return selected, linux[0]
+    return selected, linux
 
 
 def package_version(payload, version):
@@ -222,8 +271,8 @@ def package_version(payload, version):
     )
 
 
-def archive_payloads(path, license_names):
-    wanted = {"METADATA", "PKG-INFO", "DESCRIPTION", *license_names}
+def archive_payloads(path):
+    wanted = {"METADATA", "PKG-INFO", "DESCRIPTION"}
     if path.suffix == ".whl":
         with zipfile.ZipFile(path) as archive:
             names = archive.namelist()
@@ -248,9 +297,6 @@ def archive_payloads(path, license_names):
 
 def downloaded_assets(destination, selected, linux, version, root):
     assets = []
-    python_project = tomllib.loads((root / "python/pyproject.toml").read_text())[
-        "project"
-    ]
     for artifact in selected:
         directory = destination / artifact["name"]
         paths = list(directory.iterdir())
@@ -300,7 +346,7 @@ def downloaded_assets(destination, selected, linux, version, root):
             )
             assets.append(paths[0])
         for path in paths:
-            payloads = archive_payloads(path, python_project["license-files"])
+            payloads = archive_payloads(path)
             if is_python:
                 metadata = [
                     payload
@@ -319,20 +365,9 @@ def downloaded_assets(destination, selected, linux, version, root):
                     and re.findall(r"(?m)^Version: (.+)$", description) == [version],
                     "R DESCRIPTION name/version differs",
                 )
-            for license_name in python_project["license-files"]:
-                copies = [
-                    payload
-                    for name, payload in payloads.items()
-                    if PurePosixPath(name).name == license_name
-                ]
-                require(
-                    copies
-                    and all(
-                        payload == (root / "python" / license_name).read_bytes()
-                        for payload in copies
-                    ),
-                    f"{path.name}: required license differs or is missing: {license_name}",
-                )
+            # Each package carries the project license and every notice at its
+            # own location, unchanged from the checkout.
+            check_package_notices.check_archive(path, root)
     require(
         len(assets) == len(native.PLATFORMS) + 2
         and len({path.name for path in assets}) == len(assets),
@@ -444,11 +479,11 @@ def select_release(root, repository_name, tag, destination):
         f"actions/runs/{run['id']}/attempts/{run['run_attempt']}/jobs?per_page=100",
         "jobs",
     )
-    validate_jobs(jobs, coverage, run)
+    jobs = validate_jobs(jobs, coverage, run)
     artifacts = paginated(
         repository_name, f"actions/runs/{run['id']}/artifacts?per_page=100", "artifacts"
     )
-    selected, linux = select_artifacts(artifacts, coverage, run, repository)
+    selected, linux = select_artifacts(artifacts, coverage, run, repository, jobs)
     destination.mkdir(parents=True, exist_ok=False)
     for artifact in selected:
         download_artifact(repository_name, artifact, destination)
@@ -457,14 +492,14 @@ def select_release(root, repository_name, tag, destination):
     (destination / "asset-paths.txt").write_text(
         "".join(f"{path.resolve()}\n" for path in assets), encoding="utf-8"
     )
+    attempt = f"{run['html_url']}/attempts/{run['run_attempt']}"
     notes = (root / f"docs/releases/{version}.md").read_text(encoding="utf-8")
-    notes += f"\nQualified native artifacts: [{run['html_url']}/attempts/{run['run_attempt']}]({run['html_url']}/attempts/{run['run_attempt']}).\n"
-    notes += (
-        "\n".join(
-            f"- `{artifact['name']}` (artifact {artifact['id']})"
-            for artifact in selected
-        )
-        + "\n"
+    # A section of its own, so the evidence does not read as part of the
+    # committed notes' last section.
+    notes = notes.rstrip("\n") + "\n\n## Qualified native artifacts\n\n"
+    notes += f"Native qualification run: [{attempt}]({attempt}).\n\n"
+    notes += "".join(
+        f"- `{artifact['name']}` (artifact {artifact['id']})\n" for artifact in selected
     )
     (destination / "release-notes.md").write_text(notes, encoding="utf-8")
     return assets

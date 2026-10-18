@@ -290,10 +290,18 @@ python -m evaluations.harbor.author grade <solvers>
 `sources/`, `input/`, and an empty `output/`: what a writing task's
 container holds. A candidate whose check passes is copied to
 `<prompts>/<name>/full.md`. `prepare --solvers` writes
-`<solvers>/<name>-candidate-<language>/` with only the evaluated agent's
-`instruction.md`, `input/`, and an empty `output/`, standing for `/app`.
-`grade` grades each solver's `output/` against the golden files and prints
-the same report as `report`. The session that runs them:
+`<solvers>/<name>-candidate-<language>/`, standing for `/app`, with
+`input/`, an empty `output/`, and an `instruction.md` that maps
+`/app/input` and `/app/output` to the folder's `input/` and `output/`,
+asks for a script that names them relative to the folder and runs from it
+(`python3 output/result.py`), then gives the evaluated agent's instruction
+verbatim. `grade` grades the datasets each solver saved against the golden
+files, then reruns its script as Harbor's verifier does: from a clean copy
+of the folder that holds the benchmark's inputs and only the script, by
+the track's interpreter, within the verifier's timeout. A saved dataset
+alone never passes; where the interpreter is not on PATH, the report calls
+the grade a file-only check. It prints the same report as `report`. The
+session that runs them:
 
 - gives each subagent a prompt that names its folder and nothing else:
   "Work in `<folder>`. Read `instruction.md` there and follow it. Read and
@@ -310,9 +318,10 @@ the same report as `report`. The session that runs them:
   runtime requires its agents to read before working in a directory (an
   `AGENTS.md` at the repository or worktree root). A guide holds no
   benchmark content; the session notes the read in its log and goes on;
-- before the solvers run, checks that its Python provides every package
-  the track's system prompt lists and installs any that are missing, so
-  no solver is failed by the session's own environment;
+- before the solvers run, checks that its Python, the `python3` that
+  `grade` reruns scripts with, provides every package the track's system
+  prompt lists and installs any that are missing, so no solver or rerun is
+  failed by the session's own environment;
 - runs at least two independent solver attempts per candidate, in
   separate folder sets: two models where the agent tool allows a choice,
   and where it does not, two fresh sessions, with the round's report
@@ -321,7 +330,8 @@ the same report as `report`. The session that runs them:
 ### After the writing task
 
 - **Solvers.** A candidate's solver task is graded like an evaluation task
-  but without a reference: the datasets, and the clean rerun under Harbor.
+  but without a reference: the datasets, and the clean rerun, under Harbor
+  or by `grade`.
   No leaderboard accepts it. Use at least two models; a subagent session
   whose tool allows no model choice uses two fresh sessions instead and
   says so in its report.
