@@ -1,7 +1,7 @@
 # Local checks and PR jobs use these same targets from the repository root.
 .DEFAULT_GOAL := help
-.PHONY: help setup check check-lint check-repository test-rust test-python test-r \
-        docs-test docs-generate docs-build docs
+.PHONY: help setup quick check check-lint check-repository test-rust test-python \
+        test-r docs-test docs-generate docs-build docs
 
 UV ?= uv
 PROJECT := $(UV) run --project python --no-sync
@@ -12,6 +12,12 @@ help:
 
 setup:
 	python -m tools.commands.setup --uv "$(UV)"
+
+# Before a push: lint without the R binding and the repository checks. Pull
+# request CI runs the complete check, including every test suite.
+quick:
+	$(TOOLS) tools.commands.repository lint --without-r
+	$(TOOLS) tools.commands.repository check
 
 check: check-lint check-repository test-rust test-python test-r
 
