@@ -1,0 +1,35 @@
+# A minimal outside workspace that builds the facade the way a project that
+# embeds it does (#2929): its own empty [workspace], so Cargo never treats
+# rust/Cargo.toml as the root, and the facade by path with nothing else. CI
+# runs it in the minimum toolchain job, from the repository root:
+#
+#   cp rust/Cargo.lock rust/tests/embedder/Cargo.lock
+#   cargo test --manifest-path rust/tests/embedder/Cargo.toml --target-dir rust/target
+#
+# The copied lock only keeps the run on the reviewed dependency versions;
+# Cargo drops the entries this graph does not use. Neither the lock nor any
+# build output here is committed.
+[package]
+name = "embedder"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.90"
+license = "MIT"
+publish = false
+
+[workspace]
+
+[dependencies]
+yamaa = { path = "../../crates/yamaa", default-features = false, features = ["yaml"] }
+
+[dev-dependencies]
+# Gives the parser's own controls (the test target below) their crate. Cargo
+# unifies this path with the one yamaa-adapters declares into one package,
+# which tests/graph.rs checks.
+yamaa-saphyr-parser = { path = "../../vendor/saphyr-parser" }
+serde_json = "1.0.145"
+
+# The vendored parser's five compact-flow controls, compiled unchanged.
+[[test]]
+name = "compact_flow_pairs"
+path = "../../vendor/saphyr-parser/tests/compact_flow_pairs.rs"

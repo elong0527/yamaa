@@ -178,6 +178,17 @@ RUSTFLAGS='-D warnings' cargo +1.90.0 check --locked --workspace --all-targets -
 RUSTFLAGS='-D warnings' cargo +1.90.0 clippy --locked --workspace --all-targets --all-features -- -D warnings
 ```
 
+The same job builds the facade from the outside workspace in
+`rust/tests/embedder`, as a project that depends on it by path does, and runs
+the vendored YAML parser's compact-flow controls directly and through the
+facade. Run it from the repository root; the copied lock keeps the run on the
+reviewed versions:
+
+```sh
+cp rust/Cargo.lock rust/tests/embedder/Cargo.lock
+RUSTFLAGS='-D warnings' cargo +1.90.0 test --manifest-path rust/tests/embedder/Cargo.toml --target-dir rust/target
+```
+
 `.github/workflows/dependency-graphs.yml` checks both locks against the
 advisory policy in `rust/deny.toml` and `osv-scanner.toml`, and resolves
 minimum and newest compatible graphs, on dispatch. Run a lane locally
@@ -191,7 +202,7 @@ uv run --project python --no-sync python -m tools.ci.dependency_graphs \
 Use `--graph newest` for the upper lane. The destination must be new and outside
 the checkout. The minimum lane pins each workspace registry dependency to its
 declared lower bound and each Python runtime/test dependency to its floor.
-Reviewed local patches and exact policy pins remain in force. Transitive Cargo
+Vendored crates and exact policy pins remain in force. Transitive Cargo
 dependencies use the newest Rust-1.90-compatible selection, rather than claiming
 support for every historical transitive release. The newest lane starts without
 a Cargo lock and resolves all declared ranges with Cargo's MSRV fallback policy;

@@ -25,7 +25,7 @@ def check_archive(
     lock: bytes,
     manifest: bytes,
     toolchain: bytes | None = None,
-    patch_sources=(),
+    vendored=(),
 ) -> None:
     with tarfile.open(path, "r:gz") as archive:
         members = [
@@ -75,30 +75,30 @@ def check_archive(
                 raise ValueError(
                     f"{path.name}: Rust toolchain differs from the canonical bytes"
                 )
-        patch_names = {str(location.parent / relative) for relative, _ in patch_sources}
-        if patch_sources and any(
+        vendored_names = {str(location.parent / relative) for relative, _ in vendored}
+        if vendored and any(
             member.name.startswith(str(location.parent / "vendor") + "/")
             and not (member.isfile() or member.isdir())
             for member in archive.getmembers()
         ):
-            raise ValueError(f"{path.name}: local Cargo patches must not contain links")
-        if patch_sources and any(
+            raise ValueError(f"{path.name}: vendored crates must not contain links")
+        if vendored and any(
             member.isfile()
             and member.name.startswith(str(location.parent / "vendor") + "/")
-            and member.name not in patch_names
+            and member.name not in vendored_names
             for member in archive.getmembers()
         ):
-            raise ValueError(f"{path.name}: unexpected local Cargo patch file")
-        for relative, payload in patch_sources:
+            raise ValueError(f"{path.name}: unexpected vendored crate file")
+        for relative, payload in vendored:
             name = str(location.parent / relative)
             copies = [m for m in archive.getmembers() if m.name == name]
             if len(copies) != 1 or not copies[0].isfile():
                 raise ValueError(
-                    f"{path.name}: expected one regular local Cargo patch source"
+                    f"{path.name}: expected one regular vendored crate source"
                 )
             if archive.extractfile(copies[0]).read() != payload:
                 raise ValueError(
-                    f"{path.name}: local Cargo patch differs from canonical bytes"
+                    f"{path.name}: vendored crate source differs from canonical bytes"
                 )
 
 
@@ -111,12 +111,12 @@ def main():
     manifest = (WORKSPACE / "Cargo.toml").read_bytes()
     toolchain = (WORKSPACE / "rust-toolchain.toml").read_bytes()
     metadata = locked_metadata(WORKSPACE)
-    patch_sources = [
+    vendored = [
         (source.relative_to(WORKSPACE).as_posix(), source.read_bytes())
-        for source in backend.local_patch_sources(WORKSPACE)
+        for source in backend.vendored_sources(WORKSPACE)
     ]
     for archive in args.archives:
-        check_archive(archive, lock, manifest, toolchain, patch_sources)
+        check_archive(archive, lock, manifest, toolchain, vendored)
         print(
             f"{archive.name}: canonical lock, workspace manifest and toolchain bytes retained"
         )
