@@ -9,6 +9,14 @@
 //! values, than the ones admission checked. Admission therefore refuses it as
 //! malformed wherever it occurs, repeats included.
 //!
+//! The native decoder also reserves room for every element a known list
+//! declares before it reads the first. The compact parser bounds a count only
+//! by one byte per element, while one empty struct in a schema or key-value
+//! list takes one byte and reserves about 100 or 48 bytes. Admission
+//! therefore refuses a list unless its bytes can hold the declared count at
+//! the fewest bytes the decoder accepts for each element, so that a
+//! reservation never exceeds what decoding that many valid elements takes.
+//!
 //! The table follows parquet 57.3.0's readers as this build calls them:
 //! `parquet_metadata_from_bytes`, `read_row_group`, `read_column_chunk`,
 //! `read_column_metadata` and the page header readers in
@@ -90,6 +98,25 @@ impl Wire {
                 | (Self::Struct(_), 12)
         )
     }
+
+    /// The fewest bytes the native decoder accepts for the first element of a
+    /// list of this wire type, and for each later element.
+    fn minimum(self) -> (usize, usize) {
+        match self {
+            Self::Struct(shape) => shape.minimum(),
+            // Every other element takes at least one byte.
+            _ => (1, 1),
+        }
+    }
+
+    /// Whether `bytes` can hold `count` elements of this wire type.
+    fn fits(self, count: usize, bytes: usize) -> bool {
+        let (first, each) = self.minimum();
+        count == 0
+            || bytes
+                .checked_sub(first)
+                .is_some_and(|rest| count - 1 <= rest / each)
+    }
 }
 
 impl Shape {
@@ -170,11 +197,42 @@ impl Shape {
             _ => return None,
         })
     }
+
+    /// The fewest bytes the native decoder accepts for the first element of a
+    /// list of this struct, and for each later element: the stop byte, and a
+    /// one-byte header and the shortest value for each field it requires.
+    fn minimum(self) -> (usize, usize) {
+        use Shape::*;
+        match self {
+            // The required name (a header and an empty length), and from the
+            // second element on the repetition type (a header and a one-byte
+            // value), which the schema conversion requires of every element
+            // but the root.
+            SchemaElement => (3, 5),
+            // The required columns (a header and an empty list header), byte
+            // size and row count.
+            RowGroup => (7, 7),
+            // The required column index, and two required booleans that take
+            // only their headers.
+            SortingColumn => (5, 5),
+            // The three required integers.
+            PageEncodingStats => (7, 7),
+            // The required key.
+            KeyValue => (3, 3),
+            // Exactly one variant, whose value can take no byte, as an unknown
+            // boolean variant does.
+            ColumnOrder => (2, 2),
+            // The stop byte. The decoder reserves no column chunk by the
+            // declared count: it first compares that count with the schema's.
+            _ => (1, 1),
+        }
+    }
 }
 
 /// Refuse a known field of the admitted struct `value`, read as `shape`,
-/// whose held wire type is not the one the native decoder reads it with, at
-/// every depth the decoder reaches. Each byte is read once.
+/// whose held wire type is not the one the native decoder reads it with, and
+/// a known list too short for the elements it declares, at every depth the
+/// decoder reaches. Each byte is read once.
 pub(super) fn check(value: Value<'_>, shape: Shape) -> Result<(), Error> {
     walk(&mut Cursor::new(value), shape)
 }
@@ -198,11 +256,21 @@ fn walk(cursor: &mut Cursor<'_>, shape: Shape) -> Result<(), Error> {
                 if count != 0 && !element.admits(held) {
                     return Err(Error::Malformed);
                 }
+                // It reserves room for every element before it reads one.
+                // Refuse a count that the struct's remaining bytes, and then
+                // the list's own bytes, cannot hold.
+                let remaining = cursor.remaining();
+                if !element.fits(count, remaining) {
+                    return Err(Error::Malformed);
+                }
                 for _ in 0..count {
                     match *element {
                         Wire::Struct(shape) => walk(cursor, shape)?,
                         _ => cursor.skip_element(held)?,
                     }
+                }
+                if !element.fits(count, remaining - cursor.remaining()) {
+                    return Err(Error::Malformed);
                 }
             }
             _ => cursor.skip_value(kind)?,
@@ -689,5 +757,106 @@ mod tests {
         ] {
             assert_eq!(reader::read(&bytes).unwrap_err(), reader::Error::Malformed);
         }
+    }
+
+    /// A list value of wire type `kind` holding `count` elements: `first`,
+    /// then copies of `other`. It may be longer than `Fields::list` writes.
+    fn repeated(kind: u8, count: usize, first: &[u8], other: &[u8]) -> Vec<u8> {
+        let mut bytes = vec![0xf0 | kind];
+        varint(count as u64, &mut bytes);
+        bytes.extend(first);
+        for _ in 1..count {
+            bytes.extend(other);
+        }
+        bytes
+    }
+
+    /// A file with no page and no column: version 1, the schema list value
+    /// `schema`, no rows, then the fields `rest` adds.
+    fn columnless(schema: &[u8], rest: impl Fn(Fields) -> Fields) -> Vec<u8> {
+        let footer = rest(Fields::default().i32(1, 1).raw(2, 9, schema).i64(3, 0)).end();
+        let mut bytes = b"PAR1".to_vec();
+        bytes.extend(&footer);
+        bytes.extend((footer.len() as u32).to_le_bytes());
+        bytes.extend(b"PAR1");
+        bytes
+    }
+
+    /// The issue's crafted footers held 64 Mi empty key-value entries and 64
+    /// Mi empty schema elements, and parquet 57.3.0 reserved about 3 and 6 GiB
+    /// for them before it refused the first. Here they are scaled down, beside
+    /// the other lists the decoder reserves by their declared count: a list
+    /// of empty structs is malformed, and a list of elements the decoder
+    /// accepts, each as short as it can be, is admitted.
+    #[test]
+    fn a_list_too_short_for_the_elements_it_declares_is_malformed() {
+        const N: usize = 1 << 12;
+        let empty = repeated(12, N, &[0], &[0]);
+        let list = |element: &[u8]| repeated(12, N, element, element);
+        // A root, and empty groups that name only their repetition.
+        let root = Fields::default().binary(4, b"").i32(5, N as i64 - 1).end();
+        let groups = repeated(12, N, &root, &[0x35, 0, 0x18, 0, 0]);
+        let root_only = repeated(12, 1, &[0x48, 0, 0], &[]);
+        type Case = (&'static str, Vec<u8>, Vec<u8>);
+        let cases: [Case; 6] = [
+            (
+                "key_value_metadata",
+                file(&[7], At::File, |f| f.raw(5, 9, &empty)),
+                file(&[7], At::File, |f| f.raw(5, 9, &list(&[0x18, 0, 0]))),
+            ),
+            (
+                "schema",
+                columnless(&empty, |f| f.raw(4, 9, &[0x0c])),
+                columnless(&groups, |f| f.raw(4, 9, &[0x0c])),
+            ),
+            // An unknown boolean variant takes no byte past its header.
+            (
+                "column_orders",
+                file(&[7], At::File, |f| f.raw(7, 9, &empty)),
+                file(&[7], At::File, |f| f.raw(7, 9, &list(&[0x21, 0]))),
+            ),
+            // Admission reads only the last row group list; the native
+            // decoder reads each one.
+            (
+                "row_groups",
+                columnless(&root_only, |f| f.raw(4, 9, &empty).raw(4, 9, &[0x0c])),
+                columnless(&root_only, |f| {
+                    let group = list(&[0x19, 0x0c, 0x16, 0, 0x16, 0, 0]);
+                    f.raw(4, 9, &group).raw(4, 9, &[0x0c])
+                }),
+            ),
+            (
+                "sorting_columns",
+                file(&[7], At::Group, |f| f.raw(4, 9, &empty)),
+                file(&[7], At::Group, |f| {
+                    f.raw(4, 9, &list(&[0x15, 0, 0x11, 0x11, 0]))
+                }),
+            ),
+            (
+                "encoding_stats",
+                file(&[7], At::Meta, |f| f.raw(13, 9, &empty)),
+                file(&[7], At::Meta, |f| {
+                    f.raw(13, 9, &list(&[0x15, 0, 0x15, 0, 0x15, 2, 0]))
+                }),
+            ),
+        ];
+        for (name, refused, admitted) in cases {
+            assert!(malformed(&refused), "{name}");
+            framing::admit(&admitted).unwrap_or_else(|error| panic!("{name}: {error:?}"));
+        }
+        // The native decoder reads each of the shortest key-value entries.
+        let keys = file(&[7], At::File, |f| f.raw(5, 9, &list(&[0x18, 0, 0])));
+        let decoded = reader::read(&keys).unwrap();
+        let column = decoded.batches[0].column(0);
+        let values = column.as_any().downcast_ref::<Int64Array>().unwrap();
+        assert_eq!(values.values(), &[7]);
+        // Every schema element but the root also names its repetition.
+        let names = repeated(12, N, &root, &[0x48, 0, 0]);
+        assert!(malformed(&columnless(&names, |f| f.raw(4, 9, &[0x0c]))));
+        // One byte short: the struct's remaining bytes could hold the
+        // entries, but the list's own bytes cannot, since its first entry
+        // holds only an unknown boolean field.
+        let short = repeated(12, N, &[0x31, 0], &[0x18, 0, 0]);
+        assert!(malformed(&file(&[7], At::File, |f| f.raw(5, 9, &short))));
     }
 }
