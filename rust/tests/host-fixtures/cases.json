@@ -3887,11 +3887,12 @@
       "inherited_source_files": [
         "entry/spec.yaml",
         "shared/base.yaml",
+        "shared/project.yaml",
         "shared/environment.yaml"
       ],
       "terminology_directories": [
         "entry",
-        "environment",
+        "project",
         "terminology",
         "outputs"
       ],
