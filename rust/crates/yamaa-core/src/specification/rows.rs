@@ -719,6 +719,7 @@ fn bind_assignment(
                 findings.push(BindFinding::OutputReference {
                     path: declaration.path.clone(),
                     name: reference.clone(),
+                    row: row.map(String::from),
                     finding,
                 });
                 None
