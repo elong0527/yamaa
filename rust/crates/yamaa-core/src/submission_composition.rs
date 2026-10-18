@@ -480,6 +480,8 @@ struct ColumnAdmission<'a> {
     reads: &'a Reads,
     /// The dataset's class decides whether `core` derives `mandatory` (SUB-10).
     tabulation: bool,
+    /// The dataset's class, reported with a refused `datetime` column (SUB-27).
+    class: &'static str,
 }
 impl ColumnAdmission<'_> {
     /// SUB-10: the one resolution the domain build also enforces.
@@ -721,9 +723,18 @@ impl ColumnAdmission<'_> {
                 .map_or_else(|| format!("{column_path}.type"), |p| format!("{p}.type"));
             let mut finding =
                 Finding::cause(ConditionCode::SubmissionDatetimeColumn, &type_path, name);
-            finding
-                .context
-                .insert("column".into(), crate::json::Value::String(name.clone()));
+            let text = |value: &str| crate::json::Value::String(value.into());
+            for (key, value) in [
+                ("column", text(name)),
+                ("value", text("datetime")),
+                ("class", text(self.class)),
+                (
+                    "permitted",
+                    crate::json::Value::Array(vec![text("str"), text("date")]),
+                ),
+            ] {
+                finding.context.insert(key.into(), value);
+            }
             findings.push(finding);
         }
         let display_format = match column_type.numeric_date_format(adam) {
@@ -1532,6 +1543,7 @@ fn compose_datasets(
             keys: &keys,
             reads: &reads,
             tabulation,
+            class: dataset.class.value.name(),
         };
         for name in &output_columns {
             let column_path = format!("{path}.columns.{name}.submission");

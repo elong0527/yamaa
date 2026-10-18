@@ -642,6 +642,28 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 assert_eq!(findings[0].context[key], value, "{key}");
             }
         }
+        if change == 32 {
+            // SUB-27 reports the details of the specification's own refusal.
+            let finding = findings
+                .iter()
+                .find(|finding| finding.code == SubmissionDatetimeColumn)
+                .expect("reached");
+            assert_eq!(finding.path, "sdtm.specs[0].columns.DTM.type");
+            let text = |value: &str| JsonValue::String(value.into());
+            for (key, value) in [
+                ("detail", text("DTM")),
+                ("column", text("DTM")),
+                ("value", text("datetime")),
+                ("class", text("SPECIAL PURPOSE")),
+                (
+                    "permitted",
+                    JsonValue::Array(vec![text("str"), text("date")]),
+                ),
+            ] {
+                assert_eq!(finding.context[key], value, "{key}");
+            }
+            assert_eq!(finding.context.len(), 5, "{:?}", finding.context);
+        }
     }
     // DEFINE-4 and CT-6: under Submission every published item of a CDISC/NCI
     // list carries its NCI code, and a sponsor-extended item, which has none,
