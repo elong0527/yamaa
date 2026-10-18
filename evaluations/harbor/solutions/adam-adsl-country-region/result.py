@@ -4,30 +4,51 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Create ADSL from DM: one record per subject with COUNTRY and REGION1.
 
-import polars as pl
+COUNTRY is the collected country in upper case, or "UNKNOWN" when no
+country was collected. REGION1 is "North America" for USA/CAN, "Europe"
+for DEU, and "Rest of World" for any other country, including "UNKNOWN".
+"""
 
-dm = pl.read_csv("/app/input/dm.csv", infer_schema=False)
+import csv
 
-adsl = (
-    dm.with_columns(
-        COUNTRY=pl.col("COUNTRY").fill_null("").str.strip_chars().str.to_uppercase()
-    )
-    .with_columns(
-        COUNTRY=pl.when(pl.col("COUNTRY") == "")
-        .then(pl.lit("UNKNOWN"))
-        .otherwise(pl.col("COUNTRY"))
-    )
-    .with_columns(
-        REGION1=pl.when(pl.col("COUNTRY").is_in(["USA", "CAN"]))
-        .then(pl.lit("North America"))
-        .when(pl.col("COUNTRY") == "DEU")
-        .then(pl.lit("Europe"))
-        .otherwise(pl.lit("Rest of World"))
-    )
-    .select("STUDYID", "USUBJID", "COUNTRY", "REGION1")
-)
+INPUT_CSV = "/app/input/dm.csv"
+OUTPUT_CSV = "/app/output/adsl.csv"
 
-Path("/app/output").mkdir(parents=True, exist_ok=True)
-adsl.write_csv("/app/output/adsl.csv")
+OUTPUT_COLUMNS = ["STUDYID", "USUBJID", "COUNTRY", "REGION1"]
+
+
+def region_for(country):
+    if country in ("USA", "CAN"):
+        return "North America"
+    if country == "DEU":
+        return "Europe"
+    return "Rest of World"
+
+
+def main():
+    with open(INPUT_CSV, newline="", encoding="utf-8") as f:
+        dm = list(csv.DictReader(f))
+
+    rows = []
+    for record in dm:
+        collected = (record.get("COUNTRY") or "").strip()
+        country = collected.upper() if collected else "UNKNOWN"
+        rows.append(
+            {
+                "STUDYID": record["STUDYID"],
+                "USUBJID": record["USUBJID"],
+                "COUNTRY": country,
+                "REGION1": region_for(country),
+            }
+        )
+
+    with open(OUTPUT_CSV, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=OUTPUT_COLUMNS)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+if __name__ == "__main__":
+    main()

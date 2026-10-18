@@ -1,25 +1,25 @@
-Following CDISC ADaM standards, use the provided LB dataset
-(SDTM laboratory records) to create an ADLB dataset with one
-record per subject per visit per parameter.
+Following CDISC ADaM standards, use the provided LB dataset to create an ADLB
+dataset with one record per subject per parameter per visit.
 
 The output dataset should contain the following columns in this order:
 USUBJID, PARAMCD, AVAL, PARAM, VISIT, DTYPE
 
-Keep every collected record unchanged, with DTYPE empty.
-
-Add one absolute differential record per subject and visit for each
-differential fraction present: "LYMLE" becomes "LYMPH" ("Lymphocytes
-Abs (10^9/L)"), "NEUTLE" becomes "NEUT" ("Neutrophils Abs (10^9/L)"),
-"MONOLE" becomes "MONO" ("Monocytes Abs (10^9/L)"), "EOSLE" becomes
-"EOS" ("Eosinophils Abs (10^9/L)"), and "BASOLE" becomes "BASO"
-("Basophils Abs (10^9/L)"). An absolute record is added only when
-the visit also has a white blood cell count (WBC) and no record of
-the new absolute parameter yet. Its value is the WBC count times
-the fraction for the same subject and visit, and DTYPE is
-CALCULATION.
-
-A differential with a fraction but no WBC count gains nothing, and
-a visit that already holds the absolute record gains none for that
+Each LB record is a collected record in the output. On a collected record,
+PARAMCD is the test code, PARAM is the test name, AVAL is the collected
+result, and DTYPE has no value. On an added absolute record, AVAL is the WBC
+count times the matching differential fraction for the same subject and
+visit, and DTYPE is "CALCULATION". LYMPH is the added absolute parameter for
+the LYMLE fraction, with PARAM "Lymphocytes Abs (10^9/L)". NEUT is the added
+absolute parameter for the NEUTLE fraction, with PARAM "Neutrophils Abs
+(10^9/L)". MONO is the added absolute parameter for the MONOLE fraction,
+with PARAM "Monocytes Abs (10^9/L)". EOS is the added absolute parameter
+for the EOSLE fraction, with PARAM "Eosinophils Abs (10^9/L)". BASO is the
+added absolute parameter for the BASOLE fraction, with PARAM "Basophils Abs
+(10^9/L)". An absolute record is added for a subject, visit, and
+differential only when both a WBC count and that differential's fraction
+are present for the subject and visit and no record of that absolute
+parameter is already there. A differential with a fraction but no WBC count
+gains nothing, and an existing absolute record blocks only its own
 differential.
 
 Read the source datasets from /app/input and save the completed dataset as

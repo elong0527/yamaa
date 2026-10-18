@@ -4,36 +4,63 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build the SDTM AE dataset from AE_RAW.
 
-import polars as pl
+One record per adverse event. AESER is "Y" when any seriousness
+criterion (AESDTH, AESLIFE, AESHOSP, AESDISAB, AESCONG, AESMIE) is "Y",
+and "N" when no criterion is "Y", including when every criterion is
+blank. A criterion flag with no value stays empty.
+"""
 
-ae_raw = pl.read_csv("/app/input/ae_raw.csv", infer_schema=False).with_columns(
-    pl.col("AESEQ").cast(pl.Int64)
-)
+import csv
+import os
 
-criteria = ["AESDTH", "AESLIFE", "AESHOSP", "AESDISAB", "AESCONG", "AESMIE"]
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-# Serious when any criterion is Y; otherwise not serious, even when every
-# criterion is empty. The criterion flags stay as collected.
-ae = (
-    ae_raw.with_columns(
-        AESER=pl.when(
-            pl.any_horizontal(pl.col(criteria) == "Y")
-        )
-        .then(pl.lit("Y"))
-        .otherwise(pl.lit("N")),
-        DOMAIN=pl.lit("AE"),
-    ).select(
-        "DOMAIN",
-        "STUDYID",
-        "USUBJID",
-        "AESEQ",
-        "AETERM",
-        "AESER",
-        *criteria,
-    )
-)
+CRITERIA = ["AESDTH", "AESLIFE", "AESHOSP", "AESDISAB", "AESCONG", "AESMIE"]
 
-Path("/app/output").mkdir(exist_ok=True)
-ae.write_csv("/app/output/ae.csv")
+OUTPUT_COLUMNS = [
+    "DOMAIN",
+    "STUDYID",
+    "USUBJID",
+    "AESEQ",
+    "AETERM",
+    "AESER",
+    "AESDTH",
+    "AESLIFE",
+    "AESHOSP",
+    "AESDISAB",
+    "AESCONG",
+    "AESMIE",
+]
+
+
+def main():
+    with open(os.path.join(INPUT_DIR, "ae_raw.csv"), newline="") as f:
+        raw_rows = list(csv.DictReader(f))
+
+    out_rows = []
+    for row in raw_rows:
+        serious = any((row.get(col) or "") == "Y" for col in CRITERIA)
+        out = {
+            "DOMAIN": "AE",
+            "STUDYID": row.get("STUDYID", ""),
+            "USUBJID": row.get("USUBJID", ""),
+            "AESEQ": row.get("AESEQ", ""),
+            "AETERM": row.get("AETERM", ""),
+            "AESER": "Y" if serious else "N",
+        }
+        for col in CRITERIA:
+            out[col] = row.get(col) or ""
+        out_rows.append(out)
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    with open(os.path.join(OUTPUT_DIR, "ae.csv"), "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=OUTPUT_COLUMNS)
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+
+if __name__ == "__main__":
+    main()

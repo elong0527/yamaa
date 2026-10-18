@@ -1,16 +1,11 @@
 Following CDISC ADaM standards, use the provided ADSL dataset to create a
-CLINSITE dataset for a Bioresearch Monitoring (BIMO) submission package,
-with one record per clinical site.
+CLINSITE dataset with one record per clinical site.
 
 The output dataset should contain the following columns in this order:
 STUDYID, SITEID, ARM, SAFPOP, ENRLPOP
 
-SITEID keeps leading zeros: '007' and '7' are different sites.
-
-ARM is the alphabetically first arm among the site's treated subjects, or
-has no value.
-
-SAFPOP counts treated subjects ('Y'); ENRLPOP counts all enrolled subjects.
+SAFFL is "Y". SITEID is the site key exactly as collected, leading zeros
+kept, so a site key of "007" and a site key of "7" are different sites.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/clinsite.csv.

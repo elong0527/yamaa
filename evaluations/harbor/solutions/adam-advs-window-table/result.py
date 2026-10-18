@@ -4,84 +4,97 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+import csv
 
-import polars as pl
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-raw = pl.read_csv("/app/input/advs_raw.csv", infer_schema=False).with_columns(
-    pl.col("VSSEQ").cast(pl.Int64, strict=False),
-    pl.col("ADT").str.to_date(strict=False),
-    pl.col("ADY").cast(pl.Int64, strict=False),
-    pl.col("AVAL").cast(pl.Float64, strict=False),
-)
-windows = pl.read_csv("/app/input/awindow.csv", infer_schema=False).with_columns(
-    pl.col("AVISITN").cast(pl.Int64, strict=False),
-    pl.col("AWLO").cast(pl.Int64, strict=False),
-    pl.col("AWHI").cast(pl.Int64, strict=False),
-    pl.col("AWTARGET").cast(pl.Int64, strict=False),
-)
 
-# The one window in the same study whose first-to-last range, both ends
-# inclusive, holds the study day. An absent bound never matches.
-assigned = []
-for record in raw.sort(["STUDYID", "USUBJID", "VSSEQ"]).iter_rows(named=True):
-    match = None
-    if record["ADY"] is not None:
-        candidates = windows.filter(
-            (pl.col("STUDYID") == record["STUDYID"])
-            & pl.col("AWLO").is_not_null()
-            & pl.col("AWHI").is_not_null()
-            & (pl.col("AWLO") <= record["ADY"])
-            & (record["ADY"] <= pl.col("AWHI"))
-        )
-        if candidates.height:
-            match = candidates.row(0, named=True)
-    assigned.append(
-        {
-            **record,
-            "AVISIT": match["AVISIT"] if match else None,
-            "AVISITN": match["AVISITN"] if match else None,
-            "AWTARGET": match["AWTARGET"] if match else None,
-            "AWTDIFF": record["ADY"] - match["AWTARGET"]
-            if (match and record["ADY"] is not None and match["AWTARGET"] is not None)
-            else None,
+def read_csv(path):
+    with open(path, newline="") as f:
+        return list(csv.DictReader(f))
+
+
+def to_int(text):
+    if text is None or text.strip() == "":
+        return None
+    return int(text)
+
+
+def main():
+    raw = read_csv(f"{INPUT_DIR}/advs_raw.csv")
+    windows = read_csv(f"{INPUT_DIR}/awindow.csv")
+
+    windows_by_study = {}
+    for w in windows:
+        windows_by_study.setdefault(w["STUDYID"], []).append(w)
+
+    records = []
+    for row in raw:
+        ady = to_int(row["ADY"])
+        matched = None
+        if ady is not None:
+            for w in windows_by_study.get(row["STUDYID"], []):
+                lo = to_int(w["AWLO"])
+                hi = to_int(w["AWHI"])
+                # An absent bound is not an open-ended one: a window
+                # whose last day was never stated matches nothing.
+                if lo is None or hi is None:
+                    continue
+                if lo <= ady <= hi:
+                    matched = w
+                    break
+
+        rec = {
+            "STUDYID": row["STUDYID"],
+            "USUBJID": row["USUBJID"],
+            "PARAMCD": row["PARAMCD"],
+            "VSSEQ": row["VSSEQ"],
+            "VISIT": row["VISIT"],
+            "ADT": row["ADT"],
+            "ADY": row["ADY"],
+            "AVAL": row["AVAL"],
+            "AVISIT": "",
+            "AVISITN": "",
+            "AWTARGET": "",
+            "AWTDIFF": "",
+            "ANL01FL": "",
         }
-    )
+        diff = None
+        if matched is not None:
+            target = to_int(matched["AWTARGET"])
+            rec["AVISIT"] = matched["AVISIT"]
+            rec["AVISITN"] = matched["AVISITN"]
+            rec["AWTARGET"] = matched["AWTARGET"]
+            if target is not None:
+                diff = ady - target
+                rec["AWTDIFF"] = str(diff)
+        rec["_diff"] = diff
+        records.append(rec)
 
-framed = pl.DataFrame(assigned).with_columns(
-    pl.col("VSSEQ").cast(pl.Int64),
-    pl.col("ADT").cast(pl.Date),
-    pl.col("ADY").cast(pl.Int64),
-    pl.col("AVAL").cast(pl.Float64),
-    pl.col("AVISITN").cast(pl.Int64),
-    pl.col("AWTARGET").cast(pl.Int64),
-    pl.col("AWTDIFF").cast(pl.Int64),
-    AWTABS=pl.col("AWTDIFF").abs(),
-)
+    # ANL01FL is Y on the record nearest its window target among the
+    # records for the same study, subject, parameter and analysis
+    # visit; the lower VSSEQ breaks a tie.
+    groups = {}
+    for rec in records:
+        if rec["AVISIT"] == "" or rec["_diff"] is None:
+            continue
+        key = (rec["STUDYID"], rec["USUBJID"], rec["PARAMCD"], rec["AVISIT"])
+        groups.setdefault(key, []).append(rec)
+    for group in groups.values():
+        best = min(group, key=lambda r: (abs(r["_diff"]), int(r["VSSEQ"])))
+        best["ANL01FL"] = "Y"
 
-# The record nearest its target in each study, subject, parameter, and
-# visit; the lower sequence number breaks a tie.
-flagged = (
-    framed.filter(pl.col("AVISIT").is_not_null())
-    .sort(["AWTABS", "VSSEQ"], nulls_last=True)
-    .unique(["STUDYID", "USUBJID", "PARAMCD", "AVISIT"], keep="first", maintain_order=True)
-    .select("STUDYID", "USUBJID", "PARAMCD", "AVISIT", "VSSEQ")
-    .with_columns(ANL01FL=pl.lit("Y"))
-)
-
-advs = (
-    framed.drop("AWTABS")
-    .join(
-        flagged,
-        on=["STUDYID", "USUBJID", "PARAMCD", "AVISIT", "VSSEQ"],
-        how="left",
-    )
-    .sort(["STUDYID", "USUBJID", "VSSEQ"])
-    .select(
+    fieldnames = [
         "STUDYID", "USUBJID", "PARAMCD", "VSSEQ", "VISIT", "ADT", "ADY",
         "AVAL", "AVISIT", "AVISITN", "AWTARGET", "AWTDIFF", "ANL01FL",
-    )
-)
+    ]
+    with open(f"{OUTPUT_DIR}/advs.csv", "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for rec in records:
+            writer.writerow({k: rec[k] for k in fieldnames})
 
-Path("/app/output").mkdir(parents=True, exist_ok=True)
-advs.write_csv("/app/output/advs.csv")
+
+if __name__ == "__main__":
+    main()

@@ -4,51 +4,60 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Create ADEG from ADEG_RAW with time-matched period baselines.
 
-import polars as pl
+For each subject, parameter and analysis period, the baseline day is
+APERDAY -1. BASE is the AVAL recorded at the same nominal time point on
+that period's baseline day; CHG is AVAL - BASE (blank on the baseline
+day itself and wherever no baseline value exists).
+"""
 
-COLUMNS = [
-    "STUDYID", "USUBJID", "PARAMCD", "PARAM", "APERIOD", "APERDAY", "ATPT",
-    "ATPTN", "AVAL", "AVALU", "ABLFL", "BASE", "CHG", "BASETYPE",
+import csv
+from decimal import Decimal
+
+INPUT_PATH = "/app/input/adeg_raw.csv"
+OUTPUT_PATH = "/app/output/adeg.csv"
+
+FIELDS = [
+    "STUDYID", "USUBJID", "PARAMCD", "PARAM", "APERIOD", "APERDAY",
+    "ATPT", "ATPTN", "AVAL", "AVALU", "ABLFL", "BASE", "CHG", "BASETYPE",
 ]
-MATCH = ["STUDYID", "USUBJID", "PARAMCD", "APERIOD", "ATPTN"]
 
-adeg = pl.read_csv(
-    "/app/input/adeg_raw.csv",
-    infer_schema=False,
-).with_columns(
-    pl.col("APERIOD").cast(pl.Int64),
-    pl.col("APERDAY").cast(pl.Int64),
-    pl.col("ATPTN").cast(pl.Float64),
-    pl.col("AVAL").cast(pl.Float64),
-)
 
-# Day -1 of each period is that period's baseline day.
-on_baseline_day = pl.col("APERDAY") == -1
+def main():
+    with open(INPUT_PATH, newline="") as f:
+        rows = list(csv.DictReader(f))
 
-# Time-matched: the same subject, parameter, period and nominal time on the
-# period's own baseline day; nothing stands in for a missing one.
-baseline = adeg.filter(on_baseline_day).select(
-    *MATCH, pl.col("AVAL").alias("BASE")
-)
+    # AVAL on each period's baseline day, by subject/parameter/period/time point.
+    baseline = {}
+    for row in rows:
+        if row["APERDAY"] == "-1":
+            key = (row["USUBJID"], row["PARAMCD"], row["APERIOD"], row["ATPT"])
+            baseline[key] = row["AVAL"]
 
-adeg = (
-    adeg.join(baseline, on=MATCH, how="left", validate="m:1",
-              maintain_order="left")
-    .with_columns(
-        ABLFL=pl.when(on_baseline_day).then(pl.lit("Y")),
-        # No change on the baseline day itself, nor without a baseline.
-        CHG=pl.when(~on_baseline_day).then(pl.col("AVAL") - pl.col("BASE")),
-        BASETYPE=pl.concat_str(
-            pl.lit("Period "),
-            pl.col("APERIOD").cast(pl.String),
-            pl.lit(" Baseline Day "),
-            pl.col("ATPT"),
-        ),
-    )
-    .select(COLUMNS)
-)
+    out_rows = []
+    for row in rows:
+        is_baseline_day = row["APERDAY"] == "-1"
+        key = (row["USUBJID"], row["PARAMCD"], row["APERIOD"], row["ATPT"])
+        base = baseline.get(key, "")
+        if is_baseline_day or base == "":
+            chg = ""
+        else:
+            chg = str(Decimal(row["AVAL"]) - Decimal(base))
+        out = {name: row[name] for name in FIELDS[:10]}
+        out["ABLFL"] = "Y" if is_baseline_day else ""
+        out["BASE"] = base
+        out["CHG"] = chg
+        out["BASETYPE"] = (
+            "Period " + row["APERIOD"] + " Baseline Day " + row["ATPT"]
+        )
+        out_rows.append(out)
 
-Path("/app/output").mkdir(exist_ok=True)
-adeg.write_csv("/app/output/adeg.csv")
+    with open(OUTPUT_PATH, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=FIELDS)
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+
+if __name__ == "__main__":
+    main()

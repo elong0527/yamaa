@@ -1,15 +1,13 @@
-Following CDISC SDTM standards, use the provided TU, TR, AE, and CM
-datasets to create a RELREC dataset with one row per dataset-level
-relationship and per related record.
+Following CDISC SDTM standards, use the provided AE, CM, TR, and TU datasets to
+create a RELREC dataset with one record per linked record or related dataset.
 
 The output dataset should contain the following columns in this order:
 STUDYID, USUBJID, RDOMAIN, IDVAR, IDVARVAL, RELTYPE, RELID
 
-On a dataset-level row, IDVAR names the link variable (TULNKID or TRLNKID),
-and RELTYPE carries ONE on the TU row and MANY on the TR row. The dataset-
-level rows share RELID 1.
-
-A record-level row has IDVAR AESEQ or CMSEQ, with IDVARVAL written as text.
+RDOMAIN is "TU", "TR", "AE", or "CM". IDVAR is "TULNKID", "TRLNKID",
+"AESEQ", or "CMSEQ". IDVARVAL is the sequence number of the related
+record, as text, or has no value. RELTYPE is "ONE" or "MANY", or has no
+value. The dataset-level rows share RELID "1".
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/relrec.csv.

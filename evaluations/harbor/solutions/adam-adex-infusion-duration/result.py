@@ -4,77 +4,139 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
+"""Create ADEX (one record per infusion) from EX.
+
+PARAMCD is "INFDUR" and PARAM is "Infusion Duration (min)" on every
+record; AVALU is "min" on every record.
+
+CALCDUR is the elapsed time in minutes from EXSTDTC to EXENDTC, with
+seconds kept as a fraction of a minute and nothing added or rounded.
+It has no value when EXSTDTC or EXENDTC was collected as a date
+without a time of day.
+
+AVAL is the collected duration in minutes when EXDUR holds a readable
+fixed-length ISO 8601 duration; otherwise AVAL is CALCDUR. Text that
+is not such a duration (for example one without its leading P) counts
+as not collected, and a readable collected duration always wins even
+when it disagrees with the start and end times. AVAL has no value when
+neither gives a value; every infusion keeps its record.
+"""
+
+import csv
 import re
 from datetime import datetime
-from pathlib import Path
 
-import polars as pl
+INPUT_EX = "/app/input/ex.csv"
+OUTPUT_ADEX = "/app/output/adex.csv"
 
-ex = pl.read_csv("/app/input/ex.csv", infer_schema=False).with_columns(
-    pl.col("EXSEQ").cast(pl.Int64)
+COLUMNS = [
+    "STUDYID",
+    "USUBJID",
+    "EXSEQ",
+    "EXSTDTC",
+    "EXENDTC",
+    "EXDUR",
+    "PARAMCD",
+    "PARAM",
+    "AVAL",
+    "AVALU",
+    "CALCDUR",
+]
+
+# A fixed-length ISO 8601 duration: P[nD][T[nH][nM][nS]] with at least
+# one component. Years, months and weeks are not fixed length, so a
+# duration using them is not readable here.
+DURATION_RE = re.compile(
+    r"^P(?:(?P<days>\d+(?:\.\d+)?)D)?"
+    r"(?:T(?:(?P<hours>\d+(?:\.\d+)?)H)?"
+    r"(?:(?P<minutes>\d+(?:\.\d+)?)M)?"
+    r"(?:(?P<seconds>\d+(?:\.\d+)?)S)?)?$"
 )
 
-DURATION = re.compile(
-    r"P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?"
-)
 
-
-def collected_minutes(text: str | None) -> float | None:
-    # An ISO 8601 duration of days, hours, minutes and seconds, with at
-    # least one part; anything else counts as not collected.
-    if text is None:
+def parse_duration_minutes(text):
+    """Minutes in a fixed-length ISO 8601 duration, or None."""
+    if not text:
         return None
-    match = DURATION.fullmatch(text)
-    if match is None or not any(match.groups()) or text.endswith("T"):
+    match = DURATION_RE.match(text.strip())
+    if match is None:
         return None
-    days, hours, minutes, seconds = (float(part) if part else 0.0 for part in match.groups())
-    return days * 1440 + hours * 60 + minutes + seconds / 60
-
-
-def moment(text: str | None) -> datetime | None:
-    # A date alone has no time of day, and none is assumed.
-    if text is None or len(text) <= 10:
+    parts = match.groupdict()
+    if all(value is None for value in parts.values()):
         return None
-    return datetime.fromisoformat(text if len(text) == 19 else text + ":00")
+    total = 0.0
+    if parts["days"] is not None:
+        total += float(parts["days"]) * 1440.0
+    if parts["hours"] is not None:
+        total += float(parts["hours"]) * 60.0
+    if parts["minutes"] is not None:
+        total += float(parts["minutes"])
+    if parts["seconds"] is not None:
+        total += float(parts["seconds"]) / 60.0
+    return total
 
 
-rows = []
-for record in ex.iter_rows(named=True):
-    start, end = moment(record["EXSTDTC"]), moment(record["EXENDTC"])
-    calcdur = (end - start).total_seconds() / 60 if start and end else None
-    collected = collected_minutes(record["EXDUR"])
-    rows.append(
-        {
-            "STUDYID": record["STUDYID"],
-            "USUBJID": record["USUBJID"],
-            "EXSEQ": record["EXSEQ"],
-            "EXSTDTC": record["EXSTDTC"],
-            "EXENDTC": record["EXENDTC"],
-            "EXDUR": record["EXDUR"],
-            "PARAMCD": "INFDUR",
-            "PARAM": "Infusion Duration (min)",
-            "AVAL": collected if collected is not None else calcdur,
-            "AVALU": "min",
-            "CALCDUR": calcdur,
-        }
-    )
+def parse_datetime(text):
+    """A datetime for an ISO 8601 value that carries a time of day,
+    or None when the value is a date without a time (or missing)."""
+    if not text:
+        return None
+    text = text.strip()
+    if "T" not in text:
+        return None
+    return datetime.fromisoformat(text)
 
-adex = pl.DataFrame(
-    rows,
-    schema={
-        "STUDYID": pl.String,
-        "USUBJID": pl.String,
-        "EXSEQ": pl.Int64,
-        "EXSTDTC": pl.String,
-        "EXENDTC": pl.String,
-        "EXDUR": pl.String,
-        "PARAMCD": pl.String,
-        "PARAM": pl.String,
-        "AVAL": pl.Float64,
-        "AVALU": pl.String,
-        "CALCDUR": pl.Float64,
-    },
-)
 
-Path("/app/output").mkdir(exist_ok=True)
-adex.write_csv("/app/output/adex.csv")
+def calc_duration_minutes(start_text, end_text):
+    """Elapsed minutes from start to end, or None when either value
+    was collected as a date without a time of day."""
+    start = parse_datetime(start_text)
+    end = parse_datetime(end_text)
+    if start is None or end is None:
+        return None
+    return (end - start).total_seconds() / 60.0
+
+
+def format_number(value):
+    """A number as text: whole minutes without a decimal point,
+    otherwise the exact value (no rounding beyond float repr)."""
+    if value is None:
+        return ""
+    if float(value).is_integer():
+        return str(int(value))
+    return repr(float(value))
+
+
+def main():
+    with open(INPUT_EX, newline="", encoding="utf-8") as handle:
+        ex_rows = list(csv.DictReader(handle))
+
+    out_rows = []
+    for row in ex_rows:
+        calcdur = calc_duration_minutes(row["EXSTDTC"], row["EXENDTC"])
+        collected = parse_duration_minutes(row["EXDUR"])
+        aval = collected if collected is not None else calcdur
+        out_rows.append(
+            {
+                "STUDYID": row["STUDYID"],
+                "USUBJID": row["USUBJID"],
+                "EXSEQ": row["EXSEQ"],
+                "EXSTDTC": row["EXSTDTC"],
+                "EXENDTC": row["EXENDTC"],
+                "EXDUR": row["EXDUR"],
+                "PARAMCD": "INFDUR",
+                "PARAM": "Infusion Duration (min)",
+                "AVAL": format_number(aval),
+                "AVALU": "min",
+                "CALCDUR": format_number(calcdur),
+            }
+        )
+
+    with open(OUTPUT_ADEX, "w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=COLUMNS)
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+
+if __name__ == "__main__":
+    main()

@@ -4,112 +4,126 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+import csv
+import os
 
-import polars as pl
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-raw = pl.read_csv("/app/input/adlb_raw.csv", infer_schema=False).with_columns(
-    pl.col("ASEQ").cast(pl.Int64),
-    pl.col("AVAL").cast(pl.Float64, strict=False),
-    pl.col("ANRLO").cast(pl.Float64, strict=False),
-    pl.col("ANRHI").cast(pl.Float64, strict=False),
-)
 
-# The record's own mark: LOW below the lower limit, HIGH above the upper
-# limit, NORMAL between them limits included. No value when the result or
-# either limit is missing.
-based = raw.with_columns(
-    ANRIND=pl.when(
-        pl.col("AVAL").is_null()
-        | pl.col("ANRLO").is_null()
-        | pl.col("ANRHI").is_null()
-    )
-    .then(None)
-    .when(pl.col("AVAL") < pl.col("ANRLO"))
-    .then(pl.lit("LOW"))
-    .when(pl.col("AVAL") > pl.col("ANRHI"))
-    .then(pl.lit("HIGH"))
-    .otherwise(pl.lit("NORMAL")),
-)
+def to_float(value):
+    if value is None:
+        return None
+    value = value.strip()
+    if value == "":
+        return None
+    return float(value)
 
-# BASE repeats the flagged baseline record's value; BNRIND repeats its
-# mark. Both have no value when no record carries the flag.
-baselines = (
-    based.filter(pl.col("ABLFL") == "Y")
-    .select("STUDYID", "USUBJID", "PARAMCD", BASE="AVAL", BNRIND="ANRIND")
-)
-with_base = based.join(
-    baselines, on=["STUDYID", "USUBJID", "PARAMCD"], how="left"
-)
 
-# SHIFT1 joins the baseline mark and the record's own mark; R2BASE is the
-# record as a multiple of the baseline; CRIT1 assesses greater than three
-# times the upper limit; CRIT2 assesses less than the lower limit.
-adlb = (
-    with_base.with_columns(
-        SHIFT1=pl.when(
-            pl.col("BNRIND").is_null() | pl.col("ANRIND").is_null()
-        )
-        .then(None)
-        .otherwise(pl.col("BNRIND") + pl.lit(" to ") + pl.col("ANRIND")),
-        R2BASE=pl.when(
-            pl.col("AVAL").is_null()
-            | pl.col("BASE").is_null()
-            | (pl.col("BASE") == 0)
-        )
-        .then(None)
-        .otherwise(pl.col("AVAL") / pl.col("BASE")),
-        CRITLIM=3 * pl.col("ANRHI"),
-    )
-    .with_columns(
-        CRIT1=pl.when(
-            pl.col("AVAL").is_not_null() & pl.col("CRITLIM").is_not_null()
-        )
-        .then(pl.lit("Result greater than 3 x ULN"))
-        .otherwise(None),
-        CRIT1FL=pl.when(
-            pl.col("AVAL").is_null() | pl.col("CRITLIM").is_null()
-        )
-        .then(None)
-        .when(pl.col("AVAL") > pl.col("CRITLIM"))
-        .then(pl.lit("Y"))
-        .otherwise(pl.lit("N")),
-        CRIT2=pl.when(
-            pl.col("AVAL").is_not_null() & pl.col("ANRLO").is_not_null()
-        )
-        .then(pl.lit("Result less than LLN"))
-        .otherwise(None),
-        CRIT2FL=pl.when(
-            pl.col("AVAL").is_null() | pl.col("ANRLO").is_null()
-        )
-        .then(None)
-        .when(pl.col("AVAL") < pl.col("ANRLO"))
-        .then(pl.lit("Y"))
-        .otherwise(pl.lit("N")),
-    )
-    .select(
-        "STUDYID",
-        "USUBJID",
-        "PARAMCD",
-        "PARAM",
-        "ASEQ",
-        "AVISIT",
-        "AVAL",
-        "ANRLO",
-        "ANRHI",
-        "ANRIND",
-        "ABLFL",
-        "BASE",
-        "BNRIND",
-        "SHIFT1",
-        "R2BASE",
-        "CRIT1",
-        "CRIT1FL",
-        "CRIT2",
-        "CRIT2FL",
-    )
-    .sort(["USUBJID", "ASEQ"])
-)
+def fmt_number(x):
+    if x == int(x):
+        return str(int(x))
+    return repr(x)
 
-Path("/app/output").mkdir(exist_ok=True)
-adlb.write_csv("/app/output/adlb.csv")
+
+def main():
+    with open(os.path.join(INPUT_DIR, "adlb_raw.csv"), newline="") as f:
+        rows = list(csv.DictReader(f))
+
+    # Per-record ANRIND
+    for row in rows:
+        aval = to_float(row["AVAL"])
+        anrlo = to_float(row["ANRLO"])
+        anrhi = to_float(row["ANRHI"])
+        if aval is None or anrlo is None or anrhi is None:
+            row["_ANRIND"] = ""
+        elif aval < anrlo:
+            row["_ANRIND"] = "LOW"
+        elif aval > anrhi:
+            row["_ANRIND"] = "HIGH"
+        else:
+            row["_ANRIND"] = "NORMAL"
+
+    # Baseline values per subject and parameter
+    baselines = {}
+    for row in rows:
+        if row["ABLFL"].strip() == "Y":
+            baselines[(row["USUBJID"], row["PARAMCD"])] = row
+
+    out_rows = []
+    for row in rows:
+        aval = to_float(row["AVAL"])
+        anrlo = to_float(row["ANRLO"])
+        anrhi = to_float(row["ANRHI"])
+        anrind = row["_ANRIND"]
+
+        base_row = baselines.get((row["USUBJID"], row["PARAMCD"]))
+        if base_row is None:
+            base_txt = ""
+            base_val = None
+            bnrind = ""
+        else:
+            base_txt = base_row["AVAL"]
+            base_val = to_float(base_row["AVAL"])
+            bnrind = base_row["_ANRIND"]
+
+        if anrind == "" or bnrind == "":
+            shift1 = ""
+        else:
+            shift1 = bnrind + " to " + anrind
+
+        if aval is None or base_val is None or base_val == 0:
+            r2base = ""
+        else:
+            r2base = fmt_number(aval / base_val)
+
+        if aval is not None and anrhi is not None:
+            crit1 = "Result greater than 3 x ULN"
+            crit1fl = "Y" if aval > 3 * anrhi else "N"
+        else:
+            crit1 = ""
+            crit1fl = ""
+
+        if aval is not None and anrlo is not None:
+            crit2 = "Result less than LLN"
+            crit2fl = "Y" if aval < anrlo else "N"
+        else:
+            crit2 = ""
+            crit2fl = ""
+
+        out_rows.append({
+            "STUDYID": row["STUDYID"],
+            "USUBJID": row["USUBJID"],
+            "PARAMCD": row["PARAMCD"],
+            "PARAM": row["PARAM"],
+            "ASEQ": row["ASEQ"],
+            "AVISIT": row["AVISIT"],
+            "AVAL": row["AVAL"],
+            "ANRLO": row["ANRLO"],
+            "ANRHI": row["ANRHI"],
+            "ANRIND": anrind,
+            "ABLFL": row["ABLFL"],
+            "BASE": base_txt,
+            "BNRIND": bnrind,
+            "SHIFT1": shift1,
+            "R2BASE": r2base,
+            "CRIT1": crit1,
+            "CRIT1FL": crit1fl,
+            "CRIT2": crit2,
+            "CRIT2FL": crit2fl,
+        })
+
+    fieldnames = [
+        "STUDYID", "USUBJID", "PARAMCD", "PARAM", "ASEQ", "AVISIT",
+        "AVAL", "ANRLO", "ANRHI", "ANRIND", "ABLFL", "BASE", "BNRIND",
+        "SHIFT1", "R2BASE", "CRIT1", "CRIT1FL", "CRIT2", "CRIT2FL",
+    ]
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    with open(os.path.join(OUTPUT_DIR, "adlb.csv"), "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+
+if __name__ == "__main__":
+    main()

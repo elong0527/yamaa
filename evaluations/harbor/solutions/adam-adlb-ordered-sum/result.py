@@ -4,57 +4,73 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Create ADLB from LB: every collected record plus one TOTAL record
+per subject and visit, summed in the order the source records were
+stored."""
 
-import polars as pl
+import csv
+import os
 
-lb = pl.read_csv("/app/input/lb.csv", infer_schema=False).with_columns(
-    pl.col("LBSEQ").cast(pl.Int64),
-    pl.col("LBSTRESN").cast(pl.Float64, strict=False).alias("AVAL"),
-)
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-# Keep every collected component record; DTYPE has no value on these.
-components = lb.select(
-    "STUDYID",
-    "USUBJID",
-    pl.col("LBTESTCD").alias("PARAMCD"),
-    pl.col("LBTEST").alias("PARAM"),
-    pl.col("VISIT").alias("AVISIT"),
-    "AVAL",
-    pl.lit(None, dtype=pl.String).alias("DTYPE"),
-)
+COLUMNS = ["STUDYID", "USUBJID", "PARAMCD", "PARAM", "AVISIT", "AVAL", "DTYPE"]
 
 
-# One total record per subject and visit: the sum of the collected
-# component results in laboratory sequence order. No value, rather than
-# zero, when none of them has a collected result.
-def ordered_sum(values: list) -> float | None:
-    nums = [v for v in values if v is not None]
-    if not nums:
-        return None
-    total = nums[0]
-    for value in nums[1:]:
-        total = total + value
-    return total
+def main():
+    with open(os.path.join(INPUT_DIR, "lb.csv"), newline="") as f:
+        source = list(csv.DictReader(f))
+
+    collected = []  # (group key, output row) in stored order
+    totals = {}  # group key -> running total, None until a result is seen
+    last_index = {}  # group key -> index in `collected` of its last record
+
+    for row in source:
+        key = (row["STUDYID"], row["USUBJID"], row["VISIT"])
+        result = (row["LBSTRESN"] or "").strip()
+        totals.setdefault(key, None)
+        if result != "":
+            value = float(result)
+            totals[key] = value if totals[key] is None else totals[key] + value
+        collected.append(
+            (
+                key,
+                {
+                    "STUDYID": row["STUDYID"],
+                    "USUBJID": row["USUBJID"],
+                    "PARAMCD": row["LBTESTCD"],
+                    "PARAM": row["LBTEST"],
+                    "AVISIT": row["VISIT"],
+                    "AVAL": result,
+                    "DTYPE": "",
+                },
+            )
+        )
+        last_index[key] = len(collected) - 1
+
+    final_rows = []
+    for i, (key, row) in enumerate(collected):
+        final_rows.append(row)
+        if last_index[key] == i:
+            total = totals[key]
+            final_rows.append(
+                {
+                    "STUDYID": key[0],
+                    "USUBJID": key[1],
+                    "PARAMCD": "TOTAL",
+                    "PARAM": "Total of Components",
+                    "AVISIT": key[2],
+                    "AVAL": "" if total is None else repr(total),
+                    "DTYPE": "CALCULATION",
+                }
+            )
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    with open(os.path.join(OUTPUT_DIR, "adlb.csv"), "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=COLUMNS)
+        writer.writeheader()
+        writer.writerows(final_rows)
 
 
-totals = (
-    lb.sort(["USUBJID", "VISIT", "LBSEQ"])
-    .group_by("STUDYID", "USUBJID", "VISIT", maintain_order=True)
-    .agg(pl.col("AVAL").alias("VALS"))
-    .with_columns(
-        PARAMCD=pl.lit("TOTAL"),
-        PARAM=pl.lit("Total of Components"),
-        AVISIT=pl.col("VISIT"),
-        AVAL=pl.col("VALS").map_elements(
-            ordered_sum, return_dtype=pl.Float64
-        ),
-        DTYPE=pl.lit("CALCULATION"),
-    )
-    .select("STUDYID", "USUBJID", "PARAMCD", "PARAM", "AVISIT", "AVAL", "DTYPE")
-)
-
-adlb = pl.concat([components, totals], how="diagonal")
-
-Path("/app/output").mkdir(exist_ok=True)
-adlb.write_csv("/app/output/adlb.csv")
+if __name__ == "__main__":
+    main()

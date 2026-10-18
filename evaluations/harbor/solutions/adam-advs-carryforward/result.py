@@ -4,66 +4,108 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build ADVS with one record per planned measurement.
 
-import polars as pl
+Reads ADSL, PLAN and VS from /app/input and writes /app/output/advs.csv.
+A collected VS record belongs to a planned measurement when study,
+subject, test code (= planned parameter code) and collection date
+(= ADT) all match. Uncollected planned measurements carry forward the
+most recent earlier collected value for the same subject and parameter
+(LOCF). HEIGHTBL is the latest height collected on or before the
+subject's treatment start date.
+"""
 
-plan = pl.read_csv("/app/input/plan.csv", infer_schema=False).with_columns(
-    pl.col("ASEQ").cast(pl.Int64, strict=False),
-    pl.col("ADT").str.to_date(strict=False),
-)
-vs = pl.read_csv("/app/input/vs.csv", infer_schema=False).with_columns(
-    pl.col("VSSEQ").cast(pl.Int64, strict=False),
-    pl.col("VSDTC").str.to_date(strict=False),
-    pl.col("VSSTRESN").cast(pl.Float64, strict=False),
-)
-adsl = pl.read_csv("/app/input/adsl.csv", infer_schema=False).with_columns(
-    pl.col("TRTSDT").str.to_date(strict=False)
-)
+import csv
+import os
 
-# The record collected for a planned measurement: same subject, test code
-# as the parameter, and collection date as the planned date.
-collected = plan.join(
-    vs.select("STUDYID", "USUBJID", "VSSEQ", VSTESTCD="VSTESTCD", VSDTC="VSDTC", AVALCOL="VSSTRESN"),
-    left_on=["STUDYID", "USUBJID", "PARAMCD", "ADT"],
-    right_on=["STUDYID", "USUBJID", "VSTESTCD", "VSDTC"],
-    how="left",
-)
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-# The collected value, otherwise the most recent earlier value for the
-# same subject and parameter, in planned order.
-carried = (
-    collected.sort(["STUDYID", "USUBJID", "PARAMCD", "ADT", "ASEQ"])
-    .with_columns(
-        AVAL=pl.col("AVALCOL")
-        .fill_null(strategy="forward")
-        .over(["STUDYID", "USUBJID", "PARAMCD"])
-    )
-    .with_columns(AVAL=pl.coalesce("AVALCOL", "AVAL"))
-)
 
-# The latest height on or before treatment start, repeated on every
-# record of the subject.
-heights = (
-    vs.filter(
-        (pl.col("VSTESTCD") == "HEIGHT") & pl.col("VSSTRESN").is_not_null()
-    )
-    .join(adsl.select("STUDYID", "USUBJID", "TRTSDT"), on=["STUDYID", "USUBJID"], how="left")
-    .filter(pl.col("VSDTC").is_not_null() & (pl.col("VSDTC") <= pl.col("TRTSDT")))
-    .sort(["VSDTC", "VSSEQ"])
-    .unique(["STUDYID", "USUBJID"], keep="last", maintain_order=True)
-    .select("STUDYID", "USUBJID", HEIGHTBL="VSSTRESN")
-)
+def read_csv(name):
+    with open(os.path.join(INPUT_DIR, name), newline="") as f:
+        return list(csv.DictReader(f))
 
-advs = (
-    carried.join(adsl.select("STUDYID", "USUBJID", "TRTSDT"), on=["STUDYID", "USUBJID"], how="left")
-    .join(heights, on=["STUDYID", "USUBJID"], how="left")
-    .sort(["USUBJID", "ASEQ"])
-    .select(
-        "STUDYID", "USUBJID", "ASEQ", "VSSEQ", "PARAMCD", "ADT", "AVAL",
-        "TRTSDT", "HEIGHTBL",
-    )
-)
 
-Path("/app/output").mkdir(parents=True, exist_ok=True)
-advs.write_csv("/app/output/advs.csv")
+def main():
+    adsl = read_csv("adsl.csv")
+    plan = read_csv("plan.csv")
+    vs = read_csv("vs.csv")
+
+    trtsdt = {row["USUBJID"]: row["TRTSDT"] for row in adsl}
+
+    # Collected records keyed by (study, subject, test code).
+    collected = {}
+    for row in vs:
+        key = (row["STUDYID"], row["USUBJID"], row["VSTESTCD"])
+        collected.setdefault(key, []).append(row)
+    for rows in collected.values():
+        rows.sort(key=lambda r: (r["VSDTC"], int(r["VSSEQ"])))
+
+    def heightbl(usubjid):
+        start = trtsdt.get(usubjid, "")
+        best = None
+        for row in vs:
+            if (
+                row["USUBJID"] == usubjid
+                and row["VSTESTCD"] == "HEIGHT"
+                and row["VSDTC"] <= start
+            ):
+                if best is None or (row["VSDTC"], int(row["VSSEQ"])) > (
+                    best["VSDTC"],
+                    int(best["VSSEQ"]),
+                ):
+                    best = row
+        return best["VSSTRESN"] if best is not None else ""
+
+    out_rows = []
+    for p in plan:
+        key = (p["STUDYID"], p["USUBJID"], p["PARAMCD"])
+        records = collected.get(key, [])
+        match = None
+        earlier = None
+        for row in records:
+            if row["VSDTC"] == p["ADT"]:
+                match = row
+            elif row["VSDTC"] < p["ADT"]:
+                earlier = row
+        if match is not None:
+            vsseq = match["VSSEQ"]
+            aval = match["VSSTRESN"]
+        else:
+            vsseq = ""
+            aval = earlier["VSSTRESN"] if earlier is not None else ""
+        out_rows.append(
+            {
+                "STUDYID": p["STUDYID"],
+                "USUBJID": p["USUBJID"],
+                "ASEQ": p["ASEQ"],
+                "VSSEQ": vsseq,
+                "PARAMCD": p["PARAMCD"],
+                "ADT": p["ADT"],
+                "AVAL": aval,
+                "TRTSDT": trtsdt.get(p["USUBJID"], ""),
+                "HEIGHTBL": heightbl(p["USUBJID"]),
+            }
+        )
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    fieldnames = [
+        "STUDYID",
+        "USUBJID",
+        "ASEQ",
+        "VSSEQ",
+        "PARAMCD",
+        "ADT",
+        "AVAL",
+        "TRTSDT",
+        "HEIGHTBL",
+    ]
+    with open(os.path.join(OUTPUT_DIR, "advs.csv"), "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+
+if __name__ == "__main__":
+    main()

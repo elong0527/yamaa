@@ -4,79 +4,106 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Create the ADTTE overall-survival dataset from ADRS and ADSL.
 
-import polars as pl
+One record per subject. A qualifying death is an ADRS record with
+PARAMCD "DEATH", AVALC "Y", ANL01FL "Y" and a recorded ADT; the
+earliest such date (lowest ASEQ on a tie) is the event. Subjects
+without a qualifying death are censored at their last-alive date when
+it falls after randomization, and at randomization otherwise.
+"""
 
-adsl = pl.read_csv("/app/input/adsl.csv", infer_schema=False, null_values="").with_columns(
-    pl.col("RANDDT").str.to_date(strict=False),
-    pl.col("LSTALVDT").str.to_date(strict=False),
-)
-adrs = pl.read_csv("/app/input/adrs.csv", infer_schema=False, null_values="").with_columns(
-    pl.col("ASEQ").cast(pl.Int64, strict=False),
-    pl.col("ADT").str.to_date(strict=False),
-)
+import csv
+from datetime import date
 
-# The earliest dated qualifying death: code DEATH, result Y, flag Y.
-# On a tied date the lower sequence wins.
-death = (
-    adrs.filter(
-        (pl.col("PARAMCD") == "DEATH")
-        & (pl.col("AVALC") == "Y")
-        & (pl.col("ANL01FL") == "Y")
-        & pl.col("ADT").is_not_null()
-    )
-    .sort(["STUDYID", "USUBJID", "ADT", "ASEQ"])
-    .unique(["STUDYID", "USUBJID"], keep="first", maintain_order=True)
-    .select("STUDYID", "USUBJID", DEATHDT="ADT", DEATHSEQ="ASEQ")
-)
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-adtte = (
-    adsl.join(death, on=["STUDYID", "USUBJID"], how="left", maintain_order="left")
-    .with_columns(
-        STARTDT=pl.col("RANDDT"),
-        CENSORDT1=pl.col("LSTALVDT"),
-    )
-    .with_columns(
-        # A death before randomization still counts, moved up to it; with
-        # no death, the last-alive date when after randomization, else
-        # randomization itself.
-        ADT=pl.when(pl.col("DEATHDT") >= pl.col("STARTDT"))
-        .then(pl.col("DEATHDT"))
-        .when(pl.col("DEATHDT").is_not_null())
-        .then(pl.col("STARTDT"))
-        .when(pl.col("CENSORDT1") > pl.col("STARTDT"))
-        .then(pl.col("CENSORDT1"))
-        .otherwise(pl.col("STARTDT")),
-    )
-    .with_columns(
-        AVAL=(pl.col("ADT") - pl.col("STARTDT")).dt.total_days() + 1,
-        CNSR=pl.when(pl.col("DEATHDT").is_not_null()).then(0).otherwise(1),
-        EVNTDESC=pl.when(pl.col("DEATHDT").is_not_null())
-        .then(pl.lit("Death"))
-        .when(pl.col("CENSORDT1") > pl.col("STARTDT"))
-        .then(pl.lit("Alive"))
-        .otherwise(pl.lit("Randomization")),
-        CNSDTDSC=pl.when(pl.col("DEATHDT").is_not_null())
-        .then(None)
-        .when(pl.col("CENSORDT1") > pl.col("STARTDT"))
-        .then(pl.lit("Alive During Study"))
-        .otherwise(pl.lit("Randomization")),
-        SRCDOM=pl.when(pl.col("DEATHDT").is_not_null())
-        .then(pl.lit("ADRS"))
-        .otherwise(pl.lit("ADSL")),
-        SRCVAR=pl.when(pl.col("DEATHDT").is_not_null())
-        .then(pl.lit("ADT"))
-        .when(pl.col("CENSORDT1") > pl.col("STARTDT"))
-        .then(pl.lit("LSTALVDT"))
-        .otherwise(pl.lit("RANDDT")),
-        SRCSEQ=pl.when(pl.col("DEATHDT").is_not_null())
-        .then(pl.col("DEATHSEQ"))
-        .otherwise(None),
-        PARAMCD=pl.lit("OS"),
-        PARAM=pl.lit("Overall Survival"),
-    )
-    .select(
+
+def parse_date(text):
+    text = (text or "").strip()
+    if not text:
+        return None
+    return date.fromisoformat(text)
+
+
+def read_rows(path):
+    with open(path, newline="") as handle:
+        return list(csv.DictReader(handle))
+
+
+def main():
+    adsl = read_rows(f"{INPUT_DIR}/adsl.csv")
+    adrs = read_rows(f"{INPUT_DIR}/adrs.csv")
+
+    # Select each subject's qualifying death record: earliest ADT,
+    # lowest ASEQ on a tied date.
+    deaths = {}
+    for row in adrs:
+        if row["PARAMCD"] != "DEATH":
+            continue
+        if row["AVALC"] != "Y" or row["ANL01FL"] != "Y":
+            continue
+        death_date = parse_date(row["ADT"])
+        if death_date is None:
+            continue
+        key = (death_date, int(row["ASEQ"]))
+        subject = row["USUBJID"]
+        if subject not in deaths or key < deaths[subject][0]:
+            deaths[subject] = (key, row)
+
+    records = []
+    for subject_row in adsl:
+        studyid = subject_row["STUDYID"]
+        usubjid = subject_row["USUBJID"]
+        startdt = parse_date(subject_row["RANDDT"])
+        lstalvdt = parse_date(subject_row["LSTALVDT"])
+
+        if usubjid in deaths:
+            _, death_row = deaths[usubjid]
+            death_date = parse_date(death_row["ADT"])
+            adt = death_date if death_date >= startdt else startdt
+            cnsr = "0"
+            evntdesc = "Death"
+            cnsdtdsc = ""
+            srcdom = "ADRS"
+            srcvar = "ADT"
+            srcseq = death_row["ASEQ"]
+        else:
+            at_last_alive = lstalvdt is not None and lstalvdt > startdt
+            adt = lstalvdt if at_last_alive else startdt
+            cnsr = "1"
+            if at_last_alive:
+                evntdesc = "Alive"
+                cnsdtdsc = "Alive During Study"
+                srcvar = "LSTALVDT"
+            else:
+                evntdesc = "Randomization"
+                cnsdtdsc = "Randomization"
+                srcvar = "RANDDT"
+            srcdom = "ADSL"
+            srcseq = ""
+
+        aval = (adt - startdt).days + 1
+        records.append(
+            {
+                "STUDYID": studyid,
+                "USUBJID": usubjid,
+                "PARAMCD": "OS",
+                "PARAM": "Overall Survival",
+                "STARTDT": startdt.isoformat(),
+                "ADT": adt.isoformat(),
+                "AVAL": str(aval),
+                "CNSR": cnsr,
+                "EVNTDESC": evntdesc,
+                "CNSDTDSC": cnsdtdsc,
+                "SRCDOM": srcdom,
+                "SRCVAR": srcvar,
+                "SRCSEQ": srcseq,
+            }
+        )
+
+    columns = [
         "STUDYID",
         "USUBJID",
         "PARAMCD",
@@ -90,9 +117,12 @@ adtte = (
         "SRCDOM",
         "SRCVAR",
         "SRCSEQ",
-    )
-    .sort("USUBJID")
-)
+    ]
+    with open(f"{OUTPUT_DIR}/adtte.csv", "w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=columns)
+        writer.writeheader()
+        writer.writerows(records)
 
-Path("/app/output").mkdir(parents=True, exist_ok=True)
-adtte.write_csv("/app/output/adtte.csv", null_value="")
+
+if __name__ == "__main__":
+    main()

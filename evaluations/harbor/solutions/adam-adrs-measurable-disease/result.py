@@ -4,37 +4,55 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+import csv
 
-import polars as pl
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-adsl = pl.read_csv("/app/input/adsl.csv", infer_schema=False)
-tu = pl.read_csv("/app/input/tu.csv", infer_schema=False).with_columns(
-    pl.col("TUSEQ").cast(pl.Int64)
-)
 
-# Target disease at screening: a screening tumor identification record
-# whose result is target. Later target records do not count.
-target_subjects = tu.filter(
-    (pl.col("TUTESTCD") == "TUMIDENT")
-    & (pl.col("VISIT") == "SCREENING")
-    & (pl.col("TUSTRESC") == "TARGET")
-).select("USUBJID").unique()
+def read_csv(path):
+    with open(path, newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
 
-adrs = (
-    adsl.with_columns(
-        PARAMCD=pl.lit("MDIS"),
-        PARAM=pl.lit("Measurable Disease at Baseline"),
-        AVALC=pl.when(pl.col("USUBJID").is_in(target_subjects["USUBJID"]))
-        .then(pl.lit("Y"))
-        .otherwise(pl.lit("N")),
-    )
-    .with_columns(
-        AVAL=pl.when(pl.col("AVALC") == "Y").then(1).otherwise(0).cast(pl.Int64)
-    )
-    .select("STUDYID", "USUBJID", "PARAMCD", "PARAM", "AVALC", "AVAL")
-    .sort("USUBJID")
-)
 
-Path("/app/output").mkdir(exist_ok=True)
-adrs.write_csv("/app/output/adrs.csv")
+def main():
+    adsl = read_csv(f"{INPUT_DIR}/adsl.csv")
+    tu = read_csv(f"{INPUT_DIR}/tu.csv")
+
+    target_subjects = set()
+    for row in tu:
+        if (
+            row.get("TUTESTCD") == "TUMIDENT"
+            and row.get("VISIT") == "SCREENING"
+            and (row.get("TUSTRESC") or "").strip() == "TARGET"
+        ):
+            target_subjects.add((row.get("STUDYID"), row.get("USUBJID")))
+
+    out_rows = []
+    for subject in adsl:
+        key = (subject.get("STUDYID"), subject.get("USUBJID"))
+        avalc = "Y" if key in target_subjects else "N"
+        out_rows.append(
+            {
+                "STUDYID": subject.get("STUDYID"),
+                "USUBJID": subject.get("USUBJID"),
+                "PARAMCD": "MDIS",
+                "PARAM": "Measurable Disease at Baseline",
+                "AVALC": avalc,
+                "AVAL": 1 if avalc == "Y" else 0,
+            }
+        )
+
+    with open(
+        f"{OUTPUT_DIR}/adrs.csv", "w", newline="", encoding="utf-8"
+    ) as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=["STUDYID", "USUBJID", "PARAMCD", "PARAM", "AVALC", "AVAL"],
+        )
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+
+if __name__ == "__main__":
+    main()

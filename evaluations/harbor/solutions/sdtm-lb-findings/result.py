@@ -4,97 +4,27 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build the SDTM LB dataset from the ODM extract.
 
-import polars as pl
+One record per collected lab result in the IG.LB item groups: a test
+with no collected entry gives no record, while an entry of "NOT DONE"
+gives a record carrying LBSTAT.
+"""
 
-odm = pl.read_csv("/app/input/odm.csv", infer_schema=False)
+import csv
+import os
 
-key_cols = [
-    "StudyOID",
-    "SubjectKey",
-    "StudyEventOID",
-    "StudyEventRepeatKey",
-    "ItemGroupOID",
-    "ItemGroupRepeatKey",
-]
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-wide = (
-    odm.group_by(key_cols)
-    .agg(pl.struct("ItemOID", "Value").alias("items"))
-    .with_columns(
-        pl.col("items")
-        .list.eval(
-            pl.element().filter(
-                pl.element().struct.field("ItemOID") == "IT.LB.LBDTC"
-            )
-        )
-        .list.get(0)
-        .struct.field("Value")
-        .alias("LBDTC"),
-    )
-    .drop("items")
-)
+TESTS = {
+    "IT.LB.CALCIUM": ("CA", "Calcium"),
+    "IT.LB.CREAT": ("CREAT", "Creatinine"),
+}
+DATE_ITEM = "IT.LB.LBDTC"
+UNIT = "mg/dL"
 
-tests = odm.filter(pl.col("ItemOID").is_in(["IT.LB.CALCIUM", "IT.LB.CREAT"]))
-
-code_of = {"IT.LB.CALCIUM": "CA", "IT.LB.CREAT": "CREAT"}
-name_of = {"CA": "Calcium", "CREAT": "Creatinine"}
-
-joined = tests.join(wide, on=key_cols, how="left")
-
-
-def as_number(text):
-    if text is None or text == "" or text == "NOT DONE":
-        return None
-    try:
-        return float(text)
-    except ValueError:
-        return None
-
-
-rows = []
-for r in joined.to_dicts():
-    value = r["Value"]
-    # A test with no collected entry produces no record.
-    if value is None or value == "":
-        continue
-    code = code_of[r["ItemOID"]]
-    not_done = value == "NOT DONE"
-    rows.append(
-        {
-            "DOMAIN": "LB",
-            "STUDYID": r["StudyOID"],
-            "USUBJID": r["SubjectKey"],
-            "LBDTC": r["LBDTC"],
-            "LBTESTCD": code,
-            "LBTEST": name_of[code],
-            "LBORRES": None if not_done else value,
-            "LBORRESU": None if not_done else "mg/dL",
-            "LBSTRESN": None if not_done else as_number(value),
-            "LBSTRESU": None if not_done else "mg/dL",
-            "LBSTAT": "NOT DONE" if not_done else None,
-        }
-    )
-
-lb = pl.DataFrame(
-    rows,
-    schema={
-        "DOMAIN": pl.String,
-        "STUDYID": pl.String,
-        "USUBJID": pl.String,
-        "LBDTC": pl.String,
-        "LBTESTCD": pl.String,
-        "LBTEST": pl.String,
-        "LBORRES": pl.String,
-        "LBORRESU": pl.String,
-        "LBSTRESN": pl.Float64,
-        "LBSTRESU": pl.String,
-        "LBSTAT": pl.String,
-    },
-).sort(["STUDYID", "USUBJID", "LBDTC", "LBTESTCD"]).with_columns(
-    pl.int_range(1, pl.len() + 1).over(["STUDYID", "USUBJID"]).alias("LBSEQ")
-).select(
+COLUMNS = [
     "DOMAIN",
     "STUDYID",
     "USUBJID",
@@ -107,7 +37,93 @@ lb = pl.DataFrame(
     "LBSTRESU",
     "LBSTAT",
     "LBDTC",
-)
+]
 
-Path("/app/output").mkdir(parents=True, exist_ok=True)
-lb.write_csv("/app/output/lb.csv")
+
+def numeric_text(value):
+    """Numeric form of a collected entry, or "" when it is not a number."""
+    try:
+        number = float(value)
+    except ValueError:
+        return ""
+    if number.is_integer():
+        return str(int(number))
+    return str(number)
+
+
+def main():
+    with open(os.path.join(INPUT_DIR, "odm.csv"), newline="") as handle:
+        rows = list(csv.DictReader(handle))
+
+    # Group the LB items by subject and visit group.
+    groups = {}
+    for row in rows:
+        if row["ItemGroupOID"] != "IG.LB":
+            continue
+        key = (
+            row["StudyOID"],
+            row["SubjectKey"],
+            row["StudyEventOID"],
+            row["StudyEventRepeatKey"],
+            row["ItemGroupOID"],
+            row["ItemGroupRepeatKey"],
+        )
+        groups.setdefault(key, {})[row["ItemOID"]] = row["Value"]
+
+    records = []
+    for (study_id, subject, *_), items in groups.items():
+        lbdtc = items.get(DATE_ITEM, "")
+        for item_oid, (testcd, test) in TESTS.items():
+            entry = items.get(item_oid)
+            if entry is None or entry == "":
+                continue  # no collected entry: no record
+            record = {
+                "DOMAIN": "LB",
+                "STUDYID": study_id,
+                "USUBJID": subject,
+                "LBTESTCD": testcd,
+                "LBTEST": test,
+                "LBDTC": lbdtc,
+            }
+            if entry == "NOT DONE":
+                record.update(
+                    LBORRES="",
+                    LBORRESU="",
+                    LBSTRESN="",
+                    LBSTRESU="",
+                    LBSTAT="NOT DONE",
+                )
+            else:
+                record.update(
+                    LBORRES=entry,
+                    LBORRESU=UNIT,
+                    LBSTRESN=numeric_text(entry),
+                    LBSTRESU=UNIT,
+                    LBSTAT="",
+                )
+            records.append(record)
+
+    # LBSEQ numbers each subject's records from 1 by collection date,
+    # then by test code.
+    by_subject = {}
+    for record in records:
+        by_subject.setdefault(record["USUBJID"], []).append(record)
+    ordered = []
+    for subject in sorted(by_subject):
+        subject_records = sorted(
+            by_subject[subject],
+            key=lambda r: (r["LBDTC"], r["LBTESTCD"]),
+        )
+        for index, record in enumerate(subject_records, start=1):
+            record["LBSEQ"] = str(index)
+            ordered.append(record)
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    with open(os.path.join(OUTPUT_DIR, "lb.csv"), "w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=COLUMNS)
+        writer.writeheader()
+        writer.writerows(ordered)
+
+
+if __name__ == "__main__":
+    main()

@@ -4,38 +4,60 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+import csv
+from decimal import Decimal, ROUND_HALF_UP, getcontext
 
-import polars as pl
+getcontext().prec = 50
 
-lb = pl.read_csv("/app/input/lb.csv", infer_schema=False).with_columns(
-    pl.col("AVAL").cast(pl.Float64, strict=False),
-    pl.col("ANRLO").cast(pl.Float64, strict=False).alias("ANRLO_NUM"),
-)
+FOUR_PLACES = Decimal("0.0001")
 
-# Keep the collected AVAL/ANRLO as numbers; the ratio is rounded once to
-# four places with half away from zero.
-ratio = pl.col("AVAL") / pl.col("ANRLO_NUM")
-rounded = (
-    pl.when(ratio >= 0)
-    .then(((ratio * 10000) + 0.5).floor() / 10000)
-    .otherwise(((ratio * 10000) - 0.5).ceil() / 10000)
-)
 
-adlb = (
-    lb.with_columns(
-        ANRLO=pl.col("ANRLO_NUM"),
-        R2ANRLO=pl.when(
-            pl.col("AVAL").is_null()
-            | pl.col("ANRLO_NUM").is_null()
-            | (pl.col("ANRLO_NUM") == 0)
+def parse_number(text):
+    text = (text or "").strip()
+    if text == "":
+        return None
+    return Decimal(text)
+
+
+def report(value):
+    """Format a Decimal to exactly four decimal places, rounding an exact
+    half away from zero. A missing value is reported as absent."""
+    if value is None:
+        return ""
+    return str(value.quantize(FOUR_PLACES, rounding=ROUND_HALF_UP))
+
+
+def main():
+    with open("/app/input/lb.csv", newline="") as f:
+        rows = list(csv.DictReader(f))
+
+    out_rows = []
+    for row in rows:
+        aval = parse_number(row["AVAL"])
+        anrlo = parse_number(row["ANRLO"])
+        if aval is None or anrlo is None or anrlo == 0:
+            ratio = None
+        else:
+            # Nothing is rounded before the report: the ratio keeps every
+            # digit it was calculated with and is rounded once, in report().
+            ratio = aval / anrlo
+        out_rows.append(
+            {
+                "STUDYID": row["STUDYID"],
+                "USUBJID": row["USUBJID"],
+                "PARAMCD": row["PARAMCD"],
+                "AVAL": report(aval),
+                "ANRLO": report(anrlo),
+                "R2ANRLO": report(ratio),
+            }
         )
-        .then(None)
-        .otherwise(rounded),
-    )
-    .select("STUDYID", "USUBJID", "PARAMCD", "AVAL", "ANRLO", "R2ANRLO")
-    .sort("USUBJID")
-)
 
-Path("/app/output").mkdir(exist_ok=True)
-adlb.write_csv("/app/output/adlb.csv")
+    fieldnames = ["STUDYID", "USUBJID", "PARAMCD", "AVAL", "ANRLO", "R2ANRLO"]
+    with open("/app/output/adlb.csv", "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+
+if __name__ == "__main__":
+    main()

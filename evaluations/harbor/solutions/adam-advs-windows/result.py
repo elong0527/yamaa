@@ -4,119 +4,172 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+import csv
+from collections import OrderedDict
 
-import polars as pl
+INPUT_DIR = "/app/input"
+OUTPUT_PATH = "/app/output/advs.csv"
 
-# SDTM VS staged as the ADaM input; rename to the analysis names the
-# rest of the solution works with.
-raw = (
-    pl.read_csv("/app/input/vs.csv", infer_schema=False)
-    .rename(
-        {
-            "VSTESTCD": "PARAMCD",
-            "VSDTC": "ADT",
-            "VSDY": "ADY",
-            "VSSTRESN": "AVAL",
-        }
-    )
-    .with_columns(
-        pl.col("VSSEQ").cast(pl.Int64, strict=False),
-        pl.col("VISITNUM").cast(pl.Float64, strict=False),
-        pl.col("ADT").str.to_date(strict=False),
-        pl.col("ADY").cast(pl.Int64, strict=False),
-        pl.col("AVAL").cast(pl.Float64, strict=False),
-    )
-)
+COLUMNS = [
+    "STUDYID", "USUBJID", "PARAMCD", "VSSEQ", "VISIT", "VISITNUM",
+    "ADT", "ADY", "AVAL", "AVISIT", "AVISITN", "ANL01FL",
+]
+
+AVISITN = {
+    "SCREENING": -1,
+    "BASELINE": 0,
+    "WEEK 2": 2,
+    "WEEK 4": 4,
+    "POST-TREATMENT": 99,
+}
+
+EXPECTED_VISITS = ["SCREENING", "BASELINE", "WEEK 2", "WEEK 4"]
 
 
-def visit(day: int | None) -> tuple[str | None, int | None]:
-    if day is None:
-        return None, None
-    if day < 0:
-        return "SCREENING", -1
-    if day < 2:
-        return "BASELINE", 0
-    if day < 22:
-        return "WEEK 2", 2
-    if day < 43:
-        return "WEEK 4", 4
-    return "POST-TREATMENT", 99
+def window_for(ady):
+    """Analysis visit whose window holds the study day, or None."""
+    if ady is None:
+        return None
+    if ady < 0:
+        return "SCREENING"
+    if ady == 1:
+        return "BASELINE"
+    if 2 <= ady <= 21:
+        return "WEEK 2"
+    if 22 <= ady <= 42:
+        return "WEEK 4"
+    if ady >= 43:
+        return "POST-TREATMENT"
+    return None
 
 
-framed = raw.with_columns(
-    pl.col("ADY")
-    .map_elements(lambda d: visit(d)[0], return_dtype=pl.String)
-    .alias("AVISIT"),
-    pl.col("ADY")
-    .map_elements(lambda d: visit(d)[1], return_dtype=pl.Int64)
-    .alias("AVISITN"),
-)
+def to_int(text):
+    text = (text or "").strip()
+    if text == "":
+        return None
+    return int(float(text))
 
-# SV lists every planned visit of every subject, including those that did
-# not take place, and the unscheduled visits.
-sv = pl.read_csv("/app/input/sv.csv", infer_schema=False).with_columns(
-    pl.col("VISITNUM").cast(pl.Float64, strict=False)
-)
 
-# Each planned SCREENING, BASELINE, WEEK 2, or WEEK 4 visit gets one SYSBP
-# expected record when no collected record's study day falls in the
-# analysis window of that name: the planned visit name and number and the
-# window, and no date, study day, or value. No other visit gets one.
-# Expected records continue the subject's sequence numbering after the
-# highest collected VSSEQ, in VISITNUM order.
-windows = {"SCREENING": -1, "BASELINE": 0, "WEEK 2": 2, "WEEK 4": 4}
-keys = ["STUDYID", "USUBJID", "PARAMCD"]
-covered = framed.select(*keys, "AVISIT").drop_nulls().unique()
-top = framed.group_by("STUDYID", "USUBJID").agg(pl.col("VSSEQ").max().alias("TOP"))
+def to_num_text(text):
+    text = (text or "").strip()
+    if text == "":
+        return ""
+    value = float(text)
+    if value == int(value):
+        return str(int(value))
+    return repr(value)
 
-expected = (
-    sv.filter(pl.col("VISIT").is_in(list(windows)))
-    .with_columns(
-        PARAMCD=pl.lit("SYSBP"),
-        AVISIT=pl.col("VISIT"),
-        AVISITN=pl.col("VISIT").replace_strict(windows, return_dtype=pl.Int64),
-    )
-    .join(covered, on=[*keys, "AVISIT"], how="anti")
-    .join(top, on=["STUDYID", "USUBJID"], how="left")
-    .sort([*keys, "VISITNUM"])
-    .with_columns(
-        VSSEQ=pl.col("TOP").fill_null(0)
-        + pl.int_range(1, pl.len() + 1, dtype=pl.Int64).over(keys),
-        ADT=pl.lit(None, dtype=pl.Date),
-        ADY=pl.lit(None, dtype=pl.Int64),
-        AVAL=pl.lit(None, dtype=pl.Float64),
-    )
-    .select(
-        *keys, "VSSEQ", "VISIT", "VISITNUM", "ADT", "ADY", "AVAL",
-        "AVISIT", "AVISITN",
-    )
-)
-framed = pl.concat([framed, expected], how="vertical")
 
-# The earliest record by study day in each study, subject, parameter,
-# and visit; the lower sequence number breaks a same-day tie. Expected
-# records have no study day and never take the flag.
-flagged = (
-    framed.filter(pl.col("AVISIT").is_not_null() & pl.col("ADY").is_not_null())
-    .sort(["ADY", "VSSEQ"])
-    .unique(["STUDYID", "USUBJID", "PARAMCD", "AVISIT"], keep="first", maintain_order=True)
-    .select("STUDYID", "USUBJID", "PARAMCD", "AVISIT", "VSSEQ")
-    .with_columns(ANL01FL=pl.lit("Y"))
-)
+def read_csv(path):
+    with open(path, newline="") as handle:
+        return list(csv.DictReader(handle))
 
-advs = (
-    framed.join(
-        flagged,
-        on=["STUDYID", "USUBJID", "PARAMCD", "AVISIT", "VSSEQ"],
-        how="left",
-    )
-    .sort(["STUDYID", "USUBJID", "VSSEQ"])
-    .select(
-        "STUDYID", "USUBJID", "PARAMCD", "VSSEQ", "VISIT", "VISITNUM",
-        "ADT", "ADY", "AVAL", "AVISIT", "AVISITN", "ANL01FL",
-    )
-)
 
-Path("/app/output").mkdir(parents=True, exist_ok=True)
-advs.write_csv("/app/output/advs.csv")
+def main():
+    sv_rows = read_csv(INPUT_DIR + "/sv.csv")
+    vs_rows = read_csv(INPUT_DIR + "/vs.csv")
+
+    # Planned visits per subject from SV (visit name -> visit number).
+    planned = OrderedDict()
+    for row in sv_rows:
+        subject = row["USUBJID"]
+        planned.setdefault(subject, OrderedDict())
+        if row["VISIT"] in EXPECTED_VISITS:
+            planned[subject][row["VISIT"]] = to_int(row["VISITNUM"])
+
+    records = []
+    subjects = OrderedDict()  # subject -> {"max_seq": int, "windows": set}
+    for row in vs_rows:
+        subject = row["USUBJID"]
+        ady = to_int(row["VSDY"])
+        avisit = window_for(ady)
+        info = subjects.setdefault(subject, {"max_seq": 0, "windows": set()})
+        seq = to_int(row["VSSEQ"])
+        info["max_seq"] = max(info["max_seq"], seq)
+        if avisit is not None:
+            info["windows"].add(avisit)
+        records.append(OrderedDict([
+            ("STUDYID", row["STUDYID"]),
+            ("USUBJID", subject),
+            ("PARAMCD", row["VSTESTCD"]),
+            ("VSSEQ", seq),
+            ("VISIT", row["VISIT"]),
+            ("VISITNUM", to_int(row["VISITNUM"])),
+            ("ADT", (row["VSDTC"] or "").strip()),
+            ("ADY", ady),
+            ("AVAL", to_num_text(row["VSSTRESN"])),
+            ("AVISIT", avisit or ""),
+            ("AVISITN", AVISITN[avisit] if avisit else None),
+            ("ANL01FL", ""),
+            ("_expected", False),
+        ]))
+
+    # ANL01FL: earliest by study day, lower VSSEQ breaks a tie, per
+    # study/subject/parameter/analysis visit. Records with no study day
+    # (hence no window) never take the flag.
+    best = {}
+    for rec in records:
+        if rec["ADY"] is None or rec["AVISIT"] == "":
+            continue
+        key = (rec["STUDYID"], rec["USUBJID"], rec["PARAMCD"], rec["AVISIT"])
+        rank = (rec["ADY"], rec["VSSEQ"])
+        if key not in best or rank < best[key][0]:
+            best[key] = (rank, rec)
+    for _, rec in best.values():
+        rec["ANL01FL"] = "Y"
+
+    # Expected records for planned visits whose window holds no measured
+    # study day for the subject.
+    expected_by_subject = OrderedDict()
+    for subject, visits in planned.items():
+        info = subjects.get(subject, {"max_seq": 0, "windows": set()})
+        missing = [
+            (num, name) for name, num in visits.items()
+            if name not in info["windows"]
+        ]
+        missing.sort(key=lambda item: (item[0] is None, item[0]))
+        expected = []
+        for place, (num, name) in enumerate(missing, start=1):
+            expected.append(OrderedDict([
+                ("STUDYID", next(
+                    r["STUDYID"] for r in sv_rows if r["USUBJID"] == subject)),
+                ("USUBJID", subject),
+                ("PARAMCD", "SYSBP"),
+                ("VSSEQ", info["max_seq"] + place),
+                ("VISIT", name),
+                ("VISITNUM", num),
+                ("ADT", ""),
+                ("ADY", None),
+                ("AVAL", ""),
+                ("AVISIT", name),
+                ("AVISITN", AVISITN[name]),
+                ("ANL01FL", ""),
+                ("_expected", True),
+            ]))
+        expected_by_subject[subject] = expected
+
+    # Emit collected records in input order, with each subject's expected
+    # records (VSSEQ continuing the subject's sequence) after them.
+    last_index = {}
+    for i, rec in enumerate(records):
+        last_index[rec["USUBJID"]] = i
+    output = []
+    for i, rec in enumerate(records):
+        output.append(rec)
+        if last_index[rec["USUBJID"]] == i:
+            output.extend(expected_by_subject.get(rec["USUBJID"], []))
+    for subject, expected in expected_by_subject.items():
+        if subject not in last_index:
+            output.extend(expected)
+
+    with open(OUTPUT_PATH, "w", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(COLUMNS)
+        for rec in output:
+            writer.writerow([
+                "" if rec[col] is None else rec[col] for col in COLUMNS
+            ])
+
+
+if __name__ == "__main__":
+    main()

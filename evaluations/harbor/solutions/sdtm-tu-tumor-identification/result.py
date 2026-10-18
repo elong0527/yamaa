@@ -4,63 +4,91 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build the SDTM TU dataset from TU_RAW.
 
-import polars as pl
+One record per identified tumor or lesion. Reads /app/input/tu_raw.csv
+and writes /app/output/tu.csv.
+"""
 
-raw = pl.read_csv("/app/input/tu_raw.csv", infer_schema=False).with_columns(
-    pl.col("TUSEQ").cast(pl.Int64),
-    pl.col("VISITNUM").cast(pl.Int64),
-)
+import csv
+import os
 
-prefix = (
-    pl.when(pl.col("LESION_CATEGORY") == "Target")
-    .then(pl.lit("T"))
-    .when(pl.col("LESION_CATEGORY") == "Non-target")
-    .then(pl.lit("NT"))
-    .otherwise(pl.lit("NEW"))
-)
-category = (
-    pl.when(pl.col("LESION_CATEGORY") == "Target")
-    .then(pl.lit("TARGET"))
-    .when(pl.col("LESION_CATEGORY") == "Non-target")
-    .then(pl.lit("NON-TARGET"))
-    .otherwise(pl.lit("NEW"))
-)
+INPUT_PATH = "/app/input/tu_raw.csv"
+OUTPUT_PATH = "/app/output/tu.csv"
 
-tu = (
-    raw.with_columns(
-        DOMAIN=pl.lit("TU"),
-        TULNKID=prefix + pl.col("LESION_NUM"),
-        TUTESTCD=pl.lit("TUMIDENT"),
-        TUTEST=pl.lit("Tumor Identification"),
-        TUORRES=category,
-        TUSTRESC=category,
-        TULOC=pl.col("LOCATION").str.to_uppercase(),
-        TULAT=pl.col("LATERALITY").str.to_uppercase(),
-        TUMETHOD=pl.col("METHOD"),
-        TUEVAL=pl.col("EVALUATOR"),
-    )
-    .sort(["USUBJID", "TUSEQ"])
-    .select(
-        "DOMAIN",
-        "STUDYID",
-        "USUBJID",
-        "TUSEQ",
-        "TULNKID",
-        "TUTESTCD",
-        "TUTEST",
-        "TUORRES",
-        "TUSTRESC",
-        "TULOC",
-        "TULAT",
-        "TUMETHOD",
-        "TUEVAL",
-        "VISITNUM",
-        "VISIT",
-        "TUDTC",
-    )
-)
+CATEGORY_MAP = {
+    "target": "TARGET",
+    "non-target": "NON-TARGET",
+    "new": "NEW",
+}
 
-Path("/app/output").mkdir(exist_ok=True)
-tu.write_csv("/app/output/tu.csv")
+LINK_PREFIX = {
+    "TARGET": "T",
+    "NON-TARGET": "NT",
+    "NEW": "NEW",
+}
+
+COLUMNS = [
+    "DOMAIN",
+    "STUDYID",
+    "USUBJID",
+    "TUSEQ",
+    "TULNKID",
+    "TUTESTCD",
+    "TUTEST",
+    "TUORRES",
+    "TUSTRESC",
+    "TULOC",
+    "TULAT",
+    "TUMETHOD",
+    "TUEVAL",
+    "VISITNUM",
+    "VISIT",
+    "TUDTC",
+]
+
+
+def main():
+    with open(INPUT_PATH, newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+
+    out = []
+    seq_by_subject = {}
+    for row in rows:
+        subj = row["USUBJID"]
+        seq_by_subject[subj] = seq_by_subject.get(subj, 0) + 1
+
+        category = CATEGORY_MAP[row["LESION_CATEGORY"].strip().lower()]
+        link_id = LINK_PREFIX[category] + row["LESION_NUM"].strip()
+        laterality = row["LATERALITY"].strip()
+
+        out.append(
+            {
+                "DOMAIN": "TU",
+                "STUDYID": row["STUDYID"],
+                "USUBJID": subj,
+                "TUSEQ": seq_by_subject[subj],
+                "TULNKID": link_id,
+                "TUTESTCD": "TUMIDENT",
+                "TUTEST": "Tumor Identification",
+                "TUORRES": category,
+                "TUSTRESC": category,
+                "TULOC": row["LOCATION"].strip().upper(),
+                "TULAT": laterality.upper() if laterality else "",
+                "TUMETHOD": row["METHOD"],
+                "TUEVAL": row["EVALUATOR"],
+                "VISITNUM": row["VISITNUM"],
+                "VISIT": row["VISIT"],
+                "TUDTC": row["TUDTC"],
+            }
+        )
+
+    os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
+    with open(OUTPUT_PATH, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=COLUMNS)
+        writer.writeheader()
+        writer.writerows(out)
+
+
+if __name__ == "__main__":
+    main()

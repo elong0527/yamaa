@@ -4,118 +4,117 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
+import csv
 from datetime import date
-from pathlib import Path
 
-import polars as pl
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
 
-def parse_date(text: str | None) -> date | None:
-    if text is None or text == "":
+def read_csv(path):
+    with open(path, newline="", encoding="utf-8") as f:
+        return list(csv.DictReader(f))
+
+
+def parse_date(value):
+    value = (value or "").strip()
+    if not value:
         return None
-    try:
-        # Collection and element dates are ISO dates without times.
-        return date.fromisoformat(text[:10])
-    except ValueError:
-        return None
+    return date.fromisoformat(value)
 
 
-def study_day(ref: date | None, coll: date | None) -> int | None:
-    if ref is None or coll is None:
-        return None
-    delta = (coll - ref).days
-    return delta + 1 if delta >= 0 else delta
+def format_number(value):
+    if value is None:
+        return ""
+    if float(value).is_integer():
+        return str(int(value))
+    return f"{value:.2f}".rstrip("0").rstrip(".")
 
 
-dm = pl.read_csv("/app/input/dm.csv", infer_schema=False)
-se = pl.read_csv("/app/input/se.csv", infer_schema=False)
-tv = pl.read_csv("/app/input/tv.csv", infer_schema=False)
-vs_raw = pl.read_csv("/app/input/vs_raw.csv", infer_schema=False).with_columns(
-    pl.col("VSSEQ").cast(pl.Int64)
-)
+def main():
+    dm = read_csv(f"{INPUT_DIR}/dm.csv")
+    se = read_csv(f"{INPUT_DIR}/se.csv")
+    tv = read_csv(f"{INPUT_DIR}/tv.csv")
+    vs_raw = read_csv(f"{INPUT_DIR}/vs_raw.csv")
 
-tv_map = {row["VISIT"]: row["VISITNUM"] for row in tv.to_dicts()}
-ref_map = {
-    row["USUBJID"]: parse_date(row["RFSTDTC"]) for row in dm.to_dicts()
-}
-se_by_subject: dict[str, list[dict]] = {}
-for row in se.to_dicts():
-    se_by_subject.setdefault(row["USUBJID"], []).append(
-        {
-            "EPOCH": row["EPOCH"],
-            "start": parse_date(row["SESTDTC"]),
-            "end": parse_date(row["SEENDTC"]),
-        }
-    )
+    ref_start = {}
+    for row in dm:
+        ref_start[row["USUBJID"]] = parse_date(row["RFSTDTC"])
 
-# Latest planned visit number collected before each date, per subject, for
-# unplanned labels such as UNSCHEDULED.
-planned_by_subject: dict[str, list[tuple[date, float]]] = {}
-for row in vs_raw.to_dicts():
-    if row["VISIT"] in tv_map and row["VSDTC"] not in (None, ""):
-        coll = parse_date(row["VSDTC"])
-        if coll is not None:
-            planned_by_subject.setdefault(row["USUBJID"], []).append(
-                (coll, float(tv_map[row["VISIT"]]))
-            )
+    elements = {}
+    for row in se:
+        elements.setdefault(row["USUBJID"], []).append(
+            (row["EPOCH"], parse_date(row["SESTDTC"]), parse_date(row["SEENDTC"]))
+        )
 
-rows = []
-for row in vs_raw.to_dicts():
-    usubjid = row["USUBJID"]
-    coll = parse_date(row["VSDTC"])
-    # Planned visit number, or the latest planned number before the
-    # collection date plus .01 for an unplanned label.
-    if row["VISIT"] in tv_map:
-        visitnum: float | None = float(tv_map[row["VISIT"]])
-    else:
-        candidates = [
-            num for day, num in planned_by_subject.get(usubjid, []) if day < coll
-        ] if coll is not None else []
-        visitnum = max(candidates) + 0.01 if candidates else None
-    # Element containing the collection date; a shared day belongs to the
-    # later element.
-    epoch = None
-    if coll is not None:
-        hits = [
-            e
-            for e in se_by_subject.get(usubjid, [])
-            if e["start"] is not None
-            and e["end"] is not None
-            and e["start"] <= coll <= e["end"]
-        ]
-        if hits:
-            hits.sort(key=lambda e: e["start"])
-            epoch = hits[-1]["EPOCH"]
-    vsdy = study_day(ref_map.get(usubjid), coll)
-    rows.append(
-        {
+    planned = {}
+    for row in tv:
+        planned[row["VISIT"]] = float(row["VISITNUM"])
+
+    def unplanned_visitnum(subject, coll_date):
+        # Latest planned visit number collected for the subject before
+        # the record's collection date, plus 0.01.
+        if coll_date is None:
+            return None
+        best = None
+        for row in vs_raw:
+            if row["USUBJID"] != subject or row["VISIT"] not in planned:
+                continue
+            other_date = parse_date(row["VSDTC"])
+            if other_date is not None and other_date < coll_date:
+                num = planned[row["VISIT"]]
+                if best is None or num > best:
+                    best = num
+        return None if best is None else best + 0.01
+
+    out_rows = []
+    for row in vs_raw:
+        subject = row["USUBJID"]
+        coll_date = parse_date(row["VSDTC"])
+
+        if row["VISIT"] in planned:
+            visitnum = planned[row["VISIT"]]
+        else:
+            visitnum = unplanned_visitnum(subject, coll_date)
+
+        epoch = ""
+        if coll_date is not None:
+            chosen = None
+            for name, start, end in elements.get(subject, []):
+                if start is not None and end is not None and start <= coll_date <= end:
+                    # A day shared by two elements belongs to the later one.
+                    if chosen is None or start >= chosen[1]:
+                        chosen = (name, start)
+            if chosen is not None:
+                epoch = chosen[0]
+
+        vsdy = ""
+        ref = ref_start.get(subject)
+        if coll_date is not None and ref is not None:
+            diff = (coll_date - ref).days
+            vsdy = str(diff + 1) if diff >= 0 else str(diff)
+
+        out_rows.append({
             "DOMAIN": "VS",
             "STUDYID": row["STUDYID"],
-            "USUBJID": usubjid,
+            "USUBJID": subject,
             "VSSEQ": row["VSSEQ"],
             "VSTESTCD": row["VSTESTCD"],
             "VSORRES": row["VSORRES"],
             "VSDTC": row["VSDTC"],
             "VISIT": row["VISIT"],
-            "VISITNUM": visitnum,
+            "VISITNUM": format_number(visitnum),
             "EPOCH": epoch,
             "VSDY": vsdy,
-        }
-    )
+        })
 
-vs = pl.DataFrame(rows).sort(["USUBJID", "VSSEQ"]).select(
-    "DOMAIN",
-    "STUDYID",
-    "USUBJID",
-    "VSSEQ",
-    "VSTESTCD",
-    "VSORRES",
-    "VSDTC",
-    "VISIT",
-    "VISITNUM",
-    "EPOCH",
-    "VSDY",
-)
+    columns = ["DOMAIN", "STUDYID", "USUBJID", "VSSEQ", "VSTESTCD", "VSORRES",
+               "VSDTC", "VISIT", "VISITNUM", "EPOCH", "VSDY"]
+    with open(f"{OUTPUT_DIR}/vs.csv", "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=columns)
+        writer.writeheader()
+        writer.writerows(out_rows)
 
-Path("/app/output").mkdir(exist_ok=True)
-vs.write_csv("/app/output/vs.csv")
+
+if __name__ == "__main__":
+    main()
