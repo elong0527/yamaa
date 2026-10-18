@@ -96,14 +96,15 @@ unchanged. Other Arrow and Parquet releases are unsupported: the adapter's
 version-specific APIs, confined to `storage_api.rs`, are adapted and qualified
 for 57.3.0 only. Broadening that range requires separate adapter and
 installed-host qualification first. The direct storage codec floors are brotli
-8.0.4 and lz4_flex 0.13.1. Portable libm remains exactly 0.2.16, and the
-reviewed local saphyr-parser patch remains part of every graph this workspace
-builds. Cargo reads `[patch]` only from the root of the workspace being built,
-so a Rust embedder adds the patch to its own workspace, as the
-[Rust guide](../rust/README.md#distribution) shows; without it, the
-embedder's graph takes the unpatched `saphyr-parser` from crates.io.
-The Python binding builds with PyO3 0.27.2 through 0.30; the lock selects
-0.30.1, and the minimum dependency graph tests 0.27.2.
+8.0.4 and lz4_flex 0.13.1. Portable libm remains exactly 0.2.16. The reviewed
+saphyr-parser 0.2.1 with its compact-flow fix is vendored as
+`yamaa-saphyr-parser`, which `yamaa-adapters` depends on by path. It is
+therefore part of every graph that builds the engine, including a project that
+depends on the facade by git or path with no other configuration; CI's
+minimum-toolchain release lane builds the facade from such an outside
+workspace (#2929). The Python
+binding builds with PyO3 0.27.2 through 0.30; the lock selects 0.30.1, and the
+minimum dependency graph tests 0.27.2.
 
 The engine deliberately links two versions of four crates, because yamaa's
 direct floors differ from Parquet 57.3.0's: lz4_flex 0.13 beside Parquet's
@@ -145,7 +146,7 @@ The [dependency graph lanes](../CONTRIBUTING.md#ci-and-release-qualification)
 test declared direct minima and newest compatible selections on Linux with
 CPython 3.12, 3.14 and 3.15, all with R 4.6.1; on 3.15 the minima are its own
 floors. Cargo transitive dependencies use the newest
-MSRV-compatible resolution in both lanes; local patches and exact pins are
+MSRV-compatible resolution in both lanes; vendored crates and exact pins are
 preserved. Python runtime/test floors are exact in the minimum lane, while
 Python transitives are resolved compatibly. These isolated graphs do not change
 `rust/Cargo.lock` or `python/uv.lock`. The full native matrix separately qualifies
@@ -167,9 +168,9 @@ The scanners match locked registry packages by name and version, so they do
 not cover vendored source or native libraries bundled inside a package. These
 components are tracked by hand:
 
-- `saphyr-parser` 0.2.1 with the reviewed compact-flow patch, a path
-  dependency in `rust/vendor/saphyr-parser`. #2583 replaces it with a
-  published release.
+- `saphyr-parser` 0.2.1 with the reviewed compact-flow patch, vendored as
+  `yamaa-saphyr-parser`, a path dependency in `rust/vendor/saphyr-parser`.
+  #2583 replaces it with a published release.
 - The ReadStat 1.1.9 SAS reader subset in
   `rust/crates/yamaa-adapters/vendor/readstat`. #2927 tracks the upstream
   fixes since 1.1.9.
@@ -426,7 +427,7 @@ Indexed and scanned lookups keep the same diagnostics and ordering.
 | A dead declaration with an invalid reference fails a file without `parents` | The declaration is removed before validation and the file builds. To keep a declaration validated, name the column in `output.columns`, `keys` or `output.order_by`, or read it from a live derivation or verification. |
 | An input that no column reads is the implied driver | The input is removed too; name it in `base`. |
 | `parents: []` added only to enable pruning | Every specification is pruned, so the line no longer affects pruning. Any `parents` field, even an empty one, still orders resolved columns by dependency; without one, declaration order is the resolved order ([REQ-0060](../rules/execution/lifecycle.md#req-0060), [REQ-0643](../rules/specification/composition.md#req-0643)). Remove the line only once no column reads a column declared after it; otherwise the specification fails with `forward_reference` ([REQ-0071](../rules/execution/lifecycle.md#req-0071)). |
-| Rust code depending on `yamaa-adapters` or `yamaa-core` | Depend on the `yamaa` facade crate by path or git and, with its default `yaml` feature, add the `saphyr-parser` patch that the [Rust guide](../rust/README.md#distribution) shows. |
+| Rust code depending on `yamaa-adapters` or `yamaa-core` | Depend on the `yamaa` facade crate by path or git, as the [Rust guide](../rust/README.md#distribution) shows. Its default `yaml` feature brings the reviewed YAML parser with no other configuration; 0.4.0 itself also needs the `saphyr-parser` patch that its [release notes](releases/0.4.0.md) show. |
 | `datetime_precision` of minute text (`2025-03-04T08:30`) is `S`; `datetime_impute` with `time: last` gives `08:30:00`; hour text (`T08`) is invalid | `M`, `08:30:59`, and hour text is accepted (`H`). `IN ('M', 'S')` selects what `= 'S'` selected in 0.3.0, and only those forms convert directly to a `datetime`. A condition meaning "a time was collected" tests `IN ('H', 'M', 'S')`, because hour text also carries a collected time ([REQ-1327](../rules/operations/temporal.md#req-1327)). Complete hour text with `datetime_impute`; it is not a `datetime` ([REQ-1329](../rules/operations/temporal.md#req-1329)). |
 | Lock pins an earlier yamaa | Regenerate the project lock for 0.4.0 before using project functions; each applicable build checks the runtime version. |
 | A `between.value` qualified by an input that does not drive the row reads a wrong value with no message | It fails validation as `unknown_field`. Derive the value into a column, for example `AGE` from `DM.AGE`, and name that column. |

@@ -52,6 +52,10 @@ def main():
         # Type-check the package with the configuration in python/pyproject.toml.
         run(sys.executable, "-m", "pyrefly", "check", cwd=ROOT / "python")
         run("cargo", "fmt", "--all", "--check", cwd=WORKSPACE)
+        # The outside-workspace check is a workspace of its own, out of reach
+        # of `--all`; CI's minimum-toolchain job builds and tests it.
+        embedder = WORKSPACE / "tests/embedder/Cargo.toml"
+        run("cargo", "fmt", "--check", "--manifest-path", str(embedder), cwd=WORKSPACE)
         run(
             "cargo",
             "clippy",

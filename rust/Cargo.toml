@@ -1,4 +1,7 @@
 [workspace]
+# yamaa-adapters depends on the vendored YAML parser by path. A path dependency
+# inside this directory would otherwise join the workspace, and workspace-wide
+# test and Clippy runs would cover the upstream sources.
 exclude = ["vendor/saphyr-parser"]
 members = ["crates/yamaa-core", "crates/yamaa-adapters", "crates/yamaa", "crates/yamaa-python", "crates/yamaa-r"]
 default-members = ["crates/yamaa-core", "crates/yamaa-adapters"]
@@ -40,6 +43,3 @@ lto = "thin"
 [profile.release-test]
 inherits = "release"
 lto = false
-
-[patch.crates-io]
-saphyr-parser = { path = "vendor/saphyr-parser" }

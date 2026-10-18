@@ -1,0 +1,4 @@
+# The released sources follow the 2024 style edition of their 2024 language
+# edition. `cargo fmt --all` formats this path dependency of yamaa-adapters,
+# and this file keeps the workspace's 2021 style from applying to it.
+style_edition = "2024"
