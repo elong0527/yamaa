@@ -157,7 +157,7 @@ Evidence: `schema-expressions`, `schema-source-binding`.
 Replaces: REQ-1093, REQ-1094.
 
 A dataset-qualified `source` reads through the implicit join, and a structured
-`source:` binding adds its filter, selection and absent value
+`source:` binding adds its range, filter, selection and absent value
 ([LOOKUP-1](lookup.md#lookup-1)). Each returns its variable's value under
 [EXPR-6](#expr-6), with the variable's type ([EXPR-14](#expr-14)).
 
@@ -313,7 +313,7 @@ Evidence: `schema-text-mapping`, `schema-text-mapping-unmapped`, `negative-mappi
 Replaces: REQ-0304, REQ-1110.
 
 A `mapping` requires a string source. The source may be a filtered source
-carrying the variable with its filter, selection or absent value
+carrying the variable with its range, filter, selection or absent value
 ([LOOKUP-1](lookup.md#lookup-1)). A dictionary path is read once during
 workflow planning through the specification's
 [project resources](reference/files.md), and its content must satisfy the
@@ -354,8 +354,8 @@ when it is omitted, counted under `missing`, and a non-numeric source fails.
 Evidence: `schema-expressions`, `negative-cut-coded`, `schema-missing-input-default`.
 Replaces: REQ-0306, REQ-1118.
 
-The source may be a filtered source carrying the variable with its filter,
-selection or absent value ([LOOKUP-1](lookup.md#lookup-1)). Breaks compare
+The source may be a filtered source carrying the variable with its range,
+filter, selection or absent value ([LOOKUP-1](lookup.md#lookup-1)). Breaks compare
 mathematical values exactly under [VALUE-19](values.md#value-19).
 Without `missing`, a missing source gives missing, the default substitution of
 [COLUMN-10](columns.md#column-10).

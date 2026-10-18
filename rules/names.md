@@ -153,7 +153,9 @@ source:
 ```
 
 [Lookup and joins](lookup.md) defines the join uniqueness the
-selection relaxes and the record selection `filter` states.
+selection relaxes and the matched records `filter` narrows. `between` is not a
+handler either: it keeps the matched records whose bounds hold a value of the
+current row ([LOOKUP-9](lookup.md#lookup-9)).
 
 ## ODM item reads
 
