@@ -14,12 +14,12 @@ status: normative
 
 **REQ-0959.** A **study document** is composed from one selected `sdtm`,
 `adam`, or `send` section of an admitted
-[project file](../specification/project.md#req-1330). The project supplies
+[project file](../specification/project.md#req-1331). The project supplies
 `study` and shared `codelists`; the selected section supplies one
 implementation guide, supporting documents, an ordered `specs` list and one
 `define` target. Each section produces exactly one Define-XML document.
 Composition requires the `study`, `standard` and `define` that a run does
-not, under [REQ-1336](#req-1336).
+not, under [REQ-1337](#req-1337).
 The retained `define.yaml` reference route and its schema remain transition
 qualification history until the complete replacement is qualified.
 
@@ -887,9 +887,9 @@ schema: fail and report the schema violation. The run publishes nothing.
 
 **REQ-1027.** A failed publication fails under [REQ-0764](../storage/publication.md#req-0764).
 
-<a id="req-1336"></a>
+<a id="req-1337"></a>
 
-**REQ-1336.** A Define-XML generation whose project declares no `study`, no
+**REQ-1337.** A Define-XML generation whose project declares no `study`, no
 section for the selected family, or a selected section without `standard` or
 `define`: fail with `missing_required_field` before any specification is
 captured, reporting every missing field at once, each at its project path such

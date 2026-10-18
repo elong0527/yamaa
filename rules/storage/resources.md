@@ -13,7 +13,7 @@ status: normative
 <a id="req-0772"></a>
 
 **REQ-0772.** The caller explicitly supplies the entry file and any
-[project file](../specification/project.md#req-1330); the project file links the
+[project file](../specification/project.md#req-1331); the project file links the
 implementation environment file of each host language. These caller arguments
 follow ordinary host path resolution. By default, every document-declared
 relative path resolves from the file that writes it, including an inherited

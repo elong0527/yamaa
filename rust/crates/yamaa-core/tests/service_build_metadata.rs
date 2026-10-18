@@ -1007,7 +1007,7 @@ mod service {
                     "study"
                 )]
             );
-            assert_eq!(findings[0].definition().requirement, Some("REQ-1336"));
+            assert_eq!(findings[0].definition().requirement, Some("REQ-1337"));
             assert_eq!(spy.events, ["capture_environment"]);
         }
         #[test]
@@ -1042,7 +1042,7 @@ mod service {
             );
             assert!(findings
                 .iter()
-                .all(|finding| finding.definition().requirement == Some("REQ-1336")));
+                .all(|finding| finding.definition().requirement == Some("REQ-1337")));
             assert_eq!(spy.events, ["capture_environment"]);
         }
         #[test]

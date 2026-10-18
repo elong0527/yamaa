@@ -811,7 +811,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         DefineRequiredDeclaration,
         "validation",
         "missing_required_field",
-        "REQ-1336",
+        "REQ-1337",
     );
     // A project without the selected family's section names that section.
     assert_eq!(

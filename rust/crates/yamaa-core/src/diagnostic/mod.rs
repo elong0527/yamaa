@@ -429,7 +429,7 @@ conditions! {
     SubmissionJsonInvalid => ("validation", "value_not_permitted", Some("REQ-1231")),
     SubmissionInventoryFailed => ("verification", "allowed_values_failed", Some("REQ-1156")),
     DefineStandardName => ("validation", "value_not_permitted", Some("REQ-1074")),
-    DefineRequiredDeclaration => ("validation", "missing_required_field", Some("REQ-1336")),
+    DefineRequiredDeclaration => ("validation", "missing_required_field", Some("REQ-1337")),
     DefineArtifactOutsidePackage => ("validation", "artifact_outside_document", Some("REQ-1021")),
     DefineDatasetJsonOutsidePackage => ("validation", "artifact_outside_document", Some("REQ-1229")),
     DefineArtifactCollision => ("validation", "artifact_path_collision", Some("REQ-1195")),

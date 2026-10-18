@@ -834,7 +834,7 @@ mod file {
         fn define_reports_every_missing_study_section_guide_and_target_before_reading_specifications(
         ) {
             // A run needs only a section's specs; Define requires the study, the
-            // selected section and that section's standard and define (REQ-1336).
+            // selected section and that section's standard and define (REQ-1337).
             for (removed, expected) in [
                 (
                     &["study:", "  standard:", "  define: define.xml"][..],
@@ -876,7 +876,7 @@ mod file {
                     .map(|(field, detail)| {
                         yamaa_adapters::json!({
                             "phase": "validation", "condition": "missing_required_field",
-                            "requirement": "REQ-1336", "spec_paths": [field],
+                            "requirement": "REQ-1337", "spec_paths": [field],
                             "context": {"detail": detail}
                         })
                     })

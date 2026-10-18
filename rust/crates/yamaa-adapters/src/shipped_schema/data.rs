@@ -1363,39 +1363,39 @@ verification_severity:
 #[rustfmt::skip]
 pub(super) const PROJECT_MODULES: &[(&str, &str)] = &[
     ("schema_project.yaml", r#"version: '1.0'
-# See REQ-1330.
+# See REQ-1331.
 includes:
 - schema_shared.yaml
 project_class:
 - schema_version:
     type: str
     required: true
-    description: See REQ-1334.
+    description: See REQ-1335.
 - environments:
     type: environments_class
-    description: See REQ-1334.
+    description: See REQ-1335.
 - codelists:
     type: list[codelist_source]
-    description: See REQ-1334.
+    description: See REQ-1335.
 - study:
     type: study_class
-    description: See REQ-1334.
+    description: See REQ-1335.
 - sdtm:
     type: submission_section_class
-    description: See REQ-1334.
+    description: See REQ-1335.
 - adam:
     type: submission_section_class
-    description: See REQ-1334.
+    description: See REQ-1335.
 - send:
     type: submission_section_class
-    description: See REQ-1334.
+    description: See REQ-1335.
 environments_class:
 - python:
     type: project_path
-    description: See REQ-1335.
+    description: See REQ-1336.
 - r:
     type: project_path
-    description: See REQ-1335.
+    description: See REQ-1336.
 codelist_source:
   type:
   - project_path

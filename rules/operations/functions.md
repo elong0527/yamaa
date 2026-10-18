@@ -22,7 +22,7 @@ status: normative
 
 <a id="req-0663"></a>
 
-**REQ-0663.** The caller supplies one [project file](../specification/project.md#req-1330), and its `environments` entry for the host language links the one environment file that host reads under [REQ-1331](../specification/project.md#req-1331). Every path an environment file declares resolves relative to that file under the admitted resource policy. A specification cannot select, replace or override the project or its environments. No adjacent environment or language subdirectory is discovered implicitly.
+**REQ-0663.** The caller supplies one [project file](../specification/project.md#req-1331), and its `environments` entry for the host language links the one environment file that host reads under [REQ-1332](../specification/project.md#req-1332). Every path an environment file declares resolves relative to that file under the admitted resource policy. A specification cannot select, replace or override the project or its environments. No adjacent environment or language subdirectory is discovered implicitly.
 
 <a id="req-0664"></a>
 
@@ -219,12 +219,12 @@ differences.
 
 <a id="req-1080"></a>
 
-**REQ-1080.** The `environment_class` fields have these meanings: `schema_version` selects the schema, and `lock` and `functions` declare installed code. The language comes from the [project](../specification/project.md#req-1331) `environments` key that links the file. Study terminology and submission metadata belong to the project file, not to an environment file.
+**REQ-1080.** The `environment_class` fields have these meanings: `schema_version` selects the schema, and `lock` and `functions` declare installed code. The language comes from the [project](../specification/project.md#req-1332) `environments` key that links the file. Study terminology and submission metadata belong to the project file, not to an environment file.
 
 The `lock` and external function declarations are local resource paths under
 [Resource resolution](../storage/resources.md). Relative spellings start at the
 environment file that declares them, not at the project file that links it,
-under [REQ-1333](../specification/project.md#req-1333). Absolute local paths
+under [REQ-1334](../specification/project.md#req-1334). Absolute local paths
 and parent segments have the same meaning as domain resource paths; an absent
 file fails at that location without configuration discovery or fallback search.
 
