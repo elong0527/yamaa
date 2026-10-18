@@ -45,6 +45,10 @@ pub enum WindowFinding {
         operation: String,
         forbidden: bool,
     },
+    RepeatedGroup {
+        path: String,
+        identifier: String,
+    },
 }
 impl WindowFinding {
     pub fn diagnostic_code(&self) -> crate::diagnostic::ConditionCode {
@@ -57,6 +61,7 @@ impl WindowFinding {
             Self::Order {
                 forbidden: true, ..
             } => C::WindowOrderForbidden,
+            Self::RepeatedGroup { .. } => C::WindowRepeatedGroup,
         }
     }
     pub fn definition(&self) -> crate::diagnostic::Definition {
@@ -75,6 +80,11 @@ impl WindowFinding {
                 "operation",
                 crate::value::Value::Str(operation.clone()),
             ),
+            Self::RepeatedGroup { path, identifier } => (
+                path,
+                "identifier",
+                crate::value::Value::Str(identifier.clone()),
+            ),
         };
         Diagnostic {
             code: self.diagnostic_code(),
@@ -86,6 +96,17 @@ impl WindowFinding {
     }
 }
 impl Declaration {
+    /// A partition names each variable once (REQ-0293); report every repeat.
+    fn repeated_groups(&self, findings: &mut Vec<BindFinding>) {
+        for (index, name) in self.groups.iter().enumerate() {
+            if self.groups[..index].contains(name) {
+                findings.push(BindFinding::Window(WindowFinding::RepeatedGroup {
+                    path: format!("{}.window.group_by[{index}]", self.path),
+                    identifier: name.clone(),
+                }));
+            }
+        }
+    }
     pub fn prepare(
         d: &Document,
         payload: usize,
@@ -335,6 +356,7 @@ impl Declaration {
                 forbidden: baseline,
             }));
         }
+        self.repeated_groups(findings);
         let filter = match &self.filter {
             Some((
                 text,
@@ -597,6 +619,7 @@ impl Declaration {
                 forbidden: baseline,
             }));
         }
+        self.repeated_groups(findings);
         if let Some((expression, compiled)) = &self.filter {
             static_checks::predicate(
                 compiled,
