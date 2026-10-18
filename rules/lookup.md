@@ -830,7 +830,7 @@ intermediates:
 
 The `filter` drops every `SRC` record whose distance is missing. When the
 current input record's reference is missing, every distance is missing, no
-candidate survives, and the read takes `no_match` ([LOOKUP-13](#lookup-13)).
+candidate survives, and the read takes `no_match` ([LOOKUP-24](#lookup-24)).
 
 To fall back to a candidate instead, leave the filter out and place missing
 distances last. Without `nulls`, a missing distance sorts first under `asc`
