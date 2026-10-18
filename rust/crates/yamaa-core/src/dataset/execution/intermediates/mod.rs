@@ -16,7 +16,9 @@ enum Choice {
 /// Fresh for every attempt, with no entries for unused intermediate declarations.
 #[derive(Default)]
 pub(super) struct Run {
-    eligible: BTreeMap<usize, Vec<usize>>,
+    /// Per record, whether a filter that reads only the donor records keeps
+    /// it, decided the first time the record matches (LOOKUP-8).
+    narrowed: BTreeMap<usize, Vec<Option<bool>>>,
     key_indexes: BTreeMap<usize, Option<key_index::KeyIndex>>,
     choices: BTreeMap<(SelectionIdentity, usize), Choice>,
     materialized: BTreeMap<(usize, Option<SelectionIdentity>), Rc<Dataset>>,
@@ -51,7 +53,7 @@ impl Run {
             }
             affected.push(windowed);
         }
-        self.eligible.retain(|index, _| !affected[*index]);
+        self.narrowed.retain(|index, _| !affected[*index]);
         self.key_indexes.retain(|index, _| !affected[*index]);
         self.choices.retain(|(_, index), _| !affected[*index]);
         self.materialized.retain(|(index, _), _| !affected[*index]);
@@ -70,7 +72,7 @@ impl Run {
             return Ok(());
         }
 
-        self.eligible
+        self.narrowed
             .retain(|index, _| !plan.intermediates()[*index].source.is_self());
         self.choices
             .retain(|(_, index), _| !plan.intermediates()[*index].source.is_self());
@@ -135,7 +137,12 @@ pub(super) fn verify<E>(
                 failures.push(check.diagnostic(item, table.schema(), name, count));
             }
         }
-        state.intermediates.eligible.insert(index, eligible);
+        // The check narrowed every record; a later match reuses each answer.
+        let mut narrowed = vec![Some(false); table.row_count()];
+        for row in eligible {
+            narrowed[row] = Some(true);
+        }
+        state.intermediates.narrowed.insert(index, narrowed);
     }
     if failures.is_empty() {
         Ok(())
@@ -494,6 +501,9 @@ impl<E> TableAccess for Filtered<'_, E> {
         self.table.cell(self.rows[row], column)
     }
 }
+/// Every donor record a filter that reads only the donor records keeps: the
+/// relation a row driver traverses and a `unique` verification checks, not a
+/// match.
 fn eligibility<E>(
     table: &dyn TableAccess<Error = E>,
     item: &Intermediate,
@@ -506,19 +516,7 @@ fn eligibility<E>(
         .map_err(|_| Box::new(ExecutionError::Allocation))?;
     for source_row in 0..table.row_count() {
         if let Some(filter) = item.filter.as_ref().filter(|filter| !filter.correlated()) {
-            let truth = crate::dataset::execution::predicates::evaluate(
-                filter.predicate(),
-                table,
-                source_row,
-                &[],
-            )
-            .map_err(|error| {
-                Box::new(ExecutionError::Predicate {
-                    source_row,
-                    error: *error,
-                })
-            })?;
-            if truth != crate::expression::Truth::True {
+            if !keeps(table, filter, source_row)? {
                 continue;
             }
         }
@@ -724,39 +722,9 @@ fn cell<'a, E>(
     Ok(value)
 }
 
-/// Select one stable extremum, retaining input position as the final tie breaker.
-fn select<E>(
-    table: &dyn TableAccess<Error = E>,
-    item: &Intermediate,
-    matching: &[usize],
-    selection: &SourceSelection,
-) -> Result<usize, Box<ExecutionError<E>>> {
-    use std::cmp::Ordering;
-    let mut best = matching[0];
-    for &row in &matching[1..] {
-        let mut order = Ordering::Equal;
-        for term in &selection.order_by {
-            order = windows::compare(
-                cell(table, item, row, term.column)?,
-                cell(table, item, best, term.column)?,
-                term,
-            );
-            if order != Ordering::Equal {
-                break;
-            }
-        }
-        order = order.then_with(|| row.cmp(&best));
-        if (selection.keep == Keep::First && order == Ordering::Less)
-            || (selection.keep == Keep::Last && order == Ordering::Greater)
-        {
-            best = row;
-        }
-    }
-    Ok(best)
-}
-
-/// Resolve and cache the record choice for one intermediate read,
-/// scanning eligible donors against the resolved keys, range and filter.
+/// Resolve and cache the record choice for one intermediate read: match the
+/// records on the resolved keys and range, narrow them by the filter, then
+/// select (LOOKUP-25).
 #[allow(clippy::too_many_arguments)]
 fn resolve_choice<T: TableAccess + ?Sized>(
     index: usize,
@@ -771,8 +739,7 @@ fn resolve_choice<T: TableAccess + ?Sized>(
     source_name: &str,
     cache_key: (SelectionIdentity, usize),
 ) -> Result<Choice, Box<ExecutionError<T::Error>>> {
-    // Newly admitted expressions use the original dependency/filter boundary.
-    // Ordinary selectors retain the established filter-before-raw-key behavior.
+    // Expression match values resolve their current references first.
     let current = if item.has_expression_keys() {
         Some(match_values::resolve(
             item, candidate, plan, row, primary, state,
@@ -781,19 +748,6 @@ fn resolve_choice<T: TableAccess + ?Sized>(
         None
     };
     check_deferred_filter_types(item)?;
-
-    if !state.intermediates.eligible.contains_key(&index)
-        || item
-            .derivations
-            .as_ref()
-            .is_some_and(|derived| !derived.current.is_empty())
-    {
-        let eligible = eligibility(table, item)?;
-
-        state.intermediates.eligible.insert(index, eligible);
-    }
-    let mut count = 0;
-    let mut selected = None;
     let keys = match current {
         Some(current) => {
             match_values::evaluate(item, &current, candidate, plan, row, primary, state)?
@@ -817,24 +771,32 @@ fn resolve_choice<T: TableAccess + ?Sized>(
             )
         })
         .transpose()?;
-
-    let eligible_len = state.intermediates.eligible[&index].len();
-    if range_value
-        .as_ref()
-        .is_none_or(|value| !matches!(value, Value::Missing))
-        && !keys
-            .iter()
-            .any(|(_, value)| matches!(value, Value::Missing))
-    {
-        let mut scanned = Vec::new();
-        // Small relations retain their existing scan and observation profile;
-        // the index pays off only for repeated reads of a sizable relation.
-        // Plain intermediates are indexed over the full key tuple, for any
-        // number of key columns and any scalar type. Expression keys,
-        // ranges, derivations and correlated filters stay on the scan path
-        // below, as do self sources and lookup keys whose type the donor
-        // column cannot compare with (the scan owns that diagnostic).
-        let use_index = eligible_len >= key_index::MINIMUM_ROWS
+    let probe_keys = keys
+        .iter()
+        .map(|(column, value)| (*column, ValueRef::from(value)))
+        .collect::<Vec<_>>();
+    let kinds = keys
+        .iter()
+        .map(|(column, _)| item.source_kind(plan.secondary(), *column).map(Into::into))
+        .collect::<Vec<_>>();
+    let probe = matching::Probe {
+        keys: &probe_keys,
+        kinds: &kinds,
+        range: item
+            .range
+            .as_ref()
+            .zip(range_value.as_ref().map(ValueRef::from)),
+    };
+    let mut count = 0;
+    let mut selected = None;
+    if !probe.incomplete() {
+        // Small relations keep the scan; the index pays off only for repeated
+        // reads of a sizable relation. Plain intermediates are indexed over the
+        // full key tuple, for any number of key columns and any scalar type.
+        // Expression keys, ranges, derivations and correlated filters stay on
+        // the scan, as do SELF sources and key pairs whose types are not known
+        // to compare (the scan owns that refusal).
+        let use_index = table.row_count() >= key_index::MINIMUM_ROWS
             && !item.keys.is_empty()
             && !item.has_expression_keys()
             && !item.source.is_self()
@@ -856,145 +818,142 @@ fn resolve_choice<T: TableAccess + ?Sized>(
                     _ => false,
                 }
             });
-        let matching: &[usize] = 'matching: {
-            if use_index {
-                if !state.intermediates.key_indexes.contains_key(&index) {
-                    let indexed = key_index::KeyIndex::build(
-                        table,
-                        item,
-                        &state.intermediates.eligible[&index],
-                    )?;
-                    state.intermediates.key_indexes.insert(index, indexed);
-                }
-                if let Some(indexed) = state
-                    .intermediates
-                    .key_indexes
-                    .get(&index)
-                    .and_then(|indexed| indexed.as_ref())
-                {
-                    break 'matching indexed.matching(&keys)?;
-                }
-                // The donor relation is not indexable (a donor cell's type
-                // does not fit its column); the scan below owns its outcome.
+        let mut indexed = None;
+        if use_index {
+            if let std::collections::btree_map::Entry::Vacant(entry) =
+                state.intermediates.key_indexes.entry(index)
+            {
+                let rows = (0..table.row_count()).collect::<Vec<_>>();
+                entry.insert(key_index::KeyIndex::build(table, item, &rows)?);
             }
-            // First count every matching record without reading order or donor fields.
-            let matching = &mut scanned;
-
-            matching
-                .try_reserve_exact(eligible_len)
-                .map_err(|_| Box::new(ExecutionError::Allocation))?;
-            for position in 0..eligible_len {
-                let source_row = state.intermediates.eligible[&index][position];
-                let mut matches = true;
-                for (column, expected) in &keys {
-                    // A false equality cannot hide a later dynamic type refusal.
-                    // Known compatible pairs need no further reads once this row differs.
-                    if !matches
-                        && item
-                            .source_kind(plan.secondary(), *column)
-                            .is_some_and(|kind| {
-                                expected.value_type().is_some_and(|expected| {
-                                    crate::value::comparable_types(expected, kind.into())
-                                })
-                            })
-                    {
-                        continue;
-                    }
-                    let value = cell(table, item, source_row, *column)?;
-                    if let (ValueRef::Bool(left), Value::Bool(right)) = (value, expected) {
-                        matches &= left == *right;
-                        continue;
-                    }
-                    match crate::value::compare_present_refs(value, ValueRef::from(expected)) {
-                        Ok(std::cmp::Ordering::Equal) => (),
-                        Err(crate::value::ComparisonError::IncompatibleTypes) => {
-                            let key = item
-                                .keys
-                                .iter()
-                                .find(|key| key.source_column == *column)
-                                .expect("resolved key belongs to the admitted selector");
-                            let field = &table.schema().columns()[*column].name;
-                            let source = if key.value.is_expression() {
-                                format!("key[{field}]")
-                            } else {
-                                key.value
-                                    .read()
-                                    .map_or(field.clone(), |read| read.identifier().into())
-                            };
-                            return Err(Box::new(ExecutionError::ScalarDiagnostic(
-                                crate::diagnostic::lookup_key_type(
-                                    &key.path,
-                                    &item.identifier,
-                                    &source,
-                                    crate::result_type::ResultType::known(expected.value_type()),
-                                    crate::result_type::ResultType::known(value.value_type()),
-                                ),
-                            )));
-                        }
-                        _ => {
-                            matches = false;
-                        }
-                    }
-                }
-                if matches {
-                    if let Some(filter) = item.filter.as_ref().filter(|filter| filter.correlated())
-                    {
-                        let owner = match &item.source {
-                            IntermediateSource::Input(index) => {
-                                relation_predicates::DonorOwner::Secondary(*index)
-                            }
-                            IntermediateSource::Primary { .. } => {
-                                relation_predicates::DonorOwner::Primary
-                            }
-                            IntermediateSource::SelfRows { .. } => {
-                                relation_predicates::DonorOwner::Completed
-                            }
-                        };
-                        if relation_predicates::evaluate(
-                            filter,
-                            relation_predicates::Donor {
-                                table,
-                                row: source_row,
-                                owner,
-                            },
-                            primary,
-                            candidate,
-                            plan,
-                            row,
-                            assignment,
-                            state,
-                        )? != crate::expression::Truth::True
-                        {
-                            continue;
-                        }
-                    }
-                    if let (Some(range), Some(value)) = (&item.range, &range_value) {
-                        let allowed = range
-                            .allows(ValueRef::from(value), |column| {
-                                cell(table, item, source_row, column)
-                            })
-                            .map_err(|failure| match failure {
-                                RelationRangeFailure::Access(error) => error,
-                                RelationRangeFailure::Incomparable(types) => {
-                                    Box::new(ExecutionError::ScalarDiagnostic(
-                                        types.diagnostic(range.path(), &item.identifier),
-                                    ))
-                                }
-                            })?;
-                        if !allowed {
-                            continue;
-                        }
-                    }
-                    matching.push(source_row);
-                }
+            // A donor cell whose type fits no column type leaves the relation
+            // unindexed; the scan below owns its outcome.
+            if let Some(index) = state
+                .intermediates
+                .key_indexes
+                .get(&index)
+                .and_then(Option::as_ref)
+            {
+                indexed = Some(index.matching(&keys)?.to_vec());
             }
-            scanned.as_slice()
+        }
+        let capacity = indexed.as_ref().map_or(table.row_count(), Vec::len);
+        // The index has already matched its bucket on every key pair, and an
+        // indexed lookup declares no range: only narrowing remains.
+        let bucket = matching::Probe {
+            keys: &[],
+            kinds: &[],
+            range: None,
         };
-        count = matching.len();
-        selected = matching.first().copied();
+        let (rows, probe): (Box<dyn Iterator<Item = usize>>, _) = match indexed {
+            Some(rows) => (Box::new(rows.into_iter()), &bucket),
+            None => (Box::new(0..table.row_count()), &probe),
+        };
+        // A filter that reads only the donor records keeps one answer per
+        // record, unless the records are derived for this current record.
+        let reusable = item
+            .derivations
+            .as_ref()
+            .is_none_or(|derived| derived.current.is_empty());
+        let found = matching::candidates(
+            rows,
+            capacity,
+            probe,
+            |source_row, column| cell(table, item, source_row, column),
+            |source_row| {
+                let Some(filter) = &item.filter else {
+                    return Ok(true);
+                };
+                if filter.correlated() {
+                    let owner = match &item.source {
+                        IntermediateSource::Input(index) => {
+                            relation_predicates::DonorOwner::Secondary(*index)
+                        }
+                        IntermediateSource::Primary { .. } => {
+                            relation_predicates::DonorOwner::Primary
+                        }
+                        IntermediateSource::SelfRows { .. } => {
+                            relation_predicates::DonorOwner::Completed
+                        }
+                    };
+                    return Ok(relation_predicates::evaluate(
+                        filter,
+                        relation_predicates::Donor {
+                            table,
+                            row: source_row,
+                            owner,
+                        },
+                        primary,
+                        candidate,
+                        plan,
+                        row,
+                        assignment,
+                        state,
+                    )? == crate::expression::Truth::True);
+                }
+                if reusable {
+                    if let Some(Some(kept)) = state
+                        .intermediates
+                        .narrowed
+                        .get(&index)
+                        .and_then(|narrowed| narrowed.get(source_row))
+                    {
+                        return Ok(*kept);
+                    }
+                }
+                let kept = keeps(table, filter, source_row)?;
+                if reusable {
+                    let narrowed = state
+                        .intermediates
+                        .narrowed
+                        .entry(index)
+                        .or_insert_with(|| vec![None; table.row_count()]);
+                    if let Some(slot) = narrowed.get_mut(source_row) {
+                        *slot = Some(kept);
+                    }
+                }
+                Ok(kept)
+            },
+        )
+        .map_err(|refusal| match refusal {
+            matching::Refusal::Failed(error) => error,
+            matching::Refusal::Key {
+                index: pair,
+                current,
+                donor,
+            } => {
+                let column = keys[pair].0;
+                let key = item
+                    .keys
+                    .iter()
+                    .find(|key| key.source_column == column)
+                    .expect("resolved key belongs to the admitted selector");
+                Box::new(ExecutionError::ScalarDiagnostic(
+                    crate::diagnostic::lookup::key_type(
+                        &key.path,
+                        crate::diagnostic::lookup::Owner::Intermediate(&item.identifier),
+                        &matching::key_source(key, &table.schema().columns()[column].name),
+                        crate::result_type::ResultType::known(current),
+                        crate::result_type::ResultType::known(donor),
+                    ),
+                ))
+            }
+            matching::Refusal::Range(types) => {
+                Box::new(ExecutionError::ScalarDiagnostic(types.diagnostic(
+                    item.range.as_ref().map_or("", |range| range.path()),
+                    &item.identifier,
+                )))
+            }
+        })?;
+        count = found.rows.len();
+        selected = found.rows.first().copied();
         if count > 1 {
             if let Some(selection) = &item.selection {
-                selected = Some(select(table, item, matching, selection)?);
+                selected = Some(matching::select(
+                    &found.rows,
+                    selection,
+                    |source_row, column| cell(table, item, source_row, column),
+                )?);
             } else {
                 return Err(Box::new(ExecutionError::MultipleMatches {
                     path: item.path.clone(),
@@ -1021,10 +980,25 @@ fn resolve_choice<T: TableAccess + ?Sized>(
             intermediate: item.identifier.clone(),
             matched_key: matched_key(table, &keys)?,
             identity: failure_identity(candidate, plan.keys(), row)?,
-            implicit_join: false,
         }));
     };
 
     state.intermediates.choices.insert(cache_key, choice);
     Ok(choice)
+}
+
+/// Whether a filter that reads only the donor records keeps one of them.
+fn keeps<E>(
+    table: &dyn TableAccess<Error = E>,
+    filter: &RelationPredicate,
+    source_row: usize,
+) -> Result<bool, Box<ExecutionError<E>>> {
+    crate::dataset::execution::predicates::evaluate(filter.predicate(), table, source_row, &[])
+        .map(|truth| truth == crate::expression::Truth::True)
+        .map_err(|error| {
+            Box::new(ExecutionError::Predicate {
+                source_row,
+                error: *error,
+            })
+        })
 }

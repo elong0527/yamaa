@@ -12,11 +12,12 @@ use std::collections::BTreeMap;
 use crate::expression::SourceSpan;
 
 mod dataset;
-pub(crate) use dataset::lookup_key_type;
 pub use dataset::DatasetFinding;
 
+pub(crate) mod lookup;
+
 mod aggregate;
-pub use aggregate::{AggregateContextCause, AggregateEmptyKey, AggregateFinding};
+pub use aggregate::{AggregateContextCause, AggregateFinding};
 
 mod odm;
 pub use odm::{OdmDeclared, OdmFinding, OdmLocation};
@@ -150,8 +151,7 @@ conditions! {
     ApplicationUnsupported => ("planning", "unsupported_operation", None),
     ApplicationRejected => ("engine", "engine_rejected", None),
     DatasetMultipleValues => ("derivation", "multiple_values_per_key", Some("REQ-0075")),
-    DatasetUnmatchedKey => ("join", "unmatched_key", Some("REQ-0124")),
-    JoinUnmatchedKey => ("join", "unmatched_key", Some("LOOKUP-24")),
+    LookupUnmatchedKey => ("join", "unmatched_key", Some("LOOKUP-24")),
     DatasetMultipleMatches => ("join", "multiple_matches", Some("REQ-0127")),
     DatasetBaselineAmbiguity => ("derivation", "ambiguous_baseline", Some("REQ-0322")),
     DatasetReductionInputType => ("validation", "incompatible_input_type", Some("REQ-0510")),
@@ -310,9 +310,6 @@ conditions! {
     AggregateOutputGroups => ("validation", "invalid_aggregate_context", Some("REQ-0507")),
     AggregateOwnGroupKeys => ("validation", "invalid_aggregate_context", Some("REQ-0142")),
     AggregateMixedRelations => ("validation", "mixed_relations", Some("REQ-0504")),
-    AggregateKeyReference => ("validation", "unknown_field", Some("REQ-0141")),
-    AggregateKeyType => ("validation", "incompatible_input_type", Some("REQ-0004")),
-    AggregateMissingKeys => ("validation", "missing_aggregate_keys", Some("REQ-0140")),
     AggregateGroupNotOutputKey => ("validation", "invalid_aggregate_context", Some("REQ-0470")),
     SourceNonAscii => ("validation", "non_ascii_source", Some("REQ-0705")),
     SourceInvalidText => ("validation", "invalid_text", Some("REQ-0029")),
@@ -360,26 +357,16 @@ conditions! {
     IntermediateIdentifierCollision => ("validation", "duplicate_identifier", Some("REQ-0113")),
     IntermediateDatasetReference => ("validation", "unknown_field", Some("REQ-0079")),
     IntermediateRenameOnly => ("validation", "rename_only_intermediate", Some("REQ-1248")),
-    IntermediateAbsenceConflict => ("validation", "conflicting_absence_policy", Some("LOOKUP-13")),
-    IntermediateSelectionUnpaired => ("validation", "unpaired_fields", Some("REQ-0119")),
-    IntermediateEmptyKey => ("validation", "invalid_field_type", Some("REQ-0115")),
     IntermediateRepeatedKey => ("validation", "invalid_field_type", Some("REQ-0115")),
-    IntermediateNoApplicableKeys => ("validation", "no_applicable_keys", Some("REQ-0153")),
-    IntermediateRangeDeclaration => ("validation", "invalid_field_type", Some("REQ-1049")),
-    IntermediateRangeReference => ("validation", "unknown_field", Some("REQ-0121")),
-    IntermediateRangeTypes => ("validation", "incomparable_range_types", Some("REQ-0121")),
     IntermediateColumnReference => ("validation", "unknown_field", Some("REQ-0122")),
     RowDependencyPhaseBoundary => ("validation", "phase_boundary", Some("REQ-0069")),
     QualifiedNumericReference => ("validation", "qualified_identifier", Some("REQ-0442")),
     RowNumericSourceScope => ("validation", "unknown_field", Some("REQ-0410")),
     GroupedRowNumericSourceScope => ("validation", "unknown_field", Some("REQ-0411")),
-    ImplicitSourceKeyType => ("validation", "incompatible_input_type", Some("REQ-0151")),
-    ImplicitSourceNoApplicableKeys => ("validation", "no_applicable_keys", Some("REQ-0152")),
     SourceFilterReference => ("validation", "unknown_field", Some("REQ-0132")),
-    SourceSelectionUnpaired => ("validation", "unpaired_fields", Some("REQ-0119")),
     SourceFilterSingleValue => ("validation", "prohibited_construct", Some("REQ-0148")),
-    SourceAbsenceConflict => ("validation", "conflicting_absence_policy", Some("LOOKUP-24")),
     SourceRequireMatchScope => ("validation", "prohibited_construct", Some("LOOKUP-24")),
+    SourceRangeScope => ("validation", "prohibited_construct", Some("LOOKUP-9")),
     SourceUnknownReference => ("validation", "unknown_field", Some("REQ-0103")),
     VerificationUnknownReference => ("validation", "unknown_field", Some("REQ-0405")),
     OutputMissingKeyFailed => ("output", "missing_key", Some("REQ-0240")),
@@ -470,10 +457,19 @@ conditions! {
     WindowRepeatedGroup => ("validation", "invalid_field_type", Some("REQ-0293")),
     WindowBaselineInputType => ("validation", "incompatible_input_type", Some("REQ-0323")),
     LookupSelectionReference => ("validation", "unknown_field", Some("REQ-0120")),
-    LookupDonorKeyReference => ("validation", "unknown_field", Some("REQ-0116")),
-    LookupOutputKeyReference => ("validation", "unknown_field", Some("REQ-0117")),
     LookupValueReference => ("validation", "unknown_field", Some("REQ-0125")),
-    LookupKeyType => ("validation", "incompatible_input_type", Some("REQ-0323")),
+    // One cause per lookup fault, whichever kind of lookup raises it
+    // (LOOKUP-25): an implicit join, a named intermediate or an aggregate.
+    LookupEmptyKey => ("validation", "invalid_field_type", Some("LOOKUP-5")),
+    LookupNoApplicableKeys => ("validation", "no_applicable_keys", Some("LOOKUP-5")),
+    LookupDonorKeyReference => ("validation", "unknown_field", Some("LOOKUP-5")),
+    LookupMatchValueReference => ("validation", "unknown_field", Some("LOOKUP-5")),
+    LookupKeyType => ("validation", "incompatible_input_type", Some("LOOKUP-9")),
+    LookupRangeDeclaration => ("validation", "invalid_field_type", Some("LOOKUP-9")),
+    LookupRangeReference => ("validation", "unknown_field", Some("REQ-0121")),
+    LookupRangeTypes => ("validation", "incomparable_range_types", Some("REQ-0121")),
+    LookupSelectionUnpaired => ("validation", "unpaired_fields", Some("LOOKUP-10")),
+    LookupAbsenceConflict => ("validation", "conflicting_absence_policy", Some("LOOKUP-24")),
     FlagMissingValueRequired => ("validation", "missing_value_required", Some("REQ-1258")),
     PredicateUnknownField => ("validation", "unknown_field", Some("REQ-0189")),
     PredicateUnresolvableName => ("validation", "unresolvable_name", Some("REQ-0189")),

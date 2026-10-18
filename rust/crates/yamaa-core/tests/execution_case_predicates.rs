@@ -668,7 +668,6 @@ mod execution {
                 intermediate,
                 matched_key,
                 identity: Some(identity),
-                implicit_join: false,
             } = *attempt.result.unwrap_err()
             else {
                 panic!("native selected-record no-match condition")
@@ -2561,7 +2560,6 @@ mod execution {
                         intermediate: "I".into(),
                         matched_key: observed(),
                         identity: identity(),
-                        implicit_join: false,
                     },
                     ExecutionError::UnmatchedKey {
                         path: "columns.A.derivation.source".into(),
@@ -2569,7 +2567,6 @@ mod execution {
                         intermediate: "intermediate(DM)".into(),
                         matched_key: observed(),
                         identity: identity(),
-                        implicit_join: true,
                     },
                     ExecutionError::MultipleMatches {
                         path: "columns.A.source".into(),
@@ -2596,7 +2593,7 @@ mod execution {
                 ];
                 for (error, requirement) in faults.iter().zip([
                     "REQ-0075",
-                    "REQ-0124",
+                    "LOOKUP-24",
                     "LOOKUP-24",
                     "REQ-0127",
                     "REQ-0322",

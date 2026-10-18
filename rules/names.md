@@ -73,7 +73,7 @@ a field of an in-scope dataset. A field typed `variable` holds a qualified
 source variable or an unqualified constructed output column. The rule that owns
 a field may narrow the qualified variables it accepts: a `between` value
 qualified by an input dataset must name the current row's driver
-([LOOKUP-9](lookup.md#lookup-9), [LOOKUP-23](lookup.md#lookup-23)).
+([LOOKUP-9](lookup.md#lookup-9)).
 
 <a id="name-4"></a>
 
@@ -156,7 +156,9 @@ source:
 ```
 
 [Lookup and joins](lookup.md) defines the join uniqueness the
-selection relaxes and the record selection `filter` states.
+selection relaxes and the matched records `filter` narrows. `between` is not a
+handler either: it keeps the matched records whose bounds hold a value of the
+current row ([LOOKUP-9](lookup.md#lookup-9)).
 
 ## ODM item reads
 

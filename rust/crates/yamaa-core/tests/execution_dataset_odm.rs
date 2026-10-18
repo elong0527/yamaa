@@ -1220,7 +1220,8 @@ mod execution {
                         panic!("opaque")
                     };
                     assert_eq!(identifier, "TAB.V");
-                    assert_eq!(*donor.reads.borrow(), [(0, 1)]);
+                    // The record matches its key before the filter narrows it.
+                    assert_eq!(*donor.reads.borrow(), [(0, 0), (0, 1)]);
                     failure
                 } else {
                     let ExecutionError::SecondaryCell {
@@ -1262,7 +1263,7 @@ mod execution {
                 Assignment, DatasetPlan, Expression, Intermediate, IntermediateKey, MatchRead,
                 MatchValue, PlanError, RowMode, RowTemplate, SecondarySource, SourceSchemas,
             },
-            expression::{self, compile, Context},
+            expression::{compile, Context},
             table::{CellError, TableAccess, TableSchema, ValueRef},
             text_pad::StringPad,
             value::{ColumnType as T, Value},
@@ -1449,13 +1450,14 @@ mod execution {
                     [vec![Value::Int(1), Value::Int(7), Value::Int(7)]]
                 );
                 assert!(observed.handler_counts.is_empty());
+                // The record matches its padded key before the filter narrows it.
                 assert_eq!(
                     *trace.borrow(),
                     [
                         ("SRC", 0, 0),
                         ("SRC", 0, 1),
-                        ("TAB", 0, 3),
                         ("TAB", 0, 0),
+                        ("TAB", 0, 3),
                         ("TAB", 0, 1),
                         ("TAB", 0, 1)
                     ]
@@ -1494,14 +1496,17 @@ mod execution {
             assert!(tab.fail.borrow().is_some());
             assert!(observed.handler_counts.is_empty());
         }
+        /// An ordinary selector resolves its current match value before any
+        /// donor record is matched or narrowed, as an expression selector does
+        /// (LOOKUP-25).
         #[test]
-        fn ordinary_selector_keeps_filter_before_raw_dependency_and_its_opaque_payload() {
+        fn ordinary_selector_resolves_its_raw_dependency_before_the_filter_and_keeps_its_payload() {
             let (src, tab, trace) = tables(Value::Missing, T::Str, Value::Str("".into()));
-            *src.fail.borrow_mut() = Some((1, Failure(Box::new(9), Rc::new(()))));
-            let payload = Box::new(8);
+            let payload = Box::new(9);
             let address = &*payload as *const u8;
             let marker = Rc::new(());
-            *tab.fail.borrow_mut() = Some((3, Failure(payload, marker.clone())));
+            *src.fail.borrow_mut() = Some((1, Failure(payload, marker.clone())));
+            *tab.fail.borrow_mut() = Some((3, Failure(Box::new(8), Rc::new(()))));
             let mut selected = item(vec![key(MatchValue::Variable(read()))]);
             selected.filter = Some(filter().into());
             let observed = plan(&src, &tab, selected, T::Str).unwrap().execute(
@@ -1510,20 +1515,20 @@ mod execution {
                 &mut yamaa_core::function_invocation::NoFunctions::new(),
                 None,
             );
-            let ExecutionError::Predicate { error, .. } = *observed.result.unwrap_err() else {
-                panic!("original predicate port failure")
-            };
-            let expression::ErrorKind::Resolution {
+            let ExecutionError::Cell {
+                path,
+                source_row,
                 error: CellError::Access(Failure(retained, identity)),
-                ..
-            } = error.kind
+            } = *observed.result.unwrap_err()
             else {
-                panic!("original predicate payload")
+                panic!("original current dependency failure")
             };
             assert_eq!(&*retained as *const u8, address);
             assert!(Rc::ptr_eq(&identity, &marker));
-            assert_eq!(*trace.borrow(), [("SRC", 0, 0), ("TAB", 0, 3)]);
-            assert!(src.fail.borrow().is_some());
+            assert_eq!(path, "intermediates[0]");
+            assert_eq!(source_row, 0);
+            assert_eq!(*trace.borrow(), [("SRC", 0, 0), ("SRC", 0, 1)]);
+            assert!(tab.fail.borrow().is_some());
             assert!(observed.handler_counts.is_empty());
         }
         #[test]
@@ -1699,31 +1704,46 @@ mod execution {
             ));
             assert!(trace.borrow().is_empty());
         }
+        /// The padded match value is complete before any record is matched,
+        /// and the filter is asked only about a record that matched it.
         #[test]
-        fn donor_filter_completes_before_padding_evaluation_or_allocation_failure() {
-            let (src, mut tab, trace) = tables(
-                Value::Str("present".into()),
-                T::Str,
-                Value::Str("present".into()),
-            );
-            tab.rows[0][3] = Value::Str("bad".into());
-            let mut selected = item(vec![key(pad("1000000"))]);
-            selected.filter = Some(filter().into());
-            let observed = plan(&src, &tab, selected, T::Str).unwrap().execute(
-                &src,
-                &[&tab],
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                None,
-            );
-            assert!(matches!(
-                *observed.result.unwrap_err(),
-                ExecutionError::Predicate { .. }
-            ));
-            assert_eq!(
-                *trace.borrow(),
-                [("SRC", 0, 0), ("SRC", 0, 1), ("TAB", 0, 3)]
-            );
-            assert!(observed.handler_counts.is_empty());
+        fn padding_precedes_the_match_and_the_filter_narrows_only_a_matched_record() {
+            for (width, failed) in [("1000000", false), ("7", true)] {
+                let (src, mut tab, trace) = tables(
+                    Value::Str("present".into()),
+                    T::Str,
+                    Value::Str("present".into()),
+                );
+                tab.rows[0][3] = Value::Str("bad".into());
+                let mut selected = item(vec![key(pad(width))]);
+                selected.filter = Some(filter().into());
+                let observed = plan(&src, &tab, selected, T::Str).unwrap().execute(
+                    &src,
+                    &[&tab],
+                    &mut yamaa_core::function_invocation::NoFunctions::new(),
+                    None,
+                );
+                if failed {
+                    assert!(matches!(
+                        *observed.result.unwrap_err(),
+                        ExecutionError::Predicate { .. }
+                    ));
+                    assert_eq!(
+                        *trace.borrow(),
+                        [("SRC", 0, 0), ("SRC", 0, 1), ("TAB", 0, 0), ("TAB", 0, 3)]
+                    );
+                    assert!(observed.handler_counts.is_empty());
+                } else {
+                    assert_eq!(
+                        observed.result.unwrap().dataset.rows(),
+                        [vec![Value::Int(1), Value::Missing, Value::Missing]]
+                    );
+                    assert_eq!(
+                        *trace.borrow(),
+                        [("SRC", 0, 0), ("SRC", 0, 1), ("TAB", 0, 0)]
+                    );
+                }
+            }
         }
         #[test]
         fn donor_filter_keeps_only_true_in_written_order_before_match_count_and_value() {
@@ -1748,15 +1768,18 @@ mod execution {
                 observed.result.unwrap().dataset.rows(),
                 [vec![Value::Int(1), Value::Int(8), Value::Int(8)]]
             );
+            // Each record matches its key, then the filter narrows it.
             assert_eq!(
                 *trace.borrow(),
                 [
                     ("SRC", 0, 0),
                     ("SRC", 0, 1),
+                    ("TAB", 0, 0),
                     ("TAB", 0, 3),
+                    ("TAB", 1, 0),
                     ("TAB", 1, 3),
-                    ("TAB", 2, 3),
                     ("TAB", 2, 0),
+                    ("TAB", 2, 3),
                     ("TAB", 2, 1),
                     ("TAB", 2, 1)
                 ]

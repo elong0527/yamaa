@@ -2,119 +2,272 @@
 
 A derivation reads another relation through the implicit join of a
 dataset-qualified source, through a named intermediate declared in
-`intermediates`, or through an aggregate. Each matches declared or applicable
-keys, narrows the records, selects at most one record or reduces them, and
-answers absence.
+`intermediates`, or through a qualified aggregate. Each is one lookup
+([LOOKUP-25](#lookup-25)): it matches records on keys and an optional range,
+narrows them by a filter, selects one record or reduces them, and answers
+absence. The kinds of lookup differ only in the steps they declare.
 
-## The implicit join
+## The lookup model
 
-<a id="lookup-1"></a>
+<a id="lookup-25"></a>
 
-### LOOKUP-1. A dataset-qualified source reads through the implicit join on the applicable output keys
+### LOOKUP-25. Every lookup runs the same four steps, match, narrow, select and answer absence, whatever its kind
 
-A scalar source qualified by a dataset reads it through the implicit join: one
-value per current row, matching the current row's values of the applicable
-keys against the dataset's same-named columns. The applicable keys are the
-output `keys`, in output-key order, that the dataset also carries, and at
-least one is required. The match preserves the left row, and a row with no
-match gives missing by default, counted, or fails when the input declares
-`require_match: true` ([LOOKUP-24](#lookup-24)). The qualifier of the row
-template's driver is not a join.
+An implicit join, a named intermediate and a qualified aggregate are one
+lookup in four steps, run in order for each current row. Match keeps the
+records whose keys equal the row's match values and whose bounds, when
+declared, hold its range value ([LOOKUP-9](#lookup-9)). Narrow keeps the
+matched records its `filter` holds for ([LOOKUP-8](#lookup-8)). Select chooses
+one candidate, or an aggregate reduces them ([LOOKUP-10](#lookup-10)). With no
+candidate, absence is answered ([LOOKUP-24](#lookup-24)). Candidates keep
+stored record order. The kinds differ only in the steps they enable.
 
-Fails: `incompatible_input_type`, `no_applicable_keys`.
-Evidence: `schema-lookup`, `schema-source-binding`, `sdtm-sv-subject-visits`, `negative-input-require-match`.
-Replaces: REQ-0111, REQ-0150, REQ-0151, REQ-0152, REQ-1051, REQ-1052.
+Evidence: `schema-lookup-source-range`, `schema-lookup-filters`, `schema-aggregation`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`.
+
+| Step | Implicit join | Named intermediate | Qualified aggregate |
+| --- | --- | --- | --- |
+| Match keys | The applicable output keys ([LOOKUP-1](#lookup-1)) | `key`, or the applicable keys ([LOOKUP-5](#lookup-5)) | `key`, or the applicable keys |
+| Match range | `between` on a structured `source:` | `between` | `between` |
+| Narrow | `filter` on a structured `source:`, over the donor record | `filter`, which may also read the current row's driver | `filter`, over the donor record |
+| Select | `order_by` and `keep` | `order_by` and `keep` | The reduction of `expr` over every candidate ([LOOKUP-18](#lookup-18)) |
+| Answer absence | `absent`, missing by default, or `require_match` | `no_match`, missing by default, or `require_match` | Missing, uncounted ([FORMULA-24](formulas.md#formula-24)) |
+
+A step a lookup does not declare keeps every record: without `between` every
+record whose keys match is in range, and without `filter` every matched record
+is a candidate. Each step reads only what the step before kept, so a record is
+narrowed only after it matches, and selection or reduction sees only the
+narrowed records. A key value whose type cannot compare therefore fails even
+on a record the filter would remove ([LOOKUP-9](#lookup-9)), and a filter that
+would fail on a record no row matches is never asked about it
+([LOOKUP-8](#lookup-8)).
+
+The current row's match values and range value are evaluated before any
+record is read, so a failure there is reported before any record is matched
+or narrowed. A missing one seeks no record, and absence is answered.
+
+Each kind adds only what it needs. An implicit join infers its keys and
+declares no `key` ([LOOKUP-1](#lookup-1)). A named intermediate is read
+through its id, and every column reading it for a row shares one selection
+([LOOKUP-12](#lookup-12)). An aggregate reduces every candidate instead of
+selecting one, so it declares no `order_by` or `keep`. An unqualified
+aggregate and a grouped-row aggregate are not lookups: they reduce the
+constructed output rows of a partition or the current input group, which
+their `filter` narrows ([LOOKUP-8](#lookup-8)), and declare no `between`
+([LOOKUP-19](#lookup-19)).
+
+<a id="lookup-9"></a>
+
+### LOOKUP-9. Match keeps the records whose keys equal the current row's match values and whose bounds hold its range value
+
+Step one keeps each record whose every key column equals its paired match
+value and, with `between`, whose stated bounds hold the range value:
+`lower <= value` and `value <= upper`, both inclusive. Values compare exactly
+under [VALUE-19](values.md#value-19), with no operand converted, and a pair or
+bound whose types cannot compare fails. A missing match or range value seeks
+no record, and a record missing a key or a stated bound does not match.
+`between` names a current-row value and at least one bound field.
+
+Fails: `incompatible_input_type`, `incomparable_range_types`, `invalid_field_type`, `prohibited_construct`, `unknown_field`.
+Evidence: `negative-lookup-bad-range`, `negative-lookup-range-other-input`, `negative-aggregate-range-other-input`, `schema-lookup-source-range`, `schema-lookup-intermediate-range-driver`, `schema-aggregate-range-driver`, `sdtm-lb-lab-specific-ranges`, `adam-advs-window-table`, `adam-adtr-nadir`, `adam-adsl-new-therapy`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`.
+Replaces: REQ-0121, REQ-0128, REQ-0134, REQ-0330, REQ-0472, REQ-0473, REQ-0474,
+REQ-0509, REQ-1049.
+
+The key pairs are those of [LOOKUP-5](#lookup-5). Every pair is compared on
+every record offered, so a record value whose type cannot compare with its
+match value fails whatever the other pairs hold, even on a record the filter
+would remove. A pair whose declared types, or the result type of its match
+expression ([LOOKUP-6](#lookup-6)), cannot compare fails as
+`incompatible_input_type` before any record is read, reporting both types, for
+every kind of lookup; a type decided per value fails the same way when that
+value is compared. `int` and `float` compare exactly, and every other type
+must match exactly.
+
+`between` declares `value` and `lower`, `upper` or both, each bound a field of
+the lookup's relation: a stored field, or a name an intermediate derives
+([LOOKUP-15](#lookup-15)). An omitted bound leaves that side unbounded without
+excluding the stated endpoint. Every kind of lookup may declare it: a named
+intermediate, a qualified aggregate, and an implicit join through a structured
+`source:` binding or a filtered source ([LOOKUP-1](#lookup-1)). The range is
+compared only on the records whose keys match, and a record missing a stated
+bound is ineligible rather than open-ended. A missing range value seeks no
+record; it never widens the match to every record whose keys match.
 
 ```yaml
-input:
-  ADSL: {path: adsl.csv, require_match: true}
-columns:
-  - name: TRTSDTM
-    derivation: ADSL.TRTSDTM
+intermediates:
+  - id: REFRANGE
+    dataset: LBRANGE
+    key: [LBTESTCD, SEX]
+    between: {value: AGE, lower: AGELO, upper: AGEHI}
 ```
 
-The driver's qualifier reads the input or intermediate record that built the
-row. A `between` value is not a scalar source and never joins: it reads the
-current row alone ([LOOKUP-9](#lookup-9)). An inferred key must compare equal
-on both sides, and [VALUE-2](values.md#value-2) performs no implicit
-conversion: an applicable key whose left and right types are not mutually
-comparable fails as `incompatible_input_type`, reporting both types. With no
-applicable key the intended match is unclear, and the read fails as
-`no_applicable_keys`. The
-author then states the match with a named intermediate declaring its `key`
-([LOOKUP-5](#lookup-5)), the same explicit form that serves whenever the
-intended keys differ from the applicable keys.
+The value names what the current row holds: an output column, written bare; a
+field of the record of the row's driver, qualified by the driver; or a column
+a named intermediate selects for the row, qualified by its id. A value read
+from a driver's record must name the driver of every row that reads the
+lookup, wherever the lookup is read: in a row template, that template's driver
+([LOOKUP-2](#lookup-2)), and during column derivation, the driver of every row
+template the read can evaluate on. A value naming nothing the current row
+holds, such as a field of another input or of the lookup's own relation, fails
+as `unknown_field` at `between.value`, once per range, whichever kind of
+lookup declares it. Such a field is never read through the implicit join
+([LOOKUP-1](#lookup-1)); bring it onto the row as a column first, and name the
+column:
 
-A structured `source:` binding, or a filtered source that carries a variable
-with its filter, selection or absent value, keeps its `filter`, `order_by` and
-`keep` on the implicit join: the filter narrows the eligible records and the
-ordered selection chooses among the survivors exactly as an explicit lookup
-would ([LOOKUP-8](#lookup-8), [LOOKUP-10](#lookup-10)).
+```yaml
+columns:
+  - name: AGE
+    type: int
+    derivation: DM.AGE
+intermediates:
+  - id: REFRANGE
+    dataset: LBRANGE
+    key: [LBTESTCD]
+    between: {value: AGE, lower: AGELO, upper: AGEHI}
+```
 
-A qualified read that is not a source binding, such as an operation's
-variable operand or an identifier in a predicate, declares no absence handler
-and gives missing for a row with no match, counted at its path except in a
-predicate ([LOOKUP-24](#lookup-24)). `require_match: true` on the input covers
-every one of these reads.
+The value and every stated bound must be mutually comparable, with no operand
+converted. A value and a bound whose types cannot compare fail validation as
+`incomparable_range_types`, reporting the types of the value and the stated
+bounds; a type decided per value fails the same way when the record is
+compared. A derived bound has its derivation's declared or result type
+([LOOKUP-15](#lookup-15)).
 
-<a id="lookup-2"></a>
+A `between` with neither bound fails as `invalid_field_type`, and a bound
+naming no field of the relation as `unknown_field`. A source that reads the
+driver's own record, an output column or a named intermediate has no implicit
+join to narrow, and `between` there fails as `prohibited_construct` at the
+field. A `between` on an unqualified or grouped-row aggregate, which matches
+no relation, fails as `invalid_aggregate_context` ([LOOKUP-18](#lookup-18)).
 
-### LOOKUP-2. Row construction reads another dataset through the same join, using only row-phase values
+<a id="lookup-8"></a>
 
-During ungrouped row construction, a scalar source qualified with another
-input dataset joins that dataset on the applicable keys, each matching the
-same-named field of the row template's input record. During grouped row
-construction each applicable key instead matches the candidate's group-key
-value, and every applicable key must be a group key of the row template. A
-match value must be available in the row phase; one available only in a later
-phase fails.
+### LOOKUP-8. Narrow keeps the matched records for which the lookup's filter is TRUE
 
-Fails: `ungrouped_driver_field`, `unknown_field`, `phase_boundary`.
-Evidence: `rust/crates/yamaa-core/tests/relations_reference_scope.rs`, `adam-adlb-supplb-padded-key`.
-Replaces: REQ-0126, REQ-0156, REQ-0157.
+Step two asks a lookup's `filter` about each matched record, and only about
+matched records, keeping those for which it is `TRUE` in stored order. Its
+identifiers must name available fields in an admitted scope, or fail: the
+lookup's qualifier reads the donor record, and a named intermediate's filter
+may also read the current row's driver. An aggregate's filter narrows its own
+relation, whichever it reduces. A filter on a construct with no records to
+select among fails.
 
-In ungrouped row construction each retained input record builds one candidate
-row ([ROW-3](rows.md#row-3)). The input record's fields are
-the only single values the match can read; values produced only by column
-derivation are not available then. A named intermediate states the same match
-with declared `key` pairs, and its match values have the same availability:
-input-record fields or columns of the same row template. The join binds one
-value per row, and later derivations in the same row template read that value
-through the bound column. A row-phase `compute` still names no qualified
-cross-dataset identifier ([FORMULA-9](formulas.md#formula-9)).
+Fails: `unknown_field`, `prohibited_construct`.
+Evidence: `schema-lookup-filters`, `negative-source-missing-field`, `negative-source-trivial-filter`, `schema-aggregation`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`, `rust/crates/yamaa-adapters/tests/fixtures/row_reductions.json`.
+Replaces: REQ-0132, REQ-0133, REQ-0148, REQ-0471.
 
-In grouped row construction every applicable key must be a group key of the
-row template ([ROW-4](rows.md#row-4)). A key the group does not
-carry varies within the group and names no single match value, and fails as
-`ungrouped_driver_field` ([ROW-5](rows.md#row-5)). A key no
-input record carries fails as `unknown_field`
-([NAME-3](names.md#name-3)), in either mode.
+For an input dataset, `order_by` names qualified fields of that dataset only,
+`columns` lists bare field names, and every `filter` field is qualified. The
+current row's driver is root `base` (or the sole input) without explicit rows,
+or the enclosing `rows[].dataset` during row construction. During column
+derivation the qualifier must be the driver of every row template that the
+expression can evaluate on. The row driver may be an eligible named
+intermediate under [ROW-2](rows.md#row-2). Other datasets,
+intermediates that are not the current driver, and unqualified output names
+are not filter scopes. The filter of a structured source or a qualified
+aggregate reads the donor record only; correlated predicates are supported by
+named intermediates.
 
-During grouped row construction, every variable a lookup matches on must be
-derived by the row template that reads the lookup. The exceptions are the
-template's group keys and, for an ungrouped template, the driver record's own
-fields. [Column derivation](columns.md) orders row derivations
-before column derivation, and a match value available only in a later phase
-fails as `phase_boundary`.
+The current-driver references are dependencies of each lookup read and obey
+the existing phase and group-key rules: in a grouped template, the qualified
+field must be a group key. An unknown field fails as `unknown_field`, and when
+the bare field exists in the donor dataset the diagnostic suggests its
+qualified spelling. `order_by` remains donor-only even when `filter` is
+correlated. When driver and donor use the same dataset identifier, that
+qualifier always names the donor; declare a separate input identifier for the
+same resource when both sides need to be referenced explicitly.
+
+```yaml
+base: PLAN
+intermediates:
+  - id: PRIOR
+    dataset: OBS
+    key: [STUDYID, USUBJID, PARAMCD]
+    filter: >-
+      OBS.ANL01FL = 'Y' AND OBS.AVAL IS NOT NULL
+      AND OBS.AVISITN < PLAN.AVISITN
+    order_by: [OBS.AVISITN, OBS.QSSEQ]
+    keep: last
+```
+
+The key match finds the subject's records of the parameter, the comparison
+keeps those before the current visit, and ordered selection chooses one.
+`PRIOR.AVAL`, `PRIOR.ADT` and other reads share the chosen record, including
+its missing fields. The lookup generates no rows.
+
+`FALSE` and `UNKNOWN` exclude a candidate. A filter that reads only the donor
+record gives one answer for a record whichever row matched it, and that answer
+may be reused; a correlated result is never reused for another row. Normal
+predicate typing and missing-value rules apply without coercion. The filter is
+asked only about matched records, so a filter that would fail on a record no
+row matches never runs. A `filter` on a construct with no records to select
+among (an output column, a chosen lookup record, a group key) fails as
+`prohibited_construct`.
+
+An aggregate's `filter` narrows the relation it reduces: for a qualified
+aggregate, the right-side records its lookup matches; for an unqualified one,
+the constructed output rows of each `group_by` partition; and for a
+grouped-row aggregate, the records of the current input group.
+[FORMULA-4](formulas.md#formula-4) defines predicate evaluation, and filtering
+preserves the order of the retained records
+([FORMULA-19](formulas.md#formula-19)).
+
+<a id="lookup-10"></a>
+
+### LOOKUP-10. Select chooses the first or last candidate by order_by, and an aggregate reduces every candidate
+
+Step three chooses one of several candidates. `order_by` and `keep` are
+declared together or not at all; with them, `keep: first` chooses the
+candidate that sorts first and `keep: last` the one that sorts last, a tie
+going to the earlier stored record for `first` and the later for `last`. More
+than one candidate with nothing to choose by is an unhandled multiple match
+and fails. An aggregate declares no selection and reduces every candidate, in
+stored order.
+
+Fails: `unpaired_fields`, `multiple_matches`.
+Evidence: `negative-lookup-unordered`, `negative-lookup-empty-order`, `negative-lookup-unchosen`, `negative-source-duplicate-key`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`.
+Replaces: REQ-0119, REQ-0127, REQ-0135, REQ-0145.
+
+Declaring one of `order_by` and `keep` without the other fails as
+`unpaired_fields`, on a named intermediate and a source binding alike, and an
+unhandled multiple match fails as `multiple_matches`. An `order_by` that lists
+no term orders nothing: `keep` beside it fails as `unpaired_fields` the same
+way, reporting `order_by` missing. During grouped row
+construction it fails at the join phase, before any column is derived. A
+`keep` that chose among several candidates counts one `multiple_matches`
+handling ([COLUMN-14](columns.md#column-14)).
+
+The `order_by` terms sort under [VALUE-22](values.md#value-22) and name fields
+of the lookup's relation, in the scopes of [LOOKUP-8](#lookup-8). A lookup
+whose key is verified unique needs neither `order_by` nor `keep`
+([LOOKUP-17](#lookup-17)). An aggregate reduces its candidates in stored order
+([FORMULA-19](formulas.md#formula-19)).
 
 <a id="lookup-24"></a>
 
-### LOOKUP-24. An implicit join that finds no record answers with absent, missing by default, unless require_match fails it
+### LOOKUP-24. A lookup with no candidate answers absence, missing by default, unless require_match fails it
 
-When a read through an implicit join finds no record for a row, its filter
-included, or reads a missing key, it gives its `source` binding's `absent`
-value, or missing when none is declared, counted under `absent` at the read's
-path unless a predicate made the read. `require_match: true` on the binding or
-on the input instead fails the row as `unmatched_key`, unless the binding
-declares `absent`; a binding cannot declare both.
+A lookup with no candidate for a row, or with a missing match or range value,
+answers absence: an implicit join gives its `source` binding's `absent` value
+and a named intermediate its `no_match` value, either missing when undeclared
+and counted under that handler unless a predicate made the read.
+`require_match: true` on the binding or intermediate, or on an input for joins
+that declare no `absent`, instead fails the read as `unmatched_key`; one
+lookup cannot declare both. An aggregate's empty match yields missing
+([FORMULA-24](formulas.md#formula-24)).
 
 Fails: `unmatched_key`, `conflicting_absence_policy`, `prohibited_construct`.
-Evidence: `schema-lookup-absent-default`, `negative-source-require-match`, `negative-input-require-match`, `schema-handlers`, `rust/crates/yamaa-adapters/tests/execution_implicit_join_absence.rs`, `rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.json`.
+Evidence: `schema-lookup-absent-default`, `negative-source-require-match`, `negative-input-require-match`, `negative-lookup-unmatched-key`, `negative-lookup-missing-sex`, `negative-lookup-require-match-no-match`, `schema-handlers`, `adam-adae-death`, `rust/crates/yamaa-adapters/tests/execution_implicit_join_absence.rs`, `rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.json`.
+Replaces: REQ-0124, REQ-0129, REQ-0130, REQ-0131, REQ-0147.
 
 ```yaml
 input:
   ADSL: {path: adsl.csv, require_match: true}
   EX: ex.csv
+intermediates:
+  - id: REFRANGE
+    dataset: LBRANGE
+    key: [LBTESTCD, SEX]
+    require_match: true
 columns:
   - name: TRTSDT
     derivation:
@@ -136,31 +289,271 @@ rule ([EXPR-8](expressions.md#expr-8)). Counts follow
 [COLUMN-14](columns.md#column-14), and a declared `absent` is counted the same
 way as the default.
 
-A missing key value is incomplete, not unmatched: no record is sought, and the
-row is answered, or fails, the same way. A matched record whose value is
-missing is a collected blank, not an absent record, and is not answered.
-`absent` keeps answering a variable or ODM item that does not exist
-([COLUMN-11](columns.md#column-11)), and with several surviving records
-`order_by` and `keep` choose one first ([LOOKUP-10](#lookup-10)).
+A named intermediate with no candidate gives every column reading it its
+`no_match` literal, or missing when `no_match` is omitted, independently for
+each column read and counted under that column's `no_match` handler, declared
+or by default. One column's handling never answers for another.
+`no_match: {literal: null}` answers with missing, the same answer as an
+omitted `no_match`, and it keeps that meaning when an empty child inherits the
+specification. A YAML null declares no handler: written over an inherited
+`no_match` it clears the handler, and the read answers with missing again,
+under [LAYER-9](inheritance.md#layer-9).
+
+An aggregate declares no absence handler and no `require_match`. A row whose
+match leaves no candidate, or whose match or range value is missing, reduces
+an empty group, which yields missing under the empty-group rule of
+[FORMULA-24](formulas.md#formula-24); no handler counts it.
+
+A missing match or range value is incomplete, not unmatched: no record is
+sought, and the row is answered, or fails, the same way. A matched record
+whose value is missing is a collected blank, not an absent record, and is not
+answered. `absent` keeps answering a variable or ODM item that does not exist
+([COLUMN-11](columns.md#column-11)), and with several candidates `order_by`
+and `keep` choose one first ([LOOKUP-10](#lookup-10)).
 
 `require_match: true` asserts that every row the read is made for finds a
-record. On a binding it covers that binding. On an input,
-`input.<NAME>.require_match` covers every read through an implicit join to
-that input, the concise form, operands and predicate reads included, and it
-may be declared on an input no join reads. A binding's declared `absent`
-still answers its own reads, and a named intermediate over the input keeps
-its own absence policy ([LOOKUP-13](#lookup-13)). A row that finds no record
-fails as `unmatched_key` at the read's path, reporting the sought key values
-in the vocabulary of [LOOKUP-14](#lookup-14), and a read that requires a
-match counts nothing.
+record. On a binding it covers that binding, and on a named intermediate every
+read of it. On an input, `input.<NAME>.require_match` covers every read
+through an implicit join to that input, the concise form, operands and
+predicate reads included, and it may be declared on an input no join reads. A
+binding's declared `absent` still answers its own reads, and a named
+intermediate over the input keeps its own absence policy: `no_match`,
+`require_match` or neither. A row that finds no record fails as
+`unmatched_key` at the read's path, reporting the sought key values in the
+vocabulary of [LOOKUP-14](#lookup-14), and a read that requires a match counts
+nothing.
 
-`require_match: true` beside `absent` on one binding declares both that a row
-without a record is an error and what it gives, and fails validation as
-`conflicting_absence_policy` at the two fields. A source that reads the
-driver's own record, an output column or a named intermediate has no implicit
-join to require a match of, and `require_match` there fails as
-`prohibited_construct` at the field; a named intermediate declares its own
-([LOOKUP-13](#lookup-13)).
+`require_match: true` beside `absent` on one binding, or beside `no_match` on
+one intermediate, declares both that a row without a record is an error and
+what it gives, and fails validation as `conflicting_absence_policy` at the two
+fields: choose one, or add the condition that keeps the rows that must match.
+A source that reads the driver's own record, an output column or a named
+intermediate has no implicit join to require a match of, and `require_match`
+there fails as `prohibited_construct` at the field; a named intermediate
+declares its own.
+
+<a id="lookup-14"></a>
+
+### LOOKUP-14. Lookup handler counts, failures and reviews report the match in one vocabulary
+
+`key` and `intermediate_key` name the fields a lookup matched on and the values
+it matched them with, and `keys` names the output row a failure belongs to.
+An unmatched key and an unhandled multiple match report the match the same
+way, and `unmatched_key` carries the sought source values. Validation reports
+the source/key pairs of every lookup and implicit join: the match performed,
+the type each side declares, whether the pairs were inferred or declared, and
+the absence policy that answers a miss.
+
+Evidence: `negative-lookup-unmatched-key`, `rust/crates/yamaa-adapters/tests/fixtures/specs/lookup-failures.json`.
+Replaces: REQ-0139, REQ-0143, REQ-0144, REQ-0149.
+
+Neither failure renames the other's fields. Handler accounting follows
+[COLUMN-14](columns.md#column-14), whose counts are `handler` rows of the run
+report: a `keep` that chose among surviving
+records counts one `multiple_matches` handling, an absence an intermediate
+answers counts one `no_match` handling, declared or by default, and a record
+an implicit join does not find counts one `absent` handling at the read's path
+([LOOKUP-24](#lookup-24)). An `unmatched_key` from an implicit join names
+`intermediate(<dataset>)` as its intermediate, as an implicit join's multiple
+match does.
+
+## Keys
+
+<a id="lookup-5"></a>
+
+### LOOKUP-5. A key pairs each column of the lookup's relation with a current-row match value, and an omitted key is the applicable output keys
+
+`key` states the match as pairs, each a column of the lookup's relation and
+the current-row match value it must equal. A list of column names pairs each
+with the same-named current-row value; a mapping pairs each column, written as
+its key, with a variable or expression. An implicit join, and a named
+intermediate or qualified aggregate without `key`, pair the applicable output
+keys ([LOOKUP-1](#lookup-1)). A lookup names at least one pair, every column
+must exist, and every match value must read a known current-row value.
+
+Fails: `invalid_field_type`, `no_applicable_keys`, `unknown_field`, `invalid_aggregate_context`.
+Evidence: `negative-lookup-mismatched`, `negative-lookup-unknown-key`, `negative-lookup-repeated-key`, `negative-row-aggregate-keys`, `sdtm-lb-lab-specific-ranges`, `rust/crates/yamaa-adapters/tests/fixtures/intermediate_key_reference.json`, `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`.
+Replaces: REQ-0115, REQ-0116, REQ-0117, REQ-0118, REQ-0140, REQ-0141, REQ-0142,
+REQ-0305.
+
+```yaml
+intermediates:
+  - id: REFRANGE
+    dataset: LBRANGE
+    key: {TESTCD: LBTESTCD, SEX: SEX}
+```
+
+Here the current-row `LBTESTCD` matches the limit table's `TESTCD` column; the
+list `[TESTCD, SEX]` would have matched `TESTCD` against a current-row
+`TESTCD` that does not exist. A list of one column is still a list. A mapping
+may pair a column with the same-named value, and a match value may be an
+expression ([LOOKUP-6](#lookup-6)). Pair order does not change the result.
+
+The applicable keys are the output `keys`, in output-key order, that the
+lookup's relation also carries, each paired with the current row's same-named
+value. An implicit join always matches them. A named intermediate or a
+qualified aggregate matches them when it omits `key`, and states `key` only
+when the intended match differs. With no applicable key the intended match is
+unclear, and the lookup fails as `no_applicable_keys`, reporting the dataset
+and the output keys with a hint: declare the `key` explicitly, or, for an
+implicit join, read the dataset through a named intermediate that declares
+it.
+
+A written `key` names at least one pair. An empty list or mapping names no
+match and fails as `invalid_field_type`, on a named intermediate and an
+aggregate alike. A named intermediate's list names each column once; a column
+listed again fails as `invalid_field_type` at that entry, reporting the
+column.
+
+A `key` column the lookup's relation does not have fails as `unknown_field`.
+Every match value must read a known current-row value: a variable must name
+one, and every identifier an expression reads must be one, or the match fails
+as `unknown_field`. `SELF` names donor rows and is never a current-row scope,
+so a match value written `SELF.field` names no current-row value and fails the
+same way; when the current row carries `field`, the diagnostic suggests that
+bare name.
+
+Each pair compares its match value with its column in the match step
+([LOOKUP-9](#lookup-9)): the two types must be mutually comparable under
+[VALUE-19](values.md#value-19), with no operand converted, or the pair fails
+as `incompatible_input_type` under [VALUE-2](values.md#value-2).
+[INPUT-5](inputs.md#input-5) gives an undeclared field of a typeless container
+the type `str`; a key typed on one side and defaulted on the other needs
+repair, not a wider comparison.
+
+A grouped-row aggregate reads its own input group and declares no key pairs:
+the group is the match, and a `key` there fails as `invalid_aggregate_context`
+([LOOKUP-19](#lookup-19)).
+
+<a id="lookup-6"></a>
+
+### LOOKUP-6. A key match value may be an expression whose static result type is checked before matching
+
+A match value in a `key` mapping may be an expression instead of a variable.
+It is evaluated against the current row, its value is the match operand for
+that position, and a missing result matches nothing, as a missing variable
+does. The pair's comparison ([LOOKUP-9](#lookup-9)) uses the expression's
+result type ([EXPR-14](expressions.md#expr-14)) before any record is matched;
+a result type decided per value is compared when each value is matched.
+
+Evidence: `adam-adlb-supplb-padded-key`, `adam-adlb-end-of-treatment`, `rust/crates/yamaa-core/tests/relations_aggregate_compiler.rs::key_expressions_compare_by_their_one_result_type_before_matching`.
+Replaces: REQ-1259.
+
+The result type is the expression's ordinary non-missing result: a local
+`missing`, `invalid` or `no_match` replacement takes no part, and a non-missing
+replacement is compared when it is used as a match operand. A pair fails
+before matching only when none of the types the result can take compares with
+the key column's type under [VALUE-19](values.md#value-19), and the failure
+names that result type. `N + 1` over an `int` `N` is an `int`, a `mapping` to
+integer values an `int`, and `greatest` over an `int` and a `float` a number of
+either type, which compares with a numeric key column and with no text one.
+`{literal: null}` is always missing and compares with every column. The same
+holds for a named intermediate's and an aggregate's `key` alike.
+
+## The implicit join
+
+<a id="lookup-1"></a>
+
+### LOOKUP-1. A dataset-qualified source reads through the implicit join on the applicable output keys
+
+A scalar source qualified by a dataset reads it through the implicit join, a
+lookup whose key pairs are the applicable keys: the output `keys`, in
+output-key order, that the dataset also carries, each matched against the
+current row's same-named value. A structured `source:` binding adds its
+`between`, `filter`, `order_by`, `keep`, `absent` and `require_match` to the
+join ([LOOKUP-25](#lookup-25)). The join gives one value per current row and
+preserves the row. The qualifier of the row template's driver is not a join.
+
+Evidence: `schema-lookup`, `schema-source-binding`, `schema-lookup-source-range`, `sdtm-sv-subject-visits`, `negative-input-require-match`.
+Replaces: REQ-0111, REQ-0150, REQ-0151, REQ-0152, REQ-1051, REQ-1052.
+
+```yaml
+input:
+  ADSL: {path: adsl.csv, require_match: true}
+  PERIODS: periods.csv
+columns:
+  - name: TRTSDTM
+    derivation: ADSL.TRTSDTM
+  - name: APERIOD
+    derivation:
+      source:
+        variable: PERIODS.APERIOD
+        between: {value: ASTDT, lower: APERSDT, upper: APEREDT}
+```
+
+The driver's qualifier reads the input or intermediate record that built the
+row. A `between` value is not a scalar source and never joins: it reads the
+current row alone ([LOOKUP-9](#lookup-9)). An applicable key compares its two
+sides as the match step does, and
+[VALUE-2](values.md#value-2) performs no implicit conversion: a key whose left
+and right types are not mutually comparable fails as `incompatible_input_type`,
+reporting both types ([LOOKUP-9](#lookup-9)). With no applicable key the
+intended match is unclear, and the read fails as `no_applicable_keys`
+([LOOKUP-5](#lookup-5)). The author then states the match with a named
+intermediate declaring its `key`, the same explicit form that serves whenever
+the intended keys differ from the applicable keys.
+
+A structured `source:` binding, or a filtered source that carries a variable
+with its range, filter, selection or absent value, keeps them on the implicit
+join exactly as a named intermediate would: `between` keeps the matched
+records whose bounds hold the current row's value ([LOOKUP-9](#lookup-9)), the
+filter narrows them ([LOOKUP-8](#lookup-8)), and the ordered selection chooses
+among the survivors ([LOOKUP-10](#lookup-10)). Above, each row takes the
+period whose first and last days hold its own `ASTDT`, an output column; in a
+row template the value may instead read the template's driver record
+([LOOKUP-2](#lookup-2)).
+
+A qualified read that is not a source binding, such as an operation's
+variable operand or an identifier in a predicate, declares no absence handler
+and gives missing for a row with no match, counted at its path except in a
+predicate ([LOOKUP-24](#lookup-24)). `require_match: true` on the input covers
+every one of these reads.
+
+<a id="lookup-2"></a>
+
+### LOOKUP-2. Row construction reads another dataset through the same join, using only row-phase values
+
+During ungrouped row construction, a scalar source qualified with another
+input dataset joins that dataset on the applicable keys, each matching the
+same-named field of the row template's input record. During grouped row
+construction each applicable key instead matches the candidate's group-key
+value, and every applicable key must be a group key of the row template. A
+match value must be available in the row phase; one available only in a later
+phase fails.
+
+Fails: `ungrouped_driver_field`, `unknown_field`, `phase_boundary`.
+Evidence: `rust/crates/yamaa-core/tests/relations_reference_scope.rs`, `adam-adlb-supplb-padded-key`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`.
+Replaces: REQ-0126, REQ-0156, REQ-0157.
+
+In ungrouped row construction each retained input record builds one candidate
+row ([ROW-3](rows.md#row-3)). The input record's fields are
+the only single values the match can read; values produced only by column
+derivation are not available then. A named intermediate states the same match
+with declared `key` pairs, and its match values have the same availability:
+input-record fields or columns of the same row template. The join binds one
+value per row, and later derivations in the same row template read that value
+through the bound column. A row-phase `compute` still names no qualified
+cross-dataset identifier ([FORMULA-9](formulas.md#formula-9)).
+
+In grouped row construction every applicable key must be a group key of the
+row template ([ROW-4](rows.md#row-4)). A key the group does not
+carry varies within the group and names no single match value, and fails as
+`ungrouped_driver_field` ([ROW-5](rows.md#row-5)). A key no
+input record carries fails as `unknown_field`
+([NAME-3](names.md#name-3)), in either mode.
+
+A `between` value has the same availability as a match value
+([LOOKUP-9](#lookup-9)): during ungrouped row construction it reads a field of
+the template's driver record, qualified by the driver, or a column the same
+template derives; during grouped row construction a driver field it reads must
+be a group key of the template, or it fails as `ungrouped_driver_field`.
+
+During grouped row construction, every variable a lookup matches on must be
+derived by the row template that reads the lookup. The exceptions are the
+template's group keys and, for an ungrouped template, the driver record's own
+fields. [Column derivation](columns.md) orders row derivations
+before column derivation, and a match value available only in a later phase
+fails as `phase_boundary`.
 
 ## Named intermediates
 
@@ -171,25 +564,24 @@ join to require a match of, and `require_match` there fails as
 An entry of `intermediates` declares `id` and `dataset`, the relation it
 reads; `key` is optional. Its `id` shares one naming list with dataset
 identifiers, other lookup ids and the output `domain`, and a collision fails.
-An omitted `key` is the applicable keys of [LOOKUP-1](#lookup-1), as it is for
-a qualified aggregate, and with no applicable key the read fails. A `key` is
-stated only when the intended match differs from that inferred match.
+An omitted `key` is the applicable keys ([LOOKUP-5](#lookup-5)), and a `key`
+is stated only when the intended match differs from that inferred match.
 
-Fails: `duplicate_identifier`, `missing_required_field`, `no_applicable_keys`.
+Fails: `duplicate_identifier`, `missing_required_field`.
 Evidence: `negative-lookup-id-collision`, `negative-lookup-unknown-key`, `schema-lookup`.
 Replaces: REQ-0112, REQ-0113, REQ-0114, REQ-0153, REQ-1048, REQ-1050.
 
 For a named intermediate, `dataset: SELF` instead reads the specification's
 completed derived rows ([LOOKUP-7](#lookup-7)). The current row is the output
-row, or grouped-row candidate, the match runs for. The match fields are the
+row, or grouped-row candidate, the lookup runs for. The match fields are the
 `key` columns, the match values are what the current row supplies for them
-([LOOKUP-5](#lookup-5)), and the eligible records are the dataset records
-surviving `filter`.
+([LOOKUP-5](#lookup-5)), and the candidates are the matched records that
+survive `filter` ([LOOKUP-25](#lookup-25)).
 
 An `id` collision fails as `duplicate_identifier`. The schema requires `id`
 and `dataset`: omitting either fails as `missing_required_field` with no
 requirement attached. An omitted `key` with no applicable key fails as
-`no_applicable_keys`.
+`no_applicable_keys` ([LOOKUP-5](#lookup-5)).
 
 ```yaml
 intermediates:
@@ -237,7 +629,7 @@ intermediates:
 ```
 
 Without `no_match` the intermediate answers a row without a record with
-missing as well ([LOOKUP-13](#lookup-13)), so omitting the line changes
+missing as well ([LOOKUP-24](#lookup-24)), so omitting the line changes
 nothing. Asserting a match is a change the implicit join cannot state:
 `require_match: true` makes the same declaration valid.
 
@@ -256,81 +648,6 @@ intermediates:
 An implicit join to `CODING` also needs matching output-key types. When the
 output's `CMSEQ` is numeric but `CODING.CMSEQ` is stored as text, declare
 `CODING.CMSEQ` as `int` on input before reading `CODING.DRUG_RECORD_NO`.
-
-<a id="lookup-5"></a>
-
-### LOOKUP-5. A key pairs each lookup column with a comparable current-row match value
-
-`key` states the match as pairs, each a column of the lookup's dataset and the
-current-row match value it must equal. A list of column names, even of one
-column, pairs each column with the same-named current-row value; a mapping
-pairs each column, written as the mapping key, with a variable or expression
-written beside it. Pair order does not change the result. Every column must
-exist, every match value must read a known current-row value, and each pair
-must be mutually comparable, with no operand converted.
-
-Fails: `invalid_field_type`, `missing_aggregate_keys`, `unknown_field`, `incompatible_input_type`.
-Evidence: `negative-lookup-mismatched`, `negative-lookup-repeated-key`, `sdtm-lb-lab-specific-ranges`, `rust/crates/yamaa-adapters/tests/fixtures/intermediate_key_reference.json`.
-Replaces: REQ-0115, REQ-0116, REQ-0117, REQ-0118, REQ-0305.
-
-```yaml
-intermediates:
-  - id: REFRANGE
-    dataset: LBRANGE
-    key: {TESTCD: LBTESTCD, SEX: SEX}
-```
-
-Here the current-row `LBTESTCD` matches the limit table's `TESTCD` column; the
-list `[TESTCD, SEX]` would have matched `TESTCD` against a current-row
-`TESTCD` that does not exist. A mapping may pair a column with the same-named
-value, and a match value may be an expression ([LOOKUP-6](#lookup-6)).
-
-A written `key` names at least one pair. An empty list or mapping names no
-match: a lookup fails as `invalid_field_type`, and an aggregate fails as
-`missing_aggregate_keys` ([LOOKUP-21](#lookup-21)). A lookup's list names each
-column once; a column listed again fails as `invalid_field_type` at that entry,
-reporting the column.
-
-A `key` column the lookup's dataset does not have fails as `unknown_field`.
-Every match value must read a known current-row value: a variable must name
-one, and every identifier an expression reads must be one, or the match fails
-as `unknown_field`. `SELF` names donor rows and is never a current-row scope,
-so a match value written `SELF.field` names no current-row value and fails the
-same way; when the current row carries `field`, the diagnostic suggests that
-bare name.
-
-Each pair must be mutually comparable under
-[VALUE-19](values.md#value-19): an intermediate's `key` requires each
-match value and its paired key column to have the same comparable type. The
-match converts no operand. A pair that cannot compare fails as
-`incompatible_input_type` under [VALUE-2](values.md#value-2),
-reporting both declared types. [INPUT-5](inputs.md#input-5) gives
-an undeclared field of a typeless container the type `str`; a key typed on one
-side and defaulted on the other needs repair, not a wider comparison.
-
-<a id="lookup-6"></a>
-
-### LOOKUP-6. A key match value may be an expression whose static result type is checked before matching
-
-A match value in a `key` mapping may be an expression instead of a variable.
-It is evaluated against the current row, its value is the match operand for
-that position, and a missing result matches nothing, as a missing variable
-does. The pair's comparison ([LOOKUP-5](#lookup-5)) uses the expression's
-result type ([EXPR-14](expressions.md#expr-14)) before any record is matched;
-a result type decided per value is compared when each value is matched.
-
-Evidence: `adam-adlb-supplb-padded-key`, `adam-adlb-end-of-treatment`, `rust/crates/yamaa-core/tests/relations_aggregate_compiler.rs::key_expressions_compare_by_their_one_result_type_before_matching`.
-Replaces: REQ-1259.
-
-The result type is the expression's ordinary non-missing result: a local
-`missing`, `invalid` or `no_match` replacement takes no part, and a non-missing
-replacement is compared when it is used as a match operand. A pair fails
-before matching only when none of the types the result can take compares with
-the key column's type under [VALUE-19](values.md#value-19), and the failure
-names that result type. `N + 1` over an `int` `N` is an `int`, a `mapping` to
-integer values an `int`, and `greatest` over an `int` and a `float` a number of
-either type, which compares with a numeric key column and with no text one.
-`{literal: null}` is always missing and compares with every column.
 
 <a id="lookup-7"></a>
 
@@ -389,140 +706,6 @@ rows:
       COVERED: COVER.VSSEQ
 ```
 
-<a id="lookup-8"></a>
-
-### LOOKUP-8. A lookup filter reads donor records and may correlate with the current row's driver
-
-A lookup `filter` identifier must name an available field in an admitted scope,
-or fail. The lookup's own qualifier reads a candidate donor record, and a
-different qualifier may read the current row's driver. A donor-only filter
-selects eligible records once per run; a filter referencing the current driver
-is evaluated for each current row against the equality-matched donor records,
-before range narrowing and ordered selection, and keeps a candidate only when
-the predicate is `TRUE`. A filter on a construct with no records to select
-among fails.
-
-Fails: `unknown_field`, `prohibited_construct`.
-Evidence: `schema-lookup-filters`, `negative-source-missing-field`, `negative-source-trivial-filter`.
-Replaces: REQ-0132, REQ-0133, REQ-0148.
-
-For an input dataset, `order_by` names qualified fields of that dataset only,
-`columns` lists bare field names, and every `filter` field is qualified. The
-current row's driver is root `base` (or the sole input) without explicit rows,
-or the enclosing `rows[].dataset` during row construction. During column
-derivation the qualifier must be the driver of every row template that the
-expression can evaluate on. The row driver may be an eligible named
-intermediate under [ROW-2](rows.md#row-2). Other datasets,
-intermediates that are not the current driver, and unqualified output names
-are not filter scopes. A filtered scalar source remains donor-only; correlated
-predicates are supported by named intermediates.
-
-The current-driver references are dependencies of each lookup read and obey
-the existing phase and group-key rules: in a grouped template, the qualified
-field must be a group key. An unknown field fails as `unknown_field`, and when
-the bare field exists in the donor dataset the diagnostic suggests its
-qualified spelling. `order_by` remains donor-only even when `filter` is
-correlated. When driver and donor use the same dataset identifier, that
-qualifier always names the donor; declare a separate input identifier for the
-same resource when both sides need to be referenced explicitly.
-
-```yaml
-base: PLAN
-intermediates:
-  - id: PRIOR
-    dataset: OBS
-    key: [STUDYID, USUBJID, PARAMCD]
-    filter: >-
-      OBS.ANL01FL = 'Y' AND OBS.AVAL IS NOT NULL
-      AND OBS.AVISITN < PLAN.AVISITN
-    order_by: [OBS.AVISITN, OBS.QSSEQ]
-    keep: last
-```
-
-The comparison restricts eligible donors, and ordered selection chooses one.
-`PRIOR.AVAL`, `PRIOR.ADT` and other reads share the chosen record, including
-its missing fields. The lookup generates no rows.
-
-`FALSE` and `UNKNOWN` exclude a candidate. The donor dataset and equality
-index may be cached, but a correlated eligibility result is never reused for
-another row. Normal predicate typing and missing-value rules apply without
-coercion. A `filter` on a construct with no records to select among (an output
-column, a chosen lookup record, a group key) fails as `prohibited_construct`.
-
-## Matching and selection
-
-<a id="lookup-9"></a>
-
-### LOOKUP-9. Eligible records match every key pair by equality and then narrow to the between range
-
-Records surviving `filter` match by equality on every source/key pair, then
-narrow by `between`: a record is kept when `lower <= value` and
-`value <= upper`. A `between` names one current-row `value` and at least one
-of `lower` and `upper`, each a field of the donor record; an omitted bound
-leaves that side unbounded. Both endpoints are inclusive, and a record missing
-a stated bound is ineligible rather than open-ended.
-
-Fails: `unknown_field`, `incomparable_range_types`.
-Evidence: `negative-lookup-bad-range`, `negative-lookup-range-other-input`, `schema-lookup-intermediate-range-driver`, `sdtm-lb-lab-specific-ranges`, `adam-advs-window-table`.
-Replaces: REQ-0121, REQ-0128, REQ-0134, REQ-1049.
-
-Bounds are bare donor-record field identifiers: stored fields or names the
-intermediate derives ([LOOKUP-15](#lookup-15)). A `between` with neither bound
-fails validation. A bound naming a field the augmented donor record does not
-have, or a `value` that is not a known variable, fails as `unknown_field`.
-
-The value and every stated bound must be mutually comparable: `int` and
-`float` compare exactly under [VALUE-19](values.md#value-19), and every
-other runtime type must match exactly, with no operand converted. A mismatch
-fails as `incomparable_range_types` before any record is compared, reporting
-the runtime types of the value and the stated bounds. A derived bound has its
-derivation's declared or result type ([LOOKUP-15](#lookup-15)).
-
-A `value` qualified by an input dataset reads the record of the current row's
-driver ([NAME-4](names.md#name-4)), in the scope of a correlated `filter`
-field ([LOOKUP-8](#lookup-8)). That input must drive every row that reads the
-intermediate; during column derivation, every row template the read can
-evaluate on. A read in another intermediate's `derivations` takes the value
-from the reading intermediate's donor record instead
-([LOOKUP-16](#lookup-16)). For a row that another input dataset drives, the
-value names no current-row value and is never read through the implicit join
-([LOOKUP-1](#lookup-1)). It fails as `unknown_field`, also when the row reads
-the intermediate through another intermediate's `between.value` or an
-aggregate's `derive` step. Bring such a value onto the row as a column first,
-and name the column:
-
-```yaml
-columns:
-  - name: AGE
-    type: int
-    derivation: DM.AGE
-intermediates:
-  - id: REFRANGE
-    dataset: LBRANGE
-    key: [LBTESTCD]
-    between: {value: AGE, lower: AGELO, upper: AGEHI}
-```
-
-<a id="lookup-10"></a>
-
-### LOOKUP-10. Several surviving records need order_by and keep, which choose the first or last
-
-`order_by` and `keep` are declared together or not at all. With them, the
-ordered first or last surviving record is chosen, and remaining ties break by
-record order. More than one surviving record with no `order_by` and `keep` to
-choose by is an unhandled multiple match and fails. During grouped row
-construction it fails at the join phase, before any column is derived.
-
-Fails: `unpaired_fields`, `multiple_matches`.
-Evidence: `negative-lookup-unordered`, `negative-lookup-empty-order`, `negative-lookup-unchosen`, `negative-source-duplicate-key`.
-Replaces: REQ-0119, REQ-0127, REQ-0135, REQ-0145.
-
-Declaring one of `order_by` and `keep` without the other fails as
-`unpaired_fields`, and an unhandled multiple match fails as
-`multiple_matches`. An `order_by` that lists no term orders nothing: `keep`
-beside it fails as `unpaired_fields` the same way, reporting `order_by`
-missing.
-
 <a id="lookup-11"></a>
 
 ### LOOKUP-11. A lookup-qualified variable reads a column of the selected record
@@ -561,72 +744,6 @@ dataset. An intermediate declaring `require_match: true` never fails as
 its donor pool after each completed row template and invalidates its cached
 selection index at that boundary.
 
-<a id="lookup-13"></a>
-
-### LOOKUP-13. An intermediate that selects nothing answers with no_match, missing by default, unless require_match fails it as unmatched_key
-
-An intermediate that yields nothing gives every column reading it its
-`no_match` literal, or missing when `no_match` is omitted, independently for
-each column read and counted under `no_match`. `require_match: true` instead
-fails the read as `unmatched_key`, and declaring it beside `no_match` fails
-validation. A missing match value is incomplete, not unmatched: it yields
-nothing before any record is sought and is answered the same way. A selected
-record whose value is missing is a collected blank, not an absent record, and
-is not answered.
-
-Fails: `unmatched_key`, `conflicting_absence_policy`.
-Evidence: `negative-lookup-unmatched-key`, `negative-lookup-missing-sex`, `negative-lookup-require-match-no-match`, `schema-lookup-absent-default`, `adam-adae-death`.
-Replaces: REQ-0124, REQ-0129, REQ-0130, REQ-0131, REQ-0147.
-
-`no_match`, `require_match` or neither is the intermediate's absence policy,
-and an input's `require_match`, which covers that input's implicit joins
-([LOOKUP-24](#lookup-24)), does not change it. The failure is
-`unmatched_key`, reporting the source values and the key columns it sought.
-One column's handling never answers for another.
-`no_match: {literal: null}` answers with missing, the same answer as an
-omitted `no_match`, and it keeps that meaning when an empty child inherits the
-specification. A YAML null declares no handler: written over an inherited
-`no_match` it clears the handler, and the read answers with missing again,
-under [LAYER-9](inheritance.md#layer-9). `require_match: true` beside
-`no_match` declares both that a row without a record is an error and what it
-gives, and fails as `conflicting_absence_policy` at the two fields: choose one,
-or add the condition that keeps the rows that must match. The answer is
-recorded under the `no_match` handler of [Column derivation](columns.md),
-declared or by default ([COLUMN-14](columns.md#column-14)).
-
-```yaml
-intermediates:
-  - id: REFRANGE
-    dataset: LBRANGE
-    key: [LBTESTCD, SEX]
-    require_match: true
-```
-
-<a id="lookup-14"></a>
-
-### LOOKUP-14. Lookup handler counts, failures and reviews report the match in one vocabulary
-
-`key` and `intermediate_key` name the fields a lookup matched on and the values
-it matched them with, and `keys` names the output row a failure belongs to.
-An unmatched key and an unhandled multiple match report the match the same
-way, and `unmatched_key` carries the sought source values. Validation reports
-the source/key pairs of every lookup and implicit join: the match performed,
-the type each side declares, whether the pairs were inferred or declared, and
-the absence policy that answers a miss.
-
-Evidence: `negative-lookup-unmatched-key`, `rust/crates/yamaa-adapters/tests/fixtures/specs/lookup-failures.json`.
-Replaces: REQ-0139, REQ-0143, REQ-0144, REQ-0149.
-
-Neither failure renames the other's fields. Handler accounting follows
-[COLUMN-14](columns.md#column-14), whose counts are `handler` rows of the run
-report: a `keep` that chose among surviving
-records counts one `multiple_matches` handling, an absence an intermediate
-answers counts one `no_match` handling, declared or by default, and a record
-an implicit join does not find counts one `absent` handling at the read's path
-([LOOKUP-24](#lookup-24)). An `unmatched_key` from an implicit join names
-`intermediate(<dataset>)` as its intermediate, as an implicit join's multiple
-match does.
-
 ## Intermediate derivations
 
 <a id="lookup-15"></a>
@@ -640,7 +757,7 @@ declared before each one. A typed entry converts each result to its declared
 type before anything later reads it, and an untyped entry keeps its raw
 result, its field taking the expression's result type
 ([EXPR-14](expressions.md#expr-14)). The derived values augment each donor
-record before `filter`, matching, `order_by` selection and `columns`
+record before matching, `filter`, `order_by` selection and `columns`
 projection, and behave there like stored fields.
 
 Fails: `unknown_field`, `duplicate_derivation`.
@@ -737,7 +854,7 @@ intermediates:
 
 The `filter` drops every `SRC` record whose distance is missing. When the
 current input record's reference is missing, every distance is missing, no
-candidate survives, and the read takes `no_match` ([LOOKUP-13](#lookup-13)).
+candidate survives, and the read takes `no_match` ([LOOKUP-24](#lookup-24)).
 
 To fall back to a candidate instead, leave the filter out and place missing
 distances last. Without `nulls`, a missing distance sorts first under `asc`
@@ -795,8 +912,9 @@ through that intermediate's id. The read runs the other intermediate's match
 for the donor record being augmented, not for an output row: every match
 value, `between` value and correlated `filter` field the match reads comes from
 that donor record, written bare or qualified by the reading intermediate's
-dataset. Filtering, matching, range narrowing, ordered selection and the
-absence policy apply as for any other read, once per donor record.
+dataset. Matching, range narrowing, filtering, ordered selection and the
+absence policy apply as for any other read ([LOOKUP-25](#lookup-25)), once per
+donor record.
 
 Fails: `unknown_field`, `phase_boundary`, `dependency_cycle`.
 Evidence: `adam-adlb-end-of-treatment`, `adam-adsl-crossover-sequence`, `rust/crates/yamaa-adapters/tests/execution_aggregate_record_operations.rs`.
@@ -919,11 +1037,12 @@ reducer expression and a predicate resolve each name the same way. An
 aggregate reduces records from one relation, returns one value per group, and
 never changes the row count.
 
-- **Qualified.** During column derivation the expression reduces the right
-  side before the join of [LOOKUP-21](#lookup-21), even when the expression
-  qualifier equals the current row template's input dataset. A scalar source
-  qualified to that input dataset reads one record; the aggregate keyword makes
-  the same qualifier relational.
+- **Qualified.** During column derivation the expression reduces the
+  candidates of its lookup: the right-side records its key pairs and range
+  match and its filter keeps ([LOOKUP-25](#lookup-25)), even when the
+  expression qualifier equals the current row template's input dataset. A
+  scalar source qualified to that input dataset reads one record; the
+  aggregate keyword makes the same qualifier relational.
 - **Unqualified.** The expression reduces constructed output rows within its
   `group_by` partition and broadcasts the result to every row in the
   partition.
@@ -945,9 +1064,9 @@ never an ODM item by its `ItemOID`, and a qualified name that names an ODM item
 fails. ODM item identifiers carry further periods; read the item into a column
 with [`odm`](names.md#name-7) first.
 
-The context decides what `group_by` ([LOOKUP-19](#lookup-19)), `filter`
-([LOOKUP-20](#lookup-20)), `key` ([LOOKUP-21](#lookup-21)), `derive`
-([LOOKUP-22](#lookup-22)) and `between` ([LOOKUP-23](#lookup-23)) range over;
+The context decides what `group_by` ([LOOKUP-19](#lookup-19)), `key`
+([LOOKUP-5](#lookup-5)), `between` ([LOOKUP-9](#lookup-9)), `filter`
+([LOOKUP-8](#lookup-8)) and `derive` ([LOOKUP-22](#lookup-22)) range over;
 `expr` is the reducer expression of [FORMULA-17](formulas.md#formula-17).
 
 <a id="lookup-19"></a>
@@ -966,44 +1085,11 @@ Evidence: `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`
 Replaces: REQ-0331, REQ-0470, REQ-0507, REQ-0508.
 
 A qualified `group_by` column that is not an output key fails, as does an
-unqualified expression with no `group_by`. A grouped-row aggregate fails when
-it declares its own `group_by`, declares `key` ([LOOKUP-21](#lookup-21)),
-names an identifier outside its row template's input dataset, or is used by an
+unqualified expression with no `group_by` or with a `between`. A grouped-row
+aggregate fails when it declares its own `group_by`, declares `key`
+([LOOKUP-5](#lookup-5)) or `between` ([LOOKUP-9](#lookup-9)), names an
+identifier outside its row template's input dataset, or is used by an
 ungrouped row template.
-
-<a id="lookup-20"></a>
-
-### LOOKUP-20. An aggregate filter selects records from the aggregate's own evaluation context
-
-An aggregate `filter` selects records from its evaluation context: right-side
-records for a qualified column derivation, constructed output rows for an
-unqualified reduction, and the current input group's records for a grouped row
-derivation. [FORMULA-4](formulas.md#formula-4) defines predicate evaluation,
-and filtering preserves the order of the retained records
-([FORMULA-19](formulas.md#formula-19)).
-
-Evidence: `schema-aggregation`, `rust/crates/yamaa-adapters/tests/fixtures/row_reductions.json`.
-Replaces: REQ-0471.
-
-<a id="lookup-21"></a>
-
-### LOOKUP-21. A qualified aggregate matches its relation on key pairs, and a grouped-row aggregate declares none
-
-An aggregate whose expression reads a qualified dataset relation matches on
-`key` pairs ([LOOKUP-5](#lookup-5)). An omitted `key` is the applicable keys
-([LOOKUP-3](#lookup-3)), and with no pairs at all the aggregate names no match
-and fails. Declared `key` columns must exist in the relation and their match
-values must be known. A grouped-row aggregate reads its own input group and
-declares no key pairs: the group is the match.
-
-Fails: `missing_aggregate_keys`, `unknown_field`.
-Evidence: `negative-row-aggregate-keys`, `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`.
-Replaces: REQ-0140, REQ-0141, REQ-0142.
-
-With no pairs the aggregate fails as `missing_aggregate_keys`. A declared `key`
-column the relation does not have, or a match value that is not known, fails
-as `unknown_field`, and a pair that cannot compare fails under
-[VALUE-2](values.md#value-2).
 
 <a id="lookup-22"></a>
 
@@ -1062,40 +1148,3 @@ producer's segment expression is `0.5 * (PREVC + AVAL) * (ARELTM - PREVT)`,
 and the consumer's reduction is `SUM(SEGS.SEG)`. A first sample's missing
 neighbour produces a missing segment, which `SUM` skips under
 [FORMULA-19](formulas.md#formula-19).
-
-<a id="lookup-23"></a>
-
-### LOOKUP-23. A qualified aggregate's between keeps right-side records whose bounds contain a current-row value
-
-A qualified aggregate may declare `between` to narrow right-side records for
-each current row. `value` is a variable the current row can read; `lower` and
-`upper` are bare donor-record fields of the aggregate expression's one
-right-side relation, at least one is required, and every declared comparison is
-inclusive. A missing current-row value admits no right-side record, and a
-right-side record with a missing stated bound is ineligible. `between` is
-invalid on an unqualified or grouped-row aggregate.
-
-Fails: `unknown_field`.
-Evidence: `adam-adtr-nadir`, `adam-adsl-new-therapy`, `negative-aggregate-range-other-input`, `schema-aggregate-range-driver`, `rust/crates/yamaa-adapters/tests/execution_aggregate_record_operations.rs`.
-Replaces: REQ-0330, REQ-0472, REQ-0473, REQ-0474, REQ-0509.
-
-The current row can read a constructed output column, a column of a named
-intermediate, or a field of its driver qualified by that driver's input
-dataset ([NAME-4](names.md#name-4)). The aggregate evaluates for every row its
-column derives, and a qualified field must belong to the driver of each of
-them: root `base` without row templates, and otherwise the driver of every row
-template. A value qualified by any other input dataset is never read through
-the implicit join ([LOOKUP-1](#lookup-1)) and fails as `unknown_field`, as
-under [LOOKUP-9](#lookup-9).
-
-The comparisons are `lower <= value` and `value <= upper`. Omitting one bound
-makes the match one-sided without excluding the stated endpoint. The value and
-every stated bound must be mutually comparable under
-[VALUE-19](values.md#value-19). When no record is admitted the aggregate
-result is missing under the empty-group rule of
-[FORMULA-24](formulas.md#formula-24); a missing cutoff never reduces the
-unrestricted right side.
-
-A `between` on an unqualified or grouped-row aggregate fails, as does one
-declaring neither bound, naming a bound outside the qualified relation, naming
-a `value` the current row cannot read, or using incomparable operands.

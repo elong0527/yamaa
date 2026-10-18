@@ -119,11 +119,11 @@ intermediate_class:
     - no_match:
         type: substitute_value
         required: false
-        description: Value returned when the lookup yields nothing; without it, yielding nothing gives missing (LOOKUP-13).
+        description: Value returned when the lookup yields nothing; without it, yielding nothing gives missing (LOOKUP-24).
     - require_match:
         type: bool
         required: false
-        description: When true, yielding nothing fails instead of being answered; it cannot be declared with no_match (LOOKUP-13).
+        description: When true, yielding nothing fails instead of being answered; it cannot be declared with no_match (LOOKUP-24).
     - derivations:
         type: "dict[identifier, intermediate_derivation]"
         required: false
@@ -150,6 +150,9 @@ record_between_class:
 # See REQ-0251.
 match_key_range_fields:
     - key: {type: match_key}
+    - fields_from: match_range_fields
+
+match_range_fields:
     - between: {type: record_between_class}
 
 match_filter_fields:
@@ -414,6 +417,7 @@ source_binding_class:
         type: variable
         required: true
         description: Variable to copy (LOOKUP-1).
+    - fields_from: match_range_fields
     - fields_from: match_filter_fields
     - fields_from: match_selection_fields
     - absent:
@@ -441,7 +445,7 @@ flag_class:
 
 filtered_source:
     type: [variable, source_binding_class]
-    description: A variable, or the source_binding_class form carrying it with its filter, selection or absent value (LOOKUP-1).
+    description: A variable, or the source_binding_class form carrying it with its range, filter, selection or absent value (LOOKUP-1).
 
 keep_policy:
     type: str

@@ -129,18 +129,23 @@ pub enum Expression {
         variable: String,
         path: String,
     },
-    /// Source-only eligibility and stable choice on an implicit secondary join.
+    /// An implicit join on completed output keys (LOOKUP-1): a source
+    /// binding's range, filter, selection and answer for a row without a
+    /// record, or an operand's.
     SourceLookup {
         lookup: Lookup,
+        range: Option<RelationRange>,
         filter: Option<BoundPredicate>,
         selection: Option<SourceSelection>,
         /// The read's answer for a row without a record: a source binding's,
         /// or an operand's.
         absence: Option<JoinAbsence>,
     },
-    /// A qualified source keeps its filter and stable choice on its declared port.
+    /// A source binding's implicit join on its declared port, with its range,
+    /// filter, selection and answer for a row without a record.
     JoinedSource {
         read: std::boxed::Box<JoinedRead>,
+        range: Option<RelationRange>,
         filter: Option<BoundPredicate>,
         selection: Option<SourceSelection>,
         /// The source binding's answer for a row without a record.
@@ -2063,6 +2068,46 @@ fn validate_branching_assignment(
     Ok(true)
 }
 
+/// An implicit join's range (LOOKUP-9): admitted like any lookup's range, and
+/// a grouped row reads only a group key of its driver's record.
+#[allow(clippy::too_many_arguments)]
+fn validate_join_range(
+    range: &RelationRange,
+    donor: &TableSchema,
+    primary: &TableSchema,
+    secondary: &[SecondarySource],
+    intermediates: &[Intermediate],
+    output: &TableSchema,
+    available: &[bool],
+    mode: &RowMode,
+) -> Result<(), PlanError> {
+    range.validate_lookup(
+        donor,
+        &|column| donor.columns().get(column).map(|field| field.kind.into()),
+        primary,
+        secondary,
+        intermediates,
+        output,
+        available,
+    )?;
+    if let (CurrentRead::Record { column, .. }, RowMode::Groups(keys)) =
+        (range.current().read, mode.local_mode())
+    {
+        if !keys.contains(&column) {
+            return Err(PlanError::NonGroupSource);
+        }
+    }
+    if let CurrentRead::Intermediate { index, column } = range.current().read {
+        let item = intermediates
+            .get(index)
+            .ok_or(PlanError::InvalidIntermediate)?;
+        intermediates::validate_context_read(
+            item, column, primary, secondary, available, output, mode,
+        )?;
+    }
+    Ok(())
+}
+
 /// Validate expressions admitted directly against the schemas,
 /// without nested assignment recursion.
 #[allow(clippy::too_many_arguments)]
@@ -2080,6 +2125,7 @@ fn validate_direct_assignment(
         Expression::Joined(read) => read.validate(source, secondary, output, available, mode)?,
         Expression::JoinedSource {
             read,
+            range,
             filter,
             selection,
             absence,
@@ -2090,6 +2136,18 @@ fn validate_direct_assignment(
                 .is_some_and(|absence| absence.path.is_empty())
             {
                 return Err(PlanError::EmptyPath);
+            }
+            if let Some(range) = range {
+                validate_join_range(
+                    range,
+                    &read.schema,
+                    primary,
+                    secondary,
+                    intermediates,
+                    output,
+                    available,
+                    mode,
+                )?;
             }
             let width = read.schema.columns().len();
             if let Some(filter) = filter {
@@ -2160,6 +2218,7 @@ fn validate_direct_assignment(
         }
         Expression::SourceLookup {
             lookup: bound,
+            range,
             filter,
             selection,
             absence,
@@ -2173,6 +2232,18 @@ fn validate_direct_assignment(
                 .is_some_and(|absence| absence.path.is_empty())
             {
                 return Err(PlanError::EmptyPath);
+            }
+            if let Some(range) = range {
+                validate_join_range(
+                    range,
+                    &secondary[bound.source].schema,
+                    primary,
+                    secondary,
+                    intermediates,
+                    output,
+                    available,
+                    mode,
+                )?;
             }
             let width = secondary[bound.source].schema.columns().len();
             if let Some(filter) = filter {
