@@ -1,0 +1,30 @@
+{
+  "datasetJSONCreationDateTime": "2026-09-11T00:00:00",
+  "datasetJSONVersion": "1.1.0",
+  "fileOID": "CATH.adam.Define-XML_2.1.ADAE",
+  "sourceSystem": {"name": "yamaa", "version": "1.0"},
+  "studyOID": "STDY.CATH",
+  "metaDataVersionOID": "MDV.CATH.adam",
+  "metaDataRef": "define.xml",
+  "itemGroupOID": "IG.ADAE",
+  "records": 5,
+  "name": "ADAE",
+  "label": "Adverse Events Analysis Dataset",
+  "columns": [
+    {"itemOID": "IT.ADAE.STUDYID", "name": "STUDYID", "label": "Study Identifier", "dataType": "string", "length": 4, "keySequence": 1},
+    {"itemOID": "IT.ADAE.USUBJID", "name": "USUBJID", "label": "Unique Subject Identifier", "dataType": "string", "length": 16, "keySequence": 2},
+    {"itemOID": "IT.ADAE.AESEQ", "name": "AESEQ", "label": "Sequence Number", "dataType": "integer", "length": 8, "keySequence": 3},
+    {"itemOID": "IT.ADAE.AETERM", "name": "AETERM", "label": "Reported Term for the Adverse Event", "dataType": "string", "length": 9},
+    {"itemOID": "IT.ADAE.ASTDTM", "name": "ASTDTM", "label": "Analysis Start Date/Time", "dataType": "datetime", "targetDataType": "integer", "length": 8, "displayFormat": "DATETIME20."},
+    {"itemOID": "IT.ADAE.ASTDT", "name": "ASTDT", "label": "Analysis Start Date", "dataType": "date", "targetDataType": "integer", "length": 8, "displayFormat": "DATE9."},
+    {"itemOID": "IT.ADAE.ASTTM", "name": "ASTTM", "label": "Analysis Start Time", "dataType": "integer", "length": 8, "displayFormat": "TIME8."},
+    {"itemOID": "IT.ADAE.ASTTMF", "name": "ASTTMF", "label": "Analysis Start Time Imputation Flag", "dataType": "string", "length": 1}
+  ],
+  "rows": [
+    ["CATH", "CATH-UCSD-0001", 1, "HEADACHE", "2025-03-04T08:30:15", "2025-03-04", 30615, null],
+    ["CATH", "CATH-UCSD-0001", 2, "NAUSEA", "2025-03-06T14:05:00", "2025-03-06", 50700, "S"],
+    ["CATH", "CATH-UCSD-0002", 1, "RASH", "2025-03-10T00:00:00", "2025-03-10", 0, "H"],
+    ["CATH", "CATH-UCSD-0002", 2, "DIZZINESS", null, null, null, null],
+    ["CATH", "CATH-MCGILL-0003", 1, "FATIGUE", "2025-03-12T21:00:00", "2025-03-12", 75600, "M"]
+  ]
+}

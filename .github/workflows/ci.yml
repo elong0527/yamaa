@@ -2,12 +2,8 @@ name: CI
 
 # Pull requests are the gate. Main is checked on a schedule rather than after
 # every merge; the scheduled runs also save the Rust caches that pull requests
-# restore. Schedules only check main, so release branches are checked on each
-# push. Pull requests and the schedule run the development lanes: lint,
-# repository checks, the Rust workspace and the Linux Python and R hosts. The
-# minimum Rust toolchain, Python 3.15 and the minimum supported saved artifact
-# readers are release lanes: they run on release branch pushes and on
-# dispatch, with the other release workflows.
+# restore. Release branches are checked on each push. This workflow owns the
+# four development checks; release-compatibility.yml owns compatibility builds.
 on:
   pull_request:
   push:
@@ -54,48 +50,6 @@ jobs:
         with:
           r: runtime
       - run: make test-rust
-  rust-minimum:
-    name: rust (minimum toolchain)
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup
-        with:
-          r: runtime
-          package: 'false'
-      # The other jobs build with the pinned toolchain. Embedders build with
-      # their own, so the workspace rust-version must keep building.
-      - name: Activate the workspace rust-version toolchain
-        run: python -m tools.ci.toolchain --minimum --install
-      - name: Check and lint the workspace with the minimum toolchain
-        env:
-          RUSTFLAGS: -D warnings
-        run: |
-          cargo check --locked --manifest-path rust/Cargo.toml --workspace --all-targets --all-features
-          cargo clippy --locked --manifest-path rust/Cargo.toml --workspace --all-targets --all-features -- -D warnings
-      # An embedder builds the facade from its own workspace, where
-      # rust/Cargo.toml is not the root (#2929). This outside workspace runs
-      # the vendored YAML parser's compact-flow controls, directly and through
-      # the facade. The copied lock keeps it on the reviewed versions.
-      - name: Build the facade from an outside workspace
-        env:
-          RUSTFLAGS: -D warnings
-        run: |
-          cp rust/Cargo.lock rust/tests/embedder/Cargo.lock
-          cargo test --manifest-path rust/tests/embedder/Cargo.toml --target-dir rust/target
-      - name: Check minimal format builds
-        run: python -m tools.ci.format_features
-  # main-protection still requires this status. Release format qualification
-  # now belongs to rust-minimum; PRs do not wait for it.
-  formats:
-    if: ${{ false }}
-    runs-on: ubuntu-24.04
-    steps:
-      - run: 'true'
   python:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
@@ -104,31 +58,6 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
-      - run: make test-python
-  python-minimum:
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 35
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup
-      - name: Install the minimum supported Python saved artifact readers
-        run: uv pip install --python python/.venv/bin/python 'polars==1.35.2' 'pyarrow==23.0.1' 'lxml==6.1.3'
-      - run: make test-python
-  python-newest:
-    name: python (3.15)
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 35
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup
-        with:
-          python: '3.15'
       - run: make test-python
   r:
     runs-on: ubuntu-24.04

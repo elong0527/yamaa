@@ -15,13 +15,12 @@ pub enum DatasetFinding<'a> {
         identifier: &'a str,
         count: usize,
     },
+    /// A lookup without a record under `require_match` (LOOKUP-24), whichever
+    /// kind of lookup it is.
     UnmatchedKey {
         path: &'a str,
         dataset: &'a str,
         intermediate: &'a str,
-        /// A read through an implicit join (LOOKUP-24), rather than a named
-        /// intermediate.
-        implicit_join: bool,
     },
     MultipleMatches {
         path: &'a str,
@@ -64,28 +63,6 @@ fn type_name(value: ValueType) -> &'static str {
     }
 }
 
-/// Static admission and raw runtime key comparisons retain the same authored cause.
-pub(crate) fn lookup_key_type(
-    path: &str,
-    intermediate: &str,
-    source: &str,
-    expected: crate::result_type::ResultType,
-    actual: crate::result_type::ResultType,
-) -> Diagnostic {
-    Diagnostic {
-        code: C::LookupKeyType,
-        spec_paths: vec![path.into()],
-        context: [
-            ("intermediate".into(), text(intermediate)),
-            ("source".into(), text(source)),
-            ("expected".into(), text(&expected.name())),
-            ("actual".into(), text(&actual.name())),
-        ]
-        .into(),
-        source_span: None,
-        operand_route: None,
-    }
-}
 impl DatasetFinding<'_> {
     /// Preserve complete facts and refuse contradictory classified causes.
     pub fn diagnostic(self) -> Result<Diagnostic, ProjectionError> {
@@ -96,18 +73,7 @@ impl DatasetFinding<'_> {
                 }
                 (path, C::DatasetMultipleValues)
             }
-            Self::UnmatchedKey {
-                path,
-                implicit_join,
-                ..
-            } => (
-                path,
-                if implicit_join {
-                    C::JoinUnmatchedKey
-                } else {
-                    C::DatasetUnmatchedKey
-                },
-            ),
+            Self::UnmatchedKey { path, .. } => (path, C::LookupUnmatchedKey),
             Self::MultipleMatches { path, count, .. } => {
                 if count < 2 {
                     return Err(ProjectionError::InvalidContext);

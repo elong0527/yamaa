@@ -1,0 +1,50 @@
+schema_version: "1.0"
+domain: VS
+keys: [STUDYID, USUBJID, VSSEQ]
+input:
+  VS_RAW: {path: input/vs_raw.csv, types: {VSSEQ: int}}
+
+output:
+  path: vs.csv
+  columns: [STUDYID, USUBJID, VSSEQ, VSTESTCD, VSORRES, VSDTC]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: VS_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: VS_RAW.USUBJID
+
+  - name: VSSEQ
+    type: int
+    label: Sequence Number
+    derivation: VS_RAW.VSSEQ
+
+  - name: VSTESTCD
+    type: str
+    label: Vital Signs Test Short Name
+    derivation: VS_RAW.VSTESTCD
+
+  - name: VSORRES
+    type: str
+    label: Result or Finding in Original Units
+    derivation: VS_RAW.VSORRES
+
+  # The collected date and time read as a date-time value, which would
+  # write a time collected to the minute with seconds that were never
+  # collected; a tabulation dataset is rejected before any data is read.
+  - name: VSDTC
+    type: datetime
+    label: Date/Time of Measurements
+    derivation: VS_RAW.VSDTC
+
+submission:
+  label: Vital Signs
+  class: FINDINGS
+  structure: One record per vital sign measurement per time point per visit
+    per subject
+  repeating: true

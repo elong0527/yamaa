@@ -389,12 +389,12 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
             any("undefined requirement REQ-999999" in e for e in self.errors())
         )
 
-    def card_file(self):
+    def card_file(self, fails="Fails: `invalid_value`.\n"):
         self.write(
             "rules/inheritance.md",
             '# Inheritance\n\n<a id="layer-1"></a>\n\n'
             "### LAYER-1. Layers compose in one order\n\n"
-            "Layers compose depth first.\n\nReplaces: REQ-0002.\n",
+            f"Layers compose depth first.\n\n{fails}Replaces: REQ-0002.\n",
         )
 
     def test_registry_accepts_card_and_replaced_requirement_ids(self):
@@ -413,6 +413,26 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
                         f'Some("{requirement}")', 'Some("REQ-0001")'
                     )
                 )
+
+    def test_card_cause_reports_a_condition_its_fails_line_names(self):
+        path = self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs"
+        path.write_text(path.read_text().replace('Some("REQ-0001")', 'Some("LAYER-1")'))
+        for fails in ("", "Fails: `engine_rejected`.\n"):
+            with self.subTest(fails=fails):
+                self.card_file(fails)
+                self.assertEqual(
+                    self.errors(),
+                    [
+                        "core diagnostic registry:Invalid: LAYER-1 does not name "
+                        "invalid_value in its Fails line"
+                    ],
+                )
+        self.card_file("Fails: `engine_rejected`, `invalid_value`.\n")
+        self.assertEqual(self.errors(), [])
+        # A legacy REQ ID, even one a card replaces, carries no Fails line.
+        path.write_text(path.read_text().replace('Some("LAYER-1")', 'Some("REQ-0002")'))
+        self.card_file("")
+        self.assertEqual(self.errors(), [])
 
     def test_undefined_card_id_and_unknown_prefix_are_rejected(self):
         self.card_file()

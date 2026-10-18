@@ -125,7 +125,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     reached.insert(check(
         findings[0].diagnostic(),
         "invalid_field_type",
-        "REQ-1049",
+        "LOOKUP-9",
         "intermediates[0].between",
         &[
             ("intermediate", "P"),

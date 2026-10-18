@@ -67,7 +67,7 @@ family:
 | Strings | `schema_expression_str.yaml` | `str_extract`, `str_replace`, `str_template`, `str_case`, `str_pad` |
 | Arithmetic | `schema_expression_numeric.yaml` | `compute`, `round_half_away_from_zero` |
 | Aggregation | `schema_expression_aggregate.yaml` | `aggregate` |
-| Dates | `schema_expression_date.yaml` | `diff`, `study_day`, `impute`, `precision`, `imputation_flag`, `to_date`, `to_epoch_day`, `shift`, `duration_value` |
+| Dates | `schema_expression_date.yaml` | `diff`, `study_day`, `impute`, `precision`, `imputation_flag`, `to_date`, `to_epoch_day`, `dtc`, `time_of_day`, `shift`, `duration_value` |
 | Windows | `schema_expression_window.yaml` | `row_number`, `rank`, `row_value`, `locf`, `baseline_flag` |
 | Collected data | `schema_expression_odm.yaml` | `odm` |
 | Extension | `schema_function.yaml` | `function` |

@@ -1,6 +1,13 @@
 //! Source-independent intermediate admission and owned applicable-key inference.
 use super::*;
-use crate::{diagnostic::ConditionCode as C, key_relation::Inference, value::ColumnType};
+use crate::{
+    diagnostic::{
+        lookup::{self, Owner},
+        ConditionCode as C,
+    },
+    key_relation::Inference,
+    value::ColumnType,
+};
 
 /// Without a relation change or `require_match`, an intermediate whose absence
 /// answer is missing, by default or as `no_match: {literal: null}`, reads what
@@ -69,11 +76,11 @@ pub(super) fn declaration_findings(
             matches!(&d.nodes()[key], N::Mapping(pairs) if pairs.is_empty())
                 || matches!(&d.nodes()[key], N::Sequence(pairs) if pairs.is_empty())
         }) {
-            let mut finding = LookupFinding::new(&format!("{path}.key"), C::IntermediateEmptyKey);
-            finding.text("intermediate", name);
-            finding.text("dataset", dataset);
-            finding.text("expected", "at least one match pair");
-            findings.push(PreflightFinding::Scalar(finding.diagnostic()));
+            findings.push(PreflightFinding::Scalar(lookup::empty_key(
+                &format!("{path}.key"),
+                Owner::Intermediate(name),
+                dataset,
+            )));
         }
         // A list pairs each column with its same-named value once (REQ-0115).
         if let Some(N::Sequence(columns)) = d.field(item, "key").map(|key| &d.nodes()[key]) {
@@ -103,20 +110,14 @@ pub(super) fn declaration_findings(
         }
         // Asserting a match and answering its absence are two absence policies.
         if requires_match(d, item) && present(d, item, "no_match") {
-            findings.push(PreflightFinding::Scalar(crate::diagnostic::Diagnostic {
-                code: C::IntermediateAbsenceConflict,
-                spec_paths: vec![format!("{path}.no_match"), format!("{path}.require_match")],
-                context: [(
-                    "intermediate".into(),
-                    crate::json::Value::String(name.into()),
-                )]
-                .into(),
-                source_span: None,
-                operand_route: None,
-            }));
+            findings.push(PreflightFinding::Scalar(lookup::absence_conflict(
+                format!("{path}.no_match"),
+                format!("{path}.require_match"),
+                Owner::Intermediate(name),
+            )));
         }
         // An `order_by` with no term orders nothing, so a `keep` beside it has no
-        // order to choose by, as for a source's selection (REQ-0119).
+        // order to choose by, as for a source's selection (LOOKUP-10).
         let ordered = d
             .field(item, "order_by")
             .is_some_and(|id| matches!(&d.nodes()[id], N::Sequence(terms) if !terms.is_empty()));
@@ -129,11 +130,12 @@ pub(super) fn declaration_findings(
             ("keep", "order_by", present(d, item, "keep") && !ordered),
         ] {
             if unpaired {
-                let mut finding = LookupFinding::new(&path, C::IntermediateSelectionUnpaired);
-                finding.text("intermediate", name);
-                finding.texts("declared", &[declared]);
-                finding.texts("missing", &[missing]);
-                findings.push(PreflightFinding::Scalar(finding.diagnostic()));
+                findings.push(PreflightFinding::Scalar(lookup::selection_unpaired(
+                    &path,
+                    Owner::Intermediate(name),
+                    declared,
+                    missing,
+                )));
             }
         }
     }
@@ -150,6 +152,7 @@ pub(super) fn inferred_keys(
     donor_kind: &impl Fn(usize) -> Option<ColumnType>,
     admits: &impl Fn(usize) -> bool,
     path: &str,
+    intermediate: &str,
     dataset: &str,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<Vec<(String, match_values::Declaration)>>, BindError> {
@@ -176,11 +179,9 @@ pub(super) fn inferred_keys(
                 .collect(),
         )),
         Inference::NoApplicableKeys => {
-            let mut finding = LookupFinding::new(path, C::IntermediateNoApplicableKeys);
-            finding.text("dataset", dataset);
-            finding.texts("keys", &names);
-            finding.text("hint", "declare the `key` explicitly");
-            findings.push(BindFinding::Lookup(finding));
+            findings.push(BindFinding::Lookup(LookupFinding::from_diagnostic(
+                lookup::no_applicable_keys(path, dataset, &names, true),
+            )));
             Ok(None)
         }
         Inference::Incompatible {
@@ -188,23 +189,17 @@ pub(super) fn inferred_keys(
             expected,
             actual,
         } => {
-            let mut finding = LookupFinding::new(path, C::ImplicitSourceKeyType);
-            finding.text("source", names[key]);
-            finding.text("expected", type_name(expected));
-            finding.text("actual", type_name(actual));
-            findings.push(BindFinding::Lookup(finding));
+            findings.push(BindFinding::Lookup(LookupFinding::from_diagnostic(
+                lookup::key_type(
+                    path,
+                    Owner::Intermediate(intermediate),
+                    names[key],
+                    expected.into(),
+                    actual.into(),
+                ),
+            )));
             Ok(None)
         }
         Inference::UndeclaredOutput { .. } => Err(BindError::Internal),
-    }
-}
-
-fn type_name(kind: ColumnType) -> &'static str {
-    match kind {
-        ColumnType::Str => "str",
-        ColumnType::Int => "int",
-        ColumnType::Float => "float",
-        ColumnType::Date => "date",
-        ColumnType::DateTime => "datetime",
     }
 }

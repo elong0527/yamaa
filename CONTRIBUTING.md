@@ -171,22 +171,25 @@ also runs actionlint over every workflow.
 Keep workflow-specific setup in CI and reusable check logic in `tools/`.
 Pin external actions to complete commit IDs with exact release comments.
 
-PRs and the main schedule run only development checks: lint, repository
-checks, the Rust workspace, and the Python and R hosts on Linux. On PRs to
-main, CI reports the required `formats` check as skipped so release
-qualification does not delay merging. Release lanes
-check support claims and run on each `release/**` push and on dispatch: CI's
-minimum Rust toolchain, minimal format builds, Python 3.15 and minimum saved
-artifact reader lanes, and the macOS, Windows and R-devel package checks.
-Dependency graphs and advisories, native qualification, Harbor
-and coverage run on dispatch (native qualification also on a
+PRs and the main schedule run four development jobs: repository checks
+(including lint), the Rust workspace, and the Python and R hosts on Linux.
+These four checks are required to merge into main.
+
+The `Release compatibility` workflow checks the minimum Rust toolchain,
+minimal format builds, Python 3.15 and minimum Python saved artifact readers
+on each `release/**` push and on dispatch. CI's R job checks minimum R saved
+artifact readers on those same release events. The `R-CMD-check` workflow
+checks macOS, Windows and R-devel packages on release pushes and dispatch.
+Dependency graphs and advisories, native qualification, Harbor and coverage
+run on dispatch (native qualification also on a
 `qualification/issue-*` push). Dispatch any of them on a branch with
 `gh workflow run <workflow> --ref <branch>` to check a change that needs them
 before merging.
 
-CI's `rust (minimum toolchain)` release lane checks and lints the workspace with its
-declared `rust-version`, Rust 1.90.0, instead of the pinned toolchain that every
-other job uses, because embedders build the facade with their own toolchains.
+The `Release compatibility` workflow's `rust (minimum toolchain)` job checks
+and lints the workspace with its declared `rust-version`, Rust 1.90.0, instead
+of the pinned toolchain that every other job uses, because embedders build the
+facade with their own toolchains.
 Run it locally from `rust/`, with R installed:
 
 ```sh
