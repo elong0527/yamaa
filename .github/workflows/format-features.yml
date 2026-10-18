@@ -1,8 +1,11 @@
 name: Optional format features
 
 # A release lane, not a development check: embedders' format feature subsets
-# are checked on each release branch push and on dispatch.
+# are checked on each release branch push and on dispatch. PRs to main report
+# the required formats check as skipped without running release qualification.
 on:
+  pull_request:
+    branches: [main]
   push:
     branches: ['release/**']
   workflow_dispatch:
@@ -22,6 +25,7 @@ jobs:
   # One job runs every selection in turn: they share the Rust build, and each
   # needs only cargo and the standard-library check script.
   formats:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:

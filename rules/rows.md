@@ -114,14 +114,15 @@ literals, earlier row-derived columns, or a record lookup with already-complete
 matching values, in dependency order.
 
 Fails: `ungrouped_driver_field`.
-Evidence: `negative-row-window-ungrouped`, `rust/crates/yamaa-adapters/tests/fixtures/binding_diagnostics.tsv`, `rust/crates/yamaa-core/tests/support/diagnostic/binding.rs`.
+Evidence: `negative-row-window-ungrouped`, `negative-row-ungrouped-second-template`, `rust/crates/yamaa-adapters/tests/fixtures/binding_diagnostics.tsv`, `rust/crates/yamaa-adapters/tests/execution_grouped_driver_dataset.rs`, `rust/crates/yamaa-core/tests/support/diagnostic/binding.rs`.
 Replaces: REQ-0047, REQ-0067.
 
 The aggregate reduces the group under
 [Expressions](expressions.md) and
 [Formulas](formulas.md). A grouped row derivation reading a
 non-grouped source variable without an aggregate fails as
-`ungrouped_driver_field` and reports the variable.
+`ungrouped_driver_field`, naming the variable, the row template and that row
+template's driver.
 
 <a id="row-6"></a>
 
