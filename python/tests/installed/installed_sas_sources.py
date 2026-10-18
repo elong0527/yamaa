@@ -109,7 +109,7 @@ class SasSources(unittest.TestCase):
             self.assertEqual(before[0]["spec_paths"], ["input.SRC.path"])
         self.assertIsNone(result.output)
         for _ in range(2):
-            with self.assertRaises(yamaa.DomainError):
+            with self.assertRaises(yamaa.Error):
                 result.save()
             self.assertEqual(result.issues.to_dicts(), before)
             self.assertFalse((root / "result.csv").exists())
@@ -118,11 +118,11 @@ class SasSources(unittest.TestCase):
         for case in TRUTH["accepted"]:
             with self.subTest(case=case["id"]):
                 root, spec, _ = self.stage(case)
-                self.assertTrue(yamaa.check(spec).issues.is_empty())
+                self.assertTrue(yamaa.spec(spec).check().issues.is_empty())
                 self.assertFalse((root / "result.csv").exists())
-                result = yamaa.domain(spec)
+                result = yamaa.spec(spec).run()
                 self.assert_output(result, case)
-                self.assertTrue(result.save())
+                result.save()
                 if "csv" in case:
                     self.assertEqual(
                         (root / "result.csv").read_bytes(), case["csv"].encode("utf-8")
@@ -183,18 +183,18 @@ class SasSources(unittest.TestCase):
                     "rows": expected,
                 }
                 root, spec, _ = self.stage(case)
-                self.assertTrue(yamaa.check(spec).issues.is_empty())
-                result = yamaa.domain(spec)
+                self.assertTrue(yamaa.spec(spec).check().issues.is_empty())
+                result = yamaa.spec(spec).run()
                 self.assert_output(result, case)
-                self.assertTrue(result.save())
+                result.save()
                 self.assertTrue((root / "result.csv").is_file())
 
-    def test_static_encoding_contract_is_shared_by_check_and_domain(self):
+    def test_static_encoding_contract_is_shared_by_check_and_run(self):
         for case in TRUTH["static_refusals"]:
             with self.subTest(case=case["id"]):
                 root, spec, _ = self.stage(case)
-                checked = yamaa.check(spec)
-                result = yamaa.domain(spec)
+                checked = yamaa.spec(spec).check()
+                result = yamaa.spec(spec).run()
                 self.assertEqual(checked.issues.to_dicts(), result.issues.to_dicts())
                 self.assert_failed(result, case, root)
 
@@ -202,9 +202,9 @@ class SasSources(unittest.TestCase):
         for case in TRUTH["refusals"]:
             with self.subTest(case=case["id"]):
                 root, spec, _ = self.stage(case)
-                self.assertTrue(yamaa.check(spec).issues.is_empty())
+                self.assertTrue(yamaa.spec(spec).check().issues.is_empty())
                 self.assertFalse((root / "result.csv").exists())
-                self.assert_failed(yamaa.domain(spec), case, root)
+                self.assert_failed(yamaa.spec(spec).run(), case, root)
 
     def test_held_output_and_repeat_saves_survive_source_and_specification_mutation(
         self,
@@ -213,11 +213,11 @@ class SasSources(unittest.TestCase):
             case for case in TRUTH["accepted"] if case["id"] == TRUTH["snapshot_case"]
         )
         root, spec, source = self.stage(case)
-        result = yamaa.domain(spec)
+        result = yamaa.spec(spec).run()
         self.assert_output(result, case)
         held = result.output
         source.write_bytes(b"changed source")
-        changed = yamaa.domain(spec)
+        changed = yamaa.spec(spec).run()
         self.assert_failed(
             changed,
             {
@@ -231,7 +231,7 @@ class SasSources(unittest.TestCase):
         source.unlink()
         gc.collect()
         for _ in range(2):
-            self.assertTrue(result.save())
+            result.save()
             self.assertEqual(
                 (root / "result.csv").read_bytes(), case["csv"].encode("utf-8")
             )
