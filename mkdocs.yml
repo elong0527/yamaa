@@ -95,7 +95,7 @@ nav:
   - Home: index.md
   - Start:
       - Introduction: articles/intro.md
-      - R and Python API: articles/api.md
+      - R and Python API (planned): articles/api.md
       - Principles: articles/principles.md
       - Derivation: articles/derive.md
       - Excel to yamaa: articles/excel.md

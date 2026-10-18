@@ -1,5 +1,17 @@
 # R and Python API
 
+!!! warning "Planned API, not in yamaa 0.4.0"
+    This page describes the `spec()` and `project()` objects proposed in
+    [#2967](https://github.com/elong0527/yamaa/issues/2967). yamaa 0.4.0 does
+    not have them. In 0.4.0, Python uses `yamaa.domain`, `yamaa.check`,
+    `yamaa.define` and `yamaa.resolve_specification`, and R uses
+    `yamaa_domain`, `yamaa_check`, `yamaa_define` and
+    `yamaa_resolve_specification`. The [Python package guide](python.md), the
+    [R package guide](https://github.com/elong0527/yamaa/tree/yamaa-v0.4.0/R/yamaa)
+    and the
+    [0.4.0 release notes](https://github.com/elong0527/yamaa/releases/tag/yamaa-v0.4.0)
+    describe the API that 0.4.0 ships.
+
 yamaa has the same small API in R and Python. Two objects mirror the two kinds
 of file you write: a **spec** is one specification, which builds one dataset,
 and a **project** is a study, which lists its specifications and holds the
