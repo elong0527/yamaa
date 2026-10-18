@@ -3,13 +3,13 @@
 //!
 //! Every handler site is registered at zero before any row is read, so a site
 //! that never fires reports zero (COLUMN-14). The handler table is the
-//! executor's registration walk (`DatasetPlan::register_handlers`): the
-//! plan's conversion handlers, those of each intermediate's donor plan, then
-//! every site of each derivation in evaluation order (template assignments,
-//! column assignments, intermediate key expressions), then every site of each
-//! intermediate's derivations, intermediate by intermediate in declaration
-//! order, each followed by the key expressions of the intermediates its
-//! derivations read. Each derivation's sites come in expression order: a
+//! executor's registration walk (`DatasetPlan::register_handlers`). The
+//! dataset's own sites come first: its conversion handlers, then every site of
+//! each derivation in evaluation order (template assignments, column
+//! assignments, intermediate key expressions). Then each intermediate with
+//! derivations in turn, in the same order: its donor plan's conversion
+//! handlers, every site of each derivation in declaration order, then the key
+//! expressions of the intermediates its derivations read. Each derivation's sites come in expression order: a
 //! node's own sites, then its operands' in written order. A site registers
 //! once, where the walk first reaches it.
 use super::build::Sites;
@@ -78,13 +78,6 @@ fn registration_order(plan: &ResolvedPlan, count: usize) -> Vec<usize> {
         .region_relations(dataset)
         .filter(|&relation| matches!(plan.relation(relation).kind, RelationKind::Named { .. }))
         .collect();
-    for &relation in &named {
-        if let Some(donor) = plan.relation(relation).derivations {
-            for &site in plan.conversions(donor) {
-                walk.register(site);
-            }
-        }
-    }
     for template in plan.region_templates(dataset) {
         for binding in plan.row_bindings(template) {
             walk.node(plan.binding(binding).expr);
@@ -96,12 +89,16 @@ fn registration_order(plan: &ResolvedPlan, count: usize) -> Vec<usize> {
         }
     }
     walk.keys(dataset);
-    // Each intermediate's derivations, in declaration order, then the key
-    // expressions of the intermediates they read, as bound for the donor
-    // records. A nested donor plan is an earlier intermediate's, walked in its
-    // turn.
+    // Each intermediate's derivations in its turn, in the dataset's order:
+    // their conversion handlers, each derivation in declaration order, then
+    // the key expressions of the intermediates they read, as bound for the
+    // donor records. A nested donor plan is an earlier intermediate's, walked
+    // in its turn.
     for &relation in &named {
         if let Some(donor) = plan.relation(relation).derivations {
+            for &site in plan.conversions(donor) {
+                walk.register(site);
+            }
             for &column in &plan.region(donor).column_order {
                 if let Some(binding) = plan.column_bindings(column).next() {
                     walk.node(plan.binding(binding).expr);

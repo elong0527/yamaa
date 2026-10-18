@@ -1130,7 +1130,11 @@ columns:
         #[test]
         fn intermediate_derivation_handlers_count_each_build_of_the_donor_records() {
             let study = Study::new();
-            fs::write(study.0.join("input/src.csv"), "ID,REF\n1,5\n2,\n3,1\n").unwrap();
+            fs::write(
+                study.0.join("input/src.csv"),
+                "ID,REF,TAG\n1,5,7\n2,,x\n3,1,\n",
+            )
+            .unwrap();
             fs::write(
                 study.0.join("input/lab.csv"),
                 "ID,SEQ,DAY,FLAG\n1,1,2,H\n1,2,6,\n2,1,4,L\n",
@@ -1144,13 +1148,14 @@ keys: [ID]
 input:
   SRC: {path: input/src.csv, types: {ID: int, REF: int}}
   LAB: {path: input/lab.csv, types: {ID: int, SEQ: int, DAY: int}}
-output: {path: out.csv, columns: [ID, CAT, NEAR], report: report.csv}
+output: {path: out.csv, columns: [ID, CAT, NEAR, TAGN], report: report.csv}
 intermediates:
   - id: CODED
     dataset: LAB
     key: [ID]
     derivations:
       GRADE: {mapping: {source: FLAG, dict: {H: high, L: low}}}
+      FLAGN: {type: int, derivation: FLAG, unconvertible: {literal: null}}
     order_by: [LAB.SEQ]
     keep: first
   - id: NEAREST
@@ -1167,29 +1172,35 @@ columns:
   - {name: ID, type: int, derivation: SRC.ID}
   - {name: CAT, type: str, derivation: CODED.GRADE}
   - {name: NEAR, type: int, derivation: NEAREST.SEQ}
+  - {name: TAGN, type: int, derivation: {value: {source: SRC.TAG}, unconvertible: -1}}
 "#,
             );
             assert!(result.issues().is_empty(), "{:?}", result.issues());
             assert!(result.save().unwrap());
             assert_eq!(
                 fs::read_to_string(study.0.join("out.csv")).unwrap(),
-                "ID,CAT,NEAR\n1,high,2\n2,low,\n3,,\n"
+                "ID,CAT,NEAR,TAGN\n1,high,2,7\n2,low,,-1\n3,,,\n"
             );
-            // The derivations' paths follow the dataset's, intermediate by
-            // intermediate, and count every build of the donor records. LAB
-            // record 2 has no FLAG. CODED is built once for CAT. NEAREST's
-            // DIST reads the current record, so NEAREST is built once for
-            // each of the three rows, and each build reads CODED for each LAB
-            // record, building CODED again: GRADE answers record 2 four
-            // times, and G2 chooses between subject 1's two records twice per
-            // build.
+            // The dataset's own paths come first, its `unconvertible` before
+            // its derivations; then each intermediate in turn, its
+            // `unconvertible` first. Every build of the donor records counts.
+            // CODED is built once for CAT. NEAREST's DIST reads the current
+            // record, so NEAREST is built once for each of the three rows, and
+            // each build reads CODED for each LAB record, building CODED
+            // again: four builds of CODED. FLAGN converts neither `H` nor `L`
+            // (LAB records 1 and 3), so it answers twice per build; GRADE
+            // answers record 2, which has no FLAG, once per build; and G2
+            // chooses between subject 1's two records twice per build of
+            // NEAREST.
             assert_eq!(
                 handler_rows(&study, &result),
                 [
+                    "out.csv,handler,columns.TAGN.derivation.unconvertible,unconvertible,,TAGN,REQ-0013,,,,1,,,{}",
                     "out.csv,handler,columns.CAT.derivation.source.multiple_matches,multiple_matches,,CAT,REQ-0127,,,,1,,,{}",
                     "out.csv,handler,columns.CAT.derivation.source.no_match,no_match,,CAT,LOOKUP-24,,,,1,,,{}",
                     "out.csv,handler,columns.NEAR.derivation.source.multiple_matches,multiple_matches,,NEAR,REQ-0127,,,,1,,,{}",
                     "out.csv,handler,columns.NEAR.derivation.source.no_match,no_match,,NEAR,LOOKUP-24,,,,2,,,{}",
+                    "out.csv,handler,intermediates[0].derivations.FLAGN.unconvertible,unconvertible,,,REQ-0013,,,,8,,,{}",
                     "out.csv,handler,intermediates[0].derivations.GRADE.mapping.missing,missing,,,,,,,4,,,{}",
                     "out.csv,handler,intermediates[1].derivations.G2.source.multiple_matches,multiple_matches,,,REQ-0127,,,,6,,,{}",
                     "out.csv,handler,intermediates[1].derivations.G2.source.no_match,no_match,,,LOOKUP-24,,,,0,,,{}",
