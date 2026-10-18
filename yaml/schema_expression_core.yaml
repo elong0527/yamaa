@@ -37,6 +37,7 @@ source_binding_class:
         type: variable
         required: true
         description: Variable to copy (LOOKUP-1).
+    - fields_from: match_range_fields
     - fields_from: match_filter_fields
     - fields_from: match_selection_fields
     - absent:
@@ -64,7 +65,7 @@ flag_class:
 
 filtered_source:
     type: [variable, source_binding_class]
-    description: A variable, or the source_binding_class form carrying it with its filter, selection or absent value (LOOKUP-1).
+    description: A variable, or the source_binding_class form carrying it with its range, filter, selection or absent value (LOOKUP-1).
 
 keep_policy:
     type: str

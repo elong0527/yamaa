@@ -648,6 +648,7 @@ mod relations {
                         output_column: 0,
                     }],
                 },
+                range: None,
                 filter: None,
                 selection: None,
                 absence: None,
@@ -1926,8 +1927,8 @@ mod relations {
         fn authored_type_donor_width_reference_then_dependent_read_failure_order() {
             for (field, first) in [
                 ("K", None),
-                ("KINT", Some("REQ-0323")),
-                ("ABSENT", Some("REQ-0116")),
+                ("KINT", Some("LOOKUP-9")),
+                ("ABSENT", Some("LOOKUP-5")),
             ] {
                 let actual = finding_ids(Tree::map(vec![(field, pad("SRC.ABSENT", "0"))]));
                 let mut expected = Vec::new();
@@ -1940,7 +1941,7 @@ mod relations {
                         vec![format!("intermediates[0].key.{field}.str_pad.width")],
                     ),
                     (
-                        "REQ-0117".into(),
+                        "LOOKUP-5".into(),
                         vec![format!("intermediates[0].key.{field}")],
                     ),
                     (
@@ -2062,7 +2063,7 @@ mod relations {
                     Tree::map(vec![("literal", Tree::Scalar(N::Boolean(true)))])
                 )]))[0]
                     .0,
-                "REQ-0323"
+                "LOOKUP-9"
             );
         }
         #[test]

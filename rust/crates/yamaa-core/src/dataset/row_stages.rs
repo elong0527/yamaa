@@ -59,6 +59,20 @@ pub fn read_requires_window(
 fn read_deferred(read: Read, deferred: &[bool], intermediates: &[Intermediate]) -> bool {
     read_requires_window(&read, deferred, intermediates)
 }
+/// A range value read after the window stage defers the lookup that reads it.
+fn range_deferred(
+    range: Option<&RelationRange>,
+    deferred: &[bool],
+    intermediates: &[Intermediate],
+) -> bool {
+    match range.map(|range| range.current().read) {
+        Some(CurrentRead::Output(column)) => deferred.get(column).copied().unwrap_or(true),
+        Some(CurrentRead::Intermediate { index, .. }) => {
+            intermediate_deferred(index, deferred, intermediates)
+        }
+        Some(CurrentRead::Record { .. }) | None => false,
+    }
+}
 pub(super) fn expression_deferred(
     expression: &Expression,
     deferred: &[bool],
@@ -66,7 +80,8 @@ pub(super) fn expression_deferred(
 ) -> bool {
     match expression {
         Expression::Window(_) | Expression::ContextWindow(_) => true,
-        Expression::Joined(read) | Expression::JoinedSource { read, .. } => read.record_keys.is_none() && read.keys.iter().any(|key| deferred[key.output_column]),
+        Expression::Joined(read) => read.record_keys.is_none() && read.keys.iter().any(|key| deferred[key.output_column]),
+        Expression::JoinedSource { read, range, .. } => (read.record_keys.is_none() && read.keys.iter().any(|key| deferred[key.output_column])) || range_deferred(range.as_ref(), deferred, intermediates),
         Expression::Aggregate(aggregate) => match aggregate.relation() {
             AggregateRelation::Output { group_by } => group_by.iter().any(|&column| deferred[column])
                 || aggregate.bindings().iter().any(|binding| deferred[binding.column]),
@@ -87,7 +102,7 @@ pub(super) fn expression_deferred(
             SelectionRead::Expression(source) => expression_deferred(&source.expression, deferred, intermediates),
             SelectionRead::Source(_) | SelectionRead::Collect { .. } => false,
         }),
-        Expression::SourceLookup { lookup, .. } => lookup.keys.iter().any(|key| deferred[key.output_column]),
+        Expression::SourceLookup { lookup, range, .. } => lookup.keys.iter().any(|key| deferred[key.output_column]) || range_deferred(range.as_ref(), deferred, intermediates),
         Expression::Intermediate {index,..} => intermediate_deferred(*index, deferred, intermediates),
         Expression::Lookup(lookup) => lookup.keys.iter().any(|key| deferred[key.output_column]),
         Expression::Odm(_) | Expression::Literal(_) | Expression::Source(_) | Expression::Collect {..} | Expression::RowLookup(_) | Expression::Reduce {..} | Expression::Count {..} => false,

@@ -9,8 +9,8 @@ use crate::dataset::{
     read_requires_window, window_stages, AggregateRelation, AggregateSource, Assignment,
     BoundAggregate, BoundOdm, Check, CurrentField, CurrentRead, Expression, FirstAvailable,
     FlagRead, FunctionArgument, FunctionInput, ImputationKind, IntermediateKey, IntermediateSource,
-    JoinAbsence, JoinedRead, MatchRead, MatchValue, OdmScope, RelationPredicate, RowMode,
-    RowTemplate, SelectionRead, SourceSelection, Window, WindowKind,
+    JoinAbsence, JoinedRead, MatchRead, MatchValue, OdmScope, RelationPredicate, RelationRange,
+    RowMode, RowTemplate, SelectionRead, SourceSelection, Window, WindowKind,
 };
 use std::collections::{BTreeMap, VecDeque};
 
@@ -848,6 +848,7 @@ impl<'p> Builder<'p> {
             }
             E::SourceLookup {
                 lookup,
+                range,
                 filter,
                 selection,
                 absence,
@@ -861,11 +862,19 @@ impl<'p> Builder<'p> {
                     })
                     .collect::<Result<Vec<_>, ResolutionError>>()?;
                 let donor = cx.source(lookup.source + 1)?;
-                let relation =
-                    self.join(cx, path, donor, keys, filter.as_ref(), selection.as_ref())?;
+                let relation = self.join(
+                    cx,
+                    path,
+                    donor,
+                    keys,
+                    range.as_ref(),
+                    filter.as_ref(),
+                    selection.as_ref(),
+                )?;
                 node.kind = ExprKind::SourceLookup(relation);
                 node.reads
                     .push(Read::Relation(relation, field(lookup.column)?));
+                self.observed_range(cx, &mut node, range.as_ref(), path)?;
                 let site = format!("{path}.multiple_matches");
                 let selected = selection.is_some();
                 self.site(cx, &mut node, selected, site, H::MultipleMatches, scalar);
@@ -885,8 +894,15 @@ impl<'p> Builder<'p> {
                         ))
                     })
                     .collect::<Result<Vec<_>, ResolutionError>>()?;
-                let relation =
-                    self.join(cx, path, cx.source(lookup.source + 1)?, keys, None, None)?;
+                let relation = self.join(
+                    cx,
+                    path,
+                    cx.source(lookup.source + 1)?,
+                    keys,
+                    None,
+                    None,
+                    None,
+                )?;
                 node.kind = ExprKind::Lookup(relation);
                 node.reads
                     .push(Read::Relation(relation, field(lookup.column)?));
@@ -897,14 +913,21 @@ impl<'p> Builder<'p> {
                     .iter()
                     .map(|key| Ok((key.source_column, Read::Field(field(key.driver_column)?))))
                     .collect::<Result<Vec<_>, ResolutionError>>()?;
-                let relation =
-                    self.join(cx, path, cx.source(lookup.source + 1)?, keys, None, None)?;
+                let relation = self.join(
+                    cx,
+                    path,
+                    cx.source(lookup.source + 1)?,
+                    keys,
+                    None,
+                    None,
+                    None,
+                )?;
                 node.kind = ExprKind::RowLookup(relation);
                 node.reads
                     .push(Read::Relation(relation, field(lookup.column)?));
             }
             E::Joined(read) => {
-                let relation = self.joined(cx, path, read, None, None)?;
+                let relation = self.joined(cx, path, read, None, None, None)?;
                 node.kind = ExprKind::Joined(relation);
                 node.reads
                     .push(Read::Relation(relation, field(read.column)?));
@@ -912,14 +935,23 @@ impl<'p> Builder<'p> {
             }
             E::JoinedSource {
                 read,
+                range,
                 filter,
                 selection,
                 absence,
             } => {
-                let relation = self.joined(cx, path, read, filter.as_ref(), selection.as_ref())?;
+                let relation = self.joined(
+                    cx,
+                    path,
+                    read,
+                    range.as_ref(),
+                    filter.as_ref(),
+                    selection.as_ref(),
+                )?;
                 node.kind = ExprKind::JoinedSource(relation);
                 node.reads
                     .push(Read::Relation(relation, field(read.column)?));
+                self.observed_range(cx, &mut node, range.as_ref(), path)?;
                 let site = format!("{path}.multiple_matches");
                 let selected = selection.is_some();
                 self.site(cx, &mut node, selected, site, H::MultipleMatches, scalar);
@@ -1082,6 +1114,24 @@ impl<'p> Builder<'p> {
         Ok(())
     }
 
+    /// An implicit join's range value that reads a named intermediate is that
+    /// intermediate's read for the row (LOOKUP-9). The join evaluates it with
+    /// its own assignment, so its handler sites are recorded at `path`.
+    fn observed_range(
+        &mut self,
+        cx: &Cx<'_>,
+        node: &mut Node,
+        range: Option<&RelationRange>,
+        path: &str,
+    ) -> Result<(), ResolutionError> {
+        if let Some(CurrentRead::Intermediate { index, column }) =
+            range.map(|range| range.current().read)
+        {
+            self.observed(cx, node, &BoundRead::Intermediate { index, column }, path)?;
+        }
+        Ok(())
+    }
+
     fn source_read(
         &self,
         cx: &Cx<'_>,
@@ -1130,7 +1180,7 @@ impl<'p> Builder<'p> {
                 Read::Relation(cx.named(*index)?, field(*column)?)
             }
             BoundRead::Joined(joined) => {
-                let relation = self.joined(cx, path, joined, None, None)?;
+                let relation = self.joined(cx, path, joined, None, None, None)?;
                 Read::Relation(relation, field(joined.column)?)
             }
         })
@@ -1179,14 +1229,16 @@ impl<'p> Builder<'p> {
         Ok(id)
     }
 
-    /// An implicit join: equality keys over one donor source, with an
-    /// optional donor filter and stable selection.
+    /// An implicit join: equality keys and an optional range over one donor
+    /// source, with an optional donor filter and stable selection (LOOKUP-25).
+    #[allow(clippy::too_many_arguments)]
     fn join(
         &mut self,
         cx: &Cx<'p>,
         path: &str,
         donor: SourceId,
         keys: Vec<(usize, Read)>,
+        range: Option<&RelationRange>,
         filter: Option<&BoundPredicate>,
         selection: Option<&SourceSelection>,
     ) -> Result<RelationId, ResolutionError> {
@@ -1197,6 +1249,7 @@ impl<'p> Builder<'p> {
                 value: KeyValue::Read(current),
             });
         }
+        node.range = range.map(|range| range_node(cx, range)).transpose()?;
         node.selection = selection_shape(selection)?;
         let id = self.push_relation(node)?;
         if let Some(filter) = filter {
@@ -1213,6 +1266,7 @@ impl<'p> Builder<'p> {
         cx: &Cx<'p>,
         path: &str,
         read: &JoinedRead,
+        range: Option<&RelationRange>,
         filter: Option<&BoundPredicate>,
         selection: Option<&SourceSelection>,
     ) -> Result<RelationId, ResolutionError> {
@@ -1232,7 +1286,7 @@ impl<'p> Builder<'p> {
             };
             keys.push((key.source_column, current));
         }
-        self.join(cx, path, donor, keys, filter, selection)
+        self.join(cx, path, donor, keys, range, filter, selection)
     }
 
     /// Match values in written order; expression keys become nodes.
@@ -1889,7 +1943,10 @@ fn discriminators(check: &Check) -> Vec<usize> {
         Check::Inventory {
             scope: Some(scope), ..
         } => vec![scope.discriminator],
-        Check::Mandatory(Some(scope)) => vec![scope.discriminator],
+        Check::Mandatory(Some(scope))
+        | Check::DataType {
+            scope: Some(scope), ..
+        } => vec![scope.discriminator],
         _ => Vec::new(),
     }
 }
@@ -1898,6 +1955,7 @@ fn check_family(check: &Check) -> CheckFamily {
     match check {
         Check::NotMissing => CheckFamily::NotMissing,
         Check::Mandatory(_) => CheckFamily::Mandatory,
+        Check::DataType { .. } => CheckFamily::DataType,
         Check::AllowedValues(_) => CheckFamily::AllowedValues,
         Check::Codelist { .. } => CheckFamily::Codelist,
         Check::ValueCodelists { .. } => CheckFamily::ValueCodelists,

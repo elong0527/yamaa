@@ -39,7 +39,7 @@ Evidence: `negative-keys-conflict`, `negative-sex-duplicate`.
 Replaces: REQ-0033, REQ-0044, REQ-0075.
 
 A source `filter` decides which of those records the derivation reads before
-that count, as [LOOKUP-13](lookup.md#lookup-13) defines. A source
+that count, as [LOOKUP-8](lookup.md#lookup-8) defines. A source
 declaring `order_by` and `keep` keeps one of the records carrying those values
 instead of failing, as [COLUMN-12](#column-12) defines. A column derivation
 yielding more than one value for one key combination fails as
@@ -247,7 +247,7 @@ condition, and what the condition gives when the handler is omitted.
 | bind | `source.absent` | Absent source variable or ODM item | Fails |
 | join | `source.absent` | A read through the implicit join finds no record ([LOOKUP-24](lookup.md#lookup-24)) | Missing |
 | join | `source.order_by` and `source.keep` | Several `source.filter` results | Fails |
-| join | `intermediates[].no_match` | The intermediate selects no record ([LOOKUP-13](lookup.md#lookup-13)) | Missing |
+| join | `intermediates[].no_match` | The intermediate selects no record ([LOOKUP-24](lookup.md#lookup-24)) | Missing |
 | mapping | `mapping.missing` | Missing input | Missing |
 | mapping | `mapping.unmapped` | Non-missing value with no mapping | Fails |
 | cut | `cut.missing` | Missing numeric input | Missing |
@@ -256,7 +256,8 @@ condition, and what the condition gives when the handler is omitted.
 | template | `str_template.missing` | Any placeholder value is missing | Fails |
 | derivation | `flag.missing` | The condition is `UNKNOWN` ([EXPR-8](expressions.md#expr-8)) | Missing |
 | derivation | `first_available.missing` | Every source is missing ([EXPR-9](expressions.md#expr-9)) | Missing |
-| impute | `impute.invalid`, `precision.invalid` | Text that is not collected date text ([TIME-13](temporal.md#time-13)) | Fails |
+| impute | `impute.invalid`, `precision.invalid` | Text that is not collected date text, an ISO 8601 interval or duration included ([TIME-13](temporal.md#time-13)) | Fails |
+| impute | `dtc.invalid` | A date part that is not its field's digits or lies outside its range ([TIME-19](temporal.md#time-19)) | Fails |
 | impute | `duration_value.invalid` | Invalid fixed-length duration text ([TIME-17](temporal.md#time-17)) | Fails |
 | convert | `unconvertible` | Failed output conversion | Fails |
 
@@ -291,7 +292,7 @@ Replaces: REQ-0345, REQ-0346, REQ-0347, REQ-0348, REQ-0349, REQ-0350, REQ-0357.
 On `mapping`, `missing` never answers a non-missing input with no dictionary
 entry; that is `unmapped`'s condition
 ([EXPR-11](expressions.md#expr-11)). An intermediate's `no_match` also
-answers a missing match value ([LOOKUP-13](lookup.md#lookup-13)), as a source
+answers a missing match value ([LOOKUP-24](lookup.md#lookup-24)), as a source
 binding's `absent` answers one on its implicit join
 ([LOOKUP-24](lookup.md#lookup-24)). Omitted, each of these handlers gives the
 default of [COLUMN-10](#column-10).
@@ -318,9 +319,9 @@ Under the `source` expression, only structured source binding declares
 handlers; the concise `source: DATASET.VARIABLE` form declares none and takes
 their defaults. A source's
 `order_by` and `keep` relax right-side uniqueness wherever one source reaches
-several records: its optional `filter` selects the eligible right-side
-records, the survivors sort by the `order_by` terms, `keep` retains the
-`first` or `last`,
+several records: its optional `filter` narrows the right-side records it
+matches ([LOOKUP-8](lookup.md#lookup-8)), the survivors sort by the
+`order_by` terms, `keep` retains the `first` or `last`,
 and right-side record order resolves remaining ties. An empty filtered result
 is an absent match, answered as [LOOKUP-24](lookup.md#lookup-24) states.
 

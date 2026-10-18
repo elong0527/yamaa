@@ -892,6 +892,13 @@ pub(crate) fn temporal_reached() -> BTreeSet<ConditionCode> {
                     ],
                 ),
             ),
+            column(
+                "GAP",
+                derivation(
+                    "dtc",
+                    vec![("year", Tree::text("ID")), ("day", Tree::text("ID"))],
+                ),
+            ),
         ],
         vec![Tree::text("ID")],
     );
@@ -963,6 +970,13 @@ pub(crate) fn temporal_reached() -> BTreeSet<ConditionCode> {
             "unknown_field",
             "columns.SHIFT.derivation.shift.unit",
             vec![("field", text("unit")), ("type", text("date"))],
+        ),
+        // Temporal operations are read before the imputation operations.
+        (
+            "TIME-19",
+            "missing_required_field",
+            "columns.GAP.derivation.dtc.month",
+            vec![("field", text("month")), ("finer", text("day"))],
         ),
         (
             "TIME-1",
@@ -1088,7 +1102,7 @@ pub(crate) fn intermediate_reached() -> BTreeSet<ConditionCode> {
             fields,
             vec![(
                 "invalid_field_type",
-                Some("REQ-0115"),
+                Some("LOOKUP-5"),
                 vec!["intermediates[0].key"],
                 vec![
                     ("intermediate", text("P")),
@@ -1186,7 +1200,7 @@ pub(crate) fn intermediate_reached() -> BTreeSet<ConditionCode> {
         } else if variant == 4 {
             vec![(
                 "conflicting_absence_policy",
-                Some("LOOKUP-13"),
+                Some("LOOKUP-24"),
                 vec![
                     "intermediates[0].no_match",
                     "intermediates[0].require_match",
@@ -1201,7 +1215,7 @@ pub(crate) fn intermediate_reached() -> BTreeSet<ConditionCode> {
             };
             vec![(
                 "unpaired_fields",
-                Some("REQ-0119"),
+                Some("LOOKUP-10"),
                 vec!["intermediates[0]"],
                 vec![
                     ("intermediate", text("P")),

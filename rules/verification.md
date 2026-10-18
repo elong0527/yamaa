@@ -447,7 +447,7 @@ those [Values](values.md) types. A kind leaves missing each column the table
 gives it no value for. The report carries no version and no timestamp: the
 same specification and inputs give the same report bytes.
 
-Evidence: `schema-verification-log`, `schema-parquet`, `schema-adsl-age-quality`, `schema-row-count-fractions`.
+Evidence: `schema-verification-log`, `schema-parquet`, `schema-adsl-age-quality`, `schema-row-count-fractions`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::date_and_time_data_types_check_each_completed_value_against_their_form`.
 Replaces: REQ-0392, REQ-1174, REQ-1176.
 
 | Column | Type | Value |
@@ -470,7 +470,13 @@ Replaces: REQ-0392, REQ-1174, REQ-1176.
 `NAME` of a check is its registered name under [CHECK-1](#check-1), and a
 column check's `TARGET` is the column it infers there; a handler's `TARGET` is
 the output column whose derivation declares it, missing for a named
-intermediate's own derivations and match keys. A check's `RULE` is the rule
+intermediate's own derivations and match keys. A check that submission
+metadata adds is named for the verification it fails as: a mandatory
+column's as `not_missing` ([SUB-11](profiles/submission.md#sub-11)), a
+declared length's as `max_length` ([SUB-8](profiles/submission.md#sub-8))
+and a codelist binding's as `allowed_values`. The ISO 8601 form of a date or
+time data type ([SUB-26](profiles/submission.md#sub-26)) has no registered
+verification and is named `data_type`. A check's `RULE` is the rule
 its condition cites, the condition the check reports when it is violated, and
 is the same whether the check held or was violated; `CONDITION` names that
 condition only on a violated check. A handler answers the condition its

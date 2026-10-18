@@ -1,0 +1,78 @@
+name: Release compatibility
+
+# Compatibility claims are checked on release branches and on demand.
+# This workflow does not add jobs to ordinary pull requests.
+on:
+  push:
+    branches: ['release/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-compatibility-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  rust-minimum:
+    name: rust (minimum toolchain)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          r: runtime
+          package: 'false'
+      # The other jobs build with the pinned toolchain. Embedders build with
+      # their own, so the workspace rust-version must keep building.
+      - name: Activate the workspace rust-version toolchain
+        run: python -m tools.ci.toolchain --minimum --install
+      - name: Check and lint the workspace with the minimum toolchain
+        env:
+          RUSTFLAGS: -D warnings
+        run: |
+          cargo check --locked --manifest-path rust/Cargo.toml --workspace --all-targets --all-features
+          cargo clippy --locked --manifest-path rust/Cargo.toml --workspace --all-targets --all-features -- -D warnings
+      # An embedder builds the facade from its own workspace, where
+      # rust/Cargo.toml is not the root (#2929). This outside workspace runs
+      # the vendored YAML parser's compact-flow controls, directly and through
+      # the facade. The copied lock keeps it on the reviewed versions.
+      - name: Build the facade from an outside workspace
+        env:
+          RUSTFLAGS: -D warnings
+        run: |
+          cp rust/Cargo.lock rust/tests/embedder/Cargo.lock
+          cargo test --manifest-path rust/tests/embedder/Cargo.toml --target-dir rust/target
+      - name: Check minimal format builds
+        run: python -m tools.ci.format_features
+  python-minimum:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Install the minimum supported Python saved artifact readers
+        run: uv pip install --python python/.venv/bin/python 'polars==1.35.2' 'pyarrow==23.0.1' 'lxml==6.1.3'
+      - run: make test-python
+  python-newest:
+    name: python (3.15)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          python: '3.15'
+      - run: make test-python

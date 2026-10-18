@@ -12,11 +12,12 @@ use std::collections::BTreeMap;
 use crate::expression::SourceSpan;
 
 mod dataset;
-pub(crate) use dataset::lookup_key_type;
 pub use dataset::DatasetFinding;
 
+pub(crate) mod lookup;
+
 mod aggregate;
-pub use aggregate::{AggregateContextCause, AggregateEmptyKey, AggregateFinding};
+pub use aggregate::{AggregateContextCause, AggregateFinding};
 
 mod odm;
 pub use odm::{OdmDeclared, OdmFinding, OdmLocation};
@@ -150,8 +151,7 @@ conditions! {
     ApplicationUnsupported => ("planning", "unsupported_operation", None),
     ApplicationRejected => ("engine", "engine_rejected", None),
     DatasetMultipleValues => ("derivation", "multiple_values_per_key", Some("REQ-0075")),
-    DatasetUnmatchedKey => ("join", "unmatched_key", Some("REQ-0124")),
-    JoinUnmatchedKey => ("join", "unmatched_key", Some("LOOKUP-24")),
+    LookupUnmatchedKey => ("join", "unmatched_key", Some("LOOKUP-24")),
     DatasetMultipleMatches => ("join", "multiple_matches", Some("REQ-0127")),
     DatasetBaselineAmbiguity => ("derivation", "ambiguous_baseline", Some("REQ-0322")),
     DatasetReductionInputType => ("validation", "incompatible_input_type", Some("REQ-0510")),
@@ -168,6 +168,10 @@ conditions! {
     DatetimeShiftRange => ("convert", "conversion_failed", Some("REQ-1300")),
     DurationValueInput => ("validation", "incompatible_input_type", Some("REQ-1301")),
     DurationInvalid => ("impute", "invalid_duration_text", Some("REQ-1301")),
+    DateTextInput => ("validation", "incompatible_input_type", Some("TIME-19")),
+    DateTextGap => ("validation", "missing_required_field", Some("TIME-19")),
+    DateTextInvalid => ("impute", "invalid_date_text", Some("TIME-19")),
+    TimeOfDayInput => ("validation", "incompatible_input_type", Some("TIME-20")),
     TemporalUnit => ("validation", "value_not_permitted", Some("TIME-4")),
     TemporalFieldRequired => ("validation", "missing_required_field", Some("TIME-1")),
     TemporalFieldNotPermitted => ("validation", "unknown_field", Some("TIME-1")),
@@ -179,12 +183,14 @@ conditions! {
     ImputationDayRange => ("validation", "value_not_permitted", Some("REQ-0608")),
     ImputationDayRule => ("validation", "value_not_permitted", Some("REQ-0609")),
     ImputeInvalid => ("impute", "invalid_date_text", Some("REQ-0588")),
+    ImputeIntervalText => ("impute", "interval_or_duration_text", Some("TIME-13")),
     ImputeCalendar => ("impute", "invalid_calendar_date", Some("REQ-0608")),
     ImputeDatetimeInput => ("validation", "incompatible_input_type", Some("REQ-1182")),
     PrecisionDatetimeInput => ("validation", "incompatible_input_type", Some("REQ-1183")),
     ImputationFlagInput => ("validation", "incompatible_input_type", Some("TIME-18")),
     ToDateInput => ("validation", "incompatible_input_type", Some("REQ-0607")),
     ToDateInvalid => ("validation", "invalid_date_text", Some("REQ-0607")),
+    ToDateIntervalText => ("validation", "interval_or_duration_text", Some("TIME-2")),
     TemplateInvalid => ("validation", "invalid_string_template", Some("REQ-0461")),
     TemplateMissing => ("mapping", "missing_input", Some("REQ-0334")),
     ExtractGroup => ("validation", "regex_group_out_of_range", Some("REQ-0816")),
@@ -310,9 +316,6 @@ conditions! {
     AggregateOutputGroups => ("validation", "invalid_aggregate_context", Some("REQ-0507")),
     AggregateOwnGroupKeys => ("validation", "invalid_aggregate_context", Some("REQ-0142")),
     AggregateMixedRelations => ("validation", "mixed_relations", Some("REQ-0504")),
-    AggregateKeyReference => ("validation", "unknown_field", Some("REQ-0141")),
-    AggregateKeyType => ("validation", "incompatible_input_type", Some("REQ-0004")),
-    AggregateMissingKeys => ("validation", "missing_aggregate_keys", Some("REQ-0140")),
     AggregateGroupNotOutputKey => ("validation", "invalid_aggregate_context", Some("REQ-0470")),
     SourceNonAscii => ("validation", "non_ascii_source", Some("REQ-0705")),
     SourceInvalidText => ("validation", "invalid_text", Some("REQ-0029")),
@@ -360,26 +363,16 @@ conditions! {
     IntermediateIdentifierCollision => ("validation", "duplicate_identifier", Some("REQ-0113")),
     IntermediateDatasetReference => ("validation", "unknown_field", Some("REQ-0079")),
     IntermediateRenameOnly => ("validation", "rename_only_intermediate", Some("REQ-1248")),
-    IntermediateAbsenceConflict => ("validation", "conflicting_absence_policy", Some("LOOKUP-13")),
-    IntermediateSelectionUnpaired => ("validation", "unpaired_fields", Some("REQ-0119")),
-    IntermediateEmptyKey => ("validation", "invalid_field_type", Some("REQ-0115")),
     IntermediateRepeatedKey => ("validation", "invalid_field_type", Some("REQ-0115")),
-    IntermediateNoApplicableKeys => ("validation", "no_applicable_keys", Some("REQ-0153")),
-    IntermediateRangeDeclaration => ("validation", "invalid_field_type", Some("REQ-1049")),
-    IntermediateRangeReference => ("validation", "unknown_field", Some("REQ-0121")),
-    IntermediateRangeTypes => ("validation", "incomparable_range_types", Some("REQ-0121")),
     IntermediateColumnReference => ("validation", "unknown_field", Some("REQ-0122")),
     RowDependencyPhaseBoundary => ("validation", "phase_boundary", Some("REQ-0069")),
     QualifiedNumericReference => ("validation", "qualified_identifier", Some("REQ-0442")),
     RowNumericSourceScope => ("validation", "unknown_field", Some("REQ-0410")),
     GroupedRowNumericSourceScope => ("validation", "unknown_field", Some("REQ-0411")),
-    ImplicitSourceKeyType => ("validation", "incompatible_input_type", Some("REQ-0151")),
-    ImplicitSourceNoApplicableKeys => ("validation", "no_applicable_keys", Some("REQ-0152")),
     SourceFilterReference => ("validation", "unknown_field", Some("REQ-0132")),
-    SourceSelectionUnpaired => ("validation", "unpaired_fields", Some("REQ-0119")),
     SourceFilterSingleValue => ("validation", "prohibited_construct", Some("REQ-0148")),
-    SourceAbsenceConflict => ("validation", "conflicting_absence_policy", Some("LOOKUP-24")),
     SourceRequireMatchScope => ("validation", "prohibited_construct", Some("LOOKUP-24")),
+    SourceRangeScope => ("validation", "prohibited_construct", Some("LOOKUP-9")),
     SourceUnknownReference => ("validation", "unknown_field", Some("REQ-0103")),
     VerificationUnknownReference => ("validation", "unknown_field", Some("REQ-0405")),
     OutputMissingKeyFailed => ("output", "missing_key", Some("REQ-0240")),
@@ -401,6 +394,8 @@ conditions! {
     SubmissionKeyMandatory => ("validation", "value_not_permitted", Some("REQ-0881")),
     SubmissionClassFamily => ("validation", "value_not_permitted", Some("REQ-0882")),
     SubmissionMandatoryFailed => ("verification", "not_missing_failed", Some("REQ-0885")),
+    SubmissionDataTypeFailed => ("verification", "data_type_failed", Some("SUB-26")),
+    SubmissionDatetimeColumn => ("validation", "value_not_permitted", Some("SUB-27")),
     SubmissionMandatoryRedundant => ("validation", "redundant_declaration", Some("REQ-0916")),
     SubmissionAdamField => ("validation", "value_not_permitted", Some("REQ-0917")),
     SubmissionOriginSource => ("validation", "origin_source_not_admitted", Some("REQ-0919")),
@@ -470,10 +465,19 @@ conditions! {
     WindowRepeatedGroup => ("validation", "invalid_field_type", Some("REQ-0293")),
     WindowBaselineInputType => ("validation", "incompatible_input_type", Some("REQ-0323")),
     LookupSelectionReference => ("validation", "unknown_field", Some("REQ-0120")),
-    LookupDonorKeyReference => ("validation", "unknown_field", Some("REQ-0116")),
-    LookupOutputKeyReference => ("validation", "unknown_field", Some("REQ-0117")),
     LookupValueReference => ("validation", "unknown_field", Some("REQ-0125")),
-    LookupKeyType => ("validation", "incompatible_input_type", Some("REQ-0323")),
+    // One cause per lookup fault, whichever kind of lookup raises it
+    // (LOOKUP-25): an implicit join, a named intermediate or an aggregate.
+    LookupEmptyKey => ("validation", "invalid_field_type", Some("LOOKUP-5")),
+    LookupNoApplicableKeys => ("validation", "no_applicable_keys", Some("LOOKUP-5")),
+    LookupDonorKeyReference => ("validation", "unknown_field", Some("LOOKUP-5")),
+    LookupMatchValueReference => ("validation", "unknown_field", Some("LOOKUP-5")),
+    LookupKeyType => ("validation", "incompatible_input_type", Some("LOOKUP-9")),
+    LookupRangeDeclaration => ("validation", "invalid_field_type", Some("LOOKUP-9")),
+    LookupRangeReference => ("validation", "unknown_field", Some("REQ-0121")),
+    LookupRangeTypes => ("validation", "incomparable_range_types", Some("REQ-0121")),
+    LookupSelectionUnpaired => ("validation", "unpaired_fields", Some("LOOKUP-10")),
+    LookupAbsenceConflict => ("validation", "conflicting_absence_policy", Some("LOOKUP-24")),
     FlagMissingValueRequired => ("validation", "missing_value_required", Some("REQ-1258")),
     PredicateUnknownField => ("validation", "unknown_field", Some("REQ-0189")),
     PredicateUnresolvableName => ("validation", "unresolvable_name", Some("REQ-0189")),

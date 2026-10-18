@@ -152,7 +152,7 @@
       {
         "phase": "validation",
         "condition": "unknown_field",
-        "requirement": "REQ-0116",
+        "requirement": "LOOKUP-5",
         "spec_paths": [
           "intermediates[1].key"
         ],
@@ -183,7 +183,7 @@
       {
         "phase": "validation",
         "condition": "unknown_field",
-        "requirement": "REQ-0117",
+        "requirement": "LOOKUP-5",
         "spec_paths": [
           "intermediates[1].key"
         ],
@@ -214,7 +214,7 @@
       {
         "phase": "validation",
         "condition": "incompatible_input_type",
-        "requirement": "REQ-0323",
+        "requirement": "LOOKUP-9",
         "spec_paths": [
           "intermediates[1].key"
         ],
@@ -364,7 +364,7 @@
       {
         "phase": "join",
         "condition": "unmatched_key",
-        "requirement": "REQ-0124",
+        "requirement": "LOOKUP-24",
         "spec_paths": [
           "intermediates[0]"
         ],
