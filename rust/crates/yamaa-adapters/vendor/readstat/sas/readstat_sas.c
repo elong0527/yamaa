@@ -26,6 +26,13 @@ unsigned char sas7bdat_magic_number[32] = {
     0x09, 0xc7, 0x31, 0x8c,   0x18, 0x1f, 0x10, 0x11
 };
 
+unsigned char sas7bdat_magic_number_alt[32] = {
+    0x00, 0x00, 0x00, 0x00,   0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00,   0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00,   0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00,   0x18, 0x1f, 0x10, 0x11
+};
+
 unsigned char sas7bcat_magic_number[32] = {
     0x00, 0x00, 0x00, 0x00,   0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00,   0xc2, 0xea, 0x81, 0x63,
@@ -55,6 +62,7 @@ static readstat_charset_entry_t _charset_table[] = {
     { .code = 35,    .name = "ISO-8859-7" },
     { .code = 36,    .name = "ISO-8859-8" },
     { .code = 37,    .name = "ISO-8859-9" },
+    { .code = 38,    .name = "ISO-8859-10" },
     { .code = 39,    .name = "ISO-8859-11" },
     { .code = 40,    .name = "ISO-8859-15" },
     { .code = 41,    .name = "CP437" },
@@ -99,7 +107,7 @@ static readstat_charset_entry_t _charset_table[] = {
     { .code = 126,   .name = "WINDOWS-936" }, // "zwin"
     { .code = 128,   .name = "CP1381" }, // "zpce"
     { .code = 134,   .name = "EUC-JP" },
-    { .code = 136,   .name = "CP949" },
+    { .code = 136,   .name = "CP932" }, // "ms-932" in SAS
     { .code = 137,   .name = "CP942" },
     { .code = 138,   .name = "CP932" }, // "shift-jis" in SAS
     { .code = 140,   .name = "EUC-KR" },
@@ -170,6 +178,7 @@ readstat_error_t sas_read_header(readstat_io_t *io, sas_header_info_t *hinfo,
         goto cleanup;
     }
     if (memcmp(header_start.magic, sas7bdat_magic_number, sizeof(sas7bdat_magic_number)) != 0 &&
+            memcmp(header_start.magic, sas7bdat_magic_number_alt, sizeof(sas7bdat_magic_number_alt)) != 0 &&
             memcmp(header_start.magic, sas7bcat_magic_number, sizeof(sas7bcat_magic_number)) != 0) {
         retval = READSTAT_ERROR_PARSE;
         goto cleanup;
@@ -289,14 +298,14 @@ readstat_error_t sas_read_header(readstat_io_t *io, sas_header_info_t *hinfo,
         retval = READSTAT_ERROR_READ;
         goto cleanup;
     }
-    char major;
-    int minor, revision;
+    char major, revision_tag, revision;
+    int minor;
     /* The release field is not NUL-terminated in the file; copy it into a
      * terminated buffer before handing it to sscanf, which calls strlen on it. */
     char release[sizeof(header_end.release)+1];
     memcpy(release, header_end.release, sizeof(header_end.release));
     release[sizeof(header_end.release)] = '\0';
-    if (sscanf(release, "%c.%04dM%1d", &major, &minor, &revision) != 3) {
+    if (sscanf(release, "%c.%04d%c%c", &major, &minor, &revision_tag, &revision) != 4) {
         retval = READSTAT_ERROR_PARSE;
         goto cleanup;
     }
@@ -311,10 +320,24 @@ readstat_error_t sas_read_header(readstat_io_t *io, sas_header_info_t *hinfo,
         retval = READSTAT_ERROR_PARSE;
         goto cleanup;
     }
+    // revision_tag is usually M, but J has been observed in the wild (not created with SAS?)
+    // files have also been observed with TK in place of the revision details.
+    if ((major == '8' || major == '9') && revision_tag != 'M' && revision_tag != 'J' && revision_tag != 'T') {
+        retval = READSTAT_ERROR_PARSE;
+        goto cleanup;
+    }
     hinfo->minor_version = minor;
-    hinfo->revision = revision;
+    if (revision >= '0' && revision <= '9') {
+        hinfo->revision = revision - '0';
+    } else if (revision_tag == 'T' && revision == 'K') {
+        // files have been observed with TK in place of the revision details.
+        hinfo->revision = 0;
+    } else {
+        retval = READSTAT_ERROR_PARSE;
+        goto cleanup;
+    }
 
-    if ((major == '8' || major == '9') && minor == 0 && revision == 0) {
+    if ((major == '8' || major == '9') && minor == 0 && hinfo->revision == 0) {
         /* A bit of a hack, but most SAS installations are running a minor update */
         hinfo->vendor = READSTAT_VENDOR_STAT_TRANSFER;
     } else {

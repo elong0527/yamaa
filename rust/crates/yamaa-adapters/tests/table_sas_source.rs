@@ -142,6 +142,123 @@ mod table {
             assert_eq!(cells(&read_built(&bytes).unwrap()), [[float(7.0)]]);
         }
         #[test]
+        fn zero_width_character_column_reads_as_empty_text() {
+            // A zero-width character column stores no bytes, so every value
+            // is the zero-length text that `empty_string` interprets.
+            use crate::support::sas7bdat::{Cell, Dataset, Kind, Layout, Page, MIX};
+            let mut dataset = Dataset::new(
+                Layout::LE32,
+                &[
+                    ("X", Kind::Num, 8),
+                    ("Z", Kind::Chr, 0),
+                    ("T", Kind::Chr, 4),
+                ],
+            );
+            dataset.total = 2;
+            dataset.mix_rows = 2;
+            let rows = vec![
+                dataset.row(&[Cell::Num(1.0), Cell::Text(b""), Cell::Text(b"ab")]),
+                dataset.row(&[Cell::Num(2.0), Cell::Text(b""), Cell::Text(b"cd")]),
+            ];
+            let bytes = dataset.file(&[Page::new(MIX, dataset.metadata(), rows)]);
+            assert_eq!(
+                cells(&read_built(&bytes).unwrap()),
+                [
+                    [float(1.0), ValueRef::Missing, ValueRef::Str("ab")],
+                    [float(2.0), ValueRef::Missing, ValueRef::Str("cd")]
+                ]
+            );
+            let mut source = declaration("built.sas7bdat");
+            source.empty_string_present = true;
+            let table = sas_source::parse(&bytes, &source).unwrap();
+            assert_eq!(table.cell(1, 1).unwrap(), ValueRef::Str(""));
+        }
+        #[test]
+        fn numeric_width_changed_after_columns_were_submitted_fails_as_malformed() {
+            // The first attributes subheader describes only X, so Y is
+            // submitted as a zero-width character column. A later
+            // attributes subheader then makes Y a numeric column of width
+            // zero before a row reaches it.
+            use crate::support::sas7bdat::{
+                Cell, Dataset, Field, Kind, Layout, Page, Pointer, META, MIX,
+            };
+            let mut dataset =
+                Dataset::new(Layout::LE32, &[("X", Kind::Num, 8), ("Y", Kind::Num, 8)]);
+            dataset.total = 2;
+            dataset.mix_rows = 1;
+            let layout = dataset.layout;
+            let (blob, compression, names) = dataset.text();
+            let metadata = vec![
+                Pointer::metadata(layout.row_size(16, 2, 0, 1, compression)),
+                Pointer::metadata(layout.column_size(2)),
+                Pointer::metadata(layout.column_text(&blob)),
+                Pointer::metadata(layout.column_name(&names)),
+                Pointer::metadata(layout.column_attrs(&dataset.fields[..1])),
+            ];
+            let row = dataset.row(&[Cell::Num(1.0), Cell::Num(2.0)]);
+            let changed = Field {
+                name: "Y".into(),
+                kind: Kind::Num,
+                offset: 8,
+                width: 0,
+            };
+            let bytes = dataset.file(&[
+                Page::new(MIX, metadata, vec![row.clone()]),
+                Page::new(
+                    META,
+                    vec![
+                        Pointer::metadata(layout.column_attrs(&[changed])),
+                        Pointer::raw_row(row),
+                    ],
+                    vec![],
+                ),
+            ]);
+            assert!(matches!(
+                read_built(&bytes),
+                Err(Error::Invalid("malformed"))
+            ));
+        }
+        #[test]
+        fn sas_7_release_strings_and_tk_revisions_are_accepted() {
+            // The header's release field reads major.minor, a revision tag
+            // and a revision. Release 8 and 9 tags are M, J or T (as in TK);
+            // other majors, such as SAS 7, may carry any tag.
+            use crate::support::sas7bdat::{Cell, Dataset, Kind, Layout, Page, MAGIC, MIX};
+            let file = |release: &[u8; 8], magic: [u8; 32]| {
+                let mut dataset = Dataset::new(Layout::LE32, &[("X", Kind::Num, 8)]);
+                dataset.total = 1;
+                dataset.mix_rows = 1;
+                dataset.release = *release;
+                dataset.magic = magic;
+                let row = dataset.row(&[Cell::Num(3.0)]);
+                dataset.file(&[Page::new(MIX, dataset.metadata(), vec![row])])
+            };
+            for release in [b"9.0401M6", b"7.00.00B", b"9.0401J0", b"9.0401TK"] {
+                let table = read_built(&file(release, MAGIC)).unwrap();
+                assert_eq!(cells(&table), [[float(3.0)]], "{release:?}");
+            }
+            for release in [b"9.0401X0", b"9.0401MX", b"9.0401TX", b"9-0401M0"] {
+                assert!(
+                    matches!(
+                        read_built(&file(release, MAGIC)),
+                        Err(Error::Invalid("malformed"))
+                    ),
+                    "{release:?}"
+                );
+            }
+            // Some writers zero every magic byte but the last four.
+            let mut alternative = [0; 32];
+            alternative[28..].copy_from_slice(&MAGIC[28..]);
+            let table = read_built(&file(b"9.0401M6", alternative)).unwrap();
+            assert_eq!(cells(&table), [[float(3.0)]]);
+            let mut unknown = MAGIC;
+            unknown[31] ^= 1;
+            assert!(matches!(
+                read_built(&file(b"9.0401M6", unknown)),
+                Err(Error::Invalid("malformed"))
+            ));
+        }
+        #[test]
         fn big_endian_64_bit_signatures_keep_their_four_byte_layout() {
             // In a 64-bit big-endian file the row-size signature is followed
             // by four unspecified bytes, and only 0xFFFFFFFF opens the
