@@ -65,6 +65,7 @@ typedef struct sas7bdat_ctx_s {
     uint64_t        page_size;
     char           *page;
     char           *row;
+    size_t          row_buffer_len;
 
     char           *moved_page;
     int64_t         moved_page_index;
@@ -263,6 +264,14 @@ static readstat_error_t sas7bdat_parse_row_size_subheader(const char *subheader,
         total_row_count = sas_read4(&subheader[24], ctx->bswap);
         deleted_row_count = sas_read4(&subheader[28], ctx->bswap);
         page_row_count = sas_read4(&subheader[60], ctx->bswap);
+    }
+
+    /* Submitted columns fit the row length in force when they were submitted,
+     * and the compressed row buffer holds that many bytes. A later row-size
+     * subheader may repeat the row length but not change it. */
+    if (ctx->did_submit_columns && row_length != ctx->row_length) {
+        retval = READSTAT_ERROR_PARSE;
+        goto cleanup;
     }
 
     sas_text_ref_t file_label_ref = sas7bdat_parse_text_ref(&subheader[len-130], ctx);
@@ -570,11 +579,18 @@ cleanup:
     return retval;
 }
 
+/* Each decompressor writes up to the row length into the row buffer, which
+ * records the length it was allocated for. Without a buffer, or one shorter
+ * than the row length, nothing is written. */
+static int sas7bdat_row_buffer_holds_row(const sas7bdat_ctx_t *ctx) {
+    return ctx->row != NULL && ctx->row_length <= ctx->row_buffer_len;
+}
+
 static readstat_error_t sas7bdat_parse_subheader_rdc(const char *subheader, size_t len, sas7bdat_ctx_t *ctx) {
     readstat_error_t retval = READSTAT_OK;
     const unsigned char *input = (const unsigned char *)subheader;
     char *buffer = ctx->row;
-    if (buffer == NULL) return READSTAT_ERROR_PARSE;
+    if (!sas7bdat_row_buffer_holds_row(ctx)) return READSTAT_ERROR_PARSE;
     char *output = buffer;
     while (input + 2 <= (const unsigned char *)subheader + len) {
         int i;
@@ -665,7 +681,7 @@ static readstat_error_t sas7bdat_parse_subheader_rle(const char *subheader, size
     if (ctx->row_limit == ctx->parsed_row_count)
         return READSTAT_OK;
     /* Without an output buffer the decompressor only counts bytes. */
-    if (ctx->row == NULL)
+    if (!sas7bdat_row_buffer_holds_row(ctx))
         return READSTAT_ERROR_PARSE;
 
     readstat_error_t retval = READSTAT_OK;
@@ -692,8 +708,10 @@ cleanup:
 static readstat_error_t sas7bdat_parse_subheader_compressed(const char *subheader, size_t len, sas7bdat_ctx_t *ctx) {
     /* Columns submitted for uncompressed rows allocated no row buffer. They
      * already fit the admitted row length, so allocate it on first use. */
-    if (ctx->row == NULL && ctx->row_length)
+    if (ctx->row == NULL && ctx->row_length) {
         READSTAT_RESIZE_OR_RETURN(ctx->row, ctx->row_length);
+        ctx->row_buffer_len = ctx->row_length;
+    }
     if (ctx->rdc_compression)
         return sas7bdat_parse_subheader_rdc(subheader, len, ctx);
 
@@ -887,6 +905,7 @@ static readstat_error_t sas7bdat_submit_columns(sas7bdat_ctx_t *ctx, int compres
     if (retval != READSTAT_OK) goto cleanup;
     if (compressed) {
         READSTAT_RESIZE_OR_CLEANUP(ctx->row, ctx->row_length);
+        ctx->row_buffer_len = ctx->row_length;
     }
 cleanup:
     return retval;

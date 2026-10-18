@@ -31,8 +31,9 @@ admission, SAS physical extent validation, shared ownership of column-text
 metadata pages, unsupported compression signature
 rejection, transport physical type/offset and partial-row validation, transport
 version 8 observation count admission, overlapping RDC back-reference
-propagation, accounting for records deleted in place, and exact IBM numeric
-precision facts used by narrowing. The row text scratch buffer is sized from
+propagation, accounting for records deleted in place, row length consistency
+once columns are submitted, and exact IBM numeric precision facts used by
+narrowing. The row text scratch buffer is sized from
 the validated submitted columns rather than from every column attribute slot.
 A transport member that declares no variables (or a negative count) reaches
 the metadata handler, as a SAS file without columns does, instead of failing
@@ -63,9 +64,12 @@ table-sized metadata allocation. Allocation arithmetic and source page/header
 extents are checked. Compressed SAS row buffers are allocated only after
 physical scalar widths and offsets pass, when columns are submitted for a
 compressed row or, if uncompressed rows came first, at the first compressed
-row. Columns are submitted only once every declared column has attributes and
-a name: a column without attributes would otherwise read as a zero-width
-character column. Snapshot reads and seeks validate their ranges against the held input.
+row. The buffer records its length. Once columns are submitted, a row-size
+subheader may repeat the row length but not change it, and each decompressor
+refuses a row length that its buffer does not hold. Columns are submitted only
+once every declared column has attributes and a name: a column without
+attributes would otherwise read as a zero-width character column. Snapshot
+reads and seeks validate their ranges against the held input.
 The SAS header/page sizes are bounded by the captured snapshot framing, rather
 than a separate 16 MiB threshold. Their minimum framing sizes still apply.
 Text-blob count follows the 65,536 slots addressable by source uint16 references.

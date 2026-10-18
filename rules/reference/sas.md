@@ -146,13 +146,17 @@ compression signatures, malformed compressed data, duplicate or empty field
 names and incomplete physical framing fail before derivation.
 
 Fails: `source_sas_invalid`.
-Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/sas.rs`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::unsupported_compression_has_a_specific_retained_cause`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::counted_deletions_without_marks_are_refused_with_a_rewrite_hint`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::version_8_observation_count_keeps_trailing_blank_records`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::transport_without_a_usable_count_treats_trailing_blank_records_as_padding`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::trailing_blank_records_of_any_width_are_padding_only_without_a_count`, `python/tests/installed/installed_sas_sources.py::test_bad_sources_are_not_read_by_check_and_failed_saves_have_no_output`.
+Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/sas.rs`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::unsupported_compression_has_a_specific_retained_cause`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::counted_deletions_without_marks_are_refused_with_a_rewrite_hint`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::version_8_observation_count_keeps_trailing_blank_records`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::transport_without_a_usable_count_treats_trailing_blank_records_as_padding`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::trailing_blank_records_of_any_width_are_padding_only_without_a_count`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::a_row_size_subheader_cannot_change_the_row_length_once_columns_are_submitted`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::compressed_records_after_a_changed_row_length_are_refused_before_they_are_written`, `python/tests/installed/installed_sas_sources.py::test_bad_sources_are_not_read_by_check_and_failed_saves_have_no_output`.
 Replaces: REQ-1317.
 
 Cause `deleted_records` reports records deleted in place that cannot be
 reconciled with the dataset's count of them ([SAS-8](#sas-8)). That finding's
 context adds a `hint` to rewrite the dataset first, for example with PROC COPY
 or a DATA step.
+
+A `sas7bdat` input has one row length. A row-size subheader that follows the
+first record or data page may repeat it, and one that changes it fails as
+`malformed`.
 
 Transport member descriptor chains at 80-byte boundaries are structural
 records; multiple complete chains fail, including concatenated transport

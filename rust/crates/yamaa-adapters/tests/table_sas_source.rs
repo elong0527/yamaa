@@ -125,6 +125,108 @@ mod table {
                 ]
             );
         }
+        /// Where the record after a repeated row-size subheader is stored.
+        #[derive(Clone, Copy)]
+        enum Follow {
+            Nothing,
+            InPlace,
+            Moved,
+        }
+        /// A compressed dataset of `X` and `T` whose first record is stored for
+        /// a row length of 16. A second row-size subheader then gives `later`
+        /// as the row length, and the second record, stored for that length,
+        /// follows it compressed with RDC or RLE, in place or as a moved record.
+        fn restated_row_length(
+            layout: crate::support::sas7bdat::Layout,
+            rdc: bool,
+            later: u64,
+            follow: Follow,
+        ) -> Vec<u8> {
+            use crate::support::sas7bdat::{
+                rdc as rdc_bytes, rle, Cell, Dataset, Kind, Page, Pointer, META,
+            };
+            let mut dataset = Dataset::new(layout, &[("X", Kind::Num, 8), ("T", Kind::Chr, 8)]);
+            dataset.compression = Some(if rdc { *b"SASYZCR2" } else { *b"SASYZCRL" });
+            dataset.total = if matches!(follow, Follow::Nothing) {
+                1
+            } else {
+                2
+            };
+            let (_, compression, _) = dataset.text();
+            let compress = |row: &[u8]| if rdc { rdc_bytes(row) } else { rle(row) };
+            let mut pointers = dataset.metadata();
+            let first = dataset.row(&[Cell::Num(1.0), Cell::Text(b"one")]);
+            pointers.push(Pointer::coded(compress(&first), 4));
+            let restated = layout.row_size(later, dataset.total, 0, 0, compression);
+            pointers.push(Pointer::metadata(restated));
+            let mut second = dataset.row(&[Cell::Num(2.0), Cell::Text(b"two")]);
+            second.resize(later as usize, 0);
+            let mut moved = None;
+            match follow {
+                Follow::Nothing => {}
+                Follow::InPlace => pointers.push(Pointer::coded(compress(&second), 4)),
+                Follow::Moved => {
+                    pointers.push(Pointer::reference(1, 0));
+                    let stored = Pointer::coded(compress(&second), 0x06);
+                    moved = Some(Page::new(META, vec![stored], vec![]));
+                }
+            }
+            let mut pages = vec![Page::new(META, pointers, vec![])];
+            pages.extend(moved);
+            dataset.file(&pages)
+        }
+        #[test]
+        fn a_row_size_subheader_cannot_change_the_row_length_once_columns_are_submitted() {
+            // The submitted columns fit the row length in force at the first
+            // record, and the compressed row buffer holds that many bytes. A
+            // later row-size subheader may repeat the row length. One that
+            // changes it is refused even when no record follows, whether it
+            // shortens the row or lengthens it.
+            use crate::support::sas7bdat::Layout;
+            for layout in [Layout::LE32, Layout::LE64, Layout::BE32, Layout::BE64] {
+                for rdc in [false, true] {
+                    for follow in [Follow::InPlace, Follow::Moved] {
+                        let bytes = restated_row_length(layout, rdc, 16, follow);
+                        assert_eq!(
+                            cells(&read_built(&bytes).unwrap()),
+                            [
+                                [float(1.0), ValueRef::Str("one")],
+                                [float(2.0), ValueRef::Str("two")]
+                            ],
+                            "{layout:?} rdc {rdc}"
+                        );
+                    }
+                    for later in [8, 15, 17, 4096] {
+                        let bytes = restated_row_length(layout, rdc, later, Follow::Nothing);
+                        assert!(
+                            matches!(read_built(&bytes), Err(Error::Invalid("malformed"))),
+                            "{layout:?} rdc {rdc} later {later}"
+                        );
+                    }
+                }
+            }
+        }
+        #[test]
+        fn compressed_records_after_a_changed_row_length_are_refused_before_they_are_written() {
+            // A record stored for the longer row length would decompress past
+            // a buffer allocated for the first. Each way of storing a
+            // compressed record is refused: RLE and RDC, in place and moved.
+            use crate::support::sas7bdat::Layout;
+            for layout in [Layout::LE32, Layout::LE64, Layout::BE32, Layout::BE64] {
+                for rdc in [false, true] {
+                    for follow in [Follow::InPlace, Follow::Moved] {
+                        for later in [17, 32, 200] {
+                            let bytes = restated_row_length(layout, rdc, later, follow);
+                            assert!(
+                                matches!(read_built(&bytes), Err(Error::Invalid("malformed"))),
+                                "{layout:?} rdc {rdc} moved {} later {later}",
+                                matches!(follow, Follow::Moved)
+                            );
+                        }
+                    }
+                }
+            }
+        }
         #[test]
         fn release_field_without_a_terminator_still_parses() {
             // The header's 120-byte release block holds no NUL byte at all.
