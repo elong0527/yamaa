@@ -48,7 +48,7 @@ pub(super) fn value(
 enum Kind {
     Literal(Option<ColumnType>),
     Reference(String),
-    Numeric(crate::numeric_parser::ParsedNumeric),
+    Numeric(std::boxed::Box<CompiledExpression>),
     Choice(Vec<Kind>),
     StrictChoice(Vec<Kind>),
     Unavailable,
@@ -114,8 +114,9 @@ fn prepare_kind(
             Kind::Choice(kinds)
         }
         "compute" => {
-            match crate::numeric_parser::parse_numeric(text(d, field(d, payload, "expr")?)?) {
-                Ok(plan) => Kind::Numeric(plan),
+            let expression = text(d, field(d, payload, "expr")?)?;
+            match compile(expression, ExpressionContext::Compute, "") {
+                Ok(compiled) => Kind::Numeric(std::boxed::Box::new(compiled)),
                 Err(_) => Kind::Unavailable,
             }
         }
@@ -222,32 +223,7 @@ fn prepare_driver_kind(
         _ => Kind::Unavailable,
     })
 }
-fn unify(items: impl Iterator<Item = Option<ColumnType>>) -> Option<ColumnType> {
-    let mut kind = None;
-    for item in items {
-        let item = item?;
-        kind = match kind {
-            None => Some(item),
-            Some(previous) if previous == item => Some(item),
-            Some(ColumnType::Int | ColumnType::Float)
-                if matches!(item, ColumnType::Int | ColumnType::Float) =>
-            {
-                Some(ColumnType::Float)
-            }
-            _ => return None,
-        };
-    }
-    kind
-}
-fn unify_exact(mut items: impl Iterator<Item = Option<ColumnType>>) -> Option<ColumnType> {
-    let kind = items.next()??;
-    for item in items {
-        if item? != kind {
-            return None;
-        }
-    }
-    Some(kind)
-}
+use crate::expression::unify_exact;
 
 impl Kind {
     fn missing_only(&self) -> bool {
@@ -282,48 +258,7 @@ impl Kind {
                     .filter(|item| !item.missing_only())
                     .map(|item| item.infer(lookup)),
             ),
-            Self::Numeric(parsed) => {
-                use crate::numeric_parser::{NumericFunction as F, ParsedKind as K};
-                let mut kinds = Vec::new();
-                for node in parsed.nodes() {
-                    let kind = match &node.kind {
-                        K::Number { fractional } => Some(if *fractional {
-                            ColumnType::Float
-                        } else {
-                            ColumnType::Int
-                        }),
-                        K::Null => None,
-                        K::Identifier => {
-                            lookup(&parsed.expression()[node.span.start..node.span.end])
-                        }
-                        K::Unary { operand, .. } | K::Group { operand } => kinds[*operand],
-                        K::Binary {
-                            operator: crate::numeric::BinaryOperator::Divide,
-                            ..
-                        } => Some(ColumnType::Float),
-                        K::Binary { left, right, .. } => {
-                            unify([kinds[*left], kinds[*right]].into_iter())
-                        }
-                        K::Call {
-                            function:
-                                F::Sqrt | F::Exp | F::Ln | F::Power | F::Ceil | F::Floor | F::Trunc,
-                            ..
-                        } => Some(ColumnType::Float),
-                        // A missing float does not promote a present integer,
-                        // so mixed operand kinds cannot promise a float result.
-                        K::Call {
-                            function: F::NullIf,
-                            arguments,
-                            ..
-                        } => unify_exact(arguments.iter().map(|&index| kinds[index])),
-                        K::Call { arguments, .. } => {
-                            unify(arguments.iter().map(|&index| kinds[index]))
-                        }
-                    };
-                    kinds.push(kind);
-                }
-                kinds[parsed.root()]
-            }
+            Self::Numeric(compiled) => compiled.result_type(lookup),
         }
     }
 }
@@ -1377,14 +1312,14 @@ fn rebase(
 #[cfg(test)]
 mod inference_tests {
     use super::*;
-    use crate::{evaluation::NumericResolver, numeric::Number, value::Selection};
+    use crate::{expression::Resolver, numeric::Number, value::Selection};
     use std::convert::Infallible;
 
     struct Inputs {
         integer: Value,
         float: Value,
     }
-    impl NumericResolver for Inputs {
+    impl Resolver for Inputs {
         type Error = Infallible;
         fn resolve(&mut self, name: &str) -> Result<Selection, Self::Error> {
             Ok(Selection::Present(match name {
@@ -1398,9 +1333,14 @@ mod inference_tests {
     #[test]
     fn mixed_nullif_kinds_remain_unknown_when_missing_floats_preserve_integers() {
         let expression = "NULLIF(INT_COL, FLOAT_COL)";
-        let parsed = crate::numeric_parser::parse_numeric(expression).unwrap();
+        let compiled = crate::expression::compile(
+            expression,
+            crate::expression::Context::Compute,
+            "donor.compute",
+        )
+        .unwrap();
         assert_eq!(
-            Kind::Numeric(parsed).infer(&|name| match name {
+            Kind::Numeric(std::boxed::Box::new(compiled.clone())).infer(&|name| match name {
                 "INT_COL" => Some(ColumnType::Int),
                 "FLOAT_COL" => Some(ColumnType::Float),
                 _ => None,
@@ -1408,14 +1348,15 @@ mod inference_tests {
             None,
             "a possibly missing float cannot promise a float result",
         );
-        let plan = crate::numeric_compiler::compile_numeric(expression, "donor.compute").unwrap();
+        let plan = compiled;
         for (integer, float, expected) in [
             (Value::Int(7), Value::Missing, Number::Int(7)),
             (Value::Int(7), Value::float(2.5), Number::float(7.0)),
             (Value::Missing, Value::Missing, Number::Missing),
         ] {
             assert_eq!(
-                plan.evaluate(&mut Inputs { integer, float }).unwrap(),
+                plan.evaluate_number(&mut Inputs { integer, float })
+                    .unwrap(),
                 expected
             );
         }

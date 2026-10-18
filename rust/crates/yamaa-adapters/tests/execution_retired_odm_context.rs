@@ -908,7 +908,7 @@ rows:
                         Some(owner_identity.as_str())
                     );
                     assert_eq!(prepared.capture_reads(), if inherited { 2 } else { 1 });
-                    let expected = json!([{"phase":"validation","condition":"invalid_predicate","requirement":"REQ-0188","spec_paths":["rows[1].filter"],"context":context}]);
+                    let expected = json!([{"phase":"validation","condition":"invalid_expression","requirement":"REQ-0188","spec_paths":["rows[1].filter"],"context":context}]);
                     let written = entry.to_str().unwrap();
                     let request = || Request {
                         specification: written,

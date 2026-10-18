@@ -57,7 +57,9 @@ mod execution {
                 assert_eq!(error.spec_path, "verifications[1].assert.require");
                 assert!(matches!(
                     error.kind,
-                    predicate::ErrorKind::Condition(predicate::Condition::IncompatiblePair { .. })
+                    expression::ErrorKind::Condition(
+                        expression::Condition::IncompatiblePair { .. }
+                    )
                 ));
                 assert_eq!(records.len(), 1);
                 assert_eq!(records[0].failed_count, 1);
@@ -121,7 +123,7 @@ mod execution {
             };
             assert_eq!(
                 error.kind,
-                predicate::ErrorKind::Condition(predicate::Condition::DanglingEscape)
+                expression::ErrorKind::Condition(expression::Condition::DanglingEscape)
             );
             assert_eq!(records.len(), 1);
             assert_eq!(records[0].failed_count, 0);

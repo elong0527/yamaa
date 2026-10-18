@@ -12,7 +12,6 @@ use super::*;
 use crate::dataset::Verification;
 use crate::{
     bound_expression::{Binding, BoundPredicate, Read},
-    predicate_compiler,
     reference_scope::{self, Phase, Reach, Scope},
 };
 
@@ -55,10 +54,7 @@ struct Template {
     driver: String,
     groups: Option<Vec<String>>,
     declarations: Vec<SharedDeclaration>,
-    filter: Option<(
-        String,
-        Result<crate::predicate::Plan, predicate_compiler::Error>,
-    )>,
+    filter: Option<(String, Result<CompiledExpression, CompileError>)>,
 }
 fn deferred_odm_contexts(
     declarations: &[Template],
@@ -320,26 +316,26 @@ fn default_reads(
             } else {
                 field(d, payload, "condition")?
             };
-            match crate::predicate_parser::parse_predicate(text(d, condition)?) {
-                Ok(parsed) => {
-                    for name in parsed.identifiers() {
+            match compile(text(d, condition)?, ExpressionContext::Predicate, "") {
+                Ok(compiled) => {
+                    for name in compiled.identifiers() {
                         reference(name);
                     }
                 }
-                Err(crate::predicate_parser::ParseError::Grammar { .. }) => (),
-                Err(error) => return Err(PrepareError::predicate_parse(error, None)),
+                Err(CompileError::Invalid { .. }) => (),
+                Err(error) => return Err(PrepareError::expression(error, None)),
             }
         }
         "compute" => {
             let expression = text(d, field(d, payload, "expr")?)?;
-            match crate::numeric_parser::parse_numeric(expression) {
-                Ok(parsed) => {
-                    for name in parsed.identifiers() {
+            match compile(expression, ExpressionContext::Compute, "") {
+                Ok(compiled) => {
+                    for name in compiled.identifiers() {
                         reference(name);
                     }
                 }
-                Err(crate::numeric_parser::ParseError::Grammar { .. }) => {}
-                Err(error) => return Err(PrepareError::numeric_parse(error, None)),
+                Err(CompileError::Invalid { .. }) => {}
+                Err(error) => return Err(PrepareError::expression(error, None)),
             }
         }
         "aggregate" => return Ok((false, reads, Some("aggregate"))),
@@ -783,7 +779,7 @@ fn bind_assignment(
 
 #[allow(clippy::too_many_arguments)]
 fn bind_template_filter(
-    predicate: Option<&crate::predicate::Plan>,
+    predicate: Option<&crate::expression::CompiledExpression>,
     grouped: bool,
     template: &Template,
     filter_path: &str,
@@ -1044,11 +1040,9 @@ fn bind_template(
     let predicate = match &template.filter {
         Some((
             text,
-            Err(predicate_compiler::Error::Parse(crate::predicate_parser::ParseError::Grammar {
-                position,
-                failure,
-                ..
-            })),
+            Err(CompileError::Invalid {
+                position, failure, ..
+            }),
         )) => {
             findings.push(BindFinding::Lookup(LookupFinding::grammar(
                 &filter_path,
@@ -1058,7 +1052,7 @@ fn bind_template(
             )));
             None
         }
-        Some((_, Err(error))) => return Err(BindError::PredicatePolicy(error.clone())),
+        Some((_, Err(error))) => return Err(BindError::ExpressionPolicy(error.clone())),
         Some((_, Ok(plan))) => Some(plan),
         None => None,
     };
@@ -1066,11 +1060,7 @@ fn bind_template(
     // Qualified grouped-filter failures precede derivation binding, as in reference planning.
     if let Some(plan) = predicate.filter(|_| grouped) {
         let mut seen = std::collections::BTreeSet::new();
-        for identifier in plan
-            .identifiers()
-            .into_iter()
-            .filter(|name| name.contains('.'))
-        {
+        for identifier in plan.identifiers().filter(|name| name.contains('.')) {
             if !seen.insert(identifier) {
                 continue;
             }
@@ -1205,10 +1195,7 @@ fn bind_template(
     }))
 }
 
-type RowFilterDeclaration = Option<(
-    String,
-    Result<crate::predicate::Plan, predicate_compiler::Error>,
-)>;
+type RowFilterDeclaration = Option<(String, Result<CompiledExpression, CompileError>)>;
 
 fn prepare_row_filters(
     d: &Document,
@@ -1223,17 +1210,11 @@ fn prepare_row_filters(
                 .map(|id| {
                     let expression = text(d, id)?;
                     let path = format!("rows[{index}].filter");
-                    let compiled = predicate_compiler::compile(expression, &path);
+                    let compiled = compile(expression, ExpressionContext::Predicate, &path);
                     match &compiled {
-                        Ok(_)
-                        | Err(predicate_compiler::Error::Parse(
-                            crate::predicate_parser::ParseError::Grammar { .. },
-                        )) => {}
-                        Err(predicate_compiler::Error::Internal) => {
-                            return Err(PrepareError::Internal)
-                        }
+                        Ok(_) | Err(CompileError::Invalid { .. }) => {}
                         Err(error) => {
-                            return Err(PrepareError::predicate(error.clone(), Some(&path)))
+                            return Err(PrepareError::expression(error.clone(), Some(&path)))
                         }
                     }
                     Ok((String::from(expression), compiled))

@@ -1,20 +1,24 @@
 # Closed grammars
 
-The language admits four closed grammars. Each one is defined once, here:
+The language admits two closed grammars. Each one is defined once, here:
 
 | Contract | Rule | Written in |
 |---|---|---|
-| [`predicate.yaml`](predicate.yaml) | [Formulas](../../rules/formulas.md#formula-1) | a field typed `predicate` |
-| [`numeric.yaml`](numeric.yaml) | [Formulas](../../rules/formulas.md#formula-10) | `compute.expr` |
+| [`expression.yaml`](expression.yaml) | [Formulas](../../rules/formulas.md#formula-1) | a field typed `predicate`, `compute.expr` and `aggregate.expr` |
 | [`string-template.yaml`](string-template.yaml) | [Text](../../rules/text.md#text-3) | `str_template.template` |
-| [`aggregate.yaml`](aggregate.yaml) | [Formulas](../../rules/formulas.md#formula-17) | `aggregate.expr` |
+
+The expression grammar is one language read in three contexts. A context fixes
+the root a text must have and the constructs, functions and reducers it admits
+([FORMULA-27](../../rules/formulas.md#formula-27)), so the same text can be
+admitted in one field and refused in another.
 
 These files are the single authored grammar truth for the shared Rust parser
 used by Python and R. Repository validation renders each rule's grammar block
 from `productions` and validates the structure and vocabulary of every contract.
 The typed core replay checks every case's exact parse shape, collected identifier
-set and decision, and expands the declared function arities, reducers, reserved
-words and comparison operators into independent acceptance boundaries. Installed
+set and decision in its context, and expands the declared function arities,
+reducers, reserved words and comparison operators into independent acceptance
+boundaries in every context. Installed
 Python and R public suites put the same texts into real specification fields;
 later binding failures remain separate from grammar decisions. Empty expression
 fields fail public schema admission under REQ-0287 before reaching the parser.
@@ -31,12 +35,16 @@ accept different specifications.
 | `contract_version` | the version of this contract, `MAJOR.MINOR.PATCH` |
 | `rule` | the rule that owns the grammar |
 | `start` | the production a text must derive from |
+| `contexts` | the fields the grammar is read in, when there is more than one |
 | `productions` | the ordered productions, each a `name` and a `definition` |
 | `imports` | each non-terminal another contract defines, and that contract |
 | `vocabulary` | each non-terminal that names tokens rather than deriving them |
 | `reserved` | the spellings a bare identifier may not take |
-| `prohibited` | each spelling reserved for a construct the grammar refuses |
 | `cases` | the vectors every implementation must reproduce |
+
+The expression vocabulary declares each `function` with its argument bounds
+and its `result`, `numeric` or `boolean`, and each `reducer` with the argument
+forms it takes: `expression`, and `star` for the record star of `COUNT`.
 
 A `definition` is EBNF: a quoted terminal is literal, `[x]` is optional, `x*`
 and `{x}` repeat, `(x | y)` groups alternatives, and `...` spans a scalar
@@ -68,6 +76,7 @@ make about it:
 | Key | Meaning |
 |---|---|
 | `id` | a stable name for the case |
+| `context` | the context the text is read in, for a grammar with `contexts` |
 | `covers` | the behavior the case is evidence for |
 | `text` | the text to read |
 | `parse` | `accept` or `reject` |
@@ -115,6 +124,9 @@ parenthesis in the source text groups and leaves no trace in the shape.
 A function, reducer, or keyword is written in upper case because its spelling
 is case-insensitive; an identifier is written as the text spells it because
 its spelling is not. A quoted value doubles an interior quote, as predicates do.
+A sign written before a number belongs to the literal, so `-1` is `(int -1)`
+and `-9223372036854775808` is the least `int`; a sign before anything else is
+a unary sign, so `-A` is `(neg (id A))`.
 
 ## Running the vectors
 
@@ -122,7 +134,7 @@ From the repository root, with Rust 1.90.0 and `py-yaml12==0.2.0` installed:
 
 ```bash
 python3 -m tools.validation.validate_repository --root .
-python3 -m tools.numeric.check_shared_grammar
+cd rust && cargo test --locked -p yamaa-adapters --test declaration_contract_vectors
 ```
 
 The first checks the rule blocks and contract structure. The second replays

@@ -4,7 +4,7 @@ use crate::bound_expression::BoundPredicate;
 use crate::dataset::execution as dataset;
 use crate::{
     bound_expression::{Binding, Read},
-    predicate::{ErrorKind, Truth},
+    expression::{Condition, ErrorKind, Truth},
     table::TableAccess,
     temporal::{Date, DateTime, Precision},
     value::{ColumnType, Value},
@@ -57,14 +57,17 @@ fn validate_predicate<E>(
     }
     let sample_predicate = BoundPredicate::new(predicate.plan().clone(), bindings)
         .expect("admitted verification names");
-    crate::dataset::execution::predicates::evaluate(&sample_predicate, dataset, 0, &samples)
-        .map_err(|error| {
-            Box::new(ExecutionError::VerificationPredicate {
-                error,
-                records: std::mem::take(records),
-            })
-        })?;
-    Ok(())
+    match crate::dataset::execution::predicates::evaluate(&sample_predicate, dataset, 0, &samples) {
+        // Samples expose type faults; an arithmetic failure depends on values.
+        Err(error) if matches!(error.kind, ErrorKind::Condition(Condition::Arithmetic(_))) => {
+            Ok(())
+        }
+        Err(error) => Err(Box::new(ExecutionError::VerificationPredicate {
+            error: *error,
+            records: std::mem::take(records),
+        })),
+        Ok(_) => Ok(()),
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -92,7 +95,7 @@ fn evaluate_predicate<T: TableAccess + ?Sized>(
         )
         .map_err(|error| {
             Box::new(ExecutionError::VerificationPredicate {
-                error,
+                error: *error,
                 records: std::mem::take(records),
             })
         });
@@ -103,10 +106,11 @@ fn evaluate_predicate<T: TableAccess + ?Sized>(
     .map_err(|error| match *error {
         ExecutionError::Predicate { source_row, error } => match error.kind {
             ErrorKind::Condition(condition) => Box::new(ExecutionError::VerificationPredicate {
-                error: crate::predicate::EvaluationError {
+                error: crate::expression::EvaluationError {
                     spec_path: error.spec_path,
                     expression: error.expression,
                     route: error.route,
+                    source_span: error.source_span,
                     kind: ErrorKind::Condition(condition),
                 },
                 records: std::mem::take(records),

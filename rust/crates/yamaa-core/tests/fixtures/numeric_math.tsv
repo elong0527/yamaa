@@ -32,7 +32,7 @@ ln-operand-error	LN(1 / 0)	-	error:division_by_zero:REQ-0430	-	unary
 power-eager	POWER(A, B)	A=missing	error:unknown_field:REQ-0443:B	A,B	right
 power-second-failure-first	POWER(-2, B)	B=str:0.5	error:incompatible_input_type:REQ-0444:B:str	B	right
 power-first-failure	POWER(A, B)	B=int:2	error:unknown_field:REQ-0443:A	A	left
-power-literal-overflow	POWER(9223372036854775808, A)	A=int:2	error:integer_overflow:REQ-0434:9223372036854775808	-	left
+power-literal-overflow	POWER(9223372036854775808, A)	A=int:2	error:integer_overflow:REQ-0014	-	-
 math-nested-domain	EXP(LN(A))	A=int:0	error:ln_of_nonpositive:REQ-0432	A	unary
 math-normalization-before-next	LN(EXP(A))	A=int:710	missing	A	-
 math-nonfinite-literal	POWER(1, 1e9999)	-	missing	-	-

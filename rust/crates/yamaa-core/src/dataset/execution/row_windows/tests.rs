@@ -3,6 +3,7 @@ use crate::{
     dataset::{
         Assignment, DatasetPlan, Expression, OrderTerm, RowMode, RowTemplate, Window, WindowKind,
     },
+    expression::{compile, Context as ExpressionContext},
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
     value::{ColumnType, Value},
 };
@@ -71,7 +72,7 @@ fn plan(expression: &str, name: &str, column: usize) -> DatasetPlan {
             ],
             filter: Some(
                 BoundPredicate::new(
-                    crate::predicate_compiler::compile(expression, "row.filter").unwrap(),
+                    compile(expression, ExpressionContext::Predicate, "row.filter").unwrap(),
                     vec![Binding {
                         name: name.into(),
                         read: Read::Column(column),
@@ -202,12 +203,13 @@ fn grouped_postwindow_filters_use_contextual_join_and_named_lookup_reads_lazily(
         let mut template = plan("SEQ > 1", "SEQ", 1).templates()[0].clone();
         template.filter = Some(
             BoundPredicate::new_contextual(
-                crate::predicate_compiler::compile(
+                compile(
                     if keep {
                         "SEQ > 1 AND MATCH = 2"
                     } else {
                         "SEQ < 0 AND MATCH = 2"
                     },
+                    ExpressionContext::Predicate,
                     "row.filter",
                 )
                 .unwrap(),

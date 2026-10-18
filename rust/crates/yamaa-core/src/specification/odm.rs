@@ -15,10 +15,7 @@ pub(super) struct Declaration {
     item_oid: String,
     path: String,
     selectors: [Option<Vec<String>>; 3],
-    filter: Option<(
-        String,
-        Result<crate::predicate::Plan, crate::predicate_compiler::Error>,
-    )>,
+    filter: Option<(String, Result<CompiledExpression, CompileError>)>,
 }
 
 pub(super) fn prepare(
@@ -53,18 +50,15 @@ pub(super) fn prepare(
         .filter(|&node| !matches!(d.nodes()[node], N::Null))
         .map(|node| {
             let expression = text(d, node)?;
-            let compiled =
-                crate::predicate_compiler::compile(expression, &format!("{path}.filter"));
+            let compiled = compile(
+                expression,
+                ExpressionContext::Predicate,
+                &format!("{path}.filter"),
+            );
             match &compiled {
-                Ok(_)
-                | Err(crate::predicate_compiler::Error::Parse(
-                    crate::predicate_parser::ParseError::Grammar { .. },
-                )) => (),
-                Err(crate::predicate_compiler::Error::Internal) => {
-                    return Err(PrepareError::Internal)
-                }
+                Ok(_) | Err(CompileError::Invalid { .. }) => (),
                 Err(error) => {
-                    return Err(PrepareError::predicate(
+                    return Err(PrepareError::expression(
                         error.clone(),
                         Some(&format!("{path}.filter")),
                     ))
@@ -120,19 +114,18 @@ pub(super) fn bind(
     let filter = if let Some((expression, compiled)) = &declaration.filter {
         let plan = match compiled {
             Ok(plan) => plan,
-            Err(crate::predicate_compiler::Error::Parse(
-                crate::predicate_parser::ParseError::Grammar {
-                    position, failure, ..
-                },
-            )) => {
-                findings.push(BindFinding::Predicate(failure.original_diagnostic(
+            Err(CompileError::Invalid {
+                position, failure, ..
+            }) => {
+                findings.push(BindFinding::Predicate(failure.diagnostic(
+                    ExpressionContext::Predicate,
                     &format!("{}.filter", declaration.path),
                     expression,
                     position.character,
                 )));
                 return Ok(None);
             }
-            Err(error) => return Err(BindError::PredicatePolicy(error.clone())),
+            Err(error) => return Err(BindError::ExpressionPolicy(error.clone())),
         };
         let mut bindings = Vec::new();
         let mut seen = BTreeSet::new();
@@ -506,7 +499,7 @@ pub(super) fn context_findings(
         {
             let path = format!("{}.filter", site.path);
             let expression = text(d, filter)?;
-            match crate::predicate_compiler::compile(expression, &path) {
+            match compile(expression, ExpressionContext::Predicate, &path) {
                 Ok(plan) => {
                     let mut seen = BTreeSet::new();
                     for identifier in plan.identifiers() {
@@ -532,12 +525,11 @@ pub(super) fn context_findings(
                         ));
                     }
                 }
-                Err(crate::predicate_compiler::Error::Parse(
-                    crate::predicate_parser::ParseError::Grammar {
-                        position, failure, ..
-                    },
-                )) => {
-                    findings.push(PreflightFinding::Odm(failure.original_diagnostic(
+                Err(CompileError::Invalid {
+                    position, failure, ..
+                }) => {
+                    findings.push(PreflightFinding::Odm(failure.diagnostic(
+                        ExpressionContext::Predicate,
                         &path,
                         expression,
                         position.character,

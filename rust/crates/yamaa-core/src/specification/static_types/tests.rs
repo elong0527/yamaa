@@ -100,6 +100,30 @@ fn independent_case_types_survive_an_unknown_operand() {
 }
 
 #[test]
+fn predicate_arithmetic_operands_are_typed_as_in_compute() {
+    let case = |when: &str| {
+        Tree::map(vec![(
+            "case",
+            Tree::List(vec![Tree::map(vec![
+                ("when", Tree::text(when)),
+                ("then", literal(N::Integer("1".into()))),
+            ])]),
+        )])
+    };
+    // Each non-numeric operand of arithmetic is reported once, and arithmetic
+    // over a faulty operand adds no comparison finding of its own.
+    assert_eq!(
+        binding_codes(
+            case("TERM + 1 > 0 OR DAY - 1 < COUNT OR TERM * 2 = 1"),
+            None
+        ),
+        vec![C::NumericInputType, C::NumericInputType]
+    );
+    let spec = PreparedSpecification::prepare(&document(case("COUNT * 2 > ID - 1"), None)).unwrap();
+    assert!(spec.bind(&source()).is_ok());
+}
+
+#[test]
 fn compute_and_reduction_reject_known_text_without_evaluation() {
     assert_eq!(
         binding_codes(
@@ -125,16 +149,17 @@ fn compute_and_reduction_reject_known_text_without_evaluation() {
 
 #[test]
 fn numeric_and_aggregate_result_kinds_are_native_metadata() {
-    let numeric =
-        crate::numeric_compiler::compile_numeric("A + POWER(B, 2) / -3", "result").unwrap();
-    assert_eq!(numeric.result_type(), ColumnType::Float);
-    let aggregate = crate::aggregate_compiler::compile_aggregate(
+    use crate::expression::{compile, Context};
+    let numeric = compile("A + POWER(B, 2) / -3", Context::Compute, "result").unwrap();
+    assert_eq!(numeric.numeric_result_type(), Some(ColumnType::Float));
+    let aggregate = compile(
         "SUM(EX.DOSE) / NULLIF(EX.PLANDOSE, 0)",
+        Context::Aggregate,
         "result",
     )
     .unwrap();
     assert_eq!(aggregate.numeric_result_type(), Some(ColumnType::Float));
-    let bare = crate::aggregate_compiler::compile_aggregate("MIN(EX.TERM)", "result").unwrap();
+    let bare = compile("MIN(EX.TERM)", Context::Aggregate, "result").unwrap();
     assert_eq!(bare.numeric_result_type(), None);
 }
 
@@ -252,7 +277,9 @@ fn repeated_type_findings_keep_the_complete_ordered_context() {
             .collect();
     }
     let expression = terms.pop().unwrap();
-    let plan = crate::numeric_compiler::compile_numeric(&expression, "result").unwrap();
+    let plan =
+        crate::expression::compile(&expression, crate::expression::Context::Compute, "result")
+            .unwrap();
     let findings = numeric_kinds(&plan, |_| Some(crate::value::ValueType::Str));
     assert_eq!(findings.len(), 1024);
     for (index, finding) in findings.iter().enumerate() {

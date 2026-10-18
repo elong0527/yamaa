@@ -5,6 +5,7 @@ use crate::{
     project_terminology as ct,
     schema::{Document, DocumentNode as N},
     specification_submission_document as spec, submission_document as env,
+    submission_origin::{self as origin, Reads},
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -91,6 +92,8 @@ pub struct Study {
     pub(crate) standards: Vec<Standard>,
     pub(crate) datasets: Vec<Dataset>,
     pub(crate) codelists: Vec<Codelist>,
+    /// Every dataset any submission section of the study declares (CT-11).
+    pub(crate) inventory: BTreeSet<String>,
 }
 impl Study {
     pub fn installed_version(&self) -> &str {
@@ -195,6 +198,10 @@ fn reference_id(reference: &spec::DocumentReference) -> &str {
         spec::DocumentReference::Class(class) => &class.document.value,
     }
 }
+/// Whether a document reference says where in the document it points.
+fn paged(reference: &spec::DocumentReference) -> bool {
+    matches!(reference, spec::DocumentReference::Class(class) if class.pages.is_some())
+}
 fn references(
     findings: &mut Vec<Finding>,
     references: &[spec::DocumentReference],
@@ -222,6 +229,8 @@ fn comment_references(
         references(findings, &class.documents.value, known, path);
     }
 }
+/// SUB-15: the origin type and source pairs each family admits. `send` takes
+/// any source the `sdtm` table admits for the type, or none.
 fn origin_admits(
     family: Submission,
     kind: spec::OriginType,
@@ -234,61 +243,35 @@ fn origin_admits(
             T::Assigned | T::Derived => matches!(source, Some(S::Vendor | S::Sponsor)),
             T::Protocol => source == Some(S::Sponsor),
             T::Other => source.is_some(),
-            T::Predecessor => source.is_none(),
-            T::NotAvailable => false,
+            T::Predecessor | T::NotAvailable => source.is_none(),
         },
-        Submission::Send => source.is_none(),
+        Submission::Send => source.is_none() || origin_admits(Submission::Sdtm, kind, source),
         Submission::Adam => {
             source.is_none() && matches!(kind, T::Derived | T::Assigned | T::Predecessor | T::Other)
         }
     }
 }
-fn derivation_admits(
+/// The first derivation that refutes the origin type under SUB-19, if any.
+fn refuting(
     document: &Document,
-    node: usize,
+    derivations: &[usize],
     kind: spec::OriginType,
-    intermediates: &BTreeSet<String>,
-) -> bool {
-    use spec::OriginType as T;
-    match derivation_kind(document, node, intermediates) {
-        "literal" => matches!(kind, T::Assigned | T::Protocol | T::Other),
-        "source" => matches!(
-            kind,
-            T::Collected | T::Assigned | T::Protocol | T::Predecessor | T::Other | T::NotAvailable
-        ),
-        _ => matches!(kind, T::Derived | T::Assigned | T::Other),
-    }
+    reads: &Reads,
+) -> Option<origin::DerivationKind> {
+    derivations
+        .iter()
+        .map(|&node| origin::classify(document, node, reads))
+        .find(|derivation| !derivation.admits(kind))
 }
-pub(crate) fn derivation_kind(
+/// SUB-20: the first derivation that is not the copy a Predecessor claims.
+fn copy_failure(
     document: &Document,
-    mut node: usize,
-    intermediates: &BTreeSet<String>,
-) -> &'static str {
-    if let Some(value) = document.field(node, "value") {
-        node = value;
-    }
-    let literal = document.field(node, "literal").is_some();
-    let source_node = document.field(node, "source").unwrap_or(node);
-    let variable = match &document.nodes()[source_node] {
-        N::Text(value) => Some(value.as_str()),
-        _ => document
-            .field(source_node, "variable")
-            .and_then(|n| match &document.nodes()[n] {
-                N::Text(value) => Some(value.as_str()),
-                _ => None,
-            }),
-    };
-    let intermediate = variable
-        .and_then(|v| v.split_once('.'))
-        .is_some_and(|(qualifier, _)| intermediates.contains(qualifier));
-    let source = !intermediate && (variable.is_some() || document.field(node, "odm").is_some());
-    if literal {
-        "literal"
-    } else if source {
-        "source"
-    } else {
-        "computed"
-    }
+    derivations: &[usize],
+    predecessor: &origin::Predecessor<'_>,
+) -> Option<origin::CopyFailure> {
+    derivations
+        .iter()
+        .find_map(|&node| origin::copies(document, node, predecessor).err())
 }
 fn reserved_metadata(
     document: &Document,
@@ -358,7 +341,7 @@ struct ColumnAdmission<'a> {
     known: &'a BTreeSet<&'a str>,
     acrfs: &'a [&'a env::DocumentReference],
     keys: &'a [String],
-    intermediates: &'a BTreeSet<String>,
+    reads: &'a Reads,
     /// The dataset's class decides whether `core` derives `mandatory` (SUB-10).
     tabulation: bool,
 }
@@ -387,7 +370,7 @@ impl ColumnAdmission<'_> {
             known,
             acrfs,
             keys,
-            intermediates,
+            reads,
             ..
         } = *self;
         let refutation = match level {
@@ -456,18 +439,34 @@ impl ColumnAdmission<'_> {
                 name,
             ));
         }
+        let description = origin.description.as_ref().map(|d| d.value.as_str());
+        let predecessor = description
+            .filter(|_| origin.kind.value == spec::OriginType::Predecessor)
+            .and_then(origin::predecessor);
         if matches!(
             origin.kind.value,
             spec::OriginType::Other
                 | spec::OriginType::Predecessor
                 | spec::OriginType::NotAvailable
-        ) && origin.description.is_none()
+        ) && description.is_none()
         {
             findings.push(Finding::cause(
                 ConditionCode::SubmissionOriginDescription,
                 &format!("{column_path}.origin"),
                 name,
             ));
+        } else if origin.kind.value == spec::OriginType::Predecessor && predecessor.is_none() {
+            // SUB-16: a Predecessor description names `<dataset>.<column>`.
+            let mut finding = Finding::cause(
+                ConditionCode::SubmissionOriginDescription,
+                &format!("{column_path}.origin.description"),
+                name,
+            );
+            finding.context.insert(
+                "reason".into(),
+                crate::json::Value::String("predecessor_form".into()),
+            );
+            findings.push(finding);
         }
         if origin.kind.value == spec::OriginType::Derived && metadata.method.is_none() {
             findings.push(Finding::cause(
@@ -476,11 +475,19 @@ impl ColumnAdmission<'_> {
                 name,
             ));
         }
-        if derivations
-            .iter()
-            .any(|&node| !derivation_admits(doc, node, origin.kind.value, intermediates))
-        {
+        if refuting(doc, derivations, origin.kind.value, reads).is_some() {
             findings.push(Finding::cause(refutation, column_path, name));
+        } else if let Some(failure) = predecessor
+            .as_ref()
+            .and_then(|predecessor| copy_failure(doc, derivations, predecessor))
+        {
+            // SUB-20: a Predecessor is a bare `source` of the column it names.
+            let mut finding = Finding::cause(refutation, column_path, name);
+            finding.context.insert(
+                "reason".into(),
+                crate::json::Value::String(failure.reason().into()),
+            );
+            findings.push(finding);
         }
         let mut refs = origin.documents.value.clone();
         if origin.kind.value == spec::OriginType::Collected
@@ -489,6 +496,9 @@ impl ColumnAdmission<'_> {
                 Some(spec::OriginSource::Investigator | spec::OriginSource::Subject)
             )
         {
+            // SUB-17: under `Submission` the reference says where in the form
+            // the value was collected; only `Other` derives a page-less one.
+            let submission = section.context.value == env::Context::Submission;
             if acrfs.len() != 1 {
                 findings.push(Finding::cause(
                     ConditionCode::SubmissionAnnotatedCrfMissing,
@@ -496,11 +506,22 @@ impl ColumnAdmission<'_> {
                     name,
                 ));
             } else if origin.documents.origin.key.is_none() {
-                refs.push(spec::DocumentReference::Plain(spec::Field {
-                    value: acrfs[0].id.value.clone(),
-                    origin: origin.documents.origin,
-                }));
-            } else if refs.is_empty() || refs.iter().any(|r| reference_id(r) != acrfs[0].id.value) {
+                if submission {
+                    findings.push(Finding::cause(
+                        ConditionCode::SubmissionOriginDocument,
+                        &format!("{column_path}.origin"),
+                        name,
+                    ));
+                } else {
+                    refs.push(spec::DocumentReference::Plain(spec::Field {
+                        value: acrfs[0].id.value.clone(),
+                        origin: origin.documents.origin,
+                    }));
+                }
+            } else if refs.is_empty()
+                || refs.iter().any(|r| reference_id(r) != acrfs[0].id.value)
+                || (submission && !refs.iter().any(paged))
+            {
                 findings.push(Finding::cause(
                     ConditionCode::SubmissionOriginDocument,
                     &format!("{column_path}.origin.documents"),
@@ -958,17 +979,12 @@ fn compose_values(
                         .as_ref()
                         .and_then(|m| m.origin_metadata.as_ref())
                         .expect("refuted admitted origin");
-                    let node = derivations
-                        .iter()
-                        .find(|&&n| {
-                            !derivation_admits(doc, n, origin.kind.value, admission.intermediates)
-                        })
-                        .expect("refuted effective derivation");
+                    // A Predecessor that is not the named copy is refuted by a
+                    // bare `source`, which SUB-19 alone admits.
+                    let kind = refuting(doc, &derivations, origin.kind.value, admission.reads)
+                        .unwrap_or_else(|| origin::classify(doc, derivations[0], admission.reads));
                     for (key, value) in [
-                        (
-                            "derivation_kind",
-                            derivation_kind(doc, *node, admission.intermediates),
-                        ),
+                        ("derivation_kind", kind.name()),
                         ("origin_type", origin.kind.value.name()),
                     ] {
                         finding
@@ -991,11 +1007,84 @@ fn compose_values(
     discriminator
 }
 
+/// The label a study specification declares for one column of one dataset.
+fn declared_label(document: &Document, dataset: &str, column: &str) -> Option<String> {
+    if text(document, document.root(), "domain").as_deref() != Some(dataset) {
+        return None;
+    }
+    match document
+        .field(document.root(), "columns")
+        .map(|n| &document.nodes()[n])
+    {
+        Some(N::Sequence(columns)) => columns
+            .iter()
+            .find(|&&node| text(document, node, "name").as_deref() == Some(column))
+            .and_then(|&node| text(document, node, "label")),
+        _ => None,
+    }
+}
+/// SUB-20: a Predecessor column that keeps its predecessor's name keeps its
+/// label, wherever in the study a specification declares that column.
+fn predecessor_labels(
+    study: &[&Document],
+    column: &spec::Column,
+    origins: &[&spec::OriginMetadata],
+    path: &str,
+    findings: &mut Vec<Finding>,
+) {
+    let Some(label) = &column.label else {
+        return;
+    };
+    let mut checked = BTreeSet::new();
+    for metadata in origins {
+        if metadata.kind.value != spec::OriginType::Predecessor {
+            continue;
+        }
+        let Some(predecessor) = metadata
+            .description
+            .as_ref()
+            .and_then(|description| origin::predecessor(&description.value))
+        else {
+            continue;
+        };
+        if predecessor.column != column.name.value || !checked.insert(predecessor.name()) {
+            continue;
+        }
+        for document in study {
+            let Some(declared) = declared_label(document, predecessor.dataset, predecessor.column)
+            else {
+                continue;
+            };
+            if declared != label.value {
+                let mut finding = Finding::cause(
+                    ConditionCode::SubmissionPredecessorLabel,
+                    &format!("{path}.columns.{}.label", column.name.value),
+                    &column.name.value,
+                );
+                for (key, value) in [
+                    ("predecessor", predecessor.name()),
+                    ("label", label.value.clone()),
+                    ("predecessor_label", declared),
+                ] {
+                    finding
+                        .context
+                        .insert(key.into(), crate::json::Value::String(value));
+                }
+                findings.push(finding);
+                break;
+            }
+        }
+    }
+}
+
 /// Compose every captured dataset in order, collecting codelist bindings.
+/// `study` holds every specification any submission section lists.
+#[allow(clippy::too_many_arguments)]
 fn compose_datasets(
     section: &env::Section,
     catalogue: &ct::Catalogue,
     inputs: &[Input<'_>],
+    study: &[&Document],
     known: &BTreeSet<&str>,
     acrfs: &[&env::DocumentReference],
     findings: &mut Vec<Finding>,
@@ -1016,16 +1105,7 @@ fn compose_datasets(
             &path,
             findings,
         );
-        let intermediates: BTreeSet<_> = doc
-            .field(doc.root(), "intermediates")
-            .and_then(|n| match &doc.nodes()[n] {
-                N::Sequence(nodes) => Some(nodes),
-                _ => None,
-            })
-            .into_iter()
-            .flatten()
-            .filter_map(|&n| text(doc, n, "id"))
-            .collect();
+        let reads = Reads::of(doc);
         let id = text(doc, doc.root(), "domain").unwrap_or_default();
         if !ids.insert(id.clone()) || known.contains(id.as_str()) {
             findings.push(Finding::cause(
@@ -1171,7 +1251,7 @@ fn compose_datasets(
             known,
             acrfs,
             keys: &keys,
-            intermediates: &intermediates,
+            reads: &reads,
             tabulation,
         };
         for name in &output_columns {
@@ -1185,6 +1265,22 @@ fn compose_datasets(
                 continue;
             };
             redundant_mandatory_checks(&admission, &declarations, column, &path, findings);
+            let own = column
+                .submission
+                .as_ref()
+                .and_then(|metadata| metadata.origin_metadata.as_ref());
+            let origins: Vec<_> = own
+                .into_iter()
+                .chain(
+                    declarations
+                        .value_rows()
+                        .iter()
+                        .flat_map(|row| &row.overrides)
+                        .filter(|entry| &entry.name.value == name)
+                        .filter_map(|entry| entry.submission.origin_metadata.as_ref()),
+                )
+                .collect();
+            predecessor_labels(study, column, &origins, &path, findings);
             let derivations = column_derivations(doc, column, declarations.value_rows(), None);
             if let Some(column) = admission.admit(
                 column,
@@ -1243,15 +1339,29 @@ fn compose_datasets(
     datasets
 }
 
+/// Compose the selected section. `others` holds the specifications the study's
+/// other submission sections list: the dataset inventory (CT-11) and the
+/// predecessor columns (SUB-20) span every section, while only `inputs` are
+/// represented in the document.
 pub fn compose(
     study: &env::Study,
     section: &env::Section,
     catalogue: &ct::Catalogue,
     inputs: &[Input<'_>],
+    others: &[&Document],
     installed: &str,
     created: &str,
 ) -> Result<Study, Vec<Finding>> {
     let mut findings = Vec::new();
+    let specifications: Vec<&Document> = inputs
+        .iter()
+        .map(|input| input.document)
+        .chain(others.iter().copied())
+        .collect();
+    let inventory = specifications
+        .iter()
+        .filter_map(|document| text(document, document.root(), "domain"))
+        .collect();
     let family = family_name(section.family);
     let prefix = family.to_string();
     let mut fail = |code, suffix: &str, detail: &str| {
@@ -1323,6 +1433,7 @@ pub fn compose(
         section,
         catalogue,
         inputs,
+        &specifications,
         &known,
         &acrfs,
         &mut findings,
@@ -1425,5 +1536,6 @@ pub fn compose(
         standards,
         datasets,
         codelists,
+        inventory,
     })
 }

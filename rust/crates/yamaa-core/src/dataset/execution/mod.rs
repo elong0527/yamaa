@@ -227,7 +227,7 @@ pub enum ExecutionError<E> {
         identity: Option<RowIdentity>,
     },
     Numeric {
-        error: crate::numeric_compiler::CompiledEvaluationError<Infallible>,
+        error: crate::expression::EvaluationError<Infallible>,
         identity: Option<RowIdentity>,
     },
     HandlerAccounting(HandlerCountOverflow),
@@ -272,12 +272,12 @@ pub enum ExecutionError<E> {
         records: Vec<CheckRecord>,
     },
     VerificationPredicate {
-        error: crate::predicate::EvaluationError<CellError<Infallible>>,
+        error: crate::expression::EvaluationError<CellError<Infallible>>,
         records: Vec<CheckRecord>,
     },
     Predicate {
         source_row: usize,
-        error: crate::predicate::EvaluationError<CellError<E>>,
+        error: crate::expression::EvaluationError<CellError<E>>,
     },
     Limit {
         resource: Resource,
@@ -510,7 +510,7 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
                     let truth = case_predicates::evaluate(
                         when, table, candidate, plan, row, assignment, state,
                     )?;
-                    truth == crate::predicate::Truth::True
+                    truth == crate::expression::Truth::True
                 }
             };
             if selected {
@@ -1123,9 +1123,14 @@ impl DatasetPlan {
                         source_row,
                         &candidate.values,
                     )
-                    .map_err(|error| Box::new(ExecutionError::Predicate { source_row, error }))?
+                    .map_err(|error| {
+                        Box::new(ExecutionError::Predicate {
+                            source_row,
+                            error: *error,
+                        })
+                    })?
                 };
-                if truth != crate::predicate::Truth::True {
+                if truth != crate::expression::Truth::True {
                     continue;
                 }
             }
@@ -1248,9 +1253,14 @@ impl DatasetPlan {
                     source_row,
                     &candidate.values,
                 )
-                .map_err(|error| Box::new(ExecutionError::Predicate { source_row, error }))?
+                .map_err(|error| {
+                    Box::new(ExecutionError::Predicate {
+                        source_row,
+                        error: *error,
+                    })
+                })?
             };
-            if truth == crate::predicate::Truth::True {
+            if truth == crate::expression::Truth::True {
                 candidates.swap(retained, row);
                 retained += 1;
             }

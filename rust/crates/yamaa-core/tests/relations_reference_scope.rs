@@ -313,7 +313,7 @@ mod relations {
                 IntermediateKey, IntermediateSource, MatchRead, MatchValue, PlanError,
                 RelationPredicate, RowMode, RowTemplate, SecondarySource, SourceSchemas,
             },
-            predicate_compiler,
+            expression::{compile, Context},
             value::Value,
         };
         fn assignment(column: usize, expression: Expression) -> Assignment {
@@ -326,8 +326,9 @@ mod relations {
         fn filter(identifier: &str, read: CurrentRead) -> RelationPredicate {
             RelationPredicate::new(
                 BoundPredicate::new(
-                    predicate_compiler::compile(
+                    compile(
                         &format!("D.V > {identifier}"),
+                        Context::Predicate,
                         "intermediates[0].filter",
                     )
                     .unwrap(),
@@ -478,7 +479,12 @@ mod relations {
                 },
             )));
             let numeric = yamaa_core::bound_expression::BoundNumeric::new(
-                yamaa_core::numeric_compiler::compile_numeric("P.V + 1", "C2").unwrap(),
+                yamaa_core::expression::compile(
+                    "P.V + 1",
+                    yamaa_core::expression::Context::Compute,
+                    "C2",
+                )
+                .unwrap(),
                 vec![Binding {
                     name: "P.V".into(),
                     read: Read::Intermediate {
@@ -623,7 +629,12 @@ mod relations {
         fn bound_intermediate_compute() -> Expression {
             Expression::Compute(
                 yamaa_core::bound_expression::BoundNumeric::new(
-                    yamaa_core::numeric_compiler::compile_numeric("P.V + 1", "C2").unwrap(),
+                    yamaa_core::expression::compile(
+                        "P.V + 1",
+                        yamaa_core::expression::Context::Compute,
+                        "C2",
+                    )
+                    .unwrap(),
                     vec![Binding {
                         name: "P.V".into(),
                         read: Read::Intermediate {
@@ -638,7 +649,7 @@ mod relations {
         fn bound_intermediate_flag() -> Expression {
             Expression::Flag(
                 yamaa_core::dataset::Flag::new(
-                    predicate_compiler::compile("P.V > 0", "C2").unwrap(),
+                    compile("P.V > 0", Context::Predicate, "C2").unwrap(),
                     vec![yamaa_core::dataset::FlagBinding {
                         name: "P.V".into(),
                         read: yamaa_core::dataset::FlagRead::Read(Read::Intermediate {
@@ -912,7 +923,12 @@ mod relations {
             .unwrap();
             assert_eq!(dependencies, [0, 0, 1]);
             let filter = BoundPredicate::new(
-                yamaa_core::predicate_compiler::compile("VALUE > 0", "row.filter").unwrap(),
+                yamaa_core::expression::compile(
+                    "VALUE > 0",
+                    yamaa_core::expression::Context::Predicate,
+                    "row.filter",
+                )
+                .unwrap(),
                 vec![Binding {
                     name: "VALUE".into(),
                     read: Read::Column(2),
@@ -2017,7 +2033,12 @@ mod relations {
         #[test]
         fn source_selection_readers_of_windows_remain_unavailable_to_record_filters() {
             let predicate = BoundPredicate::new(
-                yamaa_core::predicate_compiler::compile("VALUE > 1", "rows[0].filter").unwrap(),
+                yamaa_core::expression::compile(
+                    "VALUE > 1",
+                    yamaa_core::expression::Context::Predicate,
+                    "rows[0].filter",
+                )
+                .unwrap(),
                 vec![Binding {
                     name: "VALUE".into(),
                     read: Read::Column(2),
@@ -2174,13 +2195,14 @@ mod relations {
         #[test]
         fn typed_aggregate_raw_field_labels_cannot_invent_a_self_relation_owner() {
             use yamaa_core::{
-                aggregate_compiler::compile_aggregate,
                 dataset::{
                     AggregateBinding, AggregatePhase, AggregateRelation, AggregateSource,
                     BoundAggregate,
                 },
+                expression::{compile, Context},
             };
-            let expression = compile_aggregate("SUM(P.V)", "rows[0].V.aggregate").unwrap();
+            let expression =
+                compile("SUM(P.V)", Context::Aggregate, "rows[0].V.aggregate").unwrap();
             let aggregate = BoundAggregate::new(
                 expression,
                 AggregateRelation::Matched {

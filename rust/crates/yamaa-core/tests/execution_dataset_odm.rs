@@ -10,8 +10,8 @@ mod execution {
         use yamaa_core::{
             bound_expression::{Binding, BoundPredicate, Read},
             diagnostic::ConditionCode,
+            expression::ErrorKind,
             odm_source::{FIELDS, HIERARCHY, IDENTIFYING},
-            predicate::ErrorKind,
             table::{CellError, Column, TableAccess, TableSchema, ValueRef},
             value::{ColumnType, Value},
         };
@@ -80,7 +80,12 @@ mod execution {
         }
         fn predicate(text: &str, field: usize, path: &str) -> BoundPredicate {
             BoundPredicate::new(
-                yamaa_core::predicate_compiler::compile(text, path).unwrap(),
+                yamaa_core::expression::compile(
+                    text,
+                    yamaa_core::expression::Context::Predicate,
+                    path,
+                )
+                .unwrap(),
                 vec![Binding {
                     name: format!("SRC.{}", FIELDS[field]),
                     read: Read::Source(field),
@@ -715,7 +720,7 @@ mod execution {
                 FlagRead, Intermediate, IntermediateKey, MatchRead, MatchValue, RowMode,
                 RowTemplate, SecondarySource, SourceSchemas,
             },
-            predicate_compiler,
+            expression::{compile, Context},
             table::{CellError, TableAccess, TableSchema, ValueRef},
             value::{ColumnType as T, Value},
         };
@@ -767,8 +772,12 @@ mod execution {
         fn flag(expr: &str, read: FlagRead, true_value: Value) -> Expression {
             Expression::Flag(
                 Flag::new(
-                    predicate_compiler::compile(expr, "columns.C1.derivation.flag.condition")
-                        .unwrap(),
+                    compile(
+                        expr,
+                        Context::Predicate,
+                        "columns.C1.derivation.flag.condition",
+                    )
+                    .unwrap(),
                     vec![FlagBinding {
                         name: "AGE".into(),
                         read,
@@ -1037,7 +1046,7 @@ mod execution {
             let table = table();
             let constant = Expression::Flag(
                 Flag::new(
-                    predicate_compiler::compile("TRUE", "flag.condition").unwrap(),
+                    compile("TRUE", Context::Predicate, "flag.condition").unwrap(),
                     vec![],
                     Value::Str("Y".into()),
                     None,
@@ -1079,7 +1088,7 @@ mod execution {
             use yamaa_core::bound_expression::{Binding, BoundPredicate};
             let filter = filtered.then(|| {
                 BoundPredicate::new(
-                    predicate_compiler::compile("TAB.V > 0", "intermediates[0].filter").unwrap(),
+                    compile("TAB.V > 0", Context::Predicate, "intermediates[0].filter").unwrap(),
                     vec![Binding {
                         name: "TAB.V".into(),
                         read: Read::Source(1),
@@ -1166,7 +1175,7 @@ mod execution {
                     };
                     assert_eq!(source_row, 0);
                     assert_eq!(error.spec_path, "intermediates[0].filter");
-                    let yamaa_core::predicate::ErrorKind::Resolution {
+                    let yamaa_core::expression::ErrorKind::Resolution {
                         identifier,
                         error: CellError::Access(failure),
                     } = error.kind
@@ -1209,7 +1218,7 @@ mod execution {
                 Assignment, DatasetPlan, Expression, Intermediate, IntermediateKey, MatchRead,
                 MatchValue, PlanError, RowMode, RowTemplate, SecondarySource, SourceSchemas,
             },
-            predicate::{self, Comparison, Node, Scalar},
+            expression::{self, compile, Context},
             table::{CellError, TableAccess, TableSchema, ValueRef},
             text_pad::StringPad,
             value::{ColumnType as T, Value},
@@ -1359,15 +1368,10 @@ mod execution {
         }
         fn filter() -> BoundPredicate {
             BoundPredicate::new(
-                predicate::Plan::new(
-                    vec![Node::Compare {
-                        operator: Comparison::Greater,
-                        left: Scalar::Identifier("TAB.FILTER".into()),
-                        right: Scalar::Literal(Value::Int(0)),
-                    }],
-                    0,
-                    "intermediates[0].filter".into(),
-                    "TAB.FILTER > 0".into(),
+                compile(
+                    "TAB.FILTER > 0",
+                    Context::Predicate,
+                    "intermediates[0].filter",
                 )
                 .unwrap(),
                 vec![Binding {
@@ -1464,7 +1468,7 @@ mod execution {
             let ExecutionError::Predicate { error, .. } = *observed.result.unwrap_err() else {
                 panic!("original predicate port failure")
             };
-            let predicate::ErrorKind::Resolution {
+            let expression::ErrorKind::Resolution {
                 error: CellError::Access(Failure(retained, identity)),
                 ..
             } = error.kind

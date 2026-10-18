@@ -406,7 +406,7 @@ locked predicate syntax fixture already preserves that native mapping. The
 unchanged Python reference was rerun on 2026-10-11 and still reports REQ-0188.
 The delegated decision in #1973 item 6 selects REQ-0191 for new shared execution.
 This disposes of the citation difference without rewriting either locked
-observation. REQ-0192 now explicitly describes parse-time `invalid_predicate`
+observation. REQ-0192 now explicitly describes parse-time `invalid_expression`
 under REQ-0188 and retained temporal cause/standalone context, preserving the
 original rejected date's complete report. Installed qualification remains a
 separate gate; this record does not turn a pending tuple into a pass.

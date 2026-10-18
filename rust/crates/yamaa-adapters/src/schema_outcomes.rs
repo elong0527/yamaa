@@ -84,17 +84,27 @@ pub(crate) fn normalization(error: NormalizationError) -> Result<Value, Error> {
 }
 /// Dependency discovery never turns a resource refusal into a missing edge.
 pub(crate) fn inheritance_dependencies(error: InheritanceDependencyError) -> Result<Value, Error> {
-    use yamaa_core::{aggregate_parser as a, numeric_parser as n, predicate_parser as p};
+    use yamaa_core::expression::{CompileError, Resource};
     use InheritanceDependencyError as E;
     use InheritanceReferenceError as R;
-    fn syntax_limit(phase: &str, resource: n::ParseResource, maximum: usize) -> Value {
-        limit(
-            phase,
-            match resource {
-                n::ParseResource::Depth => "semantic_depth",
-            },
-            maximum,
-        )
+    /// An expression field's own boundary, or its regular-expression literal's.
+    fn syntax_limit(field: &str, error: &CompileError) -> Option<Value> {
+        let CompileError::Limit {
+            resource,
+            limit: maximum,
+            ..
+        } = error
+        else {
+            return None;
+        };
+        Some(match resource {
+            Resource::Depth => limit(&format!("inheritance_{field}"), "semantic_depth", *maximum),
+            Resource::Regex(resource) => limit(
+                &format!("inheritance_{field}_regex"),
+                regex_resource(*resource),
+                *maximum,
+            ),
+        })
     }
     Ok(match error {
         E::Normalization(error) | E::Reference(R::Normalization(error)) => {
@@ -108,25 +118,15 @@ pub(crate) fn inheritance_dependencies(error: InheritanceDependencyError) -> Res
                 .collect::<Vec<_>>();
             json!({"status":"invalid","diagnostics":translated})
         }
-        E::Reference(R::Numeric(n::ParseError::Limit {
-            resource, limit, ..
-        })) => syntax_limit("inheritance_numeric", resource, limit),
-        E::Reference(R::Aggregate(a::ParseError::Limit {
-            resource, limit, ..
-        })) => syntax_limit("inheritance_aggregate", resource, limit),
-        E::Reference(R::Predicate(p::ParseError::Limit {
-            resource, limit, ..
-        })) => syntax_limit("inheritance_predicate", resource, limit),
-        E::Reference(R::Predicate(p::ParseError::RegexLimit {
-            resource,
-            limit: maximum,
-            ..
-        })) => limit(
-            "inheritance_predicate_regex",
-            regex_resource(resource),
-            maximum,
-        ),
+        E::Reference(R::Numeric(error)) => {
+            syntax_limit("numeric", &error).ok_or(Error::Internal)?
+        }
+        E::Reference(R::Aggregate(error)) => {
+            syntax_limit("aggregate", &error).ok_or(Error::Internal)?
+        }
         // Grammar failures deliberately contribute no edges, then survive for final validation.
-        E::Reference(_) => return Err(Error::Internal),
+        E::Reference(R::Predicate(error)) => {
+            syntax_limit("predicate", &error).ok_or(Error::Internal)?
+        }
     })
 }

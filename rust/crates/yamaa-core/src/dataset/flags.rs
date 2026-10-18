@@ -1,7 +1,7 @@
 //! One owned three-valued flag plan; output conversion remains its assignment's owner.
 use super::*;
 use crate::{
-    predicate::{self, Truth},
+    expression::{CompiledExpression, Condition, ErrorKind, EvaluationError, Truth},
     table::ValueRef,
 };
 
@@ -26,7 +26,7 @@ pub enum FlagError {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Flag {
-    condition: predicate::Plan,
+    condition: CompiledExpression,
     bindings: Vec<FlagBinding>,
     true_value: Value,
     false_value: Option<Value>,
@@ -36,7 +36,7 @@ impl Flag {
     /// Inspect the entire supplied map and literals before allocating an index.
     /// `Some(Missing)` preserves an explicitly declared null branch.
     pub fn new(
-        condition: predicate::Plan,
+        condition: CompiledExpression,
         mut bindings: Vec<FlagBinding>,
         true_value: Value,
         false_value: Option<Value>,
@@ -48,7 +48,7 @@ impl Flag {
         if false_value.is_some() && missing.is_none() {
             return Err(FlagError::MissingValueRequired);
         }
-        let names = condition.identifiers();
+        let names: Vec<&str> = condition.identifiers().collect();
         bindings.sort_unstable_by(|a, b| a.name.cmp(&b.name));
         for (i, b) in bindings.iter().enumerate() {
             if i > 0 && bindings[i - 1].name == b.name {
@@ -73,7 +73,7 @@ impl Flag {
             missing,
         })
     }
-    pub fn condition(&self) -> &predicate::Plan {
+    pub fn condition(&self) -> &CompiledExpression {
         &self.condition
     }
     pub fn bindings(&self) -> &[FlagBinding] {
@@ -154,29 +154,12 @@ impl Flag {
 }
 
 /// Flag predicates own their public validation vocabulary, including regex input
-/// types (REQ-0190). Generic predicate consumers retain their current mapping.
+/// types (REQ-0190). A numeric operand's failure keeps the shared projection.
 pub fn flag_condition_diagnostic<E>(
-    error: &predicate::EvaluationError<E>,
+    error: &EvaluationError<E>,
 ) -> Option<crate::diagnostic::Diagnostic> {
-    use predicate::ErrorKind;
-    let ErrorKind::Condition(cause) = &error.kind else {
-        return None;
-    };
-    Some(type_condition_diagnostic(
-        &error.spec_path,
-        cause,
-        &error.route,
-    ))
-}
-
-pub(super) fn type_condition_diagnostic(
-    path: &str,
-    cause: &predicate::Condition,
-    route: &[predicate::Route],
-) -> crate::diagnostic::Diagnostic {
     use crate::diagnostic::{ConditionCode as C, Context, Diagnostic};
     use crate::json::Value as V;
-    use predicate::Condition;
     fn text(s: &str) -> V {
         V::String(s.into())
     }
@@ -191,6 +174,9 @@ pub(super) fn type_condition_diagnostic(
             DateTime => "datetime",
         }
     }
+    let ErrorKind::Condition(cause) = &error.kind else {
+        return None;
+    };
     let mut context = Context::new();
     let code = match cause {
         Condition::UnknownField { identifier } => {
@@ -209,14 +195,17 @@ pub(super) fn type_condition_diagnostic(
         }
         Condition::DanglingEscape => {
             context.insert("reason".into(), text("LIKE pattern has a dangling escape"));
-            C::PredicateInvalidEscape
+            C::PredicateDanglingEscape
         }
+        Condition::NumericUnknownField { .. }
+        | Condition::NumericInput { .. }
+        | Condition::Arithmetic(_) => return error.diagnostic().ok(),
     };
-    Diagnostic {
+    Some(Diagnostic {
         code,
-        spec_paths: vec![path.into()],
+        spec_paths: vec![error.spec_path.clone()],
         context,
         source_span: None,
-        operand_route: Some(route.iter().map(|r| format!("{r:?}")).collect()),
-    }
+        operand_route: Some(error.route.iter().map(|step| step.label()).collect()),
+    })
 }

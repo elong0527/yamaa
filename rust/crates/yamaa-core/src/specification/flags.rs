@@ -4,13 +4,11 @@ use crate::json::Value as V;
 use crate::{
     dataset::{Flag, FlagBinding, FlagRead},
     diagnostic::{ConditionCode as C, Diagnostic},
-    predicate::Plan,
-    predicate_compiler,
 };
 
 #[derive(Clone, Debug)]
 pub(super) struct Declaration {
-    condition: Result<Plan, Diagnostic>,
+    condition: Result<CompiledExpression, Diagnostic>,
     path: String,
     true_value: crate::value::Value,
     false_value: Option<crate::value::Value>,
@@ -58,34 +56,20 @@ pub(super) fn prepare(
     path: &str,
 ) -> Result<Declaration, PrepareError> {
     let expression = condition(d, payload)?;
-    let compiled = match predicate_compiler::compile(expression, &format!("{path}.condition")) {
+    let condition_path = format!("{path}.condition");
+    let compiled = match compile(expression, ExpressionContext::Predicate, &condition_path) {
         Ok(plan) => Ok(plan),
-        Err(predicate_compiler::Error::Parse(crate::predicate_parser::ParseError::Grammar {
-            position,
-            failure,
-            ..
-        })) => {
-            let mut diagnostic =
-                failure.diagnostic(&format!("{path}.condition"), expression, position.character);
-            // The flag's established public grammar context carries the original
-            // predicate and character position. Portable parser pattern geometry
-            // remains internal and generic predicate consumers keep their mapping.
-            if matches!(
-                failure,
-                crate::predicate_parser::GrammarFailure::InvalidRegex { .. }
-            ) {
-                diagnostic.context.remove("pattern_byte");
-                diagnostic.context.remove("reason");
-            }
-            Err(diagnostic)
-        }
-        Err(predicate_compiler::Error::Internal) => return Err(PrepareError::Internal),
-        Err(error) => {
-            return Err(PrepareError::predicate(
-                error.clone(),
-                Some(&format!("{path}.condition")),
-            ))
-        }
+        // The flag's public context carries the original predicate and its
+        // character position, as every predicate field's does.
+        Err(CompileError::Invalid {
+            position, failure, ..
+        }) => Err(failure.diagnostic(
+            ExpressionContext::Predicate,
+            &condition_path,
+            expression,
+            position.character,
+        )),
+        Err(error) => return Err(PrepareError::expression(error, Some(&condition_path))),
     };
     let branch = |name: &str| {
         d.field(payload, name)

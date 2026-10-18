@@ -2,14 +2,13 @@
 //! Outputs are observations, never expected fixture values or backend qualification.
 
 use std::convert::Infallible;
-use yamaa_core::evaluation::NumericResolver;
+use yamaa_core::expression::{compile, Context, Resolver};
 use yamaa_core::numeric::Number;
-use yamaa_core::numeric_compiler::compile_numeric;
 use yamaa_core::value::{Selection, Value};
 
 /// Supply normalized values through the same compiled evaluator used by callers.
 struct Inputs(f64, f64);
-impl NumericResolver for Inputs {
+impl Resolver for Inputs {
     type Error = Infallible;
     /// Resolve exactly the two probe operand names.
     fn resolve(&mut self, name: &str) -> Result<Selection, Self::Error> {
@@ -28,8 +27,8 @@ fn sample(id: &str, x: f64, y: f64) {
         ("LN", y, 0.0, "LN(A)"),
         ("POWER", y, x / 100.0, "POWER(A, B)"),
     ] {
-        let plan = compile_numeric(source, "assessment").unwrap();
-        let result = match plan.evaluate(&mut Inputs(a, b)).unwrap() {
+        let plan = compile(source, Context::Compute, "assessment").unwrap();
+        let result = match plan.evaluate_number(&mut Inputs(a, b)).unwrap() {
             Number::Float(value) => value.get(),
             Number::Missing => f64::NAN,
             Number::Int(_) => panic!("math policy must return float"),

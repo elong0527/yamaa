@@ -7,7 +7,7 @@ use crate::{
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn bind(
-    plan: &crate::predicate::Plan,
+    plan: &crate::expression::CompiledExpression,
     donor_name: &str,
     donor: &TableSchema,
     donor_kind: &impl Fn(usize) -> Option<ColumnType>,

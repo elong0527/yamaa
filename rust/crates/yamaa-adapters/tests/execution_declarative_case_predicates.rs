@@ -205,7 +205,7 @@ columns:
                 assert_eq!(fs::read(fixture.0.join("result.csv")).unwrap(), b"ID,VALUE\na,1\nb,0\n");
             } else {
                 let issue = &result.issues()[0];
-                assert_eq!(issue.condition, "invalid_predicate");
+                assert_eq!(issue.condition, "invalid_expression");
                 assert_eq!(issue.spec_paths, ["verifications[0].assert.require"]);
                 assert!(result.output().is_none());
                 assert!(result.save().is_err());

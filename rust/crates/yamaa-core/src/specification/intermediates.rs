@@ -2,7 +2,6 @@
 use super::*;
 use crate::{
     dataset::{Intermediate, IntermediateKey, Keep, OrderTerm, SecondarySource, SourceSelection},
-    predicate_compiler,
     value::Value,
 };
 
@@ -15,7 +14,7 @@ struct Declaration {
     source: self_relations::Relation,
     keys: Option<Vec<(String, match_values::Declaration)>>,
     filter_text: Option<String>,
-    filter: Option<Result<crate::predicate::Plan, predicate_compiler::Error>>,
+    filter: Option<Result<CompiledExpression, CompileError>>,
     order: Vec<(String, bool, bool)>,
     keep: Option<Keep>,
     no_match: Option<Value>,
@@ -87,11 +86,9 @@ fn finish_item(
             }
             filter
         }
-        Some(Err(predicate_compiler::Error::Parse(
-            crate::predicate_parser::ParseError::Grammar {
-                position, failure, ..
-            },
-        ))) => {
+        Some(Err(CompileError::Invalid {
+            position, failure, ..
+        })) => {
             findings.push(BindFinding::Lookup(LookupFinding::grammar(
                 &format!("{}.filter", item.path),
                 item.filter_text.as_deref().expect("written predicate"),
@@ -101,7 +98,7 @@ fn finish_item(
             // A syntax rejection does not remove the declaration's schema.
             None
         }
-        Some(Err(error)) => return Err(BindError::PredicatePolicy(error.clone())),
+        Some(Err(error)) => return Err(BindError::ExpressionPolicy(error.clone())),
         None => None,
     };
     let mut order_by = Vec::new();
@@ -903,15 +900,15 @@ impl Declarations {
             {
                 let expression = text(d, filter)?;
                 filter_text = Some(expression.into());
-                let compiled = predicate_compiler::compile(expression, &format!("{path}.filter"));
+                let compiled = compile(
+                    expression,
+                    ExpressionContext::Predicate,
+                    &format!("{path}.filter"),
+                );
                 match &compiled {
-                    Err(predicate_compiler::Error::Parse(
-                        crate::predicate_parser::ParseError::Grammar { .. },
-                    ))
-                    | Ok(_) => {}
-                    Err(predicate_compiler::Error::Internal) => return Err(PrepareError::Internal),
+                    Err(CompileError::Invalid { .. }) | Ok(_) => {}
                     Err(error) => {
-                        return Err(PrepareError::predicate(
+                        return Err(PrepareError::expression(
                             error.clone(),
                             Some(&format!("{path}.filter")),
                         ))

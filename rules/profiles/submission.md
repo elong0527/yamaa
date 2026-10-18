@@ -399,7 +399,9 @@ That derivation is the row template's derivation, or the column-level
 derivation when the row template inherits a uniform one. The refutation follows
 the entry, and the origin claim is per value. Conflicting declarations fail
 with `conflicting_value_metadata`, not a last-wins merge; a value-level origin
-the derivation refutes fails with `refuted_value_origin`.
+the derivation refutes fails with `refuted_value_origin`, and so does a
+value-level `Predecessor` whose derivation is not the copy
+[SUB-20](#sub-20) requires.
 
 ## Origin
 
@@ -426,14 +428,15 @@ declared origin has no place in a submission document.
 ### SUB-15. Each family admits its own origin type and source pairs
 
 Which origin type and source pairs are admitted depends on the family. For
-`sdtm`, the table below fixes them. For `adam`, the admitted types are
-`Derived`, `Assigned`, `Predecessor` and `Other`, and `source` is derived
-rather than declared: `Sponsor` for `Derived`, `Assigned` and `Other`, and
-absent for `Predecessor`. For `send`, every type is admitted and `source` must
-be absent. A pair the family does not admit fails.
+`sdtm`, the table below fixes them. For `send`, every type is admitted, and
+`source` is either absent or a source the `sdtm` table admits for the type.
+For `adam`, the admitted types are `Derived`, `Assigned`, `Predecessor` and
+`Other`, and `source` is derived rather than declared: `Sponsor` for
+`Derived`, `Assigned` and `Other`, and absent for `Predecessor`. A pair the
+family does not admit fails.
 
 Fails: `origin_source_not_admitted`.
-Evidence: `sdtm-lb-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::original_lb_source_rejection_and_per_value_published_vocabulary_have_zero_writes`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionOriginSource`.
+Evidence: `sdtm-lb-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::original_lb_source_rejection_and_per_value_published_vocabulary_have_zero_writes`, `rust/crates/yamaa-adapters/tests/file_resources.rs::not_available_and_send_sources_follow_the_family_pairs`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionOriginSource`.
 Replaces: REQ-0889, REQ-0890, REQ-0891, REQ-0919.
 
 | Type | Admitted sources for `sdtm` |
@@ -444,11 +447,15 @@ Replaces: REQ-0889, REQ-0890, REQ-0891, REQ-0919.
 | `Protocol` | `Sponsor` |
 | `Other` | any |
 | `Predecessor` | none; `source` must be absent |
-| `Not Available` | not admitted |
+| `Not Available` | none; `source` must be absent |
 
-For `adam`, a declared `source` is rejected, and `Collected` and `Protocol` are
-not admitted. The `send` family identifies responsibility through its own
-trial-summary and findings columns rather than through this attribute. An
+An `sdtm` `Not Available` origin declares no source and carries the
+description [SUB-16](#sub-16) requires, which says why the value is not
+available. For `adam`, a declared `source` is rejected, and `Collected`,
+`Protocol` and `Not Available` are not admitted. A `send` source is optional:
+the family identifies responsibility through its own trial-summary and
+findings columns, and a declared source states it with the pairs the `sdtm`
+table admits, so a `send` `Predecessor` or `Not Available` declares none. An
 origin type and source pair the family does not admit, a `source` present where
 these rules require absence, or one absent where they require presence fails
 with `origin_source_not_admitted`.
@@ -458,34 +465,49 @@ with `origin_source_not_admitted`.
 ### SUB-16. A Predecessor, Other or Not Available origin carries a description
 
 `origin.description` is required when `type` is `Predecessor`, and names the
-dataset and column the value was copied from in the form
-`<dataset>.<column>`. The description is also required when `type` is `Other`
-or `Not Available`, and is optional elsewhere. A description absent where this
-rule requires it fails.
+dataset and column the value was copied from as `<dataset>.<column>`,
+optionally followed by ` where ` and a condition written for reviewers. The
+description is also required when `type` is `Other` or `Not Available`, and is
+optional elsewhere. A description absent where this rule requires it, or a
+`Predecessor` description of another form, fails.
 
 Fails: `origin_description_missing`.
-Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionOriginDescription`.
+Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionOriginDescription`, `rust/crates/yamaa-core/src/submission_origin.rs::predecessor_descriptions_name_one_column_and_an_optional_condition`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::predecessor_columns_copy_the_column_their_description_names`.
 Replaces: REQ-0892, REQ-0920.
 
-Neither `Other` nor `Not Available` states anything alone.
+Neither `Other` nor `Not Available` states anything alone. The dataset and the
+column are identifiers joined by one period, and the condition after the
+lowercase ` where ` names the records the predecessor column contributes, as
+in `SUPPDM.QVAL where QNAM = 'RACEOTH'`. No rule parses the condition; a
+generated document carries the whole description, and [SUB-20](#sub-20)
+requires the copy to declare a `filter` when a condition is written. A
+description absent where this rule requires it fails with
+`origin_description_missing`, reporting the column; a `Predecessor`
+description of another form fails the same way at `origin.description`.
 
 <a id="sub-17"></a>
 
-### SUB-17. A value collected from a person references the annotated case report form
+### SUB-17. A value collected from a person references the annotated case report form, with a page under `Submission`
 
 A column with a `Collected` origin from `Investigator` or `Subject` references
 the study's annotated case report form, and [Define-XML](define-xml.md)
-rejects a reference naming any other document. The reference is derived when
-`documents` is omitted; a column declares `documents` to say where in the form
-the value was collected. Such an origin with no document reference fails.
+rejects a reference naming any other document. Under `context: Submission`,
+the column declares `documents` with at least one `pages` reference into the
+form. Under `context: Other`, the reference is derived when `documents` is
+omitted. Such an origin with no document reference, or under `Submission` with
+no page reference, fails.
 
 Fails: `origin_document_missing`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionOriginDocument`, `python/tests/installed/installed_public_define.py::test_defaults_selection_bound_lists_and_required_acrf_aliases`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionOriginDocument`, `rust/crates/yamaa-adapters/tests/file_resources.rs::collected_origins_name_their_form_page_under_submission`, `python/tests/installed/installed_public_define.py::test_defaults_selection_bound_lists_and_required_acrf_aliases`.
 Replaces: REQ-0893, REQ-0894, REQ-0921.
 
 A value collected from a person is traceable to the form it was collected on.
-The annotated case report form is the only document the reference can name.
-Omitting `documents` leaves the reference without a page.
+The annotated case report form is the only document the reference can name,
+and every declared reference names it. A derived reference carries no page, so
+it is admitted only under `Other`; a regulatory submission states the page a
+reviewer opens, and [DEFINE-4](define-xml.md#define-4) lists the requirement.
+Under `Submission`, omitted `documents`, or declared references none of which
+carries `pages`, fail with `origin_document_missing`, reporting the column.
 
 <a id="sub-18"></a>
 
@@ -507,38 +529,62 @@ algorithm attached is not traceable.
 
 ### SUB-19. A declared origin the column's derivation contradicts is rejected, and an origin is never inferred
 
-The derivation graph of the [Column derivation](../columns.md)
-proves some facts about a column value, and a declared origin that contradicts
-a proven fact is rejected. The graph never supplies an origin: origin is always
-declared and sometimes refuted, never inferred. The table below fixes which
-types each derivation admits. For a row-derived column, each `rows` entry's
-derivation is checked, and the column keeps only the types all entries admit;
-no shared type fails.
+The [Column derivation](../columns.md) graph proves some facts about a
+column value, and a declared origin that contradicts one is rejected; an
+origin is never inferred. A bare `source` or `odm` refutes no type, a bare
+`literal` refutes `Derived` and `Predecessor`, a copy, recode, reformat or
+assembly of collected values refutes `Protocol` and `Predecessor`, and any
+other derivation refutes `Collected`, `Protocol` and `Predecessor`. A
+row-derived column keeps only the types all its `rows` entries admit, and no
+shared type fails.
 
 Fails: `origin_contradicts_derivation`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::independent_metadata_refutations_preserve_shared_conditions_and_zero_writes`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionOriginRefuted`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::independent_metadata_refutations_preserve_shared_conditions_and_zero_writes`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::recodes_literals_and_stored_values_admit_their_published_origins`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::computed_values_and_case_reads_of_derived_columns_refute_collected`, `rust/crates/yamaa-core/src/submission_origin.rs::every_derivation_row_refutes_exactly_its_published_types`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionOriginRefuted`.
 Replaces: REQ-0896, REQ-0897, REQ-0898, REQ-0899, REQ-0900, REQ-0922.
 
 | Derivation | Admitted `origin.type` | Refuted |
 |---|---|---|
-| anything other than a bare `source`, a bare `odm` or a bare `literal` | `Derived`, `Assigned`, `Other` | `Collected`, `Protocol`, `Predecessor`, `Not Available` |
-| a bare `literal` | `Assigned`, `Protocol`, `Other` | `Collected`, `Derived`, `Predecessor`, `Not Available` |
-| a bare `source` or a bare `odm` | every type except `Derived` | `Derived` |
+| a bare `source` or a bare `odm` | every type | none |
+| a bare `literal` | `Assigned`, `Protocol`, `Collected`, `Other`, `Not Available` | `Derived`, `Predecessor` |
+| a recode: `mapping`, `case`, `first_available`, `str_case`, `str_pad`, `str_replace`, `str_extract`, `str_template` or `to_date`, reading only as the next paragraph states | `Collected`, `Derived`, `Assigned`, `Other`, `Not Available` | `Protocol`, `Predecessor` |
+| anything else | `Derived`, `Assigned`, `Other`, `Not Available` | `Collected`, `Protocol`, `Predecessor` |
+
+A recode copies, recodes, reformats or assembles collected values. Each
+variable it names is a bare read, one that looks no record up through a named
+intermediate, and each expression it nests in a `case` result
+([EXPR-3](../expressions.md#expr-3)) is a literal, a bare `source` or `odm`
+read, or a recode. Every condition and result of a `case`
+reads only declared input values or literals: each identifier of a `when`
+predicate, and each variable a result reads, is qualified by a dataset `input`
+declares, or is an `odm` read. A recode that reads otherwise, through a named
+intermediate or, in a `case`, from an output column, is anything else.
+
+Anything else computes its value: arithmetic and rounding (`compute`,
+`round_half_away_from_zero`), aggregation, windows, temporal computation (the
+date and datetime operations other than `to_date`), `flag`, `cut`, `greatest`
+and `least`, `function`, and every read through a named intermediate,
+including a `source` that looks a record up. Each type it refutes asserts the
+value arrived as it stands, and the specification shows it did not.
 
 The graph cannot tell an investigator-recorded value from a vendor-transmitted
-or protocol-fixed value. A column whose derivation is anything other than a
-bare `source`, a bare `odm` or a bare `literal` computes its value from other
-values: each refuted type asserts the value arrived as it stands, and the
-specification shows it did not. A column derived by a bare `literal` takes the
-same value in every row regardless of any input: nothing was observed, computed
-or copied, and a value the specification states outright is available.
+or protocol-fixed value, and it refutes only what the derivation proves. An
+SDTM recode of collected terminology (`SEX` from `Male` to `M` through
+`mapping`), a case normalization (`str_case`) and an ISO 8601 assembly of
+collected date parts (`str_template` or `to_date`) admit `Collected`. A value
+printed on the case report form, such as a unit or a test name, is written as
+a bare `literal` and admits `Collected`; a bare `literal` reads no input, so it
+refutes `Derived`. A vendor- or EDC-computed value read as stored, such as an
+eGFR or a BMI, is a bare `source` and admits `Derived`, with the method
+[SUB-18](#sub-18) requires. `Not Available` claims nothing a derivation can
+contradict, so every derivation admits it.
 
 A column derived by a bare `source` copies one value of one declared dataset,
 and a column derived by a bare `odm` copies the `Value` of the one ODM record it
 identifies ([NAME-13](../names.md#name-13)): nothing was
 computed. Whether that stored value was collected, assigned, fixed by the
-protocol or copied from a predecessor dataset is a fact about the source and
-not about this specification.
+protocol, computed upstream or copied from a predecessor dataset is a fact
+about the source and not about this specification; [SUB-20](#sub-20) checks
+the copy a `Predecessor` claims.
 
 When the entries of a row-derived column disagree, no shared type is an error,
 not a silently admitted origin. A refuted origin fails with
@@ -551,15 +597,37 @@ the derivation that refutes it.
 
 A column whose `origin.type` is `Predecessor` copies its values unchanged from
 the predecessor dataset and column `origin.description` names, so its
-derivation must be a bare `source` of that dataset and column. When both the
-column and the named predecessor column declare submission metadata, their
-declared labels must be equal.
+derivation must be a bare `source` of that dataset and column, declaring a
+`filter` when the description writes a where clause. When the column's name
+equals the predecessor column's name and a specification some submission
+section of the study environment lists declares that column, their labels must
+be equal; a renamed column keeps its own label.
 
+Fails: `origin_contradicts_derivation`, `refuted_value_origin`, `predecessor_label_mismatch`.
+Evidence: `negative-mandatory-arm-missing`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::predecessor_columns_copy_the_column_their_description_names`, `rust/crates/yamaa-adapters/tests/file_resources.rs::predecessor_labels_and_the_dataset_inventory_span_every_section`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionPredecessorLabel`.
 Replaces: REQ-1157.
 
-Any other derivation computes rather than copies, and the refutation of
-[SUB-19](#sub-19) already rejects a computed column that claims otherwise. A
-copy keeps the name, the label and the values of what it copies.
+The `source` reads the predecessor through the input dataset declared under the
+predecessor's name: `origin.description: DM.AGE` requires `source: DM.AGE`, and
+`SUPPDM.QVAL where QNAM = 'RACEOTH'` requires a structured `source` of
+`SUPPDM.QVAL` that declares a `filter`. No rule compares the filter with the
+written condition. Any other derivation computes rather than copies, and the
+refutation of [SUB-19](#sub-19) already rejects a computed column that claims
+otherwise. A bare `source` of another dataset or column, or one without the
+`filter` a written condition requires, fails with
+`origin_contradicts_derivation`, reporting the column, the predecessor and the
+reason. A value-level `Predecessor` entry is checked against its row
+template's derivation and fails with `refuted_value_origin`, as
+[SUB-13](#sub-13) states.
+
+The copy is checked when the specification is validated on its own. The
+labels are compared when a document composes the specification: composition
+reads the specifications every submission section of the study environment
+lists, and a predecessor column no listed specification declares, or declares
+without a label, is not compared. A copy that keeps the name keeps the label,
+while a renamed column such as `PARAMCD` from `LBTESTCD` describes its own
+content. A label that differs fails with `predecessor_label_mismatch` at the
+column's `label`, reporting the predecessor and both labels.
 
 ## Methods, comments and documents
 
@@ -608,13 +676,13 @@ list.
 
 <a id="sub-23"></a>
 
-### SUB-23. Family-independent rules and the `mandatory` resolution are checked on the specification alone, and other family-dependent rules when a document composes it
+### SUB-23. Rules needing no family or study environment, and the `mandatory` resolution, are checked on the specification alone, and the rest when a document composes it
 
-Every rule of this profile that does not depend on a family is checked when the
-specification is validated on its own, and so is the resolution and enforcement
-of `mandatory`, which reads its family group from the dataset's `class`. Every
-other family-dependent rule is checked when [Define-XML](define-xml.md)
-composes the specification into a document.
+Every rule of this profile that needs neither a family nor the study
+environment is checked when the specification is validated on its own, and so
+is the resolution and enforcement of `mandatory`, which reads its family group
+from the dataset's `class`. Every other rule is checked when
+[Define-XML](define-xml.md) composes the specification into a document.
 
 Evidence: `sdtm-lb-metadata`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::metadata_admission_has_exact_causes_before_study_access`, `rust/crates/yamaa-adapters/tests/file_resources.rs::original_lb_source_rejection_and_per_value_published_vocabulary_have_zero_writes`.
 Replaces: REQ-0907, REQ-0908.
@@ -624,7 +692,9 @@ Checked when the specification is validated on its own:
 - the vocabularies;
 - the required and prohibited field combinations;
 - the length binding of [SUB-8](#sub-8);
-- the graph refutations of [SUB-19](#sub-19);
+- the graph refutations of [SUB-19](#sub-19), the form of a `Predecessor`
+  description ([SUB-16](#sub-16)) and the copy it claims
+  ([SUB-20](#sub-20));
 - the value-level declaration rules of [SUB-12](#sub-12) and
   [SUB-13](#sub-13);
 - the presence of `method` for a declared `Derived` origin
@@ -639,7 +709,10 @@ Checked when a document composes the specification:
 - the core designations and `core`/`mandatory` conflicts of
   [SUB-10](#sub-10), and the agreement of the class's group with the family;
 - the remaining family-dependent rules, such as the origin pairs of
-  [SUB-15](#sub-15).
+  [SUB-15](#sub-15);
+- the annotated case report form references of [SUB-17](#sub-17), which name
+  the section's documents and depend on its `context`, and the predecessor
+  labels of [SUB-20](#sub-20), which read every section's specifications.
 
 Only the study document says which standard the identifier names. A
 specification that is never composed carries declarations no family has
