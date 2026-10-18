@@ -186,6 +186,14 @@ registry!(
     yamaa::Submission,
     "submission"
 );
+registry!(
+    PLANS,
+    PlansHandle,
+    store_plans,
+    plans_of,
+    yamaa::Plans,
+    "plans"
+);
 
 /// The original interrupt condition a project function raised, or `None`.
 fn interrupt(build: &yamaa::Build) -> Option<Robj> {
@@ -220,17 +228,43 @@ fn spec_check(specification: Raw, project: Robj, version: Raw) -> List {
     })
 }
 
+/// An empty holder for the compiled plans one lazy object keeps between its
+/// runs (#2821). Creating it reads nothing.
 #[extendr]
-fn spec_run(specification: Raw, project: Robj, version: Raw, capabilities: List) -> List {
+fn plans() -> List {
+    reply(|| store_plans(yamaa::Plans::new()))
+}
+
+/// The holder a lazy object passes, or `None` for a one-shot run. A run only
+/// borrows it, so a run started from a project function shares it too.
+fn held_plans(plans: &Robj) -> std::result::Result<Option<Rc<RefCell<yamaa::Plans>>>, Refusal> {
+    if plans.is_null() {
+        return Ok(None);
+    }
+    plans_of(plans).map(Some)
+}
+
+#[extendr]
+fn spec_run(
+    specification: Raw,
+    project: Robj,
+    version: Raw,
+    capabilities: List,
+    plans: Robj,
+) -> List {
     reply(|| {
         let project = optional_text(&project)?;
-        let run = engine(&version, Some(capabilities))?
-            .spec_run(
-                &text(&specification)?,
-                project.as_deref(),
-                &CancellationToken::new(),
-            )
-            .map_err(|error| from_error("cannot run the specification", &error))?;
+        let engine = engine(&version, Some(capabilities))?;
+        let specification = text(&specification)?;
+        let token = CancellationToken::new();
+        let run = match held_plans(&plans)? {
+            Some(plans) => {
+                let plans = plans.try_borrow().map_err(|_| "plans handle in use")?;
+                engine.spec_run_reusing(&specification, project.as_deref(), &plans, &token)
+            }
+            None => engine.spec_run(&specification, project.as_deref(), &token),
+        }
+        .map_err(|error| from_error("cannot run the specification", &error))?;
         store(run)
     })
 }
@@ -348,16 +382,20 @@ fn project_check(project: Raw, version: Raw) -> List {
 }
 
 #[extendr]
-fn project_run(project: Raw, section: Robj, version: Raw, capabilities: List) -> List {
+fn project_run(project: Raw, section: Robj, version: Raw, capabilities: List, plans: Robj) -> List {
     reply(|| {
         let section = optional_text(&section)?;
-        let runs = engine(&version, Some(capabilities))?
-            .project_run(
-                &text(&project)?,
-                section.as_deref(),
-                &CancellationToken::new(),
-            )
-            .map_err(|error| from_error("cannot run the project", &error))?;
+        let engine = engine(&version, Some(capabilities))?;
+        let project = text(&project)?;
+        let token = CancellationToken::new();
+        let runs = match held_plans(&plans)? {
+            Some(plans) => {
+                let plans = plans.try_borrow().map_err(|_| "plans handle in use")?;
+                engine.project_run_reusing(&project, section.as_deref(), &plans, &token)
+            }
+            None => engine.project_run(&project, section.as_deref(), &token),
+        }
+        .map_err(|error| from_error("cannot run the project", &error))?;
         store_project_run(runs)
     })
 }

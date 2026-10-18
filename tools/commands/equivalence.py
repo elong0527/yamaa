@@ -7,6 +7,9 @@ installs both outside it, and runs on those installs:
 - public benchmark conformance for each host: every active benchmark
   reproduces its expected bytes, and every negative benchmark its expected
   first diagnostic (phase, condition, requirement and specification paths);
+  a repeat pass runs each entry's spec object a second time, reusing the
+  plan its first run compiled, and requires the same issues, tables and
+  saved bytes (#2821);
 - the installed Python suites and `R CMD check`, which carry the cross-host
   diagnostic parity truth and the host-fixture families.
 

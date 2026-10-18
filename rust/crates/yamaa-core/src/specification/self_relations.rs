@@ -307,7 +307,8 @@ pub(super) fn bind_operand(
             .is_none_or(|(owner, _)| owner != driver)
     {
         row_intermediates::bind(
-            reference, path, named, secondary, items, output, catalog, available, edges, findings,
+            reference, path, named, secondary, items, output, catalog, row, available, edges,
+            findings,
         )
     } else {
         rounding::bind_row_operand(

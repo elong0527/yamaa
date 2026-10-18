@@ -858,6 +858,9 @@ def _render_pyi(definition):
             args = _python_args(export.get("args"), definition, classes)
             returns = _python_type(_type_node(export["returns"]), definition, classes)
             items.append((kind, "\n".join(_stub_def(name, args, returns, ""))))
+        elif kind == "class" and not export.get("methods"):
+            # An opaque handle without methods still needs a stub body.
+            items.append((kind, f"class {name}: ..."))
         elif kind == "class":
             lines = [f"class {name}:"]
             for method in export.get("methods", []):

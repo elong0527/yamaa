@@ -1,9 +1,12 @@
 //! The host API both bindings expose: operations on a specification or a
 //! project path. Hosts keep the paths in their own lazy objects; every call
 //! here rereads the files, and every result is a fixed snapshot that writes
-//! nothing until `save`.
+//! nothing until `save`. A lazy object also keeps a [`Plans`] holder, so a
+//! later run reuses what an earlier run compiled once the run-start check
+//! finds the files unchanged.
 
-use std::sync::Arc;
+use std::collections::BTreeMap;
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use yamaa_adapters::issue_rows::Issue;
 use yamaa_adapters::project_scope::{identify, Project};
@@ -13,6 +16,7 @@ use crate::cancel::CancellationToken;
 use crate::diagnostic::{context_value_from_core, ContextValue, Report};
 use crate::engine::{Build, DefineBuild, DefineRequest, Engine, Request, SaveOutcome};
 use crate::error::Error;
+use crate::plan::Plan;
 use crate::table::Table;
 
 /// A refused operation: a message for people and the issues that explain it.
@@ -100,6 +104,73 @@ fn request<'a>(specification: &'a str, project: Option<&'a str>) -> Request<'a> 
     }
 }
 
+/// The specification and project paths a kept plan was compiled from.
+type PlanKey = (String, Option<String>);
+
+/// The compiled plans a host's lazy object keeps between runs (#2821), one
+/// for each specification and project path its runs compiled.
+///
+/// [`Engine::spec_run_reusing`] and [`Engine::project_run_reusing`] reuse a
+/// kept plan only when the run-start check finds every file it was compiled
+/// from unchanged: the specification, its layers, dictionaries and linked
+/// producing specifications, the project file, the environment file, and the
+/// lock, function definitions and codelists they declare. When one changed or
+/// is gone, the run compiles again, exactly as a one-shot run does, and keeps
+/// the new plan; a refused compilation keeps nothing. Every run reads its
+/// inputs and activates the project functions afresh, so a reused run differs
+/// from a one-shot run only in time.
+///
+/// A holder is `Send` and `Sync`. Its lock is held only to read or replace a
+/// kept plan, never across a compilation, a run or a callback, so a run
+/// started from a project function, or on another thread, works as any other.
+#[derive(Default)]
+pub struct Plans {
+    kept: Mutex<BTreeMap<PlanKey, Plan>>,
+}
+
+impl Plans {
+    /// An empty holder: the first run of each specification compiles it.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    fn kept(&self) -> MutexGuard<'_, BTreeMap<PlanKey, Plan>> {
+        self.kept.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    fn key(request: &Request<'_>) -> PlanKey {
+        (
+            request.specification.to_owned(),
+            request.environment.map(str::to_owned),
+        )
+    }
+
+    /// The plan kept for `request`, if any.
+    pub(crate) fn get(&self, request: &Request<'_>) -> Option<Plan> {
+        self.kept().get(&Self::key(request)).cloned()
+    }
+
+    /// Keep the plan compiled for `request`; a refused compilation instead
+    /// drops whatever the request kept, so its next run compiles again.
+    pub(crate) fn keep(&self, request: &Request<'_>, plan: Plan) {
+        let key = Self::key(request);
+        let mut kept = self.kept();
+        if plan.report().is_empty() {
+            kept.insert(key, plan);
+        } else {
+            kept.remove(&key);
+        }
+    }
+
+    /// Drop the plans kept for `project`'s specifications that it no longer
+    /// lists.
+    fn retain(&self, project: &str, listed: impl Fn(&str) -> bool) {
+        self.kept().retain(|(specification, owner), _| {
+            owner.as_deref() != Some(project) || listed(specification)
+        });
+    }
+}
+
 impl Engine {
     /// Check one specification without reading study data or running project
     /// code, with the project's codelists and functions when it has one.
@@ -119,7 +190,22 @@ impl Engine {
         project: Option<&str>,
         token: &CancellationToken,
     ) -> Result<Run, Error> {
-        self.build(&request(specification, project), token)
+        self.spec_run_reusing(specification, project, &Plans::new(), token)
+    }
+
+    /// [`Engine::spec_run`] through `plans`, as a host's specification object
+    /// runs. The first run compiles the specification and keeps its plan; a
+    /// later run reuses that plan when the run-start check finds every file
+    /// it was compiled from unchanged, and compiles again when one changed or
+    /// is gone, so no run uses stale files. See [`Plans`].
+    pub fn spec_run_reusing(
+        &self,
+        specification: &str,
+        project: Option<&str>,
+        plans: &Plans,
+        token: &CancellationToken,
+    ) -> Result<Run, Error> {
+        self.build_reusing(plans, &request(specification, project), None, token)
             .map(|build| Run { build })
     }
 
@@ -482,6 +568,22 @@ impl Engine {
         section: Option<&str>,
         token: &CancellationToken,
     ) -> Result<ProjectRun, Error> {
+        self.project_run_reusing(project, section, &Plans::new(), token)
+    }
+
+    /// [`Engine::project_run`] through `plans`, as a host's project object
+    /// runs. Each specification the run builds reuses the plan an earlier run
+    /// kept for it, under the rule of [`Engine::spec_run_reusing`]. The
+    /// project file is read afresh every time, so the run scope and order
+    /// follow the current file, and the plans of specifications it no longer
+    /// lists are dropped.
+    pub fn project_run_reusing(
+        &self,
+        project: &str,
+        section: Option<&str>,
+        plans: &Plans,
+        token: &CancellationToken,
+    ) -> Result<ProjectRun, Error> {
         if token.is_cancelled() {
             return Err(Error::Cancelled);
         }
@@ -490,6 +592,11 @@ impl Engine {
             Ok(read) => read,
             Err(issues) => return Ok(ProjectRun::refused(issues)),
         };
+        plans.retain(project, |specification| {
+            read.listed()
+                .iter()
+                .any(|listed| listed.path() == specification)
+        });
         let plan = read.plan(section);
         if !plan.refusal().is_empty() {
             return Ok(ProjectRun::refused(plan.refusal().to_vec()));
@@ -506,9 +613,10 @@ impl Engine {
             } else if !blocked.is_empty() {
                 self.refused_build(blocked)
             } else {
-                self.build_in_project(
+                self.build_reusing(
+                    plans,
                     &Request::new(listed.path()).with_environment(project),
-                    Arc::new(held.clone()),
+                    Some(Arc::new(held.clone())),
                     token,
                 )?
             };

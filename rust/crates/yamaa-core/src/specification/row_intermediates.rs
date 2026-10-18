@@ -165,7 +165,25 @@ pub(super) fn dependencies(
     Ok(columns)
 }
 
+/// A row template reads a lookup that matches on a column only the column
+/// phase completes (LOOKUP-2): a key match value, its `between` value, or a
+/// match value of another lookup a `between` value reads. The finding is at
+/// the template's read of the lookup.
+fn match_phase_boundary(path: &str, column: &str, intermediate: &str, row: &str) -> BindFinding {
+    let mut finding = LookupFinding::new(
+        path,
+        crate::diagnostic::ConditionCode::IntermediateMatchPhaseBoundary,
+    );
+    finding.text("identifier", column);
+    finding.text("intermediate", intermediate);
+    finding.text("row", row);
+    finding.text("available_phase", "column_derivation");
+    finding.text("required_phase", "row_construction");
+    BindFinding::Lookup(finding)
+}
+
 /// Bind one direct read using the same selector and actual completed outputs.
+/// `row` names the row template that reads it during row construction.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn bind(
     reference: &str,
@@ -175,6 +193,7 @@ pub(super) fn bind(
     items: &[Option<crate::dataset::Intermediate>],
     output: &TableSchema,
     catalog: &Catalog,
+    row: Option<&str>,
     available: Option<&[usize]>,
     edges: &mut Vec<usize>,
     findings: &mut Vec<BindFinding>,
@@ -240,7 +259,21 @@ pub(super) fn bind(
         for read in key.value.reads() {
             if let crate::dataset::MatchRead::Output { column, identifier } = read {
                 if available.is_some_and(|available| !available.contains(column)) {
-                    findings.push(missing_dependency(identifier, &key.path));
+                    // A row template's read of a lookup matching on a column
+                    // it leaves to the column phase (LOOKUP-2), once per column.
+                    match row.filter(|_| declarations.reader().is_none()) {
+                        Some(row) => {
+                            let finding =
+                                match_phase_boundary(path, identifier, &item.identifier, row);
+                            if !findings[before..].iter().any(|prior| {
+                                matches!((prior, &finding), (BindFinding::Lookup(prior), BindFinding::Lookup(finding))
+                                    if prior.diagnostic() == finding.diagnostic())
+                            }) {
+                                findings.push(finding);
+                            }
+                        }
+                        None => findings.push(missing_dependency(identifier, &key.path)),
+                    }
                     continue;
                 }
             }
@@ -332,8 +365,15 @@ pub(super) fn bind(
             .validate_output(name, None, available, &[0])
             .map_err(BindError::Catalog)?
         {
-            // A lookup's own dependency is a match value it reads (REQ-0126),
-            // not a read by this row derivation, so it is not projected as one.
+            // A lookup's own dependency is a match value it reads, not a read
+            // by this row derivation: one the row template leaves to the
+            // column phase fails at the template's read (LOOKUP-2).
+            if let (Some(row), crate::reference_binding::Diagnostic::PhaseBoundary { .. }) =
+                (row, &finding)
+            {
+                findings.push(match_phase_boundary(path, name, &item.identifier, row));
+                continue;
+            }
             findings.push(BindFinding::OutputReference {
                 path: path.into(),
                 name: name.clone(),

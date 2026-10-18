@@ -31,6 +31,7 @@ handshake:
     format_parquet: yamaa-adapters/parquet
     format_readstat: yamaa-adapters/readstat
     format_odm: yamaa-adapters/odm
+    plan_reuse: yamaa::Plans
   failure_record: records.diagnostic
   result_record: records.result
 
@@ -90,6 +91,16 @@ python:
       methods:
         - {name: issues, args: {}, returns: _ArrowTable}
         - {name: save, args: {}, returns: unit}
+    - kind: class
+      name: _Plans
+      rust: api_entry::Plans
+      constructible: false
+      methods: []
+    - kind: function
+      name: _plans
+      rust: api_entry::_plans
+      args: {}
+      returns: _Plans
     - kind: function
       name: _spec_check
       rust: api_entry::_spec_check
@@ -98,7 +109,7 @@ python:
     - kind: function
       name: _spec_run
       rust: api_entry::_spec_run
-      args: {specification: text, project: "optional<text> = None"}
+      args: {specification: text, project: "optional<text> = None", plans: "optional<_Plans> = None"}
       returns: _Run
     - kind: function
       name: _spec_resolve
@@ -118,7 +129,7 @@ python:
     - kind: function
       name: _project_run
       rust: api_entry::_project_run
-      args: {project: text, section: "optional<text> = None"}
+      args: {project: text, section: "optional<text> = None", plans: "optional<_Plans> = None"}
       returns: _ProjectRun
     - kind: function
       name: _project_submission
@@ -155,8 +166,9 @@ r:
       source: rust/crates/yamaa-r/src/api_entry.rs
       functions:
         - {name: spec_check, args: {specification: raw, project: robj, version: raw}, returns: r_reply}
+        - {name: plans, args: {}, returns: r_reply}
         - name: spec_run
-          args: {specification: raw, project: robj, version: raw, capabilities: r_list}
+          args: {specification: raw, project: robj, version: raw, capabilities: r_list, plans: robj}
           returns: r_reply
         - {name: spec_resolve, args: {specification: raw, project: robj, version: raw}, returns: r_reply}
         - name: read_odm
@@ -171,7 +183,7 @@ r:
         - {name: project_spec, args: {project: raw, name: raw, version: raw}, returns: r_reply}
         - {name: project_check, args: {project: raw, version: raw}, returns: r_reply}
         - name: project_run
-          args: {project: raw, section: robj, version: raw, capabilities: r_list}
+          args: {project: raw, section: robj, version: raw, capabilities: r_list, plans: robj}
           returns: r_reply
         - {name: project_run_names, args: {handle: robj}, returns: r_reply}
         - {name: project_run_output, args: {handle: robj, name: raw}, returns: r_reply}
@@ -191,6 +203,7 @@ r:
 # generator refuses an export missing from both this table and host_only.
 operations:
   core_version: {python: [_CORE_VERSION], r: [core_version]}
+  plans: {python: [_plans], r: [plans]}
   spec_check: {python: [_spec_check], r: [spec_check]}
   spec_run: {python: [_spec_run], r: [spec_run]}
   spec_resolve: {python: [_spec_resolve], r: [spec_resolve]}

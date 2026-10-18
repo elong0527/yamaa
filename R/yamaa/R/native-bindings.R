@@ -9,8 +9,12 @@
   .Call(wrap__spec_check, specification, project, version)
 }
 
-.native_spec_run <- function(specification, project, version, capabilities) {
-  .Call(wrap__spec_run, specification, project, version, capabilities)
+.native_plans <- function() {
+  .Call(wrap__plans)
+}
+
+.native_spec_run <- function(specification, project, version, capabilities, plans) {
+  .Call(wrap__spec_run, specification, project, version, capabilities, plans)
 }
 
 .native_spec_resolve <- function(specification, project, version) {
@@ -53,8 +57,8 @@
   .Call(wrap__project_check, project, version)
 }
 
-.native_project_run <- function(project, section, version, capabilities) {
-  .Call(wrap__project_run, project, section, version, capabilities)
+.native_project_run <- function(project, section, version, capabilities, plans) {
+  .Call(wrap__project_run, project, section, version, capabilities, plans)
 }
 
 .native_project_run_names <- function(handle) {
