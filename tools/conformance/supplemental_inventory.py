@@ -37,6 +37,7 @@ def require_native_consumer(source, name):
     """Reject reference semantic imports in retained installed Python suites."""
     prefixes = (
         "yamaa._reference_domain",
+        "yamaa.resources",
         "yamaa.adapters",
         "yamaa.models",
         "yamaa.runtime",

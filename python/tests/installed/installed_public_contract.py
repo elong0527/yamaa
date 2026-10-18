@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 import gc
+import importlib.util
 import inspect
 import json
 import math
@@ -108,8 +109,8 @@ class PublicContract(unittest.TestCase):
         for name in REMOVED:
             with self.subTest(name=name):
                 self.assertFalse(hasattr(yamaa, name))
-        with self.assertRaises(ModuleNotFoundError):
-            __import__("yamaa.resources")
+        for module in ("yamaa.resources", "yamaa._odm"):
+            self.assertIsNone(importlib.util.find_spec(module))
         self.assertEqual(
             sorted(name for name in dir(_native) if not name.startswith("__")),
             [
