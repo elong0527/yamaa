@@ -207,6 +207,9 @@ pub enum BindError {
     InvalidNumericBinding(crate::bound_expression::BindingError),
     #[error("specification invalid plan: {0:?}")]
     InvalidPlan(crate::dataset::PlanError),
+    /// The bound plan failed a resolution check (#2840); refused as internal.
+    #[error("specification unresolved plan: {0}")]
+    Resolution(crate::dataset::ResolutionError),
 }
 #[derive(Debug)]
 pub enum BindFinding {
@@ -1733,31 +1736,36 @@ impl PreparedSpecification {
         self.bind_sources(&[source])
     }
     /// Schemas follow authored input order, independently of the selected driver.
+    /// Every bound plan, on the rows and the no-rows route alike, resolves into
+    /// its slot graph and passes the resolution checks before it is returned.
     pub fn bind_sources(&self, schemas: &[&TableSchema]) -> Result<DatasetPlan, BindError> {
         if schemas.len() != self.sources.len() {
             return Err(BindError::SourceCount);
         }
         let source = schemas[self.driver];
-        if self.rows.is_some() {
-            return self.bind_rows_plan(schemas, source);
-        }
-        let (catalog, secondary, intermediates, mut findings) =
-            self.bind_column_catalog(source, schemas)?;
-        let (assignments, dependencies) = self.bind_column_declarations(
-            &catalog,
-            source,
-            &secondary,
-            &intermediates,
-            &mut findings,
-        )?;
-        self.finish_column_plan(
-            assignments,
-            dependencies,
-            findings,
-            secondary,
-            intermediates,
-            source,
-        )
+        let plan = if self.rows.is_some() {
+            self.bind_rows_plan(schemas, source)?
+        } else {
+            let (catalog, secondary, intermediates, mut findings) =
+                self.bind_column_catalog(source, schemas)?;
+            let (assignments, dependencies) = self.bind_column_declarations(
+                &catalog,
+                source,
+                &secondary,
+                &intermediates,
+                &mut findings,
+            )?;
+            self.finish_column_plan(
+                assignments,
+                dependencies,
+                findings,
+                secondary,
+                intermediates,
+                source,
+            )?
+        };
+        plan.resolve().map_err(BindError::Resolution)?;
+        Ok(plan)
     }
 
     fn bind_rows_plan(

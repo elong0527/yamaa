@@ -1,0 +1,22 @@
+# Advisory check for rust/Cargo.lock and python/uv.lock against OSV, run by
+# the dependency-graphs workflow as
+#   osv-scanner scan source --config osv-scanner.toml \
+#     --lockfile rust/Cargo.lock --lockfile python/uv.lock
+# OSV also carries GitHub's reviewed advisories, which RustSec (cargo deny,
+# configured in rust/deny.toml) and the PyPI database (pip-audit) can lack.
+#
+# Any advisory against a locked package fails the check. An ignored advisory
+# carries its id, a reason and a review date in `ignoreUntil`; after that date
+# it fails the check again until it is reviewed. An advisory that cargo deny
+# also reports is ignored in rust/deny.toml too, with the same reason and
+# review date.
+
+[[IgnoredVulns]]
+id = "GHSA-2f9f-gq7v-9h6m"
+ignoreUntil = 2027-01-31
+reason = "thrift 0.17.0 (CVE-2026-43868, fixed in 0.23.0) arrives only through parquet 57.3.0, which the engine pins exactly; parquet 57.3.1 still requires thrift 0.17. Parquet 57.3.0 calls thrift only from its deprecated format module and an error conversion: footer, page-header, page-index and bloom-filter decoding use Parquet's own decoder. Admission bounds every binary, list, set and map length before Parquet decodes. RustSec has no entry for this advisory, so rust/deny.toml does not list it."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0436"
+ignoreUntil = 2027-04-30
+reason = "paste is unmaintained, not vulnerable, and a procedural macro that runs only at compile time. It arrives through extendr-api 0.9.0, the latest release, and through parquet 57.3.0, which the engine pins exactly; parquet 57.3.1 still requires it."

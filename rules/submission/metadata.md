@@ -287,7 +287,12 @@ derives `<DOMAIN>TESTCD` as `{literal: <code>}` with a string code. A dynamic
 expression leaves the value unknown until data arrives, and value-level
 metadata is validated without data (see [REQ-0907](metadata.md#req-0907)), so a dynamic
 discriminator fails loudly rather than silently attaching metadata to an
-unknown value.
+unknown value. A check applied only to the rows of one code, such as a
+value-level `length` that differs from the column's, finds those rows by
+comparing the code with `<DOMAIN>TESTCD`. That column must then be declared
+`str`: a column of another type never equals a string code under
+[REQ-0004](../values/types.md#req-0004), so the declaration fails the same
+way rather than checking no row.
 
 <a id="req-1165"></a>
 

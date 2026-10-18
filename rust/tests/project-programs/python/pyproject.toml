@@ -10,3 +10,11 @@ description = "Ordinary installed project functions for yamaa benchmarks"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/yamaa_benchmarks"]
+
+[tool.uv]
+# `make setup` installs a built wheel, which uv rebuilds only when a file listed
+# here changes. List every wheel input: this file and the package sources.
+cache-keys = [
+  { file = "pyproject.toml" },
+  { file = "src/**" },
+]
