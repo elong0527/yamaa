@@ -45,6 +45,7 @@ fn code(record: &CheckRecord, phase: Phase) -> Result<ConditionCode, Error> {
             | VerificationRowCountFailed
             | VerificationNotMissingFailed
             | SubmissionMandatoryFailed
+            | SubmissionDataTypeFailed
             | VerificationAllowedValuesFailed
             | VerificationCodelistFailed
             | SubmissionInventoryFailed
@@ -191,6 +192,7 @@ fn base_context<'a>(
         }
         VerificationNotMissingFailed
         | SubmissionMandatoryFailed
+        | SubmissionDataTypeFailed
         | VerificationAllowedValuesFailed
         | VerificationCodelistFailed
         | SubmissionInventoryFailed
@@ -223,6 +225,9 @@ fn base_context<'a>(
                     .codelist(&observation.id)
                     .ok_or(Error::InvalidObservation)?;
                 context.insert("codelist", Fact::Text(id));
+            }
+            if let Check::DataType { form, .. } = check {
+                context.insert("data_type", Fact::Text(form.name()));
             }
             context
         }

@@ -103,6 +103,7 @@ columns:
         type: Assigned
         source: Sponsor
 
+  # Collected to the minute, the day or the month, so a partial date-time.
   - name: VSDTC
     type: str
     label: Date/Time of Measurements
@@ -110,7 +111,7 @@ columns:
     submission:
       core: Exp
       role: Record Qualifier
-      data_type: datetime
+      data_type: partialDatetime
       origin:
         type: Assigned
         source: Sponsor

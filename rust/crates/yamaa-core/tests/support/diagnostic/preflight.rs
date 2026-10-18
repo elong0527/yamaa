@@ -892,6 +892,13 @@ pub(crate) fn temporal_reached() -> BTreeSet<ConditionCode> {
                     ],
                 ),
             ),
+            column(
+                "GAP",
+                derivation(
+                    "dtc",
+                    vec![("year", Tree::text("ID")), ("day", Tree::text("ID"))],
+                ),
+            ),
         ],
         vec![Tree::text("ID")],
     );
@@ -963,6 +970,13 @@ pub(crate) fn temporal_reached() -> BTreeSet<ConditionCode> {
             "unknown_field",
             "columns.SHIFT.derivation.shift.unit",
             vec![("field", text("unit")), ("type", text("date"))],
+        ),
+        // Temporal operations are read before the imputation operations.
+        (
+            "TIME-19",
+            "missing_required_field",
+            "columns.GAP.derivation.dtc.month",
+            vec![("field", text("month")), ("finer", text("day"))],
         ),
         (
             "TIME-1",

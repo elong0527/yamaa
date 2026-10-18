@@ -28,9 +28,10 @@ describes.
 `.github/workflows/native.yml` builds, installs and tests every supported
 combination on manual dispatch. A release is cut from a commit whose complete
 native run passed. Development PRs do not run the release lanes, so before a
-release also dispatch R-CMD-check, Optional format features and Dependency
-graphs on the candidate, and CI for its minimum toolchain, Python 3.15 and
-minimum saved artifact reader lanes.
+release also dispatch R-CMD-check, Dependency graphs and Release compatibility
+on the candidate. Release compatibility checks the minimum toolchain, minimal
+format builds, Python 3.15 and minimum Python saved artifact readers; dispatch
+CI for its minimum R saved artifact reader checks.
 
 Python, R and Cargo versions move together;
 `tools.packaging.check_shared_release_versions` checks that they agree. The
@@ -100,9 +101,9 @@ installed-host qualification first. The direct storage codec floors are brotli
 saphyr-parser 0.2.1 with its compact-flow fix is vendored as
 `yamaa-saphyr-parser`, which `yamaa-adapters` depends on by path. It is
 therefore part of every graph that builds the engine, including a project that
-depends on the facade by git or path with no other configuration; CI's
-minimum-toolchain release lane builds the facade from such an outside
-workspace (#2929). The Python
+depends on the facade by git or path with no other configuration; the Release
+compatibility workflow's minimum-toolchain job builds the facade from such an
+outside workspace (#2929). The Python
 binding builds with PyO3 0.27.2 through 0.30; the lock selects 0.30.1, and the
 minimum dependency graph tests 0.27.2.
 

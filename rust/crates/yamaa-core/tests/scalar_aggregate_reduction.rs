@@ -1567,7 +1567,7 @@ mod scalar {
         use crate::support::diagnostic::temporal_imputation as diagnostic;
         #[test]
         fn independent_diagnostic_truth_reaches_every_imputation_cause() {
-            assert_eq!(diagnostic::reached().len(), 15);
+            assert_eq!(diagnostic::reached().len(), 17);
         }
 
         #[test]
