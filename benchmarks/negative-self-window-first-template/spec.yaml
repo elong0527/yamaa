@@ -1,0 +1,67 @@
+schema_version: "1.0"
+domain: VS
+keys: [USUBJID, VSDY, VSCAT]
+input:
+  VITALS: {path: input/vitals.csv, types: {VSDY: int, SYSBP: int}}
+  WINDOWS: {path: input/windows.csv, types: {LO: int, HI: int}}
+
+output:
+  path: vs.csv
+  columns: [USUBJID, VSDY, VSCAT, VSSTRESN, VISIT]
+
+intermediates:
+  # The subject's latest record built so far.
+  - id: LATEST
+    dataset: SELF
+    key: [USUBJID]
+    order_by: [SELF.VSDY]
+    keep: last
+    no_match: null
+
+  # The visit window holding the study day of that latest record.
+  - id: LATESTWIN
+    dataset: WINDOWS
+    key: [USUBJID]
+    between: {value: LATEST.VSDY, lower: LO, upper: HI}
+    no_match: null
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: VITALS.USUBJID
+
+  - {name: VSDY, type: int, label: Study Day of Vital Signs}
+  - {name: VSCAT, type: str, label: Category for Vital Signs}
+
+  - name: VSSTRESN
+    type: int
+    label: Numeric Result/Finding in Standard Units
+
+  - {name: VISIT, type: str, label: Visit Name}
+
+rows:
+  # Each collected measurement. Its visit is the window of the subject's
+  # latest record built so far, but these are the first rows built, so no
+  # such record exists yet, and the specification is rejected before any
+  # data is read.
+  - id: collected
+    dataset: VITALS
+    derivations:
+      VSDY: VITALS.VSDY
+      VSCAT: {literal: COLLECTED}
+      VSSTRESN: VITALS.SYSBP
+      VISIT: LATESTWIN.NAME
+
+  # One follow-up record per subject, in the window of the subject's latest
+  # collected measurement.
+  - id: followup
+    dataset: VITALS
+    group_by: [VITALS.USUBJID]
+    derivations:
+      VSDY:
+        aggregate:
+          expr: "MAX(VITALS.VSDY)"
+      VSCAT: {literal: FOLLOW-UP}
+      VSSTRESN: {literal: null}
+      VISIT: LATESTWIN.NAME
