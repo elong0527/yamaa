@@ -787,8 +787,6 @@ mod project {
                         }),
                         functions,
                         codelists: vec![],
-                        has_study: false,
-                        submissions: vec![],
                     },
                 )
                 .unwrap()
@@ -1504,6 +1502,7 @@ mod project {
             let captured = "held/uv.lock";
             let origins = LockOrigins {
                 source,
+                entry: "study/project.yaml",
                 lock_source: captured,
                 written: &lock.written,
             };
@@ -2098,6 +2097,96 @@ mod project {
                 absent[0].spec_paths,
                 ["columns.A.derivation.case[0].then.function.name"]
             );
+        }
+
+        #[test]
+        fn a_project_without_an_environment_for_the_host_reports_every_call_as_undeclared() {
+            use yamaa_core::{
+                build,
+                project_environment::{Draft, Environment},
+                project_function::Language,
+            };
+            let spec = specification(vec![
+                ("A", "int", call("id", vec![("x", Tree::text("ID"))])),
+                (
+                    "B",
+                    "int",
+                    Tree::map(vec![(
+                        "case",
+                        Tree::List(vec![Tree::map(vec![
+                            ("when", Tree::text("ID > 0")),
+                            ("then", call("other", vec![("x", Tree::text("ID"))])),
+                        ])]),
+                    )]),
+                ),
+            ]);
+            for host in [Language::Python, Language::R] {
+                // The supplied project declares no `environments` key for the host.
+                let environment = Environment::admit(
+                    host,
+                    Draft {
+                        language: None,
+                        lock: None,
+                        functions: None,
+                        codelists: vec![],
+                    },
+                )
+                .unwrap()
+                .into_execution();
+                let Err(PrepareError::Invalid(findings)) =
+                    PreparedSpecification::prepare_with_environment(&spec, &environment)
+                else {
+                    panic!("each call needs the host's environment file")
+                };
+                let diagnostics = findings
+                    .iter()
+                    .map(|finding| finding.diagnostic())
+                    .collect::<Vec<_>>();
+                assert_eq!(
+                    diagnostics
+                        .iter()
+                        .map(|d| d.spec_paths[0].as_str())
+                        .collect::<Vec<_>>(),
+                    [
+                        "columns.A.derivation.function.name",
+                        "columns.B.derivation.case[0].then.function.name"
+                    ]
+                );
+                for (diagnostic, function) in diagnostics.iter().zip(["id", "other"]) {
+                    assert_eq!(
+                        (
+                            diagnostic.definition().phase,
+                            diagnostic.definition().condition,
+                            diagnostic.definition().requirement
+                        ),
+                        (
+                            "validation",
+                            "project_environment_missing",
+                            Some("REQ-0694")
+                        )
+                    );
+                    assert_eq!(
+                        diagnostic.context,
+                        [
+                            ("function".into(), JsonValue::String(function.into())),
+                            ("language".into(), JsonValue::String(host.key().into())),
+                            ("cause".into(), JsonValue::String("undeclared".into())),
+                        ]
+                        .into()
+                    );
+                }
+            }
+            // Without any project the same calls keep the ordinary unknown cause.
+            let plain = build::without_environment(Language::Python);
+            let Err(PrepareError::Invalid(findings)) =
+                PreparedSpecification::prepare_with_environment(&spec, &plain)
+            else {
+                panic!("unknown calls without a project")
+            };
+            assert_eq!(findings.len(), 2);
+            assert!(findings.iter().all(|finding| {
+                finding.diagnostic().definition().condition == "unknown_project_function"
+            }));
         }
 
         #[test]

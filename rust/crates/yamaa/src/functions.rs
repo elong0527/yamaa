@@ -85,11 +85,41 @@ pub struct Parameter {
     pub name: String,
 }
 
-/// One admitted logical signature: declaration-order host parameter names.
+/// A declared column type, the vocabulary of a function's `returns`. There is
+/// no boolean column type, although booleans remain valid function scalars.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ColumnType {
+    Str,
+    Int,
+    Float,
+    Date,
+    DateTime,
+}
+
+impl ColumnType {
+    pub(crate) fn from_core(kind: yamaa_core::value::ColumnType) -> Self {
+        use yamaa_core::value::ColumnType as Core;
+        match kind {
+            Core::Str => Self::Str,
+            Core::Int => Self::Int,
+            Core::Float => Self::Float,
+            Core::Date => Self::Date,
+            Core::DateTime => Self::DateTime,
+        }
+    }
+}
+
+/// One admitted logical signature: declaration-order host parameter names,
+/// the declared result type and whether an invoked binding may return
+/// missing. Hosts convert a returned host value by `returns`; the engine
+/// still checks the result type and missing permission itself.
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Signature {
     pub parameters: Vec<Parameter>,
+    pub returns: ColumnType,
+    pub may_return_missing: bool,
 }
 
 impl Signature {
@@ -102,6 +132,8 @@ impl Signature {
                     name: parameter.name.clone(),
                 })
                 .collect(),
+            returns: ColumnType::from_core(signature.returns()),
+            may_return_missing: signature.may_return_missing(),
         }
     }
 }
@@ -329,6 +361,36 @@ mod tests {
         let port = Echo;
         assert!(port.is_interrupt(&FunctionError::Interrupted { payload: None }));
         assert!(!port.is_interrupt(&FunctionError::Protocol));
+    }
+
+    #[test]
+    fn signatures_carry_the_declared_result() {
+        use yamaa_core::function_signature::{LogicalSignature, Parameter, Presence};
+        use yamaa_core::value::{ColumnType as Core, ValueType};
+        let parameter = Parameter {
+            name: "x".into(),
+            host_name: "x".into(),
+            kind: ValueType::Int,
+            accepts_missing: false,
+            presence: Presence::Required,
+        };
+        for (core, facade) in [
+            (Core::Str, ColumnType::Str),
+            (Core::Int, ColumnType::Int),
+            (Core::Float, ColumnType::Float),
+            (Core::Date, ColumnType::Date),
+            (Core::DateTime, ColumnType::DateTime),
+        ] {
+            for may_return_missing in [false, true] {
+                let signature =
+                    LogicalSignature::new(vec![parameter.clone()], core, may_return_missing)
+                        .unwrap();
+                let converted = Signature::from_core(&signature);
+                assert_eq!(converted.returns, facade);
+                assert_eq!(converted.may_return_missing, may_return_missing);
+                assert_eq!(converted.parameters[0].name, "x");
+            }
+        }
     }
 
     #[test]

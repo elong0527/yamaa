@@ -9,7 +9,6 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 import yamaa
-from yamaa.resources import MemoryResolver
 
 
 class ColumnCeilings(unittest.TestCase):
@@ -74,9 +73,17 @@ class ColumnCeilings(unittest.TestCase):
         spec.write_text(json.dumps(document), encoding="ascii")
         return spec
 
+    @staticmethod
+    def routes(spec, project=None):
+        """Check and run one specification, alone or as a project names it."""
+        specification = (
+            yamaa.spec(spec) if project is None else yamaa.project(project).spec("TEST")
+        )
+        return specification.check(), specification.run()
+
     def assert_build(self, spec, width=1):
-        self.assertEqual(yamaa.check(spec).issues.height, 0)
-        built = yamaa.domain(spec)
+        self.assertEqual(yamaa.spec(spec).check().issues.height, 0)
+        built = yamaa.spec(spec).run()
         self.assertEqual(built.issues.height, 0)
         self.assertEqual(built.output.row(0), ("S-001", *["x"] * (width - 1)))
         self.assertEqual(built.output.shape, (1, width))
@@ -97,7 +104,7 @@ class ColumnCeilings(unittest.TestCase):
             )
         if hasattr(result, "save"):
             self.assertIsNone(result.output)
-            with self.assertRaises(yamaa.DomainError):
+            with self.assertRaises(yamaa.Error):
                 result.save()
 
     def test_declared_columns_with_narrow_output(self):
@@ -108,8 +115,8 @@ class ColumnCeilings(unittest.TestCase):
         # output with one live column builds, so exercise the ceiling with a live
         # 1,025-column output.
         spec = self.write_case("refuse-columns", columns=1025)
-        for operation in (yamaa.check, yamaa.domain):
-            self.assert_refusal(operation(spec), compiler=True)
+        for result in self.routes(spec):
+            self.assert_refusal(result, compiler=True)
 
     def test_fixed_refusal_and_retry_expose_the_remaining_error(
         self,
@@ -123,12 +130,16 @@ class ColumnCeilings(unittest.TestCase):
         document["columns"][2]["derivation"] = {
             "str_case": {"source": "C0001", "to": "upper"}
         }
-        environment = spec.with_name("environment.yaml")
-        environment.write_text("schema_version: '1.0'\nlanguage: python\n")
-        for route in (None, environment):
+        # The same refusal with a project that links an empty environment.
+        spec.with_name("environment.yaml").write_text("schema_version: '1.0'\n")
+        project = spec.with_name("project.yaml")
+        project.write_text(
+            "schema_version: '1.0'\nenvironments: {python: environment.yaml}\n"
+            "adam: {specs: [spec.yaml]}\n"
+        )
+        for route in (None, project):
             spec.write_text(json.dumps(document))
-            for operation in (yamaa.check, yamaa.domain):
-                refused = operation(spec, environment=route)
+            for refused in self.routes(spec, route):
                 self.assert_refusal(refused, compiler=True)
                 rows = refused.issues.to_dicts()
                 self.assertEqual(len(rows), 1)
@@ -150,8 +161,8 @@ class ColumnCeilings(unittest.TestCase):
                 ],
             }
             spec.write_text(json.dumps(repaired))
-            for operation in (yamaa.check, yamaa.domain):
-                rows = operation(spec, environment=route).issues.to_dicts()
+            for result in self.routes(spec, route):
+                rows = result.issues.to_dicts()
                 self.assertEqual(len(rows), 1)
                 self.assertEqual(rows[0]["condition"], "incompatible_input_type")
                 self.assertEqual(rows[0]["requirement"], "REQ-0308")
@@ -228,8 +239,8 @@ class ColumnCeilings(unittest.TestCase):
                 ).encode("ascii")
                 for spec in (parent, explicit, child, grandchild):
                     with self.subTest(spec=spec.name):
-                        self.assertEqual(yamaa.check(spec).issues.height, 0)
-                        built = yamaa.domain(spec)
+                        self.assertEqual(yamaa.spec(spec).check().issues.height, 0)
+                        built = yamaa.spec(spec).run()
                         self.assertEqual(built.issues.height, 0)
                         self.assertEqual(built.output.rows(), expected)
                         built.save()
@@ -239,19 +250,15 @@ class ColumnCeilings(unittest.TestCase):
 
     def test_pathological_parent_chain_is_still_refused(self):
         # Each layer names one parent, so only a chain of 8,193 distinct layers
-        # reaches the occurrence bound. Serve that chain from memory rather than
-        # writing thousands of files; without the bound it would reach the base.
+        # reaches the occurrence bound; without the bound it would reach the base.
         base = self.write_case("long-parent-chain")
-        objects = {
-            f"layer-{index}.yaml": (
-                f"schema_version: '1.0'\nparent: layer-{index + 1}.yaml\n"
-            ).encode("ascii")
-            for index in range(8193)
-        }
-        objects["layer-8193.yaml"] = base.read_bytes()
-        resolver = MemoryResolver(objects)
-        for operation in (yamaa.check, yamaa.domain):
-            result = operation("layer-0.yaml", resolver=resolver)
+        for index in range(8193):
+            base.with_name(f"layer-{index}.yaml").write_text(
+                f"schema_version: '1.0'\nparent: layer-{index + 1}.yaml\n",
+                encoding="ascii",
+            )
+        base.with_name("layer-8193.yaml").write_bytes(base.read_bytes())
+        for result in self.routes(base.with_name("layer-0.yaml")):
             self.assert_refusal(result)
             self.assertEqual(result.issues.height, 1)
             self.assertEqual(
@@ -265,7 +272,6 @@ class ColumnCeilings(unittest.TestCase):
                     "actual": 8193,
                 },
             )
-        self.assertEqual(resolver.outputs, {})
 
     def test_output_columns_reach_their_own_boundary(self):
         self.assert_build(self.write_case("admit-output", columns=1024), width=1024)
@@ -273,26 +279,26 @@ class ColumnCeilings(unittest.TestCase):
         # Keep declared columns in range: the extra projection must reach its own
         # count refusal before duplicate-output validation, not the column cap.
         spec = self.write_case("refuse-output", columns=1024, selected=[*names, "ID"])
-        for operation in (yamaa.check, yamaa.domain):
-            self.assert_refusal(operation(spec), compiler=True)
+        for result in self.routes(spec):
+            self.assert_refusal(result, compiler=True)
 
     def test_typed_source_fields(self):
         self.assert_build(self.write_case("admit-types", fields=1024, typed=True))
         spec = self.write_case("refuse-types", fields=1025, typed=True)
-        for operation in (yamaa.check, yamaa.domain):
-            self.assert_refusal(operation(spec), compiler=True)
+        for result in self.routes(spec):
+            self.assert_refusal(result, compiler=True)
 
     def test_csv_source_fields(self):
         self.assert_build(self.write_case("admit-csv", fields=1024))
         spec = self.write_case("refuse-csv", fields=1025)
-        self.assert_refusal(yamaa.domain(spec))
+        self.assert_refusal(yamaa.spec(spec).run())
 
     def test_parquet_source_fields(self):
         self.assert_build(
             self.write_case("admit-parquet", fields=1024, source_format="parquet")
         )
         spec = self.write_case("refuse-parquet", fields=1025, source_format="parquet")
-        self.assert_refusal(yamaa.domain(spec))
+        self.assert_refusal(yamaa.spec(spec).run())
 
     def linked_consumer(self, producer):
         """A consumer that types the producer's stored artifact through its link."""
@@ -311,11 +317,11 @@ class ColumnCeilings(unittest.TestCase):
                 consumer = self.linked_consumer(producer)
                 if width == 1024:
                     # Callers build and save the producer before its consumer.
-                    self.assertTrue(yamaa.domain(producer).save())
+                    yamaa.spec(producer).run().save()
                     self.assert_build(consumer)
                 else:
-                    for operation in (yamaa.check, yamaa.domain):
-                        self.assert_refusal(operation(consumer))
+                    for result in self.routes(consumer):
+                        self.assert_refusal(result)
 
     def test_in_range_contract_refuses_overwide_stored_artifact(self):
         # The link's metadata stays admissible; only the stored artifact's width
@@ -332,11 +338,11 @@ class ColumnCeilings(unittest.TestCase):
                     + "\n",
                     encoding="ascii",
                 )
-                self.assertEqual(yamaa.check(consumer).issues.height, 0)
+                self.assertEqual(yamaa.spec(consumer).check().issues.height, 0)
                 if width == 1024:
                     self.assert_build(consumer)
                 else:
-                    self.assert_refusal(yamaa.domain(consumer))
+                    self.assert_refusal(yamaa.spec(consumer).run())
 
 
 if __name__ == "__main__":

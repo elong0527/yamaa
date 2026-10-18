@@ -313,6 +313,14 @@ link whose artifact does not exist yet. Building the consumer reads the
 artifact named by `path`: an absent artifact fails as a missing input at
 `input.<dataset>.path`, and no producer runs in its place.
 
+A project run is a caller that builds and orders several specifications. It
+builds a producer in its run scope before the consumers that link it, and
+hands each consumer the producer's held serialized artifact; a producer outside
+the run scope is not built, and its consumer reads the saved file at `path`
+([PROJECT-8](profiles/project.md#project-8),
+[PROJECT-9](profiles/project.md#project-9)). Either way the link types the
+artifact under [INPUT-11](#input-11).
+
 <a id="input-11"></a>
 
 ### INPUT-11. A linked artifact's fields are exactly its producer's output columns, with their types

@@ -147,7 +147,7 @@ class DashboardTests(unittest.TestCase):
             excluded = generate.render_benchmark(case).decode("ascii")
         self.assertIn("Public conformance excluded: a reviewed reason", excluded)
 
-    def test_mapping_uses_environment_codelists_beside_the_benchmark(self):
+    def test_mapping_uses_project_codelists_beside_the_benchmark(self):
         benchmark = generate.BENCHMARKS / "sdtm-dm-metadata"
         page = generate.render_benchmark(benchmark).decode("ascii")
         mapping = page.split('id="mapping-spec"', 1)[1].split('role="tabpanel"', 1)[0]
@@ -168,8 +168,8 @@ class DashboardTests(unittest.TestCase):
             expected_cells.extend(value for row in rows[1:] for value in row)
         self.assertEqual(content.cells, expected_cells)
         spec_lines = (BENCHMARK / "spec.yaml").read_text().splitlines()
-        python_lines = ["import yamaa", "", 'yamaa.domain("spec.yaml").output']
-        r_lines = ["library(yamaa)", "", 'yamaa_domain("spec.yaml")$output']
+        python_lines = ["import yamaa", "", 'yamaa.spec("spec.yaml").run().output']
+        r_lines = ["library(yamaa)", "", 'yamaa_spec("spec.yaml")$run()$output']
         solution_lines = [
             line
             for name in generate.SOLUTION_FILES
@@ -796,23 +796,29 @@ class DashboardTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "benchmark.yaml"):
                 generate.render_benchmark(benchmark)
 
-    def test_generated_calls_preserve_multifile_order_and_host_environment(self):
+    def test_generated_calls_preserve_multifile_order_and_project(self):
         snippets = dict(
             generate.benchmark_code(generate.BENCHMARKS / "sdtm-dm-race-ethnicity")
         )
         self.assertEqual(
             snippets["Python"],
-            'import yamaa\n\nyamaa.domain("spec_dm.yaml").save()\nyamaa.domain("spec_suppdm.yaml").output\n',
+            'import yamaa\n\nyamaa.spec("spec_dm.yaml").run().save()\nyamaa.spec("spec_suppdm.yaml").run().output\n',
         )
         self.assertEqual(
             snippets["R"],
-            'library(yamaa)\n\nyamaa_domain("spec_dm.yaml")$save()\nyamaa_domain("spec_suppdm.yaml")$output\n',
+            'library(yamaa)\n\nyamaa_spec("spec_dm.yaml")$run()$save()\nyamaa_spec("spec_suppdm.yaml")$run()$output\n',
         )
         snippets = dict(
             generate.benchmark_code(generate.BENCHMARKS / "schema-functions")
         )
-        self.assertIn('environment="python/environment.yaml"', snippets["Python"])
-        self.assertIn('environment="r/environment.yaml"', snippets["R"])
+        self.assertEqual(
+            snippets["Python"],
+            'import yamaa\n\nyamaa.project("project.yaml").spec("TEST").run().output\n',
+        )
+        self.assertEqual(
+            snippets["R"],
+            'library(yamaa)\n\nyamaa_project("project.yaml")$spec("TEST")$run()$output\n',
+        )
 
     def test_dashboard_renders_lifecycle_badge_beside_summary(self):
         finalized = generate.render_benchmark(

@@ -10,12 +10,14 @@ may reach, and the one snapshot a run reads of each file.
 
 ### FILE-1. A document's relative paths resolve from the file that declares them, never from a discovered root
 
-The caller explicitly supplies the entry file and any implementation
-environment file; these caller arguments follow ordinary host path
-resolution. By default, every relative path a document declares resolves from
-the file that writes it, including an inherited layer or a producing
-specification. No project configuration is discovered or read to select
-resource locations.
+The caller explicitly supplies the entry file and any project file
+([PROJECT-1](../profiles/project.md#project-1)), which links the implementation
+environment file of each host language; these caller arguments follow ordinary
+host path resolution. By default, every relative path a document declares
+resolves from the file that writes it, including an inherited layer, a
+producing specification, a project file and an environment file. No project
+configuration is discovered, and a project file does not select a
+specification's resource locations.
 
 Evidence: `schema-inheritance-project-root`, `rust/crates/yamaa-adapters/tests/file_resources.rs::inherited_parent_keeps_its_own_input_and_output_locations_without_configuration`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::project_configuration_is_ignored_and_missing_input_has_no_fallback`.
 Replaces: REQ-0772, REQ-1246.
@@ -27,8 +29,9 @@ declaring file and written spelling.
 With the default `relative_to: declaring`, a shared layer's `input/dm.csv`
 names the file beside that shared layer. If that file is absent, a study's own
 `input/dm.csv` is not substituted. A shared input with `relative_to: entry`
-explicitly names each study entry's own `input/dm.csv`. `yamaa-project.yaml`
-and old project or data-root settings affect neither selection. Missing-file
+explicitly names each study entry's own `input/dm.csv`. A project file,
+`yamaa-project.yaml` and old project or data-root settings affect neither
+selection. Missing-file
 diagnostics retain the original declaring field and written path.
 
 <a id="file-2"></a>
@@ -38,8 +41,8 @@ diagnostics retain the original declaring field and written path.
 A relative path uses its declaration's `relative_to` base: `declaring` selects
 the directory of the file that writes the path, and `entry` selects the
 directory of the specification's entry file. On an input dataset the setting
-applies to both `path` and `schema`; on `output` it applies to `path`,
-`warning_log` and `verification_log`. Other document resources use their
+applies to both `path` and `schema`; on `output` it applies to `path` and
+`report`. Other document resources use their
 declaring file. A rooted path names its absolute local location regardless of
 `relative_to`.
 
@@ -80,6 +83,13 @@ passes `check`, and building fails with the ordinary missing-input finding at
 `input.<dataset>.path`. The caller builds and saves the producer as its own
 entry first; its explicit Save publishes the artifact under
 [Output](../output.md).
+
+A project run is a caller that orders these builds. A producer in its run
+scope builds first, and the consumer reads that producer's held serialized
+artifact in place of the file at `path`
+([PROJECT-8](../profiles/project.md#project-8)). A producer outside the run
+scope is not built, and the consumer reads the saved file at `path`
+([PROJECT-9](../profiles/project.md#project-9)).
 
 ## Written form
 
@@ -149,9 +159,10 @@ Fails: `resource_path_missing`, `resource_path_not_regular_file`.
 Evidence: `negative-path-missing`, `negative-path-directory`, `rust/crates/yamaa-adapters/tests/file_resources.rs::absent_artifact_location_has_no_fallback_and_nonregular_input_is_terminal`.
 Replaces: REQ-0781, REQ-0782, REQ-0784, REQ-0785.
 
-The caller's entry parent is canonicalized and opened once; aliases the caller
-used for that selected directory retain the same authority. A declaration
-outside that parent is walked from its filesystem root. The anchor is an IO
+The caller's entry parent, and the parent of the project file the caller
+passes, are each canonicalized and opened once; aliases the caller used for a
+selected directory retain the same authority. A declaration outside those
+parents is walked from its filesystem root. The anchor is an IO
 consistency mechanism, not an application containment policy or fallback
 search location. The same resolution and traversal rules apply on every
 supported platform.
@@ -165,11 +176,11 @@ inconsistent witness. It does not enforce a project or data-root boundary.
 ### FILE-8. No component below the anchor is a symbolic link
 
 No component below the anchor is a symbolic link, including one whose target
-is otherwise readable. The caller-selected entry parent is exempt: its
-canonical directory and descriptor are selected before any specification is
-read, and declared paths do not select exempt directories. A path outside that
-parent retains the no-link check on every component below its filesystem
-root.
+is otherwise readable. The caller-selected parents of [FILE-7](#file-7), the
+entry parent and the project file's parent, are exempt: their canonical
+directories and descriptors are selected before any specification is read, and
+declared paths do not select exempt directories. A path outside those parents
+retains the no-link check on every component below its filesystem root.
 
 Fails: `resource_path_symlink`.
 Evidence: `negative-path-symlink`, `rust/crates/yamaa-adapters/tests/file_resources.rs::outside_parent_and_file_links_remain_terminal`, `rust/crates/yamaa-adapters/tests/file_resources.rs::retired_python_junctions_reject_descent_and_keep_caller_selected_root_authority`.

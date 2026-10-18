@@ -81,8 +81,8 @@ class LongitudinalCapacity(unittest.TestCase):
                 }
                 entry = root / "spec.yaml"
                 entry.write_text(json.dumps(document), encoding="ascii")
-                self.assertEqual(yamaa.check(entry).issues.height, 0)
-                built = yamaa.domain(entry)
+                self.assertEqual(yamaa.spec(entry).check().issues.height, 0)
+                built = yamaa.spec(entry).run()
                 self.assertEqual(built.issues.to_dicts(), [])
                 self.assertEqual(built.output.shape, (50_000, 100))
                 for row in (0, 10_006, 10_007, 49_999):
@@ -93,7 +93,7 @@ class LongitudinalCapacity(unittest.TestCase):
                 if profile == "parquet":
                     # A link only types the stored artifact: save the producer
                     # before its consumer reads it.
-                    self.assertTrue(built.save())
+                    built.save()
                     consumer_document = dict(document)
                     consumer_document["input"] = {
                         "SRC": {"path": "output.parquet", "schema": "spec.yaml"}
@@ -104,16 +104,16 @@ class LongitudinalCapacity(unittest.TestCase):
                     }
                     consumer = root / "consumer.yaml"
                     consumer.write_text(json.dumps(consumer_document), encoding="ascii")
-                    consumed = yamaa.domain(consumer)
+                    consumed = yamaa.spec(consumer).run()
                     self.assertEqual(consumed.issues.to_dicts(), [])
                     self.assertEqual(consumed.output.shape, (50_000, 100))
-                    self.assertTrue(consumed.save())
+                    consumed.save()
                     self.assertEqual((root / "consumer.csv").read_bytes(), expected)
                     del consumed
                 # Saving uses accepted bytes, including after source changes.
                 source.write_bytes(b"changed\n")
                 for _ in range(2):
-                    self.assertTrue(built.save())
+                    built.save()
                     output = root / f"output.{profile}"
                     if profile == "csv":
                         self.assertEqual(output.read_bytes(), expected)

@@ -375,6 +375,11 @@ pub(crate) enum BuildOutcome {
     Unsupported {
         issues: Vec<yamaa_adapters::issue_rows::Issue>,
     },
+    /// A project-run specification that did not build: a project finding
+    /// failed it, or a producer it reads failed or did not run.
+    Refused {
+        issues: Vec<yamaa_adapters::issue_rows::Issue>,
+    },
 }
 
 /// Compilation reads through the engine's resolver. Each run opens its own
@@ -384,6 +389,9 @@ struct EngineRuntime<'a> {
     shared: &'a EngineShared,
     specification: &'a str,
     run_resolver: Option<Arc<dyn yamaa_adapters::host_resources::Resolver>>,
+    /// Artifacts a project run already built, offered to this run's inputs
+    /// whose `schema` links name their producers.
+    held: Option<Arc<yamaa_adapters::file_resources::HeldArtifacts>>,
 }
 
 impl yamaa_adapters::file_application::RuntimePort for EngineRuntime<'_> {
@@ -401,6 +409,9 @@ impl yamaa_adapters::file_application::RuntimePort for EngineRuntime<'_> {
     ) -> Result<Self::Result, Self::Error> {
         let identity = self.shared.identity("domain", self.specification);
         let mut run_scope = prepared.run_scope(self.run_resolver.clone());
+        if let Some(held) = &self.held {
+            run_scope.hold(Arc::clone(held));
+        }
         let result =
             yamaa_adapters::file_application::plain(prepared, &mut run_scope, identity, scope);
         Ok(BuildOutcome::Plain { result })
@@ -420,6 +431,9 @@ impl yamaa_adapters::file_application::RuntimePort for EngineRuntime<'_> {
             });
         };
         let mut run_scope = project.run_scope(self.run_resolver.clone());
+        if let Some(held) = &self.held {
+            run_scope.hold(Arc::clone(held));
+        }
         let inner = project.build_with(
             &mut run_scope,
             |run| {
@@ -498,10 +512,9 @@ pub(crate) enum Compiled {
 
 fn selection_failed(
     error: &yamaa_adapters::file_workflow::SelectionError,
-    shared: &EngineShared,
 ) -> (Vec<yamaa_adapters::issue_rows::Issue>, RetainedSources) {
     (
-        yamaa_adapters::project_application::selection_failure(error, shared.language),
+        yamaa_adapters::project_application::selection_failure(error),
         error.retained_sources(),
     )
 }
@@ -520,6 +533,7 @@ pub(crate) fn compile(
             shared,
             specification,
             run_resolver: None,
+            held: None,
         },
     };
     match yamaa_core::domain_entry::compile(
@@ -532,7 +546,7 @@ pub(crate) fn compile(
     ) {
         Ok(selected) => Compiled::Ready(Box::new(selected)),
         Err(yamaa_adapters::file_application::ApplicationError::Preparation(error)) => {
-            let (issues, sources) = selection_failed(&error, shared);
+            let (issues, sources) = selection_failed(&error);
             Compiled::Refused { issues, sources }
         }
         Err(yamaa_adapters::file_application::ApplicationError::Runtime(never)) => match never {},
@@ -541,12 +555,14 @@ pub(crate) fn compile(
 
 /// The Build and Finished half: one run of a compiled request in its own
 /// resource scope. A refused compilation's run returns its held refusal and
-/// performs no resource, activation or study work.
+/// performs no resource, activation or study work. A project run offers its
+/// `held` artifacts to the inputs whose `schema` links name their producers.
 pub(crate) fn run(
     shared: &EngineShared,
     specification: &str,
     compiled: &Compiled,
     run_resolver: Option<Arc<dyn yamaa_adapters::host_resources::Resolver>>,
+    held: Option<Arc<yamaa_adapters::file_resources::HeldArtifacts>>,
     scope: yamaa_core::application_observer::Scope<'_>,
 ) -> BuildOutcome {
     let selected = match compiled {
@@ -565,13 +581,14 @@ pub(crate) fn run(
             shared,
             specification,
             run_resolver,
+            held,
         },
     };
     match yamaa_core::domain_entry::run(selected, &mut application, scope) {
         Ok(outcome) => outcome,
         // A run selects nothing; keep any selection refusal typed regardless.
         Err(yamaa_adapters::file_application::ApplicationError::Preparation(error)) => {
-            let (issues, sources) = selection_failed(&error, shared);
+            let (issues, sources) = selection_failed(&error);
             BuildOutcome::SelectionFailed { issues, sources }
         }
         Err(yamaa_adapters::file_application::ApplicationError::Runtime(never)) => match never {},
@@ -586,23 +603,26 @@ pub(crate) fn outcome_accepted(outcome: &BuildOutcome) -> bool {
         BuildOutcome::Project { result, .. } => result
             .as_ref()
             .is_ok_and(|domain| domain.output().is_some()),
-        BuildOutcome::SelectionFailed { .. } | BuildOutcome::Unsupported { .. } => false,
+        BuildOutcome::SelectionFailed { .. }
+        | BuildOutcome::Unsupported { .. }
+        | BuildOutcome::Refused { .. } => false,
+    }
+}
+
+/// The issue rows of one outcome, live from its current state.
+pub(crate) fn outcome_issues(outcome: &BuildOutcome) -> Vec<yamaa_adapters::issue_rows::Issue> {
+    match outcome {
+        BuildOutcome::Plain { result } | BuildOutcome::Project { result, .. } => match result {
+            Ok(domain) => domain.issues(),
+            Err(issues) => issues.clone(),
+        },
+        BuildOutcome::SelectionFailed { issues, .. }
+        | BuildOutcome::Unsupported { issues }
+        | BuildOutcome::Refused { issues } => issues.clone(),
     }
 }
 
 /// Build the public report for one outcome, live from its current state.
 pub(crate) fn outcome_report(outcome: &BuildOutcome) -> Report {
-    match outcome {
-        BuildOutcome::Plain { result } => match result {
-            Ok(domain) => Report::from_issues(&domain.issues()),
-            Err(issues) => Report::from_issues(issues),
-        },
-        BuildOutcome::Project { result, .. } => match result {
-            Ok(domain) => Report::from_issues(&domain.issues()),
-            Err(issues) => Report::from_issues(issues),
-        },
-        BuildOutcome::SelectionFailed { issues, .. } | BuildOutcome::Unsupported { issues } => {
-            Report::from_issues(issues)
-        }
-    }
+    Report::from_issues(&outcome_issues(outcome))
 }

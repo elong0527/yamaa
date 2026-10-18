@@ -347,10 +347,7 @@ fn push_item_groups(metadata: &mut Element, study: &Study, language: &str) {
                 "def:ArchiveLocationID",
                 dataset.href.as_ref().map(|_| format!("LF.{id}")),
             )
-            .attr(
-                "def:StandardOID",
-                format!("STD.{}", section.standard.name.value.name()),
-            )
+            .attr("def:StandardOID", format!("STD.{}", study.guide))
             .optional(
                 "def:CommentOID",
                 sub.comment.as_ref().map(|_| format!("COM.{id}")),

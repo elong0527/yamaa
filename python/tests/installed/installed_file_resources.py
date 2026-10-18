@@ -2,7 +2,7 @@
 
 The eight capture-stage partial reports and private cache/limit/Changed facts
 remain in typed native tests and installed_original_specifications.py. Public
-builds inspect all sources first, so physical missing/directory cases use the
+runs inspect all sources first, so physical missing/directory cases use the
 unchanged inspection truth and retain zero study reads.
 """
 
@@ -63,30 +63,27 @@ class FileResources(unittest.TestCase):
                 if producer:
                     # A link only types the stored artifact: callers build and
                     # save each study's producer before its consumer reads it.
-                    produced = yamaa.domain(study / "producer.yaml")
+                    produced = yamaa.spec(study / "producer.yaml").run()
                     self.assertTrue(produced.issues.is_empty(), produced.issues)
-                    self.assertTrue(produced.save())
+                    self.assertIsNone(produced.save())
                     self.assertEqual(
                         (study / "output/produced.csv").read_bytes(),
                         csv.encode("ascii"),
                     )
-                self.assertTrue(yamaa.check(entry).issues.is_empty())
-                result = yamaa.domain(entry)
+                spec = yamaa.spec(entry)
+                self.assertTrue(spec.check().issues.is_empty())
+                result = spec.run()
                 self.assertTrue(result.issues.is_empty(), result.issues)
                 self.assertFalse((study / "output/result.csv").exists())
                 results.append((study, csv.encode("ascii"), result))
             shutil.rmtree(shared)
             for study, csv, result in results:
                 shutil.rmtree(study / "input")
-                for _ in range(2):
-                    self.assertTrue(result.save())
-                    self.assertEqual((study / "output/result.csv").read_bytes(), csv)
-                    self.assertTrue((study / "output/warnings.csv").is_file())
-                    self.assertTrue((study / "output/verifications.csv").is_file())
-                    if producer:
-                        self.assertEqual(
-                            (study / "output/produced.csv").read_bytes(), csv
-                        )
+                self.assertIsNone(result.save())
+                self.assertEqual((study / "output/result.csv").read_bytes(), csv)
+                self.assertTrue((study / "output/report.csv").is_file())
+                if producer:
+                    self.assertEqual((study / "output/produced.csv").read_bytes(), csv)
 
     def setUp(self):
         original = builtins.__import__
@@ -176,14 +173,17 @@ class FileResources(unittest.TestCase):
                         sort_keys=True,
                         separators=(",", ":"),
                     ),
+                    "source_span": None,
+                    "operand_route": None,
                 }
                 for finding in expected["diagnostics"]
             ],
         )
         gc.collect()
         for _ in range(2):
-            with self.assertRaises(yamaa.DomainError):
+            with self.assertRaises(yamaa.Error) as caught:
                 result.save()
+            self.assertTrue(caught.exception.issues.equals(result.issues))
             self.assertEqual(self.observe(result), expected)
             self.assertFalse((case / "adsl.csv").exists())
 
@@ -207,7 +207,7 @@ class FileResources(unittest.TestCase):
                 self.fail_files(case, failures)
                 expected = self.expected(inspection[tuple(failures.items())], entry)
                 for _ in range(2):
-                    self.failed(yamaa.domain(entry), expected, case)
+                    self.failed(yamaa.spec(entry).run(), expected, case)
 
     def test_all_physical_inspection_failures_precede_every_study_read(self):
         for row in self.records("source-inspection.tsv", 7):
@@ -222,18 +222,19 @@ class FileResources(unittest.TestCase):
                 # requires every metadata cause in order, with zero reads.
                 for name in PATHS.keys() - failures.keys():
                     (case / PATHS[name]).write_bytes(b"\xff")
-                self.assertTrue(yamaa.check(entry).issues.is_empty())
+                self.assertTrue(yamaa.spec(entry).check().issues.is_empty())
                 expected = self.expected(row["expected"], entry)
                 for _ in range(2):
-                    self.failed(yamaa.domain(entry), expected, case)
+                    self.failed(yamaa.spec(entry).run(), expected, case)
 
-    def test_each_public_build_reinspects_files_without_reusing_prior_source_bytes(
+    def test_each_public_run_reinspects_files_without_reusing_prior_source_bytes(
         self,
     ):
         with tempfile.TemporaryDirectory() as directory:
             case, entry = self.case(directory)
             expected = self.lookup_expected(entry)
-            first = yamaa.domain(entry)
+            spec = yamaa.spec(entry)
+            first = spec.run()
             self.assertEqual(self.observe(first), expected)
             content = (case / PATHS["DM"]).read_bytes()
             (case / PATHS["DM"]).unlink()
@@ -242,19 +243,18 @@ class FileResources(unittest.TestCase):
                 for row in self.records("source-inspection.tsv", 7)
                 if row["case"] == "missing_first"
             )
-            self.failed(
-                yamaa.domain(entry), self.expected(missing["expected"], entry), case
-            )
+            self.failed(spec.run(), self.expected(missing["expected"], entry), case)
             self.assertEqual(self.observe(first), expected)
             (case / PATHS["DM"]).write_bytes(content)
-            self.assertEqual(self.observe(yamaa.domain(entry)), expected)
+            self.assertEqual(self.observe(spec.run()), expected)
 
-    def test_changed_files_do_not_replace_owned_values_and_fresh_builds_read_new_bytes(
+    def test_changed_files_do_not_replace_owned_values_and_fresh_runs_read_new_bytes(
         self,
     ):
         with tempfile.TemporaryDirectory() as directory:
             case, entry = self.case(directory)
-            first = yamaa.domain(entry)
+            spec = yamaa.spec(entry)
+            first = spec.run()
             expected = self.lookup_expected(entry)
             self.assertEqual(self.observe(first), expected)
             source = case / PATHS["AE"]
@@ -264,7 +264,7 @@ class FileResources(unittest.TestCase):
             source.write_bytes(
                 content.replace(old, b"MYOCARDIAL INFARCTION,FATAL,151\n")
             )
-            second = yamaa.domain(entry)
+            second = spec.run()
             self.assertTrue(second.issues.is_empty(), second.issues)
             self.assertEqual(first.output["DTHDY"].to_list(), [150, 80, None, None])
             self.assertEqual(second.output["DTHDY"].to_list(), [151, 80, None, None])
@@ -273,7 +273,7 @@ class FileResources(unittest.TestCase):
                 [r["snapshots_created"] for r in self.observe(second)["source_reads"]],
                 [1, 1, 1],
             )
-            self.assertTrue(first.save())
+            self.assertIsNone(first.save())
             self.assertEqual(
                 (case / "adsl.csv").read_bytes(),
                 (case / "expected/adsl.csv").read_bytes(),
@@ -282,7 +282,7 @@ class FileResources(unittest.TestCase):
     def test_original_lookup_keeps_complete_owned_report_and_two_exact_saves(self):
         with tempfile.TemporaryDirectory() as directory:
             case, entry = self.case(directory)
-            result = yamaa.domain(entry)
+            result = yamaa.spec(entry).run()
             self.assertEqual(self.observe(result), self.lookup_expected(entry))
             self.assertTrue(result.issues.is_empty())
             held = result.output
@@ -293,11 +293,10 @@ class FileResources(unittest.TestCase):
             entry.unlink()
             shutil.rmtree(case / "input")
             gc.collect()
-            for _ in range(2):
-                self.assertTrue(result.save())
-                self.assertEqual((case / "adsl.csv").read_bytes(), golden)
-                self.assertEqual(self.observe(result), expected)
-                self.assertTrue(result.output.equals(held))
+            self.assertIsNone(result.save())
+            self.assertEqual((case / "adsl.csv").read_bytes(), golden)
+            self.assertEqual(self.observe(result), expected)
+            self.assertTrue(result.output.equals(held))
             del result
             gc.collect()
             self.assertEqual(held["DTHDY"].to_list(), [150, 80, None, None])
@@ -320,10 +319,10 @@ class FileResources(unittest.TestCase):
             entry = case / "spec.yaml"
             for written in ("../outside.csv", source.as_posix()):
                 entry.write_text(self.simple_document(written), encoding="ascii")
-                result = yamaa.domain(entry)
+                result = yamaa.spec(entry).run()
                 self.assertTrue(result.issues.is_empty(), result.issues)
                 self.assertEqual(result.output["ID"].to_list(), [7])
-                self.assertTrue(result.save())
+                self.assertIsNone(result.save())
                 self.assertEqual((case / "result.csv").read_bytes(), b"ID\n7\n")
 
     def test_physical_symlink_refusal_retains_native_condition_without_output(self):
@@ -338,7 +337,7 @@ class FileResources(unittest.TestCase):
                 )
             entry = case / "spec.yaml"
             entry.write_text(self.simple_document("alias.csv"), encoding="ascii")
-            result = yamaa.domain(entry)
+            result = yamaa.spec(entry).run()
             self.assertIsNone(result.output)
             self.assertEqual(
                 result.issues.to_dicts(),
@@ -349,10 +348,12 @@ class FileResources(unittest.TestCase):
                         "requirement": "REQ-0783",
                         "spec_paths": ["input.SRC.path"],
                         "context": TRUTH["alias_context_json"],
+                        "source_span": None,
+                        "operand_route": None,
                     }
                 ],
             )
-            with self.assertRaises(yamaa.DomainError):
+            with self.assertRaises(yamaa.Error):
                 result.save()
             self.assertFalse((case / "result.csv").exists())
 

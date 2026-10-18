@@ -23,6 +23,8 @@ pub enum Error {
 pub struct FileProject {
     run: Arc<PreparedRun>,
     resources: Resources,
+    /// Inputs a project run may serve from artifacts it already built.
+    linked: Vec<crate::file_resources::LinkedInput>,
 }
 /// Ordinary compilation rejection beside the original native resource owner.
 /// Projection refusal and file deletion never consume or replace this evidence.
@@ -73,6 +75,7 @@ impl FileProject {
         entry: crate::file_entry::CapturedEntry,
     ) -> Result<Self, Box<RejectedOrdinary>> {
         let (resources, entry, document, links, environment) = entry.into_parts();
+        let linked = crate::file_resources::linked_inputs(&resources, &document, &links);
         match PreparedRun::prepare_with_profile_inspection(
             document,
             &links,
@@ -82,7 +85,7 @@ impl FileProject {
             },
         )
         .and_then(|run| {
-            let findings = crate::verification_logs::location_findings(&resources, &run);
+            let findings = crate::run_report::location_findings(&resources, &run);
             if findings.is_empty() {
                 Ok(run)
             } else {
@@ -95,6 +98,7 @@ impl FileProject {
                 Ok(Self {
                     run: Arc::new(run),
                     resources,
+                    linked,
                 })
             }
             Err(run) => Err(Box::new(RejectedOrdinary {
@@ -105,17 +109,17 @@ impl FileProject {
         }
     }
     /// Schemas are retained capabilities; public entry points use the shipped
-    /// domain and environment closures.
+    /// domain and project closures. `environment` names the project file.
     pub fn prepare(
         mut resources: Resources,
         specification: &str,
         environment: &str,
         host: Language,
         specification_schema: Arc<CapturedSchema>,
-        environment_schema: Arc<CapturedSchema>,
+        project_schemas: project_source::ProjectSchemas,
     ) -> Result<Self, Error> {
         let mut environment =
-            capture_environment(&mut resources, environment, host, environment_schema)?;
+            capture_environment(&mut resources, environment, host, project_schemas)?;
         let document = file_preparation::prepare_document(
             &mut resources,
             specification,
@@ -137,6 +141,7 @@ impl FileProject {
             &mut None,
         )
         .map_err(Error::Document)?;
+        let linked = crate::file_resources::linked_inputs(&resources, &document, &links);
         let run = PreparedRun::prepare_with_profile_inspection(
             document,
             &links,
@@ -146,7 +151,7 @@ impl FileProject {
             },
         )
         .map_err(Error::Compile)?;
-        let findings = crate::verification_logs::location_findings(&resources, &run);
+        let findings = crate::run_report::location_findings(&resources, &run);
         if !findings.is_empty() {
             return Err(Error::Compile(run.reject(
                 yamaa_core::specification::PrepareError::Invalid(findings),
@@ -155,6 +160,7 @@ impl FileProject {
         Ok(Self {
             run: Arc::new(run),
             resources,
+            linked,
         })
     }
     pub fn run(&self) -> &PreparedRun {
@@ -201,8 +207,8 @@ impl FileProject {
         activation: &mut A,
         scope: Scope<'_>,
     ) -> Attempt<ResourceError, A::Error> {
-        self.run
-            .execute_with_ports(activation, run.resources_mut(), scope)
+        let mut port = crate::file_resources::HeldPort::new(run, &self.linked);
+        self.run.execute_with_ports(activation, &mut port, scope)
     }
     /// Let an installed port borrow the exact retained lock without copying it
     /// or exposing study authority. Port construction performs no activation.
@@ -213,24 +219,26 @@ impl FileProject {
         scope: Scope<'_>,
     ) -> Attempt<ResourceError, A::Error> {
         let mut activation = factory(&self.run);
+        let mut port = crate::file_resources::HeldPort::new(run, &self.linked);
         self.run
-            .execute_with_ports(&mut activation, run.resources_mut(), scope)
+            .execute_with_ports(&mut activation, &mut port, scope)
     }
 }
 
-/// Capture the original environment and declared metadata through the same
-/// approved reader. Static workflow preparation reuses this transfer without
-/// introducing a second capture or any activation or study-source port.
+/// Capture the original project file, the environment file it links for the
+/// host and their declared metadata through the same approved reader. Static
+/// workflow preparation reuses this transfer without introducing a second
+/// capture or any activation or study-source port.
 pub(crate) fn capture_environment(
     resources: &mut Resources,
     written: &str,
     host: Language,
-    schema: Arc<CapturedSchema>,
+    schemas: project_source::ProjectSchemas,
 ) -> Result<project_source::OwnedEnvironment, Error> {
     let mut reader = crate::file_metadata::Reader { resources };
     let prepared = match yamaa_core::build::prepare_environment(
         &mut reader,
-        &mut project_source::Decoder(schema),
+        &mut project_source::Decoder(schemas),
         written,
         host,
     ) {

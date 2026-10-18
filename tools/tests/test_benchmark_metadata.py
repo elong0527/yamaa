@@ -48,8 +48,36 @@ class BenchmarkMetadata(unittest.TestCase):
             (source / "input/adsl.csv").read_bytes(),
         )
 
-    def test_singleton_and_host_environment_defaults_are_explicit_in_plan(self):
+    def test_runtime_staging_follows_the_python_environment_the_project_links(self):
+        from tools.paths import ROOT
+        from tools.staging.stage_project_inputs import stage_case
+
+        source = self.case / "study"
+        (source / "code/py").mkdir(parents=True)
+        (source / "spec.yaml").write_text("domain: TEST\n")
+        (source / "benchmark.yaml").write_text(yaml.safe_dump(self.metadata))
+        (source / "project.yaml").write_text(
+            "schema_version: '1.0'\n"
+            "environments: {python: code/py/environment.yaml, r: r/environment.yaml}\n"
+        )
+        (source / "code/py/environment.yaml").write_text("schema_version: '1.0'\n")
+        staged = self.case / "staged"
+        stage_case(source, staged)
+        self.assertEqual(
+            (staged / "code/py/uv.lock").read_bytes(),
+            (ROOT / "python/uv.lock").read_bytes(),
+        )
+        self.assertFalse((staged / "uv.lock").exists())
+        self.assertFalse((staged / "r").exists())
+        (source / "project.yaml").write_text("schema_version: '1.0'\n")
+        shutil.rmtree(staged)
+        stage_case(source, staged)
+        self.assertFalse((staged / "code/py/uv.lock").exists())
+
+    def test_singleton_and_root_project_defaults_are_explicit_in_plan(self):
         (self.case / "environment.yaml").write_text("root is never automatic\n")
+        (self.case / "r").mkdir()
+        (self.case / "r/environment.yaml").write_text("host fixture\n")
         self.assertEqual(
             benchmark.entries(self.case),
             {
@@ -57,13 +85,14 @@ class BenchmarkMetadata(unittest.TestCase):
                 "r": [{"specification": "spec.yaml", "environment": None}],
             },
         )
-        (self.case / "r").mkdir()
-        (self.case / "r/environment.yaml").write_text("host fixture\n")
+        (self.case / "project.yaml").write_text("study project\n")
         self.assertEqual(
-            benchmark.entries(self.case)["r"],
-            [{"specification": "spec.yaml", "environment": "r/environment.yaml"}],
+            benchmark.entries(self.case),
+            {
+                host: [{"specification": "spec.yaml", "environment": "project.yaml"}]
+                for host in ("python", "r")
+            },
         )
-        self.assertIsNone(benchmark.entries(self.case)["python"][0]["environment"])
 
     def test_authored_order_and_environment_override_are_preserved_per_host(self):
         (self.case / "other.yaml").write_text("domain: OTHER\n")
@@ -84,20 +113,21 @@ class BenchmarkMetadata(unittest.TestCase):
             (self.case / "custom.yaml").read_text(), "parameters: {cutoff: 42}\n"
         )
 
-    def test_explicit_null_disables_an_existing_host_environment(self):
-        (self.case / "python").mkdir()
-        (self.case / "python/environment.yaml").write_text("host fixture\n")
+    def test_explicit_null_disables_an_existing_root_project(self):
+        (self.case / "project.yaml").write_text("study project\n")
         self.metadata["entries"] = {
             "python": [{"specification": "spec.yaml", "environment": None}],
             "r": [{"specification": "spec.yaml"}],
         }
         self.write()
-        self.assertIsNone(benchmark.entries(self.case)["python"][0]["environment"])
+        entries = benchmark.entries(self.case)
+        self.assertIsNone(entries["python"][0]["environment"])
+        self.assertEqual(entries["r"][0]["environment"], "project.yaml")
 
     def test_metadata_is_required_and_legacy_prose_or_scripts_cannot_supply_it(self):
         (self.case / "benchmark.yaml").unlink()
         (self.case / "README.md").write_text("**Standard:** TEST | **Domain:** TEST\n")
-        (self.case / "run.py").write_text('yamaa.domain("spec.yaml")\n')
+        (self.case / "run.py").write_text('yamaa.spec("spec.yaml").run()\n')
         self.assertEqual(benchmark.directories(self.case.parent), [self.case])
         with self.assertRaisesRegex(ValueError, "benchmark.yaml"):
             benchmark.entries(self.case)
@@ -154,10 +184,10 @@ class BenchmarkMetadata(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     benchmark.entries(self.case)
 
-    def test_define_call_declares_its_environment_standard_and_created_time(self):
-        (self.case / "environment.yaml").write_text("schema_version: '1.0'\n")
+    def test_define_call_declares_its_project_section_and_created_time(self):
+        (self.case / "project.yaml").write_text("schema_version: '1.0'\n")
         define = {
-            "environment": "environment.yaml",
+            "environment": "project.yaml",
             "standard": "adam",
             "created": "2026-09-11T00:00:00",
         }
@@ -165,11 +195,11 @@ class BenchmarkMetadata(unittest.TestCase):
         self.assertEqual(benchmark.load_metadata(self.case)["define"], define)
         for mutation in [
             None,
-            "environment.yaml",
+            "project.yaml",
             {**define, "standard": "SDTM"},
             {**define, "created": "2026-09-11"},
             {**define, "environment": "missing.yaml"},
-            {**define, "environment": "../environment.yaml"},
+            {**define, "environment": "../project.yaml"},
             {key: value for key, value in define.items() if key != "created"},
             {**define, "host": "python"},
         ]:
@@ -208,6 +238,26 @@ class BenchmarkMetadata(unittest.TestCase):
                 self.write()
                 with self.assertRaises(ValueError):
                     benchmark.entries(self.case)
+
+    def test_project_name_is_the_domain_the_layers_compose(self):
+        (self.case / "common.yaml").write_text("domain: COMMON\n")
+        (self.case / "a.yaml").write_text("parent: common.yaml\ndomain: A\n")
+        (self.case / "b.yaml").write_text("parent: a.yaml\n")
+        entry = self.case / "entry.yaml"
+        # Common -> A -> B -> entry: B adds no domain, so A's replaces Common's.
+        entry.write_text("parent: b.yaml\n")
+        self.assertEqual(benchmark.specification_name(entry), "A")
+        entry.write_text("parent: b.yaml\ndomain: NO\n")
+        self.assertEqual(benchmark.specification_name(entry), "NO")
+        (self.case / "a.yaml").write_text("parent: common.yaml\n")
+        entry.write_text("parent: b.yaml\n")
+        self.assertEqual(benchmark.specification_name(entry), "COMMON")
+        (self.case / "common.yaml").write_text("parent: entry.yaml\n")
+        with self.assertRaisesRegex(ValueError, "cyclic parent"):
+            benchmark.specification_name(entry)
+        (self.case / "lone.yaml").write_text("keys: [ID]\n")
+        with self.assertRaisesRegex(ValueError, "domain"):
+            benchmark.specification_name(self.case / "lone.yaml")
 
     def test_metadata_only_case_cannot_disappear_or_release_without_a_specification(
         self,

@@ -4,7 +4,7 @@ use crate::json::Value as JsonValue;
 use crate::{
     diagnostic::{ConditionCode as C, Diagnostic},
     project_environment::{Draft, Finding, LockKind},
-    project_function::{Definition, Finding as F, Language},
+    project_function::{Definition, Finding as F},
     project_terminology::{Fault, Finding as T},
     value::Value,
 };
@@ -51,45 +51,6 @@ impl ReadFailure {
             operand_route: None,
         }
     }
-}
-
-fn root_findings(
-    document: &crate::schema::Document,
-    host: Language,
-) -> Result<[Option<Finding>; 3], Error> {
-    use crate::schema::DocumentNode as N;
-    let root = document.root();
-    if !matches!(document.nodes().get(root), Some(N::Mapping(_))) {
-        return Err(Error::UnavailableShape);
-    }
-    let present = match document
-        .field(root, "functions")
-        .map(|n| &document.nodes()[n])
-    {
-        None => false,
-        Some(N::Mapping(_)) => true,
-        _ => return Err(Error::UnavailableShape),
-    };
-    let declared = match document
-        .field(root, "language")
-        .map(|n| &document.nodes()[n])
-    {
-        None => None,
-        Some(N::Text(text)) if text == "python" => Some(Language::Python),
-        Some(N::Text(text)) if text == "r" => Some(Language::R),
-        _ => return Err(Error::UnavailableShape),
-    };
-    Ok([
-        (present && declared.is_none()).then_some(Finding::MissingLanguage),
-        declared
-            .filter(|declared| *declared != host)
-            .map(|declared| Finding::LanguageMismatch { declared, host }),
-        (document.field(root, "study").is_none()
-            && ["sdtm", "adam", "send"]
-                .iter()
-                .any(|name| document.field(root, name).is_some()))
-        .then_some(Finding::MissingStudy),
-    ])
 }
 
 /// Project scalar failures against their retained normalized arena. Integer
@@ -219,12 +180,6 @@ impl<'a> Project<'a> for Owned {
             JsonValue::Number((text).parse().expect("canonical integer")),
         );
         Ok(())
-    }
-}
-fn language(value: Language) -> &'static str {
-    match value {
-        Language::Python => "python",
-        Language::R => "r",
     }
 }
 fn lock(value: LockKind) -> &'static str {
@@ -432,24 +387,16 @@ fn finding_diagnostic<'a, B: Project<'a>>(
     finding: &'a Finding,
     project: &mut B,
 ) -> Result<B::Output, Error> {
-    let (reason, path) = match finding {
-        Finding::MissingLanguage => ("missing_language", "language"),
-        Finding::MissingStudy => ("missing_study", "study"),
-        Finding::LanguageMismatch { declared, host } => {
-            let mut d = project.start(C::RunnerLanguageMismatch, "language")?;
-            project.context(&mut d, "declared", language(*declared))?;
-            project.context(&mut d, "runner", language(*host))?;
-            return Ok(d);
-        }
+    match finding {
         Finding::LockKindMismatch {
             language: declared,
             actual,
         } => {
             let mut d = project.start(C::ProjectEnvironmentInvalid, "lock")?;
             project.context(&mut d, "reason", "lock_kind_mismatch")?;
-            project.context(&mut d, "language", language(*declared))?;
+            project.context(&mut d, "language", declared.key())?;
             project.context(&mut d, "actual_lock_kind", lock(*actual))?;
-            return Ok(d);
+            Ok(d)
         }
         Finding::DuplicateFunction { function: index } => {
             let definition = function(draft, *index)?;
@@ -457,15 +404,12 @@ fn finding_diagnostic<'a, B: Project<'a>>(
             project.append(&mut d, &definition.name)?;
             project.context(&mut d, "function", &definition.name)?;
             project.context(&mut d, "reason", "duplicate_function")?;
-            return Ok(d);
+            Ok(d)
         }
         Finding::Function {
             function: index,
             finding,
-        } => return function_diagnostic(function(draft, *index)?, finding, project),
-        Finding::Codelist(finding) => return terminology_diagnostic(draft, finding, project),
-    };
-    let mut d = project.start(C::ProjectEnvironmentInvalid, path)?;
-    project.context(&mut d, "reason", reason)?;
-    Ok(d)
+        } => function_diagnostic(function(draft, *index)?, finding, project),
+        Finding::Codelist(finding) => terminology_diagnostic(draft, finding, project),
+    }
 }

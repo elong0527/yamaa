@@ -35,7 +35,7 @@ pub fn resolve(
         },
         host,
     )
-    .map_err(|error| crate::project_application::selection_failure(&error, host))?;
+    .map_err(|error| crate::project_application::selection_failure(&error))?;
     let artifact = match selected {
         yamaa_core::build::Prepared::Plain(prepared) => prepared.resolved_specification(),
         yamaa_core::build::Prepared::Ordinary(prepared) => prepared.resolved_specification(),
@@ -124,8 +124,7 @@ fn entry(document: &PreparedDocument, resources: &Resources) -> Result<Entry, Er
         let relative_to = selector(normalized, output);
         for (field, role) in [
             ("path", ResourceRole::OutputData),
-            ("warning_log", ResourceRole::WarningLog),
-            ("verification_log", ResourceRole::VerificationLog),
+            ("report", ResourceRole::Report),
         ] {
             if normalized.field(output, field).is_none() {
                 continue;

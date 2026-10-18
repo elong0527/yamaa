@@ -170,8 +170,8 @@ artifact.
 
 ### SPEC-8. Language source is ASCII
 
-Schema documents, specifications, inheritance layers and project environments
-contain only bytes from `0x00` through `0x7F`. A non-ASCII source byte fails
+Schema documents, specifications, inheritance layers, project files and
+environment files contain only bytes from `0x00` through `0x7F`. A non-ASCII source byte fails
 validation, reporting its file and position. A format's ASCII escape notation
 may denote a non-ASCII value; the decoded value is then an ordinary string.
 

@@ -1,10 +1,10 @@
 # Schema language
 
-The schema bundle under `yaml/` defines the shape of every specification and
-project environment. These rules fix how the bundle is written and read: its
-documents and includes, the YAML every document is read as, named types and
-registries, type expressions, shorthand unions, the one spelling a written
-value takes, and descriptor keywords.
+The schema bundle under `yaml/` defines the shape of every specification,
+project file and environment file. These rules fix how the bundle is written
+and read: its documents and includes, the YAML every document is read as,
+named types and registries, type expressions, shorthand unions, the one
+spelling a written value takes, and descriptor keywords.
 
 ## Bundles and documents
 
@@ -12,19 +12,21 @@ value takes, and descriptor keywords.
 
 ### SCHEMA-1. A schema bundle is one entry point and every document it includes, loaded whole
 
-`schema.yaml` is the specification-bundle entry point, and
-`schema_environment.yaml` is the independent project-environment-bundle entry
-point of [Project functions](../profiles/functions.md). Every schema document
-is a YAML 1.2 mapping containing `version`, an optional `includes` and
-declarations. `includes` is an ordered list of filenames matching
-`schema_[a-z0-9_]+.yaml`, resolved relative to the including file. The
-complete transitive bundle is loaded before names resolve, and every document
-in a bundle declares the same version.
+`schema.yaml` is the specification-bundle entry point, `schema_project.yaml`
+is the independent project-bundle entry point of the
+[Project file](../profiles/project.md), and `schema_environment.yaml` is the
+independent environment-bundle entry point of
+[Project functions](../profiles/functions.md). Every schema document is a YAML
+1.2 mapping containing `version`, an optional `includes` and declarations.
+`includes` is an ordered list of filenames matching `schema_[a-z0-9_]+.yaml`,
+resolved relative to the including file. The complete transitive bundle is
+loaded before names resolve, and every document in a bundle declares the same
+version.
 
 Evidence: `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::duplicate_registry_entries_and_closed_include_names_are_rejected`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::include_and_field_reuse_cycles_do_not_become_recursive_aliases`, `rust/crates/yamaa-adapters/tests/declaration_schema_capture.rs::shipped_closure_retains_every_authoritative_byte_and_admits_without_a_directory`.
 Replaces: REQ-0242, REQ-0243, REQ-0244, REQ-0282.
 
-A document may be included by both entry points; declaration uniqueness
+A document may be included by several entry points; declaration uniqueness
 applies within each loaded bundle. Absolute paths, parent traversal, URLs,
 missing files and include cycles are errors. Include order has no validation
 or execution meaning. Except for registries, a declaration name may occur once
@@ -33,11 +35,11 @@ construct fails.
 
 <a id="schema-2"></a>
 
-### SCHEMA-2. A specification or environment declares in `schema_version` the bundle version it is written against
+### SCHEMA-2. A specification, project file or environment file declares in `schema_version` the bundle version it is written against
 
-A specification or project environment declares its entry-point bundle
-version in `schema_version`, and the declared version must equal the bundle
-version. Any other version is an error, and the document is not validated
+A specification, project file or environment file declares its entry-point
+bundle version in `schema_version`, and the declared version must equal the
+bundle version. Any other version is an error, and the document is not validated
 against the bundle. An invalid include or an inconsistent bundle version also
 fails.
 

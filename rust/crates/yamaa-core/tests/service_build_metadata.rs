@@ -168,12 +168,23 @@ mod service {
         fn document(tree: Tree) -> Document {
             tree.document()
         }
-        fn environment(invalid: bool) -> Document {
+        /// The project links the Python environment file; an invalid link is a
+        /// project scalar failure that precedes every capture.
+        fn project(invalid: bool) -> Document {
+            document(Tree::map(vec![(
+                "environments",
+                Tree::map(vec![(
+                    "python",
+                    if invalid {
+                        Tree::boolean(true)
+                    } else {
+                        Tree::text("python/environment.yaml")
+                    },
+                )]),
+            )]))
+        }
+        fn environment() -> Document {
             document(Tree::map(vec![
-                (
-                    "language",
-                    Tree::text(if invalid { "invalid" } else { "python" }),
-                ),
                 ("lock", Tree::text("uv.lock")),
                 (
                     "functions",
@@ -314,25 +325,41 @@ mod service {
             type Project = CheckedOwnedProject;
             type Failure = Failure;
             fn capture(&mut self, request: Request<'_>) -> Result<Entry, Failure> {
-                assert_eq!(request.environment, Some("env.yaml"));
+                assert_eq!(request.environment, Some("project.yaml"));
                 let source = metadata::Source {
-                    identity: "/study/env.yaml".into(),
+                    identity: "/study/project.yaml".into(),
+                    bytes: b"held project".to_vec(),
+                };
+                let linked = metadata::Source {
+                    identity: "/study/python/environment.yaml".into(),
                     bytes: b"held environment".to_vec(),
                 };
                 let mut decoder = ScriptedMetadataDecoder::<Opaque>::new(self.log.clone());
                 decoder.steps.push_back(MetadataDecodeStep {
                     source: source.clone(),
+                    target: metadata::DecodeTarget::Project,
+                    outcome: Ok(project(matches!(self.scenario, Scenario::Environment))),
+                });
+                decoder.steps.push_back(MetadataDecodeStep {
+                    source: linked.clone(),
                     target: metadata::DecodeTarget::Environment,
-                    outcome: Ok(environment(matches!(self.scenario, Scenario::Environment))),
+                    outcome: Ok(environment()),
                 });
                 let mut port = ScriptedMetadata::<Opaque>::new(self.log.clone());
                 port.steps.push_back(MetadataCaptureStep {
-                    kind: metadata::Kind::Lock,
+                    kind: metadata::Kind::Environment,
                     declaring_source: source.identity.clone(),
+                    written: "python/environment.yaml".into(),
+                    outcome: Ok(metadata::Reply::Document(linked.clone())),
+                });
+                // The lock path resolves from the linked environment file.
+                port.steps.push_back(MetadataCaptureStep {
+                    kind: metadata::Kind::Lock,
+                    declaring_source: linked.identity.clone(),
                     written: "uv.lock".into(),
                     outcome: Ok(metadata::Reply::Lock {
                         source: metadata::Source {
-                            identity: "/study/uv.lock".into(),
+                            identity: "/study/python/uv.lock".into(),
                             bytes: b"lock".to_vec(),
                         },
                         kind: LockKind::Uv,
@@ -399,7 +426,7 @@ mod service {
         fn request() -> Request<'static> {
             Request {
                 specification: "spec.yaml",
-                environment: Some("env.yaml"),
+                environment: Some("project.yaml"),
             }
         }
         #[test]
@@ -538,7 +565,7 @@ mod service {
         fn document(tree: Tree) -> Document {
             tree.document()
         }
-        fn environment(with_study: bool) -> Environment {
+        fn project(with_study: bool) -> Environment {
             let mut fields = vec![(
                 "sdtm",
                 Tree::map(vec![
@@ -585,7 +612,7 @@ mod service {
         impl Spy {
             fn new() -> Self {
                 Self {
-                    environment: Some(environment(true)),
+                    environment: Some(project(true)),
                     events: Vec::new(),
                     seconds: Some(0),
                     environment_error: None,
@@ -613,7 +640,7 @@ mod service {
                 self.seconds
             }
             fn capture_environment(&mut self, written: &str) -> Result<Environment, Opaque> {
-                assert_eq!(written, "environment.yaml");
+                assert_eq!(written, "project.yaml");
                 self.events.push("capture_environment");
                 if let Some(error) = self.environment_error.take() {
                     return Err(error);
@@ -624,7 +651,7 @@ mod service {
                 define::EnvironmentView {
                     document: &environment.document,
                     catalogue: &environment.catalogue,
-                    source: "/project/environment.yaml",
+                    source: "/project/project.yaml",
                 }
             }
             fn capture_specification(
@@ -645,7 +672,7 @@ mod service {
                 written: &str,
             ) -> Result<String, Opaque> {
                 assert_eq!(path, "sdtm.define");
-                assert_eq!(declaring, "/project/environment.yaml");
+                assert_eq!(declaring, "/project/project.yaml");
                 assert_eq!(written, "define.xml");
                 Ok("/project/define.xml".into())
             }
@@ -663,7 +690,7 @@ mod service {
             }
             fn verify_metadata(&mut self, path: &str, source: &str) -> Result<(), Opaque> {
                 assert_eq!(path, "sdtm");
-                assert_eq!(source, "/project/environment.yaml");
+                assert_eq!(source, "/project/project.yaml");
                 self.events.push("verify_metadata");
                 self.verification_error.take().map_or(Ok(()), Err)
             }
@@ -692,7 +719,7 @@ mod service {
             fn target(&self, path: &str, declaring: &str, written: &str) -> Result<String, Opaque> {
                 assert_eq!(
                     (path, declaring, written),
-                    ("sdtm.define", "/project/environment.yaml", "define.xml")
+                    ("sdtm.define", "/project/project.yaml", "define.xml")
                 );
                 Ok("/project/define.xml".into())
             }
@@ -731,7 +758,7 @@ mod service {
             Application::prepare(
                 spy,
                 define::Request {
-                    environment: "environment.yaml",
+                    environment: "project.yaml",
                     standard,
                     created,
                     installed: "0.3.0",
@@ -789,7 +816,7 @@ mod service {
             assert_eq!(attempt.application.artifacts().len(), 0);
         }
         #[test]
-        fn complete_metadata_and_rendering_precede_publication_and_save_is_one_shot() {
+        fn complete_metadata_and_rendering_precede_publication_and_save_rewrites_held_bytes() {
             let mut spy = Spy::new();
             let mut attempt = prepare(&mut spy, "sdtm", Some("2026-10-11T00:00:00"));
             assert!(attempt.outcome.is_ok());
@@ -807,15 +834,23 @@ mod service {
                 .contains("CreationDateTime=\"2026-10-11T00:00:00\""));
             let bytes = held.1.to_vec();
             assert!(attempt.application.save(&mut spy).ok().unwrap());
-            assert_eq!(spy.published, [("define.xml".into(), bytes)]);
+            assert_eq!(spy.published, [("define.xml".into(), bytes.clone())]);
             assert_eq!(
                 attempt.application.artifacts().next().unwrap().2,
                 PublicationState::Published
             );
-            let events = spy.events.clone();
-            assert!(!attempt.application.save(&mut spy).ok().unwrap());
-            assert_eq!(spy.events, events);
-            assert_eq!(spy.publishers, 2);
+            // A repeated save preflights again and rewrites the same held
+            // bytes, so a deleted target is restored; nothing is recomposed.
+            assert!(attempt.application.save(&mut spy).ok().unwrap());
+            assert_eq!(
+                spy.published,
+                [
+                    ("define.xml".into(), bytes.clone()),
+                    ("define.xml".into(), bytes)
+                ]
+            );
+            assert_eq!(spy.publishers, 3);
+            assert_eq!(spy.clock_calls.get(), 0);
         }
         #[test]
         fn verification_failure_retains_original_payload_and_never_acquires_a_publisher() {
@@ -897,7 +932,7 @@ mod service {
         #[test]
         fn missing_study_is_the_real_typed_owner_before_any_metadata_verification() {
             let mut spy = Spy::new();
-            spy.environment = Some(environment(false));
+            spy.environment = Some(project(false));
             let attempt = prepare(&mut spy, "sdtm", Some("2026-10-11T00:00:00"));
             let Err(Failure::Metadata(findings)) = attempt.outcome else {
                 panic!("missing actual cause")
@@ -910,7 +945,59 @@ mod service {
                     "study"
                 )]
             );
-            assert_eq!(findings[0].definition().requirement, Some("REQ-1015"));
+            assert_eq!(findings[0].definition().requirement, Some("REQ-1337"));
+            assert_eq!(spy.events, ["capture_environment"]);
+        }
+        #[test]
+        fn a_section_listing_only_specs_reports_every_missing_define_declaration_together() {
+            let mut spy = Spy::new();
+            // A run admits this section; only Define composition needs more.
+            spy.environment = Some(Environment {
+                document: document(Tree::map(vec![(
+                    "sdtm",
+                    Tree::map(vec![("specs", Tree::List(vec![]))]),
+                )])),
+                catalogue: Catalogue::admit(vec![]).unwrap(),
+            });
+            let attempt = prepare(&mut spy, "sdtm", Some("2026-10-11T00:00:00"));
+            let Err(Failure::Metadata(findings)) = attempt.outcome else {
+                panic!("missing define declarations")
+            };
+            let cause = |path, detail| {
+                yamaa_core::submission_composition::Finding::cause(
+                    ConditionCode::DefineRequiredDeclaration,
+                    path,
+                    detail,
+                )
+            };
+            assert_eq!(
+                findings,
+                [
+                    cause("study", "study"),
+                    cause("sdtm.standard", "standard"),
+                    cause("sdtm.define", "define"),
+                ]
+            );
+            assert!(findings
+                .iter()
+                .all(|finding| finding.definition().requirement == Some("REQ-1337")));
+            assert_eq!(spy.events, ["capture_environment"]);
+        }
+        #[test]
+        fn a_project_without_the_selected_section_names_that_section() {
+            let mut spy = Spy::new();
+            let attempt = prepare(&mut spy, "adam", Some("2026-10-11T00:00:00"));
+            let Err(Failure::Metadata(findings)) = attempt.outcome else {
+                panic!("missing selected section")
+            };
+            assert_eq!(
+                findings,
+                [yamaa_core::submission_composition::Finding::cause(
+                    ConditionCode::DefineRequiredDeclaration,
+                    "adam",
+                    "adam"
+                )]
+            );
             assert_eq!(spy.events, ["capture_environment"]);
         }
         #[test]

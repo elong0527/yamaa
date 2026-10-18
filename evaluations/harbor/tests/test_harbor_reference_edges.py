@@ -97,7 +97,7 @@ def _worsening_rows(tmp_path, track, ae=None, fa=None):
     if track != "yamaa":
         return _run(tmp_path, name, track, changes)["adae.csv"]
     # The native extension is optional for the test suite (see
-    # test_package.py), but the yamaa track runs the compiled domain entry
+    # test_package.py), but the yamaa track runs the compiled spec entry
     # point: skip it like the R and opensas tracks skip unavailable
     # runtimes, instead of failing on the missing module.
     try:
@@ -106,7 +106,7 @@ def _worsening_rows(tmp_path, track, ae=None, fa=None):
         if error.name != "yamaa._native":
             raise
         pytest.skip("the compiled native extension is not installed")
-    from yamaa import domain
+    import yamaa
 
     study = tmp_path / "study"
     shutil.copytree(ROOT / "benchmarks" / name, study)
@@ -116,7 +116,7 @@ def _worsening_rows(tmp_path, track, ae=None, fa=None):
             writer = csv.DictWriter(stream, fieldnames=header)
             writer.writeheader()
             writer.writerows(rows)
-    result = domain(study / "spec.yaml").output
+    result = yamaa.spec(study / "spec.yaml").run().output
     result.write_csv(study / "actual.csv", datetime_format="%Y-%m-%dT%H:%M:%S")
     return _read(study / "actual.csv")[1]
 
@@ -434,7 +434,7 @@ def _pro_deterioration_rows(tmp_path, track, qs):
         if error.name != "yamaa._native":
             raise
         pytest.skip("the compiled native extension is not installed")
-    from yamaa import domain
+    import yamaa
 
     study = tmp_path / "study"
     shutil.copytree(ROOT / "benchmarks" / name, study)
@@ -443,7 +443,7 @@ def _pro_deterioration_rows(tmp_path, track, qs):
         writer = csv.DictWriter(stream, fieldnames=header)
         writer.writeheader()
         writer.writerows(qs)
-    result = domain(study / "spec.yaml").output
+    result = yamaa.spec(study / "spec.yaml").run().output
     result.write_csv(study / "actual.csv")
     return _read(study / "actual.csv")[1]
 
@@ -811,7 +811,7 @@ def test_replicate_qtc_average_pairs_by_replicate_and_skips_absent_rr(
             if error.name != "yamaa._native":
                 raise
             pytest.skip("the compiled native extension is not installed")
-        from yamaa import domain
+        import yamaa
 
         study = tmp_path / "study"
         shutil.copytree(ROOT / "benchmarks" / name, study)
@@ -819,7 +819,7 @@ def test_replicate_qtc_average_pairs_by_replicate_and_skips_absent_rr(
             writer = csv.DictWriter(stream, fieldnames=list(row))
             writer.writeheader()
             writer.writerows(records)
-        domain(study / "spec.yaml").output.write_csv(study / "actual.csv")
+        yamaa.spec(study / "spec.yaml").run().output.write_csv(study / "actual.csv")
         rows = _read(study / "actual.csv")[1]
     else:
         rows = _run(tmp_path, name, qtc_track, changes)["adeg.csv"]
@@ -940,7 +940,7 @@ def test_placebo_comparator_pools_by_parameter_and_time_point(tmp_path, placebo_
             if error.name != "yamaa._native":
                 raise
             pytest.skip("the compiled native extension is not installed")
-        from yamaa import domain
+        import yamaa
 
         study = tmp_path / "study"
         shutil.copytree(ROOT / "benchmarks" / name, study)
@@ -948,7 +948,7 @@ def test_placebo_comparator_pools_by_parameter_and_time_point(tmp_path, placebo_
             writer = csv.DictWriter(stream, fieldnames=list(row))
             writer.writeheader()
             writer.writerows(records)
-        domain(study / "spec.yaml").output.write_csv(study / "actual.csv")
+        yamaa.spec(study / "spec.yaml").run().output.write_csv(study / "actual.csv")
         rows = _read(study / "actual.csv")[1]
     else:
         rows = _run(tmp_path, name, placebo_track, {"adeg_raw.csv": records})[

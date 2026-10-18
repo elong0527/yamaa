@@ -5,25 +5,12 @@ pub struct Request<'a> {
     pub environment: Option<&'a str>,
 }
 
-/// An absent environment has no declarations, captures, lock or activation
+/// An absent project has no declarations, captures, lock or activation
 /// requirements. It does not manufacture a source file or discovery location.
 pub fn without_environment(
     host: crate::project_function::Language,
 ) -> crate::project_environment::ExecutionEnvironment {
-    use crate::project_environment::{Draft, Environment};
-    Environment::admit(
-        host,
-        Draft {
-            language: None,
-            lock: None,
-            functions: None,
-            codelists: std::vec::Vec::new(),
-            has_study: false,
-            submissions: std::vec::Vec::new(),
-        },
-    )
-    .expect("empty environment admission")
-    .into_execution()
+    crate::project_environment::ExecutionEnvironment::without_project(host)
 }
 
 /// Native quota and snapshot observations; these methods neither decode nor

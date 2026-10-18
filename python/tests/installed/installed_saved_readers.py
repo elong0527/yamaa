@@ -129,25 +129,30 @@ class SavedReaders(unittest.TestCase):
         self.assertEqual(table.to_pydict(), values)
 
     def read_submission(self, root, *, profile, empty):
-        document = yamaa.define(
-            root / "environment.yaml", "sdtm", created=TRUTH["created"]
+        document = yamaa.project(root / "project.yaml").submission(
+            "sdtm", created=TRUTH["created"]
         )
         if empty:
             # A transported dataset without rows must declare it has no data.
             self.assertEqual(
                 document.issues["condition"].to_list(), ["transport_dataset_empty"]
             )
-            with self.assertRaises(yamaa.DefineError):
+            with self.assertRaises(yamaa.Error):
                 document.save()
             self.assertFalse((root / "test.json").exists())
             self.assertFalse((root / "define.xml").exists())
             return
         self.assertTrue(document.issues.is_empty(), document.issues)
-        for name in ("spec.yaml", "environment.yaml", f"output.{profile}"):
+        for name in ("spec.yaml", "project.yaml", f"output.{profile}"):
             (root / name).unlink()
-        self.assertTrue(document.save())
-        self.assertFalse(document.save())
+        document.save()
         saved = (root / "test.json").read_bytes()
+        define = (root / "define.xml").read_bytes()
+        # A repeated save rewrites the held bytes, so a changed file is restored.
+        (root / "test.json").write_bytes(b"sentinel")
+        document.save()
+        self.assertEqual((root / "test.json").read_bytes(), saved)
+        self.assertEqual((root / "define.xml").read_bytes(), define)
         # Preserve JSON's signed -0 before applying its declared float type.
         data = json.loads(
             saved, parse_int=lambda text: -0.0 if text == "-0" else int(text)
@@ -216,9 +221,8 @@ class SavedReaders(unittest.TestCase):
                     specification = json.loads(json.dumps(TRUTH["specification"]))
                     specification["output"]["path"] = f"output.{profile}"
                     (root / "spec.yaml").write_text(json.dumps(specification))
-                    (root / "environment.yaml").write_text(
-                        json.dumps(TRUTH["environment"])
-                    )
+                    # The authored submission metadata is a project document.
+                    (root / "project.yaml").write_text(json.dumps(TRUTH["environment"]))
                     source = root / "input.csv"
                     source.write_text(
                         TRUTH["input"].splitlines(keepends=True)[0]
@@ -226,7 +230,7 @@ class SavedReaders(unittest.TestCase):
                         else TRUTH["input"],
                         encoding="utf-8",
                     )
-                    built = yamaa.domain(root / "spec.yaml")
+                    built = yamaa.spec(root / "spec.yaml").run()
                     self.assertTrue(built.issues.is_empty(), built.issues)
                     self.assert_values(
                         built.output.to_dict(as_series=False), empty=empty
@@ -236,13 +240,13 @@ class SavedReaders(unittest.TestCase):
                     source.unlink()
                     original = (root / "spec.yaml").read_bytes()
                     (root / "spec.yaml").unlink()
-                    self.assertTrue(built.save())
+                    built.save()
                     saved = output.read_bytes()
                     for _ in range(2):
                         (self.read_csv if profile == "csv" else self.read_parquet)(
                             saved, empty=empty
                         )
-                        self.assertTrue(built.save())
+                        built.save()
                         self.assertEqual(output.read_bytes(), saved)
                     (root / "spec.yaml").write_bytes(original)
                     self.read_submission(root, profile=profile, empty=empty)

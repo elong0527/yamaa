@@ -82,7 +82,7 @@ output_class:
     - relative_to:
         type: path_base
         default: declaring
-        description: Base for the primary artifact and its warning and verification logs (FILE-2).
+        description: Base for the primary artifact and the run report file (FILE-2).
     - decimals:
         type: int
         required: false
@@ -91,14 +91,10 @@ output_class:
         type: "list[identifier]"
         required: true
         description: Declared columns selected for the artifact, in artifact order (OUTPUT-1).
-    - warning_log:
+    - report:
         type: path
         required: false
-        description: Sidecar dataset recording warning-level verification violations; the verification rules fix its schema (OUTPUT-10).
-    - verification_log:
-        type: path
-        required: false
-        description: Sidecar dataset recording the outcome of every declared verification; the verification rules fix its schema (OUTPUT-10).
+        description: File the run report is written to, its extension selecting its profile; required when any verification is a warning (CHECK-22).
     - order_by:
         type: "list[order_by_term]"
         required: false
@@ -920,7 +916,7 @@ expressions:
         - name:
             type: identifier
             required: true
-            description: Logical function selected from the supplied environment (FUNC-4).
+            description: Logical function selected from the environment the project links for the host language (FUNC-4).
         - args:
             type: "dict[identifier, function_arg]"
             default: {}
@@ -1020,7 +1016,7 @@ submission_column_class:
     - inventory_vocabulary:
         type: bool
         required: false
-        description: Whether every non-missing value must name a dataset any submission section of the study environment declares (CT-11).
+        description: Whether every non-missing value must name a dataset any submission section of the project file declares (CT-11).
     - origin:
         type: submission_origin_class
         required: false
@@ -1335,126 +1331,41 @@ verification_severity:
 "#),
 ];
 #[rustfmt::skip]
-pub(super) const ENVIRONMENT_MODULES: &[(&str, &str)] = &[
-    ("schema_environment.yaml", r#"version: '1.0'
+pub(super) const PROJECT_MODULES: &[(&str, &str)] = &[
+    ("schema_project.yaml", r#"version: '1.0'
+# See PROJECT-1.
 includes:
 - schema_shared.yaml
-environment_class:
+project_class:
 - schema_version:
     type: str
     required: true
-    description: Schema bundle version this environment is admitted against (FUNC-2).
-- language:
-    type: str
-    values:
-    - python
-    - r
-    description: Host language of every project function definition (FUNC-3).
-- lock:
-    type: project_path
-    description: Optional packaging lock the installed called packages are verified against (FUNC-3).
-- functions:
-    type: dict[identifier, function_definition]
-    description: Project function definitions keyed by logical name (FUNC-4).
+    description: Schema bundle version this project file is admitted against (PROJECT-1).
+- environments:
+    type: environments_class
+    description: Environment file of each host language, by language key (PROJECT-2).
 - codelists:
     type: list[codelist_source]
     description: Codelist sources supplying study terminology (CT-1).
 - study:
     type: study_class
-    description: Study a submission section composes its Define-XML document for (DEFINE-1).
+    description: Study the specifications belong to; Define-XML requires it (DEFINE-1, DEFINE-28).
 - sdtm:
     type: submission_section_class
-    description: Submission section composing sdtm specifications into one Define-XML document (DEFINE-1).
+    description: Tabulation specifications and the submission metadata composing them into one Define-XML document (PROJECT-3).
 - adam:
     type: submission_section_class
-    description: Submission section composing adam specifications into one Define-XML document (DEFINE-1).
+    description: Analysis specifications and the submission metadata composing them into one Define-XML document (PROJECT-3).
 - send:
     type: submission_section_class
-    description: Submission section composing send specifications into one Define-XML document (DEFINE-1).
-function_definition:
-  type:
-  - project_path
-  - function_definition_class
-  description: Inline project function definition, or the path of a file holding one (FUNC-4).
-function_definition_class:
-- function:
-    type: qualified_callable
-    required: true
-    description: Statically written fully qualified callable the definition binds (FUNC-8).
-- description:
-    type: str
-    required: true
-    min_length: 1
-    description: Description of what the function computes (FUNC-4).
-- params:
-    type: list[function_parameter_class]
-    required: true
-    description: Closed, ordered named parameters of the function (FUNC-5).
-- returns:
-    type: column_type
-    required: true
-    description: Column type of the one scalar the function returns (FUNC-9).
-- may_return_missing:
-    type: bool
-    default: false
-    description: Whether an invoked binding may return the missing value (FUNC-9).
-- comparison_decimals:
-    type: int
-    default: 4
-    description: Decimal places at which numeric test results are compared (FUNC-13).
-- tests:
-    type: list[function_test_class]
-    required: true
-    description: Inline test cases activation runs before any study data is read (FUNC-11).
-function_parameter_class:
-- name:
-    type: identifier
-    required: true
-    description: Parameter name, matching the callable's parameter exactly (FUNC-5).
-- type:
-    type: function_param_type
-    required: true
-    description: Exact type every argument and default of this parameter has (FUNC-5).
-- required:
-    type: bool
-    default: true
-    description: Whether a call must supply this argument (FUNC-5).
-- default:
-    type: function_value
-    description: Value an omitted optional argument takes (FUNC-7).
-- accepts_missing:
-    type: bool
-    default: false
-    description: Whether a missing argument is passed to the binding instead of short-circuiting the call (FUNC-7).
-qualified_callable:
-  type: str
-  min_length: 1
-  description: Fully qualified callable name, such as projectbmi.bmi or projectbmi::bmi (FUNC-8).
-function_case_id:
-  type: str
-  pattern: ^[a-z][a-z0-9-]*$
-  description: Name of one function test case (FUNC-11).
-function_coverage:
-  type: str
-  pattern: ^(normal|boundary|nullable-output|numeric-comparison|(default|accepted-missing|short-circuit-missing|boolean-true|boolean-false):[A-Za-z_][A-Za-z0-9_]*)$
-  description: Obligation a function test case demonstrates (FUNC-11).
-function_test_class:
-- id:
-    type: function_case_id
-    required: true
-    description: Unique name of the test case (FUNC-11).
-- covers:
-    type: list[function_coverage]
-    required: true
-    description: Obligations this case demonstrates (FUNC-11).
-- args:
-    type: dict[identifier, function_value]
-    required: true
-    description: Logical arguments the case passes, by parameter name (FUNC-11).
-- result:
-    type: function_value
-    required: true
-    description: Result the call is expected to return (FUNC-11).
+    description: Nonclinical tabulation specifications and the submission metadata composing them into one Define-XML document (PROJECT-3).
+environments_class:
+- python:
+    type: project_path
+    description: Environment file the Python host reads, relative to the project file (PROJECT-2).
+- r:
+    type: project_path
+    description: Environment file the R host reads, relative to the project file (PROJECT-2).
 codelist_source:
   type:
   - project_path
@@ -1631,27 +1542,25 @@ standard_name:
   - SENDIG-GENETOX
   description: Standard name, in the exact case Define-XML 2.1 publishes.
 submission_section_class:
-- standard:
-    type: implementation_guide_class
-    required: true
-    description: Implementation guide shared by the selected datasets (DEFINE-6).
 - specs:
     type: list[path]
     required: true
-    description: Ordered specifications resolved with their parent layers (DEFINE-5).
+    description: Ordered specifications of this family, resolved with their parent layers; the only field a run needs (PROJECT-3, DEFINE-5).
+- standard:
+    type: implementation_guide_class
+    description: Implementation guide shared by the selected datasets; Define-XML requires it (DEFINE-6, DEFINE-28).
 - define:
     type: path
-    required: true
-    description: Define-XML publication target, relative to its declaring environment (DEFINE-2).
+    description: Define-XML publication target, relative to the project file; Define-XML requires it (DEFINE-2, DEFINE-28).
 - documents:
     type: list[document_class]
     description: Supporting document IDs, kinds, literal links and titles (DEFINE-13).
-- transport:
+- datasets:
     type: str
     values:
+    - json
     - xpt
-    - dataset_json
-    description: Optional transport file written for each composed dataset in the document's directory, read from its published artifact; omission writes only the Define-XML document (JSON-1, XPT-1).
+    description: Optional transport file written for each composed dataset in the document's directory, read from its published artifact, json for Dataset-JSON and xpt for SAS Transport; omission writes only the Define-XML document (JSON-1, XPT-1).
 - context:
     type: str
     default: Submission
@@ -1680,7 +1589,7 @@ submission_section_class:
 - source_system_version:
     type: str
     min_length: 1
-    description: Optional nonempty XML and JSON source-system version; omission selects the installed package version (FUNC-2).
+    description: Optional nonempty XML and JSON source-system version; omission selects the installed package version (DEFINE-12).
 implementation_guide_class:
 - name:
     type: standard_name
@@ -1717,6 +1626,172 @@ document_class:
     required: true
     min_length: 1
     description: Label a reader sees for the document.
+"#),
+    ("schema_shared.yaml", r#"version: "1.0"
+
+# See REQ-1150.
+
+column_type:
+    type: str
+    values: [str, int, float, date, datetime]
+
+literal_value:
+    type: [str, int, float, bool, "null"]
+    description: Scalar literal; a non-finite float becomes missing (VALUE-4).
+
+substitute_value:
+    type: [str, int, float, bool, missing_value]
+    description: "Literal a handler, flag or mapping returns, with `{literal: null}` for the missing value (COLUMN-10)."
+
+missing_value:
+    registry: missing_values
+
+missing_values:
+    literal:
+        type: "null"
+        description: The missing value, spelled as the literal expression; a bare YAML null instead leaves a field absent (LAYER-9).
+
+path:
+    type: str
+    min_length: 1
+
+project_path:
+    type: str
+    min_length: 1
+    description: Local resource a run reads or publishes; a relative spelling uses the base its declaration selects and an absolute spelling names its local location (FILE-2).
+
+path_base:
+    type: str
+    values: [declaring, entry]
+    description: Base directory of a relative path, the declaring file's or the entry file's directory (FILE-2).
+
+identifier:
+    type: str
+    pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
+    description: Single-token identifier; the field's own description states which naming list it belongs to, such as a declared dataset, a declared column, a standard, a document or a function (SPEC-2).
+
+
+function_param_type:
+    type: str
+    values: [str, int, float, bool, date, datetime]
+
+function_string_literal_class:
+    - literal: {type: str, required: true}
+
+function_date_literal_class:
+    - date: {type: str, required: true}
+
+function_datetime_literal_class:
+    - datetime: {type: str, required: true}
+
+function_value:
+    type:
+        - literal_value
+        - function_date_literal_class
+        - function_datetime_literal_class
+
+"#),
+];
+#[rustfmt::skip]
+pub(super) const ENVIRONMENT_MODULES: &[(&str, &str)] = &[
+    ("schema_environment.yaml", r#"version: '1.0'
+includes:
+- schema_shared.yaml
+environment_class:
+- schema_version:
+    type: str
+    required: true
+    description: Schema bundle version this environment file is admitted against (FUNC-2).
+- lock:
+    type: project_path
+    description: Optional packaging lock the installed called packages are verified against, for the language the project's environments key states (FUNC-3).
+- functions:
+    type: dict[identifier, function_definition]
+    description: Project function definitions keyed by logical name (FUNC-4).
+function_definition:
+  type:
+  - project_path
+  - function_definition_class
+  description: Inline project function definition, or the path of a file holding one (FUNC-4).
+function_definition_class:
+- function:
+    type: qualified_callable
+    required: true
+    description: Statically written fully qualified callable the definition binds (FUNC-8).
+- description:
+    type: str
+    required: true
+    min_length: 1
+    description: Description of what the function computes (FUNC-4).
+- params:
+    type: list[function_parameter_class]
+    required: true
+    description: Closed, ordered named parameters of the function (FUNC-5).
+- returns:
+    type: column_type
+    required: true
+    description: Column type of the one scalar the function returns (FUNC-9).
+- may_return_missing:
+    type: bool
+    default: false
+    description: Whether an invoked binding may return the missing value (FUNC-9).
+- comparison_decimals:
+    type: int
+    default: 4
+    description: Decimal places at which numeric test results are compared (FUNC-13).
+- tests:
+    type: list[function_test_class]
+    required: true
+    description: Inline test cases activation runs before any study data is read (FUNC-11).
+function_parameter_class:
+- name:
+    type: identifier
+    required: true
+    description: Parameter name, matching the callable's parameter exactly (FUNC-5).
+- type:
+    type: function_param_type
+    required: true
+    description: Exact type every argument and default of this parameter has (FUNC-5).
+- required:
+    type: bool
+    default: true
+    description: Whether a call must supply this argument (FUNC-5).
+- default:
+    type: function_value
+    description: Value an omitted optional argument takes (FUNC-7).
+- accepts_missing:
+    type: bool
+    default: false
+    description: Whether a missing argument is passed to the binding instead of short-circuiting the call (FUNC-7).
+qualified_callable:
+  type: str
+  min_length: 1
+  description: Fully qualified callable name, such as projectbmi.bmi or projectbmi::bmi (FUNC-8).
+function_case_id:
+  type: str
+  pattern: ^[a-z][a-z0-9-]*$
+  description: Name of one function test case (FUNC-11).
+function_coverage:
+  type: str
+  pattern: ^(normal|boundary|nullable-output|numeric-comparison|(default|accepted-missing|short-circuit-missing|boolean-true|boolean-false):[A-Za-z_][A-Za-z0-9_]*)$
+  description: Obligation a function test case demonstrates (FUNC-11).
+function_test_class:
+- id:
+    type: function_case_id
+    required: true
+    description: Unique name of the test case (FUNC-11).
+- covers:
+    type: list[function_coverage]
+    required: true
+    description: Obligations this case demonstrates (FUNC-11).
+- args:
+    type: dict[identifier, function_value]
+    required: true
+    description: Logical arguments the case passes, by parameter name (FUNC-11).
+- result:
+    type: function_value
+    required: true
+    description: Result the call is expected to return (FUNC-11).
 "#),
     ("schema_shared.yaml", r#"version: "1.0"
 

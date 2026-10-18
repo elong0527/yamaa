@@ -1,7 +1,7 @@
 # Submission metadata
 
 This file is a profile: it is optional, and it applies to a specification that
-declares `submission` metadata and to the study environment section that
+declares `submission` metadata and to the project file section that
 composes such specifications into a [Define-XML](define-xml.md) document and
 [Dataset-JSON](dataset-json.md) or [SAS Transport](xpt.md) files. It governs
 the dataset and column metadata a submission document is generated from: what
@@ -31,7 +31,7 @@ An internal column is not in the artifact, so it is not in the document that
 describes the artifact; declaring metadata for one is an error rather than an
 ignored declaration.
 
-A column's `codelist` names a codelist the study document declares.
+A column's `codelist` names a codelist the project file declares.
 [Controlled terminology](terminology.md) owns that object, the values a binding
 enforces ([CT-7](terminology.md#ct-7)), and the redundancy of an
 `allowed_values` verification beside it ([CT-9](terminology.md#ct-9)).
@@ -338,10 +338,11 @@ Replaces: REQ-0885, REQ-0916.
 
 The domain build enforces the resolution of [SUB-10](#sub-10) without a study
 document. The check runs after the column's declared verifications and before
-its terminology checks, and the verification log records it as a `not_missing`
-check. Its failure reports the column, the failure count and the offending
-keys, as a failed `not_missing` does, at the path of the declaration that makes
-the column mandatory: `columns.<column>.submission.mandatory`, or
+its terminology checks, and the run report records it as a `not_missing` check
+row ([CHECK-23](../verification.md#check-23)). Its failure reports the column,
+the failure count and the offending keys, as a failed `not_missing` does, at
+the path of the declaration that makes the column mandatory:
+`columns.<column>.submission.mandatory`, or
 `columns.<column>.submission.core` when `core` derives it, and the same fields
 under `rows.<row>.submission.<column>` for a value-level entry.
 
@@ -635,7 +636,7 @@ the predecessor dataset and column `origin.description` names, so its
 derivation must be a bare `source` of that dataset and column, declaring a
 `filter` when the description writes a where clause. When the column's name
 equals the predecessor column's name and a specification some submission
-section of the study environment lists declares that column, their labels must
+section of the project file lists declares that column, their labels must
 be equal; a renamed column keeps its own label.
 
 Fails: `origin_contradicts_derivation`, `refuted_value_origin`, `predecessor_label_mismatch`.
@@ -659,7 +660,7 @@ template's derivation and fails with `refuted_value_origin`, as
 
 The copy is checked when the specification is validated on its own. The
 labels are compared when a document composes the specification: composition
-reads the specifications every submission section of the study environment
+reads the specifications every submission section of the project file
 lists, and a predecessor column no listed specification declares, or declares
 without a label, is not compared. A copy that keeps the name keeps the label,
 while a renamed column such as `PARAMCD` from `LBTESTCD` describes its own
@@ -719,12 +720,12 @@ document reference holding only `document` restate their string and fail as
 
 <a id="sub-23"></a>
 
-### SUB-23. Rules needing no family or study environment, and the `mandatory` resolution, are checked on the specification alone, and the rest when a document composes it
+### SUB-23. Rules needing no family or project file, and the `mandatory` resolution, are checked on the specification alone, and the rest when a document composes it
 
-Every rule of this profile that needs neither a family nor the study
-environment is checked when the specification is validated on its own, and so
-is the resolution and enforcement of `mandatory`, which reads its family group
-from the dataset's `class`. Every other rule is checked when
+Every rule of this profile that needs neither a family nor the project file is
+checked when the specification is validated on its own, and so is the
+resolution and enforcement of `mandatory`, which reads its family group from
+the dataset's `class`. Every other rule is checked when
 [Define-XML](define-xml.md) composes the specification into a document.
 
 Evidence: `sdtm-lb-metadata`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::metadata_admission_has_exact_causes_before_study_access`, `rust/crates/yamaa-adapters/tests/file_resources.rs::original_lb_source_rejection_and_per_value_published_vocabulary_have_zero_writes`.

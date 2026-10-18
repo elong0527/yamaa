@@ -5,7 +5,7 @@ expressions:
         - name:
             type: identifier
             required: true
-            description: Logical function selected from the supplied environment (FUNC-4).
+            description: Logical function selected from the environment the project links for the host language (FUNC-4).
         - args:
             type: "dict[identifier, function_arg]"
             default: {}

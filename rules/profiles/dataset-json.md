@@ -1,8 +1,8 @@
 # Dataset-JSON
 
 This file is a profile: it is optional, and it applies only to a build whose
-selected submission section of a study environment sets `transport:
-dataset_json`. Such a build writes one deterministic Dataset-JSON 1.1 file per
+selected submission section of a project file sets `datasets: json`. Such a
+build writes one deterministic Dataset-JSON 1.1 file per
 composed specification, carrying the published dataset and the submission
 metadata the [Define-XML](define-xml.md) document is generated from. A domain
 build never writes Dataset-JSON. [JSON-1](#json-1), [JSON-2](#json-2),
@@ -13,16 +13,16 @@ files [SAS Transport](xpt.md) writes.
 
 <a id="json-1"></a>
 
-### JSON-1. A section's `transport` requests one file per composed dataset, named for the dataset beside the document
+### JSON-1. A section's `datasets` requests one transport file per composed dataset, named for the dataset beside the document
 
-The selected environment submission section's optional `transport` requests
-one transport file for each specification in its ordered `specs`: `xpt` a SAS
-Transport version 5 file under [SAS Transport](xpt.md), and `dataset_json` a
-Dataset-JSON file under this profile. Each file is in the directory of the
-section's `define` target, named the lower-case dataset name with the extension
-`.xpt` or `.json`. Omission produces only the Define-XML document. The
-extension mapping of [OUTPUT-5](../output.md#output-5) stays closed at `.csv`
-and `.parquet`.
+The selected project submission section's optional `datasets` requests one
+transport file for each specification in its ordered `specs`: `json` a
+Dataset-JSON file under this profile, and `xpt` a SAS Transport version 5 file
+under [SAS Transport](xpt.md). Each file is in the directory of the section's
+`define` target, named the lower-case dataset name with the extension `.json`
+or `.xpt`. Omission produces only the Define-XML document. The extension
+mapping of [OUTPUT-5](../output.md#output-5) stays closed at `.csv` and
+`.parquet`.
 
 Evidence: `sdtm-dm-metadata`, `sdtm-dm-xpt`, `adam-adsl-xpt`, `rust/crates/yamaa-adapters/tests/file_resources.rs::mutual_references_and_published_contract_fail_before_any_publication`, `python/tests/installed/installed_public_define.py::test_missing_artifact_only_when_requested_and_semantic_failure_zero_writes`.
 Replaces: REQ-1193, REQ-1194.
@@ -205,8 +205,8 @@ Replaces: REQ-1203, REQ-1204, REQ-1205, REQ-1207, REQ-1208.
 `sourceSystem` is one object carrying `name` and `version`, in that order. Its
 name is `yamaa`; its version is the selected section's explicit
 `source_system_version`, or the actual installed yamaa version when omitted,
-under [FUNC-2](functions.md#func-2). The same selected version is used in
-Define-XML and Dataset-JSON.
+under [DEFINE-12](define-xml.md#define-12). The same selected version is used
+in Define-XML and Dataset-JSON.
 
 A column's `targetDataType` is written only as [JSON-10](#json-10) states;
 every value is written in the spelling its own type fixes.
@@ -331,7 +331,7 @@ artifact's empty field arrives as missing under
 
 ### JSON-12. When Dataset-JSON is requested, each dataset's leaf names its JSON file
 
-When the selected section requests `dataset_json`, each dataset's `def:leaf`
+When the selected section sets `datasets: json`, each dataset's `def:leaf`
 names that dataset's JSON file beside the document: its `xlink:href` and
 `def:title` use the JSON file name rather than the published CSV or Parquet
 path. When no transport is requested, the leaf names the specification's
@@ -407,7 +407,7 @@ A visible document therefore never points at a data file that is not there yet,
 which is the order of [OUTPUT-10](../output.md#output-10) applied to
 this pair. Atomic replacement is guaranteed per file and not across the
 package, exactly as [OUTPUT-10](../output.md#output-10) states for a
-primary artifact and its log. A failed publication fails under
+primary artifact and its report file. A failed publication fails under
 [OUTPUT-8](../output.md#output-8) and this rule.
 
 ## Reading

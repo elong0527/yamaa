@@ -43,7 +43,6 @@ pub struct Define {
     application: service::Application<NativePorts>,
     failure: Option<Failure>,
     issues: Vec<Issue>,
-    host: Language,
 }
 #[derive(Debug)]
 pub struct SaveError;
@@ -78,7 +77,6 @@ impl Define {
             application: attempt.application,
             failure: None,
             issues: Vec::new(),
-            host,
         };
         if let Err(failure) = attempt.outcome {
             result.refuse(native_failure(failure));
@@ -86,7 +84,7 @@ impl Define {
         result
     }
     fn refuse(&mut self, failure: Failure) {
-        self.issues = crate::issue_rows::collect(issues(&failure, self.host));
+        self.issues = crate::issue_rows::collect(issues(&failure));
         self.failure = Some(failure);
     }
     pub fn issues(&self) -> &[Issue] {
@@ -171,17 +169,31 @@ impl NativePorts {
                 R::ContentChanged.field_diagnostic("environment", &self.environment_written),
             );
         }
-        let raw = &root.normalized().document;
-        let text = |node: usize| match &raw.nodes()[node] {
-            N::Text(written) => Some(written.as_str()),
+        let text = |raw: &yamaa_core::schema::Document, node: usize| match &raw.nodes()[node] {
+            N::Text(written) => Some(written.to_owned()),
             _ => None,
         };
+        // The project declares its environment link and codelists; the linked
+        // environment file declares its lock and functions.
+        let project = &root.normalized().document;
+        let linked = environment
+            .environment_file()
+            .map(|file| (file, &file.normalized().document));
+        if linked.is_some_and(|(file, _)| file.source().identity == identity) {
+            let key = self.host.key();
+            let environments = project.field(project.root(), "environments")?;
+            let written = text(project, project.field(environments, key)?)?;
+            return Some(
+                R::ContentChanged.field_diagnostic(&format!("environments.{key}"), &written),
+            );
+        }
         if environment
             .lock()
             .is_some_and(|lock| lock.source.identity == identity)
         {
-            let written = text(raw.field(raw.root(), "lock")?)?;
-            return Some(R::ContentChanged.field_diagnostic("lock", written));
+            let (_, raw) = linked?;
+            let written = text(raw, raw.field(raw.root(), "lock")?)?;
+            return Some(R::ContentChanged.field_diagnostic("lock", &written));
         }
         let capture = environment
             .captures()
@@ -189,19 +201,22 @@ impl NativePorts {
             .find(|capture| capture.document.source().identity == identity)?;
         match &capture.origin {
             crate::project_source::Origin::Function(name) => {
+                let (_, raw) = linked?;
                 let functions = raw.field(raw.root(), "functions")?;
-                let written = text(raw.field(functions, name)?)?;
-                Some(R::ContentChanged.field_diagnostic(&format!("functions.{name}"), written))
+                let written = text(raw, raw.field(functions, name)?)?;
+                Some(R::ContentChanged.field_diagnostic(&format!("functions.{name}"), &written))
             }
             crate::project_source::Origin::Codelist(index) => {
-                let codelists = raw.field(raw.root(), "codelists")?;
-                let N::Sequence(codelists) = &raw.nodes()[codelists] else {
+                let codelists = project.field(project.root(), "codelists")?;
+                let N::Sequence(codelists) = &project.nodes()[codelists] else {
                     return None;
                 };
-                let written = text(*codelists.get(*index)?)?;
-                Some(R::ContentChanged.field_diagnostic(&format!("codelists[{index}]"), written))
+                let written = text(project, *codelists.get(*index)?)?;
+                Some(R::ContentChanged.field_diagnostic(&format!("codelists[{index}]"), &written))
             }
-            crate::project_source::Origin::Lock => None,
+            crate::project_source::Origin::Lock | crate::project_source::Origin::Environment(_) => {
+                None
+            }
         }
     }
 }
@@ -226,7 +241,7 @@ impl Ports for NativePorts {
             .map_err(|error| Failure::Project(project_application::Error::Configuration(error)))?;
         self.resources = Some(resources);
         self.environment_written = written.into();
-        let schema = crate::shipped_schema::capture_environment()
+        let schema = crate::shipped_schema::capture_project()
             .map_err(|error| Failure::Project(project_application::Error::Schema(error)))?;
         let host = self.host;
         let environment =
@@ -437,9 +452,9 @@ fn resource(path: &str, written: &str, error: file_resources::Error) -> Failure 
         error,
     }
 }
-fn issues(failure: &Failure, host: Language) -> Vec<Issue> {
+fn issues(failure: &Failure) -> Vec<Issue> {
     match failure {
-        Failure::Project(error) => project_application::failure(error, host),
+        Failure::Project(error) => project_application::failure(error),
         Failure::Metadata(findings) => findings
             .iter()
             .map(|f| {

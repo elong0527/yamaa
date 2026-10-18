@@ -32,7 +32,8 @@ replay the same parser vectors.
 | Location | Purpose |
 | --- | --- |
 | [schema.yaml](schema.yaml) | Specification entry point |
-| [schema_environment.yaml](schema_environment.yaml) | Study environment entry point |
+| [schema_project.yaml](schema_project.yaml) | Project file entry point: environments, terminology and submission sections |
+| [schema_environment.yaml](schema_environment.yaml) | Environment file entry point: one host's lock and project functions |
 | [rules/](../rules/README.md) | Normative contracts |
 | [Schema fields](https://elong0527.github.io/yamaa/reference/schema-fields/) | Generated shapes, defaults, and semantic links |
 | [Requirement index](https://elong0527.github.io/yamaa/reference/requirements/) | Generated canonical IDs and owners |
@@ -83,7 +84,7 @@ rule, grammar, or fixture:
   length comes from `max_length`, an ADaM origin source from its type, and,
   under the `Other` context, a collected value's page-less annotated-CRF
   reference from the document that declares it.
-- Declare a codelist once in the study environment and bind columns to its
+- Declare a codelist once in the project file and bind columns to its
   identifier, as required by the
   [terminology contract](../rules/profiles/terminology.md).
 - Change a closed grammar in its `grammar/` file first. The rule's grammar
@@ -100,7 +101,8 @@ rule, grammar, or fixture:
   path-policy tests may exercise parent-directory segments and temporary
   absolute local paths as positive cases. URI schemes, symbolic links,
   non-regular resources and missing files remain negative cases. A
-  `yamaa-project.yaml` does not change document resource locations.
+  project file, like the retired `yamaa-project.yaml`, does not change
+  document resource locations.
 - Write every fixture under the source profile its extension selects. CSV
   fixtures follow the [CSV profile](../rules/reference/csv.md): UTF-8 without a
   byte-order mark, comma-separated

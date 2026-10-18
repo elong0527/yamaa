@@ -80,7 +80,7 @@ submission_column_class:
     - inventory_vocabulary:
         type: bool
         required: false
-        description: Whether every non-missing value must name a dataset any submission section of the study environment declares (CT-11).
+        description: Whether every non-missing value must name a dataset any submission section of the project file declares (CT-11).
     - origin:
         type: submission_origin_class
         required: false

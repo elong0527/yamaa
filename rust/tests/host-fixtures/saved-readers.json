@@ -172,7 +172,7 @@
         "spec.yaml"
       ],
       "define": "define.xml",
-      "transport": "dataset_json",
+      "datasets": "json",
       "context": "Other",
       "xml_lang": "en",
       "file_oid": "READERS.1",

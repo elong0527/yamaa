@@ -238,8 +238,8 @@ def output_specs(benchmark: Path) -> list[dict]:
         output = spec["output"]
         if not (benchmark / "expected" / Path(output["path"]).name).is_file():
             continue
-        if output.get("warning_log") or output.get("verification_log"):
-            raise BuildError(f"{benchmark.name}: log outputs are not graded yet")
+        if output.get("report"):
+            raise BuildError(f"{benchmark.name}: run reports are not graded yet")
         specs.append(spec)
     if not specs:
         raise BuildError(f"{benchmark.name}: no specification writes a golden dataset")

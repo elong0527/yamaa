@@ -4,7 +4,7 @@
 //! requirement, spec paths, structured context and optional geometry).
 //! Severity is error for every record the portable shape carries today: only
 //! error-severity findings become issue rows, while warning-severity findings
-//! surface as log tables. Context numbers keep their exact identity: an
+//! surface as rows of the run report. Context numbers keep their exact identity: an
 //! integer token wider than both 64-bit machine types keeps its decimal
 //! spelling instead of passing through binary64. The original context text is
 //! retained privately so host data-frame conversion stays byte-identical; the
@@ -13,6 +13,8 @@
 //! recorded fact, never a default.
 
 use std::collections::BTreeMap;
+
+use crate::table::Table;
 
 /// Diagnostic severity. Every portable issue row carries error severity today.
 #[non_exhaustive]
@@ -54,7 +56,7 @@ pub enum ContextValue {
     Map(BTreeMap<String, ContextValue>),
 }
 
-fn context_value_from_core(value: &yamaa_core::json::Value) -> ContextValue {
+pub(crate) fn context_value_from_core(value: &yamaa_core::json::Value) -> ContextValue {
     use yamaa_core::json::Value;
     match value {
         Value::Null => ContextValue::Null,
@@ -199,6 +201,81 @@ impl Report {
     pub fn len(&self) -> usize {
         self.diagnostics.len()
     }
+
+    /// The issues table both hosts return: one row per diagnostic, in report
+    /// order. `context` is the canonical JSON text; `source_span` is
+    /// `[start, end]` and, like `operand_route`, missing when the failure site
+    /// recorded no geometry.
+    pub fn table(&self) -> Table {
+        use arrow_array::builder::{Int64Builder, ListBuilder, StringBuilder};
+        use arrow_schema::{DataType, Field, Schema};
+        use std::sync::Arc;
+
+        let mut phase = StringBuilder::new();
+        let mut condition = StringBuilder::new();
+        let mut requirement = StringBuilder::new();
+        let mut spec_paths = ListBuilder::new(StringBuilder::new());
+        let mut context = StringBuilder::new();
+        let mut source_span = ListBuilder::new(Int64Builder::new());
+        let mut operand_route = ListBuilder::new(StringBuilder::new());
+        for diagnostic in &self.diagnostics {
+            phase.append_value(&diagnostic.phase);
+            condition.append_value(&diagnostic.code);
+            requirement.append_option(diagnostic.requirement.as_deref());
+            for path in &diagnostic.spec_path {
+                spec_paths.values().append_value(path);
+            }
+            spec_paths.append(true);
+            context.append_value(diagnostic.context.to_json());
+            match diagnostic.source_span {
+                Some(span) => {
+                    for offset in [span.start, span.end] {
+                        source_span
+                            .values()
+                            .append_value(i64::try_from(offset).unwrap_or(i64::MAX));
+                    }
+                    source_span.append(true);
+                }
+                None => source_span.append(false),
+            }
+            match &diagnostic.operand_route {
+                Some(route) => {
+                    for step in route {
+                        operand_route.values().append_value(step);
+                    }
+                    operand_route.append(true);
+                }
+                None => operand_route.append(false),
+            }
+        }
+        let list = |item: DataType| DataType::List(Arc::new(Field::new("item", item, true)));
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("phase", DataType::Utf8, true),
+            Field::new("condition", DataType::Utf8, true),
+            Field::new("requirement", DataType::Utf8, true),
+            Field::new("spec_paths", list(DataType::Utf8), true),
+            Field::new("context", DataType::Utf8, true),
+            Field::new("source_span", list(DataType::Int64), true),
+            Field::new("operand_route", list(DataType::Utf8), true),
+        ]));
+        let batch = arrow_array::RecordBatch::try_new(
+            schema.clone(),
+            vec![
+                Arc::new(phase.finish()),
+                Arc::new(condition.finish()),
+                Arc::new(requirement.finish()),
+                Arc::new(spec_paths.finish()),
+                Arc::new(context.finish()),
+                Arc::new(source_span.finish()),
+                Arc::new(operand_route.finish()),
+            ],
+        )
+        .expect("the builders produce exactly the declared issue columns");
+        Table::from_public(
+            yamaa_adapters::public_table::PublicTable::from_batches(schema, vec![batch])
+                .expect("the batch was built against this schema"),
+        )
+    }
 }
 
 #[cfg(test)]
@@ -318,6 +395,61 @@ mod tests {
         assert!(context.is_empty());
         assert_eq!(context.to_json(), "null");
         assert_eq!(context.iter().count(), 0);
+    }
+
+    #[test]
+    fn issues_table_keeps_every_field_and_absent_geometry() {
+        use arrow_array::{Array, Int64Array, ListArray, StringArray};
+        let mut located = issue();
+        located.requirement = Some("probe-requirement".into());
+        located.source_span = Some(yamaa_core::expression::SourceSpan { start: 3, end: 9 });
+        located.operand_route = Some(vec!["left".into()]);
+        let table = Report::from_issues(&[issue(), located]).table();
+        let names: Vec<_> = table.columns().iter().map(|f| f.name().as_str()).collect();
+        assert_eq!(
+            names,
+            [
+                "phase",
+                "condition",
+                "requirement",
+                "spec_paths",
+                "context",
+                "source_span",
+                "operand_route"
+            ]
+        );
+        assert_eq!(table.rows(), 2);
+        let batch = &table.batches()[0];
+        let text = |index: usize| {
+            batch
+                .column(index)
+                .as_any()
+                .downcast_ref::<StringArray>()
+                .unwrap()
+                .clone()
+        };
+        assert_eq!(text(0).value(0), "input");
+        assert_eq!(text(1).value(1), "conversion_probe");
+        assert!(text(2).is_null(0));
+        assert_eq!(text(2).value(1), "probe-requirement");
+        assert_eq!(text(4).value(0), CONTEXT);
+        let list = |index: usize| {
+            batch
+                .column(index)
+                .as_any()
+                .downcast_ref::<ListArray>()
+                .unwrap()
+                .clone()
+        };
+        let paths = list(3).value(0);
+        let paths = paths.as_any().downcast_ref::<StringArray>().unwrap();
+        assert_eq!(paths.value(0), "columns.A");
+        assert!(list(5).is_null(0));
+        let span = list(5).value(1);
+        let span = span.as_any().downcast_ref::<Int64Array>().unwrap();
+        assert_eq!((span.value(0), span.value(1)), (3, 9));
+        assert!(list(6).is_null(0));
+        assert!(!list(6).is_null(1));
     }
 
     #[test]

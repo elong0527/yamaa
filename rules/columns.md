@@ -187,8 +187,8 @@ row-derived column must rely on the column's declared type.
    error stops execution; warnings accumulate without changing the column.
 
 A failed error-level verification fails under [Verification](verification.md).
-A warning-level violation leaves the primary artifact intact and enters the
-warning log of [Verification](verification.md).
+A warning-level violation leaves the primary artifact intact and is recorded
+in the run report of [Verification](verification.md).
 
 <a id="column-9"></a>
 
@@ -385,13 +385,15 @@ literal answers every value.
 
 <a id="column-14"></a>
 
-### COLUMN-14. Every handler path reports how many records it answered, default substitutions and zero included
+### COLUMN-14. Every handler path reports how many records it answered as a report row, default substitutions and zero included
 
-Each handler path's record count is reported, counting the declared handler's
-substitutions and the default substitutions an omitted handler gives under the
-same path. A handler firing zero times is reportable and is not an error. The
-count for a source's `order_by` and `keep` reports only records where more
-than one match survived the filter.
+Each handler path's record count is a `handler` row of the run report under
+[CHECK-23](verification.md#check-23), for a failed run as well as a successful
+one, counting the declared handler's substitutions and the default
+substitutions an omitted handler gives under the same path. A handler firing
+zero times is reportable and is not an error. The count for a source's
+`order_by` and `keep` reports only records where more than one match survived
+the filter.
 
 Evidence: `rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.json`, `rust/crates/yamaa-adapters/tests/fixtures/original_mapping_cut.json`, `rust/crates/yamaa-adapters/tests/fixtures/flag_reference.json`, `rust/crates/yamaa-core/tests/execution_numeric_lifecycle.rs::accounting_retains_zero_declarations_and_prior_firings_on_failure`.
 Replaces: REQ-0356, REQ-0361.

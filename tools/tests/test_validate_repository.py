@@ -557,7 +557,7 @@ class TestClosedGrammarContracts(unittest.TestCase):
         self.assertIn('"yaml/grammar"', text)
         runner = self.root / "R" / "yamaa" / "tests" / "public_grammar.R"
         self.assertIn('"grammar-original"', runner.read_text())
-        self.assertIn("yamaa_domain(", runner.read_text())
+        self.assertIn("yamaa_spec(", runner.read_text())
 
 
 class TestValidatorCLI(unittest.TestCase):

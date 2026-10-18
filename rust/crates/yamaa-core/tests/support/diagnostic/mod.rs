@@ -18,6 +18,7 @@ pub mod project_activation;
 pub mod project_codelist_binding;
 pub mod project_functions;
 pub mod project_lock;
+pub mod project_scope;
 pub mod record_operations;
 pub mod result_types;
 pub mod sas;

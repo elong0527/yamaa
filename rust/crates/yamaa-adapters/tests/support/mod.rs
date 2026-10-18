@@ -9,6 +9,8 @@ pub mod aggregate_syntax;
 pub mod ipc_snapshot;
 pub mod numeric_syntax;
 pub mod odm_declaration;
+#[cfg(feature = "odm")]
+pub mod odm_files;
 pub mod predicate_syntax;
 pub mod project_call_compiler;
 pub mod project_codelist_compiler;

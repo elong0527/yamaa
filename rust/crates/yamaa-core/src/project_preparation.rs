@@ -1,9 +1,15 @@
 //! Capture, structurally decode and admit project dependencies through native ports.
 //! Code activation, study data and publication authority are absent from this service.
+//!
+//! The caller supplies one project file. Its `environments` entry for the host
+//! language links that language's environment file; every other entry stays
+//! unread. Paths the project writes resolve from the project file, and the lock
+//! and function paths an environment file writes resolve from that file.
 use crate::{
     limits::{LimitExceeded, Limits},
+    project_document,
     project_environment::{Draft, Environment, Finding, LockKind, LockReference},
-    project_environment_document::{self, Declaration},
+    project_environment_document::{self, Declaration, EnvironmentSources},
     project_function::Language,
     project_function_document,
     project_terminology::Source as TerminologySource,
@@ -20,12 +26,15 @@ pub struct Source {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
+    Environment,
     Lock,
     Function,
     Codelist,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Origin {
+    /// The environment file a project `environments` key links.
+    Environment(Language),
     Lock,
     Function(String),
     Codelist(usize),
@@ -59,6 +68,7 @@ pub trait ProjectCapturePort {
 /// Closed structural targets are selected by the application, never by a host callback.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DecodeTarget {
+    Project,
     Environment,
     Function,
     Codelist,
@@ -123,7 +133,10 @@ pub struct SourceOrigins {
 #[derive(Debug)]
 pub struct PreparedEnvironment<D> {
     pub origins: SourceOrigins,
+    /// The caller-supplied project file.
     pub root: D,
+    /// The environment file the project links for the host language.
+    pub environment_file: Option<D>,
     pub captures: Vec<DocumentCapture<D>>,
     pub lock: Option<LockCapture>,
     pub environment: Environment,
@@ -134,6 +147,7 @@ pub struct RejectedEnvironment<E, D, X> {
     pub draft: Box<Draft>,
     pub origins: SourceOrigins,
     pub root: D,
+    pub environment_file: Option<D>,
     pub captures: Vec<DocumentCapture<D>>,
     pub lock: Option<LockCapture>,
     pub sources: Vec<SourceFailure<E, D, X>>,
@@ -192,6 +206,42 @@ fn capture<P: ProjectCapturePort, D, X>(
     Ok(reply)
 }
 
+/// One captured YAML dependency with its decoded declarations, or the retained
+/// failure of that single source.
+type Captured<P, D, T> = Result<
+    (<D as ProjectDecodePort>::Document, T),
+    CaptureFailure<
+        <P as ProjectCapturePort>::Error,
+        <D as ProjectDecodePort>::Document,
+        <D as ProjectDecodePort>::Error,
+    >,
+>;
+
+/// Capture, decode and structurally admit one declared YAML dependency.
+fn capture_document<P: ProjectCapturePort, D: ProjectDecodePort, T>(
+    port: &mut P,
+    decoder: &mut D,
+    (kind, target): (Kind, DecodeTarget),
+    declaring: &str,
+    written: &str,
+    decode: impl FnOnce(&Document) -> Result<T, Vec<project_function_document::Finding>>,
+) -> Captured<P, D, T> {
+    let Reply::Document(source) = capture(port, kind, declaring, written)? else {
+        return Err(CaptureFailure::Protocol);
+    };
+    let captured = decoder
+        .decode(source, target)
+        .map_err(CaptureFailure::Structural)?;
+    let document = D::document(&captured);
+    match decode(document) {
+        Ok(value) => Ok((captured, value)),
+        Err(findings) => Err(CaptureFailure::Scalar {
+            document: Box::new(captured),
+            findings,
+        }),
+    }
+}
+
 pub fn prepare<P: ProjectCapturePort, D: ProjectDecodePort>(
     decoder: &mut D,
     source: Source,
@@ -200,10 +250,10 @@ pub fn prepare<P: ProjectCapturePort, D: ProjectDecodePort>(
 ) -> PreparationResult<P::Error, D::Document, D::Error> {
     Limits::spec_bytes(source.bytes.len()).map_err(Failure::RootLimit)?;
     let root = decoder
-        .decode(source, DecodeTarget::Environment)
+        .decode(source, DecodeTarget::Project)
         .map_err(Failure::Root)?;
     let document = D::document(&root);
-    let declarations = match project_environment_document::decode(document, document.root()) {
+    let declarations = match project_document::decode(document, document.root()) {
         Ok(declarations) => declarations,
         Err(findings) => {
             return Err(Failure::RootScalar {
@@ -216,8 +266,44 @@ pub fn prepare<P: ProjectCapturePort, D: ProjectDecodePort>(
     let mut origins = SourceOrigins::default();
     let mut captures = Vec::new();
     let mut lock = None;
-    if let Some(written) = &declarations.lock {
-        let result = (|| match capture(port, Kind::Lock, &D::source(&root).identity, written)? {
+    // The key states the language; an absent key leaves the host without code.
+    let language = declarations.environments.get(host).map(|_| host);
+    let mut environment_file = None;
+    let mut sources = EnvironmentSources::default();
+    if let Some(written) = declarations.environments.get(host) {
+        let origin = Origin::Environment(host);
+        match capture_document(
+            port,
+            decoder,
+            (Kind::Environment, DecodeTarget::Environment),
+            &D::source(&root).identity,
+            written,
+            |document| project_environment_document::decode(document, document.root()),
+        ) {
+            Ok((captured, decoded)) => {
+                environment_file = Some(captured);
+                sources = decoded;
+            }
+            Err(CaptureFailure::Interrupted(error)) => {
+                return Err(Failure::Interrupted {
+                    origin,
+                    written: written.into(),
+                    error,
+                })
+            }
+            Err(error) => failures.push(SourceFailure {
+                origin,
+                written: written.into(),
+                error,
+            }),
+        }
+    }
+    // An environment file's own paths resolve from that file.
+    let environment_identity = environment_file
+        .as_ref()
+        .map(|captured| D::source(captured).identity.clone());
+    if let (Some(written), Some(declaring)) = (&sources.lock, &environment_identity) {
+        let result = (|| match capture(port, Kind::Lock, declaring, written)? {
             Reply::Lock { source, kind } => Ok(LockCapture { source, kind }),
             _ => Err(CaptureFailure::Protocol),
         })();
@@ -237,40 +323,27 @@ pub fn prepare<P: ProjectCapturePort, D: ProjectDecodePort>(
             }),
         }
     }
-    let mut functions = declarations.functions.as_ref().map(|_| Vec::new());
-    for entry in declarations.functions.into_iter().flatten() {
+    let mut functions = sources.functions.as_ref().map(|_| Vec::new());
+    for entry in sources.functions.into_iter().flatten() {
         match entry.declaration {
             Declaration::Inline(def) => {
                 origins.functions.push(entry.name);
                 functions.as_mut().expect("present functions").push(*def);
             }
             Declaration::Path(written) => {
-                let result = (|| {
-                    let Reply::Document(source) =
-                        capture(port, Kind::Function, &D::source(&root).identity, &written)?
-                    else {
-                        return Err(CaptureFailure::Protocol);
-                    };
-                    let captured = decoder
-                        .decode(source, DecodeTarget::Function)
-                        .map_err(CaptureFailure::Structural)?;
-                    let document = D::document(&captured);
-                    let definition = match project_function_document::decode(
-                        document,
-                        document.root(),
-                        &entry.name,
-                    ) {
-                        Ok(definition) => definition,
-                        Err(findings) => {
-                            return Err(CaptureFailure::Scalar {
-                                document: Box::new(captured),
-                                findings,
-                            })
-                        }
-                    };
-                    Ok((captured, definition))
-                })();
-                match result {
+                let declaring = environment_identity
+                    .as_deref()
+                    .expect("functions come from a captured environment file");
+                match capture_document(
+                    port,
+                    decoder,
+                    (Kind::Function, DecodeTarget::Function),
+                    declaring,
+                    &written,
+                    |document| {
+                        project_function_document::decode(document, document.root(), &entry.name)
+                    },
+                ) {
                     Ok((document, definition)) => {
                         origins.functions.push(entry.name.clone());
                         captures.push(DocumentCapture {
@@ -306,29 +379,14 @@ pub fn prepare<P: ProjectCapturePort, D: ProjectDecodePort>(
                 codelists.push(*source);
             }
             Declaration::Path(written) => {
-                let result = (|| {
-                    let Reply::Document(source) =
-                        capture(port, Kind::Codelist, &D::source(&root).identity, &written)?
-                    else {
-                        return Err(CaptureFailure::Protocol);
-                    };
-                    let captured = decoder
-                        .decode(source, DecodeTarget::Codelist)
-                        .map_err(CaptureFailure::Structural)?;
-                    let document = D::document(&captured);
-                    let source =
-                        match project_terminology_document::decode(document, document.root()) {
-                            Ok(source) => source,
-                            Err(findings) => {
-                                return Err(CaptureFailure::Scalar {
-                                    document: Box::new(captured),
-                                    findings,
-                                })
-                            }
-                        };
-                    Ok((captured, source))
-                })();
-                match result {
+                match capture_document(
+                    port,
+                    decoder,
+                    (Kind::Codelist, DecodeTarget::Codelist),
+                    &D::source(&root).identity,
+                    &written,
+                    |document| project_terminology_document::decode(document, document.root()),
+                ) {
                     Ok((document, source)) => {
                         origins.codelists.push(index);
                         captures.push(DocumentCapture {
@@ -354,28 +412,23 @@ pub fn prepare<P: ProjectCapturePort, D: ProjectDecodePort>(
         }
     }
     let draft = Draft {
-        language: declarations.language,
+        language,
         lock: lock
             .as_ref()
-            .zip(declarations.lock)
+            .zip(sources.lock)
             .map(|(captured, written)| LockReference {
                 written,
                 kind: captured.kind,
             }),
         functions,
         codelists,
-        has_study: declarations.study.is_some(),
-        submissions: declarations
-            .submissions
-            .into_iter()
-            .map(|(kind, _)| kind)
-            .collect(),
     };
     let admission = Environment::admit_retained(host, draft);
     match admission {
         Ok(environment) if failures.is_empty() => Ok(PreparedEnvironment {
             origins,
             root,
+            environment_file,
             captures,
             lock,
             environment,
@@ -390,6 +443,7 @@ pub fn prepare<P: ProjectCapturePort, D: ProjectDecodePort>(
                 draft,
                 origins,
                 root,
+                environment_file,
                 captures,
                 lock,
                 sources: failures,

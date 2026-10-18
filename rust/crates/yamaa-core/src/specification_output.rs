@@ -73,6 +73,10 @@ impl Artifact {
     pub fn bytes(&self) -> &[u8] {
         &self.bytes
     }
+    /// Share the retained bytes without copying them.
+    pub fn retained_bytes(&self) -> Arc<[u8]> {
+        Arc::clone(&self.bytes)
+    }
     pub fn projection(&self) -> &[usize] {
         &self.projection
     }

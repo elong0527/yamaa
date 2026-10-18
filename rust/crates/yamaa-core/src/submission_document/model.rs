@@ -17,7 +17,7 @@ pub enum FieldName {
     Specs,
     Define,
     Documents,
-    Transport,
+    Datasets,
     Context,
     XmlLang,
     FileOid,
@@ -46,7 +46,7 @@ impl FieldName {
             Self::Specs => "specs",
             Self::Define => "define",
             Self::Documents => "documents",
-            Self::Transport => "transport",
+            Self::Datasets => "datasets",
             Self::Context => "context",
             Self::XmlLang => "xml_lang",
             Self::FileOid => "file_oid",
@@ -238,12 +238,15 @@ pub struct DocumentReference {
 pub struct Section {
     pub family: Submission,
     pub origin: Origin,
-    pub standard: ImplementationGuide,
     pub specs: Field<Vec<Field<String>>>,
-    pub define: Field<String>,
+    /// Required only when Define-XML composes the section.
+    pub standard: Option<ImplementationGuide>,
+    /// Required only when Define-XML composes the section.
+    pub define: Option<Field<String>>,
     pub documents: Field<Vec<DocumentReference>>,
-    /// Omission writes only the Define-XML document.
-    pub transport: Option<Field<Transport>>,
+    /// The transport file a submission writes beside Define-XML for each
+    /// dataset (`json` or `xpt`); absent writes only the Define-XML document.
+    pub datasets: Option<Field<Transport>>,
     pub context: Field<Context>,
     pub xml_lang: Field<String>,
     pub file_oid: Option<Field<String>>,

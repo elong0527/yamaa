@@ -10,11 +10,12 @@ import argparse
 import datetime as dt
 import importlib.abc
 import json
+import os
 import platform
 import shutil
 import struct
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 PROTOCOL = "public-conformance/1"
 REFERENCE_MODULES = (
@@ -73,6 +74,56 @@ def cell(value, kind):
             )
         )
     raise ValueError("unknown public table type: " + kind)
+
+
+SECTIONS = ("sdtm", "adam", "send")
+
+
+def read_yaml(path):
+    """Read a project or specification document; inputs, never truth."""
+    import yaml12
+
+    return yaml12.parse_yaml(path.read_text(encoding="utf-8"))
+
+
+def project_for(case, project, entry, specification):
+    """The project file that lists `specification`, relative to the case.
+
+    A project selects only a specification it lists. A metamorphic variant
+    keeps its entry's project metadata through a copy beside the project
+    that lists the variant in place of the entry.
+    """
+    original = (case / entry).resolve()
+    if (case / specification).resolve() == original:
+        return project
+    document = read_yaml(case / project)
+    base = PurePosixPath(project).parent
+    target = PurePosixPath(os.path.relpath(case / specification, case / base))
+    replaced = False
+    for section in SECTIONS:
+        if isinstance(document.get(section), dict):
+            specs = document[section].get("specs") or []
+            for index, spec in enumerate(specs):
+                if (case / base / spec).resolve() == original:
+                    specs[index], replaced = target.as_posix(), True
+    if not replaced:
+        raise ValueError(f"{project} does not list {entry}")
+    derived = base / ("__project_" + PurePosixPath(specification).stem + ".yaml")
+    # JSON is YAML; the copy resolves its links from the project's directory.
+    (case / derived).write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+    return derived.as_posix()
+
+
+def stage_lock(case, project, lock):
+    """Supply the packaging lock beside the Python environment a project links."""
+    environments = read_yaml(case / project).get("environments") or {}
+    linked = environments.get("python")
+    if linked is not None:
+        # A project's links resolve from the project file; the environment
+        # file's lock resolves from the environment file.
+        target = (case / project).parent / PurePosixPath(linked).parent / "uv.lock"
+        if not target.exists():
+            shutil.copyfile(lock, target)
 
 
 def table(frame):
@@ -148,26 +199,31 @@ def main(argv=None):
     )
 
     def build(case, entry, specification):
-        environment = entry["environment"]
-        if environment is not None:
-            lock = case / Path(environment).parent / "uv.lock"
-            if not lock.exists():
-                shutil.copyfile(args.python_lock, lock)
-        built = yamaa.domain(
-            case / specification,
-            environment=None if environment is None else case / environment,
-        )
-        tables = {
-            slot: table(getattr(built, slot))
-            for slot in ("output", "verification_log", "warning_log")
-        }
-        saved = False if built.issues.height else built.save()
-        issues = built.issues.to_dicts()
+        # An entry's `environment` names the project file it runs with.
+        project = entry["environment"]
+        if project is None:
+            run = yamaa.spec(case / specification).run()
+        else:
+            stage_lock(case, project, args.python_lock)
+            # A project names a specification by its entry's own `domain`.
+            name = read_yaml(case / entry["specification"])["domain"]
+            listing = project_for(case, project, entry["specification"], specification)
+            run = yamaa.project(case / listing).spec(name).run()
+        tables = {"output": table(run.output), "report": table(run.report)}
+        saved = False
+        if not run.issues.height:
+            try:
+                run.save()
+            except yamaa.Error:
+                pass
+            else:
+                saved = True
+        issues = run.issues.to_dicts()
         for issue in issues:
             issue["context"] = json.loads(issue["context"])
         return {
             "specification": specification,
-            "environment": environment,
+            "environment": project,
             "issues": issues,
             "tables": tables,
             "saved": saved,

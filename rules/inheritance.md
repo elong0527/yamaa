@@ -131,8 +131,8 @@ Replaces: REQ-0627, REQ-0628, REQ-0629, REQ-0631, REQ-0642.
 
 Later root `metadata`, `keys`, `output` and `verifications` therefore replace
 their inherited values whole. An entry that inherits `output` publishes at the
-location its inherited `relative_to` selects, and its `path`, `warning_log` and
-`verification_log` keep the declaring layer's provenance under
+location its inherited `relative_to` selects, and its `path` and `report`
+keep the declaring layer's provenance under
 [LAYER-10](#layer-10); an entry can inherit `relative_to: entry` or replace
 `output` whole. Dataset shorthand is expanded before datasets are matched: a
 bare path becomes the long dataset form, so a later `relative_to` governs an

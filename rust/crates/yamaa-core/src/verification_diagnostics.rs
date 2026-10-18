@@ -94,8 +94,19 @@ fn base_context<'a>(
                 {
                     return Err(Error::InvalidObservation);
                 }
+                // An ungrouped check bounds the one whole-artifact group and
+                // names its single count; a grouped check names every offending
+                // group's count, even when exactly one group offends.
+                let grouped = matches!(
+                    compiled
+                        .verifications()
+                        .iter()
+                        .find(|check| check.path == record.path.as_str())
+                        .map(|check| &check.check),
+                    Some(Check::ScopedRowCount(check)) if check.group_by.is_some()
+                );
                 let mut context: Context<'a> = [("failure_count", failed)].into();
-                if observation.counts.len() == 1 {
+                if !grouped && observation.counts.len() == 1 {
                     context.insert("count", Fact::Unsigned(observation.counts[0]));
                     if let Some(d) = observation.denominators.as_deref() {
                         context.insert("denominator", Fact::Unsigned(d[0]));
@@ -219,8 +230,8 @@ fn base_context<'a>(
     })
 }
 
-/// Preserve every check, its declaration identity, complete failure keys and log
-/// context. Ordinary issue display uses the existing first-five-key policy;
+/// Preserve every check, its declaration identity, complete failure keys and
+/// report context. Ordinary issue display uses the existing first-five-key policy;
 /// codelist values retain every key. Existing report admission/byte limits remain
 /// at the caller, and no new approximation or bound carrier is introduced here.
 pub fn project<'a>(
@@ -320,7 +331,7 @@ pub fn project<'a>(
                     values.truncate(5);
                 }
             }
-            // Display samples and complete governed logs retain aligned group counts.
+            // Display samples and the complete run report retain aligned group counts.
             if record.row_count.as_ref().is_some() && record.failed_count > 5 {
                 for name in ["counts", "denominators"] {
                     if let Some(Fact::Sequence(values)) = context.get_mut(name) {

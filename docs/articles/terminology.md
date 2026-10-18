@@ -1,9 +1,9 @@
 # Codelists and controlled terminology
 
 A codelist may come from published controlled terminology or from a sponsor's
-own definitions. Both use the same list and column-binding fields. For a
-domain build, declare the lists in the project environment and pass that
-environment explicitly to the engine.
+own definitions. Both use the same list and column-binding fields. Declare
+the lists in the project file, and open a specification through that project
+to use them.
 
 ## Select the sources and versions
 
@@ -29,13 +29,14 @@ chosen release before using them in a study.
 
 ## Declare published and sponsor lists together
 
-Save this as `environment.yaml`. The published examples show selected values
+Save this as `project.yaml`. The published examples show selected values
 and use the illustrative release `2023-12-15`; they are not complete copies of
-either publishing set. The age groups are invented sponsor definitions.
+either publishing set. The age groups are invented sponsor definitions. The
+`adam` section lists the specification of the next step, so the project can
+open it by its `domain` name.
 
 ```yaml
 schema_version: "1.0"
-language: python
 codelists:
   - standard:
       name: CDISC/NCI
@@ -69,6 +70,8 @@ codelists:
         items:
           - {value: "<65"}
           - {value: ">=65"}
+adam:
+  specs: [spec.yaml]
 ```
 
 List `id` and `name` must each be unique across all sources. A column binds
@@ -77,15 +80,15 @@ published concept identifier and is independent of the binding ID. Define-XML
 composition has additional alias requirements described in the
 [Define-XML rule](https://github.com/elong0527/yamaa/blob/main/rules/profiles/define-xml.md).
 
-Sources may also live in local files: an environment entry such as
+Sources may also live in local files: a project entry such as
 `codelists: [sdtm-ct.yaml, adam-ct.yaml, sponsor-codelists.yaml]` reads each file's
-`standard` and `codelists` mapping. Relative source paths resolve from the YAML
-file that declares them.
+`standard` and `codelists` mapping. Relative source paths resolve from the
+project file.
 
 ## Bind and check a column
 
-Save this minimal synthetic specification as `spec.yaml` and place the invented
-input below beside it as `input.csv`. The example only demonstrates terminology
+Save this minimal synthetic specification as `spec.yaml` beside `project.yaml`
+and place the invented input below beside it as `input.csv`. The example only demonstrates terminology
 bindings; it is not a complete SDTM or ADaM submission specification.
 
 ```yaml
@@ -126,15 +129,29 @@ ID,SEX,DTYPE,AGEGR1
 SYNTHETIC-001,F,AVERAGE,<65
 ```
 
-```python
-import yamaa
+=== "R"
 
-checked = yamaa.check("spec.yaml", environment="environment.yaml")
-print(checked.issues)  # Static binding and type checks; no study data is read.
-built = yamaa.domain("spec.yaml", environment="environment.yaml")
-print(built.issues)    # Also checks completed column values.
-print(built.output)
-```
+    ```r
+    library(yamaa)
+
+    spec <- yamaa_project("project.yaml")$spec("EXAMPLE")
+    spec$check()$issues  # Static binding and type checks; no study data is read.
+    run <- spec$run()
+    run$issues           # Also checks completed column values.
+    run$output
+    ```
+
+=== "Python"
+
+    ```python
+    import yamaa
+
+    spec = yamaa.project("project.yaml").spec("EXAMPLE")
+    print(spec.check().issues)  # Static binding and type checks; no study data is read.
+    run = spec.run()
+    print(run.issues)           # Also checks completed column values.
+    print(run.output)
+    ```
 
 A codelist binding can check a completed value; it does not translate an input
 code. Use the `mapping` derivation when source values need translation before
@@ -146,7 +163,7 @@ checking.
 | `external` dictionary with a required version | The binding imposes no value check; yamaa does not read the dictionary. Declare `external` instead of `items`. |
 
 In this example, changing `SEX` to `INVALID`, `AGEGR1` to `OTHER` or `DTYPE` to
-`OTHER` fails the build's value check. `DTYPE` is extensible, which lets the
+`OTHER` fails the run's value check. `DTYPE` is extensible, which lets the
 study add a value: declare it as an item marked `extended: true`, and the
 Define-XML document marks it as an extended value. An added value has no
 published concept identifier, so it declares no `alias`, and a submission
@@ -158,8 +175,8 @@ A list with `items` already states its column's value set, so an
 declaration, even when the two lists agree. Beside an `external` dictionary, or
 on a column with no binding, `allowed_values` stays an ordinary check.
 
-See the [environment schema](https://github.com/elong0527/yamaa/blob/main/yaml/schema_environment.yaml)
+See the [project schema](https://github.com/elong0527/yamaa/blob/main/yaml/schema_project.yaml)
 for the accepted fields and the [controlled terminology rule](https://github.com/elong0527/yamaa/blob/main/rules/profiles/terminology.md)
 for binding, extension, and verification requirements. The
 [DM metadata example](https://github.com/elong0527/yamaa/tree/main/benchmarks/sdtm-dm-metadata)
-shows versioned terminology sources in a complete Define-XML environment.
+shows versioned terminology sources in a complete Define-XML project.

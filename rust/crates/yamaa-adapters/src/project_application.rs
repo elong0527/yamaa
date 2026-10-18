@@ -20,17 +20,18 @@ pub fn prepare(
     environment: &str,
     host: Language,
 ) -> Result<FileProject, Error> {
-    let (resources, entry) =
+    let (mut resources, entry) =
         crate::file_configuration::resources(specification).map_err(Error::Configuration)?;
     let environment = environment_path(environment)
         .map_err(|error| Error::Project(file_project::Error::Resource(error)))?;
+    resources.select_caller_parent(&environment);
     FileProject::prepare(
         resources,
         &entry,
         &environment,
         host,
         crate::shipped_schema::capture().map_err(Error::Schema)?,
-        crate::shipped_schema::capture_environment().map_err(Error::Schema)?,
+        crate::shipped_schema::capture_project().map_err(Error::Schema)?,
     )
     .map_err(Error::Project)
 }
@@ -45,16 +46,16 @@ pub(crate) fn environment_path(environment: &str) -> Result<String, crate::file_
 fn refused(stage: &str) -> Failure {
     file_application::rejected(stage, "issue_projection")
 }
-pub fn failure(error: &Error, host: Language) -> Failure {
+pub fn failure(error: &Error) -> Failure {
     match error {
         Error::Configuration(crate::file_configuration::Error::Path(error)) => {
             file_application::resource_failure("prepare", error)
         }
         Error::Schema(_) => file_application::rejected("prepare", "shipped_schema"),
-        Error::Project(error) => project_failure(error, host),
+        Error::Project(error) => project_failure(error),
     }
 }
-fn project_failure(error: &file_project::Error, host: Language) -> Failure {
+fn project_failure(error: &file_project::Error) -> Failure {
     match error {
         file_project::Error::Resource(error) => {
             file_application::resource_failure("environment", error)
@@ -99,20 +100,17 @@ fn project_failure(error: &file_project::Error, host: Language) -> Failure {
             }
             _ => file_application::rejected("check", "compilation_boundary"),
         },
-        file_project::Error::Environment(error) => environment_failure(error, host),
+        file_project::Error::Environment(error) => environment_failure(error),
     }
 }
-fn environment_failure(
-    error: &EnvironmentFailure<crate::file_resources::Error>,
-    host: Language,
-) -> Failure {
+fn environment_failure(error: &EnvironmentFailure<crate::file_resources::Error>) -> Failure {
     use crate::project_environment_diagnostics as diagnostics;
     let projected = match error {
         EnvironmentFailure::Root(SourceError::Findings(captured)) => {
             diagnostics::schema_root(captured)
         }
         EnvironmentFailure::RootScalar { root, findings } => {
-            diagnostics::scalar_root_with_host(root, findings, host)
+            diagnostics::scalar_root(root, findings)
         }
         EnvironmentFailure::Rejected(rejected) => {
             let mut issues = match diagnostics::admission(rejected) {
@@ -164,13 +162,18 @@ pub fn check(specification: &str, environment: &str, host: Language) -> Failure 
                 crate::specification_check::issue_rows(prepared.run())
                     .unwrap_or_else(|_| refused("check"))
             }
-            Err(error) => selection_failure(&error, host),
+            Err(error) => selection_failure(&error),
         },
     )
 }
-fn workflow_issues(error: &crate::file_workflow::Error, host: Language) -> Failure {
-    preparation_issues(error, host).unwrap_or_else(|error| match error {
-        IssueError::Original(error) => workflow_failure(error, host),
+/// The issues of a refused workflow preparation, such as a project file that
+/// cannot be captured, exactly as a check of a specification reports them.
+pub fn workflow_rejection(error: &crate::file_workflow::Error) -> Failure {
+    crate::issue_rows::collect(workflow_issues(error))
+}
+fn workflow_issues(error: &crate::file_workflow::Error) -> Failure {
+    preparation_issues(error).unwrap_or_else(|error| match error {
+        IssueError::Original(error) => workflow_failure(error),
         IssueError::Projection => refused("check"),
         IssueError::ResourceLimit(refusal) => refusal.issues("environment", "resource_limit"),
     })
@@ -178,7 +181,7 @@ fn workflow_issues(error: &crate::file_workflow::Error, host: Language) -> Failu
 
 /// Selected preparation retains the original owner in the caller. Diagnostic
 /// projection is complete and bounded; no feature dispatch depends on failure.
-pub fn selection_failure(error: &crate::file_workflow::SelectionError, host: Language) -> Failure {
+pub fn selection_failure(error: &crate::file_workflow::SelectionError) -> Failure {
     match error {
         crate::file_workflow::SelectionError::Plain(error) => match error.error() {
             crate::file_preparation::Error::Resource(error) => {
@@ -202,7 +205,7 @@ pub fn selection_failure(error: &crate::file_workflow::SelectionError, host: Lan
                 ))
             }
         },
-        crate::file_workflow::SelectionError::Preparation(error) => workflow_issues(error, host),
+        crate::file_workflow::SelectionError::Preparation(error) => workflow_issues(error),
         crate::file_workflow::SelectionError::Ordinary(error) => match &error.run().rejection.error
         {
             PrepareError::Invalid(_) => {
@@ -221,14 +224,14 @@ pub fn selection_failure(error: &crate::file_workflow::SelectionError, host: Lan
         },
     }
 }
-fn workflow_failure(error: &crate::file_workflow::Error, host: Language) -> Failure {
+fn workflow_failure(error: &crate::file_workflow::Error) -> Failure {
     use crate::file_workflow::Error as W;
     match error {
         W::Configuration(crate::file_configuration::Error::Path(error)) => {
             file_application::resource_failure("prepare", error)
         }
         W::Schema(_) => file_application::rejected("prepare", "shipped_schema"),
-        W::Environment(environment) => project_failure(environment.error(), host),
+        W::Environment(environment) => project_failure(environment.error()),
         W::Entry(entry) => entry_failure(entry.error()),
     }
 }
@@ -314,11 +317,10 @@ fn issue(diagnostic: yamaa_core::diagnostic::Diagnostic) -> Result<Issue, IssueE
 /// any other preparation failure stays with its original owner.
 pub fn preparation_issues(
     error: &crate::file_workflow::Error,
-    host: Language,
 ) -> Result<Vec<Issue>, IssueError<'_>> {
     use crate::file_workflow::Error as W;
     match error {
-        W::Environment(environment) => environment_issues(error, environment.error(), host),
+        W::Environment(environment) => environment_issues(error, environment.error()),
         W::Entry(entry) => match entry.error() {
             crate::file_entry::Error::Document(crate::file_preparation::Error::Preparation(
                 cause,
@@ -332,7 +334,6 @@ pub fn preparation_issues(
 fn environment_issues<'a>(
     owner: &'a crate::file_workflow::Error,
     cause: &file_project::Error,
-    host: Language,
 ) -> Result<Vec<Issue>, IssueError<'a>> {
     use crate::project_environment_diagnostics as D;
     use crate::project_source::Failure as F;
@@ -372,7 +373,7 @@ fn environment_issues<'a>(
             issues.extend(D::root_boundary(error, written).map_err(projection)?);
         }
         F::RootScalar { root, findings } => {
-            issues.extend(D::scalar_root_with_host(root, findings, host).map_err(|_| invalid())?)
+            issues.extend(D::scalar_root(root, findings).map_err(|_| invalid())?)
         }
         F::Rejected(rejected) => {
             for rows in [
@@ -506,8 +507,8 @@ mod resource_tests {
             if let Some(actual) = actual {
                 context["actual"] = actual.into();
             }
-            for host in [Language::Python, Language::R] {
-                let rows = failure(&error, host);
+            {
+                let rows = failure(&error);
                 assert_eq!(rows.len(), 1);
                 assert_eq!(rows[0].phase, "engine");
                 assert_eq!(
@@ -531,10 +532,7 @@ mod resource_tests {
             )
         };
         let original = file_application::preparation_failure(inventory().into_message());
-        let project = failure(
-            &Error::Project(file_project::Error::Document(inventory())),
-            Language::Python,
-        );
+        let project = failure(&Error::Project(file_project::Error::Document(inventory())));
         assert_eq!(project, original);
         assert_eq!(project.len(), 1);
         assert_eq!(

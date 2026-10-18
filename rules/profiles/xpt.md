@@ -1,8 +1,8 @@
 # SAS Transport
 
 This file is a profile: it is optional, and it applies only to a build whose
-selected submission section of a study environment sets `transport: xpt`. Such
-a build writes one SAS Transport version 5 file per composed dataset in the
+selected submission section of a project file sets `datasets: xpt`. Such a
+build writes one SAS Transport version 5 file per composed dataset in the
 public record layout SAS documents as TS-140, carrying the published dataset
 and the names, labels and formats the [Define-XML](define-xml.md) document is
 generated from. A domain build never writes a transport file; reading one is
@@ -12,9 +12,9 @@ the [SAS source profiles](../reference/sas.md)' concern.
 
 <a id="xpt-1"></a>
 
-### XPT-1. A section's `transport: xpt` writes each composed dataset as one SAS Transport version 5 file
+### XPT-1. A section's `datasets: xpt` writes each composed dataset as one SAS Transport version 5 file
 
-`transport: xpt` requests one transport file per composed specification, named
+`datasets: xpt` requests one transport file per composed specification, named
 and placed as [JSON-1](dataset-json.md#json-1) fixes and written by one writer
 under [JSON-2](dataset-json.md#json-2). A dataset declared to have no data has
 no file under [JSON-3](dataset-json.md#json-3). The rows are the published
@@ -125,7 +125,7 @@ and each must be a name [DEFINE-22](define-xml.md#define-22) admits:
 `^[A-Z][A-Z0-9]{0,7}$` for a dataset and `^[A-Z][A-Z0-9_]{0,7}$` for a column.
 The dataset's `submission.label` and each column's `label` are at most 40
 characters of printable ASCII, `0x20` through `0x7E`. A name or label that does
-not fit fails before any data is read, under `xpt` in every context.
+not fit fails before any data is read, under `datasets: xpt` in every context.
 
 Fails: `sas_name_too_long`, `transport_label_invalid`.
 Evidence: `negative-transport-name-too-long`, `negative-transport-label-too-long`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionLabelInvalid`.
@@ -216,7 +216,8 @@ An `int` or `float` column's declared `display_format` is written in its
 NAMESTR when it parses as a SAS format: a name of at most eight upper-case
 letters, digits and underscores that begins and ends with a letter or an
 underscore, an optional width, `.`, and optional decimals, the name empty only
-beside a width. A declared format that does not parse fails under `xpt`. An
+beside a width. A declared format that does not parse fails under
+`datasets: xpt`. An
 `adam` date carries `DATE9.` and a datetime `DATETIME20.`; a character variable
 carries no format.
 

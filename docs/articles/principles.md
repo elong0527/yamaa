@@ -61,16 +61,16 @@ These four principles follow from the core principle of one execution:
   specification; a cycle fails instead of resolving. A company standard is
   shared, not copied into files that then change separately.
 - **Language neutral**: The same specification with the same inputs generates the
-  same output dataset in R and in Python, wherever the project's declared
-  environment language is available. A runner whose language does not match the
-  environment's declaration fails before reading data rather than approximating
-  the result.
+  same output dataset in R and in Python, wherever the project links an
+  environment for that language. A specification that calls a project function
+  fails before reading data when the project links no environment for the
+  running language, rather than approximating the result.
 - **Explicit**: Nothing reaches the output unless the specification put it
   there. Each declared column is derived in exactly one place.
 - **Extension**: A specification holds no code from R or Python. It has one
-  extension point: a named contract. A project function is declared once in the
-  project environment and called by its logical name where it is used; its
-  implementation is written once per environment, in that environment's
+  extension point: a named contract. A project function is declared in each
+  language's environment file, with the same parameters and tests, and called
+  by its logical name where it is used; its implementation is written once per
   language.
 
 Following the principles, the goal is to move most of the AI agents' work into

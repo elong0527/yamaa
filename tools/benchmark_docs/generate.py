@@ -14,7 +14,7 @@ from markdown_it import MarkdownIt
 
 import yaml
 from evaluations.harbor.brief import brief
-from tools.benchmark import LIFECYCLES, load_metadata
+from tools.benchmark import LIFECYCLES, load_metadata, specification_name
 from tools.benchmark import entries as benchmark_entries
 from tools.benchmark_docs import mapping_doc
 from tools.conformance.public_conformance import plan
@@ -586,17 +586,23 @@ def benchmark_code(benchmark):
         return []
     entries = benchmark_entries(benchmark)
     result = []
-    for host, title, opening, function, save, output in (
-        ("r", "R", "library(yamaa)", "yamaa_domain", "$save()", "$output"),
-        ("python", "Python", "import yamaa", "yamaa.domain", ".save()", ".output"),
+    for host, title, opening, spec, project, member in (
+        ("r", "R", "library(yamaa)", "yamaa_spec", "yamaa_project", "$"),
+        ("python", "Python", "import yamaa", "yamaa.spec", "yamaa.project", "."),
     ):
         calls = []
         for index, entry in enumerate(entries[host], 1):
-            arguments = json.dumps(entry["specification"])
-            if entry["environment"] is not None:
-                arguments += ", environment=" + json.dumps(entry["environment"])
-            final = output if index == len(entries[host]) else save
-            calls.append(f"{function}({arguments}){final}")
+            if entry["environment"] is None:
+                opened = f"{spec}({json.dumps(entry['specification'])})"
+            else:
+                # A project opens its listed specification by its domain name.
+                name = specification_name(benchmark / entry["specification"])
+                opened = (
+                    f"{project}({json.dumps(entry['environment'])})"
+                    f"{member}spec({json.dumps(name)})"
+                )
+            final = "output" if index == len(entries[host]) else "save()"
+            calls.append(f"{opened}{member}run(){member}{final}")
         result.append((title, opening + "\n\n" + "\n".join(calls) + "\n"))
     return result
 
@@ -678,21 +684,16 @@ def render_material_pane(key, title, provenance, picker_label, documents):
     )
 
 
-def environment_codelists(benchmark):
-    """The codelists a benchmark's study environment declares, or None.
+def project_codelists(benchmark):
+    """The codelists a benchmark's root project file declares, or None.
 
-    A codelist source is inline or a path relative to the environment file.
+    A codelist source is inline or a path relative to the project file.
     """
-    for candidate in (
-        benchmark / "environment.yaml",
-        benchmark / "python" / "environment.yaml",
-    ):
-        if candidate.is_file():
-            break
-    else:
+    candidate = benchmark / "project.yaml"
+    if not candidate.is_file():
         return None
-    environment = yaml.safe_load(candidate.read_text(encoding="utf-8"))
-    sources = environment.get("codelists") if isinstance(environment, dict) else None
+    project = yaml.safe_load(candidate.read_text(encoding="utf-8"))
+    sources = project.get("codelists") if isinstance(project, dict) else None
     codelists = []
     for source in sources if isinstance(sources, list) else []:
         if isinstance(source, str):
@@ -1076,7 +1077,7 @@ def render_benchmark(benchmark, previous=None, next=None):
         spec_file_header = ""
     code_snippets = benchmark_code(benchmark)
     material_tabs, material_panes = render_materials(
-        benchmark, spec, environment_codelists(benchmark), code_snippets, edit_base
+        benchmark, spec, project_codelists(benchmark), code_snippets, edit_base
     )
     template = Template((HERE / "dashboard.html").read_text(encoding="utf-8"))
     result = template.substitute(

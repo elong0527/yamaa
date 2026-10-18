@@ -2,6 +2,6 @@ lifecycle: draft
 standard: ADaM
 domain: ADSL
 define:
-  environment: environment.yaml
+  environment: project.yaml
   standard: adam
   created: '2026-09-11T00:00:00'

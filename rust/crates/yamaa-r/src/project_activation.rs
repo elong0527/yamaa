@@ -1,12 +1,14 @@
 //! Installed R metadata and namespace capabilities on the calling R thread.
 //! Original condition objects are rooted in owned error payloads; no longjmp
 //! crosses Rust because installed host helpers return closed reply envelopes.
+//! Project functions receive and return plain R values: arguments convert
+//! before the call and results convert by the declared column type.
 use extendr_api::prelude::*;
 use std::sync::Mutex;
 use yamaa::{
-    Argument, CallError, FunctionError, FunctionHandle, FunctionIdentity, HostLanguage,
+    Argument, CallError, ColumnType, FunctionError, FunctionHandle, FunctionIdentity, HostLanguage,
     HostPayload, LockContext, LockFinding, LockKind, LockReason, ProjectFunctions, Scalar,
-    ScalarRef, Signature,
+    Signature,
 };
 
 /// Installed capabilities: lock verification, binding resolution and host
@@ -29,11 +31,38 @@ impl Functions {
     }
 }
 
+/// One bound R callable and the declared column type its result converts to.
+struct Bound {
+    function: crate::thread_bound::ThreadBound<Function>,
+    returns: ColumnType,
+}
+
+impl Bound {
+    fn handle(function: Function, returns: ColumnType) -> FunctionHandle {
+        FunctionHandle::new(Self {
+            function: crate::thread_bound::ThreadBound::new(function),
+            returns,
+        })
+    }
+
+    /// Borrow the callable and its declared result type on the owning thread.
+    fn get(handle: &FunctionHandle) -> std::result::Result<(Function, ColumnType), CallError> {
+        handle
+            .with::<Self, _>(|bound| {
+                bound
+                    .function
+                    .get()
+                    .map(|function| (function.clone(), bound.returns))
+            })
+            .ok_or(CallError::Raised(FunctionError::Protocol))?
+            .map_err(CallError::Raised)
+    }
+}
+
 /// One closed host reply: a completed payload or a classified failure status.
 enum Status {
     Completed(Robj),
     Host(Robj),
-    Representation(Robj),
     Interrupt(Robj),
 }
 
@@ -73,7 +102,6 @@ fn call_status(
     match status {
         0 => Ok(Status::Completed(payload)),
         1 => Ok(Status::Host(payload)),
-        2 => Ok(Status::Representation(payload)),
         3 => Ok(Status::Interrupt(payload)),
         _ => Err(FunctionError::Protocol),
     }
@@ -96,7 +124,7 @@ fn optional_text(value: &Robj) -> std::result::Result<Option<String>, FunctionEr
 
 /// The installed helper renders only explicitly ordinary conditions. A failed
 /// secondary renderer cannot replace the original payload in the attempt.
-fn ordinary(condition: &Robj, formatter: &Function, rejected: bool) -> Option<(String, String)> {
+fn ordinary(condition: &Robj, formatter: &Function) -> Option<(String, String)> {
     let reply = formatter
         .call(pairlist!(condition = condition.clone()))
         .ok()?;
@@ -105,12 +133,11 @@ fn ordinary(condition: &Robj, formatter: &Function, rejected: bool) -> Option<(S
     let message =
         crate::function_callback::detail(&reply.elt(1).ok()?, "unavailable R condition message")
             .ok()?;
-    let _ = rejected;
     Some((class, message))
 }
 
 fn classify_host(formatter: &Function, condition: &Robj) -> FunctionError {
-    match ordinary(condition, formatter, false) {
+    match ordinary(condition, formatter) {
         Some((class, message)) => FunctionError::Exception {
             class,
             message,
@@ -124,96 +151,46 @@ fn classify_host(formatter: &Function, condition: &Robj) -> FunctionError {
     }
 }
 
-fn classify_representation(formatter: &Function, condition: &Robj) -> FunctionError {
-    match ordinary(condition, formatter, true) {
-        Some((_class, message)) => FunctionError::Representation {
-            message,
-            payload: Some(HostPayload::new(crate::thread_bound::ThreadBound::new(
-                condition.clone(),
-            ))),
-        },
-        None => FunctionError::Internal {
-            code: "host_classification",
-        },
-    }
-}
-
-fn classify_status(formatter: &Function, status: Status) -> std::result::Result<Robj, CallError> {
+/// Unwrap a completed reply, classifying a raised condition or an interrupt.
+fn completed(formatter: &Function, status: Status) -> std::result::Result<Robj, FunctionError> {
     match status {
         Status::Completed(payload) => Ok(payload),
-        Status::Host(condition) => Err(CallError::Raised(classify_host(formatter, &condition))),
-        Status::Representation(condition) => Err(CallError::InvalidResult(
-            classify_representation(formatter, &condition),
-        )),
-        Status::Interrupt(condition) => Err(CallError::Raised(FunctionError::Interrupted {
+        Status::Host(condition) => Err(classify_host(formatter, &condition)),
+        Status::Interrupt(condition) => Err(FunctionError::Interrupted {
             payload: Some(HostPayload::new(crate::thread_bound::ThreadBound::new(
                 condition,
             ))),
-        })),
+        }),
     }
 }
 
-fn owned_scalar(value: ScalarRef<'_>) -> std::result::Result<Scalar, CallError> {
-    // No wildcard: `ScalarRef` may grow under the stability policy, and a new
-    // argument variant must fail loudly rather than arrive as `NA`.
-    Ok(match value {
-        ScalarRef::Missing => Scalar::Missing,
-        ScalarRef::Str(value) => Scalar::Str(value.to_owned()),
-        ScalarRef::Int(value) => Scalar::Int(value),
-        ScalarRef::Float(value) => Scalar::Float(value),
-        ScalarRef::Bool(value) => Scalar::Bool(value),
-        ScalarRef::Date(value) => Scalar::Date(value),
-        ScalarRef::DateTime(value) => Scalar::DateTime(value),
-        _ => {
-            return Err(CallError::Raised(FunctionError::Protocol));
-        }
-    })
+/// Plain R arguments in declaration order, named for the host call. A value
+/// R cannot hold exactly fails the call before any project code runs.
+fn plain_arguments<'a>(
+    arguments: &[Argument<'a>],
+) -> std::result::Result<Vec<(&'a str, Robj)>, CallError> {
+    arguments
+        .iter()
+        .map(|argument| {
+            crate::function_callback::argument(argument.value)
+                .map(|value| (argument.name, value))
+                .map_err(|reason| {
+                    CallError::Raised(FunctionError::Representation {
+                        message: format!("argument {}: {reason}", argument.name),
+                        payload: None,
+                    })
+                })
+        })
+        .collect()
 }
 
-fn invoke_scalar(
-    handle: &Function,
-    formatter: &Function,
-    arguments: &[Argument<'_>],
-) -> std::result::Result<Scalar, CallError> {
-    let mut encoded = Vec::with_capacity(arguments.len());
-    for argument in arguments {
-        let value = yamaa::EncodedScalar::encode(owned_scalar(argument.value)?);
-        encoded.push((
-            argument.name,
-            Robj::from(list!(
-                tag = value.tag,
-                payload = Raw::from_bytes(&value.payload)
-            )),
-        ));
-    }
-    let status = call_status(handle, pairlist!(encoded = List::from_pairs(encoded)))
-        .map_err(CallError::Raised)?;
-    let result = classify_status(formatter, status)?;
-    let result = result
-        .as_list()
-        .filter(|list| list.len() == 2)
-        .ok_or(CallError::InvalidResult(FunctionError::Protocol))?;
-    let tag = result
-        .elt(0)
-        .map_err(|error| {
-            CallError::InvalidResult(FunctionError::SdkBoundary {
-                payload: sdk_payload(&error),
-            })
-        })?
-        .as_integer()
-        .ok_or(CallError::InvalidResult(FunctionError::Protocol))?;
-    let payload = result
-        .elt(1)
-        .map_err(|error| {
-            CallError::InvalidResult(FunctionError::SdkBoundary {
-                payload: sdk_payload(&error),
-            })
-        })?
-        .as_raw()
-        .ok_or(CallError::InvalidResult(FunctionError::Protocol))?;
-    yamaa::EncodedScalar::decode(tag, payload.as_slice()).map_err(|error| {
-        CallError::InvalidResult(FunctionError::Scalar {
-            reason: error.reason(),
+/// Convert a returned plain R value by the declared column type; any other
+/// value is an invalid result with the reason it was refused.
+fn plain_result(value: &Robj, returns: ColumnType) -> std::result::Result<Scalar, CallError> {
+    crate::function_callback::result(value, returns).map_err(|message| {
+        CallError::InvalidResult(FunctionError::Representation {
+            message,
+            payload: None,
         })
     })
 }
@@ -250,20 +227,7 @@ impl ProjectFunctions for Functions {
                 .map(|function| Raw::from_bytes(function.call.as_bytes())),
         );
         let status = call_status(verify, pairlist!(versions = versions, calls = calls))?;
-        let rows = match status {
-            Status::Completed(rows) => rows,
-            Status::Host(condition) => return Err(classify_host(formatter, &condition)),
-            Status::Representation(condition) => {
-                return Err(classify_representation(formatter, &condition));
-            }
-            Status::Interrupt(condition) => {
-                return Err(FunctionError::Interrupted {
-                    payload: Some(HostPayload::new(crate::thread_bound::ThreadBound::new(
-                        condition,
-                    ))),
-                });
-            }
-        };
+        let rows = completed(formatter, status)?;
         let rows = rows.as_list().ok_or(FunctionError::Protocol)?;
         let mut findings = Vec::with_capacity(rows.len());
         for (_, row) in rows.iter() {
@@ -327,24 +291,10 @@ impl ProjectFunctions for Functions {
                 parameters = names
             ),
         )?;
-        let handle = match status {
-            Status::Completed(handle) => handle,
-            Status::Host(condition) => return Err(classify_host(formatter, &condition)),
-            Status::Representation(condition) => {
-                return Err(classify_representation(formatter, &condition));
-            }
-            Status::Interrupt(condition) => {
-                return Err(FunctionError::Interrupted {
-                    payload: Some(HostPayload::new(crate::thread_bound::ThreadBound::new(
-                        condition,
-                    ))),
-                });
-            }
-        };
-        handle
+        completed(formatter, status)?
             .as_function()
             .ok_or(FunctionError::Protocol)
-            .map(|handle| FunctionHandle::new(crate::thread_bound::ThreadBound::new(handle)))
+            .map(|function| Bound::handle(function, signature.returns))
     }
 
     fn invoke(
@@ -352,26 +302,26 @@ impl ProjectFunctions for Functions {
         handle: &FunctionHandle,
         arguments: &[Argument<'_>],
     ) -> std::result::Result<Scalar, CallError> {
-        let handle = handle
-            .with::<crate::thread_bound::ThreadBound<Function>, _>(|handle| handle.get().cloned())
-            .ok_or(CallError::Raised(FunctionError::Protocol))?
-            .map_err(CallError::Raised)?;
+        let (function, returns) = Bound::get(handle)?;
         let formatter_guard = self
             .formatter
             .lock()
             .map_err(|_| CallError::Raised(FunctionError::Internal { code: "host_port" }))?;
         let formatter = formatter_guard.get().map_err(CallError::Raised)?;
-        invoke_scalar(&handle, formatter, arguments)
+        let arguments = List::from_pairs(plain_arguments(arguments)?);
+        let status =
+            call_status(&function, pairlist!(arguments = arguments)).map_err(CallError::Raised)?;
+        let value = completed(formatter, status).map_err(CallError::Raised)?;
+        plain_result(&value, returns)
     }
 }
 
 /// Caller-supplied registry port: bindings come from an explicit map of
-/// (staged for the registry activation path; dataset execution still uses
-/// the locked port, so this surface is intentionally not yet constructed
-/// by an entry point in this crate).
 /// logical call strings to already-resolved R functions, never from a
 /// namespace lookup. Declared-lock auditing stays separate: this port
-/// refuses lock verification rather than silently skipping it.
+/// refuses lock verification rather than silently skipping it. It is staged
+/// for the registry activation path; dataset execution still uses the locked
+/// port, so no entry point in this crate constructs it yet.
 #[allow(dead_code)]
 pub struct RegistryPort {
     registry: std::collections::BTreeMap<String, crate::thread_bound::ThreadBound<Function>>,
@@ -419,76 +369,25 @@ impl ProjectFunctions for RegistryPort {
         if actual.contains("...") || actual != expected {
             return Err(FunctionError::Protocol);
         }
-        Ok(FunctionHandle::new(crate::thread_bound::ThreadBound::new(
-            handle,
-        )))
+        Ok(Bound::handle(handle, signature.returns))
     }
     fn invoke(
         &self,
         handle: &FunctionHandle,
         arguments: &[Argument<'_>],
     ) -> std::result::Result<Scalar, CallError> {
-        // Registry invocation has no installed formatter, so raised host
-        // payloads stay opaque: the core still validates lengths and exact
-        // types before accepting any output.
-        let handle = handle
-            .with::<crate::thread_bound::ThreadBound<Function>, _>(|handle| handle.get().cloned())
-            .ok_or(CallError::Raised(FunctionError::Protocol))?
-            .map_err(CallError::Raised)?;
-        let mut encoded = Vec::with_capacity(arguments.len());
-        for argument in arguments {
-            let value = yamaa::EncodedScalar::encode(owned_scalar(argument.value)?);
-            encoded.push((
-                argument.name,
-                Robj::from(list!(
-                    tag = value.tag,
-                    payload = Raw::from_bytes(&value.payload)
-                )),
-            ));
-        }
-        let status = call_status(&handle, pairlist!(encoded = List::from_pairs(encoded)))
-            .map_err(CallError::Raised)?;
-        let result = match status {
-            Status::Completed(payload) => payload,
-            Status::Host(_) | Status::Representation(_) => {
-                return Err(CallError::InvalidResult(FunctionError::Internal {
-                    code: "host_classification",
-                }));
-            }
-            Status::Interrupt(condition) => {
-                return Err(CallError::Raised(FunctionError::Interrupted {
-                    payload: Some(HostPayload::new(crate::thread_bound::ThreadBound::new(
-                        condition,
-                    ))),
-                }));
-            }
-        };
-        let result = result
-            .as_list()
-            .filter(|list| list.len() == 2)
-            .ok_or(CallError::InvalidResult(FunctionError::Protocol))?;
-        let tag = result
-            .elt(0)
+        // A registered function is called directly with its named plain
+        // arguments. With no installed reply envelope or formatter, a raised
+        // R condition stays an opaque payload; the core still validates the
+        // converted result before accepting any output.
+        let (function, returns) = Bound::get(handle)?;
+        let value = function
+            .call(Pairlist::from_pairs(plain_arguments(arguments)?))
             .map_err(|error| {
-                CallError::InvalidResult(FunctionError::SdkBoundary {
+                CallError::Raised(FunctionError::SdkBoundary {
                     payload: sdk_payload(&error),
                 })
-            })?
-            .as_integer()
-            .ok_or(CallError::InvalidResult(FunctionError::Protocol))?;
-        let payload = result
-            .elt(1)
-            .map_err(|error| {
-                CallError::InvalidResult(FunctionError::SdkBoundary {
-                    payload: sdk_payload(&error),
-                })
-            })?
-            .as_raw()
-            .ok_or(CallError::InvalidResult(FunctionError::Protocol))?;
-        yamaa::EncodedScalar::decode(tag, payload.as_slice()).map_err(|error| {
-            CallError::InvalidResult(FunctionError::Scalar {
-                reason: error.reason(),
-            })
-        })
+            })?;
+        plain_result(&value, returns)
     }
 }

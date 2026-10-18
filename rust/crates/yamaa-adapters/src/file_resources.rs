@@ -89,7 +89,7 @@ struct Snapshot {
 pub struct Resources {
     host: Option<crate::host_resources::Resources>,
     host_sources: RetainedSources,
-    roots: Arc<[Root]>,
+    roots: Arc<Vec<Root>>,
     local_paths: bool,
     base: Segments,
     /// The canonical identity of the last selected entry: the declaring
@@ -99,6 +99,148 @@ pub struct Resources {
     by_path: BTreeMap<Segments, usize>,
     by_identity: BTreeMap<(i128, i128), usize>,
     reads: usize,
+}
+
+/// Whether two resource locations name one file: ordinal case-insensitive on
+/// Windows, where child opens are, and exact elsewhere.
+pub(crate) fn same_location(left: &str, right: &str) -> bool {
+    #[cfg(windows)]
+    {
+        crate::windows_file::equal_name(left, right)
+    }
+    #[cfg(unix)]
+    {
+        left == right
+    }
+}
+
+/// Serialized artifacts a project run has already built, by producer. An
+/// input whose `schema` link names that producer and whose `path` names the
+/// held artifact's location reads those bytes instead of the saved file, still
+/// under the producer's output contract.
+#[derive(Clone, Debug, Default)]
+pub struct HeldArtifacts {
+    artifacts: BTreeMap<String, (String, Arc<[u8]>)>,
+}
+impl HeldArtifacts {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    /// Hold the artifact the producer with canonical identity `producer`
+    /// built for its `output.path` location `location`.
+    pub fn insert(&mut self, producer: String, location: String, bytes: Arc<[u8]>) {
+        self.artifacts.insert(producer, (location, bytes));
+    }
+    /// The held artifact of `producer`, when it was built for `location`.
+    pub fn get(&self, producer: &str, location: &str) -> Option<Arc<[u8]>> {
+        self.artifacts
+            .get(producer)
+            .filter(|(held, _)| same_location(held, location))
+            .map(|(_, bytes)| Arc::clone(bytes))
+    }
+    pub fn is_empty(&self) -> bool {
+        self.artifacts.is_empty()
+    }
+}
+
+/// One input that reads a producing specification's artifact through a
+/// `schema` link, with the location its `path` names.
+#[derive(Clone, Debug)]
+pub(crate) struct LinkedInput {
+    dataset: String,
+    producer: String,
+    location: String,
+}
+
+/// The linked inputs of one prepared document. Locations are lexical: no file
+/// is opened, and an input whose location cannot be formed reads its file.
+pub(crate) fn linked_inputs(
+    resources: &Resources,
+    document: &crate::specification_source::PreparedDocument,
+    links: &[crate::specification_source::LinkedSpecification],
+) -> Vec<LinkedInput> {
+    links
+        .iter()
+        .filter_map(|link| {
+            let origin = document.written_input_origin(&link.dataset, "path")?;
+            let location = resources
+                .location_from(origin.base_source, origin.written)
+                .ok()?;
+            Some(LinkedInput {
+                dataset: link.dataset.clone(),
+                producer: link.identity.clone(),
+                location,
+            })
+        })
+        .collect()
+}
+
+/// A run's study port that serves held producer artifacts to linked inputs
+/// and reads every other input through the run's resources.
+pub(crate) struct HeldPort<'a> {
+    resources: &'a mut Resources,
+    held: Option<Arc<HeldArtifacts>>,
+    inputs: &'a [LinkedInput],
+}
+impl<'a> HeldPort<'a> {
+    pub(crate) fn new(run: &'a mut RunScope, inputs: &'a [LinkedInput]) -> Self {
+        let held = run.held();
+        Self {
+            resources: run.resources_mut(),
+            held,
+            inputs,
+        }
+    }
+    fn held(&self, source: &yamaa_core::specification::SourceDeclaration) -> Option<Arc<[u8]>> {
+        let held = self.held.as_ref()?;
+        self.inputs
+            .iter()
+            .find(|input| input.dataset == source.name)
+            .and_then(|input| held.get(&input.producer, &input.location))
+    }
+}
+impl yamaa_core::specification_run::SpecificationSourcePort for HeldPort<'_> {
+    type Error = Error;
+    fn owned_table(
+        &self,
+        source: &yamaa_core::specification::SourceDeclaration,
+    ) -> Option<Arc<dyn std::any::Any + Send + Sync>> {
+        if self.held(source).is_some() {
+            None
+        } else {
+            self.resources.owned_table(source)
+        }
+    }
+    fn resource_failure(&self, error: &Error) -> Option<yamaa_core::resource::ResourceFailure> {
+        resource_failure(error)
+    }
+    fn inspect(
+        &mut self,
+        source: &yamaa_core::specification::SourceDeclaration,
+    ) -> Result<(), Error> {
+        if self.held(source).is_some() {
+            return Ok(());
+        }
+        Resources::inspect(self.resources, &source.path)
+    }
+    fn capture_reads(&self) -> usize {
+        self.resources.reads
+    }
+    fn capture(
+        &mut self,
+        source: &yamaa_core::specification::SourceDeclaration,
+        origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
+    ) -> Result<Arc<[u8]>, Error> {
+        if let Some(bytes) = self.held(source) {
+            *origin = Some(yamaa_core::specification_run::SourceOrigin::Generated);
+            return Ok(bytes);
+        }
+        yamaa_core::specification_run::SpecificationSourcePort::capture(
+            self.resources,
+            source,
+            origin,
+        )
+    }
 }
 
 /// The study half of one run's resource authority. A prepared value keeps
@@ -112,8 +254,19 @@ pub struct RunScope {
     /// retained sources of a run behind its own resolver still begin with
     /// the metadata that compiled it. Empty when the scope inherits them.
     compiled: RetainedSources,
+    /// Artifacts a project run already built, offered to this run's saved
+    /// producer links.
+    held: Option<Arc<HeldArtifacts>>,
 }
 impl RunScope {
+    /// Offer artifacts the caller already built to this run's saved links.
+    /// Links without a held artifact read the saved file their path names.
+    pub fn hold(&mut self, held: Arc<HeldArtifacts>) {
+        self.held = Some(held);
+    }
+    pub(crate) fn held(&self) -> Option<Arc<HeldArtifacts>> {
+        self.held.clone()
+    }
     /// Snapshots created so far in this scope, including those it inherited.
     pub fn capture_reads(&self) -> usize {
         self.resources.capture_reads()
@@ -139,7 +292,7 @@ impl Resources {
         Self {
             host_sources: vec![],
             host: Some(crate::host_resources::Resources::new(resolver, base.into())),
-            roots: Arc::new([]),
+            roots: Arc::new(Vec::new()),
             local_paths: false,
             base: vec![],
             entry: None,
@@ -179,6 +332,7 @@ impl Resources {
                     reads: self.reads,
                 },
                 compiled: Vec::new(),
+                held: None,
             },
             Some(resolver) => {
                 let entry = self
@@ -193,7 +347,7 @@ impl Resources {
                             entry.clone(),
                         )),
                         host_sources: vec![],
-                        roots: Arc::new([]),
+                        roots: Arc::new(Vec::new()),
                         local_paths: false,
                         base: vec![],
                         entry: Some(entry),
@@ -203,6 +357,7 @@ impl Resources {
                         reads: 0,
                     },
                     compiled: self.retain_sources(),
+                    held: None,
                 }
             }
         }
@@ -216,6 +371,37 @@ impl Resources {
         let mut resources = Self::new(base, base, &[])?;
         resources.local_paths = true;
         Ok(resources)
+    }
+    /// The project file a caller passes is a caller path like the entry
+    /// (REQ-1331): its existing parent is selected once, and the caller's own
+    /// spelling of that directory keeps its authority (REQ-0781). A project
+    /// operation names each listed specification by its canonical identity,
+    /// so without this root the caller's spelling of the project file, such
+    /// as the macOS `/var` alias of `/private/var`, lies outside the entry
+    /// parent and is walked from its filesystem root and refused as a link.
+    /// A parent that cannot be selected adds no root: reading the project
+    /// file then reports its own failure. Configuration calls this before any
+    /// run scope shares the roots.
+    pub(crate) fn select_caller_parent(&mut self, path: &str) {
+        if self.host.is_some() || !self.local_paths {
+            return;
+        }
+        let Some(parent) = Path::new(path).parent().and_then(Path::to_str) else {
+            return;
+        };
+        let Ok(root) = selected_root(parent) else {
+            return;
+        };
+        // An entry beside its project file already holds every spelling.
+        if !self.roots.iter().any(|known| {
+            root.spellings
+                .iter()
+                .all(|spelling| known.spellings.contains(spelling))
+        }) {
+            if let Some(roots) = Arc::get_mut(&mut self.roots) {
+                roots.push(root);
+            }
+        }
     }
     /// The first root is the project root; later roots retain fallback order.
     pub fn new(root: &str, base: &str, data_roots: &[String]) -> Result<Self, Error> {
@@ -231,7 +417,7 @@ impl Resources {
         Ok(Self {
             host: None,
             host_sources: vec![],
-            roots: roots.into(),
+            roots: Arc::new(roots),
             local_paths: false,
             base,
             entry: None,

@@ -93,8 +93,8 @@ impl Plan {
     }
 
     /// Run the compiled specification once. Every adjudicated outcome
-    /// returns an owned build carrying its outputs, logs, observations and
-    /// diagnostics; only cancellation fails the call itself.
+    /// returns an owned build carrying its output, run report, observations
+    /// and diagnostics; only cancellation fails the call itself.
     ///
     /// # Example
     ///
@@ -183,6 +183,7 @@ impl Plan {
             &self.compiled.specification,
             &self.compiled.state,
             resolver,
+            None,
             yamaa_core::application_observer::Scope::new(&bridge),
         )
     }

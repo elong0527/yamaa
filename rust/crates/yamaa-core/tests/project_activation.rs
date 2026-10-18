@@ -2461,6 +2461,7 @@ mod project {
                     values: vec![Value::Str("good".into())],
                     codes: vec!["later".into()],
                     default: false,
+                    path: "rows.later.submission.CODE.codelist".into(),
                 }],
             };
             let groups = |check| {
@@ -2656,8 +2657,6 @@ mod project {
                 }),
                 functions: Some(functions),
                 codelists: vec![],
-                has_study: false,
-                submissions: vec![],
             };
             assert!(Environment::admit(Language::Python, draft).is_ok());
         }

@@ -15,8 +15,8 @@ def load_spec(name):
     return yaml.safe_load((BENCHMARKS / name / "spec.yaml").read_text(encoding="utf-8"))
 
 
-def load_environment_codelists(name):
-    return generate.environment_codelists(BENCHMARKS / name)
+def load_project_codelists(name):
+    return generate.project_codelists(BENCHMARKS / name)
 
 
 def rendered_tables(spec):
@@ -88,7 +88,7 @@ class SdtmMappingTests(unittest.TestCase):
             tab_id: (headers, rows)
             for tab_id, _, headers, rows in mapping_doc.mapping_sheets(
                 load_spec("sdtm-dm-metadata"),
-                load_environment_codelists("sdtm-dm-metadata"),
+                load_project_codelists("sdtm-dm-metadata"),
             )
         }
         _, mapping = sheets["mapping"]

@@ -12,6 +12,8 @@ use crate::{
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Cause {
     UnknownFunction,
+    /// The supplied project links no environment file for the host language.
+    UndeclaredEnvironment(crate::project_function::Language),
     UnknownReference(String),
     RowPhase {
         identifier: String,
@@ -68,6 +70,10 @@ impl FunctionFinding {
                 (C::RowDependencyPhaseBoundary, None)
             }
             Cause::UnknownFunction => (C::UnknownProjectFunction, None),
+            Cause::UndeclaredEnvironment(language) => {
+                context.insert("language".into(), text(language.key()));
+                (C::ProjectEnvironmentMissing, Some("undeclared"))
+            }
             Cause::UnknownArgument => (C::InvalidFunctionArgument, Some("unknown_argument")),
             Cause::DuplicateArgument => (C::InvalidFunctionArgument, Some("duplicate_argument")),
             Cause::MissingRequiredArgument => (
@@ -172,7 +178,14 @@ pub(super) fn prepare(
     d: &Document,
     columns: &[usize],
     functions: &[Function],
+    undeclared: Option<crate::project_function::Language>,
 ) -> Result<Prepared, PrepareError> {
+    // Without a host environment no call names a declared function; the absent
+    // environment, not the function name, is the cause each call reports.
+    let unknown = || match undeclared {
+        Some(language) => Cause::UndeclaredEnvironment(language),
+        None => Cause::UnknownFunction,
+    };
     let mut function_index = BTreeMap::new();
     for function in functions {
         if function_index
@@ -262,7 +275,7 @@ pub(super) fn prepare(
                             function: function.into(),
                             argument: None,
                             node: *node,
-                            cause: Cause::UnknownFunction,
+                            cause: unknown(),
                         }),
                     ));
                 }
@@ -339,7 +352,7 @@ pub(super) fn prepare(
                     let arguments = &argument_origins[error.call];
                     let (cause, argument, node, path) = match error.kind {
                         project_calls::Kind::UnknownFunction => {
-                            (Cause::UnknownFunction, None, *node, format!("{path}.name"))
+                            (unknown(), None, *node, format!("{path}.name"))
                         }
                         project_calls::Kind::UnknownReference { argument } => {
                             let (name, node, reference) = &arguments[argument];

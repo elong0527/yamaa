@@ -62,13 +62,107 @@ local({
     inherits(tryCatch(json_equal(wire,jsonlite::fromJSON(adjacent,simplifyVector=FALSE)),
       error=identity),"error"))
 })
+# The public API runs or checks one specification; only a result writes.
+run_spec <- function(path) yamaa_spec(path)$run()
+check_spec <- function(path) yamaa_spec(path)$check()
+# Private installed-run evidence: the run's complete observations as JSON text,
+# or NULL for a specification refused before its run began.
+domain_observations <- function(result) yamaa:::.run_observations(result)
+# save() returns invisible NULL. A refused save signals yamaa_error with the
+# run's own issues: a failed run's, or a successful run's refused publication.
+saved <- function(result) is.null(result$save())
+save_refused <- function(result,message) {
+  failure <- tryCatch({result$save();NULL},error=identity)
+  inherits(failure,"yamaa_error") && identical(conditionMessage(failure),message) &&
+    identical(failure$issues,result$issues)
+}
+failed_save <- function(result) save_refused(result,"cannot save a failed run; see issues")
+refused_save <- function(result) save_refused(result,"nothing was saved; see issues")
+# Every public issues table has the authored finding fields first, then the
+# source geometry columns. Truth compares the fields it authors.
+issue_columns <- c("phase","condition","requirement","spec_paths","context","source_span","operand_route")
+authored_columns <- fixture_strings(host_truth[["issue_columns"]])
+stopifnot(identical(issue_columns[seq_along(authored_columns)],authored_columns))
 source(file.path(root,"issue-frame-truth.R"),local=TRUE)
 check_issue_frame <- function(actual,expected) {
-  stopifnot(is.data.frame(actual),identical(names(actual),fixture_strings(host_truth[["issue_columns"]])))
-  stopifnot(nrow(actual)==length(expected$phase),identical(lapply(actual,identity),expected))
-  stopifnot(all(vapply(actual[c("phase","condition","requirement","context")],is.character,logical(1))),is.list(actual$spec_paths))
+  fields <- names(expected)
+  stopifnot(is.data.frame(actual),identical(names(actual),issue_columns),all(authored_columns %in% fields),
+    identical(fields,issue_columns[seq_along(fields)]))
+  stopifnot(nrow(actual)==length(expected$phase),identical(lapply(actual[fields],identity),expected))
+  stopifnot(all(vapply(actual[c("phase","condition","requirement","context")],is.character,logical(1))),
+    all(vapply(actual[c("spec_paths","source_span","operand_route")],is.list,logical(1))))
+}
+# One run report replaces the retired verification and warning logs: every
+# run that began returns it, first its run row (REQ-0393, REQ-0392).
+report_columns <- c("ARTIFACT","KIND","SPEC_PATH","NAME","ID","TARGET","RULE","SEVERITY",
+  "OUTCOME","CONDITION","COUNT","TOTAL","KEYS","DETAILS")
+check_run_report <- function(result) {
+  report <- result$report
+  succeeded <- !is.null(result$output)
+  stopifnot(is.data.frame(report),identical(names(report),report_columns),nrow(report)>=1L,
+    identical(report$KIND[[1L]],"run"),identical(report$SPEC_PATH[[1L]],"output"),
+    identical(report$OUTCOME[[1L]],if(succeeded) "succeeded" else "failed"),
+    is.double(report$COUNT),is.double(report$TOTAL),
+    identical(report$COUNT[[1L]],if(succeeded) as.double(nrow(result$output)) else NA_real_))
 }
 rawfile <- function(path) readBin(path,"raw",n=file.info(path)$size)
+# Exact decimal text of whole doubles, missing kept missing.
+integer_text <- function(value) {
+  text <- sprintf("%.0f",value)
+  text[is.na(value)] <- NA_character_
+  text
+}
+# Staged int truth is decimal text, here or under the retired int64 class; R
+# exchanges int as double, so convert it where the conversion is exact.
+typed_truth <- function(expected,types) {
+  stopifnot(length(expected)==length(types))
+  for(index in seq_along(expected)) if(identical(types[[index]],"int")) {
+    column <- expected[[index]]
+    if(is.double(column) && is.null(attributes(column))) next
+    text <- as.character(unclass(column))
+    value <- as.double(text)
+    stopifnot(identical(integer_text(value),text))
+    expected[[index]] <- value
+  }
+  expected
+}
+# Decimal integer text beyond 2^53 in magnitude, compared as exact digits.
+beyond_double <- function(text) {
+  digits <- sub("^-","",text)
+  !is.na(text) & (nchar(digits)>16L | (nchar(digits)==16L & digits>"9007199254740992"))
+}
+# Compare an output with authored text cells by declared kind: str text and
+# int decimal text. R exchanges int as double, so an int cell beyond 2^53
+# makes the output view refuse, naming the first such cell column by column;
+# the run's saved bytes keep every value.
+check_text_columns <- function(result,truth) {
+  unheld <- NULL
+  for(column in names(truth$columns)) if(is.null(unheld) && truth$kinds[[column]]=="int") {
+    beyond <- beyond_double(truth$columns[[column]])
+    if(any(beyond)) unheld <- truth$columns[[column]][which(beyond)[[1L]]]
+  }
+  if(!is.null(unheld)) {
+    failure <- tryCatch(result$output,error=identity)
+    stopifnot(inherits(failure,"yamaa_error"),identical(conditionMessage(failure),
+      paste0("integer ",unheld," is beyond 2^53 and cannot be held exactly by an R double")))
+    return(invisible())
+  }
+  stopifnot(identical(names(result$output),names(truth$columns)))
+  for(column in names(truth$columns)) {
+    actual <- result$output[[column]]
+    if(truth$kinds[[column]]=="int") {
+      stopifnot(is.double(actual),is.null(attributes(actual)))
+      actual <- integer_text(actual)
+    }
+    else stopifnot(is.character(actual))
+    stopifnot(identical(is.na(actual),is.na(truth$columns[[column]])),
+      identical(as.character(actual),truth$columns[[column]]))
+  }
+}
+artifact_types <- function(case_name) {
+  report <- jsonlite::fromJSON(file.path(root,"expected",paste0(case_name,".json")),simplifyVector=FALSE)
+  fixture_strings(report$artifacts[[1L]]$types)
+}
 # Public calls retain the complete independently authored original reports.
 public_expected <- function(expected, entry) {
   if (is.character(expected)) expected <- jsonlite::fromJSON(expected, simplifyVector=FALSE)
@@ -80,10 +174,9 @@ public_expected <- function(expected, entry) {
   expected
 }
 public_observed <- function(result) {
-  jsonlite::fromJSON(rawToChar(get(".domain_observations",asNamespace("yamaa"))(result)),simplifyVector=FALSE)
+  jsonlite::fromJSON(domain_observations(result),simplifyVector=FALSE)
 }
 source(file.path(root,"public-output-truth.R"),local=TRUE)
-domain_observations <- get(".domain_observations",envir=asNamespace("yamaa"))
 json_text <- function(value) {
   # Quote only run-identity labels; original semantic truth remains unchanged.
   characters <- strsplit(enc2utf8(value),"",fixed=TRUE)[[1L]]
@@ -101,7 +194,7 @@ for(case_name in names(issue_frame_truth)[!startsWith(names(issue_frame_truth),"
   stopifnot(file.copy(file.path(root,"cases",case_name),directory,recursive=TRUE))
   case <- file.path(directory,case_name)
   entry <- file.path(case,if(case_name=="schema-inheritance") "spec_study.yaml" else "spec.yaml")
-  built <- yamaa_domain(entry)
+  built <- run_spec(entry)
   report <- rawToChar(rawfile(file.path(root,"expected",paste0(case_name,".json"))))
   report <- sub('"runtime":"python"','"runtime":"r"',report,fixed=TRUE)
   report <- sub('fixture-runtime',as.character(getRversion()),report,fixed=TRUE)
@@ -111,31 +204,32 @@ for(case_name in names(issue_frame_truth)[!startsWith(names(issue_frame_truth),"
   report <- gsub(paste0('"specification":',json_text(basename(entry))),
                  entry_field,report,fixed=TRUE)
   unsaved <- sub('^\\{"artifacts":.*,"backend":','{"artifacts":[],"backend":',report)
-  observed <- rawToChar(domain_observations(built))
+  observed <- domain_observations(built)
   if(!identical(observed,unsaved)) {
     cat(case_name,"public unsaved report mismatch\nexpected:\n",unsaved,
         "\nactual:\n",observed,"\n",sep="")
   }
   stopifnot(identical(observed,unsaved))
   check_issue_frame(built$issues,issue_frame_truth[[case_name]])
-  stopifnot(is.null(built$verification_log),is.null(built$warning_log))
+  check_run_report(built)
   expected <- public_output_truth[[case_name]]
+  if(!is.null(expected)) expected <- typed_truth(expected,artifact_types(case_name))
   if(is.null(expected)) {
-    stopifnot(is.null(built$output),inherits(tryCatch(built$save(),error=identity),"yamaa_domain_error"))
-    stopifnot(identical(rawToChar(domain_observations(built)),unsaved))
+    stopifnot(is.null(built$output),failed_save(built))
+    stopifnot(identical(domain_observations(built),unsaved))
   } else {
     stopifnot(is.data.frame(built$output),identical(as.list(built$output),expected))
     output_name <- switch(case_name,"schema-lookup"="adsl.csv","schema-window-functions"="advs.csv","adlb.csv")
     for(attempt in seq_len(2L)) {
-      stopifnot(identical(built$save(),TRUE),identical(rawfile(file.path(case,output_name)),rawfile(file.path(case,"expected",output_name))))
-      stopifnot(identical(rawToChar(domain_observations(built)),report))
+      stopifnot(saved(built),identical(rawfile(file.path(case,output_name)),rawfile(file.path(case,"expected",output_name))))
+      stopifnot(identical(domain_observations(built),report))
     }
     stopifnot(identical(as.list(built$output),expected))
   }
   report_directory <- Sys.getenv("YAMAA_PUBLIC_REPORT_DIR")
   if(nzchar(report_directory)) {
     # Relabel only the observed run identity; semantic findings and reads stay exact.
-    observed <- rawToChar(domain_observations(built))
+    observed <- domain_observations(built)
     observed <- sub('"example":"domain"',paste0('"example":"',case_name,'"'),observed,fixed=TRUE)
     observed <- gsub(entry_field,
                      paste0('"specification":',json_text(basename(entry))),observed,fixed=TRUE)
@@ -151,27 +245,41 @@ entry <- file.path(directory,"spec.yaml")
 writeLines(c("schema_version: '1.0'","domain: TEST","keys: [ID]","input: {SRC: input.csv}",
              "output: {path: absent/output.csv, columns: [ID]}","columns:",
              "  - {name: ID, type: int, derivation: SRC.ID}"),entry)
-stopifnot(nrow(yamaa_check(entry)$issues)==0L)
-failed <- yamaa_domain(entry)
-stopifnot(is.null(failed$output),identical(failed$issues$condition,"resource_path_missing"),inherits(tryCatch(failed$save(),error=identity),"yamaa_domain_error"))
+stopifnot(nrow(check_spec(entry)$issues)==0L)
+failed <- run_spec(entry)
+stopifnot(is.null(failed$output),identical(failed$issues$condition,"resource_path_missing"),failed_save(failed))
 writeBin(fixture_bytes(host_truth[["integer_boundary_csv"]]),file.path(directory,"input.csv"))
-built <- yamaa_domain(entry)
-stopifnot(identical(as.character(built$output$ID),c("-9223372036854775808","9223372036854775807")),identical(is.na(built$output$ID),c(FALSE,FALSE)))
+built <- run_spec(entry)
+# R exchanges int as double: the output view refuses the int64 extremes rather
+# than change them, while the held run saves them exactly below.
+unheld <- tryCatch(built$output,error=identity)
+stopifnot(nrow(built$issues)==0L,inherits(unheld,"yamaa_error"),
+  identical(conditionMessage(unheld),"integer -9223372036854775808 is beyond 2^53 and cannot be held exactly by an R double"),
+  identical(built$report$COUNT[[1L]],2))
 writeLines("[changed",entry); writeLines("changed",file.path(directory,"input.csv"))
-stopifnot(identical(built$save(),FALSE),identical(built$issues$condition,"engine_rejected"))
+stopifnot(refused_save(built),identical(built$issues$condition,"engine_rejected"))
 dir.create(file.path(directory,"absent"))
-stopifnot(identical(built$save(),TRUE),nrow(built$issues)==0L,identical(rawfile(file.path(directory,"absent/output.csv")),fixture_bytes(host_truth[["integer_boundary_csv"]])))
-refused <- yamaa_domain("absent.yaml",environment="absent-environment.yaml")
-stopifnot(is.null(domain_observations(refused)))
-stopifnot(is.null(refused$output),identical(refused$issues$phase,"validation"),
+stopifnot(saved(built),nrow(built$issues)==0L,identical(rawfile(file.path(directory,"absent/output.csv")),fixture_bytes(host_truth[["integer_boundary_csv"]])))
+# A missing project file refuses every project operation before any
+# specification is read: the run builds nothing and its save signals.
+absent <- yamaa_project("absent-project.yaml")
+refused <- absent$run()
+stopifnot(identical(refused$names,character()),identical(names(refused$report),report_columns),
+  nrow(refused$report)==0L,identical(refused$issues$phase,"validation"),
   identical(refused$issues$condition,"project_environment_missing"),
   identical(refused$issues$requirement,"REQ-0694"),identical(refused$issues$spec_paths,list("environment")),
   identical(refused$issues$context,paste0('{"cause":"missing","path":',
-    json_text(file.path(normalizePath(getwd(),winslash="/"),"absent-environment.yaml")),'}')),
-  identical(refused$issues,yamaa_check("absent.yaml",environment="absent-environment.yaml")$issues))
-stopifnot(inherits(tryCatch(yamaa_domain(NULL),error=identity),"error"))
+    json_text(file.path(normalizePath(getwd(),winslash="/"),"absent-project.yaml")),'}')),
+  identical(refused$issues,absent$check()$issues),
+  save_refused(refused,"the project run was refused; see issues"))
+unread <- tryCatch(absent$spec("TEST"),error=identity)
+stopifnot(inherits(unread,"yamaa_error"),identical(conditionMessage(unread),"cannot read the project; see issues"),
+  identical(unread$issues,refused$issues))
+# Argument mistakes are ordinary errors, never yamaa_error.
+argument <- tryCatch(yamaa_spec(NULL)$run(),error=identity)
+stopifnot(inherits(argument,"error"),!inherits(argument,"yamaa_error"))
 unlink(directory,recursive=TRUE)
-cat("public check without study data, full-range integers, retained save retry and environment refusal passed\n")
+cat("public check without study data, full-range integers, retained save retry and project refusal passed\n")
 
 remove_directory_link <- function(path) {
   if(.Platform$OS.type=="windows") {
@@ -197,12 +305,12 @@ for(late in c(FALSE,TRUE)) for(existing in c(FALSE,TRUE)) {
   if(existing) writeBin(charToRaw("retained"),target)
   link <- file.path(directory,"link")
   if(late) dir.create(link) else stopifnot(file.symlink(outside,link))
-  built <- yamaa_domain(entry)
+  built <- run_spec(entry)
   stopifnot(identical(as.character(built$output$ID),"1"))
   if(late) {
     stopifnot(identical(unlink(link,recursive=TRUE),0L),!file.exists(link),file.symlink(outside,link))
   }
-  stopifnot(identical(built$save(),FALSE),identical(built$issues$context,'{"code":"invalid_target","stage":"output"}'),
+  stopifnot(refused_save(built),identical(built$issues$context,'{"code":"invalid_target","stage":"output"}'),
             identical(list.files(outside,all.files=TRUE,no..=TRUE),if(existing) c("output.csv","sentinel") else "sentinel"))
   stopifnot(identical(rawfile(sentinel),sentinel_bytes))
   if(existing) stopifnot(identical(rawfile(target),charToRaw("retained")))
@@ -210,7 +318,7 @@ for(late in c(FALSE,TRUE)) for(existing in c(FALSE,TRUE)) {
             identical(rawfile(sentinel),sentinel_bytes))
   if(existing) stopifnot(identical(rawfile(target),charToRaw("retained")))
   stopifnot(dir.create(link))
-  stopifnot(identical(built$save(),TRUE),nrow(built$issues)==0L,identical(rawfile(file.path(link,"output.csv")),charToRaw("ID\n1\n")))
+  stopifnot(saved(built),nrow(built$issues)==0L,identical(rawfile(file.path(link,"output.csv")),charToRaw("ID\n1\n")))
   stopifnot(identical(rawfile(sentinel),sentinel_bytes))
   unlink(directory,recursive=TRUE);unlink(outside,recursive=TRUE)
 }
@@ -234,11 +342,11 @@ local({
     entry <- normalizePath(entry,winslash="/",mustWork=TRUE)
     expected <- public_expected(rawToChar(rawfile(file.path(root,"expected","adam-adlb-ordered-sum.json"))),entry)
     if (input_parquet) for (index in seq_along(expected$source_reads)) expected$source_reads[[index]]$path <- "input/lb.parquet"
-    result <- yamaa_domain(entry)
+    result <- run_spec(entry)
     stopifnot(nrow(result$issues)==0L,!is.null(result$output),context_equal(public_observed(result),unsaved_report(expected)))
     unlink(entry); unlink(file.path(work,"input"),recursive=TRUE)
     for (attempt in seq_len(2L)) {
-      stopifnot(identical(result$save(),TRUE))
+      stopifnot(saved(result))
       observed <- public_observed(result)
       stopifnot(context_equal(unsaved_report(observed),unsaved_report(expected)))
       if (output_parquet) {
@@ -280,12 +388,12 @@ for(name in names(unsupported_types)) cases[[length(cases)+1L]] <- c(
   paste0('"dataset":"SRC","field":"FIELD","path":"input.parquet","stored_type":"',unsupported_types[[name]],'"'))
 for (test in cases) {
   stopifnot(file.copy(file.path(root,"pq",paste0(test[[1L]],".parquet")),file.path(directory,"input.parquet"),overwrite=TRUE))
-  result <- yamaa_domain(entry)
+  result <- run_spec(entry)
   finding <- paste0('{"condition":"',test[[2L]],'","context":{',test[[4L]],'},"phase":"ingest","requirement":"',test[[3L]],'","spec_paths":["input.SRC.path"]}')
   expected <- paste0('{"artifacts":[],"backend":"rust","callbacks":[],"diagnostics":[',finding,'],"engine_version":"',yamaa:::.core_version(),'","error":null,"example":"',test[[1L]],'","handler_counts":[],"nodes":[{"diagnostics":[',finding,'],"handler_counts":[],"outcome":"failure","specification":"spec.yaml","unsupported":[]}],"outcome":"failure","report_version":"0.3.0-draft","runtime":"r","runtime_version":"',as.character(getRversion()),'","source_reads":[{"base_directory":".","condition":null,"outcome":"captured","path":"input.parquet","snapshots_created":1}],"tables":[],"unsupported":[],"verifications":[]}')
   expected <- public_expected(expected,entry)
   stopifnot(is.null(result$output),context_equal(public_observed(result),expected),
-    inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),
+    failed_save(result),
     !file.exists(file.path(directory,"output.csv")))
 }
   cat("public R Parquet closed types and exact complete refusal reports passed without Python\n")
@@ -299,11 +407,11 @@ local({
     source <- paste0('{"schema_version":"1.0","domain":"TEST","input":{"SRC":{"path":"input.PARQUET","empty_string":"',policy,'"}},"keys":["I"],"columns":[{"name":"I","type":"int","derivation":"SRC.I"},{"name":"S","type":"str","derivation":"SRC.S"}],"output":{"path":"output.csv","columns":["I","S"]}}')
     writeBin(charToRaw(source),entry)
     stopifnot(file.copy(file.path(root,"pq","text.parquet"),file.path(directory,"input.PARQUET"),overwrite=TRUE))
-    result <- yamaa_domain(entry)
+    result <- run_spec(entry)
     stopifnot(nrow(result$issues)==0L)
     expected <- charToRaw(if (policy=="missing") "I,S\n1,\n2,X\n" else 'I,S\n1,""\n2,X\n')
     unlink(entry); unlink(file.path(directory,"input.PARQUET")); invisible(gc())
-    for (attempt in seq_len(2L)) stopifnot(identical(result$save(),TRUE),identical(rawfile(file.path(directory,"output.csv")),expected))
+    for (attempt in seq_len(2L)) stopifnot(saved(result),identical(rawfile(file.path(directory,"output.csv")),expected))
   }
   cat("public R Parquet empty-string policy and retained exact saved bytes passed without Python\n")
 })
@@ -324,7 +432,7 @@ local({
   stopifnot(inherits(stored$FACTOR$type,"DictionaryType"),inherits(stored$ORDERED$type,"DictionaryType"))
   entry <- file.path(directory,"spec.yaml")
   writeBin(charToRaw('{"schema_version":"1.0","domain":"TEST","input":{"SRC":{"path":"input.parquet","empty_string":"present"}},"keys":["ID"],"columns":[{"name":"ID","type":"str","derivation":"SRC.ID"},{"name":"FACTOR","type":"str","derivation":"SRC.FACTOR"},{"name":"ORDERED","type":"str","derivation":"SRC.ORDERED"}],"output":{"path":"output.csv","columns":["ID","FACTOR","ORDERED"]}}'),entry)
-  result <- yamaa_domain(entry)
+  result <- run_spec(entry)
   stopifnot(nrow(result$issues)==0L,identical(result$output$ID,as.character(1:6)),
     identical(result$output$FACTOR,text),identical(result$output$ORDERED,text))
   cat("public R Parquet factor columns read as text passed without Python\n")
@@ -341,13 +449,13 @@ local({
   input <- file.path(case,"input","adsl.csv")
   captured <- rawfile(input)
   stopifnot(unlink(input)==0L,!file.exists(input))
-  stopifnot(nrow(yamaa_check(entry)$issues)==0L)
+  stopifnot(nrow(check_spec(entry)$issues)==0L)
   writeBin(captured,input)
-  result <- yamaa_domain(entry)
+  result <- run_spec(entry)
   expected <- read.csv(file.path(case,"expected","adsl.csv"),colClasses=c("character","character",rep("numeric",4L)),na.strings="",check.names=FALSE)
   stopifnot(nrow(expected)==16L,nrow(result$issues)==0L,identical(result$output,expected),
             identical(rawfile(entry),written),!file.exists(file.path(case,"adsl.csv")))
-  stopifnot(identical(result$save(),TRUE),identical(read.csv(file.path(case,"adsl.csv"),colClasses=c("character","character",rep("numeric",4L)),na.strings="",check.names=FALSE),expected))
+  stopifnot(saved(result),identical(read.csv(file.path(case,"adsl.csv"),colClasses=c("character","character",rep("numeric",4L)),na.strings="",check.names=FALSE),expected))
   case_name <- "negative-rounding-source"
   stopifnot(file.copy(file.path(root,"cases",case_name),directory,recursive=TRUE))
   case <- file.path(directory,case_name)
@@ -355,15 +463,15 @@ local({
   stopifnot(unlink(input_directory,recursive=TRUE)==0L,!file.exists(input_directory))
   expected_error <- host_truth[["rounding_type_error_yaml"]]
   stopifnot(identical(rawToChar(rawfile(file.path(case,"expected","error.yaml"))),expected_error))
-  checked <- yamaa_check(file.path(case,"spec.yaml"))$issues
-  rejected <- yamaa_domain(file.path(case,"spec.yaml"))
+  checked <- check_spec(file.path(case,"spec.yaml"))$issues
+  rejected <- run_spec(file.path(case,"spec.yaml"))
   stopifnot(nrow(checked)==1L,identical(checked$phase,"validation"),
     identical(checked$condition,"incompatible_input_type"),identical(checked$requirement,"REQ-0418"),
     identical(checked$spec_paths,list("columns.RNDVAL.derivation.round_half_away_from_zero.source")),
     identical(checked$context,'{"actual":"str","expected":"numeric","source":"SEX"}'),
     identical(rejected$issues,checked),is.null(rejected$output),
-    is.null(get(".domain_observations",asNamespace("yamaa"))(rejected)),
-    inherits(tryCatch(rejected$save(),error=identity),"yamaa_domain_error"),
+    is.null(domain_observations(rejected)),
+    failed_save(rejected),
     !file.exists(file.path(case,"adsl.csv")))
   cat("public original declarative rounding matches 16 committed rows and rejects original nonnumeric input before study capture without Python passed\n")
 })
@@ -375,15 +483,15 @@ local({
     stopifnot(file.copy(file.path(root,"cases",case_name),directory,recursive=TRUE))
     case <- file.path(directory,case_name);entry <- file.path(case,"spec.yaml")
     written <- rawfile(entry);input <- file.path(case,"input");held <- file.path(case,"held")
-    stopifnot(file.rename(input,held),nrow(yamaa_check(entry)$issues)==0L,file.rename(held,input))
-    result <- yamaa_domain(entry)
+    stopifnot(file.rename(input,held),nrow(check_spec(entry)$issues)==0L,file.rename(held,input))
+    result <- run_spec(entry)
     expected <- read.csv(file.path(case,"expected","adsl.csv"),na.strings="",check.names=FALSE)
     dates <- if(case_name=="adam-adsl-duration") c("STDT","ENDT") else c("BRTHDT","RANDDT")
     for(column in dates) expected[[column]] <- as.Date(expected[[column]])
     integers <- if(case_name=="adam-adsl-duration") c("DURW","DURM") else "AAGE"
-    for(column in integers) expected[[column]] <- structure(as.character(expected[[column]]),class="yamaa_int64_vector")
+    for(column in integers) expected[[column]] <- as.double(expected[[column]])
     stopifnot(nrow(result$issues)==0L,identical(result$output,expected),identical(rawfile(entry),written),
-      !file.exists(file.path(case,"adsl.csv")),identical(result$save(),TRUE),
+      !file.exists(file.path(case,"adsl.csv")),saved(result),
       identical(rawfile(file.path(case,"adsl.csv")),rawfile(file.path(case,"expected","adsl.csv"))))
   }
   cases <- list(
@@ -400,13 +508,13 @@ local({
     context_yaml <- if(bounds) "  value: inclusive\n  permitted: [exclusive]\n" else paste0("  source: ",item[[3L]],"\n  expected: date\n  actual: ",item[[4L]],"\n")
     context <- if(bounds) '{"permitted":["exclusive"],"value":"inclusive"}' else paste0('{"actual":"',item[[4L]],'","expected":"date","source":"',item[[3L]],'"}')
     stopifnot(identical(rawToChar(rawfile(file.path(case,"expected","error.yaml"))),paste0("phase: validation\ncondition: ",condition,"\nspec_paths:\n  - ",item[[2L]],"\nrequirement: ",requirement,"\ncontext:\n",context_yaml)))
-    checked <- yamaa_check(file.path(case,"spec.yaml"))$issues
-    rejected <- yamaa_domain(file.path(case,"spec.yaml"))
+    checked <- check_spec(file.path(case,"spec.yaml"))$issues
+    rejected <- run_spec(file.path(case,"spec.yaml"))
     stopifnot(nrow(checked)==1L,identical(checked$phase,"validation"),identical(checked$condition,condition),
       identical(checked$requirement,requirement),identical(checked$spec_paths,list(item[[2L]])),
       identical(checked$context,context),identical(rejected$issues,checked),is.null(rejected$output),
-      is.null(get(".domain_observations",asNamespace("yamaa"))(rejected)),
-      inherits(tryCatch(rejected$save(),error=identity),"yamaa_domain_error"),!file.exists(file.path(case,"input")))
+      is.null(domain_observations(rejected)),
+      failed_save(rejected),!file.exists(file.path(case,"input")))
   }
   cat("public complete date operations match original independent outputs and four complete static failures without Python passed\n")
 })
@@ -418,17 +526,17 @@ local({
     stopifnot(file.copy(file.path(root,"cases",case_name),directory,recursive=TRUE))
     case <- file.path(directory,case_name);entry <- file.path(case,"spec.yaml")
     written <- rawfile(entry);input <- file.path(case,"input");held <- file.path(case,"held")
-    stopifnot(file.rename(input,held),nrow(yamaa_check(entry)$issues)==0L,file.rename(held,input))
-    result <- yamaa_domain(entry)
+    stopifnot(file.rename(input,held),nrow(check_spec(entry)$issues)==0L,file.rename(held,input))
+    result <- run_spec(entry)
     output <- if(case_name=="schema-birth-date") "adsl.csv" else "dm.csv"
     expected <- read.csv(file.path(case,"expected",output),colClasses="character",na.strings="",check.names=FALSE)
     dates <- if(case_name=="schema-birth-date") fixture_strings(host_truth[["partial_date_columns"]]) else "RFICDTC"
     for(column in dates) expected[[column]] <- as.Date(expected[[column]])
     if(case_name=="schema-birth-date") expected$DTM <- as.POSIXct(expected$DTM,format="%Y-%m-%dT%H:%M:%S",tz="UTC")
     column <- if(case_name=="schema-birth-date") "DOBDY" else "AGE"
-    expected[[column]] <- structure(expected[[column]],class="yamaa_int64_vector")
+    expected[[column]] <- as.double(expected[[column]])
     stopifnot(nrow(result$issues)==0L,identical(result$output,expected),identical(rawfile(entry),written),
-      !file.exists(file.path(case,output)),identical(result$save(),TRUE),
+      !file.exists(file.path(case,output)),saved(result),
       identical(rawfile(file.path(case,output)),rawfile(file.path(case,"expected",output))))
   }
   failures <- read.delim(file.path(root,"temporal-imputation-diagnostics.tsv"),quote="",colClasses="character",check.names=FALSE)
@@ -439,13 +547,13 @@ local({
     case <- file.path(directory,finding$case);entry <- file.path(case,"spec.yaml")
     static <- finding$phase=="validation"
     if(static) unlink(file.path(case,"input"),recursive=TRUE)
-    checked <- yamaa_check(entry)$issues
-    result <- yamaa_domain(entry);actual <- result$issues
+    checked <- check_spec(entry)$issues
+    result <- run_spec(entry);actual <- result$issues
     stopifnot(nrow(actual)==1L,identical(actual$phase,finding$phase),
       identical(actual$condition,finding$condition),identical(actual$requirement,finding$requirement),
       identical(actual$spec_paths,list(finding$spec_path)),identical(actual$context,finding$context),
-      is.null(result$output),identical(is.null(get(".domain_observations",asNamespace("yamaa"))(result)),static),
-      inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),length(list.files(case,pattern="[.]csv$"))==0L)
+      is.null(result$output),identical(is.null(domain_observations(result)),static),
+      failed_save(result),length(list.files(case,pattern="[.]csv$"))==0L)
     if(static) stopifnot(identical(checked,actual)) else stopifnot(nrow(checked)==0L)
   }
   cat("public temporal imputation preserves two original outputs and ten complete failures without Python passed\n")
@@ -456,21 +564,21 @@ local({
   on.exit(unlink(directory,recursive=TRUE))
   source <- host_truth[["unicode_case_yaml"]]
   entry <- file.path(directory,"spec.yaml");writeBin(charToRaw(source),entry)
-  stopifnot(nrow(yamaa_check(entry)$issues)==0L)
+  stopifnot(nrow(check_spec(entry)$issues)==0L)
   writeBin(charToRaw("ID,TEXT\n1,FOLLOW-UP\n2,\u00df\u0130\u00e9\U0001f642AbC\n3,\n"),file.path(directory,"input.csv"))
-  result <- yamaa_domain(entry)
+  result <- run_spec(entry)
   expected_bytes <- fixture_bytes(host_truth[["unicode_case_csv"]])
   expected <- data.frame(ID=c("1","2","3"),UP=c("FOLLOW-UP","\u00df\u0130\u00e9\U0001f642ABC","MiXeD"),
     LOW=c("follow-up","\u00df\u0130\u00e9\U0001f642abc",NA_character_),
     SENT=c("Follow-up","\u00df\u0130\u00e9\U0001f642abc",NA_character_),
     TITLE=c("Follow-Up","\u00df\u0130\u00e9\U0001f642Abc",NA_character_),stringsAsFactors=FALSE)
   stopifnot(nrow(result$issues)==0L,identical(result$output,expected),!file.exists(file.path(directory,"output.csv")),
-    identical(result$save(),TRUE),identical(rawfile(file.path(directory,"output.csv")),expected_bytes))
+    saved(result),identical(rawfile(file.path(directory,"output.csv")),expected_bytes))
   source <- sub("to: upper, missing: MiXeD","to: upper",source,fixed=TRUE)
   writeBin(charToRaw(source),entry);writeBin(charToRaw("ID,TEXT\nrow1,\n"),file.path(directory,"input.csv"))
   # Without `missing`, a missing source gives missing and reports no finding,
   # as the independent text-case-reference.json records.
-  answered <- yamaa_domain(entry)
+  answered <- run_spec(entry)
   stopifnot(nrow(answered$issues)==0L,identical(answered$output,data.frame(ID="row1",UP=NA_character_,
     LOW=NA_character_,SENT=NA_character_,TITLE=NA_character_,stringsAsFactors=FALSE)))
   failures <- read.delim(file.path(root,"text-case-diagnostics.tsv"),quote="",colClasses="character",check.names=FALSE)
@@ -480,19 +588,19 @@ local({
     stopifnot(file.copy(file.path(root,"cases",finding$case),directory,recursive=TRUE))
     case <- file.path(directory,finding$case);entry <- file.path(case,"spec.yaml")
     unlink(file.path(case,"input"),recursive=TRUE)
-    checked <- yamaa_check(entry)$issues;rejected <- yamaa_domain(entry);actual <- rejected$issues
+    checked <- check_spec(entry)$issues;rejected <- run_spec(entry);actual <- rejected$issues
     stopifnot(nrow(actual)==1L,identical(actual$phase,finding$phase),identical(actual$condition,finding$condition),
       identical(actual$requirement,finding$requirement),identical(actual$spec_paths,list(finding$spec_path)),
       identical(actual$context,finding$context),identical(checked,actual),is.null(rejected$output),
-      is.null(get(".domain_observations",asNamespace("yamaa"))(rejected)),
-      inherits(tryCatch(rejected$save(),error=identity),"yamaa_domain_error"),!file.exists(file.path(case,"input")))
+      is.null(domain_observations(rejected)),
+      failed_save(rejected),!file.exists(file.path(case,"input")))
   }
   case_name <- "schema-sentence-case"
   stopifnot(file.copy(file.path(root,"cases",case_name),directory,recursive=TRUE))
   case <- file.path(directory,case_name);entry <- file.path(case,"spec.yaml")
-  checked <- yamaa_check(entry)$issues;result <- yamaa_domain(entry)
+  checked <- check_spec(entry)$issues;result <- run_spec(entry)
   stopifnot(nrow(checked)==0L,nrow(result$issues)==0L,!is.null(result$output),
-    !file.exists(file.path(case,"adlb.csv")),identical(result$save(),TRUE),
+    !file.exists(file.path(case,"adlb.csv")),saved(result),
     identical(rawfile(file.path(case,"adlb.csv")),rawfile(file.path(case,"expected","adlb.csv"))))
   cat("public ASCII string case matches independent exact outputs, original negatives and original ordered sentence artifact without Python passed\n")
 })
@@ -511,21 +619,21 @@ local({
   expected <- c("ID,POSITION\nc,3\nb,2\n","ID,POSITION\n")
   for(i in seq_along(inputs)) {
     writeBin(charToRaw(inputs[[i]]),data)
-    stopifnot(nrow(yamaa_check(entry)$issues)==0L)
-    result <- yamaa_domain(entry)
+    stopifnot(nrow(check_spec(entry)$issues)==0L)
+    result <- run_spec(entry)
     stopifnot(nrow(result$issues)==0L,!is.null(result$output),!file.exists(output))
     if(i==1L) stopifnot(identical(result$output$ID,c("c","b")),identical(as.character(result$output$POSITION),c("3","2")))
     else stopifnot(nrow(result$output)==0L)
     unlink(data)
-    for(attempt in seq_len(2L)) stopifnot(identical(result$save(),TRUE),identical(rawfile(output),charToRaw(expected[[i]])))
+    for(attempt in seq_len(2L)) stopifnot(saved(result),identical(rawfile(output),charToRaw(expected[[i]])))
     unlink(output)
   }
   writeBin(charToRaw("ID,REC,SORT,KEEP\n"),data)
-  result <- yamaa_domain(entry);actual <- result$issues
+  result <- run_spec(entry);actual <- result$issues
   stopifnot(nrow(actual)==1L,identical(actual$phase,"validation"),identical(actual$condition,"ordinal_field_collision"),
     identical(actual$requirement,"REQ-1294"),identical(actual$spec_paths,list("input.SRC.ordinal")),
     identical(actual$context,'{"dataset":"SRC","field":"REC"}'),is.null(result$output),
-    inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),!file.exists(output))
+    failed_save(result),!file.exists(output))
   cat("public raw source filter retains multiline record positions and internal presentation order with independent exact cached CSV twice without Python passed\n")
 })
 
@@ -539,11 +647,11 @@ local({
     stopifnot(file.copy(file.path(cases,name),directory,recursive=TRUE))
     case <- file.path(directory,name);entry <- file.path(case,"spec.yaml")
     if(name=="width-noninteger") unlink(file.path(case,"input.csv"))
-    result <- yamaa_domain(entry)
+    result <- run_spec(entry)
     expected_csv <- file.path(case,"expected.csv")
     if(file.exists(expected_csv)) {
       stopifnot(nrow(result$issues)==0L,!is.null(result$output),!file.exists(file.path(case,"output.csv")),
-        identical(result$save(),TRUE),identical(rawfile(file.path(case,"output.csv")),rawfile(expected_csv)))
+        saved(result),identical(rawfile(file.path(case,"output.csv")),rawfile(expected_csv)))
     } else {
       expected <- findings[findings$case==name,]
       actual <- result$issues
@@ -554,13 +662,13 @@ local({
         # Each captured padding cause has one independently authored full path.
         stopifnot(identical(paste0('["',actual$spec_paths[[index]],'"]'),expected$spec_paths[[index]]))
       }
-      stopifnot(inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),!file.exists(file.path(case,"output.csv")))
-      if(name=="width-noninteger") stopifnot(identical(yamaa_check(entry)$issues,actual),
-        is.null(get(".domain_observations",asNamespace("yamaa"))(result)),!file.exists(file.path(case,"input.csv")))
+      stopifnot(failed_save(result),!file.exists(file.path(case,"output.csv")))
+      if(name=="width-noninteger") stopifnot(identical(check_spec(entry)$issues,actual),
+        is.null(domain_observations(result)),!file.exists(file.path(case,"input.csv")))
     }
-    observed <- get(".domain_observations",asNamespace("yamaa"))(result)
+    observed <- domain_observations(result)
     if(!is.null(observed)) {
-      report <- rawToChar(observed)
+      report <- observed
       # Literal complete arrays avoid locale-dependent regexp offsets for UTF-8
       # report bytes on Windows and retain the independent ledger truth.
       expected <- handler_truth$handlers[handler_truth$case==name]
@@ -571,7 +679,7 @@ local({
   }
   stopifnot(file.copy(file.path(root,"cases","negative-str-pad-width"),directory,recursive=TRUE))
   case <- file.path(directory,"negative-str-pad-width");unlink(file.path(case,"input"),recursive=TRUE)
-  entry <- file.path(case,"spec.yaml");checked <- yamaa_check(entry)$issues;rejected <- yamaa_domain(entry)
+  entry <- file.path(case,"spec.yaml");checked <- check_spec(entry)$issues;rejected <- run_spec(entry)
   stopifnot(nrow(checked)==1L,identical(checked$phase,"validation"),identical(checked$condition,"invalid_field_type"),
     identical(checked$requirement,"REQ-0287"),identical(checked$spec_paths,list("columns.IDVARVAL.derivation.str_pad.width")),
     identical(checked$context,'{"actual":"str","expected":"int"}'),identical(rejected$issues,checked),
@@ -584,7 +692,7 @@ local({
   stopifnot(length(flag_truth)==33L)
   directory <- tempfile("flag-originals-");dir.create(directory)
   on.exit(unlink(directory,recursive=TRUE),add=TRUE)
-  observations <- get(".domain_observations",asNamespace("yamaa"))
+  observations <- domain_observations
   for(name in names(flag_truth)) {
     truth <- flag_truth[[name]]
     stopifnot(file.copy(file.path(root,truth$directory,name),directory,recursive=TRUE))
@@ -595,20 +703,20 @@ local({
     output <- file.path(case,truth$output)
     for(attempt in seq_len(2L)) {
       stopifnot(!file.exists(output))
-      result <- yamaa_domain(entry)
+      result <- run_spec(entry)
       check_issue_frame(result$issues,truth$findings)
       wire <- observations(result)
       if(is.null(wire)) stopifnot(identical(truth$handlers,"[]")) else {
-        report <- rawToChar(wire)
+        report <- wire
         ledger <- paste0('"handler_counts":',truth$handlers,',')
         stopifnot(sum(gregexpr('"handler_counts":',report,fixed=TRUE)[[1L]]>0L)==2L,
           sum(gregexpr(ledger,report,fixed=TRUE)[[1L]]>0L)==2L)
       }
       if(nzchar(truth$expected_csv)) {
         expected <- rawfile(file.path(case,truth$expected_csv))
-        stopifnot(is.data.frame(result$output),isTRUE(result$save()),identical(rawfile(output),expected))
+        stopifnot(is.data.frame(result$output),saved(result),identical(rawfile(output),expected))
         unlink(output)
-      } else stopifnot(is.null(result$output),inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"))
+      } else stopifnot(is.null(result$output),failed_save(result))
       stopifnot(!file.exists(output),identical(lapply(files,rawfile),retained))
       if(truth$schema_failure) stopifnot(is.null(wire))
     }
@@ -625,10 +733,10 @@ local({
     if(identical(name,"different-row-drivers")) stopifnot(truth$success,length(truth$issues$phase)==0L)
     stopifnot(file.copy(file.path(root,"row-cases",name),directory,recursive=TRUE))
     case <- file.path(directory,name);entry <- file.path(case,"spec.yaml")
-    result <- yamaa_domain(entry);check_issue_frame(result$issues,truth$issues)
-    observed <- get(".domain_observations",asNamespace("yamaa"))(result)
+    result <- run_spec(entry);check_issue_frame(result$issues,truth$issues)
+    observed <- domain_observations(result)
     if(!is.null(observed)) {
-      report <- rawToChar(observed)
+      report <- observed
       # Compare complete arrays literally; authored paths can contain brackets.
       ledger <- paste0('"handler_counts":',truth$ledger,',')
       stopifnot(sum(gregexpr('"handler_counts":',report,fixed=TRUE)[[1L]]>0L)==2L,
@@ -637,19 +745,19 @@ local({
     output <- file.path(case,truth$output)
     stopifnot(!file.exists(output))
     if(truth$success) {
-      stopifnot(!is.null(result$output),identical(result$save(),TRUE),
+      stopifnot(!is.null(result$output),saved(result),
         identical(rawfile(output),rawfile(file.path(case,"expected.csv"))),
-        identical(result$save(),TRUE),identical(rawfile(output),rawfile(file.path(case,"expected.csv"))))
+        saved(result),identical(rawfile(output),rawfile(file.path(case,"expected.csv"))))
     } else {
-      stopifnot(is.null(result$output),inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),!file.exists(output))
+      stopifnot(is.null(result$output),failed_save(result),!file.exists(output))
     }
     if(name %in% fixture_strings(host_truth[["row_driver_cases"]])) {
-      check_issue_frame(yamaa_check(entry)$issues,truth$issues)
+      check_issue_frame(check_spec(entry)$issues,truth$issues)
     }
   }
   original <- file.path(directory,"adam-adlb-supplb-padded-key")
   unlink(file.path(original,"input"),recursive=TRUE)
-  stopifnot(nrow(yamaa_check(file.path(original,"spec.yaml"))$issues)==0L,!file.exists(file.path(original,"input")))
+  stopifnot(nrow(check_spec(file.path(original,"spec.yaml"))$issues)==0L,!file.exists(file.path(original,"input")))
   cat("common input record rows match unchanged padded-key bytes, complete independent findings and reached handler ledgers without Python; EOT intermediate/grouped named-source execution passed\n")
 })
 
@@ -658,47 +766,47 @@ local({
   on.exit(unlink(directory,recursive=TRUE))
   handler_truth <- read.delim(file.path(root,"text-extract-handlers.tsv"),quote="",colClasses="character",check.names=FALSE)
   check_handlers <- function(result,case_name) {
-    report <- get(".domain_observations",asNamespace("yamaa"))(result)
+    report <- domain_observations(result)
     expected <- handler_truth$handlers[handler_truth$case==case_name]
     if(!is.null(report) && length(expected)) stopifnot(length(expected)==1L,
-      grepl(paste0('"handler_counts":',expected),rawToChar(report),fixed=TRUE))
+      grepl(paste0('"handler_counts":',expected),report,fixed=TRUE))
   }
   case_name <- "adam-adae-text-cleanup"
   stopifnot(file.copy(file.path(root,"cases",case_name),directory,recursive=TRUE))
   case <- file.path(directory,case_name);entry <- file.path(case,"spec.yaml")
   written <- rawfile(entry);input <- file.path(case,"input");held <- file.path(case,"held")
-  stopifnot(file.rename(input,held),nrow(yamaa_check(entry)$issues)==0L,file.rename(held,input))
-  result <- yamaa_domain(entry)
+  stopifnot(file.rename(input,held),nrow(check_spec(entry)$issues)==0L,file.rename(held,input))
+  result <- run_spec(entry)
   check_handlers(result,case_name)
   expected <- read.csv(file.path(case,"expected","adae.csv"),colClasses="character",na.strings="",check.names=FALSE)
-  for(column in c("AESEQ","AEREFNUM")) expected[[column]] <- structure(expected[[column]],class="yamaa_int64_vector")
+  for(column in c("AESEQ","AEREFNUM")) expected[[column]] <- as.double(expected[[column]])
   stopifnot(nrow(result$issues)==0L,identical(result$output,expected),identical(rawfile(entry),written),
-    !file.exists(file.path(case,"adae.csv")),identical(result$save(),TRUE),
+    !file.exists(file.path(case,"adae.csv")),saved(result),
     identical(rawfile(file.path(case,"adae.csv")),rawfile(file.path(case,"expected","adae.csv"))))
   case_name <- "negative-str-uncaptured-group"
   stopifnot(file.copy(file.path(root,"cases",case_name),directory,recursive=TRUE))
   case <- file.path(directory,case_name);unlink(file.path(case,"input"),recursive=TRUE)
-  checked <- yamaa_check(file.path(case,"spec.yaml"))$issues;rejected <- yamaa_domain(file.path(case,"spec.yaml"))
+  checked <- check_spec(file.path(case,"spec.yaml"))$issues;rejected <- run_spec(file.path(case,"spec.yaml"))
   stopifnot(nrow(checked)==1L,identical(checked$phase,"validation"),identical(checked$condition,"regex_group_out_of_range"),
     identical(checked$requirement,"REQ-0816"),identical(checked$spec_paths,list("columns.SITEID.derivation.str_extract.group")),
     identical(checked$context,'{"group":2,"group_count":1,"pattern":"^CATH-([^-]+)-[0-9]{4}$"}'),
-    identical(rejected$issues,checked),is.null(rejected$output),is.null(get(".domain_observations",asNamespace("yamaa"))(rejected)),
-    inherits(tryCatch(rejected$save(),error=identity),"yamaa_domain_error"))
+    identical(rejected$issues,checked),is.null(rejected$output),is.null(domain_observations(rejected)),
+    failed_save(rejected))
   failures <- read.delim(file.path(root,"text-extract-diagnostics.tsv"),quote="",colClasses="character",check.names=FALSE)
   for(index in seq_len(nrow(failures))) {
     finding <- failures[index,];case_name <- finding$case
     stopifnot(file.copy(file.path(root,"text-extract-cases",case_name),directory,recursive=TRUE))
-    case <- file.path(directory,case_name);rejected <- yamaa_domain(file.path(case,"spec.yaml"));actual <- rejected$issues
+    case <- file.path(directory,case_name);rejected <- run_spec(file.path(case,"spec.yaml"));actual <- rejected$issues
     check_handlers(rejected,case_name)
     stopifnot(nrow(actual)==1L,identical(actual$phase,finding$phase),identical(actual$condition,finding$condition),
       identical(actual$requirement,finding$requirement),identical(actual$spec_paths,list(finding$spec_path)),identical(actual$context,finding$context),
-      is.null(rejected$output),inherits(tryCatch(rejected$save(),error=identity),"yamaa_domain_error"),!file.exists(file.path(case,"output.csv")))
+      is.null(rejected$output),failed_save(rejected),!file.exists(file.path(case,"output.csv")))
   }
   for(case_name in c("optional-unentered","entered-empty","whole-empty","leftmost-alternative","last-repeated-capture","literal-null","nested-case","row-extract")) {
     stopifnot(file.copy(file.path(root,"text-extract-cases",case_name),directory,recursive=TRUE))
-    case <- file.path(directory,case_name);result <- yamaa_domain(file.path(case,"spec.yaml"))
+    case <- file.path(directory,case_name);result <- run_spec(file.path(case,"spec.yaml"))
     check_handlers(result,case_name)
-    stopifnot(nrow(result$issues)==0L,!file.exists(file.path(case,"output.csv")),identical(result$save(),TRUE),
+    stopifnot(nrow(result$issues)==0L,!file.exists(file.path(case,"output.csv")),saved(result),
       identical(rawfile(file.path(case,"output.csv")),rawfile(file.path(case,"expected.csv"))))
     if(case_name=="optional-unentered") stopifnot(identical(result$output$RESULT,NA_character_))
     if(case_name %in% c("entered-empty","whole-empty")) stopifnot(identical(result$output$RESULT,""))
@@ -714,42 +822,42 @@ local({
   paths <- read.delim(file.path(root,"text-template-directories.tsv"),quote="",colClasses="character",check.names=FALSE)
   directories <- setNames(paths$directory,paths$case)
   check_handlers <- function(result,name) {
-    observed <- get(".domain_observations",asNamespace("yamaa"))(result)
+    observed <- domain_observations(result)
     expected <- handlers$handlers[handlers$case==name]
     if(!is.null(observed) && length(expected)) stopifnot(length(expected)==1L,
-      grepl(paste0('"handler_counts":',expected),rawToChar(observed),fixed=TRUE))
+      grepl(paste0('"handler_counts":',expected),observed,fixed=TRUE))
   }
   name <- "adam-adsl-site-parse"
   stopifnot(file.copy(file.path(root,"cases",name),directory,recursive=TRUE))
   case <- file.path(directory,name);entry <- file.path(case,"spec.yaml");written <- rawfile(entry)
-  stopifnot(file.rename(file.path(case,"input"),file.path(case,"held")),nrow(yamaa_check(entry)$issues)==0L,
+  stopifnot(file.rename(file.path(case,"input"),file.path(case,"held")),nrow(check_spec(entry)$issues)==0L,
     file.rename(file.path(case,"held"),file.path(case,"input")))
-  result <- yamaa_domain(entry);check_handlers(result,name)
+  result <- run_spec(entry);check_handlers(result,name)
   expected <- read.csv(file.path(case,"expected","adsl.csv"),colClasses="character",na.strings="",check.names=FALSE)
   stopifnot(nrow(result$issues)==0L,identical(result$output,expected),identical(rawfile(entry),written),
-    !file.exists(file.path(case,"adsl.csv")),identical(result$save(),TRUE),
+    !file.exists(file.path(case,"adsl.csv")),saved(result),
     identical(rawfile(file.path(case,"adsl.csv")),rawfile(file.path(case,"expected","adsl.csv"))))
   name <- "negative-subject-reference"
   stopifnot(file.copy(file.path(root,"cases",name),directory,recursive=TRUE))
   case <- file.path(directory,name);unlink(file.path(case,"input"),recursive=TRUE)
-  checked <- yamaa_check(file.path(case,"spec.yaml"))$issues;result <- yamaa_domain(file.path(case,"spec.yaml"))
+  checked <- check_spec(file.path(case,"spec.yaml"))$issues;result <- run_spec(file.path(case,"spec.yaml"))
   stopifnot(nrow(checked)==1L,identical(checked$phase,"validation"),identical(checked$condition,"invalid_string_template"),
     identical(checked$requirement,"REQ-0461"),identical(checked$spec_paths,list("columns.SUBJREF.derivation.str_template")),
     identical(checked$context,'{"placeholder":"SITEID + \':\' + SUBJID","reason":"invalid_placeholder"}'),
-    identical(result$issues,checked),is.null(result$output),is.null(get(".domain_observations",asNamespace("yamaa"))(result)),
-    inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"))
+    identical(result$issues,checked),is.null(result$output),is.null(domain_observations(result)),
+    failed_save(result))
   failures <- read.delim(file.path(root,"text-template-diagnostics.tsv"),quote="",colClasses="character",check.names=FALSE)
   failures$requirement[!nzchar(failures$requirement)] <- NA_character_
   for(name in unique(failures$case)) {
     stopifnot(file.copy(file.path(root,"text-template-cases",directories[[name]]),directory,recursive=TRUE))
     case <- file.path(directory,name)
     if(directories[[name]]!=name) stopifnot(file.rename(file.path(directory,directories[[name]]),case))
-    result <- yamaa_domain(file.path(case,"spec.yaml"));actual <- result$issues
+    result <- run_spec(file.path(case,"spec.yaml"));actual <- result$issues
     expected <- failures[failures$case==name,];check_handlers(result,name)
     stopifnot(nrow(actual)==nrow(expected),identical(actual$phase,expected$phase),identical(actual$condition,expected$condition),
       identical(actual$requirement,expected$requirement),identical(actual$spec_paths,lapply(expected$spec_path,identity)),
       identical(actual$context,expected$context),is.null(result$output),
-      inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),!file.exists(file.path(case,"output.csv")))
+      failed_save(result),!file.exists(file.path(case,"output.csv")))
   }
   cases <- sort(paths$case)
   for(name in cases) {
@@ -759,8 +867,8 @@ local({
     stopifnot(file.copy(file.path(root,"text-template-cases",directories[[name]]),directory,recursive=TRUE))
     case <- file.path(directory,name)
     if(directories[[name]]!=name) stopifnot(file.rename(file.path(directory,directories[[name]]),case))
-    result <- yamaa_domain(file.path(case,"spec.yaml"));check_handlers(result,name)
-    stopifnot(nrow(result$issues)==0L,!file.exists(file.path(case,"output.csv")),identical(result$save(),TRUE),
+    result <- run_spec(file.path(case,"spec.yaml"));check_handlers(result,name)
+    stopifnot(nrow(result$issues)==0L,!file.exists(file.path(case,"output.csv")),saved(result),
       identical(rawfile(file.path(case,"output.csv")),rawfile(file.path(case,"expected.csv"))))
     if(name=="empty-template") stopifnot(identical(result$output$RESULT,""))
     if(name=="empty-string-value") stopifnot(identical(result$output$RESULT,"<>"))
@@ -781,22 +889,22 @@ local({
     written <- rawfile(entry);output <- file.path(case,"out.csv")
     for(attempt in seq_len(2L)) {
       stopifnot(!file.exists(output))
-      result <- yamaa_domain(entry);check_issue_frame(result$issues,truth$issues)
-      observed <- get(".domain_observations",asNamespace("yamaa"))(result)
+      result <- run_spec(entry);check_issue_frame(result$issues,truth$issues)
+      observed <- domain_observations(result)
       if(is.null(observed)) {
         stopifnot(identical(truth$handlers,"[]"))
       } else {
-        report <- rawToChar(observed)
+        report <- observed
         ledger <- paste0('"handler_counts":',truth$handlers,',')
         stopifnot(sum(gregexpr('"handler_counts":',report,fixed=TRUE)[[1L]]>0L)==2L,
           sum(gregexpr(ledger,report,fixed=TRUE)[[1L]]>0L)==2L)
       }
       if(truth$success) {
-        stopifnot(!is.null(result$output),identical(result$save(),TRUE),
+        stopifnot(!is.null(result$output),saved(result),
           identical(rawfile(output),rawfile(file.path(case,"expected.csv"))))
         unlink(output)
       } else {
-        stopifnot(is.null(result$output),inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"))
+        stopifnot(is.null(result$output),failed_save(result))
       }
       stopifnot(!file.exists(output),identical(rawfile(entry),written))
     }
@@ -826,25 +934,25 @@ local({
       "derivation: {case: [{when: 'FALSE', then: LOOK.VAL}, {otherwise: {literal: ok}}]}",written,fixed=TRUE)
     if(variant=="boolean_missing") written <- sub("TAB.KINT > 'bad'","FALSE AND TAB.KINT > 'bad'",written,fixed=TRUE)
     writeBin(charToRaw(written),entry)
-    result <- yamaa_domain(entry)
+    result <- run_spec(entry)
     if(variant=="unused") {
       # Every specification is pruned after composition (REQ-0638, REQ-0641): no
       # column reads LOOK, so pruning discards the intermediate together with its
       # ill-typed filter and the specification builds with no issues instead of
       # refusing the dead declaration.
-      stopifnot(nrow(result$issues)==0L,!is.null(result$output),identical(result$save(),TRUE),
+      stopifnot(nrow(result$issues)==0L,!is.null(result$output),saved(result),
         identical(rawfile(output),charToRaw("ID,V,V2\na,ok,ok\n")))
       unlink(file.path(case,c("src.csv","tab.csv")))
-      stopifnot(nrow(yamaa_check(entry)$issues)==0L)
+      stopifnot(nrow(check_spec(entry)$issues)==0L)
       unlink(case,recursive=TRUE)
       next
     }
     check_issue_frame(result$issues,if(variant=="duplicate") key_truth$dependency_before_bad_filter$issues else type_truth)
     stopifnot(is.null(result$output))
-    for(i in seq_len(2L)) stopifnot(inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"))
+    for(i in seq_len(2L)) stopifnot(failed_save(result))
     stopifnot(!file.exists(output))
     unlink(file.path(case,c("src.csv","tab.csv")))
-    check_issue_frame(yamaa_check(entry)$issues,type_truth)
+    check_issue_frame(check_spec(entry)$issues,type_truth)
     unlink(case,recursive=TRUE)
   }
   cat("retained filter types, original key ordering and check without source files passed\n")
@@ -899,17 +1007,17 @@ local({
   writeBin(charToRaw(body),entry)
   writeBin(charToRaw("ID,K,SEQ,V\na,x,2,5\nb,x,1,9\n"),file.path(directory,"src.csv"))
   writeBin(charToRaw("ID,K\nc,x\nd,x\n"),file.path(directory,"other.csv"))
-  result <- yamaa_domain(entry)
-  stopifnot(nrow(result$issues)==0L,identical(result$save(),TRUE),identical(rawfile(file.path(directory,"result.csv")),fixture_bytes(host_truth[["section_order_csv"]])))
-  observed <- rawToChar(get(".domain_observations",asNamespace("yamaa"))(result))
+  result <- run_spec(entry)
+  stopifnot(nrow(result$issues)==0L,saved(result),identical(rawfile(file.path(directory,"result.csv")),fixture_bytes(host_truth[["section_order_csv"]])))
+  observed <- domain_observations(result)
   check_handler_ledger(observed,"[{\"spec_path\":\"rows[1].derivations.V.compute.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"rows[2].derivations.V.compute.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":2},{\"spec_path\":\"columns.FINAL.derivation.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":5},{\"spec_path\":\"columns.FIRST.derivation.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":5}]")
 
   unlink(file.path(directory,fixture_strings(host_truth[["section_case_files"]])))
   writeBin(charToRaw(sub("SECTION: {literal: first}","SECTION: P.K",body,fixed=TRUE)),entry)
   expected <- list(phase="validation",condition="phase_boundary",requirement="REQ-0120",spec_paths=list("rows[0].derivations.SECTION.source"),context="{\"available_phase\":\"completed_prior_row_template\",\"identifier\":\"P.K\",\"required_phase\":\"row_construction\"}")
-  check_issue_frame(yamaa_check(entry)$issues,expected)
-  rejected <- yamaa_domain(entry);check_issue_frame(rejected$issues,expected)
-  stopifnot(is.null(rejected$output),is.null(get(".domain_observations",asNamespace("yamaa"))(rejected)),inherits(tryCatch(rejected$save(),error=identity),"yamaa_domain_error"),!file.exists(file.path(directory,"src.csv")),!file.exists(file.path(directory,"result.csv")))
+  check_issue_frame(check_spec(entry)$issues,expected)
+  rejected <- run_spec(entry);check_issue_frame(rejected$issues,expected)
+  stopifnot(is.null(rejected$output),is.null(domain_observations(rejected)),failed_save(rejected),!file.exists(file.path(directory,"src.csv")),!file.exists(file.path(directory,"result.csv")))
   cat("completed-template SELF borrowing, complete handlers and pre-study phase refusal passed without Python\n")
 })
 
@@ -921,10 +1029,10 @@ local({
   writeBin(charToRaw(body),entry)
   writeBin(charToRaw("ID\n2\n1\n3\n"),file.path(directory,"src.csv"))
   writeBin(fixture_bytes(host_truth[["duplicate_donor_csv"]]),file.path(directory,"donor.csv"))
-  result <- yamaa_domain(entry)
-  stopifnot(nrow(result$issues)==0L,identical(result$save(),TRUE),
+  result <- run_spec(entry)
+  stopifnot(nrow(result$issues)==0L,saved(result),
     identical(rawfile(file.path(directory,"result.csv")),fixture_bytes(host_truth[["duplicate_lookup_csv"]])))
-  observed <- rawToChar(get(".domain_observations",asNamespace("yamaa"))(result))
+  observed <- domain_observations(result)
   check_handler_ledger(observed,'[{"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":1},{"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":1},{"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":1},{"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":1}]')
   unlink(c(file.path(directory,"src.csv"),file.path(directory,"donor.csv"),file.path(directory,"result.csv")))
   cases <- list(
@@ -935,10 +1043,10 @@ local({
     writeBin(charToRaw(sub(case$remove,"",body,fixed=TRUE)),entry)
     expected <- list(phase="validation",condition=case$condition,requirement=case$requirement,
       spec_paths=list("intermediates[0]"),context=case$context)
-    checked <- yamaa_check(entry);check_issue_frame(checked$issues,expected)
-    rejected <- yamaa_domain(entry);check_issue_frame(rejected$issues,expected)
-    stopifnot(is.null(rejected$output),is.null(get(".domain_observations",asNamespace("yamaa"))(rejected)),
-      inherits(tryCatch(rejected$save(),error=identity),"yamaa_domain_error"),!file.exists(file.path(directory,"src.csv")))
+    checked <- check_spec(entry);check_issue_frame(checked$issues,expected)
+    rejected <- run_spec(entry);check_issue_frame(rejected$issues,expected)
+    stopifnot(is.null(rejected$output),is.null(domain_observations(rejected)),
+      failed_save(rejected),!file.exists(file.path(directory,"src.csv")))
   }
   cat("inferred applicable intermediate keys, stable shared selection and complete declaration failures passed without Python\n")
 })
@@ -950,11 +1058,11 @@ local({
   entry <- file.path(directory,"spec.yaml")
   writeBin(charToRaw(body),entry)
   writeBin(fixture_bytes(host_truth[["filtered_donor_csv"]]),file.path(directory,"src.csv"))
-  stopifnot(nrow(yamaa_check(entry)$issues)==0L)
-  result <- yamaa_domain(entry)
-  stopifnot(nrow(result$issues)==0L,identical(result$save(),TRUE),
+  stopifnot(nrow(check_spec(entry)$issues)==0L)
+  result <- run_spec(entry)
+  stopifnot(nrow(result$issues)==0L,saved(result),
     identical(rawfile(file.path(directory,"result.csv")),fixture_bytes(host_truth[["filtered_lookup_csv"]])))
-  observed <- rawToChar(get(".domain_observations",asNamespace("yamaa"))(result))
+  observed <- domain_observations(result)
   check_handler_ledger(observed,'[{"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":2},{"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":1},{"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":2},{"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":1}]')
   cat("same-input donor grain, shared missing field and complete handler accounting passed without Python\n")
 })
@@ -967,21 +1075,21 @@ local({
   writeBin(fixture_bytes(host_truth[["ordered_donor_csv"]]),file.path(directory,"donor.csv"))
   writeBin(charToRaw("ID,SEQ,CUT\n1,1,4\n3,1,2\n"),file.path(directory,"alt.csv"))
   writeBin(fixture_bytes(host_truth[["lookup_cutoff_yaml"]]),entry)
-  result <- yamaa_domain(entry)
-  stopifnot(nrow(result$issues)==0L,identical(result$save(),TRUE),identical(rawfile(file.path(directory,"result.csv")),fixture_bytes(host_truth[["lookup_cutoff_csv"]])))
-  observed <- rawToChar(get(".domain_observations",asNamespace("yamaa"))(result))
+  result <- run_spec(entry)
+  stopifnot(nrow(result$issues)==0L,saved(result),identical(rawfile(file.path(directory,"result.csv")),fixture_bytes(host_truth[["lookup_cutoff_csv"]])))
+  observed <- domain_observations(result)
   check_handler_ledger(observed,"[{\"spec_path\":\"columns.A.derivation.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"columns.A.derivation.source.no_match\",\"handler\":\"no_match\",\"count\":2},{\"spec_path\":\"columns.B.derivation.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"columns.B.derivation.source.no_match\",\"handler\":\"no_match\",\"count\":2}]")
   unlink(file.path(directory,"result.csv"))
   writeBin(fixture_bytes(host_truth[["lookup_alternative_yaml"]]),entry)
-  result <- yamaa_domain(entry)
-  stopifnot(nrow(result$issues)==0L,identical(result$save(),TRUE),identical(rawfile(file.path(directory,"result.csv")),charToRaw("ID,SEQ,A,B\n1,1,three,\n3,1,,\n")))
-  observed <- rawToChar(get(".domain_observations",asNamespace("yamaa"))(result))
+  result <- run_spec(entry)
+  stopifnot(nrow(result$issues)==0L,saved(result),identical(rawfile(file.path(directory,"result.csv")),charToRaw("ID,SEQ,A,B\n1,1,three,\n3,1,,\n")))
+  observed <- domain_observations(result)
   check_handler_ledger(observed,"[{\"spec_path\":\"rows[0].derivations.A.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"rows[0].derivations.B.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"rows[0].derivations.A.source.no_match\",\"handler\":\"no_match\",\"count\":1},{\"spec_path\":\"rows[0].derivations.B.source.no_match\",\"handler\":\"no_match\",\"count\":1}]")
   unlink(file.path(directory,"result.csv"))
   writeBin(charToRaw("schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: src.csv, types: {ID: int, SEQ: int, CUT: int}}\n  ALT: {path: alt.csv, types: {ID: int, SEQ: int, CUT: int}}\n  D: {path: donor.csv, types: {ID: int, TIME: int}}\noutput: {path: result.csv, columns: [ID, SEQ, A, B]}\nintermediates:\n  - id: P\n    dataset: D\n    key: [ID]\n    filter: \"D.TIME < SRC.CUT\"\n    order_by: [D.TIME]\n    keep: last\n    no_match: {literal: null}\nrows:\n  - id: alternate\n    dataset: ALT\n    derivations: {ID: ALT.ID, SEQ: ALT.SEQ, A: P.A, B: P.B}\ncolumns:\n  - {name: ID, type: int}\n  - {name: SEQ, type: int}\n  - {name: A, type: str}\n  - {name: B, type: str}\n"),entry)
-  rejected <- yamaa_domain(entry)
+  rejected <- run_spec(entry)
   check_issue_frame(rejected$issues,list(phase="validation",condition="unknown_field",requirement="REQ-0120",spec_paths=list("intermediates[0].filter"),context='{"identifier":"SRC.CUT","intermediate":"P"}'))
-  stopifnot(is.null(rejected$output),inherits(tryCatch(rejected$save(),error=identity),"yamaa_domain_error"),!file.exists(file.path(directory,"result.csv")))
+  stopifnot(is.null(rejected$output),failed_save(rejected),!file.exists(file.path(directory,"result.csv")))
   cat("correlated donor filters, actual current driver, complete findings and handler accounting passed without Python\n")
 })
 
@@ -993,19 +1101,19 @@ local({
   writeBin(charToRaw(body),entry)
   writeBin(charToRaw("ID,SELECT\n1,Y\n2,N\n3,Y\n"),file.path(directory,"src.csv"))
   writeBin(fixture_bytes(host_truth[["fallback_donor_csv"]]),file.path(directory,"donor.csv"))
-  result <- yamaa_domain(entry)
-  stopifnot(nrow(result$issues)==0L,identical(result$save(),TRUE),
+  result <- run_spec(entry)
+  stopifnot(nrow(result$issues)==0L,saved(result),
     identical(rawfile(file.path(directory,"result.csv")),charToRaw("ID,A,B\n1,first,\n2,skip,skip\n3,,\n")))
-  observed <- rawToChar(get(".domain_observations",asNamespace("yamaa"))(result))
+  observed <- domain_observations(result)
   check_handler_ledger(observed,"[{\"spec_path\":\"columns.A.derivation.case[0].then.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"columns.A.derivation.case[0].then.source.no_match\",\"handler\":\"no_match\",\"count\":1},{\"spec_path\":\"columns.B.derivation.case[0].then.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"columns.B.derivation.case[0].then.source.no_match\",\"handler\":\"no_match\",\"count\":1}]")
   for (variable in c("P.A", "P.ABSENT")) {
     writeBin(charToRaw(sub("then: P.A",paste0("then: {source: {variable: ",variable,", absent: fallback}}"),body,fixed=TRUE)),entry)
-    admitted <- yamaa_domain(entry)
+    admitted <- run_spec(entry)
     expected <- if (variable == "P.A") "ID,A,B\n1,first,\n2,skip,skip\n3,,\n" else host_truth[["fallback_lookup_csv"]]
     count <- if (variable == "P.A") "0" else "2"
-    stopifnot(nrow(admitted$issues)==0L, admitted$save(),
+    stopifnot(nrow(admitted$issues)==0L, saved(admitted),
       identical(rawfile(file.path(directory,"result.csv")), charToRaw(expected)))
-    observations <- rawToChar(get(".domain_observations",asNamespace("yamaa"))(admitted))
+    observations <- domain_observations(admitted)
     handler <- paste0('{"count":',count,',"handler":"absent","spec_path":"columns.A.derivation.case[0].then.source.absent"}')
     stopifnot(grepl(handler,observations,fixed=TRUE))
   }
@@ -1019,15 +1127,15 @@ local({
     directory <- tempfile("yamaa-case-predicate-");dir.create(directory)
     file.copy(list.files(case,full.names=TRUE),directory)
     entry <- file.path(directory,"spec.yaml")
-    result <- yamaa_domain(entry)
+    result <- run_spec(entry)
     expected <- file.path(directory,"expected.csv")
     if (file.exists(expected)) {
-      stopifnot(nrow(result$issues)==0L,identical(result$save(),TRUE),identical(rawfile(file.path(directory,"result.csv")),rawfile(expected)))
+      stopifnot(nrow(result$issues)==0L,saved(result),identical(rawfile(file.path(directory,"result.csv")),rawfile(expected)))
     } else {
       finding <- failures[failures$case==basename(case),,drop=FALSE]
       stopifnot(nrow(finding)==1L)
       check_issue_frame(result$issues,list(phase=finding$phase,condition=finding$condition,requirement=finding$requirement,spec_paths=list(finding$spec_path),context=finding$context))
-      stopifnot(is.null(result$output),inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),!file.exists(file.path(directory,"result.csv")))
+      stopifnot(is.null(result$output),failed_save(result),!file.exists(file.path(directory,"result.csv")))
     }
     unlink(directory,recursive=TRUE)
   }
@@ -1035,8 +1143,8 @@ local({
     case <- file.path(root,"cases",name)
     directory <- tempfile("yamaa-original-case-");dir.create(directory)
     file.copy(list.files(case,full.names=TRUE),directory,recursive=TRUE)
-    result <- yamaa_domain(file.path(directory,"spec.yaml"))
-    stopifnot(nrow(result$issues)==0L,identical(result$save(),TRUE))
+    result <- run_spec(file.path(directory,"spec.yaml"))
+    stopifnot(nrow(result$issues)==0L,saved(result))
     for (expected in list.files(file.path(directory,"expected"),pattern="\\.csv$",full.names=TRUE)) stopifnot(identical(rawfile(file.path(directory,basename(expected))),rawfile(expected)))
     unlink(directory,recursive=TRUE)
   }
@@ -1060,29 +1168,22 @@ local({
     directory <- tempfile("yamaa-source-selection-");dir.create(directory)
     file.copy(list.files(file.path(root,paste0(label,"-cases"),truth$directory),full.names=TRUE),directory)
     entry <- file.path(directory,"spec.yaml")
-    check_issue_frame(yamaa_check(entry)$issues,truth$check_issues)
-    result <- yamaa_domain(entry)
+    check_issue_frame(check_spec(entry)$issues,truth$check_issues)
+    result <- run_spec(entry)
     check_issue_frame(result$issues,truth$issues)
-    report <- rawToChar(get(".domain_observations",asNamespace("yamaa"))(result))
+    report <- domain_observations(result)
     check_handler_ledger(report,truth$handlers)
     expected_reads <- paste0('"source_reads":',truth$source_reads)
     stopifnot(grepl(expected_reads,report,fixed=TRUE),grepl('"artifacts":[]',report,fixed=TRUE))
     if (!is.null(truth$columns)) {
-      stopifnot(identical(names(result$output),names(truth$columns)))
-      for (column in names(truth$columns)) {
-        actual <- result$output[[column]]
-        if (truth$kinds[[column]] == "int") stopifnot(inherits(actual,"yamaa_int64_vector"))
-        else stopifnot(is.character(actual))
-        stopifnot(identical(is.na(actual),is.na(truth$columns[[column]])),
-          identical(as.character(actual),truth$columns[[column]]))
-      }
-      stopifnot(identical(result$save(),TRUE),
+      check_text_columns(result,truth)
+      stopifnot(saved(result),
         identical(rawfile(file.path(directory,"result.csv")),rawfile(file.path(directory,"expected.csv"))))
       writeBin(charToRaw("changed after build"),file.path(directory,"input.csv"))
-      stopifnot(identical(result$save(),TRUE),
+      stopifnot(saved(result),
         identical(rawfile(file.path(directory,"result.csv")),rawfile(file.path(directory,"expected.csv"))))
     } else stopifnot(is.null(result$output),
-      inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),!file.exists(file.path(directory,"result.csv")))
+      failed_save(result),!file.exists(file.path(directory,"result.csv")))
     unlink(directory,recursive=TRUE)
   }
   }
@@ -1099,10 +1200,10 @@ local({
     directory <- normalizePath(directory,winslash="/",mustWork=TRUE)
     file.copy(list.files(file.path(root,paste0(label,"-cases"),truth$directory),full.names=TRUE),directory)
     entry <- file.path(directory,"spec.yaml")
-    check_issue_frame(yamaa_check(entry)$issues,truth$check_issues)
-    result <- yamaa_domain(entry)
+    check_issue_frame(check_spec(entry)$issues,truth$check_issues)
+    result <- run_spec(entry)
     check_issue_frame(result$issues,truth$issues)
-    report <- rawToChar(get(".domain_observations",asNamespace("yamaa"))(result))
+    report <- domain_observations(result)
     check_handler_ledger(report,truth$handlers)
     if (!is.null(truth$verifications)) {
       expected <- gsub('"__SPECIFICATION__"',json_text(entry),truth$verifications,fixed=TRUE)
@@ -1111,21 +1212,14 @@ local({
     expected_reads <- paste0('"source_reads":',truth$source_reads)
     stopifnot(grepl(expected_reads,report,fixed=TRUE),grepl('"artifacts":[]',report,fixed=TRUE))
     if (!is.null(truth$columns)) {
-      stopifnot(identical(names(result$output),names(truth$columns)))
-      for (column in names(truth$columns)) {
-        actual <- result$output[[column]]
-        if (truth$kinds[[column]] == "int") stopifnot(inherits(actual,"yamaa_int64_vector"))
-        else stopifnot(is.character(actual))
-        stopifnot(identical(is.na(actual),is.na(truth$columns[[column]])),
-          identical(as.character(actual),truth$columns[[column]]))
-      }
-      stopifnot(identical(result$save(),TRUE),
+      check_text_columns(result,truth)
+      stopifnot(saved(result),
         identical(rawfile(file.path(directory,"result.csv")),rawfile(file.path(directory,"expected.csv"))))
       writeBin(charToRaw("changed after build"),file.path(directory,"donor.csv"))
-      stopifnot(identical(result$save(),TRUE),
+      stopifnot(saved(result),
         identical(rawfile(file.path(directory,"result.csv")),rawfile(file.path(directory,"expected.csv"))))
     } else stopifnot(is.null(result$output),
-      inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),!file.exists(file.path(directory,"result.csv")))
+      failed_save(result),!file.exists(file.path(directory,"result.csv")))
     unlink(directory,recursive=TRUE)
   }
   cat("independent completed-row selected assertions retain exact records, effects and Save bytes without Python\n")
@@ -1137,18 +1231,18 @@ local({
     entry <- file.path(directory,"spec.yaml")
     writeBin(charToRaw(truth$spec),entry)
     for (name in names(truth$parents)) writeBin(charToRaw(truth$parents[[name]]),file.path(directory,name))
-    checked <- yamaa_check(entry)$issues
+    checked <- check_spec(entry)$issues
     if (is.null(truth$check_condition)) stopifnot(nrow(checked)==0L)
     else stopifnot(identical(checked$condition[[1]],truth$check_condition))
     for (name in names(truth$inputs)) writeBin(charToRaw(truth$inputs[[name]]),file.path(directory,name))
-    result <- yamaa_domain(entry)
+    result <- run_spec(entry)
     if (is.null(truth$run_condition)) {
-      stopifnot(nrow(result$issues)==0L,identical(result$save(),TRUE),
+      stopifnot(nrow(result$issues)==0L,saved(result),
         identical(rawfile(file.path(directory,"result.csv")),charToRaw(truth$csv)))
     } else stopifnot(identical(result$issues$condition[[1]],truth$run_condition),is.null(result$output))
-    observations <- get(".domain_observations",asNamespace("yamaa"))(result)
+    observations <- domain_observations(result)
     if (!is.null(observations)) {
-      counts <- jsonlite::fromJSON(rawToChar(observations),simplifyVector=FALSE)$handler_counts
+      counts <- jsonlite::fromJSON(observations,simplifyVector=FALSE)$handler_counts
       reached <- sum(vapply(counts,function(item) if(item$handler=="no_match") item$count else 0,numeric(1)))
       stopifnot(reached==truth$no_match_count)
     }
@@ -1163,18 +1257,18 @@ local({
     entry <- file.path(directory,"spec.yaml")
     writeBin(charToRaw(truth$spec),entry)
     # Static checks must not access the CSV files, which do not exist yet.
-    checked <- yamaa_check(entry)$issues
+    checked <- check_spec(entry)$issues
     if (is.null(truth$check_condition)) stopifnot(nrow(checked)==0L)
     else stopifnot(truth$check_condition %in% checked$condition)
     for (name in names(truth$inputs)) writeBin(charToRaw(truth$inputs[[name]]),file.path(directory,name))
-    result <- yamaa_domain(entry)
+    result <- run_spec(entry)
     if (is.null(truth$run_condition)) {
-      stopifnot(nrow(result$issues)==0L,identical(result$save(),TRUE),
+      stopifnot(nrow(result$issues)==0L,saved(result),
         identical(rawfile(file.path(directory,"result.csv")),charToRaw(truth$csv)))
     } else stopifnot(truth$run_condition %in% result$issues$condition,is.null(result$output))
-    observations <- get(".domain_observations",asNamespace("yamaa"))(result)
+    observations <- domain_observations(result)
     if (!is.null(observations)) {
-      counts <- jsonlite::fromJSON(rawToChar(observations),simplifyVector=FALSE)$handler_counts
+      counts <- jsonlite::fromJSON(observations,simplifyVector=FALSE)$handler_counts
       reached <- sum(vapply(counts,function(item) if(item$handler=="unconvertible") item$count else 0,numeric(1)))
       stopifnot(reached==truth$unconvertible_count)
     }
@@ -1195,19 +1289,19 @@ local({
     directory <- tempfile("yamaa-temporal-"); dir.create(directory)
     entry <- file.path(directory,"spec.yaml")
     writeBin(charToRaw(truth$spec),entry)
-    assert_temporal_issues(yamaa_check(entry)$issues,truth$check_issue)
+    assert_temporal_issues(check_spec(entry)$issues,truth$check_issue)
     for (name in names(truth$inputs)) writeBin(charToRaw(truth$inputs[[name]]),file.path(directory,name))
-    result <- yamaa_domain(entry)
+    result <- run_spec(entry)
     assert_temporal_issues(result$issues,truth$run_issue)
-    if (!is.null(truth$csv)) stopifnot(identical(result$save(),TRUE),
+    if (!is.null(truth$csv)) stopifnot(saved(result),
       identical(rawfile(file.path(directory,"result.csv")),charToRaw(truth$csv)))
     else {
-      stopifnot(is.null(result$output),inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),
+      stopifnot(is.null(result$output),failed_save(result),
         !file.exists(file.path(directory,"result.csv")))
     }
-    observations <- get(".domain_observations",asNamespace("yamaa"))(result)
+    observations <- domain_observations(result)
     if (!is.null(observations)) {
-      counts <- jsonlite::fromJSON(rawToChar(observations),simplifyVector=FALSE)$handler_counts
+      counts <- jsonlite::fromJSON(observations,simplifyVector=FALSE)$handler_counts
       reached <- sum(vapply(counts,function(item) if(item$handler=="invalid") item$count else 0,numeric(1)))
       stopifnot(reached==truth$invalid_count)
     }
@@ -1224,8 +1318,8 @@ local({
     original <- rawfile(entry)
     # No input file exists: declaration admission must precede source access.
     for (attempt in 1:2) {
-      checked <- yamaa_check(entry)
-      result <- yamaa_domain(entry)
+      checked <- check_spec(entry)
+      result <- run_spec(entry)
       for (frame in list(checked$issues,result$issues)) {
         stopifnot(nrow(frame)==length(truth$issues))
         for (index in seq_along(truth$issues)) {
@@ -1238,7 +1332,7 @@ local({
         }
       }
       stopifnot(is.null(result$output),
-        inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),
+        failed_save(result),
         !file.exists(file.path(directory,"out.csv")),identical(rawfile(entry),original))
     }
     unlink(directory,recursive=TRUE)
@@ -1257,7 +1351,7 @@ local({
     entry <- file.path(directory,"spec.yaml")
     writeBin(charToRaw(truth$specification),entry)
     for (attempt in 1:2) {
-      checked <- yamaa_check(entry); result <- yamaa_domain(entry)
+      checked <- check_spec(entry); result <- run_spec(entry)
       for (check in list(list(frame=checked$issues,expected=truth$check_issues),
                          list(frame=result$issues,expected=truth$issues))) {
         frame <- check$frame
@@ -1271,10 +1365,10 @@ local({
             context_equal(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),expected$context))
         }
       }
-      if (!is.null(truth$csv)) stopifnot(identical(result$save(),TRUE),
+      if (!is.null(truth$csv)) stopifnot(saved(result),
         identical(rawfile(file.path(directory,"out.csv")),charToRaw(truth$csv)))
       else stopifnot(is.null(result$output),
-        inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),
+        failed_save(result),
         !file.exists(file.path(directory,"out.csv")))
     }
     unlink(directory,recursive=TRUE)
@@ -1294,8 +1388,8 @@ local({
         writeBin(charToRaw(truth$inputs[[name]]),path)
       } else if (!length(truth$issues)) next
       for (attempt in 1:2) {
-        checked <- yamaa_check(entry)
-        result <- yamaa_domain(entry)
+        checked <- check_spec(entry)
+        result <- run_spec(entry)
         for (frame in list(checked$issues,result$issues)) {
           stopifnot(nrow(frame)==length(truth$issues))
           for (index in seq_along(truth$issues)) {
@@ -1309,12 +1403,12 @@ local({
         }
         stopifnot(!file.exists(file.path(directory,"out.csv")))
         if (length(truth$issues)) stopifnot(is.null(result$output),
-          is.null(get(".domain_observations",asNamespace("yamaa"))(result)),
-          inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"))
+          is.null(domain_observations(result)),
+          failed_save(result))
         else {
           if (!is.null(truth$output_rows)) stopifnot(identical(result$output$K,"r1"),
             identical(result$output$XVAL,1))
-          stopifnot(identical(result$save(),TRUE),
+          stopifnot(saved(result),
             identical(rawfile(file.path(directory,"out.csv")),charToRaw(truth$csv)))
           unlink(file.path(directory,"out.csv"))
         }
@@ -1337,7 +1431,7 @@ local({
     entry <- file.path(directory,"spec.yaml")
     writeBin(charToRaw(truth$specification),entry)
     for (attempt in 1:2) {
-      checked <- yamaa_check(entry); result <- yamaa_domain(entry)
+      checked <- check_spec(entry); result <- run_spec(entry)
       for (check in list(list(frame=checked$issues,expected=truth$check_issues),
                          list(frame=result$issues,expected=truth$issues))) {
         frame <- check$frame
@@ -1351,10 +1445,10 @@ local({
             context_equal(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),expected$context))
         }
       }
-      if (!is.null(truth$csv)) stopifnot(identical(result$save(),TRUE),
+      if (!is.null(truth$csv)) stopifnot(saved(result),
         identical(rawfile(file.path(directory,"out.csv")),charToRaw(truth$csv)))
       else stopifnot(is.null(result$output),
-        inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),
+        failed_save(result),
         !file.exists(file.path(directory,"out.csv")))
     }
     unlink(directory,recursive=TRUE)
@@ -1364,7 +1458,7 @@ local({
 
 local({
   assert_diagnostic_sites <- function(actual,expected) {
-    stopifnot(identical(names(actual),fixture_strings(host_truth[["issue_columns"]])),
+    stopifnot(identical(names(actual),issue_columns),
       nrow(actual)==length(expected))
     for (i in seq_along(expected)) {
       finding <- expected[[i]]
@@ -1380,17 +1474,17 @@ local({
     directory <- tempfile("yamaa-diagnostic-sites-"); dir.create(directory)
     entry <- file.path(directory,"spec.yaml")
     writeBin(charToRaw(truth$specification),entry)
-    assert_diagnostic_sites(yamaa_check(entry)$issues,truth$check_issues)
+    assert_diagnostic_sites(check_spec(entry)$issues,truth$check_issues)
     for (name in names(truth$inputs)) {
       path <- file.path(directory,name); dir.create(dirname(path),recursive=TRUE,showWarnings=FALSE)
       writeBin(charToRaw(truth$inputs[[name]]),path)
     }
     for (attempt in 1:2) {
-      assert_diagnostic_sites(yamaa_check(entry)$issues,truth$check_issues)
-      result <- yamaa_domain(entry)
+      assert_diagnostic_sites(check_spec(entry)$issues,truth$check_issues)
+      result <- run_spec(entry)
       assert_diagnostic_sites(result$issues,truth$issues)
       stopifnot(is.null(result$output),
-        inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),
+        failed_save(result),
         !file.exists(file.path(directory,truth$output)))
     }
     unlink(directory,recursive=TRUE)
@@ -1410,7 +1504,7 @@ local({
     entry <- file.path(directory,"spec.yaml")
     writeBin(charToRaw(truth$specification),entry)
     for (attempt in 1:2) {
-      checked <- yamaa_check(entry); result <- yamaa_domain(entry)
+      checked <- check_spec(entry); result <- run_spec(entry)
       for (check in list(list(frame=checked$issues,expected=truth$check_issues),
                          list(frame=result$issues,expected=truth$issues))) {
         frame <- check$frame
@@ -1424,17 +1518,17 @@ local({
             context_equal(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),expected$context))
         }
       }
-      report <- jsonlite::fromJSON(rawToChar(get(".domain_observations",asNamespace("yamaa"))(result)),simplifyVector=FALSE)
+      report <- jsonlite::fromJSON(domain_observations(result),simplifyVector=FALSE)
       expected <- lapply(truth$verifications,function(record) {
         record$specification <- entry
         record
       })
       stopifnot(identical(report$verifications,expected),
         identical(report$handler_counts,truth$handler_counts))
-      if (!is.null(truth$csv)) stopifnot(identical(result$save(),TRUE),
+      if (!is.null(truth$csv)) stopifnot(saved(result),
         identical(rawfile(file.path(directory,"out.csv")),charToRaw(truth$csv)))
       else stopifnot(is.null(result$output),
-        inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),
+        failed_save(result),
         !file.exists(file.path(directory,"out.csv")))
     }
     unlink(directory,recursive=TRUE)
@@ -1453,7 +1547,7 @@ local({
     entry <- file.path(directory,"spec.yaml")
     writeBin(charToRaw(truth$specification),entry)
     for (attempt in 1:2) {
-      checked <- yamaa_check(entry); result <- yamaa_domain(entry)
+      checked <- check_spec(entry); result <- run_spec(entry)
       for (check in list(list(frame=checked$issues,expected=truth$check_issues),
                          list(frame=result$issues,expected=truth$issues))) {
         frame <- check$frame
@@ -1467,10 +1561,10 @@ local({
             context_equal(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),expected$context))
         }
       }
-      if (!is.null(truth$csv)) stopifnot(identical(result$save(),TRUE),
+      if (!is.null(truth$csv)) stopifnot(saved(result),
         identical(rawfile(file.path(directory,"out.csv")),charToRaw(truth$csv)))
       else stopifnot(is.null(result$output),
-        inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),
+        failed_save(result),
         !file.exists(file.path(directory,"out.csv")))
     }
     unlink(directory,recursive=TRUE)
@@ -1480,7 +1574,7 @@ local({
 
 local({
   assert_row_join_issues <- function(actual,expected) {
-    stopifnot(identical(names(actual),fixture_strings(host_truth[["issue_columns"]])),
+    stopifnot(identical(names(actual),issue_columns),
       nrow(actual)==length(expected))
     for (i in seq_along(expected)) {
       finding <- expected[[i]]
@@ -1497,21 +1591,21 @@ local({
     directory <- tempfile("yamaa-row-join-keys-"); dir.create(directory)
     entry <- file.path(directory,"spec.yaml")
     writeBin(charToRaw(truth$specification),entry)
-    assert_row_join_issues(yamaa_check(entry)$issues,truth$check_issues)
+    assert_row_join_issues(check_spec(entry)$issues,truth$check_issues)
     for (name in names(truth$inputs)) {
       path <- file.path(directory,name); dir.create(dirname(path),recursive=TRUE,showWarnings=FALSE)
       writeBin(charToRaw(truth$inputs[[name]]),path)
     }
     for (attempt in 1:2) {
-      assert_row_join_issues(yamaa_check(entry)$issues,truth$check_issues)
-      result <- yamaa_domain(entry)
+      assert_row_join_issues(check_spec(entry)$issues,truth$check_issues)
+      result <- run_spec(entry)
       assert_row_join_issues(result$issues,truth$issues)
       if (!is.null(truth$csv)) {
-        stopifnot(!is.null(result$output),identical(result$save(),TRUE),
+        stopifnot(!is.null(result$output),saved(result),
           identical(rawfile(file.path(directory,"out.csv")),charToRaw(truth$csv)))
         unlink(file.path(directory,"out.csv"))
       } else stopifnot(is.null(result$output),
-        inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),
+        failed_save(result),
         !file.exists(file.path(directory,"out.csv")))
     }
     unlink(directory,recursive=TRUE)
@@ -1537,25 +1631,25 @@ local({
     entry <- file.path(directory,"spec.yaml")
     writeBin(charToRaw(truth$specification),entry)
     if (length(truth$check_issues)) {
-      assert_key_issues(yamaa_check(entry)$issues,truth$check_issues)
-      assert_key_issues(yamaa_domain(entry)$issues,truth$check_issues)
+      assert_key_issues(check_spec(entry)$issues,truth$check_issues)
+      assert_key_issues(run_spec(entry)$issues,truth$check_issues)
     }
     for (name in names(truth$inputs)) writeBin(charToRaw(truth$inputs[[name]]),file.path(directory,name))
     for (attempt in 1:2) {
-      assert_key_issues(yamaa_check(entry)$issues,truth$check_issues)
-      result <- yamaa_domain(entry)
+      assert_key_issues(check_spec(entry)$issues,truth$check_issues)
+      result <- run_spec(entry)
       assert_key_issues(result$issues,truth$issues)
       stopifnot(!file.exists(file.path(directory,"out.csv")))
       if (length(truth$issues)) stopifnot(is.null(result$output),
-        inherits(tryCatch(result$save(),error=identity),"yamaa_domain_error"),
+        failed_save(result),
         !file.exists(file.path(directory,"out.csv")))
       else {
-        observations <- get(".domain_observations",asNamespace("yamaa"))(result)
-        counts <- jsonlite::fromJSON(rawToChar(observations),simplifyVector=FALSE)$handler_counts
-        stopifnot(identical(counts,truth$handlers),identical(result$save(),TRUE),
+        observations <- domain_observations(result)
+        counts <- jsonlite::fromJSON(observations,simplifyVector=FALSE)$handler_counts
+        stopifnot(identical(counts,truth$handlers),saved(result),
           identical(rawfile(file.path(directory,"out.csv")),charToRaw(truth$csv)))
         writeBin(charToRaw("changed after build"),file.path(directory,"source.csv"))
-        stopifnot(identical(result$save(),TRUE),
+        stopifnot(saved(result),
           identical(rawfile(file.path(directory,"out.csv")),charToRaw(truth$csv)))
         unlink(file.path(directory,"out.csv"))
         writeBin(charToRaw(truth$inputs[["source.csv"]]),file.path(directory,"source.csv"))

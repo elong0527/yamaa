@@ -201,7 +201,7 @@ mod inventory_rejection_tests {
             })),
         );
         assert_eq!(
-            crate::project_application::selection_failure(&rejected, Language::Python),
+            crate::project_application::selection_failure(&rejected),
             crate::file_application::preparation_failure(error().into_message())
         );
     }

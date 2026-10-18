@@ -992,7 +992,7 @@ mod schema {
                 Document::new(self.0, root).unwrap()
             }
         }
-        fn environment(count: usize) -> Document {
+        fn project(count: usize) -> Document {
             let mut a = Arena::default();
             let study = a.texts(&[
                 ("id", "STUDY01"),
@@ -1078,8 +1078,8 @@ mod schema {
         fn compose(
             documents: &[Document],
         ) -> Result<submission_composition::Study, Vec<submission_composition::Finding>> {
-            let environment = environment(documents.len());
-            let declared = submission_document::decode(&environment, environment.root()).unwrap();
+            let project = project(documents.len());
+            let declared = submission_document::decode(&project, project.root()).unwrap();
             let sources: Vec<_> = (0..documents.len())
                 .map(|index| format!("d{index}.yaml"))
                 .collect();
@@ -1096,9 +1096,14 @@ mod schema {
                     href: Some(&artifacts[index]),
                 })
                 .collect();
+            let section = &declared.sections()[0];
+            let required = submission_composition::Required::admit(
+                declared.study(),
+                Some(section),
+                section.family,
+            )?;
             submission_composition::compose(
-                declared.study().unwrap(),
-                &declared.sections()[0],
+                required,
                 &Catalogue::admit(vec![]).unwrap(),
                 &inputs,
                 &[],
@@ -1168,8 +1173,8 @@ mod schema {
                     N::Null,
                     N::Text("sdtm".into()),
                     N::Null,
-                    N::Text("language".into()),
-                    N::Text("r".into()),
+                    N::Text("environments".into()),
+                    N::Mapping(vec![]),
                     N::Mapping(vec![(0, 1), (2, 3), (4, 5), (6, 7), (8, 9)]),
                 ],
                 10,
@@ -1311,7 +1316,7 @@ mod schema {
             })
             .collect();
             let docs = a.node(N::Sequence(docs));
-            let xpt = a.text("xpt");
+            let datasets = a.text("json");
             let context = a.text("Other");
             let xml_lang = a.text("fr-CA");
             let file = a.text("FILE.analysis-1");
@@ -1328,17 +1333,19 @@ mod schema {
                 ("standard", guide),
                 ("specs", specs),
                 ("define", define),
-                ("transport", xpt),
+                ("datasets", datasets),
                 ("context", context),
                 ("xml_lang", xml_lang),
                 ("file_oid", file),
                 ("metadata_version", metadata),
                 ("stylesheet", style),
             ]);
-            let language = a.text("python");
+            // Other project domains are left to their own admission.
+            let python = a.text("python/environment.yaml");
+            let environments = a.map(vec![("python", python)]);
             let root = a.map(vec![
                 ("send", send),
-                ("language", language),
+                ("environments", environments),
                 ("study", study),
                 ("adam", adam),
                 ("sdtm", sdtm),
@@ -1372,9 +1379,10 @@ mod schema {
                 [Submission::Send, Submission::Adam, Submission::Sdtm]
             );
             let send = &owned.sections()[0];
-            assert_eq!(send.standard.name.value, GuideName::SendIgDart);
-            assert_eq!(send.standard.version.value, "3.4");
-            assert_eq!(send.standard.status.value, GuideStatus::Final);
+            let standard = send.standard.as_ref().unwrap();
+            assert_eq!(standard.name.value, GuideName::SendIgDart);
+            assert_eq!(standard.version.value, "3.4");
+            assert_eq!(standard.status.value, GuideStatus::Final);
             assert_eq!(
                 send.specs
                     .value
@@ -1383,9 +1391,10 @@ mod schema {
                     .collect::<Vec<_>>(),
                 ["specs/dm.yaml", "specs/ae.yaml"]
             );
-            assert_eq!(send.define.value, "results/define.xml");
+            assert_eq!(send.define.as_ref().unwrap().value, "results/define.xml");
             assert!(send.documents.value.is_empty());
-            assert!(send.transport.is_none());
+            // An absent dataset container writes only the Define-XML document.
+            assert!(send.datasets.is_none());
             assert_eq!(send.context.value, Context::Submission);
             assert_eq!(send.xml_lang.value, "en");
             for origin in [
@@ -1404,11 +1413,14 @@ mod schema {
                     && send.stylesheet.is_none()
             );
             let adam = &owned.sections()[1];
-            assert_eq!(adam.standard.name.value, GuideName::AdamIgMd);
             assert_eq!(
-                adam.transport.as_ref().map(|field| field.value),
-                Some(submission_document::Transport::Xpt)
+                adam.standard.as_ref().unwrap().name.value,
+                GuideName::AdamIgMd
             );
+            let datasets = adam.datasets.as_ref().unwrap();
+            assert_eq!(datasets.value, submission_document::Transport::DatasetJson);
+            assert_eq!(datasets.origin.field, F::Datasets);
+            assert!(datasets.origin.node.is_some() && datasets.origin.key.is_some());
             assert_eq!(adam.context.value, Context::Other);
             assert_eq!(adam.xml_lang.value, "fr-CA");
             assert_eq!(adam.file_oid.as_ref().unwrap().value, "FILE.analysis-1");
@@ -1451,7 +1463,10 @@ mod schema {
                     ("other", DocumentKind::Other, "notes/data.txt", "Notes"),
                 ]
             );
-            assert_eq!(owned.sections()[2].standard.name.value, GuideName::SdtmIgAp);
+            assert_eq!(
+                owned.sections()[2].standard.as_ref().unwrap().name.value,
+                GuideName::SdtmIgAp
+            );
         }
         #[test]
         fn every_shipped_guide_spelling_is_closed_metadata_not_family_composition() {
@@ -1473,16 +1488,18 @@ mod schema {
                 let root = a.map(vec![("sdtm", section)]);
                 let input = a.finish(root);
                 let owned = submission_document::decode(&input, root).unwrap();
-                assert_eq!(owned.sections()[0].standard.name.value, expected);
-                assert_eq!(owned.sections()[0].standard.name.value.name(), text);
+                let standard = owned.sections()[0].standard.as_ref().unwrap();
+                assert_eq!(standard.name.value, expected);
+                assert_eq!(standard.name.value.name(), text);
                 assert!(owned.study().is_none()); // missing generator prerequisites remain a separate use case.
             }
         }
         #[test]
         fn absent_declarations_and_explicit_default_values_have_distinct_origin_facts() {
             let mut a = Arena::default();
-            let language = a.text("r");
-            let root = a.map(vec![("language", language)]);
+            let r = a.text("r/environment.yaml");
+            let environments = a.map(vec![("r", r)]);
+            let root = a.map(vec![("environments", environments)]);
             let input = a.finish(root);
             let owned = submission_document::decode(&input, root).unwrap();
             assert!(owned.study().is_none());
@@ -1492,7 +1509,7 @@ mod schema {
             let specs = a.node(N::Sequence(vec![]));
             let define = a.text("define.xml");
             let documents = a.node(N::Sequence(vec![]));
-            let flag = a.text("dataset_json");
+            let datasets = a.text("json");
             let context = a.text("Submission");
             let lang = a.text("en");
             let section = a.map(vec![
@@ -1500,7 +1517,7 @@ mod schema {
                 ("specs", specs),
                 ("define", define),
                 ("documents", documents),
-                ("transport", flag),
+                ("datasets", datasets),
                 ("context", context),
                 ("xml_lang", lang),
             ]);
@@ -1510,7 +1527,7 @@ mod schema {
             let s = &owned.sections()[0];
             for (origin, expected) in [
                 (s.documents.origin, documents),
-                (s.transport.as_ref().unwrap().origin, flag),
+                (s.datasets.as_ref().unwrap().origin, datasets),
                 (s.context.origin, context),
                 (s.xml_lang.origin, lang),
             ] {
@@ -1538,7 +1555,7 @@ mod schema {
                 ("title", ""),
             ]);
             let documents = a.node(N::Sequence(vec![doc]));
-            let flag = a.text("true");
+            let datasets = a.text("parquet");
             let context = a.text("submission");
             let language = a.text("e-123456789");
             let file = a.text("");
@@ -1551,7 +1568,7 @@ mod schema {
                 ("specs", specs),
                 ("define", define),
                 ("documents", documents),
-                ("transport", flag),
+                ("datasets", datasets),
                 ("context", context),
                 ("xml_lang", language),
                 ("file_oid", file),
@@ -1609,6 +1626,12 @@ mod schema {
                     Step::Field(F::Link)
                 ]
             );
+            // `datasets` is a closed choice whose only container is `json`.
+            assert_eq!(
+                findings[12].path.steps().collect::<Vec<_>>(),
+                [Step::Field(F::Adam), Step::Field(F::Datasets)]
+            );
+            assert_eq!(findings[12].requirement(), None);
             assert_eq!(
                 findings
                     .iter()
@@ -1644,13 +1667,13 @@ mod schema {
         #[test]
         fn null_optional_fields_are_original_shape_findings_not_absent_defaults() {
             let mut a = Arena::default();
-            let guide = a.guide("SENDIG");
             let specs = a.node(N::Sequence(vec![]));
-            let define = a.text("d.xml");
-            let mut fields = vec![("standard", guide), ("specs", specs), ("define", define)];
+            let mut fields = vec![("specs", specs)];
             for key in [
+                "standard",
+                "define",
                 "documents",
-                "transport",
+                "datasets",
                 "context",
                 "xml_lang",
                 "file_oid",
@@ -1670,6 +1693,8 @@ mod schema {
             assert_eq!(
                 findings.iter().map(|f| f.kind).collect::<Vec<_>>(),
                 [
+                    Kind::ExpectedMapping,
+                    Kind::ExpectedText,
                     Kind::ExpectedSequence,
                     Kind::ExpectedText,
                     Kind::ExpectedText,
@@ -1807,11 +1832,9 @@ mod schema {
             let root = a.map(vec![("adam", section)]);
             let input = a.finish(root);
             let owned = submission_document::decode(&input, root).unwrap();
-            assert_eq!(
-                owned.sections()[0].standard.status.value,
-                GuideStatus::Draft
-            );
-            assert_eq!(owned.sections()[0].standard.version.value, "1.3");
+            let standard = owned.sections()[0].standard.as_ref().unwrap();
+            assert_eq!(standard.status.value, GuideStatus::Draft);
+            assert_eq!(standard.version.value, "1.3");
             assert!(owned.sections()[0]
                 .metadata_version
                 .as_ref()
@@ -1839,6 +1862,55 @@ mod schema {
             let owned = submission_document::decode(&empty, 0).unwrap();
             assert!(owned.sections().is_empty());
             assert!(owned.study().is_none());
+        }
+        #[test]
+        fn a_section_listing_only_specs_admits_and_leaves_define_declarations_to_composition() {
+            use yamaa_core::submission_composition::Required;
+            for (name, family) in [
+                ("sdtm", Submission::Sdtm),
+                ("adam", Submission::Adam),
+                ("send", Submission::Send),
+            ] {
+                let mut a = Arena::default();
+                let spec = a.text("specs/dm.yaml");
+                let specs = a.node(N::Sequence(vec![spec]));
+                let section = a.map(vec![("specs", specs)]);
+                let root = a.map(vec![(name, section)]);
+                let input = a.finish(root);
+                let owned = submission_document::decode(&input, root).unwrap();
+                drop(input);
+                assert!(owned.study().is_none());
+                let s = &owned.sections()[0];
+                assert_eq!(s.family, family);
+                assert_eq!(
+                    s.specs
+                        .value
+                        .iter()
+                        .map(|v| v.value.as_str())
+                        .collect::<Vec<_>>(),
+                    ["specs/dm.yaml"]
+                );
+                assert_eq!(s.specs.origin.node, Some(specs));
+                assert!(s.standard.is_none() && s.define.is_none() && s.datasets.is_none());
+                assert!(s.documents.value.is_empty());
+                assert_eq!(s.context.value, Context::Submission);
+                assert_eq!(s.xml_lang.value, "en");
+                // Only Define-XML composition requires the study, guide and target.
+                let Err(findings) = Required::admit(owned.study(), Some(s), family) else {
+                    panic!("composition requires the define declarations")
+                };
+                assert_eq!(
+                    findings
+                        .iter()
+                        .map(|finding| finding.path.as_str())
+                        .collect::<Vec<_>>(),
+                    [
+                        "study".to_string(),
+                        format!("{name}.standard"),
+                        format!("{name}.define")
+                    ]
+                );
+            }
         }
 
         #[test]
@@ -2171,7 +2243,7 @@ mod schema {
                 Document::new(self.0, root).unwrap()
             }
         }
-        fn environment() -> Document {
+        fn project() -> Document {
             let mut a = Arena::default();
             let study = a.texts(&[
                 ("id", "VLSTUDY"),
@@ -2339,11 +2411,16 @@ mod schema {
             a.finish(root)
         }
         fn compose(document: &Document) -> Result<Study, Vec<submission_composition::Finding>> {
-            let environment = environment();
-            let declared = submission_document::decode(&environment, environment.root()).unwrap();
+            let project = project();
+            let declared = submission_document::decode(&project, project.root()).unwrap();
+            let section = &declared.sections()[0];
+            let required = submission_composition::Required::admit(
+                declared.study(),
+                Some(section),
+                section.family,
+            )?;
             submission_composition::compose(
-                declared.study().unwrap(),
-                &declared.sections()[0],
+                required,
                 &Catalogue::admit(vec![]).unwrap(),
                 &[Input {
                     document,

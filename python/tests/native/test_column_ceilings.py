@@ -17,7 +17,6 @@ pytest.importorskip(
 )
 
 import yamaa
-from yamaa.resources import MemoryResolver
 
 
 def write_case(tmp_path, *, columns, typed_fields=0, source_format="csv"):
@@ -73,27 +72,71 @@ def compiler_limit_rows(result):
     ]
 
 
+def project_file(tmp_path):
+    """A project that lists spec.yaml and links an empty Python environment."""
+    (tmp_path / "environment.yaml").write_text("schema_version: '1.0'\n")
+    project = tmp_path / "project.yaml"
+    project.write_text(
+        "schema_version: '1.0'\nenvironments: {python: environment.yaml}\n"
+        "adam: {specs: [spec.yaml]}\n"
+    )
+    return project
+
+
+def operations(spec, project):
+    """Check and run one specification, alone or as its project names it."""
+    specification = (
+        yamaa.spec(spec) if project is None else yamaa.project(project).spec("TEST")
+    )
+    return specification.check(), specification.run()
+
+
+def refusals(spec, project):
+    """The one finding of checking and of running a specification without a name.
+
+    A project selects only a specification it can read a `domain` from, so
+    through a project the refusal comes from checking and running the project,
+    and each finding there also names the listed file as `entry` and `source`.
+    """
+    if project is None:
+        frames = [result.issues for result in operations(spec, None)]
+    else:
+        listed = yamaa.project(project)
+        frames = [listed.check().issues, listed.run().issues]
+    findings = []
+    for frame in frames:
+        assert frame.height == 1
+        finding = frame.row(0, named=True)
+        finding["context"] = json.loads(finding["context"])
+        if project is not None:
+            identity = spec.resolve().as_posix()
+            assert finding["context"].pop("entry") == identity
+            assert finding["context"].pop("source") == identity
+        findings.append(finding)
+    return findings
+
+
 def test_declared_and_output_columns_admit_1024_and_refuse_1025(tmp_path):
     spec = write_case(tmp_path, columns=1024)
-    assert yamaa.check(spec).issues.height == 0
-    built = yamaa.domain(spec)
+    assert yamaa.spec(spec).check().issues.height == 0
+    built = yamaa.spec(spec).run()
     assert built.issues.height == 0
     assert built.output.width == 1024
     assert built.output.row(0) == ("S-001", *["x"] * 1023)
 
     spec = write_case(tmp_path, columns=1025)
-    assert compiler_limit_rows(yamaa.check(spec))
+    assert compiler_limit_rows(yamaa.spec(spec).check())
 
 
 def test_typed_source_fields_admit_1024_and_refuse_1025(tmp_path):
     spec = write_case(tmp_path, columns=1, typed_fields=1024)
-    assert yamaa.check(spec).issues.height == 0
-    built = yamaa.domain(spec)
+    assert yamaa.spec(spec).check().issues.height == 0
+    built = yamaa.spec(spec).run()
     assert built.issues.height == 0
     assert built.output.to_dict(as_series=False) == {"ID": ["S-001"]}
 
     spec = write_case(tmp_path, columns=1, typed_fields=1025)
-    assert compiler_limit_rows(yamaa.check(spec))
+    assert compiler_limit_rows(yamaa.spec(spec).check())
 
 
 @pytest.mark.parametrize("source_format", ["csv", "parquet"])
@@ -106,7 +149,7 @@ def test_source_width_admits_1024_and_refuses_1025(tmp_path, source_format):
         # Without its types, the dataset is written as its bare path.
         document["input"]["SRC"] = document["input"]["SRC"]["path"]
         spec.write_text(yaml.safe_dump(document))
-        built = yamaa.domain(spec)
+        built = yamaa.spec(spec).run()
         if width == 1024:
             assert built.issues.height == 0
             assert built.output.to_dict(as_series=False) == {"ID": ["S-001"]}
@@ -126,15 +169,15 @@ def test_wide_producer_contract_and_decoder_build(tmp_path):
     consumer["output"] = {"path": "consumer.csv", "columns": ["ID"]}
     spec = tmp_path / "consumer.yaml"
     spec.write_text(yaml.safe_dump(consumer))
-    assert yamaa.check(spec).issues.height == 0
+    assert yamaa.spec(spec).check().issues.height == 0
     # Callers build and save the producer before the consumer reads its artifact.
-    assert yamaa.domain(producer).save()
-    built = yamaa.domain(spec)
+    yamaa.spec(producer).run().save()
+    built = yamaa.spec(spec).run()
     assert built.issues.height == 0
     assert built.output.to_dict(as_series=False) == {"ID": ["S-001"]}
 
 
-@pytest.mark.parametrize("environment", [False, True])
+@pytest.mark.parametrize("project", [False, True])
 @pytest.mark.parametrize(
     ("resource", "limit", "actual", "path"),
     [
@@ -144,8 +187,8 @@ def test_wide_producer_contract_and_decoder_build(tmp_path):
         ("projected_columns", 1024, 1025, "output.columns"),
     ],
 )
-def test_compiler_refusal_details_on_check_and_domain(
-    tmp_path, environment, resource, limit, actual, path
+def test_compiler_refusal_details_on_check_and_run(
+    tmp_path, project, resource, limit, actual, path
 ):
     spec = write_case(
         tmp_path,
@@ -164,13 +207,7 @@ def test_compiler_refusal_details_on_check_and_domain(
     if resource == "projected_columns":
         document["output"]["columns"] = ["ID"] * actual
     spec.write_text(yaml.safe_dump(document))
-    kwargs = {}
-    if environment:
-        env = tmp_path / "environment.yaml"
-        env.write_text("schema_version: '1.0'\nlanguage: python\n")
-        kwargs["environment"] = env
-    for operation in (yamaa.check, yamaa.domain):
-        result = operation(spec, **kwargs)
+    for result in operations(spec, project_file(tmp_path) if project else None):
         assert result.issues.height == 1
         issue = result.issues.row(0, named=True)
         assert issue["phase"] == "engine"
@@ -186,9 +223,9 @@ def test_compiler_refusal_details_on_check_and_domain(
         }
 
 
-@pytest.mark.parametrize("environment", [False, True])
+@pytest.mark.parametrize("project", [False, True])
 def test_inheritance_depth_admits_original_chain_and_parent_occurrences_keep_fixed_bound(
-    tmp_path, environment
+    tmp_path, project
 ):
     spec = write_case(tmp_path, columns=1)
     (tmp_path / "base.yaml").write_text(spec.read_text())
@@ -198,42 +235,28 @@ def test_inheritance_depth_admits_original_chain_and_parent_occurrences_keep_fix
             f"schema_version: '1.0'\nparent: {parent}\n"
         )
     spec.write_text("schema_version: '1.0'\nparent: layer-0.yaml\n")
-    kwargs = {}
-    if environment:
-        env = tmp_path / "environment.yaml"
-        env.write_text("schema_version: '1.0'\nlanguage: python\n")
-        kwargs["environment"] = env
-    assert yamaa.check(spec, **kwargs).issues.height == 0
-    built = yamaa.domain(spec, **kwargs)
+    project = project_file(tmp_path) if project else None
+    checked, built = operations(spec, project)
+    assert checked.issues.height == 0
     assert built.issues.height == 0
     assert built.output.to_dict(as_series=False) == {"ID": ["S-001"]}
-    assert built.save()
+    built.save()
     assert (tmp_path / "out.csv").read_bytes() == b"ID\nS-001\n"
 
     # Each layer names one parent, so only a chain of 8,193 distinct layers
-    # reaches the occurrence bound. Serve that chain from memory rather than
-    # writing thousands of files; without the bound it would reach the base.
-    objects = {
-        f"layer-{index}.yaml": (
-            f"schema_version: '1.0'\nparent: layer-{index + 1}.yaml\n"
-        ).encode("ascii")
-        for index in range(8193)
-    }
-    objects["layer-8193.yaml"] = (tmp_path / "base.yaml").read_bytes()
-    memory = {}
-    if environment:
-        objects["environment.yaml"] = env.read_bytes()
-        memory["environment"] = "environment.yaml"
-    resolver = MemoryResolver(objects)
-    for operation in (yamaa.check, yamaa.domain):
-        result = operation("layer-0.yaml", resolver=resolver, **memory)
-        assert result.issues.height == 1
-        issue = result.issues.row(0, named=True)
+    # reaches the occurrence bound; without the bound it would reach the base.
+    for index in range(1, 8193):
+        (tmp_path / f"chain-{index}.yaml").write_text(
+            f"schema_version: '1.0'\nparent: chain-{index + 1}.yaml\n"
+        )
+    (tmp_path / "chain-8193.yaml").write_text((tmp_path / "base.yaml").read_text())
+    spec.write_text("schema_version: '1.0'\nparent: chain-1.yaml\n")
+    for issue in refusals(spec, project):
         assert issue["phase"] == "engine"
         assert issue["condition"] == "engine_rejected"
         assert issue["requirement"] is None
         assert issue["spec_paths"] == []
-        assert json.loads(issue["context"]) == {
+        assert issue["context"] == {
             "code": "resource_limit",
             "stage": "prepare",
             "phase": "inheritance",
@@ -241,31 +264,23 @@ def test_inheritance_depth_admits_original_chain_and_parent_occurrences_keep_fix
             "limit": 8192,
             "actual": 8193,
         }
-    assert resolver.outputs == {}
     assert (tmp_path / "out.csv").read_bytes() == b"ID\nS-001\n"
 
 
-@pytest.mark.parametrize("environment", [False, True])
-def test_wide_yaml_integer_reaches_its_complete_language_finding(tmp_path, environment):
+@pytest.mark.parametrize("project", [False, True])
+def test_wide_yaml_integer_reaches_its_complete_language_finding(tmp_path, project):
     spec = write_case(tmp_path, columns=1)
     digits = "9" * 4097
-    kwargs = {}
-    if environment:
-        env = tmp_path / "environment.yaml"
-        env.write_text("schema_version: '1.0'\nlanguage: python\n")
-        kwargs["environment"] = env
+    project = project_file(tmp_path) if project else None
     for text, actual in (
         ("value: " + digits + "\n", None),
         ("schema_version: " + digits + "\n", int(digits)),
     ):
         spec.write_text(text)
-        for operation in (yamaa.check, yamaa.domain):
-            result = operation(spec, **kwargs)
-            assert result.issues.height == 1
-            issue = result.issues.row(0, named=True)
+        for issue in refusals(spec, project):
             assert issue["phase"] == "validation"
             assert issue["condition"] == "schema_version_mismatch"
             assert issue["requirement"] == "REQ-0281"
             assert issue["spec_paths"] == ["schema_version"]
-            assert json.loads(issue["context"]) == {"expected": "1.0", "actual": actual}
+            assert issue["context"] == {"expected": "1.0", "actual": actual}
     assert not (tmp_path / "out.csv").exists()

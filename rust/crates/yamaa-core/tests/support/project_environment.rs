@@ -2,7 +2,7 @@ use std::collections::BTreeSet;
 use yamaa_core::json::Value as JsonValue;
 use yamaa_core::{
     diagnostic::ConditionCode,
-    project_environment::{self, Draft},
+    project_environment::{self, Draft, LockKind, LockReference},
     project_environment_diagnostics,
     project_function::Language,
     project_terminology::{Codelist, DataType, External, Item, Source, Standard},
@@ -68,6 +68,8 @@ pub fn extended_alias_reached() -> BTreeSet<ConditionCode> {
     assert_eq!(finding.context.len(), 3);
     BTreeSet::from([finding.code])
 }
+/// A project that links a Python environment file with no functions and
+/// declares two invalid codelists of its own.
 pub fn draft() -> Draft {
     let items = vec![
         Item {
@@ -100,15 +102,13 @@ pub fn draft() -> Draft {
         }),
     };
     Draft {
-        language: Some(Language::R),
+        language: Some(Language::Python),
         lock: None,
         functions: Some(vec![]),
         codelists: vec![Source {
             standard: None,
             codelists: vec![list.clone(), list],
         }],
-        has_study: false,
-        submissions: vec![],
     }
 }
 pub fn reached() -> BTreeSet<ConditionCode> {
@@ -116,7 +116,6 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     let findings = project_environment::validate(Language::Python, &d);
     let projected = project_environment_diagnostics::diagnostics(&d, &findings).unwrap();
     let expected = [
-        ("runner_language_mismatch", "REQ-0696", "language"),
         (
             "codelist_shape_invalid",
             "REQ-0947",
@@ -214,12 +213,17 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         assert_eq!(finding.operand_route, None);
         reached.insert(finding.code);
     }
-    let mut missing_language = d.clone();
-    missing_language.language = None;
-    missing_language.codelists.clear();
-    let findings = project_environment::validate(Language::Python, &missing_language);
+    // The `environments` key states the language, so only the captured lock
+    // syntax can disagree with it.
+    let mut lock_mismatch = d.clone();
+    lock_mismatch.lock = Some(LockReference {
+        written: "renv.lock".into(),
+        kind: LockKind::Renv,
+    });
+    lock_mismatch.codelists.clear();
+    let findings = project_environment::validate(Language::Python, &lock_mismatch);
     let projected =
-        project_environment_diagnostics::diagnostics(&missing_language, &findings).unwrap();
+        project_environment_diagnostics::diagnostics(&lock_mismatch, &findings).unwrap();
     assert_eq!(projected.len(), 1);
     let finding = &projected[0];
     assert_eq!(
@@ -234,8 +238,11 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             Some("REQ-0695")
         ),
     );
-    assert_eq!(finding.spec_paths, ["language"]);
-    assert_eq!(finding.context["reason"], "missing_language");
+    assert_eq!(finding.spec_paths, ["lock"]);
+    assert_eq!(finding.context.len(), 3);
+    assert_eq!(finding.context["reason"], "lock_kind_mismatch");
+    assert_eq!(finding.context["language"], "python");
+    assert_eq!(finding.context["actual_lock_kind"], "renv");
     assert_eq!(finding.source_span, None);
     assert_eq!(finding.operand_route, None);
     reached.insert(finding.code);
@@ -249,7 +256,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             "unreadable",
         ),
     ] {
-        let finding = failure.diagnostic("/study/environment.yaml");
+        let finding = failure.diagnostic("/study/project.yaml");
         assert_eq!(
             (
                 finding.definition().phase,
@@ -267,7 +274,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         assert_eq!(finding.context["cause"], JsonValue::String(cause.into()),);
         assert_eq!(
             finding.context["path"],
-            JsonValue::String("/study/environment.yaml".into()),
+            JsonValue::String("/study/project.yaml".into()),
         );
         assert_eq!(finding.source_span, None);
         assert_eq!(finding.operand_route, None);

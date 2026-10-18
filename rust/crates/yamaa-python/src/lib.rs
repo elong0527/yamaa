@@ -2,40 +2,28 @@
 // Authoritative source: rust/interface/bindings.yaml (see rust/interface/README.md).
 //! Python composition roots and lossless public result conversion.
 use pyo3::prelude::*;
+mod api_entry;
 mod arrow_bridge;
-mod define_entry;
-mod domain_entry;
+mod context_values;
 mod function_callback;
 mod project_activation;
-mod report_fields;
-mod resolved_artifact;
-mod resource_resolver;
 mod style;
 #[pymodule]
 fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add("_CORE_VERSION", yamaa::VERSION)?;
     module.add_class::<arrow_bridge::ArrowTable>()?;
-    module.add_class::<define_entry::Define>()?;
-    module.add(
-        "DefineError",
-        module.py().get_type::<define_entry::DefineError>(),
-    )?;
-    module.add_function(wrap_pyfunction!(define_entry::_define_file, module)?)?;
-    module.add_class::<domain_entry::Domain>()?;
-    module.add(
-        "DomainError",
-        module.py().get_type::<domain_entry::DomainError>(),
-    )?;
-    module.add_function(wrap_pyfunction!(domain_entry::_domain_file, module)?)?;
-    module.add_function(wrap_pyfunction!(domain_entry::_check_file, module)?)?;
-    module.add_function(wrap_pyfunction!(
-        resolved_artifact::_resolve_specification_file,
-        module
-    )?)?;
-    module.add_function(wrap_pyfunction!(
-        resolved_artifact::_read_resolved_specification,
-        module
-    )?)?;
+    module.add("_Error", module.py().get_type::<api_entry::_Error>())?;
+    module.add_class::<api_entry::Run>()?;
+    module.add_class::<api_entry::ProjectRun>()?;
+    module.add_class::<api_entry::Submission>()?;
+    module.add_function(wrap_pyfunction!(api_entry::_spec_check, module)?)?;
+    module.add_function(wrap_pyfunction!(api_entry::_spec_run, module)?)?;
+    module.add_function(wrap_pyfunction!(api_entry::_spec_resolve, module)?)?;
+    module.add_function(wrap_pyfunction!(api_entry::_project_spec, module)?)?;
+    module.add_function(wrap_pyfunction!(api_entry::_project_check, module)?)?;
+    module.add_function(wrap_pyfunction!(api_entry::_project_run, module)?)?;
+    module.add_function(wrap_pyfunction!(api_entry::_project_submission, module)?)?;
+    module.add_function(wrap_pyfunction!(api_entry::_read_odm, module)?)?;
     module.add_function(wrap_pyfunction!(style::_style_same_value, module)?)?;
     Ok(())
 }

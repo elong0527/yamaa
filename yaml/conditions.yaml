@@ -45,6 +45,8 @@ conditions:
   duplicate_intermediate_records: {phases: [verification]}
   duplicate_key: {phases: [output]}
   duplicate_order_term: {phases: [validation]}
+  # PROJECT-5
+  duplicate_specification_name: {phases: [validation]}
   empty_string_present_unsupported: {phases: [validation]}
   engine_rejected: {phases: [engine]}
   field_parse_failed: {phases: [ingest]}
@@ -90,9 +92,9 @@ conditions:
   missing_derivation: {phases: [validation]}
   missing_input: {phases: [mapping]}
   missing_key: {phases: [output]}
+  missing_report: {phases: [validation]}
   missing_required_field: {phases: [validation]}
   missing_value_required: {phases: [validation]}
-  missing_warning_log: {phases: [validation]}
   # REQ-0504; also emitted by the retained aggregate reference validator.
   mixed_relations: {phases: [validation]}
   model_contract_mismatch: {phases: [validation]}
@@ -121,6 +123,10 @@ conditions:
   phase_boundary: {phases: [validation]}
   predecessor_label_mismatch: {phases: [validation]}
   producer_contract_mismatch: {phases: [validation]}
+  # PROJECT-11
+  producer_not_completed: {phases: [validation]}
+  # PROJECT-8
+  producer_workflow_cycle: {phases: [validation]}
   prohibited_construct: {phases: [validation]}
   prohibited_function: {phases: [validation]}
   project_environment_invalid: {phases: [validation]}
@@ -144,7 +150,6 @@ conditions:
   resource_path_symlink: {phases: [validation]}
   resource_path_uri_scheme: {phases: [validation]}
   row_count_failed: {phases: [verification]}
-  runner_language_mismatch: {phases: [validation]}
   runtime_artifact_mismatch: {phases: [validation]}
   sas_name_too_long: {phases: [validation]}
   schema_version_mismatch: {phases: [validation]}
@@ -188,9 +193,13 @@ conditions:
   unknown_operation: {phases: [validation]}
   unknown_project_function: {phases: [validation]}
   unknown_reference: {phases: [validation]}
+  # PROJECT-6
+  unknown_specification_name: {phases: [validation]}
   unknown_standard: {phases: [validation]}
   unknown_standard_family: {phases: [validation]}
   unknown_window: {phases: [validation]}
+  # PROJECT-10
+  unlinked_producer: {phases: [validation]}
   unmapped_value: {phases: [mapping]}
   unmatched_key: {phases: [join]}
   unmatched_pattern: {phases: [mapping]}

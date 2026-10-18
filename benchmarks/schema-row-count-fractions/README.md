@@ -21,17 +21,19 @@ bounds with an inclusive edge, and a deliberately violated warning.
   so the check holds and pins the inclusive count boundary.
 - Unflagged subjects stay at or under one half: 5 of 8 do not, so the
   check is violated. It is a warning, so the run still succeeds and the
-  warning log carries the broken check.
+  run report carries the broken check.
 
-The check log records `REPORT_VERSION`, `ARTIFACT`, `SPEC_PATH`,
-`VERIFICATION_ID`, `CHECK`, `TARGET`, `REQUIREMENT`, `SEVERITY`,
-`OUTCOME`, `CONDITION`, `EVALUATED_COUNT`, `FAILURE_COUNT`, and
-`DETAILS`. The group check evaluates two groups; the others evaluate the
-whole dataset as one unit. A held check leaves `CONDITION` empty and
-reports zero failures; the violated warning names its condition and
-reports how many rows matched out of how many.
-
-The warning log records `LOG_VERSION`, `ARTIFACT`, `SEVERITY`,
-`CONDITION`, `REQUIREMENT`, `SPEC_PATH`, `VERIFICATION_ID`,
-`FAILURE_COUNT`, `OFFENDING_KEYS`, and `DETAILS`. A dataset-level check
-has no offending rows, so it carries an empty key set.
+The run report (`adsl-checks.csv`) has one row per item the run handled,
+each naming the dataset (`ARTIFACT`), the kind of item (`KIND`), where the
+spec states it (`SPEC_PATH`) and its subject (`NAME`): the run and its
+outcome (`OUTCOME`), the subjects read and built, each output column with
+its missing values and longest text, then one row per check in the order
+the run evaluated them. A check row carries its label (`ID`), the rule it
+applies (`RULE`), its `SEVERITY`, and how many units failed out of how
+many it evaluated (`COUNT`, `TOTAL`): the group check evaluates two
+groups and the others the whole dataset as one unit. Every check covers
+the dataset rather than one column, so none names a column (`TARGET`).
+A held check leaves `CONDITION` and `KEYS` empty, reports zero failures
+and has empty details (`{}`). The violated warning names its condition,
+reports in `DETAILS` how many rows matched out of how many, and lists one
+empty key (`[{}]`): a check over the whole dataset has no offending rows.

@@ -20,7 +20,7 @@ tracker, one work item per root cause.
         README.md                  # the data contract
         spec.yaml                  # one entry specification
         spec_<name>.yaml ...       # alternatives, parents or producers
-        environment.yaml           # when the entry generates a document
+        project.yaml               # environments, terminology and sections
         input/                     # independently authored source files
         expected/                  # exact output, logs, documents or error
         python/environment.yaml    # when Python calls a project function
@@ -35,15 +35,20 @@ standard: SDTM
 domain: DM
 ```
 
-A case with one `spec*.yaml` runs that file in both hosts. When present,
-`python/environment.yaml` and `r/environment.yaml` supply their respective host
-function environments. A root `environment.yaml` is not selected implicitly.
-Project function definitions, parameters and tests stay in their existing
-explicit environment files.
+A case with one `spec*.yaml` runs that file in both hosts. When present, the
+root `project.yaml` is the project every call passes, in both hosts. Its
+`environments` map links `python/environment.yaml` and `r/environment.yaml`,
+and each host reads only its own entry; its `codelists`, `study` and
+`sdtm`/`adam`/`send` sections carry the study metadata. Project function
+definitions, parameters and tests stay in the explicit environment files,
+which declare no language: the `environments` key states it. A section needs
+only `specs` to run; `study`, `standard` and `define` are required only by
+Define-XML. No other file is selected implicitly.
 
 A case with several specifications declares the public calls in order. Both
 hosts must be present; each call names its specification and may override its
-host environment, including an explicit `null` to call without one. Put the
+project in the `environment` field, including an explicit `null` to call
+without one. Put the
 primary entry last in both host lists; the dashboard selects the final Python
 call as the page's entry specification:
 
@@ -61,22 +66,25 @@ entries:
       environment: null
 ```
 
-A case whose study environment composes a submission section declares that
-Define call, so the fixed-time Define suites and `tools.benchmark` run it over
-the case's published tables and compare `expected/` byte for byte:
+A case whose project composes a submission section declares that project
+submission in `define`, so the fixed-time Define suites and `tools.benchmark`
+run it over the case's published tables and compare `expected/` byte for byte.
+Its `environment` names the project file, as an entry's does, and its
+`standard` the section the submission composes:
 
 ```yaml
 define:
-  environment: environment.yaml
+  environment: project.yaml
   standard: sdtm
   created: '2026-09-11T00:00:00'
 ```
 
-`expected/` then holds the Define-XML document and each transport file
-(`.xpt` or `.json`) beside the published tables, or, for a negative case,
-`expected/error.yaml` with the Define call's first issue; its domain build
-must still succeed. `.xpt` goldens are written by
-`python -m tools.conformance.xpt_goldens` from the hand-authored tables there.
+`expected/` then holds the Define-XML document and each transport file the
+section's `datasets` requests (`.xpt` for `xpt`, `.json` for `json`) beside
+the published tables, or, for a negative case, `expected/error.yaml` with the
+submission's first issue; its domain build must still succeed. `.xpt` goldens
+are written by `python -m tools.conformance.xpt_goldens` from the
+hand-authored tables there.
 
 `sdtm-dm-race-ethnicity` is the worked producer/consumer example. Each producer
 commits its own expected artifact beside the entry's. A `schema` link only types
@@ -150,19 +158,31 @@ for another reason.
 ## A benchmark that needs project code
 
 A `function` call names a logical function with arguments only. A benchmark
-passes an explicit environment file that declares its host language, packaging
-lock and inline or file-backed function definitions and tests. Equivalent
-Python/R examples carry equivalent definitions, independently written in each
-host's syntax, and share the unchanged specification and expected outputs.
+passes an explicit project file whose `environments` map links one environment
+file per host language. Each environment file declares that host's packaging
+lock and inline or file-backed function definitions and tests; its lock and
+function paths resolve from the environment file, and the project's own paths
+resolve from `project.yaml`. Equivalent Python/R examples carry equivalent
+definitions, independently written in each host's syntax, and share the
+unchanged specification, project and expected outputs:
+
+```yaml
+schema_version: '1.0'
+environments:
+  python: python/environment.yaml
+  r: r/environment.yaml
+adam:
+  specs:
+  - spec.yaml
+```
 
 Function implementations are ordinary installed packages. The benchmark program
 packages live in `rust/tests/project-programs/`; no vendored runtime artifact,
 contract fingerprint or activation cache is used. The original function
 studies are copied outside the checkout by `tools/staging/stage_project_inputs.py`.
-It copies the sole existing `python/uv.lock` beside each Python environment;
-committed R locks contain versions without hashes. Each host entry selects its
-`python/environment.yaml` or `r/environment.yaml` explicitly. The subdirectories
-are fixture organization, not implicit project-root selection.
+It copies the sole existing `python/uv.lock` beside the Python environment file
+the project links; committed R locks contain versions without hashes. The
+subdirectories are fixture organization, not implicit project-root selection.
 
 An expected failure before a dataset is completed replaces the CSV with
 `expected/error.yaml`, unless the intended artifact is useful as a forward
@@ -336,11 +356,9 @@ aggregate formula at `aggregate` and a lone flag condition at
 class, and a written long form that only restates its shorthand fails at its
 own path as `redundant_long_form`.
 
-Every validation-phase negative case declares `validation` in `benchmark.yaml`:
-`rule` plus exactly one `validator` family or open `blocked_by: "#N"` issue.
-The primary condition and specification paths stay solely in the independent
-`expected/error.yaml`. Implemented validators must emit that condition at every
-expected path. Add `covers: [operation, "verify:operation"]` to the metadata for
+The primary condition and specification paths of a negative case stay solely
+in the independent `expected/error.yaml`; `benchmark.yaml` carries no
+validation block. Add `covers: [operation, "verify:operation"]` to the metadata for
 vocabulary failure coverage; shared installed refusals declare `covers` beside
 their existing cases in the shared host fixture owner.
 

@@ -9,6 +9,7 @@ from pathlib import Path, PurePosixPath
 import yaml
 
 HOSTS = ("python", "r")
+PROJECT = "project.yaml"
 LIFECYCLES = {"draft": "lightgrey", "reviewed": "yellow", "finalized": "brightgreen"}
 DEFINE_STANDARDS = ("sdtm", "adam", "send")
 CREATED = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}")
@@ -166,7 +167,13 @@ def relative_file(case, value, field):
 
 
 def entries(case, metadata=None):
-    """Preserve authored call order and explicit per-host environments."""
+    """Preserve authored call order and the explicit project each call passes.
+
+    A case's root `project.yaml` is the default for every call in both hosts;
+    its `environments` key links each host's environment file. An entry's
+    `environment` field names that project file, or is None for a call that
+    opens its specification without a project.
+    """
     metadata = load_metadata(case) if metadata is None else metadata
     declared = metadata.get("entries")
     if "entries" not in metadata:
@@ -187,8 +194,7 @@ def entries(case, metadata=None):
             f"{case}: {host} entries must be a nonempty list",
         )
         result[host] = []
-        default = f"{host}/environment.yaml"
-        default = default if (case / default).is_file() else None
+        default = PROJECT if (case / PROJECT).is_file() else None
         for call in calls:
             require(
                 isinstance(call, dict)
@@ -210,20 +216,26 @@ def entries(case, metadata=None):
 
 
 def compare_define(case, staged, define):
-    """Run the declared Define call over saved artifacts and compare it.
+    """Run the declared project submission over saved artifacts and compare it.
 
-    A positive case compares every held document and transport file with
-    ``expected/`` byte for byte; a negative case compares its first issue with
-    the partial assertion of ``expected/error.yaml``. Returns the problems.
+    `define` names the project file in its `environment` field and the
+    submission section in its `standard` field. A positive case saves the
+    submission and compares every file it writes, the Define-XML document and
+    each transport file, with ``expected/`` byte for byte; a negative case
+    compares its first issue with the partial assertion of
+    ``expected/error.yaml``. Returns the problems.
     """
     import json
 
-    from yamaa import define as compose
+    import yamaa
 
-    result = compose(
-        staged / define["environment"], define["standard"], created=define["created"]
-    )
-    issues = result.issues.to_dicts()
+    try:
+        result = yamaa.project(staged / define["environment"]).submission(
+            define["standard"], created=define["created"]
+        )
+        issues = result.issues.to_dicts()
+    except yamaa.Error as error:
+        result, issues = None, error.issues.to_dicts()
     for issue in issues:
         issue["context"] = json.loads(issue["context"])
     negative = case / "expected" / "error.yaml"
@@ -250,9 +262,21 @@ def compare_define(case, staged, define):
         return []
     if issues:
         return [f"define issues: {issues}"]
+
+    def files():
+        return {
+            path.relative_to(staged).as_posix(): path.read_bytes()
+            for path in staged.rglob("*")
+            if path.is_file()
+        }
+
+    before = files()
+    result.save()
     problems = []
-    for name, content, _ in result._native.artifacts():
-        truth = case / "expected" / Path(name).name
+    for name, content in sorted(files().items()):
+        if before.get(name) == content:
+            continue
+        truth = case / "expected" / PurePosixPath(name).name
         verdict = (
             "matches"
             if truth.is_file() and truth.read_bytes() == content
@@ -264,19 +288,54 @@ def compare_define(case, staged, define):
     return problems
 
 
+def specification_name(path):
+    """The `domain` a project names a listed specification by (PROJECT-5).
+
+    Layers contribute from the root ancestor down to the entry file, a later
+    layer taking precedence (LAYER-3), so the layer nearest the entry that
+    writes `domain` supplies the name.
+    """
+    import yaml12
+
+    layer, chain = Path(path), set()
+    while True:
+        identity = layer.resolve()
+        require(identity not in chain, f"{path}: cyclic parent at {layer}")
+        chain.add(identity)
+        try:
+            document = yaml12.parse_yaml(layer.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValueError) as error:
+            raise ValueError(f"{layer}: {error}") from error
+        require(isinstance(document, dict), f"{layer}: expected a mapping")
+        if "domain" in document:
+            name = document["domain"]
+            break
+        parent = document.get("parent")
+        if parent is None:
+            name = None
+            break
+        require(isinstance(parent, str) and parent, f"{layer}: parent must be one path")
+        layer = layer.parent / parent
+    require(
+        isinstance(name, str) and bool(name),
+        f"{path}: no layer names the specification's domain",
+    )
+    return name
+
+
 def main():
     """Build a case's declared Python entries in order inside a staged copy.
 
     Each entry is saved in the staged copy before the next entry is built, so a
     later entry reads an earlier entry's artifact at its own declared path, as
-    a `schema` link requires. A case declaring ``define`` then runs that Define
-    call over the saved artifacts and compares it with ``expected/``. Nothing
-    is published into the checkout.
+    a `schema` link requires. A case declaring ``define`` then runs that
+    project submission over the saved artifacts and compares it with
+    ``expected/``. Nothing is published into the checkout.
     """
     parser = argparse.ArgumentParser(description=main.__doc__)
     parser.add_argument("case", type=Path, help="benchmark directory")
     case = parser.parse_args().case.resolve()
-    from yamaa import domain
+    import yamaa
 
     from tools.staging.stage_project_inputs import stage_case
 
@@ -291,11 +350,14 @@ def main():
             ignore=shutil.ignore_patterns("expected", "README.md", "benchmark.yaml"),
         )
         for call in calls:
-            environment = call["environment"]
-            result = domain(
-                staged / call["specification"],
-                environment=None if environment is None else staged / environment,
-            )
+            specification = staged / call["specification"]
+            project = call["environment"]
+            if project is None:
+                spec = yamaa.spec(specification)
+            else:
+                name = specification_name(specification)
+                spec = yamaa.project(staged / project).spec(name)
+            result = spec.run()
             output = result.output
             if output is None:
                 parser.exit(1, f"{call['specification']}: {result.issues}\n")

@@ -1,86 +1,89 @@
 # Project functions
 
 This file is a profile: it is optional, and it applies only to a build whose
-caller supplies a project environment declaring `functions`, and to the
-specification calls that name them. Project code runs in the environment's one
-host language through statically named installed callables, its contract is
-closed, and its inline tests run before any study data is read. A build
-without project functions is unaffected, except that a supplied project
-environment is admitted under [FUNC-2](#func-2).
+caller supplies a project file linking an environment file that declares
+`functions` for the host language, and to the specification calls that name
+them. Project code runs in that host language through statically named
+installed callables, its contract is closed, and its inline tests run before
+any study data is read. A build without project functions is unaffected,
+except that a linked environment file is admitted under [FUNC-2](#func-2).
 
-## The project environment
+## The environment file
 
 <a id="func-1"></a>
 
-### FUNC-1. Project functions come only from an environment file the caller supplies
+### FUNC-1. Project functions come only from the environment file the caller's project links for the host language
 
 A portable specification may declare a logical `function` call before project
 code exists: structural authoring validates its versionless `name` and closed
 argument-leaf shape, and contract-dependent checks require an explicitly
-supplied environment. The caller supplies one environment file through
-`environment=` to `domain` or `check`. A specification cannot select, replace or
-override the environment, and no adjacent environment or language subdirectory
-is discovered implicitly.
+supplied project file that links an environment for the host language. The
+project's `environments` entry for that language links the one environment
+file the host reads ([PROJECT-2](project.md#project-2)). A specification cannot
+select, replace or override the project or its environments.
 
 Fails: `project_environment_missing`.
-Evidence: `rust/crates/yamaa-adapters/tests/file_project.rs::absent_environment_selects_plain_route_without_capturing_or_inventing_metadata`, `rust/crates/yamaa-adapters/tests/file_project.rs::unavailable_environment_precedes_bad_entry_and_valid_environment_is_retained_before_missing_entry`, `python/tests/installed/installed_public_environment.py::test_supplied_missing_environment_precedes_bad_or_absent_entry_without_activation`.
+Evidence: `rust/crates/yamaa-adapters/tests/file_project.rs::unavailable_environment_precedes_bad_entry_and_valid_environment_is_retained_before_missing_entry`, `python/tests/installed/installed_public_environment.py::test_missing_environment_file_precedes_bad_or_absent_entry_without_activation`, `python/tests/installed/installed_public_environment.py::test_each_host_reads_only_its_own_environment_entry`.
 Replaces: REQ-0662, REQ-0663, REQ-0694.
 
-Omission never creates an environment implicitly. Every path declared in the
-environment resolves relative to that file under the admitted resource policy
-of [File resolution](../reference/files.md). A supplied environment that cannot
-be read fails with `project_environment_missing`; a call without an
-implementation environment cannot execute.
+Omission never creates an environment implicitly, and no adjacent environment
+or language subdirectory is discovered. Every path an environment file declares
+resolves relative to that file under the admitted resource policy of
+[File resolution](../reference/files.md). A supplied project file that cannot
+be read fails with `project_environment_missing`. A call to a project function
+when the supplied project links no environment for the host language cannot
+execute: it fails with `project_environment_missing`, reported at each call
+with the host language. A call when no project is supplied names no declared
+function under [FUNC-4](#func-4).
 
 <a id="func-2"></a>
 
-### FUNC-2. The environment is admitted on its own against the environment schema before any activation or study read
+### FUNC-2. An environment file is admitted on its own against the environment schema before any activation or study read
 
-The environment is independently admitted against `schema_environment.yaml`.
-`schema_version` selects the schema bundle, and there is no environment content
-version. Missing, unreadable or invalid supplied metadata fails before
-activation or study reads. An invalid environment, definition, test or
-duplicate logical declaration fails, and static checking returns every
-independently inferable finding before activation.
+An environment file is independently admitted against
+`schema_environment.yaml`. `schema_version` selects the schema bundle, and
+there is no environment content version. A missing, unreadable or invalid
+project file, linked environment file or declared metadata resource fails
+before activation or study reads. An invalid project file, environment file,
+definition, test or duplicate logical declaration fails, and static checking
+returns every independently inferable finding before activation.
 
 Fails: `project_environment_invalid`.
-Evidence: `schema-functions`, `rust/crates/yamaa-adapters/tests/file_project.rs::metadata_failures_name_each_written_dependency_and_cause_before_study_reads`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::invalid_inline_scalars_do_not_mask_independent_root_header_findings`.
+Evidence: `schema-functions`, `rust/crates/yamaa-adapters/tests/file_project.rs::metadata_failures_name_each_written_dependency_and_cause_before_study_reads`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::inline_scalars_report_alone_without_study_or_language_findings_and_unlinked_hosts_read_nothing`.
 Replaces: REQ-0664, REQ-0695, REQ-1080.
 
-A missing or invalid declared metadata resource reports its written path,
-declaring environment field and concrete cause, and invalid YAML retains its
-line, column and parser reason.
+A missing or invalid declared metadata resource, including the environment
+file a project links, reports its written path, declaring field and concrete
+cause, and invalid YAML retains its line, column and parser reason.
 
-`language`, `lock` and `functions` declare installed code; `codelists` supplies
-study terminology; `study` and the `sdtm`, `adam` and `send` sections carry
-submission metadata for [Define-XML](define-xml.md). A submission section
-requires `study`. Domain builds do not open submission document links or
-generate a Define-XML artifact. Each submission section may declare a
-non-empty `source_system_version` string; its value overrides source-system
-version metadata in both Define-XML and Dataset-JSON, and omission selects the
-actual installed yamaa version. Qualification retains the actual generator
-version separately from this metadata override.
+An environment file declares `schema_version`, and `lock` and `functions`
+declare installed code. The language comes from the project `environments` key
+that links the file ([FUNC-3](#func-3)). Study terminology and submission
+metadata belong to the project file ([PROJECT-3](project.md#project-3)), not to
+an environment file.
 
-The `lock` and external function and codelist declarations are local resource
-paths under [File resolution](../reference/files.md). Relative spellings start
-at the environment file that declares them. Absolute local paths and parent
-segments have the same meaning as domain resource paths, and an absent file
-fails at that location without configuration discovery or fallback search.
+The `lock` and external function declarations are local resource paths under
+[File resolution](../reference/files.md). Relative spellings start at the
+environment file that declares them, not at the project file that links it
+([PROJECT-4](project.md#project-4)). Absolute local paths and parent segments
+have the same meaning as domain resource paths, and an absent file fails at
+that location without configuration discovery or fallback search.
 
 <a id="func-3"></a>
 
 ### FUNC-3. One host language applies to every function, and a declared lock pins the called packages
 
-`language` is exactly `r` or `python`, applies to every function definition,
-and is required when `functions` is present. `lock` optionally names the
-packaging lock for the running environment: uv TOML for Python or renv JSON for
-R. On each build that calls a function with a declared lock, before any study
-read, the host verifies the installed version of yamaa and of every called
-function package against the captured lock.
+The `environments` key that links an environment file, exactly `python` or
+`r`, states the language of that file and applies to every function definition
+it declares; an environment file has no language field of its own. `lock`
+optionally names the packaging lock for that language: uv TOML for Python or
+renv JSON for R. On each build that calls a function with a declared lock,
+before any study read, the host verifies the installed version of yamaa and of
+every called function package against the captured lock.
 
-Fails: `runner_language_mismatch`, `runtime_artifact_mismatch`, `project_environment_invalid`.
-Evidence: `schema-functions`, `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::language_and_lock_kind_findings_are_core_owned_after_capture_without_code_authority`, `rust/crates/yamaa-adapters/tests/project_environment.rs::lock_and_actual_conformance_mismatches_keep_complete_zero_read_reports`.
-Replaces: REQ-0665, REQ-0666, REQ-0667, REQ-0696, REQ-0697.
+Fails: `runtime_artifact_mismatch`, `project_environment_invalid`.
+Evidence: `schema-functions`, `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::lock_kind_and_function_findings_are_core_owned_after_capture_without_code_authority`, `rust/crates/yamaa-adapters/tests/project_environment.rs::lock_and_actual_conformance_mismatches_keep_complete_zero_read_reports`.
+Replaces: REQ-0665, REQ-0666, REQ-0667, REQ-0697.
 
 Parallel bindings and per-function language choices are invalid. `lock` is
 optional, including when `functions` is present. Omission uses the installed
@@ -90,18 +93,15 @@ valid. The packaging tool manages installation, code and transitive
 dependencies; yamaa neither vendors, resolves, pins nor caches project code.
 Captured bytes establish the lock format independently of the filename.
 
-Static checking rejects a host-language mismatch or a lock format incompatible
-with `language`, without importing project code or reading study data.
-Standard-library and base-package functions are exempt from the version check.
-This is a called-package check; a full environment audit belongs to uv or
-renv.
+Static checking rejects a lock format incompatible with the language the
+linking `environments` key states, without importing project code or reading
+study data, and fails with `project_environment_invalid`. Standard-library and
+base-package functions are exempt from the version check. This is a
+called-package check; a full environment audit belongs to uv or renv.
 
-An unsupported or mismatched runner language fails with
-`runner_language_mismatch`, and a lock format incompatible with `language` with
-`project_environment_invalid`. A missing, invalid, ambiguous or mismatched
-installed called-package version fails with `runtime_artifact_mismatch`; its
-context identifies the package, the expected lock versions and the observed
-installed version.
+A missing, invalid, ambiguous or mismatched installed called-package version
+fails with `runtime_artifact_mismatch`; its context identifies the package,
+the expected lock versions and the observed installed version.
 
 ## Definitions and calls
 
@@ -124,7 +124,8 @@ Replaces: REQ-0314, REQ-0668, REQ-0669, REQ-0698, REQ-1083, REQ-1085.
 A call contains no implementation language, callable name or contract version.
 A `function` call's exact argument and result types are those its definition
 states. `expressions.function.name` selects a logical function from the
-supplied environment, and `args` supplies its named argument leaves; the result
+environment the project links for the host language, and `args` supplies its
+named argument leaves; the result
 is one scalar for one logical row under the shared invocation lifecycle.
 
 A definition file contains that one definition and does not repeat its logical
@@ -234,7 +235,7 @@ a normalized missing result still requires `may_return_missing: true`. An
 invalid result fails and is not converted.
 
 Fails: `invalid_function_result`.
-Evidence: `schema-non-finite`, `rust/crates/yamaa-core/tests/project_function_invocation.rs::shared_function_invocation_vectors`, `R/yamaa/tests/scalars.R`.
+Evidence: `schema-non-finite`, `rust/crates/yamaa-core/tests/project_function_invocation.rs::shared_function_invocation_vectors`, `R/yamaa/tests/function_values.R`.
 Replaces: REQ-0686, REQ-0702.
 
 Conversion under the [Column derivation](../columns.md) is not a
@@ -242,18 +243,18 @@ repair mechanism for an invalid function result. A wrong type or shape, or an
 undeclared missing value returned by an invoked binding, fails with
 `invalid_function_result`; it is fatal.
 
-A designated lossless host scalar is a representation of an existing logical
-type, not an arbitrary object wrapper. For `language: r`, `int` arguments use
-`yamaa_int64` (one canonical signed-i64 decimal string) and `str` arguments use
-`yamaa_utf8` (one validated UTF-8 byte sequence, including NUL). The exact
-class, storage, shape and payload are validated; subclasses and extra
-attributes are not admitted. Results may use those same representations or an
-unclassed R integer or character scalar of the corresponding exact logical
-type. Double and logical scalars remain `float` and `bool`; there is no numeric
-or text coercion. R `date` and `datetime` use the Date and explicitly UTC
-POSIXct representations fixed by
-[Temporal values](../values.md#value-14). This host mapping adds no
-logical type.
+The R adapter passes plain R values. A missing argument is `NA`, `str` is a
+character string, `int` and `float` are doubles and `bool` is a logical.
+`date` and `datetime` use the Date and explicitly UTC POSIXct representations
+fixed by [Temporal values](../values.md#value-14). An `int` beyond 2^53 in
+magnitude or text containing NUL has no exact R value, and the call fails
+rather than pass a changed value. The adapter converts a result by the declared
+type. `NULL` or a length-one `NA` is missing. Otherwise `str` needs one
+character string, `int` one whole number of magnitude at most 2^53, `float`
+one number, `date` one Date of whole days and `datetime` one UTC POSIXct of
+whole seconds; a number may have integer or double storage. Any other value,
+including a logical, a classed number or a vector, is an invalid result. This
+host mapping adds no logical type.
 
 <a id="func-10"></a>
 

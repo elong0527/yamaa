@@ -1,0 +1,261 @@
+version: '1.0'
+includes:
+- schema_shared.yaml
+project_class:
+- schema_version:
+    type: str
+    required: true
+- environments:
+    type: environments_class
+- codelists:
+    type: list[codelist_source]
+- study:
+    type: study_class
+- sdtm:
+    type: submission_section_class
+- adam:
+    type: submission_section_class
+- send:
+    type: submission_section_class
+environments_class:
+- python:
+    type: path
+- r:
+    type: path
+codelist_source:
+  type:
+  - path
+  - codelist_source_class
+codelist_source_class:
+- standard:
+    type: terminology_standard_class
+- codelists:
+    type: list[codelist_class]
+    required: true
+terminology_standard_class:
+- name:
+    type: str
+    required: true
+    min_length: 1
+- publishing_set:
+    type: str
+    required: true
+    values:
+    - ADaM
+    - CDASH
+    - DEFINE-XML
+    - SDTM
+    - SEND
+- version:
+    type: str
+    required: true
+    min_length: 1
+study_class:
+- id:
+    type: define_id
+    required: true
+    description: See REQ-1062.
+- name:
+    type: str
+    required: true
+    min_length: 1
+    description: See REQ-1062.
+- description:
+    type: str
+    required: true
+    min_length: 1
+    description: See REQ-1062.
+- protocol_name:
+    type: str
+    required: true
+    min_length: 1
+    description: See REQ-1062.
+metadata_version_class:
+- id:
+    type: define_id
+    required: true
+    description: See REQ-1063.
+- name:
+    type: str
+    required: true
+    min_length: 1
+    description: See REQ-1063.
+- description:
+    type: str
+    required: false
+    min_length: 1
+    description: See REQ-1063.
+codelist_class:
+- id:
+    type: identifier
+    required: true
+    description: See REQ-1077.
+- name:
+    type: str
+    required: true
+    min_length: 1
+    description: See REQ-1077.
+- data_type:
+    type: str
+    default: text
+    values:
+    - text
+    - integer
+    - float
+    description: See REQ-1077.
+- extensible:
+    type: bool
+    default: false
+    description: See REQ-1077.
+- alias:
+    type: str
+    required: false
+    min_length: 1
+    description: See REQ-1077.
+- format_name:
+    type: str
+    required: false
+    min_length: 1
+    description: See REQ-1077.
+- items:
+    type: list[codelist_item_class]
+    required: false
+    description: See REQ-1077.
+- external:
+    type: external_codelist_class
+    required: false
+    description: See REQ-1077.
+codelist_item_class:
+- value:
+    type: literal_value
+    required: true
+    description: See REQ-1078.
+- decode:
+    type: str
+    required: false
+    min_length: 1
+    description: See REQ-1078.
+- rank:
+    type: int
+    required: false
+    description: See REQ-1078.
+- alias:
+    type: str
+    required: false
+    min_length: 1
+    description: See REQ-1078.
+- extended:
+    type: bool
+    default: false
+    description: See REQ-1078.
+external_codelist_class:
+- dictionary:
+    type: str
+    required: true
+    min_length: 1
+    description: See REQ-1079.
+- version:
+    type: str
+    required: true
+    min_length: 1
+    description: See REQ-1079.
+- href:
+    type: str
+    required: false
+    min_length: 1
+    description: See REQ-1079.
+define_id:
+  type: str
+  pattern: ^[A-Za-z_][A-Za-z0-9_.-]*$
+  description: See REQ-1068.
+relative_href:
+  type: str
+  pattern: ^(?:[^./\\][^/\\]*|\.(?:[^./\\][^/\\]*|\.[^/\\]+)?)(?:/(?:[^./\\][^/\\]*|\.(?:[^./\\][^/\\]*|\.[^/\\]+)?)?)*$
+  description: See REQ-1070.
+language_tag:
+  type: str
+  pattern: ^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$
+  description: See REQ-1073.
+standard_name:
+  type: str
+  values:
+  - ADaMIG
+  - ADaMIG-MD
+  - BIMO
+  - CDISC/NCI
+  - SDTMIG
+  - SDTMIG-AP
+  - SDTMIG-MD
+  - SENDIG
+  - SENDIG-AR
+  - SENDIG-DART
+  - SENDIG-GENETOX
+  description: See REQ-1074.
+submission_section_class:
+- specs:
+    type: list[path]
+    required: true
+- standard:
+    type: implementation_guide_class
+- define:
+    type: path
+- documents:
+    type: list[document_class]
+- datasets:
+    type: str
+    values:
+    - json
+- context:
+    type: str
+    default: Submission
+    values:
+    - Submission
+    - Other
+- xml_lang:
+    type: language_tag
+    default: en
+- file_oid:
+    type: define_id
+- metadata_version:
+    type: metadata_version_class
+- originator:
+    type: str
+    min_length: 1
+- stylesheet:
+    type: relative_href
+implementation_guide_class:
+- name:
+    type: standard_name
+    required: true
+- version:
+    type: str
+    required: true
+    min_length: 1
+- status:
+    type: str
+    required: true
+    values:
+    - Draft
+    - Final
+document_class:
+- id:
+    type: identifier
+    required: true
+    description: See REQ-1065.
+- kind:
+    type: str
+    required: true
+    values:
+    - annotated_crf
+    - supplemental
+    - other
+    description: See REQ-1065.
+- link:
+    type: relative_href
+    required: true
+    description: See REQ-1065.
+- title:
+    type: str
+    required: true
+    min_length: 1
+    description: See REQ-1065.

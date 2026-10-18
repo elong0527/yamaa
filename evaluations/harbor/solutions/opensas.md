@@ -61,8 +61,8 @@ ages, measurements and complete dates. Its reduced-subject check recomputes
 answers after dropping subjects. These controls do not establish parity with
 SAS Institute software.
 
-`schema-adsl-age-quality` also declares a warning log. It is a schema
-benchmark with no Harbor prompt, and log outputs are not graded.
+`schema-adsl-age-quality` also declares a run report. It is a schema
+benchmark with no Harbor prompt, and run reports are not graded.
 
 ## Compatibility gaps and solution choices
 

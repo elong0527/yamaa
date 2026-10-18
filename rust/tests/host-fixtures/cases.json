@@ -3796,7 +3796,9 @@
         "condition",
         "requirement",
         "spec_paths",
-        "context"
+        "context",
+        "source_span",
+        "operand_route"
       ],
       "alias_context_json": "{\"dataset\":\"SRC\",\"path\":\"alias.csv\"}",
       "lookup_paths": {
@@ -3806,9 +3808,9 @@
       },
       "entry_relative": {
         "shared": {
-          "ordinary.yaml": "schema_version: '1.0'\ndomain: DIRECT\nkeys: [ID]\ninput: {RAW: {path: input/data.csv, relative_to: entry, types: {ID: int}}}\ncolumns: [{name: ID, type: int, label: Identifier, derivation: RAW.ID}]\noutput: {path: output/result.csv, relative_to: entry, columns: [ID], warning_log: output/warnings.csv, verification_log: output/verifications.csv}\n",
+          "ordinary.yaml": "schema_version: '1.0'\ndomain: DIRECT\nkeys: [ID]\ninput: {RAW: {path: input/data.csv, relative_to: entry, types: {ID: int}}}\ncolumns: [{name: ID, type: int, label: Identifier, derivation: RAW.ID}]\noutput: {path: output/result.csv, relative_to: entry, columns: [ID], report: output/report.csv}\n",
           "producer.yaml": "schema_version: '1.0'\ndomain: PRODUCER\nkeys: [ID]\ninput: {RAW: {path: input/data.csv, relative_to: entry, types: {ID: int}}}\ncolumns: [{name: ID, type: int, label: Identifier, derivation: RAW.ID}]\noutput: {path: output/produced.csv, relative_to: entry, columns: [ID]}\n",
-          "consumer.yaml": "schema_version: '1.0'\ndomain: CONSUMER\nkeys: [ID]\ninput: {P: {path: output/produced.csv, schema: producer.yaml, relative_to: entry}}\ncolumns: [{name: ID, type: int, label: Identifier, derivation: P.ID}]\noutput: {path: output/result.csv, relative_to: entry, columns: [ID], warning_log: output/warnings.csv, verification_log: output/verifications.csv}\n"
+          "consumer.yaml": "schema_version: '1.0'\ndomain: CONSUMER\nkeys: [ID]\ninput: {P: {path: output/produced.csv, schema: producer.yaml, relative_to: entry}}\ncolumns: [{name: ID, type: int, label: Identifier, derivation: P.ID}]\noutput: {path: output/result.csv, relative_to: entry, columns: [ID], report: output/report.csv}\n"
         },
         "studies": {
           "first": "ID\n1\n",
@@ -3840,11 +3842,12 @@
       "inherited_source_files": [
         "entry/spec.yaml",
         "shared/base.yaml",
+        "shared/project.yaml",
         "shared/environment.yaml"
       ],
       "terminology_directories": [
         "entry",
-        "environment",
+        "project",
         "terminology",
         "outputs"
       ],
@@ -3902,11 +3905,6 @@
       }
     },
     "verification-logs": {
-      "artifact_names": [
-        "adsl-checks.csv",
-        "adsl-warnings.csv",
-        "adsl.csv"
-      ],
       "case_name": "schema-verification-log",
       "evaluated_counts": [
         "3",
@@ -3922,14 +3920,16 @@
       "retained_source_files": [
         "spec.yaml",
         "submission-spec.yaml",
-        "environment.yaml"
+        "project.yaml"
       ],
       "issue_columns": [
         "phase",
         "condition",
         "requirement",
         "spec_paths",
-        "context"
+        "context",
+        "source_span",
+        "operand_route"
       ],
       "lb_columns": [
         "DOMAIN",
@@ -3976,7 +3976,7 @@
               "label: \"bad\\tlabel\""
             ]
           ],
-          "environment_mutations": [
+          "project_mutations": [
             [
               "context: Submission",
               "context: Other"
@@ -4006,7 +4006,7 @@
               "label: \"bad\\tlabel\""
             ]
           ],
-          "environment_mutations": [],
+          "project_mutations": [],
           "inherit_specification": false,
           "issues": [
             {
@@ -4030,7 +4030,7 @@
         {
           "name": "document-title",
           "specification_mutations": [],
-          "environment_mutations": [
+          "project_mutations": [
             [
               "title: Annotated Case Report Form",
               "title: \"bad\\ttitle\""
@@ -4060,7 +4060,7 @@
               "label: \"bad\\tlabel\""
             ]
           ],
-          "environment_mutations": [
+          "project_mutations": [
             [
               "context: Submission",
               "context: Other"
@@ -4090,7 +4090,7 @@
               "label: \"bad\\tlabel\""
             ]
           ],
-          "environment_mutations": [
+          "project_mutations": [
             [
               "title: Annotated Case Report Form",
               "title: \"bad\\ttitle\""
@@ -4124,7 +4124,7 @@
               "label: \"first\\nsecond\""
             ]
           ],
-          "environment_mutations": [
+          "project_mutations": [
             [
               "title: Annotated Case Report Form",
               "title: \"third\\nfourth\""
@@ -4150,35 +4150,173 @@
         "condition",
         "requirement",
         "spec_paths",
-        "context"
-      ],
-      "owned_view_names": [
-        "output",
-        "issues",
-        "diagnostics",
-        "verification_log",
-        "warning_log"
-      ],
-      "diagnostic_record_names": [
-        "phase",
-        "condition",
-        "requirement",
-        "spec_paths",
         "context",
         "source_span",
         "operand_route"
       ],
-      "interrupt_message": "public contract activation interrupt",
-      "define_argument_names": [
-        "environment",
-        "standard",
-        "created"
+      "report_columns": [
+        "ARTIFACT",
+        "KIND",
+        "SPEC_PATH",
+        "NAME",
+        "ID",
+        "TARGET",
+        "RULE",
+        "SEVERITY",
+        "OUTCOME",
+        "CONDITION",
+        "COUNT",
+        "TOTAL",
+        "KEYS",
+        "DETAILS"
       ],
-      "log_output_yaml": "columns: [ID, VALUE], verification_log: checks.csv, warning_log: warnings.csv}",
+      "members": {
+        "spec": [
+          "check",
+          "resolve",
+          "run"
+        ],
+        "project": [
+          "check",
+          "run",
+          "spec",
+          "submission"
+        ],
+        "check": [
+          "issues"
+        ],
+        "run": [
+          "issues",
+          "output",
+          "report",
+          "save"
+        ],
+        "project_run": [
+          "issues",
+          "names",
+          "report",
+          "save"
+        ],
+        "member_run": [
+          "issues",
+          "output",
+          "report"
+        ],
+        "submission": [
+          "issues",
+          "save"
+        ]
+      },
+      "arguments": {
+        "spec": [
+          "path"
+        ],
+        "project": [
+          "path"
+        ],
+        "read_odm": [
+          "source",
+          "archive_member",
+          "max_archive_members",
+          "max_expanded_bytes",
+          "max_xml_depth"
+        ],
+        "spec.check": [],
+        "spec.resolve": [],
+        "spec.run": [],
+        "project.spec": [
+          "name"
+        ],
+        "project.check": [],
+        "project.run": [
+          "section"
+        ],
+        "project.submission": [
+          "section",
+          "created"
+        ],
+        "run.save": [],
+        "project_run.save": [],
+        "submission.save": []
+      },
+      "read_odm_limits": {
+        "max_archive_members": "10000",
+        "max_expanded_bytes": "268435456",
+        "max_xml_depth": "64"
+      },
+      "read_only_views": {
+        "run": [
+          "output",
+          "issues",
+          "report"
+        ],
+        "member_run": [
+          "output",
+          "issues",
+          "report"
+        ],
+        "project_run": [
+          "names",
+          "issues",
+          "report"
+        ],
+        "submission": [
+          "issues"
+        ]
+      },
+      "messages": {
+        "failed_run_save": "cannot save a failed run; see issues",
+        "resolve": "cannot resolve the specification; see issues",
+        "unread_project": "cannot read the project; see issues",
+        "unknown_section_run": "cannot run the project; see issues",
+        "unknown_section_submission": "cannot compose the submission; see issues",
+        "refused_project_run_save": "the project run was refused; see issues",
+        "refused_submission_save": "the submission was refused; see issues",
+        "no_member_built": "the project run has no specification named \"ADSL\"; it built none",
+        "unknown_member": "the project run has no specification named \"ADSL\"; it has TEST"
+      },
+      "interrupt_message": "public contract activation interrupt",
+      "report_output_yaml": "columns: [ID, VALUE], report: checks.csv}",
       "empty_text_column": "  - {name: EMPTY, type: str, derivation: {literal: ''}}\noutput: {",
       "unreached_row_count_yaml": "verifications:\n  - row_count: {min: 0, id: unreached}\noutput: {",
       "integer_column_yaml": "  - {name: VALUE, type: int, derivation: SRC.VALUE}",
       "fatal_integer_column_yaml": "  - name: VALUE\n    type: int\n    derivation: SRC.VALUE\n    verifications:\n      - range: {max: 0, severity: warning, id: warn}\n      - range: {max: 0, severity: error, id: fatal}",
+      "failed_input_csv": "ID,VALUE\na,-3\nb,7\nc,\n",
+      "failed_report_csv": "ARTIFACT,KIND,SPEC_PATH,NAME,ID,TARGET,RULE,SEVERITY,OUTCOME,CONDITION,COUNT,TOTAL,KEYS,DETAILS\noutput.csv,run,output,,,,,,failed,range_failed,,,,{}\noutput.csv,input,input.SRC,SRC,,,,,,,3,,,\"{\"\"bytes\"\":21,\"\"path\"\":\"\"input.csv\"\",\"\"profile\"\":\"\"csv\"\"}\"\noutput.csv,rows,base,SRC,,,,,,,3,3,,{}\noutput.csv,check,columns.VALUE.verifications[0].range,range,warn,VALUE,REQ-0377,warning,violated,range_failed,1,3,\"[{\"\"ID\"\":\"\"b\"\"}]\",\"{\"\"column\"\":\"\"VALUE\"\"}\"\noutput.csv,check,columns.VALUE.verifications[1].range,range,fatal,VALUE,REQ-0377,error,violated,range_failed,1,3,\"[{\"\"ID\"\":\"\"b\"\"}]\",\"{\"\"column\"\":\"\"VALUE\"\"}\"\n",
+      "typed_specification_yaml": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC:\n    path: input.csv\n    types: {ID: int, S: str, I: int, F: float, D: date, T: datetime}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\n  - {name: S, type: str, label: Text, derivation: SRC.S}\n  - {name: I, type: int, label: Integer, derivation: SRC.I}\n  - {name: F, type: float, label: Float, derivation: SRC.F}\n  - {name: D, type: date, label: Date, derivation: SRC.D}\n  - {name: T, type: datetime, label: Datetime, derivation: SRC.T}\noutput: {path: output.csv, columns: [ID, S, I, F, D, T]}\n",
+      "typed_input_csv": "ID,S,I,F,D,T\n1,\u03b1,-9007199254740992,-0.0,0001-01-01,0001-01-01T00:00:00\n2,,,,,\n3,\u00e9,9007199254740992,1.25,9999-12-31,9999-12-31T23:59:59\n",
+      "typed_values": {
+        "ID": [
+          "1",
+          "2",
+          "3"
+        ],
+        "S": [
+          "\u03b1",
+          null,
+          "\u00e9"
+        ],
+        "I": [
+          "-9007199254740992",
+          null,
+          "9007199254740992"
+        ],
+        "F": [
+          "-0.0",
+          null,
+          "1.25"
+        ],
+        "D": [
+          "-719162",
+          null,
+          "2932896"
+        ],
+        "T": [
+          "-62135596800",
+          null,
+          "253402300799"
+        ]
+      },
       "python_input_csv": "ID,VALUE\na,-9223372036854775808\nb,9223372036854775807\nc,\n",
       "python_values_decimal": [
         "-9223372036854775808",
@@ -4212,10 +4350,10 @@
       "cases": [
         {
           "name": "literal_wider_than_i64",
-          "entry": "check",
+          "call": "check",
           "specification_yaml": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: {literal: 18446744073709551616}}\noutput: {path: output.csv, columns: [ID, N]}\n",
           "input_csv": "ID\na\n",
-          "records": [
+          "issues": [
             {
               "phase": "validation",
               "condition": "integer_overflow",
@@ -4223,17 +4361,7 @@
               "spec_paths": [
                 "columns.N.derivation.literal"
               ],
-              "context": {
-                "actual": {
-                  "integer": "18446744073709551616"
-                },
-                "maximum": {
-                  "integer": "9223372036854775807"
-                },
-                "minimum": {
-                  "integer": "-9223372036854775808"
-                }
-              },
+              "context": "{\"actual\":18446744073709551616,\"maximum\":9223372036854775807,\"minimum\":-9223372036854775808}",
               "source_span": null,
               "operand_route": null
             }
@@ -4241,12 +4369,12 @@
         },
         {
           "name": "division_at_the_root_over_every_key_scalar",
-          "entry": "domain",
+          "call": "run",
           "specification_yaml": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID, TAG, EXACT, WIDE, LOW, RATE, WHOLE, GAP]\ninput: {SRC: {path: input.csv, types: {ID: str, TAG: str, EXACT: int, WIDE: int, LOW: int, RATE: float, WHOLE: float, GAP: str, VALUE: float, ZERO: float}}}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: TAG, type: str, derivation: SRC.TAG}\n  - {name: EXACT, type: int, derivation: SRC.EXACT}\n  - {name: WIDE, type: int, derivation: SRC.WIDE}\n  - {name: LOW, type: int, derivation: SRC.LOW}\n  - {name: RATE, type: float, derivation: SRC.RATE}\n  - {name: WHOLE, type: float, derivation: SRC.WHOLE}\n  - {name: GAP, type: str, derivation: SRC.GAP}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n  - {name: ZERO, type: float, derivation: SRC.ZERO}\n  - {name: RATIO, type: float, derivation: {compute: {expr: 'VALUE / ZERO'}}}\noutput: {path: output.csv, columns: [ID, TAG, EXACT, WIDE, LOW, RATE, WHOLE, GAP, VALUE, ZERO, RATIO]}\n",
           "input_csv": {
             "hex": "49442c5441472c45584143542c574944452c4c4f572c524154452c57484f4c452c4741502c56414c55452c5a45524f0a5a6fc3ab2c6100622c393030373139393235343734303939322c393030373139393235343734303939332c2d393232333337323033363835343737353830382c322e352c332e302c2c312c300a"
           },
-          "records": [
+          "issues": [
             {
               "phase": "derivation",
               "condition": "division_by_zero",
@@ -4254,33 +4382,7 @@
               "spec_paths": [
                 "columns.RATIO.derivation.compute"
               ],
-              "context": {
-                "expr": "VALUE / ZERO",
-                "keys": [
-                  {
-                    "EXACT": {
-                      "integer": "9007199254740992"
-                    },
-                    "GAP": null,
-                    "ID": "Zo\u00eb",
-                    "LOW": {
-                      "integer": "-9223372036854775808"
-                    },
-                    "RATE": {
-                      "float": "2.5"
-                    },
-                    "TAG": {
-                      "hex": "610062"
-                    },
-                    "WHOLE": {
-                      "float": "3.0"
-                    },
-                    "WIDE": {
-                      "integer": "9007199254740993"
-                    }
-                  }
-                ]
-              },
+              "context": "{\"expr\":\"VALUE / ZERO\",\"keys\":[{\"EXACT\":9007199254740992,\"GAP\":null,\"ID\":\"Zo\u00eb\",\"LOW\":-9223372036854775808,\"RATE\":2.5,\"TAG\":\"a\\u0000b\",\"WHOLE\":3.0,\"WIDE\":9007199254740993}]}",
               "source_span": [
                 0,
                 12
@@ -4291,10 +4393,10 @@
         },
         {
           "name": "division_in_a_right_operand",
-          "entry": "domain",
+          "call": "run",
           "specification_yaml": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: str, VALUE: float, ZERO: float}}}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n  - {name: ZERO, type: float, derivation: SRC.ZERO}\n  - {name: RATIO, type: float, derivation: {compute: {expr: '1 + VALUE / ZERO'}}}\noutput: {path: output.csv, columns: [ID, VALUE, ZERO, RATIO]}\n",
           "input_csv": "ID,VALUE,ZERO\na,2.5,0\n",
-          "records": [
+          "issues": [
             {
               "phase": "derivation",
               "condition": "division_by_zero",
@@ -4302,14 +4404,7 @@
               "spec_paths": [
                 "columns.RATIO.derivation.compute"
               ],
-              "context": {
-                "expr": "1 + VALUE / ZERO",
-                "keys": [
-                  {
-                    "ID": "a"
-                  }
-                ]
-              },
+              "context": "{\"expr\":\"1 + VALUE / ZERO\",\"keys\":[{\"ID\":\"a\"}]}",
               "source_span": [
                 4,
                 16
@@ -4322,10 +4417,10 @@
         },
         {
           "name": "aggregate_empty_key_mapping",
-          "entry": "domain",
+          "call": "run",
           "specification_yaml": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: G, type: str, derivation: SRC.G}\n  - {name: V, type: int, derivation: {aggregate: {expr: 'SUM(SRC.V)', key: {}}}}\noutput: {path: output.csv, columns: [ID, G, V]}\n",
           "input_csv": "ID,G,V\na,g,2\na,g,3\n",
-          "records": [
+          "issues": [
             {
               "phase": "validation",
               "condition": "missing_aggregate_keys",
@@ -4333,10 +4428,7 @@
               "spec_paths": [
                 "columns.V.derivation.aggregate"
               ],
-              "context": {
-                "dataset": "SRC",
-                "key": {}
-              },
+              "context": "{\"dataset\":\"SRC\",\"key\":{}}",
               "source_span": null,
               "operand_route": null
             }
@@ -4344,10 +4436,10 @@
         },
         {
           "name": "aggregate_empty_key_list",
-          "entry": "domain",
+          "call": "run",
           "specification_yaml": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: G, type: str, derivation: SRC.G}\n  - {name: V, type: int, derivation: {aggregate: {expr: 'SUM(SRC.V)', key: []}}}\noutput: {path: output.csv, columns: [ID, G, V]}\n",
           "input_csv": "ID,G,V\na,g,2\na,g,3\n",
-          "records": [
+          "issues": [
             {
               "phase": "validation",
               "condition": "missing_aggregate_keys",
@@ -4355,10 +4447,7 @@
               "spec_paths": [
                 "columns.V.derivation.aggregate"
               ],
-              "context": {
-                "dataset": "SRC",
-                "key": []
-              },
+              "context": "{\"dataset\":\"SRC\",\"key\":[]}",
               "source_span": null,
               "operand_route": null
             }
@@ -4366,10 +4455,10 @@
         },
         {
           "name": "two_undeclared_output_columns",
-          "entry": "check",
+          "call": "check",
           "specification_yaml": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\noutput: {path: output.csv, columns: [ID, X, Y]}\n",
           "input_csv": "ID\na\n",
-          "records": [
+          "issues": [
             {
               "phase": "validation",
               "condition": "undeclared_column",
@@ -4377,9 +4466,7 @@
               "spec_paths": [
                 "output.columns[1]"
               ],
-              "context": {
-                "column": "X"
-              },
+              "context": "{\"column\":\"X\"}",
               "source_span": null,
               "operand_route": null
             },
@@ -4390,9 +4477,7 @@
               "spec_paths": [
                 "output.columns[2]"
               ],
-              "context": {
-                "column": "Y"
-              },
+              "context": "{\"column\":\"Y\"}",
               "source_span": null,
               "operand_route": null
             }
@@ -4400,23 +4485,276 @@
         },
         {
           "name": "absent_specification",
-          "entry": "check",
+          "call": "check",
           "specification_yaml": null,
           "input_csv": null,
-          "records": [
+          "issues": [
             {
               "phase": "engine",
               "condition": "engine_rejected",
               "requirement": null,
               "spec_paths": [],
-              "context": {
-                "code": "resource_missing",
-                "stage": "prepare"
-              },
+              "context": "{\"code\":\"resource_missing\",\"stage\":\"prepare\"}",
               "source_span": null,
               "operand_route": null
             }
           ]
+        }
+      ]
+    },
+    "read-odm": {
+      "columns": [
+        "ODMVersion",
+        "FileOID",
+        "StudyOID",
+        "MetaDataVersionOID",
+        "SubjectKey",
+        "StudySubjectID",
+        "SubjectStatus",
+        "StudyEventOID",
+        "StudyEventRepeatKey",
+        "EventName",
+        "StartDate",
+        "EventStatus",
+        "EventWorkflowStatus",
+        "FormOID",
+        "FormRepeatKey",
+        "FormName",
+        "FormLayoutOID",
+        "FormStatus",
+        "FormWorkflowStatus",
+        "OpenQueries",
+        "ItemGroupOID",
+        "ItemGroupRepeatKey",
+        "ItemGroupName",
+        "TransactionType",
+        "ItemOID",
+        "ItemName",
+        "Value",
+        "ValuePresent",
+        "IsNull",
+        "SourceOrdinal"
+      ],
+      "integer_columns": [
+        "SourceOrdinal"
+      ],
+      "reads": [
+        {
+          "document": "odm13.xml",
+          "rows": [
+            {
+              "ODMVersion": "1.3",
+              "FileOID": "FILE.13",
+              "StudyOID": "S.13",
+              "MetaDataVersionOID": "M.13",
+              "SubjectKey": "SUBJECT-1",
+              "StudySubjectID": "DISPLAY-1",
+              "SubjectStatus": "Available",
+              "StudyEventOID": "E.13",
+              "StudyEventRepeatKey": null,
+              "EventName": "Screening",
+              "StartDate": "2026-01-02",
+              "EventStatus": null,
+              "EventWorkflowStatus": null,
+              "FormOID": "F.13",
+              "FormRepeatKey": null,
+              "FormName": "Demographics",
+              "FormLayoutOID": null,
+              "FormStatus": null,
+              "FormWorkflowStatus": null,
+              "OpenQueries": null,
+              "ItemGroupOID": "G.13",
+              "ItemGroupRepeatKey": "7",
+              "ItemGroupName": "Subject details",
+              "TransactionType": "Insert",
+              "ItemOID": "I.DATE",
+              "ItemName": "Collection date",
+              "Value": "2026-01-02",
+              "ValuePresent": "true",
+              "IsNull": "false",
+              "SourceOrdinal": "1"
+            },
+            {
+              "ODMVersion": "1.3",
+              "FileOID": "FILE.13",
+              "StudyOID": "S.13",
+              "MetaDataVersionOID": "M.13",
+              "SubjectKey": "SUBJECT-1",
+              "StudySubjectID": "DISPLAY-1",
+              "SubjectStatus": "Available",
+              "StudyEventOID": "E.13",
+              "StudyEventRepeatKey": null,
+              "EventName": "Screening",
+              "StartDate": "2026-01-02",
+              "EventStatus": null,
+              "EventWorkflowStatus": null,
+              "FormOID": "F.13",
+              "FormRepeatKey": null,
+              "FormName": "Demographics",
+              "FormLayoutOID": null,
+              "FormStatus": null,
+              "FormWorkflowStatus": null,
+              "OpenQueries": null,
+              "ItemGroupOID": "G.13",
+              "ItemGroupRepeatKey": "7",
+              "ItemGroupName": "Subject details",
+              "TransactionType": "Insert",
+              "ItemOID": "I.EMPTY",
+              "ItemName": "Collected empty",
+              "Value": "",
+              "ValuePresent": "true",
+              "IsNull": "false",
+              "SourceOrdinal": "2"
+            },
+            {
+              "ODMVersion": "1.3",
+              "FileOID": "FILE.13",
+              "StudyOID": "S.13",
+              "MetaDataVersionOID": "M.13",
+              "SubjectKey": "SUBJECT-1",
+              "StudySubjectID": "DISPLAY-1",
+              "SubjectStatus": "Available",
+              "StudyEventOID": "E.13",
+              "StudyEventRepeatKey": null,
+              "EventName": "Screening",
+              "StartDate": "2026-01-02",
+              "EventStatus": null,
+              "EventWorkflowStatus": null,
+              "FormOID": "F.13",
+              "FormRepeatKey": null,
+              "FormName": "Demographics",
+              "FormLayoutOID": null,
+              "FormStatus": null,
+              "FormWorkflowStatus": null,
+              "OpenQueries": null,
+              "ItemGroupOID": "G.13",
+              "ItemGroupRepeatKey": "7",
+              "ItemGroupName": "Subject details",
+              "TransactionType": "Insert",
+              "ItemOID": "I.NULL",
+              "ItemName": "Explicit null",
+              "Value": null,
+              "ValuePresent": "false",
+              "IsNull": "true",
+              "SourceOrdinal": "3"
+            }
+          ]
+        },
+        {
+          "document": "odm20.xml",
+          "rows": [
+            {
+              "ODMVersion": "2.0",
+              "FileOID": "FILE.20",
+              "StudyOID": "S.20",
+              "MetaDataVersionOID": "M.20",
+              "SubjectKey": "SUBJECT-20",
+              "StudySubjectID": null,
+              "SubjectStatus": null,
+              "StudyEventOID": "E.20",
+              "StudyEventRepeatKey": null,
+              "EventName": "Screening",
+              "StartDate": null,
+              "EventStatus": null,
+              "EventWorkflowStatus": null,
+              "FormOID": "FO.20",
+              "FormRepeatKey": "2",
+              "FormName": "Biomarker form",
+              "FormLayoutOID": null,
+              "FormStatus": null,
+              "FormWorkflowStatus": null,
+              "OpenQueries": null,
+              "ItemGroupOID": "IG.20",
+              "ItemGroupRepeatKey": "3",
+              "ItemGroupName": "Biomarker group",
+              "TransactionType": null,
+              "ItemOID": "I.TEST",
+              "ItemName": "Test name",
+              "Value": "PD-L1",
+              "ValuePresent": "true",
+              "IsNull": "false",
+              "SourceOrdinal": "1"
+            },
+            {
+              "ODMVersion": "2.0",
+              "FileOID": "FILE.20",
+              "StudyOID": "S.20",
+              "MetaDataVersionOID": "M.20",
+              "SubjectKey": "SUBJECT-20",
+              "StudySubjectID": null,
+              "SubjectStatus": null,
+              "StudyEventOID": "E.20",
+              "StudyEventRepeatKey": null,
+              "EventName": "Screening",
+              "StartDate": null,
+              "EventStatus": null,
+              "EventWorkflowStatus": null,
+              "FormOID": "FO.20",
+              "FormRepeatKey": "2",
+              "FormName": "Biomarker form",
+              "FormLayoutOID": null,
+              "FormStatus": null,
+              "FormWorkflowStatus": null,
+              "OpenQueries": null,
+              "ItemGroupOID": "IG.20",
+              "ItemGroupRepeatKey": "3",
+              "ItemGroupName": "Biomarker group",
+              "TransactionType": null,
+              "ItemOID": "I.RESULT",
+              "ItemName": "Test result",
+              "Value": "",
+              "ValuePresent": "true",
+              "IsNull": "false",
+              "SourceOrdinal": "2"
+            }
+          ]
+        }
+      ],
+      "archive": {
+        "name": "documents.tar",
+        "members": [
+          "odm13.xml",
+          "odm20.xml"
+        ],
+        "selected": "odm20.xml"
+      },
+      "refusals": [
+        {
+          "name": "depth-below-minimum",
+          "document": "odm13.xml",
+          "options": {
+            "max_xml_depth": "7"
+          },
+          "code": "invalid_option"
+        },
+        {
+          "name": "member-of-plain-xml",
+          "document": "odm13.xml",
+          "options": {
+            "archive_member": "odm13.xml"
+          },
+          "code": "archive_member"
+        },
+        {
+          "name": "absent-source",
+          "document": null,
+          "options": {},
+          "code": "not_found"
+        },
+        {
+          "name": "archive-without-member",
+          "document": "documents.tar",
+          "options": {},
+          "code": "archive_member"
+        },
+        {
+          "name": "archive-over-member-limit",
+          "document": "documents.tar",
+          "options": {
+            "archive_member": "odm20.xml",
+            "max_archive_members": "1"
+          },
+          "code": "limit"
         }
       ]
     }

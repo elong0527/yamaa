@@ -13,12 +13,13 @@ domain: ADSL
 keys: [STUDYID, USUBJID]
 ```
 
-## Two entry points
+## Three entry points
 
 | Entry point | What it validates |
 |---|---|
 | `schema.yaml` | One specification: one output dataset |
-| `schema_environment.yaml` | One project environment: packaging lock, versionless installed functions, inline tests, codelists, and submission metadata |
+| `schema_project.yaml` | One study's project file: each language's environment file, codelists, study metadata, and the `sdtm`, `adam` and `send` sections |
+| `schema_environment.yaml` | One language's environment: packaging lock and versionless installed functions with inline tests |
 
 Each entry point pulls in shared modules with `includes`. For a
 specification, `schema.yaml` includes the shared headers, the derivation

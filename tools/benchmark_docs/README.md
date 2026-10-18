@@ -2,7 +2,7 @@
 
 Generates a self-contained HTML page per benchmark plus the
 `docs/benchmark/index.md` gallery, from each benchmark's `benchmark.yaml`,
-`README.md`, spec, optional `environment.yaml` codelists, and
+`README.md`, spec, optional `project.yaml` codelists, and
 `input/`/`expected/` files,
 plus its agent
 evaluation prompts and reference solutions in

@@ -139,8 +139,8 @@ Replaces: REQ-0006, REQ-0007, REQ-0008, REQ-1149.
 The boundaries are exactly these:
 
 - after YAML core-schema scalar resolution and before validating or using
-  literals or defaults in specifications, schemas, environments or
-  conformance documents;
+  literals or defaults in specifications, schemas, project and environment
+  files or conformance documents;
 - after receiving a typed source value or parsing stored text as a number;
 - after a built-in expression, mapping, conditional, coalescing operation or
   handler selects or substitutes a result;

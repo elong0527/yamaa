@@ -36,7 +36,7 @@ host locale. Encoding is absent on CSV and Parquet inputs. A missing SAS
 encoding, or an encoding declaration on another profile, fails validation.
 
 Fails: `source_encoding_required`.
-Evidence: `rust/crates/yamaa-adapters/src/sas_source/native.rs::declared_decoders_reject_incomplete_or_undefined_text`, `python/tests/installed/installed_sas_sources.py::test_static_encoding_contract_is_shared_by_check_and_domain`.
+Evidence: `rust/crates/yamaa-adapters/src/sas_source/native.rs::declared_decoders_reject_incomplete_or_undefined_text`, `python/tests/installed/installed_sas_sources.py::test_static_encoding_contract_is_shared_by_check_and_run`.
 Replaces: REQ-1311.
 
 The failure reports `source_encoding_required` at `input.<dataset>.encoding`.

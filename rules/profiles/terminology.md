@@ -1,23 +1,23 @@
 # Controlled terminology
 
-This file is a profile: it is optional, and it applies to a build whose study
-environment declares `codelists` and to the specifications that bind them
-through `submission.codelist`. A codelist is declared once in the environment,
+This file is a profile: it is optional, and it applies to a build whose
+project file declares `codelists` and to the specifications that bind them
+through `submission.codelist`. A codelist is declared once in the project file,
 every binding names it, and a binding enforces the items its list declares. A
-build whose environment declares no codelists is unaffected, except for a
-column that declares `inventory_vocabulary` under [CT-11](#ct-11).
+build whose project declares no codelists is unaffected, except for a column
+that declares `inventory_vocabulary` under [CT-11](#ct-11).
 
 ## Declaring codelists
 
 <a id="ct-1"></a>
 
-### CT-1. A codelist is declared once in an environment codelist source, and a column binds it by `id`
+### CT-1. A codelist is declared once in a project codelist source, and a column binds it by `id`
 
-A domain-build codelist is declared once in an environment codelist source and
+A domain-build codelist is declared once in a project codelist source and
 carries an `id` that is unique across all captured sources. A column names that
 `id` through `submission.codelist`, and columns share one codelist statement.
-`name` is the codelist's human-readable name and is unique across all
-environment codelist sources. A duplicate codelist `id` or `name`, or a
+`name` is the codelist's human-readable name and is unique across all project
+codelist sources. A duplicate codelist `id` or `name`, or a
 binding naming no declared codelist, fails validation.
 
 Fails: `duplicate_define_identifier`, `unknown_codelist`.
@@ -26,7 +26,7 @@ Replaces: REQ-0926, REQ-0927, REQ-0948, REQ-0953, REQ-1077.
 
 `id` and `name` are separate: `id` is what a specification writes, and `name`
 is what a reader sees. [Submission metadata](submission.md)'s `codelist` names
-a codelist the study document declares; this profile owns that object, the
+a codelist the project file declares; this profile owns that object, the
 values a binding enforces, and the redundancy of an `allowed_values`
 verification beside it. A duplicate `id` or `name` fails with
 `duplicate_define_identifier`. A binding naming no declared codelist fails with
@@ -136,7 +136,7 @@ it would claim a code the published list does not assign. An extension the
 list does not admit fails with `codelist_extension_not_admitted` at the item's
 `extended`; an alias on an extended item fails with `codelist_extended_alias`
 at the item's `alias`, reporting the codelist, the item's value and the alias.
-Both are checked wherever the environment's codelists are validated, in every
+Both are checked wherever the project's codelists are validated, in every
 context.
 
 ## Bindings
@@ -211,10 +211,10 @@ Evidence: `negative-allowed-values-beside-codelist`, `rust/crates/yamaa-adapters
 Replaces: REQ-0942, REQ-0944, REQ-0945, REQ-0955.
 
 The failure reports the verification's path and, in `stated_by`, the binding's
-path, with the column and the codelist. A binding's items are known where an
-environment supplies the codelists: a domain build with an environment and a
-composed document check the redundancy, and a build without one does not read
-the binding. Not every constrained column carries published terminology.
+path, with the column and the codelist. A binding's items are known where a
+project supplies the codelists: a domain build with a project and a composed
+document check the redundancy, and a build without one does not read the
+binding. Not every constrained column carries published terminology.
 
 ## Documents and inventories
 
@@ -222,7 +222,7 @@ the binding. Not every constrained column carries published terminology.
 
 ### CT-10. A generated document carries exactly the codelists its output columns bind
 
-Each generated document includes exactly the environment codelists bound by its
+Each generated document includes exactly the project codelists bound by its
 represented output columns, in their declaration order, and the
 controlled-terminology standards cited by those sources. Unbound codelists may
 serve another submission section and are omitted without an
@@ -233,11 +233,11 @@ Replaces: REQ-0946.
 
 <a id="ct-11"></a>
 
-### CT-11. An inventory-vocabulary column holds only names of datasets any submission section of the study environment declares
+### CT-11. An inventory-vocabulary column holds only names of datasets any submission section of the project declares
 
 A column carrying submission metadata may declare `inventory_vocabulary`. Every
 non-missing value of such a column must equal the name of a dataset a
-specification some submission section of the study environment lists declares,
+specification some submission section of the project file lists declares,
 whichever section composes the column. Missing values pass, exactly as
 [CT-7](#ct-7) treats missing values, and enforcement runs where
 [Verification](../verification.md) runs a column verification, over the
@@ -251,9 +251,9 @@ The admitted values are the study's dataset inventory, which no static list can
 enumerate; that distinguishes this vocabulary from a codelist, whose values
 [CT-3](#ct-3) requires be listed or deferred to a dictionary. The inventory is
 the `domain` of every specification the `sdtm`, `adam` and `send` sections of
-the study environment list, so an ADaM `SRCDOM` may name the SDTM `AE` domain
-the `sdtm` section lists. A domain build reads it from the environment it is
-given and admits no name without one; composition reads the other sections'
+the project file list, so an ADaM `SRCDOM` may name the SDTM `AE` domain the
+`sdtm` section lists. A domain build reads it from the project it is given and
+admits no name without one; composition reads the other sections'
 specifications for it, and Dataset-JSON's recheck of published values uses
 the same inventory. A column that also prohibits absence resolves `mandatory`
 to true ([SUB-11](submission.md#sub-11)). The ADaM `SRCDOM` column, whose

@@ -114,5 +114,5 @@ nav:
       - Contributing: https://github.com/elong0527/yamaa/blob/main/CONTRIBUTING.md
       - Partitioned execution design: partition-execution.md
       - Release and migration: release.md
-      - Python package: articles/python.md
+      - Python package: https://github.com/elong0527/yamaa/tree/main/python
       - R package: https://github.com/elong0527/yamaa/tree/main/R/yamaa

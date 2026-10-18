@@ -1453,14 +1453,14 @@ output: {{path: output.csv, columns: [I, S]}}
             .unwrap();
             assert_eq!(actual["verifications"], json!([]));
             assert_eq!(actual["diagnostics"][0]["condition"], "missing_key");
-            // Warning-log admission scans all declarations before granting study ports,
+            // Report admission scans all declarations before granting study ports,
             // even when an earlier payload finding remains deferred.
-            let missing_log = format!("{written}  - row_count: {{min: 1, severity: warning}}\n");
+            let missing_report = format!("{written}  - row_count: {{min: 1, severity: warning}}\n");
             assert!(matches!(
-                PreparedRun::prepare(prepare(&schema, missing_log.as_bytes())),
+                PreparedRun::prepare(prepare(&schema, missing_report.as_bytes())),
                 Err(yamaa_adapters::specification_run::Error::Prepare(
                     yamaa_core::specification::PrepareError::Invalid(findings)
-                )) if findings.iter().any(|finding| finding.diagnostic().definition().condition == "missing_warning_log")
+                )) if findings.iter().any(|finding| finding.diagnostic().definition().condition == "missing_report")
             ));
         }
 

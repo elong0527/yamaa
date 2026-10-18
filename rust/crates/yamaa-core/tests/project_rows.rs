@@ -557,7 +557,8 @@ mod project {
     mod project_environment {
         use yamaa_core::{
             project_environment::{
-                validate, Draft, Environment, Finding, LockKind, LockReference, Submission,
+                validate, Draft, Environment, ExecutionEnvironment, Finding, LockKind,
+                LockReference,
             },
             project_function::{Case, Definition, Language},
             value::{ColumnType, Value},
@@ -568,8 +569,6 @@ mod project {
                 lock: None,
                 functions: None,
                 codelists: vec![],
-                has_study: false,
-                submissions: vec![],
             }
         }
         fn definition() -> Definition {
@@ -590,70 +589,70 @@ mod project {
             }
         }
         #[test]
-        fn empty_environment_and_submission_only_environments_need_no_code_or_lock() {
-            assert!(Environment::admit(Language::Python, draft()).is_ok());
-            let mut submission = draft();
-            submission.has_study = true;
-            submission.submissions = vec![Submission::Sdtm, Submission::Adam, Submission::Send];
-            assert!(Environment::admit(Language::R, submission).is_ok());
+        fn a_project_without_an_environment_for_the_host_needs_no_code_or_lock() {
+            for host in [Language::Python, Language::R] {
+                let admitted = Environment::admit(host, draft()).unwrap();
+                assert_eq!(admitted.draft(), &draft());
+                // The supplied project names no environment file for this host.
+                let execution = admitted.into_execution();
+                assert_eq!(execution.language(), None);
+                assert_eq!(execution.undeclared_language(), Some(host));
+                // A build without any project has no environment to name.
+                let plain = ExecutionEnvironment::without_project(host);
+                assert_eq!(plain.host(), host);
+                assert_eq!(plain.language(), None);
+                assert_eq!(plain.undeclared_language(), None);
+                assert!(!plain.functions_present() && plain.lock().is_none());
+                assert!(plain.catalogue().sources().is_empty());
+            }
         }
         #[test]
-        fn present_functions_even_empty_require_language_but_no_lock() {
+        fn present_functions_even_empty_need_no_lock() {
             let mut d = draft();
-            d.functions = Some(vec![]);
-            assert_eq!(
-                validate(Language::Python, &d),
-                vec![Finding::MissingLanguage]
-            );
             d.language = Some(Language::Python);
+            d.functions = Some(vec![]);
             assert!(validate(Language::Python, &d).is_empty());
             d.functions = Some(vec![definition()]);
-            assert!(Environment::admit(Language::Python, d).is_ok());
+            let execution = Environment::admit(Language::Python, d)
+                .unwrap()
+                .into_execution();
+            assert_eq!(execution.undeclared_language(), None);
+            assert!(execution.lock().is_none());
         }
         #[test]
-        fn declared_language_and_captured_lock_kind_are_independent_findings() {
+        fn captured_lock_kind_must_match_the_linked_environment_language() {
+            for (language, kind, actual) in [
+                (Language::Python, LockKind::Uv, LockKind::Renv),
+                (Language::R, LockKind::Renv, LockKind::Uv),
+            ] {
+                let mut d = draft();
+                d.language = Some(language);
+                d.lock = Some(LockReference {
+                    written: "custom-name.lock".into(),
+                    kind: actual,
+                });
+                assert_eq!(
+                    validate(language, &d),
+                    vec![Finding::LockKindMismatch { language, actual }]
+                );
+                d.lock.as_mut().unwrap().kind = kind;
+                assert!(validate(language, &d).is_empty());
+            }
+        }
+        #[test]
+        fn all_function_faults_remain_owned_without_any_effect_port() {
             let mut d = draft();
-            d.language = Some(Language::R);
-            d.lock = Some(LockReference {
-                written: "custom-name.lock".into(),
-                kind: LockKind::Uv,
-            });
-            assert_eq!(
-                validate(Language::Python, &d),
-                vec![
-                    Finding::LanguageMismatch {
-                        declared: Language::R,
-                        host: Language::Python
-                    },
-                    Finding::LockKindMismatch {
-                        language: Language::R,
-                        actual: LockKind::Uv
-                    }
-                ]
-            );
             d.language = Some(Language::Python);
-            assert!(validate(Language::Python, &d).is_empty());
-        }
-        #[test]
-        fn all_function_and_root_faults_remain_owned_without_any_effect_port() {
-            let mut d = draft();
             d.functions = Some(vec![definition(), definition()]);
-            d.submissions = vec![Submission::Adam];
             assert_eq!(
                 validate(Language::Python, &d),
-                vec![
-                    Finding::MissingLanguage,
-                    Finding::DuplicateFunction { function: 1 },
-                    Finding::MissingStudy
-                ]
+                vec![Finding::DuplicateFunction { function: 1 }]
             );
-            d.language = Some(Language::Python);
             d.lock = Some(LockReference {
                 written: "../uv.lock".into(),
                 kind: LockKind::Uv,
             });
             d.functions.as_mut().unwrap().pop();
-            d.has_study = true;
             let expected = d.clone();
             let admitted = Environment::admit(Language::Python, d).unwrap();
             assert_eq!(admitted.draft(), &expected);
@@ -666,6 +665,7 @@ mod project {
                 .into_execution();
             assert_eq!(empty.host(), Language::R);
             assert_eq!(empty.language(), None);
+            assert_eq!(empty.undeclared_language(), Some(Language::R));
             assert!(!empty.functions_present());
             assert!(empty.functions().is_empty());
             assert!(empty.lock().is_none());
@@ -682,8 +682,6 @@ mod project {
             assert!(empty.functions_present());
             assert!(empty.functions().is_empty());
             d.functions = Some(vec![definition()]);
-            d.has_study = true;
-            d.submissions = vec![Submission::Adam];
             let expected = d.clone();
             let original_name = d.functions.as_ref().unwrap()[0].name.as_ptr();
             let original_cases = d.functions.as_ref().unwrap()[0].tests.as_ptr();
@@ -705,16 +703,19 @@ mod project {
                 original_cases
             );
             assert_eq!(execution.functions()[0].language(), Language::Python);
-            assert!(execution.has_study());
-            assert_eq!(execution.submissions(), [Submission::Adam]);
+            assert_eq!(execution.undeclared_language(), None);
             assert!(execution.catalogue().sources().is_empty());
         }
 
         #[test]
         fn rejected_admission_retains_exact_draft_ownership_and_all_findings() {
             let mut input = draft();
+            input.language = Some(Language::Python);
+            input.lock = Some(LockReference {
+                written: "renv.lock".into(),
+                kind: LockKind::Renv,
+            });
             input.functions = Some(vec![definition(), definition()]);
-            input.submissions = vec![Submission::Adam];
             let expected = input.clone();
             let functions = input.functions.as_ref().unwrap().as_ptr();
             let cases = input.functions.as_ref().unwrap()[0].tests.as_ptr();
@@ -731,9 +732,11 @@ mod project {
             assert_eq!(
                 rejected.error,
                 vec![
-                    Finding::MissingLanguage,
-                    Finding::DuplicateFunction { function: 1 },
-                    Finding::MissingStudy
+                    Finding::LockKindMismatch {
+                        language: Language::Python,
+                        actual: LockKind::Renv
+                    },
+                    Finding::DuplicateFunction { function: 1 }
                 ]
             );
         }
@@ -754,7 +757,7 @@ mod project {
                 (ReadFailure::Missing, "missing"),
                 (ReadFailure::Unreadable, "unreadable"),
             ] {
-                let diagnostic = failure.diagnostic("/study/environment.yaml");
+                let diagnostic = failure.diagnostic("/study/project.yaml");
                 let definition = diagnostic.code.definition();
                 assert_eq!(
                     (
@@ -772,28 +775,24 @@ mod project {
                 assert_eq!(diagnostic.context["cause"], JsonValue::String(cause.into()));
                 assert_eq!(
                     diagnostic.context["path"],
-                    JsonValue::String("/study/environment.yaml".into())
+                    JsonValue::String("/study/project.yaml".into())
                 );
             }
         }
         #[test]
-        fn every_root_and_terminology_cause_has_independent_normative_paths_and_mapping() {
-            assert_eq!(support::reached().len(), 9);
+        fn every_lock_and_terminology_cause_has_independent_normative_paths_and_mapping() {
+            assert_eq!(support::reached().len(), 8);
             let draft = support::draft();
             let projected = diagnostics(
                 &draft,
                 &project_environment::validate(Language::Python, &draft),
             )
             .unwrap();
-            let mismatch = projected
+            // The linked language has no finding of its own; only codelists fail.
+            assert_eq!(projected.len(), 16);
+            assert!(projected
                 .iter()
-                .find(|diagnostic| diagnostic.spec_paths == ["language"])
-                .unwrap();
-            assert_eq!(mismatch.context.len(), 2);
-            assert_eq!(
-                mismatch.context["runner"],
-                JsonValue::String("python".into())
-            );
+                .all(|diagnostic| diagnostic.spec_paths[0].starts_with("codelists[0].codelists[")));
             let value = projected
                 .iter()
                 .find(|diagnostic| {
@@ -848,8 +847,6 @@ mod project {
                     }],
                 }]),
                 codelists: vec![],
-                has_study: false,
-                submissions: vec![],
             }
         }
         #[test]
@@ -1051,45 +1048,40 @@ mod project {
         }
 
         #[test]
-        fn retained_admission_reports_all_independent_root_errors_and_captured_lock_syntax() {
-            use yamaa_core::project_environment::{Environment, Submission};
+        fn retained_admission_reports_the_captured_lock_syntax_against_the_linked_language() {
+            use yamaa_core::project_environment::Environment;
+            // Empty present functions and an absent environment need no finding.
+            let mut d = draft();
+            d.lock = None;
+            d.functions = Some(vec![]);
+            assert!(Environment::admit_retained(Language::Python, d).is_ok());
             let mut d = draft();
             d.language = None;
             d.lock = None;
-            d.functions = Some(vec![]);
-            d.submissions = vec![Submission::Adam];
-            let rejection = Environment::admit_retained(Language::Python, d).unwrap_err();
-            let projected = diagnostics(&rejection.draft, &rejection.error).unwrap();
-            assert_eq!(projected.len(), 2);
-            for (finding, (path, reason)) in projected
-                .iter()
-                .zip([("language", "missing_language"), ("study", "missing_study")])
-            {
-                assert_eq!(finding.spec_paths, [path]);
-                assert_eq!(finding.context["reason"], JsonValue::String(reason.into()));
-                assert_eq!(finding.context.len(), 1);
-            }
+            d.functions = None;
+            assert!(Environment::admit_retained(Language::Python, d).is_ok());
             let mut d = draft();
             d.functions = None;
             d.language = Some(Language::R);
-            let findings = project_environment::validate(Language::Python, &d);
-            let projected = diagnostics(&d, &findings).unwrap();
-            assert_eq!(projected.len(), 2);
-            assert_eq!(projected[1].spec_paths, ["lock"]);
+            let rejection = Environment::admit_retained(Language::R, d).unwrap_err();
+            let projected = diagnostics(&rejection.draft, &rejection.error).unwrap();
+            assert_eq!(projected.len(), 1);
+            assert_eq!(projected[0].spec_paths, ["lock"]);
             assert_eq!(
-                projected[1].definition().condition,
+                projected[0].definition().condition,
                 "project_environment_invalid"
             );
+            assert_eq!(projected[0].context.len(), 3);
             assert_eq!(
-                projected[1].context["actual_lock_kind"],
+                projected[0].context["actual_lock_kind"],
                 JsonValue::String("uv".into())
             );
             assert_eq!(
-                projected[1].context["language"],
+                projected[0].context["language"],
                 JsonValue::String("r".into())
             );
             assert_eq!(
-                projected[1].context["reason"],
+                projected[0].context["reason"],
                 JsonValue::String("lock_kind_mismatch".into())
             );
         }
@@ -1110,11 +1102,40 @@ mod project {
             schema::{Document, DocumentNode as N},
             value::{ColumnType, Value, ValueType},
         };
+        /// The caller-supplied project file and the environment file it links.
+        const PROJECT: &str = "held/project.yaml";
+        const ENVIRONMENT: &str = "held/environment.yaml";
         fn document(nodes: Vec<N>) -> Document {
             let root = nodes.len() - 1;
             Document::new(nodes, root).unwrap()
         }
-        fn root_document(functions: &[(&str, bool)], codelists: &[bool]) -> Document {
+        /// A project root that links a Python environment file and declares
+        /// inline or external codelists.
+        fn project_document(codelists: &[bool]) -> Document {
+            let mut nodes = vec![
+                N::Text("environment.yaml".into()),
+                N::Text("python".into()),
+                N::Mapping(vec![(1, 0)]),
+                N::Text("environments".into()),
+            ];
+            let mut entries = Vec::new();
+            for external in codelists {
+                entries.push(nodes.len());
+                nodes.push(if *external {
+                    N::Text("ct.yaml".into())
+                } else {
+                    N::Mapping(vec![])
+                });
+            }
+            let lists = nodes.len();
+            nodes.push(N::Sequence(entries));
+            let list_key = nodes.len();
+            nodes.push(N::Text("codelists".into()));
+            nodes.push(N::Mapping(vec![(3, 2), (list_key, lists)]));
+            document(nodes)
+        }
+        /// A linked environment file that declares inline or external functions.
+        fn environment_document(functions: &[(&str, bool)]) -> Document {
             let mut nodes = Vec::new();
             let mut entries = Vec::new();
             for (name, external) in functions {
@@ -1132,24 +1153,20 @@ mod project {
             nodes.push(N::Mapping(entries));
             let function_key = nodes.len();
             nodes.push(N::Text("functions".into()));
-            let mut entries = Vec::new();
-            for external in codelists {
-                entries.push(nodes.len());
-                nodes.push(if *external {
-                    N::Text("ct.yaml".into())
-                } else {
-                    N::Mapping(vec![])
-                });
-            }
-            let lists = nodes.len();
-            nodes.push(N::Sequence(entries));
-            let list_key = nodes.len();
-            nodes.push(N::Text("codelists".into()));
-            nodes.push(N::Mapping(vec![
-                (function_key, functions),
-                (list_key, lists),
-            ]));
+            nodes.push(N::Mapping(vec![(function_key, functions)]));
             document(nodes)
+        }
+        fn project(document: &Document) -> Root<'_> {
+            Root {
+                document,
+                identity: PROJECT,
+            }
+        }
+        fn environment(document: &Document) -> Option<Root<'_>> {
+            Some(Root {
+                document,
+                identity: ENVIRONMENT,
+            })
         }
         fn text(value: &str) -> CV {
             CV::String(value.into())
@@ -1172,12 +1189,12 @@ mod project {
                     })
                     .collect(),
             );
-            let doc = root_document(
+            let project_doc = project_document(&[]);
+            let environment_doc = environment_document(
                 &names
                     .iter()
                     .map(|name| (name.as_str(), true))
                     .collect::<Vec<_>>(),
-                &[],
             );
             let captured = document(vec![
                 N::Integer("9223372036854775808".into()),
@@ -1202,13 +1219,12 @@ mod project {
                     finding: F::InvalidCallable,
                 })
                 .collect::<Vec<_>>();
-            let root = Root {
-                document: &doc,
-                identity: "held/environment.yaml",
-            };
+            let root = project(&project_doc);
+            let linked = environment(&environment_doc);
             let report = p::admit_admission(
                 Admission {
                     root,
+                    environment: linked,
                     draft: &draft,
                     function_origins: &names,
                     codelist_origins: &[],
@@ -1242,6 +1258,7 @@ mod project {
             }];
             let report = p::admit_scalar_sources(
                 root,
+                linked,
                 captures.iter().map(|capture| ScalarSource {
                     capture: *capture,
                     findings: &scalar,
@@ -1279,7 +1296,7 @@ mod project {
                 .collect();
             context.extend([
                 ("source".into(), text(source)),
-                ("entry".into(), text("held/environment.yaml")),
+                ("entry".into(), text(PROJECT)),
                 ("environment_path".into(), text(declaration)),
             ]);
             Diagnostic {
@@ -1319,24 +1336,20 @@ mod project {
                     }],
                 }]),
                 codelists: vec![],
-                has_study: false,
-                submissions: vec![],
             }
         }
         #[test]
-        fn independent_complete_seventeen_record_environment_report_preserves_every_field_and_order(
-        ) {
-            assert_eq!(support::reached().len(), 9);
+        fn independent_complete_sixteen_record_project_report_preserves_every_field_and_order() {
+            assert_eq!(support::reached().len(), 8);
             let draft = support::draft();
-            let doc = root_document(&[], &[false]);
+            let project_doc = project_document(&[false]);
+            let environment_doc = environment_document(&[]);
             let findings = project_environment::validate(Language::Python, &draft);
             let origins = [0];
             let result = p::admit_admission(
                 Admission {
-                    root: Root {
-                        document: &doc,
-                        identity: "held/environment.yaml",
-                    },
+                    root: project(&project_doc),
+                    environment: environment(&environment_doc),
                     draft: &draft,
                     function_origins: &[],
                     codelist_origins: &origins,
@@ -1347,13 +1360,8 @@ mod project {
             .unwrap()
             .diagnostics()
             .unwrap();
-            let mut want = vec![expected(
-                C::RunnerLanguageMismatch,
-                "language",
-                &[("declared", text("r")), ("runner", text("python"))],
-                "held/environment.yaml",
-                "language",
-            )];
+            // Inline codelists are declared by the project itself.
+            let mut want = vec![];
             for list in 0..2 {
                 let base = format!("codelists[0].codelists[{list}]");
                 if list == 1 {
@@ -1361,7 +1369,7 @@ mod project {
                         C::CodelistDuplicateIdentifier,
                         &format!("{base}.id"),
                         &[("codelist", text("SEX")), ("field", text("id"))],
-                        "held/environment.yaml",
+                        PROJECT,
                         "codelists[0]",
                     ));
                     want.push(expected(
@@ -1372,7 +1380,7 @@ mod project {
                             ("field", text("name")),
                             ("name", text("Sex")),
                         ],
-                        "held/environment.yaml",
+                        PROJECT,
                         "codelists[0]",
                     ));
                 }
@@ -1380,54 +1388,54 @@ mod project {
                     C::CodelistInvalidShape,
                     &base,
                     &[("codelist", text("SEX"))],
-                    "held/environment.yaml",
+                    PROJECT,
                     "codelists[0]",
                 ));
                 want.push(expected(
                     C::CodelistInvalidValue,
                     &format!("{base}.items[0].value"),
                     &[("codelist", text("SEX")), ("value", CV::Bool(true))],
-                    "held/environment.yaml",
+                    PROJECT,
                     "codelists[0]",
                 ));
                 want.push(expected(
                     C::CodelistExtensionNotAdmitted,
                     &format!("{base}.items[0].extended"),
                     &[("codelist", text("SEX"))],
-                    "held/environment.yaml",
+                    PROJECT,
                     "codelists[0]",
                 ));
                 want.push(expected(
                     C::CodelistInvalidValue,
                     &format!("{base}.items[1].value"),
                     &[("codelist", text("SEX")), ("value", CV::Bool(true))],
-                    "held/environment.yaml",
+                    PROJECT,
                     "codelists[0]",
                 ));
                 want.push(expected(
                     C::CodelistDuplicateValue,
                     &format!("{base}.items[1].value"),
                     &[("codelist", text("SEX")), ("value", CV::Bool(true))],
-                    "held/environment.yaml",
+                    PROJECT,
                     "codelists[0]",
                 ));
                 want.push(expected(
                     C::CodelistPartialItemField,
                     &base,
                     &[("codelist", text("SEX")), ("field", text("decode"))],
-                    "held/environment.yaml",
+                    PROJECT,
                     "codelists[0]",
                 ));
                 want.push(expected(
                     C::CodelistPartialItemField,
                     &base,
                     &[("codelist", text("SEX")), ("field", text("rank"))],
-                    "held/environment.yaml",
+                    PROJECT,
                     "codelists[0]",
                 ));
             }
             assert_eq!(result, want);
-            assert_eq!(result.len(), 17);
+            assert_eq!(result.len(), 16);
         }
         #[test]
         fn every_function_route_has_complete_independent_inline_and_external_context() {
@@ -1575,14 +1583,15 @@ mod project {
             ];
             for external in [false, true] {
                 let draft = draft();
-                let doc = root_document(&[("id", external)], &[]);
+                let project_doc = project_document(&[]);
+                let environment_doc = environment_document(&[("id", external)]);
                 let captured = document(vec![N::Mapping(vec![])]);
                 let names = ["id".into()];
                 let captures = if external {
                     vec![Capture {
                         origin: Origin::Function("id"),
                         document: &captured,
-                        identity: "held/environment.yaml",
+                        identity: "held/function.yaml",
                     }]
                 } else {
                     vec![]
@@ -1596,10 +1605,8 @@ mod project {
                     .collect::<Vec<_>>();
                 let result = p::admit_admission(
                     Admission {
-                        root: Root {
-                            document: &doc,
-                            identity: "held/environment.yaml",
-                        },
+                        root: project(&project_doc),
+                        environment: environment(&environment_doc),
                         draft: &draft,
                         function_origins: &names,
                         codelist_origins: &[],
@@ -1613,12 +1620,14 @@ mod project {
                 let want = cases
                     .iter()
                     .map(|(_, suffix, reason, context)| {
-                        let path = if suffix.is_empty() {
-                            "functions.id".into()
+                        // The environment file authors every function name; an
+                        // external function file holds the remaining fields.
+                        let (path, source) = if suffix.is_empty() {
+                            ("functions.id".into(), ENVIRONMENT)
                         } else if external {
-                            (*suffix).into()
+                            ((*suffix).into(), "held/function.yaml")
                         } else {
-                            format!("functions.id.{suffix}")
+                            (format!("functions.id.{suffix}"), ENVIRONMENT)
                         };
                         let mut fields = vec![("function", text("id")), ("reason", text(reason))];
                         fields.extend(context.iter().cloned());
@@ -1626,7 +1635,7 @@ mod project {
                             C::ProjectEnvironmentInvalid,
                             &path,
                             &fields,
-                            "held/environment.yaml",
+                            source,
                             "functions.id",
                         )
                     })
@@ -1653,7 +1662,8 @@ mod project {
             let mut draft = draft();
             let name = "f".repeat(16_384);
             draft.functions.as_mut().unwrap()[0].name = name.clone();
-            let doc = root_document(&[(&name, false)], &[]);
+            let project_doc = project_document(&[]);
+            let environment_doc = environment_document(&[(&name, false)]);
             let names = [name.clone()];
             let findings = vec![
                 Finding::Function {
@@ -1664,10 +1674,8 @@ mod project {
             ];
             let report = p::admit_admission(
                 Admission {
-                    root: Root {
-                        document: &doc,
-                        identity: "held/environment.yaml",
-                    },
+                    root: project(&project_doc),
+                    environment: environment(&environment_doc),
                     draft: &draft,
                     function_origins: &names,
                     codelist_origins: &[],
@@ -1684,7 +1692,7 @@ mod project {
                     ("function", text(&name)),
                     ("reason", text("invalid_callable")),
                 ],
-                "held/environment.yaml",
+                ENVIRONMENT,
                 &format!("functions.{name}"),
             );
             assert_eq!(actual.len(), findings.len());
@@ -1693,30 +1701,41 @@ mod project {
         #[test]
         fn malformed_origin_relationships_and_wrong_held_nodes_refuse_explicitly() {
             let draft = draft();
-            let inline = root_document(&[("id", false)], &[]);
-            let external = root_document(&[("id", true)], &[]);
+            let project_doc = project_document(&[]);
+            let inline = environment_document(&[("id", false)]);
+            let external = environment_document(&[("id", true)]);
             let captured = document(vec![N::Mapping(vec![])]);
             let names = ["id".into()];
             let wrong_names = ["other".into()];
-            let findings = [Finding::MissingLanguage];
+            let findings = [Finding::LockKindMismatch {
+                language: Language::Python,
+                actual: LockKind::Renv,
+            }];
             let capture = Capture {
                 origin: Origin::Function("id"),
                 document: &captured,
-                identity: "held/environment.yaml",
+                identity: "held/function.yaml",
             };
-            for (root, origins, captures) in [
-                (&inline, &wrong_names, vec![]),
-                (&inline, &names, vec![capture]),
-                (&external, &names, vec![]),
-                (&external, &names, vec![capture, capture]),
+            // The linked environment file is held beside the captures.
+            let linked = Capture {
+                origin: Origin::Environment("python"),
+                document: &inline,
+                identity: ENVIRONMENT,
+            };
+            for (linked_environment, origins, captures) in [
+                (Some(&inline), &wrong_names, vec![]),
+                (Some(&inline), &names, vec![capture]),
+                (Some(&external), &names, vec![]),
+                (Some(&external), &names, vec![capture, capture]),
+                (Some(&inline), &names, vec![linked]),
+                // Functions are declared only by a linked environment file.
+                (None, &names, vec![]),
             ] {
                 assert!(matches!(
                     p::admit_admission(
                         Admission {
-                            root: Root {
-                                document: root,
-                                identity: "held/environment.yaml"
-                            },
+                            root: project(&project_doc),
+                            environment: linked_environment.and_then(environment),
                             draft: &draft,
                             function_origins: origins,
                             codelist_origins: &[],
@@ -1727,94 +1746,230 @@ mod project {
                     Err(Error::InvalidOrigin)
                 ));
             }
+            // The lock is declared by the linked environment file, so a lock
+            // finding cannot be reported without it.
+            let mut lock_only = draft.clone();
+            lock_only.functions = None;
+            assert!(matches!(
+                p::admit_admission(
+                    Admission {
+                        root: project(&project_doc),
+                        environment: None,
+                        draft: &lock_only,
+                        function_origins: &[],
+                        codelist_origins: &[],
+                        captures: std::iter::empty()
+                    },
+                    &findings
+                ),
+                Err(Error::InvalidOrigin)
+            ));
             let scalar = [SF {
                 path: "result".into(),
                 node: 100,
                 kind: Kind::IntegerRange,
             }];
             assert!(matches!(
-                p::admit_root_scalars(
-                    Root {
-                        document: &inline,
-                        identity: "held/environment.yaml"
-                    },
-                    &scalar,
-                    None
-                ),
+                p::admit_root_scalars(project(&project_doc), &scalar),
                 Err(Error::Core(
                     project_environment_diagnostics::Error::InvalidIndex
                 ))
             ));
             let scalar = [SF {
                 path: "result".into(),
-                node: inline.root(),
+                node: project_doc.root(),
                 kind: Kind::IntegerRange,
             }];
             assert!(matches!(
-                p::admit_root_scalars(
-                    Root {
-                        document: &inline,
-                        identity: "held/environment.yaml"
-                    },
-                    &scalar,
-                    None
-                ),
+                p::admit_root_scalars(project(&project_doc), &scalar),
                 Err(Error::Core(
                     project_environment_diagnostics::Error::UnavailableShape
                 ))
             ));
         }
         #[test]
-        fn root_headers_and_wide_scalars_are_one_admitted_complete_report() {
+        fn lock_findings_name_the_linked_environment_file_that_writes_the_lock() {
+            let mut draft = draft();
+            draft.functions = None;
+            draft.lock.as_mut().unwrap().kind = LockKind::Renv;
+            let findings = project_environment::validate(Language::Python, &draft);
+            assert_eq!(
+                findings,
+                [Finding::LockKindMismatch {
+                    language: Language::Python,
+                    actual: LockKind::Renv
+                }]
+            );
+            let project_doc = project_document(&[]);
+            let environment_doc = environment_document(&[]);
+            let result = p::admit_admission(
+                Admission {
+                    root: project(&project_doc),
+                    environment: environment(&environment_doc),
+                    draft: &draft,
+                    function_origins: &[],
+                    codelist_origins: &[],
+                    captures: std::iter::empty(),
+                },
+                &findings,
+            )
+            .unwrap()
+            .diagnostics()
+            .unwrap();
+            assert_eq!(
+                result,
+                [expected(
+                    C::ProjectEnvironmentInvalid,
+                    "lock",
+                    &[
+                        ("reason", text("lock_kind_mismatch")),
+                        ("language", text("python")),
+                        ("actual_lock_kind", text("renv")),
+                    ],
+                    ENVIRONMENT,
+                    "lock",
+                )]
+            );
+        }
+        #[test]
+        fn root_wide_scalars_are_one_admitted_complete_report() {
             let wide = "123456789012345678901234567890";
             let doc = document(vec![
                 N::Integer(wide.into()),
+                N::Text("value".into()),
+                N::Mapping(vec![(1, 0)]),
+                N::Sequence(vec![2]),
+                N::Text("items".into()),
+                N::Mapping(vec![(4, 3)]),
+                N::Sequence(vec![5]),
+                N::Text("codelists".into()),
+                N::Mapping(vec![(7, 6)]),
+                N::Sequence(vec![8]),
+                N::Text("codelists".into()),
+                N::Mapping(vec![(10, 9)]),
+            ]);
+            let findings = [SF {
+                node: 0,
+                path: "codelists[0].codelists[0].items[0].value".into(),
+                kind: Kind::IntegerRange,
+            }];
+            let report = p::admit_root_scalars(project(&doc), &findings).unwrap();
+            assert_eq!(
+                report.diagnostics().unwrap(),
+                [expected(
+                    C::ProjectEnvironmentInvalid,
+                    "codelists[0].codelists[0].items[0].value",
+                    &[
+                        ("reason", text("integer_out_of_range")),
+                        (
+                            "value",
+                            CV::Number((wide).parse().expect("canonical integer"))
+                        )
+                    ],
+                    PROJECT,
+                    "$"
+                )]
+            );
+        }
+        #[test]
+        fn environment_file_scalar_failures_report_against_the_project_link() {
+            let project_doc = project_document(&[]);
+            let doc = document(vec![
+                N::Integer("9223372036854775808".into()),
                 N::Text("result".into()),
                 N::Mapping(vec![(1, 0)]),
-                N::Text("id".into()),
+                N::Text("inline".into()),
                 N::Mapping(vec![(3, 2)]),
                 N::Text("functions".into()),
                 N::Mapping(vec![(5, 4)]),
             ]);
             let findings = [SF {
                 node: 0,
-                path: "functions.id.result".into(),
+                path: "functions.inline.result".into(),
                 kind: Kind::IntegerRange,
             }];
-            let root = Root {
-                document: &doc,
-                identity: "held/environment.yaml",
+            let value = (
+                "value",
+                CV::Number(("9223372036854775808").parse().expect("canonical integer")),
+            );
+            let source = |key| ScalarSource {
+                capture: Capture {
+                    origin: Origin::Environment(key),
+                    document: &doc,
+                    identity: ENVIRONMENT,
+                },
+                findings: &findings,
             };
-            let report = p::admit_root_scalars(root, &findings, Some(Language::Python)).unwrap();
+            // A failed environment file is never also the linked environment.
+            let result = p::admit_scalar_sources(
+                project(&project_doc),
+                None,
+                [source("python")].into_iter(),
+            )
+            .unwrap()
+            .diagnostics()
+            .unwrap();
             assert_eq!(
-                report.diagnostics().unwrap(),
-                [
-                    expected(
-                        C::ProjectEnvironmentInvalid,
-                        "language",
-                        &[("reason", text("missing_language"))],
-                        "held/environment.yaml",
-                        "$"
-                    ),
-                    expected(
-                        C::ProjectEnvironmentInvalid,
-                        "functions.id.result",
-                        &[
-                            ("reason", text("integer_out_of_range")),
-                            (
-                                "value",
-                                CV::Number((wide).parse().expect("canonical integer"))
-                            )
-                        ],
-                        "held/environment.yaml",
-                        "$"
-                    )
-                ]
+                result,
+                [expected(
+                    C::ProjectEnvironmentInvalid,
+                    "functions.inline.result",
+                    &[("reason", text("integer_out_of_range")), value.clone()],
+                    ENVIRONMENT,
+                    "environments.python"
+                )]
+            );
+            // Only an `environments` key the project writes names that file.
+            assert!(matches!(
+                p::admit_scalar_sources(project(&project_doc), None, [source("r")].into_iter()),
+                Err(Error::InvalidOrigin)
+            ));
+            // A failed function file is declared by the linked environment file.
+            let environment_doc = environment_document(&[("first", true)]);
+            let function = document(vec![
+                N::Integer("9223372036854775808".into()),
+                N::Text("result".into()),
+                N::Mapping(vec![(1, 0)]),
+            ]);
+            let function_findings = [SF {
+                node: 0,
+                path: "tests[0].result".into(),
+                kind: Kind::IntegerRange,
+            }];
+            let function_source = ScalarSource {
+                capture: Capture {
+                    origin: Origin::Function("first"),
+                    document: &function,
+                    identity: "held/first.yaml",
+                },
+                findings: &function_findings,
+            };
+            assert!(matches!(
+                p::admit_scalar_sources(project(&project_doc), None, [function_source].into_iter()),
+                Err(Error::InvalidOrigin)
+            ));
+            let result = p::admit_scalar_sources(
+                project(&project_doc),
+                environment(&environment_doc),
+                [function_source].into_iter(),
+            )
+            .unwrap()
+            .diagnostics()
+            .unwrap();
+            assert_eq!(
+                result,
+                [expected(
+                    C::ProjectEnvironmentInvalid,
+                    "tests[0].result",
+                    &[("reason", text("integer_out_of_range")), value],
+                    "held/first.yaml",
+                    "functions.first"
+                )]
             );
         }
         #[test]
         fn scalar_sources_admit_all_captures_before_copying_and_keep_authored_holes() {
-            let root_doc = root_document(&[], &[true, true, true]);
+            let root_doc = project_document(&[true, true, true]);
             let doc = document(vec![
                 N::Integer("9223372036854775808".into()),
                 N::Text("value".into()),
@@ -1825,10 +1980,7 @@ mod project {
                 path: "items[0].value".into(),
                 kind: Kind::IntegerRange,
             }];
-            let root = Root {
-                document: &root_doc,
-                identity: "held/environment.yaml",
-            };
+            let root = project(&root_doc);
             let sources = [
                 ScalarSource {
                     capture: Capture {
@@ -1847,7 +1999,8 @@ mod project {
                     findings: &findings,
                 },
             ];
-            let result = p::admit_scalar_sources(root, sources.iter().copied())
+            // Codelist files are declared by the project, not the environment.
+            let result = p::admit_scalar_sources(root, None, sources.iter().copied())
                 .unwrap()
                 .diagnostics()
                 .unwrap();
@@ -1903,7 +2056,8 @@ mod project {
                 }
             }
             let draft = draft();
-            let doc = root_document(&[("id", true)], &[]);
+            let project_doc = project_document(&[]);
+            let environment_doc = environment_document(&[("id", true)]);
             let captured = document(vec![N::Mapping(vec![])]);
             let names = ["id".into()];
             let findings = [Finding::Function {
@@ -1913,10 +2067,8 @@ mod project {
             let calls = Rc::new(Cell::new(0));
             let report = p::admit_admission(
                 Admission {
-                    root: Root {
-                        document: &doc,
-                        identity: "held/environment.yaml",
-                    },
+                    root: project(&project_doc),
+                    environment: environment(&environment_doc),
                     draft: &draft,
                     function_origins: &names,
                     codelist_origins: &[],
@@ -1971,21 +2123,19 @@ mod project {
                     })
                     .collect(),
             );
-            let doc = root_document(
+            let project_doc = project_document(&[]);
+            let environment_doc = environment_document(
                 &names
                     .iter()
                     .map(|name| (name.as_str(), false))
                     .collect::<Vec<_>>(),
-                &[],
             );
             let findings = project_environment::validate(Language::Python, &draft);
             assert_eq!(findings.len(), 600);
             let report = p::admit_admission(
                 Admission {
-                    root: Root {
-                        document: &doc,
-                        identity: "held/environment.yaml",
-                    },
+                    root: project(&project_doc),
+                    environment: environment(&environment_doc),
                     draft: &draft,
                     function_origins: &names,
                     codelist_origins: &[],
@@ -2006,7 +2156,7 @@ mod project {
                         ("reason", text("invalid_case_result")),
                         ("value", CV::Bool(true)),
                     ],
-                    "held/environment.yaml",
+                    ENVIRONMENT,
                     &declaration,
                 ));
                 for obligation in ["boundary", "normal"] {
@@ -2018,7 +2168,7 @@ mod project {
                             ("reason", text("missing_coverage_obligation")),
                             ("obligation", text(obligation)),
                         ],
-                        "held/environment.yaml",
+                        ENVIRONMENT,
                         &declaration,
                     ));
                 }

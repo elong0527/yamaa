@@ -179,6 +179,18 @@ This qualifies a Unix study-source adapter. Entry/layer/environment/codelist cap
 
 The Windows implementations use retained handles in [windows_file.rs](../../src/windows_file.rs) and [file_publication_windows.rs](../../src/file_publication_windows.rs). The installed Python and R suites cover original-file access and publication on Windows.
 
+## odm
+# ODM XML reader documents
+
+`odm/odm13.xml` and `odm/odm20.xml` are the two documents of the retired Python
+ODM reader suite, kept byte for byte, so the cases ported into `odm_xml.rs`
+apply the same edits to the same text. The installed Python and R `read_odm`
+suites read the same two files, staged as `host-fixtures/odm`, against the
+`read-odm` family of `rust/tests/host-fixtures/cases.json`.
+TAR and gzip inputs are written at test time by `support/odm_files.rs`; no
+binary archive is committed. Expected values are the ones the Python suite
+asserted or ones read from the documents by hand; no Rust output generated them.
+
 ## odm_deferred
 # Deferred ODM defaults
 
@@ -583,21 +595,27 @@ Both installed hosts compare complete UTF-8 payloads twice while study callbacks
 
 The compound invalid-pattern/later-limit source comes from the independently authored complete build report. Its sole static finding keeps the first pattern path and JSON context without entering study authority. Direct compiled-model coverage also pins an empty verification ID under REQ-0374, including repeated queries.
 
-## verification_logs_reference
+## run_report_reference
 The `specs/schema-verification-log.json` report comes from the installed,
 retained Python reference engine's `execute_example(..., backend="python")` on
-the unchanged `benchmarks/schema-verification-log` document and inputs. Its three
-rendered CSV files were compared byte for byte with the unchanged committed
-goldens before retaining the report. Only the backend label and runtime/engine
-identity placeholders were changed to the same fixture convention used by the
-other reports. No candidate Rust execution supplies this expected data.
+the `benchmarks/schema-verification-log` document and inputs. Its rendered CSV
+files were compared byte for byte with the committed goldens before retaining
+the report. Only the backend label and runtime/engine identity placeholders
+were changed to the same fixture convention used by the other reports. No
+candidate Rust execution supplies this expected data.
+
+When the warning and verification logs became one run report, the benchmark's
+report golden `expected/adsl-checks.csv` was re-authored by hand from the
+retired log goldens, the specification and its input. The first `artifacts`
+entry here is that golden's observation: its exact content, records, byte
+length, columns and types. The retired warning-log entry was removed and every
+other field is unchanged.
 
 Native and installed Python/R tests compare the complete report, including
-source reads, all source and derived cells, all four checks and the actual three
-published artifacts in verification, warning and primary order. Installed tests
-also retain their actual public reports after this comparison. These witnesses
-qualify this document; they do not close the remaining public API sidecar
-support gates.
+source reads, all source and derived cells, all three checks and the actual two
+published artifacts in report and primary order. Installed tests also retain
+their actual public reports after this comparison. These witnesses qualify this
+document; they do not close the remaining public API report support gates.
 
 ## window_diagnostics
 # Original window diagnostic truth

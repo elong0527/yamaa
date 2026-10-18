@@ -432,7 +432,7 @@ columns:
                 let body = body
                     .replace(
                         "output: {path: result.csv,",
-                        "output: {path: result.csv, warning_log: warnings.csv,",
+                        "output: {path: result.csv, report: report.csv,",
                     )
                     .replace("  - assert:\n", "  - assert:\n      severity: warning\n")
                     .replace(pattern, &pattern.replace("P.X", "P.MISSING"));

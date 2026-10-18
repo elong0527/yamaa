@@ -16,11 +16,11 @@ const DOCUMENT: &[FieldName] = &[
     FieldName::Title,
 ];
 const SECTION: &[FieldName] = &[
-    FieldName::Standard,
     FieldName::Specs,
+    FieldName::Standard,
     FieldName::Define,
     FieldName::Documents,
-    FieldName::Transport,
+    FieldName::Datasets,
     FieldName::Context,
     FieldName::XmlLang,
     FieldName::FileOid,
@@ -419,10 +419,14 @@ impl<'a> Parser<'a> {
             return Ok(None);
         }
         let node = origin.node.unwrap();
-        let standard = self.guide(
-            self.get(node, FieldName::Standard),
-            path.field(FieldName::Standard),
-        )?;
+        // Only Define-XML composition requires the guide and target; a section
+        // that lists its specifications already admits for runs.
+        let standard_origin = self.get(node, FieldName::Standard);
+        let standard = if standard_origin.node.is_some() {
+            self.guide(standard_origin, path.field(FieldName::Standard))?
+        } else {
+            None
+        };
         let specs_origin = self.get(node, FieldName::Specs);
         let specs_path = path.field(FieldName::Specs);
         // Copy only the admitted final list; measurement iterates borrowed nodes.
@@ -448,7 +452,7 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        let define = self.required_text(node, FieldName::Define, path, TextRule::NonEmpty)?;
+        let define = self.optional_text(node, FieldName::Define, path, TextRule::NonEmpty)?;
         let docs_origin = self.get(node, FieldName::Documents);
         let docs_path = path.field(FieldName::Documents);
         let doc_nodes = self.sequence(docs_origin, docs_path, true)?.unwrap_or(&[]);
@@ -462,15 +466,12 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        let transport_origin = self.get(node, FieldName::Transport);
-        let transport = if transport_origin.node.is_some() {
+        let datasets_origin = self.get(node, FieldName::Datasets);
+        let datasets = if datasets_origin.node.is_some() {
             self.choice(
-                transport_origin,
-                path.field(FieldName::Transport),
-                &[
-                    ("xpt", Transport::Xpt),
-                    ("dataset_json", Transport::DatasetJson),
-                ],
+                datasets_origin,
+                path.field(FieldName::Datasets),
+                &[("json", Transport::DatasetJson), ("xpt", Transport::Xpt)],
                 None,
             )?
         } else {
@@ -507,30 +508,28 @@ impl<'a> Parser<'a> {
             path,
             TextRule::NonEmpty,
         )?;
-        Ok(standard.zip(define).zip(context).zip(xml_lang).map(
-            |(((standard, define), context), xml_lang)| Section {
-                family,
-                origin,
-                standard,
-                specs: Field {
-                    value: specs,
-                    origin: specs_origin,
-                },
-                define,
-                documents: Field {
-                    value: documents,
-                    origin: docs_origin,
-                },
-                transport,
-                context,
-                xml_lang,
-                file_oid,
-                metadata_version,
-                originator,
-                stylesheet,
-                source_system_version,
+        Ok(context.zip(xml_lang).map(|(context, xml_lang)| Section {
+            family,
+            origin,
+            specs: Field {
+                value: specs,
+                origin: specs_origin,
             },
-        ))
+            standard,
+            define,
+            documents: Field {
+                value: documents,
+                origin: docs_origin,
+            },
+            datasets,
+            context,
+            xml_lang,
+            file_oid,
+            metadata_version,
+            originator,
+            stylesheet,
+            source_system_version,
+        }))
     }
     fn run(&mut self, root: usize) -> Result<Declarations, Cause> {
         let N::Mapping(fields) = &self.input.nodes()[root] else {

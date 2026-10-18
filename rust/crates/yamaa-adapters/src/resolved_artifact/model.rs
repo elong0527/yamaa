@@ -30,8 +30,7 @@ pub enum ResourceRole {
     InputData,
     ProducerSchema,
     OutputData,
-    WarningLog,
-    VerificationLog,
+    Report,
     MappingDictionary,
     ParentSpecification,
 }
@@ -91,7 +90,7 @@ pub struct ResolvedArtifact {
     model_kind: String,
     replay: String,
     entry: String,
-    environment: Option<String>,
+    project: Option<String>,
     entries: Vec<Entry>,
 }
 
@@ -127,18 +126,14 @@ impl std::fmt::Display for Error {
 impl std::error::Error for Error {}
 
 impl ResolvedArtifact {
-    pub fn new(
-        entry: String,
-        environment: Option<String>,
-        entries: Vec<Entry>,
-    ) -> Result<Self, Error> {
+    pub fn new(entry: String, project: Option<String>, entries: Vec<Entry>) -> Result<Self, Error> {
         let artifact = Self {
             format: FORMAT.into(),
             artifact_version: ARTIFACT_VERSION,
             model_kind: MODEL_KIND.into(),
             replay: "inspection_only".into(),
             entry,
-            environment,
+            project,
             entries,
         };
         artifact.validate()?;
@@ -150,8 +145,8 @@ impl ResolvedArtifact {
     pub fn entry(&self) -> &str {
         &self.entry
     }
-    pub fn environment(&self) -> Option<&str> {
-        self.environment.as_deref()
+    pub fn project(&self) -> Option<&str> {
+        self.project.as_deref()
     }
     /// Deterministic compact UTF-8 JSON; exact integer tokens never use binary64.
     pub fn to_json(&self) -> Result<String, Error> {

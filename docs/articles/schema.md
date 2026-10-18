@@ -22,7 +22,8 @@ explained in [Schema introduction](schema-intro.md).
 | [`schema_expression_window.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_expression_window.yaml) | Window expressions over constructed output rows: `row_number`, `rank`, `row_value`, `locf`, `baseline_flag` |
 | [`schema_expression_odm.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_expression_odm.yaml) | The `odm` item read over the fixed ODM schema (Name binding) |
 | [`schema_function.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_function.yaml) | The `function` extension point: logical name and named arguments (Project functions) |
-| [`schema_environment.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_environment.yaml) | The project environment: packaging lock, versionless installed functions, inline tests, codelists and submission metadata (Project functions) |
+| [`schema_project.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_project.yaml) | The project file: each language's environment file, codelists, study metadata and the `sdtm`, `adam` and `send` sections (Project file) |
+| [`schema_environment.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_environment.yaml) | One language's environment: packaging lock and versionless installed functions with inline tests (Project functions) |
 | [`schema_verification.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_verification.yaml) | Dataset and column verifications (Verification) |
 | [`schema_metadata.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_metadata.yaml) | Governed dataset and column metadata (Submission metadata) |
 | [`conditions.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/conditions.yaml) | The validation-condition registry: every condition an implementation may raise, keyed to the phases that may raise it |

@@ -67,7 +67,7 @@ pub fn specification_with_verifications(
     columns: Vec<(&str, &str, Tree)>,
     rows: Vec<Tree>,
     verifications: Vec<Tree>,
-    warning_log: Option<&str>,
+    report: Option<&str>,
 ) -> SpecificationDocument {
     let mut projection = vec![Tree::text("ID")];
     let mut declarations = vec![Tree::map(vec![
@@ -96,8 +96,8 @@ pub fn specification_with_verifications(
         ("path", Tree::text("output.csv")),
         ("columns", Tree::List(projection)),
     ];
-    if let Some(path) = warning_log {
-        output.push(("warning_log", Tree::text(path)));
+    if let Some(path) = report {
+        output.push(("report", Tree::text(path)));
     }
     let mut fields = vec![
         ("schema_version", Tree::text("1.0")),

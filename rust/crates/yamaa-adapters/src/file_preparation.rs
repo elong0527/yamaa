@@ -80,6 +80,8 @@ impl Error {
 pub struct FileSpecification {
     run: PreparedRun,
     resources: Resources,
+    /// Inputs a project run may serve from artifacts it already built.
+    linked: Vec<crate::file_resources::LinkedInput>,
 }
 /// A plain compilation refusal still owns the original native snapshots.
 pub struct RejectedPlain {
@@ -115,6 +117,7 @@ impl FileSpecification {
     pub fn prepare(mut resources: Resources, written: &str) -> Result<Self, Error> {
         let document = prepare_document(&mut resources, written, None)?;
         let links = capture_links(&mut resources, &document, None, &mut None)?;
+        let linked = crate::file_resources::linked_inputs(&resources, &document, &links);
         let run = PreparedRun::prepare_with_profile_inspection(
             document,
             &links,
@@ -123,18 +126,23 @@ impl FileSpecification {
             },
         )
         .map_err(Error::Compile)?;
-        let findings = crate::verification_logs::location_findings(&resources, &run);
+        let findings = crate::run_report::location_findings(&resources, &run);
         if !findings.is_empty() {
             return Err(Error::Compile(crate::specification_run::Error::Prepare(
                 yamaa_core::specification::PrepareError::Invalid(findings),
             )));
         }
-        Ok(Self { run, resources })
+        Ok(Self {
+            run,
+            resources,
+            linked,
+        })
     }
     pub(crate) fn from_workflow(
         entry: crate::file_entry::CapturedEntry,
     ) -> Result<Self, Box<RejectedPlain>> {
         let (resources, entry, document, links, _) = entry.into_parts();
+        let linked = crate::file_resources::linked_inputs(&resources, &document, &links);
         let result = PreparedRun::prepare_with_profile_inspection(
             document,
             &links,
@@ -143,7 +151,7 @@ impl FileSpecification {
             },
         )
         .and_then(|run| {
-            let findings = crate::verification_logs::location_findings(&resources, &run);
+            let findings = crate::run_report::location_findings(&resources, &run);
             if findings.is_empty() {
                 Ok(run)
             } else {
@@ -153,7 +161,11 @@ impl FileSpecification {
             }
         });
         match result {
-            Ok(run) => Ok(Self { run, resources }),
+            Ok(run) => Ok(Self {
+                run,
+                resources,
+                linked,
+            }),
             Err(error) => Err(Box::new(RejectedPlain {
                 error: Error::Compile(error),
                 entry,
@@ -206,7 +218,8 @@ impl FileSpecification {
         run: &mut RunScope,
         scope: yamaa_core::application_observer::Scope<'_>,
     ) -> CapturedAttempt<ResourceError> {
-        self.run.execute_with_port(run.resources_mut(), scope)
+        let mut port = crate::file_resources::HeldPort::new(run, &self.linked);
+        self.run.execute_with_port(&mut port, scope)
     }
 }
 
@@ -847,10 +860,7 @@ mod inventory_rejection_tests {
             resources: Resources::for_entry(&base).unwrap(),
         }));
         assert_eq!(
-            crate::project_application::selection_failure(
-                &rejected,
-                yamaa_core::project_function::Language::Python,
-            ),
+            crate::project_application::selection_failure(&rejected),
             crate::file_application::preparation_failure(error().into_message())
         );
     }

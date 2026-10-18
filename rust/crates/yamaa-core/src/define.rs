@@ -262,7 +262,6 @@ pub struct Application<P: Ports> {
     specifications: Vec<P::Specification>,
     artifacts: Vec<Artifact<P::Target>>,
     failed: bool,
-    saved: bool,
 }
 pub struct Attempt<P: Ports> {
     pub application: Application<P>,
@@ -280,7 +279,6 @@ impl<P: Ports> Application<P> {
             specifications: Vec::new(),
             artifacts: Vec::new(),
             failed: false,
-            saved: false,
         };
         let outcome = application.prepare_inner(
             ports,
@@ -320,29 +318,28 @@ impl<P: Ports> Application<P> {
             Failure::Metadata(vec![Finding::cause(
                 ConditionCode::SubmissionMetadataMissing,
                 standard,
-                "invalid closed environment submission declarations",
+                "invalid closed project submission declarations",
             )])
         })?;
-        let study = crate::define_diagnostics::required(declarations.study(), "study", "study")
-            .map_err(|finding| Failure::Metadata(vec![finding]))?;
-        let section = crate::define_diagnostics::required(
+        // A run needs only a section's specifications. Submission composition
+        // additionally requires the study, the selected section and its guide
+        // and target, and reports every one that is missing together.
+        let required = composition::Required::admit(
+            declarations.study(),
             declarations
                 .sections()
                 .iter()
                 .find(|section| section.family == family),
-            standard,
-            standard,
+            family,
         )
-        .map_err(|finding| Failure::Metadata(vec![finding]))?;
+        .map_err(Failure::Metadata)?;
+        let section = required.section;
+        let define = required.define;
         let identity = environment.source;
         let define_location = ports
-            .location(
-                &format!("{standard}.define"),
-                identity,
-                &section.define.value,
-            )
+            .location(&format!("{standard}.define"), identity, &define.value)
             .map_err(Failure::Port)?;
-        let transport = section.transport.as_ref().map(|field| field.value);
+        let transport = section.datasets.as_ref().map(|field| field.value);
         let mut locations = Vec::new();
         let mut hrefs = Vec::new();
         let mut outputs = Vec::new();
@@ -393,7 +390,7 @@ impl<P: Ports> Application<P> {
             let (href, target) = match transport {
                 Some(transport) if !declares_no_data(view.document) => {
                     let file = format!("{}.{}", id.to_ascii_lowercase(), transport.extension());
-                    let target_written = ports.transport_written(&section.define.value, &file);
+                    let target_written = ports.transport_written(&define.value, &file);
                     let target = ports
                         .location(&format!("{path}.transport"), identity, &target_written)
                         .map_err(Failure::Port)?;
@@ -508,8 +505,7 @@ impl<P: Ports> Application<P> {
             })
             .collect();
         let mut composed = composition::compose(
-            study,
-            section,
+            required,
             environment.catalogue,
             &inputs,
             &others,
@@ -583,14 +579,10 @@ impl<P: Ports> Application<P> {
             }
         }
         let target = ports
-            .target(
-                &format!("{standard}.define"),
-                identity,
-                &section.define.value,
-            )
+            .target(&format!("{standard}.define"), identity, &define.value)
             .map_err(Failure::Port)?;
         self.artifacts.push(Artifact {
-            written: section.define.value.clone(),
+            written: define.value.clone(),
             target,
             bytes: xml,
             state: PublicationState::Ready,
@@ -715,9 +707,6 @@ impl<P: Ports> Application<P> {
         if self.failed {
             return Err(SaveFailure::Refused);
         }
-        if self.saved {
-            return Ok(false);
-        }
         let mut publishers = match self.preflight(ports) {
             Ok(publishers) => publishers,
             Err(failure) => {
@@ -735,7 +724,6 @@ impl<P: Ports> Application<P> {
             }
             artifact.state = PublicationState::Published;
         }
-        self.saved = true;
         Ok(true)
     }
 }

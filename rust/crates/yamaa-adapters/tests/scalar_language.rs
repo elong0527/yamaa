@@ -691,7 +691,7 @@ rows:
             );
         }
     }
-    mod verification_logs {
+    mod run_report {
         use std::{
             fs,
             path::PathBuf,
@@ -704,7 +704,7 @@ rows:
         impl Study {
             fn new() -> Self {
                 let path = std::env::temp_dir().join(format!(
-                    "yamaa-log-witness-{}-{}",
+                    "yamaa-report-witness-{}-{}",
                     std::process::id(),
                     NEXT.fetch_add(1, Ordering::Relaxed)
                 ));
@@ -719,7 +719,10 @@ rows:
                 let raw = fs::read_to_string(source.join("spec.yaml")).unwrap();
                 (study, raw)
             }
-            fn build(&self, raw: &str) -> file_application::Domain {
+            fn try_build(
+                &self,
+                raw: &str,
+            ) -> Result<file_application::Domain, file_application::Failure> {
                 fs::write(self.0.join("spec.yaml"), raw).unwrap();
                 let path = self.0.join("spec.yaml").to_str().unwrap().to_owned();
                 file_application::domain(
@@ -732,12 +735,14 @@ rows:
                         runtime: "test",
                         runtime_version: "test",
                         engine_version: yamaa_core::VERSION,
-                        example: "logs",
+                        example: "report",
                         specification: &path,
                         base_directory: ".",
                     },
                 )
-                .unwrap()
+            }
+            fn build(&self, raw: &str) -> file_application::Domain {
+                self.try_build(raw).unwrap()
             }
         }
         impl Drop for Study {
@@ -745,21 +750,24 @@ rows:
                 fs::remove_dir_all(&self.0).unwrap();
             }
         }
-        const VERIFICATION_HEADER: &str = "REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,DETAILS\n";
-        const WARNING_HEADER: &str = "LOG_VERSION,ARTIFACT,SEVERITY,CONDITION,REQUIREMENT,SPEC_PATH,VERIFICATION_ID,FAILURE_COUNT,OFFENDING_KEYS,DETAILS\n";
+        const HEADER: &str = "ARTIFACT,KIND,SPEC_PATH,NAME,ID,TARGET,RULE,SEVERITY,OUTCOME,CONDITION,COUNT,TOTAL,KEYS,DETAILS\n";
+        /// The report as CSV text, read back from a save into `report.csv`.
+        fn saved_report(study: &Study, name: &str) -> String {
+            fs::read_to_string(study.0.join(name)).unwrap()
+        }
         #[test]
-        fn original_verification_benchmark_matches_three_unchanged_goldens_without_build_writes() {
+        fn original_report_benchmark_matches_the_unchanged_goldens_without_build_writes() {
             let (study, raw) = Study::benchmark();
             let mut result = study.build(&raw);
             assert!(result.issues().is_empty());
             assert!(result.output().is_some());
-            assert_eq!(result.log_table(false).unwrap().rows(), 3);
-            assert_eq!(result.log_table(true).unwrap().rows(), 1);
+            // One run, input and base row, two column rows and three check rows.
+            assert_eq!(result.report_table().rows(), 8);
             assert_eq!(
                 result.observations()["artifacts"],
                 yamaa_adapters::json!([])
             );
-            for name in ["adsl.csv", "adsl-checks.csv", "adsl-warnings.csv"] {
+            for name in ["adsl.csv", "adsl-checks.csv"] {
                 assert!(!study.0.join(name).exists());
             }
             fs::write(study.0.join("input/dm.csv"), "changed").unwrap();
@@ -768,7 +776,7 @@ rows:
                 .join("../../../benchmarks/schema-verification-log/expected");
             for _ in 0..2 {
                 assert!(result.save().unwrap());
-                for name in ["adsl.csv", "adsl-checks.csv", "adsl-warnings.csv"] {
+                for name in ["adsl.csv", "adsl-checks.csv"] {
                     assert_eq!(
                         fs::read(study.0.join(name)).unwrap(),
                         fs::read(root.join(name)).unwrap(),
@@ -782,7 +790,7 @@ rows:
                         .iter()
                         .map(|a| a["name"].as_str().unwrap())
                         .collect::<Vec<_>>(),
-                    ["adsl-checks", "adsl-warnings", "adsl"]
+                    ["adsl-checks", "adsl"]
                 );
                 let mut expected: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(
                     include_str!("fixtures/specs/schema-verification-log.json"),
@@ -791,7 +799,7 @@ rows:
                 expected["runtime"] = yamaa_adapters::json!("test");
                 expected["runtime_version"] = yamaa_adapters::json!("test");
                 expected["engine_version"] = yamaa_adapters::json!(yamaa_core::VERSION);
-                expected["example"] = yamaa_adapters::json!("logs");
+                expected["example"] = yamaa_adapters::json!("report");
                 for group in ["nodes", "tables", "verifications", "callbacks"] {
                     for record in expected[group].as_array_mut().unwrap() {
                         record["specification"] =
@@ -802,15 +810,15 @@ rows:
             }
         }
         #[test]
-        fn failed_save_publishes_only_retained_verification_and_preserves_primary_and_warning() {
+        fn failed_save_publishes_only_the_report_and_preserves_the_primary() {
             let (study, raw) = Study::benchmark();
             let mut result = study.build(&raw.replace("severity: warning", "severity: error"));
             assert!(result.output().is_none());
-            assert!(result.warning_log().is_none());
-            assert_eq!(result.log_table(false).unwrap().rows(), 2);
+            // The run, its input and base rows, then the two column checks it reached.
+            assert_eq!(result.report_table().rows(), 5);
             assert_eq!(result.issues().len(), 1);
             assert_eq!(result.issues()[0].condition, "range_failed");
-            for name in ["adsl.csv", "adsl-checks.csv", "adsl-warnings.csv"] {
+            for name in ["adsl.csv", "adsl-checks.csv"] {
                 fs::write(study.0.join(name), "sentinel").unwrap();
             }
             fs::remove_file(study.0.join("input/dm.csv")).unwrap();
@@ -818,15 +826,14 @@ rows:
             for _ in 0..2 {
                 assert!(result.save().is_err());
                 assert_eq!(fs::read(study.0.join("adsl.csv")).unwrap(), b"sentinel");
-                assert_eq!(
-                    fs::read(study.0.join("adsl-warnings.csv")).unwrap(),
-                    b"sentinel"
+                let expected = format!(
+                    "{HEADER}adsl.csv,run,output,,,,,,failed,range_failed,,,,{{}}\n\
+                     adsl.csv,input,input.DM,DM,,,,,,,3,,,\"{{\"\"bytes\"\":66,\"\"path\"\":\"\"input/dm.csv\"\",\"\"profile\"\":\"\"csv\"\"}}\"\n\
+                     adsl.csv,rows,base,DM,,,,,,,3,3,,{{}}\n\
+                     adsl.csv,check,columns.AGE.verifications[0].not_missing,not_missing,,AGE,REQ-0375,error,held,,0,3,,{{}}\n\
+                     adsl.csv,check,columns.AGE.verifications[1].range,range,,AGE,REQ-0377,error,violated,range_failed,1,3,\"[{{\"\"USUBJID\"\":\"\"S-2\"\"}}]\",\"{{\"\"column\"\":\"\"AGE\"\"}}\"\n"
                 );
-                let expected = format!("{VERIFICATION_HEADER}1.0,adsl.csv,columns.AGE.verifications[0].not_missing,,not_missing,AGE,REQ-0375,error,held,,3,0,{{}}\n1.0,adsl.csv,columns.AGE.verifications[1].range,,range,AGE,REQ-0377,error,violated,range_failed,3,1,\"{{\"\"column\"\":\"\"AGE\"\"}}\"\n");
-                assert_eq!(
-                    fs::read(study.0.join("adsl-checks.csv")).unwrap(),
-                    expected.as_bytes()
-                );
+                assert_eq!(saved_report(&study, "adsl-checks.csv"), expected);
                 assert_eq!(
                     result.observations()["artifacts"].as_array().unwrap().len(),
                     1
@@ -836,19 +843,14 @@ rows:
         }
 
         #[test]
-        fn whole_target_preflight_precedes_first_log_write_and_can_retry_held_bytes() {
+        fn whole_target_preflight_precedes_the_first_report_write_and_can_retry_held_bytes() {
             let (study, raw) = Study::benchmark();
             let mut result = study.build(&raw.replace("path: adsl.csv", "path: absent/adsl.csv"));
             fs::write(study.0.join("adsl-checks.csv"), "old checks").unwrap();
-            fs::write(study.0.join("adsl-warnings.csv"), "old warnings").unwrap();
             assert!(!result.save().unwrap());
             assert_eq!(
                 fs::read(study.0.join("adsl-checks.csv")).unwrap(),
                 b"old checks"
-            );
-            assert_eq!(
-                fs::read(study.0.join("adsl-warnings.csv")).unwrap(),
-                b"old warnings"
             );
             assert_eq!(
                 result.observations()["artifacts"],
@@ -859,35 +861,47 @@ rows:
             assert!(result.issues().is_empty());
             assert_eq!(
                 result.observations()["artifacts"].as_array().unwrap().len(),
-                3
+                2
             );
+            assert!(saved_report(&study, "adsl-checks.csv")
+                .starts_with(&format!("{HEADER}absent/adsl.csv,run,output,")));
         }
         #[test]
-        fn empty_declared_logs_replace_stale_findings_with_typed_headers() {
+        fn every_run_reports_and_only_a_declared_report_file_is_written() {
             let study = Study::new();
             fs::write(study.0.join("input/input.csv"), "ID\n1\n").unwrap();
-            let mut result = study.build("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input/input.csv}\noutput: {path: out.csv, columns: [ID], warning_log: warnings.csv, verification_log: checks.csv}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n");
-            assert!(result.issues().is_empty());
-            for warning in [false, true] {
-                let table = result.log_table(warning).unwrap();
-                assert_eq!(table.rows(), 0);
-            }
-            for name in ["warnings.csv", "checks.csv"] {
-                fs::write(study.0.join(name), "stale").unwrap();
-            }
-            assert!(result.save().unwrap());
+            let raw = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input/input.csv}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
+            let mut undeclared = study.build(raw);
+            assert!(undeclared.issues().is_empty());
+            // A run, an input, a base and a column row; no handler or check.
+            assert_eq!(undeclared.report_table().rows(), 4);
+            assert!(undeclared.save().unwrap());
             assert_eq!(
-                fs::read(study.0.join("checks.csv")).unwrap(),
-                VERIFICATION_HEADER.as_bytes()
+                undeclared.observations()["artifacts"]
+                    .as_array()
+                    .unwrap()
+                    .len(),
+                1
             );
+            assert!(!study.0.join("report.csv").exists());
+            let mut declared =
+                study.build(&raw.replace("columns: [ID]}", "columns: [ID], report: report.csv}"));
+            assert_eq!(declared.run_report(), undeclared.run_report());
+            fs::write(study.0.join("report.csv"), "stale").unwrap();
+            assert!(declared.save().unwrap());
             assert_eq!(
-                fs::read(study.0.join("warnings.csv")).unwrap(),
-                WARNING_HEADER.as_bytes()
+                saved_report(&study, "report.csv"),
+                format!(
+                    "{HEADER}out.csv,run,output,,,,,,succeeded,,1,,,{{}}\n\
+                     out.csv,input,input.SRC,SRC,,,,,,,1,,,\"{{\"\"bytes\"\":5,\"\"path\"\":\"\"input/input.csv\"\",\"\"profile\"\":\"\"csv\"\"}}\"\n\
+                     out.csv,rows,base,SRC,,,,,,,1,1,,{{}}\n\
+                     out.csv,column,columns.ID,ID,,,,,,,0,1,,{{}}\n"
+                )
             );
         }
 
         #[test]
-        fn warning_prefix_survives_a_later_derivation_failure_without_warning_authority() {
+        fn failed_runs_report_the_prefix_they_reached_and_no_columns() {
             let (study, raw) = Study::benchmark();
             // FAIL must be projected to stay live under pruning (REQ-0638);
             // a dead column's division failure would be discarded with it.
@@ -896,20 +910,20 @@ rows:
                 .replace("columns: [USUBJID, AGE]", "columns: [USUBJID, AGE, FAIL]");
             let mut result = study.build(&raw);
             assert!(result.output().is_none());
-            assert!(result.warning_log().is_none());
-            assert_eq!(result.log_table(false).unwrap().rows(), 2);
-            let report = result.observations();
-            assert_eq!(report["verifications"][1]["severity"], "warning");
-            assert_eq!(
-                report["verifications"][1]["failure"]["condition"],
-                "range_failed"
-            );
             assert_eq!(result.issues().len(), 1);
             assert_eq!(result.issues()[0].condition, "division_by_zero");
             assert!(result.save().is_err());
-            assert!(study.0.join("adsl-checks.csv").exists());
-            assert!(!study.0.join("adsl-warnings.csv").exists());
             assert!(!study.0.join("adsl.csv").exists());
+            assert_eq!(
+                saved_report(&study, "adsl-checks.csv"),
+                format!(
+                    "{HEADER}adsl.csv,run,output,,,,,,failed,division_by_zero,,,,{{}}\n\
+                     adsl.csv,input,input.DM,DM,,,,,,,3,,,\"{{\"\"bytes\"\":66,\"\"path\"\":\"\"input/dm.csv\"\",\"\"profile\"\":\"\"csv\"\"}}\"\n\
+                     adsl.csv,rows,base,DM,,,,,,,3,3,,{{}}\n\
+                     adsl.csv,check,columns.AGE.verifications[0].not_missing,not_missing,,AGE,REQ-0375,error,held,,0,3,,{{}}\n\
+                     adsl.csv,check,columns.AGE.verifications[1].range,range,,AGE,REQ-0377,warning,violated,range_failed,1,3,\"[{{\"\"USUBJID\"\":\"\"S-2\"\"}}]\",\"{{\"\"column\"\":\"\"AGE\"\"}}\"\n"
+                )
+            );
             assert_eq!(
                 result.observations()["artifacts"].as_array().unwrap().len(),
                 1
@@ -917,48 +931,221 @@ rows:
         }
 
         #[test]
-        #[cfg(feature = "parquet")]
-        fn parquet_logs_preserve_governed_logical_rows_and_integer_columns() {
+        fn unread_inputs_report_missing_counts_and_null_bytes() {
             let (study, raw) = Study::benchmark();
+            fs::remove_file(study.0.join("input/dm.csv")).unwrap();
+            let mut result = study.build(&raw);
+            assert!(result.output().is_none());
+            assert_eq!(result.issues()[0].condition, "resource_path_missing");
+            assert!(result.save().is_err());
+            assert_eq!(
+                saved_report(&study, "adsl-checks.csv"),
+                format!(
+                    "{HEADER}adsl.csv,run,output,,,,,,failed,resource_path_missing,,,,{{}}\n\
+                     adsl.csv,input,input.DM,DM,,,,,,,,,,\"{{\"\"bytes\"\":null,\"\"path\"\":\"\"input/dm.csv\"\",\"\"profile\"\":\"\"csv\"\"}}\"\n\
+                     adsl.csv,rows,base,DM,,,,,,,,,,{{}}\n"
+                )
+            );
+        }
+
+        #[test]
+        fn template_and_handler_rows_count_each_construction_and_answer() {
+            let study = Study::new();
+            fs::write(
+                study.0.join("input/input.csv"),
+                "ID,GRP,KEEP,CODE,NUM\n1,g1,Y,A,10\n2,g1,N,B,x\n3,g2,Y,,7\n4,g2,Y,A,8\n",
+            )
+            .unwrap();
             let mut result = study.build(
-                &raw.replace("adsl-checks.csv", "checks.parquet")
-                    .replace("adsl-warnings.csv", "warnings.parquet"),
+                r#"schema_version: '1.0'
+domain: TEST
+keys: [ID, KIND]
+input: {SRC: input/input.csv}
+output: {path: out.csv, columns: [ID, KIND, LABEL, N], report: report.csv}
+columns:
+  - {name: ID, type: str}
+  - {name: KIND, type: str}
+  - {name: LABEL, type: str}
+  - {name: N, type: int}
+rows:
+  - id: each
+    filter: "SRC.KEEP = 'Y'"
+    derivations:
+      ID: SRC.ID
+      KIND: {literal: each}
+      LABEL:
+        mapping:
+          source: SRC.CODE
+          dict: {A: Alpha}
+          missing: null
+          unmapped: Other
+      N: {value: {source: SRC.NUM}, unconvertible: -1}
+  - id: grouped
+    group_by: [SRC.GRP]
+    derivations: {ID: SRC.GRP, KIND: {literal: group}, LABEL: {literal: Group}, N: {literal: 0}}
+"#,
             );
             assert!(result.issues().is_empty());
             assert!(result.save().unwrap());
-            let report = result.observations();
-            for (name, rows, integer_columns) in
-                [("checks", 3, vec![10, 11]), ("warnings", 1, vec![7])]
-            {
-                let artifact = report["artifacts"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .find(|a| a["name"] == name)
-                    .unwrap();
-                assert_eq!(artifact["profile"], "parquet");
-                assert_eq!(artifact["row_count"], rows);
-                assert_eq!(artifact["content"], "");
-                let table = result.log_table(name == "warnings").unwrap();
-                for column in integer_columns {
-                    assert_eq!(
-                        table.columns()[column].data_type(),
-                        &arrow_schema::DataType::Int64
-                    );
-                }
-                assert_eq!(
-                    fs::read(study.0.join(format!("{name}.parquet")))
-                        .unwrap()
-                        .get(..4),
-                    Some(b"PAR1".as_slice())
-                );
-            }
-            let warning: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(
-                report["artifacts"][1]["records"][1].as_str().unwrap(),
+            // Record 2 is derived before the filter discards it, so its
+            // unmapped code and unconvertible number are both answered.
+            assert_eq!(
+                saved_report(&study, "report.csv"),
+                format!(
+                    "{HEADER}out.csv,run,output,,,,,,succeeded,,5,,,{{}}\n\
+                     out.csv,input,input.SRC,SRC,,,,,,,4,,,\"{{\"\"bytes\"\":65,\"\"path\"\":\"\"input/input.csv\"\",\"\"profile\"\":\"\"csv\"\"}}\"\n\
+                     out.csv,rows,rows[0],SRC,,,,,,,3,4,,{{}}\n\
+                     out.csv,rows,rows[1],SRC,,,,,,,2,4,,{{}}\n\
+                     out.csv,handler,rows[0].derivations.N.unconvertible,unconvertible,,N,REQ-0013,,,,1,,,{{}}\n\
+                     out.csv,handler,rows[0].derivations.LABEL.mapping.missing,missing,,LABEL,,,,,1,,,{{}}\n\
+                     out.csv,handler,rows[0].derivations.LABEL.mapping.unmapped,unmapped,,LABEL,REQ-0334,,,,1,,,{{}}\n\
+                     out.csv,column,columns.ID,ID,,,,,,,0,5,,\"{{\"\"max_length\"\":2}}\"\n\
+                     out.csv,column,columns.KIND,KIND,,,,,,,0,5,,\"{{\"\"max_length\"\":5}}\"\n\
+                     out.csv,column,columns.LABEL,LABEL,,,,,,,1,5,,\"{{\"\"max_length\"\":5}}\"\n\
+                     out.csv,column,columns.N,N,,,,,,,0,5,,{{}}\n"
+                )
+            );
+        }
+
+        #[test]
+        fn a_grouped_row_count_names_every_offending_count_even_for_one_group() {
+            let study = Study::new();
+            fs::write(study.0.join("input/input.csv"), "ID,ARM\n1,A\n2,A\n3,B\n").unwrap();
+            let mut result = study.build(
+                r#"schema_version: '1.0'
+domain: TEST
+keys: [ID]
+input: {SRC: {path: input/input.csv, types: {ID: int}}}
+output: {path: out.csv, columns: [ID, ARM], report: report.csv}
+columns:
+  - {name: ID, type: int, derivation: SRC.ID}
+  - {name: ARM, type: str, derivation: SRC.ARM}
+verifications:
+  - row_count: {group_by: [ARM], max: 1, severity: warning}
+  - row_count: {max: 2, severity: warning}
+  - row_count: {filter: "ARM = 'A'", max_fraction: 0.5, severity: warning}
+"#,
+            );
+            assert!(result.issues().is_empty(), "{:?}", result.issues());
+            assert!(result.save().unwrap());
+            let report = saved_report(&study, "report.csv");
+            // Arm A's two rows exceed the per-arm maximum while arm B holds:
+            // one offending group, still reported as a sequence of counts.
+            assert!(
+                report.contains(
+                    "out.csv,check,verifications[0].row_count,row_count,,,REQ-0385,warning,violated,row_count_failed,1,2,\"[{\"\"ARM\"\":\"\"A\"\"}]\",\"{\"\"counts\"\":[2]}\"\n"
+                ),
+                "{report}"
+            );
+            // An ungrouped check names its one count; only a fraction bound
+            // adds the denominator.
+            assert!(
+                report.contains(
+                    "out.csv,check,verifications[1].row_count,row_count,,,REQ-0385,warning,violated,row_count_failed,1,1,[{}],\"{\"\"count\"\":3}\"\n"
+                ),
+                "{report}"
+            );
+            assert!(
+                report.contains(
+                    "out.csv,check,verifications[2].row_count,row_count,,,REQ-0385,warning,violated,row_count_failed,1,1,[{}],\"{\"\"count\"\":2,\"\"denominator\"\":3}\"\n"
+                ),
+                "{report}"
+            );
+        }
+
+        #[test]
+        fn temporal_handlers_cite_the_condition_they_answer() {
+            let study = Study::new();
+            fs::write(
+                study.0.join("input/input.csv"),
+                "ID,DTC,DTM,DUR\n1,2025-03,2025-03-05T10:20,P1D\n2,,bad,bad\n3,bad,,P2D\n",
             )
             .unwrap();
-            assert_eq!(warning[7], 1);
-            assert_eq!(warning[8], "[{\"USUBJID\":\"S-2\"}]");
+            let mut result = study.build(
+                r#"schema_version: '1.0'
+domain: TEST
+keys: [ID]
+input: {SRC: {path: input/input.csv, types: {ID: int}}}
+output: {path: out.csv, columns: [ID, START, STAMP, SPAN, PR], report: report.csv}
+columns:
+  - {name: ID, type: int, derivation: SRC.ID}
+  - name: START
+    type: date
+    derivation: {impute: {type: date, source: SRC.DTC, day: first, minimum_source_precision: month, invalid: {literal: null}}}
+  - name: STAMP
+    type: datetime
+    derivation: {impute: {type: datetime, source: SRC.DTM, minimum_source_precision: day, time: first, invalid: {literal: null}}}
+  - name: SPAN
+    type: float
+    derivation: {duration_value: {source: SRC.DUR, unit: day, invalid: {literal: null}}}
+  - name: PR
+    type: str
+    derivation: {precision: {type: datetime, source: SRC.DTM, invalid: {literal: null}}}
+"#,
+            );
+            assert!(result.issues().is_empty(), "{:?}", result.issues());
+            assert!(result.save().unwrap());
+            // A missing source raises no condition, so its handler cites no
+            // rule; text no reader accepts cites the rule its operation
+            // raises without the handler: record 2's text for STAMP, SPAN
+            // and PR, and record 3's text for START.
+            assert_eq!(
+                saved_report(&study, "report.csv"),
+                format!(
+                    "{HEADER}out.csv,run,output,,,,,,succeeded,,3,,,{{}}\n\
+                     out.csv,input,input.SRC,SRC,,,,,,,3,,,\"{{\"\"bytes\"\":68,\"\"path\"\":\"\"input/input.csv\"\",\"\"profile\"\":\"\"csv\"\"}}\"\n\
+                     out.csv,rows,base,SRC,,,,,,,3,3,,{{}}\n\
+                     out.csv,handler,columns.START.derivation.impute.missing,missing,,START,,,,,1,,,{{}}\n\
+                     out.csv,handler,columns.START.derivation.impute.invalid,invalid,,START,REQ-0588,,,,1,,,{{}}\n\
+                     out.csv,handler,columns.STAMP.derivation.impute.missing,missing,,STAMP,,,,,1,,,{{}}\n\
+                     out.csv,handler,columns.STAMP.derivation.impute.invalid,invalid,,STAMP,REQ-0588,,,,1,,,{{}}\n\
+                     out.csv,handler,columns.SPAN.derivation.duration_value.invalid,invalid,,SPAN,REQ-1301,,,,1,,,{{}}\n\
+                     out.csv,handler,columns.PR.derivation.precision.missing,missing,,PR,,,,,1,,,{{}}\n\
+                     out.csv,handler,columns.PR.derivation.precision.invalid,invalid,,PR,REQ-0588,,,,1,,,{{}}\n\
+                     out.csv,column,columns.ID,ID,,,,,,,0,3,,{{}}\n\
+                     out.csv,column,columns.START,START,,,,,,,2,3,,{{}}\n\
+                     out.csv,column,columns.STAMP,STAMP,,,,,,,2,3,,{{}}\n\
+                     out.csv,column,columns.SPAN,SPAN,,,,,,,1,3,,{{}}\n\
+                     out.csv,column,columns.PR,PR,,,,,,,2,3,,\"{{\"\"max_length\"\":6}}\"\n"
+                )
+            );
+        }
+
+        #[test]
+        #[cfg(feature = "parquet")]
+        fn parquet_reports_preserve_governed_logical_rows_and_integer_columns() {
+            let (study, raw) = Study::benchmark();
+            let mut result = study.build(&raw.replace("adsl-checks.csv", "checks.parquet"));
+            assert!(result.issues().is_empty());
+            assert!(result.save().unwrap());
+            let report = result.observations();
+            let artifact = report["artifacts"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|a| a["name"] == "checks")
+                .unwrap();
+            assert_eq!(artifact["profile"], "parquet");
+            assert_eq!(artifact["row_count"], 8);
+            assert_eq!(artifact["content"], "");
+            let table = result.report_table();
+            for column in [10, 11] {
+                assert_eq!(
+                    table.columns()[column].data_type(),
+                    &arrow_schema::DataType::Int64
+                );
+            }
+            assert_eq!(
+                fs::read(study.0.join("checks.parquet")).unwrap().get(..4),
+                Some(b"PAR1".as_slice())
+            );
+            let range: yamaa_core::json::Value =
+                yamaa_adapters::json_wire::decode(artifact["records"][7].as_str().unwrap())
+                    .unwrap();
+            assert_eq!(range[1], "check");
+            assert_eq!(range[10], 1);
+            assert_eq!(range[11], 3);
+            assert_eq!(range[12], "[{\"USUBJID\":\"S-2\"}]");
         }
     }
 }

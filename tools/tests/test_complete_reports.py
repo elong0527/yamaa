@@ -55,7 +55,7 @@ class CompletePublicTruth(unittest.TestCase):
                     }
                     for suffix in (
                         "original-specifications",
-                        "verification-logs",
+                        "run-report",
                     )
                 ],
             }
@@ -398,6 +398,27 @@ assert observed.to_dict(as_series=False) == {"VALUE": [1, 2, None]}
                 change(raw)
                 with self.assertRaises(ValueError):
                     cohort.validate_inventory(raw, self.revision, cohort.COHORT)
+
+    def test_retired_verification_log_suite_cannot_stand_in_for_the_run_report(self):
+        for host in ("python", "r"):
+            with self.subTest(host=host):
+                root = self.evidence / host
+                path = (root / "supplemental" if host == "python" else root) / (
+                    "supplemental.json"
+                )
+                original = path.read_bytes()
+                record = cohort.read(path)
+                for suite in record["suites"]:
+                    if suite["id"] == host + "/run-report":
+                        suite["id"] = host + "/verification-logs"
+                cohort.write(path, record)
+                try:
+                    with self.assertRaisesRegex(
+                        ValueError, f"suite is missing: {host}/run-report"
+                    ):
+                        cohort.installed_owner(root, host, self.revision)
+                finally:
+                    path.write_bytes(original)
 
     def test_tools_import_without_any_yamaa_package(self):
         program = """

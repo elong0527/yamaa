@@ -319,11 +319,11 @@ mod transport {
     fn adam_dataset_json_targets_the_integer_its_document_submits() {
         let case = benchmarks().join("adam-adsl-xpt");
         let temp = stage(&case);
-        let environment = temp.0.join("environment.yaml");
-        let text = fs::read_to_string(&environment)
+        let project = temp.0.join("project.yaml");
+        let text = fs::read_to_string(&project)
             .unwrap()
-            .replace("transport: xpt", "transport: dataset_json");
-        fs::write(&environment, text).unwrap();
+            .replace("datasets: xpt", "datasets: json");
+        fs::write(&project, text).unwrap();
         let result = run(&case, &temp);
         assert!(result.issues().is_empty(), "{:?}", result.issues());
         let artifacts: Vec<_> = result.artifacts().collect();
@@ -375,12 +375,12 @@ mod transport {
         let header = dm.lines().next().unwrap();
         let first = dm.lines().nth(1).unwrap().replace("CATH-UCSD-0001", "C-1");
         fs::write(temp.0.join("suppdm.csv"), format!("{header}\n{first}\n")).unwrap();
-        let environment = temp.0.join("environment.yaml");
-        let text = fs::read_to_string(&environment).unwrap().replace(
+        let project = temp.0.join("project.yaml");
+        let text = fs::read_to_string(&project).unwrap().replace(
             "  - spec.yaml",
             "  - spec.yaml\n  - ae.yaml\n  - suppdm.yaml",
         );
-        fs::write(&environment, text).unwrap();
+        fs::write(&project, text).unwrap();
         let result = run(&case, &temp);
         assert!(result.issues().is_empty(), "{:?}", result.issues());
         let artifacts: Vec<_> = result.artifacts().map(|(name, _, _)| name).collect();
@@ -419,11 +419,11 @@ mod transport {
                 ),
         )
         .unwrap();
-        let environment = temp.0.join("environment.yaml");
-        let text = fs::read_to_string(&environment)
+        let project = temp.0.join("project.yaml");
+        let text = fs::read_to_string(&project)
             .unwrap()
             .replace("  - spec.yaml", "  - spec.yaml\n  - ae.yaml");
-        fs::write(&environment, text).unwrap();
+        fs::write(&project, text).unwrap();
         let mut result = run(&case, &temp);
         assert!(result.issues().is_empty(), "{:?}", result.issues());
         let names: Vec<_> = result.artifacts().map(|(name, _, _)| name).collect();

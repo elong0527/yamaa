@@ -1,7 +1,7 @@
 # Define-XML
 
 This file is a profile: it is optional, and it applies only to a build that
-selects an `sdtm`, `adam` or `send` submission section of a study environment.
+selects an `sdtm`, `adam` or `send` submission section of a project file.
 Such a build composes the section, the study and the submission metadata of the
 specifications the section lists into one deterministic Define-XML 2.1
 document. A domain build never generates a Define-XML document.
@@ -10,31 +10,34 @@ document. A domain build never generates a Define-XML document.
 
 <a id="define-1"></a>
 
-### DEFINE-1. A Define-XML document is composed from one selected submission section of the study environment
+### DEFINE-1. A Define-XML document is composed from one selected submission section of the project file
 
 A study document is composed from one selected `sdtm`, `adam` or `send` section
-of an admitted `environment.yaml`. The environment supplies `study` and shared
-`codelists`; the selected section supplies one implementation guide, supporting
-documents, an ordered `specs` list and one `define` target. Each section
-produces exactly one Define-XML document. The selected environment section is
-the only place the composition is declared.
+of an admitted project file ([PROJECT-1](project.md#project-1)). The project
+supplies `study` and shared `codelists`; the selected section supplies one
+implementation guide, supporting documents, an ordered `specs` list and one
+`define` target. Each section produces exactly one Define-XML document. The
+selected project section is the only place the composition is declared.
 
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::explicit_section_selector_datetime_and_missing_published_artifact_are_refused`, `python/tests/installed/installed_public_define.py::test_defaults_selection_bound_lists_and_required_acrf_aliases`.
 Replaces: REQ-0959, REQ-0960, REQ-1061, REQ-1062, REQ-1063.
 
 An implementation must not assemble a document from whatever specifications a
 directory holds: which datasets one submission represents is a study decision,
-and a directory listing is not one.
+and a directory listing is not one. Composition requires the `study`,
+`standard` and `define` that a run of the same project does not
+([DEFINE-28](#define-28)).
 
 <a id="define-2"></a>
 
 ### DEFINE-2. The section's `define` target names the document's file, ends in `.xml`, and is `define.xml` beside a transport
 
 The selected section's `define` names the file the document produces, and its
-extension must be `.xml`; when the section requests a transport, its file name
-must be exactly `define.xml`. The extension mapping of
-[OUTPUT-5](../output.md#output-5) is not consulted: that mapping selects a
-profile for a dataset artifact, and this artifact has one form. A `define`
+extension must be `.xml`; when the section declares `datasets`, requesting a
+transport file per dataset, its file name must be exactly `define.xml`. The
+extension mapping of [OUTPUT-5](../output.md#output-5) is not consulted: that
+mapping selects a profile for a dataset artifact, and this artifact has one
+form. A `define`
 target whose extension is not `.xml`, or that is not named `define.xml` beside
 a transport, fails validation.
 
@@ -91,9 +94,9 @@ requirements a regulator imposes. Under `Submission`:
   written, so [DEFINE-22](#define-22) must admit every name;
 - every dataset's `submission.label` and every column's `label` is at most 40
   characters of printable ASCII ([XPT-5](xpt.md#xpt-5));
-- when a transport is requested, every published text value is printable
-  ASCII of at most 200 bytes ([XPT-7](xpt.md#xpt-7)), for a Dataset-JSON file
-  as for a SAS Transport file;
+- when the section declares `datasets`, every published text value is
+  printable ASCII of at most 200 bytes ([XPT-7](xpt.md#xpt-7)), for a
+  Dataset-JSON file as for a SAS Transport file;
 - every dataset carries a `def:ArchiveLocationID`, unless it declares
   `has_no_data`;
 - every dataset carries a `Description` and a `def:Class`;
@@ -258,7 +261,7 @@ one identifier space, `def:leaf`, so a document identifier must not equal a
 dataset identifier.
 
 Fails: `duplicate_define_identifier`.
-Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionDuplicateIdentifier`, `rust/crates/yamaa-core/tests/project_rows.rs::independent_complete_seventeen_record_environment_report_preserves_every_field_and_order`.
+Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionDuplicateIdentifier`, `rust/crates/yamaa-core/tests/project_rows.rs::independent_complete_sixteen_record_project_report_preserves_every_field_and_order`.
 Replaces: REQ-0971, REQ-1017.
 
 The shared `def:leaf` space is checked, not disambiguated. A duplicate dataset
@@ -343,9 +346,12 @@ Replaces: REQ-0979, REQ-0980, REQ-0981.
 | `SourceSystemVersion` | section override or actual installed version |
 | `def:Context` | `context` |
 
-The source-system version selection applies to both XML and Dataset-JSON under
-[FUNC-2](functions.md#func-2). The generated Define-XML release is `2.1.11`,
-and `SourceSystem` is `yamaa`.
+Each section may declare a non-empty `source_system_version`. Its value
+overrides the source-system version metadata in both Define-XML and
+Dataset-JSON, and omission selects the actual installed yamaa version.
+Qualification retains the actual generator version separately from this
+metadata override. The generated Define-XML release is `2.1.11`, and
+`SourceSystem` is `yamaa`.
 
 <a id="define-13"></a>
 
@@ -431,8 +437,8 @@ A declared `Purpose` could only agree with or contradict the derivation.
 ### DEFINE-16. A dataset's leaf names its transport file or its artifact, relative to the document and inside its directory
 
 The dataset's `def:leaf` names the file the package carries for that dataset:
-its transport file beside the document when the selected section requests a
-transport ([JSON-1](dataset-json.md#json-1)), and otherwise the artifact its
+its transport file beside the document when the selected section declares
+`datasets` ([JSON-1](dataset-json.md#json-1)), and otherwise the artifact its
 specification produces. `xlink:href` is that path relative to the directory
 holding the generated document, written with `/` separators, and `def:title`
 is the path's final component. The href must not begin with a parent
@@ -604,7 +610,7 @@ reference.
 `SASDatasetName` is written only for a dataset name matching
 `^[A-Z][A-Z0-9]{0,7}$`, and `SASFieldName` only for a column name matching
 `^[A-Z][A-Z0-9_]{0,7}$`. A name its pattern refuses is omitted, and fails
-instead under `Submission` or when the section requests `xpt`. Define-XML
+instead under `Submission` or when the section sets `datasets: xpt`. Define-XML
 carries a long `Alias` element, which [DEFINE-26](#define-26) defers.
 
 Fails: `sas_name_too_long`.
@@ -698,7 +704,7 @@ failure at any point publishes nothing. A failed publication fails under
 
 The constructs listed below are outside this profile. None has a field in the
 schema that [Submission metadata](submission.md),
-[Controlled terminology](terminology.md) and `schema_environment.yaml` close,
+[Controlled terminology](terminology.md) and `schema_project.yaml` close,
 so a specification that tries to declare one is rejected as an unknown field.
 An `Alias` carrying a transport name longer than eight characters is not
 generated, and a `FormalExpression` is generated only from a declared
@@ -718,7 +724,7 @@ Replaces: REQ-1011, REQ-1012.
 The long transport-name `Alias` and `FormalExpression` have a declaration but
 no generation, and each is stated rather than silently dropped. For a name
 longer than eight characters [DEFINE-22](#define-22) omits the attribute and
-fails under `Submission` or `xpt` instead.
+fails under `Submission` or `datasets: xpt` instead.
 
 <a id="define-27"></a>
 
@@ -765,3 +771,21 @@ A generator that cannot consume an entry fails loudly under the `Submission`
 context, naming its row and column; it never quietly omits per-value
 definitions. The generator consumes the bounded typed map and the semantics of
 this rule.
+
+<a id="define-28"></a>
+
+### DEFINE-28. Define-XML requires the project's `study` and the section's `standard` and `define`, which a run does not
+
+A Define-XML generation whose project declares no `study`, no section for the
+selected family, or a selected section without `standard` or `define` fails
+with `missing_required_field` before any specification is captured. It reports
+every missing field at once, each at its project path such as `study`,
+`sdtm.standard` or `sdtm.define`. A run of the same project needs none of them
+and does not report them.
+
+Fails: `missing_required_field`.
+Evidence: `rust/crates/yamaa-adapters/tests/file_resources.rs::define_reports_every_missing_study_section_guide_and_target_before_reading_specifications`, `python/tests/installed/installed_public_define.py::test_every_declared_define_section_is_composed_without_a_section`.
+Replaces: REQ-1337.
+
+A project can therefore list its specifications and run them before its
+submission metadata is ready ([PROJECT-3](project.md#project-3)).

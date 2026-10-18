@@ -87,9 +87,10 @@ Enforced by [CSV-3](reference/csv.md#csv-3),
 ## Rule files
 
 Language rules live in `rules/*.md`. Format and file-handling rules move to
-`rules/reference/`, and the submission and project-function profiles to
-`rules/profiles/`. During the 0.5.0 conversion, contracts not yet converted
-keep their `REQ-NNNN` requirements and are listed with the prefix `REQ`.
+`rules/reference/`, and the submission, project-file and project-function
+profiles to `rules/profiles/`. During the 0.5.0 conversion, contracts not yet
+converted keep their `REQ-NNNN` requirements and are listed with the prefix
+`REQ`.
 
 | File | Prefix | Covers |
 | --- | --- | --- |
@@ -106,7 +107,7 @@ keep their `REQ-NNNN` requirements and are listed with the prefix `REQ`.
 | [Windows](windows.md) | WINDOW | Declare complete named windows and compute partitions, ranks, neighbors, carried values, and baseline flags. |
 | [Text](text.md) | TEXT | Pad, change case, interpolate templates, and extract and replace with portable regular expressions. |
 | [Dates and times](temporal.md) | TIME | Compute differences and study days, complete collected dates and times, report collected precision and imputation flags, and apply civil arithmetic. |
-| [Verification](verification.md) | CHECK | Apply assertions, severity, and grouped counts to completed values, and record what ran in the warning log and the verification log. |
+| [Verification](verification.md) | CHECK | Apply assertions, severity, and grouped counts to completed values, and record what each run read, counted and checked in one run report. |
 | [Output](output.md) | OUTPUT | Select artifact columns, keys, profiles, and row order, and publish complete files atomically. |
 | [File resolution](reference/files.md) | FILE | Resolve declared local paths from their base, reach one regular file, and read one immutable snapshot per physical file. |
 | [CSV profile](reference/csv.md) | CSV | Read admitted CSV spellings and write canonical CSV bytes and display precision. |
@@ -119,6 +120,7 @@ keep their `REQ-NNNN` requirements and are listed with the prefix `REQ`.
 | [Dataset-JSON](profiles/dataset-json.md) | JSON | Write a dataset and its submission metadata as one deterministic Dataset-JSON 1.1 file. |
 | [SAS Transport](profiles/xpt.md) | XPT | Write a dataset as one deterministic SAS Transport version 5 file in the public record layout. |
 | [Project functions](profiles/functions.md) | FUNC | Resolve immutable runtimes and validate function inputs, results, and activation conformance. |
+| [Project file](profiles/project.md) | PROJECT | Link each host's environment, declare a study's terminology and submission sections once, and check, run and package the specifications its sections list. |
 
 The [requirement index](https://elong0527.github.io/yamaa/reference/requirements/),
 [rules at a glance](https://elong0527.github.io/yamaa/reference/rules-summary/)
@@ -173,6 +175,10 @@ One term per concept across all rules, schema comments, and messages:
 
 - **specification** -- the YAML file under review. `study` and `document` stay
   project-level (resources and submission contracts), never names for the YAML.
+- **project file** -- the one study-level YAML a caller passes: it links each
+  host language's **environment file**, which declares only that host's lock
+  and project functions, and it declares the study's terminology and
+  submission sections ([Project file](profiles/project.md)).
 - **input dataset** / **output dataset** -- state the role whenever it matters.
   Bare `dataset` appears only as a key name. `table` means a documentation
   table, never data.
