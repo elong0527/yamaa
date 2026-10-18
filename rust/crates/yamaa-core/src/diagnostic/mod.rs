@@ -366,6 +366,7 @@ conditions! {
     IntermediateRepeatedKey => ("validation", "invalid_field_type", Some("REQ-0115")),
     IntermediateColumnReference => ("validation", "unknown_field", Some("REQ-0122")),
     RowDependencyPhaseBoundary => ("validation", "phase_boundary", Some("REQ-0069")),
+    IntermediateMatchPhaseBoundary => ("validation", "phase_boundary", Some("LOOKUP-2")),
     QualifiedNumericReference => ("validation", "qualified_identifier", Some("REQ-0442")),
     RowNumericSourceScope => ("validation", "unknown_field", Some("REQ-0410")),
     GroupedRowNumericSourceScope => ("validation", "unknown_field", Some("REQ-0411")),

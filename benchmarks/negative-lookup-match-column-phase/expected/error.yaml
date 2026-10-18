@@ -1,0 +1,11 @@
+phase: validation
+condition: phase_boundary
+spec_paths:
+  - rows[0].derivations.APERIODC.source
+requirement: LOOKUP-2
+context:
+  identifier: ASEQ
+  intermediate: PERIOD
+  row: collected
+  available_phase: column_derivation
+  required_phase: row_construction

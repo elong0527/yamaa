@@ -310,6 +310,7 @@ mod diagnostics {
             reached.extend(preflight::namespace_reached());
             reached.extend(binding::intermediate_key_reached());
             reached.extend(intermediate_ranges::reached());
+            reached.extend(intermediate_ranges::match_phase_reached());
             reached.extend(producer::reached());
             reached.extend(preflight::output_reached());
             reached.extend(grammar::reached());

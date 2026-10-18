@@ -200,3 +200,110 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     ));
     reached
 }
+
+/// A row template reads a lookup whose range value is a window column, which
+/// only the column phase completes (LOOKUP-2).
+pub(crate) fn match_phase_reached() -> BTreeSet<ConditionCode> {
+    let derivation = |operation: &str, payload: Tree| {
+        Tree::map(vec![("value", Tree::map(vec![(operation, payload)]))])
+    };
+    let source = |name: &str| derivation("source", Tree::map(vec![("variable", Tree::text(name))]));
+    let column = |name: &str, kind: &str| {
+        Tree::map(vec![("name", Tree::text(name)), ("type", Tree::text(kind))])
+    };
+    let rank = Tree::map(vec![
+        ("name", Tree::text("RANK")),
+        ("type", Tree::text("int")),
+        (
+            "derivation",
+            derivation(
+                "row_number",
+                Tree::map(vec![(
+                    "window",
+                    Tree::map(vec![("order_by", Tree::List(vec![Tree::text("ID")]))]),
+                )]),
+            ),
+        ),
+    ]);
+    let mut nodes = vec![];
+    let root = Tree::map(vec![
+        ("schema_version", Tree::text("1.0")),
+        ("domain", Tree::text("TEST")),
+        (
+            "input",
+            Tree::map(vec![
+                ("SRC", Tree::map(vec![("path", Tree::text("src.csv"))])),
+                ("D", Tree::map(vec![("path", Tree::text("donor.csv"))])),
+            ]),
+        ),
+        ("keys", Tree::List(vec![Tree::text("ID")])),
+        (
+            "intermediates",
+            Tree::List(vec![Tree::map(vec![
+                ("id", Tree::text("P")),
+                ("dataset", Tree::text("D")),
+                ("key", Tree::List(vec![Tree::text("ID")])),
+                (
+                    "between",
+                    Tree::map(vec![
+                        ("value", Tree::text("RANK")),
+                        ("lower", Tree::text("LOW")),
+                    ]),
+                ),
+            ])]),
+        ),
+        (
+            "columns",
+            Tree::List(vec![column("ID", "int"), rank, column("VALUE", "str")]),
+        ),
+        (
+            "rows",
+            Tree::List(vec![Tree::map(vec![
+                ("id", Tree::text("record")),
+                ("dataset", Tree::text("SRC")),
+                (
+                    "derivations",
+                    Tree::map(vec![("ID", source("SRC.ID")), ("VALUE", source("P.V"))]),
+                ),
+            ])]),
+        ),
+        (
+            "output",
+            Tree::map(vec![
+                ("path", Tree::text("out.csv")),
+                (
+                    "columns",
+                    Tree::List(vec![Tree::text("ID"), Tree::text("VALUE")]),
+                ),
+            ]),
+        ),
+    ])
+    .append(&mut nodes);
+    let model = SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+        .unwrap()
+        .unwrap();
+    let prepared = PreparedSpecification::prepare(&model).unwrap();
+    let src = schema(&[("ID", T::Int)]);
+    let donor = schema(&[("ID", T::Int), ("LOW", T::Int), ("V", T::Str)]);
+    let Err(BindError::Invalid(findings)) = prepared.bind_sources(&[&src, &donor]) else {
+        panic!("a row read of a column-phase match value must fail")
+    };
+    let mut found = findings
+        .iter()
+        .flat_map(|finding| finding.diagnostics(prepared.source()).unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(found.len(), 1);
+    BTreeSet::from([check(
+        found.remove(0),
+        "phase_boundary",
+        "LOOKUP-2",
+        "rows[0].derivations.VALUE.source",
+        &[
+            ("identifier", "RANK"),
+            ("intermediate", "P"),
+            ("row", "record"),
+            ("available_phase", "column_derivation"),
+            ("required_phase", "row_construction"),
+        ],
+    )])
+}
