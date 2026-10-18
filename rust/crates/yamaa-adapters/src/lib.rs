@@ -52,6 +52,7 @@ pub mod specification_report;
 pub mod typed_csv;
 
 pub mod canonical_path;
+mod changed_metadata;
 pub mod file_application;
 pub mod file_configuration;
 pub mod file_entry;

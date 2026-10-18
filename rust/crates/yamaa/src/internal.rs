@@ -384,7 +384,8 @@ pub(crate) enum BuildOutcome {
 
 /// Compilation reads through the engine's resolver. Each run opens its own
 /// resource scope: through the compile authority, or through the run's own
-/// resolver when it brings one.
+/// resolver when it brings one. A plan's run first verifies the compiled
+/// metadata; a build's run does not, because its compilation just did.
 struct EngineRuntime<'a> {
     shared: &'a EngineShared,
     specification: &'a str,
@@ -392,6 +393,25 @@ struct EngineRuntime<'a> {
     /// Artifacts a project run already built, offered to this run's inputs
     /// whose `schema` links name their producers.
     held: Option<Arc<yamaa_adapters::file_resources::HeldArtifacts>>,
+    verify: bool,
+}
+
+impl EngineRuntime<'_> {
+    /// Refuse a run whose held metadata changed since compilation, before
+    /// activation or any study read. The refusal keeps the compiled sources.
+    fn refusal(
+        &self,
+        verify: impl FnOnce() -> Result<(), Vec<yamaa_adapters::issue_rows::Issue>>,
+        sources: impl FnOnce() -> RetainedSources,
+    ) -> Option<BuildOutcome> {
+        if !self.verify {
+            return None;
+        }
+        verify().err().map(|issues| BuildOutcome::SelectionFailed {
+            issues,
+            sources: sources(),
+        })
+    }
 }
 
 impl yamaa_adapters::file_application::RuntimePort for EngineRuntime<'_> {
@@ -407,6 +427,12 @@ impl yamaa_adapters::file_application::RuntimePort for EngineRuntime<'_> {
         prepared: &yamaa_adapters::file_preparation::FileSpecification,
         scope: yamaa_core::application_observer::Scope<'_>,
     ) -> Result<Self::Result, Self::Error> {
+        if let Some(refused) = self.refusal(
+            || prepared.verify_metadata(),
+            || prepared.retained_sources(),
+        ) {
+            return Ok(refused);
+        }
         let identity = self.shared.identity("domain", self.specification);
         let mut run_scope = prepared.run_scope(self.run_resolver.clone());
         if let Some(held) = &self.held {
@@ -422,6 +448,11 @@ impl yamaa_adapters::file_application::RuntimePort for EngineRuntime<'_> {
         project: &yamaa_adapters::file_project::FileProject,
         scope: yamaa_core::application_observer::Scope<'_>,
     ) -> Result<Self::Result, Self::Error> {
+        if let Some(refused) =
+            self.refusal(|| project.verify_metadata(), || project.retained_sources())
+        {
+            return Ok(refused);
+        }
         let Some(functions) = self.shared.functions.clone() else {
             return Ok(BuildOutcome::Unsupported {
                 issues: yamaa_adapters::file_application::unsupported(
@@ -534,6 +565,7 @@ pub(crate) fn compile(
             specification,
             run_resolver: None,
             held: None,
+            verify: false,
         },
     };
     match yamaa_core::domain_entry::compile(
@@ -554,15 +586,18 @@ pub(crate) fn compile(
 }
 
 /// The Build and Finished half: one run of a compiled request in its own
-/// resource scope. A refused compilation's run returns its held refusal and
-/// performs no resource, activation or study work. A project run offers its
-/// `held` artifacts to the inputs whose `schema` links name their producers.
+/// resource scope. With `verify`, the run first verifies the compiled metadata
+/// and refuses if it changed. A refused compilation's run returns its held
+/// refusal and performs no resource, activation or study work. A project run
+/// offers its `held` artifacts to the inputs whose `schema` links name their
+/// producers.
 pub(crate) fn run(
     shared: &EngineShared,
     specification: &str,
     compiled: &Compiled,
     run_resolver: Option<Arc<dyn yamaa_adapters::host_resources::Resolver>>,
     held: Option<Arc<yamaa_adapters::file_resources::HeldArtifacts>>,
+    verify: bool,
     scope: yamaa_core::application_observer::Scope<'_>,
 ) -> BuildOutcome {
     let selected = match compiled {
@@ -582,6 +617,7 @@ pub(crate) fn run(
             specification,
             run_resolver,
             held,
+            verify,
         },
     };
     match yamaa_core::domain_entry::run(selected, &mut application, scope) {

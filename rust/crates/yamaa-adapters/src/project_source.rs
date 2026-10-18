@@ -36,6 +36,8 @@ pub struct PreparedEnvironment {
 #[derive(Debug)]
 pub struct OwnedEnvironment {
     origins: SourceOrigins,
+    /// The project file path as preparation was given it.
+    written: Option<String>,
     root: Option<CapturedDocument>,
     environment_file: Option<CapturedDocument>,
     captures: Vec<DocumentCapture>,
@@ -50,6 +52,7 @@ pub struct OwnedEnvironment {
 pub struct CapturedEnvironment {
     inventory_documents: Vec<crate::specification_source::PreparedDocument>,
     origins: SourceOrigins,
+    written: Option<String>,
     root: Option<CapturedDocument>,
     environment_file: Option<CapturedDocument>,
     captures: Vec<DocumentCapture>,
@@ -69,6 +72,10 @@ impl CapturedEnvironment {
     pub fn root_optional(&self) -> Option<&CapturedDocument> {
         self.root.as_ref()
     }
+    /// The project file path as preparation was given it.
+    pub fn written(&self) -> Option<&str> {
+        self.written.as_deref()
+    }
     /// The environment file the project links for the host language. It
     /// declares the lock and functions; their paths resolve from it.
     pub fn environment_file(&self) -> Option<&CapturedDocument> {
@@ -85,6 +92,7 @@ impl PreparedEnvironment {
     pub fn into_owned(self) -> OwnedEnvironment {
         OwnedEnvironment {
             origins: self.origins,
+            written: None,
             root: Some(self.root),
             environment_file: self.environment_file,
             captures: self.captures,
@@ -102,6 +110,7 @@ impl OwnedEnvironment {
                 functions: Vec::new(),
                 codelists: Vec::new(),
             },
+            written: None,
             root: None,
             environment_file: None,
             captures: Vec::new(),
@@ -113,6 +122,12 @@ impl OwnedEnvironment {
     }
     pub(crate) fn inventory_captured(&self) -> bool {
         self.inventory_captured
+    }
+    /// Keep the project file path preparation was given, so a later refusal
+    /// can name the file as written.
+    pub(crate) fn with_written(mut self, written: &str) -> Self {
+        self.written = Some(written.into());
+        self
     }
     pub(crate) fn attach_inventory(
         &mut self,
@@ -136,6 +151,7 @@ impl OwnedEnvironment {
             CapturedEnvironment {
                 inventory_documents: self.inventory_documents,
                 origins: self.origins,
+                written: self.written,
                 root: self.root,
                 environment_file: self.environment_file,
                 captures: self.captures,
