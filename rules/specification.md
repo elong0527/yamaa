@@ -121,7 +121,7 @@ derivation keeps its column-phase meaning, and a `rows` entry naming its
 column fails.
 
 Fails: `duplicate_derivation`.
-Evidence: `schema-rows-override`, `rust/crates/yamaa-core/tests/project_specification.rs`, `rust/crates/yamaa-adapters/tests/fixtures/row_intermediate_reference.json`.
+Evidence: `schema-rows-override`, `rust/crates/yamaa-core/tests/project_specification.rs`, `rust/crates/yamaa-adapters/tests/fixtures/row_intermediate_reference.json`, `rust/crates/yamaa-adapters/tests/execution_row_phase_reads.rs`.
 Replaces: REQ-0199, REQ-1260.
 
 The rule applies to output and internal columns alike. A row-phase context is
@@ -131,7 +131,8 @@ one of these:
 - a grouped `rows` filter;
 - a donor field of a `SELF` intermediate;
 - a match variable or `between` value of a named intermediate that a `rows`
-  derivation reads ([LOOKUP-2](lookup.md#lookup-2)).
+  derivation reads ([LOOKUP-2](lookup.md#lookup-2)), and of each further
+  intermediate that such a `between` value reads.
 
 A read of a named intermediate backed by an input dataset, including a read
 through another row-local column, may be such a default. A column-level read

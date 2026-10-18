@@ -39,6 +39,10 @@ impl LookupFinding {
             operand_route: None,
         })
     }
+    /// Add the further authored sites the finding names, in order.
+    pub(super) fn extend_paths(&mut self, paths: impl IntoIterator<Item = String>) {
+        self.0.spec_paths.extend(paths);
+    }
     pub(super) fn text(&mut self, key: &str, value: &str) {
         self.0
             .context

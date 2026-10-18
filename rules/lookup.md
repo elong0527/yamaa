@@ -580,13 +580,20 @@ reads of the intermediate reach it.
 During grouped row construction, every variable a lookup matches on must be
 derived by the row template that reads the lookup. The exceptions are the
 template's group keys and, for an ungrouped template, the driver record's own
-fields. [Column derivation](columns.md) orders row derivations
-before column derivation, and a match value available only in a later phase
-fails as `phase_boundary`. The finding is at the row template's read of the
-lookup, in a derivation or the row `filter`, and names the value, the lookup
-and the row template, whether the value is a `key` match value, the lookup's
-`between` value, or a match value of another lookup that a `between` value
-reads.
+fields.
+
+In either mode, [Column derivation](columns.md) orders row derivations before
+column derivation, and a match value available only in a later phase fails as
+`phase_boundary`. A named intermediate declares its match once for every read,
+so the finding is at the row template's read of the intermediate, in a
+derivation or the row `filter`, once for that site. It names the value, the
+intermediate and the row template, whether the value is a `key` match value,
+the intermediate's `between` value, or a match value of another intermediate
+that a `between` value reads; in that last case the finding also names each
+value followed, from the first `between` value to the value that reads the
+column. A structured source's own `between` value is written in the row
+derivation, and a later-phase one fails as that derivation's read does
+([COLUMN-4](columns.md#column-4)), at `between.value`.
 
 ## Named intermediates
 
