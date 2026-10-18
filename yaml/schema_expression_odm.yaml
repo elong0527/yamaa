@@ -23,14 +23,14 @@ odm_class:
         required: true
         description: The ODM input and the complete ItemOID, written as DATASET.ItemOID (NAME-7).
     - event:
-        type: [odm_oid, "list[odm_oid]"]
-        description: StudyEventOID values an identified record carries; one OID or a list (NAME-12).
+        type: "list[odm_oid]"
+        description: StudyEventOID values an identified record carries, written as a list even when there is one (NAME-12).
     - form:
-        type: [odm_oid, "list[odm_oid]"]
-        description: FormOID values an identified record carries; one OID or a list (NAME-12).
+        type: "list[odm_oid]"
+        description: FormOID values an identified record carries, written as a list even when there is one (NAME-12).
     - item_group:
-        type: [odm_oid, "list[odm_oid]"]
-        description: ItemGroupOID values an identified record carries; one OID or a list (NAME-12).
+        type: "list[odm_oid]"
+        description: ItemGroupOID values an identified record carries, written as a list even when there is one (NAME-12).
     - filter:
         type: predicate
         description: Predicate over the ODM input's schema fields that an identified record satisfies (NAME-12).

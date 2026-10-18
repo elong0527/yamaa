@@ -139,7 +139,7 @@ mod project {
             );
             let raw = VALID.replace(
                 "submission: {length: 3",
-                "verifications: {max_length: {max: 4}}\n    submission: {length: 3",
+                "verifications: [{max_length: {max: 4}}]\n    submission: {length: 3",
             );
             let issues = study.check(&raw);
             assert_eq!(issues[0].condition, "declared_length_conflict");
@@ -720,7 +720,7 @@ mod project {
             let study = Study::new();
             let raw = value_length_spec("4").replace(
                 "derivation: SRC.VALUE, submission",
-                "derivation: SRC.VALUE, verifications: {max_length: {max: 3}}, submission",
+                "derivation: SRC.VALUE, verifications: [{max_length: {max: 3}}], submission",
             );
             let issues = study.check(&raw);
             assert_eq!(issues.len(), 1, "{issues:?}");
@@ -858,11 +858,11 @@ mod project {
         fn restated_facts_and_relaxed_keys_fail_validation_before_data() {
             let key_check = VALID.replace(
                 "{name: ID, type: int, derivation: SRC.ID}",
-                "{name: ID, type: int, derivation: SRC.ID, verifications: {not_missing: {}}}",
+                "{name: ID, type: int, derivation: SRC.ID, verifications: [{not_missing: {}}]}",
             );
             let mandatory_check = VALID.replace(
                 "    submission: {length: 3",
-                "    verifications: {not_missing: {}}\n    submission: {mandatory: true, length: 3",
+                "    verifications: [{not_missing: {}}]\n    submission: {mandatory: true, length: 3",
             );
             let key_unique = format!("{VALID}verifications: [{{unique: [ID]}}]\n");
             let relaxed_key = VALID.replace(
@@ -923,7 +923,7 @@ mod project {
             let relaxed = ROW_CT
                 .replace(
                     "submission: {origin: {type: Assigned}, codelist: DEFAULT}",
-                    "verifications: {not_missing: {}}, submission: {origin: {type: Assigned}, mandatory: true}",
+                    "verifications: [{not_missing: {}}], submission: {origin: {type: Assigned}, mandatory: true}",
                 )
                 .replace("codelist: GLUCOSE", "mandatory: false");
             assert!(study.check(&relaxed).is_empty());
@@ -1426,7 +1426,7 @@ columns:
         }
         #[test]
         fn inherited_link_and_artifact_paths_keep_independent_authored_layers() {
-            let entry="schema_version: '1.0'\nparent: parent.yaml\ndomain: CONS\nkeys: [ID]\ninput: {SRC: {path: './child.csv'}}\ncolumns: [{name: ID, type: int, label: ID, derivation: SRC.ID}]\noutput: {path: consumer.csv, columns: [ID]}\n";
+            let entry="schema_version: '1.0'\nparent: parent.yaml\ndomain: CONS\nkeys: [ID]\ninput: {SRC: './child.csv'}\ncolumns: [{name: ID, type: int, label: ID, derivation: SRC.ID}]\noutput: {path: consumer.csv, columns: [ID]}\n";
             let parent =
         "schema_version: '1.0'\ninput: {SRC: {path: parent.csv, schema: '../producer.yaml'}}\n";
             let (consumer, consumer_port) = inherited("/consumer.yaml", entry, parent);

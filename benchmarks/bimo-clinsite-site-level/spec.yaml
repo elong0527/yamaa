@@ -36,13 +36,13 @@ columns:
         sources: [SAFPOP_RAW]
         missing: 0
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   - name: ENRLPOP
     type: int
     label: Number of Enrolled Subjects at the Site
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
 rows:
   # One record per site named by at least one subject row; a site identifier
@@ -61,5 +61,4 @@ rows:
           filter: "SUBJ.SAFFL = 'Y'"
           expr: COUNT(SUBJ.USUBJID)
       ENRLPOP:
-        aggregate:
-          expr: COUNT(SUBJ.USUBJID)
+        aggregate: COUNT(SUBJ.USUBJID)

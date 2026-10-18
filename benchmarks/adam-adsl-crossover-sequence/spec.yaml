@@ -72,16 +72,16 @@ columns:
     label: Planned Treatment for Period 01
     derivation: PERIOD01.ELEMENT
     verifications:
-      allowed_values:
-        values: [Vitamin D3, Placebo]
+      - allowed_values:
+          values: [Vitamin D3, Placebo]
 
   - name: TRT02P
     type: str
     label: Planned Treatment for Period 02
     derivation: PERIOD02.ELEMENT
     verifications:
-      allowed_values:
-        values: [Vitamin D3, Placebo]
+      - allowed_values:
+          values: [Vitamin D3, Placebo]
 
   # The period treatments in period order; empty when they are.
   - name: TRTSEQP

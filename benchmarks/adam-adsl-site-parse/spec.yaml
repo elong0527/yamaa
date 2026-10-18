@@ -45,7 +45,7 @@ columns:
         sources: [SITEIDP, DM.SITEID]
         missing: UNKNOWN
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   # SITEID is never missing, so UNKNOWN here means SUBJID is missing.
   - name: SUBJREF
@@ -56,7 +56,7 @@ columns:
         template: "{SITEID}:{SUBJID}"
         missing: UNKNOWN
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
 verifications:
   - row_count:

@@ -81,6 +81,5 @@ rows:
       PARAMCD: {literal: TOTAL}
       PARAM: {literal: Total of Components}
       AVAL:
-        aggregate:
-          expr: "SUM(LB.LBSTRESN)"
+        aggregate: "SUM(LB.LBSTRESN)"
       DTYPE: {literal: CALCULATION}

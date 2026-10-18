@@ -1241,7 +1241,7 @@ output: {{path: output.csv, columns: [I, S]}}
             let written = raw
                 .replace(
                     "verifications:\n",
-                    "verifications:\n  - unique:\n      columns: [USUBJID]\n",
+                    "verifications:\n  - unique: [USUBJID]\n",
                 )
                 .replace("path: adlb.csv", "path: adlb.bad");
             let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
@@ -1343,14 +1343,14 @@ output: {{path: output.csv, columns: [I, S]}}
             // the later declaration is the execution diagnostic (REQ-1177).
             for (declaration, condition, requirement, suffix, reason) in [
                 (
-                    "unique: {columns: []}",
+                    "unique: []",
                     "invalid_declaration",
                     "REQ-0397",
                     "unique",
                     "columns names at least one column",
                 ),
                 (
-                    "unique: {columns: [ABSENT]}",
+                    "unique: [ABSENT]",
                     "unknown_field",
                     "REQ-0405",
                     "unique.columns",
@@ -1780,7 +1780,7 @@ output: {{path: output.csv, columns: [I, S]}}
             );
             let bad = raw.replace(
                 "label: Analysis Value\n",
-                "label: Analysis Value\n    derivation: {aggregate: {expr: 'SUM(LB.LBSTRESN)'}}\n",
+                "label: Analysis Value\n    derivation: {aggregate: 'SUM(LB.LBSTRESN)'}\n",
             );
             let error = PreparedRun::prepare(prepare(&schema, bad.as_bytes()))
                 .expect_err("dataset aggregate is not a row default");

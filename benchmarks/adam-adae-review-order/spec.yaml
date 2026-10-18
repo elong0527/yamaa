@@ -49,8 +49,8 @@ columns:
     label: Analysis Severity/Intensity
     derivation: AE.AESEV
     verifications:
-      allowed_values:
-        values: [MILD, MODERATE, SEVERE]
+      - allowed_values:
+          values: [MILD, MODERATE, SEVERE]
 
   # Rank for the review order above.
   - name: SEVORD

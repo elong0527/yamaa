@@ -95,8 +95,8 @@ columns:
     derivation:
       flag: "DOSENUM IS NOT NULL"
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
 verifications:
   - row_count:

@@ -166,8 +166,7 @@ columns:
         expr: "WEIGHTKG / POWER(NULLIF(HEIGHTCM, 0) / 100, 2)"
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID]
+  - unique: [STUDYID, USUBJID]
 ```
 
 ## yamaa: benchmarks

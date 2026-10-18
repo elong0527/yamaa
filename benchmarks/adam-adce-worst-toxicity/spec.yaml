@@ -40,8 +40,8 @@ columns:
     label: Analysis Severity/Intensity
     derivation: CE.CESEV
     verifications:
-      allowed_values:
-        values: [MILD, MODERATE, SEVERE]
+      - allowed_values:
+          values: [MILD, MODERATE, SEVERE]
 
   - name: ASEVN
     type: int
@@ -52,16 +52,16 @@ columns:
         dict: {MILD: 1, MODERATE: 2, SEVERE: 3}
         missing: {literal: null}
     verifications:
-      allowed_values:
-        values: [1, 2, 3]
+      - allowed_values:
+          values: [1, 2, 3]
 
   - name: ATOXGRN
     type: int
     label: Analysis Toxicity Grade (N)
     derivation: ASEVN
     verifications:
-      allowed_values:
-        values: [1, 2, 3]
+      - allowed_values:
+          values: [1, 2, 3]
 
   # Number each subject's graded events: worst grade first, then earliest
   # start, then lowest CESEQ. AOCCFL marks number 1; an ungraded event is
@@ -85,8 +85,8 @@ columns:
     derivation:
       flag: "WGRSEQ = 1"
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
 verifications:
   - row_count:

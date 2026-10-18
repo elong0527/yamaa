@@ -96,8 +96,8 @@ check_integer_output_conversions <- function() {
     "schema_version: '1.0'", "domain: TEST", "keys: [ID]",
     "input: {SRC: input.csv}",
     "output: {path: output.csv, columns: [ID, VALUE]}", "columns:",
-    "  - {name: ID, type: int, derivation: {source: SRC.ID}}",
-    "  - {name: VALUE, type: int, derivation: {source: SRC.VALUE}}"
+    "  - {name: ID, type: int, derivation: SRC.ID}",
+    "  - {name: VALUE, type: int, derivation: SRC.VALUE}"
   ), entry)
   truth <- c("-9223372036854775808", "9223372036854775807",
              "9007199254740993", "-9007199254740993",

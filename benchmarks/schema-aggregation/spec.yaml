@@ -31,16 +31,14 @@ columns:
     type: int
     label: Number of Dose Records
     derivation:
-      aggregate:
-        expr: "COUNT(EX.*)"
+      aggregate: "COUNT(EX.*)"
 
   # Qualified: counts only the records whose dose is present.
   - name: NDOSEVAL
     type: int
     label: Number of Non-missing Doses
     derivation:
-      aggregate:
-        expr: "COUNT(EX.EXDOSE)"
+      aggregate: "COUNT(EX.EXDOSE)"
 
   # Qualified: a missing dose contributes nothing, never zero; a subject
   # whose doses are all missing gets a missing total.
@@ -48,24 +46,21 @@ columns:
     type: float
     label: Total Dose
     derivation:
-      aggregate:
-        expr: "SUM(EX.EXDOSE)"
+      aggregate: "SUM(EX.EXDOSE)"
 
   # Qualified: defined as SUM over COUNT of the non-missing doses.
   - name: MEANDOSE
     type: float
     label: Mean Dose
     derivation:
-      aggregate:
-        expr: "MEAN(EX.EXDOSE)"
+      aggregate: "MEAN(EX.EXDOSE)"
 
   # Qualified: the largest present dose.
   - name: MAXDOSE
     type: float
     label: Maximum Dose
     derivation:
-      aggregate:
-        expr: "MAX(EX.EXDOSE)"
+      aggregate: "MAX(EX.EXDOSE)"
 
   # Qualified with a filter: only the DRUG records are eligible.
   - name: DRUGDOSE

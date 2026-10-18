@@ -122,8 +122,8 @@ columns:
     derivation:
       flag: "PARENT_PK.SAMPLED = 1"
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
   # The parent drug's result as recorded; nothing is imputed for a result
   # below the limit or a missing sample, except that a placebo record
@@ -146,8 +146,8 @@ columns:
     derivation:
       flag: "CHG IS NOT NULL AND PKCONC IS NOT NULL"
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
 verifications:
   - row_count:

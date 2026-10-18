@@ -1533,8 +1533,8 @@
     "artifact": ""
   },
   {
-    "case": "scalar_key",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: {expr: 'SUM(SRC.V)', key: ID}}\n",
+    "case": "single_column_key",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, G, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - name: V\n    type: int\n    label: V\n    derivation: {aggregate: {expr: 'SUM(SRC.V)', key: [ID]}}\n",
     "input": "ID,G,V\na,g,2\na,g,3\n",
     "expected": {
       "artifacts": [
@@ -1565,7 +1565,7 @@
       "diagnostics": [],
       "engine_version": "fixture-engine",
       "error": null,
-      "example": "correlated-aggregate-scalar_key",
+      "example": "correlated-aggregate-single_column_key",
       "handler_counts": [],
       "nodes": [
         {

@@ -349,7 +349,7 @@
   },
   {
     "case": "keys_selectors",
-    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: {item: SRC.IT.TEST.OID, event: [E], form: F2, item_group: G}}}\n",
+    "source": "schema_version: '1.0'\ndomain: TEST\nkeys: [STUDYID, USUBJID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [STUDYID, USUBJID, VAL]}\ncolumns:\n  - {name: STUDYID, type: str, label: Study, derivation: SRC.StudyOID}\n  - {name: USUBJID, type: str, label: Subject, derivation: SRC.SubjectKey}\n  - {name: VAL, type: str, label: Value, derivation: {odm: {item: SRC.IT.TEST.OID, event: [E], form: [F2], item_group: [G]}}}\n",
     "input": "StudyOID,MetaDataVersionOID,SubjectKey,StudyEventOID,StudyEventRepeatKey,FormOID,FormRepeatKey,ItemGroupOID,ItemGroupRepeatKey,ItemOID,Value\nS,M,P,E,,F,,G,,IT.TEST.OID,Y\nS,M,P,E,,F2,,G,,IT.TEST.OID,N\n",
     "expected": {
       "artifacts": [

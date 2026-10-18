@@ -21,7 +21,7 @@ Decide which visit's answer is the subject's sex, and read that one:
 
 ```yaml
 derivation:
-  odm: {item: ODM.IT.DM.SEX, event: SCREENING}
+  odm: {item: ODM.IT.DM.SEX, event: [SCREENING]}
 ```
 
 Reading the screening answer gives one record for every subject, whether or

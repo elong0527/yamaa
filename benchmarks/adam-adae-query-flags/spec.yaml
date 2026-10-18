@@ -74,8 +74,8 @@ columns:
     label: Standardized MedDRA Query 01 Scope
     derivation: SMQ1.SCOPE
     verifications:
-      allowed_values:
-        values: [BROAD, NARROW]
+      - allowed_values:
+          values: [BROAD, NARROW]
 
   - name: SMQ02NAM
     type: str
@@ -92,8 +92,8 @@ columns:
     label: Standardized MedDRA Query 02 Scope
     derivation: SMQ2.SCOPE
     verifications:
-      allowed_values:
-        values: [BROAD, NARROW]
+      - allowed_values:
+          values: [BROAD, NARROW]
 
   - name: CQ01NAM
     type: str

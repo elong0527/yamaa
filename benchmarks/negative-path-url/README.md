@@ -33,8 +33,7 @@ that copy with the study:
 
 ```yaml
 input:
-  LBREF:
-    path: input/lbref.csv
+  LBREF: input/lbref.csv
 ```
 
 Retrieval belongs to the step that assembles study data, where the received

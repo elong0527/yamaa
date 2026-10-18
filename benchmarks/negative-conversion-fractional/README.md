@@ -19,8 +19,7 @@ precision by declaring the result as `float`:
 ```yaml
 - name: AVAL
   type: float
-  derivation:
-    source: VS.VSSTRESN
+  derivation: VS.VSSTRESN
 ```
 
 If the result must be an integer, the specification must choose an explicit

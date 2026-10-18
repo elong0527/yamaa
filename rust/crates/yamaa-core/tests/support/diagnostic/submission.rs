@@ -498,11 +498,12 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             23 => *spec.at(&["keys"]) = Tree::list(vec![Tree::text("MISSING")]),
             24 => *spec.at(&["output", "columns"]) = Tree::list(vec![]),
             25 => *spec.at(&["submission", "class"]) = Tree::text("BASIC DATA STRUCTURE"),
+            // Composition reads the canonical class of the `unique` shorthand.
             26 => spec.set(
                 &["verifications"],
                 Tree::list(vec![Tree::map(vec![(
                     "unique",
-                    Tree::list(vec![Tree::text("VALUE")]),
+                    Tree::map(vec![("columns", Tree::list(vec![Tree::text("VALUE")]))]),
                 )])]),
             ),
             27 => {

@@ -24,8 +24,7 @@ nothing else:
 - name: ACTARM
   type: str
   label: Description of Actual Arm
-  derivation:
-    source: ARM
+  derivation: ARM
 ```
 
 When the actual arm is collected in its own right, read the rows that hold

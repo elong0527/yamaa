@@ -152,7 +152,7 @@ directory <- tempfile("public-check-");dir.create(directory)
 entry <- file.path(directory,"spec.yaml")
 writeLines(c("schema_version: '1.0'","domain: TEST","keys: [ID]","input: {SRC: input.csv}",
              "output: {path: absent/output.csv, columns: [ID]}","columns:",
-             "  - {name: ID, type: int, derivation: {source: SRC.ID}}"),entry)
+             "  - {name: ID, type: int, derivation: SRC.ID}"),entry)
 stopifnot(nrow(yamaa_check(entry)$issues)==0L)
 failed <- yamaa_domain(entry)
 stopifnot(is.null(failed$output),identical(failed$issues$condition,"resource_path_missing"),inherits(tryCatch(failed$save(),error=identity),"yamaa_domain_error"))
@@ -193,7 +193,7 @@ for(late in c(FALSE,TRUE)) for(existing in c(FALSE,TRUE)) {
   entry <- file.path(directory,"spec.yaml")
   writeLines(c("schema_version: '1.0'","domain: TEST","keys: [ID]","input: {SRC: input.csv}",
                "output: {path: link/output.csv, columns: [ID]}","columns:",
-               "  - {name: ID, type: int, derivation: {source: SRC.ID}}"),entry)
+               "  - {name: ID, type: int, derivation: SRC.ID}"),entry)
   writeBin(charToRaw("ID\n1\n"),file.path(directory,"input.csv"))
   target <- file.path(outside,"output.csv")
   if(existing) writeBin(charToRaw("retained"),target)
@@ -228,7 +228,7 @@ local({
     dir.create(file.path(work,"input"))
     source <- rawToChar(rawfile(file.path(original,"spec.yaml")))
     if (input_parquet) {
-      source <- sub(host_truth[["floating_input_override"]],"path: input/lb.parquet",source,fixed=TRUE)
+      source <- sub(host_truth[["floating_input_override"]],"input/lb.parquet",source,fixed=TRUE)
       stopifnot(file.copy(file.path(root,"pq","ordered-sum.parquet"),file.path(work,"input","lb.parquet")))
     } else stopifnot(file.copy(file.path(original,"input","lb.csv"),file.path(work,"input","lb.csv")))
     if (output_parquet) source <- sub("path: adlb.csv","path: adlb.parquet",source,fixed=TRUE)
@@ -260,7 +260,7 @@ local({
   directory <- tempfile("public-parquet-refusals-"); dir.create(directory)
   on.exit(unlink(directory,recursive=TRUE))
   entry <- file.path(directory,"spec.yaml")
-  source <- '{"schema_version":"1.0","domain":"TEST","base":"SRC","input":{"SRC":{"path":"input.parquet"}},"keys":["ID"],"columns":[{"name":"ID","type":"int","derivation":{"compute":{"expr":"1"}}}],"output":{"path":"output.csv","columns":["ID"]}}'
+  source <- '{"schema_version":"1.0","domain":"TEST","base":"SRC","input":{"SRC":"input.parquet"},"keys":["ID"],"columns":[{"name":"ID","type":"int","derivation":{"compute":{"expr":"1"}}}],"output":{"path":"output.csv","columns":["ID"]}}'
   writeBin(charToRaw(source),entry)
   entry <- normalizePath(entry,winslash="/",mustWork=TRUE)
 cases <- list(
@@ -802,7 +802,7 @@ local({
       writeBin(charToRaw('K,KINT,KNUM,VAL\n"       7",,7,A\n'),file.path(case,"tab.csv"))
     if(variant=="unused") written <- gsub("derivation: LOOK.VAL","derivation: {literal: ok}",written,fixed=TRUE)
     if(variant=="unread_branch") written <- gsub("derivation: LOOK.VAL",
-      "derivation: {case: [{when: 'FALSE', then: {source: LOOK.VAL}}, {otherwise: {literal: ok}}]}",written,fixed=TRUE)
+      "derivation: {case: [{when: 'FALSE', then: LOOK.VAL}, {otherwise: {literal: ok}}]}",written,fixed=TRUE)
     if(variant=="boolean_missing") written <- sub("TAB.KINT > 'bad'","FALSE AND TAB.KINT > 'bad'",written,fixed=TRUE)
     writeBin(charToRaw(written),entry)
     result <- yamaa_domain(entry)
@@ -884,7 +884,7 @@ local({
   check_handler_ledger(observed,"[{\"spec_path\":\"rows[1].derivations.V.compute.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"rows[2].derivations.V.compute.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":2},{\"spec_path\":\"columns.FINAL.derivation.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":5},{\"spec_path\":\"columns.FIRST.derivation.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":5}]")
 
   unlink(file.path(directory,fixture_strings(host_truth[["section_case_files"]])))
-  writeBin(charToRaw(sub("SECTION: {literal: first}","SECTION: {source: {variable: P.K}}",body,fixed=TRUE)),entry)
+  writeBin(charToRaw(sub("SECTION: {literal: first}","SECTION: P.K",body,fixed=TRUE)),entry)
   expected <- list(phase="validation",condition="phase_boundary",requirement="REQ-0120",spec_paths=list("rows[0].derivations.SECTION.source"),context="{\"available_phase\":\"completed_prior_row_template\",\"identifier\":\"P.K\",\"required_phase\":\"row_construction\"}")
   check_issue_frame(yamaa_check(entry)$issues,expected)
   rejected <- yamaa_domain(entry);check_issue_frame(rejected$issues,expected)

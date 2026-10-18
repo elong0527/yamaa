@@ -3,7 +3,8 @@
 The schema bundle under `yaml/` defines the shape of every specification and
 project environment. These rules fix how the bundle is written and read: its
 documents and includes, the YAML every document is read as, named types and
-registries, type expressions, shorthand unions and descriptor keywords.
+registries, type expressions, shorthand unions, the one spelling a written
+value takes, and descriptor keywords.
 
 ## Bundles and documents
 
@@ -221,7 +222,7 @@ quotes a bracketed type expression in both:
 
 ```yaml
 - keys: {type: "list[identifier]", required: true}
-- verifications: {type: [column_verification, "list[column_verification]"]}
+- dict: {type: ["dict[str, substitute_value]", project_path], required: true}
 - order_by:
     type: "list[order_by_term]"
     required: false
@@ -234,28 +235,73 @@ YAML does require it is a parse error.
 
 <a id="schema-10"></a>
 
-### SCHEMA-10. Two union shapes are shorthand, expanded to their canonical form while validating
+### SCHEMA-10. One union shape is shorthand, expanded to its canonical class while validating
 
-A union of `T` and `list[T]` accepts either, and a bare `T` expands to a
-one-element list. A union of a non-class type `V` and a class declaring exactly
-one required field whose type is `V` accepts either, and a bare `V` expands to
-that class with the field set to it. An implementation expands shorthand while
+A union of a non-class type `V` and a class declaring exactly one required
+field whose type is `V` accepts either, and a bare `V` expands to that class
+with the field set to it. An implementation expands shorthand while
 validating, after the written value matches its union member, and a validated
-document contains only the canonical form. No other union is shorthand.
+document contains only the canonical class. A union of a type `T` and
+`list[T]` is a bundle error, and no other union is shorthand.
 
-Evidence: `schema-shorthand`, `rust/crates/yamaa-core/tests/schema_references.rs::collection_normalization_prioritizes_canonical_lists_even_when_t_is_a_list`, `rust/crates/yamaa-core/tests/schema_references.rs::shorthand_checks_the_written_member_without_reinterpreting_generated_fields`.
+Evidence: `schema-shorthand`, `rust/crates/yamaa-core/tests/schema_references.rs::single_or_list_unions_are_bundle_errors_and_lists_normalize_as_written`, `rust/crates/yamaa-core/tests/schema_references.rs::shorthand_checks_the_written_member_without_reinterpreting_generated_fields`.
 Replaces: REQ-0264, REQ-0265, REQ-0266, REQ-0267, REQ-0268.
 
-The list and the class are the canonical forms. When a bare `V` expands,
-declared defaults are applied to the remaining fields of the class and other
-optional fields remain absent. This form also applies when `V` is
-registry-backed, as `expression` is in `derivation`. Expansion happens after
-the written value has been validated against the union member it matched, so a
-constraint on the written form is checked before the value is expanded.
+The class is the canonical form. When a bare `V` expands, declared defaults
+are applied to the remaining fields of the class and other optional fields
+remain absent. This form also applies when `V` is registry-backed, as
+`expression` is in `derivation`. Expansion happens after the written value has
+been validated against the union member it matched, so a constraint on the
+written form is checked before the value is expanded.
 
-A union matching neither shape, such as `literal_value`, selects a member and
-expands nothing. A rule may say where a shorthand applies and what the expanded
-value means, but the rule must not define a different expansion.
+A field that takes several values is typed `list[T]` and is written as a list
+even when it holds one value. No union offers the single value beside the
+list, and no bare value is wrapped into one. A union matching neither shape,
+such as `literal_value`, selects a member and expands nothing. A rule may say
+where a shorthand applies and what the expanded value means, but the rule must
+not define a different expansion.
+
+<a id="schema-15"></a>
+
+### SCHEMA-15. A written long form that holds only the field its shorthand fills is refused
+
+A value has one spelling. A written value that matches the class of a
+shorthand union and holds nothing but the field a bare value of that union
+fills restates the shorthand and fails validation, reporting its path, that
+field and the shorthand to write instead. A long form that writes any other
+field, even a default or a null, keeps its meaning. The refusal applies to
+what an author wrote, never to the canonical form a validation produces.
+
+Fails: `redundant_long_form`.
+Evidence: `negative-redundant-long-form`, `rust/crates/yamaa-adapters/tests/declaration_one_spelling.rs`, `rust/crates/yamaa-core/tests/schema_references.rs::a_dataset_mapping_holding_only_its_path_restates_the_path_shorthand`.
+
+The shorthand unions of the specification bundle, and the long form each one
+refuses, are:
+
+| Written in | Shorthand | Refused long form |
+|---|---|---|
+| `aggregate` | `aggregate: E` | `aggregate: {expr: E}` |
+| `flag` | `flag: P` | `flag: {condition: P}` |
+| `str_template` | `str_template: T` | `str_template: {template: T}` |
+| `odm` | `odm: D.I` | `odm: {item: D.I}` |
+| `source` and a filtered source | `X` | `{variable: X}` |
+| an order term | `X` | `{variable: X}` |
+| `unique` | `unique: [A, B]` | `unique: {columns: [A, B]}` |
+| an input dataset | `D: path.csv` | `D: {path: path.csv}` |
+| a derivation | `E` | `{value: E}` |
+| a submission comment, method or document reference | `T` | `{text: T}`, `{description: T}`, `{document: T}` |
+
+A bare string derivation or case result is the source shorthand of
+[EXPR-5](../expressions.md#expr-5), and a written `{source: X}` with a string
+`X` in a `derivation`, a `derivations` entry or a `case` `then` or `otherwise`
+restates it and fails the same way. A restatement around another one names the
+innermost shorthand: `derivation: {value: {source: X}}` reports `X`.
+
+The check runs on the document each author wrote: a standalone specification,
+and each inheritance layer before composition. A composed, pruned or resolved
+document holds the canonical class of every shorthand and is validated
+without this check. A clear marker in a layer is a written field and keeps a
+long form valid.
 
 ## Descriptors
 

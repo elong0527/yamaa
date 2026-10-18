@@ -1079,8 +1079,8 @@ columns:
             );
         }
     }
-    mod declarative_intermediate_key_shorthand {
-        //! REQ-0115 scalar key shorthand retains exact integers and shared donor choice.
+    mod declarative_intermediate_single_key {
+        //! LOOKUP-5 single-column key list retains exact integers and shared donor choice.
         use std::{
             fs,
             path::PathBuf,
@@ -1115,7 +1115,7 @@ output: {path: result.csv, columns: [ID, A, B]}
 intermediates:
   - id: P
     dataset: D
-    key: ID
+    key: [ID]
     order_by: [D.SEQ]
     keep: first
     no_match: {literal: null}
@@ -1150,7 +1150,7 @@ columns:
             }
         }
         #[test]
-        fn scalar_shorthand_preserves_distinct_large_integer_keys_and_per_read_handlers() {
+        fn single_column_key_preserves_distinct_large_integer_keys_and_per_read_handlers() {
             let fixture = Fixture::new();
             fs::write(
                 fixture.0.join("src.csv"),
@@ -1378,7 +1378,7 @@ columns:
                 case["specification"] = yamaa_adapters::json!(case["specification"]
                     .as_str()
                     .unwrap()
-                    .replace("derivation: LOOK.VAL", "derivation: {case: [{when: 'FALSE', then: {source: LOOK.VAL}}, {otherwise: {literal: ok}}]}"))
+                    .replace("derivation: LOOK.VAL", "derivation: {case: [{when: 'FALSE', then: LOOK.VAL}, {otherwise: {literal: ok}}]}"))
             }
             "boolean_missing" => {
                 case["inputs"]["tab.csv"] = yamaa_adapters::json!("K,KINT,KNUM,VAL\n\"       7\",,7,A\n");
@@ -1532,7 +1532,7 @@ output: {path: result.csv, columns: [ID, SEQ, X, A, B]}
 intermediates:
   - id: P
     dataset: D
-    key: ID
+    key: [ID]
     filter: "D.ELIG = 'Y'"
     between: {value: X, lower: LOW, upper: HIGH}
     columns: [V, W, V]
@@ -2187,7 +2187,7 @@ domain: TEST
 keys: [ID]
 input: {SRC: {path: absent.parquet, ordinal: REC}}
 output: {path: result.csv, columns: [ID]}
-columns: [{name: ID, type: str, derivation: {odm: {item: SRC.ITEM}}}]
+columns: [{name: ID, type: str, derivation: {odm: SRC.ITEM}}]
 "#,
                 b"unused\n",
             );
@@ -2237,8 +2237,8 @@ columns:
         #[test]
         fn nested_column_and_row_odm_derivations_still_reject_ordinals_before_capture() {
             for declarations in [
-        "columns:\n  - name: ID\n    type: str\n    derivation:\n      case:\n        - when: \"1 = 1\"\n          then: {odm: {item: SRC.ITEM}}\n        - otherwise: {literal: x}\n",
-        "columns: [{name: ID, type: str, derivation: SRC.ID}]\nrows:\n  - id: records\n    derivations:\n      ID: {value: {odm: {item: SRC.ITEM}}}\n",
+        "columns:\n  - name: ID\n    type: str\n    derivation:\n      case:\n        - when: \"1 = 1\"\n          then: {odm: SRC.ITEM}\n        - otherwise: {literal: x}\n",
+        "columns: [{name: ID, type: str, derivation: SRC.ID}]\nrows:\n  - id: records\n    derivations:\n      ID: {odm: SRC.ITEM}\n",
     ] {
         let fixture = authored(
             &format!("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: {{path: absent.parquet, ordinal: REC}}}}\noutput: {{path: result.csv, columns: [ID]}}\n{declarations}"),

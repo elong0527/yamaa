@@ -30,8 +30,7 @@ Read the limits under the name that holds them:
 
 ```yaml
 input:
-  LBREF:
-    path: input/reference/lbref.csv
+  LBREF: input/reference/lbref.csv
 ```
 
 Storing the file itself where the study reads it works equally well. Either

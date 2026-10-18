@@ -41,8 +41,8 @@ columns:
     type: str
     label: Qualifier Variable Name
     verifications:
-      allowed_values:
-        values: [MHFAMHX, MHCONF]
+      - allowed_values:
+          values: [MHFAMHX, MHCONF]
 
   - name: QLABEL
     type: str

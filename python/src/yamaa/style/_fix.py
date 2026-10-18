@@ -362,9 +362,8 @@ def _block_mapping(
     """Write a one-line flow mapping as a block mapping, member by member."""
     if not node.value:
         return None
-    if len(node.value) == 1 and node.value[0][0].value in ("literal", "source"):
-        # `literal_form` keeps `{literal: X}` in flow form; `source_form` wants
-        # `{source: X}` rewritten by its author, not moved to block form.
+    if len(node.value) == 1 and node.value[0][0].value == "literal":
+        # `literal_form` keeps `{literal: X}` in flow form.
         return None
     text = document.lines[line]
     members = []

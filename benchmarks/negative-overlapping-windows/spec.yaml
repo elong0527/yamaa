@@ -20,7 +20,7 @@ intermediates:
   # matches with no rule to choose one, so the run stops.
   - id: AWIN
     dataset: AWINDOW
-    key: STUDYID
+    key: [STUDYID]
     between: {value: ADY, lower: AWLO, upper: AWHI}
 
 columns:

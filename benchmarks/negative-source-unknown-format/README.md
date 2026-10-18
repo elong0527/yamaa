@@ -25,8 +25,7 @@ is chosen by what the study declares rather than by inspection:
 
 ```yaml
 input:
-  DM:
-    path: input/dm.csv
+  DM: input/dm.csv
 ```
 
 A listing kept in some other format is converted before the study reads it,

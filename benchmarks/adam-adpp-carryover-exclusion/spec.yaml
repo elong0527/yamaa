@@ -95,8 +95,8 @@ columns:
     derivation:
       flag: "PREPCMAX IS NULL OR PREPCMAX <= 5"
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
 verifications:
   - row_count:

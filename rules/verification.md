@@ -18,8 +18,13 @@ infers its declared column and runs after that column's derivation and
 conversion. Dataset verifications run after all column work, output-key
 validation, and column verifications finish.
 
-Evidence: `schema-verification-log`, `rust/crates/yamaa-adapters/tests/fixtures/original_not_missing.json`.
+Evidence: `schema-verification-log`, `negative-single-verification`, `rust/crates/yamaa-adapters/tests/fixtures/original_not_missing.json`.
 Replaces: REQ-0371, REQ-0372.
+
+A column's `verifications` and the dataset's `verifications` are each a list
+of checks, and a single check is written as a one-item list. A check written
+on its own, not in a list, fails as `invalid_field_type` under
+[SCHEMA-12](reference/schema-language.md#schema-12).
 
 <a id="check-2"></a>
 
@@ -175,7 +180,9 @@ Replaces: REQ-0381.
 
 Write an unnamed check as `unique: [SITEID, SUBJID]`. The mapping form
 `unique: {columns: [SITEID, SUBJID], id: site-subject}` also admits an
-optional `severity`.
+optional `severity`, and it is written only to declare one of them: a mapping
+holding only `columns` restates the list and fails as `redundant_long_form`
+under [SCHEMA-15](reference/schema-language.md#schema-15).
 
 The redundant finding reports the verification's path, its columns and, in
 `stated_by`, `keys`. Equality is between sets: order and a repeated column do

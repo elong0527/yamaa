@@ -99,25 +99,37 @@ A dataset-qualified `source` reads through the implicit join, and a structured
 
 <a id="expr-5"></a>
 
-### EXPR-5. A bare string derivation or case result is a source reference, never a literal
+### EXPR-5. A bare string derivation or case result is only a source reference, never a literal or a call
 
-A `derivation`, `case_branch_class.then` or `case_otherwise_class.otherwise`
-written as a bare string is the source shorthand: it desugars to
-`{source: <string>}` before registry dispatch, and a validated document
-contains only that canonical form. The string is always a source reference,
-never a literal, so a bare `DM` with no variable `DM` fails validation rather
-than producing the literal `"DM"`. A `derivation` that is a non-string scalar
-is invalid, and the error names the dict form.
+A `derivation`, a `derivations` entry, `case_branch_class.then` or
+`case_otherwise_class.otherwise` written as a bare string is the source
+shorthand: it desugars to `{source: <string>}` before registry dispatch, and
+the string is always the variable copied. It is never a literal or an
+operation call, so `DM` with no variable `DM` and `to_date(DM.D)` both fail
+validation. A written `{source: <string>}` there restates the shorthand and
+fails. A non-string scalar derivation is invalid, and the error names the dict
+form.
 
-Evidence: `schema-shorthand`, `schema-expressions`, `rust/crates/yamaa-core/tests/schema_references.rs::registry_and_bare_derivation_diagnostics_preserve_paths_and_context`.
+Fails: `bare_derivation_scalar`, `redundant_long_form`.
+Evidence: `negative-derivation-call-form`, `schema-shorthand`, `schema-expressions`, `rust/crates/yamaa-core/tests/schema_references.rs::bare_derivation_strings_are_source_references_never_calls`, `rust/crates/yamaa-core/tests/schema_references.rs::registry_and_bare_derivation_diagnostics_preserve_paths_and_context`.
 Replaces: REQ-0319, REQ-0320.
 
 For a `derivation`, the handled-expression expansion of
 [SCHEMA-10](reference/schema-language.md#schema-10) then applies unchanged.
-`derivation: 5` must be written `{literal: 5}`. The specification reader uses
-YAML 1.2 core, so only `true`/`false` spellings, numbers and null parse as
-non-strings; quote a column reference that YAML would otherwise parse as a
-non-string.
+`derivation: 5` must be written `{literal: 5}`, and an operation is written as
+its mapping, such as `{to_date: {source: DM.BRTHDTC}}`. Text spelled like a
+call, such as `to_date(DM.BRTHDTC)`, is copied as written into the expanded
+`source`, where it names no variable and fails as `pattern_mismatch` under
+[SCHEMA-12](reference/schema-language.md#schema-12); a well-formed name that
+no input or column declares fails when the source binds. A written
+`{source: X}` with a string `X` fails as `redundant_long_form` under
+[SCHEMA-15](reference/schema-language.md#schema-15). The mapping form stays
+where it adds something: a structured `source:` binding
+([LOOKUP-1](lookup.md#lookup-1)), a `key` match value
+([LOOKUP-6](lookup.md#lookup-6)) or the `value` of a handled expression. The
+specification reader uses YAML 1.2 core, so only `true`/`false` spellings,
+numbers and null parse as non-strings; quote a column reference that YAML
+would otherwise parse as a non-string.
 
 <a id="expr-6"></a>
 
@@ -172,15 +184,18 @@ Replaces: REQ-1256, REQ-1257, REQ-1258.
 
 `flag` is the shorthand for the common one-branch `case` that returns a flag
 value. A bare predicate string is the condition with the default values:
-`true_value: "Y"`, and `false_value` and `missing` missing. The condition
-follows the three-valued logic [FORMULA-4](formulas.md#formula-4) gives
-`case`; unlike `case` with `otherwise`, `UNKNOWN` does not reach
-`false_value`.
+`true_value: "Y"`, and `false_value` and `missing` missing; the mapping form
+names `condition` beside the values it declares. The condition follows the
+three-valued logic [FORMULA-4](formulas.md#formula-4) gives `case`; unlike
+`case` with `otherwise`, `UNKNOWN` does not reach `false_value`.
 
 A `flag` that declares `false_value` without `missing` fails as
 `missing_value_required` at `missing`. A `flag` whose payload is neither a
 predicate string nor a mapping, whose mapping form lacks `condition` or names a
 non-predicate `condition`, or whose condition is not a valid predicate fails.
+A mapping that holds only `condition` restates the bare predicate and fails as
+`redundant_long_form` under
+[SCHEMA-15](reference/schema-language.md#schema-15).
 
 <a id="expr-9"></a>
 

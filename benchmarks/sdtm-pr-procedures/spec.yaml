@@ -16,8 +16,8 @@ columns:
     label: Domain Abbreviation
     derivation: {literal: PR}
     verifications:
-      allowed_values:
-        values: [PR]
+      - allowed_values:
+          values: [PR]
 
   - name: STUDYID
     type: str

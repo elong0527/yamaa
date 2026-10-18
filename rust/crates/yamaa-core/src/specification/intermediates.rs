@@ -719,25 +719,12 @@ impl Declarations {
                         )]));
                     }
                 }
-                let names = if matches!(d.nodes()[payload], N::Sequence(_)) {
-                    payload
-                } else {
-                    field(d, payload, "columns")?
-                };
-                let columns = sequence(d, names)?
+                let columns = sequence(d, field(d, payload, "columns")?)?
                     .iter()
                     .enumerate()
                     .map(|(index, &id)| {
-                        text(d, id).map(|name| {
-                            (
-                                name.into(),
-                                if names == payload {
-                                    format!("{check_path}[{index}]")
-                                } else {
-                                    format!("{check_path}.columns[{index}]")
-                                },
-                            )
-                        })
+                        text(d, id)
+                            .map(|name| (name.into(), format!("{check_path}.columns[{index}]")))
                     })
                     .collect::<Result<_, _>>()?;
                 unique.push((check_path, columns, identity));
@@ -822,16 +809,11 @@ impl Declarations {
                 .field(id, "key")
                 .filter(|&id| !matches!(d.nodes()[id], N::Null))
             {
-                if !matches!(d.nodes()[key], N::Text(_) | N::Mapping(_) | N::Sequence(_)) {
+                if !matches!(d.nodes()[key], N::Mapping(_) | N::Sequence(_)) {
                     reject(extra, "intermediate_key", format!("{path}.key"));
                     continue;
                 }
-                if let N::Text(name) = &d.nodes()[key] {
-                    Some(vec![(
-                        name.clone(),
-                        match_values::Declaration::Variable(name.clone()),
-                    )])
-                } else if matches!(d.nodes()[key], N::Sequence(_)) {
+                if matches!(d.nodes()[key], N::Sequence(_)) {
                     let fields = sequence(d, key)?;
                     if fields.len() > crate::limits::Limits::KEYS {
                         return Err(PrepareError::limit(

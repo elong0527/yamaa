@@ -3,7 +3,7 @@ domain: ADPP
 keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
 input:
   PP: {path: input/pp.csv, types: {PPSTRESN: float}}
-  ADSL: {path: input/adsl.csv}
+  ADSL: input/adsl.csv
 
 output:
   path: adpp.csv

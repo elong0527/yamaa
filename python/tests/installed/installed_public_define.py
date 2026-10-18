@@ -339,7 +339,7 @@ class PublicDefine(unittest.TestCase):
                 elif case == "domain":
                     spec["domain"] = "XX"
                 elif case == "dynamic":
-                    first["derivations"]["LBTESTCD"] = {"source": "ODM.TestCode"}
+                    first["derivations"]["LBTESTCD"] = "ODM.TestCode"
                 elif case == "unknown":
                     effective["BOGUS"] = effective.pop("LBORRESU")
                 elif case == "output":

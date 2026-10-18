@@ -562,27 +562,34 @@ def test_a_long_block_scalar_at_the_end_is_left_to_its_author(
     assert remaining == ["line_width"]
 
 
-def test_literal_and_source_spellings(tmp_path: Path) -> None:
+def test_literal_spelling(tmp_path: Path) -> None:
     path = _spec(
         tmp_path,
         CANONICAL.replace(
-            "          then: {literal: null}\n        - otherwise: FIRSTDOSE.EXSTDTC\n",
-            "          then:\n            literal: null\n"
-            "        - otherwise: {source: FIRSTDOSE.EXSTDTC}\n",
-        ).replace(
-            "    derivation: DM.USUBJID\n",
-            "    derivation:\n      source: DM.USUBJID\n",
+            "          then: {literal: null}\n",
+            "          then:\n            literal: null\n",
         ),
     )
     findings = check_file(path, orders=ORDERS)
     assert [(item.name, item.spec_path) for item in findings] == [
-        ("source_form", "columns[1].derivation"),
         ("literal_form", "columns[2].derivation.case[0].then"),
-        ("source_form", "columns[2].derivation.case[1].otherwise"),
     ]
     # A spelling is corrected by its author, not by a fix.
     _, remaining = _fix(path)
-    assert remaining == ["source_form", "literal_form", "source_form"]
+    assert remaining == ["literal_form"]
+
+
+def test_a_source_mapping_is_left_to_the_language(tmp_path: Path) -> None:
+    # The language itself refuses {source: X} where the bare string is the
+    # shorthand, so the style check names no source spelling.
+    path = _spec(
+        tmp_path,
+        CANONICAL.replace(
+            "    derivation: DM.USUBJID\n",
+            "    derivation:\n      source: DM.USUBJID\n",
+        ),
+    )
+    assert _names(path) == []
 
 
 def test_literal_block_form_reports_any_value_shape(tmp_path: Path) -> None:
@@ -618,7 +625,7 @@ def test_literal_flow_form_on_following_line_is_not_reported(
     assert _names(path) == []
 
 
-def test_sources_outside_the_shorthand_positions_keep_the_mapping(
+def test_sources_with_more_than_a_variable_keep_the_mapping(
     tmp_path: Path,
 ) -> None:
     path = _spec(
@@ -634,16 +641,15 @@ def test_sources_outside_the_shorthand_positions_keep_the_mapping(
     assert _names(path) == []
 
 
-def test_literal_and_source_forms_need_a_single_key_mapping(
+def test_the_literal_form_needs_a_single_key_mapping(
     tmp_path: Path,
 ) -> None:
-    # `literal_form` and `source_form` name the single-key mappings {literal: X} and
-    # {source: X}: a block mapping with another key beside literal/source
-    # is a different value and stays silent, and an empty mapping is
-    # neither form (and must not crash the check).
+    # `literal_form` names the single-key mapping {literal: X}: a block
+    # mapping with another key beside literal is a different value and stays
+    # silent, and an empty mapping is not the form (and must not crash the
+    # check).
     for derivation in (
         "    derivation:\n      literal: DM\n      note: x\n",
-        "    derivation:\n      source: DM.USUBJID\n      note: x\n",
         "    derivation: {}\n",
     ):
         path = _spec(
