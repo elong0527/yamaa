@@ -441,7 +441,9 @@ mod table {
                 let file = |short: Option<Vec<u8>>| {
                     let mut later: Vec<Pointer> =
                         short.into_iter().map(Pointer::metadata).collect();
-                    later.push(Pointer::metadata(layout.column_attrs(&[narrowed.clone()])));
+                    later.push(Pointer::metadata(
+                        layout.column_attrs(std::slice::from_ref(&narrowed)),
+                    ));
                     later.push(Pointer::raw_row(row.clone()));
                     dataset.file(&[
                         Page::new(MIX, dataset.metadata(), vec![row.clone()]),
