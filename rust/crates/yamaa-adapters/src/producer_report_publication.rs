@@ -3,6 +3,7 @@
 use crate::{
     file_producer_build::Provenance,
     file_resources::{Error as ResourceError, Resources},
+    issue_rows::Issue,
     producer_publication::{same_location, AdmissionFailure},
     producer_report::{NativeAttempt, NodeRunReport},
     report_storage::StoredReport,
@@ -430,6 +431,38 @@ impl Publication {
     }
     pub(crate) fn admission_failure(&self, diagnostic: bool) -> Option<&Admission> {
         self.targets_for(diagnostic).err()
+    }
+    /// Open the publisher of every request a save in this mode would enter,
+    /// without writing; the caller checks them against other results' files.
+    pub(crate) fn publishers(&self, diagnostic: bool) -> Result<Vec<Publisher>, Vec<Issue>> {
+        let targets =
+            self.targets_for(diagnostic)
+                .map_err(|admission| match &admission.failure {
+                    AdmissionFailure::Resource { error, .. } => {
+                        crate::file_application::resource_failure("output", error)
+                    }
+                    AdmissionFailure::Rejected(code) => {
+                        crate::file_application::rejected("output", code)
+                    }
+                    AdmissionFailure::Incomplete => {
+                        crate::file_application::rejected("output", "publication_incomplete")
+                    }
+                })?;
+        self.requests(diagnostic)
+            .map(|(index, request)| {
+                let target = targets
+                    .values
+                    .iter()
+                    .find(|target| target.request == index)
+                    .ok_or_else(|| {
+                        crate::file_application::rejected("output", "publication_incomplete")
+                    })?;
+                target
+                    .target
+                    .publisher(&request.path)
+                    .map_err(|error| crate::file_application::publication_failure(&error))
+            })
+            .collect()
     }
     pub(crate) fn prefix_report(
         &self,

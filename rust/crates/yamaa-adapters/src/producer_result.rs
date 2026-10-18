@@ -78,6 +78,54 @@ impl RootResult {
         self.issues = crate::issue_rows::collect(std::mem::take(&mut self.issues));
         outcome
     }
+    /// Whether a node that ran declares a report file.
+    pub fn declares_report(&self) -> bool {
+        self.reports.iter().any(|held| held.report.file().is_some())
+    }
+    /// Publish the report files of the nodes that ran, in node order, and no
+    /// primary artifact, as a failed graph saves, even when the graph
+    /// succeeded. `Err` means no node that ran declares a report file.
+    pub fn save_report(&mut self) -> Result<bool, crate::file_application::FailedBuild> {
+        if self.report_publication.is_none() || !self.declares_report() {
+            return Err(crate::file_application::FailedBuild);
+        }
+        let outcome = self.save_reports_mode(true, |publisher, path, bytes| {
+            publisher.publish(path, bytes)
+        });
+        self.issues = crate::issue_rows::collect(std::mem::take(&mut self.issues));
+        match outcome {
+            Err(crate::file_application::FailedBuild) => Ok(self
+                .report_save_attempt
+                .as_ref()
+                .is_some_and(|attempt| attempt.outcome.is_ok() && attempt.unwind.is_none())),
+            saved => saved,
+        }
+    }
+    /// Open the publisher of every file a save would write, the report files
+    /// alone with `report_only`, without writing any of them.
+    pub(crate) fn publishers(
+        &self,
+        report_only: bool,
+    ) -> Result<Vec<crate::resource_publication::Publisher>, Vec<Issue>> {
+        let diagnostic = report_only || self.output.is_none();
+        if let Some(publication) = &self.report_publication {
+            if diagnostic && !self.declares_report() {
+                return Ok(Vec::new());
+            }
+            return publication.publishers(diagnostic);
+        }
+        if diagnostic {
+            return Ok(Vec::new());
+        }
+        match (&self.publication, self.publication_refusal) {
+            (Some(publication), _) => publication.publishers(),
+            (None, Some(code)) => Err(crate::file_application::rejected("output", code)),
+            (None, None) => Err(crate::file_application::rejected(
+                "output",
+                "publication_incomplete",
+            )),
+        }
+    }
     fn save_actual(&mut self) -> Result<bool, crate::file_application::FailedBuild> {
         if self.report_publication.is_some() {
             return self.save_reports_with(|publisher, path, bytes| publisher.publish(path, bytes));
@@ -205,17 +253,34 @@ impl RootResult {
             &[u8],
         ) -> Result<(), crate::file_publication::Error>,
     ) -> Result<bool, crate::file_application::FailedBuild> {
+        self.save_reports_mode(false, publish)
+    }
+    /// `report_only` publishes in diagnostic mode, as a failed graph does.
+    fn save_reports_mode(
+        &mut self,
+        report_only: bool,
+        publish: impl FnMut(
+            &mut crate::resource_publication::Publisher,
+            &str,
+            &[u8],
+        ) -> Result<(), crate::file_publication::Error>,
+    ) -> Result<bool, crate::file_application::FailedBuild> {
         use crate::producer_report_publication::Failure;
         let failed = self.output.is_none();
-        if failed && !self.reports.iter().any(|held| held.report.file().is_some()) {
-            return Err(crate::file_application::FailedBuild);
+        let diagnostic = failed || report_only;
+        if diagnostic && !self.declares_report() {
+            return if failed {
+                Err(crate::file_application::FailedBuild)
+            } else {
+                Ok(false)
+            };
         }
         self.issues.truncate(self.base_issues);
         self.latest = None;
         self.save_attempt = None;
         self.report_save_attempt = None;
         let publication = self.report_publication.as_ref().expect("reported owner");
-        let count = publication.requests(failed).count();
+        let count = publication.requests(diagnostic).count();
 
         let report = (|| {
             // Own the complete report before any write. Every actual prefix is
@@ -224,12 +289,12 @@ impl RootResult {
             let mut value = publication.prefix_report(
                 &self.observations,
                 &self.reports,
-                failed,
+                diagnostic,
                 count,
                 count,
             )?;
             let locations = publication
-                .requests(failed)
+                .requests(diagnostic)
                 .map(|(key, request)| crate::report_publication::Location {
                     key,
                     node: request.node,
@@ -257,8 +322,10 @@ impl RootResult {
             }
         };
         let mut attempt = crate::producer_report_publication::Attempt::default();
-        publication.save_into(failed, &self.reports, &mut attempt, publish);
-        let (saved, code, request) = if let Some(failure) = publication.admission_failure(failed) {
+        publication.save_into(diagnostic, &self.reports, &mut attempt, publish);
+        let (saved, code, request) = if let Some(failure) =
+            publication.admission_failure(diagnostic)
+        {
             use crate::producer_publication::AdmissionFailure;
             match &failure.failure {
                 AdmissionFailure::Incomplete => (false, "publication_incomplete", failure.request),

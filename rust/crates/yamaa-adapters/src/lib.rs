@@ -104,6 +104,7 @@ mod producer_report_publication;
 pub mod producer_result;
 pub mod project_application;
 pub mod project_check;
+pub mod project_scope;
 
 mod project_diagnostic_projection;
 
