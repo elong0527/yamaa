@@ -287,6 +287,7 @@ pub(super) fn bind(
                 &|column| item.source_kind(secondary, column),
                 &|column| item.admits_donor_column(column),
                 &item.path,
+                &item.identifier,
                 dataset,
                 findings,
             )?;

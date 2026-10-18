@@ -99,7 +99,9 @@ impl Declaration {
             | "row_value"
             | "locf"
             | "shift"
-            | "duration_value" => {
+            | "duration_value"
+            | "dtc"
+            | "time_of_day" => {
                 let mut references = Vec::new();
                 derivations::references(d, value, project, &mut references, 0)?;
                 self_relations::template_references(d, value, templates, &mut references, 0)?;

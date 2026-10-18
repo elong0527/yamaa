@@ -17,6 +17,7 @@ mod joined;
 mod key_grain;
 mod lookup;
 mod mapping_cut;
+mod matching;
 mod numeric;
 mod odm;
 mod ordering;
@@ -239,15 +240,13 @@ pub enum ExecutionError<E> {
         matched_key: Vec<(String, Value)>,
         identity: Option<RowIdentity>,
     },
+    /// A lookup found no record under `require_match` (LOOKUP-24).
     UnmatchedKey {
         path: String,
         dataset: String,
         intermediate: String,
         matched_key: Vec<(String, Value)>,
         identity: Option<RowIdentity>,
-        /// A read through an implicit join failed, rather than a named
-        /// intermediate.
-        implicit_join: bool,
     },
     SecondaryCell {
         path: String,
@@ -465,6 +464,7 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
     }
     if let Expression::JoinedSource {
         read,
+        range,
         filter,
         selection,
         absence,
@@ -473,6 +473,7 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
         return joined::read_options(
             table,
             read,
+            range.as_ref(),
             filter.as_ref(),
             selection.as_ref(),
             absence.as_ref().map_or(
@@ -484,6 +485,39 @@ fn evaluate_raw_retained<T: TableAccess + ?Sized>(
             plan,
             row,
             state,
+        );
+    }
+    if let Expression::SourceLookup {
+        lookup: bound,
+        range,
+        filter,
+        selection,
+        absence,
+    } = &assignment.expression
+    {
+        let range = lookup::range_value(
+            range.as_ref(),
+            table,
+            candidate,
+            plan,
+            row,
+            assignment,
+            state,
+        )?;
+        return lookup::read_source(
+            state.secondary[bound.source],
+            bound,
+            range,
+            filter.as_ref(),
+            selection.as_ref(),
+            absence.as_ref(),
+            &lookup::Context {
+                assignment,
+                candidate,
+                plan,
+                row,
+            },
+            state.handlers,
         );
     }
     if let Expression::Intermediate { index, column } = assignment.expression {
@@ -1451,6 +1485,7 @@ impl DatasetPlan {
             let record = match &verification.check {
                 Check::NotMissing
                 | Check::Mandatory(_)
+                | Check::DataType { .. }
                 | Check::AllowedValues(_)
                 | Check::Codelist { .. }
                 | Check::ValueCodelists { .. }
@@ -1632,7 +1667,7 @@ impl DatasetPlan {
                 if group.checks.iter().any(|verification| {
                     matches!(&verification.check, Check::ValueCodelists { discriminator, .. }
                         if !completed[*discriminator]) || matches!(&verification.check, Check::Inventory { scope: Some(scope), .. } if !completed[scope.discriminator]) || matches!(&verification.check, Check::ValueMaxLength { discriminator, .. } if !completed[*discriminator])
-                        || matches!(&verification.check, Check::Mandatory(Some(scope)) if !completed[scope.discriminator])
+                        || matches!(&verification.check, Check::Mandatory(Some(scope)) | Check::DataType { scope: Some(scope), .. } if !completed[scope.discriminator])
                 }) {
                     return Ok(());
                 }
@@ -1655,6 +1690,7 @@ impl DatasetPlan {
                         }
                         Check::NotMissing
                         | Check::Mandatory(_)
+                        | Check::DataType { .. }
                         | Check::AllowedValues(_)
                         | Check::Codelist { .. }
                         | Check::ValueCodelists { .. }
@@ -1712,9 +1748,13 @@ impl DatasetPlan {
                                                 let matches = matches!(&candidate.values[*discriminator], Value::Str(code) if codes.contains(code));
                                                 matches == *include
                                             },
-                                            (Check::Mandatory(Some(scope)), _) => {
-                                                scope.selects(&candidate.values)
-                                            }
+                                            (
+                                                Check::Mandatory(Some(scope))
+                                                | Check::DataType {
+                                                    scope: Some(scope), ..
+                                                },
+                                                _,
+                                            ) => scope.selects(&candidate.values),
                                             _ => true,
                                         };
                                         selected.then_some(index)
@@ -2157,25 +2197,9 @@ fn evaluate_leaf<T: TableAccess + ?Sized>(
         Expression::FirstAvailable(_) | Expression::SourceBinding { .. } => {
             unreachable!("source recursion is handled above")
         }
-        Expression::SourceLookup {
-            lookup: bound,
-            filter,
-            selection,
-            absence,
-        } => lookup::read_source(
-            secondary[bound.source],
-            bound,
-            filter.as_ref(),
-            selection.as_ref(),
-            absence.as_ref(),
-            &lookup::Context {
-                assignment,
-                candidate,
-                plan,
-                row,
-            },
-            handlers,
-        )?,
+        Expression::SourceLookup { .. } => {
+            unreachable!("implicit joins execute through run state")
+        }
         Expression::Collect { .. } => {
             key_grain::collect(table, assignment, candidate, plan, row, handlers)?
         }

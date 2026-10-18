@@ -322,6 +322,7 @@ mod diagnostics {
             reached.extend(binding::lookup_reached());
             reached.extend(binding::source_filter_reached());
             reached.extend(binding::source_match_reached());
+            reached.extend(binding::source_range_reached());
             reached.extend(binding::implicit_source_reached());
             reached.extend(binding::verification_reached());
             reached.extend(binding::verification_declarations_reached());
@@ -395,6 +396,20 @@ mod diagnostics {
                     "length_failed",
                     "REQ-0378",
                 ),
+                (
+                    yamaa_core::dataset::Check::DataType {
+                        form: yamaa_core::iso8601::Form::Date,
+                        scope: None,
+                    },
+                    vec![
+                        Value::Str("2025-03-04".into()),
+                        Value::Str("2025-03".into()),
+                        Value::Missing,
+                    ],
+                    vec![1],
+                    "data_type_failed",
+                    "SUB-26",
+                ),
             ] {
                 let rows = yamaa_core::dataset_checks::column_offenders(&check, &values);
                 assert_eq!(rows, offending);
@@ -423,6 +438,12 @@ mod diagnostics {
                     assert_eq!(
                         diagnostic.context["max"],
                         JsonValue::Number(("2").parse().expect("canonical integer"))
+                    );
+                }
+                if condition == "data_type_failed" {
+                    assert_eq!(
+                        diagnostic.context["data_type"],
+                        JsonValue::String("date".into())
                     );
                 }
                 assert!(yamaa_core::dataset_checks::column_diagnostic(

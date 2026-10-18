@@ -152,7 +152,7 @@ fn mapping_source_selection_without_its_pair_is_rejected() {
             yamaa_adapters::json!([{
                 "phase": "validation",
                 "condition": "unpaired_fields",
-                "requirement": "REQ-0119",
+                "requirement": "LOOKUP-10",
                 "spec_paths": ["columns.SEX.derivation.mapping.source"],
                 "context": {
                     "operation": "source",

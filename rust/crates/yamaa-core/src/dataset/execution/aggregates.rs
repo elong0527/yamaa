@@ -157,18 +157,16 @@ fn select<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?Sized>(
     row: usize,
     state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<SelectedRelation, Box<ExecutionError<T::Error>>> {
-    let capacity = if matches!(bound.relation(), AggregateRelation::CurrentGroup) {
-        candidate.members.len()
-    } else {
-        donor.row_count()
+    let reserve = |capacity: usize| {
+        let mut members = Vec::new();
+        members
+            .try_reserve_exact(capacity)
+            .map_err(|_| Box::new(ExecutionError::Allocation))?;
+        Ok::<_, Box<ExecutionError<T::Error>>>(members)
     };
-
-    let mut members = Vec::new();
-    members
-        .try_reserve_exact(capacity)
-        .map_err(|_| Box::new(ExecutionError::Allocation))?;
     match bound.relation() {
         AggregateRelation::CurrentGroup => {
+            let mut members = reserve(candidate.members.len())?;
             for &source_row in &candidate.members {
                 if filter(donor, bound, source_row)? {
                     members.push(source_row);
@@ -180,6 +178,7 @@ fn select<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?Sized>(
             })
         }
         AggregateRelation::Output { group_by } => {
+            let mut members = reserve(donor.row_count())?;
             let mut first = None;
             for source_row in 0..donor.row_count() {
                 let mut matches = true;
@@ -214,7 +213,8 @@ fn select<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?Sized>(
                 None
             };
             // Aggregate match values are completed before the right side is
-            // selected. Its predicate visits only matched donor records.
+            // matched, and its filter narrows only matched records
+            // (LOOKUP-25).
             let values = match current {
                 Some(current) => intermediates::match_values::evaluate(
                     request, &current, candidate, plan, row, primary, state,
@@ -223,12 +223,6 @@ fn select<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?Sized>(
                     request, candidate, plan, row, primary, state,
                 )?,
             };
-            if values.iter().any(|(_, value)| *value == Value::Missing) {
-                return Ok(SelectedRelation {
-                    members,
-                    representative: None,
-                });
-            }
             let range_value = bound
                 .range()
                 .map(|range| {
@@ -250,58 +244,72 @@ fn select<T: TableAccess + ?Sized, P: TableAccess<Error = T::Error> + ?Sized>(
                     )
                 })
                 .transpose()?;
-            let mut first = None;
-            for source_row in 0..donor.row_count() {
-                let mut matches = true;
-                for (column, expected) in &values {
-                    if crate::value::compare_present_refs(
-                        cell(donor, bound, coordinate, source_row, *column)?,
-                        ValueRef::from(expected),
-                    ) != Ok(std::cmp::Ordering::Equal)
-                    {
-                        matches = false;
-                        break;
-                    }
-                }
-                if matches {
-                    first.get_or_insert(source_row);
-                    if filter(donor, bound, source_row)?
-                        && narrow(bound, range_value.as_ref(), donor, coordinate, source_row)?
-                    {
-                        members.push(source_row);
-                    }
-                }
+            let probe_keys = values
+                .iter()
+                .map(|(column, value)| (*column, ValueRef::from(value)))
+                .collect::<Vec<_>>();
+            let kinds = values
+                .iter()
+                .map(|(column, _)| {
+                    donor
+                        .schema()
+                        .columns()
+                        .get(*column)
+                        .map(|field| field.kind.into())
+                })
+                .collect::<Vec<_>>();
+            let probe = matching::Probe {
+                keys: &probe_keys,
+                kinds: &kinds,
+                range: bound.range().zip(range_value.as_ref().map(ValueRef::from)),
+            };
+            if probe.incomplete() {
+                return Ok(SelectedRelation {
+                    members: Vec::new(),
+                    representative: None,
+                });
             }
+            let found = matching::candidates(
+                0..donor.row_count(),
+                0,
+                &probe,
+                |source_row, column| cell(donor, bound, coordinate, source_row, column),
+                |source_row| filter(donor, bound, source_row),
+            )
+            .map_err(|refusal| match refusal {
+                matching::Refusal::Failed(error) => error,
+                matching::Refusal::Key {
+                    index,
+                    current,
+                    donor: record,
+                } => {
+                    let column = values[index].0;
+                    let key = keys
+                        .iter()
+                        .find(|key| key.source_column == column)
+                        .expect("resolved key belongs to the admitted aggregate");
+                    Box::new(ExecutionError::ScalarDiagnostic(
+                        crate::diagnostic::lookup::key_type(
+                            &key.path,
+                            crate::diagnostic::lookup::Owner::Unnamed,
+                            &matching::key_source(key, &donor.schema().columns()[column].name),
+                            crate::result_type::ResultType::known(current),
+                            crate::result_type::ResultType::known(record),
+                        ),
+                    ))
+                }
+                matching::Refusal::Range(types) => Box::new(ExecutionError::ScalarDiagnostic(
+                    types.diagnostic_for(bound.range().map_or("", |range| range.path()), None),
+                )),
+            })?;
+            // Grouping columns are key columns: the first record whose keys
+            // match carries their values (FORMULA-22).
             Ok(SelectedRelation {
-                members,
-                representative: first,
+                members: found.rows,
+                representative: found.first_key_match,
             })
         }
     }
-}
-
-fn narrow<T: TableAccess + ?Sized>(
-    bound: &BoundAggregate,
-    value: Option<&Value>,
-    donor: &T,
-    coordinate: Coordinate,
-    source_row: usize,
-) -> Result<bool, Box<ExecutionError<T::Error>>> {
-    use crate::dataset::RelationRangeFailure;
-    let Some(range) = bound.range() else {
-        return Ok(true);
-    };
-    range
-        .allows(
-            ValueRef::from(value.expect("bound range value")),
-            |column| cell(donor, bound, coordinate, source_row, column),
-        )
-        .map_err(|error| match error {
-            RelationRangeFailure::Access(error) => error,
-            RelationRangeFailure::Incomparable(types) => Box::new(
-                ExecutionError::ScalarDiagnostic(types.diagnostic_for(range.path(), None)),
-            ),
-        })
 }
 
 /// Read a relation record's field; the arithmetic over reductions reads the

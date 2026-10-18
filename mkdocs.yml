@@ -70,10 +70,10 @@ markdown_extensions:
   - md_in_html
   # Content tabs (`=== "R"`) need superfences, which nests code blocks in a
   # tab, and the alternate tab markup, the only one Material styles.
-  # Superfences highlights code with Pygments unless told not to; keep code
-  # blocks plain, as MkDocs' default fenced_code rendered them.
+  # Highlight fenced code at build time; Material supplies token colors for
+  # both the light and dark palettes, including code nested inside tabs.
   - pymdownx.highlight:
-      use_pygments: false
+      use_pygments: true
   - pymdownx.superfences
   - pymdownx.tabbed:
       alternate_style: true

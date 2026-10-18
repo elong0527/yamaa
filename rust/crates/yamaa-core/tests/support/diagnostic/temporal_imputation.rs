@@ -253,5 +253,30 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         "columns.V.derivation.impute",
         vec![("operation", text("to_date")), ("value", text("2024-13"))],
     );
+    // An interval or duration names no single date, and its failure says so.
+    check(
+        operation(date)
+            .source_value(ValueRef::Str("2024-01-01/2024-01-10"))
+            .unwrap_err(),
+        "impute",
+        "interval_or_duration_text",
+        "TIME-13",
+        "columns.V.derivation.impute",
+        vec![
+            ("operation", text("impute")),
+            ("source", text("SRC.V")),
+            ("value", text("2024-01-01/2024-01-10")),
+        ],
+    );
+    check(
+        operation(K::ToDate)
+            .source_value(ValueRef::Str("P3D"))
+            .unwrap_err(),
+        "validation",
+        "interval_or_duration_text",
+        "TIME-2",
+        "columns.V.derivation.impute",
+        vec![("operation", text("to_date")), ("value", text("P3D"))],
+    );
     reached
 }

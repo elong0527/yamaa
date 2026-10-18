@@ -18,7 +18,7 @@ impl ReferenceCause {
         match self {
             Self::Selection => C::LookupSelectionReference,
             Self::DonorKey => C::LookupDonorKeyReference,
-            Self::OutputKey => C::LookupOutputKeyReference,
+            Self::OutputKey => C::LookupMatchValueReference,
             Self::Value => C::LookupValueReference,
         }
     }
@@ -85,9 +85,9 @@ impl LookupFinding {
         expected: crate::result_type::ResultType,
         actual: ColumnType,
     ) -> Self {
-        Self(crate::diagnostic::lookup_key_type(
+        Self(crate::diagnostic::lookup::key_type(
             path,
-            intermediate,
+            crate::diagnostic::lookup::Owner::Intermediate(intermediate),
             source,
             expected,
             actual.into(),

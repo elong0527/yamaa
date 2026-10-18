@@ -239,7 +239,15 @@ pub(super) fn collect_bound<T: TableAccess + ?Sized>(
     }
     if distinct.len() > 1 {
         if let Some(selection) = selection {
-            let chosen = select(table, path, &carrying, selection)?;
+            let chosen = matching::select(&carrying, selection, |source_row, column| {
+                table.cell(source_row, column).map_err(|error| {
+                    Box::new(ExecutionError::Cell {
+                        path: path.into(),
+                        source_row,
+                        error,
+                    })
+                })
+            })?;
 
             let value = table.cell(chosen, column).map_err(|error| {
                 Box::new(ExecutionError::Cell {
@@ -264,43 +272,4 @@ pub(super) fn collect_bound<T: TableAccess + ?Sized>(
         }));
     }
     Ok(first.map_or(Value::Missing, own))
-}
-
-/// Select a stable extremum without sorting or cloning donor payloads.
-fn select<T: TableAccess + ?Sized>(
-    table: &T,
-    path: &str,
-    carrying: &[usize],
-    selection: &SourceSelection,
-) -> Result<usize, Box<ExecutionError<T::Error>>> {
-    use std::cmp::Ordering;
-    let mut best = carrying[0];
-    for &row in &carrying[1..] {
-        let mut order = Ordering::Equal;
-        for term in &selection.order_by {
-            let read = |source_row| -> Result<ValueRef<'_>, Box<ExecutionError<T::Error>>> {
-                let value = table.cell(source_row, term.column).map_err(|error| {
-                    Box::new(ExecutionError::Cell {
-                        path: path.into(),
-                        source_row,
-                        error,
-                    })
-                })?;
-                Ok(value)
-            };
-            let left = read(row)?;
-            let right = read(best)?;
-            order = windows::compare(left, right, term);
-            if order != Ordering::Equal {
-                break;
-            }
-        }
-        order = order.then_with(|| row.cmp(&best));
-        if (selection.keep == Keep::First && order == Ordering::Less)
-            || (selection.keep == Keep::Last && order == Ordering::Greater)
-        {
-            best = row;
-        }
-    }
-    Ok(best)
 }

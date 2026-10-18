@@ -53,8 +53,8 @@ jobs:
 
   graph:
     # Rust 1.90 is the workspace rust-version that both graphs resolve
-    # against. They build with the pinned toolchain; the CI workflow checks
-    # the minimum toolchain. Branch rulesets require these check names, so
+    # against. They build with the pinned toolchain; Release compatibility
+    # checks the minimum toolchain. Branch rulesets require these names, so
     # moving the pin leaves them unchanged.
     name: ${{ matrix.graph }} (Python ${{ matrix.python }}, Rust 1.90, R 4.6.1)
     runs-on: ubuntu-24.04

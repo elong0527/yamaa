@@ -67,6 +67,30 @@ pub(crate) fn reached() -> BTreeSet<C> {
             "invalid_duration_text",
             "REQ-1301",
         ),
+        (
+            K::DateText { depth: 2 },
+            vec![Value::Str("2030".into()), Value::float(1.0)],
+            C::DateTextInput,
+            "validation",
+            "incompatible_input_type",
+            "TIME-19",
+        ),
+        (
+            K::DateText { depth: 2 },
+            vec![Value::Str("2030".into()), Value::Str("13".into())],
+            C::DateTextInvalid,
+            "impute",
+            "invalid_date_text",
+            "TIME-19",
+        ),
+        (
+            K::TimeOfDay,
+            vec![Value::Str("08:30".into())],
+            C::TimeOfDayInput,
+            "validation",
+            "incompatible_input_type",
+            "TIME-20",
+        ),
     ] {
         let operation = Temporal::new(
             kind,
