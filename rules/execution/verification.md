@@ -373,7 +373,10 @@ report bytes.
 
 **REQ-1174.** `NAME` of a check is its registered name under
 [REQ-0371](verification.md#req-0371), and a column check's `TARGET` is the
-column it infers under [REQ-0372](verification.md#req-0372). A handler's
+column it infers under [REQ-0372](verification.md#req-0372). A check's `RULE`
+is the requirement its condition cites, the condition the check reports when
+it is violated, and is the same whether the check held or was violated;
+`CONDITION` names that condition only on a violated check. A handler's
 `TARGET` is the output column whose derivation declares it, missing for a named
 intermediate's own derivations and match keys. A handler answers the condition
 its operation raises without it, and its `RULE` is the requirement that
@@ -410,13 +413,23 @@ A check's `COUNT` and `TOTAL` count the unit the check itself counts:
 - groups for a check that partitions the artifact, where an ungrouped
   `row_count` is the one group [REQ-0385](verification.md#req-0385) bounds.
 
-`COUNT` is therefore never greater than `TOTAL`, and is `0` exactly when
-`OUTCOME` is `held`. A held check leaves `CONDITION` and `KEYS` missing and
-`DETAILS` `{}`. A violated one carries the condition its failure reports,
-`KEYS` with the complete ordered sequence of offending keys or groups rather
-than the bounded sample an error report may show, and `DETAILS` with that
-failure's remaining context. For grouped `row_count`, `DETAILS.counts` is the
-complete sequence of observed counts aligned with those groups.
+A row-wise check's `TOTAL` is every output row it evaluated, a row whose
+value is missing included even where the missing value passes the check under
+[REQ-0375](verification.md#req-0375), and its `COUNT` is the rows that offend
+it. `COUNT` is therefore never greater than `TOTAL`, and is `0` exactly when
+`OUTCOME` is `held`. A held check leaves `KEYS` missing and `DETAILS` `{}`. A
+violated one carries `KEYS` with the complete ordered sequence of offending
+keys or groups rather than the bounded sample an error report may show, and
+`DETAILS` with that failure's remaining context.
+
+A violated `row_count` without `group_by` has `KEYS` `[{}]` under
+[REQ-0394](verification.md#req-0394) and `DETAILS` `{"count": <n>}`, with
+`"denominator": <d>` added when the check declares a fraction bound: `<n>` is
+the rows its `filter` admits and `<d>` every row of the artifact, as
+[REQ-0385](verification.md#req-0385) divides them. Only a grouped `row_count`
+uses `counts`: its `DETAILS.counts` is the complete sequence of observed counts
+aligned with the offending groups in `KEYS`, and `DETAILS.denominators`,
+present under a fraction bound, holds the rows of each of those groups.
 
 <a id="req-0394"></a>
 
@@ -431,8 +444,8 @@ complete sequence of observed counts aligned with those groups.
 
 A scalar above `U+FFFF` is its JSON surrogate-pair escape. `KEYS` is an array
 holding one object per offending row, its output keys by name, or per
-offending group, its grouping columns by name; a dataset-level `row_count` has
-the one empty group `[{}]`. Empty remaining context is `{}`.
+offending group, its grouping columns by name; an ungrouped `row_count` has the
+one empty group `[{}]`. Empty remaining context is `{}`.
 
 ### Report verification
 
