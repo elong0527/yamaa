@@ -321,7 +321,10 @@ session that runs them:
 - before the solvers run, checks that its Python, the `python3` that
   `grade` reruns scripts with, provides every package the track's system
   prompt lists and installs any that are missing, so no solver or rerun is
-  failed by the session's own environment;
+  failed by the session's own environment. Packages installed this way
+  belong to the session only: they never make a solver's program
+  eligible as a reference, which the commit step checks in the project's
+  locked environment;
 - runs at least two independent solver attempts per candidate, in
   separate folder sets: two models where the agent tool allows a choice,
   and where it does not, two fresh sessions, with the round's report
@@ -346,7 +349,14 @@ session that runs them:
 - **Commit.** Review each passing candidate against sections 4 and 5, take
   a passing solver's program per language as its reference, and write
   the conventions prompt the same way (`--tier conventions --prompts
-  <prompts>`). Name the jobs or workspaces in the pull request.
+  <prompts>`). Name the jobs or workspaces in the pull request. A program
+  becomes a reference only if it also reproduces the golden in the
+  project's locked environment, the environment the finishing checks and
+  Harbor's oracle run in, so rerun it there before committing it. A
+  program that passes only in the session's parity environment is not a
+  reference: take another passing solver's program that runs in the
+  locked environment, or keep the reference already committed for that
+  benchmark and say so in the pull request.
 
 ## Checks to run before finishing
 
