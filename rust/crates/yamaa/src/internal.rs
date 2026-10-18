@@ -390,11 +390,19 @@ pub(crate) enum BuildOutcome {
     Unsupported {
         issues: Vec<yamaa_adapters::issue_rows::Issue>,
     },
+    /// A project-run specification that did not build: a project finding
+    /// failed it, or a producer it reads failed or did not run.
+    Refused {
+        issues: Vec<yamaa_adapters::issue_rows::Issue>,
+    },
 }
 
 struct EngineRuntime<'a> {
     shared: &'a EngineShared,
     specification: &'a str,
+    /// Artifacts a project run already built; their presence selects the
+    /// saved-link producer route for this one specification.
+    held: Option<Arc<yamaa_adapters::file_producer_build::HeldArtifacts>>,
 }
 
 impl yamaa_adapters::file_application::RuntimePort for EngineRuntime<'_> {
@@ -403,6 +411,14 @@ impl yamaa_adapters::file_application::RuntimePort for EngineRuntime<'_> {
 
     fn resolver(&self) -> Option<Arc<dyn yamaa_adapters::host_resources::Resolver>> {
         resolver_bridge(self.shared)
+    }
+
+    fn producers(&self) -> yamaa_adapters::file_workflow::Producers {
+        if self.held.is_some() {
+            yamaa_adapters::file_workflow::Producers::Saved
+        } else {
+            yamaa_adapters::file_workflow::Producers::Built
+        }
     }
 
     fn plain(
@@ -470,6 +486,9 @@ impl yamaa_adapters::file_application::RuntimePort for EngineRuntime<'_> {
             });
         };
         let mut build = graph.into_build();
+        if let Some(held) = &self.held {
+            build.hold(Arc::clone(held));
+        }
         let provenance = Arc::clone(build.provenance());
         let lock_bytes = provenance
             .environment()
@@ -535,12 +554,16 @@ pub(crate) fn run_check(
     )
 }
 
+/// Build one specification. `held` selects the project-run route: producer
+/// links are not built, and each reads the held artifact of a producer the
+/// run already built, or the saved file its path names.
 pub(crate) fn run_build(
     shared: &EngineShared,
     specification: &str,
     environment: Option<&str>,
     token: &CancellationToken,
     measurements: &Arc<yamaa_adapters::application_measurements::Measurements>,
+    held: Option<Arc<yamaa_adapters::file_producer_build::HeldArtifacts>>,
 ) -> Result<BuildOutcome, Error> {
     if token.is_cancelled() {
         return Err(Error::Cancelled);
@@ -555,6 +578,7 @@ pub(crate) fn run_build(
         runtime: EngineRuntime {
             shared,
             specification,
+            held,
         },
     };
     match yamaa_core::domain_entry::domain(
@@ -587,27 +611,30 @@ pub(crate) fn outcome_accepted(outcome: &BuildOutcome) -> bool {
             .result
             .as_ref()
             .is_ok_and(|root| root.output().is_some()),
-        BuildOutcome::SelectionFailed { .. } | BuildOutcome::Unsupported { .. } => false,
+        BuildOutcome::SelectionFailed { .. }
+        | BuildOutcome::Unsupported { .. }
+        | BuildOutcome::Refused { .. } => false,
+    }
+}
+
+/// The issue rows of one outcome, live from its current state.
+pub(crate) fn outcome_issues(outcome: &BuildOutcome) -> Vec<yamaa_adapters::issue_rows::Issue> {
+    match outcome {
+        BuildOutcome::Plain { result } | BuildOutcome::Project { result, .. } => match result {
+            Ok(domain) => domain.issues(),
+            Err(issues) => issues.clone(),
+        },
+        BuildOutcome::Producer { projection, .. } => match &projection.result {
+            Ok(root) => root.issues().to_vec(),
+            Err(refusal) => refusal.issues(),
+        },
+        BuildOutcome::SelectionFailed { issues, .. }
+        | BuildOutcome::Unsupported { issues }
+        | BuildOutcome::Refused { issues } => issues.clone(),
     }
 }
 
 /// Build the public report for one outcome, live from its current state.
 pub(crate) fn outcome_report(outcome: &BuildOutcome) -> Report {
-    match outcome {
-        BuildOutcome::Plain { result } => match result {
-            Ok(domain) => Report::from_issues(&domain.issues()),
-            Err(issues) => Report::from_issues(issues),
-        },
-        BuildOutcome::Project { result, .. } => match result {
-            Ok(domain) => Report::from_issues(&domain.issues()),
-            Err(issues) => Report::from_issues(issues),
-        },
-        BuildOutcome::Producer { projection, .. } => match &projection.result {
-            Ok(root) => Report::from_issues(root.issues()),
-            Err(refusal) => Report::from_issues(&refusal.issues()),
-        },
-        BuildOutcome::SelectionFailed { issues, .. } | BuildOutcome::Unsupported { issues } => {
-            Report::from_issues(issues)
-        }
-    }
+    Report::from_issues(&outcome_issues(outcome))
 }

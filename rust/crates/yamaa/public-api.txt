@@ -65,6 +65,7 @@ yamaa::Parameter: pub use yamaa::functions::Parameter
 yamaa::Phase: pub use yamaa::observe::Phase
 yamaa::Progress: pub use yamaa::observe::Progress
 yamaa::ProjectFunctions: pub use yamaa::functions::ProjectFunctions
+yamaa::ProjectRun: pub use yamaa::api::ProjectRun
 yamaa::RecordBatch: pub use yamaa::table::RecordBatch
 yamaa::Refusal: pub use yamaa::observe::Refusal
 yamaa::RenvLock: pub use yamaa::functions::RenvLock
@@ -90,12 +91,18 @@ yamaa::SourceBytes: pub use yamaa::engine::SourceBytes
 yamaa::SourceSpan: pub use yamaa::diagnostic::SourceSpan
 yamaa::StringArray: pub use yamaa::table::StringArray
 yamaa::StringViewArray: pub use yamaa::table::StringViewArray
+yamaa::Submission: pub use yamaa::api::Submission
 yamaa::Table: pub use yamaa::table::Table
 yamaa::TableError: pub use yamaa::error::TableError
 yamaa::TimeUnit: pub use yamaa::table::TimeUnit
 yamaa::TimestampSecondArray: pub use yamaa::table::TimestampSecondArray
 yamaa::VERSION: pub const VERSION: &str
 yamaa::api::Engine: impl Engine
+yamaa::api::Engine: impl Engine
+yamaa::api::Engine::project_check: pub fn project_check(&self, project: &str, token: &CancellationToken) -> Table
+yamaa::api::Engine::project_run: pub fn project_run(&self, project: &str, section: Option<&str>, token: &CancellationToken) -> Result<ProjectRun, Error>
+yamaa::api::Engine::project_spec: pub fn project_spec(&self, project: &str, name: &str) -> Result<String, Failure>
+yamaa::api::Engine::project_submission: pub fn project_submission(&self, project: &str, section: Option<&str>, created: Option<&str>, installed: &str, token: &CancellationToken) -> Result<Submission, Error>
 yamaa::api::Engine::spec_check: pub fn spec_check(&self, specification: &str, project: Option<&str>, token: &CancellationToken) -> Table
 yamaa::api::Engine::spec_resolve: pub fn spec_resolve(&self, specification: &str, project: Option<&str>) -> Result<ContextValue, Failure>
 yamaa::api::Engine::spec_run: pub fn spec_run(&self, specification: &str, project: Option<&str>, token: &CancellationToken) -> Result<Run, Error>
@@ -105,6 +112,13 @@ yamaa::api::Failure: impl std::fmt::Display for Failure
 yamaa::api::Failure: pub struct Failure [derive(Clone, Debug)] [non_exhaustive]
 yamaa::api::Failure::issues: pub issues: Table
 yamaa::api::Failure::message: pub message: String
+yamaa::api::ProjectRun: impl ProjectRun
+yamaa::api::ProjectRun: pub struct ProjectRun
+yamaa::api::ProjectRun::get: pub fn get(&self, name: &str) -> Option<&Run>
+yamaa::api::ProjectRun::issues: pub fn issues(&self) -> Table
+yamaa::api::ProjectRun::names: pub fn names(&self) -> Vec<String>
+yamaa::api::ProjectRun::report: pub fn report(&self) -> Table
+yamaa::api::ProjectRun::save: pub fn save(&mut self) -> Result<(), Failure>
 yamaa::api::Run: impl Run
 yamaa::api::Run: pub struct Run
 yamaa::api::Run::build: pub fn build(&self) -> &Build
@@ -112,6 +126,10 @@ yamaa::api::Run::issues: pub fn issues(&self) -> Table
 yamaa::api::Run::output: pub fn output(&self) -> Option<&Table>
 yamaa::api::Run::report: pub fn report(&self) -> Option<&Table>
 yamaa::api::Run::save: pub fn save(&mut self) -> Result<(), Failure>
+yamaa::api::Submission: impl Submission
+yamaa::api::Submission: pub struct Submission
+yamaa::api::Submission::issues: pub fn issues(&self) -> Table
+yamaa::api::Submission::save: pub fn save(&mut self) -> Result<(), Failure>
 yamaa::apply_scalar_operator: pub use yamaa::scalar::apply_scalar_operator
 yamaa::cancel::CancellationToken: impl CancellationToken
 yamaa::cancel::CancellationToken: pub struct CancellationToken [derive(Clone, Debug, Default)] [non_exhaustive]

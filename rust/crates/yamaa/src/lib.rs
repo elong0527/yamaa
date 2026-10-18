@@ -38,7 +38,7 @@ pub mod table;
 
 mod internal;
 
-pub use api::{Failure, Run};
+pub use api::{Failure, ProjectRun, Run, Submission};
 pub use cancel::CancellationToken;
 pub use diagnostic::{ContextValue, Diagnostic, DiagnosticContext, Report, Severity, SourceSpan};
 pub use engine::{
