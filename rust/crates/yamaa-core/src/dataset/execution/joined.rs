@@ -1,8 +1,13 @@
 //! Lazy implicit donor lookup shares missing, multiplicity and port evidence.
+use super::lookup::JoinSite;
 use super::*;
+/// A formula or operand read through the implicit join, answered at `site`
+/// when the join finds no record (LOOKUP-24).
+#[allow(clippy::too_many_arguments)]
 pub(super) fn read<T: TableAccess + ?Sized>(
     current: &T,
     joined: &crate::dataset::JoinedRead,
+    site: JoinSite<'_>,
     assignment: &Assignment,
     candidate: &Candidate,
     plan: &DatasetPlan,
@@ -10,7 +15,7 @@ pub(super) fn read<T: TableAccess + ?Sized>(
     state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
     read_options(
-        current, joined, None, None, assignment, candidate, plan, row, state,
+        current, joined, None, None, site, assignment, candidate, plan, row, state,
     )
 }
 #[allow(clippy::too_many_arguments)]
@@ -19,6 +24,7 @@ pub(super) fn read_options<T: TableAccess + ?Sized>(
     joined: &crate::dataset::JoinedRead,
     filter: Option<&crate::bound_expression::BoundPredicate>,
     selection: Option<&SourceSelection>,
+    site: JoinSite<'_>,
     assignment: &Assignment,
     candidate: &Candidate,
     plan: &DatasetPlan,
@@ -40,6 +46,7 @@ pub(super) fn read_options<T: TableAccess + ?Sized>(
         row,
         filter,
         selection,
+        site,
         state.handlers,
     )
 }

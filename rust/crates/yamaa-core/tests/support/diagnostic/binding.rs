@@ -729,6 +729,52 @@ pub(crate) fn source_filter_reached() -> BTreeSet<ConditionCode> {
     reached
 }
 
+/// `require_match` contradicts `absent`, and a source with no implicit join
+/// has no match to require (LOOKUP-24).
+pub(crate) fn source_match_reached() -> BTreeSet<ConditionCode> {
+    let mut reached = BTreeSet::new();
+    let null = || {
+        T::map(vec![(
+            "literal",
+            T::Scalar(yamaa_core::schema::DocumentNode::Null),
+        )])
+    };
+    for (options, condition, paths, values) in [
+        (
+            vec![("absent", null()), ("require_match", T::boolean(true))],
+            "conflicting_absence_policy",
+            vec![
+                "columns.VALUE.derivation.source.absent",
+                "columns.VALUE.derivation.source.require_match",
+            ],
+            vec![("variable", text("SRC.V"))],
+        ),
+        (
+            vec![("require_match", T::boolean(true))],
+            "prohibited_construct",
+            vec!["columns.VALUE.derivation.source.require_match"],
+            vec![("identifier", text("SRC.V"))],
+        ),
+    ] {
+        let mut fields = vec![("variable", T::text("SRC.V"))];
+        fields.extend(options);
+        let prepared = compile(
+            T::map(vec![("value", T::map(vec![("source", T::map(fields))]))]),
+            None,
+        );
+        let findings = failures(&prepared);
+        assert_eq!(findings.len(), 1);
+        reached.insert(check(
+            findings[0].diagnostics(&source()).unwrap().remove(0),
+            condition,
+            Some("LOOKUP-24"),
+            &paths,
+            values,
+        ));
+    }
+    reached
+}
+
 pub fn verification_reached() -> BTreeSet<ConditionCode> {
     let mut nodes = vec![];
     let assertion = T::map(vec![
@@ -1089,6 +1135,7 @@ pub(crate) fn intermediate_key_reached() -> BTreeSet<ConditionCode> {
             T::List(vec![T::map(vec![
                 ("id", T::text("P")),
                 ("dataset", T::text("DONOR")),
+                ("require_match", T::boolean(true)),
             ])]),
         ),
         (

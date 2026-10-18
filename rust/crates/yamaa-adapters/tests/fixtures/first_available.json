@@ -33,11 +33,23 @@
       "engine_version": "fixture-engine",
       "error": null,
       "example": "first-available-filtered_fallback",
-      "handler_counts": [],
+      "handler_counts": [
+        {
+          "count": 0,
+          "handler": "missing",
+          "spec_path": "columns.V.derivation.first_available.missing"
+        }
+      ],
       "nodes": [
         {
           "diagnostics": [],
-          "handler_counts": [],
+          "handler_counts": [
+            {
+              "count": 0,
+              "handler": "missing",
+              "spec_path": "columns.V.derivation.first_available.missing"
+            }
+          ],
           "outcome": "success",
           "specification": "spec.yaml",
           "unsupported": []
@@ -269,11 +281,23 @@
       "engine_version": "fixture-engine",
       "error": null,
       "example": "first-available-skip_later_conflict",
-      "handler_counts": [],
+      "handler_counts": [
+        {
+          "count": 0,
+          "handler": "missing",
+          "spec_path": "columns.V.derivation.first_available.missing"
+        }
+      ],
       "nodes": [
         {
           "diagnostics": [],
-          "handler_counts": [],
+          "handler_counts": [
+            {
+              "count": 0,
+              "handler": "missing",
+              "spec_path": "columns.V.derivation.first_available.missing"
+            }
+          ],
           "outcome": "success",
           "specification": "spec.yaml",
           "unsupported": []
@@ -505,11 +529,23 @@
       "engine_version": "fixture-engine",
       "error": null,
       "example": "first-available-empty_filter",
-      "handler_counts": [],
+      "handler_counts": [
+        {
+          "count": 3,
+          "handler": "missing",
+          "spec_path": "columns.V.derivation.first_available.missing"
+        }
+      ],
       "nodes": [
         {
           "diagnostics": [],
-          "handler_counts": [],
+          "handler_counts": [
+            {
+              "count": 3,
+              "handler": "missing",
+              "spec_path": "columns.V.derivation.first_available.missing"
+            }
+          ],
           "outcome": "success",
           "specification": "spec.yaml",
           "unsupported": []
@@ -741,11 +777,23 @@
       "engine_version": "fixture-engine",
       "error": null,
       "example": "first-available-null_filter",
-      "handler_counts": [],
+      "handler_counts": [
+        {
+          "count": 2,
+          "handler": "missing",
+          "spec_path": "columns.V.derivation.first_available.missing"
+        }
+      ],
       "nodes": [
         {
           "diagnostics": [],
-          "handler_counts": [],
+          "handler_counts": [
+            {
+              "count": 2,
+              "handler": "missing",
+              "spec_path": "columns.V.derivation.first_available.missing"
+            }
+          ],
           "outcome": "success",
           "specification": "spec.yaml",
           "unsupported": []
@@ -977,11 +1025,23 @@
       "engine_version": "fixture-engine",
       "error": null,
       "example": "first-available-empty_list",
-      "handler_counts": [],
+      "handler_counts": [
+        {
+          "count": 3,
+          "handler": "missing",
+          "spec_path": "columns.V.derivation.first_available.missing"
+        }
+      ],
       "nodes": [
         {
           "diagnostics": [],
-          "handler_counts": [],
+          "handler_counts": [
+            {
+              "count": 3,
+              "handler": "missing",
+              "spec_path": "columns.V.derivation.first_available.missing"
+            }
+          ],
           "outcome": "success",
           "specification": "spec.yaml",
           "unsupported": []
@@ -1213,11 +1273,23 @@
       "engine_version": "fixture-engine",
       "error": null,
       "example": "first-available-missing_list",
-      "handler_counts": [],
+      "handler_counts": [
+        {
+          "count": 3,
+          "handler": "missing",
+          "spec_path": "columns.V.derivation.first_available.missing"
+        }
+      ],
       "nodes": [
         {
           "diagnostics": [],
-          "handler_counts": [],
+          "handler_counts": [
+            {
+              "count": 3,
+              "handler": "missing",
+              "spec_path": "columns.V.derivation.first_available.missing"
+            }
+          ],
           "outcome": "success",
           "specification": "spec.yaml",
           "unsupported": []
@@ -1831,7 +1903,13 @@
       "engine_version": "fixture-engine",
       "error": null,
       "example": "first-available-multiple_first",
-      "handler_counts": [],
+      "handler_counts": [
+        {
+          "count": 0,
+          "handler": "missing",
+          "spec_path": "columns.V.derivation.first_available.missing"
+        }
+      ],
       "nodes": [
         {
           "diagnostics": [
@@ -1853,7 +1931,13 @@
               ]
             }
           ],
-          "handler_counts": [],
+          "handler_counts": [
+            {
+              "count": 0,
+              "handler": "missing",
+              "spec_path": "columns.V.derivation.first_available.missing"
+            }
+          ],
           "outcome": "failure",
           "specification": "spec.yaml",
           "unsupported": []
@@ -2037,7 +2121,13 @@
       "engine_version": "fixture-engine",
       "error": null,
       "example": "first-available-selected_unconvertible",
-      "handler_counts": [],
+      "handler_counts": [
+        {
+          "count": 0,
+          "handler": "missing",
+          "spec_path": "columns.V.derivation.first_available.missing"
+        }
+      ],
       "nodes": [
         {
           "diagnostics": [
@@ -2060,7 +2150,13 @@
               ]
             }
           ],
-          "handler_counts": [],
+          "handler_counts": [
+            {
+              "count": 0,
+              "handler": "missing",
+              "spec_path": "columns.V.derivation.first_available.missing"
+            }
+          ],
           "outcome": "failure",
           "specification": "spec.yaml",
           "unsupported": []
@@ -2244,7 +2340,13 @@
       "engine_version": "fixture-engine",
       "error": null,
       "example": "first-available-fallback_unconvertible",
-      "handler_counts": [],
+      "handler_counts": [
+        {
+          "count": 1,
+          "handler": "missing",
+          "spec_path": "columns.V.derivation.first_available.missing"
+        }
+      ],
       "nodes": [
         {
           "diagnostics": [
@@ -2267,7 +2369,13 @@
               ]
             }
           ],
-          "handler_counts": [],
+          "handler_counts": [
+            {
+              "count": 1,
+              "handler": "missing",
+              "spec_path": "columns.V.derivation.first_available.missing"
+            }
+          ],
           "outcome": "failure",
           "specification": "spec.yaml",
           "unsupported": []

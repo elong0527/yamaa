@@ -17,6 +17,7 @@ intermediates:
   - id: DOSING
     dataset: EX
     columns: [EXTRT, EXDOSE]
+    require_match: true
 
 columns:
   - name: STUDYID

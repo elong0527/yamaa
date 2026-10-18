@@ -211,23 +211,24 @@ does not read a window result, evaluated before the window pass.
 
 <a id="column-10"></a>
 
-### COLUMN-10. A local handler answers its condition with a literal or `{literal: null}`, and an omitted handler leaves it fatal
+### COLUMN-10. A local handler answers its condition with a literal, and an omitted handler gives missing for a missing single input or absent record and leaves every other condition fatal
 
-Each local handler applies at the site the table below lists and is
-substituted only when its condition occurs. Every handler value is a scalar
-literal, or `{literal: null}`, which answers with missing; handlers are never
-expressions and add no dependencies. Omitting an applicable handler field, or
-writing it as YAML null, leaves its condition fatal at every site. A condition
-that registers no handler is answered by its owning rule.
+Each local handler applies at the site the table below lists, only when its
+condition occurs, and substitutes a scalar literal or `{literal: null}`, never
+an expression. Omitted, or written as YAML null, a handler for the missing
+input of a single-input verb, a record a lookup does not find, an `UNKNOWN`
+flag condition or `first_available` sources all missing gives missing, counted
+as that handler. Every other condition fails without its handler, a missing
+`str_template` placeholder among them.
 
 Fails: `missing_input`, `unmapped_value`, `unmatched_pattern`.
-Evidence: `schema-handlers`, `negative-cut-missing-input`, `negative-mapping-unmapped-value`.
+Evidence: `schema-handlers`, `schema-missing-input-default`, `schema-lookup-absent-default`, `negative-mapping-unmapped-value`.
 Replaces: REQ-0334, REQ-0342, REQ-0343, REQ-0344, REQ-0360, REQ-0362, REQ-0364.
 
 These sites identify conditions within expression evaluation or result
 handling; the ordered derivation lifecycle is [COLUMN-8](#column-8) and
 [COLUMN-9](#column-9). Each handler uses a literal unless its behavior says
-otherwise.
+otherwise, and no handler adds a dependency.
 
 A handler's literal is a string, integer, float or Boolean, written bare. The
 missing value has one spelling, `{literal: null}`, the same as the literal
@@ -238,38 +239,51 @@ and `missing`, of `first_available`'s `missing` and of an inline `mapping`
 dictionary entry, and a `function` argument passes the missing value as
 `{literal: null}`.
 
-| Stage | Local declaration | Behavior |
-|---|---|---|
-| bind | `source.absent` | Absent source variable or ODM item |
-| join | `source.order_by` and `source.keep` | Choose one `source.filter` result |
-| join | `intermediates[].no_match` | The intermediate selects no record ([LOOKUP-13](lookup.md#lookup-13)) |
-| mapping | `missing` | Missing input |
-| mapping | `unmapped` | Non-missing value with no mapping |
-| cut | `missing` | Missing numeric input |
-| extract | `missing` | Missing string input |
-| extract | `no_match` | Non-missing string does not match |
-| template | `missing` | Any placeholder value is missing |
-| impute | `impute.invalid`, `precision.invalid` | Text that is not collected date text ([TIME-13](temporal.md#time-13)) |
-| impute | `duration_value.invalid` | Invalid fixed-length duration text ([TIME-17](temporal.md#time-17)) |
-| convert | `unconvertible` | Failed output conversion |
+The table states, for each handler, the stage that answers its condition, the
+condition, and what the condition gives when the handler is omitted.
 
-An implicit join that finds no record, for example, yields missing under
-[LOOKUP-1](lookup.md#lookup-1). An unhandled local absent, missing,
-mapping, or extraction condition fails. A handler field on an expression that
-does not register it is a schema failure. A handler literal incompatible with
-its result context fails, reporting both the handler and the original context.
+| Stage | Handler | Condition | Omitted |
+|---|---|---|---|
+| bind | `source.absent` | Absent source variable or ODM item | Fails |
+| join | `source.absent` | A read through the implicit join finds no record ([LOOKUP-24](lookup.md#lookup-24)) | Missing |
+| join | `source.order_by` and `source.keep` | Several `source.filter` results | Fails |
+| join | `intermediates[].no_match` | The intermediate selects no record ([LOOKUP-13](lookup.md#lookup-13)) | Missing |
+| mapping | `mapping.missing` | Missing input | Missing |
+| mapping | `mapping.unmapped` | Non-missing value with no mapping | Fails |
+| cut | `cut.missing` | Missing numeric input | Missing |
+| extract | `missing` of `str_extract`, `str_replace` and `str_case` | Missing string input | Missing |
+| extract | `str_extract.no_match` | Non-missing string does not match | Fails |
+| template | `str_template.missing` | Any placeholder value is missing | Fails |
+| derivation | `flag.missing` | The condition is `UNKNOWN` ([EXPR-8](expressions.md#expr-8)) | Missing |
+| derivation | `first_available.missing` | Every source is missing ([EXPR-9](expressions.md#expr-9)) | Missing |
+| impute | `impute.invalid`, `precision.invalid` | Text that is not collected date text ([TIME-13](temporal.md#time-13)) | Fails |
+| impute | `duration_value.invalid` | Invalid fixed-length duration text ([TIME-17](temporal.md#time-17)) | Fails |
+| convert | `unconvertible` | Failed output conversion | Fails |
+
+An omitted handler that gives missing is a default substitution: the value is
+the one `{literal: null}` gives, and it is counted under the handler's path as
+a declared substitution is ([COLUMN-14](#column-14)). `impute` and `precision`
+declare no `missing`: a missing source gives missing, counted at their
+`missing` path, unless `impute` declares `fallback`
+([TIME-13](temporal.md#time-13)). A read through an implicit join that is not
+a source binding declares no `absent` and takes its default
+([LOOKUP-24](lookup.md#lookup-24)). `require_match: true` on a named
+intermediate, a source binding or an input turns the absence answer into an
+`unmatched_key` failure. A handler field on an expression that does not
+register it is a schema failure. A handler literal incompatible with its result
+context fails, reporting both the handler and the original context.
 
 <a id="column-11"></a>
 
-### COLUMN-11. `absent` answers a variable that does not exist, and `missing` answers a missing input value
+### COLUMN-11. `absent` answers a variable or record that does not exist, and `missing` answers a missing input value
 
 `absent` on a `source` binding applies when the variable or ODM item does not
-exist in context, never when it exists and holds a missing value. `missing`
-applies when the named input value is missing, on every expression that
-declares it; where an operation has several inputs, such as a `str_template`
-with several placeholders, it fires when any input is missing. `invalid`,
-`unmapped` and `str_extract`'s `no_match` fire only when every input is
-present.
+exist in context, and when its implicit join finds no record; never when a
+variable or record exists and holds a missing value. `missing` applies when
+the named input value is missing, on every expression that declares it; where
+an operation has several inputs, such as a `str_template` with several
+placeholders, it fires when any input is missing. `invalid`, `unmapped` and
+`str_extract`'s `no_match` fire only when every input is present.
 
 Evidence: `rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.json`, `rust/crates/yamaa-adapters/tests/fixtures/original_mapping_cut.json`, `schema-handlers`.
 Replaces: REQ-0345, REQ-0346, REQ-0347, REQ-0348, REQ-0349, REQ-0350, REQ-0357.
@@ -277,7 +291,10 @@ Replaces: REQ-0345, REQ-0346, REQ-0347, REQ-0348, REQ-0349, REQ-0350, REQ-0357.
 On `mapping`, `missing` never answers a non-missing input with no dictionary
 entry; that is `unmapped`'s condition
 ([EXPR-11](expressions.md#expr-11)). An intermediate's `no_match` also
-answers a missing match value ([LOOKUP-13](lookup.md#lookup-13)).
+answers a missing match value ([LOOKUP-13](lookup.md#lookup-13)), as a source
+binding's `absent` answers one on its implicit join
+([LOOKUP-24](lookup.md#lookup-24)). Omitted, each of these handlers gives the
+default of [COLUMN-10](#column-10).
 
 The owning rule states which values an operation cannot use;
 [Dates and times](temporal.md) states them for the temporal operations on the
@@ -288,25 +305,24 @@ source to either gives missing without a handler
 ([TIME-13](temporal.md#time-13)).
 
 An aggregate declares no handler at all. A variable it names that does not
-exist is [Name binding](names.md)'s unresolved reference. A
-right side that reduces to no matching record is
-[Lookup and joins](lookup.md)'s absent match. A group whose records
-all hold missing values is neither condition;
-[Formulas](formulas.md) states what each reducer returns for
-such a group.
+exist is [Name binding](names.md)'s unresolved reference. A right side that
+reduces to no matching record yields missing, and no handler counts it. A
+group whose records all hold missing values is neither condition;
+[Formulas](formulas.md) states what each reducer returns for such a group.
 
 <a id="column-12"></a>
 
 ### COLUMN-12. A structured source carries its own handlers, and order_by with keep selects one of several records
 
-Under the `source` expression, only structured source binding carries
-handlers; the concise `source: DATASET.VARIABLE` form has none. A source's
+Under the `source` expression, only structured source binding declares
+handlers; the concise `source: DATASET.VARIABLE` form declares none and takes
+their defaults. A source's
 `order_by` and `keep` relax right-side uniqueness wherever one source reaches
 several records: its optional `filter` selects the eligible right-side
 records, the survivors sort by the `order_by` terms, `keep` retains the
 `first` or `last`,
 and right-side record order resolves remaining ties. An empty filtered result
-is not a handled condition: it is an absent match and yields missing.
+is an absent match, answered as [LOOKUP-24](lookup.md#lookup-24) states.
 
 Evidence: `schema-handlers`, `rust/crates/yamaa-adapters/tests/fixtures/source_selection.json`, `rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.json`.
 Replaces: REQ-0351, REQ-0352, REQ-0353, REQ-0354, REQ-0355, REQ-0365.
@@ -327,8 +343,9 @@ records and the records a key combination was derived from. Without `order_by`
 and `keep`, several matched records fail as `multiple_matches` under
 [LOOKUP-10](lookup.md#lookup-10), and disagreement among the records a
 key combination was derived from fails under [COLUMN-2](#column-2). The absent
-match follows [Lookup and joins](lookup.md). `source.keep` outside
-`first` or `last` is a schema failure.
+match follows [LOOKUP-24](lookup.md#lookup-24): `absent` answers it, missing
+by default, and `require_match: true` fails it. `source.keep` outside `first`
+or `last` is a schema failure.
 
 <a id="column-13"></a>
 
@@ -368,14 +385,28 @@ literal answers every value.
 
 <a id="column-14"></a>
 
-### COLUMN-14. Every handler path reports how many records it answered, zero included
+### COLUMN-14. Every handler path reports how many records it answered, default substitutions and zero included
 
-Each handler path's record count is reported. A handler firing zero times is
-reportable and is not an error. The count for a source's `order_by` and `keep`
-reports only records where more than one match survived the filter.
+Each handler path's record count is reported, counting the declared handler's
+substitutions and the default substitutions an omitted handler gives under the
+same path. A handler firing zero times is reportable and is not an error. The
+count for a source's `order_by` and `keep` reports only records where more
+than one match survived the filter.
 
-Evidence: `rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.json`, `rust/crates/yamaa-adapters/tests/fixtures/original_mapping_cut.json`, `rust/crates/yamaa-core/tests/execution_numeric_lifecycle.rs::accounting_retains_zero_declarations_and_prior_firings_on_failure`.
+Evidence: `rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.json`, `rust/crates/yamaa-adapters/tests/fixtures/original_mapping_cut.json`, `rust/crates/yamaa-adapters/tests/fixtures/flag_reference.json`, `rust/crates/yamaa-core/tests/execution_numeric_lifecycle.rs::accounting_retains_zero_declarations_and_prior_firings_on_failure`.
 Replaces: REQ-0356, REQ-0361.
+
+A default substitution is counted where the handler it stands for would be:
+at `<operation>.missing` for `mapping`, `cut`, `str_extract`, `str_replace`,
+`str_case`, `flag`, `first_available`, `impute` and `precision`; at
+`<path>.absent` for a read through an implicit join, at the source binding or
+operand that makes the read ([LOOKUP-24](lookup.md#lookup-24)); and at the
+reading column's `no_match` for a named intermediate
+([LOOKUP-14](lookup.md#lookup-14)). An operation registers its `missing` and
+`absent` paths before any row is read, so a run reports them even when they
+answer nothing; a read that requires a match registers none. A lookup read
+made while a predicate is evaluated is not a handler site: its absence gives
+missing, uncounted.
 
 ## Diagnostic citations
 

@@ -123,7 +123,11 @@ intermediate_class:
     - no_match:
         type: substitute_value
         required: false
-        description: Value returned when the lookup yields nothing; without it, yielding nothing fails (LOOKUP-13).
+        description: Value returned when the lookup yields nothing; without it, yielding nothing gives missing (LOOKUP-13).
+    - require_match:
+        type: bool
+        required: false
+        description: When true, yielding nothing fails instead of being answered; it cannot be declared with no_match (LOOKUP-13).
     - derivations:
         type: "dict[identifier, intermediate_derivation]"
         required: false
@@ -270,6 +274,10 @@ dataset_class:
         type: identifier
         required: false
         description: Name of the generated source record ordinal (INPUT-3).
+    - require_match:
+        type: bool
+        required: false
+        description: When true, every read through an implicit join to this input must find a record, unless the read declares absent (LOOKUP-24).
 
 intermediate_id:
     type: str
@@ -387,7 +395,7 @@ expressions:
             description: Variables to test in order (EXPR-9).
         - missing:
             type: substitute_value
-            description: Value returned when every source is missing (EXPR-9).
+            description: Value returned when every source is missing; missing when absent (EXPR-9).
     greatest: # See REQ-1096.
         - sources:
             type: "list[variable]"
@@ -414,7 +422,10 @@ source_binding_class:
     - fields_from: match_selection_fields
     - absent:
         type: substitute_value
-        description: Value used when the source variable or item is absent (LOOKUP-1).
+        description: Value used when the source variable or item is absent, or when its implicit join finds no record; without it, a join that finds no record gives missing (LOOKUP-24).
+    - require_match:
+        type: bool
+        description: When true, an implicit join that finds no record fails instead of being answered; it cannot be declared with absent (LOOKUP-24).
 
 flag_class:
     - condition:
@@ -656,7 +667,7 @@ expressions:
             description: Compare exactly when true; fold ASCII letters when false (EXPR-12).
         - missing:
             type: substitute_value
-            description: Value returned when the source is missing; without it, a missing source fails (EXPR-11).
+            description: Value returned when the source is missing; without it, a missing source gives missing (EXPR-11).
         - unmapped:
             type: substitute_value
             description: Value returned when the source is present but has no dictionary entry; without it, such a source fails (EXPR-11).
@@ -680,7 +691,7 @@ expressions:
             description: Right-closed and left-open when true; left-closed and right-open when false (EXPR-13).
         - missing:
             type: substitute_value
-            description: Value returned when the source is missing (EXPR-13).
+            description: Value returned when the source is missing; without it, a missing source gives missing (EXPR-13).
 "#),
     ("schema_expression_numeric.yaml", r#"version: "1.0"
 
@@ -771,7 +782,7 @@ expressions:
             description: Match group to return; 0 is the full match (TEXT-10).
         - missing:
             type: substitute_value
-            description: Value returned when the source is missing (TEXT-10).
+            description: Value returned when the source is missing; without it, a missing source gives missing (TEXT-10).
         - no_match:
             type: substitute_value
             description: Value returned when the pattern does not match the source (TEXT-10).
@@ -790,7 +801,7 @@ expressions:
             description: Literal text that replaces each match (TEXT-11).
         - missing:
             type: substitute_value
-            description: Value returned when the source is missing (TEXT-11).
+            description: Value returned when the source is missing; without it, a missing source gives missing (TEXT-11).
     str_template: # See REQ-1113.
         type: [string_template, str_template_class]
         description: Portable string template, concise or with missing handling (TEXT-4).
@@ -806,7 +817,7 @@ expressions:
             description: Case to produce, one of upper, lower, sentence or title (TEXT-5).
         - missing:
             type: substitute_value
-            description: Value returned when the source is missing (TEXT-5).
+            description: Value returned when the source is missing; without it, a missing source gives missing (TEXT-5).
 
 string_template:
     type: str
@@ -819,7 +830,7 @@ str_template_class:
         description: Text containing literal content and braced variables (TEXT-3).
     - missing:
         type: substitute_value
-        description: Value returned when any placeholder value is missing (TEXT-4).
+        description: Value returned when any placeholder value is missing; without it, a missing placeholder fails (TEXT-4).
 "#),
     ("schema_expression_window.yaml", r#"version: "1.0"
 

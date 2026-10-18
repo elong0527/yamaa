@@ -82,11 +82,12 @@ A placeholder is a variable reference, collected as a dependency before
 evaluation; a repeated placeholder is one dependency, replaced wherever it
 appears. When every dependency is complete, placeholders are replaced by their
 string values, unconverted, and brace pairs are unescaped. A value that is not
-a string fails. A missing value returns the declared `missing` value. Otherwise
-the result is the exact concatenation of literal text and values, the empty
-string when the template is empty.
+a string fails. A missing value returns the declared `missing` value and,
+unlike a single-input verb's missing source, fails without it. Otherwise the
+result is the exact concatenation of literal text and values, the empty string
+when the template is empty.
 
-Fails: `incompatible_input_type`.
+Fails: `incompatible_input_type`, `missing_input`.
 Evidence: `schema-shorthand`, `sdtm-dm-race-ethnicity`, `schema-expressions`, `rust/crates/yamaa-adapters/tests/fixtures/text_template_reference.json`.
 Replaces: REQ-0446, REQ-0447, REQ-0448, REQ-0455, REQ-0456, REQ-0457, REQ-0458, REQ-0459, REQ-0460, REQ-0462, REQ-1112, REQ-1113, REQ-1116, REQ-1117.
 
@@ -116,8 +117,9 @@ dependencies. A placeholder that does not bind fails under the
 [Column derivation](columns.md) and
 [Name binding](names.md). A value that is not a string fails
 under [VALUE-2](values.md#value-2). `missing` answers when any placeholder
-value is missing; without it, the missing value is fatal under
-[Column derivation](columns.md). The concatenation is exact under
+value is missing; without it, the missing value fails as `missing_input` on
+the `mapping` stage, and a template never gives missing by default
+([COLUMN-10](columns.md#column-10)). The concatenation is exact under
 [VALUE-12](values.md#value-12).
 
 Text joined from several parts is written as one template: literal text, with
@@ -146,8 +148,9 @@ Every substitution preserves scalar count. None has a one-to-many mapping, a
 context rule, language tailoring or a Unicode-version dependency, and word
 detection for `title` is ASCII-only: a run is `[A-Za-z]+`, with no locale and
 no Unicode word-break rule. Non-ASCII scalars, including non-ASCII letters such
-as `U+00DF` and `U+0130`, pass through unchanged. `missing` is the value
-returned when the source is missing.
+as `U+00DF` and `U+0130`, pass through unchanged. A missing source returns
+`missing`, or missing when it is omitted, counted under `missing`
+([COLUMN-10](columns.md#column-10)).
 
 Identifier and keyword case behavior comes from the closed ASCII grammars that
 own them and is unaffected by data casing. Predicate `LIKE` remains
@@ -330,8 +333,10 @@ empty string.
 A group that the pattern declares but the match does not enter has no value,
 so `str_extract` produces missing and `no_match` does not apply: the pattern
 did match, and `no_match` applies only when the pattern matched nowhere in the
-subject. A missing source returns the declared `missing` value. The handlers
-are those of [Column derivation](columns.md).
+subject. A missing source returns the declared `missing` value, or missing
+when it is omitted, counted under `missing`; present text the pattern matches
+nowhere fails without `no_match`. The handlers are those of
+[Column derivation](columns.md).
 
 <a id="text-11"></a>
 
@@ -359,8 +364,9 @@ becomes `-b--`.
 In `replacement`, `$`, the backslash and braces have no special meaning, and no
 capture group is referenced. A source the pattern matches nowhere is returned
 unchanged, and a result with no scalars is the empty string, never missing. A
-missing source returns the declared `missing` value; without that handler, the
-missing source is fatal under [Column derivation](columns.md).
+missing source returns the declared `missing` value, or missing when that
+handler is omitted, counted under `missing`
+([COLUMN-10](columns.md#column-10)).
 
 <a id="text-12"></a>
 

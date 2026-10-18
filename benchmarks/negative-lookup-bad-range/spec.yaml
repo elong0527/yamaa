@@ -22,6 +22,7 @@ intermediates:
     dataset: EPOCHS
     key: [STUDYID]
     between: {value: VSDTC, lower: DYLO, upper: DYHI}
+    require_match: true
 
 columns:
   - name: STUDYID

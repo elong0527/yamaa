@@ -174,7 +174,13 @@
       },
       "issues": [],
       "check_issues": [],
-      "handlers": [],
+      "handlers": [
+        {
+          "spec_path": "columns.ID.derivation.first_available.missing",
+          "handler": "missing",
+          "count": 1
+        }
+      ],
       "source_reads": [
         "input.csv"
       ],
@@ -254,7 +260,13 @@
       },
       "issues": [],
       "check_issues": [],
-      "handlers": [],
+      "handlers": [
+        {
+          "spec_path": "columns.K.derivation.first_available.missing",
+          "handler": "missing",
+          "count": 0
+        }
+      ],
       "source_reads": [
         "input.csv"
       ],
@@ -301,6 +313,11 @@
           "spec_path": "columns.K.derivation.source.multiple_matches",
           "handler": "multiple_matches",
           "count": 2
+        },
+        {
+          "spec_path": "columns.K.derivation.source.absent",
+          "handler": "absent",
+          "count": 0
         }
       ],
       "source_reads": [
@@ -340,7 +357,18 @@
       },
       "issues": [],
       "check_issues": [],
-      "handlers": [],
+      "handlers": [
+        {
+          "spec_path": "columns.K.derivation.first_available.missing",
+          "handler": "missing",
+          "count": 0
+        },
+        {
+          "spec_path": "columns.K.derivation.first_available.sources[0].absent",
+          "handler": "absent",
+          "count": 1
+        }
+      ],
       "source_reads": [
         "input.csv",
         "donor.csv"
@@ -384,6 +412,11 @@
       "issues": [],
       "check_issues": [],
       "handlers": [
+        {
+          "spec_path": "columns.A.derivation.first_available.missing",
+          "handler": "missing",
+          "count": 0
+        },
         {
           "spec_path": "columns.B.derivation.source.multiple_matches",
           "handler": "multiple_matches",

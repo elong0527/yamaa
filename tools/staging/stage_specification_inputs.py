@@ -494,6 +494,28 @@ def stage_text_pad_truth(destination: Path):
     )
     shutil.copy2(original, destination / "text-pad-reference.json")
     capture = json.loads(original.read_text(encoding="utf-8"))
+    # Each successful case's complete handler ledger, as the report writes it.
+    with (destination / "text-pad-handlers.tsv").open(
+        "w", newline="", encoding="ascii"
+    ) as stream:
+        writer = csv.writer(
+            stream,
+            delimiter="\t",
+            lineterminator="\n",
+            quoting=csv.QUOTE_NONE,
+            quotechar=None,
+        )
+        writer.writerow(("case", "handlers"))
+        for name, case in capture.items():
+            if "handlers" in case:
+                writer.writerow(
+                    (
+                        name,
+                        json.dumps(
+                            case["handlers"], sort_keys=True, separators=(",", ":")
+                        ),
+                    )
+                )
     root = destination / "text-pad-cases"
     root.mkdir()
     with (destination / "text-pad-findings.tsv").open(

@@ -341,9 +341,9 @@ Replaces: REQ-0367, REQ-0368.
 
 A supplemental qualifier record points to its parent domain record. The
 derivation that produces the cross-dataset link asserts the link; a
-verification over the finished artifact does not. An intermediate without
-`no_match` rejects a value matching no record, and an intermediate read carried
-by a key column or a `not_missing` column does the same.
+verification over the finished artifact does not. An intermediate declaring
+`require_match: true` rejects a value matching no record, and an intermediate
+read carried by a key column or a `not_missing` column does the same.
 
 Evidence: `sdtm-suppmh-linkage`.
 Replaces: REQ-0369, REQ-0370.

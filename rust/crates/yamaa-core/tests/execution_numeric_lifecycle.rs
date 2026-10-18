@@ -551,6 +551,7 @@ mod execution {
                     keep,
                 }),
                 no_match: Some(Value::Missing),
+                require_match: false,
                 unique: vec![],
                 derivations: None,
                 pending_schema: None,
@@ -1149,6 +1150,7 @@ mod execution {
                 filter: None,
                 selection: None,
                 no_match: None,
+                require_match: true,
                 unique: Vec::new(),
                 derivations: None,
                 pending_schema: None,
@@ -1672,6 +1674,7 @@ mod execution {
             )
             .unwrap();
             let selection = Expression::FirstAvailable(Box::new(FirstAvailable::new(
+                path.to_string(),
                 [1, 2]
                     .iter()
                     .enumerate()
@@ -1931,6 +1934,7 @@ mod execution {
                         assign(
                             2,
                             Expression::FirstAvailable(Box::new(FirstAvailable::new(
+                                "row.SELECTED".into(),
                                 vec![SelectionSource {
                                     path: "row.SELECTED.sources[0]".into(),
                                     read: SelectionRead::Expression(Box::new(assign(
@@ -2015,6 +2019,7 @@ mod execution {
             )
             .unwrap();
             let selection = Expression::FirstAvailable(Box::new(FirstAvailable::new(
+                "row.RESULT".into(),
                 vec![
                     SelectionSource {
                         path: "row.RESULT.sources[0]".into(),
@@ -2256,6 +2261,7 @@ mod execution {
                     filter: None,
                     selection: None,
                     no_match: absence.then_some(Value::Missing),
+                    require_match: !absence,
                     unique: Vec::new(),
                     derivations: None,
                     pending_schema: None,

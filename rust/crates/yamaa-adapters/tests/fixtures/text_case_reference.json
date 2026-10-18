@@ -35,22 +35,5 @@
       }
     }
   ],
-  "missing": [
-    {
-      "phase": "mapping",
-      "condition": "missing_input",
-      "spec_paths": [
-        "columns.TEXT.derivation.str_case"
-      ],
-      "requirement": "REQ-0334",
-      "context": {
-        "variable": "SRC.TEXT",
-        "keys": [
-          {
-            "ID": "row1"
-          }
-        ]
-      }
-    }
-  ]
+  "missing": []
 }

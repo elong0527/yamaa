@@ -2365,8 +2365,9 @@ mod declaration {
 
         #[test]
         fn original_absent_intermediate_verifications_remain_optional() {
+            // `require_match` keeps the lookup from restating the implicit join.
             assert!(Study::new()
-                .check(json!({"id":"DS_EOS","dataset":"DS"}))
+                .check(json!({"id":"DS_EOS","dataset":"DS","require_match":true}))
                 .is_empty());
         }
     }

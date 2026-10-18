@@ -71,6 +71,18 @@ class SpecContext:
             if isinstance(template, dict)
             for name in (template.get("derivations") or {})
         }
+        # Inputs whose every implicit join must find a record (LOOKUP-24);
+        # the base is read as the row's own record, never joined.
+        inputs = spec.get("input")
+        self.required_inputs = {
+            str(name)
+            for name, declaration in (
+                inputs.items() if isinstance(inputs, dict) else ()
+            )
+            if isinstance(declaration, dict)
+            and declaration.get("require_match") is True
+            and name != spec.get("base")
+        }
 
     def lookup(self, name):
         return self.lookups.get(name)
@@ -235,19 +247,22 @@ def no_match_phrase(lookup, depth=0):
     """What an unmatched row yields, as a trailing clause.
 
     A sponsor's variable sheet is written in sentences, so this is worded as
-    one rather than bracketed like a code comment. An absent `no_match` makes
-    an unmatched row fatal (REQ-0124), which is the reviewable fact -- not an
-    omission to render as a blank cell. A lookup reached through another
-    lookup answers in the shorter form, so its clause cannot be mistaken for
-    the outer lookup's own answer at the end of the sentence.
+    one rather than bracketed like a code comment. `require_match: true` makes
+    an unmatched row fatal (LOOKUP-13), which is the reviewable fact; without
+    it the declared `no_match` answers, or a blank when none is declared. A
+    lookup reached through another lookup answers in the shorter form, so its
+    clause cannot be mistaken for the outer lookup's own answer at the end of
+    the sentence.
     """
-    if not declared(lookup, "no_match"):
+    if isinstance(lookup, dict) and lookup.get("require_match") is True:
         return (
             ", an error when unmatched"
             if depth
             else ", and a row with no match is an error"
         )
-    answer = literal_text(lookup["no_match"])
+    answer = (
+        literal_text(lookup["no_match"]) if declared(lookup, "no_match") else "blank"
+    )
     if depth:
         return ", " + answer + " when unmatched"
     return ", and no match yields " + answer
@@ -355,12 +370,18 @@ def describe_expression_text(text, ctx=None, depth=0):
     return rewritten + ", with " + join_and(origins)
 
 
+REQUIRED_RECORD = "; a row with no matching record is an error"
+
+
 def describe_reference(variable, ctx=None, depth=0):
     """A column that is one value copied in, from this row or another dataset."""
     head, tail = split_reference(variable)
     lookup = context(ctx).lookup(head) if head else None
     if lookup is None:
-        return "Copy value from " + str(variable) + "."
+        required = head in context(ctx).required_inputs
+        return sentence(
+            "Copy value from " + str(variable) + (REQUIRED_RECORD if required else "")
+        )
     return sentence(
         "Take "
         + tail
@@ -444,7 +465,15 @@ def describe_source(src, ctx=None, depth=0):
     text = "Copy value from " + str(variable)
     if selection:
         text += " " + ", ".join(selection)
-    return sentence(text + handler_phrase(src, "absent", "an absent source"))
+    # A declared `absent` answers before any required match (LOOKUP-24).
+    required = src.get("require_match") is True or (
+        not declared(src, "absent") and head in context(ctx).required_inputs
+    )
+    return sentence(
+        text
+        + handler_phrase(src, "absent", "an absent source")
+        + (REQUIRED_RECORD if required else "")
+    )
 
 
 def describe_mapping(mapping, ctx=None, depth=0):

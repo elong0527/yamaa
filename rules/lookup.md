@@ -17,15 +17,20 @@ value per current row, matching the current row's values of the applicable
 keys against the dataset's same-named columns. The applicable keys are the
 output `keys`, in output-key order, that the dataset also carries, and at
 least one is required. The match preserves the left row, and a row with no
-match yields missing. The qualifier of the row template's driver is not a
-join.
+match gives missing by default, counted, or fails when the input declares
+`require_match: true` ([LOOKUP-24](#lookup-24)). The qualifier of the row
+template's driver is not a join.
 
 Fails: `incompatible_input_type`, `no_applicable_keys`.
-Evidence: `schema-lookup`, `schema-source-binding`, `sdtm-sv-subject-visits`.
+Evidence: `schema-lookup`, `schema-source-binding`, `sdtm-sv-subject-visits`, `negative-input-require-match`.
 Replaces: REQ-0111, REQ-0150, REQ-0151, REQ-0152, REQ-1051, REQ-1052.
 
 ```yaml
-derivation: ADSL.TRTSDTM
+input:
+  ADSL: {path: adsl.csv, require_match: true}
+columns:
+  - name: TRTSDTM
+    derivation: ADSL.TRTSDTM
 ```
 
 The driver's qualifier reads the input or intermediate record that built the
@@ -43,6 +48,12 @@ with its filter, selection or absent value, keeps its `filter`, `order_by` and
 `keep` on the implicit join: the filter narrows the eligible records and the
 ordered selection chooses among the survivors exactly as an explicit lookup
 would ([LOOKUP-8](#lookup-8), [LOOKUP-10](#lookup-10)).
+
+A qualified read that is not a source binding, such as an operation's
+variable operand or an identifier in a predicate, declares no absence handler
+and gives missing for a row with no match, counted at its path except in a
+predicate ([LOOKUP-24](#lookup-24)). `require_match: true` on the input covers
+every one of these reads.
 
 <a id="lookup-2"></a>
 
@@ -83,6 +94,71 @@ template's group keys and, for an ungrouped template, the driver record's own
 fields. [Column derivation](columns.md) orders row derivations
 before column derivation, and a match value available only in a later phase
 fails as `phase_boundary`.
+
+<a id="lookup-24"></a>
+
+### LOOKUP-24. An implicit join that finds no record answers with absent, missing by default, unless require_match fails it
+
+When a read through an implicit join finds no record for a row, its filter
+included, or reads a missing key, it gives its `source` binding's `absent`
+value, or missing when none is declared, counted under `absent` at the read's
+path unless a predicate made the read. `require_match: true` on the binding or
+on the input instead fails the row as `unmatched_key`, unless the binding
+declares `absent`; a binding cannot declare both.
+
+Fails: `unmatched_key`, `conflicting_absence_policy`, `prohibited_construct`.
+Evidence: `schema-lookup-absent-default`, `negative-source-require-match`, `negative-input-require-match`, `schema-handlers`, `rust/crates/yamaa-adapters/tests/execution_implicit_join_absence.rs`, `rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.json`.
+
+```yaml
+input:
+  ADSL: {path: adsl.csv, require_match: true}
+  EX: ex.csv
+columns:
+  - name: TRTSDT
+    derivation:
+      source:
+        variable: EX.EXSTDTC
+        filter: "EX.EXDOSE > 0"
+        order_by: [EX.EXSTDTC]
+        keep: first
+        require_match: true
+```
+
+The concise `DATASET.VARIABLE` is a source binding's shorthand and answers by
+default, counted at the binding's path. Any other read through an implicit
+join, such as an operation's variable operand, declares no `absent` and gives
+missing, counted under `absent` at its own path. A read made while a `flag`
+condition or a `case` predicate is evaluated is not a handler site: it gives
+missing uncounted, and the predicate answers the unknown result by its own
+rule ([EXPR-8](expressions.md#expr-8)). Counts follow
+[COLUMN-14](columns.md#column-14), and a declared `absent` is counted the same
+way as the default.
+
+A missing key value is incomplete, not unmatched: no record is sought, and the
+row is answered, or fails, the same way. A matched record whose value is
+missing is a collected blank, not an absent record, and is not answered.
+`absent` keeps answering a variable or ODM item that does not exist
+([COLUMN-11](columns.md#column-11)), and with several surviving records
+`order_by` and `keep` choose one first ([LOOKUP-10](#lookup-10)).
+
+`require_match: true` asserts that every row the read is made for finds a
+record. On a binding it covers that binding. On an input,
+`input.<NAME>.require_match` covers every read through an implicit join to
+that input, the concise form, operands and predicate reads included, and it
+may be declared on an input no join reads. A binding's declared `absent`
+still answers its own reads, and a named intermediate over the input keeps
+its own absence policy ([LOOKUP-13](#lookup-13)). A row that finds no record
+fails as `unmatched_key` at the read's path, reporting the sought key values
+in the vocabulary of [LOOKUP-14](#lookup-14), and a read that requires a
+match counts nothing.
+
+`require_match: true` beside `absent` on one binding declares both that a row
+without a record is an error and what it gives, and fails validation as
+`conflicting_absence_policy` at the two fields. A source that reads the
+driver's own record, an output column or a named intermediate has no implicit
+join to require a match of, and `require_match` there fails as
+`prohibited_construct` at the field; a named intermediate declares its own
+([LOOKUP-13](#lookup-13)).
 
 ## Named intermediates
 
@@ -139,13 +215,12 @@ intermediates:
 
 ### LOOKUP-4. A named intermediate must narrow, derive or reshape its dataset
 
-A named intermediate must narrow, derive or reshape its dataset, or require
-that every read selects a record. An intermediate that declares nothing beyond
-`id`, `dataset` and `no_match: {literal: null}` reads exactly what the implicit
-join reads
-([LOOKUP-1](#lookup-1)) and fails: read the input dataset directly instead of
-aliasing it. Composition preserves this refusal even when no output reads the
-declaration.
+A named intermediate must narrow, derive or reshape its dataset, or declare
+`require_match: true`. An intermediate that declares nothing beyond `id` and
+`dataset`, with or without `no_match: {literal: null}`, reads exactly what the
+implicit join reads ([LOOKUP-1](#lookup-1)) and fails: read the input dataset
+directly instead of aliasing it. Composition preserves this refusal even when
+no output reads the declaration.
 
 Fails: `rename_only_intermediate`.
 Evidence: `negative-lookup-rename-intermediate`, `sdtm-cm-whodrug-coding`.
@@ -158,6 +233,11 @@ intermediates:
     dataset: CODING
     no_match: {literal: null}
 ```
+
+Without `no_match` the intermediate answers a row without a record with
+missing as well ([LOOKUP-13](#lookup-13)), so omitting the line changes
+nothing. Asserting a match is a change the implicit join cannot state:
+`require_match: true` makes the same declaration valid.
 
 Instead, qualify the dataset where it is read:
 
@@ -434,42 +514,59 @@ unlisted column.
 A named lookup matches only when it is read. The match runs the first time a
 column reads the lookup for a row, and every later read in that row shares the
 selection, so every column reading the same lookup sees the same record. A
-lookup answers one value per current row, the selected record's column, the
-`no_match` literal or an `unmatched_key` failure, and never changes the row
-count. An input lookup's dataset is read once per run.
+lookup answers one value per current row, the selected record's column, its
+absence answer or an `unmatched_key` failure under `require_match`, and never
+changes the row count. An input lookup's dataset is read once per run.
 
 Evidence: `rust/crates/yamaa-adapters/tests/execution_key_lookup_reads.rs`, `rust/crates/yamaa-adapters/tests/execution_per_template_defaults.rs`.
 Replaces: REQ-0136, REQ-0138, REQ-0146, REQ-1264.
 
 The per-row match selects among records already read and never re-reads the
-dataset. An intermediate without `no_match` never fails as `unmatched_key` on
-a row that did not read it. A `SELF` intermediate extends its donor pool after
-each completed row template and invalidates its cached selection index at that
-boundary.
+dataset. An intermediate declaring `require_match: true` never fails as
+`unmatched_key` on a row that did not read it. A `SELF` intermediate extends
+its donor pool after each completed row template and invalidates its cached
+selection index at that boundary.
 
 <a id="lookup-13"></a>
 
-### LOOKUP-13. An intermediate that selects nothing answers with no_match or fails as unmatched_key
+### LOOKUP-13. An intermediate that selects nothing answers with no_match, missing by default, unless require_match fails it as unmatched_key
 
-An intermediate that yields nothing is answered by its `no_match` handler, its
-absence policy: every column reading it receives the literal, independently
-for each column read. Without `no_match` the read fails. A missing match value
-is incomplete, not unmatched: it yields nothing before any record is sought,
-and the absence policy answers the same way. A selected record whose value is
-missing is a collected blank, not an absent record, and the absence policy
-does not answer it.
+An intermediate that yields nothing gives every column reading it its
+`no_match` literal, or missing when `no_match` is omitted, independently for
+each column read and counted under `no_match`. `require_match: true` instead
+fails the read as `unmatched_key`, and declaring it beside `no_match` fails
+validation. A missing match value is incomplete, not unmatched: it yields
+nothing before any record is sought and is answered the same way. A selected
+record whose value is missing is a collected blank, not an absent record, and
+is not answered.
 
-Fails: `unmatched_key`.
-Evidence: `negative-lookup-unmatched-key`, `negative-lookup-missing-sex`, `adam-adae-death`.
+Fails: `unmatched_key`, `conflicting_absence_policy`.
+Evidence: `negative-lookup-unmatched-key`, `negative-lookup-missing-sex`, `negative-lookup-require-match-no-match`, `schema-lookup-absent-default`, `adam-adae-death`.
 Replaces: REQ-0124, REQ-0129, REQ-0130, REQ-0131, REQ-0147.
 
-The failure is `unmatched_key`, reporting the source values and the key
-columns it sought. One column's handling never answers for another.
-`no_match: {literal: null}` answers with missing, and it keeps that meaning
-when an empty child inherits the specification. A YAML null declares no
-handler: written over an inherited `no_match` it clears the handler, and the
-read fails again, under [LAYER-9](inheritance.md#layer-9). The answer is
-recorded under the `no_match` handler of [Column derivation](columns.md).
+`no_match`, `require_match` or neither is the intermediate's absence policy,
+and an input's `require_match`, which covers that input's implicit joins
+([LOOKUP-24](#lookup-24)), does not change it. The failure is
+`unmatched_key`, reporting the source values and the key columns it sought.
+One column's handling never answers for another.
+`no_match: {literal: null}` answers with missing, the same answer as an
+omitted `no_match`, and it keeps that meaning when an empty child inherits the
+specification. A YAML null declares no handler: written over an inherited
+`no_match` it clears the handler, and the read answers with missing again,
+under [LAYER-9](inheritance.md#layer-9). `require_match: true` beside
+`no_match` declares both that a row without a record is an error and what it
+gives, and fails as `conflicting_absence_policy` at the two fields: choose one,
+or add the condition that keeps the rows that must match. The answer is
+recorded under the `no_match` handler of [Column derivation](columns.md),
+declared or by default ([COLUMN-14](columns.md#column-14)).
+
+```yaml
+intermediates:
+  - id: REFRANGE
+    dataset: LBRANGE
+    key: [LBTESTCD, SEX]
+    require_match: true
+```
 
 <a id="lookup-14"></a>
 
@@ -488,8 +585,12 @@ Replaces: REQ-0139, REQ-0143, REQ-0144, REQ-0149.
 
 Neither failure renames the other's fields. Handler accounting follows
 [Column derivation](columns.md): a `keep` that chose among surviving
-records counts one `multiple_matches` handling, and a declared `no_match` that
-answered an absence counts one `no_match` handling.
+records counts one `multiple_matches` handling, an absence an intermediate
+answers counts one `no_match` handling, declared or by default, and a record
+an implicit join does not find counts one `absent` handling at the read's path
+([LOOKUP-24](#lookup-24)). An `unmatched_key` from an implicit join names
+`intermediate(<dataset>)` as its intermediate, as an implicit join's multiple
+match does.
 
 ## Intermediate derivations
 
@@ -674,8 +775,8 @@ intermediate's dataset or derivations and, when that intermediate declares
 
 The other intermediate is selected once per donor record, and every derivation
 of that record that reads it shares the selection ([LOOKUP-12](#lookup-12)). A
-read that fails, such as an intermediate without `no_match` that selects
-nothing, fails the run with that intermediate's condition at that
+read that fails, such as an intermediate declaring `require_match: true` that
+selects nothing, fails the run with that intermediate's condition at that
 intermediate's path, as a row reading it would. The read adds no current-row
 dependency and never changes the number of donor records.
 

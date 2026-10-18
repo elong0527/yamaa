@@ -27,6 +27,7 @@ intermediates:
   - id: ELEMENTS
     dataset: TE
     key: {STUDYID: TA.STUDYID, ETCD: TA.ETCD}
+    require_match: true
     verifications:
       - unique: [STUDYID, ETCD]
 

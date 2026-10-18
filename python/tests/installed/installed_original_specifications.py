@@ -1094,15 +1094,13 @@ class PublicDomains(unittest.TestCase):
             source = source.replace("to: upper, missing: MiXeD", "to: upper")
             entry.write_text(source)
             (root / "input.csv").write_bytes(b"ID,TEXT\nrow1,\n")
-            rejected = yamaa.domain(entry)
+            # Without `missing`, a missing source gives missing (COLUMN-10).
+            answered = yamaa.domain(entry)
             expected = json.loads((ROOT / "text-case-reference.json").read_text())[
                 "missing"
-            ][0]
-            expected = dict(expected, spec_paths=["columns.UP.derivation.str_case"])
-            self.assertEqual(issues(rejected), [expected])
-            self.assertIsNone(rejected.output)
-            with self.assertRaises(yamaa.DomainError):
-                rejected.save()
+            ]
+            self.assertEqual(issues(answered), expected)
+            self.assertEqual(answered.output.rows(), [("row1", None, None, None, None)])
             with (ROOT / "text-case-diagnostics.tsv").open() as stream:
                 failures = list(csv.DictReader(stream, delimiter="\t"))
             self.assertEqual(len(failures), 2)

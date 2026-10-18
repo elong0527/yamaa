@@ -362,12 +362,9 @@ the [local-handlers contract](../rules/columns.md#local-handlers):
 | Phase | Rejects |
 |---|---|
 | `bind` | an absent source variable or ODM item |
-| `join` | an unresolved multiple match, or an intermediate that selects no record |
-| `mapping` | a missing or unmapped lookup input |
-| `cut` | a missing numeric classification input |
-| `extract` | a missing string or unmatched pattern |
-| `template` | a missing placeholder value |
-| `impute` | a missing or unusable partial-date input |
+| `join` | an unresolved multiple match, or a read that finds no record under a `require_match` its lookup, source or input declares |
+| `mapping` | an unmapped lookup input, a pattern that matches nowhere, or a missing placeholder value |
+| `impute` | invalid collected date or duration text |
 | `convert` | a result that cannot take its declared type |
 | `final` | a failed final replacement |
 

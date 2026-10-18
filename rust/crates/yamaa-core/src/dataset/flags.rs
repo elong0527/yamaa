@@ -31,10 +31,13 @@ pub struct Flag {
     true_value: Value,
     false_value: Option<Value>,
     missing: Option<Value>,
+    /// The flag operation's path, owning its `missing` count.
+    path: String,
 }
 impl Flag {
     /// Inspect the entire supplied map and literals before allocating an index.
-    /// `Some(Missing)` preserves an explicitly declared null branch.
+    /// `Some(Missing)` preserves an explicitly declared null branch. The
+    /// operation's path is its condition's path without `.condition`.
     pub fn new(
         condition: CompiledExpression,
         mut bindings: Vec<FlagBinding>,
@@ -65,16 +68,27 @@ impl Flag {
         }) {
             return Err(FlagError::Binding(BindingError::MissingName));
         }
+        let path = condition
+            .spec_path()
+            .strip_suffix(".condition")
+            .unwrap_or(condition.spec_path())
+            .to_owned();
         Ok(Self {
             condition,
             bindings,
             true_value,
             false_value,
             missing,
+            path,
         })
     }
     pub fn condition(&self) -> &CompiledExpression {
         &self.condition
+    }
+    /// An `UNKNOWN` condition is counted here, whether `missing` is declared
+    /// or its default substitution gives missing (EXPR-8).
+    pub fn missing_path(&self) -> String {
+        std::format!("{}.missing", self.path)
     }
     pub fn bindings(&self) -> &[FlagBinding] {
         &self.bindings

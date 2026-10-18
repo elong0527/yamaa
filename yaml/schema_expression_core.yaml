@@ -14,7 +14,7 @@ expressions:
             description: Variables to test in order (EXPR-9).
         - missing:
             type: substitute_value
-            description: Value returned when every source is missing (EXPR-9).
+            description: Value returned when every source is missing; missing when absent (EXPR-9).
     greatest: # See REQ-1096.
         - sources:
             type: "list[variable]"
@@ -41,7 +41,10 @@ source_binding_class:
     - fields_from: match_selection_fields
     - absent:
         type: substitute_value
-        description: Value used when the source variable or item is absent (LOOKUP-1).
+        description: Value used when the source variable or item is absent, or when its implicit join finds no record; without it, a join that finds no record gives missing (LOOKUP-24).
+    - require_match:
+        type: bool
+        description: When true, an implicit join that finds no record fails instead of being answered; it cannot be declared with absent (LOOKUP-24).
 
 flag_class:
     - condition:

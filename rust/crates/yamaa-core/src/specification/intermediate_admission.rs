@@ -2,8 +2,10 @@
 use super::*;
 use crate::{diagnostic::ConditionCode as C, key_relation::Inference, value::ColumnType};
 
-/// A missing handler alone leaves the input relation unchanged (REQ-1248).
-/// The inheritance resolver also uses this predicate before pruning declarations.
+/// Without a relation change or `require_match`, an intermediate whose absence
+/// answer is missing, by default or as `no_match: {literal: null}`, reads what
+/// the implicit join reads (LOOKUP-4). The inheritance resolver also uses this
+/// predicate before pruning declarations.
 pub(crate) fn is_rename_only(d: &Document, item: usize) -> bool {
     let changes_relation = [
         "key",
@@ -18,8 +20,10 @@ pub(crate) fn is_rename_only(d: &Document, item: usize) -> bool {
     .iter()
     .any(|field| present(d, item, field));
     !changes_relation
+        && !requires_match(d, item)
         && d.field(item, "no_match")
-            .is_some_and(|node| missing_literal(d, node))
+            .filter(|&node| !matches!(d.nodes()[node], N::Null))
+            .is_none_or(|node| missing_literal(d, node))
 }
 
 /// Declaration failures precede source access and key-type binding.
@@ -76,6 +80,20 @@ pub(super) fn declaration_findings(
             finding.text("intermediate", name);
             finding.text("dataset", dataset);
             findings.push(PreflightFinding::Scalar(finding.diagnostic()));
+        }
+        // Asserting a match and answering its absence are two absence policies.
+        if requires_match(d, item) && present(d, item, "no_match") {
+            findings.push(PreflightFinding::Scalar(crate::diagnostic::Diagnostic {
+                code: C::IntermediateAbsenceConflict,
+                spec_paths: vec![format!("{path}.no_match"), format!("{path}.require_match")],
+                context: [(
+                    "intermediate".into(),
+                    crate::json::Value::String(name.into()),
+                )]
+                .into(),
+                source_span: None,
+                operand_route: None,
+            }));
         }
         for (declared, missing) in [("order_by", "keep"), ("keep", "order_by")] {
             if present(d, item, declared) && !present(d, item, missing) {

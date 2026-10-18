@@ -21,6 +21,8 @@ pub struct StringCase {
     mode: Case,
     missing: Option<Value>,
 }
+/// `Recovered` is a missing source, answered by the declared `missing` or by
+/// the default missing value.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Step {
     Value(Value),
@@ -53,6 +55,10 @@ impl StringCase {
     pub fn missing(&self) -> Option<&Value> {
         self.missing.as_ref()
     }
+    /// The declared `missing` literal, or missing when it is omitted.
+    pub fn missing_substitute(&self) -> Value {
+        self.missing.clone().unwrap_or(Value::Missing)
+    }
     pub(crate) fn input_diagnostic(&self, actual: &'static str) -> Diagnostic {
         diagnostic(
             C::StrCaseInput,
@@ -66,12 +72,7 @@ impl StringCase {
     }
     pub fn apply(&self, value: ValueRef<'_>) -> Result<Step, Error> {
         match value {
-            ValueRef::Missing if self.missing.is_some() => Ok(Step::Recovered),
-            ValueRef::Missing => Err(Error::Diagnostic(diagnostic(
-                C::StrCaseMissing,
-                &self.path,
-                &[("variable", Value::Str(self.source.clone()))],
-            ))),
+            ValueRef::Missing => Ok(Step::Recovered),
             ValueRef::Str(text) => Ok(Step::Value(Value::Str(transform(text, self.mode)))),
             other => Err(Error::Diagnostic(self.input_diagnostic(match other {
                 ValueRef::Int(_) => "int",

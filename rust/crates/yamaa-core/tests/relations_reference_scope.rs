@@ -367,6 +367,7 @@ mod relations {
                 filter,
                 selection: None,
                 no_match: Some(Value::Missing),
+                require_match: false,
                 unique: Vec::new(),
                 derivations: None,
                 pending_schema: None,
@@ -849,6 +850,7 @@ mod relations {
                 selection: None,
                 columns: Some(vec![2]),
                 no_match: Some(Value::Missing),
+                require_match: false,
                 unique: Vec::new(),
                 derivations: None,
                 pending_schema: None,
@@ -1784,6 +1786,7 @@ mod relations {
                         filter: None,
                         selection: None,
                         no_match: Some(Value::Missing),
+                        require_match: false,
                         unique: Vec::new(),
                         derivations: None,
                         pending_schema: None,
@@ -1839,6 +1842,7 @@ mod relations {
                         filter: None,
                         selection: None,
                         no_match: Some(Value::Missing),
+                        require_match: false,
                         unique: Vec::new(),
                         derivations: None,
                         pending_schema: None,
@@ -1920,6 +1924,7 @@ mod relations {
                         range: None,
                         columns: None,
                         no_match: None,
+                        require_match: true,
                         unique: vec![],
                         derivations: None,
                         pending_schema: None,
@@ -1983,6 +1988,7 @@ mod relations {
         }
         fn wrapped(column: usize, expression: Expression) -> Expression {
             Expression::FirstAvailable(Box::new(FirstAvailable::new(
+                "row.selection".into(),
                 vec![SelectionSource {
                     path: "row.selection[0]".into(),
                     read: SelectionRead::Expression(Box::new(assignment(
@@ -2116,6 +2122,7 @@ mod relations {
                 filter: None,
                 selection: None,
                 no_match: Some(Value::Missing),
+                require_match: false,
                 unique: Vec::new(),
                 derivations: None,
                 pending_schema: None,
@@ -2127,6 +2134,7 @@ mod relations {
         #[test]
         fn first_template_self_hidden_in_first_available_is_rejected() {
             let hidden = Expression::FirstAvailable(Box::new(FirstAvailable::new(
+                "rows[0].first_available".into(),
                 vec![SelectionSource {
                     path: "rows[0].first_available.sources[0]".into(),
                     read: SelectionRead::Expression(Box::new(assign(

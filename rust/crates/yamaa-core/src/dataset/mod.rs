@@ -132,12 +132,17 @@ pub enum Expression {
         lookup: Lookup,
         filter: Option<BoundPredicate>,
         selection: Option<SourceSelection>,
+        /// The read's answer for a row without a record: a source binding's,
+        /// or an operand's.
+        absence: Option<JoinAbsence>,
     },
     /// A qualified source keeps its filter and stable choice on its declared port.
     JoinedSource {
         read: std::boxed::Box<JoinedRead>,
         filter: Option<BoundPredicate>,
         selection: Option<SourceSelection>,
+        /// The source binding's answer for a row without a record.
+        absence: Option<JoinAbsence>,
     },
     /// One condition selects a raw true/false/UNKNOWN literal.
     Flag(Flag),
@@ -217,6 +222,36 @@ pub enum Keep {
 pub struct SourceSelection {
     pub order_by: Vec<OrderTerm>,
     pub keep: Keep,
+}
+
+/// How a read through an implicit join answers a row whose match finds no
+/// record, or whose match value is missing (LOOKUP-24): a `source` binding
+/// with its declared `absent` value and `require_match`, and an operand bound
+/// to the join with neither. A formula's reads carry none; their owner gives
+/// the read's site when it reads.
+#[derive(Clone, Debug, PartialEq)]
+pub struct JoinAbsence {
+    /// The read's path, owning the `absent` count and failure.
+    pub path: String,
+    /// The declared `absent` literal; `None` gives missing by default.
+    pub absent: Option<Value>,
+    /// `require_match: true` fails the row as `unmatched_key` instead.
+    pub require_match: bool,
+}
+impl JoinAbsence {
+    /// An operand's answer: missing by default, counted at its path.
+    pub fn operand(path: &str) -> Self {
+        Self {
+            path: path.into(),
+            absent: None,
+            require_match: false,
+        }
+    }
+    /// Whether the read fails instead of answering, given whether its input
+    /// declares `require_match: true`: a declared `absent` always answers.
+    pub fn requires_match(&self, input_requires_match: bool) -> bool {
+        self.absent.is_none() && (self.require_match || input_requires_match)
+    }
 }
 
 /// One named secondary relation with a stable schema and source-list position.
@@ -526,6 +561,8 @@ pub struct DatasetPlan {
     conversion_handlers: Vec<ConversionHandler>,
     conversion_sites: BTreeMap<String, usize>,
     output_order: Vec<OrderTerm>,
+    /// Inputs whose every implicit join must find a record (LOOKUP-24).
+    required_matches: std::collections::BTreeSet<String>,
 }
 
 /// Validate nonempty, unique, bound column lists without reading table cells.
@@ -1418,6 +1455,7 @@ impl DatasetPlan {
             conversion_handlers: Vec::new(),
             conversion_sites: BTreeMap::new(),
             output_order: Vec::new(),
+            required_matches: Default::default(),
         })
     }
 }
@@ -1439,6 +1477,17 @@ impl DatasetPlan {
     /// Presentation occurs only after all keys and verifications succeed.
     pub fn output_order(&self) -> &[OrderTerm] {
         &self.output_order
+    }
+    /// Name the inputs declaring `require_match: true`: a read through an
+    /// implicit join to one of them that finds no record fails, unless the
+    /// read declares its own `absent` answer (LOOKUP-24).
+    pub fn with_required_matches(mut self, inputs: impl IntoIterator<Item = String>) -> Self {
+        self.required_matches = inputs.into_iter().collect();
+        self
+    }
+    /// Whether every implicit join through this input must find a record.
+    pub fn requires_match(&self, input: &str) -> bool {
+        self.required_matches.contains(input)
     }
     /// Severity belongs to admitted check declarations, never host issue rows.
     pub fn with_warning_verifications(mut self, paths: Vec<String>) -> Result<Self, PlanError> {
@@ -2025,8 +2074,15 @@ fn validate_direct_assignment(
             read,
             filter,
             selection,
+            absence,
         } => {
             read.validate(source, secondary, output, available, mode)?;
+            if absence
+                .as_ref()
+                .is_some_and(|absence| absence.path.is_empty())
+            {
+                return Err(PlanError::EmptyPath);
+            }
             let width = read.schema.columns().len();
             if let Some(filter) = filter {
                 filter
@@ -2098,11 +2154,18 @@ fn validate_direct_assignment(
             lookup: bound,
             filter,
             selection,
+            absence,
         } => {
             // Implicit source joins use completed output keys in every row
             // mode. Their ownership and availability are admitted below; they
             // do not borrow a raw record from the enclosing driver.
             lookup::validate_source(bound, secondary, available, output)?;
+            if absence
+                .as_ref()
+                .is_some_and(|absence| absence.path.is_empty())
+            {
+                return Err(PlanError::EmptyPath);
+            }
             let width = secondary[bound.source].schema.columns().len();
             if let Some(filter) = filter {
                 filter

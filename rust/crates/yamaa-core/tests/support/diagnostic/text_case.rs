@@ -3,7 +3,7 @@ use yamaa_core::json::Value as V;
 use yamaa_core::{
     diagnostic::ConditionCode,
     table::ValueRef,
-    text_case::{Case, Error, StringCase},
+    text_case::{Case, Error, Step, StringCase},
     value::Value,
 };
 pub(crate) fn reached() -> BTreeSet<ConditionCode> {
@@ -14,46 +14,32 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         None,
     )
     .unwrap();
-    let mut reached = BTreeSet::new();
-    for (value, phase, condition, requirement, path, fields) in [
+    // A missing source is answered with missing, never failed (COLUMN-10).
+    assert_eq!(operation.apply(ValueRef::Missing), Ok(Step::Recovered));
+    assert_eq!(operation.missing_substitute(), Value::Missing);
+    // Only a source of another type fails.
+    let Error::Diagnostic(diagnostic) = operation.apply(ValueRef::Int(1)).unwrap_err();
+    let definition = diagnostic.definition();
+    assert_eq!(
         (
-            Value::Int(1),
-            "validation",
-            "incompatible_input_type",
-            "REQ-0308",
-            "columns.V.derivation.str_case.source",
-            vec![("source", "SRC.V"), ("expected", "str"), ("actual", "int")],
+            definition.phase,
+            definition.condition,
+            definition.requirement
         ),
-        (
-            Value::Missing,
-            "mapping",
-            "missing_input",
-            "REQ-0334",
-            "columns.V.derivation.str_case",
-            vec![("variable", "SRC.V")],
-        ),
-    ] {
-        let Error::Diagnostic(diagnostic) = operation.apply(ValueRef::from(&value)).unwrap_err();
-        let definition = diagnostic.definition();
-        assert_eq!(
-            (
-                definition.phase,
-                definition.condition,
-                definition.requirement
-            ),
-            (phase, condition, Some(requirement))
-        );
-        assert_eq!(diagnostic.spec_paths, [path]);
-        assert_eq!(
-            diagnostic.context,
-            fields
-                .into_iter()
-                .map(|(key, text)| (key.into(), V::String(text.into())))
-                .collect()
-        );
-        assert_eq!(diagnostic.source_span, None);
-        assert_eq!(diagnostic.operand_route, None);
-        reached.insert(diagnostic.code);
-    }
-    reached
+        ("validation", "incompatible_input_type", Some("REQ-0308"))
+    );
+    assert_eq!(
+        diagnostic.spec_paths,
+        ["columns.V.derivation.str_case.source"]
+    );
+    assert_eq!(
+        diagnostic.context,
+        [("source", "SRC.V"), ("expected", "str"), ("actual", "int")]
+            .into_iter()
+            .map(|(key, text)| (key.into(), V::String(text.into())))
+            .collect()
+    );
+    assert_eq!(diagnostic.source_span, None);
+    assert_eq!(diagnostic.operand_route, None);
+    BTreeSet::from([diagnostic.code])
 }

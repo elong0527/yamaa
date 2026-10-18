@@ -19,11 +19,13 @@ intermediates:
     dataset: QUERY
     key: {TERM: AEDECOD}
     filter: "QUERY.PREFIX = 'SMQ01'"
+    require_match: true
 
   - id: SMQ2
     dataset: QUERY
     key: {TERM: AEDECOD}
     filter: "QUERY.PREFIX = 'SMQ02'"
+    require_match: true
 
 columns:
   - name: STUDYID

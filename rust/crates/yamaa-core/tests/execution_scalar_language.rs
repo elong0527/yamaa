@@ -326,6 +326,7 @@ mod execution {
                     keep: Keep::Last,
                 }),
                 no_match: None,
+                require_match: true,
                 unique: Vec::new(),
                 derivations: None,
                 pending_schema: None,

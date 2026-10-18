@@ -16,7 +16,7 @@ expressions:
             description: Compare exactly when true; fold ASCII letters when false (EXPR-12).
         - missing:
             type: substitute_value
-            description: Value returned when the source is missing; without it, a missing source fails (EXPR-11).
+            description: Value returned when the source is missing; without it, a missing source gives missing (EXPR-11).
         - unmapped:
             type: substitute_value
             description: Value returned when the source is present but has no dictionary entry; without it, such a source fails (EXPR-11).
@@ -40,4 +40,4 @@ expressions:
             description: Right-closed and left-open when true; left-closed and right-open when false (EXPR-13).
         - missing:
             type: substitute_value
-            description: Value returned when the source is missing (EXPR-13).
+            description: Value returned when the source is missing; without it, a missing source gives missing (EXPR-13).

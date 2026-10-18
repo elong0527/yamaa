@@ -349,7 +349,8 @@ mod diagnostics {
             #[test]
 
             fn failures_have_complete_independently_authored_geometry() {
-                assert_eq!(reached().len(), 7);
+                // A missing source no longer fails mapping or cut (COLUMN-10).
+                assert_eq!(reached().len(), 5);
             }
         }
         mod odm {

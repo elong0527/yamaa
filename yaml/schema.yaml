@@ -119,7 +119,11 @@ intermediate_class:
     - no_match:
         type: substitute_value
         required: false
-        description: Value returned when the lookup yields nothing; without it, yielding nothing fails (LOOKUP-13).
+        description: Value returned when the lookup yields nothing; without it, yielding nothing gives missing (LOOKUP-13).
+    - require_match:
+        type: bool
+        required: false
+        description: When true, yielding nothing fails instead of being answered; it cannot be declared with no_match (LOOKUP-13).
     - derivations:
         type: "dict[identifier, intermediate_derivation]"
         required: false
@@ -266,6 +270,10 @@ dataset_class:
         type: identifier
         required: false
         description: Name of the generated source record ordinal (INPUT-3).
+    - require_match:
+        type: bool
+        required: false
+        description: When true, every read through an implicit join to this input must find a record, unless the read declares absent (LOOKUP-24).
 
 intermediate_id:
     type: str

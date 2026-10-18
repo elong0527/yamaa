@@ -10,23 +10,24 @@ sex (`SEX`), plus a reference table carrying an upper limit
 **Variables:**
 
 - `LBSTNRHI` would be the upper limit read from the reference
-  table matched on test code and sex. A result whose test code and
-  sex have no reference entry has no stated answer, so it rejects
-  the run with no artifact accepted.
+  table matched on test code and sex. Every result is required to
+  find its reference entry, so a result whose test code and sex
+  have none rejects the run with no artifact accepted.
 
 ## How to fix
 
 Add the governed `AST/M` range to the reference table when one exists. If an
-absent range is intentionally represented by a missing value, declare
-`no_match: {literal: null}`:
+absent range is intentionally represented by a missing value, drop
+`require_match: true`:
 
 ```yaml
 intermediates:
   - id: REFRANGE
     dataset: LBRANGE
     key: [LBTESTCD, SEX]
-    no_match: {literal: null}
 ```
 
 The lookup then returns a missing value for every column read through it when
-a complete key has no match.
+a complete key has no match, and the run counts each such answer under
+`no_match`. Declaring `no_match` beside `require_match: true` is refused as a
+contradiction.

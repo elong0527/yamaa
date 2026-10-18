@@ -204,6 +204,7 @@ fn ranged_donor(
             ),
             columns: Some(vec![1]),
             no_match: Some(Value::Missing),
+            require_match: false,
             unique: vec![],
             derivations: None,
             pending_schema: None,
