@@ -291,11 +291,13 @@ pub(crate) fn snapshot_failures(
 }
 
 /// Format one retained project attempt into its public result candidate.
+/// Save targets resolve from the attempt's run scope.
 pub(crate) fn format_project_attempt(
     attempt: &ProjectAttempt,
     run: &Arc<yamaa_adapters::project_run::PreparedRun>,
     identity: yamaa_adapters::specification_report::Identity<'_>,
     project: &yamaa_adapters::file_project::FileProject,
+    run_scope: &yamaa_adapters::file_resources::RunScope,
 ) -> Result<yamaa_adapters::file_application::Domain, Vec<yamaa_adapters::issue_rows::Issue>> {
     use yamaa_adapters::project_report::Classified;
     let mut borrowed = Vec::new();
@@ -326,7 +328,9 @@ pub(crate) fn format_project_attempt(
     let formatted = yamaa_adapters::project_report::build_result(run, attempt, identity, &facts)
         .map_err(|error| error.refusal());
     match formatted {
-        Ok(result) => yamaa_adapters::file_application::Domain::from_project(result, project),
+        Ok(result) => {
+            yamaa_adapters::file_application::Domain::from_project(result, project, run_scope)
+        }
         Err(refusal) => Err(refusal.issues()),
     }
 }
@@ -407,17 +411,19 @@ impl yamaa_adapters::file_application::RuntimePort for EngineRuntime<'_> {
 
     fn plain(
         &mut self,
-        prepared: yamaa_adapters::file_preparation::FileSpecification,
+        prepared: &yamaa_adapters::file_preparation::FileSpecification,
         scope: yamaa_core::application_observer::Scope<'_>,
     ) -> Result<Self::Result, Self::Error> {
         let identity = self.shared.identity("domain", self.specification);
-        let result = yamaa_adapters::file_application::plain(prepared, identity, scope);
+        let mut run_scope = prepared.run_scope(None);
+        let result =
+            yamaa_adapters::file_application::plain(prepared, &mut run_scope, identity, scope);
         Ok(BuildOutcome::Plain { result })
     }
 
     fn project(
         &mut self,
-        mut project: Box<yamaa_adapters::file_project::FileProject>,
+        project: &yamaa_adapters::file_project::FileProject,
         scope: yamaa_core::application_observer::Scope<'_>,
     ) -> Result<Self::Result, Self::Error> {
         let Some(functions) = self.shared.functions.clone() else {
@@ -428,7 +434,9 @@ impl yamaa_adapters::file_application::RuntimePort for EngineRuntime<'_> {
                 ),
             });
         };
+        let mut run_scope = project.run_scope(None);
         let inner = project.build_with(
+            &mut run_scope,
             |run| {
                 let bytes = run
                     .captured_environment()
@@ -444,7 +452,7 @@ impl yamaa_adapters::file_application::RuntimePort for EngineRuntime<'_> {
         let run = project.retained_run();
         scope.phase(yamaa_core::application_observer::Phase::Output);
         let identity = self.shared.identity("domain", self.specification);
-        let result = format_project_attempt(&inner, &run, identity, &project);
+        let result = format_project_attempt(&inner, &run, identity, project, &run_scope);
         scope.exit(
             yamaa_core::application_observer::Phase::Output,
             if result.is_ok() {
@@ -461,7 +469,7 @@ impl yamaa_adapters::file_application::RuntimePort for EngineRuntime<'_> {
 
     fn producer(
         &mut self,
-        graph: Box<yamaa_adapters::file_graph::FileGraph>,
+        graph: &yamaa_adapters::file_graph::FileGraph,
         scope: yamaa_core::application_observer::Scope<'_>,
     ) -> Result<Self::Result, Self::Error> {
         let Some(functions) = self.shared.functions.clone() else {
@@ -469,7 +477,8 @@ impl yamaa_adapters::file_application::RuntimePort for EngineRuntime<'_> {
                 issues: yamaa_adapters::file_application::unsupported("producer_host", None),
             });
         };
-        let mut build = graph.into_build();
+        let build = graph.build();
+        let mut run_scope = build.run_scope(None);
         let provenance = Arc::clone(build.provenance());
         let lock_bytes = provenance
             .environment()
@@ -480,7 +489,7 @@ impl yamaa_adapters::file_application::RuntimePort for EngineRuntime<'_> {
             lock_bytes: &lock_bytes,
         };
         let identity = self.shared.identity("domain", self.specification);
-        let inner = build.build_owned_reported(&mut port, identity, scope);
+        let inner = build.build_owned_reported(&mut run_scope, &mut port, identity, scope);
         // The Output phase starts after the producer build, exactly as the
         // pre-facade host paths did: producer execution is not output work.
         scope.phase(yamaa_core::application_observer::Phase::Output);
