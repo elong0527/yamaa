@@ -101,10 +101,17 @@ Resource refusal is separate from semantic source invalidity.
 **REQ-1317.** `source_sas_invalid` reports in the `ingest` phase at
 `input.<dataset>.path`, with dataset, path, and a closed `cause`:
 `framing`, `members`, `version`, `encoding`, `compression`, `header`,
-`field_name`, `field_type`, `record_order`, `truncated`, or `malformed`.
-Undecodable text fails without replacement characters. Unsupported versions,
-unsupported compression signatures, malformed compressed data, duplicate or
-empty field names, and incomplete physical framing fail before derivation.
+`field_name`, `field_type`, `record_order`, `deleted_records`, `truncated`, or
+`malformed`. Undecodable text fails without replacement characters.
+Unsupported versions, unsupported compression signatures, malformed compressed
+data, duplicate or empty field names, and incomplete physical framing fail
+before derivation. A SAS dataset that retains records deleted in place fails
+with cause `deleted_records` when a data or mix page is flagged as holding
+deleted records or the row-size subheader records a non-zero deleted-record
+count; readers never return a deleted record. That finding's context adds a `hint` to
+rewrite the dataset first, for example with PROC COPY or a DATA step. In
+compressed storage a deleted record carries an unsupported compression code
+and fails as `compression` first.
 Transport member descriptor chains at 80-byte boundaries are structural
 records; multiple complete chains fail, including concatenated transport
 datasets. A character value resembling a MEMBER header alone remains text.

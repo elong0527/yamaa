@@ -12,6 +12,7 @@
 #endif
 static YAMAA_THREAD_LOCAL size_t rows_limit, columns_limit, cells_limit;
 static YAMAA_THREAD_LOCAL int limit_hit, number_exact, refusal_resource, refusal_known;
+static YAMAA_THREAD_LOCAL int deleted_records_hit;
 static YAMAA_THREAD_LOCAL size_t refusal_limit, refusal_actual;
 static int refuse(int resource, size_t limit, size_t actual, int known) {
     if (!limit_hit) {
@@ -35,6 +36,11 @@ int yamaa_readstat_admit(size_t rows, size_t columns) {
     if (columns && rows > cells_limit / columns)
         return refuse(3, cells_limit, rows * columns, rows <= SIZE_MAX / columns);
     return 1;
+}
+/* SAS records deleted in place cannot be skipped; classify the stop. */
+readstat_error_t yamaa_readstat_deleted_records(void) {
+    deleted_records_hit = 1;
+    return READSTAT_ERROR_PARSE;
 }
 typedef int (*yamaa_metadata)(int64_t rows, int columns, int version,
         const char *encoding, void *user);
@@ -114,7 +120,7 @@ int yamaa_readstat_parse(const unsigned char *bytes, size_t length, int xport,
     yamaa_ctx ctx = { .bytes = bytes, .length = length, .metadata = metadata,
         .variable = variable, .value = value, .user = user, .xport = xport };
     rows_limit = rows; columns_limit = columns; cells_limit = cells;
-    limit_hit = 0;
+    limit_hit = 0; deleted_records_hit = 0;
     readstat_parser_t *parser = readstat_parser_init();
     if (!parser) return -6;
     readstat_set_io_ctx(parser, &ctx);
@@ -135,6 +141,7 @@ int yamaa_readstat_parse(const unsigned char *bytes, size_t length, int xport,
         *actual = refusal_actual; *known = refusal_known;
         return -2;
     }
+    if (deleted_records_hit) return -7;
     if (status == READSTAT_ERROR_MALLOC) return -6;
     if (status == READSTAT_ERROR_UNSUPPORTED_COMPRESSION) return -3;
     if (status == READSTAT_ERROR_CONVERT_BAD_STRING) return -4;

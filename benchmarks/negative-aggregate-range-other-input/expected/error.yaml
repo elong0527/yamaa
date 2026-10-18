@@ -1,7 +1,7 @@
 phase: validation
 condition: unknown_field
 spec_paths:
-  - columns.TEAENUM.derivation.aggregate.between.value
+  - columns.NTEAE.derivation.aggregate.between.value
 requirement: REQ-0121
 context:
-  identifier: EX.EXSTDTC
+  identifier: EXF.TRTSDT
