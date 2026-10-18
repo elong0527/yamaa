@@ -81,11 +81,9 @@ struct Node {
 pub(super) struct Sites {
     index: BTreeMap<(Arc<str>, u8), u32>,
     pub(super) entries: Vec<(Arc<str>, HandlerKind)>,
-    /// Counted in the attempt's report rather than a donor-local counter.
-    pub(super) reported: Vec<bool>,
 }
 impl Sites {
-    fn intern(&mut self, path: &str, kind: HandlerKind, reported: bool) -> HandlerSiteId {
+    fn intern(&mut self, path: &str, kind: HandlerKind) -> HandlerSiteId {
         let order = match kind {
             HandlerKind::Absent => 0,
             HandlerKind::Missing => 1,
@@ -101,10 +99,8 @@ impl Sites {
         let next = self.entries.len() as u32;
         let id = *self.index.entry((path.clone(), order)).or_insert_with(|| {
             self.entries.push((path, kind));
-            self.reported.push(false);
             next
         });
-        self.reported[id as usize] |= reported;
         HandlerSiteId(id)
     }
 }
@@ -117,9 +113,9 @@ struct Builder<'p> {
     donors: Vec<(*const DatasetPlan, RegionId)>,
     pending: VecDeque<RegionId>,
     calls: Vec<super::registration::Call>,
-    /// The handler kinds a named read can fire, per intermediate of the
-    /// region being lowered: (no_match, multiple_matches).
-    observed: Vec<(bool, bool)>,
+    /// The handlers a named read counts, per intermediate of the region
+    /// being lowered.
+    observed: Vec<crate::dataset::ReadHandlers>,
 }
 
 /// How a leaf `Source(c)` or `Column(c)` read is addressed in one context.
@@ -294,7 +290,8 @@ impl<'p> Builder<'p> {
                 *column = cx.column(column.index())?;
             }
         }
-        self.observed = observed_kinds(plan)?;
+        self.observed = crate::dataset::read_handlers(plan.intermediates())
+            .map_err(|child| unsupported("later intermediate read", child))?;
         // Named intermediates keep their plan positions as relation slots.
         for index in 0..plan.intermediates().len() {
             let path = plan.intermediates()[index].path.as_str();
@@ -329,7 +326,7 @@ impl<'p> Builder<'p> {
             .iter()
             .map(|declaration| {
                 let path = &declaration.handler.spec_path;
-                self.sites.intern(path, HandlerKind::Unconvertible, true)
+                self.sites.intern(path, HandlerKind::Unconvertible)
             })
             .collect();
         if cx.dataset {
@@ -429,7 +426,7 @@ impl<'p> Builder<'p> {
         }
         Ok(cx.plan.conversion_handler(&assignment.path).map(|handler| {
             self.sites
-                .intern(&handler.spec_path, HandlerKind::Unconvertible, true)
+                .intern(&handler.spec_path, HandlerKind::Unconvertible)
         }))
     }
 
@@ -526,8 +523,12 @@ impl<'p> Builder<'p> {
         Ok(())
     }
 
-    fn push(&mut self, node: Node) -> Result<ExprId, ResolutionError> {
+    fn push(&mut self, mut node: Node) -> Result<ExprId, ResolutionError> {
         let id = ExprId::try_from(self.out.exprs.len())?;
+        // An operation registers its own sites in the fixed handler order.
+        let entries = &self.sites.entries;
+        node.sites
+            .sort_by_key(|site| registration_rank(entries[site.site.index()].1));
         let out = &mut self.out;
         let operands = span(out.operands.len(), out.operands.len() + node.operands.len())?;
         let reads = span(out.reads.len(), out.reads.len() + node.reads.len())?;
@@ -548,36 +549,22 @@ impl<'p> Builder<'p> {
         Ok(id)
     }
 
-    /// A handler site the node fires when `declared`, registered by `walker`.
-    fn site(
-        &mut self,
-        cx: &Cx<'_>,
-        node: &mut Node,
-        declared: bool,
-        path: String,
-        kind: HandlerKind,
-        walker: Option<Walker>,
-    ) {
+    /// A handler site the node fires when `declared`. A node lists its sites
+    /// in registration order.
+    fn site(&mut self, node: &mut Node, declared: bool, path: String, kind: HandlerKind) {
         if declared {
-            let site = self.sites.intern(&path, kind, cx.dataset);
-            node.sites.push(NodeSite { site, walker });
+            let site = self.sites.intern(&path, kind);
+            node.sites.push(NodeSite { site });
         }
     }
 
-    /// An implicit join's `absent` count, registered by the scalar walker
-    /// unless the read fails instead of answering.
+    /// An implicit join's `absent` count, unless the read fails instead of
+    /// answering.
     fn absent(&mut self, cx: &Cx<'_>, node: &mut Node, absence: &JoinAbsence, input: &str) {
         let answers = !absence.requires_match(cx.plan.requires_match(input));
         let site = format!("{}.absent", absence.path);
         if answers && !self.has_site(node, &site) {
-            self.site(
-                cx,
-                node,
-                true,
-                site,
-                HandlerKind::Absent,
-                Some(Walker::Scalar),
-            );
+            self.site(node, true, site, HandlerKind::Absent);
         }
     }
 
@@ -625,7 +612,6 @@ impl<'p> Builder<'p> {
         // Nested value assignments, lowered after the node's own facts.
         let mut values: Vec<(&'p Assignment, OperandRole, Demand)> = Vec::new();
         let mut call = None;
-        let scalar = Some(Walker::Scalar);
         match &assignment.expression {
             E::Literal(_) => (),
             E::Source(column) => {
@@ -654,7 +640,7 @@ impl<'p> Builder<'p> {
                 }
                 let site = format!("{path}.multiple_matches");
                 let selected = selection.is_some();
-                self.site(cx, &mut node, selected, site, H::MultipleMatches, None);
+                self.site(&mut node, selected, site, H::MultipleMatches);
             }
             E::Reduce { column, .. } => {
                 node.kind = ExprKind::Reduce;
@@ -671,7 +657,7 @@ impl<'p> Builder<'p> {
                 for binding in numeric.bindings() {
                     let read = self.bound_read(cx, fields, &binding.read, path)?;
                     node.reads.push(read);
-                    self.observed(cx, &mut node, &binding.read, path)?;
+                    self.observed(&mut node, &binding.read, path)?;
                 }
                 self.joined_operands(
                     cx,
@@ -683,7 +669,7 @@ impl<'p> Builder<'p> {
             E::Flag(flag) => {
                 node.kind = ExprKind::Flag;
                 // A missing operand is counted whether or not `missing` is declared.
-                self.site(cx, &mut node, true, flag.missing_path(), H::Missing, scalar);
+                self.site(&mut node, true, flag.missing_path(), H::Missing);
                 for binding in flag.bindings() {
                     let read = match &binding.read {
                         FlagRead::Read(read) => self.bound_read(cx, fields, read, path)?,
@@ -719,22 +705,9 @@ impl<'p> Builder<'p> {
                 let base = operation.path();
                 let unmapped = operation.unmapped().is_some();
                 // A missing source is counted whether or not `missing` is declared.
-                self.site(
-                    cx,
-                    &mut node,
-                    true,
-                    format!("{base}.missing"),
-                    H::Missing,
-                    scalar,
-                );
-                self.site(
-                    cx,
-                    &mut node,
-                    unmapped,
-                    format!("{base}.unmapped"),
-                    H::Unmapped,
-                    scalar,
-                );
+                self.site(&mut node, true, format!("{base}.missing"), H::Missing);
+                let site = format!("{base}.unmapped");
+                self.site(&mut node, unmapped, site, H::Unmapped);
                 values.push((source, Value, Always));
             }
             E::Round { source, .. } => {
@@ -746,7 +719,6 @@ impl<'p> Builder<'p> {
                 operation,
             } => {
                 node.kind = ExprKind::Imputation;
-                let walker = Some(Walker::Imputation);
                 let base = operation.path();
                 // A missing source is counted at `fallback` when one is declared.
                 let missing = if operation.fallback().is_some() {
@@ -756,16 +728,16 @@ impl<'p> Builder<'p> {
                 };
                 let counts = operation.counts_missing_source();
                 let site = format!("{base}.{missing}");
-                self.site(cx, &mut node, counts, site, H::Missing, walker);
+                self.site(&mut node, counts, site, H::Missing);
                 let declared = operation.handler("invalid").is_some();
                 let site = format!("{base}.invalid");
-                self.site(cx, &mut node, declared, site, H::Invalid, walker);
+                self.site(&mut node, declared, site, H::Invalid);
                 let crossed = operation.counts_crossed_bounds();
                 let site = format!("{base}.not_after");
-                self.site(cx, &mut node, crossed, site, H::CrossedBounds, walker);
+                self.site(&mut node, crossed, site, H::CrossedBounds);
                 let partial = matches!(operation.kind(), ImputationKind::ToDate);
                 let site = format!("{base}.partial");
-                self.site(cx, &mut node, partial, site, H::Partial, walker);
+                self.site(&mut node, partial, site, H::Partial);
                 // Bounds are evaluated only after a partial source needs them.
                 for (index, operand) in operands.iter().enumerate() {
                     values.push((operand, Value, if index == 0 { Always } else { Reached }));
@@ -778,8 +750,7 @@ impl<'p> Builder<'p> {
                 node.kind = ExprKind::Temporal;
                 let declared = operation.invalid_handler().is_some();
                 let site = format!("{}.invalid", operation.path());
-                let walker = Some(Walker::Imputation);
-                self.site(cx, &mut node, declared, site, H::Invalid, walker);
+                self.site(&mut node, declared, site, H::Invalid);
                 // `dtc` reads a part only when every coarser part is present.
                 let stops = operation.kind().stops_at_missing();
                 for (index, operand) in operands.iter().enumerate() {
@@ -798,32 +769,28 @@ impl<'p> Builder<'p> {
                 node.kind = ExprKind::StrTemplate;
                 let declared = operation.missing().is_some();
                 let site = format!("{}.missing", operation.path());
-                let walker = Some(Walker::StrTemplate);
-                self.site(cx, &mut node, declared, site, H::Missing, walker);
+                self.site(&mut node, declared, site, H::Missing);
                 values.extend(operands.iter().map(|operand| (operand, Value, Always)));
             }
             E::StrExtract { source, operation } => {
                 node.kind = ExprKind::StrExtract;
-                let walker = Some(Walker::StrExtract);
                 let site = format!("{}.missing", operation.path());
-                self.site(cx, &mut node, true, site, H::Missing, walker);
+                self.site(&mut node, true, site, H::Missing);
                 let declared = operation.handler("no_match").is_some();
                 let site = format!("{}.no_match", operation.path());
-                self.site(cx, &mut node, declared, site, H::NoMatch, walker);
+                self.site(&mut node, declared, site, H::NoMatch);
                 values.push((source, Value, Always));
             }
             E::StrReplace { source, operation } => {
                 node.kind = ExprKind::StrReplace;
                 let site = format!("{}.missing", operation.path());
-                let walker = Some(Walker::StrReplace);
-                self.site(cx, &mut node, true, site, H::Missing, walker);
+                self.site(&mut node, true, site, H::Missing);
                 values.push((source, Value, Always));
             }
             E::StrCase { source, operation } => {
                 node.kind = ExprKind::StrCase;
                 let site = format!("{}.missing", operation.path());
-                let walker = Some(Walker::StrCase);
-                self.site(cx, &mut node, true, site, H::Missing, walker);
+                self.site(&mut node, true, site, H::Missing);
                 values.push((source, Value, Always));
             }
             E::StrPad { source, .. } => {
@@ -839,16 +806,16 @@ impl<'p> Builder<'p> {
             } => {
                 node.kind = ExprKind::SourceBinding;
                 let site = format!("{binding}.absent");
-                self.site(cx, &mut node, absent.is_some(), site, H::Absent, scalar);
+                self.site(&mut node, absent.is_some(), site, H::Absent);
                 let site = format!("{}.multiple_matches", source.path);
                 let kind = H::MultipleMatches;
-                self.site(cx, &mut node, *selection_declared, site, kind, scalar);
+                self.site(&mut node, *selection_declared, site, kind);
                 values.push((source, Value, Always));
             }
             E::FirstAvailable(selection) => {
                 node.kind = ExprKind::FirstAvailable;
                 let site = selection.missing_path();
-                self.site(cx, &mut node, true, site, H::Missing, scalar);
+                self.site(&mut node, true, site, H::Missing);
                 self.first_available(cx, &mut node, selection, fields)?;
             }
             E::SourceLookup {
@@ -879,10 +846,10 @@ impl<'p> Builder<'p> {
                 node.kind = ExprKind::SourceLookup(relation);
                 node.reads
                     .push(Read::Relation(relation, field(lookup.column)?));
-                self.observed_range(cx, &mut node, range.as_ref(), path)?;
+                self.observed_range(&mut node, range.as_ref(), path)?;
                 let site = format!("{path}.multiple_matches");
                 let selected = selection.is_some();
-                self.site(cx, &mut node, selected, site, H::MultipleMatches, scalar);
+                self.site(&mut node, selected, site, H::MultipleMatches);
                 if let Some(absence) = absence {
                     let input = &cx.plan.secondary()[lookup.source].name;
                     self.absent(cx, &mut node, absence, input);
@@ -956,10 +923,10 @@ impl<'p> Builder<'p> {
                 node.kind = ExprKind::JoinedSource(relation);
                 node.reads
                     .push(Read::Relation(relation, field(read.column)?));
-                self.observed_range(cx, &mut node, range.as_ref(), path)?;
+                self.observed_range(&mut node, range.as_ref(), path)?;
                 let site = format!("{path}.multiple_matches");
                 let selected = selection.is_some();
-                self.site(cx, &mut node, selected, site, H::MultipleMatches, scalar);
+                self.site(&mut node, selected, site, H::MultipleMatches);
                 if let Some(absence) = absence {
                     self.absent(cx, &mut node, absence, &read.name);
                 }
@@ -972,7 +939,7 @@ impl<'p> Builder<'p> {
                     index: *index,
                     column: *column,
                 };
-                self.observed(cx, &mut node, &read, path)?;
+                self.observed(&mut node, &read, path)?;
             }
             E::Aggregate(bound) => self.aggregate(cx, &mut node, bound)?,
             E::Odm(bound) => self.odm(cx, &mut node, bound)?,
@@ -1085,7 +1052,7 @@ impl<'p> Builder<'p> {
                 FunctionInput::Read(read) => {
                     let slot = self.bound_read(cx, fields, read, path)?;
                     node.reads.push(slot);
-                    self.observed(cx, node, read, path)?;
+                    self.observed(node, read, path)?;
                 }
                 FunctionInput::Collect { column, .. } => {
                     node.reads.push(self.source_read(cx, fields, *column)?);
@@ -1095,12 +1062,11 @@ impl<'p> Builder<'p> {
         Ok(())
     }
 
-    /// A named read that records its own handler sites: `<path>.no_match` and
-    /// `<path>.multiple_matches` register when they first fire, including for
-    /// the earlier intermediates its range and donor operands read through.
+    /// A named read counts its `multiple_matches` and `no_match` at the
+    /// reading path, those of the earlier intermediates its range and donor
+    /// operands read through included.
     fn observed(
         &mut self,
-        cx: &Cx<'_>,
         node: &mut Node,
         read: &BoundRead,
         path: &str,
@@ -1108,14 +1074,15 @@ impl<'p> Builder<'p> {
         let BoundRead::Intermediate { index, .. } = read else {
             return Ok(());
         };
-        let (no_match, multiple) = *self
+        let handlers = *self
             .observed
             .get(*index)
             .ok_or_else(|| unsupported("intermediate outside the plan", *index))?;
         let site = format!("{path}.multiple_matches");
-        self.site(cx, node, multiple, site, HandlerKind::MultipleMatches, None);
+        let multiple = handlers.multiple_matches;
+        self.site(node, multiple, site, HandlerKind::MultipleMatches);
         let site = format!("{path}.no_match");
-        self.site(cx, node, no_match, site, HandlerKind::NoMatch, None);
+        self.site(node, handlers.no_match, site, HandlerKind::NoMatch);
         Ok(())
     }
 
@@ -1124,7 +1091,6 @@ impl<'p> Builder<'p> {
     /// its own assignment, so its handler sites are recorded at `path`.
     fn observed_range(
         &mut self,
-        cx: &Cx<'_>,
         node: &mut Node,
         range: Option<&RelationRange>,
         path: &str,
@@ -1132,7 +1098,7 @@ impl<'p> Builder<'p> {
         if let Some(CurrentRead::Intermediate { index, column }) =
             range.map(|range| range.current().read)
         {
-            self.observed(cx, node, &BoundRead::Intermediate { index, column }, path)?;
+            self.observed(node, &BoundRead::Intermediate { index, column }, path)?;
         }
         Ok(())
     }
@@ -1483,7 +1449,7 @@ impl<'p> Builder<'p> {
         if let Some(range) = bound.range() {
             if let CurrentRead::Intermediate { index, column } = range.current().read {
                 let read = BoundRead::Intermediate { index, column };
-                self.observed(cx, node, &read, range.path())?;
+                self.observed(node, &read, range.path())?;
             }
         }
         if let Some(filter) = bound.filter() {
@@ -1510,15 +1476,7 @@ impl<'p> Builder<'p> {
             };
             if let Some(handler) = &derivation.handler {
                 let site = handler.spec_path.clone();
-                let walker = Some(Walker::Scalar);
-                self.site(
-                    cx,
-                    &mut wrapper,
-                    true,
-                    site,
-                    HandlerKind::Unconvertible,
-                    walker,
-                );
+                self.site(&mut wrapper, true, site, HandlerKind::Unconvertible);
             }
             let expr = self.push(wrapper)?;
             node.operands.push(Operand {
@@ -1799,6 +1757,24 @@ impl<'p> Builder<'p> {
 /// The ODM item value field.
 const ODM_VALUE: u32 = 10;
 
+/// The order in which one operation registers its own handler sites
+/// (COLUMN-14): `missing` or `fallback`, `unmapped`, `invalid`, `not_after`,
+/// `partial`, then a lookup's `multiple_matches` before its `no_match` or
+/// `absent`.
+fn registration_rank(kind: HandlerKind) -> u8 {
+    match kind {
+        HandlerKind::Missing => 0,
+        HandlerKind::Unmapped => 1,
+        HandlerKind::Invalid => 2,
+        HandlerKind::CrossedBounds => 3,
+        HandlerKind::Partial => 4,
+        HandlerKind::MultipleMatches => 5,
+        HandlerKind::NoMatch => 6,
+        HandlerKind::Absent => 7,
+        HandlerKind::Unconvertible => 8,
+    }
+}
+
 fn template_driver(cx: &Cx<'_>, mode: &RowMode) -> Result<DriverContext, ResolutionError> {
     let named = match mode {
         RowMode::IntermediateDriver { index, .. } => Some(cx.named(*index)?),
@@ -1911,34 +1887,6 @@ fn current_read(cx: &Cx<'_>, current: &CurrentField) -> Result<Read, ResolutionE
             Read::Relation(cx.named(index)?, field(column)?)
         }
     })
-}
-
-/// Per intermediate, the handler kinds a named read can fire: its own
-/// absence and multiplicity handlers, and those of the earlier intermediates
-/// its range and donor operands read through (filter operands are predicates
-/// and record nothing). Earlier intermediates come first, so one pass suffices.
-fn observed_kinds(plan: &DatasetPlan) -> Result<Vec<(bool, bool)>, ResolutionError> {
-    let mut kinds: Vec<(bool, bool)> = Vec::with_capacity(plan.intermediates().len());
-    for item in plan.intermediates() {
-        let mut no_match = item.no_match.is_some();
-        let mut multiple = item.selection.is_some();
-        let operands = item
-            .range
-            .iter()
-            .map(|range| range.current())
-            .chain(item.derivations.iter().flat_map(|derived| &derived.current));
-        for current in operands {
-            if let CurrentRead::Intermediate { index: child, .. } = current.read {
-                let (child_absent, child_multiple) = *kinds
-                    .get(child)
-                    .ok_or_else(|| unsupported("later intermediate read", child))?;
-                no_match |= child_absent;
-                multiple |= child_multiple;
-            }
-        }
-        kinds.push((no_match, multiple));
-    }
-    Ok(kinds)
 }
 
 /// The completed where columns a value-level check selects its rows by, each

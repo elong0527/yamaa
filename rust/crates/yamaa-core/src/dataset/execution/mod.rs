@@ -22,6 +22,7 @@ mod numeric;
 mod odm;
 mod ordering;
 mod predicates;
+mod registration;
 mod row_drivers;
 mod row_windows;
 mod scalar;
@@ -769,46 +770,10 @@ impl DatasetPlan {
         attempt
     }
 
-    /// Register every eagerly reported handler site at zero, in report order:
-    /// conversion handlers, each donor plan's conversion handlers, then the
-    /// sites of each walker for every assignment and key expression. The
+    /// Register every handler path at zero, in report order (COLUMN-14). The
     /// resolved plan's handler table is checked against this walk on every bind.
     pub(crate) fn register_handlers(&self, handlers: &mut HandlerCounter) {
-        for declaration in self.conversion_handlers() {
-            handlers.register(&declaration.handler.spec_path, HandlerKind::Unconvertible);
-        }
-        for intermediate in self.intermediates() {
-            if let Some(derived) = &intermediate.derivations {
-                for declaration in derived.plan.conversion_handlers() {
-                    handlers.register(&declaration.handler.spec_path, HandlerKind::Unconvertible);
-                }
-            }
-        }
-        for assignment in self
-            .templates()
-            .iter()
-            .flat_map(|template| &template.assignments)
-            .chain(self.columns())
-            .chain(
-                self.intermediates()
-                    .iter()
-                    .flat_map(|item| &item.keys)
-                    .filter_map(|key| {
-                        if let MatchValue::Expression(expression) = &key.value {
-                            Some(&expression.assignment)
-                        } else {
-                            None
-                        }
-                    }),
-            )
-        {
-            scalar::register(assignment, self, handlers);
-            imputation::register(&assignment.expression, handlers);
-            str_case::register(&assignment.expression, handlers);
-            str_extract::register(&assignment.expression, handlers);
-            str_replace::register(&assignment.expression, handlers);
-            str_template::register(&assignment.expression, handlers);
-        }
+        registration::register(self, handlers);
     }
 
     /// Share the retained semantic observations for this immutable plan attempt.

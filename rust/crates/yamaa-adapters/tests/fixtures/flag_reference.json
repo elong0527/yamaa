@@ -311,14 +311,14 @@
       "result_type": "ExecutionSuccess",
       "handlers": [
         {
-          "spec_path": "columns.COMPLFL.derivation.flag.missing",
-          "handler": "missing",
-          "count": 0
-        },
-        {
           "spec_path": "columns.COMPREC.derivation.source.no_match",
           "handler": "no_match",
           "count": 5
+        },
+        {
+          "spec_path": "columns.COMPLFL.derivation.flag.missing",
+          "handler": "missing",
+          "count": 0
         }
       ],
       "findings": [],
@@ -748,13 +748,8 @@
       "result_type": "ExecutionSuccess",
       "handlers": [
         {
-          "spec_path": "columns.DTHDTC.derivation.first_available.missing",
-          "handler": "missing",
-          "count": 1
-        },
-        {
-          "spec_path": "columns.DTHFL.derivation.flag.missing",
-          "handler": "missing",
+          "spec_path": "columns.DSDTHDT.derivation.source.multiple_matches",
+          "handler": "multiple_matches",
           "count": 0
         },
         {
@@ -763,9 +758,24 @@
           "count": 2
         },
         {
+          "spec_path": "columns.AEDTHDT.derivation.source.multiple_matches",
+          "handler": "multiple_matches",
+          "count": 0
+        },
+        {
           "spec_path": "columns.AEDTHDT.derivation.source.no_match",
           "handler": "no_match",
           "count": 2
+        },
+        {
+          "spec_path": "columns.DTHDTC.derivation.first_available.missing",
+          "handler": "missing",
+          "count": 1
+        },
+        {
+          "spec_path": "columns.DTHFL.derivation.flag.missing",
+          "handler": "missing",
+          "count": 0
         }
       ],
       "findings": [],

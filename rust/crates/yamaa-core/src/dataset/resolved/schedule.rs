@@ -431,11 +431,7 @@ impl Classes<'_> {
             ) {
                 effects = effects.max(Effects::Callbacks);
             }
-            if plan
-                .sites(expr)
-                .iter()
-                .any(|site| plan.handler(site.site).registration != Registration::Unreported)
-            {
+            if !plan.sites(expr).is_empty() {
                 effects = effects.max(Effects::Handlers);
             }
             pending.extend(plan.operands(expr).iter().map(|operand| operand.expr));

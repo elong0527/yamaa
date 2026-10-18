@@ -633,7 +633,18 @@
           "verification_id": null
         }
       ],
-      "handlers": [],
+      "handlers": [
+        {
+          "count": 0,
+          "handler": "multiple_matches",
+          "spec_path": "columns.VALUE.derivation.source.multiple_matches"
+        },
+        {
+          "count": 0,
+          "handler": "no_match",
+          "spec_path": "columns.VALUE.derivation.source.no_match"
+        }
+      ],
       "csv": "ID,KIND,CUT,VALUE\na,group,1,1\na,group,2,2\na,record,1,11\na,record,2,12\n",
       "source_reads": [
         "src.csv",
