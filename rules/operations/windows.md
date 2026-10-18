@@ -46,9 +46,11 @@ specification's `group_by` and preserve row count. In row construction those
 rows are the enclosing row template's constructed rows (REQ-0326); in an
 intermediate derivation they are the donor records as augmented by every
 derivation declared before it (REQ-1185). Omitting `group_by` creates one
-partition. Within a declared group, missing values equal other missing
-values. Rows with equal present values and equal missing group positions
-share one partition. A window partition is a group of rows.
+partition. A `group_by` names each variable once; a variable listed again
+fails as `invalid_field_type` at that entry, reporting the variable. Within
+a declared group, missing values equal other missing values. Rows with equal
+present values and equal missing group positions share one partition. A
+window partition is a group of rows.
 
 <a id="req-0294"></a>
 

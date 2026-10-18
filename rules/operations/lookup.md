@@ -132,7 +132,9 @@ the list `[TESTCD, SEX]` would have matched `TESTCD` against a current-row
 
 A written `key` names at least one pair. An empty list or mapping names no
 match: a lookup fails as `invalid_field_type`, and an aggregate fails as
-`missing_aggregate_keys` ([REQ-0140](lookup.md#req-0140)).
+`missing_aggregate_keys` ([REQ-0140](lookup.md#req-0140)). A lookup's list
+names each column once; a column listed again fails as
+`invalid_field_type` at that entry, reporting the column.
 
 <a id="req-0116"></a>
 
