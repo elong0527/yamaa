@@ -18,14 +18,14 @@ pub struct Failure {
 }
 
 impl Failure {
-    pub(crate) fn new(message: impl Into<String>, report: &Report) -> Self {
+    pub fn new(message: impl Into<String>, report: &Report) -> Self {
         Self {
             message: message.into(),
             issues: report.table(),
         }
     }
 
-    pub(crate) fn from_error(context: &str, error: &Error) -> Self {
+    pub fn from_error(context: &str, error: &Error) -> Self {
         match error {
             Error::Rejected(report) => Self::new(format!("{context}; see issues"), report),
             other => Self::new(format!("{context}: {other}"), &Report::default()),

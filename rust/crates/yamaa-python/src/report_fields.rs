@@ -52,7 +52,7 @@ pub(super) fn issue_rows<'py>(
 /// Build the owned Python value tree: integer tokens become `int` (unbounded,
 /// so a token wider than 64 bits parses its exact spelling), other number
 /// tokens `float`, objects `dict` and arrays `list`.
-fn context_value<'py>(py: Python<'py>, value: &ContextValue) -> PyResult<Bound<'py, PyAny>> {
+pub(crate) fn context_value<'py>(py: Python<'py>, value: &ContextValue) -> PyResult<Bound<'py, PyAny>> {
     match value {
         ContextValue::Null => Ok(py.None().into_bound(py)),
         ContextValue::Bool(value) => value.into_bound_py_any(py),

@@ -108,3 +108,43 @@
 .native_read_resolved_specification <- function(value) {
   .Call(wrap__read_resolved_specification, value)
 }
+
+.native_spec_check <- function(specification, project, version) {
+  .Call(wrap__spec_check, specification, project, version)
+}
+
+.native_spec_run <- function(specification, project, version, capabilities) {
+  .Call(wrap__spec_run, specification, project, version, capabilities)
+}
+
+.native_spec_resolve <- function(specification, project, version) {
+  .Call(wrap__spec_resolve, specification, project, version)
+}
+
+.native_read_odm <- function(source, archive_member, max_archive_members, max_expanded_bytes, max_xml_depth) {
+  .Call(wrap__read_odm, source, archive_member, max_archive_members, max_expanded_bytes, max_xml_depth)
+}
+
+.native_run_output <- function(handle) {
+  .Call(wrap__run_output, handle)
+}
+
+.native_run_issues <- function(handle) {
+  .Call(wrap__run_issues, handle)
+}
+
+.native_run_report <- function(handle) {
+  .Call(wrap__run_report, handle)
+}
+
+.native_run_save <- function(handle) {
+  .Call(wrap__run_save, handle)
+}
+
+.native_run_observations <- function(handle, include_measurements) {
+  .Call(wrap__run_observations, handle, include_measurements)
+}
+
+.native_run_interrupt <- function(handle) {
+  .Call(wrap__run_interrupt, handle)
+}

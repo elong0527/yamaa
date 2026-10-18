@@ -138,6 +138,45 @@ python:
       rust: style::_style_same_value
       args: {before: bytes, after: bytes}
       returns: bool
+    - kind: class
+      name: _Run
+      rust: api_entry::Run
+      constructible: false
+      methods:
+        - {name: output, args: {}, returns: "optional<_ArrowTable>"}
+        - {name: issues, args: {}, returns: _ArrowTable}
+        - {name: report, args: {}, returns: "optional<_ArrowTable>"}
+        - {name: save, args: {}, returns: unit}
+        - {name: observations, args: {include_measurements: "bool = false"}, returns: "optional<text>"}
+    - kind: exception
+      name: _Error
+      rust: api_entry::_Error
+      base: Exception
+    - kind: function
+      name: _spec_check
+      rust: api_entry::_spec_check
+      args: {specification: text, project: "optional<text> = None"}
+      returns: _ArrowTable
+    - kind: function
+      name: _spec_run
+      rust: api_entry::_spec_run
+      args: {specification: text, project: "optional<text> = None"}
+      returns: _Run
+    - kind: function
+      name: _spec_resolve
+      rust: api_entry::_spec_resolve
+      args: {specification: text, project: "optional<text> = None"}
+      returns: context_object
+    - kind: function
+      name: _read_odm
+      rust: api_entry::_read_odm
+      args:
+        source: text
+        archive_member: "optional<text> = None"
+        max_archive_members: "index = 10000"
+        max_expanded_bytes: "index = 268435456"
+        max_xml_depth: "index = 64"
+      returns: _ArrowTable
 
 r:
   module: yamaa
@@ -195,6 +234,23 @@ r:
       functions:
         - {name: resolve_specification_file, args: {specification: raw, environment: robj}, returns: r_reply}
         - {name: read_resolved_specification, args: {value: raw}, returns: r_reply}
+    - module: api_entry
+      source: rust/crates/yamaa-r/src/api_entry.rs
+      functions:
+        - {name: spec_check, args: {specification: raw, project: robj, version: raw}, returns: r_reply}
+        - name: spec_run
+          args: {specification: raw, project: robj, version: raw, capabilities: r_list}
+          returns: r_reply
+        - {name: spec_resolve, args: {specification: raw, project: robj, version: raw}, returns: r_reply}
+        - name: read_odm
+          args: {source: raw, archive_member: robj, max_archive_members: index, max_expanded_bytes: index, max_xml_depth: index}
+          returns: r_reply
+        - {name: run_output, args: {handle: robj}, returns: r_reply}
+        - {name: run_issues, args: {handle: robj}, returns: r_reply}
+        - {name: run_report, args: {handle: robj}, returns: r_reply}
+        - {name: run_save, args: {handle: robj}, returns: r_reply}
+        - {name: run_observations, args: {handle: robj, include_measurements: bool}, returns: r_reply}
+        - {name: run_interrupt, args: {handle: robj}, returns: r_reply}
 
 # Semantic pairings for generators; private transport helpers need not acquire
 # an artificial counterpart. Lists name existing exports, not new operations.
@@ -219,6 +275,15 @@ operations:
   define_issues: {python: [_DefineResult.issues], r: [define_issues, define_diagnostics]}
   define_artifacts: {python: [_DefineResult.artifacts], r: [define_artifacts]}
   define_save: {python: [_DefineResult.save], r: [define_save]}
+  spec_check: {python: [_spec_check], r: [spec_check]}
+  spec_run: {python: [_spec_run], r: [spec_run]}
+  spec_resolve: {python: [_spec_resolve], r: [spec_resolve]}
+  read_odm: {python: [_read_odm], r: [read_odm]}
+  run_output: {python: [_Run.output], r: [run_output]}
+  run_issues: {python: [_Run.issues], r: [run_issues]}
+  run_report: {python: [_Run.report], r: [run_report]}
+  run_save: {python: [_Run.save], r: [run_save]}
+  run_observations: {python: [_Run.observations], r: [run_observations]}
 host_only:
   python: [_style_same_value, _DefineResult.capture_reads, _ArrowTable.__arrow_c_stream__, DomainError, DefineError]
   r: [scalar_bytes, scalar_exact_double, scalar_operator_code, scalar_operator]

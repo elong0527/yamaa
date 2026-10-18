@@ -1,5 +1,6 @@
 //! R composition roots and lossless public result conversion.
 use extendr_api::prelude::*;
+mod api_entry;
 mod arrow_bridge;
 mod define_entry;
 mod diagnostic_records;

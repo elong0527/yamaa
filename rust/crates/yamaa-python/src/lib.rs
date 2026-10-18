@@ -2,6 +2,7 @@
 // Authoritative source: rust/interface/bindings.yaml (see rust/interface/README.md).
 //! Python composition roots and lossless public result conversion.
 use pyo3::prelude::*;
+mod api_entry;
 mod arrow_bridge;
 mod define_entry;
 mod domain_entry;
@@ -38,5 +39,14 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     )?)?;
     module.add_class::<domain_entry::Attempt>()?;
     module.add_function(wrap_pyfunction!(style::_style_same_value, module)?)?;
+    module.add_class::<api_entry::Run>()?;
+    module.add(
+        "_Error",
+        module.py().get_type::<api_entry::_Error>(),
+    )?;
+    module.add_function(wrap_pyfunction!(api_entry::_spec_check, module)?)?;
+    module.add_function(wrap_pyfunction!(api_entry::_spec_run, module)?)?;
+    module.add_function(wrap_pyfunction!(api_entry::_spec_resolve, module)?)?;
+    module.add_function(wrap_pyfunction!(api_entry::_read_odm, module)?)?;
     Ok(())
 }

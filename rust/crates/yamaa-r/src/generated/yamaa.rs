@@ -7,4 +7,5 @@ extendr_module! {
     use define_entry;
     use scalars;
     use resolved_artifact;
+    use api_entry;
 }

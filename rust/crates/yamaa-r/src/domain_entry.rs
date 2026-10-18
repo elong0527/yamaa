@@ -55,7 +55,7 @@ fn environment(value: &Robj) -> std::result::Result<Option<Raw>, String> {
             .ok_or_else(|| "environment must be raw UTF-8 or NULL".into())
     }
 }
-fn parse_capabilities(parsed: List) -> std::result::Result<(Function, Function, Function), String> {
+pub(crate) fn parse_capabilities(parsed: List) -> std::result::Result<(Function, Function, Function), String> {
     if parsed.len() != 3 {
         return Err("invalid project host capabilities".into());
     }

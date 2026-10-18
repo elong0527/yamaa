@@ -64,7 +64,7 @@ fn named_list(pairs: Vec<(String, Robj)>) -> std::result::Result<Robj, String> {
     Ok(list)
 }
 
-fn context_value(value: &ContextValue) -> std::result::Result<Robj, String> {
+pub(crate) fn context_value(value: &ContextValue) -> std::result::Result<Robj, String> {
     Ok(match value {
         ContextValue::Null => NULL.into_robj(),
         ContextValue::Bool(value) => r!(*value),
@@ -100,12 +100,8 @@ fn integer(value: i128, token: impl FnOnce() -> String) -> Robj {
 }
 
 fn text(value: &str) -> std::result::Result<Robj, String> {
-    if !value.contains('\0') {
-        return Ok(r!(value));
+    if value.contains('\0') {
+        return Err("text containing NUL cannot be held by an R character vector".into());
     }
-    let mut bytes = Raw::from_bytes(value.as_bytes()).into_robj();
-    bytes
-        .set_class(["yamaa_utf8"])
-        .map_err(|_| "diagnostic text scalar class")?;
-    Ok(bytes)
+    Ok(r!(value))
 }
