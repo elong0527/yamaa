@@ -87,6 +87,15 @@ jobs:
         run: |
           cp rust/Cargo.lock rust/tests/embedder/Cargo.lock
           cargo test --manifest-path rust/tests/embedder/Cargo.toml --target-dir rust/target
+      - name: Check minimal format builds
+        run: python -m tools.ci.format_features
+  # main-protection still requires this status. Release format qualification
+  # now belongs to rust-minimum; PRs do not wait for it.
+  formats:
+    if: ${{ false }}
+    runs-on: ubuntu-24.04
+    steps:
+      - run: 'true'
   python:
     runs-on: ubuntu-24.04
     timeout-minutes: 35

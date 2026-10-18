@@ -5,6 +5,7 @@ from pathlib import Path
 
 import yaml
 from tools.paths import ROOT
+from tools.rules.model import authored_files
 from tools.validation._repository_yaml import UniqueKeyLoader
 from tools.validation.editorial import validate_ascii_sources, validate_unicode_scalars
 from tools.validation.grammar_checks import validate_grammar_contracts
@@ -24,10 +25,10 @@ from tools.validation.repository_structure import validate_examples_layout
 
 def check_yaml_files(root: Path):
     errors = list(validate_ascii_sources(root))
-    for path in sorted(root.rglob("*.yaml")):
-        if ".github" in path.parts:
-            continue
+    for path in sorted(authored_files(root, {".yaml"})):
         label = path.relative_to(root)
+        if ".github" in label.parts:
+            continue
         try:
             document = yaml.load(
                 path.read_text(encoding="utf-8"), Loader=UniqueKeyLoader
