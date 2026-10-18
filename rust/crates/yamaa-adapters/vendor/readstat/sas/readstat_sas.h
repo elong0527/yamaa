@@ -95,8 +95,9 @@ typedef struct sas_text_ref_s {
 #define SAS_PAGE_TYPE_AMD    0x0400
 #define SAS_PAGE_TYPE_MASK   0x0F00
 
-#define SAS_PAGE_TYPE_META2  0x4000
-#define SAS_PAGE_TYPE_COMP   0x9000
+#define SAS_PAGE_TYPE_DELETED_ROWS  0x0080
+#define SAS_PAGE_TYPE_META2         0x4000
+#define SAS_PAGE_TYPE_COMP          0x9000
 
 #define SAS_SUBHEADER_POINTER_SIZE_32BIT    12
 #define SAS_SUBHEADER_POINTER_SIZE_64BIT    24
