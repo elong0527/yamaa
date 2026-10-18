@@ -72,7 +72,7 @@ handles. `arrow_stream_capsule` is the named `arrow_array_stream` PyCapsule.
 
 The `python` and `r` sections inventory the complete current registration lists,
 including class methods, private qualification accessors, exceptions, version
-metadata, R scalar helpers and resolved-artifact readers. `issue_record`
+metadata and resolved-artifact readers. `issue_record`
 describes the private native issue row both public Python views are projected
 from: the five frame fields (context as canonical JSON text), the structured
 context tree as a `context_object` (a `dict[str, object]` of owned values:
@@ -80,9 +80,8 @@ text, booleans, exact integers, floats, `None`, lists and nested objects), then
 the optional source span and operand route, `None` when unrecorded and never a
 zero default. The stub declares it once as the `_IssueRecord` alias. The R
 frame and record builders convert the same facade report natively. `r_reply`
-describes the existing `{value, error}` list and `r_scalar_reply` its
-`{tag, payload, error}` variant. The definition does not treat a Rust
-`Result`, `Vec`, `String`, enum or trait as a C-layout type.
+describes the existing `{value, error}` list. The definition does not treat a
+Rust `Result`, `Vec`, `String`, enum or trait as a C-layout type.
 
 `operations` maps equivalent semantic operations despite different calling
 conventions. Python's optional resolver corresponds to R's separate resolved
@@ -91,8 +90,8 @@ stream accessors. R `domain_arrow` selects output/verification/warning with
 `kind` 0/1/2. R's producer evidence is a projection of the retained attempt;
 Python additionally exposes that owner and its methods. `host_only` declares
 intentional helpers. Generating both hosts does not mean inventing a public
-scalar-helper API in Python or a style API in R. extendr-generated `wrap__*`,
-metadata, registration and finalizer functions are framework machinery, not
+style API in R. extendr-generated `wrap__*`, metadata, registration and
+finalizer functions are framework machinery, not
 additional engine operations. Public package facades remain the owners of
 ordinary Python/R argument presentation.
 
@@ -300,7 +299,7 @@ or timezones require an explicit preserving conversion before import. Requested
 Python export schema conversion is refused. Nonfinite floats become missing
 under the existing engine rule. Buffer sharing covers retained public Arrow
 value/validity buffers; imported temporals allocate their precision child.
-Build materialization, Polars conversion and R frame/exact-i64/NUL views can
+Build materialization, Polars conversion and R data-frame conversion can
 copy. Conversions preserve values or raise an error. The generator must reuse
 these adapters rather than promise zero copies for those conversions.
 

@@ -45,7 +45,7 @@ assert_types <- function(output, fields) {
   stopifnot(identical(names(output), field_names(fields)))
   for (field in fields) {
     value <- output[[field$name]]
-    if (field$type == "int") stopifnot(identical(class(value), "yamaa_int64_vector"))
+    if (field$type == "int") stopifnot(is.double(value), is.null(attributes(value)))
     if (field$type == "float") stopifnot(is.double(value), is.null(attributes(value)))
     if (field$type == "str") stopifnot(is.character(value), is.null(attributes(value)))
     if (field$type == "date") stopifnot(identical(class(value), "Date"))
@@ -57,7 +57,7 @@ assert_types <- function(output, fields) {
 table_rows <- function(output, fields) {
   columns <- lapply(fields, function(field) {
     value <- output[[field$name]]
-    if (field$type == "int") value <- as.character(value)
+    if (field$type == "int") value <- ifelse(is.na(value), NA_character_, sprintf("%.0f", value))
     if (field$type == "date") value <- format(value, "%Y-%m-%d")
     if (field$type == "datetime") value <- format(value, "%Y-%m-%dT%H:%M:%S", tz = "UTC", usetz = FALSE)
     value

@@ -8,8 +8,8 @@
 //! token whose magnitude is at most 2^53 becomes a double; every other
 //! integer token keeps its exact decimal spelling as a character scalar, so
 //! binary64 never narrows it; fraction and exponent tokens are doubles.
-//! Objects are named lists, arrays unnamed lists, and text containing NUL is
-//! a `yamaa_utf8` scalar, as in output columns.
+//! Objects are named lists and arrays unnamed lists. Text containing NUL has
+//! no R character value, so it fails the conversion, as in output columns.
 use extendr_api::prelude::*;
 use yamaa::{ContextValue, Diagnostic};
 

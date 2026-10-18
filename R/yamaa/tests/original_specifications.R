@@ -359,7 +359,7 @@ local({
     dates <- if(case_name=="adam-adsl-duration") c("STDT","ENDT") else c("BRTHDT","RANDDT")
     for(column in dates) expected[[column]] <- as.Date(expected[[column]])
     integers <- if(case_name=="adam-adsl-duration") c("DURW","DURM") else "AAGE"
-    for(column in integers) expected[[column]] <- structure(as.character(expected[[column]]),class="yamaa_int64_vector")
+    for(column in integers) expected[[column]] <- as.double(expected[[column]])
     stopifnot(nrow(result$issues)==0L,identical(result$output,expected),identical(rawfile(entry),written),
       !file.exists(file.path(case,"adsl.csv")),identical(result$save(),TRUE),
       identical(rawfile(file.path(case,"adsl.csv")),rawfile(file.path(case,"expected","adsl.csv"))))
@@ -404,7 +404,7 @@ local({
     for(column in dates) expected[[column]] <- as.Date(expected[[column]])
     if(case_name=="schema-birth-date") expected$DTM <- as.POSIXct(expected$DTM,format="%Y-%m-%dT%H:%M:%S",tz="UTC")
     column <- if(case_name=="schema-birth-date") "DOBDY" else "AGE"
-    expected[[column]] <- structure(expected[[column]],class="yamaa_int64_vector")
+    expected[[column]] <- as.double(expected[[column]])
     stopifnot(nrow(result$issues)==0L,identical(result$output,expected),identical(rawfile(entry),written),
       !file.exists(file.path(case,output)),identical(result$save(),TRUE),
       identical(rawfile(file.path(case,output)),rawfile(file.path(case,"expected",output))))
@@ -648,7 +648,7 @@ local({
   result <- yamaa_domain(entry)
   check_handlers(result,case_name)
   expected <- read.csv(file.path(case,"expected","adae.csv"),colClasses="character",na.strings="",check.names=FALSE)
-  for(column in c("AESEQ","AEREFNUM")) expected[[column]] <- structure(expected[[column]],class="yamaa_int64_vector")
+  for(column in c("AESEQ","AEREFNUM")) expected[[column]] <- as.double(expected[[column]])
   stopifnot(nrow(result$issues)==0L,identical(result$output,expected),identical(rawfile(entry),written),
     !file.exists(file.path(case,"adae.csv")),identical(result$save(),TRUE),
     identical(rawfile(file.path(case,"adae.csv")),rawfile(file.path(case,"expected","adae.csv"))))
@@ -1048,7 +1048,10 @@ local({
       stopifnot(identical(names(result$output),names(truth$columns)))
       for (column in names(truth$columns)) {
         actual <- result$output[[column]]
-        if (truth$kinds[[column]] == "int") stopifnot(inherits(actual,"yamaa_int64_vector"))
+        if (truth$kinds[[column]] == "int") {
+          stopifnot(is.double(actual))
+          actual <- ifelse(is.na(actual),NA_character_,sprintf("%.0f",actual))
+        }
         else stopifnot(is.character(actual))
         stopifnot(identical(is.na(actual),is.na(truth$columns[[column]])),
           identical(as.character(actual),truth$columns[[column]]))
@@ -1091,7 +1094,10 @@ local({
       stopifnot(identical(names(result$output),names(truth$columns)))
       for (column in names(truth$columns)) {
         actual <- result$output[[column]]
-        if (truth$kinds[[column]] == "int") stopifnot(inherits(actual,"yamaa_int64_vector"))
+        if (truth$kinds[[column]] == "int") {
+          stopifnot(is.double(actual))
+          actual <- ifelse(is.na(actual),NA_character_,sprintf("%.0f",actual))
+        }
         else stopifnot(is.character(actual))
         stopifnot(identical(is.na(actual),is.na(truth$columns[[column]])),
           identical(as.character(actual),truth$columns[[column]]))

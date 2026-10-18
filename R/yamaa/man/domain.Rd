@@ -1,24 +1,15 @@
 \name{yamaa_domain}
 \alias{yamaa_domain}
 \alias{yamaa_check}
-\alias{as.character.yamaa_int64_vector}
-\alias{as.character.yamaa_utf8_vector}
-\alias{[.yamaa_int64_vector}
-\alias{is.na.yamaa_utf8_vector}
-\alias{[.yamaa_utf8_vector}
 \title{Build or Check a Domain with the Shared Rust Engine}
 \usage{
 yamaa_domain(specification, environment = NULL, resolver = NULL)
 yamaa_check(specification, environment = NULL, resolver = NULL)
-\method{as.character}{yamaa_int64_vector}(x, ...)
-\method{as.character}{yamaa_utf8_vector}(x, ...)
 }
 \arguments{
 \item{specification}{One domain-specification path.}
 \item{environment}{Optional study environment path for functions and codelists.}
 \item{resolver}{Optional host resource resolver.}
-\item{x}{A lossless signed 64-bit integer or UTF-8 output vector.}
-\item{...}{Unused arguments.}
 }
 \value{A build result containing output, issues, diagnostics, optional logs and
 a save method, or a check result containing issues and diagnostics. \code{issues}
@@ -28,18 +19,14 @@ is a data frame with character \code{phase}, \code{condition}, \code{requirement
 each with \code{phase}, \code{condition}, \code{requirement} (NULL when absent),
 \code{spec_paths}, a structured \code{context} (objects as named lists, arrays as
 unnamed lists, integer tokens of magnitude at most 2^53 as doubles, wider integer
-tokens as character decimal tokens, other numbers as doubles, text containing NUL
-as \code{yamaa_utf8}), \code{source_span} (\code{list(start, end)} byte offsets or
+tokens as character decimal tokens, other numbers as doubles),
+\code{source_span} (\code{list(start, end)} byte offsets or
 NULL when unrecorded) and \code{operand_route} (character steps from the expression
 root, \code{character(0)} for a failure at the root, or NULL when unrecorded).
-Integer columns use canonical decimal text
-with the \code{yamaa_int64_vector} class and preserve the full signed 64-bit range.
-Text containing NUL uses raw values in a \code{yamaa_utf8_vector}; NULL is missing.}
-\details{\code{as.character} converts a UTF-8 vector or subset to exact Unicode
-text, preserving names and missingness. If any present value contains NUL, the
-conversion raises an error because R character cannot preserve that value.
-Use \code{unclass} to access the held raw bytes. Conversion leaves the original
-output and \code{save()} publication unchanged. With nanoarrow 0.8.0 or newer,
+Integer columns are doubles and text columns character, with \code{NA} for
+missing. An integer beyond 2^53 in magnitude or text containing NUL has no exact
+R value, so reading it raises an error instead of changing it.}
+\details{With nanoarrow 0.8.0 or newer,
 \code{output_arrow}, \code{verification_log_arrow} and \code{warning_log_arrow}
 are independent Arrow C Streams sharing retained immutable buffers. Nanoarrow
 owns each stream and releases it explicitly or on garbage collection; arrays

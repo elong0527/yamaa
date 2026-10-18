@@ -101,7 +101,7 @@ for(diamond in c(FALSE,TRUE)) {
   stopifnot(identical(verification$VERIFICATION_ID,intToUtf8(c(233L,119070L))),
     identical(as.character(verification$EVALUATED_COUNT),"8"),
     identical(as.character(warning$FAILURE_COUNT),"8"),identical(warning$OFFENDING_KEYS,keys),
-    inherits(verification$EVALUATED_COUNT,"yamaa_int64_vector"),inherits(warning$FAILURE_COUNT,"yamaa_int64_vector"),
+    is.double(verification$EVALUATED_COUNT),is.double(warning$FAILURE_COUNT),
     !any(file.exists(file.path(case$work,case$paths))))
   before <- retain(case,result,"build")
   verification$REPORT_VERSION[] <- "mutated"

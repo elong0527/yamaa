@@ -119,34 +119,30 @@ run_contract <- function() {
   rawfile <- function(name) readBin(path(name), "raw", n = file.info(path(name))$size)
   spec <- host_truth[["specification_yaml"]]
   input <- host_truth[["r_input_csv"]]
-  truth <- vapply(host_truth[["r_values_decimal"]],function(value) if(is.null(value)) NA_character_ else value,character(1L),USE.NAMES=FALSE)
+  # R holds plain doubles and character: the full-range integers here have no
+  # exact R value, so reading the frame raises rather than change one, while
+  # the retained bytes still save exactly.
+  refuses_output <- function(result, reason) {
+    seen <- tryCatch(result$output, error = identity)
+    inherits(seen, "error") && grepl(reason, conditionMessage(seen), fixed = TRUE)
+  }
+  beyond <- "is beyond 2^53 and cannot be held exactly by an R double"
   write("spec.yaml", spec); write("input.csv", input)
   first <- yamaa_domain(path("spec.yaml")); second <- yamaa_domain(path("spec.yaml"))
   for (result in list(first, second)) {
     stopifnot(nrow(check_issues(result)) == 0L, is.environment(result),
-      identical(class(result$output$VALUE), "yamaa_int64_vector"),
-      identical(as.character(result$output$VALUE), truth),
-      identical(is.na(result$output$VALUE), c(FALSE, FALSE, FALSE, FALSE, TRUE)),
+      refuses_output(result, beyond),
       is.null(result$verification_log), is.null(result$warning_log))
     for (field in fixture_strings(host_truth[["owned_view_names"]])) {
       stopifnot(inherits(tryCatch({ result[[field]] <- NULL }, error = identity), "error"))
     }
     stopifnot(inherits(tryCatch(result$save(path("other.csv")), error = identity), "error"))
   }
-  value <- first$output$VALUE
-  stopifnot(identical(as.character(value[c(1L, 5L)]), truth[c(1L, 5L)]),
-    identical(as.character(value[[1L]]), truth[[1L]]),
-    identical(as.double(value[c(1L, 4L, 5L)]), c(-2^63, 7, NA_real_)),
-    identical(as.integer(value[c(4L, 5L)]), c(7L, NA_integer_)),
-    inherits(tryCatch(as.double(value[c(2L, 3L)]), error = identity), "error"),
-    inherits(tryCatch(as.integer(value[1L]), error = identity), "error"),
-    identical(as.character(first$output[c(1L, 5L), , drop = FALSE]$VALUE), truth[c(1L, 5L)]))
-  view <- first$output; view$VALUE <- rep("changed", 5L)
-  stopifnot(identical(as.character(first$output$VALUE), truth), !file.exists(path("output.csv")))
+  stopifnot(!file.exists(path("output.csv")))
   unlink(path(c("spec.yaml", "input.csv"))); gc()
   for (attempt in 1:2) stopifnot(identical(first$save(), TRUE), identical(rawfile("output.csv"), charToRaw(input)))
   rm(first); gc()
-  stopifnot(identical(as.character(second$output$VALUE), truth), identical(second$save(), TRUE))
+  stopifnot(refuses_output(second, beyond), identical(second$save(), TRUE))
 
   for (result in list(yamaa_check(path("absent.yaml")), yamaa_domain(path("absent.yaml")))) {
     stopifnot(nrow(check_issues(result)) > 0L, is.null(result$spec), is.null(result$resolved_specification),
@@ -168,29 +164,10 @@ run_contract <- function() {
   write("input.csv", c(charToRaw("ID,VALUE\na,a"), as.raw(0L), charToRaw("b\nb,"),
     as.raw(c(0xc3, 0xa9)), charToRaw("\nc,\n")))
   text <- yamaa_domain(path("spec.yaml")); stopifnot(nrow(check_issues(text)) == 0L)
-  column <- text$output$VALUE
-  stopifnot(inherits(column, "yamaa_utf8_vector"),
-    identical(unclass(column), list(as.raw(c(97L, 0L, 98L)), as.raw(c(0xc3, 0xa9)), NULL)),
-    identical(is.na(column), c(FALSE, FALSE, TRUE)),
-    identical(unclass(column[c(1L, 3L)]), list(as.raw(c(97L, 0L, 98L)), NULL)),
-    identical(text$output$EMPTY, rep("", 3L)), identical(text$save(), TRUE))
-  conversion <- tryCatch(as.character(column), error = identity)
-  stopifnot(inherits(conversion, "error"),
-    grepl("cannot preserve NUL", conditionMessage(conversion), fixed = TRUE),
-    identical(as.character(column[c(2L, 3L)]), c("\u00e9", NA_character_)),
-    identical(as.character(column[integer()]), character()),
-    identical(as.character(setNames(column[c(2L, 3L)], c("text", "missing"))),
-      c(text = "\u00e9", missing = NA_character_)),
-    identical(as.character(text$output$VALUE[c(2L, 3L)]), c("\u00e9", NA_character_)),
-    nrow(check_issues(text)) == 0L)
-  for (value in list(
-    structure(list(as.raw(255L)), class = "yamaa_utf8_vector"),
-    structure(list("repaired"), class = "yamaa_utf8_vector"),
-    structure(list(structure(raw(), names = character())), class = "yamaa_utf8_vector"),
-    structure(list(raw()), class = c("yamaa_utf8_vector", "other")),
-    structure(list(raw()), class = "yamaa_utf8_vector", dim = c(1L, 1L)))) {
-    stopifnot(inherits(tryCatch(as.character(value), error = identity), "error"))
-  }
+  # Text holding NUL has no R character value either: the frame refuses it and
+  # Save still publishes the held bytes.
+  stopifnot(refuses_output(text, "text containing NUL cannot be held by an R character vector"),
+    identical(text$save(), TRUE), nrow(check_issues(text)) == 0L)
   expected <- c(charToRaw('ID,VALUE,EMPTY\na,a'), as.raw(0L), charToRaw('b,""\nb,'),
     as.raw(c(0xc3, 0xa9)), charToRaw(',""\nc,,""\n'))
   stopifnot(identical(rawfile("output.csv"), expected))
@@ -253,10 +230,10 @@ run_contract <- function() {
       resolved <- capabilities$resolve(call,parameters)
       if (resolved[[1L]]!=0L) return(resolved)
       invoke <- resolved[[2L]]
-      list(0L,function(encoded) {
+      list(0L,function(arguments) {
         invoked <<- invoked+1L
         if (stage=="conformance" || (stage=="derivation" && invoked>2L)) return(list(3L,interrupted))
-        invoke(encoded)
+        invoke(arguments)
       })
     }
     seen <- with_capabilities(verify,resolve,tryCatch(yamaa_domain(entry,environment),interrupt=identity))
@@ -270,10 +247,10 @@ run_contract <- function() {
     resolved <- capabilities$resolve(call,parameters)
     if(resolved[[1L]] != 0L) return(resolved)
     invoke <- resolved[[2L]]
-    list(0L,function(encoded) {
+    list(0L,function(arguments) {
       invoked <<- invoked+1L
       if(invoked>2L) return(list(1L,long_condition))
-      invoke(encoded)
+      invoke(arguments)
     })
   }
   long_failed <- with_capabilities(capabilities$verify,resolve_long,yamaa_domain(entry,environment))
@@ -287,13 +264,13 @@ run_contract <- function() {
     resolved <- capabilities$resolve(call, parameters)
     if (resolved[[1L]] != 0L) return(resolved)
     invoke <- resolved[[2L]]
-    list(0L, function(encoded) {
+    list(0L, function(arguments) {
       checked <- yamaa_check(path("spec.yaml"))
       nested <- yamaa_domain(path("spec.yaml"))
       stopifnot(nrow(check_issues(checked)) == 0L, nrow(check_issues(nested)) == 0L,
-        identical(as.character(nested$output$VALUE), truth))
+        refuses_output(nested, beyond))
       calls[[length(calls) + 1L]] <<- nested
-      invoke(encoded)
+      invoke(arguments)
     })
   }
   outer <- with_capabilities(capabilities$verify, resolve_reentrant,
@@ -306,11 +283,11 @@ run_contract <- function() {
     resolved <- capabilities$resolve(call, parameters)
     if (resolved[[1L]] != 0L) return(resolved)
     invoke <- resolved[[2L]]
-    list(0L, function(encoded) {
-      if (get(".scalar_unpack", namespace)(encoded[[1L]]) == 1.234) {
+    list(0L, function(arguments) {
+      if (identical(arguments[[1L]], 1.234)) {
         return(list(1L, original_condition))
       }
-      invoke(encoded)
+      invoke(arguments)
     })
   }
   failed <- with_binding(".project_condition_details", function(condition) list(),
@@ -323,7 +300,7 @@ run_contract <- function() {
     grepl('"outcome":"failed","phase":"output_preparation"', measured, fixed = TRUE),
     inherits(tryCatch(failed$save(), error = identity), "yamaa_domain_error"))
   unlink(path(c("spec.yaml", "input.csv"))); gc()
-  stopifnot(identical(as.character(calls[[1L]]$output$VALUE), truth))
+  stopifnot(refuses_output(calls[[1L]], beyond))
 
   defined <- yamaa_define(path("absent-environment.yaml"), "sdtm", created = "2026-09-11T00:00:00")
   stopifnot(nrow(check_issues(defined)) > 0L)
@@ -447,54 +424,6 @@ qualify_diagnostic_parity <- function() {
 }
 qualify_diagnostic_parity()
 cat("public signatures, argument errors, owned results and logs, exact values, interrupts and reentrancy passed\n")
-
-qualify_public_integer_callback <- function() {
-  directory <- tempfile("public-integer-callback-"); dir.create(directory)
-  on.exit(unlink(directory,recursive=TRUE))
-  lock <- charToRaw(paste0('{"R":{"Version":"',getRversion(),'"},"Packages":{"yamaa":{"Version":"',utils::packageVersion("yamaa"),'"}}}'))
-  writeBin(lock,file.path(directory,"renv.lock"))
-  writeBin(charToRaw("schema_version: '1.0'\nlanguage: r\nlock: renv.lock\nfunctions:\n  id:\n    function: base::identity\n    description: Integer identity.\n    params: [{name: x, type: int}]\n    returns: int\n    tests:\n      - {id: normal, covers: [normal], args: {x: 7}, result: 7}\n      - {id: boundary, covers: [boundary], args: {x: -9223372036854775808}, result: -9223372036854775808}\n      - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n"),file.path(directory,"environment.yaml"))
-  writeBin(charToRaw("schema_version: '1.0'\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int}}}\nkeys: [ID]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: V, type: int, derivation: {function: {name: id, args: {x: SRC.ID}}}}\noutput: {path: result.csv, columns: [ID, V]}\n"),file.path(directory,"domain.yaml"))
-  writeBin(charToRaw("ID\n1\n"),file.path(directory,"input.csv"))
-  entry <- file.path(directory,"domain.yaml")
-  environment <- file.path(directory,"environment.yaml")
-  input <- file.path(directory,"input.csv")
-  unlink(input)
-  stopifnot(nrow(yamaa_check(entry,environment)$issues)==0L)
-  writeBin(charToRaw("ID\n1\n"),input)
-  calls <- character()
-  resolve <- function(call,parameters) {
-    resolved <- capabilities$resolve(call,parameters)
-    if (resolved[[1L]]!=0L) return(resolved)
-    invoke <- resolved[[2L]]
-    list(0L,function(encoded) {
-      calls <<- c(calls,as.character(get(".scalar_unpack",namespace)(encoded[[1L]])))
-      invoke(encoded)
-    })
-  }
-  first <- with_capabilities(capabilities$verify,resolve,yamaa_domain(entry,environment))
-  stopifnot(nrow(first$issues)==0L,identical(as.character(first$output$V),"1"),
-    identical(calls,c("7","-9223372036854775808","1")))
-  observed <- rawToChar(get(".domain_observations",namespace)(first))
-  stopifnot(grepl('"actual":{"int":"-9223372036854775808"}',observed,fixed=TRUE),
-    grepl('"actual":{"missing":null}',observed,fixed=TRUE),grepl('"invoked":false',observed,fixed=TRUE))
-  second <- with_capabilities(capabilities$verify,resolve,yamaa_domain(entry,environment))
-  stopifnot(nrow(second$issues)==0L,identical(as.character(second$output$V),"1"),
-    identical(calls,rep(c("7","-9223372036854775808","1"),2L)))
-  writeBin(charToRaw('{"R":{"Version":"4.6.1"},"Packages":{"yamaa":{"Version":"999.0"}}}'),file.path(directory,"renv.lock"))
-  unlink(input)
-  rejected <- with_capabilities(capabilities$verify,function(...) stop("bad lock reached binding"),yamaa_domain(entry,environment))
-  stopifnot(is.null(rejected$output),identical(rejected$issues$condition,"runtime_artifact_mismatch"),
-    !file.exists(input),identical(calls,rep(c("7","-9223372036854775808","1"),2L)))
-  unlink(entry); unlink(environment); invisible(gc())
-  for (result in list(first,second)) for (attempt in seq_len(2L)) {
-    stopifnot(identical(result$save(),TRUE),identical(as.character(result$output$V),"1"))
-    target <- file.path(directory,"result.csv")
-    stopifnot(identical(readBin(target,"raw",n=file.info(target)$size),charToRaw("ID,V\n1,1\n")))
-  }
-  cat("public integer callbacks preserve exact int64, missing short-circuiting, repeated activation and held Saves\n")
-}
-qualify_public_integer_callback()
 
 qualify_public_large_text_callback <- function() {
   directory <- tempfile("public-large-text-callback-"); dir.create(directory)

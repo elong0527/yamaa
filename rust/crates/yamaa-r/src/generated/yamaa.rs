@@ -5,7 +5,6 @@ extendr_module! {
     fn core_version;
     use domain_entry;
     use define_entry;
-    use scalars;
     use resolved_artifact;
     use api_entry;
 }

@@ -43,7 +43,7 @@ views <- list(built$verification_log,built$warning_log,built$output)
 for(index in seq_along(names)) {
   truth <- read.csv(file.path(case,"expected",names[[index]]),colClasses="character",na.strings="",check.names=FALSE)
   integers <- if(index==1L)c("EVALUATED_COUNT","FAILURE_COUNT") else if(index==2L)"FAILURE_COUNT" else "AGE"
-  for(column in integers) truth[[column]] <- structure(truth[[column]],class="yamaa_int64_vector")
+  for(column in integers) truth[[column]] <- as.double(truth[[column]])
   stopifnot(identical(as.list(views[[index]]),as.list(truth)))
   stopifnot(!file.exists(file.path(case,names[[index]])))
 }
@@ -118,8 +118,8 @@ writeBin(charToRaw(source),entry)
 writeLines(c("ID","1"),file.path(case,"input.csv"))
 empty <- yamaa_domain(entry)
 stopifnot(nrow(empty$verification_log)==0L,nrow(empty$warning_log)==0L,
-  inherits(empty$verification_log$EVALUATED_COUNT,"yamaa_int64_vector"),
-  inherits(empty$warning_log$FAILURE_COUNT,"yamaa_int64_vector"),identical(empty$save(),TRUE),
+  is.double(empty$verification_log$EVALUATED_COUNT),
+  is.double(empty$warning_log$FAILURE_COUNT),identical(empty$save(),TRUE),
   length(readLines(file.path(case,"checks.csv")))==1L,length(readLines(file.path(case,"warnings.csv")))==1L)
 unlink(directory,recursive=TRUE)
 Sys.setenv(PATH=original_path)

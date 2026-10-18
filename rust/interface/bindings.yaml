@@ -20,8 +20,6 @@ imports:
     rust: yamaa_adapters::host_resources::Reply
   resource_failure:
     rust: yamaa_adapters::host_resources::Failure
-  scalar_payload:
-    rust: yamaa_adapters::scalar_bytes::ScalarBytes
   resolved_artifact:
     rust: yamaa_adapters::resolved_artifact::ResolvedArtifact
 
@@ -220,15 +218,6 @@ r:
         - {name: define_diagnostics, args: {handle: robj}, returns: r_reply}
         - {name: define_artifacts, args: {handle: robj}, returns: r_reply}
         - {name: define_save, args: {handle: robj}, returns: r_reply}
-    - module: scalars
-      source: rust/crates/yamaa-r/src/scalars.rs
-      functions:
-        - {name: scalar_bytes, args: {tag: i32, payload: raw}, returns: r_scalar_reply}
-        - {name: scalar_exact_double, args: {tag: i32, payload: raw}, returns: r_scalar_reply}
-        - {name: scalar_operator_code, args: {name: raw, unary: bool}, returns: r_reply}
-        - name: scalar_operator
-          args: {code: i32, left_tag: i32, left: raw, right_tag: i32, right: raw, unary: bool}
-          returns: r_scalar_reply
     - module: resolved_artifact
       source: rust/crates/yamaa-r/src/resolved_artifact.rs
       functions:
@@ -286,4 +275,4 @@ operations:
   run_observations: {python: [_Run.observations], r: [run_observations]}
 host_only:
   python: [_style_same_value, _DefineResult.capture_reads, _ArrowTable.__arrow_c_stream__, DomainError, DefineError]
-  r: [scalar_bytes, scalar_exact_double, scalar_operator_code, scalar_operator]
+  r: []
