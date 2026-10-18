@@ -387,9 +387,10 @@ owns decoding behavior.
   release.
 - Distribute 0.4.0 as GitHub release assets only; `release.yml` has no PyPI
   step.
-- Refuse a SAS7BDAT dataset that holds records deleted in place as
-  `source_sas_invalid` with cause `deleted_records`. Reading only its live
-  records is 0.5.0 work (#2924).
+- Read only the live records of a SAS7BDAT dataset that holds records
+  deleted in place, and refuse it as `source_sas_invalid` with cause
+  `deleted_records` when its count of deleted records and the records marked
+  deleted disagree (#2924, #2927).
 - A qualified `between.value`, in a named intermediate or an aggregate, reads
   the record of the input that drives the row. Any other input fails
   validation as `unknown_field`; it is never read through the implicit join
@@ -509,7 +510,7 @@ Make the 0.4.0 changes above as well as these:
 | `datetime_precision` of minute text (`2025-03-04T08:30`) is `S`; `datetime_impute` with `time: last` gives `08:30:00`; hour text (`T08`) is invalid | `precision` with `type: datetime` gives `minute`, `impute` with `type: datetime`, `minimum_source_precision: day` and `time: last` gives `08:30:59`, and hour text is accepted (`hour`). A condition that tested `= 'S'` for a collected time tests `IN ('minute', 'second')`; a condition meaning "a time was collected" tests `IN ('hour', 'minute', 'second')` ([TIME-7](../rules/temporal.md#time-7)). |
 | Lock pins an earlier yamaa | Regenerate the project lock for the installed yamaa before using project functions; each applicable build checks the runtime version. |
 | A `between.value` qualified by an input that does not drive the row reads a wrong value with no message | It fails validation as `unknown_field`. Derive the value into a column, for example `AGE` from `DM.AGE`, and name that column. |
-| A `.sas7bdat` input that holds records deleted in place returns them as rows | It fails as `source_sas_invalid` with cause `deleted_records`. Rewrite the dataset first, for example with `PROC COPY`. |
+| A `.sas7bdat` input that holds records deleted in place returns them as rows | Only its live records are read. It fails as `source_sas_invalid` with cause `deleted_records` when its count of deleted records and the records marked deleted disagree; rewrite such a dataset first, for example with `PROC COPY`. |
 
 ### From 0.2.0 and earlier
 

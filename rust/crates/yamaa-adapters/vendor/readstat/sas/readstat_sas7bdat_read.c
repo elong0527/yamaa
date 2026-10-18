@@ -5,6 +5,7 @@
 #include <string.h>
 #include <math.h>
 #include <inttypes.h>
+#include <limits.h>
 #include "readstat_sas.h"
 #include "readstat_sas_rle.h"
 #include "../readstat_iconv.h"
@@ -51,9 +52,12 @@ typedef struct sas7bdat_ctx_s {
 
     uint32_t        row_length;
     uint32_t        page_row_count;
+    uint32_t        total_row_count;
     uint32_t        parsed_row_count;
+    uint32_t        parsed_deleted_row_count;
     uint32_t        column_count;
     uint32_t        row_limit;
+    uint32_t        deleted_row_count;
     uint32_t        row_offset;
 
     uint64_t        header_size;
@@ -276,24 +280,26 @@ static readstat_error_t sas7bdat_parse_row_size_subheader(const char *subheader,
         ctx->rdc_compression = (memcmp(compression, SAS_COMPRESSION_SIGNATURE_RDC, 8) == 0);
     }
 
-    /* SAS keeps records deleted in place, counted here, until the dataset is
-     * rewritten. This reader cannot skip them, so it refuses the dataset. */
-    if (deleted_row_count)
-        return yamaa_readstat_deleted_records();
-
     if (!row_length || row_length > UINT32_MAX || page_row_count > UINT32_MAX)
         return READSTAT_ERROR_ROW_WIDTH_MISMATCH;
     if (!yamaa_readstat_admit(total_row_count, ctx->column_count))
         return READSTAT_ERROR_MALLOC;
+    /* SAS keeps records deleted in place, counted here among the stored
+     * records, until the dataset is rewritten. The reader skips them. */
+    if (deleted_row_count > total_row_count)
+        return yamaa_readstat_deleted_records();
+    ctx->total_row_count = total_row_count;
+    ctx->deleted_row_count = deleted_row_count;
     ctx->row_length = row_length;
 
     ctx->page_row_count = page_row_count;
-    uint64_t total_row_count_after_skipping = total_row_count;
-    if (total_row_count > ctx->row_offset) {
+    uint64_t live_row_count = total_row_count - deleted_row_count;
+    uint64_t total_row_count_after_skipping = live_row_count;
+    if (live_row_count > ctx->row_offset) {
         total_row_count_after_skipping -= ctx->row_offset;
     } else {
         total_row_count_after_skipping = 0;
-        ctx->row_offset = total_row_count;
+        ctx->row_offset = live_row_count;
     }
     if (ctx->row_limit == 0 || total_row_count_after_skipping < ctx->row_limit)
         ctx->row_limit = total_row_count_after_skipping;
@@ -403,6 +409,16 @@ cleanup:
     return retval;
 }
 
+/* A record marked deleted beyond the row-size subheader's count cannot be
+ * reconciled with it. The bridge classifies the stop. */
+static readstat_error_t sas7bdat_register_deleted_row(sas7bdat_ctx_t *ctx) {
+    if (ctx->parsed_deleted_row_count >= ctx->deleted_row_count) {
+        return yamaa_readstat_deleted_records();
+    }
+    ctx->parsed_deleted_row_count++;
+    return READSTAT_OK;
+}
+
 static readstat_error_t sas7bdat_handle_data_value(readstat_variable_t *variable, 
         col_info_t *col_info, const char *col_data, sas7bdat_ctx_t *ctx) {
     readstat_error_t retval = READSTAT_OK;
@@ -507,17 +523,41 @@ cleanup:
     return retval;
 }
 
-static readstat_error_t sas7bdat_parse_rows(const char *data, size_t len, sas7bdat_ctx_t *ctx) {
+static unsigned char sas7bdat_read_bitmap(const unsigned char *bitmap, uint32_t index) {
+    unsigned char current_byte = bitmap[index / CHAR_BIT];
+    unsigned char mask = 1 << (CHAR_BIT - 1 - index % CHAR_BIT);
+
+    return current_byte & mask;
+}
+
+static readstat_error_t sas7bdat_parse_rows(const char *data, size_t len,
+        const unsigned char *deleted_bitmap, uint32_t deleted_bitmap_row_count, sas7bdat_ctx_t *ctx) {
     readstat_error_t retval = READSTAT_OK;
-    int i;
+    uint32_t i;
     size_t row_offset=0;
-    for (i=0; i<ctx->page_row_count && ctx->parsed_row_count < ctx->row_limit; i++) {
+    for (i=0; i<ctx->page_row_count; i++) {
+        /* After the last live record, a page with a deleted-row bitmap is
+         * read on while counted deletions remain unmarked, so that the final
+         * check can find each of them. */
+        if (ctx->parsed_row_count >= ctx->row_limit &&
+                (deleted_bitmap == NULL || ctx->parsed_deleted_row_count >= ctx->deleted_row_count))
+            break;
         if (row_offset + ctx->row_length > len) {
             retval = READSTAT_ERROR_ROW_WIDTH_MISMATCH;
             goto cleanup;
         }
-        if ((retval = sas7bdat_parse_single_row(&data[row_offset], ctx)) != READSTAT_OK)
+        if (deleted_bitmap != NULL && i >= deleted_bitmap_row_count) {
+            /* The page claims more rows than the deleted-row bitmap covers */
+            retval = yamaa_readstat_deleted_records();
             goto cleanup;
+        }
+        if (deleted_bitmap != NULL && sas7bdat_read_bitmap(deleted_bitmap, i)) {
+            if ((retval = sas7bdat_register_deleted_row(ctx)) != READSTAT_OK) {
+                goto cleanup;
+            }
+        } else if ((retval = sas7bdat_parse_single_row(&data[row_offset], ctx)) != READSTAT_OK) {
+            goto cleanup;
+        }
 
         row_offset += ctx->row_length;
     }
@@ -1002,7 +1042,7 @@ static readstat_error_t sas7bdat_parse_page_pass1(const char *page, size_t page_
                         goto cleanup;
                     }
                 }
-            } else if (shp_info.compression == SAS_COMPRESSION_ROW) {
+            } else if (shp_info.compression == SAS_COMPRESSION_ROW || shp_info.compression == SAS_COMPRESSION_DELETED_ROW) {
                 /* void */
             } else {
                 retval = READSTAT_ERROR_UNSUPPORTED_COMPRESSION;
@@ -1018,6 +1058,31 @@ cleanup:
     return retval;
 }
 
+static readstat_error_t sas7bdat_parse_deleted_row_bitmap(const char *page, const char *data,
+        size_t page_size, const unsigned char **deleted_row_bitmap, uint32_t *deleted_row_bitmap_row_count,
+        sas7bdat_ctx_t *ctx) {
+    uint64_t page_unused_bytes;
+    if (ctx->u64) {
+        page_unused_bytes = sas_read8(&page[24], ctx->bswap);
+    } else {
+        page_unused_bytes = sas_read4(&page[12], ctx->bswap);
+    }
+    uint32_t row_count = ctx->page_row_count < ctx->total_row_count ? ctx->page_row_count : ctx->total_row_count;
+    uint64_t rows_length = (uint64_t)row_count * ctx->row_length;
+    uint32_t required_bytes = row_count / CHAR_BIT + (row_count % CHAR_BIT == 0 ? 0 : 1);
+
+    /* The bitmap follows the page's rows and its free space. Each term is
+     * bounded by what remains of the page, so no sum can wrap. */
+    uint64_t available = page_size - (uint64_t)(data - page);
+    if (rows_length > available || page_unused_bytes > available - rows_length ||
+            required_bytes > available - rows_length - page_unused_bytes) {
+        return yamaa_readstat_deleted_records();
+    }
+    *deleted_row_bitmap = (const unsigned char *)data + rows_length + page_unused_bytes;
+    *deleted_row_bitmap_row_count = row_count;
+    return READSTAT_OK;
+}
+
 static readstat_error_t sas7bdat_parse_page_pass2(const char *page, size_t page_size, sas7bdat_ctx_t *ctx) {
     uint16_t page_type;
 
@@ -1026,17 +1091,6 @@ static readstat_error_t sas7bdat_parse_page_pass2(const char *page, size_t page_
     page_type = sas_read2(&page[ctx->page_header_size-8], ctx->bswap);
 
     const char *data = NULL;
-
-    /* A flagged data or mix page keeps records deleted in place among its
-     * rows, marked only in a trailing bitmap that this reader does not read.
-     * Refuse the page before parsing any of its subheaders or rows, so no
-     * other failure on the page takes precedence over the refusal. */
-    if (((page_type & SAS_PAGE_TYPE_MASK) == SAS_PAGE_TYPE_DATA ||
-                (page_type & SAS_PAGE_TYPE_MASK) == SAS_PAGE_TYPE_MIX) &&
-            (page_type & SAS_PAGE_TYPE_DELETED_ROWS)) {
-        retval = yamaa_readstat_deleted_records();
-        goto cleanup;
-    }
 
     if ((page_type & SAS_PAGE_TYPE_MASK) == SAS_PAGE_TYPE_DATA) {
         ctx->page_row_count = sas_read2(&page[ctx->page_header_size-6], ctx->bswap);
@@ -1089,6 +1143,10 @@ static readstat_error_t sas7bdat_parse_page_pass2(const char *page, size_t page_
                     if ((retval = sas7bdat_parse_subheader_compressed(page + shp_info.offset, shp_info.len, ctx)) != READSTAT_OK) {
                         goto cleanup;
                     }
+                } else if (shp_info.compression == SAS_COMPRESSION_DELETED_ROW) {
+                    if ((retval = sas7bdat_register_deleted_row(ctx)) != READSTAT_OK) {
+                        goto cleanup;
+                    }
                 } else {
                     retval = READSTAT_ERROR_UNSUPPORTED_COMPRESSION;
                     goto cleanup;
@@ -1118,7 +1176,16 @@ static readstat_error_t sas7bdat_parse_page_pass2(const char *page, size_t page_
             goto cleanup;
         }
         if (ctx->handle.value) {
-            retval = sas7bdat_parse_rows(data, page + page_size - data, ctx);
+            const unsigned char *deleted_row_bitmap = NULL;
+            uint32_t deleted_row_bitmap_row_count = 0;
+            if (page_type & SAS_PAGE_TYPE_DELETED_ROWS) {
+                if ((retval = sas7bdat_parse_deleted_row_bitmap(page, data, page_size,
+                        &deleted_row_bitmap, &deleted_row_bitmap_row_count, ctx)) != READSTAT_OK) {
+                    goto cleanup;
+                }
+            }
+            retval = sas7bdat_parse_rows(data, page + page_size - data,
+                    deleted_row_bitmap, deleted_row_bitmap_row_count, ctx);
         }
     } 
 cleanup:
@@ -1277,7 +1344,8 @@ static readstat_error_t sas7bdat_parse_all_pages_pass2(sas7bdat_ctx_t *ctx) {
             }
             goto cleanup;
         }
-        if (ctx->row_limit > 0 && ctx->parsed_row_count == ctx->row_limit)
+        if (ctx->row_limit > 0 && ctx->parsed_row_count == ctx->row_limit &&
+                ctx->parsed_deleted_row_count == ctx->deleted_row_count)
             break;
     }
 cleanup:
@@ -1394,6 +1462,13 @@ readstat_error_t readstat_parse_sas7bdat(readstat_parser_t *parser, const char *
     }
     
     if ((retval = sas7bdat_submit_columns_if_needed(ctx, 0)) != READSTAT_OK) {
+        goto cleanup;
+    }
+
+    /* Each record the row-size subheader counts as deleted must be found
+     * marked deleted. Otherwise a deleted record was read as a live one. */
+    if (ctx->handle.value && ctx->parsed_deleted_row_count != ctx->deleted_row_count) {
+        retval = yamaa_readstat_deleted_records();
         goto cleanup;
     }
 

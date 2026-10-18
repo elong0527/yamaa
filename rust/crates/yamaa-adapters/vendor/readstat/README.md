@@ -27,21 +27,26 @@ source-authority encoding metadata treatment, early fixed table-shape
 admission, SAS physical extent validation, shared ownership of column-text
 metadata pages, unsupported compression signature
 rejection, transport physical type/offset and partial-row validation, overlapping RDC
-back-reference propagation, refusal of records deleted in place, and exact IBM numeric precision
+back-reference propagation, accounting for records deleted in place, and exact IBM numeric precision
 facts used by narrowing. SAS metadata still records the embedded encoding but
 does not override the explicit declaration. The bridge contains snapshot memory
 IO callbacks and never initializes filesystem IO. Rust contains every callback
 panic before it reaches C. The parent parser lifetime contains all callbacks.
 
-Records deleted in place are refused, never skipped or returned as rows. A data
-or mix page whose type carries the deleted-rows flag `0x0080`, checked before
-any of the page's subheaders or rows is parsed, or a non-zero
-deleted-row count in the row-size subheader (offset 56 in 64-bit files and 28
-otherwise, as upstream commit `d19f262e` reads it), stops the parse through the
-bridge's `yamaa_readstat_deleted_records` hook. Upstream's deleted-row bitmap
-support from that commit and its follow-ups `634f40a8` and `5850fb57` is not
-ported. A deleted compressed row keeps its subheader compression code `0x05`,
-which remains unsupported compression.
+Records deleted in place are skipped, never returned as rows, as upstream
+reads them: a bit in the deleted-row bitmap of a data or mix page that carries
+the deleted-rows flag `0x0080`, or the subheader compression code `0x05` of a
+compressed row. The row-size subheader counts the deleted records (offset 56
+in 64-bit files and 28 otherwise). Upstream trusts that count; locally, every
+counted deletion must be found marked. The second pass therefore reads past
+the last live record, through flagged pages and later pages, until it has
+found them all, and a count left unmatched at the end stops the parse. A count
+above the stored records, a mark beyond the count, a bitmap that does not fit
+its page and a page row beyond its bitmap also stop it. Each of these stops
+goes through the bridge's `yamaa_readstat_deleted_records` hook, so it reports
+cause `deleted_records`. The bitmap extent is checked term by term against the
+rest of the page, so no 64-bit sum can wrap. The bridge never sets a row limit
+or offset, so every record is read.
 
 Rust checks the fixed source-byte and table-shape boundaries from the shared
 `Limits` policy. The C readers admit declared row/column/cell geometry before
@@ -74,6 +79,7 @@ by hand, inside the local changes above, or declined here with its reason.
 | `5850fb57` (release field) | The header's release field is copied into a terminated buffer before `sscanf` reads it. The deleted-row part of this commit is listed below. | Ported |
 | `a0aa9f31` | RDC decompresses into the dataset's row buffer instead of allocating one per row. | Ported |
 | `a2fcaa91` | A dataset with no records reads every page, so column metadata on a later page is not lost. | Ported |
+| `d19f262e`, `634f40a8`, `5850fb57` (bitmap) | Records deleted in place are skipped: bitmap bits on flagged data and mix pages, and compression code `0x05`. The live count excludes them, including when a row offset applies, and the bitmap offset and the rows it covers are bounded. | Ported, with the deleted-record accounting above |
 | `3c68974f` | Allocation failures are checked. | Already covered by the local checked allocations |
 | `4d3c7f77` | A zero-width character column is accepted; its values are empty text. | Ported |
 | `b2d5407d`, `bb29605a`, `95aee731` | The release field accepts revision tags `J` and `TK` for SAS 8 and 9, any tag for other majors such as SAS 7, and the alternative magic number whose first 28 bytes are zero. | Ported |

@@ -333,41 +333,43 @@ mod table {
             }
             assert_eq!(cells(&table), expected);
         }
+        /// Every cell equals the independent pandas CSV truth for `records`.
+        fn assert_compressed_truth(
+            table: &yamaa_adapters::arrow_table::ArrowTable,
+            names: &[String],
+            records: &[Vec<Option<String>>],
+        ) {
+            assert_eq!(table.row_count(), records.len());
+            assert_eq!(table.schema().columns().len(), 100);
+            for (column, field) in table.schema().columns().iter().enumerate() {
+                assert_eq!(field.name, names[column]);
+                assert_eq!(
+                    field.kind,
+                    if column % 4 == 1 {
+                        ColumnType::Str
+                    } else {
+                        ColumnType::Float
+                    }
+                );
+                for (row, record) in records.iter().enumerate() {
+                    let actual = table.cell(row, column).unwrap();
+                    match record[column].as_deref() {
+                        None => assert_eq!(actual, ValueRef::Missing),
+                        Some(text) if column % 4 == 1 => {
+                            assert_eq!(actual, ValueRef::Str(text))
+                        }
+                        Some(number) => assert_eq!(actual, float(number.parse().unwrap())),
+                    }
+                }
+            }
+        }
         #[test]
         fn rle_and_rdc_compression_equal_independent_upstream_csv_truth() {
             let expected =
                 yamaa_adapters::csv_source::parse(&bytes("compressed-truth.csv")).unwrap();
             for file in ["rle.sas7bdat", "rdc.sas7bdat"] {
                 let table = sas_source::parse(&bytes(file), &declaration(file)).unwrap();
-                assert_eq!(table.row_count(), expected.records.len());
-                assert_eq!(table.schema().columns().len(), 100);
-                for (column, field) in table.schema().columns().iter().enumerate() {
-                    assert_eq!(field.name, expected.names[column]);
-                    assert_eq!(
-                        field.kind,
-                        if column % 4 == 1 {
-                            ColumnType::Str
-                        } else {
-                            ColumnType::Float
-                        }
-                    );
-                    for (row, record) in expected.records.iter().enumerate() {
-                        let actual = table.cell(row, column).unwrap();
-                        match record[column].as_deref() {
-                            None => assert_eq!(actual, ValueRef::Missing),
-                            Some(text) if column % 4 == 1 => {
-                                assert_eq!(actual, ValueRef::Str(text))
-                            }
-                            Some(number) => assert_eq!(
-                                actual,
-                                ValueRef::Float(
-                                    yamaa_core::value::FiniteFloat::new(number.parse().unwrap())
-                                        .unwrap()
-                                )
-                            ),
-                        }
-                    }
-                }
+                assert_compressed_truth(&table, &expected.names, &expected.records);
             }
         }
         #[test]
@@ -539,61 +541,206 @@ mod table {
             ));
         }
         #[test]
-        fn records_deleted_in_place_are_refused_with_a_rewrite_hint() {
-            // Either signal alone refuses the independent haven fixture: the
-            // deleted-rows flag 0x0080 on its mix page (type 0x0200 at 1040), or
-            // a non-zero deleted count beside its four stored records (row-size
-            // subheader at 4640).
+        fn records_deleted_in_place_are_skipped_in_the_independent_haven_fixture() {
+            // The haven fixture's mix page (type 0x0200 at 1040) holds four
+            // 40-byte records from page offset 184, and its free-space field
+            // (page offset 12, file offset 1036) is 2396. Its deleted-row
+            // bitmap therefore starts at page offset 184 + 4 * 40 + 2396 =
+            // 2740, file offset 3764, and holds zeros. The row-size subheader
+            // at 4640 counts the records.
             let source = declaration("datetime.sas7bdat");
             let original = bytes(&source.path);
             assert_eq!(&original[1040..1042], &0x0200u16.to_le_bytes());
+            assert_eq!(&original[1036..1040], &2396u32.to_le_bytes());
+            assert_eq!(&original[3764..3772], &[0; 8]);
             assert_eq!(&original[4664..4672], &[4, 0, 0, 0, 0, 0, 0, 0]);
-            for (offset, byte) in [(1040, 0x80), (4668, 1)] {
-                let mut data = original.clone();
-                data[offset] = byte;
-                let error = sas_source::parse(&data, &source).unwrap_err();
-                assert!(
-                    matches!(error, Error::Invalid("deleted_records")),
-                    "{offset}"
-                );
-                let error = yamaa_adapters::specification_run::Error::SasSource(error);
-                assert_eq!(
-                    yamaa_adapters::specification_diagnostics::findings(&error, Some(&source))
-                        .unwrap()
-                        .unwrap(),
-                    [yamaa_adapters::json!({
-                        "phase": "ingest",
-                        "condition": "source_sas_invalid",
-                        "requirement": "REQ-1317",
-                        "spec_paths": ["input.SRC.path"],
-                        "context": {
-                            "dataset": "SRC",
-                            "path": "datetime.sas7bdat",
-                            "cause": "deleted_records",
-                            "hint": "rewrite the SAS dataset first, for example with PROC \
-                                     COPY or a DATA step, to remove the records deleted in place"
-                        }
-                    })],
-                    "{offset}"
-                );
-            }
+            // Literal physical binary64 truth of the four stored records.
+            let stored = [
+                [1_738_507_332.0, 20_121.0, 20_121.0, 20_121.0, 52_932.0],
+                [1_704_190_463.0, 19_724.0, 19_724.0, 19_724.0, 36_863.0],
+                [1_736_921_722.0, 20_254.0, 20_254.0, 20_254.0, 22_522.0],
+                [-356_840_880.0, -4_124.0, -4_124.0, -4_124.0, 77_520.0],
+            ];
+            let rows = |kept: &[usize]| -> Vec<Vec<ValueRef<'static>>> {
+                kept.iter()
+                    .map(|&row| stored[row].map(float).to_vec())
+                    .collect()
+            };
+            // The flag over an all-zero bitmap deletes nothing.
+            let mut flagged = original.clone();
+            flagged[1040] = 0x80;
+            let table = sas_source::parse(&flagged, &source).unwrap();
+            assert_eq!(cells(&table), rows(&[0, 1, 2, 3]));
+            // Counting one deleted record and marking the second removes it.
+            let mut deleted = flagged;
+            deleted[4668] = 1;
+            deleted[3764] = 0b0100_0000;
+            let table = sas_source::parse(&deleted, &source).unwrap();
+            assert_eq!(cells(&table), rows(&[0, 2, 3]));
         }
         #[test]
-        fn deleted_compressed_record_keeps_its_unsupported_compression_cause() {
+        fn counted_deletions_without_marks_are_refused_with_a_rewrite_hint() {
+            // A deleted count of one beside the haven fixture's four stored
+            // records, with no page flagged, leaves the counted deletion
+            // unmarked, so a deleted record could only be read as live.
+            let source = declaration("datetime.sas7bdat");
+            let mut data = bytes(&source.path);
+            assert_eq!(&data[4664..4672], &[4, 0, 0, 0, 0, 0, 0, 0]);
+            data[4668] = 1;
+            let error = sas_source::parse(&data, &source).unwrap_err();
+            assert!(matches!(error, Error::Invalid("deleted_records")));
+            let error = yamaa_adapters::specification_run::Error::SasSource(error);
+            assert_eq!(
+                yamaa_adapters::specification_diagnostics::findings(&error, Some(&source))
+                    .unwrap()
+                    .unwrap(),
+                [yamaa_adapters::json!({
+                    "phase": "ingest",
+                    "condition": "source_sas_invalid",
+                    "requirement": "REQ-1317",
+                    "spec_paths": ["input.SRC.path"],
+                    "context": {
+                        "dataset": "SRC",
+                        "path": "datetime.sas7bdat",
+                        "cause": "deleted_records",
+                        "hint": "rewrite the SAS dataset first, for example with PROC \
+                                 COPY or a DATA step, to remove the records deleted in place"
+                    }
+                })]
+            );
+        }
+        #[test]
+        fn deleted_compressed_record_is_skipped() {
             // Independent pandas RLE layout: the row-size subheader at 130592
             // counts 10 records, none deleted, and the first compressed-row
             // pointer's compression byte is at 66840. SAS marks a deleted
             // compressed row with code 0x05 and counts it as deleted.
+            let expected =
+                yamaa_adapters::csv_source::parse(&bytes("compressed-truth.csv")).unwrap();
             let source = declaration("rle.sas7bdat");
             let mut data = bytes(&source.path);
             assert_eq!(&data[130616..130624], &[10, 0, 0, 0, 0, 0, 0, 0]);
             assert_eq!(data[66840], 0x04);
             data[66840] = 0x05;
             data[130620] = 1;
+            let table = sas_source::parse(&data, &source).unwrap();
+            assert_compressed_truth(&table, &expected.names, &expected.records[1..]);
+        }
+        #[test]
+        fn deleted_row_bitmaps_skip_records_in_every_word_size_and_byte_order() {
+            use crate::support::sas7bdat::{Cell, Dataset, Kind, Layout, Page, MIX};
+            for layout in [Layout::LE32, Layout::LE64, Layout::BE32, Layout::BE64] {
+                let mut dataset = Dataset::new(layout, &[("X", Kind::Num, 8), ("T", Kind::Chr, 8)]);
+                dataset.total = 5;
+                dataset.deleted = 2;
+                dataset.mix_rows = 5;
+                let rows = (0..5)
+                    .map(|row| {
+                        let label = format!("r{row}");
+                        dataset.row(&[Cell::Num(row as f64 + 0.5), Cell::Text(label.as_bytes())])
+                    })
+                    .collect();
+                let mut page = Page::new(MIX, dataset.metadata(), rows);
+                page.deleted = Some(vec![false, true, false, true, false]);
+                let table = read_built(&dataset.file(&[page])).unwrap();
+                assert_eq!(
+                    cells(&table),
+                    [
+                        [float(0.5), ValueRef::Str("r0")],
+                        [float(2.5), ValueRef::Str("r2")],
+                        [float(4.5), ValueRef::Str("r4")]
+                    ],
+                    "{layout:?}"
+                );
+            }
+        }
+        #[test]
+        fn deleted_records_after_the_last_live_record_are_found_on_later_pages() {
+            // The last two records of the first data page and the whole last
+            // page are deleted, after the last live record.
+            use crate::support::sas7bdat::{Cell, Dataset, Kind, Layout, Page, DATA, MIX};
+            let mut dataset = Dataset::new(Layout::LE64, &[("X", Kind::Num, 8)]);
+            dataset.total = 9;
+            dataset.deleted = 5;
+            dataset.mix_rows = 3;
+            let row = |value| dataset.row(&[Cell::Num(value)]);
+            let mut mix = Page::new(MIX, dataset.metadata(), vec![row(0.0), row(1.0), row(2.0)]);
+            mix.deleted = Some(vec![false, false, true]);
+            let rows = vec![row(3.0), row(4.0), row(5.0), row(6.0)];
+            let mut data = Page::new(DATA, vec![], rows);
+            data.deleted = Some(vec![false, false, true, true]);
+            let mut gone = Page::new(DATA, vec![], vec![row(7.0), row(8.0)]);
+            gone.deleted = Some(vec![true, true]);
+            let pages = [mix, data, gone];
+            let table = read_built(&dataset.file(&pages)).unwrap();
+            assert_eq!(
+                cells(&table),
+                [[float(0.0)], [float(1.0)], [float(3.0)], [float(4.0)]]
+            );
+            // Without the last page two counted deletions are never found.
             assert!(matches!(
-                sas_source::parse(&data, &source),
-                Err(Error::Invalid("compression"))
+                read_built(&dataset.file(&pages[..2])),
+                Err(Error::Invalid("deleted_records"))
             ));
+        }
+        #[test]
+        fn deleted_compressed_rows_in_a_64_bit_file_are_skipped_and_counted() {
+            use crate::support::sas7bdat::{rle, Cell, Dataset, Kind, Layout, Page, Pointer, META};
+            let mut dataset = Dataset::new(Layout::LE64, &[("X", Kind::Num, 8)]);
+            dataset.compression = Some(*b"SASYZCRL");
+            dataset.total = 3;
+            let file = |dataset: &Dataset| {
+                let mut pointers = dataset.metadata();
+                pointers.push(Pointer::rle_row(&dataset.row(&[Cell::Num(1.0)])));
+                pointers.push(Pointer::coded(rle(&dataset.row(&[Cell::Num(2.0)])), 0x05));
+                pointers.push(Pointer::raw_row(dataset.row(&[Cell::Num(3.0)])));
+                dataset.file(&[Page::new(META, pointers, vec![])])
+            };
+            dataset.deleted = 1;
+            let table = read_built(&file(&dataset)).unwrap();
+            assert_eq!(cells(&table), [[float(1.0)], [float(3.0)]]);
+            // A record marked deleted that the row-size subheader does not
+            // count cannot be reconciled with it.
+            dataset.deleted = 0;
+            assert!(matches!(
+                read_built(&file(&dataset)),
+                Err(Error::Invalid("deleted_records"))
+            ));
+        }
+        #[test]
+        fn deleted_record_counts_that_disagree_with_their_marks_are_refused() {
+            use crate::support::sas7bdat::{Cell, Dataset, Kind, Layout, Page, MIX};
+            let file = |total: u64, deleted: u64, rows: usize, mix: u64, marks: &[bool]| {
+                let mut dataset = Dataset::new(Layout::LE64, &[("X", Kind::Num, 8)]);
+                dataset.total = total;
+                dataset.deleted = deleted;
+                dataset.mix_rows = mix;
+                let rows = (0..rows).map(|row| dataset.row(&[Cell::Num(row as f64)]));
+                let mut page = Page::new(MIX, dataset.metadata(), rows.collect());
+                page.deleted = Some(marks.to_vec());
+                (dataset, page)
+            };
+            let refused = |(dataset, page): (Dataset, Page)| {
+                let result = read_built(&dataset.file(&[page]));
+                assert!(matches!(result, Err(Error::Invalid("deleted_records"))));
+            };
+            let marks = [false, true, false, false];
+            // More deleted records than stored ones.
+            refused(file(4, 5, 4, 4, &marks));
+            // More marks than counted deletions, and fewer.
+            refused(file(4, 1, 4, 4, &[false, true, true, false]));
+            refused(file(4, 2, 4, 4, &marks));
+            // A free-space field that places the bitmap past the page end,
+            // including one that would wrap a 64-bit sum.
+            for free_space in [4096, u64::MAX - 7] {
+                let (dataset, mut page) = file(4, 1, 4, 4, &marks);
+                page.free_space = Some(free_space);
+                refused((dataset, page));
+            }
+            // A mix page that may hold five records while the dataset stores
+            // two: its bitmap covers two, and the unmarked deletion is not
+            // looked for beyond them.
+            refused(file(2, 1, 2, 5, &[false, false, true]));
         }
         #[test]
         fn reject_multiple_members_in_both_transport_versions() {
