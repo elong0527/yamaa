@@ -1010,8 +1010,16 @@ impl ResolvedPlan {
     }
     /// A region's named intermediate `index`: named intermediates keep their
     /// plan positions as the region's first relation slots.
-    pub fn named(&self, region: RegionId, index: usize) -> RelationId {
-        RelationId(self.region(region).relations.start + index as u32)
+    /// Returns `None` when the index does not name an intermediate in that region.
+    pub fn named(&self, region: RegionId, index: usize) -> Option<RelationId> {
+        let relations = &self.region(region).relations;
+        let id = relations.start.checked_add(u32::try_from(index).ok()?)?;
+        (id < relations.end
+            && matches!(
+                self.relations[id as usize].kind,
+                RelationKind::Named { index: slot } if slot as usize == index
+            ))
+        .then_some(RelationId(id))
     }
     /// A region's column-phase columns, in the compiler's order.
     pub fn column_order(&self, id: RegionId) -> &[ColumnId] {
