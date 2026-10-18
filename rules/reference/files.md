@@ -222,8 +222,17 @@ the run; the replacement is not read. Content identity is over bytes: a
 modification time, inode number or size is not the identity.
 
 Fails: `resource_path_content_changed`.
-Evidence: `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::changed_source_retains_original_snapshot_and_ingest_issue_and_refuses_both_saves`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::already_captured_changed_metadata_keeps_original_snapshot_and_native_failure`, `rust/crates/yamaa-adapters/src/file_resources.rs::reused_numeric_identity_without_a_current_physical_witness_is_a_fresh_capture`.
+Evidence: `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::changed_source_retains_original_snapshot_and_ingest_issue_and_refuses_both_saves`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::already_captured_changed_metadata_keeps_original_snapshot_and_native_failure`, `rust/crates/yamaa-adapters/src/file_resources.rs::reused_numeric_identity_without_a_current_physical_witness_is_a_fresh_capture`, `rust/crates/yamaa/tests/plan_contracts.rs::a_changed_environment_refuses_runs_until_it_is_restored`, `rust/crates/yamaa/tests/plan_contracts.rs::a_changed_function_contract_refuses_runs_until_it_is_restored`, `rust/crates/yamaa/tests/plan_contracts.rs::every_changed_local_file_refuses_runs_under_its_declaring_field`.
 Replaces: REQ-0788, REQ-0789.
+
+An implementation may validate once and run many times. Each such run, before
+it activates a project function or reads an input record, verifies every file
+the validation read: the specification, its layers, dictionaries and linked
+producing specifications, the project file, and the environment file with the
+lock, function definitions and codelists it declares. A file that changed
+fails that run with `resource_path_content_changed`, naming the field that
+declared it and the path as written. The run neither reads the replacement
+nor validates it in its place.
 
 ## Path failures
 

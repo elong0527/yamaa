@@ -344,6 +344,20 @@ pub enum SaveOutcome { Saved, NothingToSave }  // #[non_exhaustive]
   Save targets. Nothing a run captures, activates or produces stays in the
   plan, so a failed run leaves the plan ready for the next. A `Build` owns its
   run and outlives the plan.
+- A plan never runs stale and never recompiles implicitly. Each `run` first
+  captures every held metadata file again through the compile authority (the
+  specification, its layers, dictionaries and linked producing
+  specifications, the project file, the environment file and the lock,
+  function definitions and codelists they declare) and compares it with the
+  held reference and bytes, before activation or any study read. A file that
+  changed refuses that run with `resource_path_content_changed` (FILE-10),
+  naming the field that declared it and the path as written; a resolver
+  object that is gone refuses it with `resource_path_missing`. Activation
+  stays per run, so the host's current lock, bindings and conformance cases
+  are checked against the compiled function contracts every time. Once the
+  original is back, the next run succeeds; only an explicit `compile` picks
+  up a change. `build` skips the run-start check because its compilation has
+  just captured the same metadata.
 
 ### Handles, ownership and thread safety
 
