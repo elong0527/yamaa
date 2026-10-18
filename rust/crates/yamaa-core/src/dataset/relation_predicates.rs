@@ -262,11 +262,21 @@ pub(crate) fn visit(expression: &Expression, visitor: &mut impl FnMut(usize)) {
                 visit(&branch.assignment.expression, visitor);
             }
         }
-        // The current aggregate relation/source/key IR has no named selector.
-        // Extend this visitor when aggregate derive or named relations are added.
+        // A range value or a derive binding reads a selection for the current row.
+        Expression::Aggregate(aggregate) => {
+            if let Some(CurrentRead::Intermediate { index, .. }) =
+                aggregate.range().map(|range| range.current().read)
+            {
+                visitor(index);
+            }
+            for binding in aggregate.derivations() {
+                visit(&binding.assignment.expression, visitor);
+            }
+        }
+        // The aggregate relation/source/key IR has no named selector.
+        // Extend this visitor when named relations are added.
         Expression::Joined(_)
         | Expression::JoinedSource { .. }
-        | Expression::Aggregate(_)
         | Expression::Odm(_)
         | Expression::Literal(_)
         | Expression::Window(_)

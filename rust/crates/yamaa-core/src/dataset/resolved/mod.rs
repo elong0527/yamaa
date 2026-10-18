@@ -1,0 +1,827 @@
+//! The resolved plan graph: every bound [`DatasetPlan`] compiled once into
+//! dense integer slots (rewrite 1, #2840).
+//!
+//! Resolution lowers a bound plan, its donor plans included, into one
+//! immutable arena. Donor plans become regions of that arena and nothing in
+//! it is an `Rc`, so a [`ResolvedPlan`] is `Send + Sync` and can be shared by
+//! concurrent runs. Every identifier, handler site and
+//! cache key is a slot: [`ColumnId`], [`SourceId`], [`TemplateId`],
+//! [`BindingId`], [`ExprId`], [`RelationId`], [`WindowId`],
+//! [`HandlerSiteId`], [`CheckId`] and [`StepId`]. Names and authored paths
+//! are kept only for diagnostics and reports.
+//!
+//! Bindings are keyed by (template, column). A column is row-only,
+//! column-only or mixed; each template that completes a column in the column
+//! phase is served by a binding with its own [`DriverContext`], and cells with
+//! equal contexts share one binding.
+//!
+//! The [`ResolvedPlan::schedule`] reproduces the order in which today's
+//! executor visits steps. Resolution checks three properties on every bind,
+//! whatever the build profile, and refuses the plan as internal when one
+//! fails, naming the first step that diverges:
+//!
+//! 1. topological validity: every data edge reads a cell that an earlier step
+//!    of the reading cell's template completed;
+//! 2. the eagerly registered handler sites follow today's registration walk;
+//! 3. the schedule equals the structural mirror of the executor's loops.
+//!
+//! The current executor still runs every plan; nothing here changes an
+//! output. Evaluation payloads for the expression nodes arrive with the
+//! executor over this graph (#2841).
+use crate::{
+    numeric_lifecycle::HandlerKind,
+    table::TableSchema,
+    value::{ColumnType, Value},
+};
+use std::{ops::Range, sync::Arc};
+
+mod build;
+mod reference;
+mod registration;
+mod schedule;
+#[cfg(test)]
+mod tests;
+mod verify;
+
+pub use reference::ReferenceStep;
+
+use super::{DatasetPlan, Keep, OdmTemplateScope, VerificationSeverity};
+
+macro_rules! slot {
+    ($(#[$meta:meta])* $name:ident) => {
+        $(#[$meta])*
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+        pub struct $name(u32);
+        impl $name {
+            /// Position of this slot in its table.
+            pub fn index(self) -> usize {
+                self.0 as usize
+            }
+        }
+        impl TryFrom<usize> for $name {
+            type Error = ResolutionError;
+            fn try_from(index: usize) -> Result<Self, ResolutionError> {
+                u32::try_from(index)
+                    .map(Self)
+                    .map_err(|_| ResolutionError::Capacity)
+            }
+        }
+    };
+}
+slot!(
+    /// One column of one region, in declaration order within the region.
+    ColumnId
+);
+slot!(
+    /// One source of one region: the driver first, then the secondary inputs.
+    SourceId
+);
+slot!(
+    /// One row template; a plan without rows has one key-grain template.
+    TemplateId
+);
+slot!(
+    /// One bound derivation, serving one or more (template, column) cells.
+    BindingId
+);
+slot!(
+    /// One expression node of the arena.
+    ExprId
+);
+slot!(
+    /// One selection shape: a named intermediate, an implicit join, an
+    /// aggregate relation or an ODM item read.
+    RelationId
+);
+slot!(
+    /// One window evaluation.
+    WindowId
+);
+slot!(
+    /// One (specification path, handler kind) site.
+    HandlerSiteId
+);
+slot!(
+    /// One check, including the compiler's deferred findings.
+    CheckId
+);
+slot!(
+    /// One position in the schedule.
+    StepId
+);
+slot!(
+    /// One region: the dataset itself, or the donor plan of a derived intermediate.
+    RegionId
+);
+impl RegionId {
+    /// The dataset's own region; donor regions follow it.
+    pub const DATASET: Self = Self(0);
+}
+
+/// Immutable once resolved: nothing in it is written during a run.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ResolvedPlan {
+    regions: Vec<Region>,
+    sources: Vec<SourceSlot>,
+    columns: Vec<ColumnNode>,
+    templates: Vec<TemplateNode>,
+    bindings: Vec<Binding>,
+    cells: Vec<Option<BindingId>>,
+    exprs: Vec<ExprNode>,
+    operands: Vec<Operand>,
+    reads: Vec<Read>,
+    node_sites: Vec<NodeSite>,
+    relations: Vec<RelationNode>,
+    windows: Vec<WindowNode>,
+    checks: Vec<CheckNode>,
+    handlers: Vec<HandlerSite>,
+    functions: Vec<FunctionSlot>,
+    schedule: Vec<StepInfo>,
+    keys: Vec<ColumnId>,
+    output_order: Vec<OrderKey>,
+}
+
+/// The dataset (region 0) or the donor plan of a derived intermediate.
+/// Each region owns contiguous ranges of every table.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Region {
+    pub kind: RegionKind,
+    sources: Range<u32>,
+    columns: Range<u32>,
+    templates: Range<u32>,
+    bindings: Range<u32>,
+    relations: Range<u32>,
+    schedule: Range<u32>,
+    cells: u32,
+    /// Conversion handler sites in the plan's declared order.
+    conversions: Vec<HandlerSiteId>,
+    /// Column-phase columns in the compiler's order.
+    column_order: Vec<ColumnId>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RegionKind {
+    Dataset,
+    /// Donor rows copy `stored_columns` fields, then evaluate the derivations
+    /// in declaration order. Only `typed_columns` convert their results.
+    Donor {
+        stored_columns: u32,
+        typed_columns: Vec<ColumnId>,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct SourceSlot {
+    /// The driver of the dataset region has no name in the bound plan.
+    pub name: Option<Arc<str>>,
+    pub schema: TableSchema,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ColumnNode {
+    pub name: Arc<str>,
+    /// Untyped donor results have no declared type.
+    pub kind: Option<ColumnType>,
+    pub phase: ColumnPhase,
+    /// The column-phase bindings of this column, in template order.
+    column_bindings: Range<u32>,
+    /// The column-phase declaration's position in the bound plan.
+    assignment: Option<u32>,
+}
+
+/// Which phase completes a column, decided from the templates' row bindings (#2754).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ColumnPhase {
+    RowOnly,
+    ColumnOnly,
+    Mixed,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct TemplateNode {
+    pub region: RegionId,
+    pub driver: DriverContext,
+    pub filter: Option<TemplateFilter>,
+    /// Authored row identity, when the bound plan retains it.
+    pub row: Option<Arc<str>>,
+    /// The template's row bindings, in resolved dependency order.
+    row_bindings: Range<u32>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TemplateFilter {
+    pub expr: ExprId,
+    pub placement: FilterPlacement,
+}
+
+/// When a template filter runs relative to its bindings.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FilterPlacement {
+    /// Key grain: over every source record, before any key binding.
+    BeforeKeys,
+    /// After the prewindow bindings, before the window stage (REQ-0036, REQ-0218).
+    Prewindow,
+    /// A grouped filter that reads the window stage.
+    Postwindow,
+}
+
+/// The driver and ODM scope a binding evaluates against (#2829).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DriverContext {
+    pub source: SourceId,
+    /// The named intermediate that drives the template.
+    pub named: Option<RelationId>,
+    pub grain: Grain,
+    /// This template's scope for deferred column-phase ODM reads only.
+    pub odm: Option<OdmTemplateScope>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Grain {
+    Records,
+    /// Group key fields of the driver.
+    Groups(Vec<u32>),
+    Keys,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Binding {
+    pub column: ColumnId,
+    /// The cells this binding serves.
+    pub templates: Vec<TemplateId>,
+    pub stage: Stage,
+    pub driver: DriverContext,
+    pub expr: ExprId,
+    /// Authored path, for diagnostics only.
+    pub path: Arc<str>,
+    /// The conversion handler site of the completed result.
+    pub unconvertible: Option<HandlerSiteId>,
+    pub origin: BindingOrigin,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Stage {
+    Prewindow,
+    Window,
+    Column,
+}
+
+/// The bound plan's own coordinates of a binding.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BindingOrigin {
+    /// Assignment `assignment` of the region's template `template`.
+    Template { template: u32, assignment: u32 },
+    /// Assignment `assignment` of the region's column phase.
+    Column { assignment: u32 },
+}
+
+/// One expression node. Operands and reads are slots; the operation payload
+/// itself stays with the bound plan until the executor over this graph (#2841).
+#[derive(Clone, Debug, PartialEq)]
+pub struct ExprNode {
+    pub kind: ExprKind,
+    pub path: Arc<str>,
+    operands: Range<u32>,
+    reads: Range<u32>,
+    sites: Range<u32>,
+}
+
+/// The operation family of one expression node.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExprKind {
+    Literal,
+    Source,
+    Column,
+    Collect,
+    Reduce,
+    Count,
+    Compute,
+    Flag,
+    Case,
+    /// A bound predicate: a case condition, a filter or a check predicate.
+    Predicate,
+    MappingCut,
+    Round,
+    Imputation,
+    Temporal,
+    Extreme,
+    StrConcat,
+    StrContains,
+    StrTemplate,
+    StrExtract,
+    StrReplace,
+    StrCase,
+    StrPad,
+    SourceBinding,
+    FirstAvailable,
+    Function,
+    ProjectFunction,
+    Window(WindowId),
+    ContextWindow(WindowId),
+    Intermediate(RelationId),
+    Joined(RelationId),
+    JoinedSource(RelationId),
+    SourceLookup(RelationId),
+    Lookup(RelationId),
+    RowLookup(RelationId),
+    Aggregate(RelationId),
+    Odm(RelationId),
+    /// One aggregate derivation and its conversion handler.
+    Derivation,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Operand {
+    pub expr: ExprId,
+    pub role: OperandRole,
+    pub demand: Demand,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OperandRole {
+    /// A nested value assignment.
+    Value,
+    /// A case condition.
+    When,
+    /// A case branch assignment.
+    Branch,
+    /// One `first_available` operand.
+    Selection,
+    /// A filter over the records feeding a collection.
+    Filter,
+    /// An aggregate key expression.
+    Key,
+    /// An aggregate derivation.
+    Derivation,
+}
+
+/// Demand edges are evaluated only when reached.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Demand {
+    Always,
+    Reached,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Read {
+    /// Completed value of the current row.
+    Column(ColumnId),
+    /// Raw field of the binding's driver record, or of the records feeding it.
+    Field(u32),
+    /// Field of a record the relation selected or considers.
+    Relation(RelationId, u32),
+    Window(WindowId),
+}
+
+/// One handler site an expression node can fire.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NodeSite {
+    pub site: HandlerSiteId,
+    /// The registration walker that reaches this site, if any does.
+    pub walker: Option<Walker>,
+}
+
+/// Today's registration walkers, in the order `DatasetPlan::execute` runs them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Walker {
+    Scalar,
+    Imputation,
+    StrCase,
+    StrExtract,
+    StrReplace,
+    StrTemplate,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct RelationNode {
+    pub region: RegionId,
+    pub kind: RelationKind,
+    pub path: Arc<str>,
+    pub donor: Donor,
+    /// Equality keys: a donor field and the current value it must equal.
+    pub keys: Vec<RelationKey>,
+    /// Correlated current-row operands: a named relation's filter fields in
+    /// their declared positions, then its donor operands; an ODM read's scope.
+    pub current: Vec<Read>,
+    /// A donor predicate; its field reads address the donor record.
+    pub filter: Option<ExprId>,
+    pub range: Option<RangeNode>,
+    pub selection: Option<SelectionShape>,
+    pub no_match: Option<Value>,
+    /// The region evaluating the donor derivations.
+    pub derivations: Option<RegionId>,
+    /// A key value depends on a window over the completed relation.
+    pub windowed: bool,
+    /// Output columns read across every candidate (output aggregates).
+    pub scan: Vec<ColumnId>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RelationKind {
+    /// Intermediate `index` of the region's plan.
+    Named {
+        index: u32,
+    },
+    Join,
+    CurrentGroup,
+    MatchedAggregate,
+    OutputAggregate,
+    OdmItems,
+}
+
+/// Where a relation's records come from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Donor {
+    Source(SourceId),
+    /// The driver of the reading row.
+    Driver,
+    /// Completed rows of earlier templates.
+    SelfRows,
+    /// Completed output candidates.
+    Output,
+    /// The records feeding the current grouped row.
+    Group,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct RelationKey {
+    pub field: u32,
+    pub value: KeyValue,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum KeyValue {
+    Read(Read),
+    Padded(Read),
+    Literal(Value),
+    Expr(ExprId),
+    /// An earlier selector copied into a donor plan whose operand is not
+    /// visible there; nothing in that region may read the relation.
+    Unbound,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RangeNode {
+    pub current: Read,
+    pub lower: Option<u32>,
+    pub upper: Option<u32>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SelectionShape {
+    pub order_by: Vec<FieldOrder>,
+    pub keep: Keep,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FieldOrder {
+    pub field: u32,
+    pub descending: bool,
+    pub nulls_first: bool,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct WindowNode {
+    pub region: RegionId,
+    pub function: WindowFunction,
+    pub path: Arc<str>,
+    /// Reads across the window's scope: completed columns, or driver fields
+    /// collected for a context window.
+    pub group_by: Vec<Read>,
+    pub order_by: Vec<ReadOrder>,
+    /// The value, date or reference-date operands of `function`.
+    pub operands: Vec<Read>,
+    pub filter: Option<ExprId>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WindowFunction {
+    RowNumber,
+    Competition,
+    Dense,
+    RowValue { offset: i64 },
+    PreviousNonMissing,
+    Locf,
+    BaselineFlag,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ReadOrder {
+    pub read: Read,
+    pub descending: bool,
+    pub nulls_first: bool,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CheckNode {
+    pub path: Arc<str>,
+    pub scope: CheckScope,
+    pub family: CheckFamily,
+    pub severity: VerificationSeverity,
+    /// The step at which the check is ready and evaluated.
+    pub ready_at: StepId,
+    /// Columns the check reads across every candidate.
+    reads: Range<u32>,
+    pub predicates: Vec<ExprId>,
+    /// Position within its column group, key list or dataset checks.
+    position: u32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CheckScope {
+    OutputKeys,
+    Intermediate(RelationId),
+    Column(ColumnId),
+    Dataset,
+}
+
+/// The check vocabulary of `dataset::Check`, plus key and intermediate checks.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CheckFamily {
+    KeyMissing,
+    KeyDuplicates,
+    IntermediateUnique,
+    NotMissing,
+    AllowedValues,
+    Codelist,
+    ValueCodelists,
+    Inventory,
+    ValueMaxLength,
+    Range,
+    MaxLength,
+    WideMaxLength,
+    Matches,
+    InvalidDiagnostic,
+    InvalidDeclaration,
+    Assert,
+    PredicateDeclaration,
+    Unique,
+    AllOrNone,
+    RowCount,
+    WideRowCount,
+    ScopedRowCount,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HandlerSite {
+    pub path: Arc<str>,
+    pub kind: HandlerKind,
+    pub registration: Registration,
+}
+
+/// How a site enters the attempt's handler report.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Registration {
+    /// Registered before any row, in table order; reported with zero counts.
+    Eager,
+    /// Registered when it first fires; reported in firing order.
+    OnFirstFire,
+    /// Counted inside a donor derivation and never reported.
+    Unreported,
+}
+
+/// One callback site, admitted against the function port before any table read.
+#[derive(Clone, Debug, PartialEq)]
+pub struct FunctionSlot {
+    pub expr: ExprId,
+    pub slot: usize,
+    pub signature: FunctionSignature,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum FunctionSignature {
+    Host(crate::function_signature::InvocationPlan),
+    Project(crate::function_signature::ProjectInvocationPlan),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct OrderKey {
+    pub column: ColumnId,
+    pub descending: bool,
+    pub nulls_first: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StepInfo {
+    pub step: Step,
+    /// A cancellation poll before the step (#2822).
+    pub checkpoint: bool,
+    pub partition: PartitionClass,
+    pub effects: Effects,
+}
+
+/// One step of the schedule, in the order today's executor visits it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Step {
+    Admit,
+    VerifyIntermediates { self_rows: bool },
+    KeyGrain,
+    Driver(TemplateId),
+    Row(BindingId),
+    Filter(TemplateId),
+    Window(BindingId),
+    PostwindowFilter(TemplateId),
+    PublishSelf(TemplateId),
+    Column(ColumnId),
+    Checks(CheckId),
+    UnobservedFilterTypes,
+    OutputKeys,
+    Order,
+}
+
+/// Partition safety from the accepted inventory in `docs/partition-execution.md`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum PartitionClass {
+    Safe,
+    CombineStep,
+    Global,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Effects {
+    Pure,
+    Handlers,
+    Callbacks,
+}
+
+/// A resolution check failed: the bind is refused as internal.
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
+pub enum ResolutionError {
+    #[error("resolved plan capacity")]
+    Capacity,
+    /// The bound plan has a shape resolution does not represent.
+    #[error("resolved plan unsupported: {0}")]
+    Unsupported(String),
+    /// Check 1: a data edge reads a cell no earlier step completed.
+    #[error("resolved plan reads before completion in region {region} at step {position} ({step:?}): {read}")]
+    Topology {
+        region: usize,
+        position: usize,
+        step: ReferenceStep,
+        read: String,
+    },
+    /// Check 2: the eager handler sites diverge from today's registration walk.
+    #[error("resolved handler sites diverge at position {position}: today {expected:?}, resolved {found:?}")]
+    Handlers {
+        position: usize,
+        expected: Option<(String, HandlerKind)>,
+        found: Option<(String, HandlerKind)>,
+    },
+    /// Check 3: the schedule diverges from today's evaluation order.
+    #[error("resolved schedule diverges in region {region} at step {position}: today {expected:?}, resolved {found:?}")]
+    Schedule {
+        region: usize,
+        position: usize,
+        expected: Option<ReferenceStep>,
+        found: Option<ReferenceStep>,
+    },
+}
+
+impl DatasetPlan {
+    /// Compile this bound plan into its resolved graph and run the three
+    /// resolution checks. Binding calls this on every plan it returns.
+    pub fn resolve(&self) -> Result<ResolvedPlan, ResolutionError> {
+        let (resolved, plans) = build::resolve(self)?;
+        verify::verify(&resolved, &plans)?;
+        Ok(resolved)
+    }
+}
+
+/// The plan is shared by concurrent runs (#2821).
+const _: fn() = || {
+    fn shared<T: Send + Sync>() {}
+    shared::<ResolvedPlan>();
+};
+
+fn range(range: &Range<u32>) -> Range<usize> {
+    range.start as usize..range.end as usize
+}
+
+impl ResolvedPlan {
+    pub fn regions(&self) -> &[Region] {
+        &self.regions
+    }
+    pub fn region(&self, id: RegionId) -> &Region {
+        &self.regions[id.index()]
+    }
+    pub fn sources(&self) -> &[SourceSlot] {
+        &self.sources
+    }
+    pub fn columns(&self) -> &[ColumnNode] {
+        &self.columns
+    }
+    pub fn column(&self, id: ColumnId) -> &ColumnNode {
+        &self.columns[id.index()]
+    }
+    pub fn templates(&self) -> &[TemplateNode] {
+        &self.templates
+    }
+    pub fn template(&self, id: TemplateId) -> &TemplateNode {
+        &self.templates[id.index()]
+    }
+    pub fn bindings(&self) -> &[Binding] {
+        &self.bindings
+    }
+    pub fn binding(&self, id: BindingId) -> &Binding {
+        &self.bindings[id.index()]
+    }
+    pub fn exprs(&self) -> &[ExprNode] {
+        &self.exprs
+    }
+    pub fn expr(&self, id: ExprId) -> &ExprNode {
+        &self.exprs[id.index()]
+    }
+    pub fn relations(&self) -> &[RelationNode] {
+        &self.relations
+    }
+    pub fn relation(&self, id: RelationId) -> &RelationNode {
+        &self.relations[id.index()]
+    }
+    pub fn windows(&self) -> &[WindowNode] {
+        &self.windows
+    }
+    pub fn window(&self, id: WindowId) -> &WindowNode {
+        &self.windows[id.index()]
+    }
+    pub fn checks(&self) -> &[CheckNode] {
+        &self.checks
+    }
+    pub fn check(&self, id: CheckId) -> &CheckNode {
+        &self.checks[id.index()]
+    }
+    /// Registration order of the eager sites is the report order.
+    pub fn handlers(&self) -> &[HandlerSite] {
+        &self.handlers
+    }
+    pub fn handler(&self, id: HandlerSiteId) -> &HandlerSite {
+        &self.handlers[id.index()]
+    }
+    /// Callback sites in the order the function port admits them.
+    pub fn functions(&self) -> &[FunctionSlot] {
+        &self.functions
+    }
+    /// Every step of every region; [`Self::region_schedule`] selects one region's.
+    pub fn schedule(&self) -> &[StepInfo] {
+        &self.schedule
+    }
+    pub fn keys(&self) -> &[ColumnId] {
+        &self.keys
+    }
+    pub fn output_order(&self) -> &[OrderKey] {
+        &self.output_order
+    }
+    /// The binding that completes `column` for `template`.
+    pub fn cell(&self, template: TemplateId, column: ColumnId) -> Option<BindingId> {
+        let node = self.template(template);
+        let region = self.region(node.region);
+        let width = region.columns.end - region.columns.start;
+        let row = template.0.checked_sub(region.templates.start)?;
+        let offset = column.0.checked_sub(region.columns.start)?;
+        if offset >= width {
+            return None;
+        }
+        self.cells[(region.cells + row * width + offset) as usize]
+    }
+    pub fn operands(&self, id: ExprId) -> &[Operand] {
+        &self.operands[range(&self.expr(id).operands)]
+    }
+    pub fn reads(&self, id: ExprId) -> &[Read] {
+        &self.reads[range(&self.expr(id).reads)]
+    }
+    pub fn sites(&self, id: ExprId) -> &[NodeSite] {
+        &self.node_sites[range(&self.expr(id).sites)]
+    }
+    pub fn check_reads(&self, id: CheckId) -> &[Read] {
+        &self.reads[range(&self.check(id).reads)]
+    }
+    pub fn region_schedule(&self, id: RegionId) -> &[StepInfo] {
+        &self.schedule[range(&self.region(id).schedule)]
+    }
+    pub fn region_templates(&self, id: RegionId) -> impl Iterator<Item = TemplateId> {
+        range(&self.region(id).templates).map(|index| TemplateId(index as u32))
+    }
+    pub fn region_columns(&self, id: RegionId) -> impl Iterator<Item = ColumnId> {
+        range(&self.region(id).columns).map(|index| ColumnId(index as u32))
+    }
+    pub fn region_sources(&self, id: RegionId) -> impl Iterator<Item = SourceId> {
+        range(&self.region(id).sources).map(|index| SourceId(index as u32))
+    }
+    pub fn region_relations(&self, id: RegionId) -> impl Iterator<Item = RelationId> {
+        range(&self.region(id).relations).map(|index| RelationId(index as u32))
+    }
+    pub fn region_bindings(&self, id: RegionId) -> impl Iterator<Item = BindingId> {
+        range(&self.region(id).bindings).map(|index| BindingId(index as u32))
+    }
+    /// A template's row bindings, in resolved dependency order.
+    pub fn row_bindings(&self, id: TemplateId) -> impl Iterator<Item = BindingId> {
+        range(&self.template(id).row_bindings).map(|index| BindingId(index as u32))
+    }
+    /// A column's column-phase bindings, in template order.
+    pub fn column_bindings(&self, id: ColumnId) -> impl Iterator<Item = BindingId> {
+        range(&self.column(id).column_bindings).map(|index| BindingId(index as u32))
+    }
+    /// The conversion handler sites a region declares, in declared order.
+    pub fn conversions(&self, id: RegionId) -> &[HandlerSiteId] {
+        &self.region(id).conversions
+    }
+}
