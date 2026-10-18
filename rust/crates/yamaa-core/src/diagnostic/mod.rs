@@ -190,7 +190,7 @@ conditions! {
     ImputationFlagInput => ("validation", "incompatible_input_type", Some("TIME-18")),
     ToDateInput => ("validation", "incompatible_input_type", Some("REQ-0607")),
     ToDateInvalid => ("validation", "invalid_date_text", Some("REQ-0607")),
-    ToDateIntervalText => ("validation", "interval_or_duration_text", Some("TIME-2")),
+    ToDateIntervalText => ("impute", "interval_or_duration_text", Some("TIME-2")),
     TemplateInvalid => ("validation", "invalid_string_template", Some("REQ-0461")),
     TemplateMissing => ("mapping", "missing_input", Some("REQ-0334")),
     ExtractGroup => ("validation", "regex_group_out_of_range", Some("REQ-0816")),

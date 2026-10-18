@@ -60,7 +60,7 @@ conditions:
   inheritance_cycle: {phases: [validation]}
   integer_overflow: {phases: [derivation, validation]}
   internal_column_in_keys: {phases: [validation]}
-  interval_or_duration_text: {phases: [impute, validation]}
+  interval_or_duration_text: {phases: [impute]}
   invalid_aggregate_context: {phases: [validation]}
   invalid_calendar_date: {phases: [impute]}
   invalid_clear: {phases: [validation]}

@@ -3,7 +3,8 @@
 //! at the first missing one (TIME-19): a part after it is never read, so its
 //! lookup cannot fail the run and its absence answer is not counted in the
 //! run report, while a part the text reaches is read, counted and refused as
-//! before.
+//! before. `to_date` refuses an interval or duration as `impute` and
+//! `precision` do (TIME-2, TIME-13).
 use std::{
     fs,
     path::PathBuf,
@@ -210,5 +211,44 @@ fn a_reached_part_is_read_and_refused_as_before() {
     assert_eq!(
         failure["context"],
         yamaa_adapters::json!({"operation": "dtc", "part": "day", "source": "LK.D", "value": "5", "keys": [{"ID": 3}]})
+    );
+}
+
+#[test]
+fn to_date_refuses_an_interval_with_its_source_and_row() {
+    // A duration names no single date: the failure reports the operation,
+    // the source and the value at the `impute` stage, with the row's keys.
+    let fixture = Fixture::new(
+        "schema_version: \"1.0\"\n\
+         domain: XX\n\
+         keys: [ID]\n\
+         input:\n\
+         \x20 RAW: {path: raw.csv, types: {ID: int}}\n\
+         output: {path: out.csv, columns: [ID, DT]}\n\
+         columns:\n\
+         \x20 - {name: ID, type: int, derivation: RAW.ID}\n\
+         \x20 - {name: DT, type: date, derivation: {to_date: {source: RAW.DTC}}}\n",
+        &[("raw.csv", "ID,DTC\n1,2025-03-04\n2,P3D\n")],
+    );
+    let failure = fixture.failure();
+    assert_eq!(
+        (
+            failure["phase"].as_str(),
+            failure["condition"].as_str(),
+            failure["requirement"].as_str()
+        ),
+        (
+            Some("impute"),
+            Some("interval_or_duration_text"),
+            Some("TIME-2")
+        )
+    );
+    assert_eq!(
+        failure["spec_paths"],
+        yamaa_adapters::json!(["columns.DT.derivation.to_date"])
+    );
+    assert_eq!(
+        failure["context"],
+        yamaa_adapters::json!({"operation": "to_date", "source": "RAW.DTC", "value": "P3D", "keys": [{"ID": 2}]})
     );
 }

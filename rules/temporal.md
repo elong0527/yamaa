@@ -67,7 +67,7 @@ interval or duration fails as [TIME-13](#time-13) states, and other text fails
 as invalid date text.
 
 Fails: `incompatible_input_type`, `invalid_date_text`, `interval_or_duration_text`.
-Evidence: `negative-date-conversion`, `schema-to-date-partial`, `adam-adae-post-dose-window`, `schema-birth-date`, `rust/crates/yamaa-core/tests/temporal_date_text.rs`.
+Evidence: `negative-date-conversion`, `schema-to-date-partial`, `adam-adae-post-dose-window`, `schema-birth-date`, `rust/crates/yamaa-core/tests/temporal_date_text.rs`, `rust/crates/yamaa-adapters/tests/execution_date_text_reads.rs`.
 Replaces: REQ-0593, REQ-0607, REQ-1107.
 
 `2025-03-04T08` gives `2025-03-04`, and `2025-03` gives missing. A known date
