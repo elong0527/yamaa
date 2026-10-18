@@ -64,6 +64,19 @@ typedef struct sas_text_ref_s {
     uint16_t    length;
 } sas_text_ref_t;
 
+typedef enum sas_subheader_type_e {
+    SAS_SUBHEADER_TYPE_DATA,
+    SAS_SUBHEADER_TYPE_ROW_SIZE,
+    SAS_SUBHEADER_TYPE_COLUMN_SIZE,
+    SAS_SUBHEADER_TYPE_COUNTS,
+    SAS_SUBHEADER_TYPE_COLUMN_FORMAT,
+    SAS_SUBHEADER_TYPE_COLUMN_ATTRS,
+    SAS_SUBHEADER_TYPE_COLUMN_TEXT,
+    SAS_SUBHEADER_TYPE_COLUMN_LIST,
+    SAS_SUBHEADER_TYPE_COLUMN_NAME,
+    SAS_SUBHEADER_TYPE_UNKNOWN
+} sas_subheader_type_t;
+
 #define SAS_ENDIAN_BIG       0x00
 #define SAS_ENDIAN_LITTLE    0x01
 
@@ -89,6 +102,9 @@ typedef struct sas_text_ref_s {
 #define SAS_SUBHEADER_SIGNATURE_COLUMN_LIST    0xFFFFFFFE
 #define SAS_SUBHEADER_SIGNATURE_COLUMN_NAME    0xFFFFFFFF
 
+#define SAS_SUBHEADER_SIGNATURE_64BIT_MASK     0xFFFFFFFF00000000
+#define SAS_SUBHEADER_SIGNATURE_32BIT_MASK     0x00000000FFFFFFFF
+
 #define SAS_PAGE_TYPE_META   0x0000
 #define SAS_PAGE_TYPE_DATA   0x0100
 #define SAS_PAGE_TYPE_MIX    0x0200
@@ -105,9 +121,15 @@ typedef struct sas_text_ref_s {
 #define SAS_PAGE_HEADER_SIZE_32BIT  24
 #define SAS_PAGE_HEADER_SIZE_64BIT  40
 
-#define SAS_COMPRESSION_NONE   0x00
-#define SAS_COMPRESSION_TRUNC  0x01
-#define SAS_COMPRESSION_ROW    0x04
+#define SAS_COMPRESSION_NONE               0x00
+#define SAS_COMPRESSION_TRUNC              0x01
+#define SAS_COMPRESSION_NONE_MOVED         0x02
+#define SAS_COMPRESSION_REFERENCE          0x03
+#define SAS_COMPRESSION_ROW                0x04
+#define SAS_COMPRESSION_DELETED_ROW        0x05
+#define SAS_COMPRESSION_ROW_MOVED          0x06
+#define SAS_COMPRESSION_NONE_UNREFERENCED  0x09
+#define SAS_COMPRESSION_ROW_UNREFERENCED   0x0d
 
 #define SAS_COMPRESSION_SIGNATURE_RLE  "SASYZCRL"
 #define SAS_COMPRESSION_SIGNATURE_RDC  "SASYZCR2"
@@ -115,6 +137,7 @@ typedef struct sas_text_ref_s {
 #define SAS_DEFAULT_FILE_VERSION  9
 
 extern unsigned char sas7bdat_magic_number[32];
+extern unsigned char sas7bdat_magic_number_alt[32];
 extern unsigned char sas7bcat_magic_number[32];
 
 uint64_t sas_read8(const char *data, int bswap);
