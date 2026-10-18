@@ -32,7 +32,7 @@ records are only results actually reported. The per-value
 submission metadata is validated when the specification loads;
 the engine output is unaffected by it.
 
-`submission-spec.yaml` and `submission-environment.yaml` are a separate,
+`submission-spec.yaml` and `submission-project.yaml` are a separate,
 independently completed submission witness over the original executable
 specification. They add complete dataset/column metadata and retain the
 glucose and creatinine codelist declarations. The completion explicitly uses

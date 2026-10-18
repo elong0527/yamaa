@@ -594,6 +594,11 @@ impl Preflight {
     ) -> Result<(), Vec<Issue>> {
         self.admit(root.publishers(report_only)?)
     }
+    /// Admit the files a submission section would write, so no two sections
+    /// write one file.
+    pub fn admit_define(&mut self, define: &crate::file_define::Define) -> Result<(), Vec<Issue>> {
+        self.admit(define.publishers())
+    }
     fn admit(&mut self, publishers: Vec<Publisher>) -> Result<(), Vec<Issue>> {
         for publisher in publishers {
             for prior in &self.publishers {

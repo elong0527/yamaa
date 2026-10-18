@@ -462,33 +462,44 @@ Indexed and scanned lookups keep the same diagnostics and ordering.
 
 ## Migration
 
-### From 0.3.0
+### From 0.4.0
+
+The [0.5.0 release notes](releases/0.5.0.md#migration) list every change.
+The main ones:
 
 | Earlier spelling or behavior | Current form |
 | --- | --- |
 | Python `yamaa.domain(spec, environment=env)` and `yamaa.check(spec, environment=env)` | `yamaa.project("project.yaml").spec("DM").run()` and `.check()`, or `yamaa.spec(spec).run()` and `.check()` without a project. |
 | Python `yamaa.define(env, "sdtm", created=...)` | `yamaa.project("project.yaml").submission("sdtm", created=...)`. |
-| Python `yamaa_domain`, `DomainRun` and `DomainRunError` | `yamaa.spec(spec).run()` and `yamaa.Error`. |
-| Python `generate_study_document` | `yamaa.project("project.yaml").submission(section)`. |
 | Python `DomainError` and `DefineError` | `yamaa.Error`, which carries `issues`. |
 | `save()` returns `True` | `save()` returns nothing and raises `yamaa.Error` when it cannot write. |
-| Python subpackages such as `yamaa.odm` | `yamaa.read_odm`; the subpackages are private. |
-| R `cdiscbuilder` package | The `yamaa` R package: `yamaa_spec`, `yamaa_project` and `yamaa_read_odm`. |
 | An environment file holds `language`, `codelists`, `study` and the `sdtm`, `adam` and `send` sections | A `project.yaml` holds `codelists`, `study` and the sections, and its `environments` names each language's environment file. The environment file keeps `schema_version`, `lock` and `functions`; the `environments` key states its language. |
 | A section requires `standard` and `define` | A section needs only `specs`; `study`, `standard` and `define` are required only to create submission files. |
 | `dataset_json: true` | `datasets: json`. |
 | `output.verification_log` and `output.warning_log`, read as `verification_log` and `warning_log` | `output.report`, read as `report`: one run report per run, with a row for the run and for each input, row template, handler, output column and evaluated check. |
+| Lock pins yamaa 0.4.0 | Regenerate the project lock for 0.5.0 before using project functions; each applicable build checks the runtime version. |
+
+The `issues` table keeps its five columns and adds `source_span` and
+`operand_route` after them; `context` stays canonical JSON text.
+
+### From 0.3.0
+
+Make the 0.4.0 changes above as well as these:
+
+| Earlier spelling or behavior | Current form |
+| --- | --- |
+| Python `yamaa_domain`, `DomainRun` and `DomainRunError` | `yamaa.spec(spec).run()` and `yamaa.Error`. |
+| Python `generate_study_document` | `yamaa.project("project.yaml").submission(section)`. |
+| Python subpackages such as `yamaa.odm` | `yamaa.read_odm`; the subpackages are private. |
+| R `cdiscbuilder` package | The `yamaa` R package: `yamaa_spec`, `yamaa_project` and `yamaa_read_odm`. |
 | A dead declaration with an invalid reference fails a file without `parents` | The declaration is removed before validation and the file builds. To keep a declaration validated, name the column in `output.columns`, `keys` or `output.order_by`, or read it from a live derivation or verification. |
 | An input that no column reads is the implied driver | The input is removed too; name it in `base`. |
 | `parents: []` added only to enable pruning | Every specification is pruned, so the line no longer affects pruning. Any `parents` field, even an empty one, still orders resolved columns by dependency; without one, declaration order is the resolved order ([REQ-0060](../rules/execution/lifecycle.md#req-0060), [REQ-0643](../rules/specification/composition.md#req-0643)). Remove the line only once no column reads a column declared after it; otherwise the specification fails with `forward_reference` ([REQ-0071](../rules/execution/lifecycle.md#req-0071)). |
 | Rust code depending on `yamaa-adapters` or `yamaa-core` | Depend on the `yamaa` facade crate by path or git, as the [Rust guide](../rust/README.md#distribution) shows. Its default `yaml` feature brings the reviewed YAML parser with no other configuration; 0.4.0 itself also needs the `saphyr-parser` patch that its [release notes](releases/0.4.0.md) show. |
 | `datetime_precision` of minute text (`2025-03-04T08:30`) is `S`; `datetime_impute` with `time: last` gives `08:30:00`; hour text (`T08`) is invalid | `M`, `08:30:59`, and hour text is accepted (`H`). `IN ('M', 'S')` selects what `= 'S'` selected in 0.3.0, and only those forms convert directly to a `datetime`. A condition meaning "a time was collected" tests `IN ('H', 'M', 'S')`, because hour text also carries a collected time ([REQ-1327](../rules/operations/temporal.md#req-1327)). Complete hour text with `datetime_impute`; it is not a `datetime` ([REQ-1329](../rules/operations/temporal.md#req-1329)). |
-| Lock pins an earlier yamaa | Regenerate the project lock for 0.4.0 before using project functions; each applicable build checks the runtime version. |
+| Lock pins an earlier yamaa | Regenerate the project lock for the installed yamaa before using project functions; each applicable build checks the runtime version. |
 | A `between.value` qualified by an input that does not drive the row reads a wrong value with no message | It fails validation as `unknown_field`. Derive the value into a column, for example `AGE` from `DM.AGE`, and name that column. |
 | A `.sas7bdat` input that holds records deleted in place returns them as rows | It fails as `source_sas_invalid` with cause `deleted_records`. Rewrite the dataset first, for example with `PROC COPY`. |
-
-The `issues` table keeps its five columns and adds `source_span` and
-`operand_route` after them; `context` stays canonical JSON text.
 
 ### From 0.2.0 and earlier
 

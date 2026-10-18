@@ -96,6 +96,15 @@ impl Define {
     pub fn artifacts(&self) -> impl ExactSizeIterator<Item = (&str, &[u8], PublicationState)> {
         self.application.artifacts()
     }
+    /// A publisher for each artifact target that admits one, writing
+    /// nothing. A target that admits none is this composition's own failure,
+    /// which its save reports and records.
+    pub(crate) fn publishers(&self) -> Vec<crate::resource_publication::Publisher> {
+        self.application
+            .targets()
+            .filter_map(|(target, written)| target.publisher(written).ok())
+            .collect()
+    }
     pub fn capture_reads(&self) -> usize {
         self.ports
             .resources

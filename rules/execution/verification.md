@@ -311,8 +311,9 @@ row per input dataset, in declaration order; one `rows` row per row template,
 or one for root `base` without row templates; one `handler` row per handler
 path, in execution order, zero counts included; one `column` row per output
 column, in `output.columns` order, for a successful run only; and one `check`
-row per evaluated verification, in execution order. A check a stopped run never
-reached has no row.
+row per evaluated column or dataset verification, in execution order. An
+intermediate's verifications have no row, and a check a stopped run never
+reached has none.
 
 <a id="req-1175"></a>
 
@@ -455,8 +456,9 @@ one empty group `[{}]`. Empty remaining context is `{}`.
 it is written. These properties of the report must hold:
 
 - its columns, types, and order;
-- one row per run, input dataset, row template, handler path, output column,
-  and evaluated check, each kind in order;
+- one row per run, input dataset, row template, handler path, output column
+  of a successful run, and evaluated column or dataset check, each kind in
+  order;
 - a non-missing `SPEC_PATH` unique within the report;
 - each kind's outcome, severity, and condition vocabularies;
 - `KEYS` on exactly the violated checks;
@@ -468,7 +470,8 @@ A malformed report is an execution defect, not a finding it can record.
 
 **REQ-1178.** The rows correspond one to one with what the executor
 evaluated: the declared inputs, the row templates, the handler paths it
-counted, the declared output columns, and the checks it evaluated. A run fails
+counted, the declared output columns of a successful run, and the column and
+dataset checks it evaluated. A run fails
 with a named condition only under [REQ-0373](verification.md#req-0373) and the
 other rules. A report that fails its own verification refuses the build, and
 no partial report is returned or written.

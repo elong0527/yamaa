@@ -24,9 +24,11 @@ use yamaa_core::producer_publication::PreparedPublication;
 /// that resolve to one location are metadata facts, refused before any study
 /// read whether or not a node declares a report. The comparison needs neither
 /// file nor parent to exist; physical alias checks remain at Save's whole-set
-/// preflight.
+/// preflight. The files of `saved` producers, read rather than built, are
+/// never written here, but no node may write one of them either.
 pub(crate) fn admit_locations(
     documents: &[Arc<crate::specification_source::PreparedDocument>],
+    saved: &[Arc<crate::specification_source::PreparedDocument>],
     resources: &Resources,
 ) -> Result<(), crate::file_graph::Error> {
     use crate::file_graph::Error;
@@ -34,6 +36,7 @@ pub(crate) fn admit_locations(
     let fields = [("path", "output.path"), ("report", "output.report")];
     let count = documents
         .iter()
+        .chain(saved)
         .map(|document| {
             fields
                 .iter()
@@ -42,6 +45,15 @@ pub(crate) fn admit_locations(
         })
         .sum::<usize>();
     let mut locations: Vec<(&'static str, String)> = Vec::with_capacity(count);
+    for document in saved {
+        for (field, right) in fields {
+            if let Some(origin) = document.written_output_field_origin(field)
+                && let Ok(location) = resources.location_from(origin.base_source, origin.written)
+            {
+                locations.push((right, location));
+            }
+        }
+    }
     for (node, document) in documents.iter().enumerate() {
         for (field, right) in fields {
             if let Some(origin) = document.written_output_field_origin(field) {
