@@ -4,90 +4,27 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build the SDTM LB dataset from the ODM extract.
 
-import polars as pl
+One record per collected glucose or creatinine result. Reads
+/app/input/odm.csv and writes /app/output/lb.csv.
+"""
 
-odm = pl.read_csv("/app/input/odm.csv", infer_schema=False)
+import csv
+from collections import OrderedDict
 
-# One row per ItemOID within each visit group.
-key_cols = [
-    "StudyOID",
-    "SubjectKey",
-    "StudyEventOID",
-    "StudyEventRepeatKey",
-    "ItemGroupOID",
-    "ItemGroupRepeatKey",
-]
-wide = (
-    odm.group_by(key_cols)
-    .agg(pl.struct("ItemOID", "Value").alias("items"))
-    .with_columns(
-        pl.col("items")
-        .list.eval(pl.element().filter(pl.element().struct.field("ItemOID") == "IT.LB.LBDTC"))
-        .list.get(0)
-        .struct.field("Value")
-        .alias("LBDTC"),
-    )
-    .drop("items")
+INPUT_CSV = "/app/input/odm.csv"
+OUTPUT_CSV = "/app/output/lb.csv"
+
+TESTS = OrderedDict(
+    [
+        ("IT.LB.GLUC", ("GLUC", "Glucose")),
+        ("IT.LB.CREAT", ("CREAT", "Creatinine")),
+    ]
 )
+DATE_ITEM = "IT.LB.LBDTC"
 
-# Keep the raw long rows for the two lab tests.
-tests = odm.filter(pl.col("ItemOID").is_in(["IT.LB.GLUC", "IT.LB.CREAT"]))
-
-code_of = {"IT.LB.GLUC": "GLUC", "IT.LB.CREAT": "CREAT"}
-name_of = {"GLUC": "Glucose", "CREAT": "Creatinine"}
-
-joined = tests.join(wide, on=key_cols, how="left")
-
-
-def as_number(text):
-    if text is None or text == "":
-        return None
-    try:
-        return float(text)
-    except ValueError:
-        return None
-
-
-rows = []
-for r in joined.to_dicts():
-    value = r["Value"]
-    if value is None or value == "":
-        continue
-    code = code_of[r["ItemOID"]]
-    rows.append(
-        {
-            "DOMAIN": "LB",
-            "STUDYID": r["StudyOID"],
-            "USUBJID": r["SubjectKey"],
-            "LBDTC": r["LBDTC"],
-            "LBTESTCD": code,
-            "LBTEST": name_of[code],
-            "LBORRES": value,
-            "LBORRESU": "mg/dL",
-            "LBSTRESN": as_number(value),
-            "LBSTRESU": "mg/dL",
-        }
-    )
-
-lb = pl.DataFrame(
-    rows,
-    schema={
-        "DOMAIN": pl.String,
-        "STUDYID": pl.String,
-        "USUBJID": pl.String,
-        "LBDTC": pl.String,
-        "LBTESTCD": pl.String,
-        "LBTEST": pl.String,
-        "LBORRES": pl.String,
-        "LBORRESU": pl.String,
-        "LBSTRESN": pl.Float64,
-        "LBSTRESU": pl.String,
-    },
-).sort(["STUDYID", "USUBJID", "LBDTC", "LBTESTCD"]).with_columns(
-    pl.int_range(1, pl.len() + 1).over(["STUDYID", "USUBJID"]).alias("LBSEQ")
-).select(
+COLUMNS = [
     "DOMAIN",
     "STUDYID",
     "USUBJID",
@@ -99,7 +36,80 @@ lb = pl.DataFrame(
     "LBSTRESN",
     "LBSTRESU",
     "LBDTC",
-)
+]
 
-Path("/app/output").mkdir(parents=True, exist_ok=True)
-lb.write_csv("/app/output/lb.csv")
+
+def numeric_form(text):
+    """Return the numeric rendering of text, or '' when not a number."""
+    try:
+        value = float(text)
+    except (TypeError, ValueError):
+        return ""
+    if value == int(value):
+        return str(int(value))
+    return repr(value)
+
+
+def main():
+    with open(INPUT_CSV, newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+
+    # Group items by subject and visit group (one collection event).
+    groups = OrderedDict()
+    for row in rows:
+        key = (
+            row["StudyOID"],
+            row["SubjectKey"],
+            row["StudyEventOID"],
+            row["StudyEventRepeatKey"],
+            row["ItemGroupOID"],
+            row["ItemGroupRepeatKey"],
+        )
+        groups.setdefault(key, {})[row["ItemOID"]] = row["Value"]
+
+    records = []
+    for (study_oid, subject_key, *_), items in groups.items():
+        lbdtc = items.get(DATE_ITEM, "")
+        for item_oid, (testcd, test) in TESTS.items():
+            if item_oid not in items:
+                continue
+            entry = items[item_oid]
+            records.append(
+                {
+                    "DOMAIN": "LB",
+                    "STUDYID": study_oid,
+                    "USUBJID": subject_key,
+                    "LBTESTCD": testcd,
+                    "LBTEST": test,
+                    "LBORRES": entry,
+                    "LBORRESU": "mg/dL",
+                    "LBSTRESN": numeric_form(entry),
+                    "LBSTRESU": "mg/dL",
+                    "LBDTC": lbdtc,
+                }
+            )
+
+    # LBSEQ numbers each subject's records from 1 by collection date,
+    # then by test code.
+    by_subject = {}
+    for record in records:
+        by_subject.setdefault(record["USUBJID"], []).append(record)
+    ordered = []
+    for subject in by_subject:
+        subject_records = sorted(
+            by_subject[subject],
+            key=lambda r: (r["LBDTC"], r["LBTESTCD"]),
+        )
+        for index, record in enumerate(subject_records, start=1):
+            record["LBSEQ"] = index
+        ordered.extend(subject_records)
+
+    with open(OUTPUT_CSV, "w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=COLUMNS)
+        writer.writeheader()
+        for record in ordered:
+            writer.writerow({column: record[column] for column in COLUMNS})
+
+
+if __name__ == "__main__":
+    main()

@@ -4,55 +4,53 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+import csv
 
-import polars as pl
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-vs = pl.read_csv("/app/input/vs.csv", infer_schema=False).with_columns(
-    pl.col("VSSTRESN").cast(pl.Float64, strict=False)
-)
-adsl = pl.read_csv("/app/input/adsl.csv", infer_schema=False).with_columns(
-    pl.col("HEIGHTBL").cast(pl.Float64, strict=False)
-)
+# Baseline height (cm) per subject from ADSL.
+baseline_height_cm = {}
+with open(f"{INPUT_DIR}/adsl.csv", newline="") as f:
+    for row in csv.DictReader(f):
+        h = (row.get("HEIGHTBL") or "").strip()
+        baseline_height_cm[row["USUBJID"]] = float(h) if h else None
 
-# Every collected result stays in place.
-collected = vs.select(
-    "STUDYID",
-    "USUBJID",
-    AVISIT="VISIT",
-    PARAMCD="VSTESTCD",
-    PARAM="VSTEST",
-    AVAL="VSSTRESN",
-)
-
-# One BMI record for each weight with a result, using the subject's
-# baseline height in metres. Without a usable height the record stays
-# with no value.
-weights = (
-    vs.filter(
-        (pl.col("VSTESTCD") == "WEIGHT") & pl.col("VSSTRESN").is_not_null()
-    )
-    .join(adsl.select("USUBJID", "HEIGHTBL"), on="USUBJID", how="left")
-    .with_columns(
-        BMI=pl.when(
-            pl.col("HEIGHTBL").is_not_null() & (pl.col("HEIGHTBL") != 0)
+rows = []
+with open(f"{INPUT_DIR}/vs.csv", newline="") as f:
+    for rec in csv.DictReader(f):
+        result = (rec.get("VSSTRESN") or "").strip()
+        rows.append(
+            {
+                "STUDYID": rec["STUDYID"],
+                "USUBJID": rec["USUBJID"],
+                "AVISIT": rec["VISIT"],
+                "PARAMCD": rec["VSTESTCD"],
+                "PARAM": rec["VSTEST"],
+                "AVAL": result,
+            }
         )
-        .then(pl.col("VSSTRESN") / ((pl.col("HEIGHTBL") / 100) ** 2))
-        .otherwise(None)
-    )
-    .select(
-        "STUDYID",
-        "USUBJID",
-        AVISIT="VISIT",
-        PARAMCD=pl.lit("BMI"),
-        PARAM=pl.lit("Body Mass Index (kg/m^2)"),
-        AVAL="BMI",
-    )
-)
+        # A BMI record follows each collected weight record with a result.
+        if rec["VSTESTCD"] == "WEIGHT" and result:
+            height_cm = baseline_height_cm.get(rec["USUBJID"])
+            if height_cm is None or height_cm == 0:
+                bmi = ""
+            else:
+                height_m = height_cm / 100.0
+                bmi = repr(float(result) / (height_m * height_m))
+            rows.append(
+                {
+                    "STUDYID": rec["STUDYID"],
+                    "USUBJID": rec["USUBJID"],
+                    "AVISIT": rec["VISIT"],
+                    "PARAMCD": "BMI",
+                    "PARAM": "Body Mass Index (kg/m^2)",
+                    "AVAL": bmi,
+                }
+            )
 
-advs = pl.concat([collected, weights], how="diagonal").sort(
-    ["USUBJID", "AVISIT", "PARAMCD"]
-)
-
-Path("/app/output").mkdir(parents=True, exist_ok=True)
-advs.write_csv("/app/output/advs.csv")
+columns = ["STUDYID", "USUBJID", "AVISIT", "PARAMCD", "PARAM", "AVAL"]
+with open(f"{OUTPUT_DIR}/advs.csv", "w", newline="") as f:
+    writer = csv.DictWriter(f, fieldnames=columns)
+    writer.writeheader()
+    writer.writerows(rows)

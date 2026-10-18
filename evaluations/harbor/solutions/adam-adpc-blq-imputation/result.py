@@ -4,60 +4,77 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
+"""Build ADPC from PC with BLQ imputation.
+
+One record per sample. AVAL is the quantified concentration as recorded;
+a below-limit result ("<...") is 0 before the first or after the last
+quantified result of its profile (subject, analyte, dose), and blank
+between them. A not-done sample has no AVAL and neither starts nor ends
+the quantified span.
+"""
+
+import csv
 from pathlib import Path
 
-import polars as pl
+INPUT = Path("/app/input")
+OUTPUT = Path("/app/output")
 
-pc = pl.read_csv("/app/input/pc.csv", infer_schema=False).with_columns(
-    pl.col("PCSEQ").cast(pl.Int64),
-    pl.col("PCSTRESN").cast(pl.Float64, strict=False),
-    pl.col("PCTPTNUM").cast(pl.Float64, strict=False),
-)
 
-PROFILE = ["STUDYID", "USUBJID", "PCTESTCD", "PCTPTREF"]
+def main() -> None:
+    with (INPUT / "pc.csv").open(newline="") as f:
+        rows = list(csv.DictReader(f))
 
-# The first and last quantified time points of each profile. A result
-# below the limit and a sample not done have no number, so neither moves
-# the quantified span.
-span = (
-    pc.filter(pl.col("PCSTRESN").is_not_null())
-    .group_by(PROFILE)
-    .agg(
-        pl.col("PCTPTNUM").min().alias("FIRSTQ"),
-        pl.col("PCTPTNUM").max().alias("LASTQ"),
-    )
-)
+    # Classify each sample.
+    for r in rows:
+        stat = (r.get("PCSTAT") or "").strip()
+        stresc = (r.get("PCSTRESC") or "").strip()
+        if stat == "NOT DONE" or stresc == "":
+            r["_kind"] = "notdone"
+        elif stresc.startswith("<"):
+            r["_kind"] = "blq"
+        else:
+            r["_kind"] = "quant"
 
-based = pc.join(span, on=PROFILE, how="left", maintain_order="left")
+    # Profiles: one subject, one analyte, one dose, in planned time order.
+    profiles = {}
+    for r in rows:
+        key = (r["USUBJID"], r["PCTESTCD"], r["PCTPTREF"])
+        profiles.setdefault(key, []).append(r)
+    for members in profiles.values():
+        members.sort(key=lambda r: (float(r["PCTPTNUM"]), int(r["PCSEQ"])))
+        quant_pos = [i for i, r in enumerate(members) if r["_kind"] == "quant"]
+        for i, r in enumerate(members):
+            if r["_kind"] == "quant":
+                r["_aval"] = (r.get("PCSTRESN") or "").strip()
+            elif r["_kind"] == "blq":
+                if not quant_pos or i < quant_pos[0] or i > quant_pos[-1]:
+                    r["_aval"] = "0"
+                else:
+                    r["_aval"] = ""
+            else:
+                r["_aval"] = ""
 
-# A quantified result as recorded; a below-limit result is 0 before the
-# first or after the last quantified result of its profile (and in a
-# profile with no quantified result), and has no value between them. A
-# sample not done has no value.
-adpc = based.with_columns(
-    AVAL=pl.when(pl.col("PCSTRESN").is_not_null())
-    .then(pl.col("PCSTRESN"))
-    .when(
-        pl.col("PCSTRESC").str.starts_with("<")
-        & (
-            pl.col("FIRSTQ").is_null()
-            | (pl.col("PCTPTNUM") < pl.col("FIRSTQ"))
-            | (pl.col("PCTPTNUM") > pl.col("LASTQ"))
-        )
-    )
-    .then(pl.lit(0.0))
-    .otherwise(None),
-).select(
-    "STUDYID",
-    "USUBJID",
-    "PCSEQ",
-    pl.col("PCTESTCD").alias("PARAMCD"),
-    pl.col("PCTPTREF").alias("ATPTREF"),
-    pl.col("PCTPT").alias("ATPT"),
-    pl.col("PCTPTNUM").alias("ATPTN"),
-    "AVAL",
-    pl.col("PCSTRESU").alias("AVALU"),
-)
+    out_fields = [
+        "STUDYID", "USUBJID", "PCSEQ", "PARAMCD", "ATPTREF",
+        "ATPT", "ATPTN", "AVAL", "AVALU",
+    ]
+    OUTPUT.mkdir(parents=True, exist_ok=True)
+    with (OUTPUT / "adpc.csv").open("w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=out_fields)
+        w.writeheader()
+        for r in rows:
+            w.writerow({
+                "STUDYID": r["STUDYID"],
+                "USUBJID": r["USUBJID"],
+                "PCSEQ": r["PCSEQ"],
+                "PARAMCD": r["PCTESTCD"],
+                "ATPTREF": r["PCTPTREF"],
+                "ATPT": r["PCTPT"],
+                "ATPTN": r["PCTPTNUM"],
+                "AVAL": r["_aval"],
+                "AVALU": "ng/mL",
+            })
 
-Path("/app/output").mkdir(exist_ok=True)
-adpc.write_csv("/app/output/adpc.csv")
+
+if __name__ == "__main__":
+    main()

@@ -4,26 +4,67 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build CLINSITE (one record per clinical site) from ADSL.
 
-import polars as pl
+Reads /app/input/adsl.csv and writes /app/output/clinsite.csv with
+columns STUDYID, SITEID, ARM, SAFPOP, ENRLPOP.
 
-subj = pl.read_csv("/app/input/adsl.csv", infer_schema=False, null_values="")
+Rules:
+- A subject counts as treated when SAFFL is "Y".
+- A site appears exactly when at least one subject row names it.
+- SITEID is the site key exactly as collected (SITENUM); leading zeros
+  are kept, so "007" and "7" are different sites.
+- ARM is the alphabetically first arm among the site's treated
+  subjects, blank when the site has no treated subjects.
+- SAFPOP is the number of treated subjects at the site (0 when none).
+- ENRLPOP is the number of enrolled subjects at the site.
+"""
 
-clinsite = (
-    # One record per site; the site key stays text so leading zeros survive.
-    subj.group_by("STUDYID", "SITENUM", maintain_order=True)
-    .agg(
-        # The alphabetically first arm among the site's treated subjects.
-        pl.col("ARM").filter(pl.col("SAFFL") == "Y").min().alias("ARM"),
-        # Treated subjects, then all enrolled subjects, at the site.
-        (pl.col("SAFFL") == "Y").sum().alias("SAFPOP"),
-        pl.len().alias("ENRLPOP"),
-    )
-    .rename({"SITENUM": "SITEID"})
-    .select("STUDYID", "SITEID", "ARM", "SAFPOP", "ENRLPOP")
-    .sort("SITEID")
-)
+import csv
+import os
+from collections import OrderedDict
 
-Path("/app/output").mkdir(parents=True, exist_ok=True)
-clinsite.write_csv("/app/output/clinsite.csv", null_value="")
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
+
+
+def main():
+    with open(os.path.join(INPUT_DIR, "adsl.csv"), newline="") as f:
+        rows = list(csv.DictReader(f))
+
+    sites = OrderedDict()
+    for row in rows:
+        site = row["SITENUM"]
+        entry = sites.setdefault(
+            site,
+            {"studyid": row["STUDYID"], "treated_arms": [], "safpop": 0, "enrlpop": 0},
+        )
+        entry["enrlpop"] += 1
+        if row["SAFFL"] == "Y":
+            entry["safpop"] += 1
+            entry["treated_arms"].append(row["ARM"])
+
+    out_rows = []
+    for site, entry in sites.items():
+        arm = min(entry["treated_arms"]) if entry["treated_arms"] else ""
+        out_rows.append(
+            {
+                "STUDYID": entry["studyid"],
+                "SITEID": site,
+                "ARM": arm,
+                "SAFPOP": entry["safpop"],
+                "ENRLPOP": entry["enrlpop"],
+            }
+        )
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    with open(os.path.join(OUTPUT_DIR, "clinsite.csv"), "w", newline="") as f:
+        writer = csv.DictWriter(
+            f, fieldnames=["STUDYID", "SITEID", "ARM", "SAFPOP", "ENRLPOP"]
+        )
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+
+if __name__ == "__main__":
+    main()

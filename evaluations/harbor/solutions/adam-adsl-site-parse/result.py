@@ -4,29 +4,67 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build ADSL from DM: parse the site code out of the subject identifier.
 
-import polars as pl
+One record per subject. SITEIDP is the middle part of the unique subject
+identifier when it has three hyphen-separated parts and the last part is
+exactly four digits; otherwise it is blank. SITEID is the parsed site when
+present, else the collected site, else "UNKNOWN". SUBJREF joins the site
+to use and the collected subject number with a colon, and is "UNKNOWN"
+when the subject number is missing.
+"""
 
-dm = pl.read_csv("/app/input/dm.csv", infer_schema=False, null_values="")
+import csv
+import os
 
-adsl = (
-    dm.with_columns(
-        # The middle segment when the identifier holds two dashes with
-        # exactly four digits after the last one.
-        SITEIDP=pl.col("USUBJID").str.extract(r"^[^-]+-([^-]+)-[0-9]{4}$", 1),
-    )
-    .with_columns(
-        SITEID=pl.coalesce("SITEIDP", "SITEID").fill_null("UNKNOWN"),
-    )
-    .with_columns(
-        SUBJREF=pl.when(pl.col("SUBJID").is_null())
-        .then(pl.lit("UNKNOWN"))
-        .otherwise(pl.col("SITEID") + pl.lit(":") + pl.col("SUBJID")),
-    )
-    .select("STUDYID", "USUBJID", "SUBJID", "SITEIDP", "SITEID", "SUBJREF")
-    .sort("USUBJID")
-)
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-Path("/app/output").mkdir(parents=True, exist_ok=True)
-adsl.write_csv("/app/output/adsl.csv", null_value="")
+
+def parse_site(usubjid):
+    parts = usubjid.split("-")
+    if len(parts) == 3 and len(parts[2]) == 4 and parts[2].isdigit():
+        return parts[1]
+    return ""
+
+
+def main():
+    with open(os.path.join(INPUT_DIR, "dm.csv"), newline="") as f:
+        dm = list(csv.DictReader(f))
+
+    rows = []
+    for rec in dm:
+        siteidp = parse_site(rec["USUBJID"])
+        collected_site = rec["SITEID"]
+        if siteidp:
+            siteid = siteidp
+        elif collected_site:
+            siteid = collected_site
+        else:
+            siteid = "UNKNOWN"
+        subjid = rec["SUBJID"]
+        if subjid:
+            subjref = siteid + ":" + subjid
+        else:
+            subjref = "UNKNOWN"
+        rows.append(
+            {
+                "STUDYID": rec["STUDYID"],
+                "USUBJID": rec["USUBJID"],
+                "SUBJID": subjid,
+                "SITEIDP": siteidp,
+                "SITEID": siteid,
+                "SUBJREF": subjref,
+            }
+        )
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    fieldnames = ["STUDYID", "USUBJID", "SUBJID", "SITEIDP", "SITEID", "SUBJREF"]
+    with open(os.path.join(OUTPUT_DIR, "adsl.csv"), "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+if __name__ == "__main__":
+    main()

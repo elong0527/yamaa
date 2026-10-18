@@ -4,62 +4,96 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build ADSL (one record per subject) from DM and EX.
 
-import polars as pl
+Derives the two crossover treatment periods per subject: earliest start
+and latest end per epoch, the treatment of the earliest record in each
+epoch, and the washout duration strictly between the periods.
+"""
 
-dm = pl.read_csv("/app/input/dm.csv", infer_schema=False)
-ex = pl.read_csv("/app/input/ex.csv", infer_schema=False).with_columns(
-    pl.col("EXSEQ").cast(pl.Int64, strict=False),
-    pl.col("EXSTDTC").str.to_date(strict=False),
-    pl.col("EXENDTC").str.to_date(strict=False),
-)
+import csv
+from datetime import date
 
-ex1 = ex.filter(pl.col("EPOCH") == "TREATMENT 1")
-ex2 = ex.filter(pl.col("EPOCH") == "TREATMENT 2")
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-agg1 = ex1.group_by(["STUDYID", "USUBJID"]).agg(
-    TR01SDT=pl.col("EXSTDTC").min(), TR01EDT=pl.col("EXENDTC").max()
-)
-agg2 = ex2.group_by(["STUDYID", "USUBJID"]).agg(
-    TR02SDT=pl.col("EXSTDTC").min(), TR02EDT=pl.col("EXENDTC").max()
-)
+COLUMNS = [
+    "STUDYID", "USUBJID", "TR01SDT", "TR01EDT", "TR02SDT", "TR02EDT",
+    "TRT01A", "TRT02A", "WASHDUR",
+]
 
-# The treatment on the earliest record in each period: earliest start date
-# with the lower sequence number breaking ties, records without a start
-# date sorting last.
-first1 = (
-    ex1.sort(["EXSTDTC", "EXSEQ"], nulls_last=True)
-    .unique(["STUDYID", "USUBJID"], keep="first", maintain_order=True)
-    .select("STUDYID", "USUBJID", TRT01A="EXTRT")
-)
-first2 = (
-    ex2.sort(["EXSTDTC", "EXSEQ"], nulls_last=True)
-    .unique(["STUDYID", "USUBJID"], keep="first", maintain_order=True)
-    .select("STUDYID", "USUBJID", TRT02A="EXTRT")
-)
 
-adsl = (
-    dm.join(agg1, on=["STUDYID", "USUBJID"], how="left", maintain_order="left")
-    .join(agg2, on=["STUDYID", "USUBJID"], how="left", maintain_order="left")
-    .join(first1, on=["STUDYID", "USUBJID"], how="left", maintain_order="left")
-    .join(first2, on=["STUDYID", "USUBJID"], how="left", maintain_order="left")
-    # Days strictly between the periods, counting neither endpoint.
-    .with_columns(
-        WASHDUR=(pl.col("TR02SDT") - pl.col("TR01EDT")).dt.total_days() - 1
-    )
-    .select(
-        "STUDYID",
-        "USUBJID",
-        "TR01SDT",
-        "TR01EDT",
-        "TR02SDT",
-        "TR02EDT",
-        "TRT01A",
-        "TRT02A",
-        "WASHDUR",
-    )
-)
+def parse_day(text):
+    text = (text or "").strip()
+    if not text:
+        return None
+    return date.fromisoformat(text)
 
-Path("/app/output").mkdir(exist_ok=True)
-adsl.write_csv("/app/output/adsl.csv")
+
+def read_rows(path):
+    with open(path, newline="") as handle:
+        return list(csv.DictReader(handle))
+
+
+def period(rows):
+    """Return (start, end, treatment) for one subject's records in one epoch."""
+    starts = [d for d in (parse_day(r["EXSTDTC"]) for r in rows) if d]
+    ends = [d for d in (parse_day(r["EXENDTC"]) for r in rows) if d]
+    start = min(starts) if starts else None
+    end = max(ends) if ends else None
+    treatment = ""
+    if rows:
+        def earliest_key(row):
+            day = parse_day(row["EXSTDTC"])
+            # A record with no start date counts as later than any with one.
+            return (day is None, day or date.max, float(row["EXSEQ"]))
+
+        treatment = min(rows, key=earliest_key)["EXTRT"]
+    return start, end, treatment
+
+
+def main():
+    dm = read_rows(f"{INPUT_DIR}/dm.csv")
+    ex = read_rows(f"{INPUT_DIR}/ex.csv")
+
+    by_subject = {}
+    for row in ex:
+        by_subject.setdefault((row["STUDYID"], row["USUBJID"]), []).append(row)
+
+    out = []
+    for subject in dm:
+        key = (subject["STUDYID"], subject["USUBJID"])
+        records = by_subject.get(key, [])
+        t1 = [r for r in records if r["EPOCH"] == "TREATMENT 1"]
+        t2 = [r for r in records if r["EPOCH"] == "TREATMENT 2"]
+        tr01sdt, tr01edt, trt01a = period(t1)
+        tr02sdt, tr02edt, trt02a = period(t2)
+
+        washdur = ""
+        if tr01edt is not None and tr02sdt is not None:
+            # Days strictly between the two dates, counting neither endpoint.
+            washdur = str((tr02sdt - tr01edt).days - 1)
+
+        def fmt(day):
+            return day.isoformat() if day is not None else ""
+
+        out.append({
+            "STUDYID": subject["STUDYID"],
+            "USUBJID": subject["USUBJID"],
+            "TR01SDT": fmt(tr01sdt),
+            "TR01EDT": fmt(tr01edt),
+            "TR02SDT": fmt(tr02sdt),
+            "TR02EDT": fmt(tr02edt),
+            "TRT01A": trt01a,
+            "TRT02A": trt02a,
+            "WASHDUR": washdur,
+        })
+
+    with open(f"{OUTPUT_DIR}/adsl.csv", "w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=COLUMNS)
+        writer.writeheader()
+        writer.writerows(out)
+
+
+if __name__ == "__main__":
+    main()

@@ -155,7 +155,7 @@ def test_fixture_values_and_specification_internals_are_unsaid():
     # Input and output columns are said freely.
     assert not {"AEOUT", "DTHDT", "AESEQ"} & set(unsaid)
     full = (build.PROMPTS / DEATH.name / "full.md").read_text()
-    leaked = full.replace("DTHFL is Y when", "DTHFL is Y (DEATHEV) when")
+    leaked = full.replace('DTHFL is\n"Y" on', 'DTHFL is\n"Y" (DEATHEV) on')
     assert check.unsaid_problems(leaked, unsaid) == [
         "says 'DEATHEV', an intermediate result of the specification"
     ]
@@ -200,7 +200,7 @@ def test_the_full_checks_reject_a_changed_request():
         f"the opening does not start {data['opening']!r}"
     ]
     assert check.full_problems(
-        full.replace("DTHFL is Y", "The YAML says DTHFL is Y"), data
+        full.replace('DTHFL is\n"Y"', 'The YAML says DTHFL is\n"Y"'), data
     )
 
 

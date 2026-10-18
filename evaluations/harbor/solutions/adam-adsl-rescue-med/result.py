@@ -4,33 +4,53 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
+import csv
 from pathlib import Path
 
-import polars as pl
+INPUT = Path("/app/input")
+OUTPUT = Path("/app/output")
 
-dm = pl.read_csv("/app/input/dm.csv", infer_schema=False, null_values="")
-cm = pl.read_csv("/app/input/cm.csv", infer_schema=False, null_values="").with_columns(
-    pl.col("CMSEQ").cast(pl.Int64, strict=False),
-)
 
-# The first rescue medication by earliest start date, with the smaller
-# sequence number breaking a tie. A start holding only year and month
-# compares as written, so it falls before any full date in the same
-# month; a record with no start date still counts. Comparing the
-# collected text with empty sorting first keeps both rules.
-first = (
-    cm.filter(pl.col("CMCAT") == "RESCUE MEDICATION")
-    .with_columns(__sortkey=pl.col("CMSTDTC").fill_null(""))
-    .sort(["__sortkey", "CMSEQ"], nulls_last=False)
-    .unique(["STUDYID", "USUBJID"], keep="first", maintain_order=True)
-    .select("STUDYID", "USUBJID", RESCTRT="CMTRT")
-)
+def read_rows(name):
+    with open(INPUT / name, newline="", encoding="utf-8") as f:
+        return list(csv.DictReader(f))
 
-adsl = (
-    dm.join(first, on=["STUDYID", "USUBJID"], how="left", maintain_order="left")
-    .select("STUDYID", "USUBJID", "RESCTRT")
-    .sort("USUBJID")
-)
 
-Path("/app/output").mkdir(parents=True, exist_ok=True)
-adsl.write_csv("/app/output/adsl.csv", null_value="")
+def main():
+    dm = read_rows("dm.csv")
+    cm = read_rows("cm.csv")
+
+    rescue = {}
+    for row in cm:
+        if (row.get("CMCAT") or "") != "RESCUE MEDICATION":
+            continue
+        key = (row.get("STUDYID") or "", row.get("USUBJID") or "")
+        # Compare the start date as written: a year-month value such as
+        # "2025-03" sorts before any full date in the same month under
+        # plain string ordering. A missing date sorts as the empty string.
+        date_key = row.get("CMSTDTC") or ""
+        try:
+            seq_key = int(row.get("CMSEQ") or "")
+        except ValueError:
+            try:
+                seq_key = float(row.get("CMSEQ") or "")
+            except ValueError:
+                seq_key = 0
+        sort_key = (date_key, seq_key)
+        if key not in rescue or sort_key < rescue[key][0]:
+            rescue[key] = (sort_key, row.get("CMTRT") or "")
+
+    OUTPUT.mkdir(parents=True, exist_ok=True)
+    with open(OUTPUT / "adsl.csv", "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["STUDYID", "USUBJID", "RESCTRT"])
+        for row in dm:
+            studyid = row.get("STUDYID") or ""
+            usubjid = row.get("USUBJID") or ""
+            entry = rescue.get((studyid, usubjid))
+            resctrt = entry[1] if entry else ""
+            writer.writerow([studyid, usubjid, resctrt])
+
+
+if __name__ == "__main__":
+    main()

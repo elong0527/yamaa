@@ -1,47 +1,39 @@
-Following CDISC ADaM standards, use the provided ADSL, RS, and DS
-datasets to create an ADTTE dataset for progression-free survival,
-with one record per subject.
+Following CDISC ADaM standards, use the provided ADSL, DS, and RS datasets to
+create an ADTTE dataset with one record per subject.
 
 The output dataset should contain the following columns in this order:
-STUDYID, USUBJID, PARAMCD, PARAM, STARTDT, ADT, AVAL, CNSR, EVNTDESC,
-SRCDOM, SRCVAR, SRCSEQ
+STUDYID, USUBJID, PARAMCD, PARAM, STARTDT, ADT, AVAL, CNSR, EVNTDESC, SRCDOM,
+SRCVAR, SRCSEQ
 
-Use PARAMCD "PFS" and PARAM "Progression-Free Survival". STARTDT is
-the randomization date. ADSL also carries NTXSTDT, the start date of
-new anti-cancer therapy, for subjects who began one.
-
-The event is disease progression (the first adequate overall-response
-assessment with a PD result) or death (the first disposition record
-with a DEATH outcome), whichever comes first. Only an assessment
-flagged adequate can supply a progression event or a censoring date,
-and an assessment without a date never counts. Records sharing a date
-are ordered by their sequence number.
-
-When new anti-cancer therapy started, only dates on or before the
-therapy start are usable: a progression or death dated after therapy
-start is not an event, and the subject is censored at the last adequate
-assessment dated on or before therapy start.
-
-A subject with an event has ADT at the earlier of the progression and
-death dates; a subject without one is censored at the last adequate
-assessment date, or at the randomization date when no adequate
-assessment can supply a censoring date. The event always wins, even when
-it comes after the last adequate assessment, unless new anti-cancer
-therapy started first.
-
-AVAL is the number of days from STARTDT to ADT, counting the
-randomization day as day one. CNSR is 0 for an event and 1 for a
-censored record.
-
-Describe each record with EVNTDESC DISEASE PROGRESSION, DEATH, or
-CENSORED. A progression and a death on the same day count as
-progression.
-
-Trace ADT with SRCDOM DS, SRCVAR DSDTC, and the disposition sequence
-for a death; otherwise with SRCDOM RS, SRCVAR RSDTC, and the response
-sequence of the progression event or the censored assessment. Leave
-SRCDOM, SRCVAR, and SRCSEQ empty when the subject is censored at
-randomization.
+PARAMCD is "PFS" and PARAM is "Progression-Free Survival" for every record.
+STARTDT is the subject's randomization date, RANDDT in ADSL. The progression
+date is the earliest date of an overall response assessment (RSTESTCD
+"OVRLRESP") with a result of "PD" (RSSTRESC) that is flagged adequate (ADEQFL
+"Y") and has a date; when assessments share that date, the one with the
+lowest sequence number is the progression record. The death date is the
+earliest date of a disposition record with an outcome of "DEATH" (DSDECOD),
+the record with the lowest sequence number supplying it when records share
+that date. Only assessments flagged adequate can supply a progression event
+or a censoring date, and an assessment without a date can supply neither, so
+an inadequate progression assessment leaves the subject censored at the last
+adequate dated assessment. When the subject started new anti-cancer therapy
+(NTXSTDT in ADSL), only dates on or before the therapy start date are
+usable: a progression or death dated after the therapy start date is not an
+event, and censoring uses only adequate assessments dated on or before the
+therapy start date. ADT is the earlier of the progression and death dates
+when either is present, and CNSR is 0 then; a death after the last adequate
+assessment is still an event. When neither date is present, CNSR is 1 and
+ADT is the date of the subject's last adequate dated overall response
+assessment. A subject with no usable adequate assessment at all is censored
+at the randomization date: ADT is STARTDT, AVAL is 1, and SRCDOM, SRCVAR,
+and SRCSEQ have no value. AVAL is the number of days from STARTDT through
+ADT, counting the randomization day as day one. EVNTDESC is "DISEASE
+PROGRESSION" for a progression event, "DEATH" for a death event, and
+"CENSORED" when both dates are absent; a progression and a death on the same
+day count as progression. SRCDOM, SRCVAR, and SRCSEQ trace ADT to its
+source: "DS", "DSDTC", and the disposition sequence number for a death
+event, or "RS", "RSDTC", and the response sequence number for a progression
+event or a censored assessment.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/adtte.csv.

@@ -1,26 +1,23 @@
-Following CDISC ADaM standards, use the provided PLAN, VS, and ADSL
-datasets to create an ADVS dataset with one record per planned
-measurement.
+Following CDISC ADaM standards, use the provided ADSL, PLAN, and VS datasets to
+create an ADVS dataset with one record per planned measurement.
 
 The output dataset should contain the following columns in this order:
 STUDYID, USUBJID, ASEQ, VSSEQ, PARAMCD, ADT, AVAL, TRTSDT, HEIGHTBL
 
-ADT is the planned analysis date, carried through unchanged. A
-collected record belongs to a planned measurement when the test code
-matches the planned parameter and the collection date matches ADT;
-VSSEQ is that record's sequence number and has no value when the
-planned measurement was not collected.
-
-AVAL is the collected numeric result when the planned measurement was
-collected, otherwise the most recent earlier collected value for the
-same subject and parameter; it has no value before the first collected
-value. A carried value never crosses subjects or parameters.
-
-TRTSDT is the subject treatment start date, repeated on every record
-of the subject. HEIGHTBL is the latest height collected on or before
-treatment start, repeated on every record of the subject so later
-weight records retain it; it has no value for a subject with no
-pre-treatment height.
+A collected record belongs to a planned measurement when it is for the
+same study and subject, its test code is the planned parameter code, and
+its collection date matches ADT. VSSEQ is the sequence number of that
+collected record, and VSSEQ has no value when the planned measurement
+was not collected. AVAL is the collected numeric result when the planned
+measurement was collected. When the planned measurement was not
+collected, AVAL is the most recent earlier collected value for the same
+subject and parameter, and AVAL has no value before the first collected
+value for that subject and parameter. TRTSDT is the subject's treatment
+start date, repeated on every record of the subject. HEIGHTBL is the
+latest height value collected on or before the subject's treatment
+start date, repeated on every record of the subject. HEIGHTBL has no
+value when no height was collected on or before the subject's treatment
+start date.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/advs.csv.

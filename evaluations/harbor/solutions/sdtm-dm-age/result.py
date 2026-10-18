@@ -4,83 +4,107 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-import re
-from datetime import date
-from pathlib import Path
+"""Build the SDTM DM dataset (one record per subject) from the ODM extract.
 
-import polars as pl
+Reads /app/input/odm.csv (long format: one row per collected item) and
+writes /app/output/dm.csv with columns
+DOMAIN, STUDYID, USUBJID, RFICDTC, BRTHDTC, AGE, AGEU.
+"""
 
-odm = pl.read_csv("/app/input/odm.csv", infer_schema=False)
+import csv
+import os
+from calendar import isleap
 
-FULL = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
+
+BIRTH_ITEM = "IT.DM.BRTHDT"
+CONSENT_ITEM = "IT.DM.RFICDTC"
 
 
-def is_leap(year: int) -> bool:
-    return year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
-
-
-def whole_years(birth: str, consent: str) -> int | None:
-    # Whole calendar years between birth and consent; a year-month or
-    # year-only birth date cannot give completed years.
-    if not FULL.match(birth or "") or not FULL.match(consent or ""):
+def parse_full_date(text):
+    """Return (year, month, day) if text is a full ISO date, else None."""
+    if not text:
         return None
-    by, bm, bd = int(birth[0:4]), int(birth[5:7]), int(birth[8:10])
-    cy, cm, cd = int(consent[0:4]), int(consent[5:7]), int(consent[8:10])
+    parts = text.strip().split("-")
+    if len(parts) != 3:
+        return None
     try:
-        date(by, bm, bd)
-        date(cy, cm, cd)
+        year, month, day = (int(p) for p in parts)
     except ValueError:
         return None
-    # A February 29 birthday has its anniversary on February 28 in a
-    # common year.
-    if (bm, bd) == (2, 29) and not is_leap(cy):
+    return year, month, day
+
+
+def completed_years(birth, consent):
+    """Whole calendar years between birth and consent dates.
+
+    One year fewer when the birthday falls after the consent date's
+    month and day. A February 29 birthday has its anniversary on
+    February 28 in a common year.
+    """
+    by, bm, bd = birth
+    cy, cm, cd = consent
+    if (bm, bd) == (2, 29) and not isleap(cy):
         anniversary = (2, 28)
     else:
         anniversary = (bm, bd)
-    return cy - by - (1 if (cm, cd) < anniversary else 0)
+    years = cy - by
+    if anniversary > (cm, cd):
+        years -= 1
+    return years
 
 
-wide = odm.filter(pl.col("ItemGroupOID") == "IG.DM").pivot(
-    index=["StudyOID", "SubjectKey"],
-    on="ItemOID",
-    values="Value",
-    aggregate_function="first",
-)
+def main():
+    with open(os.path.join(INPUT_DIR, "odm.csv"), newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
 
-rows = []
-for record in wide.to_dicts():
-    rfic = record.get("IT.DM.RFICDTC") or None
-    brth = record.get("IT.DM.BRTHDT") or None
-    # A missing birth date leaves the birth date, age, and units empty.
-    if not brth:
-        brth, age, ageu = None, None, None
-    else:
-        age = whole_years(brth, rfic or "")
-        ageu = "YEARS" if age is not None else None
-    rows.append(
-        {
-            "DOMAIN": "DM",
-            "STUDYID": record["StudyOID"],
-            "USUBJID": record["SubjectKey"],
-            "RFICDTC": rfic,
-            "BRTHDTC": brth,
-            "AGE": age,
-            "AGEU": ageu,
-        }
-    )
+    subjects = {}
+    order = []
+    for row in rows:
+        key = (row["StudyOID"], row["SubjectKey"])
+        if key not in subjects:
+            subjects[key] = {"RFICDTC": "", "BRTHDTC": ""}
+            order.append(key)
+        item = row["ItemOID"]
+        value = (row["Value"] or "").strip()
+        if item == CONSENT_ITEM and not subjects[key]["RFICDTC"]:
+            subjects[key]["RFICDTC"] = value
+        elif item == BIRTH_ITEM and not subjects[key]["BRTHDTC"]:
+            subjects[key]["BRTHDTC"] = value
 
-dm = pl.DataFrame(
-    rows,
-    schema={
-        "DOMAIN": pl.String,
-        "STUDYID": pl.String,
-        "USUBJID": pl.String,
-        "RFICDTC": pl.String,
-        "BRTHDTC": pl.String,
-        "AGE": pl.Int64,
-        "AGEU": pl.String,
-    },
-).sort("USUBJID")
+    out_rows = []
+    for study_oid, subject_key in order:
+        vals = subjects[(study_oid, subject_key)]
+        rficdtc = vals["RFICDTC"]
+        brthdtc = vals["BRTHDTC"]
 
-Path("/app/output").mkdir(exist_ok=True)
-dm.write_csv("/app/output/dm.csv")
+        age = ""
+        birth = parse_full_date(brthdtc)
+        consent = parse_full_date(rficdtc)
+        if birth is not None and consent is not None:
+            age = str(completed_years(birth, consent))
+        ageu = "YEARS" if age else ""
+
+        out_rows.append(
+            {
+                "DOMAIN": "DM",
+                "STUDYID": study_oid,
+                "USUBJID": subject_key,
+                "RFICDTC": rficdtc,
+                "BRTHDTC": brthdtc,
+                "AGE": age,
+                "AGEU": ageu,
+            }
+        )
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    fieldnames = ["DOMAIN", "STUDYID", "USUBJID", "RFICDTC", "BRTHDTC", "AGE", "AGEU"]
+    with open(os.path.join(OUTPUT_DIR, "dm.csv"), "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+
+if __name__ == "__main__":
+    main()

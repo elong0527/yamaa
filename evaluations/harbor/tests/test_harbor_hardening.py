@@ -414,9 +414,22 @@ def test_held_out_rejects_invalid_recomputed_reference_output(tmp_path):
     text = text.replace("/app/", f"{app.as_posix()}/")
     count = len(grade.read_rows(app / "input/dm.csv")[1])
     reference = tmp_path / "reference.py"
+    # The corruption is appended as file operations, not as code against
+    # the reference's own variables, so the test does not depend on how
+    # the reference program is written internally.
     reference.write_text(
         text
-        + f"\nif len(dm) < {count}:\n    adsl.with_columns(pl.lit('bad').alias('AGE')).write_csv({str(app / 'output/adsl.csv')!r})\n"
+        + "\nimport csv as _csv\n"
+        + f"_dm_rows = list(_csv.DictReader(open({str(app / 'input/dm.csv')!r})))\n"
+        + f"if len(_dm_rows) < {count}:\n"
+        + f"    _out_path = {str(app / 'output/adsl.csv')!r}\n"
+        + "    _rows = list(_csv.DictReader(open(_out_path)))\n"
+        + "    for _row in _rows:\n"
+        + "        _row['AGE'] = 'bad'\n"
+        + "    with open(_out_path, 'w', newline='') as _handle:\n"
+        + "        _writer = _csv.DictWriter(_handle, fieldnames=list(_rows[0]))\n"
+        + "        _writer.writeheader()\n"
+        + "        _writer.writerows(_rows)\n"
     )
     (app / "output/result.py").write_text(text)
     with pytest.raises(RuntimeError, match="invalid int value in AGE"):

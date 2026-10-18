@@ -4,78 +4,85 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build the SDTM MH dataset from the collected MH_FORM dataset.
 
-import polars as pl
+One output record per condition reported on the form, with columns:
+STUDYID, USUBJID, MHSEQ, MHTERM, MHSTDTC, MHENDTC, MHENRTPT, MHENTPT.
+"""
+
+import csv
+from datetime import date
+
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
+
+COLUMNS = [
+    "STUDYID",
+    "USUBJID",
+    "MHSEQ",
+    "MHTERM",
+    "MHSTDTC",
+    "MHENDTC",
+    "MHENRTPT",
+    "MHENTPT",
+]
 
 
-def _present(value) -> bool:
-    return value is not None and str(value) != ""
+def start_dtc(year, month):
+    """Start date at the precision recorded: year, or year and month."""
+    year = (year or "").strip()
+    month = (month or "").strip()
+    if not year:
+        return ""
+    if month:
+        return f"{year}-{int(month):02d}"
+    return year
 
 
-mh_form = pl.read_csv("/app/input/mh_form.csv", infer_schema=False)
+def main():
+    with open(f"{INPUT_DIR}/mh_form.csv", newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
 
-rows = []
-for row in mh_form.to_dicts():
-    year, month = row.get("MHSTYY"), row.get("MHSTMM")
-    if not _present(year):
-        mhstdtc = None
-    elif not _present(month):
-        mhstdtc = str(year)
-    else:
-        mhstdtc = f"{year}-{str(month).zfill(2)}"
+    out = []
+    for row in rows:
+        ongoing = (row.get("MHONGO") or "").strip() == "Y"
+        end_dtc = (row.get("MHENDTC") or "").strip()
+        screen_dtc = (row.get("SCRFDTC") or "").strip()
 
-    # A condition still active at screening carries no end date.
-    ongoing = str(row.get("MHONGO") or "") == "Y"
-    endtc = row.get("MHENDTC")
-    if ongoing or not _present(endtc):
-        mhendtc = None
-    else:
-        mhendtc = str(endtc)
+        if ongoing:
+            # A condition still active at screening carries no end date;
+            # the ongoing answer is the record of its end status.
+            mh_end = ""
+            enrtpt = "ONGOING"
+        else:
+            mh_end = end_dtc
+            enrtpt = ""
+            if end_dtc and screen_dtc:
+                end_date = date.fromisoformat(end_dtc)
+                screen_date = date.fromisoformat(screen_dtc)
+                if end_date < screen_date:
+                    enrtpt = "BEFORE"
 
-    scrfdtc = str(row.get("SCRFDTC") or "")
-    if ongoing:
-        mhenrtpt = "ONGOING"
-    elif _present(endtc) and _present(scrfdtc) and str(endtc) < scrfdtc:
-        mhenrtpt = "BEFORE"
-    else:
-        mhenrtpt = None
-    mhentpt = "SCREENING" if mhenrtpt is not None else None
+        entpt = "SCREENING" if enrtpt else ""
 
-    rows.append(
-        {
-            "STUDYID": row["STUDYID"],
-            "USUBJID": row["USUBJID"],
-            "MHSEQ": row["MHSEQ"],
-            "MHTERM": row["MHTERM"],
-            "MHSTDTC": mhstdtc,
-            "MHENDTC": mhendtc,
-            "MHENRTPT": mhenrtpt,
-            "MHENTPT": mhentpt,
-        }
-    )
+        out.append(
+            {
+                "STUDYID": row["STUDYID"],
+                "USUBJID": row["USUBJID"],
+                "MHSEQ": row["MHSEQ"],
+                "MHTERM": row["MHTERM"],
+                "MHSTDTC": start_dtc(row.get("MHSTYY"), row.get("MHSTMM")),
+                "MHENDTC": mh_end,
+                "MHENRTPT": enrtpt,
+                "MHENTPT": entpt,
+            }
+        )
 
-mh = (
-    pl.DataFrame(
-        rows,
-        schema={
-            "STUDYID": pl.String,
-            "USUBJID": pl.String,
-            "MHSEQ": pl.String,
-            "MHTERM": pl.String,
-            "MHSTDTC": pl.String,
-            "MHENDTC": pl.String,
-            "MHENRTPT": pl.String,
-            "MHENTPT": pl.String,
-        },
-    )
-    .with_columns(pl.col("MHSEQ").cast(pl.Int64).alias("_seq"))
-    .sort(["USUBJID", "_seq"])
-    .select(
-        "STUDYID", "USUBJID", "MHSEQ", "MHTERM", "MHSTDTC", "MHENDTC",
-        "MHENRTPT", "MHENTPT",
-    )
-)
+    with open(f"{OUTPUT_DIR}/mh.csv", "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=COLUMNS)
+        writer.writeheader()
+        writer.writerows(out)
 
-Path("/app/output").mkdir(exist_ok=True)
-mh.write_csv("/app/output/mh.csv")
+
+if __name__ == "__main__":
+    main()

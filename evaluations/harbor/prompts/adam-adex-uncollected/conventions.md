@@ -1,5 +1,5 @@
-Following CDISC ADaM standards, use the provided TRT and EX datasets to
-create an ADEX dataset with one record per subject per treatment.
+Following CDISC ADaM standards, use the provided EX and SUBJECT_TREATMENT
+datasets to create an ADEX dataset with one record per subject and treatment.
 
 The output dataset should contain the following columns in this order:
 STUDYID, USUBJID, EXTRT, DOSECUM, NDOSREC, NDOSVAL

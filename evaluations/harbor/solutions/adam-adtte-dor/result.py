@@ -4,138 +4,173 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Create an ADTTE dataset (Duration of Response) from ADRS_RAW, ADSL and DS.
 
-import polars as pl
+One record per subject whose ADSL RESPDT is not blank.
+"""
 
+import csv
+from datetime import date
 
-def read(name: str) -> pl.DataFrame:
-    return pl.read_csv(f"/app/input/{name}", infer_schema=False)
-
-
-def first_per_subject(
-    records: pl.DataFrame, by: list[str], descending: bool = False
-) -> pl.DataFrame:
-    return records.sort(by, descending=descending).unique(
-        "USUBJID", keep="first", maintain_order=True
-    )
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
 
-adsl = read("adsl.csv").with_columns(pl.col("RESPDT", "NACTDT").str.to_date())
-adrs = read("adrs_raw.csv").with_columns(
-    pl.col("ADT").str.to_date(), pl.col("ASEQ").cast(pl.Int64)
-)
-ds = read("ds.csv").with_columns(
-    pl.col("DSSTDTC").str.to_date(), pl.col("DSSEQ").cast(pl.Int64)
-)
+def parse_date(text):
+    text = (text or "").strip()
+    if not text:
+        return None
+    return date.fromisoformat(text)
 
-# Earliest progression and death, lowest sequence number on a tie.
-progression = first_per_subject(
-    adrs.filter(pl.col("AVALC") == "PD", pl.col("ADT").is_not_null()),
-    ["ADT", "ASEQ"],
-).select("USUBJID", PDDT="ADT", PDSEQ="ASEQ")
 
-death = first_per_subject(
-    ds.filter(pl.col("DSDECOD") == "DEATH", pl.col("DSSTDTC").is_not_null()),
-    ["DSSTDTC", "DSSEQ"],
-).select("USUBJID", DTHDT="DSSTDTC", DTHSEQ="DSSEQ")
+def read_csv(name):
+    with open(f"{INPUT_DIR}/{name}", newline="") as handle:
+        return list(csv.DictReader(handle))
 
-# Last evaluable assessment (a date and a response other than NE), highest
-# sequence number on a tie.
-last_assessment = first_per_subject(
-    adrs.filter(pl.col("ADT").is_not_null(), pl.col("AVALC") != "NE"),
-    ["ADT", "ASEQ"],
-    descending=True,
-).select("USUBJID", LASTDT="ADT", LASTSEQ="ASEQ")
 
-# Where ADT comes from, for each outcome.
-sources = pl.DataFrame(
-    {
-        "OUTCOME": [
-            "DISEASE PROGRESSION",
-            "DEATH",
-            "LAST TUMOUR ASSESSMENT",
-            "START OF NEW ANTI-CANCER THERAPY",
-        ],
-        "SRCDOM": ["ADRS", "DS", "ADRS", "ADSL"],
-        "SRCVAR": ["ADT", "DSSTDTC", "ADT", "NACTDT"],
-    }
-)
+def main():
+    adsl = read_csv("adsl.csv")
+    adrs = read_csv("adrs_raw.csv")
+    ds = read_csv("ds.csv")
 
-PDDT, DTHDT, LASTDT, NACTDT = (
-    pl.col(name) for name in ("PDDT", "DTHDT", "LASTDT", "NACTDT")
-)
-EVENT, OUTCOME = pl.col("EVENT"), pl.col("OUTCOME")
+    adrs_by_subject = {}
+    for row in adrs:
+        adrs_by_subject.setdefault(row["USUBJID"], []).append(row)
 
-adtte = (
-    adsl.filter(pl.col("RESPDT").is_not_null())
-    .join(progression, on="USUBJID", how="left")
-    .join(death, on="USUBJID", how="left")
-    .join(last_assessment, on="USUBJID", how="left")
-    # The first event; progression wins a same-day tie with death.
-    .with_columns(
-        EVENT=pl.when(PDDT.is_not_null() & (DTHDT.is_null() | (PDDT <= DTHDT)))
-        .then(pl.lit("DISEASE PROGRESSION"))
-        .when(DTHDT.is_not_null())
-        .then(pl.lit("DEATH"))
-    )
-    .with_columns(EVENTDT=pl.when(EVENT == "DEATH").then(DTHDT).otherwise(PDDT))
-    # An event after the start of new therapy does not count.
-    .with_columns(
-        EVENT=pl.when(NACTDT.is_not_null() & (pl.col("EVENTDT") > NACTDT))
-        .then(None)
-        .otherwise(EVENT)
-    )
-    # Without a counted event, the record is censored at the earlier of the
-    # last evaluable assessment and the start of new therapy.
-    .with_columns(
-        OUTCOME=pl.when(EVENT.is_not_null())
-        .then(EVENT)
-        .when(LASTDT.is_not_null() & (NACTDT.is_null() | (LASTDT <= NACTDT)))
-        .then(pl.lit("LAST TUMOUR ASSESSMENT"))
-        .when(NACTDT.is_not_null())
-        .then(pl.lit("START OF NEW ANTI-CANCER THERAPY"))
-    )
-    .with_columns(
-        ADT=pl.when(OUTCOME == "DISEASE PROGRESSION")
-        .then(PDDT)
-        .when(OUTCOME == "DEATH")
-        .then(DTHDT)
-        .when(OUTCOME == "LAST TUMOUR ASSESSMENT")
-        .then(LASTDT)
-        .when(OUTCOME == "START OF NEW ANTI-CANCER THERAPY")
-        .then(NACTDT),
-        SRCSEQ=pl.when(OUTCOME == "DISEASE PROGRESSION")
-        .then(pl.col("PDSEQ"))
-        .when(OUTCOME == "DEATH")
-        .then(pl.col("DTHSEQ"))
-        .when(OUTCOME == "LAST TUMOUR ASSESSMENT")
-        .then(pl.col("LASTSEQ")),
-        PARAMCD=pl.lit("DOR"),
-        PARAM=pl.lit("Duration of Response"),
-        STARTDT=pl.col("RESPDT"),
-        CNSR=pl.when(EVENT.is_null()).then(1).otherwise(0),
-        EVNTDESC=pl.coalesce(EVENT, pl.lit("CENSORED")),
-        CNSDTDSC=pl.when(EVENT.is_null()).then(OUTCOME),
-    )
-    .with_columns(AVAL=(pl.col("ADT") - pl.col("STARTDT")).dt.total_days() + 1)
-    .join(sources, on="OUTCOME", how="left")
-    .select(
-        "STUDYID",
-        "USUBJID",
-        "PARAMCD",
-        "PARAM",
-        "STARTDT",
-        "ADT",
-        "AVAL",
-        "CNSR",
-        "EVNTDESC",
-        "CNSDTDSC",
-        "SRCDOM",
-        "SRCVAR",
-        "SRCSEQ",
-    )
-)
+    ds_by_subject = {}
+    for row in ds:
+        ds_by_subject.setdefault(row["USUBJID"], []).append(row)
 
-Path("/app/output").mkdir(exist_ok=True)
-adtte.write_csv("/app/output/adtte.csv")
+    out_rows = []
+    for subj in adsl:
+        respdt = parse_date(subj["RESPDT"])
+        if respdt is None:
+            continue
+        usubjid = subj["USUBJID"]
+        therapy_start = parse_date(subj["NACTDT"])
+
+        assessments = adrs_by_subject.get(usubjid, [])
+
+        # Progression: earliest dated assessment with response "PD";
+        # ties on that date go to the lowest ASEQ.
+        pd_records = [
+            r for r in assessments
+            if r["AVALC"].strip() == "PD" and parse_date(r["ADT"]) is not None
+        ]
+        prog_date = None
+        prog_seq = None
+        if pd_records:
+            prog_date = min(parse_date(r["ADT"]) for r in pd_records)
+            prog_seq = min(
+                int(r["ASEQ"]) for r in pd_records
+                if parse_date(r["ADT"]) == prog_date
+            )
+
+        # Death: earliest DS record with a "DEATH" term.
+        death_records = [
+            r for r in ds_by_subject.get(usubjid, [])
+            if r["DSDECOD"].strip() == "DEATH" and parse_date(r["DSSTDTC"]) is not None
+        ]
+        death_date = None
+        death_seq = None
+        if death_records:
+            death_date = min(parse_date(r["DSSTDTC"]) for r in death_records)
+            death_seq = min(
+                int(r["DSSEQ"]) for r in death_records
+                if parse_date(r["DSSTDTC"]) == death_date
+            )
+
+        # Event date: earlier of progression and death.
+        event_date = None
+        event_kind = None
+        if prog_date is not None and (death_date is None or prog_date <= death_date):
+            event_date, event_kind = prog_date, "PD"
+        elif death_date is not None:
+            event_date, event_kind = death_date, "DEATH"
+
+        # The event counts only when it does not fall after the therapy
+        # start date; an event on the therapy start date itself counts.
+        counted = event_date is not None and (
+            therapy_start is None or event_date <= therapy_start
+        )
+
+        # Last valid tumour assessment: latest dated assessment whose
+        # response is not "NE"; ties on that date go to the highest ASEQ.
+        valid_records = [
+            r for r in assessments
+            if r["AVALC"].strip() != "NE" and parse_date(r["ADT"]) is not None
+        ]
+        last_valid_date = None
+        last_valid_seq = None
+        if valid_records:
+            last_valid_date = max(parse_date(r["ADT"]) for r in valid_records)
+            last_valid_seq = max(
+                int(r["ASEQ"]) for r in valid_records
+                if parse_date(r["ADT"]) == last_valid_date
+            )
+
+        if counted:
+            adt = event_date
+            cnsr = 0
+            if event_kind == "PD":
+                evntdesc = "DISEASE PROGRESSION"
+                cnsdtdsc = ""
+                srcdom = "ADRS"
+                srcvar = "ADT"
+                srcseq = prog_seq
+            else:
+                evntdesc = "DEATH"
+                cnsdtdsc = ""
+                srcdom = "DS"
+                srcvar = "DSSTDTC"
+                srcseq = death_seq
+        else:
+            cnsr = 1
+            evntdesc = "CENSORED"
+            candidates = [
+                d for d in (last_valid_date, therapy_start) if d is not None
+            ]
+            adt = min(candidates) if candidates else None
+            if adt is not None and adt == last_valid_date:
+                cnsdtdsc = "LAST TUMOUR ASSESSMENT"
+                srcdom = "ADRS"
+                srcvar = "ADT"
+                srcseq = last_valid_seq
+            else:
+                cnsdtdsc = "START OF NEW ANTI-CANCER THERAPY"
+                srcdom = "ADSL"
+                srcvar = "NACTDT"
+                srcseq = None
+
+        aval = ""
+        if adt is not None:
+            aval = max(1, (adt - respdt).days + 1)
+
+        out_rows.append({
+            "STUDYID": subj["STUDYID"],
+            "USUBJID": usubjid,
+            "PARAMCD": "DOR",
+            "PARAM": "Duration of Response",
+            "STARTDT": respdt.isoformat(),
+            "ADT": adt.isoformat() if adt is not None else "",
+            "AVAL": aval,
+            "CNSR": cnsr,
+            "EVNTDESC": evntdesc,
+            "CNSDTDSC": cnsdtdsc,
+            "SRCDOM": srcdom,
+            "SRCVAR": srcvar,
+            "SRCSEQ": srcseq if srcseq is not None else "",
+        })
+
+    columns = [
+        "STUDYID", "USUBJID", "PARAMCD", "PARAM", "STARTDT", "ADT", "AVAL",
+        "CNSR", "EVNTDESC", "CNSDTDSC", "SRCDOM", "SRCVAR", "SRCSEQ",
+    ]
+    with open(f"{OUTPUT_DIR}/adtte.csv", "w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=columns)
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+
+if __name__ == "__main__":
+    main()

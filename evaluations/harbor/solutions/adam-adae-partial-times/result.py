@@ -4,62 +4,91 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Create ADAE from AE, completing partial start/end datetimes.
 
-import polars as pl
+ASTDTM completes AESTDTC with the earliest value of each uncollected
+time part; AENDTM completes AEENDTC with the latest value. The time
+imputation flags record what was collected: "H" for a date alone,
+"M" for collection to the hour, "S" for collection to the minute,
+and no value when collected to the second or when no datetime can
+be formed (day not collected).
+"""
 
-ae = pl.read_csv("/app/input/ae.csv", infer_schema=False).with_columns(
-    pl.col("AESEQ").cast(pl.Int64)
-)
+import csv
+import re
 
-# The parts a collected value is missing, by its length, with the flag that
-# names the coarsest part supplied. A time to the second needs nothing.
-FIRST = {19: ("", None), 16: (":00", "S"), 13: (":00:00", "M"), 10: ("T00:00:00", "H")}
-LAST = {19: ("", None), 16: (":59", "S"), 13: (":59:59", "M"), 10: ("T23:59:59", "H")}
+INPUT_PATH = "/app/input/ae.csv"
+OUTPUT_PATH = "/app/output/adae.csv"
 
-
-def complete(collected: str | None, fill: dict) -> tuple[str | None, str | None]:
-    # A value without its day, or no value at all, gives no analysis time.
-    if collected is None or len(collected) not in fill:
-        return None, None
-    suffix, flag = fill[len(collected)]
-    return collected + suffix, flag
+SECOND = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$")
+MINUTE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$")
+HOUR = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}$")
+DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
-rows = []
-for record in ae.iter_rows(named=True):
-    astdtm, asttmf = complete(record["AESTDTC"], FIRST)
-    aendtm, aentmf = complete(record["AEENDTC"], LAST)
-    rows.append(
-        {
-            "STUDYID": record["STUDYID"],
-            "USUBJID": record["USUBJID"],
-            "AESEQ": record["AESEQ"],
-            "AETERM": record["AETERM"],
-            "AESTDTC": record["AESTDTC"],
-            "ASTDTM": astdtm,
-            "ASTTMF": asttmf,
-            "AEENDTC": record["AEENDTC"],
-            "AENDTM": aendtm,
-            "AENTMF": aentmf,
-        }
-    )
+def complete(value, end):
+    """Return (datetime_text, flag) completing a partial ISO datetime.
 
-adae = pl.DataFrame(
-    rows,
-    schema={
-        "STUDYID": pl.String,
-        "USUBJID": pl.String,
-        "AESEQ": pl.Int64,
-        "AETERM": pl.String,
-        "AESTDTC": pl.String,
-        "ASTDTM": pl.String,
-        "ASTTMF": pl.String,
-        "AEENDTC": pl.String,
-        "AENDTM": pl.String,
-        "AENTMF": pl.String,
-    },
-)
+    `end` selects latest-value completion instead of earliest-value.
+    """
+    value = (value or "").strip()
+    if not value:
+        return "", ""
+    if SECOND.match(value):
+        return value, ""
+    if MINUTE.match(value):
+        seconds = "59" if end else "00"
+        return value + ":" + seconds, "S"
+    if HOUR.match(value):
+        tail = ":59:59" if end else ":00:00"
+        return value + tail, "M"
+    if DATE.match(value):
+        tail = "T23:59:59" if end else "T00:00:00"
+        return value + tail, "H"
+    # Collected without its day (e.g. year-month only): no datetime.
+    return "", ""
 
-Path("/app/output").mkdir(exist_ok=True)
-adae.write_csv("/app/output/adae.csv")
+
+def main():
+    with open(INPUT_PATH, newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+
+    out_rows = []
+    for row in rows:
+        astdtm, asttmf = complete(row["AESTDTC"], end=False)
+        aendtm, aentmf = complete(row["AEENDTC"], end=True)
+        out_rows.append(
+            {
+                "STUDYID": row["STUDYID"],
+                "USUBJID": row["USUBJID"],
+                "AESEQ": row["AESEQ"],
+                "AETERM": row["AETERM"],
+                "AESTDTC": row["AESTDTC"],
+                "ASTDTM": astdtm,
+                "ASTTMF": asttmf,
+                "AEENDTC": row["AEENDTC"],
+                "AENDTM": aendtm,
+                "AENTMF": aentmf,
+            }
+        )
+
+    fieldnames = [
+        "STUDYID",
+        "USUBJID",
+        "AESEQ",
+        "AETERM",
+        "AESTDTC",
+        "ASTDTM",
+        "ASTTMF",
+        "AEENDTC",
+        "AENDTM",
+        "AENTMF",
+    ]
+    with open(OUTPUT_PATH, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,172 +1,196 @@
-# Reference solution for the yamaa benchmark adam-adtte-pro-deterioration
-# (Python track).
+# Reference solution for the yamaa benchmark adam-adtte-pro-deterioration (Python track).
 #
 # Written from the benchmark's full prompt and its inputs alone, as an agent
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-import calendar
-from pathlib import Path
+"""Create the ADTTE dataset (time to deterioration in global health status).
 
-import polars as pl
+Reads ADSL, DS and QS from /app/input and writes /app/output/adtte.csv
+with one record per subject.
+"""
+
+import csv
+import os
+from datetime import date
+
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
+
+CENSOR_REASONS = {
+    "DISEASE PROGRESSION",
+    "STUDY DISCONTINUATION",
+    "WITHDRAWAL OF CONSENT",
+}
 
 
-def whole_months(d1, d2):
-    """Whole calendar months from d1 to d2."""
-    m = (d2.year - d1.year) * 12 + (d2.month - d1.month)
-    last = calendar.monthrange(d2.year, d2.month)[1]
-    if d2.day < d1.day and d2.day != last:
-        m -= 1
-    return m
+def parse_date(text):
+    text = (text or "").strip()
+    if not text:
+        return None
+    return date.fromisoformat(text[:10])
 
 
-adsl = pl.read_csv(
-    "/app/input/adsl.csv", infer_schema=False, null_values=""
-).with_columns(
-    pl.col("RANDDT").str.to_date(strict=False),
-    pl.col("DTHDT").str.to_date(strict=False),
-)
-qs = pl.read_csv("/app/input/qs.csv", infer_schema=False, null_values="").with_columns(
-    pl.col("QSSEQ").cast(pl.Int64, strict=False),
-    pl.col("ADT").str.to_date(strict=False),
-    pl.col("AVAL").cast(pl.Int64, strict=False),
-)
-ds = pl.read_csv("/app/input/ds.csv", infer_schema=False, null_values="").with_columns(
-    pl.col("DSSEQ").cast(pl.Int64, strict=False),
-    pl.col("DSDTC").str.to_date(strict=False),
-)
+def fmt(d):
+    return d.isoformat() if d is not None else ""
 
-# Flag deteriorations as an internal step: the baseline is the earliest
-# dated assessment with a score (a scoreless row cannot be the baseline:
-# its null score would leave no later row able to meet the cutoff), and
-# an assessment deteriorates when it is dated after the baseline and its
-# score is at least 10 points below the baseline score.
-baseline = (
-    qs.filter(pl.col("ADT").is_not_null() & pl.col("AVAL").is_not_null())
-    .sort(["STUDYID", "USUBJID", "ADT", "QSSEQ"])
-    .unique(["STUDYID", "USUBJID"], keep="first", maintain_order=True)
-    .select("STUDYID", "USUBJID", BASEDT="ADT", BASEVAL="AVAL")
-)
-qs_flagged = (
-    qs.join(baseline, on=["STUDYID", "USUBJID"], how="left")
-    .sort(["STUDYID", "USUBJID", "ADT", "QSSEQ"], nulls_last=True)
-    .with_columns(
-        DETERFL=pl.when(
-            pl.col("ADT").is_not_null()
-            & (pl.col("ADT") > pl.col("BASEDT"))
-            & (pl.col("AVAL") <= pl.col("BASEVAL") - 10)
+
+def whole_months(start, end):
+    """Whole calendar months from start to end."""
+    months = (end.year - start.year) * 12 + (end.month - start.month)
+    if end.day < start.day:
+        months -= 1
+    return months
+
+
+def read_csv(name):
+    path = os.path.join(INPUT_DIR, name)
+    with open(path, newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
+
+
+def to_int(text, default=0):
+    try:
+        return int(float(text))
+    except (TypeError, ValueError):
+        return default
+
+
+def main():
+    adsl = read_csv("adsl.csv")
+    ds = read_csv("ds.csv")
+    qs = read_csv("qs.csv")
+
+    ds_by_subject = {}
+    for row in ds:
+        ds_by_subject.setdefault(row["USUBJID"], []).append(row)
+
+    qs_by_subject = {}
+    for row in qs:
+        qs_by_subject.setdefault(row["USUBJID"], []).append(row)
+
+    out_rows = []
+    for subj in adsl:
+        usubjid = subj["USUBJID"]
+        randdt = parse_date(subj.get("RANDDT"))
+        dthdt = parse_date(subj.get("DTHDT"))
+
+        # Assessments with both a date and a score, in date/sequence order.
+        assessments = []
+        for row in qs_by_subject.get(usubjid, []):
+            adt = parse_date(row.get("ADT"))
+            score_text = (row.get("AVAL") or "").strip()
+            if adt is None or not score_text:
+                continue
+            assessments.append(
+                {
+                    "date": adt,
+                    "score": float(score_text),
+                    "seq": to_int(row.get("QSSEQ")),
+                }
+            )
+        assessments.sort(key=lambda a: (a["date"], a["seq"]))
+
+        # Deterioration: an assessment dated after the earliest assessment
+        # whose score has fallen at least 10 points below that earliest
+        # assessment's score; the earliest such assessment gives the date.
+        deterioration = None
+        if assessments:
+            baseline = assessments[0]
+            for a in assessments[1:]:
+                if a["date"] > baseline["date"] and (
+                    baseline["score"] - a["score"] >= 10
+                ):
+                    deterioration = a
+                    break
+
+        # First censoring reason: earliest disposition record naming one of
+        # the censoring reasons (never an event).
+        censor_date = None
+        censor_reason = ""
+        records = []
+        for row in ds_by_subject.get(usubjid, []):
+            if (row.get("DSDECOD") or "").strip() in CENSOR_REASONS:
+                records.append(
+                    {
+                        "date": parse_date(row.get("DSDTC")),
+                        "seq": to_int(row.get("DSSEQ")),
+                        "reason": (row.get("DSDECOD") or "").strip(),
+                    }
+                )
+        records.sort(
+            key=lambda r: (r["date"] is None, r["date"] or date.min, r["seq"])
         )
-        .then(pl.lit("Y"))
-        .otherwise(None)
-    )
-    .select("STUDYID", "USUBJID", "QSSEQ", "AVISIT", "ADT", "AVAL", "DETERFL")
-    .sort(["USUBJID", "QSSEQ"])
-)
+        if records:
+            censor_date = records[0]["date"]
+            censor_reason = records[0]["reason"]
 
-# The first deterioration per subject, earliest date then lowest sequence.
-deter = (
-    qs_flagged.filter(pl.col("DETERFL") == "Y")
-    .sort(["STUDYID", "USUBJID", "ADT", "QSSEQ"])
-    .unique(["STUDYID", "USUBJID"], keep="first", maintain_order=True)
-    .select("STUDYID", "USUBJID", DETERDT="ADT", DETERSEQ="QSSEQ")
-)
+        def not_after_censor(d):
+            return d is not None and (censor_date is None or d <= censor_date)
 
-# The first censoring reason per subject. Only progression,
-# discontinuation, and withdrawal count; any other DS record is ignored.
-reason = (
-    ds.filter(
-        pl.col("DSDECOD").is_in(
-            ["DISEASE PROGRESSION", "STUDY DISCONTINUATION", "WITHDRAWAL OF CONSENT"]
+        # Event selection: deterioration and death compete on date, with a
+        # deterioration winning a same-date tie; each must not be dated
+        # after the first censoring reason.
+        event = None  # (kind, date, seq)
+        candidates = []
+        if deterioration is not None and not_after_censor(deterioration["date"]):
+            candidates.append(("deterioration", deterioration["date"], 0))
+        if dthdt is not None and not_after_censor(dthdt):
+            candidates.append(("death", dthdt, 1))
+        if candidates:
+            candidates.sort(key=lambda c: (c[1], c[2]))
+            kind, event_date, _ = candidates[0]
+            if kind == "deterioration":
+                event = ("deterioration", event_date, deterioration["seq"])
+            else:
+                event = ("death", event_date, None)
+
+        if event is not None:
+            kind, adt, seq = event
+            cnsr = 0
+            cnsdtdsc = ""
+            if kind == "deterioration":
+                evntdesc = "PRO DETERIORATION"
+                srcdom, srcvar, srcseq = "QS", "ADT", str(seq)
+            else:
+                evntdesc = "DEATH"
+                srcdom, srcvar, srcseq = "ADSL", "DTHDT", ""
+        else:
+            cnsr = 1
+            evntdesc = "CENSORED"
+            cnsdtdsc = censor_reason if censor_reason else "STUDY COMPLETION"
+            qualifying = [
+                a
+                for a in assessments
+                if censor_date is None or a["date"] <= censor_date
+            ]
+            if qualifying:
+                last = max(qualifying, key=lambda a: (a["date"], a["seq"]))
+                adt = last["date"]
+                srcdom, srcvar, srcseq = "QS", "ADT", str(last["seq"])
+            else:
+                adt = randdt
+                srcdom, srcvar, srcseq = "ADSL", "RANDDT", ""
+
+        out_rows.append(
+            {
+                "STUDYID": subj["STUDYID"],
+                "USUBJID": usubjid,
+                "PARAMCD": "TTDGHS",
+                "PARAM": "Time to Deterioration in Global Health Status",
+                "STARTDT": fmt(randdt),
+                "ADT": fmt(adt),
+                "AVAL": str(whole_months(randdt, adt)),
+                "CNSR": str(cnsr),
+                "EVNTDESC": evntdesc,
+                "CNSDTDSC": cnsdtdsc,
+                "SRCDOM": srcdom,
+                "SRCVAR": srcvar,
+                "SRCSEQ": srcseq,
+            }
         )
-    )
-    .sort(["STUDYID", "USUBJID", "DSDTC", "DSSEQ"], nulls_last=True)
-    .unique(["STUDYID", "USUBJID"], keep="first", maintain_order=True)
-    .select("STUDYID", "USUBJID", CENSORRSNDT="DSDTC", CENSORRSN="DSDECOD")
-)
 
-# The latest assessment with a score dated on or before the censoring
-# reason, with the latest sequence breaking a tied date; a scoreless row
-# is not an evaluable assessment and cannot set the censoring date.
-censor_qs = (
-    qs_flagged.join(reason, on=["STUDYID", "USUBJID"], how="inner")
-    .filter(
-        pl.col("ADT").is_not_null()
-        & pl.col("AVAL").is_not_null()
-        & (pl.col("ADT") <= pl.col("CENSORRSNDT"))
-    )
-    .group_by(["STUDYID", "USUBJID"])
-    .agg(
-        LASTQSLE=pl.col("ADT").max(),
-        LASTQSSEQ=pl.col("QSSEQ").filter(pl.col("ADT") == pl.col("ADT").max()).max(),
-    )
-)
-
-adtte = (
-    adsl.join(deter, on=["STUDYID", "USUBJID"], how="left", maintain_order="left")
-    .join(reason, on=["STUDYID", "USUBJID"], how="left", maintain_order="left")
-    .join(censor_qs, on=["STUDYID", "USUBJID"], how="left", maintain_order="left")
-    .with_columns(STARTDT=pl.col("RANDDT"))
-    .with_columns(
-        # Deterioration wins over death on the same date. Neither counts
-        # when it falls after the first censoring reason: progression,
-        # discontinuation, and withdrawal are censoring reasons, never
-        # events, though a same-day deterioration or death still counts.
-        DETER_EVENT=pl.col("DETERDT").is_not_null()
-        & (pl.col("DTHDT").is_null() | (pl.col("DETERDT") <= pl.col("DTHDT")))
-        & (
-            pl.col("CENSORRSNDT").is_null()
-            | (pl.col("DETERDT") <= pl.col("CENSORRSNDT"))
-        ),
-        DEATH_EVENT=pl.col("DTHDT").is_not_null()
-        & (
-            pl.col("CENSORRSNDT").is_null() | (pl.col("DTHDT") <= pl.col("CENSORRSNDT"))
-        ),
-    )
-    .with_columns(
-        EVENTDT=pl.when(pl.col("DETER_EVENT"))
-        .then(pl.col("DETERDT"))
-        .when(pl.col("DEATH_EVENT"))
-        .then(pl.col("DTHDT"))
-        .otherwise(None),
-        CENSORDT=pl.col("LASTQSLE").fill_null(pl.col("STARTDT")),
-    )
-    .with_columns(ADT=pl.col("EVENTDT").fill_null(pl.col("CENSORDT")))
-    .with_columns(
-        AVAL=pl.struct(["STARTDT", "ADT"]).map_elements(
-            lambda s: whole_months(s["STARTDT"], s["ADT"]), return_dtype=pl.Int64
-        ),
-        CNSR=pl.when(pl.col("EVENTDT").is_not_null()).then(0).otherwise(1),
-        EVNTDESC=pl.when(pl.col("DETER_EVENT"))
-        .then(pl.lit("PRO DETERIORATION"))
-        .when(pl.col("DEATH_EVENT"))
-        .then(pl.lit("DEATH"))
-        .otherwise(pl.lit("CENSORED")),
-        CNSDTDSC=pl.when(pl.col("EVENTDT").is_not_null())
-        .then(None)
-        .otherwise(pl.col("CENSORRSN").fill_null(pl.lit("STUDY COMPLETION"))),
-        SRCDOM=pl.when(pl.col("DETER_EVENT"))
-        .then(pl.lit("QS"))
-        .when(pl.col("DEATH_EVENT"))
-        .then(pl.lit("ADSL"))
-        .when(pl.col("LASTQSLE").is_null())
-        .then(pl.lit("ADSL"))
-        .otherwise(pl.lit("QS")),
-        SRCVAR=pl.when(pl.col("DETER_EVENT"))
-        .then(pl.lit("ADT"))
-        .when(pl.col("DEATH_EVENT"))
-        .then(pl.lit("DTHDT"))
-        .when(pl.col("LASTQSLE").is_null())
-        .then(pl.lit("RANDDT"))
-        .otherwise(pl.lit("ADT")),
-        SRCSEQ=pl.when(pl.col("DETER_EVENT"))
-        .then(pl.col("DETERSEQ"))
-        .when(pl.col("EVENTDT").is_null() & pl.col("LASTQSLE").is_not_null())
-        .then(pl.col("LASTQSSEQ"))
-        .otherwise(None),
-        PARAMCD=pl.lit("TTDGHS"),
-        PARAM=pl.lit("Time to Deterioration in Global Health Status"),
-    )
-    .select(
+    fieldnames = [
         "STUDYID",
         "USUBJID",
         "PARAMCD",
@@ -180,9 +204,15 @@ adtte = (
         "SRCDOM",
         "SRCVAR",
         "SRCSEQ",
-    )
-    .sort("USUBJID")
-)
+    ]
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    with open(
+        os.path.join(OUTPUT_DIR, "adtte.csv"), "w", newline="", encoding="utf-8"
+    ) as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(out_rows)
 
-Path("/app/output").mkdir(parents=True, exist_ok=True)
-adtte.write_csv("/app/output/adtte.csv", null_value="")
+
+if __name__ == "__main__":
+    main()

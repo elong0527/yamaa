@@ -4,48 +4,80 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
+import csv
+import os
 from datetime import date
-from pathlib import Path
-
-import polars as pl
 
 
-def is_leap(year: int) -> bool:
-    return year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
-
-
-def whole_years(start: date | None, end: date | None) -> int | None:
-    """Yearly anniversaries of start on or before end; negated when reversed."""
-    if start is None or end is None:
+def parse_date(text):
+    text = (text or "").strip()
+    if not text:
         return None
-    if end < start:
-        back = whole_years(end, start)
-        return None if back is None else -back
+    year, month, day = text.split("-")
+    return date(int(year), int(month), int(day))
+
+
+def anniversary_in_year(birth, year):
+    """Yearly anniversary of `birth` within `year`.
+
+    A February 29 birthday falls on February 28 in a common year.
+    """
+    month, day = birth.month, birth.day
+    if month == 2 and day == 29:
+        try:
+            return date(year, 2, 29)
+        except ValueError:
+            return date(year, 2, 28)
+    return date(year, month, day)
+
+
+def count_anniversaries(start, end):
+    """Count of yearly anniversaries of `start` falling on or before `end`.
+
+    Assumes end >= start.
+    """
     years = end.year - start.year
-    month, day = start.month, start.day
-    # A February 29 birthday falls on February 28 in common years.
-    if month == 2 and day == 29 and not is_leap(end.year):
-        day = 28
-    if (end.month, end.day) < (month, day):
+    if anniversary_in_year(start, end.year) > end:
         years -= 1
     return years
 
 
-dm = pl.read_csv("/app/input/dm.csv", infer_schema=False).with_columns(
-    pl.col("BRTHDT").str.to_date(strict=False),
-    pl.col("RANDDT").str.to_date(strict=False),
-)
+def analysis_age(brthdt, randdt):
+    if brthdt is None or randdt is None:
+        return ""
+    if randdt >= brthdt:
+        return count_anniversaries(brthdt, randdt)
+    return -count_anniversaries(randdt, brthdt)
 
-adsl = (
-    dm.with_columns(
-        AAGE=pl.struct(["BRTHDT", "RANDDT"]).map_elements(
-            lambda r: whole_years(r["BRTHDT"], r["RANDDT"]),
-            return_dtype=pl.Int64,
-        ),
-        AAGEU=pl.lit("YEARS"),
-    )
-    .select("STUDYID", "USUBJID", "BRTHDT", "RANDDT", "AAGE", "AAGEU")
-)
 
-Path("/app/output").mkdir(exist_ok=True)
-adsl.write_csv("/app/output/adsl.csv")
+def main():
+    with open("/app/input/dm.csv", newline="") as f:
+        rows = list(csv.DictReader(f))
+
+    out_rows = []
+    for row in rows:
+        brthdt = parse_date(row["BRTHDT"])
+        randdt = parse_date(row["RANDDT"])
+        out_rows.append(
+            {
+                "STUDYID": row["STUDYID"],
+                "USUBJID": row["USUBJID"],
+                "BRTHDT": row["BRTHDT"],
+                "RANDDT": row["RANDDT"],
+                "AAGE": analysis_age(brthdt, randdt),
+                "AAGEU": "YEARS",
+            }
+        )
+
+    os.makedirs("/app/output", exist_ok=True)
+    with open("/app/output/adsl.csv", "w", newline="") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=["STUDYID", "USUBJID", "BRTHDT", "RANDDT", "AAGE", "AAGEU"],
+        )
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+
+if __name__ == "__main__":
+    main()

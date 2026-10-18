@@ -4,60 +4,87 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build the SDTM LB dataset (Interleukin 13, skin compartments) from BX_RAW.
 
-import polars as pl
+One record per skin compartment per subject: every subject gets a
+non-lesional record, and a subject also gets a lesional record when a
+cohort is recorded for the subject and the cohort is not "NONAD".
+Within a subject the lesional record is sequenced before the
+non-lesional record.
+"""
 
-bx = pl.read_csv("/app/input/bx_raw.csv", infer_schema=False)
+import csv
 
-rows = []
-for r in bx.to_dicts():
-    study, subj = r["STUDYID"], r["USUBJID"]
-    cohort, les, nles, unit = r["COHORT"], r["LESRES"], r["NLESRES"], r["RESU"]
+INPUT_CSV = "/app/input/bx_raw.csv"
+OUTPUT_CSV = "/app/output/lb.csv"
+
+COLUMNS = [
+    "DOMAIN",
+    "STUDYID",
+    "USUBJID",
+    "LBSEQ",
+    "LBTESTCD",
+    "LBTEST",
+    "LBSPEC",
+    "LBLOC",
+    "LBORRES",
+    "LBORRESU",
+    "LBSTRESN",
+    "LBSTAT",
+]
+
+
+def make_record(subject, seq, location, result, unit):
+    """Assemble one LB record for a single compartment."""
+    result = (result or "").strip()
+    if result:
+        numeric = float(result)
+        status = ""
+    else:
+        numeric = ""
+        status = "NOT DONE"
+    return {
+        "DOMAIN": "LB",
+        "STUDYID": subject["STUDYID"],
+        "USUBJID": subject["USUBJID"],
+        "LBSEQ": seq,
+        "LBTESTCD": "IL13",
+        "LBTEST": "Interleukin 13",
+        "LBSPEC": "SKIN",
+        "LBLOC": location,
+        "LBORRES": result,
+        "LBORRESU": unit,
+        "LBSTRESN": numeric,
+        "LBSTAT": status,
+    }
+
+
+def main():
+    with open(INPUT_CSV, newline="") as handle:
+        subjects = list(csv.DictReader(handle))
+
     records = []
-    if cohort is not None and cohort != "" and cohort != "NONAD":
-        records.append(("LESIONAL", les))
-    records.append(("NON-LESIONAL", nles))
-    for i, (loc, res) in enumerate(records, start=1):
-        res_text = res if res not in (None, "") else None
-        try:
-            resn = float(res_text) if res_text is not None else None
-        except ValueError:
-            resn = None
-        rows.append(
-            {
-                "DOMAIN": "LB",
-                "STUDYID": study,
-                "USUBJID": subj,
-                "LBSEQ": i,
-                "LBTESTCD": "IL13",
-                "LBTEST": "Interleukin 13",
-                "LBSPEC": "SKIN",
-                "LBLOC": loc,
-                "LBORRES": res_text,
-                "LBORRESU": unit,
-                "LBSTRESN": resn,
-                "LBSTAT": "NOT DONE" if res_text is None else None,
-            }
+    for subject in subjects:
+        unit = (subject.get("RESU") or "").strip()
+        cohort = (subject.get("COHORT") or "").strip()
+        seq = 0
+        # Lesional record first, when a cohort is recorded and is not NONAD.
+        if cohort and cohort != "NONAD":
+            seq += 1
+            records.append(
+                make_record(subject, seq, "LESIONAL", subject.get("LESRES"), unit)
+            )
+        # Every subject has a non-lesional record.
+        seq += 1
+        records.append(
+            make_record(subject, seq, "NON-LESIONAL", subject.get("NLESRES"), unit)
         )
 
-lb = pl.DataFrame(
-    rows,
-    schema={
-        "DOMAIN": pl.String,
-        "STUDYID": pl.String,
-        "USUBJID": pl.String,
-        "LBSEQ": pl.Int64,
-        "LBTESTCD": pl.String,
-        "LBTEST": pl.String,
-        "LBSPEC": pl.String,
-        "LBLOC": pl.String,
-        "LBORRES": pl.String,
-        "LBORRESU": pl.String,
-        "LBSTRESN": pl.Float64,
-        "LBSTAT": pl.String,
-    },
-).sort(["STUDYID", "USUBJID", "LBSEQ"])
+    with open(OUTPUT_CSV, "w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=COLUMNS)
+        writer.writeheader()
+        writer.writerows(records)
 
-Path("/app/output").mkdir(parents=True, exist_ok=True)
-lb.write_csv("/app/output/lb.csv")
+
+if __name__ == "__main__":
+    main()

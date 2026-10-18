@@ -4,55 +4,76 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Create an ADVS dataset with derived body surface area records.
 
-import polars as pl
+Reads the collected ADVS dataset from /app/input, keeps every collected
+record, and adds one body surface area (BSA) record for each subject and
+visit that has both a height result (PARAMCD "HEIGHT") and a weight
+result (PARAMCD "WEIGHT") with a value. BSA uses the Mosteller formula,
+sqrt(height in cm * weight in kg / 3600), and is not rounded. A BSA
+record carries DTYPE "CALCULATION"; collected records have no DTYPE.
+"""
 
-raw = pl.read_csv("/app/input/advs.csv", infer_schema=False).with_columns(
-    pl.col("AVAL").cast(pl.Float64, strict=False)
-)
+import csv
+import math
+import os
 
-# Every collected record stays in place.
-collected = raw.select(
-    "STUDYID", "USUBJID", "PARAMCD", "PARAM", "AVAL", "VISIT",
-    DTYPE=pl.lit(None, dtype=pl.String),
-)
+INPUT_PATH = "/app/input/advs.csv"
+OUTPUT_PATH = "/app/output/advs.csv"
 
-# The visit's height and weight results; a zero result still counts.
-heights = (
-    raw.filter(
-        (pl.col("PARAMCD") == "HEIGHT") & pl.col("AVAL").is_not_null()
-    )
-    .group_by(["STUDYID", "USUBJID", "VISIT"])
-    .agg(HEIGHT_VAL=pl.col("AVAL").first())
-)
-weights = (
-    raw.filter(
-        (pl.col("PARAMCD") == "WEIGHT") & pl.col("AVAL").is_not_null()
-    )
-    .group_by(["STUDYID", "USUBJID", "VISIT"])
-    .agg(WEIGHT_VAL=pl.col("AVAL").first())
-)
+COLUMNS = ["STUDYID", "USUBJID", "PARAMCD", "PARAM", "AVAL", "VISIT", "DTYPE"]
 
-# One body surface area record for each visit with both results.
-bsa = (
-    heights.join(weights, on=["STUDYID", "USUBJID", "VISIT"], how="inner")
-    .with_columns(AVAL=(pl.col("HEIGHT_VAL") * pl.col("WEIGHT_VAL") / 3600).sqrt())
-    .select(
-        "STUDYID",
-        "USUBJID",
-        "AVAL",
-        "VISIT",
-        PARAMCD=pl.lit("BSA"),
-        PARAM=pl.lit("Body Surface Area (m^2)"),
-        DTYPE=pl.lit("CALCULATION"),
-    )
-    .select("STUDYID", "USUBJID", "PARAMCD", "PARAM", "AVAL", "VISIT", "DTYPE")
-)
 
-advs = pl.concat([collected, bsa], how="diagonal").sort(
-    ["USUBJID", "VISIT", "PARAMCD"]
-)
+def main():
+    with open(INPUT_PATH, newline="") as f:
+        collected = list(csv.DictReader(f))
 
-Path("/app/output").mkdir(parents=True, exist_ok=True)
-advs.write_csv("/app/output/advs.csv")
+    # Index height and weight results by study, subject and visit.
+    heights = {}
+    weights = {}
+    for row in collected:
+        aval = (row.get("AVAL") or "").strip()
+        if not aval:
+            continue
+        key = (row["STUDYID"], row["USUBJID"], row["VISIT"])
+        if row["PARAMCD"] == "HEIGHT":
+            heights[key] = float(aval)
+        elif row["PARAMCD"] == "WEIGHT":
+            weights[key] = float(aval)
+
+    # Position of the last collected record of each subject and visit,
+    # so a derived BSA record follows its source records.
+    last_index = {}
+    for i, row in enumerate(collected):
+        key = (row["STUDYID"], row["USUBJID"], row["VISIT"])
+        last_index[key] = i
+
+    out_rows = []
+    for i, row in enumerate(collected):
+        out = {c: row.get(c, "") for c in COLUMNS}
+        out["DTYPE"] = ""
+        out_rows.append(out)
+        key = (row["STUDYID"], row["USUBJID"], row["VISIT"])
+        if last_index[key] == i and key in heights and key in weights:
+            bsa = math.sqrt(heights[key] * weights[key] / 3600.0)
+            out_rows.append(
+                {
+                    "STUDYID": key[0],
+                    "USUBJID": key[1],
+                    "PARAMCD": "BSA",
+                    "PARAM": "Body Surface Area (m^2)",
+                    "AVAL": repr(bsa),
+                    "VISIT": key[2],
+                    "DTYPE": "CALCULATION",
+                }
+            )
+
+    os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
+    with open(OUTPUT_PATH, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=COLUMNS)
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+
+if __name__ == "__main__":
+    main()

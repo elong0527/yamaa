@@ -4,157 +4,134 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build ADTTE (PFS) from ADSL, DS, and RS per the task instruction.
 
-import polars as pl
+Reads /app/input/{adsl,ds,rs}.csv and writes /app/output/adtte.csv with
+one record per subject.
+"""
 
+import csv
+from datetime import date
 
-def read(name: str) -> pl.DataFrame:
-    """Read a benchmark input CSV with every column as text."""
-    return pl.read_csv(f"/app/input/{name}", infer_schema=False)
-
-
-def first_per_subject(records: pl.DataFrame, by: list[str]) -> pl.DataFrame:
-    """Keep the earliest record per subject, breaking ties by sequence."""
-    return records.sort(by).unique("USUBJID", keep="first", maintain_order=True)
+INPUT_DIR = "/app/input"
+OUTPUT_PATH = "/app/output/adtte.csv"
 
 
-def last_per_subject(records: pl.DataFrame, by: list[str]) -> pl.DataFrame:
-    """Keep the latest record per subject, breaking ties by sequence."""
-    return records.sort(by, descending=True).unique(
-        "USUBJID", keep="first", maintain_order=True
-    )
+def parse_date(text):
+    """Return a date for an ISO date string, or None when blank."""
+    text = (text or "").strip()
+    if not text:
+        return None
+    return date.fromisoformat(text)
 
 
-adsl = read("adsl.csv").with_columns(
-    pl.col("RANDDT").str.to_date(strict=False),
-    pl.col("NTXSTDT").str.to_date(strict=False),
-)
-rs = read("rs.csv").with_columns(
-    pl.col("RSDTC").str.to_date(strict=False),
-    pl.col("RSSEQ").cast(pl.Int64, strict=False),
-)
-ds = read("ds.csv").with_columns(
-    pl.col("DSDTC").str.to_date(strict=False),
-    pl.col("DSSEQ").cast(pl.Int64, strict=False),
-)
+def read_rows(name):
+    with open(f"{INPUT_DIR}/{name}", newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
 
-# The first adequate progression, the first death, and the last adequate
-# assessment. Records sharing a date are ordered by sequence number.
-progression = first_per_subject(
-    rs.filter(
-        (pl.col("RSTESTCD") == "OVRLRESP")
-        & (pl.col("RSSTRESC") == "PD")
-        & (pl.col("ADEQFL") == "Y")
-        & pl.col("RSDTC").is_not_null()
-    ),
-    ["RSDTC", "RSSEQ"],
-).select("USUBJID", PDDT="RSDTC", PDSEQ="RSSEQ")
 
-death = first_per_subject(
-    ds.filter(
-        (pl.col("DSDECOD") == "DEATH") & pl.col("DSDTC").is_not_null()
-    ),
-    ["DSDTC", "DSSEQ"],
-).select("USUBJID", DTHDT="DSDTC", DTHSEQ="DSSEQ")
+def main():
+    adsl = read_rows("adsl.csv")
+    ds = read_rows("ds.csv")
+    rs = read_rows("rs.csv")
 
-last_assessment = last_per_subject(
-    rs.filter(
-        (pl.col("RSTESTCD") == "OVRLRESP")
-        & (pl.col("ADEQFL") == "Y")
-        & pl.col("RSDTC").is_not_null()
-    ),
-    ["RSDTC", "RSSEQ"],
-).select("USUBJID", CENSORDT="RSDTC", LASTSEQ="RSSEQ")
+    # Per-subject new anti-cancer therapy start: only dates on or before
+    # it are usable for events and censoring.
+    ntx_by_subject = {}
+    for subj in adsl:
+        key = (subj["STUDYID"], subj["USUBJID"])
+        ntx_by_subject[key] = parse_date(subj["NTXSTDT"])
 
-# The last adequate assessment dated on or before new-therapy start, for
-# subjects who began one.
-pre_therapy = last_per_subject(
-    rs.join(adsl.select("USUBJID", "NTXSTDT"), on="USUBJID", how="left").filter(
-        (pl.col("RSTESTCD") == "OVRLRESP")
-        & (pl.col("ADEQFL") == "Y")
-        & pl.col("RSDTC").is_not_null()
-        & pl.col("NTXSTDT").is_not_null()
-        & (pl.col("RSDTC") <= pl.col("NTXSTDT"))
-    ),
-    ["RSDTC", "RSSEQ"],
-).select("USUBJID", PRECENSORDT="RSDTC", PRESEQ="RSSEQ")
+    def usable(key, day):
+        ntx = ntx_by_subject.get(key)
+        return ntx is None or day <= ntx
 
-PDDT, DTHDT = pl.col("PDDT"), pl.col("DTHDT")
+    deaths = {}
+    for row in ds:
+        if row["DSDECOD"] != "DEATH":
+            continue
+        dthdt = parse_date(row["DSDTC"])
+        if dthdt is None:
+            continue
+        key = (row["STUDYID"], row["USUBJID"])
+        if not usable(key, dthdt):
+            continue
+        candidate = (dthdt, int(row["DSSEQ"]))
+        if key not in deaths or candidate < deaths[key]:
+            deaths[key] = candidate
 
-adtte = (
-    adsl.join(progression, on="USUBJID", how="left")
-    .join(death, on="USUBJID", how="left")
-    .join(last_assessment, on="USUBJID", how="left")
-    .join(pre_therapy, on="USUBJID", how="left")
-    # A progression or death dated after new-therapy start is not an event.
-    .with_columns(
-        PDDT=pl.when(
-            pl.col("NTXSTDT").is_not_null() & (pl.col("PDDT") > pl.col("NTXSTDT"))
+    progressions = {}
+    last_adequate = {}
+    for row in rs:
+        if row["RSTESTCD"] != "OVRLRESP" or row["ADEQFL"] != "Y":
+            continue
+        adt = parse_date(row["RSDTC"])
+        if adt is None:
+            continue
+        key = (row["STUDYID"], row["USUBJID"])
+        if not usable(key, adt):
+            continue
+        seq = int(row["RSSEQ"])
+        if row["RSSTRESC"] == "PD":
+            candidate = (adt, seq)
+            if key not in progressions or candidate < progressions[key]:
+                progressions[key] = candidate
+        latest = last_adequate.get(key)
+        if latest is None or (adt, seq) > latest:
+            last_adequate[key] = (adt, seq)
+
+    out_rows = []
+    for subj in adsl:
+        studyid = subj["STUDYID"]
+        usubjid = subj["USUBJID"]
+        key = (studyid, usubjid)
+        startdt = parse_date(subj["RANDDT"])
+
+        prog = progressions.get(key)
+        death = deaths.get(key)
+
+        srcdom = srcvar = srcseq = ""
+        if prog is not None and (death is None or prog[0] <= death[0]):
+            adt = prog[0]
+            cnsr = 0
+            evntdesc = "DISEASE PROGRESSION"
+            srcdom, srcvar, srcseq = "RS", "RSDTC", prog[1]
+        elif death is not None:
+            adt = death[0]
+            cnsr = 0
+            evntdesc = "DEATH"
+            srcdom, srcvar, srcseq = "DS", "DSDTC", death[1]
+        else:
+            cnsr = 1
+            evntdesc = "CENSORED"
+            last = last_adequate.get(key)
+            if last is None:
+                # No usable adequate assessment: censored at randomization.
+                adt = startdt
+            else:
+                adt = last[0]
+                srcdom, srcvar, srcseq = "RS", "RSDTC", last[1]
+
+        aval = (adt - startdt).days + 1
+
+        out_rows.append(
+            {
+                "STUDYID": studyid,
+                "USUBJID": usubjid,
+                "PARAMCD": "PFS",
+                "PARAM": "Progression-Free Survival",
+                "STARTDT": startdt.isoformat(),
+                "ADT": adt.isoformat(),
+                "AVAL": aval,
+                "CNSR": cnsr,
+                "EVNTDESC": evntdesc,
+                "SRCDOM": srcdom,
+                "SRCVAR": srcvar,
+                "SRCSEQ": srcseq,
+            }
         )
-        .then(None)
-        .otherwise("PDDT"),
-        DTHDT=pl.when(
-            pl.col("NTXSTDT").is_not_null() & (pl.col("DTHDT") > pl.col("NTXSTDT"))
-        )
-        .then(None)
-        .otherwise("DTHDT"),
-    )
-    .with_columns(
-        EVENTDT=pl.min_horizontal("PDDT", "DTHDT"),
-        STARTDT=pl.col("RANDDT"),
-        PARAMCD=pl.lit("PFS"),
-        PARAM=pl.lit("Progression-Free Survival"),
-        # The censoring assessment: the last adequate one overall, or the
-        # last one dated on or before therapy start when therapy began.
-        CENSORASSESSDT=pl.when(pl.col("NTXSTDT").is_null())
-        .then(pl.col("CENSORDT"))
-        .otherwise(pl.col("PRECENSORDT")),
-        CENSORSEQ=pl.when(pl.col("NTXSTDT").is_null())
-        .then(pl.col("LASTSEQ"))
-        .otherwise(pl.col("PRESEQ")),
-    )
-    # With no usable adequate assessment the subject is censored at
-    # randomization, for a 1-day PFS.
-    .with_columns(
-        CENSORDT=pl.coalesce("CENSORASSESSDT", "STARTDT"),
-    )
-    # The event always wins, even after the last adequate assessment,
-    # unless new anti-cancer therapy started first.
-    .with_columns(
-        CNSR=pl.when(pl.col("EVENTDT").is_not_null()).then(0).otherwise(1),
-        ADT=pl.coalesce("EVENTDT", "CENSORDT"),
-    )
-    .with_columns(
-        AVAL=(pl.col("ADT") - pl.col("STARTDT")).dt.total_days() + 1,
-        # A progression and a death on the same day count as progression.
-        EVNTDESC=pl.when(pl.col("EVENTDT").is_null())
-        .then(pl.lit("CENSORED"))
-        .when(PDDT.is_not_null() & (DTHDT.is_null() | (PDDT <= DTHDT)))
-        .then(pl.lit("DISEASE PROGRESSION"))
-        .otherwise(pl.lit("DEATH")),
-    )
-    .with_columns(
-        SRCDOM=pl.when(pl.col("EVNTDESC") == "DEATH")
-        .then(pl.lit("DS"))
-        .when(pl.col("CENSORASSESSDT").is_null())
-        .then(None)
-        .otherwise(pl.lit("RS")),
-        SRCVAR=pl.when(pl.col("EVNTDESC") == "DEATH")
-        .then(pl.lit("DSDTC"))
-        .when(pl.col("CENSORASSESSDT").is_null())
-        .then(None)
-        .otherwise(pl.lit("RSDTC")),
-        SRCSEQ=pl.when(pl.col("EVNTDESC") == "DISEASE PROGRESSION")
-        .then(pl.col("PDSEQ"))
-        .when(pl.col("EVNTDESC") == "DEATH")
-        .then(pl.col("DTHSEQ"))
-        .when(pl.col("CENSORASSESSDT").is_null())
-        .then(None)
-        .otherwise(pl.col("CENSORSEQ")),
-    )
-    .sort("USUBJID")
-    .select(
+
+    fieldnames = [
         "STUDYID",
         "USUBJID",
         "PARAMCD",
@@ -167,8 +144,12 @@ adtte = (
         "SRCDOM",
         "SRCVAR",
         "SRCSEQ",
-    )
-)
+    ]
+    with open(OUTPUT_PATH, "w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(out_rows)
 
-Path("/app/output").mkdir(parents=True, exist_ok=True)
-adtte.write_csv("/app/output/adtte.csv")
+
+if __name__ == "__main__":
+    main()

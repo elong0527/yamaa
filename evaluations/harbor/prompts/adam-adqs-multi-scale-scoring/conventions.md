@@ -1,20 +1,16 @@
-Following CDISC ADaM standards, use the provided QS dataset to create
-an ADQS dataset with one record per subject per visit per item, plus
-one score record per scale per visit.
+Following CDISC ADaM standards, use the provided QS dataset to create an ADQS
+dataset with one record per subject, visit, and parameter.
 
 The output dataset should contain the following columns in this order:
 STUDYID, USUBJID, VISIT, PARAMCD, PARAM, AVAL
 
-The physical functioning items are PARAMCD F101 through F104, the role
-functioning items F201 and F202, the fatigue and sleep symptom items S01,
-S02, and F104, and the global health items G01 and G02. Score records have
-PARAMCD "F1SCORE", "F2SCORE", "SSCORE", and "GSCORE" with PARAM "Physical
-Functioning Scale Score", "Role Functioning Scale Score", "Fatigue and Sleep
-Symptom Scale Score", and "Global Health Scale Score". Item responses are on
-a one to four answer scale, except the global health items on a one to seven
-scale. Scale scores are reported on a zero to one hundred scale: higher for
-better functioning on the functioning scales, higher for worse symptoms on
-the symptom scale, and higher for better health on the global scale.
+The physical functioning score record has PARAMCD "F1SCORE" and PARAM
+"Physical Functioning Scale Score". The role functioning score record has
+PARAMCD "F2SCORE" and PARAM "Role Functioning Scale Score". The fatigue
+and sleep symptom score record has PARAMCD "SSCORE" and PARAM "Fatigue and
+Sleep Symptom Scale Score". The global health score record has PARAMCD
+"GSCORE" and PARAM "Global Health Scale Score". AVAL on a score record is
+not rounded.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/adqs.csv.

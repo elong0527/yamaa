@@ -1,27 +1,24 @@
-Following CDISC ADaM standards, use the provided LB dataset to create
-an ADLBC dataset with one record per subject per parameter per
-analysis visit.
+Following CDISC ADaM standards, use the provided LB dataset to create an ADLBC
+dataset with one record per subject per parameter per visit.
 
 The output dataset should contain the following columns in this order:
 STUDYID, USUBJID, PARAMCD, AVISITN, AVAL, PREV_AVAL, CHG
 
-Build the change parameters "_ALB" and "_BILI" from the albumin and
-bilirubin lab results; any other test produces no rows.
-
-AVISITN is the analysis visit number, taken from the lab visit number.
-AVAL is the numeric lab result for the visit.
-
-PREV_AVAL is the value of the visit just before in visit order, for
-the same subject and parameter, so an _ALB row never reads a _BILI
-value. It has no value on the subject's first visit for the
-parameter.
-
-CHG is the change since that visit, not the change from baseline; it
-has no value whenever PREV_AVAL has none. A record with no numeric
-result gets no row, so the previous value and the change skip that
-visit and compare with the latest earlier visit that has a result.
-Equal consecutive values give CHG 0, and a single-visit subject leaves
-both empty.
+- The dataset holds rows only for LB records with test code ALB or BILI
+  and a numeric result; records with another test code or no numeric
+  result have no row.
+- PARAMCD is "_ALB" for an albumin (ALB) record and "_BILI" for a
+  bilirubin (BILI) record.
+- AVISITN is the lab visit number, and AVAL is the numeric lab result
+  for the visit.
+- PREV_AVAL is the AVAL of the latest earlier visit with a result for
+  the same subject and parameter in AVISITN order, so an "_ALB" row
+  never takes a value from a "_BILI" row.
+- PREV_AVAL has no value for the earliest visit with a result for a
+  subject and parameter.
+- CHG is AVAL - PREV_AVAL, the change since the previous visit rather
+  than a change from baseline; it has no value whenever PREV_AVAL has
+  no value, and equal consecutive values give CHG 0.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/adlbc.csv.

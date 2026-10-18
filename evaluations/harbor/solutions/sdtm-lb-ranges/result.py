@@ -4,74 +4,76 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build the SDTM LB dataset from DM, LBRANGE, and LB_RAW.
 
-import polars as pl
+One record per collected test result in LB_RAW. The reference range
+(unit and limits) is selected by the record's test code together with
+the subject's sex from DM. LBNRIND flags the result against the limits.
+"""
 
+import csv
+import os
 
-def _present(value) -> bool:
-    return value is not None and str(value) != ""
-
-
-lb_raw = pl.read_csv("/app/input/lb_raw.csv", infer_schema=False)
-dm = pl.read_csv("/app/input/dm.csv", infer_schema=False)
-lbrange = pl.read_csv("/app/input/lbrange.csv", infer_schema=False)
-
-base = lb_raw.join(dm.select("USUBJID", "SEX"), on="USUBJID", how="left")
-joined = base.join(lbrange, on=["LBTESTCD", "SEX"], how="left")
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
 
-def _indicator(row) -> str | None:
-    result, lo, hi = row["LBSTRESN"], row["NRLO"], row["NRHI"]
-    if not _present(result) or not _present(lo) or not _present(hi):
-        return None
-    try:
-        value, low, high = float(result), float(lo), float(hi)
-    except ValueError:
-        return None
-    if value < low:
-        return "LOW"
-    if value > high:
-        return "HIGH"
-    return "NORMAL"
+def read_rows(name):
+    with open(os.path.join(INPUT_DIR, name), newline="") as handle:
+        return list(csv.DictReader(handle))
 
 
-rows = []
-for row in joined.to_dicts():
-    rows.append(
-        {
-            "DOMAIN": "LB",
-            "STUDYID": row["STUDYID"],
-            "USUBJID": row["USUBJID"],
-            "LBSEQ": row["LBSEQ"],
-            "LBTESTCD": row["LBTESTCD"],
-            "LBSTRESN": row["LBSTRESN"] if _present(row["LBSTRESN"]) else None,
-            "LBSTRESU": row["UNIT"] if _present(row.get("UNIT")) else None,
-            "LBSTNRLO": row["NRLO"] if _present(row.get("NRLO")) else None,
-            "LBSTNRHI": row["NRHI"] if _present(row.get("NRHI")) else None,
-            "LBNRIND": _indicator(row),
-        }
-    )
+def main():
+    dm = read_rows("dm.csv")
+    lbrange = read_rows("lbrange.csv")
+    lb_raw = read_rows("lb_raw.csv")
 
-lb = (
-    pl.DataFrame(
-        rows,
-        schema={
-            "DOMAIN": pl.String,
-            "STUDYID": pl.String,
-            "USUBJID": pl.String,
-            "LBSEQ": pl.String,
-            "LBTESTCD": pl.String,
-            "LBSTRESN": pl.String,
-            "LBSTRESU": pl.String,
-            "LBSTNRLO": pl.String,
-            "LBSTNRHI": pl.String,
-            "LBNRIND": pl.String,
-        },
-    )
-    .with_columns(pl.col("LBSEQ").cast(pl.Int64).alias("_seq"))
-    .sort(["USUBJID", "_seq"])
-    .select(
+    sex_by_subject = {row["USUBJID"]: row["SEX"] for row in dm}
+    range_by_key = {
+        (row["LBTESTCD"], row["SEX"]): row for row in lbrange
+    }
+
+    records = []
+    for row in lb_raw:
+        sex = sex_by_subject.get(row["USUBJID"], "")
+        entry = range_by_key.get((row["LBTESTCD"], sex))
+
+        if entry is None:
+            unit = ""
+            nrlo = ""
+            nrhi = ""
+        else:
+            unit = entry["UNIT"]
+            nrlo = entry["NRLO"]
+            nrhi = entry["NRHI"]
+
+        result = row["LBSTRESN"]
+        nrind = ""
+        if result != "" and nrlo != "" and nrhi != "":
+            value = float(result)
+            if value < float(nrlo):
+                nrind = "LOW"
+            elif value > float(nrhi):
+                nrind = "HIGH"
+            else:
+                nrind = "NORMAL"
+
+        records.append(
+            {
+                "DOMAIN": "LB",
+                "STUDYID": row["STUDYID"],
+                "USUBJID": row["USUBJID"],
+                "LBSEQ": row["LBSEQ"],
+                "LBTESTCD": row["LBTESTCD"],
+                "LBSTRESN": result,
+                "LBSTRESU": unit,
+                "LBSTNRLO": nrlo,
+                "LBSTNRHI": nrhi,
+                "LBNRIND": nrind,
+            }
+        )
+
+    fieldnames = [
         "DOMAIN",
         "STUDYID",
         "USUBJID",
@@ -82,8 +84,15 @@ lb = (
         "LBSTNRLO",
         "LBSTNRHI",
         "LBNRIND",
-    )
-)
+    ]
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    with open(
+        os.path.join(OUTPUT_DIR, "lb.csv"), "w", newline=""
+    ) as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(records)
 
-Path("/app/output").mkdir(exist_ok=True)
-lb.write_csv("/app/output/lb.csv")
+
+if __name__ == "__main__":
+    main()

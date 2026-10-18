@@ -4,74 +4,82 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build the SDTM LB dataset from LB_RAW.
 
-import polars as pl
+One record per collected neutrophil (ANC) or hemoglobin (HGB) result,
+with LBTOXGR the standard toxicity grade from the band set for the
+test (and, for hemoglobin, the sex). Each band includes its lower
+limit and excludes its upper one. Results for any other test, and
+hemoglobin results with a sex other than "M" or "F", get no record.
+"""
 
-raw = pl.read_csv("/app/input/lb_raw.csv", infer_schema=False).with_columns(
-    pl.col("LBSEQ").cast(pl.Int64),
-    pl.col("LBSTRESN").cast(pl.Float64, strict=False),
-)
+import csv
+import os
 
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-def toxgrade(test, sex, value):
-    if value is None:
-        return None
-    if test == "ANC":
-        if value < 0.5:
-            return "4"
-        if value < 1.0:
-            return "3"
-        if value < 1.5:
-            return "2"
-        if value < 1.8:
-            return "1"
-        return "0"
-    if test == "HGB":
-        if sex not in ("M", "F"):
-            return None
-        if value < 8.0:
-            return "3"
-        if value < 10.0:
-            return "2"
-        limit = 13.5 if sex == "M" else 12.0
-        if value < limit:
-            return "1"
-        return "0"
-    return None
+# (lower limit inclusive, grade) pairs in ascending order; a value
+# takes the grade of the last band whose lower limit it reaches.
+ANC_BANDS = [(0.0, "4"), (0.5, "3"), (1.0, "2"), (1.5, "1"), (1.8, "0")]
+HGB_BANDS = {
+    "M": [(0.0, "3"), (8.0, "2"), (10.0, "1"), (13.5, "0")],
+    "F": [(0.0, "3"), (8.0, "2"), (10.0, "1"), (12.0, "0")],
+}
 
 
-rows = []
-for r in raw.to_dicts():
-    grade = toxgrade(r["LBTESTCD"], r["SEX"], r["LBSTRESN"])
-    if grade is None and r["LBTESTCD"] not in ("ANC", "HGB"):
-        continue
-    if r["LBTESTCD"] == "HGB" and r["SEX"] not in ("M", "F"):
-        continue
-    rows.append(
-        {
-            "DOMAIN": "LB",
-            "STUDYID": r["STUDYID"],
-            "USUBJID": r["USUBJID"],
-            "LBSEQ": r["LBSEQ"],
-            "LBTESTCD": r["LBTESTCD"],
-            "LBSTRESN": r["LBSTRESN"],
-            "LBTOXGR": grade,
-        }
-    )
+def grade(value, bands):
+    result = None
+    for lower, band_grade in bands:
+        if value >= lower:
+            result = band_grade
+    return result
 
-lb = pl.DataFrame(
-    rows,
-    schema={
-        "DOMAIN": pl.String,
-        "STUDYID": pl.String,
-        "USUBJID": pl.String,
-        "LBSEQ": pl.Int64,
-        "LBTESTCD": pl.String,
-        "LBSTRESN": pl.Float64,
-        "LBTOXGR": pl.String,
-    },
-).sort(["STUDYID", "USUBJID", "LBSEQ"])
 
-Path("/app/output").mkdir(parents=True, exist_ok=True)
-lb.write_csv("/app/output/lb.csv")
+def main():
+    with open(os.path.join(INPUT_DIR, "lb_raw.csv"), newline="") as f:
+        rows = list(csv.DictReader(f))
+
+    out = []
+    for row in rows:
+        test = row["LBTESTCD"]
+        value = float(row["LBSTRESN"])
+        if test == "ANC":
+            toxgr = grade(value, ANC_BANDS)
+        elif test == "HGB":
+            bands = HGB_BANDS.get(row["SEX"])
+            if bands is None:
+                continue
+            toxgr = grade(value, bands)
+        else:
+            continue
+        out.append(
+            {
+                "DOMAIN": "LB",
+                "STUDYID": row["STUDYID"],
+                "USUBJID": row["USUBJID"],
+                "LBSEQ": row["LBSEQ"],
+                "LBTESTCD": test,
+                "LBSTRESN": row["LBSTRESN"],
+                "LBTOXGR": toxgr,
+            }
+        )
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    columns = [
+        "DOMAIN",
+        "STUDYID",
+        "USUBJID",
+        "LBSEQ",
+        "LBTESTCD",
+        "LBSTRESN",
+        "LBTOXGR",
+    ]
+    with open(os.path.join(OUTPUT_DIR, "lb.csv"), "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=columns)
+        writer.writeheader()
+        writer.writerows(out)
+
+
+if __name__ == "__main__":
+    main()

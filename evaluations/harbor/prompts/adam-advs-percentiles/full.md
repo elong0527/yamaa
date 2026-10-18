@@ -1,23 +1,21 @@
-Following CDISC ADaM standards, use the provided ADVS_RAW and LMS
-datasets to create an ADVS dataset with one record per subject per
-visit per parameter.
+Following CDISC ADaM standards, use the provided ADVS_RAW and LMS_REF datasets
+to create an ADVS dataset with one record per subject per visit per parameter.
 
 The output dataset should contain the following columns in this order:
 STUDYID, USUBJID, AVISIT, PARAMCD, PARAM, AVAL
 
-Turn each collected body measurement into one growth-percentile
-record; the collected records are not kept. PARAMCD is "BMIPCTL" for a
-collected "BMI" measurement and "WGTPCTL" for a collected "WEIGHT"
-measurement, with PARAM "BMI-for-Age Percentile" and
-"Weight-for-Age Percentile" to match.
-
-AVAL is the growth percentile for the collected result against the
-reference coefficients L, M, and S matched on measurement code, sex,
-and age in days: 100 times the standard normal cumulative probability
-of the LMS z-score ((result / M) ^ L - 1) / (L * S), not rounded. A
-measurement with no matching reference row, or with no collected
-result, leaves AVAL with no value. A collected result exactly at the
-reference median gives 50.
+PARAMCD is "BMIPCTL" for a collected BMI measurement and "WGTPCTL" for
+a collected WEIGHT measurement. PARAM is "BMI-for-Age Percentile" when
+PARAMCD is "BMIPCTL" and "Weight-for-Age Percentile" when PARAMCD is
+"WGTPCTL". AVAL is the growth percentile of the collected result: 100
+times the standard normal cumulative probability of its LMS z-score,
+where the z-score is the collected result divided by M, raised to the
+power L, minus 1, all divided by L times S. The L, M, and S are the
+reference coefficients matched on the measurement code, sex, and age in
+days. AVAL has no value when no reference row matches the measurement
+code, sex, and age in days, or when the collected result has no value.
+A collected result equal to M has a percentile of exactly 50. AVAL is
+not rounded.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/advs.csv.
