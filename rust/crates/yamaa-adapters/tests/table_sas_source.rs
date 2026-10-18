@@ -257,6 +257,31 @@ mod table {
             ));
         }
         #[test]
+        fn a_page_count_with_its_high_bit_set_is_refused() {
+            // A 64-bit header holds its page count as an unsigned integer.
+            // ReadStat kept it in a signed field, so a count with its high bit
+            // set passed the upper bound, and the check that the pages fill
+            // the file multiplied it by the page size: a signed overflow.
+            // 0xff00000000000001 times 4096 wraps to 4096, the one page of
+            // this file, so that check passed on the wrapped value. Fuzzing
+            // found it. Only a sanitizer reports the overflow; its minimal
+            // input is a regression input of the sas7bdat fuzz target.
+            use crate::support::sas7bdat::{Cell, Dataset, Kind, Layout, Page, MIX};
+            let mut dataset = Dataset::new(Layout::LE64, &[("X", Kind::Num, 8)]);
+            dataset.total = 1;
+            dataset.mix_rows = 1;
+            let row = dataset.row(&[Cell::Num(7.0)]);
+            let mut bytes = dataset.file(&[Page::new(MIX, dataset.metadata(), vec![row])]);
+            assert_eq!(cells(&read_built(&bytes).unwrap()), [[float(7.0)]]);
+            // The page count follows the header and page sizes, at 208.
+            assert_eq!(&bytes[208..216], &1u64.to_le_bytes());
+            bytes[208..216].copy_from_slice(&0xff00_0000_0000_0001_u64.to_le_bytes());
+            assert!(matches!(
+                read_built(&bytes),
+                Err(Error::Invalid("malformed"))
+            ));
+        }
+        #[test]
         fn zero_width_character_column_reads_as_empty_text() {
             // A zero-width character column stores no bytes, so every value
             // is the zero-length text that `empty_string` interprets.

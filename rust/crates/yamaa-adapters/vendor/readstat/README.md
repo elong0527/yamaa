@@ -78,7 +78,9 @@ or subheader index is zero is malformed, not skipped.
 Rust checks the fixed source-byte and table-shape boundaries from the shared
 `Limits` policy. The C readers admit declared row/column/cell geometry before
 table-sized metadata allocation. Allocation arithmetic and source page/header
-extents are checked. Compressed SAS row buffers are allocated only after
+extents are checked. A SAS page count with its high bit set is malformed:
+upstream reads it into a signed field, where it passes the upper bound and
+overflows the check that the pages fill the file. Compressed SAS row buffers are allocated only after
 physical scalar widths and offsets pass, when columns are submitted for a
 compressed row or, if uncompressed rows came first, at the first compressed
 row. The buffer records its length. Once columns are submitted, a row-size
