@@ -6,8 +6,9 @@ use crate::{
     schema::{Document, DocumentNode as N},
     specification_submission_document as spec, submission_document as env,
     submission_origin::{self as origin, Reads},
+    submission_values as values,
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Finding {
@@ -53,9 +54,14 @@ pub struct Column {
     /// The width a transport file gives a character column (SUB-24).
     pub(crate) transport_length: Option<usize>,
 }
+/// One value-level entry's definition: the rows its where clause selects take
+/// the column's metadata merged with the entry's (SUB-12, DEFINE-27).
 #[derive(Clone, Debug)]
 pub struct ValueDefinition {
-    pub(crate) test_code: String,
+    pub(crate) id: String,
+    /// Each where column's position in the dataset's columns and the values
+    /// it admits, in written order.
+    pub(crate) clause: Vec<(usize, Vec<String>)>,
     pub(crate) path: String,
     pub(crate) column: Column,
 }
@@ -67,7 +73,6 @@ pub struct Dataset {
     pub(crate) columns: Vec<Column>,
     pub(crate) href: Option<String>,
     pub(crate) artifact: String,
-    pub(crate) discriminator: Option<usize>,
 }
 #[derive(Clone, Debug)]
 pub struct Codelist {
@@ -152,11 +157,24 @@ impl Column {
     }
 }
 impl ValueDefinition {
-    pub fn test_code(&self) -> &str {
-        &self.test_code
+    pub fn id(&self) -> &str {
+        &self.id
     }
     pub fn column(&self) -> &Column {
         &self.column
+    }
+    /// Whether the entry's where clause selects a row: `holds` answers whether
+    /// the row's value of one where column is one of the listed values.
+    pub(crate) fn selects<E>(
+        &self,
+        mut holds: impl FnMut(usize, &[String]) -> Result<bool, E>,
+    ) -> Result<bool, E> {
+        for (column, values) in &self.clause {
+            if !holds(*column, values)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
     }
 }
 pub fn family_name(family: Submission) -> &'static str {
@@ -953,7 +971,6 @@ impl ColumnAdmission<'_> {
 /// mandatory on every row restates the resolution and is redundant.
 fn redundant_mandatory_checks(
     admission: &ColumnAdmission<'_>,
-    declarations: &spec::Declarations,
     column: &spec::Column,
     path: &str,
     findings: &mut Vec<Finding>,
@@ -986,12 +1003,10 @@ fn redundant_mandatory_checks(
         )
     };
     let everywhere = resolve(None)
-        && declarations
-            .value_rows()
+        && base
             .iter()
-            .flat_map(|row| &row.overrides)
-            .filter(|entry| &entry.name.value == name)
-            .all(|entry| resolve(Some(&entry.submission)));
+            .flat_map(|metadata| &metadata.value_level)
+            .all(|entry| resolve(Some(&entry.metadata)));
     if !everywhere {
         return;
     }
@@ -1014,58 +1029,9 @@ fn redundant_mandatory_checks(
     }
 }
 
-fn row_derivation(doc: &Document, row: usize, name: &str) -> Option<usize> {
-    doc.field(row, "derivations")
-        .and_then(|n| doc.field(n, name))
-}
-fn string_literal(doc: &Document, mut node: usize) -> Option<&String> {
-    node = doc.field(node, "value").unwrap_or(node);
-    let N::Mapping(fields) = &doc.nodes()[node] else {
-        return None;
-    };
-    let [(key, value)] = fields.as_slice() else {
-        return None;
-    };
-    match (&doc.nodes()[*key], &doc.nodes()[*value]) {
-        (N::Text(handler), N::Text(value)) if handler == "literal" => Some(value),
-        _ => None,
-    }
-}
-fn column_derivations(
-    doc: &Document,
-    column: &spec::Column,
-    overrides: &[spec::ValueRow],
-    row: Option<usize>,
-) -> Vec<usize> {
-    if let Some(row) = row {
-        return row_derivation(doc, row, &column.name.value)
-            .or_else(|| doc.field(column.node, "derivation"))
-            .into_iter()
-            .collect();
-    }
-    let covered: BTreeSet<_> = overrides
-        .iter()
-        .flat_map(|row| {
-            row.overrides
-                .iter()
-                .map(move |o| (row.node, o.name.value.as_str()))
-        })
-        .collect();
-    let mut nodes: Vec<_> = doc.field(column.node, "derivation").into_iter().collect();
-    if let Some(N::Sequence(rows)) = doc.field(doc.root(), "rows").map(|n| &doc.nodes()[n]) {
-        for &row in rows {
-            // Each covered row is checked against its merged metadata below.
-            if covered.contains(&(row, column.name.value.as_str())) {
-                continue;
-            }
-            if let Some(node) = row_derivation(doc, row, &column.name.value) {
-                nodes.push(node);
-            }
-        }
-    }
-    nodes
-}
-
+/// Compose every column's value-level entries (SUB-12, SUB-13): the static
+/// checks of each column's entries, then one definition per entry carrying
+/// the column's metadata merged with the entry's.
 fn compose_values(
     admission: &ColumnAdmission<'_>,
     declarations: &spec::Declarations,
@@ -1074,128 +1040,133 @@ fn compose_values(
     path: &str,
     findings: &mut Vec<Finding>,
     bound: &mut BTreeSet<String>,
-) -> Option<usize> {
+) {
     let doc = admission.doc;
     let columns = &declarations
         .columns()
         .expect("admitted dataset columns")
         .value;
-    let domain = text(doc, doc.root(), "domain").unwrap_or_default();
-    let name = format!("{domain}TESTCD");
-    let discriminator = selected
+    let declared_columns = values::declared_columns(doc);
+    let positions: Vec<String> = selected
         .iter()
-        .position(|c| c.declaration.name.value == name);
-    let mut seen = BTreeMap::<(&str, &str), &spec::ColumnSubmission>::new();
-    for row in declarations.value_rows() {
-        let row_path = format!("{path}.rows.{}.submission", row.id.value);
-        if !columns.iter().any(|c| c.name.value == name) {
-            findings.push(Finding::cause(
-                ConditionCode::SubmissionValueTestcdMissing,
-                &row_path,
-                &domain,
-            ));
-            continue;
-        }
-        let Some(test_code) =
-            row_derivation(doc, row.node, &name).and_then(|n| string_literal(doc, n))
-        else {
-            findings.push(Finding::cause(
-                ConditionCode::SubmissionValueTestcdDynamic,
-                &row_path,
-                &name,
-            ));
+        .map(|column| column.declaration.name.value.clone())
+        .collect();
+    for base in columns {
+        let name = &base.name.value;
+        let Some(metadata) = base.submission.as_ref() else {
             continue;
         };
-        if discriminator.is_none() {
-            findings.push(Finding::cause(
-                ConditionCode::SubmissionMetadataMissing,
-                &row_path,
-                "discriminator omitted from submission output",
-            ));
+        if metadata.value_level.is_empty() || !output_columns.contains(name) {
+            continue;
         }
-        for value in &row.overrides {
-            let column_path = format!("{row_path}.{}", value.name.value);
-            let Some(base) = columns.iter().find(|c| c.name.value == value.name.value) else {
-                findings.push(Finding::cause(
-                    ConditionCode::SubmissionValueColumnUnknown,
-                    &column_path,
-                    &value.name.value,
-                ));
-                continue;
-            };
-            let derivations =
-                column_derivations(doc, base, declarations.value_rows(), Some(row.node));
-            if derivations.is_empty() {
-                findings.push(Finding::cause(
-                    ConditionCode::SubmissionValueColumnUnknown,
-                    &column_path,
-                    &value.name.value,
-                ));
-                continue;
-            }
-            if !output_columns.contains(&value.name.value) {
-                findings.push(Finding::cause(
-                    ConditionCode::SubmissionValueColumnNotOutput,
-                    &column_path,
-                    &value.name.value,
-                ));
-                continue;
-            }
-            let Some(column) = selected
-                .iter_mut()
-                .find(|c| c.declaration.name.value == value.name.value)
-            else {
-                continue;
-            };
-            let key = (value.name.value.as_str(), test_code.as_str());
-            let duplicate = if let Some(first) = seen.get(&key) {
-                if !first.same_values(&value.submission) {
-                    findings.push(Finding::cause(
-                        ConditionCode::SubmissionValueMetadataConflict,
-                        &column_path,
-                        test_code,
-                    ));
-                    continue;
+        let entries = values::entries(doc, base.node);
+        let static_findings = values::admit(&entries, name, |where_column| {
+            let declared = columns.iter().find(|c| c.name.value == where_column)?;
+            Some(values::Declared {
+                output: output_columns.iter().any(|c| c == where_column),
+                text: declared.column_type.value == spec::ColumnType::String,
+            })
+        });
+        for finding in &static_findings {
+            let text = |value: &str| crate::json::Value::String(value.into());
+            let (code, suffix, detail, mut context) = match *finding {
+                values::Finding::DuplicateId { id } => (
+                    ConditionCode::SubmissionValueDuplicateId,
+                    format!("{}.id", values::path(name, id)),
+                    id.to_owned(),
+                    vec![("entry", text(id))],
+                ),
+                values::Finding::Where { id, column, fault } => {
+                    let mut context = vec![("entry", text(id)), ("reason", text(fault.reason()))];
+                    context.extend(column.map(|column| ("where_column", text(column))));
+                    (
+                        ConditionCode::SubmissionValueWhereInvalid,
+                        column.map_or_else(
+                            || format!("{}.where", values::path(name, id)),
+                            |column| format!("{}.where.{column}", values::path(name, id)),
+                        ),
+                        fault.reason().to_owned(),
+                        context,
+                    )
                 }
-                true
-            } else {
-                seen.insert(key, &value.submission);
-                false
+                // A finding carries one path: the later clause's, naming the
+                // earlier entry beside it.
+                values::Finding::Overlap { id, other } => (
+                    ConditionCode::SubmissionValueOverlap,
+                    format!("{}.where", values::path(name, id)),
+                    other.to_owned(),
+                    vec![(
+                        "entries",
+                        crate::json::Value::Array(vec![text(other), text(id)]),
+                    )],
+                ),
             };
+            context.push(("column", text(name)));
+            let mut finding = Finding::cause(code, &format!("{path}.{suffix}"), &detail);
+            finding
+                .context
+                .extend(context.into_iter().map(|(key, value)| (key.into(), value)));
+            findings.push(finding);
+        }
+        if !static_findings.is_empty() {
+            continue;
+        }
+        let Some(position) = positions.iter().position(|column| column == name) else {
+            continue;
+        };
+        for (entry, written) in metadata.value_level.iter().zip(&entries) {
+            let id = &entry.id.value;
+            let entry_path = format!("{path}.{}", values::path(name, id));
+            let clause = entry
+                .clause
+                .iter()
+                .map(|term| {
+                    positions
+                        .iter()
+                        .position(|column| column == &term.column.value)
+                        .map(|index| {
+                            (
+                                index,
+                                term.values
+                                    .iter()
+                                    .map(|value| value.value.clone())
+                                    .collect(),
+                            )
+                        })
+                })
+                .collect::<Option<Vec<_>>>();
             let mut effective = base.clone();
-            effective.submission = Some(
-                value
-                    .submission
-                    .inherit(base.submission.as_ref().expect("selected column metadata")),
-            );
+            effective.submission = Some(entry.metadata.inherit(metadata));
+            if let Some(label) = &entry.label {
+                effective.label = Some(label.clone());
+            }
             let first_finding = findings.len();
-            if admission.keys.contains(&value.name.value)
-                && value
-                    .submission
-                    .mandatory
-                    .as_ref()
-                    .is_some_and(|m| !m.value)
+            if admission.keys.contains(name)
+                && entry.metadata.mandatory.as_ref().is_some_and(|m| !m.value)
             {
                 findings.push(Finding::cause(
                     ConditionCode::SubmissionKeyMandatory,
-                    &format!("{column_path}.mandatory"),
-                    &value.name.value,
+                    &format!("{entry_path}.mandatory"),
+                    name,
                 ));
             }
-            let column_value = admission.admit(
+            // An entry without its own origin answers with the column's,
+            // which the column's own refutation already covers (SUB-13).
+            let derivations = if entry.metadata.origin_metadata.is_some() {
+                values::entry_derivations(doc, base.node, name, &declared_columns, written)
+            } else {
+                Vec::new()
+            };
+            let value = admission.admit(
                 &effective,
-                &column_path,
+                &entry_path,
                 &derivations,
                 Level::Value,
                 findings,
                 bound,
             );
             for finding in &mut findings[first_finding..] {
-                for (key, value) in [
-                    ("column", value.name.value.as_str()),
-                    ("testcd", test_code.as_str()),
-                    ("row", row.id.value.as_str()),
-                ] {
+                for (key, value) in [("column", name.as_str()), ("entry", id.as_str())] {
                     finding
                         .context
                         .insert(key.into(), crate::json::Value::String(value.into()));
@@ -1220,18 +1191,16 @@ fn compose_values(
                     }
                 }
             }
-            if let Some(column_value) = column_value {
-                if !duplicate {
-                    column.values.push(ValueDefinition {
-                        test_code: test_code.clone(),
-                        path: column_path,
-                        column: column_value,
-                    });
-                }
+            if let (Some(value), Some(clause)) = (value, clause) {
+                selected[position].values.push(ValueDefinition {
+                    id: id.clone(),
+                    clause,
+                    path: entry_path,
+                    column: value,
+                });
             }
         }
     }
-    discriminator
 }
 
 /// The label a study specification declares for one column of one dataset.
@@ -1475,6 +1444,7 @@ fn compose_datasets(
                 ));
             }
         }
+        let declared_columns = values::declared_columns(doc);
         let admission = ColumnAdmission {
             doc,
             dataset: &id,
@@ -1496,7 +1466,7 @@ fn compose_datasets(
                 ));
                 continue;
             };
-            redundant_mandatory_checks(&admission, &declarations, column, &path, findings);
+            redundant_mandatory_checks(&admission, column, &path, findings);
             let own = column
                 .submission
                 .as_ref()
@@ -1504,16 +1474,23 @@ fn compose_datasets(
             let origins: Vec<_> = own
                 .into_iter()
                 .chain(
-                    declarations
-                        .value_rows()
+                    column
+                        .submission
                         .iter()
-                        .flat_map(|row| &row.overrides)
-                        .filter(|entry| &entry.name.value == name)
-                        .filter_map(|entry| entry.submission.origin_metadata.as_ref()),
+                        .flat_map(|metadata| &metadata.value_level)
+                        .filter_map(|entry| entry.metadata.origin_metadata.as_ref()),
                 )
                 .collect();
             predecessor_labels(study, column, &origins, &path, findings);
-            let derivations = column_derivations(doc, column, declarations.value_rows(), None);
+            // The column's origin answers for every construction whose rows an
+            // entry declaring its own origin does not all select (SUB-19).
+            let derivations = values::column_derivations(
+                doc,
+                column.node,
+                name,
+                &declared_columns,
+                &values::entries(doc, column.node),
+            );
             if let Some(column) = admission.admit(
                 column,
                 &column_path,
@@ -1546,7 +1523,7 @@ fn compose_datasets(
                 }
             }
         }
-        let discriminator = compose_values(
+        compose_values(
             &admission,
             &declarations,
             &output_columns,
@@ -1562,7 +1539,6 @@ fn compose_datasets(
             columns: selected,
             artifact: input.artifact.into(),
             href: input.href.map(String::from),
-            discriminator,
         });
     }
     datasets

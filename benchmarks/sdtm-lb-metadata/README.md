@@ -35,11 +35,12 @@ the engine output is unaffected by it.
 `submission-spec.yaml` and `submission-environment.yaml` are a separate,
 independently completed submission witness over the original executable
 specification. They add complete dataset/column metadata and retain the
-glucose and creatinine codelist declarations. The completion explicitly uses
-Sponsor for the creatinine Assigned origin: SDTM admits Vendor or Sponsor for
-Assigned, whereas the original family-independent loader fixture retains its
-Investigator declaration. Installed Define tests also exercise that original
-declaration's family-admission failure.
+glucose and creatinine codelist declarations. The completion restates both
+test codes' entries, since a later layer replaces the whole list, and
+explicitly uses Sponsor for the creatinine Assigned origin: SDTM admits Vendor
+or Sponsor for Assigned, whereas the original family-independent loader
+fixture retains its Investigator declaration. Installed Define tests also
+exercise that original declaration's family-admission failure.
 
 The fixed-time witness reads the unchanged `expected/lb.csv` only when
 Dataset-JSON is explicitly requested; it does not execute the specification

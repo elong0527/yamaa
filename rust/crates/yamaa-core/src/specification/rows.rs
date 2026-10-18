@@ -1570,14 +1570,7 @@ impl Rows {
             closed_fields(
                 d,
                 row,
-                &[
-                    "id",
-                    "dataset",
-                    "group_by",
-                    "derivations",
-                    "filter",
-                    "submission",
-                ],
+                &["id", "dataset", "group_by", "derivations", "filter"],
                 &path,
             )?;
             let row_driver = d

@@ -1,0 +1,42 @@
+schema_version: "1.0"
+domain: ADVS
+keys: [USUBJID, PARAMCD]
+input:
+  VS:
+    path: input/vs.csv
+    types: {VSSTRESN: float}
+
+output:
+  path: advs.csv
+  columns: [USUBJID, PARAMCD, AVAL]
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: VS.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: VS.VSTESTCD
+
+  # Both blood pressures are described together, and diastolic pressure a
+  # second time on its own.
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: VS.VSSTRESN
+    submission:
+      length: 8
+      significant_digits: 0
+      origin:
+        type: Predecessor
+        description: VS.VSSTRESN
+      value_level:
+        - id: BP
+          where: {PARAMCD: [SYSBP, DIABP]}
+          label: Blood Pressure (mmHg)
+        - id: DIABP
+          where: {PARAMCD: [DIABP]}
+          label: Diastolic Blood Pressure (mmHg)

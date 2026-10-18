@@ -65,6 +65,7 @@ mod str_template;
 mod submission;
 mod temporal;
 mod terminology;
+mod value_level;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UnsupportedFeature {
@@ -1378,11 +1379,25 @@ impl PreparedSpecification {
                 Err(error) => return Err(error),
             }
         }
-        mandatory::admit(d, columns, &mut column_verifications, &mut findings)?;
+        value_level::admit(
+            d,
+            columns,
+            &output,
+            &mut column_verifications,
+            &mut findings,
+        )?;
+        mandatory::admit(
+            d,
+            columns,
+            &output,
+            &mut column_verifications,
+            &mut findings,
+        )?;
         verifications::redundant_unique(d, &mut findings)?;
         submission::admit(
             d,
             columns,
+            &output,
             inventory.map_or(&[], |inventory| inventory.names()),
             &mut column_verifications,
             &mut findings,

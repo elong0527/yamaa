@@ -51,6 +51,8 @@ fn code(record: &CheckRecord, phase: Phase) -> Result<ConditionCode, Error> {
             | VerificationRangeFailed
             | VerificationMaxLengthFailed
             | VerificationMatchesFailed
+            | ValueLevelMultipleMatches
+            | ValueLevelUnmatched
     ) && record.code.definition().phase == phase.name()
     {
         Ok(record.code)
@@ -215,6 +217,44 @@ fn base_context<'a>(
             }
             context
         }
+        ValueLevelMultipleMatches | ValueLevelUnmatched => {
+            let column = compiled
+                .verification_target(record.path.as_str())
+                .ok_or(Error::InvalidObservation)?;
+            let check = compiled
+                .column_check(record.path.as_str())
+                .ok_or(Error::InvalidObservation)?;
+            let mut context: Context<'a> =
+                [("column", Fact::Text(column)), ("failure_count", failed)].into();
+            match (code, check) {
+                (ValueLevelMultipleMatches, Check::ValueEntries(_)) => {
+                    let entries = record.entries.as_ref().ok_or(Error::InvalidObservation)?;
+                    if entries.len() != record.offending_rows.len()
+                        || entries.iter().any(|ids| ids.len() < 2)
+                    {
+                        return Err(Error::InvalidObservation);
+                    }
+                    context.insert(
+                        "entries",
+                        Fact::Sequence(
+                            entries
+                                .iter()
+                                .map(|ids| {
+                                    Fact::Sequence(
+                                        ids.iter().map(|id| Fact::Text(id.as_str())).collect(),
+                                    )
+                                })
+                                .collect(),
+                        ),
+                    );
+                }
+                (ValueLevelUnmatched, Check::ValueEntryMatch { id, .. }) => {
+                    context.insert("entry", Fact::Text(id.as_str()));
+                }
+                _ => return Err(Error::InvalidObservation),
+            }
+            context
+        }
         _ => return Err(Error::UnsupportedOutcome),
     })
 }
@@ -258,8 +298,11 @@ pub fn project<'a>(
                     .collect();
             }
             let mut keys = keys(&key_names, &record.offending_rows)?;
+            // An ungrouped count and an entry that matches no row examine the
+            // whole artifact as their one offending unit.
             if code == ConditionCode::VerificationRowCountFailed
                 && record.row_count.as_ref().is_none()
+                || code == ConditionCode::ValueLevelUnmatched
             {
                 keys = vec![Fact::Object(Context::new())];
             }
@@ -320,9 +363,12 @@ pub fn project<'a>(
                     values.truncate(5);
                 }
             }
-            // Display samples and complete governed logs retain aligned group counts.
-            if record.row_count.as_ref().is_some() && record.failed_count > 5 {
-                for name in ["counts", "denominators"] {
+            // Display samples and complete governed logs retain aligned group
+            // counts and matched entries.
+            if (record.row_count.as_ref().is_some() || record.entries.as_ref().is_some())
+                && record.failed_count > 5
+            {
+                for name in ["counts", "denominators", "entries"] {
                     if let Some(Fact::Sequence(values)) = context.get_mut(name) {
                         values.truncate(5);
                     }
@@ -358,6 +404,11 @@ pub fn project<'a>(
         if phase == Phase::Verification {
             let check = if code == ConditionCode::VerificationMaxLengthFailed {
                 "max_length"
+            } else if matches!(
+                code,
+                ConditionCode::ValueLevelMultipleMatches | ConditionCode::ValueLevelUnmatched
+            ) {
+                "value_level"
             } else {
                 mapping
                     .condition

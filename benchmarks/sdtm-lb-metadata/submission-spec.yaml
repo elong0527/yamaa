@@ -56,6 +56,15 @@ columns:
       core: Exp
       length: 8
       origin: {type: Assigned, source: Sponsor}
+      value_level:
+        - id: GLUC
+          where: {LBTESTCD: [GLUC]}
+          origin: {type: Assigned, source: Vendor}
+          codelist: CL_GLUCOSE
+        - id: CREAT
+          where: {LBTESTCD: [CREAT]}
+          origin: {type: Assigned, source: Sponsor}
+          codelist: CL_CREATININE
 
   - name: LBSTRESN
     submission:
@@ -76,19 +85,6 @@ columns:
       core: Exp
       origin: {type: Derived, source: Sponsor}
       method: Select the only collection date for the subject and visit
-
-rows:
-  - id: glucose
-    submission:
-      LBORRESU:
-        origin: {type: Assigned, source: Vendor}
-        codelist: CL_GLUCOSE
-
-  - id: creatinine
-    submission:
-      LBORRESU:
-        origin: {type: Assigned, source: Sponsor}
-        codelist: CL_CREATININE
 
 submission:
   label: Laboratory Tests

@@ -1,0 +1,7 @@
+STUDYID,USUBJID,PARAMCD,PARAM,AVAL,AVALC,AVALU
+CATH,CATH-001,GLUC,Glucose (mg/dL),95,95,mg/dL
+CATH,CATH-001,CREAT,Creatinine (umol/L),79.6,79.6,umol/L
+CATH,CATH-001,HCG,Choriogonadotropin Beta,,NEGATIVE,
+CATH,CATH-002,GLUC,Glucose (mg/dL),101,101,mg/dL
+CATH,CATH-002,CREAT,Creatinine (umol/L),88.4,88.4,umol/L
+CATH,CATH-002,HCG,Choriogonadotropin Beta,,POSITIVE,
