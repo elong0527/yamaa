@@ -1,0 +1,6 @@
+lifecycle: draft
+standard: ADaM
+domain: ADSL
+validation:
+  rule: R003
+  validator: spec_contract
