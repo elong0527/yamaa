@@ -614,14 +614,15 @@ qualify_resolve <- function() {
     identical(error$issues$spec_paths, list("columns.V.derivation.function.name")),
     identical(error$issues$context, '{"function":"text"}'))
 
-  # A mapping key holding NUL has no R name: resolve refuses it.
+  # A mapping key holding NUL is both text and a name in the facts, and R
+  # holds neither: resolve refuses it instead of failing inside R.
   writeLines(c("schema_version: '1.0'", "domain: TEST", "keys: [ID]",
     "input: {RAW: {path: missing.csv, types: {ID: int, V: str}}}",
     "columns: [{name: ID, type: int, derivation: RAW.ID}, {name: W, type: str, derivation: {mapping: {source: RAW.V, dict: {\"L\\0\": LOW}}}}]",
     "output: {path: output.csv, columns: [ID, W]}"), entry)
   error <- refusal(yamaa_spec(entry)$resolve())
-  stopifnot(identical(conditionMessage(error),
-    "a name containing NUL cannot be held by an R character vector"))
+  stopifnot(grepl("containing NUL cannot be held by an R character vector",
+    conditionMessage(error), fixed = TRUE))
   cat("resolve returns plain facts, names the project and refuses unreadable specifications\n")
 }
 qualify_resolve()

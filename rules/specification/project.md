@@ -177,7 +177,7 @@ save, and saving it fails.
 or one for each declared section that names `define`, in the order `sdtm`,
 `adam`, `send`, together with the [Dataset-JSON](../submission/dataset-json.md)
 files of a section that sets `datasets: json`. Its findings are those of its
-sections in that order. Saving validates the targets of every section first,
+sections in that order. Saving first compares the targets of every section,
 and two sections that name one file fail the save before any file is written.
 It then publishes the sections in that order; the first section whose
 publication fails stops the save. A submission that composed no section has
