@@ -1330,7 +1330,7 @@ S1,002,2024-06
         /// finding is decided from. `domain` reaches each of them once it reads or
         /// binds the inputs. A case that `check` starts to report fails until it
         /// leaves this list.
-        const NOT_REPORTED_BY_CHECK: [(&str, &str); 26] = [
+        const NOT_REPORTED_BY_CHECK: [(&str, &str); 32] = [
             (
                 "negative-adlb-computed-param",
                 "a cycle through an aggregate and a case",
@@ -1349,12 +1349,28 @@ S1,002,2024-06
                 "column order in a specification with row templates",
             ),
             (
+                "negative-grouped-lookup-ungrouped-key",
+                "the group keys of the row template that reads a lookup",
+            ),
+            (
+                "negative-grouped-range-ungrouped-value",
+                "the group keys of the row template that reads a lookup range",
+            ),
+            (
                 "negative-keys-missing",
                 "a key column that reads a cut of a non-key column",
             ),
             (
                 "negative-lookup-bad-range",
                 "the declared types of a lookup range",
+            ),
+            (
+                "negative-lookup-derivation-scope",
+                "the driver of each row template that reads a lookup derivation",
+            ),
+            (
+                "negative-lookup-key-other-template",
+                "the driver of each row template that reads a lookup key",
             ),
             (
                 "negative-lookup-mismatched",
@@ -1388,6 +1404,10 @@ S1,002,2024-06
             (
                 "negative-row-aggregate-keys",
                 "the scope of a grouped row aggregate",
+            ),
+            (
+                "negative-row-filter-lookup-scope",
+                "the driver of the row template whose filter reads a lookup",
             ),
             (
                 "negative-row-phase-flag",
@@ -1428,6 +1448,10 @@ S1,002,2024-06
             (
                 "negative-types-unknown-field",
                 "the fields stored in the input",
+            ),
+            (
+                "negative-verification-lookup-key",
+                "the driver of the rows a verification's lookup reads",
             ),
         ];
 

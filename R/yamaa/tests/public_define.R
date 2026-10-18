@@ -141,15 +141,13 @@ for (mode in c("original source", "value codelist", "metadata only", "arbitrary 
   root <- fixture("sdtm-lb-metadata", !metadata)
   if (mode == "original source") {
     overlay <- readLines(file.path(root, "submission-spec.yaml"))
-    rows <- which(overlay == "rows:")
-    stopifnot(length(rows) == 1L)
-    # Drop the rows: block only; the style contract orders the top-level
-    # submission: block after rows:, so keep any block that follows it.
-    after <- overlay[-seq_len(rows)]
-    following <- which(nzchar(after) & !grepl("^[ \t]", after))
-    kept <- overlay[seq_len(rows - 1L)]
-    if (length(following)) kept <- c(kept, after[seq.int(min(following), length(after))])
-    writeLines(kept, file.path(root, "submission-spec.yaml"))
+    start <- which(overlay == "      value_level:")
+    stopifnot(length(start) == 1L)
+    # Drop the completion's value_level block only, so the creatinine entry
+    # inherits the original Investigator source.
+    after <- seq.int(start + 1L, length(overlay))
+    block <- after[cumprod(grepl("^        ", overlay[after])) == 1L]
+    writeLines(overlay[-c(start, block)], file.path(root, "submission-spec.yaml"))
     stopifnot(identical(rawfile(file.path(root, "spec.yaml")), rawfile(file.path(fixtures, "sdtm-lb-metadata/spec.yaml"))))
   } else if (mode == "value codelist") {
     csv <- readLines(file.path(root, "lb.csv"))
@@ -169,7 +167,7 @@ for (mode in c("original source", "value codelist", "metadata only", "arbitrary 
   } else if (mode == "value codelist") {
     row <- which(result$issues$condition == "allowed_values_failed")
     stopifnot(length(row) == 1L, grepl('"codelist":"CL_GLUCOSE"', result$issues$context[row], fixed = TRUE),
-      grepl('"testcd":"GLUC"', result$issues$context[row], fixed = TRUE), refused(result))
+      grepl('"entry":"GLUC"', result$issues$context[row], fixed = TRUE), refused(result))
   } else {
     check_issues(result)
     saved(result, root, "define.xml")

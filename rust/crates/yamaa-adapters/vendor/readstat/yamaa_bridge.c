@@ -37,7 +37,7 @@ int yamaa_readstat_admit(size_t rows, size_t columns) {
         return refuse(3, cells_limit, rows * columns, rows <= SIZE_MAX / columns);
     return 1;
 }
-/* SAS records deleted in place cannot be skipped; classify the stop. */
+/* SAS records deleted in place that disagree with their count; classify the stop. */
 readstat_error_t yamaa_readstat_deleted_records(void) {
     deleted_records_hit = 1;
     return READSTAT_ERROR_PARSE;

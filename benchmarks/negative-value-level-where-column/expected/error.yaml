@@ -1,0 +1,10 @@
+phase: validation
+condition: value_level_where_invalid
+spec_paths:
+  - columns.AVAL.submission.value_level.SYSBP.where.VSTESTCD
+requirement: SUB-12
+context:
+  column: AVAL
+  entry: SYSBP
+  reason: undeclared
+  where_column: VSTESTCD

@@ -1,0 +1,49 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  EX: {path: input/ex.csv, types: {EXDOSE: float}}
+  RAND: input/rand.csv
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, ARM, TOTDOSE]
+
+intermediates:
+  # The randomization record of the subject at the site of the exposure
+  # record.
+  - id: RANDOMIZED
+    dataset: RAND
+    key: {SITEID: EX.SITEID, USUBJID: EX.USUBJID}
+    no_match: null
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: ARM
+    type: str
+    label: Description of Planned Arm
+
+  - name: TOTDOSE
+    type: float
+    label: Total Dose Administered
+
+rows:
+  # One record per subject from the subject's exposure records. The
+  # randomization record is matched on the site of an administration, which
+  # the subject's record does not hold, so the specification is rejected
+  # before any data is read.
+  - id: subject
+    dataset: EX
+    group_by: [EX.STUDYID, EX.USUBJID]
+    derivations:
+      STUDYID: EX.STUDYID
+      USUBJID: EX.USUBJID
+      ARM: RANDOMIZED.ARM
+      TOTDOSE: {aggregate: "SUM(EX.EXDOSE)"}

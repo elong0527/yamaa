@@ -17,8 +17,14 @@ pub enum Reach {
 /// Group membership supplied after host normalization and phase selection.
 #[derive(Clone, Copy, Debug)]
 pub enum Phase<'a> {
-    Row { group_by: Option<&'a [&'a str]> },
-    Column { groups: &'a [&'a [&'a str]] },
+    Row {
+        group_by: Option<&'a [&'a str]>,
+    },
+    /// Each grouped row template's driver, as its `dataset` names it, with
+    /// that template's `group_by`.
+    Column {
+        groups: &'a [(&'a str, &'a [&'a str])],
+    },
 }
 
 /// Context for one direct qualified reference. Named-intermediate traversal is separate.
@@ -95,7 +101,14 @@ pub fn validate(
             }
         }
         Phase::Column { groups } => {
-            if scope.reach == Reach::Scalar && groups.iter().any(|group| !group.contains(&name)) {
+            // Only a grouped row template driven by the qualifier builds rows
+            // whose driver record is a group; another driver's groups leave
+            // the read scalar (NAME-4).
+            if scope.reach == Reach::Scalar
+                && groups
+                    .iter()
+                    .any(|&(driver, group)| driver == qualifier && !group.contains(&name))
+            {
                 findings.push(Finding::ColumnGroup);
             }
         }

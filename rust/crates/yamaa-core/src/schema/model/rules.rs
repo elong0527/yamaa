@@ -202,7 +202,6 @@ model!(
         optional!("group_by", STRINGS),
         optional!("filter", Text),
         required!("derivations", HANDLED_MAP),
-        optional!("submission", Dictionary(&Object(SUBMISSION_COLUMN))),
     ]
 );
 model!(
@@ -270,43 +269,55 @@ model!(
         optional!("documents", List(&DOCUMENT_REFERENCE)),
     ]
 );
-model!(
-    SUBMISSION_COLUMN,
-    "SubmissionColumn",
-    [
-        optional!("core", Enum(&["Req", "Exp", "Perm", "Cond"])),
-        optional!("mandatory", Boolean),
-        optional!("role", Text),
-        optional!(
-            "data_type",
-            Enum(&[
-                "text",
-                "integer",
-                "float",
-                "date",
-                "datetime",
-                "time",
-                "partialDate",
-                "partialTime",
-                "partialDatetime",
-                "incompleteDate",
-                "incompleteTime",
-                "incompleteDatetime",
-                "durationDatetime",
-                "intervalDatetime",
-                "URI"
-            ])
-        ),
-        optional!("length", Integer),
-        optional!("significant_digits", Integer),
-        optional!("display_format", Text),
-        optional!("codelist", Text),
-        optional!("inventory_vocabulary", Boolean),
-        optional!("origin", Object(ORIGIN)),
-        optional!("method", METHOD_VALUE),
-        optional!("comment", COMMENT_VALUE),
-    ]
-);
+const DATA_TYPE: Kind = Enum(&[
+    "text",
+    "integer",
+    "float",
+    "date",
+    "datetime",
+    "time",
+    "partialDate",
+    "partialTime",
+    "partialDatetime",
+    "incompleteDate",
+    "incompleteTime",
+    "incompleteDatetime",
+    "durationDatetime",
+    "intervalDatetime",
+    "URI",
+]);
+/// The metadata fields a column and each of its value-level entries share.
+macro_rules! submission_metadata {
+    ($($field:expr),* $(,)?) => {
+        [
+            optional!("core", Enum(&["Req", "Exp", "Perm", "Cond"])),
+            optional!("mandatory", Boolean),
+            optional!("role", Text),
+            optional!("data_type", DATA_TYPE),
+            optional!("length", Integer),
+            optional!("significant_digits", Integer),
+            optional!("display_format", Text),
+            optional!("codelist", Text),
+            optional!("inventory_vocabulary", Boolean),
+            optional!("origin", Object(ORIGIN)),
+            optional!("method", METHOD_VALUE),
+            optional!("comment", COMMENT_VALUE),
+            $($field),*
+        ]
+    };
+}
+pub(super) const SUBMISSION_COLUMN: Model = Model {
+    name: "SubmissionColumn",
+    fields: &submission_metadata!(optional!("value_level", List(&Object(SUBMISSION_VALUE)))),
+};
+pub(super) const SUBMISSION_VALUE: Model = Model {
+    name: "SubmissionValue",
+    fields: &submission_metadata!(
+        required!("id", Text),
+        required!("where", Dictionary(&List(&NonemptyText))),
+        optional!("label", Text),
+    ),
+};
 model!(
     SUBMISSION_DATASET,
     "SubmissionDataset",

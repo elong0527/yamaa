@@ -455,6 +455,17 @@ impl Resources {
     pub(crate) fn verify_captured(&self) -> Result<(), (String, Error)> {
         self.verify_prefix(self.snapshot_count())
     }
+    /// Verify every held snapshot again, naming a failed one by the identity
+    /// its documents carry: the canonical path of a local file, the logical
+    /// location of a host object.
+    pub(crate) fn verify_held(&self) -> Result<(), (String, Error)> {
+        if let Some(host) = &self.host {
+            return host
+                .verify_located(host.len())
+                .map_err(|(identity, error)| (identity, Error::Host(error)));
+        }
+        self.verify_prefix(self.snapshots.len())
+    }
     pub(crate) fn verify_prefix(&self, count: usize) -> Result<(), (String, Error)> {
         if let Some(host) = &self.host {
             return host

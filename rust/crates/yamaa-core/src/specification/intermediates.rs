@@ -532,6 +532,10 @@ impl Declarations {
     pub(super) fn reader(&self) -> Option<&str> {
         self.1.as_deref()
     }
+    /// Where the selector at `index` reads `identifier` in its derivations.
+    pub(super) fn derivation_path(&self, index: usize, identifier: &str) -> Option<&str> {
+        intermediate_derivations::reading_path(&self.0.get(index)?.derivations, identifier)
+    }
     /// The `between.value` of the selector at `index`, with its authored path.
     pub(super) fn range_value(&self, index: usize) -> Option<(&str, String)> {
         let item = self.0.get(index)?;

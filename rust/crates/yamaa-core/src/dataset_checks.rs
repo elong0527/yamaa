@@ -137,6 +137,8 @@ pub fn column_code(check: &Check) -> Option<ConditionCode> {
             ConditionCode::VerificationMaxLengthFailed
         }
         Check::Matches(_) => ConditionCode::VerificationMatchesFailed,
+        Check::ValueEntries(_) => ConditionCode::ValueLevelMultipleMatches,
+        Check::ValueEntryMatch { .. } => ConditionCode::ValueLevelUnmatched,
         _ => return None,
     })
 }

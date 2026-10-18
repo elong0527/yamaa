@@ -162,7 +162,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         .unwrap(),
     );
     // One grammar serves both types: a missing source is no failure, and text
-    // that is not right-truncated --DTC text is invalid date text.
+    // that is not collected date text is invalid date text.
     for kind in [
         date,
         datetime,
@@ -268,15 +268,20 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             ("value", text("2024-01-01/2024-01-10")),
         ],
     );
+    // `to_date` fails on one the same way, at the same stage.
     check(
         operation(K::ToDate)
             .source_value(ValueRef::Str("P3D"))
             .unwrap_err(),
-        "validation",
+        "impute",
         "interval_or_duration_text",
         "TIME-2",
         "columns.V.derivation.impute",
-        vec![("operation", text("to_date")), ("value", text("P3D"))],
+        vec![
+            ("operation", text("to_date")),
+            ("source", text("SRC.V")),
+            ("value", text("P3D")),
+        ],
     );
     reached
 }

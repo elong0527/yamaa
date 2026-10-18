@@ -148,6 +148,9 @@ pub struct CheckRecord {
     pub codelist: Option<CodelistObservation>,
     pub inventory: Option<Vec<Value>>,
     pub row_count: Option<RowCountObservation>,
+    /// The value-level entry identifiers each offending row matches, aligned
+    /// with `offending_rows`, when two entries of one column select a row.
+    pub entries: Option<Vec<Vec<String>>>,
 }
 
 impl CheckRecord {
@@ -1413,6 +1416,7 @@ impl DatasetPlan {
 
                     row_count: None,
                     offending_rows: identities(&dataset, self.keys(), missing)?,
+                    entries: None,
                 });
             }
         }
@@ -1436,6 +1440,7 @@ impl DatasetPlan {
 
                 row_count: None,
                 offending_rows: identities(&dataset, self.keys(), duplicates)?,
+                entries: None,
             });
         }
         if !failures.is_empty() {
@@ -1456,6 +1461,8 @@ impl DatasetPlan {
                 | Check::ValueCodelists { .. }
                 | Check::Inventory { .. }
                 | Check::ValueMaxLength { .. }
+                | Check::ValueEntries(_)
+                | Check::ValueEntryMatch { .. }
                 | Check::Range { .. }
                 | Check::MaxLength(_)
                 | Check::WideMaxLength(_)
@@ -1531,6 +1538,7 @@ impl DatasetPlan {
                                 .into_iter()
                                 .flat_map(|members| members.iter().copied()),
                         )?,
+                        entries: None,
                     }
                 }
                 Check::AllOrNone(columns) => {
@@ -1553,6 +1561,7 @@ impl DatasetPlan {
 
                         row_count: None,
                         offending_rows,
+                        entries: None,
                     }
                 }
                 Check::ScopedRowCount(check) => verification::row_count_check(
@@ -1592,6 +1601,7 @@ impl DatasetPlan {
 
                         row_count: None,
                         offending_rows: Vec::new(),
+                        entries: None,
                     }
                 }
             };
@@ -1626,13 +1636,16 @@ impl DatasetPlan {
                 .iter()
                 .find(|group| group.column == *next)
             {
-                // A value-level binding reads the final discriminator. A later
-                // discriminator delays the declared check prefix until its value
+                // A value-level check reads its completed where columns. A later
+                // where column delays the declared check prefix until its value
                 // is complete; it never silently selects from a partial row.
                 if group.checks.iter().any(|verification| {
-                    matches!(&verification.check, Check::ValueCodelists { discriminator, .. }
-                        if !completed[*discriminator]) || matches!(&verification.check, Check::Inventory { scope: Some(scope), .. } if !completed[scope.discriminator]) || matches!(&verification.check, Check::ValueMaxLength { discriminator, .. } if !completed[*discriminator])
-                        || matches!(&verification.check, Check::Mandatory(Some(scope)) | Check::DataType { scope: Some(scope), .. } if !completed[scope.discriminator])
+                    verification
+                        .check
+                        .clauses()
+                        .iter()
+                        .flat_map(|clause| clause.columns())
+                        .any(|column| !completed[column])
                 }) {
                     return Ok(());
                 }
@@ -1652,6 +1665,55 @@ impl DatasetPlan {
                                 reason: reason.clone(),
                                 records: std::mem::take(records),
                             }));
+                        }
+                        Check::ValueEntries(entries) => {
+                            // A row two entries select has two definitions.
+                            let mut offending = Vec::new();
+                            let mut matched = Vec::new();
+                            for (position, candidate) in candidates.iter().enumerate() {
+                                let ids = entries
+                                    .iter()
+                                    .filter(|(_, clause)| clause.selects(&candidate.values))
+                                    .map(|(id, _)| id.clone())
+                                    .collect::<Vec<_>>();
+                                if ids.len() > 1 {
+                                    offending.push(
+                                        failure_identity(candidate, self.keys(), position)?
+                                            .expect("all keys are complete before column checks"),
+                                    );
+                                    matched.push(ids);
+                                }
+                            }
+                            records.push(CheckRecord {
+                                path: verification.path.clone(),
+                                code: crate::diagnostic::ConditionCode::ValueLevelMultipleMatches,
+                                evaluated_count: candidates.len(),
+                                failed_count: offending.len(),
+                                output_rows: candidates.len(),
+                                offending_rows: offending,
+                                codelist: None,
+                                inventory: None,
+                                row_count: None,
+                                entries: Some(matched),
+                            });
+                        }
+                        Check::ValueEntryMatch { clause, .. } => {
+                            // The whole artifact is the one unit this check examines.
+                            let matched = candidates
+                                .iter()
+                                .any(|candidate| clause.selects(&candidate.values));
+                            records.push(CheckRecord {
+                                path: verification.path.clone(),
+                                code: crate::diagnostic::ConditionCode::ValueLevelUnmatched,
+                                evaluated_count: 1,
+                                failed_count: usize::from(!matched),
+                                output_rows: candidates.len(),
+                                offending_rows: Vec::new(),
+                                codelist: None,
+                                inventory: None,
+                                row_count: None,
+                                entries: None,
+                            });
                         }
                         Check::NotMissing
                         | Check::Mandatory(_)
@@ -1676,50 +1738,35 @@ impl DatasetPlan {
                                     .iter()
                                     .enumerate()
                                     .filter_map(|(index, candidate)| {
+                                        let row = &candidate.values;
                                         let selected = match (&verification.check, binding) {
                                             (
-                                                Check::ValueCodelists {
-                                                    discriminator,
-                                                    overrides,
-                                                    ..
-                                                },
+                                                Check::ValueCodelists { overrides, .. },
                                                 Some(binding),
                                             ) => {
-                                                let code = match &candidate.values[*discriminator] {
-                                                    Value::Str(code) => Some(code.as_str()),
-                                                    _ => None,
-                                                };
-                                                code.is_some_and(|code| {
-                                                    binding.codes.iter().any(|c| c == code)
-                                                }) || binding.default
-                                                    && !code.is_some_and(|code| {
-                                                        overrides.iter().any(|c| c == code)
-                                                    })
+                                                binding
+                                                    .clauses
+                                                    .iter()
+                                                    .any(|clause| clause.selects(row))
+                                                    || binding.default
+                                                        && !overrides
+                                                            .iter()
+                                                            .any(|clause| clause.selects(row))
                                             }
                                             (
                                                 Check::Inventory {
                                                     scope: Some(scope), ..
                                                 },
                                                 _,
-                                            ) => match &candidate.values[scope.discriminator] {
-                                                Value::Str(code) => scope
-                                                    .overrides
-                                                    .iter()
-                                                    .find(|(value, _)| value == code)
-                                                    .map_or(scope.default, |(_, enabled)| *enabled),
-                                                _ => scope.default,
-                                            },
-                                            (Check::ValueMaxLength { discriminator, codes, include, .. }, _) => {
-                                                let matches = matches!(&candidate.values[*discriminator], Value::Str(code) if codes.contains(code));
-                                                matches == *include
-                                            },
-                                            (
-                                                Check::Mandatory(Some(scope))
-                                                | Check::DataType {
+                                            ) => scope.selects(row),
+                                            (Check::ValueMaxLength { scope, .. }, _)
+                                            | (Check::Mandatory(Some(scope)), _)
+                                            | (
+                                                Check::DataType {
                                                     scope: Some(scope), ..
                                                 },
                                                 _,
-                                            ) => scope.selects(&candidate.values),
+                                            ) => scope.selects(row),
                                             _ => true,
                                         };
                                         selected.then_some(index)
@@ -1804,6 +1851,7 @@ impl DatasetPlan {
                                     inventory,
                                     row_count: None,
                                     offending_rows,
+                                    entries: None,
                                 });
                             }
                         }
@@ -2030,7 +2078,9 @@ fn evaluate_first_available<T: TableAccess + ?Sized>(
 }
 
 /// Evaluate one temporal operation over its already admitted operands,
-/// recording the declared invalid handler when a step is invalid.
+/// recording the declared invalid handler when a step is invalid. `dtc`
+/// reads its parts in order and stops at the first missing one, so a later
+/// part, its lookups and its handlers are never reached (TIME-19).
 #[allow(clippy::too_many_arguments)]
 fn evaluate_temporal<T: TableAccess + ?Sized>(
     table: &T,
@@ -2041,6 +2091,7 @@ fn evaluate_temporal<T: TableAccess + ?Sized>(
     row: usize,
     state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
+    let stops = operation.kind().stops_at_missing();
     let mut values = Vec::with_capacity(operands.len());
     for (index, operand) in operands.iter().enumerate() {
         let value = evaluate_raw(table, operand, candidate, plan, row, state)?;
@@ -2048,8 +2099,14 @@ fn evaluate_temporal<T: TableAccess + ?Sized>(
             .validate_operand(index, &value)
             .expect("admitted operand index")
             .map_err(|diagnostic| Box::new(ExecutionError::ScalarDiagnostic(diagnostic)))?;
+        let last = stops && value == Value::Missing;
         values.push(value);
+        if last {
+            break;
+        }
     }
+    // A part left unread stands missing; the operation reads none after it.
+    values.resize(operands.len(), Value::Missing);
     let result = operation
         .apply_values(&values)
         .expect("admitted temporal arity")

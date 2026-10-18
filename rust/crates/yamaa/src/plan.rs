@@ -160,7 +160,7 @@ impl Plan {
             .as_deref()
             .or(self.shared.observer.as_deref());
         let resolver = request.resolver.clone().map(crate::internal::bridge);
-        let outcome = self.run_observed(resolver, &measurements, progress);
+        let outcome = self.run_observed(resolver, true, &measurements, progress);
         measurements.complete(outcome_accepted(&outcome));
         Ok(Build::from_outcome(outcome, measurements, &self.shared))
     }
@@ -171,9 +171,11 @@ impl Plan {
         &self.compiled.report
     }
 
+    /// One run; with `verify` it first verifies the compiled metadata.
     pub(crate) fn run_observed(
         &self,
         resolver: Option<Arc<dyn yamaa_adapters::host_resources::Resolver>>,
+        verify: bool,
         measurements: &yamaa_adapters::application_measurements::Measurements,
         progress: Option<&dyn Progress>,
     ) -> BuildOutcome {
@@ -184,6 +186,7 @@ impl Plan {
             &self.compiled.state,
             resolver,
             None,
+            verify,
             yamaa_core::application_observer::Scope::new(&bridge),
         )
     }
