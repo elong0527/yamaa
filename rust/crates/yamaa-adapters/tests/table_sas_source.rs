@@ -513,15 +513,21 @@ mod table {
             }
         }
         #[test]
-        fn blank_records_at_least_one_record_wide_are_never_padding() {
-            // Blank padding fills the last 80-byte record, so it is always
-            // shorter than 80 bytes. Without a count, a trailing blank record
-            // 80 bytes or wider is data; a narrower one may be padding.
+        fn trailing_blank_records_of_any_width_are_padding_only_without_a_count() {
+            // Without a count, in version 5 and with a zero version 8 count,
+            // a trailing record made entirely of blanks may be padding at any
+            // width, including a whole 80-byte record or wider, so it is not
+            // data. A version 8 count keeps every record it counts.
             use crate::support::xport::{records, transport};
-            for (version, observations) in [(5, "0".repeat(30)), (8, "0".repeat(15))] {
-                let wide = [("A", 80)];
-                let data = records(&wide, &[&["x"], &[""], &[""]]);
-                let bytes = transport(version, &wide, &observations, &data);
+            for width in [40, 80, 120] {
+                let fields = [("A", width)];
+                let data = records(&fields, &[&["x"], &[""], &[""]]);
+                for (version, observations) in [(5, "0".repeat(30)), (8, "0".repeat(15))] {
+                    let bytes = transport(version, &fields, &observations, &data);
+                    let table = sas_source::parse(&bytes, &declaration("built.xpt")).unwrap();
+                    assert_eq!(cells(&table), [[ValueRef::Str("x")]], "{version} {width}");
+                }
+                let bytes = transport(8, &fields, &format!("{:15}", 3), &data);
                 let table = sas_source::parse(&bytes, &declaration("built.xpt")).unwrap();
                 assert_eq!(
                     cells(&table),
@@ -530,13 +536,8 @@ mod table {
                         [ValueRef::Missing],
                         [ValueRef::Missing]
                     ],
-                    "{version}"
+                    "8 {width}"
                 );
-                let narrow = [("A", 40)];
-                let data = records(&narrow, &[&["x"], &[""], &[""]]);
-                let bytes = transport(version, &narrow, &observations, &data);
-                let table = sas_source::parse(&bytes, &declaration("built.xpt")).unwrap();
-                assert_eq!(cells(&table), [[ValueRef::Str("x")]], "{version}");
             }
         }
         #[test]
