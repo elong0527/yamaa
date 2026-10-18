@@ -575,9 +575,9 @@ class DashboardTests(unittest.TestCase):
                 page,
             )
         self.assertIn(
-            "DTHFL is Y or has no value.", (prompts / "conventions.md").read_text()
+            'DTHFL is "Y" or has no value.', (prompts / "conventions.md").read_text()
         )
-        self.assertIn("<p>DTHFL is Y or has no value.</p>", page)
+        self.assertIn('<p>DTHFL is &quot;Y&quot; or has no value.</p>', page)
         for name in generate.SOLUTION_FILES:
             self.assertIn(f'data-filename="solutions/adam-adae-death/{name}"', page)
             self.assertIn(
@@ -642,7 +642,8 @@ class DashboardTests(unittest.TestCase):
         # A schema benchmark has no Harbor prompt or solutions, so it
         # carries neither tab and lists no solution files.
         self.assertEqual(
-            tab_ids("schema-adsl-age-quality"), ["tab-comments", "tab-mapping-spec"]
+            tab_ids("schema-adsl-age-quality"),
+            ["tab-comments", "tab-mapping-spec", "tab-code"],
         )
         page = generate.render_benchmark(
             generate.BENCHMARKS / "schema-adsl-age-quality"
