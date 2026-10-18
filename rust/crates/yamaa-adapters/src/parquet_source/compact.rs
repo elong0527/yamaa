@@ -24,7 +24,9 @@ pub(super) enum Value<'a> {
 }
 
 impl<'a> Value<'a> {
-    /// Like the downstream decoder, the last occurrence supplies a field value.
+    /// The last occurrence supplies a field value. Admission refuses a
+    /// repeated field that the native decoder knows before it reads any
+    /// (`wire::check`), since the decoder does not always keep the last copy.
     pub(super) fn field(&self, id: i16) -> Result<Option<Self>, Error> {
         let Self::Struct(bytes) = self else {
             return Ok(None);

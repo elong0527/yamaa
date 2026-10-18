@@ -7,7 +7,15 @@
 //! only an unknown id by that field's own wire type. A known field with
 //! another wire type would make the native decoder read other bytes, or other
 //! values, than the ones admission checked. Admission therefore refuses it as
-//! malformed wherever it occurs, repeats included.
+//! malformed wherever it occurs.
+//!
+//! A known field also occurs at most once. The native decoder decodes the
+//! first copy of a repeated schema and skips the others, merges the copies of
+//! a column chunk's metadata, appends those of a row group's columns, and
+//! keeps the last copy of other fields, while admission reads the last copy.
+//! It could then act on a schema or page offsets that admission never
+//! checked. Writers never repeat a field, so admission refuses a repeated
+//! known field as malformed in every struct it walks.
 //!
 //! The native decoder also reserves room for every element a known list
 //! declares before it reads the first. The compact parser bounds a count only
@@ -16,6 +24,12 @@
 //! therefore refuses a list unless its bytes can hold the declared count at
 //! the fewest bytes the decoder accepts for each element, so that a
 //! reservation never exceeds what decoding that many valid elements takes.
+//!
+//! Those minimums tie a reservation to the list's own bytes, not to any
+//! limit. So admission also refuses a list that declares more elements than a
+//! file the engine reads holds (`Shape::most`), and `check` reports the counts
+//! that framing compares with the schema's leaves (`Lists`). Framing bounds
+//! the schema and the row groups themselves.
 //!
 //! The table follows parquet 57.3.0's readers as this build calls them:
 //! `parquet_metadata_from_bytes`, `read_row_group`, `read_column_chunk`,
@@ -29,6 +43,13 @@
 //! unknown field. This build does not enable parquet's `encryption` feature,
 //! so it also skips the encryption fields of `FileMetaData` and `ColumnChunk`.
 use super::compact::{Cursor, Error, Value};
+use crate::storage_api::ENCODING_STATS;
+use yamaa_core::limits::Limits;
+
+/// The most key-value metadata entries a footer may declare. The format
+/// bounds them by nothing; writers write a few and the engine reads one, so
+/// the column limit serves as the bound.
+const KEY_VALUES: usize = Limits::COLUMNS;
 
 /// A Thrift struct or union that the native decoder reads field by field.
 #[derive(Clone, Copy, Debug)]
@@ -227,35 +248,85 @@ impl Shape {
             _ => (1, 1),
         }
     }
+
+    /// The most elements the known list field `id` declares in a file the
+    /// engine reads, whatever its schema; `None` for a list bounded only by
+    /// its bytes, or by the schema.
+    fn most(self, id: i16) -> Option<usize> {
+        match (self, id) {
+            (Shape::FileMetaData, 5) => Some(KEY_VALUES),
+            (Shape::ColumnMetaData, 13) => Some(ENCODING_STATS),
+            // A level histogram holds one count for each level from zero to
+            // the column's highest, which is below the schema depth that
+            // admission allows.
+            (Shape::SizeStatistics, 2 | 3) => Some(Limits::SEMANTIC_DEPTH),
+            _ => None,
+        }
+    }
+}
+
+/// The declared lengths of the footer lists that admission bounds by the
+/// schema's leaf count, which it knows only once it has admitted the schema.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(super) struct Lists {
+    /// How many column orders the footer declares, if it holds the list.
+    pub column_orders: Option<usize>,
+    /// The most sorting columns that any one row group declares.
+    pub sorting_columns: usize,
+}
+
+impl Lists {
+    /// Note that the known list field `id` of `shape` declares `count`
+    /// elements, and refuse more than `Shape::most` allows.
+    fn declare(&mut self, shape: Shape, id: i16, count: usize) -> Result<(), Error> {
+        match (shape, id) {
+            (Shape::FileMetaData, 7) => self.column_orders = Some(count),
+            (Shape::RowGroup, 4) => self.sorting_columns = self.sorting_columns.max(count),
+            _ if shape.most(id).is_some_and(|most| count > most) => {
+                return Err(Error::Malformed);
+            }
+            _ => {}
+        }
+        Ok(())
+    }
 }
 
 /// Refuse a known field of the admitted struct `value`, read as `shape`,
-/// whose held wire type is not the one the native decoder reads it with, and
-/// a known list too short for the elements it declares, at every depth the
-/// decoder reaches. Each byte is read once.
-pub(super) fn check(value: Value<'_>, shape: Shape) -> Result<(), Error> {
-    walk(&mut Cursor::new(value), shape)
+/// whose held wire type is not the one the native decoder reads it with, a
+/// repeated known field, and a known list too short for the elements it
+/// declares or longer than its limit, at every depth the decoder reaches.
+/// Each byte is read once.
+pub(super) fn check(value: Value<'_>, shape: Shape) -> Result<Lists, Error> {
+    let mut lists = Lists::default();
+    walk(&mut Cursor::new(value), shape, &mut lists)?;
+    Ok(lists)
 }
 
-fn walk(cursor: &mut Cursor<'_>, shape: Shape) -> Result<(), Error> {
+fn walk(cursor: &mut Cursor<'_>, shape: Shape, lists: &mut Lists) -> Result<(), Error> {
     let mut previous = 0;
+    // One bit for each known field already read: every known id is between
+    // 1 and 18.
+    let mut read = 0u32;
     while let Some((id, kind)) = cursor.field(previous)? {
         previous = id;
         let Some(wire) = shape.field(id) else {
             cursor.skip_value(kind)?;
             continue;
         };
-        if !wire.admits(kind) {
+        let bit = 1u32 << id;
+        if !wire.admits(kind) || read & bit != 0 {
             return Err(Error::Malformed);
         }
+        read |= bit;
         match wire {
-            Wire::Struct(shape) => walk(cursor, shape)?,
+            Wire::Struct(shape) => walk(cursor, shape, lists)?,
             Wire::List(element) => {
                 let (held, count) = cursor.collection()?;
                 // The native decoder reads no element of an empty list.
                 if count != 0 && !element.admits(held) {
                     return Err(Error::Malformed);
                 }
+                lists.declare(shape, id, count)?;
                 // It reserves room for every element before it reads one.
                 // Refuse a count that the struct's remaining bytes, and then
                 // the list's own bytes, cannot hold.
@@ -265,7 +336,7 @@ fn walk(cursor: &mut Cursor<'_>, shape: Shape) -> Result<(), Error> {
                 }
                 for _ in 0..count {
                     match *element {
-                        Wire::Struct(shape) => walk(cursor, shape)?,
+                        Wire::Struct(shape) => walk(cursor, shape, lists)?,
                         _ => cursor.skip_element(held)?,
                     }
                 }
@@ -373,6 +444,16 @@ mod tests {
             }
         }
 
+        /// The fields `field` adds, twice when `repeat`.
+        fn twice(self, repeat: bool, field: fn(Self) -> Self) -> Self {
+            let once = field(self);
+            if repeat {
+                field(once)
+            } else {
+                once
+            }
+        }
+
         fn end(mut self) -> Vec<u8> {
             self.bytes.push(0);
             self.bytes
@@ -388,6 +469,8 @@ mod tests {
         Chunk,
         Meta,
         Page,
+        /// The data page header writes all of its known fields, so here a
+        /// case writes the last one, its repetition level encoding, itself.
         Data,
     }
 
@@ -406,10 +489,15 @@ mod tests {
             .collect();
         let size = body.len() as i64;
         // num_values; PLAIN; RLE definition and repetition levels.
-        let data = Fields::default().i32(1, rows).i32(2, 0).i32(3, 3).i32(4, 3);
+        let data = Fields::default().i32(1, rows).i32(2, 0).i32(3, 3);
+        let data = if at == At::Data {
+            extra(data)
+        } else {
+            data.i32(4, 3)
+        };
         // DATA_PAGE; uncompressed and compressed sizes.
         let page = Fields::default().i32(1, 0).i32(2, size).i32(3, size);
-        let page = add(At::Page, page.strct(5, add(At::Data, data))).end();
+        let page = add(At::Page, page.strct(5, data)).end();
         let chunk = (page.len() + body.len()) as i64;
         let meta = Fields::default()
             .i32(1, 2) // INT64
@@ -587,10 +675,10 @@ mod tests {
             ("PageHeader", At::Page, |f, wrong| {
                 f.pick(wrong, |p| p.binary(4, b"crc"), |p| p.i32(4, 0))
             }),
-            // A repeated num_values as a raw byte 1, which admission read as
-            // 1 and the native decoder as the varint -1.
+            // RLE repetition levels as a raw byte 3, which admission would
+            // read as 3 and the native decoder as the varint -2.
             ("DataPageHeader", At::Data, |f, wrong| {
-                f.pick(wrong, |d| d.raw(1, 3, &[1]), |d| d.i32(1, 1))
+                f.pick(wrong, |d| d.raw(4, 3, &[3]), |d| d.i32(4, 3))
             }),
             // A V2 header the native decoder reads although the page is V1.
             ("DataPageHeaderV2", At::Page, |f, wrong| {
@@ -620,6 +708,279 @@ mod tests {
         }
     }
 
+    /// For each Thrift struct the native decoder reads, a known field written
+    /// twice is malformed, and the same field written once is admitted.
+    #[test]
+    fn a_repeated_known_field_of_each_struct_is_malformed() {
+        type Case = (&'static str, At, fn(Fields, bool) -> Fields);
+        let cases: [Case; 25] = [
+            ("FileMetaData", At::File, |f, repeat| {
+                f.twice(repeat, |f| f.binary(6, b"yamaa test"))
+            }),
+            ("SchemaElement", At::Leaf, |f, repeat| {
+                f.twice(repeat, |f| f.i32(9, 7))
+            }),
+            ("LogicalType", At::Leaf, |f, repeat| {
+                let union = Fields::default().twice(repeat, |u| u.strct(10, integer()));
+                f.strct(10, union)
+            }),
+            ("DecimalType", At::Leaf, |f, repeat| {
+                let decimal = Fields::default().twice(repeat, |d| d.i32(1, 2));
+                f.strct(10, Fields::default().strct(5, decimal.i32(2, 10)))
+            }),
+            ("TimestampType", At::Leaf, |f, repeat| {
+                let unit = Fields::default().strct(2, Fields::default());
+                let time = Fields::default().twice(repeat, |t| t.bool(1, false));
+                f.strct(10, Fields::default().strct(8, time.strct(2, unit)))
+            }),
+            ("TimeUnit", At::Leaf, |f, repeat| {
+                let unit = Fields::default().twice(repeat, |u| u.strct(2, Fields::default()));
+                f.strct(10, timestamp(unit))
+            }),
+            ("IntType", At::Leaf, |f, repeat| {
+                let int = Fields::default().twice(repeat, |i| i.raw(1, 3, &[64]));
+                f.strct(10, Fields::default().strct(10, int.bool(2, true)))
+            }),
+            ("VariantType", At::Leaf, |f, repeat| {
+                let variant = Fields::default().twice(repeat, |v| v.raw(1, 3, &[1]));
+                f.strct(10, Fields::default().strct(16, variant))
+            }),
+            ("GeometryType", At::Leaf, |f, repeat| {
+                let crs = Fields::default().twice(repeat, |g| g.binary(1, b"crs"));
+                f.strct(10, Fields::default().strct(17, crs))
+            }),
+            ("GeographyType", At::Leaf, |f, repeat| {
+                let edges = Fields::default().twice(repeat, |g| g.i32(2, 1));
+                f.strct(10, Fields::default().strct(18, edges))
+            }),
+            ("RowGroup", At::Group, |f, repeat| {
+                f.twice(repeat, |g| g.i64(5, 4))
+            }),
+            ("SortingColumn", At::Group, |f, repeat| {
+                let column = Fields::default().twice(repeat, |s| s.i32(1, 0));
+                f.list(4, 12, &[column.bool(2, false).bool(3, true).end()])
+            }),
+            ("ColumnChunk", At::Chunk, |f, repeat| {
+                f.twice(repeat, |c| c.i32(5, 16))
+            }),
+            ("ColumnMetaData", At::Meta, |f, repeat| {
+                f.twice(repeat, |m| m.i64(14, 0))
+            }),
+            ("Statistics", At::Meta, |f, repeat| {
+                let stats = Fields::default().twice(repeat, |s| s.i64(3, 0));
+                f.strct(12, stats)
+            }),
+            ("PageEncodingStats", At::Meta, |f, repeat| {
+                let stats = Fields::default().i32(1, 0).i32(2, 0);
+                let stats = stats.twice(repeat, |s| s.i32(3, 1));
+                f.list(13, 12, &[stats.end()])
+            }),
+            ("SizeStatistics", At::Meta, |f, repeat| {
+                let size = Fields::default().twice(repeat, |s| s.i64(1, 0));
+                f.strct(16, size)
+            }),
+            ("GeospatialStatistics", At::Meta, |f, repeat| {
+                let geo = Fields::default().twice(repeat, |g| g.list(2, 5, &[zigzag(1)]));
+                f.strct(17, geo)
+            }),
+            ("BoundingBox", At::Meta, |f, repeat| {
+                let xmin = Fields::default().twice(repeat, |b| b.double(1, 0.0));
+                let corners = xmin.double(2, 1.0).double(3, 0.0).double(4, 1.0);
+                f.strct(17, Fields::default().strct(1, corners))
+            }),
+            ("KeyValue", At::File, |f, repeat| {
+                let pair = Fields::default().twice(repeat, |k| k.binary(1, b"k"));
+                f.list(5, 12, &[pair.binary(2, b"v").end()])
+            }),
+            ("ColumnOrder", At::File, |f, repeat| {
+                let order = Fields::default().twice(repeat, |o| o.strct(1, Fields::default()));
+                f.list(7, 12, &[order.end()])
+            }),
+            ("PageHeader", At::Page, |f, repeat| {
+                f.twice(repeat, |p| p.i32(4, 0))
+            }),
+            ("DataPageHeader", At::Data, |f, repeat| {
+                f.twice(repeat, |d| d.i32(4, 3))
+            }),
+            ("DataPageHeaderV2", At::Page, |f, repeat| {
+                let v2 = Fields::default().twice(repeat, |v| v.i32(1, 1));
+                let v2 = v2.i32(2, 0).i32(3, 1).i32(4, 0);
+                f.strct(8, v2.i32(5, 0).i32(6, 0))
+            }),
+            ("DictionaryPageHeader", At::Page, |f, repeat| {
+                let dictionary = Fields::default().i32(1, 0).i32(2, 0);
+                f.strct(7, dictionary.twice(repeat, |d| d.bool(3, false)))
+            }),
+        ];
+        for (name, at, add) in cases {
+            let refused = file(&[7], at, |fields| add(fields, true));
+            assert!(malformed(&refused), "{name}: repeated");
+            let admitted = file(&[7], at, |fields| add(fields, false));
+            framing::admit(&admitted).unwrap_or_else(|error| panic!("{name}: {error:?}"));
+        }
+    }
+
+    /// parquet 57.3.0 decodes the first copy of a repeated schema, and merges
+    /// the copies of a column chunk's metadata, while admission read the
+    /// last copy. Neither copy is read once the field is refused.
+    #[test]
+    fn a_repeated_schema_or_column_metadata_is_malformed() {
+        // A chain of nested groups whose leaf lies one level deeper than
+        // admission allows: the root, REQUIRED groups with an empty name and
+        // one child each, and an INT64 leaf.
+        let depth = super::Limits::SEMANTIC_DEPTH + 1;
+        let root = Fields::default().binary(4, b"").i32(5, 1).end();
+        let group = Fields::default().i32(3, 0).binary(4, b"").i32(5, 1).end();
+        let mut deep = vec![0xfc];
+        varint(depth as u64, &mut deep);
+        deep.extend(&root);
+        for _ in 2..depth {
+            deep.extend(&group);
+        }
+        deep.extend([0x15, 4, 0x25, 0, 0x18, 0, 0]);
+        let rows = |f: Fields| f.raw(4, 9, &[0x0c]);
+        assert!(malformed(&columnless(&deep, rows)));
+        framing::admit(&columnless(&leaves(1), rows)).unwrap();
+        let first_unchecked = columnless(&deep, |f| rows(f).raw(2, 9, &leaves(1)));
+        assert!(malformed(&first_unchecked));
+        // The column chunk's metadata once more, with a dictionary page
+        // offset, as framing would read it.
+        let held = file(&[7], At::File, |f| f);
+        let trailer = held.len() - 8;
+        let footer = u32::from_le_bytes(held[trailer..trailer + 4].try_into().unwrap());
+        let chunk = (trailer - footer as usize - 4) as i64;
+        let repeated = file(&[7], At::Chunk, move |f| {
+            let meta = Fields::default()
+                .i32(1, 2)
+                .list(2, 5, &[zigzag(0)])
+                .list(3, 8, &[b"\x01V".to_vec()])
+                .i32(4, 0)
+                .i64(5, 1)
+                .i64(6, chunk)
+                .i64(7, chunk)
+                .i64(9, 4)
+                .i64(11, 4);
+            f.strct(3, meta)
+        });
+        assert!(malformed(&repeated));
+        assert_eq!(
+            reader::read(&repeated).unwrap_err(),
+            reader::Error::Malformed
+        );
+    }
+
+    /// Each list that admission caps declares at most as many elements as a
+    /// file the engine reads holds, and one more is malformed.
+    #[test]
+    fn a_list_longer_than_any_file_the_engine_reads_is_malformed() {
+        use super::{Limits, ENCODING_STATS, KEY_VALUES};
+        let list = |count, element: &[u8]| repeated(12, count, element, element);
+        let entries = move |count| list(count, &[0x18, 0, 0]);
+        let stats = move |count| list(count, &[0x15, 0, 0x15, 0, 0x15, 2, 0]);
+        // Zero-valued i64 counts.
+        let levels = |count| repeated(6, count, &[0], &[0]);
+        type Case = (&'static str, usize, Box<dyn Fn(usize) -> Vec<u8>>);
+        let cases: [Case; 6] = [
+            (
+                "key_value_metadata",
+                KEY_VALUES,
+                Box::new(move |n| file(&[7], At::File, |f| f.raw(5, 9, &entries(n)))),
+            ),
+            (
+                "encoding_stats",
+                ENCODING_STATS,
+                Box::new(move |n| file(&[7], At::Meta, |f| f.raw(13, 9, &stats(n)))),
+            ),
+            (
+                "repetition_level_histogram",
+                Limits::SEMANTIC_DEPTH,
+                Box::new(move |n| {
+                    let size = |f: Fields| f.raw(2, 9, &levels(n));
+                    file(&[7], At::Meta, |f| f.strct(16, size(Fields::default())))
+                }),
+            ),
+            (
+                "definition_level_histogram",
+                Limits::SEMANTIC_DEPTH,
+                Box::new(move |n| {
+                    let size = |f: Fields| f.raw(3, 9, &levels(n));
+                    file(&[7], At::Meta, |f| f.strct(16, size(Fields::default())))
+                }),
+            ),
+            // As many as the schema has leaves, here two.
+            (
+                "column_orders",
+                2,
+                Box::new(move |n| {
+                    let orders = list(n, &[0x1c, 0, 0]);
+                    columnless(&leaves(2), |f| f.raw(4, 9, &[0x0c]).raw(7, 9, &orders))
+                }),
+            ),
+            (
+                "sorting_columns",
+                2,
+                Box::new(move |n| {
+                    let sorting = list(n, &[0x15, 0, 0x11, 0x11, 0]);
+                    columnless(&leaves(2), |f| f.raw(4, 9, &sorted(&sorting)))
+                }),
+            ),
+        ];
+        for (name, most, file) in cases {
+            framing::admit(&file(most)).unwrap_or_else(|error| panic!("{name}: {error:?}"));
+            assert!(malformed(&file(most + 1)), "{name}");
+        }
+        // Each leaf has exactly one column order.
+        let orders = list(1, &[0x1c, 0, 0]);
+        let fewer = columnless(&leaves(2), |f| f.raw(4, 9, &[0x0c]).raw(7, 9, &orders));
+        assert!(malformed(&fewer));
+        // The key-value cap is the column limit, and a file listing that many
+        // entries reads.
+        assert_eq!(KEY_VALUES, Limits::COLUMNS);
+        let keys = file(&[7], At::File, |f| f.raw(5, 9, &entries(KEY_VALUES)));
+        assert_eq!(reader::read(&keys).unwrap().batches[0].num_rows(), 1);
+    }
+
+    /// `walk` gives each known field id one bit of a `u32`.
+    #[test]
+    fn every_known_field_id_has_a_bit_of_its_own() {
+        use super::Shape::{self, *};
+        let shapes: [Shape; 26] = [
+            FileMetaData,
+            SchemaElement,
+            LogicalType,
+            DecimalType,
+            TimestampType,
+            TimeUnit,
+            IntType,
+            VariantType,
+            GeometryType,
+            GeographyType,
+            RowGroup,
+            SortingColumn,
+            ColumnChunk,
+            ColumnMetaData,
+            Statistics,
+            PageEncodingStats,
+            SizeStatistics,
+            GeospatialStatistics,
+            BoundingBox,
+            KeyValue,
+            ColumnOrder,
+            PageHeader,
+            DataPageHeader,
+            DataPageHeaderV2,
+            DictionaryPageHeader,
+            Empty,
+        ];
+        for shape in shapes {
+            for id in i16::MIN..=i16::MAX {
+                if shape.field(id).is_some() {
+                    assert!((1..32).contains(&id), "{shape:?} {id}");
+                }
+            }
+        }
+    }
+
     #[test]
     fn sets_maps_element_types_and_every_repeat_of_a_known_field_are_checked() {
         let pair = || Fields::default().binary(1, b"k").binary(2, b"v").end();
@@ -643,8 +1004,9 @@ mod tests {
         framing::admit(&well_typed_pairs).unwrap();
         // The native decoder reads no element of an empty list and skips an
         // unknown field, or an unknown union variant, by its own wire type.
-        let admitted: [Addition; 3] = [
-            (At::File, |f| f.list(5, 8, &[]).list(7, 0, &[])),
+        let admitted: [Addition; 4] = [
+            (At::File, |f| f.list(5, 8, &[])),
+            (At::Group, |f| f.list(4, 0, &[])),
             (At::Meta, |f| {
                 let set = f.uuid(90).collection(91, 10, 5, &[zigzag(1)]);
                 set.raw(92, 11, &[0])
@@ -668,7 +1030,8 @@ mod tests {
     fn the_footer_is_checked_as_held_before_its_native_presentation() {
         use super::super::compact;
         use super::{check, Error, Shape};
-        let checked = |footer: &[u8]| check(compact::parse(footer)?.0, Shape::FileMetaData);
+        let checked =
+            |footer: &[u8]| check(compact::parse(footer)?.0, Shape::FileMetaData).map(drop);
         let cases: [fn(Fields) -> Fields; 3] = [
             // created_by as a UUID.
             |f| f.uuid(6),
@@ -819,17 +1182,35 @@ mod tests {
         bytes
     }
 
+    /// A schema list value: a root and `count` REQUIRED INT64 leaves, each
+    /// with an empty name, the shortest leaf the native decoder accepts.
+    fn leaves(count: usize) -> Vec<u8> {
+        let root = Fields::default().binary(4, b"").i32(5, count as i64).end();
+        repeated(12, count + 1, &root, &[0x15, 4, 0x25, 0, 0x18, 0, 0])
+    }
+
+    /// A row-group list value: one row group with no column and no row,
+    /// whose sorting columns are the list value `sorting`.
+    fn sorted(sorting: &[u8]) -> Vec<u8> {
+        let group = Fields::default().raw(1, 9, &[0x0c]).i64(2, 0).i64(3, 0);
+        repeated(12, 1, &group.raw(4, 9, sorting).end(), &[])
+    }
+
     /// The issue's crafted footers held 64 Mi empty key-value entries and 64
     /// Mi empty schema elements, and parquet 57.3.0 reserved about 3 and 6 GiB
-    /// for them before it refused the first. Here they are scaled down, beside
-    /// the other lists the decoder reserves by their declared count: a list
-    /// of empty structs is malformed, and a list of elements the decoder
-    /// accepts, each as short as it can be, is admitted.
+    /// for them before it refused the first. Here they are scaled down to as
+    /// many elements as each list may declare, beside the other lists the
+    /// decoder reserves by their declared count: a list of empty structs is
+    /// malformed, and a list of elements the decoder accepts, each as short
+    /// as it can be, is admitted.
     #[test]
     fn a_list_too_short_for_the_elements_it_declares_is_malformed() {
-        const N: usize = 1 << 12;
-        let empty = repeated(12, N, &[0], &[0]);
-        let list = |element: &[u8]| repeated(12, N, element, element);
+        use super::{Limits, ENCODING_STATS};
+        // As many key-value entries, schema leaves and empty groups as
+        // admission allows.
+        const N: usize = Limits::COLUMNS;
+        let empty = |count| repeated(12, count, &[0], &[0]);
+        let list = |count, element: &[u8]| repeated(12, count, element, element);
         // A root, and empty groups that name only their repetition.
         let root = Fields::default().binary(4, b"").i32(5, N as i64 - 1).end();
         let groups = repeated(12, N, &root, &[0x35, 0, 0x18, 0, 0]);
@@ -838,42 +1219,48 @@ mod tests {
         let cases: [Case; 6] = [
             (
                 "key_value_metadata",
-                file(&[7], At::File, |f| f.raw(5, 9, &empty)),
-                file(&[7], At::File, |f| f.raw(5, 9, &list(&[0x18, 0, 0]))),
+                file(&[7], At::File, |f| f.raw(5, 9, &empty(N))),
+                file(&[7], At::File, |f| f.raw(5, 9, &list(N, &[0x18, 0, 0]))),
             ),
             (
                 "schema",
-                columnless(&empty, |f| f.raw(4, 9, &[0x0c])),
+                columnless(&empty(N), |f| f.raw(4, 9, &[0x0c])),
                 columnless(&groups, |f| f.raw(4, 9, &[0x0c])),
             ),
-            // An unknown boolean variant takes no byte past its header.
+            // One column order per leaf. An unknown boolean variant takes no
+            // byte past its header.
             (
                 "column_orders",
-                file(&[7], At::File, |f| f.raw(7, 9, &empty)),
-                file(&[7], At::File, |f| f.raw(7, 9, &list(&[0x21, 0]))),
-            ),
-            // Admission reads only the last row group list; the native
-            // decoder reads each one.
-            (
-                "row_groups",
-                columnless(&root_only, |f| f.raw(4, 9, &empty).raw(4, 9, &[0x0c])),
-                columnless(&root_only, |f| {
-                    let group = list(&[0x19, 0x0c, 0x16, 0, 0x16, 0, 0]);
-                    f.raw(4, 9, &group).raw(4, 9, &[0x0c])
+                columnless(&leaves(N), |f| f.raw(4, 9, &[0x0c]).raw(7, 9, &empty(N))),
+                columnless(&leaves(N), |f| {
+                    f.raw(4, 9, &[0x0c]).raw(7, 9, &list(N, &[0x21, 0]))
                 }),
             ),
+            // Framing reads only the columns and row count of each row
+            // group; the native decoder also requires its byte size.
+            (
+                "row_groups",
+                columnless(&root_only, |f| {
+                    f.raw(4, 9, &list(N, &[0x19, 0x0c, 0x26, 0, 0]))
+                }),
+                columnless(&root_only, |f| {
+                    f.raw(4, 9, &list(N, &[0x19, 0x0c, 0x16, 0, 0x16, 0, 0]))
+                }),
+            ),
+            // At most one sorting column per leaf.
             (
                 "sorting_columns",
-                file(&[7], At::Group, |f| f.raw(4, 9, &empty)),
-                file(&[7], At::Group, |f| {
-                    f.raw(4, 9, &list(&[0x15, 0, 0x11, 0x11, 0]))
+                columnless(&leaves(N), |f| f.raw(4, 9, &sorted(&empty(N)))),
+                columnless(&leaves(N), |f| {
+                    f.raw(4, 9, &sorted(&list(N, &[0x15, 0, 0x11, 0x11, 0])))
                 }),
             ),
             (
                 "encoding_stats",
-                file(&[7], At::Meta, |f| f.raw(13, 9, &empty)),
+                file(&[7], At::Meta, |f| f.raw(13, 9, &empty(ENCODING_STATS))),
                 file(&[7], At::Meta, |f| {
-                    f.raw(13, 9, &list(&[0x15, 0, 0x15, 0, 0x15, 2, 0]))
+                    let stats = [0x15, 0, 0x15, 0, 0x15, 2, 0];
+                    f.raw(13, 9, &list(ENCODING_STATS, &stats))
                 }),
             ),
         ];
@@ -882,7 +1269,7 @@ mod tests {
             framing::admit(&admitted).unwrap_or_else(|error| panic!("{name}: {error:?}"));
         }
         // The native decoder reads each of the shortest key-value entries.
-        let keys = file(&[7], At::File, |f| f.raw(5, 9, &list(&[0x18, 0, 0])));
+        let keys = file(&[7], At::File, |f| f.raw(5, 9, &list(N, &[0x18, 0, 0])));
         let decoded = reader::read(&keys).unwrap();
         let column = decoded.batches[0].column(0);
         let values = column.as_any().downcast_ref::<Int64Array>().unwrap();
