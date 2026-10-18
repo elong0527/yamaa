@@ -328,7 +328,8 @@ explaining it:
 
 - `save()` of a run, project run or submission that cannot write its files,
   including a failed run;
-- `resolve()` of a specification that cannot be composed;
+- `resolve()` of a specification that cannot be read, composed or prepared,
+  such as one that calls a project function its project does not define;
 - `spec(name)` when the project cannot be read or has no specification of that
   name, and `runs[["name"]]` or `runs["name"]` for a name the run does not
   have;
