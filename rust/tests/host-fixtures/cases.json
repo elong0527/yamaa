@@ -3947,11 +3947,6 @@
       }
     },
     "verification-logs": {
-      "artifact_names": [
-        "adsl-checks.csv",
-        "adsl-warnings.csv",
-        "adsl.csv"
-      ],
       "case_name": "schema-verification-log",
       "evaluated_counts": [
         "3",
@@ -3965,14 +3960,6 @@
       ]
     },
     "producer-logs": {
-      "verification_producer_artifacts": [
-        "adsl-checks.csv",
-        "adsl-warnings.csv",
-        "adsl.csv",
-        "root-checks.csv",
-        "root-warnings.csv",
-        "root.csv"
-      ],
       "diamond_names": [
         "producer",
         "left",
@@ -3996,37 +3983,7 @@
         "9223372036854775807"
       ],
       "input_csv": "ID\n1\n2\n3\n4\n5\n6\n7\n9223372036854775807\n",
-      "offending_keys_json": "[{\"ID\":1},{\"ID\":2},{\"ID\":3},{\"ID\":4},{\"ID\":5},{\"ID\":6},{\"ID\":7},{\"ID\":9223372036854775807}]",
-      "golden_csv": {
-        "producer": {
-          "warning": "LOG_VERSION,ARTIFACT,SEVERITY,CONDITION,REQUIREMENT,SPEC_PATH,VERIFICATION_ID,FAILURE_COUNT,OFFENDING_KEYS,DETAILS\n1.0,generated/producer.csv,warning,range_failed,REQ-0377,columns.ID.verifications[0].range,producer-range,8,\"[{\"\"ID\"\":1},{\"\"ID\"\":2},{\"\"ID\"\":3},{\"\"ID\"\":4},{\"\"ID\"\":5},{\"\"ID\"\":6},{\"\"ID\"\":7},{\"\"ID\"\":9223372036854775807}]\",\"{\"\"column\"\":\"\"ID\"\"}\"\n",
-          "verification": {
-            "warning": "REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,DETAILS\n1.0,generated/producer.csv,columns.ID.verifications[0].range,producer-range,range,ID,REQ-0377,warning,violated,range_failed,8,8,\"{\"\"column\"\":\"\"ID\"\"}\"\n",
-            "error": "REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,DETAILS\n1.0,generated/producer.csv,columns.ID.verifications[0].range,producer-range,range,ID,REQ-0377,error,violated,range_failed,8,8,\"{\"\"column\"\":\"\"ID\"\"}\"\n"
-          }
-        },
-        "left": {
-          "warning": "LOG_VERSION,ARTIFACT,SEVERITY,CONDITION,REQUIREMENT,SPEC_PATH,VERIFICATION_ID,FAILURE_COUNT,OFFENDING_KEYS,DETAILS\n1.0,generated/left.csv,warning,range_failed,REQ-0377,columns.ID.verifications[0].range,left-range,8,\"[{\"\"ID\"\":1},{\"\"ID\"\":2},{\"\"ID\"\":3},{\"\"ID\"\":4},{\"\"ID\"\":5},{\"\"ID\"\":6},{\"\"ID\"\":7},{\"\"ID\"\":9223372036854775807}]\",\"{\"\"column\"\":\"\"ID\"\"}\"\n",
-          "verification": {
-            "warning": "REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,DETAILS\n1.0,generated/left.csv,columns.ID.verifications[0].range,left-range,range,ID,REQ-0377,warning,violated,range_failed,8,8,\"{\"\"column\"\":\"\"ID\"\"}\"\n",
-            "error": "REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,DETAILS\n1.0,generated/left.csv,columns.ID.verifications[0].range,left-range,range,ID,REQ-0377,error,violated,range_failed,8,8,\"{\"\"column\"\":\"\"ID\"\"}\"\n"
-          }
-        },
-        "right": {
-          "warning": "LOG_VERSION,ARTIFACT,SEVERITY,CONDITION,REQUIREMENT,SPEC_PATH,VERIFICATION_ID,FAILURE_COUNT,OFFENDING_KEYS,DETAILS\n1.0,generated/right.csv,warning,range_failed,REQ-0377,columns.ID.verifications[0].range,right-range,8,\"[{\"\"ID\"\":1},{\"\"ID\"\":2},{\"\"ID\"\":3},{\"\"ID\"\":4},{\"\"ID\"\":5},{\"\"ID\"\":6},{\"\"ID\"\":7},{\"\"ID\"\":9223372036854775807}]\",\"{\"\"column\"\":\"\"ID\"\"}\"\n",
-          "verification": {
-            "warning": "REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,DETAILS\n1.0,generated/right.csv,columns.ID.verifications[0].range,right-range,range,ID,REQ-0377,warning,violated,range_failed,8,8,\"{\"\"column\"\":\"\"ID\"\"}\"\n",
-            "error": "REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,DETAILS\n1.0,generated/right.csv,columns.ID.verifications[0].range,right-range,range,ID,REQ-0377,error,violated,range_failed,8,8,\"{\"\"column\"\":\"\"ID\"\"}\"\n"
-          }
-        },
-        "root": {
-          "warning": "LOG_VERSION,ARTIFACT,SEVERITY,CONDITION,REQUIREMENT,SPEC_PATH,VERIFICATION_ID,FAILURE_COUNT,OFFENDING_KEYS,DETAILS\n1.0,generated/root.csv,warning,range_failed,REQ-0377,columns.ID.verifications[0].range,\u00e9\ud834\udd1e,8,\"[{\"\"ID\"\":1},{\"\"ID\"\":2},{\"\"ID\"\":3},{\"\"ID\"\":4},{\"\"ID\"\":5},{\"\"ID\"\":6},{\"\"ID\"\":7},{\"\"ID\"\":9223372036854775807}]\",\"{\"\"column\"\":\"\"ID\"\"}\"\n",
-          "verification": {
-            "warning": "REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,DETAILS\n1.0,generated/root.csv,columns.ID.verifications[0].range,\u00e9\ud834\udd1e,range,ID,REQ-0377,warning,violated,range_failed,8,8,\"{\"\"column\"\":\"\"ID\"\"}\"\n",
-            "error": "REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,FAILURE_COUNT,DETAILS\n1.0,generated/root.csv,columns.ID.verifications[0].range,\u00e9\ud834\udd1e,range,ID,REQ-0377,error,violated,range_failed,8,8,\"{\"\"column\"\":\"\"ID\"\"}\"\n"
-          }
-        }
-      }
+      "offending_keys_json": "[{\"ID\":1},{\"ID\":2},{\"ID\":3},{\"ID\":4},{\"ID\":5},{\"ID\":6},{\"ID\":7},{\"ID\":9223372036854775807}]"
     },
     "public-define": {
       "retained_source_files": [

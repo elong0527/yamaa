@@ -4,9 +4,10 @@
 invented source records, declarations, exact CSV text, logical values, i64
 decimal strings, IEEE 754 float bits and temporal epoch counts. The Python and
 R `saved_readers` suites consume this same truth through installed public run
-and save APIs. Both nonempty and header-only sources are qualified for CSV,
-Parquet and their generated Dataset-JSON and Define-XML documents. No benchmark
-input or expected artifact is regenerated.
+and save APIs; its `environment` key holds the project document both hosts
+write as `project.yaml`. Both nonempty and header-only sources are qualified
+for CSV, Parquet and their generated Dataset-JSON and Define-XML documents. No
+benchmark input or expected artifact is regenerated.
 
 `cases.json` owns independently authored inputs and expected truth repeated by
 installed Python and R controls. The two readers only decode this data. They do
@@ -32,8 +33,8 @@ values beyond 2^53, while both hosts save the held bytes.
 | original-specifications | Original case selection, lookup/ordering/casing inputs and exact CSV; existing independent TSV/JSON reports |
 | file-resources | Named lookup paths, issue columns, exact alias context and entry-relative programs that declare `output.report`; existing inspection/capture reports |
 | public-environment | Original case selection, graph references, quota/version inputs, exact callback CSV and the project-relative inherited and codelist files |
-| verification-logs | `specification-original/schema-verification-log`, artifact names, evaluated counts and fatal outcomes |
-| producer-logs | Decimal i64 keys, aliased/diamond inputs and complete verification/warning CSV goldens |
+| verification-logs | `specification-original/schema-verification-log`, evaluated counts and fatal outcomes, now checked in the run report |
+| producer-logs | Decimal i64 keys, aliased/diamond inputs and offending keys |
 | public-define | Existing Define input/XML/JSON owners, creation time, issue columns, column schemas, numeric metadata variants and spec/project text mutations |
 | public-contract | Shared YAML, issue and report columns, argument/member/read-only view names and defaults, shared messages, typed plain values and the failed run's report bytes; distinct host i64 vectors |
 | public-grammar | Shared condition families; existing `grammar-original/cases.tsv` decisions |
