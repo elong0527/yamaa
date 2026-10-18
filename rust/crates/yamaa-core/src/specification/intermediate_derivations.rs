@@ -675,7 +675,7 @@ pub(super) fn bind(
     .map_err(BindError::InvalidPlan)?;
     *pending_schema = None;
     Ok(Some(IntermediateDerivations {
-        plan: std::rc::Rc::new(plan),
+        plan: std::sync::Arc::new(plan),
         current,
         stored_columns: stored.columns().len(),
         typed_columns: declarations

@@ -757,7 +757,7 @@ mod execution {
             )
             .unwrap();
             let derived = IntermediateDerivations {
-                plan: Rc::new(nested),
+                plan: std::sync::Arc::new(nested),
                 current: vec![],
                 stored_columns: 1,
                 typed_columns: vec![],

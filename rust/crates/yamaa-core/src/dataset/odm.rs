@@ -7,7 +7,7 @@ pub enum OdmScope {
     Keys,
     Records,
     Groups(Vec<usize>),
-    Templates(std::rc::Rc<[OdmTemplateScope]>),
+    Templates(std::sync::Arc<[OdmTemplateScope]>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -76,7 +76,7 @@ impl BoundOdm {
     }
     pub(crate) fn defer(
         &mut self,
-        contexts: std::rc::Rc<[OdmTemplateScope]>,
+        contexts: std::sync::Arc<[OdmTemplateScope]>,
     ) -> Result<(), PlanError> {
         if self.0.source.is_none()
             || self.0.phase != AggregatePhase::Derivation
