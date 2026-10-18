@@ -202,13 +202,12 @@ pub fn reached() -> BTreeSet<ConditionCode> {
 
 /// A project function argument of an intermediate's derivation reads another
 /// intermediate that declares no `keep`: one value per donor record needs
-/// one selected record (LOOKUP-22).
+/// one selected record (LOOKUP-22). The declarations decide it, so
+/// preparation reports it, and `check()` with it.
 pub fn donor_keep_reached() -> BTreeSet<ConditionCode> {
-    use crate::support::table_schema as schema;
     use yamaa_core::{
         schema::{Document, SpecificationDocument},
-        specification::BindError,
-        value::ColumnType as T,
+        specification::PreflightFinding,
     };
     let source = |name: &str| {
         Tree::map(vec![(
@@ -293,19 +292,14 @@ pub fn donor_keep_reached() -> BTreeSet<ConditionCode> {
     let spec = SpecificationDocument::admit(Document::new(nodes, root).unwrap())
         .unwrap()
         .unwrap();
-    let prepared = PreparedSpecification::prepare_with_project(&spec, &[function("id")]).unwrap();
-    let src = schema(&[("ID", T::Int)]);
-    let donor = schema(&[("ID", T::Int), ("N", T::Int)]);
-    let obs = schema(&[("ID", T::Int), ("K", T::Int)]);
-    let Err(BindError::Invalid(findings)) = prepared.bind_sources(&[&src, &donor, &obs]) else {
+    let Err(PrepareError::Invalid(findings)) =
+        PreparedSpecification::prepare_with_project(&spec, &[function("id")])
+    else {
         panic!("a donor function argument over an unkept intermediate must fail")
     };
-    let mut found = findings
-        .iter()
-        .flat_map(|finding| finding.diagnostics(prepared.source()).unwrap())
-        .collect::<Vec<_>>();
-    assert_eq!(found.len(), 1);
-    let diagnostic = found.remove(0);
+    let [PreflightFinding::Scalar(diagnostic)] = findings.as_slice() else {
+        panic!("one donor keep finding, not {findings:?}")
+    };
     assert_eq!(
         (
             diagnostic.definition().phase,

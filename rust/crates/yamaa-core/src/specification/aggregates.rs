@@ -42,6 +42,15 @@ impl Declaration {
     pub(super) fn path(&self) -> &str {
         &self.path
     }
+    /// Whether the aggregate reduces the constructed output rows: neither its
+    /// expression nor a derive binding names a relation (LOOKUP-18).
+    pub(super) fn reduces_output(&self) -> bool {
+        self.derive.is_none()
+            && self.compiled.as_ref().is_ok_and(|compiled| {
+                !compiled.identifiers().any(|name| name.contains('.'))
+                    && compiled.record_relations().next().is_none()
+            })
+    }
     pub(super) fn calls(&self, result: &mut Vec<usize>) {
         for derive in self.derive.iter().flatten() {
             derivations::calls(&derive.branch.operation, result);
@@ -865,6 +874,48 @@ fn bind_filter(
     })
 }
 
+/// The output columns and every input's record at its own port: the primary
+/// input, `driver` in a column-phase catalog, then each secondary input. None
+/// when the catalog holds no record of the primary input.
+fn record_catalog(
+    catalog: &Catalog,
+    driver: &str,
+    output: &TableSchema,
+    secondary: &[SecondarySource],
+) -> Result<Option<Catalog>, BindError> {
+    let Some(primary) = catalog.fields(driver) else {
+        return Ok(None);
+    };
+    fn field(column: &crate::table::Column) -> reference_binding::Field<'_> {
+        reference_binding::Field {
+            name: &column.name,
+            column_type: column.kind,
+        }
+    }
+    let outputs = output.columns().iter().map(field).collect::<Vec<_>>();
+    let inputs = secondary
+        .iter()
+        .map(|input| input.schema.columns().iter().map(field).collect::<Vec<_>>())
+        .collect::<Vec<_>>();
+    let datasets = std::iter::once(reference_binding::Dataset {
+        name: driver,
+        fields: &primary,
+    })
+    .chain(
+        secondary
+            .iter()
+            .zip(&inputs)
+            .map(|(input, fields)| reference_binding::Dataset {
+                name: &input.name,
+                fields,
+            }),
+    )
+    .collect::<Vec<_>>();
+    Catalog::compile(&outputs, &datasets)
+        .map(Some)
+        .map_err(BindError::Catalog)
+}
+
 #[allow(clippy::too_many_arguments)]
 fn bound_relation(
     phase: Phase<'_>,
@@ -957,6 +1008,13 @@ fn bound_relation(
                 )?;
                 return Ok(None);
             }
+            // A match value reads the current row: an output column, or the
+            // record of any input at that input's own port, as a named
+            // intermediate's key does (LOOKUP-5). Whether the rows that
+            // evaluate the aggregate have that record is admitted for each
+            // reading context (`admit_record_keys`).
+            let records = record_catalog(catalog, driver, output, secondary)?;
+            let values = records.as_ref().unwrap_or(catalog);
             let mut keys = Vec::new();
             for (field, value) in pairs {
                 let written = format!("{relation}.{field}");
@@ -985,7 +1043,7 @@ fn bound_relation(
                     )?;
                     continue;
                 };
-                let expected = value.result_type(catalog);
+                let expected = value.result_type(values);
                 if !expected.comparable(actual.into()) {
                     finding(
                         Finding::KeyType {
@@ -999,7 +1057,7 @@ fn bound_relation(
                 }
                 let before_references = findings.len();
                 for reference in value.references() {
-                    if catalog.bind(reference).is_none() {
+                    if values.bind(reference).is_none() {
                         finding(
                             Finding::MatchValueReference {
                                 path: key_path,
@@ -1015,7 +1073,7 @@ fn bound_relation(
                 let bound = value.bind(
                     &format!("{}.key.{field}", declaration.path),
                     relation,
-                    catalog,
+                    values,
                     findings,
                     match_values::Context {
                         output,
@@ -1366,20 +1424,38 @@ pub(super) fn admit_record_keys(
     }
 }
 
-/// A row template's derivation that reads a window result completes after
-/// the template's window pass (WINDOW-3), but the stage that evaluates a
-/// matched aggregate does not follow its `between` value. An aggregate a
-/// template evaluates whose range value reads such a result, which a key
-/// derived beside a window key can do, is not supported yet: it would read
-/// the value before the window completes it.
-pub(super) fn late_ranges(plan: &crate::dataset::DatasetPlan) -> Vec<BindFinding> {
+/// A row template's derivations complete in dependency order (WINDOW-3), but
+/// the stage split moves a matched aggregate to the template's window pass only
+/// when a key, or a `case` condition around it, reads a window result. A range
+/// value or a derive binding that reads one, in an assignment the split leaves
+/// before the windows, would read it before the window completes it, as a key
+/// computed beside a window key can. Neither is supported yet. A deferred
+/// assignment reads completed results, and a keyed template evaluates every
+/// assignment before its windows, as resolution does.
+pub(super) fn late_reads(plan: &crate::dataset::DatasetPlan) -> Vec<BindFinding> {
     let width = plan.output().columns().len();
+    let intermediates = plan.intermediates();
     let mut findings = Vec::new();
     let mut reported = BTreeSet::new();
+    let mut refuse = |operation: &str, path: String, findings: &mut Vec<BindFinding>| {
+        if reported.insert(path.clone()) {
+            findings.push(BindFinding::Scalar(crate::application_issue::unsupported(
+                operation,
+                Some(&path),
+            )));
+        }
+    };
     for template in plan.templates() {
-        let deferred =
-            crate::dataset::window_stages(&template.assignments, width, plan.intermediates());
+        if matches!(template.mode, crate::dataset::RowMode::Keys) {
+            continue;
+        }
+        let deferred = crate::dataset::window_stages(&template.assignments, width, intermediates);
+        let late =
+            |read: Read| crate::dataset::read_requires_window(&read, &deferred, intermediates);
         for assignment in &template.assignments {
+            if deferred.get(assignment.column).copied().unwrap_or(false) {
+                continue;
+            }
             visit(&assignment.expression, &mut |aggregate| {
                 if !matches!(
                     aggregate.relation(),
@@ -1387,28 +1463,35 @@ pub(super) fn late_ranges(plan: &crate::dataset::DatasetPlan) -> Vec<BindFinding
                 ) {
                     return;
                 }
-                let Some(range) = aggregate.range() else {
-                    return;
-                };
-                let late = match range.current().read {
-                    crate::dataset::CurrentRead::Output(column) => {
-                        deferred.get(column).copied().unwrap_or(false)
+                if let Some(range) = aggregate.range() {
+                    let read = match range.current().read {
+                        crate::dataset::CurrentRead::Output(column) => Some(Read::Column(column)),
+                        crate::dataset::CurrentRead::Intermediate { index, column } => {
+                            Some(Read::Intermediate { index, column })
+                        }
+                        crate::dataset::CurrentRead::Record { .. } => None,
+                    };
+                    if read.is_some_and(late) {
+                        refuse(
+                            "aggregate_range_window_read",
+                            format!("{}.value", range.path()),
+                            &mut findings,
+                        );
                     }
-                    crate::dataset::CurrentRead::Intermediate { index, column } => {
-                        crate::dataset::read_requires_window(
-                            &Read::Intermediate { index, column },
-                            &deferred,
-                            plan.intermediates(),
-                        )
+                }
+                for binding in aggregate.derivations() {
+                    let mut reads = false;
+                    crate::dataset::relation_predicates::visit(
+                        &binding.assignment.expression,
+                        &mut |index| reads |= late(Read::Intermediate { index, column: 0 }),
+                    );
+                    if reads {
+                        refuse(
+                            "aggregate_derive_window_read",
+                            binding.assignment.path.clone(),
+                            &mut findings,
+                        );
                     }
-                    crate::dataset::CurrentRead::Record { .. } => false,
-                };
-                let path = format!("{}.value", range.path());
-                if late && reported.insert(path.clone()) {
-                    findings.push(BindFinding::Scalar(crate::application_issue::unsupported(
-                        "aggregate_range_window_read",
-                        Some(&path),
-                    )));
                 }
             });
         }

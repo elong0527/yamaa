@@ -4874,6 +4874,44 @@
               "operand_route": null
             }
           ]
+        },
+        {
+          "name": "aggregate_derive_reads_a_window_key",
+          "call": "run",
+          "specification_yaml": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID, SEQ, WT]\ninput: {SRC: {path: input.csv, types: {ID: int, VAL: int, LO: int, HI: int, W: int}}}\nintermediates:\n  - {id: K, dataset: SRC, key: {LO: SEQ}, order_by: [SRC.W], keep: first}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: SEQ\n    type: int\n    derivation:\n      row_number:\n        window: {group_by: [ID], order_by: [SRC.VAL]}\n  - name: WT\n    type: int\n    derivation:\n      aggregate:\n        key: [ID]\n        derive:\n          - {name: D, type: int, derivation: SRC.W}\n          - {name: V, type: int, derivation: K.W}\n          - {name: T, type: int, derivation: {greatest: {sources: [D, V]}}}\n        expr: 'SUM(T)'\noutput: {path: output.csv, columns: [ID, SEQ, WT]}\n",
+          "input_csv": "ID,VAL,LO,HI,W\n1,3,1,1,10\n1,5,2,9,20\n2,4,1,9,30\n",
+          "issues": [
+            {
+              "phase": "planning",
+              "condition": "unsupported_operation",
+              "requirement": null,
+              "spec_paths": [
+                "columns.WT.derivation.aggregate.derive[1].derivation.source"
+              ],
+              "context": "{\"operation\":\"aggregate_derive_window_read\"}",
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
+        },
+        {
+          "name": "unqualified_aggregate_key_beside_a_window_key",
+          "call": "run",
+          "specification_yaml": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID, SEQ, N]\ninput: {SRC: {path: input.csv, types: {ID: int, VAL: int, LO: int, HI: int, W: int}}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: SEQ\n    type: int\n    derivation:\n      row_number:\n        window: {group_by: [ID], order_by: [SRC.VAL]}\n  - name: N\n    type: int\n    derivation:\n      aggregate:\n        group_by: [ID]\n        expr: 'COUNT(SEQ)'\noutput: {path: output.csv, columns: [ID, SEQ, N]}\n",
+          "input_csv": "ID,VAL,LO,HI,W\n1,3,1,1,10\n1,5,2,9,20\n2,4,1,9,30\n",
+          "issues": [
+            {
+              "phase": "planning",
+              "condition": "unsupported_operation",
+              "requirement": null,
+              "spec_paths": [
+                "columns.N.derivation.aggregate"
+              ],
+              "context": "{\"operation\":\"output_aggregate_key\"}",
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
         }
       ]
     },

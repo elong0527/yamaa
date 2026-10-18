@@ -844,7 +844,10 @@ unknown field fails as `unknown_field`; a derived name that shadows a stored
 column fails as `duplicate_derivation`. A current-record read is checked in
 every context that reads the intermediate: when a row reading it is built from
 another input's record, the read names no value of that row and fails as
-`unknown_field` at the derivation, once.
+`unknown_field` at the derivation, once. A project function that a derivation
+calls is invoked once per donor record, so an argument that reads a named
+intermediate reads only one that declares `keep` ([LOOKUP-22](#lookup-22));
+an argument may read the donor record's own fields as any operand does.
 
 Derivations that read only donor records are computed once per record for
 each build of the donor records; [COLUMN-14](columns.md#column-14) lists when
@@ -1042,7 +1045,7 @@ absence policy apply as for any other read ([LOOKUP-25](#lookup-25)), once per
 donor record.
 
 Fails: `unknown_field`, `phase_boundary`, `dependency_cycle`.
-Evidence: `adam-adlb-end-of-treatment`, `adam-adsl-crossover-sequence`, `rust/crates/yamaa-adapters/tests/execution_aggregate_record_operations.rs`.
+Evidence: `adam-adlb-end-of-treatment`, `adam-adsl-crossover-sequence`, `rust/crates/yamaa-adapters/tests/execution_aggregate_record_operations.rs`, `rust/crates/yamaa-adapters/tests/project_environment.rs::intermediate_callback_reads_a_kept_selection_beside_its_own_donor_field`.
 Replaces: REQ-1263.
 
 Either form of a donor-record name names a stored field or a derivation
@@ -1056,7 +1059,11 @@ of that record that reads it shares the selection ([LOOKUP-12](#lookup-12)). A
 read that fails, such as an intermediate declaring `require_match: true` that
 selects nothing, fails the run with that intermediate's condition at that
 intermediate's path, as a row reading it would. The read adds no current-row
-dependency and never changes the number of donor records.
+dependency and never changes the number of donor records. Any operand may read
+an intermediate without `keep`, which fails as `multiple_matches` when it
+matches several records for a donor record ([LOOKUP-10](#lookup-10)), except a
+project function argument, which may read only an intermediate that declares
+`keep` ([LOOKUP-22](#lookup-22)).
 
 The other intermediate must read an `input` dataset. A `SELF` intermediate has
 no completed rows while donor records are augmented, and reading one fails as
