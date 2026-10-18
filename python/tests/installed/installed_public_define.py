@@ -242,7 +242,12 @@ class PublicDefine(unittest.TestCase):
                     overlay = yaml.safe_load(
                         (directory / "submission-spec.yaml").read_text()
                     )
-                    del overlay["rows"]
+                    units = next(
+                        column
+                        for column in overlay["columns"]
+                        if column["name"] == "LBORRESU"
+                    )
+                    del units["submission"]["value_level"]
                     (directory / "submission-spec.yaml").write_text(
                         yaml.safe_dump(overlay, sort_keys=False)
                     )
@@ -279,14 +284,14 @@ class PublicDefine(unittest.TestCase):
                         (
                             context["column"],
                             context["codelist"],
-                            context["testcd"],
+                            context["entry"],
                             context["row"],
                         ),
                         ("LBORRESU", "CL_GLUCOSE", "GLUC", 0),
                     )
                     self.assertTrue(
                         issue["spec_paths"][0].endswith(
-                            "rows.glucose.submission.LBORRESU.codelist"
+                            "columns.LBORRESU.submission.value_level.GLUC.codelist"
                         )
                     )
                 self.refused(result)
@@ -295,46 +300,26 @@ class PublicDefine(unittest.TestCase):
                 shutil.rmtree(directory)
 
     def test_lb_metadata_only_and_all_independent_value_admission_controls(self):
+        entries = "sdtm.specs[0].columns.LBORRESU.submission.value_level"
         for case, requirement, condition, suffix in [
             ("valid", None, None, None),
             ("arbitrary row ID", None, None, None),
-            ("identical duplicate", None, None, None),
-            (
-                "domain",
-                "REQ-1163",
-                "value_metadata_requires_testcd",
-                "rows.glucose.submission",
-            ),
-            (
-                "dynamic",
-                "REQ-1164",
-                "value_metadata_requires_literal_testcd",
-                "rows.glucose.submission",
-            ),
+            ("membership", None, None, None),
             (
                 "unknown",
-                "REQ-1165",
-                "value_metadata_unknown_column",
-                "rows.glucose.submission.BOGUS",
+                "SUB-12",
+                "value_level_where_invalid",
+                entries + ".GLUC.where.BOGUS",
             ),
             (
                 "output",
-                "REQ-1166",
-                "value_metadata_not_output_column",
-                "rows.glucose.submission.LBSTRESU",
+                "SUB-12",
+                "value_level_where_invalid",
+                entries + ".GLUC.where.LBSTRESU",
             ),
-            (
-                "conflict",
-                "REQ-1167",
-                "conflicting_value_metadata",
-                "rows.creatinine.submission.LBORRESU",
-            ),
-            (
-                "origin",
-                "REQ-1168",
-                "refuted_value_origin",
-                "rows.glucose.submission.LBORRESU",
-            ),
+            ("overlap", "SUB-12", "value_level_overlap", entries + ".CREAT.where"),
+            ("duplicate", "SUB-12", "duplicate_identifier", entries + ".GLUC.id"),
+            ("origin", "SUB-13", "refuted_value_origin", entries + ".GLUC"),
         ]:
             with self.subTest(case=case):
                 directory = self.fixture("sdtm-lb-metadata")
@@ -343,46 +328,34 @@ class PublicDefine(unittest.TestCase):
                 overlay = yaml.safe_load(
                     (directory / "submission-spec.yaml").read_text()
                 )
-                first = spec["rows"][0]
-                effective = overlay["rows"][0]["submission"]
+                units = next(
+                    column
+                    for column in overlay["columns"]
+                    if column["name"] == "LBORRESU"
+                )
+                glucose, creatinine = units["submission"]["value_level"]
                 if case == "arbitrary row ID":
-                    first["id"] = "glucose / primary test: 1"
-                    overlay["rows"][0]["id"] = first["id"]
-                elif case == "identical duplicate":
-                    spec["rows"][1]["derivations"]["LBTESTCD"] = {"literal": "GLUC"}
-                    overlay["rows"][1]["submission"] = {
-                        "LBORRESU": {
+                    spec["rows"][0]["id"] = "glucose / primary test: 1"
+                elif case == "membership":
+                    units["submission"]["value_level"] = [
+                        {
+                            "id": "CHEM",
+                            "where": {"LBTESTCD": ["GLUC", "CREAT"]},
                             "origin": {"type": "Assigned", "source": "Vendor"},
-                            "codelist": "CL_GLUCOSE",
-                        },
-                    }
-                    self.assertEqual(
-                        overlay["rows"][0]["submission"],
-                        overlay["rows"][1]["submission"],
-                    )
-                elif case == "domain":
-                    spec["domain"] = "XX"
-                elif case == "dynamic":
-                    first["derivations"]["LBTESTCD"] = "ODM.TestCode"
+                        }
+                    ]
                 elif case == "unknown":
-                    effective["BOGUS"] = effective.pop("LBORRESU")
+                    glucose["where"] = {"BOGUS": ["GLUC"]}
                 elif case == "output":
                     spec["output"]["columns"].remove("LBSTRESU")
-                    # Keep the declared internal column reachable independently
-                    # through the effective row filter, without adding it to output.
-                    overlay["rows"][0]["filter"] = "LBSTRESU IS NOT NULL"
-                    effective["LBSTRESU"] = {
-                        "origin": {"type": "Assigned", "source": "Vendor"}
-                    }
-                elif case == "conflict":
-                    spec["rows"][1]["derivations"]["LBTESTCD"] = {"literal": "GLUC"}
-                    self.assertNotEqual(
-                        overlay["rows"][0]["submission"],
-                        overlay["rows"][1]["submission"],
-                    )
+                    glucose["where"] = {"LBSTRESU": ["mg/dL"]}
+                elif case == "overlap":
+                    creatinine["where"]["LBTESTCD"].append("GLUC")
+                elif case == "duplicate":
+                    creatinine["id"] = "GLUC"
                 elif case == "origin":
                     # A literal unit reads no input, so it refutes Derived.
-                    effective["LBORRESU"]["origin"]["type"] = "Derived"
+                    glucose["origin"]["type"] = "Derived"
                 if case != "valid":
                     (directory / "spec.yaml").write_text(
                         yaml.safe_dump(spec, sort_keys=False)
@@ -395,16 +368,22 @@ class PublicDefine(unittest.TestCase):
                     self.assertEqual(result.issues.height, 0, result.issues)
                     written = self.save(result, directory, ["define.xml"])
                     xml = self.validate_xml(written["define.xml"])
-                    if case == "identical duplicate":
+                    if case == "membership":
+                        check = xml.xpath(
+                            "//d:WhereClauseDef/o:RangeCheck", namespaces=NS
+                        )
+                        self.assertEqual(len(check), 1)
+                        self.assertEqual(check[0].get("Comparator"), "IN")
                         self.assertEqual(
-                            len(xml.xpath("//d:WhereClauseDef", namespaces=NS)), 1
+                            check[0].xpath("o:CheckValue/text()", namespaces=NS),
+                            ["GLUC", "CREAT"],
                         )
                 else:
                     self.assertTrue(
                         any(
                             row["requirement"] == requirement
                             and row["condition"] == condition
-                            and any(path.endswith(suffix) for path in row["spec_paths"])
+                            and suffix in row["spec_paths"]
                             for row in result.issues.to_dicts()
                         ),
                         result.issues,

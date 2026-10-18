@@ -434,6 +434,51 @@ mod diagnostics {
                 .is_none());
                 reached.insert(diagnostic.code);
             }
+            // A row two value-level entries select fails; an entry that
+            // selects no row is a warning (SUB-13).
+            let clause = |value: &str| yamaa_core::dataset::WhereClause {
+                terms: vec![(1, vec![value.into()])],
+            };
+            for (check, path, condition) in [
+                (
+                    yamaa_core::dataset::Check::ValueEntries(vec![
+                        ("A".into(), clause("X")),
+                        ("B".into(), clause("X")),
+                    ]),
+                    "columns.V.submission.value_level",
+                    "value_level_multiple_matches",
+                ),
+                (
+                    yamaa_core::dataset::Check::ValueEntryMatch {
+                        id: "A".into(),
+                        clause: clause("X"),
+                    },
+                    "columns.V.submission.value_level.A",
+                    "value_level_unmatched",
+                ),
+            ] {
+                assert!(check
+                    .clauses()
+                    .iter()
+                    .all(|clause| clause.columns().eq([1])));
+                let diagnostic = yamaa_core::dataset_checks::column_diagnostic(
+                    &check,
+                    path.into(),
+                    "V".into(),
+                    1,
+                )
+                .unwrap();
+                assert_eq!(
+                    (
+                        diagnostic.definition().phase,
+                        diagnostic.definition().condition,
+                        diagnostic.definition().requirement
+                    ),
+                    ("verification", condition, Some("SUB-13"))
+                );
+                assert_eq!(diagnostic.spec_paths, [path]);
+                reached.insert(diagnostic.code);
+            }
             let pattern = yamaa_core::portable_regex::Pattern::compile("b").unwrap();
             let rows = yamaa_core::dataset_checks::matches_offenders(
                 &pattern,

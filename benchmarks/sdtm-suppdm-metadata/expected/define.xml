@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:def="http://www.cdisc.org/ns/def/v2.1" xmlns:xlink="http://www.w3.org/1999/xlink" ODMVersion="1.3.2" FileType="Snapshot" FileOID="CATH.sdtm.Define-XML_2.1" CreationDateTime="2026-09-11T00:00:00" SourceSystem="yamaa" SourceSystemVersion="1.0" def:Context="Submission">
+  <Study OID="STDY.CATH">
+    <GlobalVariables>
+      <StudyName>CATH</StudyName>
+      <StudyDescription>Example study carrying supplemental demographic qualifiers</StudyDescription>
+      <ProtocolName>CATH-01</ProtocolName>
+    </GlobalVariables>
+    <MetaDataVersion OID="MDV.CATH.sdtm" Name="CATH sdtm metadata" def:DefineVersion="2.1.11">
+      <def:Standards>
+        <def:Standard OID="STD.SDTMIG" Name="SDTMIG" Type="IG" Version="3.4" Status="Final"/>
+        <def:Standard OID="STD.CT_SDTM" Name="CDISC/NCI" Type="CT" PublishingSet="SDTM" Version="2023-12-15" Status="Final"/>
+      </def:Standards>
+      <def:AnnotatedCRF>
+        <def:DocumentRef leafID="LF.acrf"/>
+      </def:AnnotatedCRF>
+      <def:ValueListDef OID="VL.SUPPDM.QVAL">
+        <ItemRef ItemOID="IT.SUPPDM.QVAL.RACE" OrderNumber="1" Mandatory="Yes">
+          <def:WhereClauseRef WhereClauseOID="WC.SUPPDM.QVAL.RACE"/>
+        </ItemRef>
+        <ItemRef ItemOID="IT.SUPPDM.QVAL.RACEOTH" OrderNumber="2" Mandatory="Yes">
+          <def:WhereClauseRef WhereClauseOID="WC.SUPPDM.QVAL.RACEOTH"/>
+        </ItemRef>
+      </def:ValueListDef>
+      <def:WhereClauseDef OID="WC.SUPPDM.QVAL.RACE">
+        <RangeCheck Comparator="IN" SoftHard="Soft" def:ItemOID="IT.SUPPDM.QNAM">
+          <CheckValue>RACE1</CheckValue>
+          <CheckValue>RACE2</CheckValue>
+        </RangeCheck>
+      </def:WhereClauseDef>
+      <def:WhereClauseDef OID="WC.SUPPDM.QVAL.RACEOTH">
+        <RangeCheck Comparator="EQ" SoftHard="Soft" def:ItemOID="IT.SUPPDM.QNAM">
+          <CheckValue>RACEOTH</CheckValue>
+        </RangeCheck>
+      </def:WhereClauseDef>
+      <ItemGroupDef OID="IG.SUPPDM" Name="SUPPDM" Domain="DM" Purpose="Tabulation" SASDatasetName="SUPPDM" Repeating="Yes" IsReferenceData="No" def:Structure="One record per supplemental qualifier per subject" def:ArchiveLocationID="LF.SUPPDM" def:StandardOID="STD.SDTMIG">
+        <Description>
+          <TranslatedText xml:lang="en">Supplemental Qualifiers for DM</TranslatedText>
+        </Description>
+        <ItemRef ItemOID="IT.SUPPDM.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1"/>
+        <ItemRef ItemOID="IT.SUPPDM.RDOMAIN" OrderNumber="2" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.SUPPDM.USUBJID" OrderNumber="3" Mandatory="Yes" KeySequence="2"/>
+        <ItemRef ItemOID="IT.SUPPDM.IDVAR" OrderNumber="4" Mandatory="No"/>
+        <ItemRef ItemOID="IT.SUPPDM.IDVARVAL" OrderNumber="5" Mandatory="No"/>
+        <ItemRef ItemOID="IT.SUPPDM.QNAM" OrderNumber="6" Mandatory="Yes" KeySequence="3"/>
+        <ItemRef ItemOID="IT.SUPPDM.QLABEL" OrderNumber="7" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.SUPPDM.QVAL" OrderNumber="8" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.SUPPDM.QORIG" OrderNumber="9" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.SUPPDM.QEVAL" OrderNumber="10" Mandatory="No"/>
+        <def:Class Name="RELATIONSHIP"/>
+        <def:leaf ID="LF.SUPPDM" xlink:href="suppdm.json">
+          <def:title>suppdm.json</def:title>
+        </def:leaf>
+      </ItemGroupDef>
+      <ItemDef OID="IT.SUPPDM.STUDYID" Name="STUDYID" DataType="text" Length="4" SASFieldName="STUDYID">
+        <Description>
+          <TranslatedText xml:lang="en">Study Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Protocol" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.SUPPDM.RDOMAIN" Name="RDOMAIN" DataType="text" Length="2" SASFieldName="RDOMAIN">
+        <Description>
+          <TranslatedText xml:lang="en">Related Domain Abbreviation</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.SUPPDM.USUBJID" Name="USUBJID" DataType="text" Length="8" SASFieldName="USUBJID">
+        <Description>
+          <TranslatedText xml:lang="en">Unique Subject Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.SUPPDM.IDVAR" Name="IDVAR" DataType="text" Length="1" SASFieldName="IDVAR">
+        <Description>
+          <TranslatedText xml:lang="en">Identifying Variable</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.SUPPDM.IDVARVAL" Name="IDVARVAL" DataType="text" Length="1" SASFieldName="IDVARVAL">
+        <Description>
+          <TranslatedText xml:lang="en">Identifying Variable Value</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.SUPPDM.QNAM" Name="QNAM" DataType="text" Length="7" SASFieldName="QNAM">
+        <Description>
+          <TranslatedText xml:lang="en">Qualifier Variable Name</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.SUPPDM.QLABEL" Name="QLABEL" DataType="text" Length="11" SASFieldName="QLABEL">
+        <Description>
+          <TranslatedText xml:lang="en">Qualifier Variable Label</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.SUPPDM.QVAL" Name="QVAL" DataType="text" Length="25" SASFieldName="QVAL">
+        <Description>
+          <TranslatedText xml:lang="en">Data Value</TranslatedText>
+        </Description>
+        <def:Origin Type="Collected" Source="Investigator">
+          <def:DocumentRef leafID="LF.acrf">
+            <def:PDFPageRef PageRefs="2" Type="PhysicalRef"/>
+          </def:DocumentRef>
+        </def:Origin>
+        <def:ValueListRef ValueListOID="VL.SUPPDM.QVAL"/>
+      </ItemDef>
+      <ItemDef OID="IT.SUPPDM.QVAL.RACE" Name="QVAL" DataType="text" Length="25" SASFieldName="QVAL">
+        <Description>
+          <TranslatedText xml:lang="en">Race</TranslatedText>
+        </Description>
+        <CodeListRef CodeListOID="CL.RACE"/>
+        <def:Origin Type="Collected" Source="Investigator">
+          <def:DocumentRef leafID="LF.acrf">
+            <def:PDFPageRef PageRefs="2" Type="PhysicalRef"/>
+          </def:DocumentRef>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.SUPPDM.QVAL.RACEOTH" Name="QVAL" DataType="text" Length="6" SASFieldName="QVAL">
+        <Description>
+          <TranslatedText xml:lang="en">Race, Other</TranslatedText>
+        </Description>
+        <def:Origin Type="Collected" Source="Investigator">
+          <def:DocumentRef leafID="LF.acrf">
+            <def:PDFPageRef PageRefs="3" Type="PhysicalRef"/>
+          </def:DocumentRef>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.SUPPDM.QORIG" Name="QORIG" DataType="text" Length="9" SASFieldName="QORIG">
+        <Description>
+          <TranslatedText xml:lang="en">Origin</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.SUPPDM.QEVAL" Name="QEVAL" DataType="text" Length="1" SASFieldName="QEVAL">
+        <Description>
+          <TranslatedText xml:lang="en">Evaluator</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned" Source="Sponsor"/>
+      </ItemDef>
+      <CodeList OID="CL.RACE" Name="Race" DataType="text" def:StandardOID="STD.CT_SDTM">
+        <EnumeratedItem CodedValue="AMERICAN INDIAN OR ALASKA NATIVE">
+          <Alias Context="nci:ExtCodeID" Name="C41259"/>
+        </EnumeratedItem>
+        <EnumeratedItem CodedValue="ASIAN">
+          <Alias Context="nci:ExtCodeID" Name="C41260"/>
+        </EnumeratedItem>
+        <EnumeratedItem CodedValue="BLACK OR AFRICAN AMERICAN">
+          <Alias Context="nci:ExtCodeID" Name="C16352"/>
+        </EnumeratedItem>
+        <EnumeratedItem CodedValue="NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER">
+          <Alias Context="nci:ExtCodeID" Name="C41219"/>
+        </EnumeratedItem>
+        <EnumeratedItem CodedValue="WHITE">
+          <Alias Context="nci:ExtCodeID" Name="C41261"/>
+        </EnumeratedItem>
+        <Alias Context="nci:ExtCodeID" Name="C74457"/>
+      </CodeList>
+      <def:leaf ID="LF.acrf" xlink:href="acrf.pdf">
+        <def:title>Annotated Case Report Form</def:title>
+      </def:leaf>
+    </MetaDataVersion>
+  </Study>
+</ODM>

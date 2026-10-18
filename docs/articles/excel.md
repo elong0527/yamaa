@@ -199,11 +199,12 @@ own derivation. `AVAL` is the standard case -- alanine aminotransferase where
 | Excel spec | yamaa |
 |---|---|
 | One VLM row (how AVAL is derived when PARAMCD = "ALT") | One row template under `rows:` |
-| The VLM Where Clause | `row.filter` (an SQL predicate) |
+| The VLM Where Clause selecting the records to derive | `row.filter` (an SQL predicate) |
+| The VLM metadata when PARAMCD = "ALT" (origin, codelist, precision) | One `submission.value_level` entry on the column, with `where: {PARAMCD: [ALT]}` |
 | "this PARAM is derived from another PARAM" | Another row template with its own `literal` PARAMCD |
 | "one collected record yields several analysis records" | Several row templates, appended in order |
 
-See [`adam-adlb-bds`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adlb-bds) in [More examples](#more-examples) below.
+See [`adam-adlb-bds`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adlb-bds) in [More examples](#more-examples) below for the derivation, and [`adam-adlb-metadata`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adlb-metadata) for the metadata a define.xml value list carries.
 
 ---
 

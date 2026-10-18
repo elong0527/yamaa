@@ -377,8 +377,8 @@ pub(crate) fn copies(
     Ok(())
 }
 
-/// Whether a specification declares a Predecessor origin on a column or a
-/// row template's value-level entry; composition then reads the predecessor
+/// Whether a specification declares a Predecessor origin on a column or on
+/// one of its value-level entries; composition then reads the predecessor
 /// columns the study's other sections declare (SUB-20).
 pub(crate) fn names_predecessor(document: &Document) -> bool {
     let root = document.root();
@@ -390,19 +390,13 @@ pub(crate) fn names_predecessor(document: &Document) -> bool {
             == Some(OriginType::Predecessor.name())
     };
     let columns = items(document, document.field(root, "columns"));
-    let rows = items(document, document.field(root, "rows"));
     columns.iter().any(|&column| {
         document
             .field(column, "submission")
             .is_some_and(predecessor)
-    }) || rows.iter().any(|&row| {
-        match document
-            .field(row, "submission")
-            .map(|n| &document.nodes()[n])
-        {
-            Some(N::Mapping(entries)) => entries.iter().any(|&(_, entry)| predecessor(entry)),
-            _ => false,
-        }
+            || crate::submission_values::entries(document, column)
+                .iter()
+                .any(|entry| predecessor(entry.node))
     })
 }
 

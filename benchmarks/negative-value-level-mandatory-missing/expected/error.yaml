@@ -1,0 +1,11 @@
+phase: verification
+condition: not_missing_failed
+spec_paths:
+  - columns.AVAL.submission.value_level.SYSBP.mandatory
+requirement: REQ-0885
+context:
+  column: AVAL
+  failure_count: 1
+  keys:
+    - USUBJID: CATH-002
+      PARAMCD: SYSBP

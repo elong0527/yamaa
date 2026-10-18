@@ -3,13 +3,14 @@
 use super::*;
 use crate::json::Value as V;
 use crate::{
-    dataset::{Check, Verification},
+    dataset::{Check, InventoryScope, RowScope, Verification, WhereClause},
     diagnostic::{ConditionCode as C, Diagnostic},
     specification_submission_document::OriginType,
     submission_origin::{self as origin, Reads},
+    submission_values as values,
     value::Value,
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 fn present_field(d: &Document, node: usize, name: &str) -> Option<usize> {
     d.field(node, name)
@@ -117,14 +118,14 @@ fn origins<'a>(
     d: &'a Document,
     submission: usize,
     name: &str,
-    row: Option<&str>,
+    entry: Option<&str>,
     path: &str,
     inherited_method: bool,
     result: &mut Vec<PreflightFinding>,
 ) -> Option<Declared<'a>> {
     let mut fields = vec![("column", s(name))];
-    if let Some(row) = row {
-        fields.push(("row", s(row)));
+    if let Some(entry) = entry {
+        fields.push(("entry", s(entry)));
     }
     let Some(origin) = present_field(d, submission, "origin") else {
         result.push(finding(C::SubmissionOriginMissing, path, &fields));
@@ -164,24 +165,6 @@ fn copy_failure(
     derivations
         .iter()
         .find_map(|&node| origin::copies(d, node, predecessor, reads).err())
-}
-// Normalized metadata is compared directly, including defaulted fields; arena
-// indices and mapping order cannot invent a different declaration identity.
-fn same(d: &Document, a: usize, b: usize) -> bool {
-    match (&d.nodes()[a], &d.nodes()[b]) {
-        (N::Mapping(a), N::Mapping(b)) => {
-            a.len() == b.len()
-                && a.iter().all(|&(key, value)| {
-                    b.iter()
-                        .find(|&&(other, _)| d.nodes()[key] == d.nodes()[other])
-                        .is_some_and(|&(_, other)| same(d, value, other))
-                })
-        }
-        (N::Sequence(a), N::Sequence(b)) => {
-            a.len() == b.len() && a.iter().zip(b).all(|(&a, &b)| same(d, a, b))
-        }
-        (a, b) => a == b,
-    }
 }
 
 fn effective_field(
@@ -297,7 +280,7 @@ fn admit_value_fields(
         }
     }
     // An explicit verification binds the entire column once. Only authored
-    // value overrides without such a verification introduce a scoped check.
+    // entry lengths without such a verification introduce a scoped check.
     if kind == "str" && maxima.is_empty() {
         if let Some(node) = present_field(d, entry, "length") {
             if let N::Integer(value) = &d.nodes()[node] {
@@ -310,179 +293,116 @@ fn admit_value_fields(
     Ok(None)
 }
 
-/// One completed discriminator value's effective authored length bound.
-type ValueLength = (usize, String, String, String);
+/// One entry's authored length bound over the rows its where clause selects.
+struct ValueLength {
+    column: usize,
+    clause: WhereClause,
+    max: String,
+    path: String,
+}
 
-fn admit_value_declarations(
+/// Admit every entry's own metadata over its merged metadata, refute each
+/// entry's own origin against the derivations that can produce its rows
+/// (SUB-13), and collect the length bounds entries author.
+fn admit_entries(
     d: &Document,
     columns: &[usize],
-    rows: &[usize],
-    by_name: &BTreeMap<&str, usize>,
-    output: &BTreeSet<&str>,
+    output: &TableSchema,
     reads: &Reads,
     result: &mut Vec<PreflightFinding>,
-) -> Result<(String, Vec<ValueLength>), PrepareError> {
-    // Value declarations are admitted as a whole before execution. Origin and
-    // conflict decisions retain their written row/column identities.
-    let domain = text(d, field(d, d.root(), "domain")?)?;
-    let discriminator = format!("{domain}TESTCD");
-    let mut seen = BTreeMap::new();
-    let mut value_lengths = Vec::new();
-    for &row in rows {
-        let Some(submission) = present_field(d, row, "submission") else {
-            continue;
-        };
-        let entries = mapping(d, submission)?;
-        if entries.is_empty() {
-            continue;
-        }
-        let row_name = text(d, field(d, row, "id")?)?;
-        let path = format!("rows.{row_name}.submission");
-        for &(name, entry) in entries {
-            let name = text(d, name)?;
-            if let Some(&column) = by_name.get(name) {
-                let inherits_origin = present_field(d, entry, "origin").is_none()
-                    && present_field(d, column, "submission")
-                        .is_some_and(|base| present_field(d, base, "origin").is_some());
-                if !inherits_origin {
-                    origins(
-                        d,
-                        entry,
-                        name,
-                        Some(row_name),
-                        &format!("{path}.{name}"),
-                        present_field(d, column, "submission")
-                            .is_some_and(|id| present_field(d, id, "method").is_some()),
-                        result,
-                    );
-                }
+) -> Result<Vec<ValueLength>, PrepareError> {
+    let declared_columns = values::declared_columns(d);
+    let mut lengths = Vec::new();
+    for (index, &column) in columns.iter().enumerate() {
+        let name = output.columns()[index].name.as_str();
+        let base = present_field(d, column, "submission");
+        for entry in values::entries(d, column) {
+            let path = values::path(name, entry.id);
+            // An entry without its own origin answers with the column's,
+            // which the column's own refutation already covers.
+            let declaration = if entry.declares(d, "origin") {
+                origins(
+                    d,
+                    entry.node,
+                    name,
+                    Some(entry.id),
+                    &path,
+                    base.is_some_and(|id| present_field(d, id, "method").is_some()),
+                    result,
+                )
+            } else {
+                None
+            };
+            let length = admit_value_fields(d, entry.node, column, name, &path, result)?;
+            if let (Some(max), Some(clause)) =
+                (length, super::value_level::clause(&entry, output, index))
+            {
+                lengths.push(ValueLength {
+                    column: index,
+                    clause,
+                    max,
+                    path: format!("{path}.length"),
+                });
             }
-        }
-        if !by_name.contains_key(discriminator.as_str()) {
-            result.push(finding(
-                C::SubmissionValueTestcdMissing,
-                &path,
-                &[("domain", s(domain))],
-            ));
-            continue;
-        }
-        let row_declarations = field(d, row, "derivations")?;
-        let testcd = present_field(d, row_declarations, &discriminator)
-            .and_then(|node| d.field(node, "value"))
-            .and_then(|node| string(d, node, "literal"));
-        let Some(testcd) = testcd else {
-            result.push(finding(
-                C::SubmissionValueTestcdDynamic,
-                &path,
-                &[("discriminator", s(&discriminator))],
-            ));
-            continue;
-        };
-        for &(name, entry) in entries {
-            let name = text(d, name)?;
-            let field_path = format!("{path}.{name}");
-            let effective = by_name.get(name).and_then(|&column| {
-                present_field(d, row_declarations, name)
-                    .or_else(|| present_field(d, column, "derivation"))
-            });
-            let Some(effective) = effective else {
-                result.push(finding(
-                    C::SubmissionValueColumnUnknown,
-                    &field_path,
-                    &[("column", s(name)), ("row", s(row_name))],
-                ));
+            let Some(declaration) = declaration else {
                 continue;
             };
-            if !output.contains(name) {
-                result.push(finding(
-                    C::SubmissionValueColumnNotOutput,
-                    &field_path,
-                    &[("column", s(name))],
-                ));
-            }
-            let column = by_name[name];
-            let length = admit_value_fields(d, entry, column, name, &field_path, result)?;
-            if let Some(&first) = seen.get(&(name, testcd)) {
-                if !same(d, first, entry) {
-                    result.push(finding(
-                        C::SubmissionValueMetadataConflict,
-                        &field_path,
-                        &[("column", s(name)), ("testcd", s(testcd))],
-                    ));
-                    continue;
-                }
+            let derivations = values::entry_derivations(d, column, name, &declared_columns, &entry);
+            let refuting = derivations
+                .iter()
+                .map(|&node| origin::classify(d, node, reads))
+                .find(|kind| !kind.admitted().contains(&declaration.kind));
+            let copy = if refuting.is_some() {
+                None
             } else {
-                seen.insert((name, testcd), entry);
-                if let Some(max) = length {
-                    value_lengths.push((
-                        columns
-                            .iter()
-                            .position(|&id| id == column)
-                            .expect("declared output column"),
-                        testcd.to_owned(),
-                        max,
-                        format!("{field_path}.length"),
-                    ));
-                }
-            }
-            if let Some(declaration) = present_field(d, entry, "origin")
-                .or_else(|| {
-                    by_name
-                        .get(name)
-                        .and_then(|&column| present_field(d, column, "submission"))
-                        .and_then(|base| present_field(d, base, "origin"))
+                declaration.predecessor().and_then(|predecessor| {
+                    derivations.iter().find_map(|&node| {
+                        origin::copies(d, node, &predecessor, reads)
+                            .err()
+                            .map(|failure| (node, failure))
+                    })
                 })
-                .and_then(|id| declared(d, id))
-            {
-                let derivation = origin::classify(d, effective, reads);
-                let refuted = !derivation.admitted().contains(&declaration.kind);
-                let copy = declaration
-                    .predecessor()
-                    .filter(|_| !refuted)
-                    .and_then(|predecessor| copy_failure(d, &[effective], &predecessor, reads));
-                if refuted || copy.is_some() {
-                    let mut context = vec![
-                        ("column", s(name)),
-                        ("testcd", s(testcd)),
-                        ("derivation_kind", s(derivation.name())),
-                        ("origin_type", s(declaration.kind)),
-                    ];
-                    if let Some(copy) = copy {
-                        context.push(("reason", s(copy.reason())));
-                    }
-                    result.push(finding(
-                        C::SubmissionValueOriginRefuted,
-                        &field_path,
-                        &context,
-                    ));
-                }
+            };
+            let kind = match (refuting, copy) {
+                (Some(kind), _) => kind,
+                (None, Some((node, _))) => origin::classify(d, node, reads),
+                (None, None) => continue,
+            };
+            let mut context = vec![
+                ("column", s(name)),
+                ("entry", s(entry.id)),
+                ("derivation_kind", s(kind.name())),
+                ("origin_type", s(declaration.kind)),
+            ];
+            if let Some((_, failure)) = copy {
+                context.push(("reason", s(failure.reason())));
             }
+            result.push(finding(C::SubmissionValueOriginRefuted, &path, &context));
         }
     }
-    Ok((discriminator, value_lengths))
+    Ok(lengths)
 }
 fn apply_value_bounds_and_inventory(
     d: &Document,
     columns: &[usize],
+    output: &TableSchema,
     inventory: &[String],
     groups: &mut [verifications::Verifications],
     result: &mut Vec<PreflightFinding>,
-    rows: &[usize],
-    values: &(String, Vec<ValueLength>),
+    lengths: &[ValueLength],
 ) -> Result<(), PrepareError> {
-    let (discriminator, value_lengths) = (values.0.as_str(), values.1.as_slice());
-    // Apply the final effective bounds over each completed discriminator value.
-    // Equal overrides share the column's existing check; differing overrides
-    // replace the inherited synthetic bound only for their declared test codes.
+    // Apply the final effective bounds over the rows each entry selects.
+    // Equal entry bounds share the column's existing check; differing ones
+    // replace the column's bound only on the rows their entries select.
     for (column, group) in groups.iter_mut().enumerate() {
-        let authored = value_lengths
+        let authored = lengths
             .iter()
-            .filter(|entry| entry.0 == column)
+            .filter(|entry| entry.column == column)
             .collect::<Vec<_>>();
         if authored.is_empty() {
             continue;
         }
-        let name = text(d, field(d, columns[column], "name")?)?;
+        let name = output.columns()[column].name.as_str();
         let default_path = format!("columns.{name}.verifications.max_length");
         let default_index = group
             .checks
@@ -495,66 +415,55 @@ fn apply_value_bounds_and_inventory(
         });
         let overrides = authored
             .into_iter()
-            .filter(|entry| default.as_ref() != Some(&entry.2))
+            .filter(|entry| default.as_ref() != Some(&entry.max))
             .collect::<Vec<_>>();
         if overrides.is_empty() {
             continue;
         }
-        let Some(discriminator) = columns
-            .iter()
-            .position(|&node| string(d, node, "name") == Some(discriminator))
-        else {
-            continue;
-        };
         if let (Some(index), Some(max)) = (default_index, default) {
             group.checks[index].check = Check::ValueMaxLength {
                 max: crate::dataset::RowCountBound::new(&max)
                     .map_err(|_| PrepareError::Internal)?,
-                discriminator,
-                codes: overrides.iter().map(|entry| entry.1.clone()).collect(),
-                include: false,
+                scope: RowScope {
+                    clauses: overrides.iter().map(|entry| entry.clause.clone()).collect(),
+                    include: false,
+                },
             };
         }
         for entry in overrides {
             group.append_metadata(Verification {
-                path: entry.3.clone(),
+                path: entry.path.clone(),
                 check: Check::ValueMaxLength {
-                    max: crate::dataset::RowCountBound::new(&entry.2)
+                    max: crate::dataset::RowCountBound::new(&entry.max)
                         .map_err(|_| PrepareError::Internal)?,
-                    discriminator,
-                    codes: vec![entry.1.clone()],
-                    include: true,
+                    scope: RowScope {
+                        clauses: vec![entry.clause.clone()],
+                        include: true,
+                    },
                 },
             });
         }
     }
     for (column, &node) in columns.iter().enumerate() {
-        let name = text(d, field(d, node, "name")?)?;
+        let name = output.columns()[column].name.as_str();
         let base = present_field(d, node, "submission");
         let default = base
             .and_then(|id| present_field(d, id, "inventory_vocabulary"))
             .is_some_and(|id| d.nodes()[id] == N::Boolean(true));
-        let mut overrides = BTreeMap::new();
-        for &row in rows {
-            let Some(value) = present_field(d, row, "submission")
-                .and_then(|id| present_field(d, id, name))
-                .and_then(|id| present_field(d, id, "inventory_vocabulary"))
-            else {
-                continue;
-            };
-            let Some(code) = present_field(d, row, "derivations")
-                .and_then(|id| present_field(d, id, discriminator))
-                .and_then(|id| present_field(d, id, "value"))
-                .and_then(|id| string(d, id, "literal"))
-            else {
+        let mut overrides = Vec::new();
+        for entry in values::entries(d, node) {
+            let Some(value) = present_field(d, entry.node, "inventory_vocabulary") else {
                 continue;
             };
             let N::Boolean(enabled) = d.nodes()[value] else {
                 continue;
             };
-            overrides.insert(code.into(), enabled);
+            let Some(clause) = super::value_level::clause(&entry, output, column) else {
+                continue;
+            };
+            overrides.push((clause, enabled));
         }
-        if !default && !overrides.values().any(|enabled| *enabled) {
+        if !default && !overrides.iter().any(|(_, enabled)| *enabled) {
             continue;
         }
         if text(d, field(d, node, "type")?)? != "str" {
@@ -569,18 +478,7 @@ fn apply_value_bounds_and_inventory(
             ));
             continue;
         }
-        let scope = if overrides.is_empty() {
-            None
-        } else {
-            columns
-                .iter()
-                .position(|&node| string(d, node, "name") == Some(discriminator))
-                .map(|discriminator| crate::dataset::InventoryScope {
-                    discriminator,
-                    default,
-                    overrides: overrides.into_iter().collect(),
-                })
-        };
+        let scope = (!overrides.is_empty()).then_some(InventoryScope { default, overrides });
         groups[column].append_codelist(Verification {
             path: format!("columns.{name}.submission.inventory_vocabulary"),
             check: Check::Inventory {
@@ -594,20 +492,18 @@ fn apply_value_bounds_and_inventory(
 pub(super) fn admit(
     d: &Document,
     columns: &[usize],
+    output: &TableSchema,
     inventory: &[String],
     groups: &mut [verifications::Verifications],
     result: &mut Vec<PreflightFinding>,
 ) -> Result<(), PrepareError> {
     let root = d.root();
-    let output = sequence(d, field(d, field(d, root, "output")?, "columns")?)?
+    let carried = sequence(d, field(d, field(d, root, "output")?, "columns")?)?
         .iter()
         .map(|&id| text(d, id))
         .collect::<Result<BTreeSet<_>, _>>()?;
-    let rows = present_field(d, root, "rows")
-        .map(|id| sequence(d, id))
-        .transpose()?
-        .unwrap_or(&[]);
     let reads = Reads::of(d);
+    let declared_columns = values::declared_columns(d);
     reserved(d, root, None, result)?;
     let has_root = present_field(d, root, "submission");
     if let Some(metadata) = has_root {
@@ -626,16 +522,14 @@ pub(super) fn admit(
             ));
         }
     }
-    let mut by_name = BTreeMap::new();
     for (index, &column) in columns.iter().enumerate() {
         let name = text(d, field(d, column, "name")?)?;
-        by_name.insert(name, column);
         reserved(d, column, Some(name), result)?;
         let Some(submission) = present_field(d, column, "submission") else {
             continue;
         };
         let path = format!("columns.{name}.submission");
-        if !output.contains(name) {
+        if !carried.contains(name) {
             result.push(finding(
                 C::SubmissionColumnNotOutput,
                 &path,
@@ -769,23 +663,10 @@ pub(super) fn admit(
         let Some(origin) = origins(d, submission, name, None, &path, false, result) else {
             continue;
         };
-        let mut derivations = rows
-            .iter()
-            .filter_map(|&row| {
-                if present_field(d, row, "submission")
-                    .and_then(|id| present_field(d, id, name))
-                    .is_some_and(|id| present_field(d, id, "origin").is_some())
-                {
-                    return None;
-                }
-                d.field(row, "derivations")
-                    .and_then(|node| present_field(d, node, name))
-                    .or_else(|| present_field(d, column, "derivation"))
-            })
-            .collect::<Vec<_>>();
-        if rows.is_empty() {
-            derivations.extend(present_field(d, column, "derivation"));
-        }
+        // The column's origin answers for every construction whose rows an
+        // entry declaring its own origin does not all select (SUB-19).
+        let entries = values::entries(d, column);
+        let derivations = values::column_derivations(d, column, name, &declared_columns, &entries);
         if !derivations.is_empty() {
             let mut admitted = kinds(d, derivations[0], &reads);
             for &node in &derivations[1..] {
@@ -833,63 +714,7 @@ pub(super) fn admit(
             }
         }
     }
-    let values = admit_value_declarations(d, columns, rows, &by_name, &output, &reads, result)?;
-    apply_value_bounds_and_inventory(d, columns, inventory, groups, result, rows, &values)?;
-    discriminator_type_findings(d, columns, rows, groups, &values.0, result)
-}
-
-/// A check applied only to the rows of some test codes finds them by comparing
-/// each code with `<DOMAIN>TESTCD`, so that column must hold text (REQ-1164).
-/// Value-level metadata that builds no such check compares no code.
-fn discriminator_type_findings(
-    d: &Document,
-    columns: &[usize],
-    rows: &[usize],
-    groups: &[verifications::Verifications],
-    discriminator: &str,
-    result: &mut Vec<PreflightFinding>,
-) -> Result<(), PrepareError> {
-    let Some(&column) = columns
-        .iter()
-        .find(|&&node| string(d, node, "name") == Some(discriminator))
-    else {
-        return Ok(());
-    };
-    let declared = text(d, field(d, column, "type")?)?;
-    if declared == "str" {
-        return Ok(());
-    }
-    let mut selected = BTreeSet::new();
-    for check in groups.iter().flat_map(|group| &group.checks) {
-        match &check.check {
-            Check::ValueMaxLength { codes, .. } => {
-                selected.extend(codes.iter().map(String::as_str));
-            }
-            Check::ValueCodelists { overrides, .. } => {
-                selected.extend(overrides.iter().map(String::as_str));
-            }
-            Check::Inventory {
-                scope: Some(scope), ..
-            } => selected.extend(scope.overrides.iter().map(|(code, _)| code.as_str())),
-            _ => (),
-        }
-    }
-    for &row in rows {
-        let code = present_field(d, row, "submission")
-            .and_then(|_| present_field(d, row, "derivations"))
-            .and_then(|node| present_field(d, node, discriminator))
-            .and_then(|node| d.field(node, "value"))
-            .and_then(|node| string(d, node, "literal"));
-        if code.is_some_and(|code| selected.contains(code)) {
-            result.push(finding(
-                C::SubmissionValueTestcdDynamic,
-                &format!("rows.{}.submission", text(d, field(d, row, "id")?)?),
-                &[
-                    ("discriminator", s(discriminator)),
-                    ("declared_type", s(declared)),
-                ],
-            ));
-        }
-    }
+    let lengths = admit_entries(d, columns, output, &reads, result)?;
+    apply_value_bounds_and_inventory(d, columns, output, inventory, groups, result, &lengths)?;
     Ok(())
 }

@@ -2239,6 +2239,10 @@ mod schema {
                     .collect();
                 self.map(fields)
             }
+            fn strings(&mut self, values: &[&str]) -> usize {
+                let values = values.iter().map(|value| self.text(value)).collect();
+                self.node(N::Sequence(values))
+            }
             fn finish(self, root: usize) -> Document {
                 Document::new(self.0, root).unwrap()
             }
@@ -2265,13 +2269,63 @@ mod schema {
             let root = a.map(vec![("study", study), ("sdtm", section)]);
             a.finish(root)
         }
+        /// One entry of `LBORRESU`, in the order the case lists them: its id,
+        /// its where clause, its origin source and its own fields.
+        struct Written<'a> {
+            id: &'a str,
+            clause: Vec<(&'a str, Vec<&'a str>)>,
+            source: &'a str,
+        }
+        fn written(case: &str) -> Vec<Written<'_>> {
+            let entry = |id, column, values: &[&'static str], source| Written {
+                id,
+                clause: vec![(column, values.to_vec())],
+                source,
+            };
+            let gluc = entry("GLUC", "LBTESTCD", &["GLUC"], "Vendor");
+            let creat = entry("CREAT", "LBTESTCD", &["CREAT"], "Sponsor");
+            match case {
+                "reordered values" => vec![creat, gluc],
+                "inserted value" => {
+                    vec![entry("ALB", "LBTESTCD", &["ALB"], "Sponsor"), gluc, creat]
+                }
+                "membership" => vec![entry("CHEM", "LBTESTCD", &["GLUC", "CREAT"], "Vendor")],
+                "conjunction" => vec![
+                    Written {
+                        id: "GLUCSER",
+                        clause: vec![("LBTESTCD", vec!["GLUC"]), ("LBSPEC", vec!["SERUM"])],
+                        source: "Vendor",
+                    },
+                    creat,
+                ],
+                "escaped value" => vec![
+                    entry("GLUC", "LBTESTCD", &["A.&\" /\u{e9}"], "Vendor"),
+                    creat,
+                ],
+                "duplicate id" => vec![gluc, entry("GLUC", "LBTESTCD", &["CREAT"], "Sponsor")],
+                "overlap" => vec![
+                    gluc,
+                    entry("ANY", "LBTESTCD", &["CREAT", "GLUC"], "Sponsor"),
+                ],
+                "subset overlap" => vec![
+                    gluc,
+                    Written {
+                        id: "GLUCSER",
+                        clause: vec![("LBTESTCD", vec!["GLUC"]), ("LBSPEC", vec!["SERUM"])],
+                        source: "Vendor",
+                    },
+                ],
+                "no values" => vec![entry("GLUC", "LBTESTCD", &[], "Vendor"), creat],
+                "unknown column" => vec![entry("GLUC", "BOGUS", &["GLUC"], "Vendor"), creat],
+                "internal column" => vec![entry("GLUC", "LBNAM", &["GLUC"], "Vendor"), creat],
+                "numeric column" => vec![entry("GLUC", "LBSEQ", &["1"], "Vendor"), creat],
+                "own column" => vec![entry("GLUC", "LBORRESU", &["mg/dL"], "Vendor"), creat],
+                _ => vec![gluc, creat],
+            }
+        }
         fn specification(case: &str) -> Document {
             let mut a = Arena::default();
-            let domain = a.text(if case == "no discriminator" {
-                "XX"
-            } else {
-                "LB"
-            });
+            let domain = a.text("LB");
             let label = a.text("Laboratory tests");
             let class = a.text("FINDINGS");
             let structure = a.text("One record per test");
@@ -2283,122 +2337,116 @@ mod schema {
                 ("repeating", repeating),
             ]);
             let mut columns = Vec::new();
-            for name in ["LBTESTCD", "LBORRESU"] {
+            for (name, kind) in [
+                ("LBTESTCD", "str"),
+                ("LBSPEC", "str"),
+                ("LBNAM", "str"),
+                ("LBSEQ", "int"),
+                ("LBORRESU", "str"),
+            ] {
+                let name_node = a.text(name);
+                let kind = a.text(kind);
+                let label = a.text(match name {
+                    "LBORRESU" => "Original units",
+                    "LBSPEC" => "Specimen type",
+                    "LBNAM" => "Laboratory name",
+                    "LBSEQ" => "Sequence number",
+                    _ => "Test code",
+                });
+                let mut fields = vec![("name", name_node), ("type", kind), ("label", label)];
+                let literal = match name {
+                    "LBORRESU" => Some(a.texts(&[("literal", "mg/dL")])),
+                    "LBSPEC" => Some(a.texts(&[("literal", "SERUM")])),
+                    "LBNAM" => Some(a.texts(&[("literal", "CENTRAL")])),
+                    "LBSEQ" => {
+                        let one = a.node(N::Integer("1".into()));
+                        Some(a.map(vec![("literal", one)]))
+                    }
+                    _ => None,
+                };
+                if let Some(literal) = literal {
+                    let derivation = a.map(vec![("value", literal)]);
+                    fields.push(("derivation", derivation));
+                }
+                // The internal column carries no submission metadata.
+                if name == "LBNAM" {
+                    columns.push(a.map(fields));
+                    continue;
+                }
                 let origin = a.texts(&[("type", "Assigned"), ("source", "Sponsor")]);
                 let core = a.text("Exp");
                 let length = a.node(N::Integer("8".into()));
-                let submission =
-                    a.map(vec![("core", core), ("length", length), ("origin", origin)]);
-                let name_node = a.text(name);
-                let kind = a.text("str");
-                let label = a.text(if name == "LBORRESU" {
-                    "Original units"
-                } else {
-                    "Test code"
-                });
-                let mut fields = vec![
-                    ("name", name_node),
-                    ("type", kind),
-                    ("label", label),
-                    ("submission", submission),
-                ];
-                if name == "LBORRESU" && case != "no derivation" {
-                    let literal = a.texts(&[("literal", "mg/dL")]);
-                    fields.push(("derivation", literal));
+                let mut metadata = vec![("core", core), ("length", length), ("origin", origin)];
+                if name == "LBORRESU" {
+                    let mut entries = Vec::new();
+                    for written in written(case) {
+                        let id = a.text(written.id);
+                        let terms = written
+                            .clause
+                            .iter()
+                            .map(|(column, values)| (*column, a.strings(values)))
+                            .collect();
+                        let clause = a.map(terms);
+                        // A literal refutes Derived: the value is read from no input.
+                        let origin_type = if case == "refuted origin" && written.id == "GLUC" {
+                            "Derived"
+                        } else {
+                            "Assigned"
+                        };
+                        let source = if case == "invalid source" && written.id == "CREAT" {
+                            "Investigator"
+                        } else {
+                            written.source
+                        };
+                        let origin = a.texts(&[("type", origin_type), ("source", source)]);
+                        let method = a.text("Units assigned from the supplied test metadata");
+                        let mut fields = vec![
+                            ("id", id),
+                            ("where", clause),
+                            ("origin", origin),
+                            ("method", method),
+                        ];
+                        if matches!(
+                            case,
+                            "stable values" | "reordered values" | "inserted value"
+                        ) {
+                            let comment = a.text("Independent value metadata comment");
+                            fields.push(("comment", comment));
+                        }
+                        if case == "labelled" && written.id == "GLUC" {
+                            let label = a.text("Glucose units");
+                            fields.push(("label", label));
+                        }
+                        entries.push(a.map(fields));
+                    }
+                    let entries = a.node(N::Sequence(entries));
+                    metadata.push(("value_level", entries));
                 }
+                let submission = a.map(metadata);
+                fields.push(("submission", submission));
                 columns.push(a.map(fields));
             }
             let columns = a.node(N::Sequence(columns));
-            let mut names = vec![a.text("LBTESTCD")];
-            if case != "not output" {
-                names.push(a.text("LBORRESU"));
-            }
-            let output_names = a.node(N::Sequence(names));
+            let names = a.strings(&["LBTESTCD", "LBSPEC", "LBSEQ", "LBORRESU"]);
             let output_path = a.text("lb.csv");
-            let output = a.map(vec![("path", output_path), ("columns", output_names)]);
+            let output = a.map(vec![("path", output_path), ("columns", names)]);
             let mut rows = Vec::new();
-            let row_order: &[usize] = match case {
-                "reordered values" => &[1, 0],
-                "inserted value" => &[2, 0, 1],
-                _ => &[0, 1],
-            };
-            for &index in row_order {
-                let id = a.text(match (index, case) {
-                    (0, "arbitrary row ID" | "arbitrary invalid source") => {
-                        "glucose / primary test: 1"
-                    }
-                    (0, "empty row ID") => "",
-                    (0, _) => "glucose",
-                    (1, _) => "creatinine",
-                    _ => "albumin",
-                });
-                let literal = if case == "dynamic discriminator" && index == 0 {
-                    a.texts(&[("source", "ODM.TestCode")])
-                } else if case == "ambiguous discriminator" && index == 0 {
-                    a.texts(&[("literal", "GLUC"), ("source", "ODM.TestCode")])
-                } else if case == "nonstring discriminator" && index == 0 {
-                    let number = a.node(N::Integer("1".into()));
-                    a.map(vec![("literal", number)])
-                } else {
-                    a.texts(&[(
-                        "literal",
-                        if index == 0 && case == "escaped test code" {
-                            "A.&\" /é"
-                        } else if index == 0 || matches!(case, "conflict" | "identical") {
-                            "GLUC"
-                        } else if index == 1 {
-                            "CREAT"
-                        } else {
-                            "ALB"
-                        },
-                    )])
-                };
-                let literal = if case == "normalized discriminator" {
+            for (id, code) in [
+                ("glucose", "GLUC"),
+                ("creatinine", "CREAT"),
+                ("albumin", "ALB"),
+            ] {
+                let id = a.text(id);
+                let literal = a.texts(&[("literal", code)]);
+                // The normalized handler form keeps the literal readable.
+                let literal = if case == "normalized where column" {
                     let unconvertible = a.node(N::Null);
                     a.map(vec![("value", literal), ("unconvertible", unconvertible)])
                 } else {
-                    literal
+                    a.map(vec![("value", literal)])
                 };
                 let derivations = a.map(vec![("LBTESTCD", literal)]);
-                // A literal refutes Derived: the value is read from no input.
-                let origin_type = if case == "refuted origin" && index == 0 {
-                    "Derived"
-                } else {
-                    "Assigned"
-                };
-                let source = if (case == "invalid source" && index == 1)
-                    || (case == "arbitrary invalid source" && index == 0)
-                {
-                    "Investigator"
-                } else if index == 0 || case == "identical" {
-                    "Vendor"
-                } else {
-                    "Sponsor"
-                };
-                let origin = a.texts(&[("type", origin_type), ("source", source)]);
-                let method = a.text("Units assigned from the supplied test metadata");
-                let mut metadata_fields = vec![("origin", origin), ("method", method)];
-                if matches!(
-                    case,
-                    "stable values" | "reordered values" | "inserted value"
-                ) {
-                    let comment = a.text("Independent value metadata comment");
-                    metadata_fields.push(("comment", comment));
-                }
-                let metadata = a.map(metadata_fields);
-                let submission = a.map(vec![(
-                    if case == "unknown column" && index == 0 {
-                        "BOGUS"
-                    } else {
-                        "LBORRESU"
-                    },
-                    metadata,
-                )]);
-                rows.push(a.map(vec![
-                    ("id", id),
-                    ("derivations", derivations),
-                    ("submission", submission),
-                ]));
+                rows.push(a.map(vec![("id", id), ("derivations", derivations)]));
             }
             let rows = a.node(N::Sequence(rows));
             let root = a.map(vec![
@@ -2433,30 +2481,46 @@ mod schema {
                 "2026-09-11T00:00:00",
             )
         }
+        fn render(case: &str) -> String {
+            String::from_utf8(
+                submission_xml::render(&compose(&specification(case)).unwrap()).unwrap(),
+            )
+            .unwrap()
+        }
 
         #[test]
-        fn overrides_inherit_complete_metadata_and_preserve_written_occurrences() {
+        fn entries_inherit_complete_metadata_and_preserve_written_occurrences() {
             let document = specification("valid");
             let declared = declarations::decode(&document, document.root()).unwrap();
-            assert_eq!(declared.value_rows().len(), 2);
-            let row = &declared.value_rows()[0];
-            assert_eq!(row.id.value, "glucose");
-            assert_eq!(document.field(row.node, "submission"), row.origin.node);
-            assert_eq!(row.overrides[0].name.value, "LBORRESU");
-            assert!(row.overrides[0].submission.core.is_none());
+            let columns = &declared.columns().unwrap().value;
+            let units = columns.iter().find(|c| c.name.value == "LBORRESU").unwrap();
+            let metadata = units.submission.as_ref().unwrap();
+            assert_eq!(metadata.value_level.len(), 2);
+            let entry = &metadata.value_level[0];
+            assert_eq!(entry.id.value, "GLUC");
+            assert_eq!(entry.clause.len(), 1);
+            assert_eq!(entry.clause[0].column.value, "LBTESTCD");
+            assert_eq!(entry.clause[0].values[0].value, "GLUC");
+            assert!(entry.metadata.core.is_none());
+            assert!(entry.metadata.value_level.is_empty());
+            assert_eq!(
+                document.field(entry.origin.node.unwrap(), "id"),
+                entry.id.origin.node
+            );
             let study = compose(&document).unwrap();
-            let column = &study.datasets()[0].columns()[1];
+            let column = &study.datasets()[0].columns()[3];
             assert_eq!(column.values().len(), 2);
             let value = &column.values()[0];
-            assert_eq!(value.test_code(), "GLUC");
-            let metadata = value.column().declaration().submission.as_ref().unwrap();
+            assert_eq!(value.id(), "GLUC");
+            let merged = value.column().declaration().submission.as_ref().unwrap();
             assert_eq!(
-                metadata.core.as_ref().unwrap().value,
+                merged.core.as_ref().unwrap().value,
                 declarations::Core::Expected
             );
-            assert_eq!(metadata.length.as_ref().unwrap().value, "8");
+            assert_eq!(merged.length.as_ref().unwrap().value, "8");
+            assert!(merged.value_level.is_empty());
             assert_eq!(
-                metadata
+                merged
                     .origin_metadata
                     .as_ref()
                     .unwrap()
@@ -2468,120 +2532,137 @@ mod schema {
             );
         }
         #[test]
-        fn complete_row_metadata_keeps_all_admitted_overrides() {
-            let document = specification("valid");
-            assert_eq!(
-                declarations::decode(&document, document.root())
-                    .unwrap()
-                    .value_rows()
-                    .len(),
-                2
-            );
-        }
-        #[test]
-        fn arbitrary_row_labels_and_normalized_literal_handlers_retain_their_meaning() {
-            for case in ["arbitrary row ID", "normalized discriminator"] {
-                let document = specification(case);
-                let declared = declarations::decode(&document, document.root()).unwrap();
-                let study = compose(&document).unwrap();
-                let value = &study.datasets()[0].columns()[1].values()[0];
-                assert_eq!(value.test_code(), "GLUC");
-                if case == "arbitrary row ID" {
-                    assert_eq!(
-                        declared.value_rows()[0].id.value,
-                        "glucose / primary test: 1"
-                    );
-                }
-            }
-            let findings = compose(&specification("arbitrary invalid source")).unwrap_err();
+        fn an_entry_label_describes_its_definition_and_normalized_literals_still_decide_its_rows() {
+            let xml = render("labelled");
+            let start = xml.find("<ItemDef OID=\"IT.LB.LBORRESU.GLUC\"").unwrap();
+            let item = &xml[start..start + xml[start..].find("</ItemDef>").unwrap()];
+            assert!(item.contains(">Glucose units</TranslatedText>"));
+            let start = xml.find("<ItemDef OID=\"IT.LB.LBORRESU.CREAT\"").unwrap();
+            let item = &xml[start..start + xml[start..].find("</ItemDef>").unwrap()];
+            assert!(item.contains(">Original units</TranslatedText>"));
+            // A Derived entry is refuted by the literal of the template its
+            // where clause selects, through the normalized handler form.
+            let mut document = specification("normalized where column");
+            assert!(compose(&document).is_ok());
+            document = specification("refuted origin");
+            let findings = compose(&document).unwrap_err();
             assert!(findings.iter().any(|finding| finding.definition().condition
-                == "origin_source_not_admitted"
+                == "refuted_value_origin"
                 && finding
                     .path
-                    .ends_with("rows.glucose / primary test: 1.submission.LBORRESU.origin")));
+                    .ends_with("columns.LBORRESU.submission.value_level.GLUC")));
         }
         #[test]
-        fn an_empty_row_label_is_a_text_refusal_with_its_original_field_occurrence() {
-            let document = specification("empty row ID");
+        fn an_entry_id_outside_the_identifier_pattern_is_a_refusal_with_its_entry_path() {
+            let mut a = Arena::default();
+            let id = a.text("glucose / primary test: 1");
+            let terms = a.strings(&["GLUC"]);
+            let clause = a.map(vec![("LBTESTCD", terms)]);
+            let entry = a.map(vec![("id", id), ("where", clause)]);
+            let entries = a.node(N::Sequence(vec![entry]));
+            let submission = a.map(vec![("value_level", entries)]);
+            let name = a.text("LBORRESU");
+            let kind = a.text("str");
+            let column = a.map(vec![
+                ("name", name),
+                ("type", kind),
+                ("submission", submission),
+            ]);
+            let columns = a.node(N::Sequence(vec![column]));
+            let root = a.map(vec![("columns", columns)]);
+            let document = a.finish(root);
             let error = declarations::decode(&document, document.root()).unwrap_err();
-            assert!(std::ptr::eq(error.input, &document));
             let declarations::Cause::Findings(findings) = error.cause else {
-                panic!("expected a structural text refusal");
+                panic!("expected a structural identifier refusal");
             };
             assert_eq!(findings.len(), 1);
-            assert_eq!(findings[0].kind, declarations::Kind::EmptyText);
-            assert!(findings[0].requirement().is_none());
+            assert_eq!(findings[0].kind, declarations::Kind::InvalidIdentifier);
+            use declarations::{FieldName as F, Step};
             assert_eq!(
                 findings[0].path.steps().collect::<Vec<_>>(),
                 [
-                    declarations::Step::Field(declarations::FieldName::Rows),
-                    declarations::Step::Index(0),
-                    declarations::Step::Field(declarations::FieldName::Id),
+                    Step::Field(F::Columns),
+                    Step::Index(0),
+                    Step::Field(F::Submission),
+                    Step::Field(F::ValueLevel),
+                    Step::Index(0),
+                    Step::Field(F::Id),
                 ]
             );
         }
         #[test]
-        fn each_independent_value_admission_control_has_the_required_condition_and_row_path() {
-            for (case, condition, requirement, suffix) in [
+        fn each_independent_value_admission_control_has_the_required_condition_and_entry_path() {
+            let entry = "sdtm.specs[0].columns.LBORRESU.submission.value_level";
+            for (case, condition, requirement, suffix, reason) in [
                 (
-                    "no discriminator",
-                    "value_metadata_requires_testcd",
-                    "REQ-1163",
-                    "rows.glucose.submission",
+                    "duplicate id",
+                    "duplicate_identifier",
+                    "SUB-12",
+                    format!("{entry}.GLUC.id"),
+                    None,
                 ),
                 (
-                    "dynamic discriminator",
-                    "value_metadata_requires_literal_testcd",
-                    "REQ-1164",
-                    "rows.glucose.submission",
+                    "overlap",
+                    "value_level_overlap",
+                    "SUB-12",
+                    format!("{entry}.ANY.where"),
+                    None,
                 ),
                 (
-                    "ambiguous discriminator",
-                    "value_metadata_requires_literal_testcd",
-                    "REQ-1164",
-                    "rows.glucose.submission",
+                    "subset overlap",
+                    "value_level_overlap",
+                    "SUB-12",
+                    format!("{entry}.GLUCSER.where"),
+                    None,
                 ),
                 (
-                    "nonstring discriminator",
-                    "value_metadata_requires_literal_testcd",
-                    "REQ-1164",
-                    "rows.glucose.submission",
+                    "no values",
+                    "value_level_where_invalid",
+                    "SUB-12",
+                    format!("{entry}.GLUC.where.LBTESTCD"),
+                    Some("no_values"),
                 ),
                 (
                     "unknown column",
-                    "value_metadata_unknown_column",
-                    "REQ-1165",
-                    "rows.glucose.submission.BOGUS",
+                    "value_level_where_invalid",
+                    "SUB-12",
+                    format!("{entry}.GLUC.where.BOGUS"),
+                    Some("undeclared"),
                 ),
                 (
-                    "no derivation",
-                    "value_metadata_unknown_column",
-                    "REQ-1165",
-                    "rows.glucose.submission.LBORRESU",
+                    "internal column",
+                    "value_level_where_invalid",
+                    "SUB-12",
+                    format!("{entry}.GLUC.where.LBNAM"),
+                    Some("not_output"),
                 ),
                 (
-                    "not output",
-                    "value_metadata_not_output_column",
-                    "REQ-1166",
-                    "rows.glucose.submission.LBORRESU",
+                    "numeric column",
+                    "value_level_where_invalid",
+                    "SUB-12",
+                    format!("{entry}.GLUC.where.LBSEQ"),
+                    Some("not_str"),
                 ),
                 (
-                    "conflict",
-                    "conflicting_value_metadata",
-                    "REQ-1167",
-                    "rows.creatinine.submission.LBORRESU",
+                    "own column",
+                    "value_level_where_invalid",
+                    "SUB-12",
+                    format!("{entry}.GLUC.where.LBORRESU"),
+                    Some("self"),
                 ),
                 (
                     "refuted origin",
                     "refuted_value_origin",
-                    "REQ-1168",
-                    "rows.glucose.submission.LBORRESU",
+                    "SUB-13",
+                    format!("{entry}.GLUC"),
+                    None,
                 ),
                 (
                     "invalid source",
                     "origin_source_not_admitted",
                     "REQ-0919",
-                    "rows.creatinine.submission.LBORRESU.origin",
+                    format!("{entry}.CREAT.origin"),
+                    None,
                 ),
             ] {
                 let findings = compose(&specification(case)).unwrap_err();
@@ -2590,32 +2671,25 @@ mod schema {
                         .iter()
                         .any(|finding| finding.definition().condition == condition
                             && finding.definition().requirement == Some(requirement)
-                            && finding.path.ends_with(suffix)),
+                            && finding.path == suffix
+                            && reason.is_none_or(|reason| finding.context["detail"]
+                                == yamaa_core::json::Value::String(reason.into()))),
                     "{case}: {findings:?}"
                 );
             }
-        }
-        #[test]
-        fn identical_declarations_at_distinct_nodes_share_one_value_definition() {
-            let document = specification("identical");
-            let declared = declarations::decode(&document, document.root()).unwrap();
-            let a = &declared.value_rows()[0].overrides[0].submission;
-            let b = &declared.value_rows()[1].overrides[0].submission;
-            assert_ne!(a, b, "distinct occurrence facts are retained");
-            assert!(a.same_values(b));
-            let study = compose(&document).unwrap();
-            assert_eq!(study.datasets()[0].columns()[1].values().len(), 1);
+            // Clauses over columns neither of which contains the other are
+            // admitted; the build fails a row both select.
+            assert!(compose(&specification("conjunction")).is_ok());
         }
         #[test]
         fn fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references() {
-            let study = compose(&specification("valid")).unwrap();
-            let xml = String::from_utf8(submission_xml::render(&study).unwrap()).unwrap();
+            let xml = render("valid");
             assert!(xml.contains("CreationDateTime=\"2026-09-11T00:00:00\""));
             assert!(xml.contains("SourceSystemVersion=\"1.0\""));
             assert_eq!(xml.matches("<def:ValueListDef ").count(), 1);
             assert_eq!(xml.matches("<def:ValueListRef ").count(), 1);
             assert_eq!(xml.matches("<def:WhereClauseDef ").count(), 2);
-            assert_eq!(xml.matches("<ItemDef ").count(), 4);
+            assert_eq!(xml.matches("<ItemDef ").count(), 6);
             assert!(xml.contains("<def:ValueListRef ValueListOID=\"VL.LB.LBORRESU\"/>"));
             for (index, code, source) in [(1, "GLUC", "Vendor"), (2, "CREAT", "Sponsor")] {
                 let identity = format!("LB.LBORRESU.{code}");
@@ -2644,15 +2718,32 @@ mod schema {
             let item = &xml[start..start + xml[start..].find("</ItemDef>").unwrap()];
             assert!(item.find("<def:Origin ").unwrap() < item.find("<def:ValueListRef ").unwrap());
         }
+        #[test]
+        fn several_values_are_a_membership_and_several_columns_one_range_check_each() {
+            let xml = render("membership");
+            assert!(xml.contains(concat!(
+                "<def:WhereClauseDef OID=\"WC.LB.LBORRESU.CHEM\">\n",
+                "        <RangeCheck Comparator=\"IN\" SoftHard=\"Soft\" def:ItemOID=\"IT.LB.LBTESTCD\">\n",
+                "          <CheckValue>GLUC</CheckValue>\n",
+                "          <CheckValue>CREAT</CheckValue>\n",
+                "        </RangeCheck>\n",
+                "      </def:WhereClauseDef>\n",
+            )));
+            let xml = render("conjunction");
+            assert!(xml.contains(concat!(
+                "<def:WhereClauseDef OID=\"WC.LB.LBORRESU.GLUCSER\">\n",
+                "        <RangeCheck Comparator=\"EQ\" SoftHard=\"Soft\" def:ItemOID=\"IT.LB.LBTESTCD\">\n",
+                "          <CheckValue>GLUC</CheckValue>\n",
+                "        </RangeCheck>\n",
+                "        <RangeCheck Comparator=\"EQ\" SoftHard=\"Soft\" def:ItemOID=\"IT.LB.LBSPEC\">\n",
+                "          <CheckValue>SERUM</CheckValue>\n",
+                "        </RangeCheck>\n",
+                "      </def:WhereClauseDef>\n",
+            )));
+        }
 
         #[test]
-        fn value_identifiers_survive_unrelated_insertion_and_row_reordering() {
-            let render = |case| {
-                String::from_utf8(
-                    submission_xml::render(&compose(&specification(case)).unwrap()).unwrap(),
-                )
-                .unwrap()
-            };
+        fn value_identifiers_survive_unrelated_insertion_and_entry_reordering() {
             let original = render("stable values");
             let reordered = render("reordered values");
             let inserted = render("inserted value");
@@ -2675,15 +2766,10 @@ mod schema {
         }
 
         #[test]
-        fn value_identifier_retains_the_literal_with_xml_attribute_escaping() {
-            let xml = String::from_utf8(
-                submission_xml::render(&compose(&specification("escaped test code")).unwrap())
-                    .unwrap(),
-            )
-            .unwrap();
-            assert!(xml.contains("ItemOID=\"IT.LB.LBORRESU.A.&amp;&quot; /é\""));
-            assert!(xml.contains(" OID=\"WC.LB.LBORRESU.A.&amp;&quot; /é\""));
-            assert!(xml.contains("<CheckValue>A.&amp;\" /é</CheckValue>"));
+        fn where_values_keep_their_text_with_xml_escaping() {
+            let xml = render("escaped value");
+            assert!(xml.contains("ItemOID=\"IT.LB.LBORRESU.GLUC\""));
+            assert!(xml.contains("<CheckValue>A.&amp;\" /\u{e9}</CheckValue>"));
         }
     }
 }

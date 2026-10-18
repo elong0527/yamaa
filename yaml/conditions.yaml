@@ -25,8 +25,6 @@ conditions:
   codelist_type_mismatch: {phases: [validation]}
   conflicting_absence_policy: {phases: [validation]}
   conflicting_row_construction: {phases: [validation]}
-  # REQ-1167
-  conflicting_value_metadata: {phases: [validation]}
   conversion_failed: {phases: [convert, validation]}
   core_mandatory_conflict: {phases: [validation]}
   correlated_derivation_with_unique_verification: {phases: [validation]}
@@ -138,7 +136,6 @@ conditions:
   redundant_field_type: {phases: [validation]}
   redundant_long_form: {phases: [validation]}
   reference_data_repeating_conflict: {phases: [validation]}
-  # REQ-1168
   refuted_value_origin: {phases: [validation]}
   regex_group_out_of_range: {phases: [validation]}
   rename_only_intermediate: {phases: [validation]}
@@ -207,14 +204,10 @@ conditions:
   unresolvable_name: {phases: [validation]}
   unsupported_operation: {phases: [planning]}
   untransportable_text: {phases: [validation]}
-  # REQ-1166
-  value_metadata_not_output_column: {phases: [validation]}
-  # REQ-1164
-  value_metadata_requires_literal_testcd: {phases: [validation]}
-  # REQ-1163
-  value_metadata_requires_testcd: {phases: [validation]}
-  # REQ-1165
-  value_metadata_unknown_column: {phases: [validation]}
+  value_level_multiple_matches: {phases: [verification]}
+  value_level_overlap: {phases: [validation]}
+  value_level_unmatched: {phases: [verification]}
+  value_level_where_invalid: {phases: [validation]}
   value_not_permitted: {phases: [validation]}
   window_order_by_forbidden: {phases: [validation]}
   window_order_by_required: {phases: [validation]}
