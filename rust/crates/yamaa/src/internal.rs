@@ -631,6 +631,33 @@ pub(crate) fn run(
     }
 }
 
+/// The specification and project identities a request compiles to, resolved
+/// now exactly as compilation resolves them (#3069). A local path is made
+/// absolute against the current working directory and its parent directory
+/// canonical, so a relative path after a working-directory change, or a path
+/// through a retargeted link, resolves to another identity. A caller resolver
+/// names files by the references it is given, so those are the identities.
+/// `None` when a local path cannot be resolved; such a request compiles and
+/// reports why, and nothing is kept for it.
+pub(crate) fn request_identity(
+    shared: &EngineShared,
+    request: &crate::engine::Request<'_>,
+) -> Option<crate::api::PlanKey> {
+    if shared.resolver.is_some() {
+        return Some((
+            request.specification.to_owned(),
+            request.environment.map(str::to_owned),
+        ));
+    }
+    let identity = |written| yamaa_adapters::file_configuration::caller_identity(written).ok();
+    let specification = identity(request.specification)?;
+    let environment = match request.environment {
+        Some(environment) => Some(identity(environment)?),
+        None => None,
+    };
+    Some((specification, environment))
+}
+
 /// Whether two engine configurations compile and run alike: the same host
 /// language, and no resolver or the same caller resolver.
 pub(crate) fn same_authority(left: &EngineShared, right: &EngineShared) -> bool {

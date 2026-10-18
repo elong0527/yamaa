@@ -220,6 +220,11 @@ def main(argv=None):
             if path.is_file() and not path.is_symlink()
         }
 
+    def plan_of(run):
+        """How the run got its plan, from its private observations:
+        compiled, refused or reused."""
+        return json.loads(run._native.observations(True))["measurements"]["plan"]
+
     def build(case, entry, specification, repeat=False):
         # An entry's `environment` names the project file it runs with.
         project = entry["environment"]
@@ -231,17 +236,30 @@ def main(argv=None):
             name = read_yaml(case / entry["specification"])["domain"]
             listing = project_for(case, project, entry["specification"], specification)
             spec = yamaa.project(case / listing).spec(name)
+        first = spec.run()
         record = {
             "specification": specification,
             "environment": project,
-            **observe(spec.run()),
+            **observe(first),
         }
         if repeat:
             # The repeat pass (#2821): a second run of the same object reuses
             # what the first compiled and must equal it, saving the same bytes.
+            record["plan"] = plan_of(first)
             before = files(case)
-            again = observe(spec.run())
-            record["repeat"] = {**again, "same_files": files(case) == before}
+            second = spec.run()
+            again = observe(second)
+            after = files(case)
+            changed = sorted(
+                path.relative_to(case).as_posix()
+                for path in before.keys() | after.keys()
+                if before.get(path) != after.get(path)
+            )
+            record["repeat"] = {
+                **again,
+                "plan": plan_of(second),
+                "changed_files": changed,
+            }
         return record
 
     for example in plan["examples"]:

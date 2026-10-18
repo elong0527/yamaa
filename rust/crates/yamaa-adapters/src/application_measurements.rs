@@ -73,6 +73,7 @@ struct State {
     saves: Vec<Save>,
     save_attempts: u64,
     refusals: Vec<Refusal>,
+    plan: Option<&'static str>,
 }
 pub struct Measurements {
     origin: Instant,
@@ -96,8 +97,16 @@ impl Measurements {
                 saves: Vec::new(),
                 save_attempts: 0,
                 refusals: Vec::new(),
+                plan: None,
             }),
         }
+    }
+    /// Record how the run got its plan: `compiled` when it compiled its
+    /// specification, `refused` when that compilation was refused, `reused`
+    /// when it ran a plan an earlier compilation made. Private evidence only;
+    /// no public result shows it.
+    pub fn plan(&self, status: &'static str) {
+        self.state().plan = Some(status);
     }
     fn state(&self) -> std::sync::MutexGuard<'_, State> {
         self.state
@@ -185,7 +194,7 @@ impl Measurements {
             "types":{"offsets":"uint64 nanoseconds since owner origin","function_counts":"uint64 actual calls","resource_counts":"usize; required null preserves original overflow/absence"},
             "classified_refusals":state.refusals,
             "admitted":state.refused.is_none() && state.finished && state.accepted.is_some() && state.saves.iter().all(|save|save.completed_ns.is_some()),"refusal":state.refused,"original_execution_finished":state.finished,"build_accepted":state.accepted,
-            "stages":state.records,"function_calls":callback_counts,"save_attempts":state.save_attempts,"saves":state.saves})
+            "stages":state.records,"function_calls":callback_counts,"save_attempts":state.save_attempts,"saves":state.saves,"plan":state.plan})
     }
     pub fn envelope(&self, report: Option<String>) -> String {
         #[derive(Serialize)]

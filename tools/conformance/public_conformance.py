@@ -688,34 +688,85 @@ def judge_metamorphic(example, runtime, record, expectations):
     return outcome
 
 
+def first_difference(first, second, path):
+    """The path, first value and second value where two observations first
+    differ, or None when they are equal."""
+    if isinstance(first, dict) and isinstance(second, dict):
+        for key in sorted(first.keys() | second.keys(), key=str):
+            if key not in first or key not in second:
+                return f"{path}.{key}", first.get(key), second.get(key)
+            found = first_difference(first[key], second[key], f"{path}.{key}")
+            if found is not None:
+                return found
+        return None
+    if isinstance(first, list) and isinstance(second, list):
+        for index, (left, right) in enumerate(zip(first, second)):
+            found = first_difference(left, right, f"{path}[{index}]")
+            if found is not None:
+                return found
+        if len(first) == len(second):
+            return None
+        index = min(len(first), len(second))
+        return (
+            f"{path}[{index}]",
+            first[index] if index < len(first) else None,
+            second[index] if index < len(second) else None,
+        )
+    return None if first == second else (path, first, second)
+
+
+# The plan a second run of the same object must report, by the first run's:
+# a compiled plan is kept and reused; a refused compilation keeps nothing, so
+# the second run compiles again and is refused again.
+REPEATED_PLAN = {"compiled": "reused", "refused": "refused"}
+
+
 def judge_repeats(builds):
     """Each entry's object runs twice; the second run equals the first.
 
     A spec object's second run reuses the plan its first run compiled (#2821).
-    It must reproduce the first run's issues, typed public tables and save
-    outcome, and leave the saved files byte for byte as the first run saved
-    them, so the saved bytes judged against the authored truth below are both
-    runs' bytes.
+    It must say so in its private observations, reproduce the first run's
+    issues, typed public tables and save outcome, and leave every saved file
+    byte for byte as the first run saved it, so the saved bytes judged against
+    the authored truth below are both runs' bytes. A finding names the first
+    differing value or the changed files.
     """
     findings = []
     for build in builds:
+        name = build["specification"]
         repeat = build.get("repeat")
         if not isinstance(repeat, dict):
-            findings.append(f"{build['specification']} was not run a second time")
+            findings.append(f"{name} was not run a second time")
             continue
-        for field in ("issues", "tables", "saved"):
-            if repeat.get(field) != build.get(field):
-                findings.append(
-                    {
-                        "repeat": build["specification"],
-                        "differs_from_first_run": field,
-                    }
-                )
-        if repeat.get("same_files") is not True:
+        expected = REPEATED_PLAN.get(build.get("plan"))
+        if expected is None or repeat.get("plan") != expected:
             findings.append(
                 {
-                    "repeat": build["specification"],
+                    "repeat": name,
+                    "first_run_plan": build.get("plan"),
+                    "second_run_plan": repeat.get("plan"),
+                    "expected_second_run_plan": expected,
+                }
+            )
+        for field in ("issues", "tables", "saved"):
+            found = first_difference(build.get(field), repeat.get(field), field)
+            if found is not None:
+                at, first, second = found
+                findings.append(
+                    {
+                        "repeat": name,
+                        "differs_from_first_run": field,
+                        "at": at,
+                        "first_run": first,
+                        "second_run": second,
+                    }
+                )
+        if repeat.get("changed_files") != []:
+            findings.append(
+                {
+                    "repeat": name,
                     "differs_from_first_run": "saved files",
+                    "changed_files": repeat.get("changed_files"),
                 }
             )
     return findings

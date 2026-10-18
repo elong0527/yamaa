@@ -1416,6 +1416,13 @@ fn within(path: &[String], root: &[String]) -> bool {
 fn path_text(segments: &[String]) -> String {
     format!("{}/{}", segments[0], segments[1..].join("/"))
 }
+/// The identity a walk gives the file `name` in the canonical directory
+/// `parent`: its rooted segments in the engine's spelling. Opens nothing.
+pub(crate) fn file_identity(parent: &Path, name: &str) -> Option<String> {
+    let mut segments = directory_segments(parent)?;
+    segments.push(name.to_owned());
+    Some(path_text(&segments))
+}
 fn file_base(identity: &str) -> Result<Segments, Error> {
     let mut segments = rooted_segments(identity).ok_or(Error::InvalidPath)?;
     if segments.len() <= 1

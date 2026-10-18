@@ -1,8 +1,10 @@
 # Lazy objects reuse what their first run compiled (#2821). A spec or project
-# object's first run compiles and keeps its plans; a later run reuses them once
-# every file they were compiled from is unchanged, and compiles again when one
-# changed, so no run is stale. Inputs are read afresh by every run. Inputs and
-# truth come from the shared plan-reuse host fixtures, which Python reads too.
+# object's first run compiles and keeps its plans; a later run reuses them while
+# the object's paths still name the files they were compiled from and every one
+# is unchanged, and compiles again otherwise, so no run is stale and none runs a
+# study the paths no longer name (#3069). Inputs are read afresh by every run.
+# Inputs and truth come from the shared plan-reuse host fixtures, which Python
+# reads too.
 library(yamaa)
 host_fixture_root <- if (file.exists("host-fixtures/reader.R")) "host-fixtures" else
   system.file("host-fixtures", package = "yamaa", mustWork = TRUE)
@@ -11,12 +13,15 @@ truth <- read_host_fixture(host_fixture_root, "plan-reuse")
 root <- tempfile("yamaa-plan-reuse-"); dir.create(root)
 root <- normalizePath(root, winslash = "/")
 
-# A compiling run's private measurements hold the preparation phase; a reusing
-# run's start at the run.
-compiled <- function(run) {
-  grepl('"phase":"preparation"', yamaa:::.run_observations(run, include_measurements = TRUE),
-    fixed = TRUE)
+# How a run got its plan, from its private measurements: compiled, refused or
+# reused. The measurements close the observations, so their plan is the last
+# one named.
+plan_of <- function(run) {
+  text <- yamaa:::.run_observations(run, include_measurements = TRUE)
+  found <- regmatches(text, gregexpr('"plan":"[a-z]+"', text))[[1L]]
+  sub('^"plan":"([a-z]+)"$', "\\1", found[[length(found)]])
 }
+compiled <- function(run) !identical(plan_of(run), "reused")
 # Files keep LF line ends on every platform.
 write_text <- function(path, text) {
   dir.create(dirname(path), showWarnings = FALSE, recursive = TRUE)
@@ -172,4 +177,101 @@ qualify_project <- function() {
   cat("a project object reuses its plans and runs every change\n")
 }
 qualify_project()
+
+plain <- paste0("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n",
+  "input: {SRC: {path: input.csv, types: {ID: int}}}\n",
+  "output: {path: out.csv, columns: [ID]}\n",
+  "columns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\n")
+# Studies A and B with the same file names; B has one more row.
+studies <- function(where) {
+  for (name in c("a", "b")) {
+    rows <- if (name == "a") "ID\n1\n2\n" else "ID\n1\n2\n3\n"
+    write_text(file.path(where, name, "spec.yaml"), plain)
+    write_text(file.path(where, name, "dm.yaml"),
+      sub("out.csv", "dm.csv", sub("domain: TEST", "domain: DM", plain, fixed = TRUE), fixed = TRUE))
+    write_text(file.path(where, name, "project.yaml"), "schema_version: '1.0'\nsdtm:\n  specs: [dm.yaml]\n")
+    write_text(file.path(where, name, "input.csv"), rows)
+  }
+}
+
+qualify_working_directory <- function() {
+  where <- file.path(root, "moved")
+  studies(where)
+  previous <- setwd(file.path(where, "a"))
+  on.exit(setwd(previous))
+  spec <- yamaa_spec("spec.yaml")
+  project <- yamaa_project("project.yaml")
+  member <- project$spec("DM")
+  saved <- function(run, study, name) {
+    run$save()
+    read_text(file.path(where, study, name))
+  }
+  a <- "ID\n1\n2\n"
+  b <- "ID\n1\n2\n3\n"
+  first <- spec$run()
+  stopifnot(identical(plan_of(first), "compiled"), identical(saved(first, "a", "out.csv"), a),
+    identical(plan_of(spec$run()), "reused"), identical(saved(project$run(), "a", "dm.csv"), a),
+    identical(plan_of(member$run()), "compiled"), identical(plan_of(member$run()), "reused"))
+  # The same spellings now name study B: each object builds B and leaves A's
+  # saved files as they were.
+  setwd(file.path(where, "b"))
+  moved <- spec$run()
+  stopifnot(identical(plan_of(moved), "compiled"), identical(saved(moved, "b", "out.csv"), b),
+    identical(read_text(file.path(where, "a", "out.csv")), a), nrow(spec$check()$issues) == 0L,
+    identical(saved(project$run(), "b", "dm.csv"), b),
+    identical(read_text(file.path(where, "a", "dm.csv")), a))
+  # `project$spec(name)` keeps its located specification, A's, with the
+  # project's relative path, which now names B's project.
+  stopifnot(identical(plan_of(member$run()), "compiled"), identical(plan_of(member$run()), "reused"))
+  # Back in A, the spec object compiles A again: it keeps one plan.
+  setwd(file.path(where, "a"))
+  stopifnot(identical(plan_of(spec$run()), "compiled"))
+  cat("relative paths after a working directory change build the new study\n")
+}
+qualify_working_directory()
+
+qualify_link <- function() {
+  if (.Platform$OS.type == "windows") return(invisible(NULL))
+  where <- file.path(root, "linked")
+  studies(where)
+  link <- file.path(where, "study")
+  stopifnot(file.symlink(file.path(where, "a"), link))
+  spec <- yamaa_spec(file.path(link, "spec.yaml"))
+  project <- yamaa_project(file.path(link, "project.yaml"))
+  stopifnot(identical(plan_of(spec$run()), "compiled"), identical(plan_of(spec$run()), "reused"),
+    nrow(project$run()[["DM"]]$output) == 2L)
+  stopifnot(file.remove(link), file.symlink(file.path(where, "b"), link))
+  moved <- spec$run()
+  stopifnot(identical(plan_of(moved), "compiled"), nrow(moved$output) == 3L,
+    nrow(project$run()[["DM"]]$output) == 3L)
+  cat("a path through a retargeted link builds the study it now names\n")
+}
+qualify_link()
+
+qualify_serialization <- function() {
+  where <- file.path(root, "serialized")
+  write_text(file.path(where, "spec.yaml"), plain)
+  write_text(file.path(where, "input.csv"), "ID\n1\n")
+  write_text(file.path(where, "dm.yaml"),
+    sub("out.csv", "dm.csv", sub("domain: TEST", "domain: DM", plain, fixed = TRUE), fixed = TRUE))
+  write_text(file.path(where, "project.yaml"), "schema_version: '1.0'\nsdtm:\n  specs: [dm.yaml]\n")
+  spec <- yamaa_spec(file.path(where, "spec.yaml"))
+  project <- yamaa_project(file.path(where, "project.yaml"))
+  stopifnot(identical(plan_of(spec$run()), "compiled"))
+  invisible(project$run())
+  # A restored object brings an expired holder, so it starts with nothing
+  # kept and compiles on its first run.
+  saved <- file.path(where, "objects.rds")
+  saveRDS(list(spec = spec, project = project), saved)
+  for (restored in list(readRDS(saved), unserialize(serialize(list(spec = spec, project = project), NULL)))) {
+    stopifnot(identical(plan_of(restored$spec$run()), "compiled"),
+      identical(plan_of(restored$spec$run()), "reused"),
+      nrow(restored$project$run()[["DM"]]$output) == 1L)
+  }
+  # The original keeps its own plan.
+  stopifnot(identical(plan_of(spec$run()), "reused"))
+  cat("restored objects start with nothing kept\n")
+}
+qualify_serialization()
+
 unlink(root, recursive = TRUE)

@@ -27,10 +27,14 @@ METADATA = "lifecycle: draft\nstandard: TEST\ndomain: TEST\n"
 
 
 def repeated(build):
-    """The build as the runners record it: its object's second run equals the
-    first and leaves the saved files unchanged (#2821)."""
+    """The build as the runners record it: its object compiled a plan, and its
+    second run reused it, equals the first and changed no saved file (#2821)."""
     repeat = copy.deepcopy({key: build[key] for key in ("issues", "tables", "saved")})
-    return {**build, "repeat": {**repeat, "same_files": True}}
+    return {
+        **build,
+        "plan": "compiled",
+        "repeat": {**repeat, "plan": "reused", "changed_files": []},
+    }
 
 
 class PublicConformance(unittest.TestCase):
@@ -88,7 +92,7 @@ class PublicConformance(unittest.TestCase):
         self.build["tables"]["output"]["columns"][0][1] = "float"
         self.assertEqual(self.verdict()["verdict"], "mismatch")
 
-    def test_a_second_run_must_equal_the_first(self):
+    def test_a_second_run_must_reuse_the_plan_and_equal_the_first(self):
         def verdict(build):
             return judge.compare_example(
                 self.example,
@@ -102,24 +106,74 @@ class PublicConformance(unittest.TestCase):
         missing = verdict(self.build)
         self.assertEqual(missing["verdict"], "mismatch")
         self.assertIn("spec.yaml was not run a second time", missing["findings"])
+        # A refused compilation keeps nothing: the second run is refused too.
+        refused = repeated(self.build)
+        refused.update(plan="refused")
+        refused["repeat"].update(plan="refused")
+        self.assertEqual(verdict(refused)["verdict"], "pass")
+        for first, second in (("compiled", "compiled"), ("refused", "reused")):
+            with self.subTest(first=first, second=second):
+                build = repeated(self.build)
+                build.update(plan=first)
+                build["repeat"].update(plan=second)
+                result = verdict(build)
+                self.assertEqual(result["verdict"], "mismatch")
+                self.assertIn(
+                    {
+                        "repeat": "spec.yaml",
+                        "first_run_plan": first,
+                        "second_run_plan": second,
+                        "expected_second_run_plan": judge.REPEATED_PLAN[first],
+                    },
+                    result["findings"],
+                )
         changes = {
-            "issues": lambda repeat: repeat["issues"].append(
-                {"phase": "derivation", "condition": "division_by_zero"}
+            "issues": (
+                lambda repeat: repeat["issues"].append(
+                    {"condition": "division_by_zero"}
+                ),
+                "issues[0]",
+                None,
+                {"condition": "division_by_zero"},
             ),
-            "tables": lambda repeat: repeat["tables"]["output"]["rows"].pop(),
-            "saved": lambda repeat: repeat.update(saved=False),
-            "saved files": lambda repeat: repeat.update(same_files=False),
+            "tables": (
+                lambda repeat: repeat["tables"]["output"]["rows"][1].__setitem__(
+                    0, "7"
+                ),
+                "tables.output.rows[1][0]",
+                "2",
+                "7",
+            ),
+            "saved": (lambda repeat: repeat.update(saved=False), "saved", True, False),
         }
-        for field, change in changes.items():
+        for field, (change, at, first, second) in changes.items():
             with self.subTest(field=field):
                 build = repeated(self.build)
                 change(build["repeat"])
                 result = verdict(build)
                 self.assertEqual(result["verdict"], "mismatch")
                 self.assertIn(
-                    {"repeat": "spec.yaml", "differs_from_first_run": field},
+                    {
+                        "repeat": "spec.yaml",
+                        "differs_from_first_run": field,
+                        "at": at,
+                        "first_run": first,
+                        "second_run": second,
+                    },
                     result["findings"],
                 )
+        build = repeated(self.build)
+        build["repeat"]["changed_files"] = ["result.csv"]
+        result = verdict(build)
+        self.assertEqual(result["verdict"], "mismatch")
+        self.assertIn(
+            {
+                "repeat": "spec.yaml",
+                "differs_from_first_run": "saved files",
+                "changed_files": ["result.csv"],
+            },
+            result["findings"],
+        )
 
     def test_retired_adapter_csv_mutations_cannot_pass_public_conformance(self):
         # Preserve the independent corruption controls from the retired

@@ -95,9 +95,10 @@ columns:
   nothing yet.
 * `run()` builds the dataset in memory. The first `run()` compiles the
   specification and keeps it. A later `run()` of the same object reuses it if
-  every file it was compiled from is unchanged: the specification, its layers
-  and linked specifications, and the project and environment files. Otherwise
-  it compiles again. Every `run()` reads the input data afresh.
+  its paths still name the same files, even after a change of working
+  directory, and every file it was compiled from is unchanged. Otherwise it
+  compiles again. Every `run()` reads the input data afresh. A copied,
+  pickled or restored object starts with nothing kept.
 * `save()` writes the dataset to `output.path` and the run report to
   `output.report`.
 

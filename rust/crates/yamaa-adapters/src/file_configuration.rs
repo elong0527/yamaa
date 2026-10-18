@@ -32,3 +32,29 @@ pub fn resources(written: &str) -> Result<(Resources, String), Error> {
         .ok_or(Error::Path(ResourceError::InvalidPath))?;
     Ok((resources, entry.into()))
 }
+
+/// The identity compilation gives the file a caller path names, resolved now:
+/// the path is made absolute against the current working directory, as
+/// [`resources`] and a project path's admission make it, and its parent
+/// directory canonical, so a changed working directory or a retargeted link
+/// in the parent gives another identity. Reads no file. A kept plan is reused
+/// only while its caller paths still resolve to the identities it recorded.
+pub fn caller_identity(written: &str) -> Result<String, Error> {
+    if written.is_empty() || written.contains('\0') {
+        return Err(Error::Path(ResourceError::InvalidPath));
+    }
+    let absolute =
+        std::path::absolute(written).map_err(|_| Error::Path(ResourceError::InvalidPath))?;
+    let parent = absolute
+        .parent()
+        .ok_or(Error::Path(ResourceError::InvalidPath))?;
+    let parent = crate::canonical_path::canonicalize(parent)
+        .map_err(|_| Error::Path(ResourceError::Missing))?;
+    let name = absolute
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .ok_or(Error::Path(ResourceError::InvalidPath))?;
+    crate::file_resources::file_identity(&parent, name)
+        .ok_or(Error::Path(ResourceError::InvalidPath))
+}
