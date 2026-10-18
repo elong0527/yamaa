@@ -32,29 +32,41 @@ class BindingsTests(unittest.TestCase):
         self.assertGreater(len(wrapped), 1)
         self.assertTrue(all(len(line) <= 88 for line in wrapped[:-1]))
 
-    def test_issue_record_is_declared_once_and_shared_by_every_issue_view(self):
+    def test_every_issues_view_crosses_as_one_arrow_table(self):
+        # The Rust facade builds the seven-column issues table; no host
+        # projects a private issue record.
         definition = generator._load_definition()
         stub = generator._render_pyi(definition)
-        self.assertEqual(stub.count("_IssueRecord = tuple["), 1)
-        self.assertIn("dict[str, object],", stub)
-        self.assertIn("tuple[int, int] | None,", stub)
-        self.assertEqual(stub.count("list[_IssueRecord]"), 4)
-        self.assertNotIn("issue_projection", stub)
+        self.assertNotIn("_IssueRecord", stub)
+        self.assertEqual(stub.count("def issues(self) -> _ArrowTable: ..."), 3)
+        self.assertIn("def member_issues(self, name: str) -> _ArrowTable: ...", stub)
         candidate = copy.deepcopy(definition)
-        candidate["python"]["issue_record"] = "list<text>"
-        with self.assertRaisesRegex(ValueError, "tuple"):
-            generator._render_pyi(candidate)
-        del candidate["python"]["issue_record"]
-        with self.assertRaisesRegex(ValueError, "issue_record"):
+        candidate["python"]["issue_record"] = "tuple<text>"
+        with self.assertRaisesRegex(ValueError, "unknown Python definition keys"):
             generator._validate_python(candidate)
+
+    def test_every_export_is_paired_with_the_other_host_or_host_only(self):
+        definition = generator._load_definition()
+        candidate = copy.deepcopy(definition)
+        candidate["host_only"]["python"].remove("_style_same_value")
+        with self.assertRaisesRegex(ValueError, "without an R counterpart"):
+            generator._validate_operations(candidate)
+        candidate = copy.deepcopy(definition)
+        candidate["host_only"]["r"].remove("run_interrupt")
+        with self.assertRaisesRegex(ValueError, "without a Python counterpart"):
+            generator._validate_operations(candidate)
+        candidate = copy.deepcopy(definition)
+        candidate["operations"]["read_odm"]["r"] = []
+        with self.assertRaisesRegex(ValueError, "both a Python and an R export"):
+            generator._validate_operations(candidate)
 
     def test_r_definition_refuses_malformed_or_ambiguous_surface(self):
         definition = generator._load_definition()
         mutations = [
             ("missing root", lambda r: r["groups"].pop(0)),
             ("unknown key", lambda r: r.update(extra=True)),
-            ("bad groups", lambda r: r.update(groups="domain_entry")),
-            ("bad group", lambda r: r["groups"].append("domain_entry")),
+            ("bad groups", lambda r: r.update(groups="api_entry")),
+            ("bad group", lambda r: r["groups"].append("api_entry")),
             ("duplicate module", lambda r: r["groups"].append(r["groups"][0])),
             ("source escape", lambda r: r["groups"][0].update(source="../lib.rs")),
             (
@@ -125,8 +137,8 @@ class BindingsTests(unittest.TestCase):
 
         def missing_include(path, *args, **kwargs):
             text = read_text(path, *args, **kwargs)
-            if path == generator.R_SOURCE / "domain_entry.rs":
-                return text.replace('include!("generated/domain_entry.rs");', "")
+            if path == generator.R_SOURCE / "api_entry.rs":
+                return text.replace('include!("generated/api_entry.rs");', "")
             return text
 
         with mock.patch.object(
@@ -139,83 +151,62 @@ class BindingsTests(unittest.TestCase):
 
     def test_existing_observation_entry_drives_both_hosts(self):
         definition = generator._load_definition()
-        domain = next(
+        run = next(
             export
             for export in definition["python"]["exports"]
-            if export["name"] == "_DomainResult"
+            if export["name"] == "_Run"
         )
-        group = definition["r"]["groups"][1]
-        method = next(m for m in domain["methods"] if m["name"] == "observations")
+        group = next(g for g in definition["r"]["groups"] if g["module"] == "api_entry")
+        method = next(m for m in run["methods"] if m["name"] == "observations")
         function = next(
-            f for f in group["functions"] if f["name"] == "domain_observations"
+            f for f in group["functions"] if f["name"] == "run_observations"
         )
-        domain["methods"].remove(method)
+        run["methods"].remove(method)
         group["functions"].remove(function)
         self.assertNotIn("def observations(", generator._render_pyi(definition))
         self.assertNotIn(
-            ".native_domain_observations", generator._render_r_wrappers(definition)
+            ".native_run_observations", generator._render_r_wrappers(definition)
         )
         self.assertNotIn(
-            "fn domain_observations;",
+            "fn run_observations;",
             generator._render_r_registration(group, definition["r"]),
         )
-        domain["methods"].append(method)
+        run["methods"].append(method)
         group["functions"].append(function)
         self.assertIn("def observations(", generator._render_pyi(definition))
         self.assertIn(
-            ".native_domain_observations <- function(handle, include_measurements)",
+            ".native_run_observations <- function(handle, include_measurements)",
             generator._render_r_wrappers(definition),
         )
         self.assertIn(
-            "fn domain_observations;",
+            "fn run_observations;",
             generator._render_r_registration(group, definition["r"]),
         )
         py_fn = next(
             export
             for export in definition["python"]["exports"]
-            if export["name"] == "_read_resolved_specification"
+            if export["name"] == "_read_odm"
         )
-        r_group = next(
-            g for g in definition["r"]["groups"] if g["module"] == "resolved_artifact"
-        )
-        r_fn = next(
-            f
-            for f in r_group["functions"]
-            if f["name"] == "read_resolved_specification"
-        )
+        r_fn = next(f for f in group["functions"] if f["name"] == "read_odm")
         definition["python"]["exports"].remove(py_fn)
-        r_group["functions"].remove(r_fn)
+        group["functions"].remove(r_fn)
+        self.assertNotIn("_read_odm", generator._render_pyi(definition))
+        self.assertNotIn("_read_odm", generator._render_lib_rs(definition))
+        self.assertNotIn(".native_read_odm", generator._render_r_wrappers(definition))
         self.assertNotIn(
-            "_read_resolved_specification", generator._render_pyi(definition)
-        )
-        self.assertNotIn(
-            "_read_resolved_specification", generator._render_lib_rs(definition)
-        )
-        self.assertNotIn(
-            ".native_read_resolved_specification",
-            generator._render_r_wrappers(definition),
-        )
-        self.assertNotIn(
-            "fn read_resolved_specification;",
-            generator._render_r_registration(r_group, definition["r"]),
+            "fn read_odm;", generator._render_r_registration(group, definition["r"])
         )
         definition["python"]["exports"].append(py_fn)
-        r_group["functions"].append(r_fn)
+        group["functions"].append(r_fn)
+        self.assertIn("def _read_odm(", generator._render_pyi(definition))
+        self.assertIn("api_entry::_read_odm", generator._render_lib_rs(definition))
         self.assertIn(
-            "def _read_resolved_specification(text: str) -> str: ...",
-            generator._render_pyi(definition),
-        )
-        self.assertIn(
-            "resolved_artifact::_read_resolved_specification",
-            generator._render_lib_rs(definition),
-        )
-        self.assertIn(
-            ".native_read_resolved_specification <- function(value)",
+            ".native_read_odm <- function(source, archive_member, "
+            "max_archive_members, max_expanded_bytes, max_xml_depth)",
             generator._render_r_wrappers(definition),
         )
         self.assertIn(
-            "fn read_resolved_specification;",
-            generator._render_r_registration(r_group, definition["r"]),
+            "fn read_odm;", generator._render_r_registration(group, definition["r"])
         )
 
     def test_read_only_check_rejects_r_generated_drift(self):
@@ -224,7 +215,7 @@ class BindingsTests(unittest.TestCase):
             with mock.patch("sys.argv", ["generate_bindings"]):
                 for target in (
                     generator.R_WRAPPERS_TARGET,
-                    generator.R_SOURCE / "generated" / "domain_entry.rs",
+                    generator.R_SOURCE / "generated" / "api_entry.rs",
                 ):
                     with self.subTest(target=target):
                         rendered[target] += "# drift\n"

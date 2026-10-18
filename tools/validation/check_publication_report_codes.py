@@ -7,7 +7,7 @@ from tools.paths import ROOT
 AUTHORITIES = (
     "rust/crates/yamaa-core/src/producer_publication.rs",
     "rust/crates/yamaa-adapters/src/producer_publication.rs",
-    "rust/crates/yamaa-adapters/src/producer_log_publication.rs",
+    "rust/crates/yamaa-adapters/src/producer_report_publication.rs",
     "rust/crates/yamaa-adapters/src/producer_result.rs",
 )
 REPORT = "rust/crates/yamaa-adapters/src/report_publication.rs"
