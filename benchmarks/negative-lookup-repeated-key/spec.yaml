@@ -1,0 +1,37 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+  EX: {path: input/ex.csv, types: {EXSTDTC: date}}
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, TRTSDT]
+
+intermediates:
+  # Each subject's earliest exposure record. The match list names USUBJID
+  # twice, so the specification is rejected before any data is read.
+  - id: FIRSTDOSE
+    dataset: EX
+    key: [STUDYID, USUBJID, USUBJID]
+    order_by: [EX.EXSTDTC]
+    keep: first
+    no_match: null
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  - name: TRTSDT
+    type: date
+    label: Date of First Exposure to Treatment
+    derivation: FIRSTDOSE.EXSTDTC
