@@ -96,6 +96,15 @@ impl Define {
     pub fn artifacts(&self) -> impl ExactSizeIterator<Item = (&str, &[u8], PublicationState)> {
         self.application.artifacts()
     }
+    /// A publisher for each artifact's target, writing nothing.
+    pub(crate) fn publishers(
+        &self,
+    ) -> Result<Vec<crate::resource_publication::Publisher>, file_publication::Error> {
+        self.application
+            .targets()
+            .map(|(target, written)| target.publisher(written))
+            .collect()
+    }
     pub fn capture_reads(&self) -> usize {
         self.ports
             .resources

@@ -245,7 +245,22 @@ impl FileGraph {
                 &documents[0].source().identity,
             )
             .map_err(Error::Document)?;
-            crate::producer_report_publication::admit_locations(&documents, &resources)?;
+            // Saved producers are not nodes; their documents are only on
+            // the edges that read them.
+            let saved_producers = if saved {
+                nodes
+                    .iter()
+                    .flat_map(|node| &node.producers)
+                    .map(|producer| Arc::clone(&producer.document))
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            crate::producer_report_publication::admit_locations(
+                &documents,
+                &saved_producers,
+                &resources,
+            )?;
             let root = documents[0].source().identity.as_str();
             if saved {
                 producer_graph::prepare_saved(root, nodes, environment)

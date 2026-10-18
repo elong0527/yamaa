@@ -284,6 +284,12 @@ impl ProjectRun {
                 &self.refusal,
             ));
         }
+        if self.steps.is_empty() {
+            return Err(Failure::new(
+                "the project run built no specification, so nothing was saved",
+                &Report::default(),
+            ));
+        }
         let failed = self.steps.iter().any(|step| step.run.output().is_none());
         let mut preflight = yamaa_adapters::project_scope::Preflight::new();
         for step in &self.steps {
@@ -350,8 +356,9 @@ impl Submission {
         report.table()
     }
 
-    /// Publish the sections in the order `sdtm`, `adam`, `send`; the first
-    /// section that fails stops the save.
+    /// Publish the sections in the order `sdtm`, `adam`, `send`, after
+    /// checking that no two sections write one file; the first section that
+    /// fails stops the save.
     pub fn save(&mut self) -> Result<(), Failure> {
         if !self.refusal.is_empty() {
             return Err(Failure::from_issues(
@@ -359,6 +366,25 @@ impl Submission {
                 &self.refusal,
             ));
         }
+        if self.sections.is_empty() {
+            return Err(Failure::new(
+                "the submission composed no section, so nothing was saved",
+                &Report::default(),
+            ));
+        }
+        let mut preflight = yamaa_adapters::project_scope::Preflight::new();
+        for (section, define) in &self.sections {
+            if let Err(issues) = define.preflight(&mut preflight) {
+                return Err(Failure::from_issues(
+                    format!(
+                        "cannot save the {} submission; see issues",
+                        yamaa_core::project_scope::key(*section)
+                    ),
+                    &issues,
+                ));
+            }
+        }
+        drop(preflight);
         for (section, define) in &mut self.sections {
             let key = yamaa_core::project_scope::key(*section);
             match define.save() {
@@ -446,9 +472,10 @@ impl Engine {
     /// or of all sections in that order. Each builds once, producer first; a
     /// producer in the run scope hands its artifact to its consumers in
     /// memory, and one outside it is read from its saved artifact file. A
-    /// failed specification stops only its consumers. Project problems come
-    /// back as issues of a run that built nothing; only an unknown section
-    /// (`Error::Rejected`) and cancellation fail the call.
+    /// failed specification stops only its consumers, and a user interrupt in
+    /// project code stops the run after that specification. Project problems
+    /// come back as issues of a run that built nothing; only an unknown
+    /// section (`Error::Rejected`) and cancellation fail the call.
     pub fn project_run(
         &self,
         project: &str,
@@ -490,11 +517,18 @@ impl Engine {
             if let (Some(bytes), Some(location)) = (artifact, listed.artifact_location()) {
                 held.insert(listed.identity().to_owned(), location.to_owned(), bytes);
             }
+            // A user interrupt in project code stops the run here, so no
+            // later specification builds or calls project code.
+            let interrupted =
+                build.project_interrupt().is_some() || build.producer_interrupt().is_some();
             steps.push(ProjectStep {
                 name: listed.name().map(str::to_owned),
                 identity: listed.identity().to_owned(),
                 run: Run { build },
             });
+            if interrupted {
+                break;
+            }
         }
         Ok(ProjectRun {
             steps,

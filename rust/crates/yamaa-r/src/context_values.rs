@@ -4,7 +4,8 @@
 //! unnamed lists, text character and `null` is `NULL`. An integer token whose
 //! magnitude is at most 2^53 becomes a double; every other integer token keeps
 //! its exact decimal spelling as a character scalar, so binary64 never narrows
-//! it. Fraction and exponent tokens are doubles. Text containing NUL is refused.
+//! it. Fraction and exponent tokens are doubles. Text or a name containing NUL
+//! is refused.
 use extendr_api::prelude::*;
 use yamaa::ContextValue;
 
@@ -40,7 +41,15 @@ pub(crate) fn context_value(value: &ContextValue) -> std::result::Result<Robj, S
         ContextValue::Map(values) => named_list(
             values
                 .iter()
-                .map(|(key, value)| Ok((key.clone(), context_value(value)?)))
+                .map(|(key, value)| {
+                    // R raises on a NUL name, unwinding through Rust frames.
+                    if key.contains('\0') {
+                        return Err(
+                            "a name containing NUL cannot be held by an R character vector".into(),
+                        );
+                    }
+                    Ok((key.clone(), context_value(value)?))
+                })
                 .collect::<std::result::Result<Vec<_>, String>>()?,
         )?,
         // The facade enum is non-exhaustive; uncovered variants cannot occur.

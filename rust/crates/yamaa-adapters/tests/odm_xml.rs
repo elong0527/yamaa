@@ -1970,6 +1970,16 @@ mod archives {
             "invalid_archive",
             "truncated TAR member data",
         );
+        // A size within one block of u64::MAX cannot be padded to whole blocks.
+        let oversized = Tar::new()
+            .pax(&[("size", &u64::MAX.to_string())], "huge.bin", b"")
+            .file("odm.xml", ODM_13.as_bytes())
+            .finish();
+        refused(
+            read_tar(&oversized, &Options::default()),
+            "invalid_archive",
+            "invalid TAR member size",
+        );
         let selected_short = Tar::new().file("odm.xml", ODM_13.as_bytes()).unterminated();
         refused(
             read_tar(&selected_short[..900], &Options::default()),

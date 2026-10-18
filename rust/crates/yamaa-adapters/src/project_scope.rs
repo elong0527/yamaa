@@ -594,6 +594,13 @@ impl Preflight {
     ) -> Result<(), Vec<Issue>> {
         self.admit(root.publishers(report_only)?)
     }
+    /// Admit the files a submission section would write.
+    pub fn admit_define(&mut self, define: &crate::file_define::Define) -> Result<(), Vec<Issue>> {
+        let publishers = define
+            .publishers()
+            .map_err(|error| crate::file_application::publication_failure(&error))?;
+        self.admit(publishers)
+    }
     fn admit(&mut self, publishers: Vec<Publisher>) -> Result<(), Vec<Issue>> {
         for publisher in publishers {
             for prior in &self.publishers {

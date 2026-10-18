@@ -558,6 +558,10 @@ class PublicContract(unittest.TestCase):
         self.assertTrue(runs.report.equals(member.report))
         error = self.refusal(lambda: runs["ADSL"])
         self.assertEqual(str(error), MESSAGES["unknown_member"])
+        # Membership and iteration go by name, like indexing.
+        self.assertIn("TEST", runs)
+        self.assertNotIn("ADSL", runs)
+        self.assertEqual(list(runs), ["TEST"])
         self.assertEqual(project.run("adam").names, ["TEST"])
         self.assertEqual(project.run("sdtm").names, [])
         self.assertFalse((case / "test.csv").exists())

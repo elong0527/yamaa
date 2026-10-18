@@ -129,7 +129,10 @@ run scope does not rebuild that producer. The consumer reads the file its
 `path` names, the producer's saved artifact, and checks it against the
 producer's output contract under [REQ-0522](../storage/ingestion.md#req-0522)
 and [REQ-0535](../storage/ingestion.md#req-0535). An absent file fails with
-`resource_path_missing`.
+`resource_path_missing`. The consumer may not write the files it reads:
+[REQ-0756](../storage/publication.md#req-0756) compares its `output.path` and
+`output.report` locations with the producer's, as it would for a producer the
+consumer builds.
 
 <a id="req-1344"></a>
 
@@ -162,7 +165,8 @@ orders the files of one specification. When any specification failed, the
 save publishes no primary artifact: it replaces, in run order, the report file
 of every specification that ran and declares one, then fails with the
 findings of every run. A failure while replacing one file stops the
-publication there.
+publication there. A project run that built no specification has nothing to
+save, and saving it fails.
 
 ### Project submissions
 
@@ -173,8 +177,11 @@ publication there.
 or one for each declared section that names `define`, in the order `sdtm`,
 `adam`, `send`, together with the [Dataset-JSON](../submission/dataset-json.md)
 files of a section that sets `datasets: json`. Its findings are those of its
-sections in that order. Saving publishes the sections in that order; the first
-section whose publication fails stops the save.
+sections in that order. Saving validates the targets of every section first,
+and two sections that name one file fail the save before any file is written.
+It then publishes the sections in that order; the first section whose
+publication fails stops the save. A submission that composed no section has
+nothing to save, and saving it fails.
 
 ### Interface behavior
 
