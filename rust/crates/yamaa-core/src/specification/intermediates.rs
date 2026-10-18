@@ -359,7 +359,7 @@ fn bind_one(
                 .columns()
                 .iter()
                 .position(|column| column.name == *field)
-                .and_then(&donor_kind),
+                .and_then(donor_kind),
             declaration.result_type(&catalog),
         ) {
             if !crate::key_relation::comparable(expected, donor.into()) {

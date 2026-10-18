@@ -180,8 +180,10 @@ on macOS and Windows. Checkout builds are development candidates; release
 downloads are selected by the complete native qualification workflow.
 
 Supported source-build targets are R 4.6.1 on Linux x86_64, macOS arm64 and Windows
-x64. Install Rust 1.90.0/Cargo and the platform's C compiler and GNU make first.
-Windows builds require Rtools45 and the `x86_64-pc-windows-gnu` Rust target.
+x64. Install Rust 1.90 or later with Cargo, the platform's C compiler and GNU
+make first. Under rustup, the archive's `rust-toolchain.toml` selects the release
+toolchain, Rust 1.99.1. Windows builds require Rtools45 and the
+`x86_64-pc-windows-gnu` Rust target.
 The archive contains the
 complete Rust workspace and the unchanged canonical Cargo lock. Compilation uses
 `cargo build --locked`; no checkout, Python runtime or new dependency resolution

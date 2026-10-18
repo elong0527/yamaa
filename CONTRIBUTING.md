@@ -141,6 +141,17 @@ schedule checks a release branch, so each push to one also runs Optional format
 features, Dependency graphs and R-CMD-check. To check a release branch sooner,
 dispatch one with `gh workflow run <workflow> --ref release/X.Y.Z`.
 
+CI's `rust (minimum toolchain)` job checks and lints the workspace with its
+declared `rust-version`, Rust 1.90.0, instead of the pinned toolchain that every
+other job uses, because embedders build the facade with their own toolchains.
+Run it locally from `rust/`, with R installed:
+
+```sh
+rustup toolchain install 1.90.0 --profile minimal --component clippy
+RUSTFLAGS='-D warnings' cargo +1.90.0 check --locked --workspace --all-targets --all-features
+RUSTFLAGS='-D warnings' cargo +1.90.0 clippy --locked --workspace --all-targets --all-features -- -D warnings
+```
+
 `.github/workflows/dependency-graphs.yml` also resolves minimum and newest
 compatible graphs nightly, on dispatch, on each push to a release branch, and
 on each PR into main that changes a dependency manifest or lock, or the

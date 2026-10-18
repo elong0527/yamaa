@@ -428,7 +428,9 @@ today: the stable codes (`yaml_reader_unavailable`,
   with `cargo public-api`) and checked in CI (#2734): a surface change
   without a regenerated, reviewed inventory in the same change fails the
   check. There is deliberately still no inventory for adapters or core.
-- The minimum Rust version is the workspace `rust-version` (1.90 today).
+- The minimum Rust version is the workspace `rust-version` (1.90 today). CI
+  checks and lints the workspace with that release; the repository's other
+  builds use the pinned toolchain in `rust/rust-toolchain.toml`.
 - Rustdoc carries a runnable example for each operation, and one example
   program runs a specification entirely from memory (#2735).
 

@@ -69,7 +69,8 @@ API.
 
 ## Supported dependency combinations
 
-The Rust workspace declares MSRV 1.90 and builds with Rust 1.90.0. Canonical
+The Rust workspace declares MSRV 1.90 and builds with Rust 1.99.1; a CI job
+checks and lints it with Rust 1.90.0. Canonical
 release builds use `rust/Cargo.lock`, including unchanged copies in both source
 packages. Arrow and Parquet are supported at exactly 57.3.0 with flatbuffers
 25.12.19, so an embedder whose graph holds Arrow 57.3 builds the engine

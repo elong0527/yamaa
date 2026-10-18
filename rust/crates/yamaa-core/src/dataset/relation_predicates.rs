@@ -50,17 +50,16 @@ impl CurrentField {
             CurrentRead::Output(column) if column >= output.columns().len() => {
                 return Err(PlanError::InvalidIntermediate)
             }
-            CurrentRead::Intermediate { index, column } => {
+            CurrentRead::Intermediate { index, column }
                 if index >= item_index
                     || !items.get(index).is_some_and(|item| {
                         item.admits_column(column)
                             && item
                                 .source_schema(secondary)
                                 .is_some_and(|schema| column < schema.columns().len())
-                    })
-                {
-                    return Err(PlanError::InvalidIntermediate);
-                }
+                    }) =>
+            {
+                return Err(PlanError::InvalidIntermediate);
             }
             _ => (),
         }
