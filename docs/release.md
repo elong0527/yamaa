@@ -181,8 +181,10 @@ owns decoding behavior.
   streams from the same read-only attributes, with a nanoarrow 0.8.0 floor.
 - Keep the Rust adapter features `yaml`, `parquet` and `readstat` independent,
   all enabled by default; the Python and R packages enable all three.
-- Preserve full signed-i64 values and separate missingness, lossless R
-  `yamaa_int64_vector`/`yamaa_utf8_vector` and preserve-or-error conversions.
+- Preserve separate missingness and preserve-or-error conversions: Python
+  keeps full signed-i64 values, and R uses plain doubles and character in
+  output and in project function calls, raising on an integer beyond 2^53 or
+  text containing NUL.
 - Expose every finding two ways in both hosts, mapped from one Rust record:
   named `diagnostics` records with structured context and optional
   `source_span` and `operand_route`, and the five-column issues frame, whose

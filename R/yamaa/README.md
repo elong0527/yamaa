@@ -53,9 +53,10 @@ see the [contributor guide](../../CONTRIBUTING.md).
   running a specification.
 - Inputs can be CSV, Parquet, SAS datasets (`.sas7bdat`) or SAS transport v5/v8
   files (`.xpt`); outputs are CSV or Parquet.
-- Output data frames hold dates as `Date`, datetimes as UTC `POSIXct`, integer
-  columns as `yamaa_int64_vector` (the full signed 64-bit range) and text
-  containing NUL as `yamaa_utf8_vector`.
+- Output data frames and project functions use plain R values: integers as
+  doubles, text as character, dates as `Date` and datetimes as UTC `POSIXct`.
+  An integer beyond 2^53 or text containing NUL raises an error instead of
+  changing.
 - With nanoarrow 0.8.0 or newer, `output_arrow`, `verification_log_arrow` and
   `warning_log_arrow` return Arrow streams that share the result's buffers
   instead of copying them.
@@ -87,8 +88,8 @@ provide many more.
 
 ## Learn more
 
-- Package help: `?yamaa_domain`, `?yamaa_define`, `?yamaa_resource_resolver`,
-  `?yamaa_resolve_specification` and `?int64_vector_conversions`.
+- Package help: `?yamaa_domain`, `?yamaa_define`, `?yamaa_resource_resolver`
+  and `?yamaa_resolve_specification`.
 - Behavior shared with Python:
   [host resources](../../docs/articles/python.md#host-resources),
   [diagnostics](../../docs/articles/python.md#diagnostics),
