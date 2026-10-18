@@ -368,7 +368,7 @@ class PublicEnvironment(unittest.TestCase):
                 for row, source in zip(rows, ("spec.yaml", "leaf.yaml"), strict=True):
                     context = {
                         "entry": Path("spec.yaml").resolve().as_posix(),
-                        "pattern": "é(",
+                        "pattern": "\u00e9(",
                         "source": Path(source).resolve().as_posix(),
                     }
                     if source == "leaf.yaml":
@@ -835,7 +835,7 @@ class PublicEnvironment(unittest.TestCase):
 
     def test_project_check_validates_original_studies_without_study_inputs(self):
         # The caller's path may be any UTF-8 text; the project file is ASCII.
-        study = self.directory / "étude"
+        study = self.directory / "\u00e9tude"
         study.mkdir()
         for name in CASES:
             with self.subTest(name=name):

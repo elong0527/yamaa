@@ -283,7 +283,7 @@ qualify_callbacks <- function() {
       stopifnot(identical(seen, interrupted), identical(invoked, expected), !file.exists(file.path(case, "test.csv")))
     }
   }
-  long_condition <- structure(list(message = paste0(strrep("é\n", 30000L), "complete failure"), call = NULL),
+  long_condition <- structure(list(message = paste0(strrep("\u00e9\n", 30000L), "complete failure"), call = NULL),
     class = c("public_contract_error", "error", "condition"))
   invoked <- 0L
   resolve_long <- function(call, parameters) {
@@ -437,7 +437,7 @@ qualify_public_large_text_callback <- function() {
     file.path(directory, "project.yaml"))
   writeBin(charToRaw("schema_version: '1.0'\ndomain: TEXT\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int, V: str}}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: V, type: str, derivation: {function: {name: text, args: {x: SRC.V}}}}\noutput: {path: held.csv, columns: [ID, V]}\n"),
     file.path(directory, "domain.yaml"))
-  value <- paste0(strrep("é", 524289L), "complete")
+  value <- paste0(strrep("\u00e9", 524289L), "complete")
   expected <- charToRaw(paste0("ID,V\n1,", value, "\n"))
   writeBin(expected, file.path(directory, "input.csv"))
   built <- yamaa_project(file.path(directory, "project.yaml"))$spec("TEXT")$run()

@@ -432,7 +432,7 @@ for (attempt in 1:2) {
   expected <- lapply(c("spec.yaml", "leaf.yaml"), function(source) issue("invalid_regex", "REQ-0827",
     host_truth[["verification_pattern_path"]], paste0(
     '{', if (source == "leaf.yaml") paste0('"declaring_sources":["', normalizePath("parents/base.yaml", winslash = "/"), '"],'),
-    '"entry":"', normalizePath("spec.yaml", winslash = "/"), '","pattern":"é(","source":"',
+    '"entry":"', normalizePath("spec.yaml", winslash = "/"), '","pattern":"\u00e9(","source":"',
     normalizePath(source, winslash = "/"), '"}')))
   same_issues(checked$issues, expected)
 }

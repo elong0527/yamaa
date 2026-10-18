@@ -296,7 +296,7 @@ class PublicContract(unittest.TestCase):
         (self.root / "input.csv").write_bytes(b"ID,VALUE\na,a\x00b\nb,\xc3\xa9\nc,\n")
         result = yamaa.spec(self.spec).run()
         self.assertTrue(self.issues(result).is_empty())
-        self.assertEqual(result.output["VALUE"].to_list(), ["a\x00b", "é", None])
+        self.assertEqual(result.output["VALUE"].to_list(), ["a\x00b", "\u00e9", None])
         self.assertEqual(result.output["EMPTY"].to_list(), ["", "", ""])
         self.assertIsNone(result.save())
         self.assertEqual(
@@ -511,7 +511,7 @@ class PublicContract(unittest.TestCase):
 
     def test_callback_exception_keeps_its_complete_unicode_and_nul_message(self):
         project, _ = self.function_study()
-        message = "é\x00" * 30_000 + "complete failure"
+        message = "\u00e9\x00" * 30_000 + "complete failure"
         original = RuntimeError(message)
         resolve = host.resolve_callable
         calls = []
@@ -634,7 +634,7 @@ class PublicContract(unittest.TestCase):
             "output: {path: held.csv, columns: [ID, V]}\n",
             encoding="utf-8",
         )
-        value = "é" * 524_289 + "complete"
+        value = "\u00e9" * 524_289 + "complete"
         expected = ("ID,V\n1," + value + "\n").encode("utf-8")
         (case / "large.csv").write_bytes(expected)
         result = yamaa.project(case / "project.yaml").spec("TEXT").run()

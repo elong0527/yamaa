@@ -37,7 +37,7 @@ INPUT = (
     "ID,S,I,F,D,T\n"
     "1,a\0\U0001f980,-9223372036854775808,-0.0,0001-01-01,0001-01-01T00:00:00\n"
     "2,,,,,\n"
-    "3,β,9223372036854775807,1.25,9999-12-31,9999-12-31T23:59:59\n"
+    "3,\u03b2,9223372036854775807,1.25,9999-12-31,9999-12-31T23:59:59\n"
 )
 
 
@@ -76,7 +76,7 @@ class ArrowBridge(unittest.TestCase):
                 pa.timestamp("s"),
             ],
         )
-        self.assertEqual(first["S"].to_pylist(), ["a\0\U0001f980", None, "β"])
+        self.assertEqual(first["S"].to_pylist(), ["a\0\U0001f980", None, "\u03b2"])
         self.assertEqual(first["I"].to_pylist(), [-(2**63), None, 2**63 - 1])
         self.assertEqual(first["F"].to_pylist(), [-0.0, None, 1.25])
         self.assertEqual(
@@ -101,7 +101,7 @@ class ArrowBridge(unittest.TestCase):
             issues = run.issues
             report = run.report
         self.assertEqual(frame["I"].to_list(), [-(2**63), None, 2**63 - 1])
-        self.assertEqual(frame["S"].to_list(), ["a\0\U0001f980", None, "β"])
+        self.assertEqual(frame["S"].to_list(), ["a\0\U0001f980", None, "\u03b2"])
         self.assertEqual(frame["D"].dtype, pl.Date)
         self.assertIsInstance(frame["T"].dtype, pl.Datetime)
         self.assertEqual(
