@@ -1,0 +1,44 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+  EXF:
+    path: input/exfirst.csv
+    types: {TRTSDT: date}
+  AE:
+    path: input/ae.csv
+    types: {AESEQ: int, AESTDT: date}
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, TRTSDT, NTEAE]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  - name: TRTSDT
+    type: date
+    label: Date of First Exposure to Treatment
+    derivation: EXF.TRTSDT
+
+  # The subject's adverse events that start on or after the first treatment
+  # date. EXF.TRTSDT names a first-exposure record, and a subject row is
+  # built from a demographics record, so the specification is rejected
+  # before any data is read.
+  - name: NTEAE
+    type: int
+    label: Number of Treatment-Emergent Adverse Events
+    derivation:
+      aggregate:
+        between: {value: EXF.TRTSDT, upper: AESTDT}
+        expr: "COUNT(AE.*)"
