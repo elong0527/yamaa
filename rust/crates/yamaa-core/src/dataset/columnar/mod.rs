@@ -256,7 +256,7 @@ impl ResolvedPlan {
     /// Execute the resolved plan over the admitted sources and the explicit
     /// function port once, retaining handler and verification evidence on
     /// success and failure, as `DatasetPlan::execute` does.
-    pub fn execute<E>(
+    pub(crate) fn execute<E>(
         &self,
         primary: &dyn TableAccess<Error = E>,
         secondary: &[&dyn TableAccess<Error = E>],

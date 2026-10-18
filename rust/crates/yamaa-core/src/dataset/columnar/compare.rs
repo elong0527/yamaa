@@ -28,13 +28,21 @@ pub(crate) enum Selected {
     Resolved,
 }
 
-/// The executor `YAMAA_EXECUTOR` selects for this process.
+/// The executor `YAMAA_EXECUTOR` selects for this process; any other value
+/// stops the process, so a misspelled selector never runs today's executor
+/// alone in its place.
 pub(crate) fn selected() -> Selected {
     static SELECTED: std::sync::OnceLock<Selected> = std::sync::OnceLock::new();
-    *SELECTED.get_or_init(|| match std::env::var("YAMAA_EXECUTOR").as_deref() {
-        Ok("compare") => Selected::Compare,
-        Ok("resolved") => Selected::Resolved,
-        _ => Selected::Rows,
+    *SELECTED.get_or_init(|| match std::env::var("YAMAA_EXECUTOR") {
+        Err(std::env::VarError::NotPresent) => Selected::Rows,
+        Ok(value) if value == "compare" => Selected::Compare,
+        Ok(value) if value == "resolved" => Selected::Resolved,
+        Ok(value) => fail(&format!(
+            "YAMAA_EXECUTOR={value} selects no executor: use compare or resolved"
+        )),
+        Err(std::env::VarError::NotUnicode(_)) => {
+            fail("YAMAA_EXECUTOR is not Unicode: use compare or resolved")
+        }
     })
 }
 
@@ -82,14 +90,21 @@ pub(crate) enum Token {
 /// One recorded host call and whether it succeeded.
 struct Call {
     slot: usize,
-    arguments: Vec<(String, Value)>,
+    arguments: Vec<(String, String)>,
     outcome: Result<Value, bool>,
 }
 
-fn arguments(arguments: &[Argument<'_>]) -> Vec<(String, Value)> {
+/// A call's arguments by name and rendered value, so that values equal under
+/// comparison but rendered apart, such as the two zeros, differ.
+fn arguments(arguments: &[Argument<'_>]) -> Vec<(String, String)> {
     arguments
         .iter()
-        .map(|argument| (argument.name.to_owned(), super::buffer::own(argument.value)))
+        .map(|argument| {
+            (
+                argument.name.to_owned(),
+                format!("{:?}", super::buffer::own(argument.value)),
+            )
+        })
         .collect()
 }
 
@@ -221,12 +236,14 @@ pub(crate) fn compare<T: TableAccess + ?Sized>(
         mismatch: None,
     };
     let mut replayed_events = Vec::new();
-    let reference = plan.execute_rows(
-        &primary,
-        &tables,
-        &mut replayed,
-        Some(&mut |event| replayed_events.push(event)),
-    );
+    let reference = unwinding("today's executor", || {
+        plan.execute_rows(
+            &primary,
+            &tables,
+            &mut replayed,
+            Some(&mut |event| replayed_events.push(event)),
+        )
+    });
     let mut candidate_port = Replay {
         port: &*inner,
         calls: &calls,
@@ -234,12 +251,14 @@ pub(crate) fn compare<T: TableAccess + ?Sized>(
         mismatch: None,
     };
     let mut candidate_events = Vec::new();
-    let candidate = resolved.execute(
-        &primary,
-        &tables,
-        &mut candidate_port,
-        Some(&mut |event| candidate_events.push(event)),
-    );
+    let candidate = unwinding("the resolved executor", || {
+        resolved.execute(
+            &primary,
+            &tables,
+            &mut candidate_port,
+            Some(&mut |event| candidate_events.push(event)),
+        )
+    });
     let left = format!("{reference:#?}");
     let right = format!("{candidate:#?}");
     let calls_differ = |replay: &Replay<'_, T::Error>| {
@@ -267,6 +286,22 @@ pub(crate) fn compare<T: TableAccess + ?Sized>(
         ));
     }
     today
+}
+
+/// Run one replay; a panic in it is a difference too, reported as one: the
+/// hosts would otherwise catch it as an ordinary failure of the run.
+fn unwinding<R>(executor: &str, replay: impl FnOnce() -> R) -> R {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(replay)) {
+        Ok(result) => result,
+        Err(payload) => {
+            let message = payload
+                .downcast_ref::<&str>()
+                .map(|message| (*message).to_owned())
+                .or_else(|| payload.downcast_ref::<String>().cloned())
+                .unwrap_or_else(|| "a panic without a message".into());
+            fail(&format!("{executor} panicked on replay: {message}"))
+        }
+    }
 }
 
 /// Report a difference and stop the process: the hosts catch panics, and an
