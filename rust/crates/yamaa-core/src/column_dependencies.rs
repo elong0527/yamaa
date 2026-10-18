@@ -71,8 +71,11 @@ pub struct Analysis {
 /// dependencies. Source references are omitted by the binder. Output references
 /// retain written first-occurrence order. Keys retain their authored key order.
 /// Completed row-phase columns do not block scheduling, but still participate in
-/// the declaration-order and key-dependency rules. This does not waive preflight,
-/// type, reference-resolution, or phase-boundary checks performed by the caller.
+/// the declaration-order and key-dependency rules. A later key is available
+/// before the column phase only when it is derived first: always without rows
+/// (REQ-0074), and with rows only when no row template leaves it to the column
+/// phase. This does not waive preflight, type, reference-resolution, or
+/// phase-boundary checks performed by the caller.
 pub fn analyze(
     dependencies: &[Option<Vec<usize>>],
     keys: &[usize],
@@ -118,12 +121,17 @@ pub fn analyze(
         }
         diagnostics.push(Diagnostic::Cycle { columns });
     }
+    // Without rows every key is derived before any other column. With rows, a key
+    // that some template completes in the column phase follows declaration order
+    // like any other column-phase column (REQ-0071).
+    let derived_first =
+        |dependency: usize| is_key[dependency] && (!has_rows || dependencies[dependency].is_none());
     for (column, edges) in dependencies.iter().enumerate() {
         if in_cycle[column] {
             continue;
         }
         for &dependency in edges.as_deref().unwrap_or(&[]) {
-            if !is_key[dependency] && dependency >= column {
+            if !derived_first(dependency) && dependency >= column {
                 diagnostics.push(Diagnostic::ForwardReference { column, dependency });
             }
         }
