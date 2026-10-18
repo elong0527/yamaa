@@ -68,7 +68,7 @@ impl IntermediateUnique {
 /// A donor plan evaluates values in declaration order before filter/key/order.
 #[derive(Clone, Debug, PartialEq)]
 pub struct IntermediateDerivations {
-    pub plan: std::rc::Rc<DatasetPlan>,
+    pub plan: std::sync::Arc<DatasetPlan>,
     pub current: Vec<CurrentField>,
     pub stored_columns: usize,
     /// Explicitly typed results convert before completing their donor slot.

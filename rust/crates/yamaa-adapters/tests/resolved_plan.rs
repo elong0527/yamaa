@@ -119,6 +119,81 @@ fn a_derived_intermediate_resolves_its_donor_plan_as_its_own_region() {
         .all(|binding| resolved.binding(binding).stage == Stage::Column));
 }
 
+/// Every node of every benchmark that binds from its CSV or ODM inputs
+/// carries the operation of its kind.
+#[test]
+fn every_benchmark_node_carries_the_operation_of_its_kind() {
+    let mut resolved_cases = 0;
+    let mut entries: Vec<_> = std::fs::read_dir(root().join("benchmarks"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    entries.sort();
+    for case in entries {
+        let name = case.file_name().unwrap().to_str().unwrap().to_owned();
+        let Some(plan) = try_bind(&name) else {
+            continue;
+        };
+        let resolved = plan.resolve().unwrap();
+        for node in resolved.exprs() {
+            assert!(
+                node.op.fits(node.kind),
+                "{name}: {:?} holds {:?}",
+                node.kind,
+                node.op
+            );
+        }
+        resolved_cases += 1;
+    }
+    assert!(resolved_cases > 200, "{resolved_cases} benchmarks bound");
+}
+
+/// Bind one benchmark when its specification prepares and binds against the
+/// headers of CSV inputs or the ODM fields; none otherwise.
+fn try_bind(case: &str) -> Option<DatasetPlan> {
+    let root = root();
+    let case = root.join("benchmarks").join(case);
+    let bytes = std::fs::read(case.join("spec.yaml")).ok()?;
+    let captured = schema(&root.join("yaml"));
+    let document = std::panic::catch_unwind(|| prepare(&captured, &bytes)).ok()?;
+    let prepared = PreparedSpecification::prepare(document.model()).ok()?;
+    let mut schemas = Vec::new();
+    for (index, source) in prepared.sources().iter().enumerate() {
+        let names: Vec<String> = match prepared.source_interpretation(index) {
+            Some(SourceInterpretation::Odm) => yamaa_core::odm_source::FIELDS
+                .iter()
+                .map(|name| (*name).to_owned())
+                .collect(),
+            _ => {
+                if !source.path.ends_with(".csv") {
+                    return None;
+                }
+                let text = std::fs::read_to_string(case.join(&source.path)).ok()?;
+                text.lines()
+                    .next()?
+                    .split(',')
+                    .map(|name| name.to_owned())
+                    .collect()
+            }
+        };
+        let columns = names
+            .into_iter()
+            .map(|name| Column {
+                kind: source
+                    .types
+                    .iter()
+                    .find(|(field, _)| *field == name)
+                    .map_or(ColumnType::Str, |(_, kind)| *kind),
+                name,
+            })
+            .collect();
+        schemas.push(TableSchema::new(columns).ok()?);
+    }
+    prepared
+        .bind_sources(&schemas.iter().collect::<Vec<_>>())
+        .ok()
+}
+
 #[test]
 fn a_specification_without_rows_resolves_one_key_grain_template() {
     let plan = bind("adam-adsl-age-group");
