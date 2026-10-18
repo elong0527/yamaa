@@ -275,8 +275,8 @@ writes it for a failed run too, replacing a stale report from an earlier run.
 <a id="req-0391"></a>
 
 **REQ-0391.** A specification declaring any `warning` verification must
-declare `output.report`. A specification whose checks are all `error` may omit
-it.
+declare `output.report`; one that does not fails validation with
+`missing_report`. A specification whose checks are all `error` may omit it.
 
 <a id="req-1177"></a>
 

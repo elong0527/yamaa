@@ -46,6 +46,7 @@ yamaa::HostPayload: pub use yamaa::error::HostPayload
 yamaa::InputFrame: pub use yamaa::table::InputFrame
 yamaa::Int64Array: pub use yamaa::table::Int64Array
 yamaa::LargeStringArray: pub use yamaa::table::LargeStringArray
+yamaa::ListArray: pub use yamaa::table::ListArray
 yamaa::LockContext: pub use yamaa::functions::LockContext
 yamaa::LockFinding: pub use yamaa::error::LockFinding
 yamaa::LockKind: pub use yamaa::functions::LockKind
@@ -465,6 +466,7 @@ yamaa::table::InputFrame: pub struct InputFrame [derive(Clone, Debug)] [non_exha
 yamaa::table::InputFrame::import: pub fn import(stream: FFI_ArrowArrayStream) -> Result<Self, TableError>
 yamaa::table::Int64Array: pub use arrow_array::Int64Array
 yamaa::table::LargeStringArray: pub use arrow_array::LargeStringArray
+yamaa::table::ListArray: pub use arrow_array::ListArray
 yamaa::table::RecordBatch: pub use arrow_array::RecordBatch
 yamaa::table::SchemaRef: pub use arrow_schema::SchemaRef
 yamaa::table::StringArray: pub use arrow_array::StringArray
