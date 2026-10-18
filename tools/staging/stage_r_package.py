@@ -28,7 +28,7 @@ def stage(destination: Path):
     )
     from python import yamaa_build_backend as backend
 
-    for original in backend.local_patch_sources(WORKSPACE):
+    for original in backend.vendored_sources(WORKSPACE):
         target = rust / original.relative_to(WORKSPACE)
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(original, target)

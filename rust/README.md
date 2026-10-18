@@ -40,8 +40,8 @@ the bundled ReadStat C build, so it reads no SAS input:
 yamaa = { path = "<yamaa checkout>/rust/crates/yamaa", default-features = false, features = ["yaml", "parquet"] }
 ```
 
-[Distribution](#distribution) shows the git form and the `saphyr-parser` patch
-that an embedder with `yaml` adds.
+[Distribution](#distribution) shows the dependency; the `yaml` feature needs no
+other configuration.
 
 | Feature | Dependency edge and capability |
 | --- | --- |
@@ -479,32 +479,25 @@ today: the stable codes (`yaml_reader_unavailable`,
 
 ### Distribution
 
-All crates, including the facade, stay `publish = false` for 0.4.0. Embedders
-depend on the facade by git or path dependency. Cargo reads `[patch]` only from
-the root of the workspace being built, so this workspace's `[patch.crates-io]`
-entry for the vendored `saphyr-parser` does not reach an embedder, whose graph
-takes the unpatched parser from crates.io instead. The facade then reports valid
-compact-flow YAML, such as `verifications: [row_count: {min: 3, max: 3}]`, as
-`invalid_yaml`, while the Python and R packages accept it (#2929). Until #2583
-lands, an embedder that enables `yaml` adds the patch next to the facade
-dependency, from the same tag or checkout:
+All crates, including the facade, stay `publish = false`. Embedders depend on
+the facade by git or path dependency and need no other configuration:
 
 ```toml
-[dependencies]
-yamaa = { git = "https://github.com/elong0527/yamaa", tag = "yamaa-v0.4.0", default-features = false, features = ["yaml", "parquet"] }
-
-[patch.crates-io]
-saphyr-parser = { git = "https://github.com/elong0527/yamaa", tag = "yamaa-v0.4.0" }
-# or, with path dependencies on a checkout:
-# saphyr-parser = { path = "<yamaa checkout>/rust/vendor/saphyr-parser" }
+yamaa = { path = "rust/crates/yamaa", default-features = false, features = ["yaml"] }
 ```
 
-`cargo tree -i saphyr-parser` then shows the vendored `saphyr-parser v0.2.1`.
+The `yaml` feature builds the reviewed YAML parser: the vendored
+`saphyr-parser` 0.2.1 with its compact-flow fix, which `yamaa-adapters`
+depends on by path under its own crate name, `yamaa-saphyr-parser`. A path
+dependency reaches the embedder's graph without a `[patch]`, and a graph that
+already holds a published `saphyr-parser` keeps that crate beside this one.
+CI's minimum-toolchain job builds the facade from the outside workspace in
+`rust/tests/embedder` and runs the parser's compact-flow controls through it.
 
-Publishing to crates.io is not decided here. It depends on #2583 -- the
-workspace `[patch.crates-io]` vendored `saphyr-parser` cannot be published as
-a patch -- and on the provenance terms of the vendored ReadStat C sources.
-Until #2583 lands, git/path is the distribution route.
+Publishing to crates.io is not decided here. It depends on #2583 -- a
+published crate cannot depend on the vendored parser by path -- and on the
+provenance terms of the vendored ReadStat C sources. Until #2583 lands,
+git/path is the distribution route.
 
 ### Host-usage mapping
 
