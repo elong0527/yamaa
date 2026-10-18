@@ -42,6 +42,20 @@ canonical `rust/Cargo.lock`. Host source packages carry that workspace and lock.
 The [source packaging guidance](docs/release.md#source-package-contents) links
 the vendored licenses and patch provenance.
 
+Every package ships the third-party notices generated from `rust/Cargo.lock`.
+After changing the lock, regenerate them and commit the results:
+
+```sh
+uv run --project python --no-sync python -m tools.packaging.generate_third_party_notices --write
+```
+
+`make check-repository` fails while a locked crate has no matching notice entry
+or the Python License-Expression misses a license that a linked crate is relied
+on under. The generator reads only the crate packages Cargo has unpacked. It
+stops instead of guessing when a crate needs a license outside its reviewed
+list or ships an unclassified license file; review the crate and extend the
+tables in `tools/packaging/generate_third_party_notices.py`.
+
 ## Develop and verify
 
 Run `make help` at the repository root for prerequisites, configuration variables

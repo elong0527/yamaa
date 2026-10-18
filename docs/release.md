@@ -129,6 +129,27 @@ and [YAML parser provenance](https://github.com/elong0527/yamaa/blob/main/rust/v
 own their source inventories, patches and licenses. Both parser authors' MIT
 notices remain in the distributed `LICENSE-YAML.txt`.
 
+Every package carries the project license and the third-party notices: each
+wheel in its `.dist-info/licenses/` directory, the Python source archive at its
+root, and the R source package in `inst/`, which R installs at the package
+root. `LICENSE.txt` is the project's MIT license. `LICENSE-THIRD-PARTY.txt`
+reproduces the license, copyright and NOTICE texts of every third-party crate
+in the normal and build dependency closure of the shipped Python and R
+binding crates, for every platform, and names the license relied on where a
+crate offers a choice. `LICENSE-READSTAT.txt`,
+`LICENSE-UNICODE.txt` and `LICENSE-YAML.txt` cover the vendored ReadStat
+sources, the Unicode data in yamaa's own tables and the vendored YAML parser.
+The R package keeps its `MIT + file LICENSE` declaration, and its `Copyright`
+field names these files. The Python License-Expression,
+`MIT AND Apache-2.0 AND BSD-3-Clause AND Unicode-3.0`, covers the project and
+the crates linked into the wheels.
+
+`tools.packaging.generate_third_party_notices` generates the crate notices
+from `rust/Cargo.lock` and derives that expression. The repository check fails
+when the locked graph gains or loses a crate without a matching notice entry.
+Native qualification and the release selector require every wheel and source
+package to carry each notice unchanged.
+
 Native qualification exercises the static source bridge on every supported
 platform and compares both installed hosts with independently authored binary
 fixtures and exact saved bytes. The [SAS source contract](https://github.com/elong0527/yamaa/blob/main/rules/storage/sas.md)
