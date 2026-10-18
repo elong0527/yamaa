@@ -2,8 +2,10 @@
 # Every method makes one native call; behavior, validation and messages live
 # in the shared Rust engine, so R and Python report the same results. An
 # object's first `run()` compiles its specifications and keeps them in a native
-# holder; a later `run()` reuses them once every file they were compiled from
-# is unchanged, and compiles again when one changed.
+# holder; a later `run()` reuses them while its paths still name the files
+# they were compiled from and every one is unchanged, and compiles again
+# otherwise. The holder is made on the first `run()`, and made again when the
+# object was restored from `saveRDS`, an `.RData` file or another R process.
 
 .reply <- function(reply) {
   error <- reply$error
@@ -68,11 +70,12 @@
 
 .spec <- function(path, project) {
   force(path)
-  plans <- .reply(.native_plans()) # the plan the first run compiles
+  plans <- NULL # the plan the first run compiles
   object <- new.env(parent = emptyenv())
   object$check <- function() .check(.reply(.native_spec_check(path, project, .version())))
   object$resolve <- function() .reply(.native_spec_resolve(path, project, .version()))
   object$run <- function() {
+    plans <<- .reply(.native_plans(plans))
     .run(.reply(.native_spec_run(path, project, .version(), .capabilities(), plans)))
   }
   .object(object, "yamaa_spec")
@@ -128,7 +131,7 @@ yamaa_spec <- function(path) .spec(.text(path, "path"), NULL)
 #' @export
 yamaa_project <- function(path) {
   project <- .text(path, "path")
-  plans <- .reply(.native_plans()) # the plans `run()` compiles
+  plans <- NULL # the plans `run()` compiles
   object <- new.env(parent = emptyenv())
   object$spec <- function(name) {
     path <- .reply(.native_project_spec(project, .text(name, "name"), .version()))
@@ -136,6 +139,7 @@ yamaa_project <- function(path) {
   }
   object$check <- function() .check(.reply(.native_project_check(project, .version())))
   object$run <- function(section = NULL) {
+    plans <<- .reply(.native_plans(plans))
     .project_run(.reply(.native_project_run(
       project, .optional_text(section, "section"), .version(), .capabilities(), plans
     )))

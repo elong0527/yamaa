@@ -359,13 +359,15 @@ pub enum SaveOutcome { Saved, NothingToSave }  // #[non_exhaustive]
   up a change. `build` skips the run-start check because its compilation has
   just captured the same metadata.
 - The hosts' lazy objects keep a `Plans` holder each (#2821).
-  `Engine::spec_run_reusing` and `Engine::project_run_reusing` run a kept
-  plan when the run-start check finds every file it was compiled from
-  unchanged, and otherwise compile again exactly as `build` does and keep the
-  new plan; a refused compilation keeps nothing. A kept plan runs through the
-  calling engine's project functions and observer, so each host call keeps
-  its own capabilities. `spec_run` and `project_run` run through an empty
-  holder.
+  `Engine::spec_run_reusing` and `Engine::project_run_reusing` first resolve
+  the request's paths as compilation does: absolute against the current
+  working directory, with each parent directory canonical. They run the plan
+  kept for those identities when the run-start check finds every file it was
+  compiled from unchanged (#3069). Otherwise they compile again exactly as
+  `build` does and keep the new plan; a refused compilation keeps nothing. A
+  kept plan holds no project functions or observer. It runs through the
+  calling engine's, so each host call keeps its own capabilities. `spec_run`
+  and `project_run` run through an empty holder.
 
 ### Handles, ownership and thread safety
 

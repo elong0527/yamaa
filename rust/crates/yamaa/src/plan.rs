@@ -160,6 +160,11 @@ impl Plan {
             .as_deref()
             .or(self.shared.observer.as_deref());
         let resolver = request.resolver.clone().map(crate::internal::bridge);
+        measurements.plan(if self.report().is_empty() {
+            "reused"
+        } else {
+            "refused"
+        });
         let outcome = self.run_observed(resolver, true, &measurements, progress);
         measurements.complete(outcome_accepted(&outcome));
         Ok(Build::from_outcome(outcome, measurements, &self.shared))
@@ -189,6 +194,24 @@ impl Plan {
             verify,
             yamaa_core::application_observer::Scope::new(&bridge),
         )
+    }
+
+    /// This plan without the compiling engine's project functions and
+    /// observer, as a [`Plans`](crate::Plans) holder keeps it: a kept plan
+    /// runs through the calling engine's, so holding the compiling call's
+    /// host callbacks would only keep them alive.
+    pub(crate) fn detached(&self) -> Plan {
+        Plan {
+            shared: Arc::new(EngineShared {
+                resolver: self.shared.resolver.clone(),
+                language: self.shared.language,
+                runtime_name: self.shared.runtime_name.clone(),
+                runtime_version: self.shared.runtime_version.clone(),
+                functions: None,
+                observer: None,
+            }),
+            compiled: Arc::clone(&self.compiled),
+        }
     }
 
     /// Whether an engine configured as `shared` may run this plan again: it

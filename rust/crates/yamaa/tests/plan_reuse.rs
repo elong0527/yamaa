@@ -4,8 +4,9 @@
 //! A [`Plans`] holder keeps the plan each specification's first run compiled.
 //! A later run reuses it once the run-start check finds every file it was
 //! compiled from unchanged, and compiles again when one changed, so no run is
-//! stale. A compiling run's measurements start with the `preparation` phase;
-//! a reusing run's start at the run, which is what the host suites observe.
+//! stale. A run's private measurements say how it got its plan: `compiled`,
+//! `refused` or `reused`; a compiling run's also start with the `preparation`
+//! phase. The host suites and the conformance repeat pass read the same.
 use std::path::{Path, PathBuf};
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
@@ -122,12 +123,27 @@ fn engine(resolver: Option<Arc<dyn ResourceResolver>>, installed: &Arc<Installed
     Engine::new(options)
 }
 
-/// Whether the run compiled: its measurements include the `preparation` phase.
+/// How the run got its plan, from its private measurements.
+fn plan_of(run: &Run) -> &'static str {
+    let observed = run.build().observations(true).unwrap();
+    let statuses = ["compiled", "refused", "reused"]
+        .into_iter()
+        .filter(|status| observed.contains(&format!("\"plan\":\"{status}\"")))
+        .collect::<Vec<_>>();
+    assert_eq!(statuses.len(), 1, "{observed}");
+    statuses[0]
+}
+
+/// Whether the run compiled: its plan status, and its measurements include
+/// the `preparation` phase.
 fn compiled(run: &Run) -> bool {
-    run.build()
+    let preparation = run
+        .build()
         .observations(true)
         .unwrap()
-        .contains("\"phase\":\"preparation\"")
+        .contains("\"phase\":\"preparation\"");
+    assert_eq!(preparation, plan_of(run) != "reused");
+    preparation
 }
 
 /// The saved output bytes of a run through a memory resolver.
@@ -183,12 +199,14 @@ fn later_runs_reuse_the_plan_the_first_run_compiled() {
     let engine = engine(Some(resolver.clone()), &installed);
     let plans = Plans::new();
     let mut first = run(&engine, &plans);
+    assert_eq!(plan_of(&first), "compiled");
     assert!(compiled(&first));
     assert_eq!(saved(&mut first, &resolver), SAME);
     let (fresh, _) = resolver.take();
     assert!(fresh > 0);
     for attempt in 2..=4 {
         let mut again = run(&engine, &plans);
+        assert_eq!(plan_of(&again), "reused");
         assert!(!compiled(&again));
         assert_eq!(saved(&mut again, &resolver), SAME);
         // Nothing is resolved or captured anew; each of the four held files
@@ -277,6 +295,7 @@ fn a_refused_compilation_keeps_nothing_and_the_next_run_compiles() {
         Arc::from(&b"schema_version: '1.0'\ndomain: TEST\n"[..]),
     );
     let refused = run(&engine, &plans);
+    assert_eq!(plan_of(&refused), "refused");
     assert!(refused.output().is_none());
     assert!(refused.issues().rows() > 0);
     // The original is back: the next run compiles it again rather than
@@ -308,6 +327,22 @@ fn a_kept_plan_runs_with_the_calling_engines_functions() {
     // An engine over another resolver compiles anew.
     let other = engine(Some(memory_study()), &second);
     assert!(compiled(&run(&other, &plans)));
+}
+
+#[test]
+fn a_kept_plan_holds_no_project_functions_of_the_compiling_call() {
+    let resolver = memory_study();
+    let installed = Arc::new(Installed::default());
+    let plans = Plans::new();
+    let compiling = engine(Some(resolver.clone()), &installed);
+    assert_eq!(saved(&mut run(&compiling, &plans), &resolver), SAME);
+    drop(compiling);
+    // The holder keeps the plan, but not the functions it was compiled with.
+    assert_eq!(Arc::strong_count(&installed), 1);
+    let calling = engine(Some(resolver.clone()), &installed);
+    let mut again = run(&calling, &plans);
+    assert_eq!(plan_of(&again), "reused");
+    assert_eq!(saved(&mut again, &resolver), SAME);
 }
 
 #[test]
@@ -359,6 +394,16 @@ impl Study {
         #[cfg(windows)]
         let path = path.replace('\\', "/");
         path
+    }
+}
+impl Study {
+    /// An empty directory for a test of its own.
+    fn empty(name: &str) -> Self {
+        let root =
+            std::env::temp_dir().join(format!("yamaa-plan-reuse-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        Self(yamaa_adapters::canonical_path::canonicalize(root).unwrap())
     }
 }
 impl Drop for Study {
@@ -427,4 +472,36 @@ fn project_runs_reuse_each_specifications_plan_and_compile_only_what_changed() {
     );
     assert_eq!(project_run(&engine, &study, &plans), rows([true, true]));
     assert_eq!(project_run(&engine, &study, &plans), rows([false, false]));
+}
+
+/// A specification without project functions: its output repeats its input.
+const PLAIN: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
+
+#[cfg(unix)]
+#[test]
+fn a_path_through_a_retargeted_link_compiles_the_study_it_now_names() {
+    let study = Study::empty("link");
+    for (name, input) in [("a", "ID\n1\n2\n"), ("b", "ID\n1\n2\n3\n")] {
+        study.write(&format!("{name}/spec.yaml"), PLAIN);
+        study.write(&format!("{name}/input.csv"), input);
+    }
+    let link = study.0.join("study");
+    std::os::unix::fs::symlink(study.0.join("a"), &link).unwrap();
+    let installed = Arc::new(Installed::default());
+    let engine = engine(None, &installed);
+    let plans = Plans::new();
+    let specification = study.path("study/spec.yaml");
+    let rows = |plans: &Plans| {
+        let run = engine
+            .spec_run_reusing(&specification, None, plans, &CancellationToken::new())
+            .unwrap();
+        (plan_of(&run), run.output().unwrap().rows())
+    };
+    assert_eq!(rows(&plans), ("compiled", 2));
+    assert_eq!(rows(&plans), ("reused", 2));
+    // The same path now names study B, whose files are unchanged too.
+    std::fs::remove_file(&link).unwrap();
+    std::os::unix::fs::symlink(study.0.join("b"), &link).unwrap();
+    assert_eq!(rows(&plans), ("compiled", 3));
+    assert_eq!(rows(&plans), ("reused", 3));
 }
