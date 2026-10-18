@@ -2065,7 +2065,9 @@ fn evaluate_first_available<T: TableAccess + ?Sized>(
 }
 
 /// Evaluate one temporal operation over its already admitted operands,
-/// recording the declared invalid handler when a step is invalid.
+/// recording the declared invalid handler when a step is invalid. `dtc`
+/// reads its parts in order and stops at the first missing one, so a later
+/// part, its lookups and its handlers are never reached (TIME-19).
 #[allow(clippy::too_many_arguments)]
 fn evaluate_temporal<T: TableAccess + ?Sized>(
     table: &T,
@@ -2076,6 +2078,7 @@ fn evaluate_temporal<T: TableAccess + ?Sized>(
     row: usize,
     state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
+    let stops = operation.kind().stops_at_missing();
     let mut values = Vec::with_capacity(operands.len());
     for (index, operand) in operands.iter().enumerate() {
         let value = evaluate_raw(table, operand, candidate, plan, row, state)?;
@@ -2083,8 +2086,14 @@ fn evaluate_temporal<T: TableAccess + ?Sized>(
             .validate_operand(index, &value)
             .expect("admitted operand index")
             .map_err(|diagnostic| Box::new(ExecutionError::ScalarDiagnostic(diagnostic)))?;
+        let last = stops && value == Value::Missing;
         values.push(value);
+        if last {
+            break;
+        }
     }
+    // A part left unread stands missing; the operation reads none after it.
+    values.resize(operands.len(), Value::Missing);
     let result = operation
         .apply_values(&values)
         .expect("admitted temporal arity")

@@ -265,15 +265,16 @@ text stops before the first missing part, so a missing day gives `YYYY-MM`
 and a missing year gives missing. Nothing is counted.
 
 Fails: `incompatible_input_type`, `missing_required_field`, `invalid_date_text`.
-Evidence: `sdtm-ae-partial-dates`, `sdtm-mh-ongoing-conditions`, `negative-dtc-month-digits`, `rust/crates/yamaa-core/tests/temporal_date_text.rs`.
+Evidence: `sdtm-ae-partial-dates`, `sdtm-mh-ongoing-conditions`, `negative-dtc-month-digits`, `rust/crates/yamaa-core/tests/temporal_date_text.rs`, `rust/crates/yamaa-adapters/tests/execution_date_text_reads.rs`.
 
 The parts are read in order from `year`, and reading stops at the first
 missing part: the parts after it are not read, and the result is the
-right-truncated text, never a placeholder form. A year `2025`, a missing month
-and a day `15` give `2025`; a year, month and day give `2025-03-15`, and with
-an hour and minute `2025-03-15T08:30`. A truncated result is the collected
-precision rather than a substitution, so no handler fires and no count is
-reported for it.
+right-truncated text, never a placeholder form. A part that is not read makes
+no lookup, so it can neither fail the run nor count an absence. A year `2025`,
+a missing month and a day `15` give `2025`; a year, month and day give
+`2025-03-15`, and with an hour and minute `2025-03-15T08:30`. A truncated
+result is the collected precision rather than a substitution, so no handler
+fires and no count is reported for it.
 
 An `int` part is written as its decimal digits padded with leading zeros to
 the field's width: a month `3` writes `03` and a year `2025` writes `2025`. A

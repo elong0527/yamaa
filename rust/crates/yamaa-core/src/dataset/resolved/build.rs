@@ -780,7 +780,12 @@ impl<'p> Builder<'p> {
                 let site = format!("{}.invalid", operation.path());
                 let walker = Some(Walker::Imputation);
                 self.site(cx, &mut node, declared, site, H::Invalid, walker);
-                values.extend(operands.iter().map(|operand| (operand, Value, Always)));
+                // `dtc` reads a part only when every coarser part is present.
+                let stops = operation.kind().stops_at_missing();
+                for (index, operand) in operands.iter().enumerate() {
+                    let demand = if stops && index > 0 { Reached } else { Always };
+                    values.push((operand, Value, demand));
+                }
             }
             E::Extreme { operands, .. } => {
                 node.kind = ExprKind::Extreme;
