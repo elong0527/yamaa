@@ -56,6 +56,27 @@ pub fn prepare(
     nodes: Vec<SuppliedNode>,
     environment: ExecutionEnvironment,
 ) -> Result<PreparedGraph, Error> {
+    prepare_graph(root_identity, nodes, environment, false)
+}
+
+/// Prepare a graph whose supplied producers need not be nodes. A producer
+/// document that no node owns is a saved link: the graph keeps its contract
+/// and output location but never builds it (see
+/// [`yamaa_core::producer_graph::prepare_saved`]).
+pub fn prepare_saved(
+    root_identity: &str,
+    nodes: Vec<SuppliedNode>,
+    environment: ExecutionEnvironment,
+) -> Result<PreparedGraph, Error> {
+    prepare_graph(root_identity, nodes, environment, true)
+}
+
+fn prepare_graph(
+    root_identity: &str,
+    nodes: Vec<SuppliedNode>,
+    environment: ExecutionEnvironment,
+    saved_links: bool,
+) -> Result<PreparedGraph, Error> {
     if nodes.is_empty() {
         return Err(Error::Boundary {
             node: 0,
@@ -107,12 +128,16 @@ pub fn prepare(
             }
         }
         for producer in &node.producers {
-            let canonical = documents
-                .get(producer.document.source().identity.as_str())
-                .ok_or(Error::Boundary {
+            let Some(canonical) = documents.get(producer.document.source().identity.as_str())
+            else {
+                if saved_links {
+                    continue;
+                }
+                return Err(Error::Boundary {
                     node: index,
                     reason: "missing_producer_node",
-                })?;
+                });
+            };
             if !Arc::ptr_eq(&producer.document, &nodes[*canonical].document) {
                 return Err(Error::Boundary {
                     node: index,
@@ -138,6 +163,11 @@ pub fn prepare(
             producers,
         })
         .collect::<Vec<_>>();
-    let metadata = core::prepare(root_identity, &supplied, environment).map_err(Error::Graph)?;
+    let metadata = if saved_links {
+        core::prepare_saved(root_identity, &supplied, environment)
+    } else {
+        core::prepare(root_identity, &supplied, environment)
+    }
+    .map_err(Error::Graph)?;
     Ok(PreparedGraph { nodes, metadata })
 }

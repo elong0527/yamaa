@@ -152,10 +152,39 @@ impl<E> OwnedAttempt<E> {
         self.publication_refusal
     }
 }
+/// Serialized artifacts a project run has already built, by producer. A saved
+/// producer link whose producer and artifact location match a held artifact
+/// reads those bytes instead of the saved file, still under the producer's
+/// output contract.
+#[derive(Clone, Debug, Default)]
+pub struct HeldArtifacts {
+    artifacts: std::collections::BTreeMap<String, (String, Arc<[u8]>)>,
+}
+impl HeldArtifacts {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    /// Hold the artifact the producer with canonical identity `producer`
+    /// built for its `output.path` location `location`.
+    pub fn insert(&mut self, producer: String, location: String, bytes: Arc<[u8]>) {
+        self.artifacts.insert(producer, (location, bytes));
+    }
+    /// The held artifact of `producer`, when it was built for `location`.
+    pub fn get(&self, producer: &str, location: &str) -> Option<Arc<[u8]>> {
+        self.artifacts
+            .get(producer)
+            .filter(|(held, _)| crate::producer_publication::same_location(held, location))
+            .map(|(_, bytes)| Arc::clone(bytes))
+    }
+    pub fn is_empty(&self) -> bool {
+        self.artifacts.is_empty()
+    }
+}
 pub struct FileBuild {
     provenance: Arc<Provenance>,
     resources: Resources,
     metadata_snapshots: usize,
+    held: Option<Arc<HeldArtifacts>>,
 }
 impl FileBuild {
     pub(crate) fn new(
@@ -175,10 +204,16 @@ impl FileBuild {
             }),
             resources,
             metadata_snapshots,
+            held: None,
         }
     }
     pub fn provenance(&self) -> &Arc<Provenance> {
         &self.provenance
+    }
+    /// Offer artifacts the caller already built to this graph's saved links.
+    /// Links without a held artifact read the saved file their path names.
+    pub fn hold(&mut self, held: Arc<HeldArtifacts>) {
+        self.held = Some(held);
     }
     /// Use complete native original-document reports as the ordinary output
     /// gate. Returned attempts own every report and all original typed failures.
@@ -285,6 +320,7 @@ impl FileBuild {
                         activation,
                         study: &mut Study {
                             resources: &mut self.resources,
+                            held: self.held.as_deref(),
                         },
                         decoder: &mut Decoder::<A::Error>::default(),
                         report,
@@ -304,6 +340,7 @@ impl FileBuild {
 }
 struct Study<'a> {
     resources: &'a mut Resources,
+    held: Option<&'a HeldArtifacts>,
 }
 impl StudyPort for Study<'_> {
     type Error = ResourceError;
@@ -314,6 +351,15 @@ impl StudyPort for Study<'_> {
     ) -> Option<Arc<dyn std::any::Any + Send + Sync>> {
         self.resources
             .owned_table_from(node.identity(), &source.path)
+    }
+    fn held(
+        &self,
+        _node: &Node,
+        _source: &SourceDeclaration,
+        producer: &yamaa_core::producer_admission::Declaration,
+    ) -> Option<Arc<[u8]>> {
+        self.held?
+            .get(producer.producer_identity(), producer.artifact_identity())
     }
     fn resource_failure(
         &self,
