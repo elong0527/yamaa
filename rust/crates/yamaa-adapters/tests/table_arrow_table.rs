@@ -2903,6 +2903,18 @@ mod table {
                             DataType::Timestamp(TimeUnit::Microsecond, None),
                         ),
                     ),
+                    // A date64 hint names the stored DATE as it does outside a
+                    // dictionary, where it already reads as a date.
+                    (
+                        "E",
+                        Arc::new(Date32Array::from(vec![
+                            Some(-719_162),
+                            None,
+                            Some(2_932_896),
+                            Some(-719_162),
+                        ])) as ArrayRef,
+                        hint(DataType::Int16, DataType::Date64),
+                    ),
                 ];
                 for encoded in [false, true] {
                     let bytes = write(&columns, encoded);
@@ -2918,9 +2930,10 @@ mod table {
                             ("F", ColumnType::Float),
                             ("D", ColumnType::Date),
                             ("T", ColumnType::DateTime),
+                            ("E", ColumnType::Date),
                         ]
                     );
-                    for column in 0..4 {
+                    for column in 0..5 {
                         assert_eq!(table.cell(1, column).unwrap(), ValueRef::Missing);
                     }
                     for row in [0, 3] {
@@ -2937,6 +2950,10 @@ mod table {
                             panic!("datetime")
                         };
                         assert_eq!(value.fields(), (1969, 12, 31, 23, 59, 59));
+                        let ValueRef::Date(value) = table.cell(row, 4).unwrap() else {
+                            panic!("date64 dictionary")
+                        };
+                        assert_eq!(value.to_string(), "0001-01-01");
                     }
                     assert_eq!(table.cell(2, 0).unwrap(), ValueRef::Int(7));
                     let ValueRef::Float(value) = table.cell(2, 1).unwrap() else {
@@ -2951,6 +2968,10 @@ mod table {
                         panic!("datetime")
                     };
                     assert_eq!(value.fields(), (1970, 1, 1, 0, 0, 0));
+                    let ValueRef::Date(value) = table.cell(2, 4).unwrap() else {
+                        panic!("date64 dictionary")
+                    };
+                    assert_eq!(value.to_string(), "9999-12-31");
                 }
             }
 
