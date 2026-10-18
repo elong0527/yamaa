@@ -1013,6 +1013,50 @@ pub(crate) fn intermediate_reached() -> BTreeSet<ConditionCode> {
             )],
         ));
     }
+    // Every entry that repeats an earlier column is reported, at that entry.
+    let mut fields = base(
+        "TEST",
+        inputs(),
+        vec![column("ID", Some(source()))],
+        vec![Tree::text("ID")],
+    );
+    fields.push(("base", Tree::text("SRC")));
+    fields.push((
+        "intermediates",
+        Tree::List(vec![Tree::map(vec![
+            ("id", Tree::text("P")),
+            ("dataset", Tree::text("SECOND")),
+            (
+                "key",
+                Tree::List(vec![
+                    Tree::text("ID"),
+                    Tree::text("ID"),
+                    Tree::text("OTHER"),
+                    Tree::text("ID"),
+                ]),
+            ),
+        ])]),
+    ));
+    let repeated = |path| {
+        (
+            "invalid_field_type",
+            Some("REQ-0115"),
+            vec![path],
+            vec![
+                ("intermediate", text("P")),
+                ("dataset", text("SECOND")),
+                ("identifier", text("ID")),
+                ("expected", text("each column once")),
+            ],
+        )
+    };
+    reached.extend(check(
+        fields,
+        vec![
+            repeated("intermediates[0].key[1]"),
+            repeated("intermediates[0].key[3]"),
+        ],
+    ));
     for variant in 0..3 {
         let mut fields = base(
             "TEST",
