@@ -104,6 +104,7 @@
 }
 
 .submission <- function(handle) {
+  force(handle) # compose now: the result is a snapshot of the files as called
   object <- new.env(parent = emptyenv())
   .read_only(object, "issues", function() .reply(.native_submission_issues(handle)))
   object$save <- function() invisible(.reply(.native_submission_save(handle)))

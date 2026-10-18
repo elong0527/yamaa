@@ -32,18 +32,27 @@ class BindingsTests(unittest.TestCase):
         self.assertGreater(len(wrapped), 1)
         self.assertTrue(all(len(line) <= 88 for line in wrapped[:-1]))
 
-    def test_every_issues_view_crosses_as_one_arrow_table(self):
+    def test_every_issue_view_is_an_arrow_table_with_no_row_alias(self):
         # The Rust facade builds the seven-column issues table; no host
         # projects a private issue record.
         definition = generator._load_definition()
         stub = generator._render_pyi(definition)
         self.assertNotIn("_IssueRecord", stub)
+        self.assertNotIn("issue_record", definition["python"])
         self.assertEqual(stub.count("def issues(self) -> _ArrowTable: ..."), 3)
         self.assertIn("def member_issues(self, name: str) -> _ArrowTable: ...", stub)
+        # The removed row alias is neither a definition key nor a type token.
         candidate = copy.deepcopy(definition)
         candidate["python"]["issue_record"] = "tuple<text>"
         with self.assertRaisesRegex(ValueError, "unknown Python definition keys"):
             generator._validate_python(candidate)
+        candidate = copy.deepcopy(definition)
+        run = next(e for e in candidate["python"]["exports"] if e["name"] == "_Run")
+        next(m for m in run["methods"] if m["name"] == "issues")["returns"] = (
+            "list<issue_record>"
+        )
+        with self.assertRaisesRegex(ValueError, "unknown type token"):
+            generator._render_pyi(candidate)
 
     def test_every_export_is_paired_with_the_other_host_or_host_only(self):
         definition = generator._load_definition()
@@ -149,7 +158,7 @@ class BindingsTests(unittest.TestCase):
             ):
                 generator._reconcile_r(definition)
 
-    def test_existing_observation_entry_drives_both_hosts(self):
+    def test_paired_observation_entry_drives_both_hosts(self):
         definition = generator._load_definition()
         run = next(
             export
@@ -161,8 +170,13 @@ class BindingsTests(unittest.TestCase):
         function = next(
             f for f in group["functions"] if f["name"] == "run_observations"
         )
+        pairing = definition["operations"].pop("run_observations")
+        self.assertEqual(
+            pairing, {"python": ["_Run.observations"], "r": ["run_observations"]}
+        )
         run["methods"].remove(method)
         group["functions"].remove(function)
+        generator._validate_operations(definition)
         self.assertNotIn("def observations(", generator._render_pyi(definition))
         self.assertNotIn(
             ".native_run_observations", generator._render_r_wrappers(definition)
@@ -173,7 +187,12 @@ class BindingsTests(unittest.TestCase):
         )
         run["methods"].append(method)
         group["functions"].append(function)
-        self.assertIn("def observations(", generator._render_pyi(definition))
+        definition["operations"]["run_observations"] = pairing
+        generator._validate_operations(definition)
+        self.assertIn(
+            "def observations(self, include_measurements: bool = False) -> str | None: ...",
+            generator._render_pyi(definition),
+        )
         self.assertIn(
             ".native_run_observations <- function(handle, include_measurements)",
             generator._render_r_wrappers(definition),
@@ -182,32 +201,82 @@ class BindingsTests(unittest.TestCase):
             "fn run_observations;",
             generator._render_r_registration(group, definition["r"]),
         )
-        py_fn = next(
-            export
-            for export in definition["python"]["exports"]
-            if export["name"] == "_read_odm"
-        )
-        r_fn = next(f for f in group["functions"] if f["name"] == "read_odm")
-        definition["python"]["exports"].remove(py_fn)
-        group["functions"].remove(r_fn)
-        self.assertNotIn("_read_odm", generator._render_pyi(definition))
-        self.assertNotIn("_read_odm", generator._render_lib_rs(definition))
+
+    def test_paired_function_entry_drives_both_registrations(self):
+        definition = generator._load_definition()
+        exports = definition["python"]["exports"]
+        python = next(export for export in exports if export["name"] == "_read_odm")
+        group = definition["r"]["groups"][1]
+        function = next(f for f in group["functions"] if f["name"] == "read_odm")
+        pairing = definition["operations"].pop("read_odm")
+        exports.remove(python)
+        group["functions"].remove(function)
+        generator._validate_operations(definition)
+        self.assertNotIn("def _read_odm(", generator._render_pyi(definition))
+        self.assertNotIn("api_entry::_read_odm", generator._render_lib_rs(definition))
         self.assertNotIn(".native_read_odm", generator._render_r_wrappers(definition))
         self.assertNotIn(
             "fn read_odm;", generator._render_r_registration(group, definition["r"])
         )
-        definition["python"]["exports"].append(py_fn)
-        group["functions"].append(r_fn)
+        exports.append(python)
+        group["functions"].append(function)
+        definition["operations"]["read_odm"] = pairing
+        generator._validate_operations(definition)
         self.assertIn("def _read_odm(", generator._render_pyi(definition))
         self.assertIn("api_entry::_read_odm", generator._render_lib_rs(definition))
         self.assertIn(
-            ".native_read_odm <- function(source, archive_member, "
-            "max_archive_members, max_expanded_bytes, max_xml_depth)",
+            ".native_read_odm <- function(source, archive_member, max_archive_members, "
+            "max_expanded_bytes, max_xml_depth)",
             generator._render_r_wrappers(definition),
         )
         self.assertIn(
             "fn read_odm;", generator._render_r_registration(group, definition["r"])
         )
+
+    def test_every_native_export_names_its_counterpart_in_the_other_host(self):
+        definition = generator._load_definition()
+        r_functions = {
+            function["name"]
+            for group in definition["r"]["groups"]
+            for function in group["functions"]
+        }
+        mutations = [
+            (
+                "Python exports without an R counterpart: _Run.observations",
+                lambda d: d["operations"].pop("run_observations"),
+            ),
+            (
+                "operation run_observations must name both",
+                lambda d: d["operations"]["run_observations"].update(r=[]),
+            ),
+            (
+                "R exports without a Python counterpart: run_interrupt",
+                lambda d: d["host_only"]["r"].remove("run_interrupt"),
+            ),
+            (
+                "Python exports without an R counterpart: _style_same_value",
+                lambda d: d["host_only"]["python"].remove("_style_same_value"),
+            ),
+            (
+                "references absent R export absent_export",
+                lambda d: d["operations"]["run_save"].update(r=["absent_export"]),
+            ),
+            (
+                "references absent Python export member _Run.absent",
+                lambda d: d["operations"]["run_save"].update(python=["_Run.absent"]),
+            ),
+        ]
+        for message, mutate in mutations:
+            with self.subTest(message=message):
+                candidate = copy.deepcopy(definition)
+                mutate(candidate)
+                with self.assertRaisesRegex(ValueError, message):
+                    generator._validate_operations(candidate)
+        # Pairing covers both hosts completely, apart from declared transport.
+        paired_r = {
+            name for hosts in definition["operations"].values() for name in hosts["r"]
+        }
+        self.assertEqual(paired_r | set(definition["host_only"]["r"]), r_functions)
 
     def test_read_only_check_rejects_r_generated_drift(self):
         rendered = generator.render_all()

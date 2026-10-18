@@ -124,6 +124,26 @@
       ]
     },
     {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/odm/odm13.xml",
+      "family": "odm",
+      "level": "component",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/odm_xml.rs",
+        "python/tests/installed/installed_read_odm.py",
+        "R/yamaa/tests/read_odm.R"
+      ]
+    },
+    {
+      "path": "rust/crates/yamaa-adapters/tests/fixtures/odm/odm20.xml",
+      "family": "odm",
+      "level": "component",
+      "consumers": [
+        "rust/crates/yamaa-adapters/tests/odm_xml.rs",
+        "python/tests/installed/installed_read_odm.py",
+        "R/yamaa/tests/read_odm.R"
+      ]
+    },
+    {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/text_template_reference.json",
       "family": "text",
       "level": "component",
@@ -1026,7 +1046,9 @@
         "R/yamaa/tests/public_contract.R",
         "python/tests/installed/installed_public_grammar.py",
         "R/yamaa/tests/public_grammar.R",
-        "R/yamaa/tests/public_file_resources.R"
+        "R/yamaa/tests/public_file_resources.R",
+        "python/tests/installed/installed_read_odm.py",
+        "R/yamaa/tests/read_odm.R"
       ]
     },
     {
@@ -1073,7 +1095,6 @@
     "python/sas-sources": "shared_run",
     "python/saved-readers": "shared_run",
     "python/run-report": "shared_run",
-    "r/arrow-bridge": "shared_run",
     "r/column-ceilings": "shared_run",
     "r/compact-yaml": "shared_run",
     "r/longitudinal-capacity": "shared_run",
@@ -1086,13 +1107,10 @@
     "r/public-grammar": "shared_run",
     "r/sas-sources": "shared_run",
     "r/saved-readers": "shared_run",
-    "r/run-report": "shared_run",
-    "python/host-resources": "shared_run",
-    "r/host-resources": "shared_run"
+    "r/run-report": "shared_run"
   },
   "suite_ids": {
     "R/yamaa/tests/public_producers.R": "r/public-producer-builds",
-    "python/tests/installed/installed_odm_helpers.py": "python/retained-odm-helpers",
     "python/tests/installed/installed_project_functions.py": "python/project_functions",
     "python/tests/installed/installed_public_producers.py": "python/public-producer-builds"
   },

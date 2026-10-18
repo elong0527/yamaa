@@ -34,6 +34,10 @@ class RepositoryCatalog(unittest.TestCase):
             "from yamaa.io.project import ProjectResources",
             "from yamaa.io.odm import reference_walker",
             "from yamaa import yamaa_domain",
+            "from yamaa.resources import MemoryResolver",
+            "from yamaa import resources",
+            "import yamaa._odm.readers as reader",
+            "import importlib\nimportlib.import_module('yamaa._odm')",
             "import yamaa.expressions.numeric as parser",
             "def lazy():\n    from yamaa.models import TypedColumn",
             "import importlib\nimportlib.import_module('yamaa.runtime')",
@@ -66,15 +70,15 @@ class RepositoryCatalog(unittest.TestCase):
             ):
                 module.require_native_consumer(source, "installed_control.py")
         module.require_native_consumer(
-            "import yamaa\nfrom yamaa import domain, _native\n"
-            "blocked = ('yamaa.io.project', 'yamaa.runtime')\n"
-            "import importlib\nimportlib.import_module('yamaa._native_results')",
+            "import yamaa\nfrom yamaa import spec, project, read_odm, _native\n"
+            "blocked = ('yamaa.io.project', 'yamaa.runtime', 'yamaa.resources')\n"
+            "import importlib\nimportlib.import_module('yamaa._locked_functions')",
             "installed_control.py",
         )
         # The keyword and relative spellings of a native import stay allowed.
         module.require_native_consumer(
             "import importlib\n"
-            "importlib.import_module(name='yamaa._native_results')\n"
+            "importlib.import_module(name='yamaa._locked_functions')\n"
             "importlib.import_module('.helpers', package='installed_suite')\n"
             "importlib.import_module('..helpers', package='installed_suite.sub')",
             "installed_control.py",
@@ -206,6 +210,29 @@ class RepositoryCatalog(unittest.TestCase):
                     "rust/tests/host-fixtures/sas-cases.json",
                     "host-fixtures/sas-cases.json",
                 ),
+                ("tools/conformance/host_fixtures.py", "host_fixtures.py"),
+            ],
+        )
+
+    def test_odm_reader_documents_stage_beside_the_shared_host_truth(self):
+        prefix = "rust/crates/yamaa-adapters/tests/fixtures/odm/"
+        catalog = {
+            "contracts": [
+                {"path": prefix + "odm13.xml"},
+                {"path": "rust/tests/host-fixtures/cases.json"},
+            ],
+            "support_files": [
+                {
+                    "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/x.parquet",
+                    "role": "input",
+                },
+            ],
+        }
+        self.assertEqual(
+            module.host_fixture_files(catalog),
+            [
+                (prefix + "odm13.xml", "host-fixtures/odm/odm13.xml"),
+                ("rust/tests/host-fixtures/cases.json", "host-fixtures/cases.json"),
                 ("tools/conformance/host_fixtures.py", "host_fixtures.py"),
             ],
         )
