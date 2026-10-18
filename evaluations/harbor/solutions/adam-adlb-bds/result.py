@@ -4,124 +4,134 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+import csv
+from collections import OrderedDict
 
-import polars as pl
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-adsl = pl.read_csv("/app/input/adsl.csv", infer_schema=False).with_columns(
-    pl.col("TRTSDT").str.to_date(),
-)
-lb = pl.read_csv("/app/input/lb.csv", infer_schema=False).with_columns(
-    pl.col("LBSTRESN").cast(pl.Float64, strict=False).alias("RESULT"),
-    pl.col("LBDTC").str.to_date().alias("ADT"),
-)
 
-# One record per collected ALT/AST result; a collected result with no
-# numeric value produces no record.
-collected = lb.filter(
-    pl.col("LBTESTCD").is_in(["ALT", "AST"]) & pl.col("RESULT").is_not_null()
-)
+def fmt(value):
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if value == int(value) and abs(value) < 1e15:
+        return str(int(value))
+    return repr(value)
 
-# ALT and AST hold the collected result and unit; ALTSI holds the ALT
-# result times 0.0167 with unit ukat/L, one record for each ALT record.
-alt = collected.filter(pl.col("LBTESTCD") == "ALT").with_columns(
-    PARAMCD=pl.lit("ALT"),
-    PARAM=pl.lit("Alanine Aminotransferase"),
-    AVAL=pl.col("RESULT"),
-    AVALU=pl.col("LBSTRESU"),
-)
-ast = collected.filter(pl.col("LBTESTCD") == "AST").with_columns(
-    PARAMCD=pl.lit("AST"),
-    PARAM=pl.lit("Aspartate Aminotransferase"),
-    AVAL=pl.col("RESULT"),
-    AVALU=pl.col("LBSTRESU"),
-)
-altsi = collected.filter(pl.col("LBTESTCD") == "ALT").with_columns(
-    PARAMCD=pl.lit("ALTSI"),
-    PARAM=pl.lit("Alanine Aminotransferase (SI)"),
-    AVAL=pl.col("RESULT") * 0.0167,
-    AVALU=pl.lit("ukat/L"),
-)
 
-base = (
-    pl.concat([alt, ast, altsi], how="diagonal")
-    .select(
-        "STUDYID",
-        "USUBJID",
-        "PARAMCD",
-        "PARAM",
-        "ADT",
-        "AVAL",
-        "AVALU",
-    )
-    .join(
-        adsl.select("STUDYID", "USUBJID", "TRTSDT", "TRT01A"),
-        on=["STUDYID", "USUBJID"],
-        how="left",
-    )
-)
+def main():
+    adsl = {}
+    with open(f"{INPUT_DIR}/adsl.csv", newline="") as f:
+        for row in csv.DictReader(f):
+            adsl[row["USUBJID"]] = row
 
-# ABLFL is Y on the latest record on or before the treatment start date
-# for each subject and parameter, including the start date itself.
-baseline_dates = (
-    base.filter(pl.col("ADT") <= pl.col("TRTSDT"))
-    .group_by("STUDYID", "USUBJID", "PARAMCD")
-    .agg(pl.col("ADT").max().alias("BASE_DT"))
-)
-with_flag = base.join(
-    baseline_dates, on=["STUDYID", "USUBJID", "PARAMCD"], how="left"
-).with_columns(
-    ABLFL=pl.when(pl.col("ADT") == pl.col("BASE_DT"))
-    .then(pl.lit("Y"))
-    .otherwise(None)
-)
+    params = {
+        "ALT": ("ALT", "Alanine Aminotransferase"),
+        "AST": ("AST", "Aspartate Aminotransferase"),
+    }
 
-# BASE repeats the flagged baseline value; CHG and PCHG follow, with PCHG
-# empty when the baseline is zero. Values are not rounded.
-baselines = (
-    with_flag.filter(pl.col("ABLFL") == "Y")
-    .select("STUDYID", "USUBJID", "PARAMCD", BASE="AVAL")
-)
-adlb_flagged = (
-    with_flag.drop("BASE_DT")
-    .join(baselines, on=["STUDYID", "USUBJID", "PARAMCD"], how="left")
-    .with_columns(
-        CHG=pl.col("AVAL") - pl.col("BASE"),
-        PCHG=pl.when(pl.col("BASE").is_null() | (pl.col("BASE") == 0))
-        .then(None)
-        .otherwise(100 * (pl.col("AVAL") - pl.col("BASE")) / pl.col("BASE")),
-    )
-)
+    records = []
+    with open(f"{INPUT_DIR}/lb.csv", newline="") as f:
+        for row in csv.DictReader(f):
+            testcd = row["LBTESTCD"]
+            if testcd not in params:
+                continue
+            raw = (row["LBSTRESN"] or "").strip()
+            if raw == "":
+                continue
+            try:
+                aval = float(raw)
+            except ValueError:
+                continue
+            subj = adsl.get(row["USUBJID"], {})
+            base_rec = {
+                "STUDYID": row["STUDYID"],
+                "USUBJID": row["USUBJID"],
+                "ADT": row["LBDTC"],
+                "TRTSDT": subj.get("TRTSDT", ""),
+                "TRT01A": subj.get("TRT01A", ""),
+            }
+            paramcd, param = params[testcd]
+            rec = dict(base_rec)
+            rec.update({
+                "PARAMCD": paramcd,
+                "PARAM": param,
+                "AVAL": aval,
+                "AVAL_TEXT": raw,
+                "AVALU": row["LBSTRESU"],
+            })
+            records.append(rec)
+            if testcd == "ALT":
+                si = dict(base_rec)
+                si.update({
+                    "PARAMCD": "ALTSI",
+                    "PARAM": "Alanine Aminotransferase (SI)",
+                    "AVAL": aval * 0.0167,
+                    "AVAL_TEXT": None,
+                    "AVALU": "ukat/L",
+                })
+                records.append(si)
 
-# ASEQ numbers each subject's records from 1, ordered by PARAMCD (ALT,
-# then ALTSI, then AST) and then by ADT.
-order = {"ALT": 0, "ALTSI": 1, "AST": 2}
-adlb = (
-    adlb_flagged.with_columns(
-        PARAM_ORDER=pl.col("PARAMCD").replace_strict(order)
-    )
-    .sort(["STUDYID", "USUBJID", "PARAM_ORDER", "ADT"])
-    .with_columns(
-        ASEQ=pl.int_range(1, pl.len() + 1).over(["STUDYID", "USUBJID"]).cast(pl.Int64)
-    )
-    .sort(["PARAM_ORDER", "USUBJID", "ADT"])
-    .select(
-        "STUDYID",
-        "USUBJID",
-        "PARAMCD",
-        "PARAM",
-        "ADT",
-        "TRTSDT",
-        "TRT01A",
-        "AVAL",
-        "AVALU",
-        "ABLFL",
-        "BASE",
-        "CHG",
-        "PCHG",
-        "ASEQ",
-    )
-)
+    # Baseline: latest record on or before TRTSDT per subject + parameter.
+    groups = OrderedDict()
+    for rec in records:
+        groups.setdefault((rec["USUBJID"], rec["PARAMCD"]), []).append(rec)
 
-Path("/app/output").mkdir(exist_ok=True)
-adlb.write_csv("/app/output/adlb.csv")
+    for key, grecs in groups.items():
+        baseline = None
+        for rec in grecs:
+            if rec["TRTSDT"] and rec["ADT"] <= rec["TRTSDT"]:
+                if baseline is None or rec["ADT"] > baseline["ADT"]:
+                    baseline = rec
+        for rec in grecs:
+            rec["ABLFL"] = "Y" if rec is baseline else ""
+            if baseline is None:
+                rec["BASE"] = None
+                rec["CHG"] = None
+                rec["PCHG"] = None
+            else:
+                base = baseline["AVAL"]
+                chg = rec["AVAL"] - base
+                rec["BASE"] = base
+                rec["CHG"] = chg
+                rec["PCHG"] = None if base == 0 else 100.0 * chg / base
+
+    records.sort(key=lambda r: (r["USUBJID"], r["PARAMCD"], r["ADT"]))
+
+    by_subject = OrderedDict()
+    for rec in records:
+        by_subject.setdefault(rec["USUBJID"], []).append(rec)
+    for subj, srecs in by_subject.items():
+        for i, rec in enumerate(srecs, start=1):
+            rec["ASEQ"] = i
+
+    columns = ["STUDYID", "USUBJID", "PARAMCD", "PARAM", "ADT", "TRTSDT",
+               "TRT01A", "AVAL", "AVALU", "ABLFL", "BASE", "CHG", "PCHG",
+               "ASEQ"]
+    with open(f"{OUTPUT_DIR}/adlb.csv", "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(columns)
+        for rec in records:
+            writer.writerow([
+                rec["STUDYID"],
+                rec["USUBJID"],
+                rec["PARAMCD"],
+                rec["PARAM"],
+                rec["ADT"],
+                rec["TRTSDT"],
+                rec["TRT01A"],
+                rec["AVAL_TEXT"] if rec["AVAL_TEXT"] is not None
+                else fmt(rec["AVAL"]),
+                rec["AVALU"],
+                rec["ABLFL"],
+                fmt(rec["BASE"]),
+                fmt(rec["CHG"]),
+                fmt(rec["PCHG"]),
+                rec["ASEQ"],
+            ])
+
+
+if __name__ == "__main__":
+    main()

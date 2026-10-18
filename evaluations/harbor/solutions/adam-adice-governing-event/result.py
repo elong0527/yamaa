@@ -1,26 +1,83 @@
-import csv
-from collections import defaultdict
+# Reference solution for the yamaa benchmark adam-adice-governing-event (Python track).
+#
+# Written from the benchmark's full prompt and its inputs alone, as an agent
+# would write it. Harbor's oracle agent runs it to check that the prompt can
+# be solved and that the grader scores a correct answer 1.
 
-with open('/app/input/ice_raw.csv', newline='') as source:
-    records = list(csv.DictReader(source))
-priority = {'ICE04': 1, 'ICE05': 1, 'ICE01': 2, 'ICE02': 3, 'ICE03': 4}
-groups = defaultdict(list)
-for record in records:
-    groups[record['STUDYID'], record['USUBJID']].append(record)
-rows = []
-for (study, subject), events in sorted(groups.items()):
-    ordered = sorted(events, key=lambda r: (priority[r['ICETYPE']],
-                                           r['ICEDTC'], int(r['ICESEQ'])))
-    winner = ordered[0]
-    for record in sorted(events, key=lambda r: int(r['ICESEQ'])):
-        rank = ordered.index(record) + 1
-        rows.append([study, subject, record['ICESEQ'], record['ICETYPE'],
-                     record['ICEDTC'], priority[record['ICETYPE']], rank,
-                     'Y' if rank == 1 else '', '' if rank == 1 else 'Y',
-                     winner['ICETYPE'], winner['ICEDTC'], winner['ICESEQ']])
-columns = ['STUDYID', 'USUBJID', 'ASEQ', 'ADECOD1', 'ASTDT', 'ICEPRIO',
-           'ICERANK', 'GOVFL', 'SUPERFL', 'GOVTYPE', 'GOVDT', 'GOVSEQ']
-with open('/app/output/adice.csv', 'w', newline='') as output:
-    writer = csv.writer(output)
-    writer.writerow(columns)
-    writer.writerows(rows)
+import csv
+
+INPUT_DIR = "/app/input"
+OUTPUT_PATH = "/app/output/adice.csv"
+
+PRIORITY = {
+    "ICE04": 1,
+    "ICE05": 1,
+    "ICE01": 2,
+    "ICE02": 3,
+    "ICE03": 4,
+}
+
+COLUMNS = [
+    "STUDYID",
+    "USUBJID",
+    "ASEQ",
+    "ADECOD1",
+    "ASTDT",
+    "ICEPRIO",
+    "ICERANK",
+    "GOVFL",
+    "SUPERFL",
+    "GOVTYPE",
+    "GOVDT",
+    "GOVSEQ",
+]
+
+
+def main():
+    with open(f"{INPUT_DIR}/adsl.csv", newline="") as f:
+        adsl = list(csv.DictReader(f))
+    subjects = {(r["STUDYID"], r["USUBJID"]) for r in adsl}
+
+    with open(f"{INPUT_DIR}/ice_raw.csv", newline="") as f:
+        ice = list(csv.DictReader(f))
+
+    events = {}
+    order = []
+    for row in ice:
+        key = (row["STUDYID"], row["USUBJID"])
+        if key not in subjects:
+            continue
+        event = {
+            "STUDYID": row["STUDYID"],
+            "USUBJID": row["USUBJID"],
+            "ASEQ": int(row["ICESEQ"]),
+            "ADECOD1": row["ICETYPE"],
+            "ASTDT": row["ICEDTC"],
+            "ICEPRIO": PRIORITY[row["ICETYPE"]],
+        }
+        events.setdefault(key, []).append(event)
+        order.append(event)
+
+    for key, subject_events in events.items():
+        ranked = sorted(
+            subject_events,
+            key=lambda e: (e["ICEPRIO"], e["ASTDT"], e["ASEQ"]),
+        )
+        governing = ranked[0]
+        for position, event in enumerate(ranked, start=1):
+            event["ICERANK"] = position
+            event["GOVFL"] = "Y" if position == 1 else ""
+            event["SUPERFL"] = "" if position == 1 else "Y"
+            event["GOVTYPE"] = governing["ADECOD1"]
+            event["GOVDT"] = governing["ASTDT"]
+            event["GOVSEQ"] = governing["ASEQ"]
+
+    with open(OUTPUT_PATH, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=COLUMNS)
+        writer.writeheader()
+        for event in order:
+            writer.writerow({c: event[c] for c in COLUMNS})
+
+
+if __name__ == "__main__":
+    main()

@@ -4,80 +4,123 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
+"""Build the SDTM VS dataset, deriving EPOCH from the subject's SE elements.
+
+Reads SE and VS_RAW from /app/input and writes /app/output/vs.csv with one
+record per vital signs measurement.
+
+EPOCH is the trial period of the subject's element in progress at the
+collection date-time: the element whose start is on or before the collection
+and whose end is on or after it. A date-only collection reads as the start
+of that day. A reading exactly at a shared element boundary belongs to the
+later element. EPOCH is blank when the reading has no date or only a
+partial one, or when the date-time falls outside every element.
+"""
+
+import csv
+import re
 from datetime import datetime
-from pathlib import Path
 
-import polars as pl
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
+
+FULL_DATETIME = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$")
+FULL_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
-def parse_moment(text: str | None) -> datetime | None:
-    if text is None or text == "":
+def parse_element_bound(text):
+    """Parse an SE start/end date-time (always fully specified)."""
+    return datetime.fromisoformat(text)
+
+
+def parse_collection(text):
+    """Return the collection date-time, or None if missing or partial.
+
+    A full date-time parses directly; a full date alone reads as the
+    start of that day. Anything else (empty, year-month, year only)
+    yields None.
+    """
+    if not text:
         return None
-    # A partial date such as YYYY-MM has no day, so it cannot be placed in
-    # an element.
-    if len(text) == 7 and text[4] == "-":
-        return None
-    if len(text) == 4 and text.isdigit():
-        return None
-    try:
-        # A date-only collection reads as the start of that day.
-        if "T" not in text:
-            return datetime.fromisoformat(text + "T00:00:00")
+    text = text.strip()
+    if FULL_DATETIME.match(text):
         return datetime.fromisoformat(text)
-    except ValueError:
-        return None
+    if FULL_DATE.match(text):
+        return datetime.fromisoformat(text)
+    return None
 
 
-se = pl.read_csv("/app/input/se.csv", infer_schema=False)
-vs_raw = pl.read_csv("/app/input/vs_raw.csv", infer_schema=False).with_columns(
-    pl.col("VSSEQ").cast(pl.Int64)
-)
+def derive_epoch(collection, elements):
+    """Return the EPOCH of the element in progress at the collection.
 
-elements: dict[str, list[dict]] = {}
-for row in se.to_dicts():
-    elements.setdefault(row["USUBJID"], []).append(
-        {
-            "EPOCH": row["EPOCH"],
-            "start": parse_moment(row["SESTDTC"]),
-            "end": parse_moment(row["SEENDTC"]),
-        }
-    )
+    An element covers the collection when its start is on or before it
+    and its end is on or after it. When two elements share the boundary
+    instant, the later element (the one starting at the boundary) wins.
+    """
+    if collection is None:
+        return ""
+    matches = [
+        element
+        for element in elements
+        if element["start"] <= collection <= element["end"]
+    ]
+    if not matches:
+        return ""
+    later = max(matches, key=lambda element: element["start"])
+    return later["epoch"]
 
-rows = []
-for row in vs_raw.to_dicts():
-    coll = parse_moment(row["VSDTC"])
-    # Only a full date or datetime can fall in an element; empty and
-    # partial dates stay empty, as do readings outside every element.
-    epoch = None
-    if coll is not None:
-        hits = [
-            e
-            for e in elements.get(row["USUBJID"], [])
-            if e["start"] is not None
-            and e["end"] is not None
-            and e["start"] <= coll <= e["end"]
-        ]
-        if hits:
-            hits.sort(key=lambda e: e["start"])
-            # A reading exactly at a shared boundary belongs to the later
-            # element.
-            epoch = hits[-1]["EPOCH"]
-    rows.append(
-        {
-            "DOMAIN": "VS",
-            "STUDYID": row["STUDYID"],
-            "USUBJID": row["USUBJID"],
-            "VSSEQ": row["VSSEQ"],
-            "VSTESTCD": row["VSTESTCD"],
-            "VSORRES": row["VSORRES"],
-            "VSDTC": row["VSDTC"],
-            "EPOCH": epoch,
-        }
-    )
 
-vs = pl.DataFrame(rows).sort(["USUBJID", "VSSEQ"]).select(
-    "DOMAIN", "STUDYID", "USUBJID", "VSSEQ", "VSTESTCD", "VSORRES", "VSDTC", "EPOCH"
-)
+def main():
+    with open(f"{INPUT_DIR}/se.csv", newline="") as handle:
+        se_rows = list(csv.DictReader(handle))
 
-Path("/app/output").mkdir(exist_ok=True)
-vs.write_csv("/app/output/vs.csv")
+    elements_by_subject = {}
+    for row in se_rows:
+        key = (row["STUDYID"], row["USUBJID"])
+        elements_by_subject.setdefault(key, []).append(
+            {
+                "epoch": row["EPOCH"],
+                "start": parse_element_bound(row["SESTDTC"]),
+                "end": parse_element_bound(row["SEENDTC"]),
+            }
+        )
+
+    with open(f"{INPUT_DIR}/vs_raw.csv", newline="") as handle:
+        vs_rows = list(csv.DictReader(handle))
+
+    out_rows = []
+    for row in vs_rows:
+        key = (row["STUDYID"], row["USUBJID"])
+        elements = elements_by_subject.get(key, [])
+        collection = parse_collection(row["VSDTC"])
+        out_rows.append(
+            {
+                "DOMAIN": "VS",
+                "STUDYID": row["STUDYID"],
+                "USUBJID": row["USUBJID"],
+                "VSSEQ": row["VSSEQ"],
+                "VSTESTCD": row["VSTESTCD"],
+                "VSORRES": row["VSORRES"],
+                "VSDTC": row["VSDTC"],
+                "EPOCH": derive_epoch(collection, elements),
+            }
+        )
+
+    fieldnames = [
+        "DOMAIN",
+        "STUDYID",
+        "USUBJID",
+        "VSSEQ",
+        "VSTESTCD",
+        "VSORRES",
+        "VSDTC",
+        "EPOCH",
+    ]
+    with open(f"{OUTPUT_DIR}/vs.csv", "w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+
+if __name__ == "__main__":
+    main()

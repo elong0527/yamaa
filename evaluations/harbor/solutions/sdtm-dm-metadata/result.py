@@ -4,31 +4,70 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build the SDTM DM dataset from the collected DM_RAW dataset.
 
-import polars as pl
+One record per subject. Reads /app/input/dm_raw.csv and writes
+/app/output/dm.csv with columns DOMAIN, STUDYID, USUBJID, SUBJID,
+SITEID, AGE, AGEU, SEX, COUNTRY.
+"""
 
-dm_raw = pl.read_csv("/app/input/dm_raw.csv", infer_schema=False)
+import csv
+import os
 
-dm = (
-    dm_raw.with_columns(
-        DOMAIN=pl.lit("DM"),
-        USUBJID=pl.col("STUDYID") + pl.lit("-") + pl.col("SITEID") + pl.lit("-") + pl.col("SUBJID"),
-        AGE=pl.col("AGE").cast(pl.Int64, strict=False),
-        AGEU=pl.lit("YEARS"),
-    )
-    .select(
-        "DOMAIN",
-        "STUDYID",
-        "USUBJID",
-        "SUBJID",
-        "SITEID",
-        "AGE",
-        "AGEU",
-        "SEX",
-        "COUNTRY",
-    )
-)
+INPUT_PATH = "/app/input/dm_raw.csv"
+OUTPUT_PATH = "/app/output/dm.csv"
 
-Path("/app/output").mkdir(exist_ok=True)
-dm.write_csv("/app/output/dm.csv")
+COLUMNS = [
+    "DOMAIN",
+    "STUDYID",
+    "USUBJID",
+    "SUBJID",
+    "SITEID",
+    "AGE",
+    "AGEU",
+    "SEX",
+    "COUNTRY",
+]
+
+
+def build_record(row):
+    studyid = (row.get("STUDYID") or "").strip()
+    siteid = (row.get("SITEID") or "").strip()
+    subjid = (row.get("SUBJID") or "").strip()
+    age = (row.get("AGE") or "").strip()
+    sex = (row.get("SEX") or "").strip()
+    country = (row.get("COUNTRY") or "").strip()
+
+    # AGE is the collected age in whole years; blank when none collected.
+    age_value = ""
+    if age:
+        age_value = str(int(float(age)))
+
+    return {
+        "DOMAIN": "DM",
+        "STUDYID": studyid,
+        "USUBJID": "-".join([studyid, siteid, subjid]),
+        "SUBJID": subjid,
+        "SITEID": siteid,
+        "AGE": age_value,
+        "AGEU": "YEARS",
+        "SEX": sex,
+        "COUNTRY": country,
+    }
+
+
+def main():
+    with open(INPUT_PATH, newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+
+    records = [build_record(row) for row in rows]
+
+    os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
+    with open(OUTPUT_PATH, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=COLUMNS)
+        writer.writeheader()
+        writer.writerows(records)
+
+
+if __name__ == "__main__":
+    main()

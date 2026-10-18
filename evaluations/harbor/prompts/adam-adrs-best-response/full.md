@@ -1,29 +1,28 @@
-Following CDISC ADaM standards, use the provided ADSL and ADRSSEL
+Following CDISC ADaM standards, use the provided ADRS_SELECTION and ADSL
 datasets to create an ADRS dataset with one record per subject.
 
 The output dataset should contain the following columns in this order:
 STUDYID, USUBJID, PARAMCD, PARAM, RANDDT, AVALC, AVAL, ADT
 
-Use PARAMCD "BOR" and PARAM "Best Overall Response by Investigator".
-RANDDT is the subject's randomization date.
-
-AVALC is the best overall response: the response category (BORCAT) of
-the subject's selection record with BORSEQ 1, one of complete response
-(CR), partial response (PR), stable disease (SD), neither complete
-response nor progressive disease (NON-CR/NON-PD), progressive disease
-(PD), or not evaluable (NE). It has no value when the subject has no
-record with BORSEQ 1.
-
-AVAL ranks that response as 1 (complete response), 2 (partial
-response), 3 (stable disease), 4 (neither complete response nor
-progressive disease), 5 (progressive disease), or 6 (not evaluable);
-it has no value when AVALC has none.
-
-ADT is the analysis date supporting the response, taken from that
-record's date; it has no value whenever AVALC has none. The supporting
-date is never before the randomization date; it may fall exactly on
-it. Every subject keeps its record with the randomization date even
-when response, rank, and date are all empty.
+- PARAMCD is "BOR" and PARAM is "Best Overall Response by
+  Investigator" on every record.
+- Every subject in ADSL has a record, even when the subject has no
+  ADRS_SELECTION record with BORSEQ 1.
+- AVALC is the category in BORCAT on the subject's ADRS_SELECTION
+  record with BORSEQ 1: "CR" for complete response, "PR" for partial
+  response, "SD" for stable disease, "NON-CR/NON-PD" for neither
+  complete response nor progressive disease, "PD" for progressive
+  disease, and "NE" for not evaluable.
+- AVALC has no value when the subject has no ADRS_SELECTION record
+  with BORSEQ 1.
+- AVAL is 1 when AVALC is "CR", 2 when AVALC is "PR", 3 when AVALC is
+  "SD", 4 when AVALC is "NON-CR/NON-PD", 5 when AVALC is "PD", and 6
+  when AVALC is "NE".
+- AVAL has no value when AVALC has no value.
+- ADT is the analysis date supporting the response, taken from the
+  date of the subject's ADRS_SELECTION record with BORSEQ 1.
+- ADT has no value whenever AVALC has no value.
+- ADT is never before RANDDT, and it may fall exactly on RANDDT.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/adrs.csv.

@@ -4,63 +4,76 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Create ADAE with occurrence flags from ADAE_RAW.
 
-import polars as pl
+One record per adverse event. Treatment-emergent events (TRTEMFL = "Y")
+are flagged at three levels:
 
-ae = pl.read_csv("/app/input/adae_raw.csv", infer_schema=False).with_columns(
-    pl.col("AESEQ").cast(pl.Int64)
-)
+- AOCCFL:  the subject's first treatment-emergent event.
+- AOCCSFL: the subject's first treatment-emergent event within each
+  body system.
+- AOCCPFL: the subject's first treatment-emergent event within each
+  dictionary-derived term, counted inside its body system.
 
-# The first treatment-emergent event at each level: the earliest start
-# date, with the lower AESEQ breaking ties on the same day. ISO dates
-# sort as text.
-first_overall = (
-    ae.filter(pl.col("TRTEMFL") == "Y")
-    .sort(["USUBJID", "ASTDT", "AESEQ"], nulls_last=True)
-    .unique("USUBJID", keep="first", maintain_order=True)
-    .select("USUBJID", FIRST_SEQ="AESEQ")
-)
+The first event at each level is the treatment-emergent event with the
+earliest ASTDT; a lower AESEQ breaks a tie between events on the same
+date. Non-treatment-emergent events are never flagged, and subjects
+with no treatment-emergent events have no flags at all.
+"""
 
-first_soc = (
-    ae.filter(pl.col("TRTEMFL") == "Y")
-    .sort(["USUBJID", "AEBODSYS", "ASTDT", "AESEQ"], nulls_last=True)
-    .unique(["USUBJID", "AEBODSYS"], keep="first", maintain_order=True)
-    .select("USUBJID", "AEBODSYS", SOC_SEQ="AESEQ")
-)
+import csv
 
-first_pt = (
-    ae.filter(pl.col("TRTEMFL") == "Y")
-    .sort(["USUBJID", "AEBODSYS", "AEDECOD", "ASTDT", "AESEQ"], nulls_last=True)
-    .unique(["USUBJID", "AEBODSYS", "AEDECOD"], keep="first", maintain_order=True)
-    .select("USUBJID", "AEBODSYS", "AEDECOD", PT_SEQ="AESEQ")
-)
+INPUT_PATH = "/app/input/adae_raw.csv"
+OUTPUT_PATH = "/app/output/adae.csv"
 
-adae = (
-    ae.join(first_overall, on="USUBJID", how="left")
-    .join(first_soc, on=["USUBJID", "AEBODSYS"], how="left")
-    .join(first_pt, on=["USUBJID", "AEBODSYS", "AEDECOD"], how="left")
-    .with_columns(
-        AOCCFL=pl.when(pl.col("FIRST_SEQ").is_not_null() & (pl.col("AESEQ") == pl.col("FIRST_SEQ")))
-        .then(pl.lit("Y")),
-        AOCCSFL=pl.when(pl.col("SOC_SEQ").is_not_null() & (pl.col("AESEQ") == pl.col("SOC_SEQ")))
-        .then(pl.lit("Y")),
-        AOCCPFL=pl.when(pl.col("PT_SEQ").is_not_null() & (pl.col("AESEQ") == pl.col("PT_SEQ")))
-        .then(pl.lit("Y")),
-    )
-    .select(
-        "STUDYID",
-        "USUBJID",
-        "AESEQ",
-        "AEBODSYS",
-        "AEDECOD",
-        "ASTDT",
-        "TRTEMFL",
-        "AOCCFL",
-        "AOCCSFL",
+COLUMNS = [
+    "STUDYID",
+    "USUBJID",
+    "AESEQ",
+    "AEBODSYS",
+    "AEDECOD",
+    "ASTDT",
+    "TRTEMFL",
+    "AOCCFL",
+    "AOCCSFL",
+    "AOCCPFL",
+]
+
+
+def main() -> None:
+    with open(INPUT_PATH, newline="") as handle:
+        rows = list(csv.DictReader(handle))
+
+    for row in rows:
+        row["AOCCFL"] = ""
+        row["AOCCSFL"] = ""
+        row["AOCCPFL"] = ""
+
+    # Rank treatment-emergent events by start date, then sequence.
+    emergent = [row for row in rows if row["TRTEMFL"] == "Y"]
+    emergent.sort(key=lambda row: (row["USUBJID"], row["ASTDT"], int(row["AESEQ"])))
+
+    def flag_first(key_of, flag_column: str) -> None:
+        seen = set()
+        for row in emergent:
+            key = key_of(row)
+            if key not in seen:
+                seen.add(key)
+                row[flag_column] = "Y"
+
+    flag_first(lambda row: row["USUBJID"], "AOCCFL")
+    flag_first(lambda row: (row["USUBJID"], row["AEBODSYS"]), "AOCCSFL")
+    flag_first(
+        lambda row: (row["USUBJID"], row["AEBODSYS"], row["AEDECOD"]),
         "AOCCPFL",
     )
-)
 
-Path("/app/output").mkdir(exist_ok=True)
-adae.write_csv("/app/output/adae.csv")
+    with open(OUTPUT_PATH, "w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=COLUMNS)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({column: row[column] for column in COLUMNS})
+
+
+if __name__ == "__main__":
+    main()

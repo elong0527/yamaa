@@ -1,5 +1,5 @@
-Following CDISC ADaM standards, use the provided VS dataset to create an
-ADVS dataset with one record per vital-signs record.
+Following CDISC ADaM standards, use the provided VS dataset to create an ADVS
+dataset with one record per collected character-result row.
 
 The output dataset should contain the following columns in this order:
 STUDYID, USUBJID, VSSEQ, SERIES, AVISITN, AVALC, PREVAVALC

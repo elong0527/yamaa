@@ -4,71 +4,79 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Create the ADEG dataset with QTcF criterion flags from ADEG_RAW.
 
-import polars as pl
+Only records with PARAMCD "QTCF" and ONTRTFL "Y" are assessed. The
+absolute criteria compare AVAL against 450, 480 and 500 ms; the
+increase criteria compare CHG against 30 and 60 ms. A flag is Y only
+when the value is strictly above its limit, N otherwise, and each
+criterion and flag has no value when the record is not assessed or
+the compared value has no value. Values are compared as they stand,
+without rounding.
+"""
 
-raw = pl.read_csv("/app/input/adeg_raw.csv", infer_schema=False).with_columns(
-    AVALN=pl.col("AVAL").cast(pl.Float64, strict=False),
-    CHGN=pl.col("CHG").cast(pl.Float64, strict=False),
-)
+import csv
 
-# Only on-treatment QTcF records are assessed, and values are compared
-# unrounded, strictly above each limit: exactly at a limit reads N.
-assessed = (pl.col("PARAMCD") == "QTCF").fill_null(False) & (
-    pl.col("ONTRTFL") == "Y"
-).fill_null(False)
-absolute = assessed & pl.col("AVALN").is_not_null()
-change = assessed & pl.col("CHGN").is_not_null()
+INPUT_PATH = "/app/input/adeg_raw.csv"
+OUTPUT_PATH = "/app/output/adeg.csv"
 
+COLUMNS = [
+    "STUDYID", "USUBJID", "PARAMCD", "PARAM", "AVISIT", "AVAL",
+    "ABLFL", "ONTRTFL", "BASE", "CHG",
+    "CRIT1", "CRIT1FL", "CRIT2", "CRIT2FL", "CRIT3", "CRIT3FL",
+    "CRIT4", "CRIT4FL", "CRIT5", "CRIT5FL",
+]
 
-def criterion(condition, text):
-    return pl.when(condition).then(pl.lit(text))
+ABSOLUTE = [
+    ("CRIT1", "CRIT1FL", "QTcF > 450 ms", 450.0),
+    ("CRIT2", "CRIT2FL", "QTcF > 480 ms", 480.0),
+    ("CRIT3", "CRIT3FL", "QTcF > 500 ms", 500.0),
+]
 
-
-def flag(condition, value, limit):
-    return (
-        pl.when(~condition)
-        .then(None)
-        .when(pl.col(value) > limit)
-        .then(pl.lit("Y"))
-        .otherwise(pl.lit("N"))
-    )
+INCREASE = [
+    ("CRIT4", "CRIT4FL", "QTcF increase from baseline > 30 ms", 30.0),
+    ("CRIT5", "CRIT5FL", "QTcF increase from baseline > 60 ms", 60.0),
+]
 
 
-adeg = raw.with_columns(
-    CRIT1=criterion(absolute, "QTcF > 450 ms"),
-    CRIT1FL=flag(absolute, "AVALN", 450),
-    CRIT2=criterion(absolute, "QTcF > 480 ms"),
-    CRIT2FL=flag(absolute, "AVALN", 480),
-    CRIT3=criterion(absolute, "QTcF > 500 ms"),
-    CRIT3FL=flag(absolute, "AVALN", 500),
-    CRIT4=criterion(change, "QTcF increase from baseline > 30 ms"),
-    CRIT4FL=flag(change, "CHGN", 30),
-    CRIT5=criterion(change, "QTcF increase from baseline > 60 ms"),
-    CRIT5FL=flag(change, "CHGN", 60),
-).select(
-    "STUDYID",
-    "USUBJID",
-    "PARAMCD",
-    "PARAM",
-    "AVISIT",
-    "AVAL",
-    "ABLFL",
-    "ONTRTFL",
-    "BASE",
-    "CHG",
-    "CRIT1",
-    "CRIT1FL",
-    "CRIT2",
-    "CRIT2FL",
-    "CRIT3",
-    "CRIT3FL",
-    "CRIT4",
-    "CRIT4FL",
-    "CRIT5",
-    "CRIT5FL",
-)
+def number(text):
+    """The numeric value of a cell, or None when it has no value."""
+    if text is None or text.strip() == "":
+        return None
+    return float(text)
 
-Path("/app/output").mkdir(exist_ok=True)
-adeg.write_csv("/app/output/adeg.csv")
+
+def main():
+    with open(INPUT_PATH, newline="") as handle:
+        rows = list(csv.DictReader(handle))
+
+    out_rows = []
+    for row in rows:
+        out = {column: row.get(column, "") for column in COLUMNS[:10]}
+        assessed = row.get("PARAMCD") == "QTCF" and row.get("ONTRTFL") == "Y"
+        aval = number(row.get("AVAL"))
+        chg = number(row.get("CHG"))
+        for crit, flag, label, limit in ABSOLUTE:
+            if assessed and aval is not None:
+                out[crit] = label
+                out[flag] = "Y" if aval > limit else "N"
+            else:
+                out[crit] = ""
+                out[flag] = ""
+        for crit, flag, label, limit in INCREASE:
+            if assessed and chg is not None:
+                out[crit] = label
+                out[flag] = "Y" if chg > limit else "N"
+            else:
+                out[crit] = ""
+                out[flag] = ""
+        out_rows.append(out)
+
+    with open(OUTPUT_PATH, "w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=COLUMNS)
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+
+if __name__ == "__main__":
+    main()

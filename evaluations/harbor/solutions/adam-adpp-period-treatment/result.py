@@ -4,56 +4,63 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+import csv
+import os
+import re
 
-import polars as pl
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-pp = pl.read_csv("/app/input/pp.csv", infer_schema=False)
-ex = pl.read_csv("/app/input/ex.csv", infer_schema=False)
+OUT_FIELDS = [
+    "STUDYID", "USUBJID", "PARCAT1", "PARAMCD", "PARAM", "PPRFTDTC",
+    "APERIOD", "TRTA", "DOSEA", "DOSEU", "AVAL", "AVALU",
+]
 
-# The subject's dose that starts exactly at a reference date and time.
-dose = {
-    (record["USUBJID"], record["EXSTDTC"]): record for record in ex.iter_rows(named=True)
-}
 
-rows = []
-for record in pp.iter_rows(named=True):
-    matched = dose.get((record["USUBJID"], record["PPRFTDTC"]))
-    rows.append(
-        {
-            "STUDYID": record["STUDYID"],
-            "USUBJID": record["USUBJID"],
-            "PARCAT1": record["PPCAT"],
-            "PARAMCD": record["PPTESTCD"],
-            "PARAM": record["PPTEST"],
-            "PPRFTDTC": record["PPRFTDTC"],
-            # TREATMENT 1 is period 1, TREATMENT 2 period 2.
-            "APERIOD": int(matched["EPOCH"].split()[-1]) if matched else None,
-            "TRTA": matched["EXTRT"] if matched else None,
-            "DOSEA": float(matched["EXDOSE"]) if matched else None,
-            "DOSEU": matched["EXDOSU"] if matched else None,
-            "AVAL": float(record["PPSTRESN"]),
-            "AVALU": record["PPSTRESU"],
-        }
-    )
+def main():
+    with open(os.path.join(INPUT_DIR, "ex.csv"), newline="") as f:
+        ex_rows = list(csv.DictReader(f))
+    with open(os.path.join(INPUT_DIR, "pp.csv"), newline="") as f:
+        pp_rows = list(csv.DictReader(f))
 
-adpp = pl.DataFrame(
-    rows,
-    schema={
-        "STUDYID": pl.String,
-        "USUBJID": pl.String,
-        "PARCAT1": pl.String,
-        "PARAMCD": pl.String,
-        "PARAM": pl.String,
-        "PPRFTDTC": pl.String,
-        "APERIOD": pl.Int64,
-        "TRTA": pl.String,
-        "DOSEA": pl.Float64,
-        "DOSEU": pl.String,
-        "AVAL": pl.Float64,
-        "AVALU": pl.String,
-    },
-)
+    # Index each subject's doses by their exact start date and time.
+    doses = {}
+    for ex in ex_rows:
+        key = (ex["STUDYID"], ex["USUBJID"], ex["EXSTDTC"])
+        doses[key] = ex
 
-Path("/app/output").mkdir(exist_ok=True)
-adpp.write_csv("/app/output/adpp.csv")
+    out_rows = []
+    for pp in pp_rows:
+        ex = doses.get((pp["STUDYID"], pp["USUBJID"], pp["PPRFTDTC"]))
+        if ex is not None:
+            match = re.search(r"\d+", ex["EPOCH"])
+            aperiod = match.group(0) if match else ""
+            trta = ex["EXTRT"]
+            dosea = ex["EXDOSE"]
+            doseu = ex["EXDOSU"]
+        else:
+            aperiod = trta = dosea = doseu = ""
+        out_rows.append({
+            "STUDYID": pp["STUDYID"],
+            "USUBJID": pp["USUBJID"],
+            "PARCAT1": pp["PPCAT"],
+            "PARAMCD": pp["PPTESTCD"],
+            "PARAM": pp["PPTEST"],
+            "PPRFTDTC": pp["PPRFTDTC"],
+            "APERIOD": aperiod,
+            "TRTA": trta,
+            "DOSEA": dosea,
+            "DOSEU": doseu,
+            "AVAL": pp["PPSTRESN"],
+            "AVALU": pp["PPSTRESU"],
+        })
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    with open(os.path.join(OUTPUT_DIR, "adpp.csv"), "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=OUT_FIELDS)
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+
+if __name__ == "__main__":
+    main()

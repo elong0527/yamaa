@@ -1,39 +1,39 @@
-Following CDISC ADaM standards, use the provided ADEG_RAW dataset to
-create an ADEG dataset with one record per subject per parameter per
-analysis period per nominal period day per nominal time point.
+Following CDISC ADaM standards, use the provided ADEG_RAW dataset to create an
+ADEG dataset with one record per subject, parameter, analysis period, nominal
+day and nominal time point.
 
 The output dataset should contain the following columns in this order:
-STUDYID, USUBJID, COHORT, TRTA, PARAMCD, PARAM, APERIOD, APERDAY, ATPT,
-ATPTN, AVAL, AVALU, ABLFL, BASE, CHG, BASETYPE, ACOMPFL, COMP, COMPBASE,
-COMPCHG, CCOMPCHG, COMPTYPE
+STUDYID, USUBJID, COHORT, TRTA, PARAMCD, PARAM, APERIOD, APERDAY, ATPT, ATPTN,
+AVAL, AVALU, ABLFL, BASE, CHG, BASETYPE, ACOMPFL, COMP, COMPBASE, COMPCHG,
+CCOMPCHG, COMPTYPE
 
-The study is placebo-controlled and parallel-group, given in dose cohorts
-with placebo subjects in every cohort; each subject is dosed once. Each
-input record is the average of the replicate ECGs at one nominal time point
-and gives one output record, and its time-matched baseline (ABLFL, BASE,
-CHG) is already in place; the records with ABLFL "Y" are the baseline
-records. Add the time-matched placebo comparator:
-- ACOMPFL is "Y" on every placebo record (TRTA "Placebo") that is not a
-  baseline record, and has no value on every other record.
-- The placebo group of a record is every record with ACOMPFL "Y" of the
-  same parameter at the same nominal time point (ATPTN), pooled over all
-  cohorts, not only the record's own cohort.
-- COMP is the mean AVAL of the placebo group, COMPBASE its mean BASE, and
-  COMPCHG its mean CHG. Each mean is over the group's records that have a
-  value in that column, so COMPCHG is not always COMP minus COMPBASE, and
-  has no value when no group record has one.
-- Every record that is not a baseline record, drug and placebo alike,
-  carries its placebo group's means: a placebo record carries the group
-  means, not its own AVAL, BASE and CHG.
-- CCOMPCHG is CHG minus COMPCHG on the records that are neither baseline
-  nor placebo records, and has no value when CHG or COMPCHG has no value.
-  Placebo records have no CCOMPCHG.
-- COMPTYPE is "Placebo group at ", then ATPT, for example
-  "Placebo group at 2 h", on every record that is not a baseline record,
-  also when the placebo group has no record.
-- Baseline records have no ACOMPFL, COMP, COMPBASE, COMPCHG, CCOMPCHG or
-  COMPTYPE.
-- COMP, COMPBASE, COMPCHG and CCOMPCHG are not rounded.
+- A record with TRTA of "Placebo" is a placebo record; every other record
+  is a drug record.
+- A baseline record is a record with ABLFL of "Y", from the baseline day,
+  the day before dosing; every other record is after baseline.
+- ACOMPFL is "Y" on every placebo record after baseline, and has no value
+  on drug records and on baseline records.
+- COMPTYPE is "Placebo group at " followed by the record's ATPT, on every
+  record after baseline, drug and placebo alike, also when no placebo
+  record exists at that parameter and time point; COMPTYPE has no value
+  on baseline records.
+- The placebo group a record is compared with holds every placebo record
+  after baseline with the same PARAMCD and the same ATPTN, from all
+  cohorts together.
+- COMP is the mean AVAL of that group on every record after baseline;
+  COMP has no value when the group holds no record, and on baseline
+  records.
+- COMPBASE is the mean BASE of the same group, over the records that have
+  a BASE; COMPBASE has no value when no record of the group has one, and
+  on baseline records.
+- COMPCHG is the mean CHG of the same group, over the records that have a
+  CHG, so it is not always COMP minus COMPBASE; COMPCHG has no value
+  when no record of the group has one, and on baseline records.
+- CCOMPCHG is CHG minus COMPCHG on drug records after baseline, and has
+  no value on placebo records and on baseline records, or when CHG or
+  COMPCHG has no value.
+- A placebo record carries its group's means, not its own values, and
+  none of the comparator values is rounded.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/adeg.csv.

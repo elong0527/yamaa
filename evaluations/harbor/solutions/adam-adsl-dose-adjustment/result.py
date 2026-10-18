@@ -4,72 +4,69 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+import csv
+import os
 
-import polars as pl
-
-base = pl.read_csv("/app/input/adsl.csv", infer_schema=False)
-ex = pl.read_csv("/app/input/ex.csv", infer_schema=False)
-ec = pl.read_csv("/app/input/ec.csv", infer_schema=False)
-fa = pl.read_csv("/app/input/fa.csv", infer_schema=False)
-
-keys = ["STUDYID", "USUBJID"]
-
-def adjusted(sub: pl.DataFrame, column: str) -> pl.DataFrame:
-    return (
-        sub.filter(pl.col(column).fill_null("").str.strip_chars() != "")
-        .select(keys)
-        .unique()
-        .with_columns(pl.lit(True).alias(f"__adj_{column}"))
-    )
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
 
-def any_records(sub: pl.DataFrame, tag: str) -> pl.DataFrame:
-    return (
-        sub.select(keys).unique().with_columns(pl.lit(True).alias(f"__any_{tag}"))
-    )
+def read_csv(name):
+    path = os.path.join(INPUT_DIR, name)
+    with open(path, newline="", encoding="utf-8") as f:
+        return list(csv.DictReader(f))
 
 
-ex_adj = adjusted(ex, "EXADJ")
-ec_adj = adjusted(ec, "ECADJ")
-fa_adj = (
-    fa.filter(
-        (pl.col("FATESTCD") == "OCCUR")
-        & (pl.col("FAOBJ") == "DOSE ADJUSTMENT")
-        & (pl.col("FASTRESC") == "Y")
-    )
-    .select(keys)
-    .unique()
-    .with_columns(pl.lit(True).alias("__adj_FA"))
-)
-ex_any = any_records(ex, "EX")
-ec_any = any_records(ec, "EC")
-fa_any = any_records(fa, "FA")
+def filled(value):
+    return value is not None and value.strip() != ""
 
-adsl = (
-    base.join(ex_adj, on=keys, how="left", maintain_order="left")
-    .join(ec_adj, on=keys, how="left", maintain_order="left")
-    .join(fa_adj, on=keys, how="left", maintain_order="left")
-    .join(ex_any, on=keys, how="left", maintain_order="left")
-    .join(ec_any, on=keys, how="left", maintain_order="left")
-    .join(fa_any, on=keys, how="left", maintain_order="left")
-    .with_columns(
-        DOSADJFL=pl.when(
-            (pl.col("__adj_EXADJ") == True)
-            | (pl.col("__adj_ECADJ") == True)
-            | (pl.col("__adj_FA") == True)
-        )
-        .then(pl.lit("Y"))
-        .when(
-            (pl.col("__any_EX") == True)
-            | (pl.col("__any_EC") == True)
-            | (pl.col("__any_FA") == True)
-        )
-        .then(pl.lit("N"))
-        .otherwise(None)
-    )
-    .select("STUDYID", "USUBJID", "DOSADJFL")
-)
 
-Path("/app/output").mkdir(exist_ok=True)
-adsl.write_csv("/app/output/adsl.csv")
+def main():
+    subjects = read_csv("adsl.csv")
+    ex = read_csv("ex.csv")
+    ec = read_csv("ec.csv")
+    fa = read_csv("fa.csv")
+
+    has_record = set()
+    qualifying = set()
+
+    for row in ex:
+        key = (row["STUDYID"], row["USUBJID"])
+        has_record.add(key)
+        if filled(row.get("EXADJ")):
+            qualifying.add(key)
+
+    for row in ec:
+        key = (row["STUDYID"], row["USUBJID"])
+        has_record.add(key)
+        if filled(row.get("ECADJ")):
+            qualifying.add(key)
+
+    for row in fa:
+        key = (row["STUDYID"], row["USUBJID"])
+        has_record.add(key)
+        if (
+            row.get("FATESTCD") == "OCCUR"
+            and row.get("FAOBJ") == "DOSE ADJUSTMENT"
+            and row.get("FASTRESC") == "Y"
+        ):
+            qualifying.add(key)
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    out_path = os.path.join(OUTPUT_DIR, "adsl.csv")
+    with open(out_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["STUDYID", "USUBJID", "DOSADJFL"])
+        for subj in subjects:
+            key = (subj["STUDYID"], subj["USUBJID"])
+            if key in qualifying:
+                flag = "Y"
+            elif key in has_record:
+                flag = "N"
+            else:
+                flag = ""
+            writer.writerow([subj["STUDYID"], subj["USUBJID"], flag])
+
+
+if __name__ == "__main__":
+    main()

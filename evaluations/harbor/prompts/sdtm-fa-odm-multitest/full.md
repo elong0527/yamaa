@@ -1,26 +1,30 @@
-Following CDISC SDTM standards, use the provided ODM dataset to create
-an FA dataset with one record per collected reaction finding.
+Following CDISC SDTM standards, use the provided ODM dataset to create an FA
+dataset with one record per collected reaction finding.
 
 The output dataset should contain the following columns in this order:
 DOMAIN, STUDYID, USUBJID, FASEQ, FATESTCD, FATEST, FAOBJ, FACAT, FAORRES,
 FAORRESU, FASTRESC, FASTAT, FATPT, FADTC
 
-STUDYID is the ODM StudyOID and USUBJID is the SubjectKey, each as given.
-
-FATESTCD and FATEST are OCCUR and Occurrence Indicator, SEV and
-Severity/Intensity, or LDIAM and Longest Diameter, following the
-collected result item. FAOBJ is the reaction name exactly as reported
-in the sibling item of the same diary occurrence. FACAT is
-REACTOGENICITY for every diary finding. FAORRES and FASTRESC keep the
-collected result; FAORRESU is mm for diameter only. FASTAT is NOT DONE
-for a result item that is present but blank, and has no value for
-reported results. FATPT is END DAY 1 for a DAY1 occurrence and END DAY
-2 for a DAY2 occurrence, and FADTC is that day's collection date from
-the sibling item. A reaction without a severity or diameter item gives
-no such test, while a present item with a blank result still gives its
-record. A form repeat number reused on another diary day belongs to
-that day. FASEQ numbers the subject's findings by diary day, reaction
-repeat, and test order.
+DOMAIN is "FA". STUDYID is the ODM study OID and USUBJID is the ODM
+subject key, each as given. One record is written for each occurrence,
+severity, or longest diameter result item collected for a reaction. A
+reaction with no severity or diameter item has no such record, while a
+result item that is present with a blank result still gives its record.
+FATESTCD is "OCCUR" for the occurrence result, "SEV" for the severity
+result, and "LDIAM" for the longest diameter result, and FATEST is
+"Occurrence Indicator", "Severity/Intensity", and "Longest Diameter" for
+the same results. FAOBJ is the reaction name exactly as reported in the
+reaction name item of the same diary occurrence. FACAT is
+"REACTOGENICITY" for every record. FAORRES is the result as collected,
+and FASTRESC holds the same result. FAORRESU is "mm" on a longest
+diameter record and has no value on an occurrence or severity record.
+FASTAT is "NOT DONE" when a result item is present but its result is
+blank, and has no value when a result is reported. FATPT is "END DAY 1"
+for diary day DAY1 and "END DAY 2" for diary day DAY2. FADTC is the
+collection date collected for the same diary occurrence. FASEQ numbers a
+subject's records from 1 by diary day, then by the diary day's repeat,
+then by reaction repeat, then by test order, occurrence first, then
+severity, then longest diameter.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/fa.csv.

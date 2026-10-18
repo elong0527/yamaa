@@ -4,44 +4,50 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+import csv
 
-import polars as pl
+AVAL_BY_AVALC = {
+    "CR": "1",
+    "PR": "2",
+    "SD": "3",
+    "NON-CR/NON-PD": "4",
+    "PD": "5",
+    "NE": "6",
+}
 
-adsl = pl.read_csv("/app/input/adsl.csv", infer_schema=False).with_columns(
-    pl.col("RANDDT").str.to_date()
-)
-selection = pl.read_csv(
-    "/app/input/adrs_selection.csv", infer_schema=False
-).with_columns(
-    pl.col("ASEQ").cast(pl.Int64),
-    pl.col("ADT").str.to_date(),
-    pl.col("RANDDY").cast(pl.Int64),
-    pl.col("BORPRI").cast(pl.Int64),
-    pl.col("BORSEQ").cast(pl.Int64),
-)
+with open("/app/input/adsl.csv", newline="") as f:
+    adsl = list(csv.DictReader(f))
 
-# The best overall response is the selection record numbered 1.
-best = selection.filter(pl.col("BORSEQ") == 1).select(
-    "USUBJID", BORCAT="BORCAT", BESTDT="ADT"
-)
+with open("/app/input/adrs_selection.csv", newline="") as f:
+    selection = list(csv.DictReader(f))
 
-adrs = (
-    adsl.join(best, on="USUBJID", how="left")
-    .with_columns(
-        PARAMCD=pl.lit("BOR"),
-        PARAM=pl.lit("Best Overall Response by Investigator"),
-        AVALC=pl.col("BORCAT"),
-        AVAL=pl.col("BORCAT").replace_strict(
-            {"CR": 1, "PR": 2, "SD": 3, "NON-CR/NON-PD": 4, "PD": 5, "NE": 6},
-            default=None,
-            return_dtype=pl.Int64,
-        ),
-        ADT=pl.col("BESTDT"),
+best = {}
+for row in selection:
+    if row["BORSEQ"] == "1":
+        best[row["USUBJID"]] = row
+
+out = []
+for subj in adsl:
+    usubjid = subj["USUBJID"]
+    sel = best.get(usubjid)
+    avalc = sel["BORCAT"] if sel else ""
+    aval = AVAL_BY_AVALC[avalc] if avalc else ""
+    adt = sel["ADT"] if sel else ""
+    out.append(
+        {
+            "STUDYID": subj["STUDYID"],
+            "USUBJID": usubjid,
+            "PARAMCD": "BOR",
+            "PARAM": "Best Overall Response by Investigator",
+            "RANDDT": subj["RANDDT"],
+            "AVALC": avalc,
+            "AVAL": aval,
+            "ADT": adt,
+        }
     )
-    .select("STUDYID", "USUBJID", "PARAMCD", "PARAM", "RANDDT", "AVALC", "AVAL", "ADT")
-    .sort("USUBJID")
-)
 
-Path("/app/output").mkdir(exist_ok=True)
-adrs.write_csv("/app/output/adrs.csv")
+fields = ["STUDYID", "USUBJID", "PARAMCD", "PARAM", "RANDDT", "AVALC", "AVAL", "ADT"]
+with open("/app/output/adrs.csv", "w", newline="") as f:
+    writer = csv.DictWriter(f, fieldnames=fields)
+    writer.writeheader()
+    writer.writerows(out)

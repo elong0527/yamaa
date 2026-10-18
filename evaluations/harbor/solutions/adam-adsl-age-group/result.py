@@ -4,31 +4,49 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+import csv
 
-import polars as pl
+INPUT_CSV = "/app/input/dm.csv"
+OUTPUT_CSV = "/app/output/adsl.csv"
 
-dm = pl.read_csv("/app/input/dm.csv", infer_schema=False)
 
-age = pl.col("AGE").cast(pl.Float64)
-agegr1 = (
-    pl.when(age.is_null())
-    .then(pl.lit("Missing"))
-    .when(age < 18)
-    .then(pl.lit("<18"))
-    .when(age <= 64)
-    .then(pl.lit("18-64"))
-    .otherwise(pl.lit(">64"))
-)
-agegr1n = pl.col("AGEGR1").replace_strict(
-    {"<18": 1, "18-64": 2, ">64": 3}, default=None, return_dtype=pl.Int64
-)
+def age_group(age_text):
+    """Return (AGEGR1, AGEGR1N) for a raw AGE cell."""
+    if age_text is None or age_text.strip() == "":
+        return "Missing", ""
+    age = float(age_text)
+    if age < 18:
+        return "<18", "1"
+    if age <= 64:
+        return "18-64", "2"
+    return ">64", "3"
 
-adsl = (
-    dm.with_columns(AGEGR1=agegr1)
-    .with_columns(AGEGR1N=agegr1n)
-    .select("STUDYID", "USUBJID", "AGE", "AGEU", "AGEGR1", "AGEGR1N")
-)
 
-Path("/app/output").mkdir(exist_ok=True)
-adsl.write_csv("/app/output/adsl.csv")
+def main():
+    with open(INPUT_CSV, newline="") as f:
+        rows = list(csv.DictReader(f))
+
+    out_rows = []
+    for row in rows:
+        age = row["AGE"]
+        agegr1, agegr1n = age_group(age)
+        out_rows.append(
+            {
+                "STUDYID": row["STUDYID"],
+                "USUBJID": row["USUBJID"],
+                "AGE": age,
+                "AGEU": row["AGEU"],
+                "AGEGR1": agegr1,
+                "AGEGR1N": agegr1n,
+            }
+        )
+
+    fieldnames = ["STUDYID", "USUBJID", "AGE", "AGEU", "AGEGR1", "AGEGR1N"]
+    with open(OUTPUT_CSV, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+
+if __name__ == "__main__":
+    main()

@@ -4,22 +4,50 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+import csv
 
-import polars as pl
+SEVERITY_RANK = {"SEVERE": 0, "MODERATE": 1, "MILD": 2}
 
-ae = pl.read_csv("/app/input/ae.csv", infer_schema=False).with_columns(
-    pl.col("AESEQ").cast(pl.Int64)
-)
 
-adae = ae.select(
-    "STUDYID",
-    "USUBJID",
-    pl.col("AESEQ").alias("ASEQ"),
-    "AETERM",
-    pl.col("AESTDTC").alias("ASTDT"),
-    pl.col("AESEV").alias("ASEV"),
-)
+def main():
+    with open("/app/input/ae.csv", newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
 
-Path("/app/output").mkdir(exist_ok=True)
-adae.write_csv("/app/output/adae.csv")
+    subject_order = {}
+    for row in rows:
+        if row["USUBJID"] not in subject_order:
+            subject_order[row["USUBJID"]] = len(subject_order)
+
+    def review_key(row):
+        severity = (row["AESEV"] or "").strip()
+        rank = SEVERITY_RANK.get(severity, 3)
+        onset = (row["AESTDTC"] or "").strip()
+        # Within one severity, an event with no onset date comes first.
+        return (
+            subject_order[row["USUBJID"]],
+            rank,
+            0 if onset == "" else 1,
+            onset,
+            int(row["AESEQ"]),
+        )
+
+    rows.sort(key=review_key)
+
+    with open("/app/output/adae.csv", "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f, lineterminator="\n")
+        writer.writerow(["STUDYID", "USUBJID", "ASEQ", "AETERM", "ASTDT", "ASEV"])
+        for row in rows:
+            writer.writerow(
+                [
+                    row["STUDYID"],
+                    row["USUBJID"],
+                    row["AESEQ"],
+                    row["AETERM"],
+                    row["AESTDTC"],
+                    row["AESEV"],
+                ]
+            )
+
+
+if __name__ == "__main__":
+    main()

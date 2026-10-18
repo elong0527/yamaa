@@ -1,27 +1,28 @@
-Following CDISC ADaM standards, use the provided ADSL and ADAE datasets to
-create a RESULTS dataset in the style of the CDISC Analysis Results Standard
-v1.0, with one record per planned treatment group represented in the safety
-population per operation: the subject count and percentage with at least one
-treatment-emergent event.
+Following CDISC ADaM standards, use the provided ADAE and ADSL datasets to
+create a RESULTS dataset with one record per planned treatment group and
+operation.
 
 The output dataset should contain the following columns in this order:
-STUDYID, ANALYSISID, ANALYSISSETID, DATASET, VARIABLE, ANALYSISSET,
-DATASUBSET, GROUPINGID, GROUPORDER, GROUPLEVEL, METHODID, OPERATIONID, RESULT
+STUDYID, ANALYSISID, ANALYSISSETID, DATASET, VARIABLE, ANALYSISSET, DATASUBSET,
+GROUPINGID, GROUPORDER, GROUPLEVEL, METHODID, OPERATIONID, RESULT
 
 ANALYSISID is "AEINC", ANALYSISSETID is "SAFETY", DATASET is "ADAE",
-VARIABLE is "USUBJID" and METHODID is "AEINCIDENCE". ANALYSISSET is the
-literal text "SAFFL = 'Y'" and DATASUBSET is "TRTEMFL = 'Y'". The safety
-population contains ADSL subjects with SAFFL "Y". A qualifying event has
-TRTEMFL "Y" in ADAE and belongs to a safety subject. GROUPINGID is "TRT01P";
-GROUPORDER and GROUPLEVEL are the subject's TRT01PN and TRT01P. The two
-OPERATIONID values are "COUNT" and "PERCENT". For COUNT, RESULT is the
-number of distinct safety subjects with a qualifying event in that planned
-treatment group. For PERCENT, RESULT is this count as a percentage of all
-safety subjects in the same planned treatment group. Repeated events count
-once per subject. Subjects outside safety contribute to neither numerator
-nor denominator. A safety treatment group without qualifying events has
-both result rows at 0. A group without safety subjects has no result rows.
-RESULT is not rounded.
+VARIABLE is "USUBJID" and METHODID is "AEINCIDENCE". ANALYSISSET is
+"SAFFL = 'Y'" and DATASUBSET is "TRTEMFL = 'Y'". GROUPINGID is "TRT01P".
+GROUPORDER is the planned treatment code and GROUPLEVEL the planned
+treatment name of the record's planned treatment group, taken from the
+subject records in ADSL. The treatment groups and both results cover only
+safety subjects, the subjects with SAFFL "Y" in ADSL. A qualifying event is
+an adverse event with TRTEMFL "Y", and a subject with at least one
+qualifying event counts once, however many qualifying events the subject
+has. Each planned treatment group with at least one safety subject has one
+record with OPERATIONID "COUNT" and one with OPERATIONID "PERCENT", and a
+planned treatment group with no safety subjects has no records. For
+"COUNT", RESULT is the number of safety subjects in the group with at least
+one qualifying event. For "PERCENT", RESULT is that number as a percentage
+of all safety subjects in the group. Neither result is rounded. A planned
+treatment group whose safety subjects have no qualifying events keeps both
+records, with RESULT 0 in each.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/results.csv.

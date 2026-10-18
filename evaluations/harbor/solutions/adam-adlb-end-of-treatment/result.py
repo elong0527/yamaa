@@ -4,79 +4,67 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+import csv
 
-import polars as pl
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-lb = pl.read_csv("/app/input/lb.csv", infer_schema=False).with_columns(
-    pl.col("LBSEQ").cast(pl.Int64),
-    pl.col("VISITNUM").cast(pl.Int64, strict=False),
-    pl.col("LBSTRESN").cast(pl.Float64, strict=False).alias("AVAL"),
-)
-supp = pl.read_csv("/app/input/supplb.csv", infer_schema=False)
+COLUMNS = ["STUDYID", "USUBJID", "LBSEQ", "LBTESTCD", "VISITNUM",
+           "AVAL", "ENDPOINT", "EOTFL"]
 
-# ENDPOINT is Y when a supplemental endpoint qualifier with the same
-# study, subject, and sequence number marks the record. Only the protocol
-# endpoint qualifier is read. IDVARVAL is space-padded, so compare on the
-# trimmed sequence number.
-endpoint_keys = (
-    supp.filter(pl.col("QNAM") == "ENDPOINT")
-    .with_columns(pl.col("IDVARVAL").str.strip_chars().alias("SEQ_TRIM"))
-    .select("STUDYID", "USUBJID", "SEQ_TRIM")
-    .with_columns(pl.lit("Y").alias("ENDPOINT"))
-)
 
-marked = (
-    lb.with_columns(SEQ_TRIM=pl.col("LBSEQ").cast(pl.String))
-    .join(
-        endpoint_keys,
-        on=["STUDYID", "USUBJID", "SEQ_TRIM"],
-        how="left",
-        maintain_order="left",
-    )
-    .drop("SEQ_TRIM")
-)
+def read_csv(path):
+    with open(path, newline="") as f:
+        return list(csv.DictReader(f))
 
-# EOTFL is Y on one record per subject and test: the endpoint-marked
-# record when there is one, otherwise the record from the latest visit.
-endpoint_winners = (
-    marked.filter(pl.col("ENDPOINT") == "Y")
-    .group_by("STUDYID", "USUBJID", "LBTESTCD")
-    .agg(pl.col("LBSEQ").min().alias("WIN_ENDPOINT"))
-)
-latest_winners = (
-    marked.sort(["VISITNUM", "LBSEQ"], descending=[True, True], nulls_last=True)
-    .unique(["STUDYID", "USUBJID", "LBTESTCD"], keep="first", maintain_order=True)
-    .select("STUDYID", "USUBJID", "LBTESTCD", WIN_LATEST="LBSEQ")
-)
-winners = (
-    latest_winners.join(
-        endpoint_winners, on=["STUDYID", "USUBJID", "LBTESTCD"], how="left"
-    )
-    .with_columns(WIN_LBSEQ=pl.coalesce("WIN_ENDPOINT", "WIN_LATEST"))
-    .select("STUDYID", "USUBJID", "LBTESTCD", "WIN_LBSEQ")
-    .with_columns(pl.lit("Y").alias("EOTFL"))
-)
 
-adlb = (
-    marked.join(
-        winners,
-        left_on=["STUDYID", "USUBJID", "LBTESTCD", "LBSEQ"],
-        right_on=["STUDYID", "USUBJID", "LBTESTCD", "WIN_LBSEQ"],
-        how="left",
-    )
-    .select(
-        "STUDYID",
-        "USUBJID",
-        "LBSEQ",
-        "LBTESTCD",
-        "VISITNUM",
-        "AVAL",
-        "ENDPOINT",
-        "EOTFL",
-    )
-    .sort(["USUBJID", "LBTESTCD", "LBSEQ"])
-)
+def main():
+    lb = read_csv(INPUT_DIR + "/lb.csv")
+    supplb = read_csv(INPUT_DIR + "/supplb.csv")
 
-Path("/app/output").mkdir(exist_ok=True)
-adlb.write_csv("/app/output/adlb.csv")
+    # Endpoint-marked keys: (STUDYID, USUBJID, LBSEQ as int). In SUPPLB the
+    # sequence number is eight-character, space-padded text.
+    endpoint_keys = set()
+    for row in supplb:
+        if row["QNAM"] == "ENDPOINT":
+            endpoint_keys.add(
+                (row["STUDYID"], row["USUBJID"], int(row["IDVARVAL"].strip()))
+            )
+
+    records = []
+    for row in lb:
+        key = (row["STUDYID"], row["USUBJID"], int(row["LBSEQ"]))
+        records.append({
+            "STUDYID": row["STUDYID"],
+            "USUBJID": row["USUBJID"],
+            "LBSEQ": row["LBSEQ"],
+            "LBTESTCD": row["LBTESTCD"],
+            "VISITNUM": row["VISITNUM"],
+            "AVAL": row["LBSTRESN"],
+            "ENDPOINT": "Y" if key in endpoint_keys else "",
+            "EOTFL": "",
+            "_visit": int(row["VISITNUM"]),
+        })
+
+    # One EOTFL "Y" per subject and test: the endpoint-marked record when
+    # there is one, otherwise the record from the latest visit.
+    groups = {}
+    for i, rec in enumerate(records):
+        groups.setdefault((rec["USUBJID"], rec["LBTESTCD"]), []).append(i)
+    for idxs in groups.values():
+        marked = [i for i in idxs if records[i]["ENDPOINT"] == "Y"]
+        if marked:
+            winner = marked[0]
+        else:
+            winner = max(idxs, key=lambda i: records[i]["_visit"])
+        records[winner]["EOTFL"] = "Y"
+
+    with open(OUTPUT_DIR + "/adlb.csv", "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=COLUMNS)
+        writer.writeheader()
+        for rec in records:
+            writer.writerow({c: rec[c] for c in COLUMNS})
+
+
+if __name__ == "__main__":
+    main()

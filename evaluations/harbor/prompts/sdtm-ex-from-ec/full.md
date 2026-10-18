@@ -1,23 +1,26 @@
-Following CDISC SDTM standards, use the provided ODM and KITLIST
-datasets to create an EX dataset with one record per administered
-exposure.
+Following CDISC SDTM standards, use the provided KIT_LIST and ODM datasets to
+create an EX dataset with one record per administration.
 
 The output dataset should contain the following columns in this order:
 DOMAIN, STUDYID, USUBJID, EXSEQ, EXTRT, EXDOSE, EXDOSU, EXSTDTC, EXENDTC
 
-STUDYID is the ODM StudyOID and USUBJID is the SubjectKey, each as given.
-
-Only a form whose occurrence is Y gives a record, so a skipped dose
-leaves none; the placebo kit keeps its zero dose. EXSEQ numbers the
-administrations within the subject by start date and then by the form
-repeat number within the visit. EXTRT is the kit list treatment for a
-blinded kit, and the collected treatment otherwise. EXDOSE is the
-administered dose: for tablets, the tablets taken at the collected
-strength; for infusion, the collected amount per kilogram at the visit
-body weight; for a blinded kit, the kit list dose; and for an AUC
-target, the collected target. EXDOSU is mg, except the AUC target keeps
-AUC. EXSTDTC and EXENDTC are the collected start and end dates. Body
-weight comes from the VS form at the same visit.
+DOMAIN is "EX". STUDYID is the ODM study OID and USUBJID is the ODM
+subject key, each as given. Only a form whose occurrence item
+(IT.EC.ECOCCUR) is "Y" gives a record; a skipped dose gives none.
+EXTRT is the treatment as collected, except that a record whose
+collected form is "KITDOSE" has the treatment the kit list holds for
+its kit number. A record whose collected form is "TABLET" has
+EXDOSE as the number of tablets times the tablet strength. A record
+whose collected form is "INFUSION" has EXDOSE as the collected
+mg/kg dose times the body weight collected at the same visit. A
+record whose collected form is "KITDOSE" has EXDOSE as the dose
+the kit list holds for its kit number, and a kit whose listed dose
+is zero keeps that zero. A record whose collected form is
+"AUCDOSE" has EXDOSE as the AUC target as collected. EXDOSE is not
+rounded. EXDOSU is "AUC" for a record whose collected form is
+"AUCDOSE" and "mg" for every other record. EXSTDTC and EXENDTC are
+the start and end dates collected on the form. EXSEQ numbers each
+subject's records from 1 by start date.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/ex.csv.

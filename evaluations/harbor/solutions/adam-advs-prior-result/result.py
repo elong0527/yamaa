@@ -4,43 +4,64 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build ADVS from the VS dataset: one record per collected row, with
+PREVAVALC set to the closest earlier non-blank AVALC for the same
+subject and series.
 
-import polars as pl
+Rows with no SERIES value share one series. Within a subject and
+series, rows are ordered by AVISITN with a missing AVISITN last, and
+rows that tie keep their collected order. Blank results never serve as
+a previous value, and a previous value never crosses a series or a
+subject.
+"""
 
-vs = pl.read_csv("/app/input/vs.csv", infer_schema=False).with_columns(
-    pl.col("VSSEQ").cast(pl.Int64, strict=False),
-    pl.col("AVISITN").cast(pl.Int64, strict=False),
-)
+import csv
 
-# Rows with no series value share one series within each subject; order
-# within a series by visit number with missing numbers last, keeping the
-# collected order (input row order) for ties.
-ordered = vs.sort(
-    ["STUDYID", "USUBJID", "SERIES", "AVISITN"],
-    nulls_last=True,
-    maintain_order=True,
-)
+INPUT_VS = "/app/input/vs.csv"
+OUTPUT_ADVS = "/app/output/advs.csv"
 
-# The closest earlier result with a value in the same subject and series.
-prev_by_key: dict[tuple, str | None] = {}
-last_seen: dict[tuple, str | None] = {}
-for record in ordered.iter_rows(named=True):
-    key = (record["STUDYID"], record["USUBJID"], record["SERIES"])
-    prev_by_key[(record["STUDYID"], record["USUBJID"], record["VSSEQ"])] = last_seen.get(key)
-    if record["AVALC"] is not None:
-        last_seen[key] = record["AVALC"]
+COLUMNS = ["STUDYID", "USUBJID", "VSSEQ", "SERIES", "AVISITN", "AVALC",
+           "PREVAVALC"]
 
-advs = (
-    vs.with_columns(
-        PREVAVALC=pl.struct(["STUDYID", "USUBJID", "VSSEQ"]).map_elements(
-            lambda s: prev_by_key.get((s["STUDYID"], s["USUBJID"], s["VSSEQ"])),
-            return_dtype=pl.String,
-        )
-    )
-    .sort(["USUBJID", "VSSEQ"])
-    .select("STUDYID", "USUBJID", "VSSEQ", "SERIES", "AVISITN", "AVALC", "PREVAVALC")
-)
 
-Path("/app/output").mkdir(parents=True, exist_ok=True)
-advs.write_csv("/app/output/advs.csv")
+def visit_key(row):
+    """Sort key: AVISITN ascending, a missing AVISITN last.
+
+    The sort is stable, so rows sharing an AVISITN, or both missing
+    one, keep their collected order.
+    """
+    text = row["AVISITN"].strip()
+    if text == "":
+        return (1, 0.0)
+    return (0, float(text))
+
+
+def main():
+    with open(INPUT_VS, newline="") as handle:
+        rows = list(csv.DictReader(handle))
+
+    groups = {}
+    for index, row in enumerate(rows):
+        key = (row["USUBJID"], row["SERIES"])
+        groups.setdefault(key, []).append(index)
+
+    previous = {}
+    for indexes in groups.values():
+        last_nonblank = ""
+        for index in sorted(indexes, key=lambda i: visit_key(rows[i])):
+            previous[index] = last_nonblank
+            avalc = rows[index]["AVALC"]
+            if avalc.strip() != "":
+                last_nonblank = avalc
+
+    with open(OUTPUT_ADVS, "w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=COLUMNS)
+        writer.writeheader()
+        for index, row in enumerate(rows):
+            out = {name: row[name] for name in COLUMNS if name != "PREVAVALC"}
+            out["PREVAVALC"] = previous[index]
+            writer.writerow(out)
+
+
+if __name__ == "__main__":
+    main()

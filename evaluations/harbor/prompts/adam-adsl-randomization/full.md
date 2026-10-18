@@ -1,19 +1,18 @@
-Following CDISC ADaM standards, use the provided DM dataset to create an
-ADSL dataset with one record per subject.
+Following CDISC ADaM standards, use the provided DM and ODM datasets to create
+an ADSL dataset with one record per subject.
 
 The output dataset should contain the following columns in this order:
 STUDYID, USUBJID, RANDDT, RANDDY, RANDDTC
 
-RANDDT is the randomization date as collected, and has no value when
-no randomization date was collected.
-
-RANDDY is the study day of randomization relative to the subject reference
-start date.
-
-RANDDTC is the collected randomization moment written as ISO 8601 text
-with a T between date and time, at whole-second precision. It has no
-value when no moment was collected, and it is written from what was
-collected even when no randomization date was collected.
+RANDDY is the study day of the randomization date RANDDT, measured from
+RFSTDTC, the subject's reference start date. RANDDY has no value when
+RANDDT or RFSTDTC has no value. RANDDTC is the collected randomization
+moment RANDDTTM written as text at whole-second precision, the date and
+time joined by T and the seconds always shown, so a moment collected as
+10:30 is written 10:30:00. RANDDTC has no value when no moment was
+collected. RANDDTC is written from the collected moment independently of
+the collected date: a subject with a collected moment but no collected
+date still has RANDDTC, while RANDDT and RANDDY have no value.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/adsl.csv.

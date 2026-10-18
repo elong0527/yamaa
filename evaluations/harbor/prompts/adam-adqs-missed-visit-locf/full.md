@@ -1,28 +1,24 @@
-Following CDISC ADaM standards, use the provided ADSL and QS datasets
-to create an ADQS dataset with one record per subject per parameter
-per analysis visit.
+Following CDISC ADaM standards, use the provided ADSL and QS datasets to create
+an ADQS dataset with one record per subject per parameter per analysis visit.
 
 The output dataset should contain the following columns in this order:
 STUDYID, USUBJID, PARAMCD, AVISIT, AVISITN, AVAL, DTYPE, EFFFL
 
-Use PARAMCD "ACTOT". The protocol schedules Weeks 8, 16, and 24 (AVISIT
-"Week 8", "Week 16", and "Week 24", with AVISITN 8, 16, and 24) for
-every subject in the efficacy population; baseline is not a scheduled
-visit, so a missing baseline adds nothing.
-
-Keep every collected score with DTYPE empty. A collected record with
-an empty score is left out, so at a scheduled visit it counts as
-missed.
-
-Add one record with DTYPE "LOCF" for each missed scheduled visit of a
-subject in the efficacy population. Its value is the score from the
-closest earlier visit that has one for the same subject, and a collected
-zero is a real score that carries forward; it has no value when the
-subject has no earlier score. Subjects outside the efficacy population
-keep their collected records and gain none.
-
-EFFFL is the subject's efficacy population flag, repeated on every
-record.
+Each collected total score in QS is a record of the output, and a
+collected record with an empty score is left out. The scheduled visits
+are "Week 8" (AVISITN 8), "Week 16" (AVISITN 16), and "Week 24"
+(AVISITN 24). Baseline is not a scheduled visit, so a missing baseline
+adds no record. A scheduled visit is missed when the subject has no
+collected score there. For each scheduled visit missed by a subject
+whose EFFFL in ADSL is "Y", the output adds a record with PARAMCD
+"ACTOT", that visit's AVISIT and AVISITN, and DTYPE "LOCF". AVAL is
+the collected score on a collected record. On an added record, AVAL is
+the subject's score from the closest earlier visit that has one, and
+AVAL has no value when the subject has no earlier score. A collected
+score of zero counts as a score. DTYPE has no value on a collected
+record. EFFFL is the subject's efficacy population flag from ADSL,
+repeated on every record. A subject outside the efficacy population
+keeps the collected records and gains no added record.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/adqs.csv.

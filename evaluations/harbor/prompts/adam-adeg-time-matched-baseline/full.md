@@ -1,28 +1,23 @@
-Following CDISC ADaM standards, use the provided ADEG_RAW dataset to
-create an ADEG dataset with one record per subject per parameter per
-analysis period per nominal period day per nominal time point.
+Following CDISC ADaM standards, use the provided ADEG_RAW dataset to create an
+ADEG dataset with one record per subject, parameter, analysis period,
+nominal day within the period, and nominal time point.
 
 The output dataset should contain the following columns in this order:
-STUDYID, USUBJID, PARAMCD, PARAM, APERIOD, APERDAY, ATPT, ATPTN, AVAL,
-AVALU, ABLFL, BASE, CHG, BASETYPE
+STUDYID, USUBJID, PARAMCD, PARAM, APERIOD, APERDAY, ATPT, ATPTN, AVAL, AVALU,
+ABLFL, BASE, CHG, BASETYPE
 
-Each input record is the average of the replicate ECGs at one nominal time
-point and gives one output record. The baseline is time-matched, and every
-period has its own baseline day: day -1 of that period (APERDAY -1).
-- ABLFL is "Y" on every record of a baseline day and has no value on the
-  other records.
-- BASE on a baseline-day record is its own AVAL. On every other record,
-  BASE is the AVAL of the baseline-day record of the same subject,
-  parameter and period at the same nominal time point (ATPTN). BASE has no
-  value when that baseline day has no record at that time point or the
-  period has no baseline day: no other time point, day or period, and no
-  pre-dose value of the same day, takes its place.
-- CHG is AVAL minus BASE. It has no value on a baseline-day record and
-  when BASE has no value.
-- BASETYPE is "Period ", then APERIOD as a whole number, then
-  " Baseline Day ", then ATPT, for example "Period 2 Baseline Day 4 h". It
-  is filled on every record, also where BASE has no value.
-- BASE and CHG are not rounded.
+- ABLFL is "Y" on every record of day -1 of a period, that period's baseline
+  day; it has no value on every other day.
+- BASE is the AVAL recorded at the same nominal time point on the same
+  period's baseline day for the same subject and parameter; on the baseline
+  day, BASE is the record's own AVAL.
+- BASE has no value when that baseline day did not record the time point or
+  the period has no baseline day; nothing stands in for it, neither another
+  time point, day or period nor the dosing day's pre-dose value.
+- CHG is AVAL minus BASE and is not rounded; CHG has no value on the baseline
+  day or wherever BASE has no value.
+- BASETYPE is "Period " followed by the period number, " Baseline Day " and
+  ATPT on every record, including those with no baseline.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/adeg.csv.
