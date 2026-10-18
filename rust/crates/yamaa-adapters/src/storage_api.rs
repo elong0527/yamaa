@@ -28,9 +28,11 @@
 //! typed arrays read it (later releases align on import).
 //!
 //! 57's thrift decoders unwrap the value of a known boolean field that
-//! carries another wire type (later releases return an error), so a malformed
-//! footer or page header can panic inside the Parquet crate. Native Parquet
-//! decoding of admitted input runs through `contain_decode`.
+//! carries another wire type (later releases return an error), and its
+//! metadata decoder asserts that INT96 statistics hold exactly 12 bytes, so a
+//! malformed footer or page header can panic inside the Parquet crate. Native
+//! Parquet decoding of admitted input runs through `contain_decode`, which
+//! also keeps the panic it contains off stderr.
 #[cfg(feature = "parquet")]
 use parquet::{
     basic::{LogicalType, TimeUnit},
@@ -56,10 +58,7 @@ pub(crate) fn ipc_schema(
     if schema.fields().is_none() {
         return Err(malformed());
     }
-    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        arrow_ipc::convert::fb_to_schema(schema)
-    }))
-    .map_err(|_| malformed())
+    contain_decode(|| arrow_ipc::convert::fb_to_schema(schema)).ok_or_else(malformed)
 }
 
 pub(crate) use stream::StreamReader;
@@ -168,12 +167,67 @@ mod stream {
     }
 }
 
-/// Run a native Parquet decode of admitted input with its panic contained;
-/// `None` reports that the Parquet crate panicked on a malformed footer or
-/// page header.
-#[cfg(feature = "parquet")]
+/// Run a native Arrow or Parquet decode of admitted input with its panic
+/// contained and silent; `None` reports that the decoder panicked on a
+/// malformed footer, page header or embedded schema.
+///
+/// The process's panic hook prints every panic, caught or not. So the first
+/// call wraps the hook installed at that moment, once for the process: the
+/// wrapper prints nothing for a panic on a thread inside `contain_decode`, and
+/// passes every other panic to the hook it wraps. A hook installed later
+/// replaces the wrapper. A `panic = "abort"` build cannot contain a panic, so
+/// it keeps the hook it has.
 pub(crate) fn contain_decode<T>(decode: impl FnOnce() -> T) -> Option<T> {
+    quiet::install();
+    let _inside = quiet::Inside::enter();
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(decode)).ok()
+}
+
+/// The panic hook wrapper that keeps contained panics silent.
+mod quiet {
+    use std::{cell::Cell, panic, sync::Once};
+
+    thread_local! {
+        /// How many `contain_decode` calls the current thread is inside.
+        static DEPTH: Cell<usize> = const { Cell::new(0) };
+    }
+
+    /// Whether the current thread is inside `contain_decode`.
+    pub(super) fn contained() -> bool {
+        DEPTH.try_with(|depth| depth.get() > 0).unwrap_or(false)
+    }
+
+    /// Wrap the installed panic hook, once for the process.
+    pub(super) fn install() {
+        static WRAPPED: Once = Once::new();
+        // `take_hook` panics on a thread that is already panicking.
+        if cfg!(panic = "unwind") && !std::thread::panicking() {
+            WRAPPED.call_once(|| {
+                let previous = panic::take_hook();
+                panic::set_hook(Box::new(move |info| {
+                    if !contained() {
+                        previous(info);
+                    }
+                }));
+            });
+        }
+    }
+
+    /// Marks the current thread inside `contain_decode` until it is dropped.
+    pub(super) struct Inside(());
+
+    impl Inside {
+        pub(super) fn enter() -> Self {
+            DEPTH.with(|depth| depth.set(depth.get() + 1));
+            Self(())
+        }
+    }
+
+    impl Drop for Inside {
+        fn drop(&mut self) {
+            DEPTH.with(|depth| depth.set(depth.get() - 1));
+        }
+    }
 }
 
 #[cfg(feature = "parquet")]
@@ -254,5 +308,24 @@ pub(crate) fn logical_type(logical: Option<&LogicalType>) -> Logical {
             utc: *is_adjusted_to_u_t_c,
         },
         _ => Logical::Other,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{contain_decode, quiet::contained};
+
+    #[test]
+    fn only_a_thread_inside_contain_decode_is_silent() {
+        assert!(!contained());
+        let inside = contain_decode(|| {
+            // A nested call, even one that panics, leaves the outer call
+            // silent; another thread is outside.
+            assert!(contain_decode::<()>(|| panic!("a nested contained panic")).is_none());
+            let other = std::thread::spawn(contained).join().unwrap();
+            (contained(), other)
+        });
+        assert_eq!(inside, Some((true, false)));
+        assert!(!contained());
     }
 }
