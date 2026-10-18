@@ -65,8 +65,8 @@ fn issue(
 }
 
 pub fn prepared(graph: &FileGraph) -> Result<Vec<Issue>, Error<'_>> {
-    let checked = graph.graph().metadata();
-    let entry = graph.graph().nodes()[checked.root()]
+    let checked = graph.metadata();
+    let entry = graph.nodes()[checked.root()]
         .document
         .source()
         .identity
@@ -76,7 +76,7 @@ pub fn prepared(graph: &FileGraph) -> Result<Vec<Issue>, Error<'_>> {
         .check_findings()
         .map(|(index, finding)| {
             let mut diagnostic = finding.diagnostic();
-            let document = &graph.graph().nodes()[index].document;
+            let document = &graph.nodes()[index].document;
             if multiple && document.inheritance().is_some() {
                 diagnostic = declaring(diagnostic, document)?;
             }
@@ -84,11 +84,7 @@ pub fn prepared(graph: &FileGraph) -> Result<Vec<Issue>, Error<'_>> {
                 diagnostic,
                 multiple.then(|| {
                     (
-                        graph.graph().nodes()[index]
-                            .document
-                            .source()
-                            .identity
-                            .as_str(),
+                        graph.nodes()[index].document.source().identity.as_str(),
                         entry,
                     )
                 }),

@@ -305,7 +305,7 @@ mod project {
             }
         }
         fn project_domain(path: &str, environment: &str) -> file_application::Domain {
-            let yamaa_adapters::file_workflow::Selected::Ordinary(mut project) =
+            let yamaa_adapters::file_workflow::Selected::Ordinary(project) =
                 yamaa_adapters::file_workflow::select(
                     path,
                     environment,
@@ -323,7 +323,8 @@ mod project {
             else {
                 panic!("ordinary metadata capability")
             };
-            let attempt = project.build(&mut NoActivation, Scope::default());
+            let mut run_scope = project.run_scope(None);
+            let attempt = project.build(&mut run_scope, &mut NoActivation, Scope::default());
             let result = yamaa_adapters::project_report::build_result(
                 project.run(),
                 &attempt,
@@ -331,7 +332,7 @@ mod project {
                 &[],
             )
             .unwrap();
-            file_application::Domain::from_project(result, &project).unwrap()
+            file_application::Domain::from_project(result, &project, &run_scope).unwrap()
         }
 
         #[test]
@@ -461,7 +462,7 @@ mod project {
                 let path = study.0.join("spec.yaml");
                 let path = path.to_str().unwrap();
                 let environment = study.0.join("environment.yaml");
-                let yamaa_adapters::file_workflow::Selected::Ordinary(mut project) =
+                let yamaa_adapters::file_workflow::Selected::Ordinary(project) =
                     yamaa_adapters::file_workflow::select(
                         path,
                         environment.to_str().unwrap(),
@@ -488,7 +489,8 @@ mod project {
                 assert!(!study.0.join("catalog/never-read.csv").exists());
                 assert!(!study.0.join("input.csv").exists());
                 fs::write(study.0.join("input.csv"), "ID,VALUE\n1,DM\n2,renamed\n3,\n").unwrap();
-                let attempt = project.build(&mut NoActivation, Scope::default());
+                let mut run_scope = project.run_scope(None);
+                let attempt = project.build(&mut run_scope, &mut NoActivation, Scope::default());
                 let result = yamaa_adapters::project_report::build_result(
                     project.run(),
                     &attempt,
@@ -496,7 +498,8 @@ mod project {
                     &[],
                 )
                 .unwrap();
-                let run = file_application::Domain::from_project(result, &project).unwrap();
+                let run =
+                    file_application::Domain::from_project(result, &project, &run_scope).unwrap();
                 assert_eq!(run.issues().len(), 1);
                 assert_eq!(run.issues()[0].requirement.as_deref(), Some("REQ-1156"));
                 assert_eq!(yamaa_adapters::json_wire::encode(&run.issues()[0].context),"{\"column\":\"VALUE\",\"failure_count\":1,\"keys\":[{\"ID\":2}],\"values\":[\"renamed\"]}");

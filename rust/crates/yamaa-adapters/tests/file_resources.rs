@@ -80,7 +80,7 @@ mod file {
                 fs::write(study.0.join("entry/spec.yaml"), format!("schema_version: '1.0'\nparents: ../shared/base.yaml\ninput: {{SRC: {{relative_to: {mode}}}}}\n")).unwrap();
                 let (resources, entry) =
                     file_configuration::resources(&study.text("entry/spec.yaml")).unwrap();
-                let mut prepared = FileSpecification::prepare(resources, &entry).unwrap();
+                let prepared = FileSpecification::prepare(resources, &entry).unwrap();
                 assert_eq!(prepared.run().source().path, expected);
                 let origin = prepared
                     .run()
@@ -96,7 +96,10 @@ mod file {
                         "shared/base.yaml"
                     })
                 );
-                assert!(prepared.build(Scope::default()).result.is_ok());
+                assert!(prepared
+                    .build(&mut prepared.run_scope(None), Scope::default())
+                    .result
+                    .is_ok());
             }
         }
 
@@ -419,7 +422,7 @@ mod file {
             let (resources, entry) =
                 file_configuration::resources(&study.text("entry/child.yaml")).unwrap();
             assert_eq!(resources.capture_reads(), 0);
-            let mut prepared = FileSpecification::prepare(resources, &entry).unwrap();
+            let prepared = FileSpecification::prepare(resources, &entry).unwrap();
             let origin = prepared.run().document().written_output_origin().unwrap();
             assert_eq!(origin.declaring_source, study.text("shared/base.yaml"));
             assert_eq!(origin.written, "../outputs/out.csv");
@@ -429,8 +432,12 @@ mod file {
                 "../outputs/out.csv"
             );
             assert_eq!(prepared.capture_reads(), 2);
-            assert!(prepared.build(Scope::default()).result.is_ok());
-            assert_eq!(prepared.capture_reads(), 3);
+            let mut run_scope = prepared.run_scope(None);
+            assert!(prepared
+                .build(&mut run_scope, Scope::default())
+                .result
+                .is_ok());
+            assert_eq!(run_scope.capture_reads(), 3);
             assert!(!study.0.join("outputs/out.csv").exists());
         }
 
