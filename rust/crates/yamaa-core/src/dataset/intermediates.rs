@@ -174,32 +174,17 @@ pub struct ReadHandlers {
     pub no_match: bool,
 }
 
-/// The handlers a read of each intermediate counts: its own, and those of the
-/// earlier intermediates its `between` value and derivation operands read,
-/// which count at the same reading path. A filter's reads are predicates and
-/// count nothing. `Err` names an intermediate read before it is declared.
-pub fn read_handlers(intermediates: &[Intermediate]) -> Result<Vec<ReadHandlers>, usize> {
-    let mut handlers: Vec<ReadHandlers> = Vec::with_capacity(intermediates.len());
-    for item in intermediates {
-        let mut own = ReadHandlers {
+/// The handlers a read of each intermediate counts. An intermediate its
+/// `between` value, filter or derivation operands read answers uncounted, as
+/// in a predicate, so only the read's own answer counts (COLUMN-14).
+pub fn read_handlers(intermediates: &[Intermediate]) -> Vec<ReadHandlers> {
+    intermediates
+        .iter()
+        .map(|item| ReadHandlers {
             multiple_matches: item.selection.is_some(),
             no_match: !item.require_match,
-        };
-        let operands = item
-            .range
-            .iter()
-            .map(|range| range.current())
-            .chain(item.derivations.iter().flat_map(|derived| &derived.current));
-        for current in operands {
-            if let CurrentRead::Intermediate { index, .. } = current.read {
-                let earlier = handlers.get(index).ok_or(index)?;
-                own.multiple_matches |= earlier.multiple_matches;
-                own.no_match |= earlier.no_match;
-            }
-        }
-        handlers.push(own);
-    }
-    Ok(handlers)
+        })
+        .collect()
 }
 
 /// Kept current-side reads carry the dependencies of the earlier selector too.
