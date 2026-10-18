@@ -91,6 +91,28 @@ impl Declaration {
                 .map_or_else(|| input(name), |binding| binding.kind.into())
         })
     }
+    /// The range whose value binding reads for the current row: a qualified
+    /// aggregate's range that states a bound. Binding reports every other
+    /// form of `between` before it reads the value (LOOKUP-9).
+    pub(super) fn current_range(&self) -> Option<&lookup_range::Declaration> {
+        let range = self.between.as_ref()?;
+        let qualified = self.compiled.as_ref().is_ok_and(|compiled| {
+            if self.derive.is_some() {
+                !self.derive_relations.is_empty()
+            } else {
+                compiled.identifiers().any(|name| name.contains('.'))
+                    || compiled.record_relations().next().is_some()
+            }
+        });
+        (qualified && range.donor_fields().next().is_some()).then_some(range)
+    }
+    /// The derivation of each derive binding, in declaration order.
+    pub(super) fn derive_operations(&self) -> impl Iterator<Item = &Operation> {
+        self.derive
+            .iter()
+            .flatten()
+            .map(|binding| binding.branch.operation.as_ref())
+    }
 }
 fn diagnostic(
     code: crate::diagnostic::ConditionCode,
@@ -1311,51 +1333,6 @@ fn bind_range(
             None
         }
     })
-}
-/// `check` applies the range-value rule of [`lookup_range::admit`] to an
-/// aggregate's declarations alone: `drivers` names the input whose records
-/// drive each row the column derives. A value qualified by another input fails
-/// whether or not that input stores the field (LOOKUP-9).
-pub(super) fn check_ranges(
-    operation: &Operation,
-    inputs: &[SourceDeclaration],
-    drivers: &[&str],
-    findings: &mut Vec<BindFinding>,
-) {
-    match operation {
-        Operation::Aggregate(declaration) => {
-            let Some(range) = &declaration.between else {
-                return;
-            };
-            // Binding reads the value only for a qualified aggregate whose range
-            // states a bound; it reports every other form of `between` first.
-            let qualified = declaration.compiled.as_ref().is_ok_and(|compiled| {
-                if declaration.derive.is_some() {
-                    !declaration.derive_relations.is_empty()
-                } else {
-                    compiled.identifiers().any(|name| name.contains('.'))
-                        || compiled.record_relations().next().is_some()
-                }
-            });
-            if !qualified || range.donor_fields().next().is_none() {
-                return;
-            }
-            if range.value.split_once('.').is_some_and(|(qualifier, _)| {
-                inputs.iter().any(|input| input.name == qualifier)
-                    && drivers.iter().any(|&driver| driver != qualifier)
-            }) {
-                findings.push(BindFinding::AggregateDiagnostic(
-                    range.unknown_value(crate::diagnostic::lookup::Owner::Unnamed),
-                ));
-            }
-        }
-        Operation::Case(branches) => {
-            for branch in branches {
-                check_ranges(&branch.operation, inputs, drivers, findings);
-            }
-        }
-        _ => (),
-    }
 }
 #[allow(clippy::too_many_arguments)]
 fn bind_derivations(

@@ -1,7 +1,10 @@
 """Run yamaa clinical data specifications through the shared Rust engine.
 
 `spec()` and `project()` read nothing; each method runs one engine operation
-and returns a fixed result, and only a result's `save()` writes files.
+and returns a fixed result, and only a result's `save()` writes files. An
+object's first `run()` compiles its specifications and keeps them; a later
+`run()` reuses them once every file they were compiled from is unchanged, and
+compiles again when one changed.
 """
 
 from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
@@ -144,6 +147,9 @@ class Spec:
     def __init__(self, path, project=None):
         self._path = _fspath(path)
         self._project = project
+        # The plan the first run() compiles; later runs reuse it while the
+        # files it was compiled from are unchanged.
+        self._plans = _native._plans()
 
     def check(self) -> Check:
         """Report problems without reading study data or running project code."""
@@ -155,7 +161,7 @@ class Spec:
 
     def run(self) -> Run:
         """Build the dataset in memory."""
-        return Run(_call(_native._spec_run, self._path, self._project))
+        return Run(_call(_native._spec_run, self._path, self._project, self._plans))
 
 
 class Project:
@@ -163,6 +169,8 @@ class Project:
 
     def __init__(self, path):
         self._path = _fspath(path)
+        # The plans run() compiles, one for each specification it builds.
+        self._plans = _native._plans()
 
     def spec(self, name: str) -> Spec:
         """The listed specification whose `domain` is `name`."""
@@ -173,7 +181,7 @@ class Project:
 
     def run(self, section: str | None = None) -> ProjectRun:
         """Build every specification of one section, or of all sections."""
-        return ProjectRun(_call(_native._project_run, self._path, section))
+        return ProjectRun(_call(_native._project_run, self._path, section, self._plans))
 
     def submission(
         self, section: str | None = None, *, created: str | None = None

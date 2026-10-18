@@ -358,6 +358,14 @@ pub enum SaveOutcome { Saved, NothingToSave }  // #[non_exhaustive]
   original is back, the next run succeeds; only an explicit `compile` picks
   up a change. `build` skips the run-start check because its compilation has
   just captured the same metadata.
+- The hosts' lazy objects keep a `Plans` holder each (#2821).
+  `Engine::spec_run_reusing` and `Engine::project_run_reusing` run a kept
+  plan when the run-start check finds every file it was compiled from
+  unchanged, and otherwise compile again exactly as `build` does and keep the
+  new plan; a refused compilation keeps nothing. A kept plan runs through the
+  calling engine's project functions and observer, so each host call keeps
+  its own capabilities. `spec_run` and `project_run` run through an empty
+  holder.
 
 ### Handles, ownership and thread safety
 
@@ -367,11 +375,12 @@ pub enum SaveOutcome { Saved, NothingToSave }  // #[non_exhaustive]
 | `Build`, `DefineBuild` | Owned, one attempt | Yes | No | `save(&mut self)` publishes once, as today. |
 | `Plan` | Owned, reusable, cheap to clone (shared `Arc` state) | Yes | Yes | `run` takes `&self`; each run is an independent attempt in its own resource scope. The plan lives until its last clone drops, independently of the `Engine`. |
 | `RunRequest` | Owned | Yes | Yes | Concurrent runs pass their own observer; progress events carry no run identity. |
+| `Plans` | Owned by one host object, interior lock | Yes | Yes | Keeps one `Plan` per specification and project path. The lock is held only to read or replace a kept plan, never across a compilation, a run or a callback, so a run started from a callback or another thread proceeds as any other. |
 | `Table` | Owned, immutable batches | Yes | Yes | Borrowed views share buffers with the owning table. |
 | `ResolvedSpecification` | Owned, immutable | Yes | Yes | No source access after construction. |
 | `MemoryResolver` | Owned, interior-mutable | Yes | Yes | Mirrors today's `host_resources::MemoryResolver`. |
 | `CancellationToken` | Owned, cheap to clone | Yes | Yes | All clones share one flag. |
-| `dyn ResourceResolver`, `dyn ProjectFunctions`, `dyn Progress` | Caller-owned, shared as `Arc` | Required | Required | The facade never calls back into a host while holding an engine lock; there are no engine locks. |
+| `dyn ResourceResolver`, `dyn ProjectFunctions`, `dyn Progress` | Caller-owned, shared as `Arc` | Required | Required | The facade never calls back into a host while holding an engine lock; the `Plans` lock, too, is held only to read or replace a kept plan. |
 
 Project functions supplied by a host are invoked on the calling thread of the
 operation, as today; a host whose runtime is single-threaded (Python, R) owns
