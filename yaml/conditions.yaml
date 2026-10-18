@@ -153,7 +153,6 @@ conditions:
   resource_path_uri_scheme: {phases: [validation]}
   row_count_changed: {phases: [derivation]}
   row_count_failed: {phases: [verification]}
-  runner_language_mismatch: {phases: [validation]}
   runtime_artifact_mismatch: {phases: [validation]}
   sas_name_too_long: {phases: [validation]}
   schema_version_mismatch: {phases: [validation]}

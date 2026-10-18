@@ -141,7 +141,7 @@ canonical fields but does not retain collected precision.
 
 | Field | Meaning |
 | --- | --- |
-| `Scope` | Types shared by specification and project-environment schema entry points. |
+| `Scope` | Types shared by the specification, project and environment schema entry points. |
 
 ## Error conditions
 

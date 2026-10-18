@@ -13,16 +13,19 @@ status: normative
 <a id="req-0959"></a>
 
 **REQ-0959.** A **study document** is composed from one selected `sdtm`,
-`adam`, or `send` section of an admitted `environment.yaml`. The environment
-supplies `study` and shared `codelists`; the selected section supplies one
+`adam`, or `send` section of an admitted
+[project file](../specification/project.md#req-1330). The project supplies
+`study` and shared `codelists`; the selected section supplies one
 implementation guide, supporting documents, an ordered `specs` list and one
 `define` target. Each section produces exactly one Define-XML document.
+Composition requires the `study`, `standard` and `define` that a run does
+not, under [REQ-1336](#req-1336).
 The retained `define.yaml` reference route and its schema remain transition
 qualification history until the complete replacement is qualified.
 
 <a id="req-0960"></a>
 
-**REQ-0960.** The selected environment section is the only place the composition is declared.
+**REQ-0960.** The selected project section is the only place the composition is declared.
 An implementation must not assemble a document from whatever specifications a
 directory holds: which datasets one submission represents is a study decision,
 and a directory listing is not one.
@@ -227,8 +230,11 @@ attributes in this order:
 | `SourceSystemVersion` | section override or actual installed version |
 | `def:Context` | `context` |
 
-The source-system version selection applies to both XML and Dataset-JSON under
-[REQ-1080](../operations/functions.md#req-1080).
+Each section may declare a nonempty `source_system_version`. Its value
+overrides the source-system version metadata in both Define-XML and
+Dataset-JSON; omission selects the actual installed yamaa version.
+Qualification retains the actual generator version separately from this
+metadata override.
 
 <a id="req-0980"></a>
 
@@ -312,7 +318,7 @@ declared value could only agree with or contradict the derivation.
 
 **REQ-0987.** The dataset's `def:leaf` names the file the package carries for
 that dataset: the JSON target derived from its specification's output path when
-the selected section requests `dataset_json`, per
+the selected section requests `datasets: json`, per
 [REQ-1215](dataset-json.md#req-1215), and otherwise the artifact its
 specification produces. `xlink:href` is that path expressed relative
 to the directory holding the generated document, written with `/` separators,
@@ -639,18 +645,18 @@ replacement is fully qualified.
 
 | Field | Meaning |
 | --- | --- |
-| `submission_section_class.standard` | Implementation guide shared by the selected datasets. |
-| `submission_section_class.specs` | Ordered specifications resolved with their parent layers. |
-| `submission_section_class.define` | Define-XML publication target, relative to its declaring environment. |
+| `submission_section_class.specs` | Ordered specifications resolved with their parent layers; the only field a run needs. |
+| `submission_section_class.standard` | Implementation guide shared by the selected datasets; Define-XML requires it. |
+| `submission_section_class.define` | Define-XML publication target, relative to its declaring project file; Define-XML requires it. |
 | `submission_section_class.documents` | Supporting document IDs, kinds, literal links and titles. |
-| `submission_section_class.dataset_json` | Whether to read already published datasets and render adjacent JSON files. |
+| `submission_section_class.datasets` | Dataset container written beside the Define-XML document; `json` reads already published datasets and renders adjacent Dataset-JSON files, and omission writes only Define-XML. |
 | `submission_section_class.context` | Submission or Other; defaults to Submission. |
 | `submission_section_class.xml_lang` | Language of generated translated text; defaults to en. |
 | `submission_section_class.file_oid` | Optional nonempty file-identity text; it admits the existing URL-style spellings. Generated object and leaf identifiers are validated separately. |
 | `submission_section_class.metadata_version` | Optional metadata-version ID, name and description overrides. |
 | `submission_section_class.originator` | Optional submitting party. |
 | `submission_section_class.stylesheet` | Optional relative stylesheet link. |
-| `submission_section_class.source_system_version` | Optional nonempty XML and JSON source-system version; omission selects the installed package version under [REQ-1080](../operations/functions.md#req-1080). |
+| `submission_section_class.source_system_version` | Optional nonempty XML and JSON source-system version; omission selects the installed package version under [REQ-0979](#req-0979). |
 
 The generated Define-XML release is `2.1.11` and SourceSystem is `yamaa`.
 The following `define_class` table describes the retained reference-only route
@@ -880,3 +886,12 @@ schema: fail and report the schema violation. The run publishes nothing.
 <a id="req-1027"></a>
 
 **REQ-1027.** A failed publication fails under [REQ-0764](../storage/publication.md#req-0764).
+
+<a id="req-1336"></a>
+
+**REQ-1336.** A Define-XML generation whose project declares no `study`, no
+section for the selected family, or a selected section without `standard` or
+`define`: fail with `missing_required_field` before any specification is
+captured, reporting every missing field at once, each at its project path such
+as `study`, `sdtm.standard` or `sdtm.define`. A run of the same project needs
+none of them and does not report them.

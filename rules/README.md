@@ -19,6 +19,7 @@ owns the sequence of a run.
 | [Specification composition](specification/composition.md) | normative | Resolve inherited layers into one minimal, ordered specification. |
 | [Name binding](specification/binding.md) | normative | Resolve input datasets, constructed output columns, and ODM item reads. |
 | [Specification style](specification/style.md) | normative | Fix one written form of a specification and report departures without changing its meaning. |
+| [Project file](specification/project.md) | normative | Link each host's environment and declare a study's terminology and submission sections once. |
 
 ## Values
 
@@ -86,6 +87,10 @@ One term per concept across all rules, schema comments, and messages
 
 - **specification** -- the YAML file under review. `study` and `document` stay
   project-level (resources and submission contracts), never names for the YAML.
+- **project file** -- the one study-level YAML a caller passes: it links each
+  host language's **environment file**, which declares only that host's lock
+  and project functions, and it declares the study's terminology and
+  submission sections ([Project file](specification/project.md)).
 - **input dataset** / **output dataset** -- state the role whenever it matters.
   Bare `dataset` appears only as a key name. `table` means a documentation
   table, never data.

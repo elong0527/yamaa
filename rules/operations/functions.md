@@ -18,21 +18,21 @@ status: normative
 
 <a id="req-0662"></a>
 
-**REQ-0662.** A portable specification may declare a logical `function` call before project code exists. Structural authoring validates its versionless `name` and closed argument-leaf shape. Contract-dependent checks require an explicitly supplied environment. Omission never creates an environment implicitly.
+**REQ-0662.** A portable specification may declare a logical `function` call before project code exists. Structural authoring validates its versionless `name` and closed argument-leaf shape. Contract-dependent checks require an explicitly supplied project that links an environment for the host language. Omission never creates an environment implicitly.
 
 <a id="req-0663"></a>
 
-**REQ-0663.** The caller supplies one environment file through `environment=` to `domain` or `check`. Every path declared there resolves relative to that file under the admitted resource policy. A specification cannot select, replace or override the environment. No adjacent environment or language subdirectory is discovered implicitly.
+**REQ-0663.** The caller supplies one [project file](../specification/project.md#req-1330), and its `environments` entry for the host language links the one environment file that host reads under [REQ-1331](../specification/project.md#req-1331). Every path an environment file declares resolves relative to that file under the admitted resource policy. A specification cannot select, replace or override the project or its environments. No adjacent environment or language subdirectory is discovered implicitly.
 
 <a id="req-0664"></a>
 
-**REQ-0664.** The environment is independently admitted against `schema_environment.yaml`. `schema_version` selects the schema bundle. There is no environment content version. Missing, unreadable or invalid supplied metadata fails before activation or study reads.
+**REQ-0664.** An environment file is independently admitted against `schema_environment.yaml`. `schema_version` selects the schema bundle. There is no environment content version. A missing, unreadable or invalid project file, linked environment file or declared metadata resource fails before activation or study reads.
 
 ### Installed runtime
 
 <a id="req-0665"></a>
 
-**REQ-0665.** `language` is exactly `r` or `python` and applies to every function definition. It is required when `functions` is present. Parallel bindings and per-function language choices are invalid.
+**REQ-0665.** The `environments` key that links an environment file, exactly `python` or `r`, states the language of that file and applies to every function definition it declares. An environment file has no language field of its own. Parallel bindings and per-function language choices are invalid.
 
 <a id="req-0666"></a>
 
@@ -40,7 +40,7 @@ status: normative
 
 <a id="req-0667"></a>
 
-**REQ-0667.** Static checking rejects a host-language mismatch or a lock format incompatible with `language`, without importing project code or reading study data. On each build that calls a function with a declared lock, before any study read, the host verifies the installed version of yamaa and every called function package against the captured lock. Standard-library/base-package functions are exempt. This is a called-package check; a full environment audit belongs to uv or renv.
+**REQ-0667.** Static checking rejects a lock format incompatible with the language the linking `environments` key states, without importing project code or reading study data. On each build that calls a function with a declared lock, before any study read, the host verifies the installed version of yamaa and every called function package against the captured lock. Standard-library/base-package functions are exempt. This is a called-package check; a full environment audit belongs to uv or renv.
 
 ### Function definitions
 
@@ -219,13 +219,14 @@ differences.
 
 <a id="req-1080"></a>
 
-**REQ-1080.** The `environment_class` fields have these meanings: `schema_version` selects the schema; `language`, `lock`, and `functions` declare installed code; `codelists` supplies study terminology; `study` and `sdtm`, `adam`, `send` carry submission metadata for [Define-XML](../submission/define-xml.md). A submission section requires `study`. Domain builds do not open submission document links or generate a Define-XML artifact. Each submission section may declare a nonempty `source_system_version` string. Its value overrides source-system version metadata in both Define-XML and Dataset-JSON; omission selects the actual installed yamaa version. Qualification retains the actual generator version separately from this metadata override.
+**REQ-1080.** The `environment_class` fields have these meanings: `schema_version` selects the schema, and `lock` and `functions` declare installed code. The language comes from the [project](../specification/project.md#req-1331) `environments` key that links the file. Study terminology and submission metadata belong to the project file, not to an environment file.
 
-The `lock` and external function/codelist declarations are local resource paths
-under [Resource resolution](../storage/resources.md). Relative spellings start
-at the environment file that declares them. Absolute local paths and parent
-segments have the same meaning as domain resource paths; an absent file fails
-at that location without configuration discovery or fallback search.
+The `lock` and external function declarations are local resource paths under
+[Resource resolution](../storage/resources.md). Relative spellings start at the
+environment file that declares them, not at the project file that links it,
+under [REQ-1333](../specification/project.md#req-1333). Absolute local paths
+and parent segments have the same meaning as domain resource paths; an absent
+file fails at that location without configuration discovery or fallback search.
 
 
 
@@ -236,7 +237,7 @@ at that location without configuration discovery or fallback search.
 
 <a id="req-1085"></a>
 
-**REQ-1085.** `expressions.function.name` selects a logical function from the supplied environment; `args` supplies its named argument leaves. The result is one scalar for one logical row under the shared invocation lifecycle.
+**REQ-1085.** `expressions.function.name` selects a logical function from the environment the project links for the host language; `args` supplies its named argument leaves. The result is one scalar for one logical row under the shared invocation lifecycle.
 
 <a id="req-1086"></a>
 
@@ -256,16 +257,11 @@ binding, or result requirements: fail under [Project functions](functions.md).
 
 <a id="req-0694"></a>
 
-**REQ-0694.** A supplied environment that cannot be read: `project_environment_missing`. A call without an implementation environment cannot execute.
+**REQ-0694.** A supplied project file that cannot be read: `project_environment_missing`. A call to a project function when the supplied project links no environment for the host language cannot execute: `project_environment_missing`, reported at each call with the host language. A call when no project is supplied names no declared function under [REQ-0698](functions.md#req-0698).
 
 <a id="req-0695"></a>
 
-**REQ-0695.** An invalid environment, definition, test or duplicate logical declaration: `project_environment_invalid`. Static checking returns every independently inferable finding before activation. A missing or invalid declared metadata resource reports its written path, declaring environment field and concrete cause. Invalid YAML retains its line, column and parser reason.
-
-<a id="req-0696"></a>
-
-**REQ-0696.** Unsupported or mismatched runner
-language: `runner_language_mismatch`.
+**REQ-0695.** An invalid project file, environment file, definition, test or duplicate logical declaration: `project_environment_invalid`. Static checking returns every independently inferable finding before activation. A missing or invalid declared metadata resource, including the environment file a project links, reports its written path, declaring field and concrete cause. Invalid YAML retains its line, column and parser reason.
 
 <a id="req-0697"></a>
 
