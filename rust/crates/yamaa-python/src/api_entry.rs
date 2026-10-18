@@ -100,13 +100,36 @@ pub fn _spec_check(py: Python<'_>, specification: &str, project: Option<&str>) -
     ArrowTable::from(&engine(py).spec_check(specification, project, &token))
 }
 
+/// The compiled plans one lazy specification or project object keeps between
+/// its runs (#2821); see `yamaa::Plans`.
+#[pyclass(frozen, module = "yamaa._native", name = "_Plans")]
+pub struct Plans {
+    inner: yamaa::Plans,
+}
+
+/// An empty holder for one lazy object. Creating it reads nothing.
 #[pyfunction]
-#[pyo3(signature=(specification, project=None))]
-pub fn _spec_run(py: Python<'_>, specification: &str, project: Option<&str>) -> PyResult<Run> {
+pub fn _plans() -> Plans {
+    Plans {
+        inner: yamaa::Plans::new(),
+    }
+}
+
+#[pyfunction]
+#[pyo3(signature=(specification, project=None, plans=None))]
+pub fn _spec_run(
+    py: Python<'_>,
+    specification: &str,
+    project: Option<&str>,
+    plans: Option<PyRef<'_, Plans>>,
+) -> PyResult<Run> {
     let token = CancellationToken::new();
-    let run = engine(py)
-        .spec_run(specification, project, &token)
-        .map_err(|error| raise_error(py, "cannot run the specification", error))?;
+    let engine = engine(py);
+    let run = match plans.as_deref() {
+        Some(plans) => engine.spec_run_reusing(specification, project, &plans.inner, &token),
+        None => engine.spec_run(specification, project, &token),
+    }
+    .map_err(|error| raise_error(py, "cannot run the specification", error))?;
     let run = Run::new(run);
     run.propagate_interrupt(py)?;
     Ok(run)
@@ -234,11 +257,20 @@ pub fn _project_check(py: Python<'_>, project: &str) -> ArrowTable {
 }
 
 #[pyfunction]
-#[pyo3(signature=(project, section=None))]
-pub fn _project_run(py: Python<'_>, project: &str, section: Option<&str>) -> PyResult<ProjectRun> {
-    let runs = engine(py)
-        .project_run(project, section, &CancellationToken::new())
-        .map_err(|error| raise_error(py, "cannot run the project", error))?;
+#[pyo3(signature=(project, section=None, plans=None))]
+pub fn _project_run(
+    py: Python<'_>,
+    project: &str,
+    section: Option<&str>,
+    plans: Option<PyRef<'_, Plans>>,
+) -> PyResult<ProjectRun> {
+    let token = CancellationToken::new();
+    let engine = engine(py);
+    let runs = match plans.as_deref() {
+        Some(plans) => engine.project_run_reusing(project, section, &plans.inner, &token),
+        None => engine.project_run(project, section, &token),
+    }
+    .map_err(|error| raise_error(py, "cannot run the project", error))?;
     // A project interrupt in any specification fails the call with its own
     // object, as a single run does.
     for name in runs.names() {
