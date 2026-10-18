@@ -1889,7 +1889,10 @@ fn discriminators(check: &Check) -> Vec<usize> {
         Check::Inventory {
             scope: Some(scope), ..
         } => vec![scope.discriminator],
-        Check::Mandatory(Some(scope)) => vec![scope.discriminator],
+        Check::Mandatory(Some(scope))
+        | Check::DataType {
+            scope: Some(scope), ..
+        } => vec![scope.discriminator],
         _ => Vec::new(),
     }
 }
@@ -1898,6 +1901,7 @@ fn check_family(check: &Check) -> CheckFamily {
     match check {
         Check::NotMissing => CheckFamily::NotMissing,
         Check::Mandatory(_) => CheckFamily::Mandatory,
+        Check::DataType { .. } => CheckFamily::DataType,
         Check::AllowedValues(_) => CheckFamily::AllowedValues,
         Check::Codelist { .. } => CheckFamily::Codelist,
         Check::ValueCodelists { .. } => CheckFamily::ValueCodelists,

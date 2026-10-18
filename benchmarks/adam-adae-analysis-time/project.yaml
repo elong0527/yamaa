@@ -1,4 +1,4 @@
-# Fixed creation time is supplied by the Define call in benchmark.yaml.
+# Fixed creation time is supplied by the submission call in benchmark.yaml.
 schema_version: '1.0'
 study:
   id: CATH
@@ -13,6 +13,6 @@ adam:
   specs:
   - spec.yaml
   define: define.xml
-  transport: dataset_json
+  datasets: json
   context: Submission
   source_system_version: '1.0'

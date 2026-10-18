@@ -324,11 +324,11 @@ mod transport {
         };
         let case = benchmarks().join("adam-adae-analysis-time");
         let temp = stage(&case);
-        let environment = temp.0.join("environment.yaml");
-        let text = fs::read_to_string(&environment)
+        let project = temp.0.join("project.yaml");
+        let text = fs::read_to_string(&project)
             .unwrap()
-            .replace("transport: dataset_json", "transport: xpt");
-        fs::write(&environment, text).unwrap();
+            .replace("datasets: json", "datasets: xpt");
+        fs::write(&project, text).unwrap();
         let mut result = run(&case, &temp);
         assert!(result.issues().is_empty(), "{:?}", result.issues());
         assert!(result.save().unwrap());

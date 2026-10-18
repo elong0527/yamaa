@@ -247,6 +247,7 @@ mod project {
                 let path = study.0.join("spec.yaml");
                 let path = path.to_str().unwrap();
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: path,
                         environment: None,
@@ -255,7 +256,7 @@ mod project {
                 )
                 .unwrap()
             }
-            const SPEC: &str = "schema_version: '1.0'\ndomain: LB\nkeys: [ID, LBTESTCD]\ninput: {SRC: input.csv}\noutput: {path: output.csv, verification_log: checks.csv, columns: [ID, LBTESTCD, LBDTC, LBORRES]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: LBTESTCD, type: str}\n  - {name: LBDTC, type: str, derivation: SRC.DTC, submission: {data_type: DTC_TYPE, origin: {type: Collected}}}\n  - {name: LBORRES, type: str, derivation: SRC.RES, submission: {length: 20, origin: {type: Collected}}}\nrows:\n  - id: glucose\n    derivations: {LBTESTCD: {literal: GLUC}}\n  - id: onset\n    derivations: {LBTESTCD: {literal: ONSET}}\n    submission: {LBORRES: {data_type: date}}\n";
+            const SPEC: &str = "schema_version: '1.0'\ndomain: LB\nkeys: [ID, LBTESTCD]\ninput: {SRC: input.csv}\noutput: {path: output.csv, report: checks.csv, columns: [ID, LBTESTCD, LBDTC, LBORRES]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: LBTESTCD, type: str}\n  - {name: LBDTC, type: str, derivation: SRC.DTC, submission: {data_type: DTC_TYPE, origin: {type: Collected}}}\n  - {name: LBORRES, type: str, derivation: SRC.RES, submission: {length: 20, origin: {type: Collected}}}\nrows:\n  - id: glucose\n    derivations: {LBTESTCD: {literal: GLUC}}\n  - id: onset\n    derivations: {LBTESTCD: {literal: ONSET}}\n    submission: {LBORRES: {data_type: date}}\n";
             let study = Study::new();
             // The column's type checks every row: a space is not ISO 8601.
             let run = domain(
@@ -278,13 +279,13 @@ mod project {
                 issue.context,
                 yamaa_adapters::json!({"column": "LBDTC", "data_type": "partialDatetime", "failure_count": 2, "keys": [{"ID": 2, "LBTESTCD": "GLUC"}, {"ID": 2, "LBTESTCD": "ONSET"}]})
             );
-            // The verification log records the check as `data_type` (CHECK-21).
+            // The run report names the check `data_type` (CHECK-24).
             let mut run = run;
             assert!(run.save().is_err());
             let checks = fs::read_to_string(study.0.join("checks.csv")).unwrap();
             assert!(
                 checks.contains(
-                    "columns.LBDTC.submission.data_type,,data_type,LBDTC,SUB-26,error,violated,data_type_failed,4,2,"
+                    "output.csv,check,columns.LBDTC.submission.data_type,data_type,,LBDTC,SUB-26,error,violated,data_type_failed,2,4,"
                 ),
                 "{checks}"
             );
@@ -321,11 +322,29 @@ mod project {
             );
             let checks = fs::read_to_string(study.0.join("checks.csv")).unwrap();
             for row in [
-                "columns.LBDTC.submission.data_type,,data_type,LBDTC,SUB-26,error,held,,4,0,{}",
-                "rows.onset.submission.LBORRES.data_type,,data_type,LBORRES,SUB-26,error,held,,2,0,{}",
+                "output.csv,check,columns.LBDTC.submission.data_type,data_type,,LBDTC,SUB-26,error,held,,0,4,,{}\n",
+                "output.csv,check,rows.onset.submission.LBORRES.data_type,data_type,,LBORRES,SUB-26,error,held,,0,2,,{}\n",
             ] {
                 assert!(checks.contains(row), "{row}\n{checks}");
             }
+            // A value-level type selects its rows by comparing test codes, so
+            // the test code must be text (REQ-1164).
+            let issues = study.check(
+                &SPEC
+                    .replace("DTC_TYPE", "partialDatetime")
+                    .replace("{name: LBTESTCD, type: str}", "{name: LBTESTCD, type: int}")
+                    .replace("{literal: GLUC}", "{literal: '1'}")
+                    .replace("{literal: ONSET}", "{literal: '2'}"),
+            );
+            assert_eq!(issues.len(), 1, "{issues:?}");
+            assert_eq!(
+                (
+                    issues[0].condition.as_str(),
+                    issues[0].requirement.as_deref()
+                ),
+                ("value_metadata_requires_literal_testcd", Some("REQ-1164"))
+            );
+            assert_eq!(issues[0].spec_paths, ["rows.onset.submission"]);
         }
 
         /// SUB-27: a dataset of a tabulation class carries no `datetime`

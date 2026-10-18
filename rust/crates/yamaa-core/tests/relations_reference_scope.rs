@@ -2888,6 +2888,12 @@ mod relations {
                     Some("REQ-1301"),
                 ),
                 (
+                    "columns.S.derivation.dtc.invalid",
+                    "invalid",
+                    Some("S"),
+                    Some("TIME-19"),
+                ),
+                (
                     "columns.N.derivation.unconvertible",
                     "unconvertible",
                     Some("N"),

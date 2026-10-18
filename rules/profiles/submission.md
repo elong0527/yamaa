@@ -268,7 +268,7 @@ Define-XML data types name, so `datetime` is complete through the second, as
 collected to the minute is a `partialDatetime`. A partial or incomplete form
 may stop after any field. `text` and `URI` have no form to check.
 
-The verification log records the check as a `data_type` check at
+The run report records the check as a `data_type` check row at
 `columns.<column>.submission.data_type`, or at
 `rows.<row>.submission.<column>.data_type` for a value-level entry, and its
 failure reports `data_type_failed` with the column, the declared data type,
