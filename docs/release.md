@@ -15,8 +15,10 @@ open gates live in GitHub issues and pull requests, not here.
   CRAN and r-universe are later work.
 
 `.github/workflows/native.yml` builds, installs and tests every supported
-combination every two hours on main and on manual dispatch. A release is cut
-from a commit whose complete native run passed.
+combination on manual dispatch. A release is cut from a commit whose complete
+native run passed. Development PRs do not run the release lanes, so before a
+release also dispatch R-CMD-check, Optional format features and Dependency
+graphs on the candidate, and CI for its minimum saved artifact readers.
 
 Python, R and Cargo versions move together;
 `tools.packaging.check_shared_release_versions` checks that they agree. The
@@ -89,7 +91,7 @@ for floating-point columns needs Polars 1.43.2. R uses R 4.6.1 and the shared
 Rust graph; its host qualification readers are the `Suggests` dependencies in
 `R/yamaa/DESCRIPTION`.
 
-The continuous [dependency graph lanes](https://github.com/elong0527/yamaa/blob/main/CONTRIBUTING.md#ci-and-release-qualification)
+The [dependency graph lanes](https://github.com/elong0527/yamaa/blob/main/CONTRIBUTING.md#ci-and-release-qualification)
 test declared direct minima and newest compatible selections on Linux with
 CPython 3.12 and 3.14 and R 4.6.1. Cargo transitive dependencies use the newest
 MSRV-compatible resolution in both lanes; local patches and exact pins are

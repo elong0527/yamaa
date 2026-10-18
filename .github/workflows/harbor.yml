@@ -1,11 +1,8 @@
 name: Harbor
 
-# Runs every six hours on main rather than after every merge, which cancelled
-# nearly every oracle run before it finished.
+# Agent evaluation, not a development check: it runs on dispatch.
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '7 */6 * * *'
 
 permissions:
   contents: read
