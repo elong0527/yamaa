@@ -100,6 +100,10 @@ impl Dataset {
     pub fn rows(&self) -> &[Vec<Value>] {
         &self.rows
     }
+    /// Complete owned rows in their final order.
+    pub(crate) fn from_rows(schema: TableSchema, rows: Vec<Vec<Value>>) -> Self {
+        Self { schema, rows }
+    }
 }
 
 impl TableAccess for Dataset {
@@ -699,7 +703,37 @@ fn finish<E>(
 impl DatasetPlan {
     /// Execute the admitted sources and explicit function port once, retaining
     /// handler and verification evidence on both success and failure.
+    #[cfg(not(feature = "executor-comparison"))]
     pub fn execute<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionPort<Error = T::Error>,
+        observer: Option<&mut dyn FnMut(ExecutionEvent)>,
+    ) -> ExecutionAttempt<T::Error> {
+        self.execute_rows(table, secondary, functions, observer)
+    }
+
+    /// Execute as above, or with the executor the test-only selector names:
+    /// both executors compared, or the one over the resolved plan alone.
+    #[cfg(feature = "executor-comparison")]
+    pub fn execute<T: TableAccess + ?Sized>(
+        &self,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionPort<Error = T::Error>,
+        observer: Option<&mut dyn FnMut(ExecutionEvent)>,
+    ) -> ExecutionAttempt<T::Error> {
+        use super::columnar::compare::{self, Selected};
+        match compare::selected() {
+            Selected::Compare => compare::compare(self, table, secondary, functions, observer),
+            Selected::Resolved => compare::resolved(self, table, secondary, functions, observer),
+            Selected::Rows => self.execute_rows(table, secondary, functions, observer),
+        }
+    }
+
+    /// The row-at-a-time executor.
+    pub(crate) fn execute_rows<T: TableAccess + ?Sized>(
         &self,
         table: &T,
         secondary: &[&dyn TableAccess<Error = T::Error>],

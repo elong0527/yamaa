@@ -13,6 +13,13 @@ installs both outside it, and runs on those installs:
 - the installed Python suites and `R CMD check`, which carry the cross-host
   diagnostic parity truth and the host-fixture families.
 
+First, until #2843 swaps in the executor over the resolved plan, it runs the
+`yamaa-adapters` and `yamaa` test suites with the test-only executor
+selector set to `compare`: every plan those suites execute, the whole
+benchmark corpus included, runs on both executors, and the two attempts must
+be equal (output, diagnostics, handler counts in order, retained check
+records, callback order and observer events; Q7 of #2840).
+
 Building fresh means the gate never judges a stale development extension.
 """
 
@@ -28,7 +35,7 @@ from tools.commands import r_tests
 from tools.commands.check_r import check
 from tools.commands.python_tests import run_installed_suites
 from tools.conformance import public_conformance
-from tools.paths import ROOT
+from tools.paths import ROOT, WORKSPACE
 
 FIXTURES = ROOT / "benchmarks"
 
@@ -159,6 +166,27 @@ def r_conformance(work, environment, plan, revision):
     return compare(work)
 
 
+def compare_executors():
+    """Run the suites that execute specifications on both executors; a
+    differing attempt aborts the test process with both attempts printed."""
+    subprocess.run(
+        [
+            "cargo",
+            "test",
+            "--locked",
+            "-p",
+            "yamaa-adapters",
+            "-p",
+            "yamaa",
+            "--features",
+            "yamaa-core/executor-comparison",
+        ],
+        cwd=WORKSPACE,
+        env=os.environ | {"YAMAA_EXECUTOR": "compare"},
+        check=True,
+    )
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--uv", default="uv")
@@ -166,6 +194,7 @@ def main(argv=None):
     revision = subprocess.check_output(
         ["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True
     ).strip()
+    compare_executors()
     with tempfile.TemporaryDirectory(prefix="yamaa-equivalence-") as directory:
         work = Path(directory)
         plan = work / "plan"
