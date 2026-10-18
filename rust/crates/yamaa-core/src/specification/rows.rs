@@ -41,6 +41,26 @@ struct RowDeclaration {
     path: String,
     operation: RowOperation,
 }
+impl RowDeclaration {
+    /// Whether a qualified aggregate occurs anywhere in this declaration.
+    fn aggregates(&self) -> bool {
+        fn nested(operation: &Operation) -> bool {
+            match operation {
+                Operation::Aggregate(_) => true,
+                Operation::Case(branches) => {
+                    branches.iter().any(|branch| nested(&branch.operation))
+                }
+                Operation::Scalar(operation) => matches!(
+                    operation.as_ref(),
+                    scalar::Declaration::Concat { sources, .. }
+                        if sources.iter().any(|source| nested(&source.operation))
+                ),
+                _ => false,
+            }
+        }
+        matches!(&self.operation, RowOperation::Shared(branch) if nested(&branch.operation))
+    }
+}
 /// One lowered declaration, shared immutably across templates by node.
 ///
 /// The payload (operation, literal values, predicate arenas and compiled
@@ -1752,6 +1772,7 @@ impl Rows {
         }
         validate_row_phases(&templates, project, output)?;
         let mut lowered_columns = Vec::new();
+        let mut unaddressable = Vec::new();
         for (column, &id) in columns.iter().enumerate() {
             let prefix = format!("columns.{}", output.columns()[column].name);
             // Third state: a default that is row-phase for some templates
@@ -1779,7 +1800,7 @@ impl Rows {
                         intermediates,
                     )?;
                 }
-                lowered_columns.push(lower_shared(
+                let declaration = lower_shared(
                     &mut lowered,
                     d,
                     derivation,
@@ -1789,8 +1810,38 @@ impl Rows {
                     extraction,
                     string_templates,
                     intermediates,
-                )?);
+                )?;
+                // Binding uses the driver the needing templates share; a
+                // named intermediate's unaddressable record is refused here.
+                let mut needing = templates
+                    .iter()
+                    .zip(&selected)
+                    .filter(|(_, selected)| !selected.contains(&column))
+                    .map(|(template, _)| template.driver.as_str());
+                if let Some(shared) = needing.next() {
+                    if intermediates.contains(shared)
+                        && needing.all(|other| other == shared)
+                        && row_drivers::unaddressable(
+                            d,
+                            derivation,
+                            shared,
+                            driver,
+                            declaration.aggregates(),
+                            project,
+                            string_templates,
+                        )?
+                    {
+                        unaddressable.push(UnsupportedFeature {
+                            operation: "intermediate_driver_column_read".into(),
+                            path: declaration.path.clone(),
+                        });
+                    }
+                }
+                lowered_columns.push(declaration);
             }
+        }
+        if !unaddressable.is_empty() {
+            return Err(PrepareError::Unsupported(unaddressable));
         }
         Ok(Self {
             templates,
@@ -1831,8 +1882,7 @@ impl Rows {
         intermediates: Vec<Option<crate::dataset::Intermediate>>,
         mut findings: Vec<BindFinding>,
     ) -> Result<DatasetPlan, BindError> {
-        let mut catalog =
-            row_drivers::joined_catalog(output, source, name, keys, &secondary, name)?;
+        let mut catalog = row_drivers::joined_catalog(output, source, name, keys, &secondary)?;
         if self
             .templates
             .iter()
@@ -1892,20 +1942,65 @@ impl Rows {
                 .map(|template| template.driver.as_str())
                 .collect();
             let column_catalog;
-            let catalog_ref = if needing.is_empty() {
-                &catalog
+            let (catalog_ref, column_source, column_driver) = if needing.is_empty() {
+                (&catalog, source, name)
             } else if needing.iter().all(|driver| *driver == needing[0]) {
-                column_catalog = row_drivers::joined_catalog(
-                    output, source, name, keys, &secondary, needing[0],
+                // A driver intermediate that failed to bind has reported its
+                // findings and its templates were skipped; so is this column.
+                if !findings.is_empty()
+                    && named
+                        .reference(&format!("{}.driver", needing[0]))
+                        .is_some_and(|(index, _)| {
+                            intermediates.get(index).is_some_and(Option::is_none)
+                        })
+                {
+                    dependencies[declaration.column] = Some(Vec::new());
+                    continue;
+                }
+                // Resolve the driver as its row template does: an input's
+                // stored schema or the intermediate's visible fields.
+                let (_, driver_source, named_driver) = row_drivers::select(
+                    source,
+                    name,
+                    &secondary,
+                    needing[0],
+                    named,
+                    &intermediates,
                 )?;
-                &column_catalog
+                column_catalog = row_drivers::extend_catalog(
+                    row_drivers::catalog_visible(
+                        output,
+                        driver_source,
+                        needing[0],
+                        named_driver.and_then(|index| intermediates[index].as_ref()),
+                    )?,
+                    source,
+                    name,
+                    keys,
+                    &secondary,
+                    needing[0],
+                )?;
+                match named_driver {
+                    // A qualified aggregate reduces a declared input through
+                    // the primary port (REQ-0467), so its column keeps the
+                    // whole-dataset scope. Preparation has refused that
+                    // column's reads of the intermediate.
+                    Some(_) if declaration.aggregates() => (&catalog, source, name),
+                    // The intermediate's qualifier reads the record that
+                    // built the row (REQ-0111), as in its row template;
+                    // preparation has refused the reads this phase cannot
+                    // address.
+                    Some(_) => (&column_catalog, driver_source, needing[0]),
+                    // An input driver keeps the primary's scope.
+                    None => (&column_catalog, source, name),
+                }
             } else {
-                &catalog
+                (&catalog, source, name)
             };
             let mut edges = Vec::new();
             if let Some(mut value) = bind_assignment(
-                source,
-                name,
+                column_source,
+                column_driver,
                 catalog_ref,
                 declaration,
                 Phase::Column {
