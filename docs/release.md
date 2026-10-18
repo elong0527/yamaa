@@ -173,8 +173,8 @@ components are tracked by hand:
   `yamaa-saphyr-parser`, a path dependency in `rust/vendor/saphyr-parser`.
   #2583 replaces it with a published release.
 - The ReadStat 1.1.9 SAS reader subset in
-  `rust/crates/yamaa-adapters/vendor/readstat`. #2927 tracks the upstream
-  fixes since 1.1.9.
+  `rust/crates/yamaa-adapters/vendor/readstat`, with the later upstream fixes
+  that its README lists through the review baseline it records.
 - zstd 1.5.7, the C library that `zstd-sys` bundles into the engine.
 - libxml2 and libxslt, bundled in the `lxml` wheels. The lxml 6.1.3 Windows
   wheels bundle libxml2 2.11.9, an end-of-life branch that lxml describes as
@@ -192,7 +192,14 @@ Before pushing the release tag, confirm on the final commit:
 4. Every [component outside the advisory scanners](#components-outside-the-advisory-scanners)
    was compared with its upstream releases and security advisories since the
    previous release, and each fix that applies is taken or has an issue.
-5. A [release rehearsal](#publication) passed against a native run of that
+5. The vendored ReadStat was compared with upstream `dev` commit by commit.
+   Each commit after the review baseline that its
+   [README](../rust/crates/yamaa-adapters/vendor/readstat/README.md#upstream-changes-after-119)
+   records, and that changes a vendored file, is ported or listed there as not
+   ported with its reason, and the README records the new baseline. In a
+   ReadStat checkout, `git log <baseline>..origin/dev -- <vendored files>`
+   lists them, with each vendored file named by its path under `src/`.
+6. A [release rehearsal](#publication) passed against a native run of that
    commit; the tag names that run.
 
 Record the outcome on the release's planning issue.
@@ -388,9 +395,10 @@ owns decoding behavior.
   release.
 - Distribute 0.4.0 as GitHub release assets only; `release.yml` has no PyPI
   step.
-- Refuse a SAS7BDAT dataset that holds records deleted in place as
-  `source_sas_invalid` with cause `deleted_records`. Reading only its live
-  records is 0.5.0 work (#2924).
+- Read only the live records of a SAS7BDAT dataset that holds records
+  deleted in place, and refuse it as `source_sas_invalid` with cause
+  `deleted_records` when its count of deleted records and the records marked
+  deleted disagree (#2924, #2927).
 - A qualified `between.value`, in a named intermediate or an aggregate, reads
   the record of the input that drives the row. Any other input fails
   validation as `unknown_field`; it is never read through the implicit join
@@ -510,7 +518,7 @@ Make the 0.4.0 changes above as well as these:
 | `datetime_precision` of minute text (`2025-03-04T08:30`) is `S`; `datetime_impute` with `time: last` gives `08:30:00`; hour text (`T08`) is invalid | `precision` with `type: datetime` gives `minute`, `impute` with `type: datetime`, `minimum_source_precision: day` and `time: last` gives `08:30:59`, and hour text is accepted (`hour`). A condition that tested `= 'S'` for a collected time tests `IN ('minute', 'second')`; a condition meaning "a time was collected" tests `IN ('hour', 'minute', 'second')` ([TIME-7](../rules/temporal.md#time-7)). |
 | Lock pins an earlier yamaa | Regenerate the project lock for the installed yamaa before using project functions; each applicable build checks the runtime version. |
 | A `between.value` qualified by an input that does not drive the row reads a wrong value with no message | It fails validation as `unknown_field`. Derive the value into a column, for example `AGE` from `DM.AGE`, and name that column. |
-| A `.sas7bdat` input that holds records deleted in place returns them as rows | It fails as `source_sas_invalid` with cause `deleted_records`. Rewrite the dataset first, for example with `PROC COPY`. |
+| A `.sas7bdat` input that holds records deleted in place returns them as rows | Only its live records are read. It fails as `source_sas_invalid` with cause `deleted_records` when its count of deleted records and the records marked deleted disagree; rewrite such a dataset first, for example with `PROC COPY`. |
 
 ### From 0.2.0 and earlier
 

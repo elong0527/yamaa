@@ -1558,6 +1558,164 @@
           "20636166e90000000000000000000000"
         ]
       }
+    },
+    {
+      "id": "deleted-rows-flag-over-zero-bitmap",
+      "file": "datetime.sas7bdat",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "datetime.sas7bdat",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD"
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "VAR1",
+            "type": "float",
+            "label": "VAR1",
+            "derivation": "SRC.VAR1"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "VAR1"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "VAR1",
+          "type": "float"
+        }
+      ],
+      "rows": [
+        [
+          "1",
+          1738507332.0
+        ],
+        [
+          "2",
+          1704190463.0
+        ],
+        [
+          "3",
+          1736921722.0
+        ],
+        [
+          "4",
+          -356840880.0
+        ]
+      ],
+      "csv": "RECORD,VAR1\n1,1738507332.00\n2,1704190463.00\n3,1736921722.00\n4,-356840880.00\n",
+      "mutation": {
+        "set_byte": [
+          1040,
+          128
+        ]
+      }
+    },
+    {
+      "id": "deleted-record-skipped",
+      "file": "datetime.sas7bdat",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "datetime.sas7bdat",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD"
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "VAR1",
+            "type": "float",
+            "label": "VAR1",
+            "derivation": "SRC.VAR1"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "VAR1"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "VAR1",
+          "type": "float"
+        }
+      ],
+      "rows": [
+        [
+          "1",
+          1738507332.0
+        ],
+        [
+          "2",
+          1736921722.0
+        ],
+        [
+          "3",
+          -356840880.0
+        ]
+      ],
+      "csv": "RECORD,VAR1\n1,1738507332.00\n2,1736921722.00\n3,-356840880.00\n",
+      "mutation": {
+        "set_bytes": [
+          [
+            1040,
+            128
+          ],
+          [
+            4668,
+            1
+          ],
+          [
+            3764,
+            64
+          ]
+        ]
+      }
     }
   ],
   "refusals": [
@@ -2831,74 +2989,6 @@
         "set_byte": [
           118170,
           184
-        ]
-      }
-    },
-    {
-      "id": "deleted-records-page-flag",
-      "file": "datetime.sas7bdat",
-      "specification": {
-        "schema_version": "1.0",
-        "domain": "TEST",
-        "base": "SRC",
-        "keys": [
-          "RECORD"
-        ],
-        "input": {
-          "SRC": {
-            "path": "datetime.sas7bdat",
-            "encoding": "windows-1252",
-            "ordinal": "RECORD"
-          }
-        },
-        "columns": [
-          {
-            "name": "RECORD",
-            "type": "int",
-            "label": "RECORD",
-            "derivation": "SRC.RECORD"
-          },
-          {
-            "name": "VAR1",
-            "type": "float",
-            "label": "VAR1",
-            "derivation": "SRC.VAR1"
-          }
-        ],
-        "output": {
-          "path": "result.csv",
-          "columns": [
-            "RECORD",
-            "VAR1"
-          ],
-          "decimals": 2
-        }
-      },
-      "fields": [
-        {
-          "name": "RECORD",
-          "type": "int"
-        },
-        {
-          "name": "VAR1",
-          "type": "float"
-        }
-      ],
-      "condition": "source_sas_invalid",
-      "phase": "ingest",
-      "context_fields": {
-        "dataset": "SRC",
-        "path": "datetime.sas7bdat",
-        "cause": "deleted_records",
-        "hint": "rewrite the SAS dataset first, for example with PROC COPY or a DATA step, to remove the records deleted in place"
-      },
-      "spec_paths": [
-        "input.SRC.path"
-      ],
-      "mutation": {
-        "set_byte": [
-          1040,
-          128
         ]
       }
     },
