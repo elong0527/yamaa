@@ -64,7 +64,7 @@ impl JoinedRead {
                     .get(key.output_column)
                     .ok_or(PlanError::InvalidLookup)?
             };
-            if !crate::key_relation::comparable(field.kind.into(), current.kind.into())
+            if !crate::result_type::ResultType::from(field.kind).comparable(current.kind.into())
                 || self.keys[..index]
                     .iter()
                     .any(|prior| prior.source_column == key.source_column)

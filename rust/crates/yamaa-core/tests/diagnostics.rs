@@ -521,6 +521,7 @@ mod diagnostics {
             reached.extend(csv::typing_reached());
             reached.extend(parquet::reached());
             reached.extend(sas::reached());
+            reached.extend(result_types::reached());
             let check = yamaa_core::dataset::Check::Codelist {
                 id: "SEX".into(),
                 values: vec![Value::Str("F".into())],

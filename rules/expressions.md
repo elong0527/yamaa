@@ -1,10 +1,10 @@
 # Expressions
 
 A derivation computes its value with one expression from a closed registry.
-These rules define the registry and dispatch, and the expressions that copy,
-select and classify values. [Formulas](formulas.md),
-[Lookup and joins](lookup.md), [Windows](windows.md) and the text, temporal
-and function operations define the rest.
+These rules define the registry and dispatch, each expression's result type,
+and the expressions that copy, select and classify values.
+[Formulas](formulas.md), [Lookup and joins](lookup.md), [Windows](windows.md)
+and the text, temporal and function operations define the rest.
 
 ## Registry and evaluation
 
@@ -80,6 +80,70 @@ A plain string is a value unless its schema field is typed `variable`,
 is a variable, while string, date and datetime literals use their explicit
 tagged leaf forms.
 
+<a id="expr-14"></a>
+
+### EXPR-14. Every expression has one declared result type function, and every context reads its type
+
+Each registered expression has one result type function, decided before any
+data is read: fixed by the expression, set by a declared parameter, or taken
+from the types of what it reads, as the table below gives. A selecting
+expression's type is the set of the types it can select; a computing
+expression's type is one type. Key matching, intermediate fields and drivers,
+derive bindings, range bounds, inferred keys, operand checks, extremes and
+column conversion all read that type.
+
+Evidence: `rust/crates/yamaa-core/src/specification/static_types/tests.rs::numeric_and_aggregate_result_types_follow_their_operands`, `rust/crates/yamaa-core/tests/relations_aggregate_compiler.rs::key_expressions_compare_by_their_one_result_type_before_matching`, `rust/crates/yamaa-core/tests/support/diagnostic/intermediate_scopes.rs`, `rust/crates/yamaa-adapters/tests/project_environment.rs::callback_derived_fields_expose_their_declared_result_type_to_row_drivers`, `rust/crates/yamaa-adapters/tests/intermediate_result_kinds.rs::nullif_over_an_int_and_a_float_is_refused_as_integer_days_when_bound`.
+
+| Expression | Class | Result type |
+| --- | --- | --- |
+| `str_pad`, `str_extract`, `str_replace`, `str_template`, `str_case` | fixed | `str` |
+| `cut`, `precision`, `imputation_flag`, `baseline_flag`, `odm` | fixed | `str` |
+| `row_number`, `rank`, `study_day`, `to_epoch_day` | fixed | `int` |
+| `round_half_away_from_zero`, `duration_value` | fixed | `float` |
+| `to_date` | fixed | `date` |
+| `diff` | by parameter | `int` with `type: date`; with `type: datetime`, `int` in `second` and `float` in `minute`, `hour` or `day` |
+| `impute`, `shift` | by parameter | the declared `type` |
+| `function` | by parameter | the result type its definition declares ([FUNC-9](profiles/functions.md#func-9)) |
+| `source`, `row_value`, `locf` | from inputs | the variable's type |
+| `literal` | from inputs | the scalar's type: `str`, `int`, `float` or `bool`; `{literal: null}` is always missing |
+| `first_available` | from inputs | the types its `sources` and `missing` can take |
+| `greatest`, `least` | from inputs | the types its `sources` can take |
+| `case` | from inputs | the types its `then` and `otherwise` values can take |
+| `mapping` | from inputs | the types its dictionary values can take |
+| `flag` | from inputs | the types its `true_value`, `false_value` and `missing` can take |
+| `compute` | from inputs | [VALUE-10](values.md#value-10) over its operands: `int` while every operator and operand keeps `int`, and `float` otherwise |
+| `aggregate` | from inputs | [FORMULA-23](formulas.md#formula-23) over its relation's fields and derive bindings |
+
+A variable's type is its column's declared type, a stored field's type under
+[INPUT-5](inputs.md#input-5), or an intermediate field's: a typed
+derivation's declared type and an untyped one's result type
+([LOOKUP-15](lookup.md#lookup-15)). An undeclared stored field may not exist
+until its schema is captured, so before capture, as `yamaa check` reads a
+specification, its type and every type taken from it are not yet known.
+
+The selecting expressions are `source`, `row_value`, `locf`, `literal`,
+`first_available`, `greatest`, `least`, `case`, `mapping` and `flag`. Each
+returns the value it selects unchanged, with that value's own type
+([EXPR-6](#expr-6)), so its type is the set of the types of its alternatives:
+one type when every alternative has it, and otherwise a type decided per value,
+such as `int` or `float` for a `case` between an `int` and a `float` column.
+`{literal: null}` adds no type, and local `missing`, `invalid`, `absent`,
+`unmapped` and `no_match` handlers take no part.
+
+Every other expression computes its result, and its type is one type. `NULLIF`
+is a `float` when either argument is a `float`, also when that argument is
+missing ([VALUE-10](values.md#value-10)), and `duration_value` is a `float` in
+every unit ([TIME-17](temporal.md#time-17)). Over an operand whose type is
+decided per value, a computing expression gives one result type for each type
+the operand can take.
+
+Key matching ([LOOKUP-6](lookup.md#lookup-6)) and column conversion
+([VALUE-24](values.md#value-24)) read the whole of a type decided per value
+and fail before data only when none of the types it can take compares or
+converts. Every other context reads one type and checks a type decided per
+value when each value is used; an intermediate drives rows only when every
+field it exposes has one column type ([ROW-2](rows.md#row-2)).
+
 ## Values and shorthand
 
 <a id="expr-4"></a>
@@ -94,8 +158,8 @@ Replaces: REQ-1093, REQ-1094.
 
 A dataset-qualified `source` reads through the implicit join, and a structured
 `source:` binding adds its filter, selection and absent value
-([LOOKUP-1](lookup.md#lookup-1)). Each keeps its type under
-[EXPR-6](#expr-6).
+([LOOKUP-1](lookup.md#lookup-1)). Each returns its variable's value under
+[EXPR-6](#expr-6), with the variable's type ([EXPR-14](#expr-14)).
 
 <a id="expr-5"></a>
 
@@ -133,14 +197,13 @@ would otherwise parse as a non-string.
 
 <a id="expr-6"></a>
 
-### EXPR-6. An expression that selects a value returns it with its type and collected precision
+### EXPR-6. An expression that selects a value returns it unchanged, with its collected precision
 
-`source` keeps its source type under [Inputs](inputs.md),
-and `literal` keeps its YAML scalar type after non-finite normalization.
-Mapping, conditional, coalescing and extreme expressions keep the selected
-value's type, including its collected precision when the selected value is
-temporal. Numeric computation follows [Formulas](formulas.md), and each text
-operation's result follows its own rule.
+`source` returns the value of its variable and `literal` its YAML scalar after
+non-finite normalization. Mapping, conditional, coalescing and extreme
+expressions return the value they select, never a converted one, and a
+selected temporal value keeps its collected precision. The result type each
+expression declares is [EXPR-14](#expr-14)'s.
 
 Evidence: `rust/crates/yamaa-core/tests/dataset_callbacks.rs::first_available_skips_unselected_reads_and_does_not_fallback_after_conversion`, `schema-expressions`.
 Replaces: REQ-0315.

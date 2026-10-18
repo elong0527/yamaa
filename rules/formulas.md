@@ -709,9 +709,9 @@ implementation-defined order. Their string order is that of
 
 No implicit conversion happens inside the grammar.
 [Values](values.md) converts the completed derivation
-result, as it does for every other expression. A `function` expression
-returns the type its logical contract declares under
-[Project functions](profiles/functions.md).
+result, as it does for every other expression. These types, over the declared
+types of the relation's fields and derive bindings, give `aggregate` its
+result type ([EXPR-14](expressions.md#expr-14)).
 
 <a id="formula-24"></a>
 

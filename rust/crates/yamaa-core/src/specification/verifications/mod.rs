@@ -100,7 +100,18 @@ fn predicate(
             },
         })
         .collect();
-    BoundPredicate::new_contextual(plan, bindings, Vec::new())
+    // An output column has its declared type; a lookup's field is typed when
+    // its schema is captured.
+    let typed = plan.typed(|name| {
+        crate::result_type::ResultType::declared(
+            output
+                .columns()
+                .iter()
+                .find(|column| column.name == name)
+                .map(|column| column.kind),
+        )
+    });
+    BoundPredicate::new_contextual(typed, bindings, Vec::new())
         .map(Ok)
         .map_err(|_| PrepareError::Internal)
 }

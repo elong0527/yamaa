@@ -172,16 +172,10 @@
           "condition": "conversion_failed",
           "context": {
             "from": "bool",
-            "keys": [
-              {
-                "ID": 1
-              }
-            ],
-            "to": "int",
-            "value": true
+            "to": "int"
           },
-          "phase": "convert",
-          "requirement": "REQ-0013",
+          "phase": "validation",
+          "requirement": "VALUE-24",
           "spec_paths": [
             "columns.VALUE"
           ]
@@ -198,16 +192,10 @@
               "condition": "conversion_failed",
               "context": {
                 "from": "bool",
-                "keys": [
-                  {
-                    "ID": 1
-                  }
-                ],
-                "to": "int",
-                "value": true
+                "to": "int"
               },
-              "phase": "convert",
-              "requirement": "REQ-0013",
+              "phase": "validation",
+              "requirement": "VALUE-24",
               "spec_paths": [
                 "columns.VALUE"
               ]

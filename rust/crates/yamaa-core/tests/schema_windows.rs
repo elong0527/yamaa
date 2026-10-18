@@ -823,7 +823,6 @@ mod schema {
                     N::Text("λ,\"quoted\"".into()),
                     Value::Str("λ,\"quoted\"".into()),
                 ),
-                (N::Boolean(true), Value::Bool(true)),
                 (N::Float(1.5), Value::float(1.5)),
                 (
                     N::Integer("9223372036854775807".into()),
@@ -841,6 +840,31 @@ mod schema {
                 assert_eq!(plan.output().columns()[1].kind, ColumnType::Int);
                 assert_eq!(plan.keys(), [0]);
             }
+            // A Boolean converts to no column type (VALUE-3), so its int column
+            // is refused before any record is read (VALUE-24).
+            let prepared =
+                PreparedSpecification::prepare(&literal_document(N::Boolean(true))).unwrap();
+            let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
+                panic!("a Boolean literal cannot fill an int column")
+            };
+            let diagnostics = findings
+                .iter()
+                .flat_map(|finding| finding.diagnostics(prepared.source()).unwrap())
+                .collect::<Vec<_>>();
+            assert_eq!(diagnostics, prepared.check_declaration_diagnostics());
+            assert_eq!(
+                diagnostics
+                    .iter()
+                    .map(|diagnostic| (
+                        diagnostic.definition().condition,
+                        diagnostic.spec_paths.as_slice()
+                    ))
+                    .collect::<Vec<_>>(),
+                [(
+                    "conversion_failed",
+                    ["columns.VALUE".to_string()].as_slice()
+                )]
+            );
         }
 
         #[test]

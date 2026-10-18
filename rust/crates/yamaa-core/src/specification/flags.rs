@@ -27,6 +27,24 @@ fn value_text(value: &str) -> V {
     V::String(value.into())
 }
 impl Declaration {
+    /// The admitted condition, if its text parses.
+    pub(super) fn condition(&self) -> Option<&CompiledExpression> {
+        self.condition.as_ref().ok()
+    }
+    /// EXPR-14: the types `true_value`, `false_value` and `missing` can take.
+    pub(super) fn result_type(&self) -> crate::result_type::ResultType {
+        use crate::result_type::ResultType;
+        [
+            Some(&self.true_value),
+            self.false_value.as_ref(),
+            self.missing.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        .fold(ResultType::MISSING, |kind, value| {
+            kind.or(ResultType::of_value(value))
+        })
+    }
     pub(super) fn has_findings(&self) -> bool {
         self.condition.is_err() || self.false_value.is_some() && self.missing.is_none()
     }
@@ -127,8 +145,10 @@ fn output_binding(
     edges.push(column);
     Ok(Some(FlagRead::Read(Read::Column(column))))
 }
+/// The bound flag over its condition as the site types it (EXPR-14).
 fn finish(
     operation: &Declaration,
+    typed: impl FnOnce(&CompiledExpression) -> CompiledExpression,
     bindings: Vec<FlagBinding>,
 ) -> Result<Option<Expression>, BindError> {
     let Ok(condition) = &operation.condition else {
@@ -138,7 +158,7 @@ fn finish(
         return Ok(None);
     }
     Flag::new(
-        condition.clone(),
+        typed(condition),
         bindings,
         operation.true_value.clone(),
         operation.false_value.clone(),
@@ -245,10 +265,26 @@ pub(super) fn bind(
             findings.push(unknown(condition.spec_path(), name));
         }
     }
+    if findings.len() == start {
+        static_types::predicate(
+            condition,
+            declarations,
+            catalog,
+            secondary,
+            intermediates,
+            findings,
+        )?;
+    }
     if findings.len() != start {
         Ok(None)
     } else {
-        finish(operation, bindings)
+        finish(
+            operation,
+            |condition| {
+                static_types::typed(condition, declarations, catalog, secondary, intermediates)
+            },
+            bindings,
+        )
     }
 }
 #[allow(clippy::too_many_arguments)]
@@ -369,9 +405,23 @@ pub(super) fn bind_row(
             });
         }
     }
+    if findings.len() == start {
+        findings.extend(
+            static_types::predicate_kinds(condition, |name| catalog.type_of(name).map(Into::into))
+                .into_iter()
+                .map(BindFinding::Predicate),
+        );
+    }
     if findings.len() != start {
         Ok(None)
     } else {
-        finish(operation, bindings)
+        finish(
+            operation,
+            |condition| {
+                condition
+                    .typed(|name| crate::result_type::ResultType::declared(catalog.type_of(name)))
+            },
+            bindings,
+        )
     }
 }
