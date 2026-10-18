@@ -412,6 +412,12 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             "XPT-9",
             30,
         ),
+        (
+            SubmissionDatetimeColumn,
+            "value_not_permitted",
+            "SUB-27",
+            31,
+        ),
     ] {
         let mut env = environment();
         let mut spec = specification();
@@ -586,6 +592,19 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 *spec.at(&["columns"]) = Tree::list(vec![column("VALUE"), number]);
                 *spec.at(&["output", "columns"]) =
                     Tree::list(vec![Tree::text("VALUE"), Tree::text("NUMBER")]);
+            }
+            // An `sdtm` dataset carries its date and time text as `str`.
+            31 => {
+                let mut moment = column("DTM");
+                *moment.at(&["type"]) = Tree::text("datetime");
+                moment.remove(&["submission", "length"]);
+                moment.set(
+                    &["derivation"],
+                    Tree::map(vec![("source", Tree::text("SRC.DTM"))]),
+                );
+                *spec.at(&["columns"]) = Tree::list(vec![column("VALUE"), moment]);
+                *spec.at(&["output", "columns"]) =
+                    Tree::list(vec![Tree::text("VALUE"), Tree::text("DTM")]);
             }
             _ => unreachable!(),
         }

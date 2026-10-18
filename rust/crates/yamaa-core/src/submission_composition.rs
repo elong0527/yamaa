@@ -710,6 +710,19 @@ impl ColumnAdmission<'_> {
                 name,
             ));
         }
+        // SUB-27: an `sdtm` or `send` dataset carries its date and time text
+        // in a `str` column, never in a `datetime` one.
+        if !adam && level == Level::Column && column_type == spec::ColumnType::Datetime {
+            let type_path = column_path
+                .strip_suffix(".submission")
+                .map_or_else(|| format!("{column_path}.type"), |p| format!("{p}.type"));
+            let mut finding =
+                Finding::cause(ConditionCode::SubmissionDatetimeColumn, &type_path, name);
+            finding
+                .context
+                .insert("column".into(), crate::json::Value::String(name.clone()));
+            findings.push(finding);
+        }
         let display_format = match column_type.numeric_date_format(adam) {
             Some(fixed) => {
                 if metadata

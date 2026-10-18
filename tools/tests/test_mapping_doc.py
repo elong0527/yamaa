@@ -551,7 +551,16 @@ class DerivationShapeTests(unittest.TestCase):
         # A verb nested in a case branch or a lookup sits mid-cell, where the
         # leading-brace check above cannot see it, and an entry spec need not
         # be spec.yaml; so every spec file and every cell is read.
-        verbs = ("diff", "shift", "impute", "precision", "imputation_flag", "to_date")
+        verbs = (
+            "diff",
+            "shift",
+            "impute",
+            "precision",
+            "imputation_flag",
+            "to_date",
+            "dtc",
+            "time_of_day",
+        )
         raw = []
         for benchmark in sorted(BENCHMARKS.iterdir()):
             for path in generate.benchmark_spec_files(benchmark):
@@ -827,6 +836,26 @@ class DerivationShapeTests(unittest.TestCase):
             mapping_doc.describe_derivation({"to_date": {"source": "CMSTDTC"}}),
             "Take the date part of CMSTDTC, blank for a year or a year and month "
             "alone.",
+        )
+
+    def test_dtc_stops_before_the_first_blank_part(self):
+        self.assertEqual(
+            mapping_doc.describe_derivation(
+                {"dtc": {"year": "AEST_YR", "month": "AEST_MO", "day": "AEST_DY"}}
+            ),
+            "Write the collected year AEST_YR, month AEST_MO, day AEST_DY as ISO "
+            "8601 date text, stopping before the first blank part; blank when the "
+            "year is blank; a part that is not its digits is an error.",
+        )
+        rule = mapping_doc.describe_derivation(
+            {"dtc": {"year": "YR", "invalid": {"literal": None}}}
+        )
+        self.assertIn("a part that is not its digits " + mapping_doc.ARROW, rule)
+
+    def test_time_of_day_counts_seconds_since_midnight(self):
+        self.assertEqual(
+            mapping_doc.describe_derivation({"time_of_day": {"source": "ASTDTM"}}),
+            "Seconds since midnight for the time of day of ASTDTM.",
         )
 
     def test_cut_names_the_closed_side_of_each_interval(self):

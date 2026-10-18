@@ -166,7 +166,8 @@ pub(super) fn prepare_value_with_driver(
             }
             Operation::Imputation(operation)
         }
-        "diff" | "study_day" | "to_epoch_day" | "shift" | "duration_value" => {
+        "diff" | "study_day" | "to_epoch_day" | "shift" | "duration_value" | "dtc"
+        | "time_of_day" => {
             let mut features = Vec::new();
             let operation = temporal::prepare(
                 d,

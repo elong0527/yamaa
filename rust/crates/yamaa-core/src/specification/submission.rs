@@ -834,5 +834,137 @@ pub(super) fn admit(
     }
     let values = admit_value_declarations(d, columns, rows, &by_name, &output, &reads, result)?;
     apply_value_bounds_and_inventory(d, columns, inventory, groups, result, rows, &values)?;
+    data_type_checks(d, columns, rows, groups)?;
+    reject_datetime_columns(d, columns, &output, result)?;
+    Ok(())
+}
+
+/// SUB-26: a `str` column whose submission data type is a date or time type
+/// has each present completed value checked against that type's ISO 8601
+/// form, after its length and before its terminology. A value-level data
+/// type decides the rows of its test code, and the column's every other row.
+fn data_type_checks(
+    d: &Document,
+    columns: &[usize],
+    rows: &[usize],
+    groups: &mut [verifications::Verifications],
+) -> Result<(), PrepareError> {
+    use crate::{dataset::CodeScope, iso8601::Form};
+    let discriminator_name = format!("{}TESTCD", text(d, field(d, d.root(), "domain")?)?);
+    let names = columns
+        .iter()
+        .map(|&node| text(d, field(d, node, "name")?))
+        .collect::<Result<Vec<_>, _>>()?;
+    let discriminator = names.iter().position(|name| *name == discriminator_name);
+    for (index, &node) in columns.iter().enumerate() {
+        if text(d, field(d, node, "type")?)? != "str" {
+            continue;
+        }
+        let name = names[index];
+        let declared =
+            present_field(d, node, "submission").and_then(|id| string(d, id, "data_type"));
+        let effective = declared.unwrap_or("text");
+        // Value-level entries declaring their own, different data type; the
+        // first row template of a test code speaks for it.
+        let mut seen = BTreeSet::new();
+        let mut overrides = Vec::new();
+        for &row in rows {
+            let Some(own) = present_field(d, row, "submission")
+                .and_then(|id| present_field(d, id, name))
+                .and_then(|id| string(d, id, "data_type"))
+            else {
+                continue;
+            };
+            let Some(code) = present_field(d, row, "derivations")
+                .and_then(|id| present_field(d, id, &discriminator_name))
+                .and_then(|id| present_field(d, id, "value"))
+                .and_then(|id| string(d, id, "literal"))
+            else {
+                continue;
+            };
+            if own == effective || !seen.insert(code) {
+                continue;
+            }
+            let row_id = text(d, field(d, row, "id")?)?;
+            overrides.push((
+                code.to_owned(),
+                Form::of(own),
+                format!("rows.{row_id}.submission.{name}.data_type"),
+            ));
+        }
+        let form = declared.and_then(Form::of);
+        let Some(discriminator) = discriminator.filter(|_| !overrides.is_empty()) else {
+            if let Some(form) = form {
+                groups[index].append_metadata(Verification {
+                    path: format!("columns.{name}.submission.data_type"),
+                    check: Check::DataType { form, scope: None },
+                });
+            }
+            continue;
+        };
+        if let Some(form) = form {
+            groups[index].append_metadata(Verification {
+                path: format!("columns.{name}.submission.data_type"),
+                check: Check::DataType {
+                    form,
+                    scope: Some(CodeScope {
+                        discriminator,
+                        codes: overrides.iter().map(|entry| entry.0.clone()).collect(),
+                        include: false,
+                    }),
+                },
+            });
+        }
+        for (code, form, path) in overrides {
+            if let Some(form) = form {
+                groups[index].append_metadata(Verification {
+                    path,
+                    check: Check::DataType {
+                        form,
+                        scope: Some(CodeScope {
+                            discriminator,
+                            codes: vec![code],
+                            include: true,
+                        }),
+                    },
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+/// SUB-27: a dataset whose class is a tabulation class, so of the `sdtm` or
+/// `send` family, writes no `datetime` column; its date and time text is a
+/// `str` column with a date or time data type.
+fn reject_datetime_columns(
+    d: &Document,
+    columns: &[usize],
+    output: &BTreeSet<&str>,
+    result: &mut Vec<PreflightFinding>,
+) -> Result<(), PrepareError> {
+    let Some(class) =
+        present_field(d, d.root(), "submission").and_then(|id| string(d, id, "class"))
+    else {
+        return Ok(());
+    };
+    if !crate::specification_submission_document::DatasetClass::tabulation_name(class) {
+        return Ok(());
+    }
+    for &column in columns {
+        let name = text(d, field(d, column, "name")?)?;
+        if output.contains(name) && text(d, field(d, column, "type")?)? == "datetime" {
+            result.push(finding(
+                C::SubmissionDatetimeColumn,
+                &format!("columns.{name}.type"),
+                &[
+                    ("column", s(name)),
+                    ("value", s("datetime")),
+                    ("class", s(class)),
+                    ("permitted", V::Array(vec![s("str"), s("date")])),
+                ],
+            ));
+        }
+    }
     Ok(())
 }

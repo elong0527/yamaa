@@ -51,14 +51,17 @@ impl Operation {
     }
 }
 
-/// Differences, study days and epoch days are counts; a difference of
-/// datetimes in seconds is a whole count and in a longer unit a fraction; a
-/// shift keeps its declared type; a duration is a fraction in every unit.
+/// Differences, study days, epoch days and times of day are counts; a
+/// difference of datetimes in seconds is a whole count and in a longer unit a
+/// fraction; a shift keeps its declared type; a duration is a fraction in
+/// every unit; assembled date parts are text.
 fn temporal(kind: TemporalKind) -> ResultType {
     match kind {
-        TemporalKind::Difference { .. } | TemporalKind::StudyDay | TemporalKind::EpochDay => {
-            ResultType::INT
-        }
+        TemporalKind::Difference { .. }
+        | TemporalKind::StudyDay
+        | TemporalKind::EpochDay
+        | TemporalKind::TimeOfDay => ResultType::INT,
+        TemporalKind::DateText { .. } => ResultType::STR,
         TemporalKind::DateTimeDifference {
             unit: ElapsedUnit::Second,
         } => ResultType::INT,

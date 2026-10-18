@@ -1395,6 +1395,7 @@ impl DatasetPlan {
             let record = match &verification.check {
                 Check::NotMissing
                 | Check::Mandatory(_)
+                | Check::DataType { .. }
                 | Check::AllowedValues(_)
                 | Check::Codelist { .. }
                 | Check::ValueCodelists { .. }
@@ -1576,7 +1577,7 @@ impl DatasetPlan {
                 if group.checks.iter().any(|verification| {
                     matches!(&verification.check, Check::ValueCodelists { discriminator, .. }
                         if !completed[*discriminator]) || matches!(&verification.check, Check::Inventory { scope: Some(scope), .. } if !completed[scope.discriminator]) || matches!(&verification.check, Check::ValueMaxLength { discriminator, .. } if !completed[*discriminator])
-                        || matches!(&verification.check, Check::Mandatory(Some(scope)) if !completed[scope.discriminator])
+                        || matches!(&verification.check, Check::Mandatory(Some(scope)) | Check::DataType { scope: Some(scope), .. } if !completed[scope.discriminator])
                 }) {
                     return Ok(());
                 }
@@ -1599,6 +1600,7 @@ impl DatasetPlan {
                         }
                         Check::NotMissing
                         | Check::Mandatory(_)
+                        | Check::DataType { .. }
                         | Check::AllowedValues(_)
                         | Check::Codelist { .. }
                         | Check::ValueCodelists { .. }
@@ -1656,9 +1658,13 @@ impl DatasetPlan {
                                                 let matches = matches!(&candidate.values[*discriminator], Value::Str(code) if codes.contains(code));
                                                 matches == *include
                                             },
-                                            (Check::Mandatory(Some(scope)), _) => {
-                                                scope.selects(&candidate.values)
-                                            }
+                                            (
+                                                Check::Mandatory(Some(scope))
+                                                | Check::DataType {
+                                                    scope: Some(scope), ..
+                                                },
+                                                _,
+                                            ) => scope.selects(&candidate.values),
                                             _ => true,
                                         };
                                         selected.then_some(index)

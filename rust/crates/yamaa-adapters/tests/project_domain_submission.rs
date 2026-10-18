@@ -176,6 +176,138 @@ mod project {
             assert!(!study.0.join("output.csv").exists());
         }
 
+        /// SUB-26: a `str` column's date or time data type is a form each
+        /// present completed value must have; a value-level data type decides
+        /// the rows of its test code, and the column's every other row.
+        #[test]
+        fn date_and_time_data_types_check_each_completed_value_against_their_form() {
+            fn domain(study: &Study, spec: &str, input: &str) -> file_application::Domain {
+                fs::write(study.0.join("spec.yaml"), spec).unwrap();
+                fs::write(study.0.join("input.csv"), input).unwrap();
+                let path = study.0.join("spec.yaml");
+                let path = path.to_str().unwrap();
+                file_application::domain(
+                    Request {
+                        specification: path,
+                        environment: None,
+                    },
+                    identity(path),
+                )
+                .unwrap()
+            }
+            const SPEC: &str = "schema_version: '1.0'\ndomain: LB\nkeys: [ID, LBTESTCD]\ninput: {SRC: input.csv}\noutput: {path: output.csv, verification_log: checks.csv, columns: [ID, LBTESTCD, LBDTC, LBORRES]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: LBTESTCD, type: str}\n  - {name: LBDTC, type: str, derivation: SRC.DTC, submission: {data_type: DTC_TYPE, origin: {type: Collected}}}\n  - {name: LBORRES, type: str, derivation: SRC.RES, submission: {length: 20, origin: {type: Collected}}}\nrows:\n  - id: glucose\n    derivations: {LBTESTCD: {literal: GLUC}}\n  - id: onset\n    derivations: {LBTESTCD: {literal: ONSET}}\n    submission: {LBORRES: {data_type: date}}\n";
+            let study = Study::new();
+            // The column's type checks every row: a space is not ISO 8601.
+            let run = domain(
+                &study,
+                &SPEC.replace("DTC_TYPE", "partialDatetime"),
+                "ID,DTC,RES\n1,2025-03-04T08:30,2025-03-04\n2,2025-03-04 08:30,2025-03-05\n",
+            );
+            assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
+            let issue = &run.issues()[0];
+            assert_eq!(
+                (
+                    issue.phase.as_str(),
+                    issue.condition.as_str(),
+                    issue.requirement.as_deref()
+                ),
+                ("verification", "data_type_failed", Some("SUB-26"))
+            );
+            assert_eq!(issue.spec_paths, ["columns.LBDTC.submission.data_type"]);
+            assert_eq!(
+                issue.context,
+                yamaa_adapters::json!({"column": "LBDTC", "data_type": "partialDatetime", "failure_count": 2, "keys": [{"ID": 2, "LBTESTCD": "GLUC"}, {"ID": 2, "LBTESTCD": "ONSET"}]})
+            );
+            // The verification log records the check as `data_type` (CHECK-21).
+            let mut run = run;
+            assert!(run.save().is_err());
+            let checks = fs::read_to_string(study.0.join("checks.csv")).unwrap();
+            assert!(
+                checks.contains(
+                    "columns.LBDTC.submission.data_type,,data_type,LBDTC,SUB-26,error,violated,data_type_failed,4,2,"
+                ),
+                "{checks}"
+            );
+            fs::remove_file(study.0.join("checks.csv")).unwrap();
+            // A value-level type checks only the rows of its test code: the
+            // glucose result is text, while the onset result must be a date.
+            let run = domain(
+                &study,
+                &SPEC.replace("DTC_TYPE", "partialDatetime"),
+                "ID,DTC,RES\n1,2025-03-04T08:30,5.1\n2,2025-03,2025-03\n",
+            );
+            assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
+            let issue = &run.issues()[0];
+            assert_eq!(issue.condition, "data_type_failed");
+            assert_eq!(
+                issue.spec_paths,
+                ["rows.onset.submission.LBORRES.data_type"]
+            );
+            assert_eq!(
+                issue.context,
+                yamaa_adapters::json!({"column": "LBORRES", "data_type": "date", "failure_count": 2, "keys": [{"ID": 1, "LBTESTCD": "ONSET"}, {"ID": 2, "LBTESTCD": "ONSET"}]})
+            );
+            // Every value of its form, and a missing one, passes and saves.
+            let mut run = domain(
+                &study,
+                &SPEC.replace("DTC_TYPE", "incompleteDatetime"),
+                "ID,DTC,RES\n1,2025---04T08,2025-03-04\n2,,2025-03-05\n",
+            );
+            assert!(run.issues().is_empty(), "{:?}", run.issues());
+            assert!(run.save().unwrap());
+            assert_eq!(
+                fs::read_to_string(study.0.join("output.csv")).unwrap(),
+                "ID,LBTESTCD,LBDTC,LBORRES\n1,GLUC,2025---04T08,2025-03-04\n2,GLUC,,2025-03-05\n1,ONSET,2025---04T08,2025-03-04\n2,ONSET,,2025-03-05\n"
+            );
+            let checks = fs::read_to_string(study.0.join("checks.csv")).unwrap();
+            for row in [
+                "columns.LBDTC.submission.data_type,,data_type,LBDTC,SUB-26,error,held,,4,0,{}",
+                "rows.onset.submission.LBORRES.data_type,,data_type,LBORRES,SUB-26,error,held,,2,0,{}",
+            ] {
+                assert!(checks.contains(row), "{row}\n{checks}");
+            }
+        }
+
+        /// SUB-27: a dataset of a tabulation class carries no `datetime`
+        /// output column; an internal one, an analysis class and a dataset
+        /// without a class are not refused.
+        #[test]
+        fn tabulation_datasets_refuse_a_datetime_output_column() {
+            const SPEC: &str = "schema_version: '1.0'\ndomain: VS\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, OUTPUT]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VSDTM, type: datetime, derivation: SRC.DTC}\n  - {name: OUTPUT, type: str, derivation: SRC.DTC}\nsubmission: {label: Vital Signs, class: CLASS, structure: One record per reading, repeating: true}\n";
+            let study = Study::new();
+            let issues = study.check(
+                &SPEC
+                    .replace("OUTPUT]", "VSDTM]")
+                    .replace("CLASS", "FINDINGS"),
+            );
+            assert_eq!(issues.len(), 1, "{issues:?}");
+            assert_eq!(
+                (
+                    issues[0].phase.as_str(),
+                    issues[0].condition.as_str(),
+                    issues[0].requirement.as_deref()
+                ),
+                ("validation", "value_not_permitted", Some("SUB-27"))
+            );
+            assert_eq!(issues[0].spec_paths, ["columns.VSDTM.type"]);
+            assert_eq!(
+                issues[0].context,
+                yamaa_adapters::json!({"column": "VSDTM", "value": "datetime", "class": "FINDINGS", "permitted": ["str", "date"]})
+            );
+            for spec in [
+                SPEC.replace("CLASS", "FINDINGS"),
+                SPEC.replace("OUTPUT]", "VSDTM]")
+                    .replace("CLASS", "BASIC DATA STRUCTURE"),
+                SPEC.replace("OUTPUT]", "VSDTM]").replace(
+                    "submission: {label: Vital Signs, class: CLASS, structure: One record per reading, repeating: true}\n",
+                    "",
+                ),
+            ] {
+                let issues = study.check(&spec);
+                assert!(issues.is_empty(), "{spec}\n{issues:?}");
+            }
+        }
+
         const ROW_CT: &str = "schema_version: '1.0'\ndomain: LB\nkeys: [ID, LBTESTCD]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, RESULT, LBTESTCD]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: RESULT, type: str, derivation: SRC.VALUE, submission: {origin: {type: Assigned}, codelist: DEFAULT}}\n  - {name: LBTESTCD, type: str}\nrows:\n  - id: glucose\n    derivations: {LBTESTCD: {literal: GLUC}}\n    submission: {RESULT: {codelist: GLUCOSE}}\n  - id: creatinine\n    derivations: {LBTESTCD: {literal: CREAT}}\n";
         const CT_ENV: &str = "schema_version: '1.0'\ncodelists:\n  - codelists:\n      - {id: DEFAULT, name: Default values, items: [{value: D}]}\n      - {id: GLUCOSE, name: Glucose values, items: [{value: G}]}\n      - {id: EXT, name: Extended values, extensible: true, items: [{value: X}]}\n      - {id: DICT, name: Dictionary, external: {dictionary: MedDRA, version: '27.1'}}\n";
         #[test]

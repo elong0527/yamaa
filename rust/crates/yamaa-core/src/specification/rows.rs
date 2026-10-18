@@ -306,7 +306,8 @@ fn default_reads(
             }
         }
         "round_half_away_from_zero" => reference(text(d, field(d, payload, "source")?)?),
-        "diff" | "study_day" | "to_epoch_day" | "shift" | "duration_value" => {
+        "diff" | "study_day" | "to_epoch_day" | "shift" | "duration_value" | "dtc"
+        | "time_of_day" => {
             for &name in temporal::fields(operation) {
                 if let Some(N::Text(source)) = d.field(payload, name).map(|id| &d.nodes()[id]) {
                     reference(source);

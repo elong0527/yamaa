@@ -169,7 +169,7 @@ for (case in list(
   stopifnot(length(items) == length(case$columns))
   for (i in seq_along(items)) stopifnot(grepl(paste0('OID="IT.', case$id, '.', case$columns[[i]], '" Name="', case$columns[[i]], '"'), items[[i]], fixed = TRUE))
   if (case$id == "AE") stopifnot(grepl('Dictionary="MedDRA" Version="26.1"', xml, fixed = TRUE), grepl('OID="MT.AE.AEDECOD"', xml, fixed = TRUE))
-  else stopifnot(grepl('Name="VSDTC" DataType="datetime"', xml, fixed = TRUE), grepl('CodedValue="FOLLOW-UP"', xml, fixed = TRUE))
+  else stopifnot(grepl('Name="VSDTC" DataType="partialDatetime"', xml, fixed = TRUE), grepl('CodedValue="FOLLOW-UP"', xml, fixed = TRUE))
   stopifnot(!file.exists(file.path(root, paste0(tolower(case$id), ".csv"))), isTRUE(result$save()), identical(rawfile(file.path(root, "define.xml")), held[[1L]]$bytes))
   unlink(root, recursive = TRUE)
 }

@@ -63,7 +63,7 @@ check_csv <- function(saved, empty) {
 }
 
 check_submission <- function(directory, profile, empty) {
-  document <- yamaa_define(file.path(directory, "environment.yaml"), "sdtm", created = truth$created)
+  document <- yamaa_define(file.path(directory, "environment.yaml"), "adam", created = truth$created)
   if (empty) {
     # A transported dataset without rows must declare it has no data.
     stopifnot(identical(document$issues$condition, "transport_dataset_empty"))

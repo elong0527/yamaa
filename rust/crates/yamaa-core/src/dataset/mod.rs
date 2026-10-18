@@ -68,7 +68,7 @@ pub use crate::text_pad::StringPad;
 pub use crate::text_replace::StringReplace;
 pub use crate::text_template::StringTemplate;
 pub use temporal::{
-    CalendarUnit, DateBounds, ElapsedUnit, InvalidTemporal, Temporal, TemporalKind,
+    CalendarUnit, DateBounds, ElapsedUnit, InvalidTemporal, Temporal, TemporalKind, DATE_PARTS,
 };
 pub use temporal_arithmetic::TemporalStep;
 mod selection;
@@ -305,6 +305,13 @@ pub enum Check {
     /// Presence required by the column's resolved `mandatory`. Without a scope
     /// every row is checked; a scope selects rows by their completed discriminator.
     Mandatory(Option<CodeScope>),
+    /// The ISO 8601 form a `str` column's date or time submission data type
+    /// names (SUB-26). Without a scope every row is checked; a scope selects
+    /// rows by their completed discriminator.
+    DataType {
+        form: crate::iso8601::Form,
+        scope: Option<CodeScope>,
+    },
     /// Already converted, present permitted values for the owning column.
     AllowedValues(Vec<Value>),
     /// Fixed environment terminology at the owning column's checkpoint.
@@ -1498,6 +1505,7 @@ impl DatasetPlan {
                     verification.check,
                     Check::NotMissing
                         | Check::Mandatory(_)
+                        | Check::DataType { .. }
                         | Check::AllowedValues(_)
                         | Check::Codelist { .. }
                         | Check::ValueCodelists { .. }
@@ -1536,7 +1544,11 @@ impl DatasetPlan {
                         return Err(PlanError::InvalidColumns);
                     }
                 }
-                if let Check::Mandatory(Some(scope)) = &verification.check {
+                if let Check::Mandatory(Some(scope))
+                | Check::DataType {
+                    scope: Some(scope), ..
+                } = &verification.check
+                {
                     if self
                         .output
                         .columns()
@@ -2242,6 +2254,7 @@ fn validate_plan_verifications(
         match &verification.check {
             Check::NotMissing
             | Check::Mandatory(_)
+            | Check::DataType { .. }
             | Check::AllowedValues(_)
             | Check::Codelist { .. }
             | Check::ValueCodelists { .. }

@@ -1,7 +1,7 @@
 //! Temporal declarations dispatch on their declared `type` and share operand
 //! binding with other scalar operations.
 use super::*;
-use crate::dataset::{CalendarUnit, DateBounds, ElapsedUnit, Temporal, TemporalKind};
+use crate::dataset::{CalendarUnit, DateBounds, ElapsedUnit, Temporal, TemporalKind, DATE_PARTS};
 
 pub(super) const OPERATIONS: &[&str] = &[
     "diff",
@@ -9,6 +9,8 @@ pub(super) const OPERATIONS: &[&str] = &[
     "to_epoch_day",
     "shift",
     "duration_value",
+    "dtc",
+    "time_of_day",
 ];
 
 const CALENDAR_UNITS: &[&str] = &["day", "week", "month", "year"];
@@ -30,6 +32,7 @@ pub(super) fn fields(operation: &str) -> &'static [&'static str] {
         "diff" => &["start", "end"],
         "study_day" => &["date", "reference"],
         "shift" => &["source", "days", "amount"],
+        "dtc" => &DATE_PARTS,
         _ => &["source"],
     }
 }
@@ -128,6 +131,32 @@ fn declared(
         "duration_value" => TemporalKind::DurationValue {
             unit: elapsed_unit(unit()?).ok_or(PrepareError::Internal)?,
         },
+        "time_of_day" => TemporalKind::TimeOfDay,
+        "dtc" => {
+            // Every part before the finest declared one must be declared too.
+            let declared = DATE_PARTS.map(|name| d.field(payload, name).is_some());
+            let depth = declared
+                .iter()
+                .rposition(|&present| present)
+                .map_or(0, |index| index + 1);
+            if depth == 0 {
+                return Err(PrepareError::Internal);
+            }
+            let gaps = (0..depth)
+                .filter(|&index| !declared[index])
+                .map(|index| {
+                    PreflightFinding::Scalar(Temporal::date_part_gap_diagnostic(
+                        path,
+                        DATE_PARTS[index],
+                        DATE_PARTS[depth - 1],
+                    ))
+                })
+                .collect::<Vec<_>>();
+            if !gaps.is_empty() {
+                return Ok(Err(gaps));
+            }
+            TemporalKind::DateText { depth: depth as u8 }
+        }
         _ => return Err(PrepareError::Internal),
     }))
 }
@@ -346,6 +375,10 @@ pub(super) fn prepare(
         "study_day" => &["date", "reference"],
         "to_epoch_day" => &["source"],
         "duration_value" => &["source", "unit", "invalid"],
+        "time_of_day" => &["source"],
+        "dtc" => &[
+            "year", "month", "day", "hour", "minute", "second", "invalid",
+        ],
         _ => return Err(PrepareError::Internal),
     };
     for &(name, _) in mapping(d, payload)? {

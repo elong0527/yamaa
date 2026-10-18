@@ -130,7 +130,7 @@ class SavedReaders(unittest.TestCase):
 
     def read_submission(self, root, *, profile, empty):
         document = yamaa.define(
-            root / "environment.yaml", "sdtm", created=TRUTH["created"]
+            root / "environment.yaml", "adam", created=TRUTH["created"]
         )
         if empty:
             # A transported dataset without rows must declare it has no data.

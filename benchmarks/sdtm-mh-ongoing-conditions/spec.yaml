@@ -39,12 +39,9 @@ columns:
     type: str
     label: Start Date/Time of Medical History Condition
     derivation:
-      case:
-        - when: "MH_FORM.MHSTYY IS NOT NULL AND MH_FORM.MHSTMM IS NULL"
-          then: MH_FORM.MHSTYY
-        - when: "MH_FORM.MHSTYY IS NOT NULL AND MH_FORM.MHSTMM IS NOT NULL"
-          then:
-            str_template: "{MH_FORM.MHSTYY}-{MH_FORM.MHSTMM}"
+      dtc:
+        year: MH_FORM.MHSTYY
+        month: MH_FORM.MHSTMM
 
   - name: MHENDTC
     type: str

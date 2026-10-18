@@ -750,6 +750,37 @@ def describe_to_epoch_day(node, ctx=None, depth=0):
     )
 
 
+# The parts dtc writes, coarsest first.
+DATE_PARTS = ("year", "month", "day", "hour", "minute", "second")
+
+
+def describe_dtc(node, ctx=None, depth=0):
+    """Collected date parts written as ISO 8601 text, cut at the first blank."""
+    parts = ", ".join(
+        part + " " + describe_variable(node.get(part), ctx, depth)
+        for part in DATE_PARTS
+        if part in node
+    )
+    text = (
+        "Write the collected "
+        + parts
+        + " as ISO 8601 date text, stopping before the first blank part; "
+        + "blank when the year is blank"
+    )
+    if declared(node, "invalid"):
+        text += handler_phrase(node, "invalid", "a part that is not its digits")
+    else:
+        text += "; a part that is not its digits is an error"
+    return sentence(text)
+
+
+def describe_time_of_day(node, ctx=None, depth=0):
+    return sentence(
+        "Seconds since midnight for the time of day of "
+        + describe_variable(node.get("source"), ctx, depth)
+    )
+
+
 def invalid_text_phrase(node):
     """What text that is not a date yields; with no handler it is fatal."""
     if "invalid" in node:
@@ -1059,6 +1090,8 @@ DERIVATION_DESCRIBERS = {
     "imputation_flag": describe_imputation_flag,
     "to_date": describe_to_date,
     "to_epoch_day": describe_to_epoch_day,
+    "dtc": describe_dtc,
+    "time_of_day": describe_time_of_day,
     "study_day": describe_study_day,
     "str_case": describe_str_case,
     "str_pad": describe_str_pad,
@@ -1439,6 +1472,14 @@ REVISION_HISTORY_HEADERS = [
 # entry whenever a change alters the text of a rendered cell. Reviewer and
 # Sign-off stay empty -- those are the reviewer's to fill, not the build's.
 RENDERER_REVISIONS = [
+    (
+        "1.6",
+        "2026-10-17",
+        (
+            "Describe collected date parts written as ISO 8601 date text and "
+            "times of day counted in seconds since midnight"
+        ),
+    ),
     (
         "1.5",
         "2026-10-17",

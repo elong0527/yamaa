@@ -39,10 +39,9 @@
         "label": "ID",
         "submission": {
           "core": "Req",
-          "role": "Identifier",
+          "mandatory": true,
           "origin": {
-            "type": "Assigned",
-            "source": "Sponsor"
+            "type": "Assigned"
           },
           "length": 100
         },
@@ -54,10 +53,9 @@
         "label": "S",
         "submission": {
           "core": "Perm",
-          "role": "Record Qualifier",
+          "mandatory": false,
           "origin": {
-            "type": "Assigned",
-            "source": "Sponsor"
+            "type": "Assigned"
           },
           "length": 100
         },
@@ -69,10 +67,9 @@
         "label": "I",
         "submission": {
           "core": "Perm",
-          "role": "Record Qualifier",
+          "mandatory": false,
           "origin": {
-            "type": "Assigned",
-            "source": "Sponsor"
+            "type": "Assigned"
           },
           "length": 20
         },
@@ -84,10 +81,9 @@
         "label": "F",
         "submission": {
           "core": "Perm",
-          "role": "Record Qualifier",
+          "mandatory": false,
           "origin": {
-            "type": "Assigned",
-            "source": "Sponsor"
+            "type": "Assigned"
           },
           "length": 8,
           "significant_digits": 17
@@ -100,10 +96,9 @@
         "label": "D",
         "submission": {
           "core": "Perm",
-          "role": "Record Qualifier",
+          "mandatory": false,
           "origin": {
-            "type": "Assigned",
-            "source": "Sponsor"
+            "type": "Assigned"
           }
         },
         "derivation": "SRC.D"
@@ -114,10 +109,9 @@
         "label": "T",
         "submission": {
           "core": "Perm",
-          "role": "Record Qualifier",
+          "mandatory": false,
           "origin": {
-            "type": "Assigned",
-            "source": "Sponsor"
+            "type": "Assigned"
           }
         },
         "derivation": "SRC.T"
@@ -128,10 +122,9 @@
         "label": "EMPTY",
         "submission": {
           "core": "Perm",
-          "role": "Record Qualifier",
+          "mandatory": false,
           "origin": {
-            "type": "Assigned",
-            "source": "Sponsor"
+            "type": "Assigned"
           },
           "length": 100
         }
@@ -139,7 +132,7 @@
     ],
     "submission": {
       "label": "Reader controls",
-      "class": "SPECIAL PURPOSE",
+      "class": "ADAM OTHER",
       "structure": "One record per identifier",
       "repeating": false
     },
@@ -162,10 +155,10 @@
       "description": "Invented independent saved artifact controls",
       "protocol_name": "READER01"
     },
-    "sdtm": {
+    "adam": {
       "standard": {
-        "name": "SDTMIG",
-        "version": "3.4",
+        "name": "ADaMIG",
+        "version": "1.3",
         "status": "Final"
       },
       "specs": [

@@ -488,7 +488,7 @@ class PublicDefine(unittest.TestCase):
                         xml.xpath(
                             "//o:ItemDef[@Name='VSDTC']/@DataType", namespaces=ns
                         ),
-                        ["datetime"],
+                        ["partialDatetime"],
                     )
                 self.assertFalse((directory / (id_.lower() + ".csv")).exists())
                 self.assertTrue(result.save())
