@@ -12,8 +12,10 @@
 # 3. Like the existing native qualification in native.yml, this runs as
 #    a regular build every two hours (offset to :47 so it does not pile
 #    onto the native run at :17) instead of after every merge to main.
-#    Pull requests check only macOS and Windows: CI's `r` job already runs
-#    the same strict check on Ubuntu with the release R.
+#    Pull requests check only macOS and Windows, and only when they change
+#    how the package builds natively: the R binding crate, the package's
+#    native sources and DESCRIPTION, dependencies, the toolchain or staging.
+#    CI's `r` job runs the same strict check on Ubuntu for every pull request.
 
 on:
   schedule:
@@ -21,22 +23,20 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
-      - 'R/**'
-      - 'crates/**'
-      - 'rust/**'
-      - 'Cargo.lock'
-      - 'yaml/grammar/**'
+      - 'R/yamaa/DESCRIPTION'
+      - 'R/yamaa/src/**'
+      - 'rust/crates/yamaa-r/**'
+      - 'rust/crates/yamaa-adapters/build.rs'
+      - 'rust/crates/yamaa-adapters/vendor/**'
+      - 'rust/**/Cargo.toml'
+      - 'rust/Cargo.lock'
+      - 'rust/rust-toolchain.toml'
+      - 'rust/vendor/**'
       - 'tools/staging/**'
-      - 'tools/ci/toolchain.py'
       - 'tools/paths.py'
-      - 'tools/benchmark.py'
       - 'tools/conformance/supplemental_inventory.py'
       - 'tools/conformance/host_fixtures.py'
-      - 'benchmarks/**'
-      - 'python/yamaa_build_backend.py'
-      - 'python/uv.lock'
-      - 'python/tests/installed/**'
-      - 'pyproject.toml'
+      - 'tools/ci/toolchain.py'
       - '.github/workflows/R-CMD-check.yaml'
 
 name: R-CMD-check

@@ -4,6 +4,10 @@ name: CI
 # every merge; the scheduled runs also save the Rust caches that pull requests
 # restore. Odd hours keep clear of the even-hour native and R CMD check runs.
 # Schedules only check main, so release branches are checked on each push.
+# Pull requests run only the lanes most changes can break. The minimum Python
+# readers run on the main schedule; the optional format selections and the
+# macOS and Windows R checks run there too, and on a pull request that changes
+# what they cover.
 on:
   pull_request:
   push:
@@ -50,8 +54,6 @@ jobs:
         with:
           r: runtime
       - run: make test-rust
-      - name: Test adapters without the optional SAS reader
-        run: cargo test --locked --manifest-path rust/Cargo.toml -p yamaa-adapters --no-default-features --features yaml,parquet
   python:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
@@ -61,7 +63,10 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
       - run: make test-python
+  # The minimum saved artifact readers change only with their pins, so pull
+  # requests leave this lane to the main schedule and release branches.
   python-minimum:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:

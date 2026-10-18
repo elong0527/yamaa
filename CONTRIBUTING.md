@@ -126,6 +126,12 @@ is checked on those schedules instead. While a workflow's latest main run
 fails, the `Main health` workflow keeps a `main-red` issue open for it and
 closes the issue when a later main run succeeds. A PR that changes `.github/`
 also runs actionlint over every workflow.
+To keep PR feedback short, some lanes run on those main schedules and on a PR
+only when it changes what they cover: the optional format feature selections
+when it changes the adapters crate or the Cargo graph, and the macOS and
+Windows R package checks when it changes how the R package builds natively.
+The minimum saved artifact reader lane runs only on schedules and `release/**`
+pushes. Dispatch any of these workflows on a branch to run them before merging.
 Keep workflow-specific setup in CI and reusable check logic in `tools/`.
 Pin external actions to complete commit IDs with exact release comments.
 

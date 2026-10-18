@@ -1,8 +1,23 @@
 name: Optional format features
 
-# Scheduled on main with CI rather than after every merge.
+# Scheduled on main with CI rather than after every merge, and run on each
+# release branch push as CI is. A pull request runs it only when it changes the
+# adapters crate, whose code holds the format feature gates, or what decides
+# the Cargo graph and these checks.
 on:
+  push:
+    branches: ['release/**']
   pull_request:
+    paths:
+      - 'rust/crates/yamaa-adapters/**'
+      - 'rust/**/Cargo.toml'
+      - 'rust/Cargo.lock'
+      - 'rust/rust-toolchain.toml'
+      - 'rust/vendor/**'
+      - 'tools/ci/format_features.py'
+      - 'tools/ci/toolchain.py'
+      - '.github/actions/setup/**'
+      - '.github/workflows/format-features.yml'
   schedule:
     - cron: '37 1-23/2 * * *'
   workflow_dispatch:
@@ -34,7 +49,7 @@ jobs:
       - name: Check fixtures, dependency edges and linked native symbols
         run: |
           failed=()
-          for selection in none yaml parquet readstat all; do
+          for selection in none yaml parquet readstat yaml-parquet all; do
             echo "::group::$selection"
             python -m tools.ci.format_features "$selection" || failed+=("$selection")
             echo "::endgroup::"
