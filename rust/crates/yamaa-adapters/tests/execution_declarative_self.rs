@@ -363,6 +363,106 @@ columns:
                 assert!(!fixture.0.join("src.csv").exists());
             }
         }
+
+        /// W's `between` value reads P, and W2's reads W, so reading either
+        /// window reads the completed rows P selects from.
+        const WINDOWS: &str = r#"schema_version: "1.0"
+domain: TEST
+input:
+  SRC: {path: src.csv, types: {DAY: int}}
+  WIN: {path: win.csv, types: {LO: int, HI: int}}
+keys: [ID, SECTION, DAY]
+output: {path: result.csv, columns: [ID, SECTION, DAY, WINDOW]}
+intermediates:
+  - id: P
+    dataset: SELF
+    key: [ID]
+    order_by: [SELF.DAY]
+    keep: last
+    no_match: null
+  - id: W
+    dataset: WIN
+    key: [ID]
+    between: {value: P.DAY, lower: LO, upper: HI}
+    no_match: null
+  - id: W2
+    dataset: WIN
+    key: [ID]
+    between: {value: W.HI, lower: LO, upper: HI}
+    no_match: null
+columns:
+  - {name: ID, type: str, derivation: SRC.ID}
+  - {name: SECTION, type: str}
+  - {name: DAY, type: int, derivation: SRC.DAY}
+  - {name: WINDOW, type: str}
+rows:
+  - id: first
+    dataset: SRC
+    derivations: {SECTION: {literal: first}, WINDOW: {literal: none}}
+  - id: second
+    dataset: SRC
+    derivations: {SECTION: {literal: second}, WINDOW: W2.NAME}
+"#;
+        #[test]
+        fn first_template_reads_through_between_values_fail_before_study_access() {
+            for (window, paths) in [
+                (
+                    "W.NAME",
+                    vec![
+                        "rows[0].derivations.WINDOW.source",
+                        "intermediates[1].between.value",
+                    ],
+                ),
+                (
+                    "W2.NAME",
+                    vec![
+                        "rows[0].derivations.WINDOW.source",
+                        "intermediates[2].between.value",
+                        "intermediates[1].between.value",
+                    ],
+                ),
+                (
+                    "{case: [{when: \"W.NAME = 'late'\", then: {literal: late}}, {otherwise: {literal: none}}]}",
+                    vec![
+                        "rows[0].derivations.WINDOW.case[0].when",
+                        "intermediates[1].between.value",
+                    ],
+                ),
+            ] {
+                let fixture = Fixture::new();
+                let body = WINDOWS.replace("WINDOW: {literal: none}", &format!("WINDOW: {window}"));
+                assert_eq!(
+                    issues(fixture.run(&body)),
+                    vec![yamaa_adapters::json!({
+                        "phase":"validation", "condition":"phase_boundary", "requirement":"REQ-0120",
+                        "spec_paths":paths,
+                        "context":{"identifier":"P.DAY","available_phase":"completed_prior_row_template","required_phase":"row_construction"}
+                    })],
+                    "{window}"
+                );
+                assert!(!fixture.0.join("src.csv").exists());
+            }
+        }
+        #[test]
+        fn later_templates_read_completed_rows_through_between_values() {
+            let fixture = Fixture::new();
+            fs::write(fixture.0.join("src.csv"), "ID,DAY\na,3\na,8\nb,12\n").unwrap();
+            fs::write(
+                fixture.0.join("win.csv"),
+                "ID,LO,HI,NAME\na,1,5,early\na,6,10,late\na,11,20,after\nb,1,10,early\nb,11,20,late\nb,21,30,after\n",
+            )
+            .unwrap();
+            let mut result = fixture.run(WINDOWS).unwrap();
+            assert!(result.issues().is_empty(), "{:?}", result.issues());
+            assert!(result.save().unwrap());
+            // P holds each subject's latest first-template day (a: 8, b: 12),
+            // W the window holding it (a: late, b: late), and W2 the window
+            // holding that window's last day (a: 10, b: 20).
+            assert_eq!(
+                fs::read_to_string(fixture.0.join("result.csv")).unwrap(),
+                "ID,SECTION,DAY,WINDOW\na,first,3,none\na,first,8,none\nb,first,12,none\na,second,3,late\na,second,8,late\nb,second,12,late\n"
+            );
+        }
     }
     mod declarative_source_selection {
         //! Independently authored typed public results and ordered source-selection findings.

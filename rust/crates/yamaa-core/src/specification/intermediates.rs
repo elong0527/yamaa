@@ -534,6 +534,12 @@ impl Declarations {
     pub(super) fn reader(&self) -> Option<&str> {
         self.1.as_deref()
     }
+    /// The `between.value` of the selector at `index`, with its authored path.
+    pub(super) fn range_value(&self, index: usize) -> Option<(&str, String)> {
+        let item = self.0.get(index)?;
+        let range = item.range.as_ref()?;
+        Some((range.value.as_str(), format!("{}.between.value", item.path)))
+    }
 
     pub fn is_self(&self, index: usize) -> bool {
         self.0
