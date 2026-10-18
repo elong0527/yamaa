@@ -89,7 +89,7 @@ struct Snapshot {
 pub struct Resources {
     host: Option<crate::host_resources::Resources>,
     host_sources: RetainedSources,
-    roots: Arc<[Root]>,
+    roots: Arc<Vec<Root>>,
     local_paths: bool,
     base: Segments,
     /// The canonical identity of the last selected entry: the declaring
@@ -150,7 +150,7 @@ impl Resources {
         Self {
             host_sources: vec![],
             host: Some(crate::host_resources::Resources::new(resolver, base.into())),
-            roots: Arc::new([]),
+            roots: Arc::new(Vec::new()),
             local_paths: false,
             base: vec![],
             entry: None,
@@ -205,7 +205,7 @@ impl Resources {
                             entry.clone(),
                         )),
                         host_sources: vec![],
-                        roots: Arc::new([]),
+                        roots: Arc::new(Vec::new()),
                         local_paths: false,
                         base: vec![],
                         entry: Some(entry),
@@ -230,6 +230,37 @@ impl Resources {
         resources.local_paths = true;
         Ok(resources)
     }
+    /// The project file a caller passes is a caller path like the entry
+    /// (REQ-1331): its existing parent is selected once, and the caller's own
+    /// spelling of that directory keeps its authority (REQ-0781). A project
+    /// operation names each listed specification by its canonical identity,
+    /// so without this root the caller's spelling of the project file, such
+    /// as the macOS `/var` alias of `/private/var`, lies outside the entry
+    /// parent and is walked from its filesystem root and refused as a link.
+    /// A parent that cannot be selected adds no root: reading the project
+    /// file then reports its own failure. Configuration calls this before any
+    /// run scope shares the roots.
+    pub(crate) fn select_caller_parent(&mut self, path: &str) {
+        if self.host.is_some() || !self.local_paths {
+            return;
+        }
+        let Some(parent) = Path::new(path).parent().and_then(Path::to_str) else {
+            return;
+        };
+        let Ok(root) = selected_root(parent) else {
+            return;
+        };
+        // An entry beside its project file already holds every spelling.
+        if !self.roots.iter().any(|known| {
+            root.spellings
+                .iter()
+                .all(|spelling| known.spellings.contains(spelling))
+        }) {
+            if let Some(roots) = Arc::get_mut(&mut self.roots) {
+                roots.push(root);
+            }
+        }
+    }
     /// The first root is the project root; later roots retain fallback order.
     pub fn new(root: &str, base: &str, data_roots: &[String]) -> Result<Self, Error> {
         let mut roots = Vec::new();
@@ -244,7 +275,7 @@ impl Resources {
         Ok(Self {
             host: None,
             host_sources: vec![],
-            roots: roots.into(),
+            roots: Arc::new(roots),
             local_paths: false,
             base,
             entry: None,

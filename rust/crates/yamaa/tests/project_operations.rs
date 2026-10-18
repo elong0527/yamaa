@@ -215,6 +215,50 @@ fn names_select_listed_specifications_and_refuse_unknown_or_shared_names() {
     assert!(!study.exists("out/dm.csv"));
 }
 
+/// The caller's spelling of its project file keeps the authority of the
+/// directory it names, as an entry path's does, though the engine names each
+/// listed specification by its canonical identity. Here the spelling passes
+/// through a linked directory, as every macOS temporary path passes through
+/// `/var`, a link to `/private/var`.
+#[cfg(unix)]
+#[test]
+fn a_project_spelled_through_a_linked_directory_keeps_its_authority() {
+    struct Link(PathBuf);
+    impl Drop for Link {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.0);
+        }
+    }
+    let study = study();
+    let mut name = study.0.file_name().unwrap().to_os_string();
+    name.push("-link");
+    let link = Link(study.0.with_file_name(name));
+    std::os::unix::fs::symlink(&study.0, &link.0).unwrap();
+    let project = link.0.join("project.yaml").to_str().unwrap().to_owned();
+    let engine = engine();
+    let token = CancellationToken::new();
+    let check = engine.project_check(&project, &token);
+    assert_eq!(check.rows(), 0, "{:?}", rows(&check));
+    let run = engine.project_run(&project, None, &token).unwrap();
+    assert_eq!(run.names(), ["DM", "AE", "ADSL"]);
+    assert_eq!(run.issues().rows(), 0, "{:?}", rows(&run.issues()));
+    // A selected specification is checked and run as the caller named it.
+    let path = engine.project_spec(&project, "DM").unwrap();
+    assert_eq!(path, study.path("sdtm/dm.yaml"));
+    let check = engine.spec_check(&path, Some(&project), &token);
+    assert_eq!(check.rows(), 0, "{:?}", rows(&check));
+    let run = engine.spec_run(&path, Some(&project), &token).unwrap();
+    assert_eq!(run.issues().rows(), 0, "{:?}", rows(&run.issues()));
+    assert_eq!(run.output().unwrap().rows(), 2);
+    // The authority is the caller's own: a specification that declares the
+    // linked spelling still walks it from the filesystem root and refuses it.
+    let linked = link.0.join("raw/dm.csv").to_str().unwrap().to_owned();
+    study.write("sdtm/dm.yaml", DM.replace("../raw/dm.csv", &linked));
+    let run = engine.spec_run(&path, None, &token).unwrap();
+    assert!(run.output().is_none());
+    assert_eq!(conditions(&run.issues()), ["resource_path_symlink"]);
+}
+
 #[test]
 fn unknown_sections_are_refused_arguments() {
     let study = study();

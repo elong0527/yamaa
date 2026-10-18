@@ -97,11 +97,12 @@ root, a data root or the process working directory.
 <a id="req-0781"></a>
 
 **REQ-0781.** Every resolved location has a physical directory **anchor** and
-retained component witnesses. The caller's entry parent is canonicalized and
-opened once; aliases the caller used for that selected directory retain the
-same authority. A declaration outside that parent is walked from its filesystem
-root. The anchor is an IO consistency mechanism, not an application containment
-policy or fallback search location. Python and R use the same resolution and
+retained component witnesses. The caller's entry parent, and the parent of the
+project file the caller passes, are each canonicalized and opened once; aliases
+the caller used for a selected directory retain the same authority. A
+declaration outside those parents is walked from its filesystem root. The
+anchor is an IO consistency mechanism, not an application containment policy
+or fallback search location. Python and R use the same resolution and
 native traversal rules on every supported platform.
 
 <a id="req-1246"></a>
@@ -137,12 +138,13 @@ component is a regular file.
 <a id="req-0783"></a>
 
 **REQ-0783.** **No component below the anchor is a symbolic link**, including
-one whose target is otherwise readable. The caller-selected entry parent is
-exempt: its canonical directory and descriptor are selected before any
-specification is read. Declared paths do not select exempt directories. A path
-outside that parent retains the no-link check on every component below its
-filesystem root. Each walk verifies the retained directory and file entries so
-that a name substitution cannot redirect a read or publication silently.
+one whose target is otherwise readable. The caller-selected parents of
+[REQ-0781](resources.md#req-0781) are exempt: their canonical directories and
+descriptors are selected before any specification is read. Declared paths do
+not select exempt directories. A path outside those parents retains the
+no-link check on every component below its filesystem root. Each walk verifies
+the retained directory and file entries; a name substitution cannot redirect a
+read or publication silently.
 
 <a id="req-0784"></a>
 

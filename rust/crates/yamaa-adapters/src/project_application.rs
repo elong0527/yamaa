@@ -19,10 +19,11 @@ pub fn prepare(
     environment: &str,
     host: Language,
 ) -> Result<FileProject, Error> {
-    let (resources, entry) =
+    let (mut resources, entry) =
         crate::file_configuration::resources(specification).map_err(Error::Configuration)?;
     let environment = environment_path(environment)
         .map_err(|error| Error::Project(file_project::Error::Resource(error)))?;
+    resources.select_caller_parent(&environment);
     FileProject::prepare(
         resources,
         &entry,

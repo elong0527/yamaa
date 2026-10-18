@@ -96,7 +96,7 @@ struct Configured {
     project_schemas: ProjectSchemas,
 }
 fn configure(specification: &str, environment: Option<&str>) -> Result<Configured, Error> {
-    let (resources, entry) =
+    let (mut resources, entry) =
         crate::file_configuration::resources(specification).map_err(Error::Configuration)?;
     // Public caller paths retain the established absolute-path policy. This is
     // a lexical fact; the first environment file is opened only after admission.
@@ -118,6 +118,9 @@ fn configure(specification: &str, environment: Option<&str>) -> Result<Configure
             })))
         }
     };
+    if let Some(environment) = environment.as_deref() {
+        resources.select_caller_parent(environment);
+    }
     Ok(Configured {
         resources,
         entry,
