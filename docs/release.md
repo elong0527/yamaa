@@ -284,17 +284,24 @@ root. `LICENSE.txt` is the project's MIT license. `LICENSE-THIRD-PARTY.txt`
 reproduces the license, copyright and NOTICE texts of every third-party crate
 in the normal and build dependency closure of the shipped Python and R
 binding crates, for every platform, and names the license relied on where a
-crate offers a choice. `LICENSE-READSTAT.txt`,
+crate offers a choice. It also reproduces the notice that the Rust project
+ships for the standard library of the pinned toolchain,
+`share/doc/rust/COPYRIGHT-library.html`, because the native extension links
+that library. `LICENSE-READSTAT.txt`,
 `LICENSE-UNICODE.txt` and `LICENSE-YAML.txt` cover the vendored ReadStat
 sources, the Unicode data in yamaa's own tables and the vendored YAML parser.
 The R package keeps its `MIT + file LICENSE` declaration, and its `Copyright`
 field names these files. The Python License-Expression,
-`MIT AND Apache-2.0 AND BSD-3-Clause AND Unicode-3.0`, covers the project and
-the crates linked into the wheels.
+`MIT AND Apache-2.0 AND BSD-3-Clause AND Unicode-3.0`, covers the project, the
+crates linked into the wheels and the standard library, which is relied on
+under MIT, with Unicode-3.0 for the Unicode tables in `core`.
 
 `tools.packaging.generate_third_party_notices` generates the crate notices
-from `rust/Cargo.lock` and derives that expression. The repository check fails
-when the locked graph gains or loses a crate without a matching notice entry.
+from `rust/Cargo.lock` and the standard library section from the toolchain
+that `rust/rust-toolchain.toml` pins, and it derives that expression. The
+repository check fails when the locked graph gains or loses a crate without a
+matching notice entry, when `rustc` in `rust/` is not the pinned toolchain, and
+when the committed section differs from that toolchain's notice.
 Native qualification and the release selector require every wheel and source
 package to carry each notice unchanged.
 

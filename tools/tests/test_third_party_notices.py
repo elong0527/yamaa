@@ -1,5 +1,7 @@
 """Third-party notices follow the locked closure of the shipped crates."""
 
+import dataclasses
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -21,6 +23,129 @@ BSD = (
 )
 CC0 = "Creative Commons Legal Code\n\nCC0 1.0 Universal\n"
 PROJECT_LICENSE = b"MIT License\n\nCopyright (c) 2026 yamaa contributors\n"
+QUOTED = (
+    'Copyright (c) 2016 Amanieu <a@example.org>\n\nTHE SOFTWARE IS PROVIDED "AS IS".\n'
+)
+# The shape of share/doc/rust/COPYRIGHT-library.html, with the template's
+# whitespace around each notice text and its character references.
+LIBRARY_HTML = """<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Copyright notices for The Rust Standard Library</title>
+</head>
+<body>
+
+<h1>Copyright notices for The Rust Standard Library</h1>
+
+<h2>Table of Contents</h2>
+<ul>
+    <li><a href="#short-version">Short version for non-lawyers</a></li>
+</ul>
+
+<h2 id="short-version">Short version for non-lawyers</h2>
+
+The Rust Standard Library is dual-licensed under Apache 2.0 and MIT terms.
+
+<h2 id="longer-version">Longer version</h2>
+
+<p>Copyrights in the Rust Standard Library are retained by their
+contributors.</p>
+
+<p>It is licensed under the <a href="http://opensource.org/licenses/MIT">MIT</a>
+license, at your option.</p>
+
+<h2 id="in-tree-files">In-tree files</h2>
+
+<p>The following licenses cover the in-tree source files:</p>
+
+<div style="border:1px solid black; padding: 5px;">
+
+    <p>
+    <b>File/Directory:</b> <code>.</code>
+    </p>
+
+    <p><b>License:</b> Apache-2.0 OR MIT</p>
+
+    <p><b>Copyright:</b> The Rust Project Developers</p>
+
+    <p><b>Exceptions:</b></p>
+
+<div style="border:1px solid black; padding: 5px;">
+    <p>
+    <b>File/Directory:</b> <code>library/std/src/sys/sync/mutex/fuchsia.rs</code>
+    </p>
+
+    <p><b>License:</b> BSD-2-Clause AND (Apache-2.0 OR MIT)</p>
+
+    <p><b>Copyright:</b> 2016 The Fuchsia Authors</p>
+
+</div>
+
+</div>
+
+<h2 id="out-of-tree-dependencies">Out-of-tree dependencies</h2>
+
+<p>The following licenses cover the out-of-tree crates that were used in the
+Rust Standard Library in this release:</p>
+
+    <h3>\N{PACKAGE} hashbrown-0.17.1</h3>
+    <p><b>URL:</b> <a href="https://crates.io/crates/hashbrown/0.17.1">https://crates.io/crates/hashbrown/0.17.1</a></p>
+    <p><b>Authors:</b> Amanieu &#60;a@example.org&#62;</p>
+    <p><b>License:</b> MIT OR Apache-2.0</p>
+
+        <p><b>Notices:</b>
+
+            <details>
+                <summary><code>LICENSE-MIT</code></summary>
+                <pre>
+QUOTED
+                </pre>
+            </details>
+
+        </p>
+
+    <h3>\N{PACKAGE} vex-sdk-0.27.1</h3>
+    <p><b>URL:</b> <a href="https://crates.io/crates/vex-sdk/0.27.1">https://crates.io/crates/vex-sdk/0.27.1</a></p>
+    <p><b>Authors:</b> Tropical</p>
+    <p><b>License:</b> MIT</p>
+
+
+</body>
+</html>
+""".replace(
+    "QUOTED",
+    QUOTED.replace("<", "&#60;").replace(">", "&#62;").replace('"', "&#34;"),
+)
+# A parsed standard library notice whose crate shares a text with the graph.
+LIBRARY = notices.StandardLibrary(
+    release="1.99.1",
+    statement=(
+        "Copyrights in the Rust Standard Library are retained by their contributors.",
+    ),
+    files=(
+        notices.LibraryFiles(
+            path=".",
+            license="Apache-2.0 OR MIT",
+            copyrights=("The Rust Project Developers",),
+            exceptions=(
+                notices.LibraryFiles(
+                    "library/core/src/unicode", "Unicode-3.0", ("Unicode, Inc",), ()
+                ),
+            ),
+        ),
+    ),
+    licenses=(("MIT", MIT.format(holder="<year> <copyright holders>")),),
+    crates=(
+        notices.LibraryCrate(
+            "windows-sys",
+            "0.61.2",
+            "MIT OR Apache-2.0",
+            (("license-mit", MIT.format(holder="Microsoft")),),
+        ),
+        notices.LibraryCrate("vex-sdk", "0.27.1", "MIT", ()),
+    ),
+)
 
 
 class Graph:
@@ -44,6 +169,7 @@ class Graph:
             "version": version,
             "license": license,
             "source": options.get("source", notices.CRATES_IO),
+            "repository": options.get("repository"),
             "manifest_path": str(directory / "Cargo.toml"),
             "targets": [{"kind": [options.get("kind", "lib")]}],
         }
@@ -167,6 +293,119 @@ class ExpressionChoice(unittest.TestCase):
                     notices.parse_expression(expression)
 
 
+class StandardLibraryNotice(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.documents = Path(temporary.name) / "share/doc/rust"
+        (self.documents / "licenses").mkdir(parents=True)
+        for license, text in (
+            ("Apache-2.0", APACHE),
+            ("BSD-2-Clause", "Copyright (c) <year> <owner>\n"),
+            ("MIT", MIT.format(holder="<year> <copyright holders>")),
+        ):
+            (self.documents / "licenses" / f"{license}.txt").write_text(text)
+
+    def read(self, html=LIBRARY_HTML):
+        (self.documents / "COPYRIGHT-library.html").write_text(html, encoding="utf-8")
+        return notices.read_standard_library(self.documents, "1.99.1")
+
+    def test_reads_the_statement_tree_license_texts_and_crates(self):
+        library = self.read()
+        self.assertEqual(library.release, "1.99.1")
+        self.assertEqual(
+            library.statement,
+            (
+                "Copyrights in the Rust Standard Library are retained by their "
+                "contributors.",
+                "It is licensed under the MIT license, at your option.",
+            ),
+        )
+        fuchsia = notices.LibraryFiles(
+            "library/std/src/sys/sync/mutex/fuchsia.rs",
+            "BSD-2-Clause AND (Apache-2.0 OR MIT)",
+            ("2016 The Fuchsia Authors",),
+            (),
+        )
+        self.assertEqual(
+            library.files,
+            (
+                notices.LibraryFiles(
+                    ".",
+                    "Apache-2.0 OR MIT",
+                    ("The Rust Project Developers",),
+                    (fuchsia,),
+                ),
+            ),
+        )
+        # Every license an in-tree entry names, with the toolchain's text.
+        self.assertEqual(
+            [license for license, _ in library.licenses],
+            ["Apache-2.0", "BSD-2-Clause", "MIT"],
+        )
+        # Notice texts come back verbatim from inside the template's wrapper.
+        self.assertEqual(
+            library.crates,
+            (
+                notices.LibraryCrate(
+                    "hashbrown",
+                    "0.17.1",
+                    "MIT OR Apache-2.0",
+                    (("LICENSE-MIT", QUOTED),),
+                ),
+                notices.LibraryCrate("vex-sdk", "0.27.1", "MIT", ()),
+            ),
+        )
+
+    def test_another_shape_stops_generation(self):
+        cases = {
+            "expected a table of contents": LIBRARY_HTML.replace(
+                '<h2 id="in-tree-files">', '<h2 id="in-tree">'
+            ),
+            "has 'Note: reviewed'": LIBRARY_HTML.replace(
+                "<p><b>Copyright:</b> 2016", "<p><b>Note:</b> reviewed</p><p>2016"
+            ),
+            "has an unexpected text": LIBRARY_HTML.replace("<pre>\n", "<pre>"),
+            "unexpected crate '\N{PACKAGE} vex-sdk-0.27.1'": LIBRARY_HTML.replace(
+                "crates/vex-sdk/0.27.1", "crates/vex-sdk/0.27.2"
+            ),
+            "names no path or license": LIBRARY_HTML.replace(
+                "<p><b>License:</b> Apache-2.0 OR MIT</p>", ""
+            ),
+        }
+        for message, html in cases.items():
+            with self.subTest(message=message):
+                with self.assertRaisesRegex(ValueError, re.escape(message)):
+                    self.read(html)
+        (self.documents / "licenses/BSD-2-Clause.txt").unlink()
+        with self.assertRaises(FileNotFoundError):
+            self.read()
+
+    def test_the_notice_comes_from_the_pinned_toolchain(self):
+        self.read()
+        sysroot = self.documents.parent.parent.parent
+        with mock.patch.object(notices.toolchain, "channel", return_value="1.99.1"):
+            with mock.patch.object(
+                notices.subprocess,
+                "check_output",
+                side_effect=["rustc 1.99.1\nrelease: 1.99.1\n", f"{sysroot}\n"],
+            ) as run:
+                self.assertEqual(notices.standard_library(), self.read())
+            self.assertEqual(
+                [call.args[0] for call in run.call_args_list],
+                [["rustc", "-vV"], ["rustc", "--print", "sysroot"]],
+            )
+            with mock.patch.object(
+                notices.subprocess,
+                "check_output",
+                return_value="rustc 1.97.0\nrelease: 1.97.0\n",
+            ):
+                with self.assertRaisesRegex(
+                    ValueError, "rustc is 1.97.0, but the notices need Rust 1.99.1"
+                ):
+                    notices.standard_library()
+
+
 class LockedClosure(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
@@ -248,10 +487,13 @@ class LockedClosure(unittest.TestCase):
             notices.license_expression(self.graph.metadata(), selected.values()),
             "MIT AND Apache-2.0 AND Unicode-3.0",
         )
-        rendered = notices.render(list(selected.values()))
+        rendered = notices.render(list(selected.values()), LIBRARY)
         # pyo3 and cc ship the same text: it prints once, under both crates.
         self.assertEqual(rendered.count("Copyright (c) 2020 PyO3"), 1)
         self.assertIn("cc 1.7.0 (LICENSE-MIT), pyo3 0.27.2 (LICENSE-MIT)", rendered)
+        # The standard library's windows-sys is the locked one: one text, one name.
+        self.assertEqual(rendered.count("Copyright (c) 2020 Microsoft"), 1)
+        self.assertEqual(rendered.count("windows-sys 0.61.2 (license-mit)"), 1)
         self.assertIn(
             "canonical Apache-2.0 text; the crate package ships none", rendered
         )
@@ -262,6 +504,8 @@ class LockedClosure(unittest.TestCase):
         )
         # A NOTICE line that looks like an entry is text, not an entry.
         self.assertNotIn("Crate: fake", rendered.partition("\nTexts\n")[0])
+        # The standard library's crates are not locked crates.
+        self.assertNotIn(("vex-sdk", "0.27.1"), notices.committed_entries(rendered))
         self.assertEqual(
             notices.committed_entries(rendered),
             {
@@ -297,7 +541,7 @@ class LockedClosure(unittest.TestCase):
         (notice,) = notices.notices_for(graph.metadata())
         self.assertEqual(notice.relied, ("BSD-3-Clause",))
         self.assertEqual([name for name, _ in notice.texts], ["zstd/LICENSE"])
-        rendered = notices.render([notice])
+        rendered = notices.render([notice], LIBRARY)
         self.assertIn("Copyright (c) 2016 Meta Platforms, Inc.", rendered)
         self.assertNotIn("GNU GENERAL PUBLIC LICENSE", rendered)
 
@@ -323,14 +567,94 @@ class LockedClosure(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "NOTICE: notices must be UTF-8 text"):
             notices.crate_notice(windows)
 
+    def test_shared_texts_come_from_a_crate_of_the_same_repository(self):
+        graph = Graph(self.root / "shared")
+        python = graph.crate("yamaa-python", "0.4.0", "MIT", member=True)
+        graph.crate("yamaa-r", "0.4.0", "MIT", member=True)
+        repository = "https://github.com/dropbox/rust-alloc-no-stdlib"
+        lending = graph.crate(
+            "alloc-no-stdlib",
+            "2.0.4",
+            "BSD-3-Clause",
+            {"LICENSE": BSD.replace("Example", "Dropbox")},
+            repository=repository,
+        )
+        borrowing = graph.crate(
+            "alloc-stdlib", "0.2.4", "BSD-3-Clause", repository=repository
+        )
+        graph.depend(python, lending)
+        graph.depend(python, borrowing)
+        selected = {
+            notice.name: notice for notice in notices.notices_for(graph.metadata())
+        }
+        self.assertEqual(
+            selected["alloc-stdlib"].texts,
+            (("LICENSE of alloc-no-stdlib 2.0.4", BSD.replace("Example", "Dropbox")),),
+        )
+        self.assertEqual(selected["alloc-stdlib"].fallbacks, ())
+        rendered = notices.render(list(selected.values()), LIBRARY)
+        self.assertIn("    Texts: [1] LICENSE of alloc-no-stdlib 2.0.4\n", rendered)
+        self.assertIn(
+            "[1] Shipped by: alloc-no-stdlib 2.0.4 (LICENSE),\n"
+            "    alloc-stdlib 0.2.4 (LICENSE of alloc-no-stdlib 2.0.4)\n",
+            rendered,
+        )
+        self.assertNotIn("<owner>", rendered)
+        graph.packages[borrowing]["repository"] = "https://github.com/example/other"
+        with self.assertRaisesRegex(ValueError, "must ship once, from the same"):
+            notices.notices_for(graph.metadata())
+        graph.packages[borrowing]["repository"] = repository
+        directory = Path(graph.packages[borrowing]["manifest_path"]).parent
+        (directory / "LICENSE").write_text(BSD)
+        with self.assertRaisesRegex(ValueError, "drop it from SHARED_TEXTS"):
+            notices.notices_for(graph.metadata())
+
+    def test_the_standard_library_section_follows_the_locked_crates(self):
+        notice = notices.notices_for(self.graph.metadata())
+        rendered = notices.render(notice, LIBRARY)
+        crates, _, rest = rendered.partition(
+            "\nRust standard library\n---------------------\n"
+        )
+        standard, _, texts = rest.partition("\nTexts\n-----\n")
+        self.assertIn("Crate: yamaa-saphyr-parser 0.2.1", crates)
+        self.assertIn(
+            "From share/doc/rust/COPYRIGHT-library.html of Rust 1.99.1:\n\n"
+            "Copyrights in the Rust Standard Library are retained by their "
+            "contributors.\n\n"
+            "File/Directory: .\n"
+            "    License: Apache-2.0 OR MIT\n"
+            "    Copyright: The Rust Project Developers\n"
+            "    Exceptions:\n"
+            "        File/Directory: library/core/src/unicode\n"
+            "            License: Unicode-3.0\n"
+            "            Copyright: Unicode, Inc\n",
+            standard,
+        )
+        self.assertIn("Crate: vex-sdk 0.27.1\n    License: MIT\n", standard)
+        self.assertIn("    Texts: none in the Rust project's notice\n", standard)
+        self.assertIn(
+            "Shipped by: Rust 1.99.1 (share/doc/rust/licenses/MIT.txt)\n", texts
+        )
+        self.assertIn("from\nrust/Cargo.lock and the Rust 1.99.1 toolchain", rendered)
+
     def test_check_fails_when_the_closure_gains_or_loses_a_crate(self):
         metadata = self.graph.metadata()
-        notices.write(metadata)
-        self.assertEqual(notices.check(metadata)[1], [])
+        notices.write(metadata, LIBRARY)
+        self.assertEqual(notices.check(metadata, LIBRARY)[1], [])
         self.assertEqual((notices.PYTHON / "LICENSE.txt").read_bytes(), PROJECT_LICENSE)
+        # A toolchain whose notice changed needs the notices regenerated.
+        changed = dataclasses.replace(LIBRARY, crates=LIBRARY.crates[:1])
+        self.assertEqual(
+            notices.check(metadata, changed)[1],
+            [
+                f"{relative}/LICENSE-THIRD-PARTY.txt: differs from the notices "
+                "generated from rust/Cargo.lock and the Rust 1.99.1 toolchain"
+                for relative in ("python", "R/yamaa/inst")
+            ],
+        )
         gained = self.graph.crate("snap", "1.1.2", "BSD-3-Clause", {"COPYING": BSD})
         self.graph.depend("yamaa-core@0.4.0", gained)
-        errors = notices.check(self.graph.metadata())[1]
+        errors = notices.check(self.graph.metadata(), LIBRARY)[1]
         self.assertIn(
             "python/LICENSE-THIRD-PARTY.txt: no entry for snap 1.1.2, which the "
             "locked graph ships",
@@ -347,7 +671,7 @@ class LockedClosure(unittest.TestCase):
             for dependency in self.graph.nodes["yamaa-core@0.4.0"]["deps"]
             if dependency["pkg"] not in {gained, "arrow@57.3.0"}
         ]
-        errors = notices.check(self.graph.metadata())[1]
+        errors = notices.check(self.graph.metadata(), LIBRARY)[1]
         self.assertIn(
             "R/yamaa/inst/LICENSE-THIRD-PARTY.txt: lists arrow 57.3.0, which the "
             "locked graph no longer ships",
@@ -355,13 +679,13 @@ class LockedClosure(unittest.TestCase):
         )
         self.assertIn(
             "R/yamaa/inst/LICENSE-THIRD-PARTY.txt: differs from the notices "
-            "generated from rust/Cargo.lock",
+            "generated from rust/Cargo.lock and the Rust 1.99.1 toolchain",
             errors,
         )
 
     def test_package_copies_must_match_their_sources(self):
         metadata = self.graph.metadata()
-        notices.write(metadata)
+        notices.write(metadata, LIBRARY)
         (notices.R_INST / "LICENSE-YAML.txt").write_text("changed\n")
         (notices.R_INST / "LICENSE-WINDOWS.txt").write_text("stale\n")
         (notices.PYTHON / "LICENSE.txt").write_text("edited\n")
@@ -369,7 +693,7 @@ class LockedClosure(unittest.TestCase):
             license="MIT AND Apache-2.0 AND Unicode-3.0",
             files=("LICENSE.txt", "LICENSE-YAML.txt"),
         )
-        errors = notices.check(metadata)[1]
+        errors = notices.check(metadata, LIBRARY)[1]
         for expected in (
             "python/pyproject.toml: license-files must list LICENSE-THIRD-PARTY.txt",
             "R/yamaa/inst/LICENSE-YAML.txt: must be identical to python/LICENSE-YAML.txt",
