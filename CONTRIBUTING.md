@@ -127,21 +127,23 @@ every two hours on main, and on each push to a `release/**` branch. Merges to
 main do not start workflows other than the documentation site deployment; main
 is checked on those schedules instead. While a workflow's latest main run
 fails, the `Main health` workflow keeps a `main-red` issue open for it and
-closes the issue when a later main run succeeds. A PR into main that changes
-`.github/` also runs actionlint over every workflow.
+closes the issue when a later main run succeeds. A PR that changes `.github/`
+also runs actionlint over every workflow.
 Keep workflow-specific setup in CI and reusable check logic in `tools/`.
 Pin external actions to complete commit IDs with exact release comments.
 
-A PR into a release integration branch (`release/X.Y.Z`) runs the CI workflow
-alone, and CI skips its `python-minimum` job, which tests the minimum
-saved-artifact readers. Optional format features, Dependency graphs,
-R-CMD-check and Workflow lint run on PRs into main, including the release
-branch's own PR, so every change still passes them before it reaches main. No
-schedule checks a release branch, so each push to one also runs Optional format
-features, Dependency graphs and R-CMD-check. To check a release branch sooner,
-dispatch one with `gh workflow run <workflow> --ref release/X.Y.Z`.
+PRs and the main schedule run only development checks: lint, repository
+checks, the Rust workspace, and the Python and R hosts on Linux. Release lanes
+check support claims and run on each `release/**` push and on dispatch: CI's
+minimum Rust toolchain, Python 3.15 and minimum saved artifact reader lanes,
+the optional format feature selections and the macOS, Windows and R-devel
+package checks. Dependency graphs and advisories, native qualification, Harbor
+and coverage run on dispatch (native qualification also on a
+`qualification/issue-*` push). Dispatch any of them on a branch with
+`gh workflow run <workflow> --ref <branch>` to check a change that needs them
+before merging.
 
-CI's `rust (minimum toolchain)` job checks and lints the workspace with its
+CI's `rust (minimum toolchain)` release lane checks and lints the workspace with its
 declared `rust-version`, Rust 1.90.0, instead of the pinned toolchain that every
 other job uses, because embedders build the facade with their own toolchains.
 Run it locally from `rust/`, with R installed:
@@ -152,10 +154,9 @@ RUSTFLAGS='-D warnings' cargo +1.90.0 check --locked --workspace --all-targets -
 RUSTFLAGS='-D warnings' cargo +1.90.0 clippy --locked --workspace --all-targets --all-features -- -D warnings
 ```
 
-`.github/workflows/dependency-graphs.yml` also resolves minimum and newest
-compatible graphs nightly, on dispatch, on each push to a release branch, and
-on each PR into main that changes a dependency manifest or lock, or the
-advisory policy in `rust/deny.toml` or `osv-scanner.toml`. Run a lane locally
+`.github/workflows/dependency-graphs.yml` checks both locks against the
+advisory policy in `rust/deny.toml` and `osv-scanner.toml`, and resolves
+minimum and newest compatible graphs, on dispatch. Run a lane locally
 with R and the normal development prerequisites installed:
 
 ```sh
@@ -242,8 +243,8 @@ new matching batch heads and fresh completed reviews. Batch metadata belongs
 in the PR body, not a committed evidence ledger.
 
 Native qualification is separate: `.github/workflows/native.yml` builds and
-installs the supported Python wheel/source and R source combinations nightly on
-main, on dispatch, or on a `qualification/issue-*` push. It checks public
+installs the supported Python wheel/source and R source combinations on
+dispatch or on a `qualification/issue-*` push. It checks public
 benchmark conformance, installed host suites, packaging, optimized Rust behavior
 and portable math. Passing ordinary CI does not qualify a release. The final
 merged revision needs complete native evidence, including strict R package

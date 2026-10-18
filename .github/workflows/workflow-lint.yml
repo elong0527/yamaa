@@ -3,9 +3,7 @@ name: Workflow lint
 # A broken file for a scheduled workflow stops it from running without any
 # failure to see, so check every workflow when a pull request changes one.
 on:
-  # PRs into a release integration branch run only the CI workflow.
   pull_request:
-    branches: [main]
     paths:
       - '.github/**'
   workflow_dispatch:
