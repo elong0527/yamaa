@@ -162,6 +162,17 @@ impl<'a> FirstTemplate<'a> {
     pub(super) fn finish(self) -> Vec<PreflightFinding> {
         self.findings
     }
+    /// The first template's row `filter` reads for that template's rows, so
+    /// a `SELF` read there, directly or through `between` values, finds no
+    /// completed row (LOOKUP-7).
+    pub(super) fn filter(&mut self, plan: &CompiledExpression, path: &str) {
+        let mut seen = std::collections::BTreeSet::new();
+        for name in plan.identifiers() {
+            if seen.insert(name) {
+                self.register(name.into(), path);
+            }
+        }
+    }
     fn register(&mut self, name: String, path: &str) {
         // Reading another selector also runs the selector its `between.value`
         // names, for the same row, so the read reaches SELF through each such

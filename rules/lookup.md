@@ -678,16 +678,19 @@ unfinished rows are never eligible, and a read from the first template fails.
 only through a named intermediate, never as a directly qualified source.
 
 Fails: `phase_boundary`.
-Evidence: `adam-adae-prior-serious-event`, `adam-advs-windows`, `negative-self-window-first-template`, `rust/crates/yamaa-adapters/tests/execution_declarative_self.rs`.
+Evidence: `adam-adae-prior-serious-event`, `adam-advs-windows`, `negative-self-window-first-template`, `negative-self-filter-first-template`, `rust/crates/yamaa-adapters/tests/execution_declarative_self.rs`.
 Replaces: REQ-0120.
 
 A read from the first template fails as `phase_boundary`. So does a
 first-template read of another named intermediate whose `between` value reads
 a `SELF` intermediate, directly or through the `between` values of further
 intermediates; the finding names the read, then each `between` value in the
-order followed. The donor fields are output columns derived in every row
-template; a column derived only in the later column phase is unavailable to
-`SELF`. The order of donors follows row construction order.
+order followed. The first template's row `filter` reads for that template's
+candidates, so a read there fails the same way, at `rows[0].filter`; a
+grouped template's `filter` reads no qualified name at all
+([ROW-6](rows.md#row-6)). The donor fields are output columns derived in every
+row template; a column derived only in the later column phase is unavailable
+to `SELF`. The order of donors follows row construction order.
 
 For `SELF`, `filter` and `order_by` may name its donor fields either bare or as
 `SELF.field`. Bare donor fields in `filter` are not correlated current-row

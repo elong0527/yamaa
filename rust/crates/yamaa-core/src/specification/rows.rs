@@ -1746,6 +1746,11 @@ impl Rows {
                 self_admission.visit(field(d, raw, "value")?, prefix, 0)?;
             }
         }
+        // A grouped template's filter reads no qualified name at all
+        // (ROW-6), which binding reports for every template.
+        if let (None, Some((_, Ok(plan)))) = (&templates[0].groups, &templates[0].filter) {
+            self_admission.filter(plan, "rows[0].filter");
+        }
         let self_findings = self_admission.finish();
         if !self_findings.is_empty() {
             return Err(PrepareError::Invalid(self_findings));
