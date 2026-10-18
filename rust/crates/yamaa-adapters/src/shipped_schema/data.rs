@@ -91,11 +91,7 @@ output_class:
         type: "list[identifier]"
         required: true
         description: See REQ-1047.
-    - warning_log:
-        type: path
-        required: false
-        description: See REQ-1047.
-    - verification_log:
+    - report:
         type: path
         required: false
         description: See REQ-1047.

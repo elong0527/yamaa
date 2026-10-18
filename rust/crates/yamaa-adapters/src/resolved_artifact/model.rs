@@ -30,8 +30,7 @@ pub enum ResourceRole {
     InputData,
     ProducerSchema,
     OutputData,
-    WarningLog,
-    VerificationLog,
+    Report,
     MappingDictionary,
     ParentSpecification,
 }

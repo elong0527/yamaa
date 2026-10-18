@@ -435,13 +435,13 @@ pub enum CompleteError<E> {
 
 /// An owned build result; obtaining it never calls a publisher. Table bytes are
 /// the admitted output projection, while private report artifacts are prospective.
+/// Every result holds its verified run report.
 #[derive(Debug)]
 pub struct BuildResult {
     prepared: yamaa_core::specification_output::PreparedOutput<StoredReport>,
     table: Option<(crate::public_table::PublicTable, Vec<u8>)>,
     issues: Vec<crate::issue_rows::Issue>,
-    verification: Option<crate::verification_logs::HeldLog>,
-    warning: Option<crate::verification_logs::HeldLog>,
+    report: crate::run_report::HeldReport,
 }
 impl BuildResult {
     pub fn output(&self) -> Option<&[u8]> {
@@ -453,32 +453,26 @@ impl BuildResult {
     pub fn issues(&self) -> &[crate::issue_rows::Issue] {
         &self.issues
     }
-    pub fn verification_log(&self) -> Option<&[u8]> {
-        self.verification.as_ref().map(|log| log.ipc())
+    /// The run report's owned Arrow IPC view.
+    pub fn run_report(&self) -> &[u8] {
+        self.report.ipc()
     }
-    pub fn warning_log(&self) -> Option<&[u8]> {
-        self.warning.as_ref().map(|log| log.ipc())
+    pub(crate) fn report_table(&self) -> &crate::public_table::PublicTable {
+        self.report.table()
     }
-    pub(crate) fn log_table(&self, warning: bool) -> Option<&crate::public_table::PublicTable> {
-        (if warning {
-            &self.warning
-        } else {
-            &self.verification
-        })
-        .as_ref()
-        .map(|log| log.table())
+    /// Whether the specification declares a report file for publication.
+    pub(crate) fn report_file(&self) -> bool {
+        self.report.file().is_some()
     }
-    /// Failed results have only an explicit diagnostic publication capability.
-    /// Warning and primary artifacts require the accepted primary owner.
+    /// Failed results have only an explicit diagnostic publication capability:
+    /// the declared report file. The primary artifact requires the accepted
+    /// primary owner.
     pub(crate) fn publication_items(&self) -> Vec<(&str, &[u8], &Value)> {
         let mut items = Vec::new();
-        if let Some(log) = &self.verification {
-            items.push((log.path(), log.bytes(), log.observation()));
+        if let Some(file) = self.report.file() {
+            items.push(file);
         }
         if self.output().is_some() {
-            if let Some(log) = &self.warning {
-                items.push((log.path(), log.bytes(), log.observation()));
-            }
             if let Some(artifact) = self.prepared.artifact() {
                 items.push((
                     artifact.path(),
@@ -495,7 +489,7 @@ impl BuildResult {
     }
     pub(crate) fn publication_observations(&self, completed: usize) -> Result<StoredReport, Error> {
         let items = self.publication_items();
-        if completed > items.len() || items.len() > 3 {
+        if completed > items.len() || items.len() > 2 {
             return Err(Error::InvalidObservation);
         }
         let original = self.prepared.prepared_report();
@@ -542,13 +536,14 @@ pub fn build_result<E>(
     attempt: &CapturedAttempt<E>,
     id: Identity<'_>,
 ) -> Result<BuildResult, Error> {
-    let execution = attempt
-        .result
-        .as_ref()
-        .ok()
-        .and_then(|r| r.execution.as_ref());
+    let response = attempt.result.as_ref().ok();
+    let execution = response.and_then(|r| r.execution.as_ref());
     let observations = observations(run, attempt, &id)?;
-    prepare_result(run, execution, id, observations)
+    let facts = crate::run_report::RunFacts::captured(
+        &attempt.sources,
+        response.map_or(&[], |r| r.template_rows.as_slice()),
+    );
+    prepare_result(run, execution, id, observations, &facts)
 }
 
 pub(crate) fn prepare_result(
@@ -556,53 +551,37 @@ pub(crate) fn prepare_result(
     execution: Option<&yamaa_core::dataset::Execution>,
     id: Identity<'_>,
     observations: StoredReport,
+    facts: &crate::run_report::RunFacts,
 ) -> Result<BuildResult, Error> {
     use yamaa_core::specification_output::{self as output, CompleteError as E};
-    let success = execution.is_some() && run.compiled().output_findings().is_empty();
-    let logs = crate::verification_logs::prepare(run, &observations, success)?;
-    let verification = logs.verification;
-    let mut warning = logs.warning;
-
-    let prepared = if let Some(error) = logs.failure {
-        rejected_output(observations, &error, "log")
-    } else {
-        let fallback = observations.clone();
-        output::prepare(
-            run.compiled(),
-            execution,
-            &mut Report {
-                run,
-                id,
-                value: Some(observations),
-            },
-            &mut Encoder(
-                run.compiled().output_profile(),
-                run.compiled().output_decimals(),
-            ),
-        )
-        .map_err(|error| match error {
-            E::Report(e) | E::Encode(e) => e,
-            E::Projection => Error::InvalidObservation,
-            E::Limit(error) => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
-                error.resource,
-                error.limit,
-                error.actual,
-                vec!["output.path".into()],
-            )),
-            E::Publish(never) => match never {},
-        })
-        .or_else(|error| {
-            if verification.is_some() {
-                rejected_output(fallback, &error, "output")
-            } else {
-                Err(error)
-            }
-        })
-    };
-    let mut prepared = prepared?;
-    if prepared.artifact().is_none() {
-        warning = None;
-    }
+    let fallback = observations.clone();
+    // Every run reports, so a failed output preparation becomes a failed run
+    // whose report records the failure rather than a refused result.
+    let mut prepared = output::prepare(
+        run.compiled(),
+        execution,
+        &mut Report {
+            run,
+            id,
+            value: Some(observations),
+        },
+        &mut Encoder(
+            run.compiled().output_profile(),
+            run.compiled().output_decimals(),
+        ),
+    )
+    .map_err(|error| match error {
+        E::Report(e) | E::Encode(e) => e,
+        E::Projection => Error::InvalidObservation,
+        E::Limit(error) => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
+            error.resource,
+            error.limit,
+            error.actual,
+            vec!["output.path".into()],
+        )),
+        E::Publish(never) => match never {},
+    })
+    .or_else(|error| rejected_output(fallback, &error))?;
     let table = prepared
         .artifact()
         .map(|artifact| {
@@ -629,35 +608,12 @@ pub(crate) fn prepare_result(
     let table = match table {
         Ok(table) => table,
         Err(error) => {
-            if verification.is_none() {
-                return Err(error);
-            }
-            // Host-view preparation grants no output authority. Preserve the
-            // completed verification capability and revoke warning/primary.
-
-            prepared = rejected_output(prepared.prepared_report().clone(), &error, "output")?;
-            warning = None;
+            // Host-view preparation grants no output authority. The run fails
+            // and its report records why; the primary artifact is revoked.
+            prepared = rejected_output(prepared.prepared_report().clone(), &error)?;
             None
         }
     };
-    // Retain complete prospective artifact observations in publication order.
-    // Ordinary build observations strip them until an actual Save enters them.
-    if verification.is_some() || warning.is_some() {
-        let mut report = prepared.prepared_report().clone();
-        let Value::Array(primary) = std::mem::take(&mut report["artifacts"]) else {
-            return Err(Error::InvalidObservation);
-        };
-        let mut artifacts = Vec::new();
-        if let Some(log) = &verification {
-            artifacts.push(log.observation().clone());
-        }
-        if let Some(log) = &warning {
-            artifacts.push(log.observation().clone());
-        }
-        artifacts.extend(primary);
-        report["artifacts"] = Value::Array(artifacts);
-        prepared.replace_report(report);
-    }
     let issues = prepared.prepared_report()["diagnostics"]
         .as_array()
         .ok_or(Error::InvalidObservation)?
@@ -666,25 +622,44 @@ pub(crate) fn prepare_result(
         .map(crate::issue_rows::Issue::from_diagnostic)
         .collect::<Result<Vec<_>, _>>()
         .map_err(|_| Error::InvalidObservation)?;
-
+    let condition = if table.is_some() && prepared.artifact().is_some() {
+        None
+    } else {
+        Some(
+            issues
+                .first()
+                .map(|issue| issue.condition.as_str())
+                .ok_or(Error::InvalidObservation)?,
+        )
+    };
+    let report =
+        crate::run_report::prepare(run, prepared.prepared_report(), facts, condition, execution)?;
+    // Retain complete prospective artifact observations in publication order.
+    // Ordinary build observations strip them until an actual Save enters them.
+    if let Some((_, _, observation)) = report.file() {
+        let mut stored = prepared.prepared_report().clone();
+        let Value::Array(primary) = std::mem::take(&mut stored["artifacts"]) else {
+            return Err(Error::InvalidObservation);
+        };
+        let mut artifacts = vec![observation.clone()];
+        artifacts.extend(primary);
+        stored["artifacts"] = Value::Array(artifacts);
+        prepared.replace_report(stored);
+    }
     Ok(BuildResult {
         prepared,
         table,
         issues: crate::issue_rows::collect(issues),
-        verification,
-        warning,
+        report,
     })
 }
 
 fn rejected_output(
     mut report: StoredReport,
     error: &Error,
-    stage: &str,
 ) -> Result<yamaa_core::specification_output::PreparedOutput<StoredReport>, Error> {
-    let reason = match (stage, error) {
-        ("log", Error::ResourceLimit(_)) => "log_output_limit",
-        ("log", _) => "log_output_projection",
-        (_, Error::ResourceLimit(_)) => "output_limit",
+    let reason = match error {
+        Error::ResourceLimit(_) => "output_limit",
         _ => "output_projection",
     };
     let diagnostic = specification_diagnostics::portable_diagnostic(match error {

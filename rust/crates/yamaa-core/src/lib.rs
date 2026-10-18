@@ -39,6 +39,7 @@ pub mod producer_graph;
 pub mod reference_binding;
 pub mod reference_scope;
 pub mod resource;
+pub mod run_report;
 pub mod scalar_language;
 pub mod schema;
 pub mod source_ordinal;
@@ -56,7 +57,6 @@ pub mod text_replace;
 pub mod text_template;
 pub mod typed_csv;
 pub mod value;
-pub mod verification_logs;
 
 /// Version of the shared core compiled into a native installation.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

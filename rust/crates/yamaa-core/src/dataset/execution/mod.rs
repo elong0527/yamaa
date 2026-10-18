@@ -167,6 +167,14 @@ pub struct Execution {
     pub verifications: Vec<CheckRecord>,
 }
 
+/// One completed row template: the rows it emitted and the driver records it
+/// read, counted where its candidates become final.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TemplateRows {
+    pub emitted: usize,
+    pub read: usize,
+}
+
 /// An attempted run retains handler evidence even when no dataset can be accepted.
 #[derive(Debug, PartialEq)]
 pub struct ExecutionAttempt<E> {
@@ -174,12 +182,16 @@ pub struct ExecutionAttempt<E> {
     pub handler_counts: Vec<HandlerCount>,
     /// Completed checks preceding an unrelated failure, outside its diagnostic.
     pub retained_verifications: Vec<CheckRecord>,
+    /// Row templates completed in construction order; a failed construction
+    /// retains the templates that finished before it.
+    pub template_rows: Vec<TemplateRows>,
 }
 
 #[derive(Default)]
 struct AttemptObservations {
     handlers: HandlerCounter,
     verifications: Vec<CheckRecord>,
+    templates: Vec<TemplateRows>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -747,6 +759,7 @@ impl DatasetPlan {
             result,
             handler_counts: observations.handlers.snapshot().to_vec(),
             retained_verifications: observations.verifications,
+            template_rows: observations.templates,
         };
         observer(ExecutionEvent::Phase(ExecutionPhase::Finished));
         attempt
@@ -823,6 +836,7 @@ impl DatasetPlan {
         let AttemptObservations {
             handlers,
             verifications: records,
+            templates,
         } = observations;
         let primary = row_drivers::Driver::Primary(table);
         let mut intermediate_run = intermediates::Run::default();
@@ -849,6 +863,7 @@ impl DatasetPlan {
             handlers,
             &mut intermediate_run,
             &primary,
+            templates,
         )?;
         self.complete_columns(
             table,
@@ -884,6 +899,8 @@ impl DatasetPlan {
 
     /// Construct all output candidates, either from the key grain of the
     /// sole key-mode template or by processing every row template in order.
+    /// Each completed template records the rows it emitted and the driver
+    /// records it read.
     #[allow(clippy::too_many_arguments)]
     fn build_candidates<T: TableAccess + ?Sized>(
         &self,
@@ -893,6 +910,7 @@ impl DatasetPlan {
         handlers: &mut HandlerCounter,
         intermediate_run: &mut intermediates::Run,
         primary: &row_drivers::Driver<'_, T>,
+        templates: &mut Vec<TemplateRows>,
     ) -> Result<Vec<Candidate>, Box<ExecutionError<T::Error>>> {
         let mut candidates: Vec<Candidate> = Vec::new();
         let mut next_selection_identity = 0usize;
@@ -913,6 +931,10 @@ impl DatasetPlan {
                     aggregate_row: None,
                 },
             )?;
+            templates.push(TemplateRows {
+                emitted: candidates.len(),
+                read: table.row_count(),
+            });
         } else {
             for (template_index, template) in self.templates().iter().enumerate() {
                 next_selection_identity = self.process_template(
@@ -926,6 +948,7 @@ impl DatasetPlan {
                     primary,
                     &mut candidates,
                     next_selection_identity,
+                    templates,
                 )?;
             }
         }
@@ -947,6 +970,7 @@ impl DatasetPlan {
         primary: &row_drivers::Driver<'_, T>,
         candidates: &mut Vec<Candidate>,
         mut next_selection_identity: usize,
+        templates: &mut Vec<TemplateRows>,
     ) -> Result<usize, Box<ExecutionError<T::Error>>> {
         let named = if let RowMode::IntermediateDriver { index, .. } = &template.mode {
             Some(intermediates::driver(
@@ -979,6 +1003,11 @@ impl DatasetPlan {
             stored
         };
         let table = &table;
+        // A named intermediate driver reads the records its own filter selects;
+        // an input dataset driver reads every stored record.
+        let read = named
+            .as_ref()
+            .map_or(table.row_count(), |relation| relation.eligible.len());
         let first = candidates.len();
         let deferred = crate::dataset::window_stages(
             &template.assignments,
@@ -1151,6 +1180,10 @@ impl DatasetPlan {
                 first,
             )?;
         }
+        templates.push(TemplateRows {
+            emitted: candidates.len() - first,
+            read,
+        });
         intermediate_run.publish_self(self)?;
         intermediates::verify(
             self,

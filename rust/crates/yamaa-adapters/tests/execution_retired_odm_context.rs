@@ -1290,12 +1290,12 @@ rows:
             }
         }
         #[test]
-        fn original_row_count_fractions_keep_exact_primary_and_governed_log_bytes() {
+        fn original_row_count_fractions_keep_exact_primary_and_report_bytes() {
             let (study, root) = Study::benchmark("schema-row-count-fractions");
             let mut result = study.build();
             assert!(result.issues().is_empty(), "{:?}", result.issues());
             assert!(result.save().unwrap());
-            for name in ["adsl.csv", "adsl-checks.csv", "adsl-warnings.csv"] {
+            for name in ["adsl.csv", "adsl-checks.csv"] {
                 assert_eq!(
                     fs::read(study.0.join(name)).unwrap(),
                     fs::read(root.join("expected").join(name)).unwrap(),
@@ -1355,20 +1355,21 @@ columns:
   - {name: G, type: str, derivation: SRC.G}
   - {name: F, type: str, derivation: SRC.F}
   - {name: B, type: str, derivation: SRC.B}
-output: {path: out.csv, columns: [I, G, F, B], verification_log: checks.csv}
+output: {path: out.csv, columns: [I, G, F, B], report: checks.csv}
 verifications:
   - row_count: {group_by: [G], filter: "F = 'Y'", when: "B = 'Y'", min_fraction: 0.5, max_fraction: 0.5}
 "#).unwrap();
             let mut result = study.build();
             assert!(result.issues().is_empty(), "{:?}", result.issues());
             assert!(result.save().unwrap());
+            // One bound group held of the two groups evaluated.
             assert!(fs::read_to_string(study.0.join("checks.csv"))
                 .unwrap()
-                .contains("held,,2,0,{}"));
+                .contains(",row_count,,,REQ-0385,error,held,,0,2,,{}\n"));
         }
 
         #[test]
-        fn grouped_warning_retains_all_counts_in_logs_and_samples_only_issue_display() {
+        fn grouped_warning_retains_all_counts_in_the_report_and_samples_only_issue_display() {
             let study = Study::new();
             fs::write(
                 study.0.join("input.csv"),
@@ -1385,7 +1386,7 @@ columns:
   - {name: I, type: int, derivation: SRC.I}
   - {name: G, type: str, derivation: SRC.G}
   - {name: F, type: str, derivation: SRC.F}
-output: {path: out.csv, columns: [I, G, F], warning_log: warnings.csv}
+output: {path: out.csv, columns: [I, G, F], report: report.csv}
 verifications:
   - row_count: {group_by: [G], filter: "F = 'Y'", min_fraction: 1, severity: warning}
 "#,
@@ -1411,7 +1412,7 @@ verifications:
                 6
             );
             assert!(result.save().unwrap());
-            assert!(fs::read_to_string(study.0.join("warnings.csv"))
+            assert!(fs::read_to_string(study.0.join("report.csv"))
                 .unwrap()
                 .contains("[0,0,0,0,0,0]"));
         }

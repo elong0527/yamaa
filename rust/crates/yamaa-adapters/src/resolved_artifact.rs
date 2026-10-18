@@ -166,8 +166,7 @@ fn entry(
         let relative_to = selector(normalized, output);
         for (field, role) in [
             ("path", ResourceRole::OutputData),
-            ("warning_log", ResourceRole::WarningLog),
-            ("verification_log", ResourceRole::VerificationLog),
+            ("report", ResourceRole::Report),
         ] {
             if normalized.field(output, field).is_none() {
                 continue;

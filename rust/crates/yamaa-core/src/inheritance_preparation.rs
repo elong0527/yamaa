@@ -154,7 +154,7 @@ fn rebase<P: PathPort>(
         let from_entry = document
             .field(output, "relative_to")
             .is_some_and(|id| matches!(&document.nodes()[id], N::Text(base) if base == "entry"));
-        for field in ["path", "warning_log", "verification_log"] {
+        for field in ["path", "report"] {
             if let Some(id) = document.field(output, field) {
                 paths.push((id, from_entry));
             }

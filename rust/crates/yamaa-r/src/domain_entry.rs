@@ -228,9 +228,12 @@ fn domain_arrow(handle: Robj, destination: Robj, kind: i32) -> List {
         let state = state
             .try_borrow()
             .map_err(|_| "domain result already borrowed")?;
+        // Interim mapping until the binding is renamed: the verification slot
+        // returns the run report and the retired warning slot returns nothing.
         let table = match kind {
             0 => state.build.output(),
-            1 | 2 => state.build.log(kind == 2),
+            1 => state.build.run_report(),
+            2 => None,
             _ => return Err("unknown Arrow table selection".into()),
         };
         table.map_or_else(
@@ -260,7 +263,9 @@ fn domain_log(handle: Robj, warning: bool) -> List {
         let state = state
             .try_borrow()
             .map_err(|_| "domain result already borrowed")?;
-        match state.build.log(warning) {
+        // Interim mapping until the binding is renamed: the verification slot
+        // returns the run report and the retired warning slot returns nothing.
+        match state.build.run_report().filter(|_| !warning) {
             Some(table) => crate::public_table::frame(table),
             None => Ok(NULL.into_robj()),
         }

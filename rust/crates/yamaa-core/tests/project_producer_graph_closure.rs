@@ -2566,6 +2566,7 @@ mod project {
                     values: vec![Value::Str("good".into())],
                     codes: vec!["later".into()],
                     default: false,
+                    path: "rows.later.submission.CODE.codelist".into(),
                 }],
             };
             let groups = |check| {

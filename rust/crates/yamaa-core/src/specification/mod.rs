@@ -37,13 +37,13 @@ mod root_filter;
 mod source_expressions;
 pub use source_expressions::SourceFinding;
 mod column_checks;
-mod logs;
+mod report;
 mod row_drivers;
 mod row_intermediates;
 mod rows;
 mod self_relations;
 mod verifications;
-pub use logs::{LogFinding, OutputLogs};
+pub use report::ReportFinding;
 mod windows;
 pub use windows::WindowFinding;
 mod functions;
@@ -100,7 +100,7 @@ pub enum PreflightFinding {
     TextExtract(crate::diagnostic::Diagnostic),
     TextTemplate(crate::diagnostic::Diagnostic),
     TextCase(crate::diagnostic::Diagnostic),
-    Log(LogFinding),
+    Report(ReportFinding),
     Imputation(crate::diagnostic::Diagnostic),
     RoundingInput {
         path: String,
@@ -373,7 +373,7 @@ pub struct PreparedSpecification {
     output: TableSchema,
     projection: Vec<String>,
     output_path: String,
-    output_logs: OutputLogs,
+    output_report: Option<String>,
     output_decimals: Option<String>,
     output_order: Vec<(String, bool, bool)>,
     root_filter: Option<root_filter::RootFilter>,
@@ -1017,7 +1017,7 @@ struct PreparedOutputDeclarations {
     projection: Vec<String>,
     keys: Vec<usize>,
     verifications: verifications::Verifications,
-    output_logs: OutputLogs,
+    output_report: Option<String>,
     intermediates: intermediates::Declarations,
 }
 
@@ -1096,12 +1096,12 @@ fn prepare_output_declarations(
         .chain(&verifications.declared_warning_paths)
         .cloned()
         .collect::<Vec<_>>();
-    let (output_logs, log_findings) = OutputLogs::prepare(d, output_id, &output_path, warnings)?;
-    if !log_findings.is_empty() {
+    let (output_report, report_findings) = report::prepare(d, output_id, &output_path, warnings)?;
+    if !report_findings.is_empty() {
         return Err(PrepareError::Invalid(
-            log_findings
+            report_findings
                 .into_iter()
-                .map(PreflightFinding::Log)
+                .map(PreflightFinding::Report)
                 .collect(),
         ));
     }
@@ -1123,7 +1123,7 @@ fn prepare_output_declarations(
         projection,
         keys,
         verifications,
-        output_logs,
+        output_report,
         intermediates,
     })
 }
@@ -1394,7 +1394,7 @@ impl PreparedSpecification {
             projection,
             keys,
             verifications,
-            output_logs,
+            output_report,
             intermediates,
         } = prepare_output_declarations(
             d,
@@ -1439,7 +1439,7 @@ impl PreparedSpecification {
                 output,
                 projection,
                 output_path,
-                output_logs,
+                output_report,
                 output_decimals,
                 output_order,
                 root_filter,
@@ -1476,7 +1476,7 @@ impl PreparedSpecification {
             output,
             projection,
             output_path,
-            output_logs,
+            output_report,
             output_decimals,
             output_order,
             root_filter,
@@ -1612,8 +1612,21 @@ impl PreparedSpecification {
     pub fn output_path(&self) -> &str {
         &self.output_path
     }
-    pub fn output_logs(&self) -> &OutputLogs {
-        &self.output_logs
+    /// The file the run report is written to, when the specification names one.
+    pub fn output_report(&self) -> Option<&str> {
+        self.output_report.as_deref()
+    }
+    /// Each row template's stable path and driver name in construction order,
+    /// or root `base` and the driver when no row templates are declared.
+    pub fn row_constructions(&self) -> Vec<(String, &str)> {
+        match &self.rows {
+            Some(rows) => rows
+                .drivers()
+                .enumerate()
+                .map(|(index, driver)| (std::format!("rows[{index}]"), driver))
+                .collect(),
+            None => vec![("base".into(), self.source().name.as_str())],
+        }
     }
     pub fn output_profile(&self) -> Option<&'static str> {
         output_profile(&self.output_path)

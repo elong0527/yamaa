@@ -124,12 +124,13 @@ impl Domain {
         let guard = self.inner.try_lock().map_err(|_| poisoned())?;
         crate::report_fields::issue_rows(py, &guard.report().diagnostics)
     }
+    // Interim mapping until the binding is renamed: the verification slot
+    // returns the run report and the retired warning slot returns nothing.
     fn log(&self, warning: bool) -> PyResult<Option<crate::arrow_bridge::ArrowTable>> {
-        Ok(self
-            .inner
-            .try_lock()
-            .map_err(|_| poisoned())?
-            .log(warning)
+        let guard = self.inner.try_lock().map_err(|_| poisoned())?;
+        Ok(guard
+            .run_report()
+            .filter(|_| !warning)
             .map(crate::arrow_bridge::ArrowTable::from))
     }
     fn save(&self) -> PyResult<bool> {
