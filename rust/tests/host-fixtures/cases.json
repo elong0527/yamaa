@@ -4032,14 +4032,16 @@
       "retained_source_files": [
         "spec.yaml",
         "submission-spec.yaml",
-        "environment.yaml"
+        "project.yaml"
       ],
       "issue_columns": [
         "phase",
         "condition",
         "requirement",
         "spec_paths",
-        "context"
+        "context",
+        "source_span",
+        "operand_route"
       ],
       "lb_columns": [
         "DOMAIN",
