@@ -2486,12 +2486,18 @@ impl PreparedSpecification {
             .map(|filter| filter.bind(&self.source().name, source, &mut findings))
             .transpose()?
             .flatten();
-        // Every row is built from the base driver, the primary port.
+        // Every row is built from the base driver, the primary port. A dataset
+        // verification reads its intermediates for every row, as a column does.
+        let verifications = self.verifications.bind(self, &secondary, &intermediates)?;
+        let verification_reads = relation_predicates::predicate_reads(
+            relation_predicates::verification_predicates(&verifications),
+        );
         lookup_range::admit(
             [(
                 assignments
                     .values()
                     .map(|assignment| &assignment.expression)
+                    .chain(&verification_reads)
                     .collect(),
                 vec![0],
             )],
@@ -2501,10 +2507,13 @@ impl PreparedSpecification {
         relation_predicates::admit_reads(
             assignments
                 .values()
-                .map(|assignment| &assignment.expression),
+                .map(|assignment| &assignment.expression)
+                .chain(&verification_reads),
             &intermediates,
+            &self.intermediates,
             0,
             &RowMode::Keys,
+            None,
             &mut findings,
         );
         if !findings.is_empty() {
@@ -2523,7 +2532,6 @@ impl PreparedSpecification {
         let record_windows = key_assignments
             .iter()
             .any(|a| a.expression.window().is_some());
-        let verifications = self.verifications.bind(self, &secondary, &intermediates)?;
         DatasetPlan::new_with_intermediates(
             crate::dataset::SourceSchemas {
                 primary: source.clone(),

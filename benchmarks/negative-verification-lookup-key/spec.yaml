@@ -1,0 +1,47 @@
+schema_version: "1.0"
+domain: ADLB
+keys: [USUBJID, LBTESTCD, LBSEQ]
+input:
+  LB: {path: input/lb.csv, types: {LBSEQ: int, LBSTRESN: float}}
+  DM: input/dm.csv
+  LBBASE: {path: input/lbbase.csv, types: {BASE: float}}
+base: LB
+
+output:
+  path: adlb.csv
+  columns: [USUBJID, LBTESTCD, LBSEQ, AVAL]
+
+intermediates:
+  # Each result's baseline value. The subject is matched through the
+  # demographics dataset, which does not build the rows, so the
+  # specification is rejected before any data is read.
+  - id: BASELINE
+    dataset: LBBASE
+    key: {USUBJID: DM.USUBJID, LBTESTCD: LBTESTCD}
+    no_match: null
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: LB.USUBJID
+
+  - name: LBTESTCD
+    type: str
+    label: Lab Test or Examination Short Name
+    derivation: LB.LBTESTCD
+
+  - name: LBSEQ
+    type: int
+    label: Sequence Number
+    derivation: LB.LBSEQ
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: LB.LBSTRESN
+
+verifications:
+  - assert:
+      id: every-result-has-a-baseline
+      require: "BASELINE.BASE IS NOT NULL"

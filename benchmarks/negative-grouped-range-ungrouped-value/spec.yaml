@@ -1,0 +1,49 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  EX: {path: input/ex.csv, types: {EXSTDY: int, EXDOSE: float}}
+  PERIODS: {path: input/periods.csv, types: {APERIOD: int, LO: int, HI: int}}
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, TOTDOSE, APERIOD]
+
+intermediates:
+  # The treatment period holding an administration's study day.
+  - id: PERIOD
+    dataset: PERIODS
+    key: [STUDYID]
+    between: {value: EX.EXSTDY, lower: LO, upper: HI}
+    no_match: null
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: TOTDOSE
+    type: float
+    label: Total Dose Administered
+
+  - name: APERIOD
+    type: int
+    label: Period of First Dose
+
+rows:
+  # One record per subject from the subject's exposure records. The period
+  # is found from an administration's study day, which differs between the
+  # subject's administrations, so the specification is rejected before any
+  # data is read.
+  - id: subject
+    dataset: EX
+    group_by: [EX.STUDYID, EX.USUBJID]
+    derivations:
+      STUDYID: EX.STUDYID
+      USUBJID: EX.USUBJID
+      TOTDOSE: {aggregate: "SUM(EX.EXDOSE)"}
+      APERIOD: PERIOD.APERIOD
