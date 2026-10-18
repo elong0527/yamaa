@@ -792,7 +792,9 @@ pub(super) fn bind_row(
             secondary,
             intermediates,
         ),
-        Operation::Window(window) => window.bind_available(catalog, available, edges, findings),
+        Operation::Window(window) => {
+            window.bind_available(catalog, row, available, edges, findings)
+        }
         Operation::FirstAvailable(selection) => bind_selection(
             selection,
             path,

@@ -255,11 +255,12 @@ impl Declaration {
         edges: &mut Vec<usize>,
         findings: &mut Vec<BindFinding>,
     ) -> Result<Option<crate::dataset::Expression>, BindError> {
-        self.bind_available(catalog, None, edges, findings)
+        self.bind_available(catalog, None, None, edges, findings)
     }
     pub(super) fn bind_available(
         &self,
         catalog: &Catalog,
+        row: Option<&str>,
         available: Option<&[usize]>,
         edges: &mut Vec<usize>,
         findings: &mut Vec<BindFinding>,
@@ -337,6 +338,7 @@ impl Declaration {
                 findings.push(BindFinding::OutputReference {
                     path,
                     name: name.into(),
+                    row: row.map(String::from),
                     finding,
                 });
                 return Ok(0);
