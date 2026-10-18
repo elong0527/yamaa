@@ -62,7 +62,7 @@ agreement to the planning stage.
 |---|---|---|
 | Schema | Declares what a specification may contain; anything it does not declare is rejected before execution. | [Schema introduction](schema-intro.md) |
 | Rules | Fix the meaning of every written item, so the R and Python engines cannot read the same spec in two ways. | [Rules](rules.md) |
-| Engine | Runs specifications in Python and R; the same specification with the same inputs produces the same output dataset. | Python and R engines under Engine in the nav |
+| Engine | Runs specifications in Python and R; the same specification with the same inputs produces the same output dataset. | [R and Python API](api.md) |
 | Benchmark | Runnable specifications with input data and byte-exact expected outputs. | [Benchmark](../benchmark/index.md) |
 
 ## What a specification looks like
@@ -96,9 +96,9 @@ with its R or Python driver, or a readable R or Python implementation,
 including code produced with AI assistance. The sponsor prepares and reviews
 any separate implementation as part of its own development process.
 
-Retain the exact inputs, specification and inherited files, codelists and
-other referenced resources, driver, project functions, and environment
-declarations used for the build. Record the yamaa version and the host and
+Retain the exact inputs, specification and inherited files, project file,
+codelists and other referenced resources, driver, project functions, and
+environment declarations used for the build. Record the yamaa version and the host and
 dependency versions. The sponsor determines which of these accompany the
 submitted programs alongside the datasets, define.xml and reviewer's guide.
 

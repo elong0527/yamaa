@@ -9,7 +9,9 @@ owns authoring conventions.
   values and ordered calculation steps as derivations in that spec, not as
   `adsl-s1.yaml`, `adsl-final.yaml`, or other staged dataset files
 - establish dependency to avoid duplicate logic (e.g. the rest of the ADaM specs should depend on adsl.yaml)
-- keep orchestration small: call the Python or R package for each final dataset
+- keep orchestration small: list every spec in the study's `project.yaml` and
+  build them with one project run, `project.run("adam")`, not one call per
+  dataset; see the [R and Python API](api.md#run-a-whole-standard)
 - keep study-owned orchestration and comparison code beside the study
 - verify equivalence of all data with a tolerance at 1e-10.
 - Equivalence means 100% of columns and 100% of cells match, with zero validation issues.
@@ -64,7 +66,9 @@ the yamaa spec must be built as a robust and succinct yamaa spec.
 
 ## 3. Derivation order and dependency handling
 
-Derive in dependency order; every predecessor is staged before it is read:
+Derive in dependency order; every predecessor is staged before it is read. A
+project run keeps this order itself when each input that reads a predecessor
+links that predecessor's spec through `schema`:
 
 1. **Staging specs** (e.g. per-record exposure staging) - pure SDTM input.
 2. **ADSL** - from SDTM plus staging specs.
