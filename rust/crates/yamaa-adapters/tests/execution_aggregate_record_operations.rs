@@ -187,6 +187,86 @@ mod execution {
         assert!(!fixture.0.join("result.csv").exists());
     }
         }
+        /// A qualified `between.value` reads the record that built the row, so
+        /// it names the driver of every row the aggregate is derived for.
+        /// Another input has no record there and is refused (#2904).
+        #[test]
+        fn a_qualified_between_value_reads_only_the_rows_own_driver_record() {
+            let run = |spec: String| {
+                let fixture = Fixture::new();
+                fs::write(fixture.0.join("a.csv"), b"ID,CUT\na,1\nb,2\n").unwrap();
+                fs::write(
+                    fixture.0.join("b.csv"),
+                    b"ID,N\na,1\na,2\na,3\nb,1\nb,2\nb,3\n",
+                )
+                .unwrap();
+                // C orders the subjects the other way and keeps each limit in
+                // the column where A keeps its cutoff.
+                fs::write(fixture.0.join("c.csv"), b"ID,LIMIT\nb,3\na,2\n").unwrap();
+                fs::write(fixture.0.join("spec.yaml"), spec).unwrap();
+                let issues = match fixture.run() {
+                    Ok(mut domain) if domain.issues().is_empty() => {
+                        assert!(domain.save().unwrap());
+                        return Ok(fs::read_to_string(fixture.0.join("result.csv")).unwrap());
+                    }
+                    Ok(mut domain) => {
+                        assert!(domain.save().is_err());
+                        domain.issues()
+                    }
+                    Err(issues) => issues,
+                };
+                Err(issues
+                    .iter()
+                    .map(|issue| yamaa_adapters::json!({"phase": issue.phase, "condition": issue.condition, "requirement": issue.requirement, "spec_paths": issue.spec_paths, "context": issue.context.clone()}))
+                    .collect::<Vec<_>>())
+            };
+            let refused = |identifier: &str| {
+                Err(vec![yamaa_adapters::json!({
+                    "phase": "validation", "condition": "unknown_field", "requirement": "REQ-0121",
+                    "spec_paths": ["columns.TOTAL.derivation.aggregate.between.value"],
+                    "context": {"identifier": identifier}
+                })])
+            };
+            let operation = |value: &str| {
+                format!("        between: {{value: {value}, lower: N}}\n        expr: SUM(B.N)\n")
+            };
+            let inputs = |spec: String| {
+                spec.replace(
+                    "  B: {path: b.csv, types: {N: int}}\n",
+                    "  B: {path: b.csv, types: {N: int}}\n  C: {path: c.csv, types: {LIMIT: int}}\n",
+                )
+            };
+            // Without row templates the base input builds every row.
+            for value in ["A.CUT", "CUT"] {
+                assert_eq!(
+                    run(inputs(specification(&operation(value)))),
+                    Ok("ID,CUT,TOTAL\na,1,1\nb,2,3\n".into())
+                );
+            }
+            assert_eq!(
+                run(inputs(specification(&operation("C.LIMIT")))),
+                refused("C.LIMIT")
+            );
+            // Rows built from A and from C share the aggregate's column, so
+            // neither input supplies a record for every row.
+            let rows = |value: &str, templates: &str| {
+                format!("schema_version: '1.0'\ndomain: TEST\nkeys: [ID, ORIGIN]\ninput:\n  A: {{path: a.csv, types: {{CUT: int}}}}\n  B: {{path: b.csv, types: {{N: int}}}}\n  C: {{path: c.csv, types: {{LIMIT: int}}}}\noutput: {{path: result.csv, columns: [ID, ORIGIN, TOTAL]}}\ncolumns:\n  - {{name: ID, type: str}}\n  - {{name: ORIGIN, type: str}}\n  - name: TOTAL\n    type: float\n    derivation:\n      aggregate:\n{}rows:\n{templates}", operation(value))
+            };
+            let from_a =
+                "  - id: a\n    dataset: A\n    derivations: {ID: A.ID, ORIGIN: {literal: A}}\n";
+            let from_c =
+                "  - id: c\n    dataset: C\n    derivations: {ID: C.ID, ORIGIN: {literal: C}}\n";
+            assert_eq!(
+                run(rows("A.CUT", from_a)),
+                Ok("ID,ORIGIN,TOTAL\na,A,1\nb,A,3\n".into())
+            );
+            for value in ["A.CUT", "C.LIMIT"] {
+                assert_eq!(
+                    run(rows(value, &format!("{from_a}{from_c}"))),
+                    refused(value)
+                );
+            }
+        }
         #[test]
         fn named_derive_read_requires_keep_and_uses_original_current_record() {
             let fixture = Fixture::new();
@@ -2869,6 +2949,160 @@ S1,002,2024-06
                     Ok("USUBJID,ORIGIN,WINDOW\nS1,SUBJ,NONE\nS2,SUBJ,NONE\nS2,REF,EARLY\nS1,REF,LATE\n".into())
                 );
             }
+        }
+
+        /// An aggregate's `between.value` qualified by an input reads that
+        /// input's record only where it drives every row the column derives.
+        /// `check` refuses any other input from the declarations alone.
+        #[test]
+        fn an_aggregate_between_value_reads_only_its_own_driver_record() {
+            const WINDOW: &str = "intermediates:\n  - id: W\n    dataset: WIN\n    key: [USUBJID]\n    between: {value: REF.REFDAY, lower: LO, upper: HI}\n    order_by: [WIN.LO]\n    keep: first\n    no_match: null\n";
+            // The check issues, and the domain issues or the saved artifact.
+            let run = |body: &str| {
+                let fixture = Fixture::new();
+                fs::write(fixture.0.join("spec.yaml"), format!("schema_version: '1.0'\ndomain: OUT\ninput:\n  SUBJ: {{path: subj.csv, types: {{SUBJDAY: int}}}}\n  REF: {{path: ref.csv, types: {{REFDAY: int}}}}\n  WIN: {{path: win.csv, types: {{LO: int, HI: int}}}}\n  EVT: {{path: evt.csv, types: {{EVDAY: int}}}}\n{body}")).unwrap();
+                // REF orders subjects the other way and keeps its day in the
+                // column where SUBJ keeps a different day.
+                fs::write(fixture.0.join("subj.csv"), "USUBJID,SUBJDAY\nS1,5\nS2,50\n").unwrap();
+                fs::write(fixture.0.join("ref.csv"), "USUBJID,REFDAY\nS2,5\nS1,50\n").unwrap();
+                fs::write(fixture.0.join("win.csv"), "USUBJID,NAME,LO,HI\nS1,EARLY,1,10\nS1,LATE,11,100\nS2,EARLY,1,10\nS2,LATE,11,100\n").unwrap();
+                fs::write(
+                    fixture.0.join("evt.csv"),
+                    "USUBJID,EVDAY\nS1,3\nS1,10\nS1,60\nS2,3\nS2,10\nS2,60\n",
+                )
+                .unwrap();
+                let path = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
+                let request = || Request {
+                    specification: &path,
+                    environment: None,
+                };
+                let identity = || Identity {
+                    runtime: "test",
+                    runtime_version: "test",
+                    engine_version: yamaa_core::VERSION,
+                    example: "aggregate-between-current-driver",
+                    specification: &path,
+                    base_directory: ".",
+                };
+                let checked = file_application::check(
+                    yamaa_core::project_function::Language::Python,
+                    request(),
+                    identity(),
+                )
+                .iter()
+                .map(issue)
+                .collect::<Vec<_>>();
+                let built = match file_application::domain(
+                    yamaa_core::project_function::Language::Python,
+                    request(),
+                    identity(),
+                ) {
+                    Ok(mut result) => {
+                        let issues = result.issues().iter().map(issue).collect::<Vec<_>>();
+                        if issues.is_empty() {
+                            assert!(result.save().unwrap());
+                            Ok(fs::read_to_string(fixture.0.join("out.csv")).unwrap())
+                        } else {
+                            assert!(result.save().is_err());
+                            Err(issues)
+                        }
+                    }
+                    Err(failure) => Err(failure.iter().map(issue).collect::<Vec<_>>()),
+                };
+                (checked, built)
+            };
+            // Events on or after the day the value names.
+            let count = |value: &str| {
+                format!("{{aggregate: {{between: {{value: {value}, upper: EVDAY}}, expr: 'COUNT(EVT.*)'}}}}")
+            };
+            let base = |derivation: &str| {
+                format!("keys: [USUBJID]\nbase: SUBJ\noutput: {{path: out.csv, columns: [USUBJID, N]}}\ncolumns:\n  - {{name: USUBJID, type: str, derivation: SUBJ.USUBJID}}\n  - {{name: RDAY, type: int, derivation: REF.REFDAY}}\n  - {{name: N, type: int, derivation: {derivation}}}\n")
+            };
+            let refused_at = |path: &str, identifier: &str| {
+                vec![yamaa_adapters::json!({
+                    "phase": "validation", "condition": "unknown_field", "requirement": "REQ-0121",
+                    "spec_paths": [path], "context": {"identifier": identifier}
+                })]
+            };
+            let refused = |identifier: &str| {
+                refused_at("columns.N.derivation.aggregate.between.value", identifier)
+            };
+            // The base driver's rows name no REF record, read directly or from
+            // an alternative of a case.
+            let alternative = format!(
+                "{{case: [{{when: 'USUBJID IS NOT NULL', then: {}}}, {{otherwise: {{literal: null}}}}]}}",
+                count("REF.REFDAY")
+            );
+            for (derivation, expected) in [
+                (count("REF.REFDAY"), refused("REF.REFDAY")),
+                (
+                    alternative,
+                    refused_at(
+                        "columns.N.derivation.case[0].then.aggregate.between.value",
+                        "REF.REFDAY",
+                    ),
+                ),
+            ] {
+                assert_eq!(
+                    run(&base(&derivation)),
+                    (expected.clone(), Err(expected)),
+                    "{derivation}"
+                );
+            }
+            // An output-row reduction narrows by no range at all: binding refuses
+            // the range itself, and `check` does not misname its value.
+            let (checked, built) = run(&base(
+                "{aggregate: {group_by: [USUBJID], between: {value: REF.REFDAY, upper: RDAY}, expr: 'MAX(RDAY)'}}",
+            ));
+            assert_eq!(checked, Vec::<yamaa_core::json::Value>::new());
+            assert_eq!(
+                built,
+                Err(vec![yamaa_adapters::json!({
+                    "phase": "validation", "condition": "invalid_aggregate_context", "requirement": "REQ-0329",
+                    "spec_paths": ["columns.N.derivation.aggregate.between"],
+                    "context": {"expr": "MAX(RDAY)", "reason": "between narrows a qualified right side only"}
+                })])
+            );
+            // The base driver's own record supplies the value, and so does a
+            // column built for the row, here REF's day joined on the subject.
+            for (value, expected) in [("SUBJ.SUBJDAY", "S1,2\nS2,1\n"), ("RDAY", "S1,1\nS2,2\n")] {
+                assert_eq!(
+                    run(&base(&count(value))),
+                    (Vec::new(), Ok(format!("USUBJID,N\n{expected}")))
+                );
+            }
+            // A range value that reads a named intermediate runs that
+            // intermediate for the same row, so its own value is refused there.
+            assert_eq!(
+                run(&format!("{WINDOW}{}", base(&count("W.LO")))).1,
+                Err(vec![yamaa_adapters::json!({
+                    "phase": "validation", "condition": "unknown_field", "requirement": "REQ-0121",
+                    "spec_paths": ["intermediates[0].between.value"],
+                    "context": {"intermediate": "W", "identifier": "REF.REFDAY"}
+                })])
+            );
+            // A column-phase aggregate evaluates for the rows of every template:
+            // with templates driven by SUBJ and by REF, neither input drives all
+            // of them, and each refusal is reported once.
+            let rows = |templates: &str, value: &str| {
+                format!("keys: [USUBJID, ORIGIN]\noutput: {{path: out.csv, columns: [USUBJID, ORIGIN, N]}}\ncolumns:\n  - {{name: USUBJID, type: str}}\n  - {{name: ORIGIN, type: str}}\n  - {{name: N, type: int, derivation: {}}}\nrows:\n{templates}", count(value))
+            };
+            let subj = "  - id: subj\n    dataset: SUBJ\n    derivations: {USUBJID: SUBJ.USUBJID, ORIGIN: {literal: SUBJ}}\n";
+            let both = format!("{subj}  - id: ref\n    dataset: REF\n    derivations: {{USUBJID: REF.USUBJID, ORIGIN: {{literal: REF}}}}\n");
+            for value in ["SUBJ.SUBJDAY", "REF.REFDAY"] {
+                assert_eq!(
+                    run(&rows(&both, value)),
+                    (refused(value), Err(refused(value))),
+                    "{value}"
+                );
+            }
+            assert_eq!(
+                run(&rows(subj, "SUBJ.SUBJDAY")),
+                (
+                    Vec::new(),
+                    Ok("USUBJID,ORIGIN,N\nS1,SUBJ,2\nS2,SUBJ,1\n".into())
+                )
+            );
         }
     }
     mod completed_lookup_assertions {

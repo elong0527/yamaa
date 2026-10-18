@@ -1,8 +1,8 @@
 # yamaa <img src="https://raw.githubusercontent.com/elong0527/yamaa/main/docs/assets/logo.jpeg" align="right" width="120" alt="yamaa logo" />
 
 [![CI](https://github.com/elong0527/yamaa/actions/workflows/ci.yml/badge.svg?branch=main&event=schedule)](https://github.com/elong0527/yamaa/actions/workflows/ci.yml)
-[![Regular build](https://img.shields.io/github/actions/workflow/status/elong0527/yamaa/native.yml?branch=main&event=schedule&label=regular%20build)](https://github.com/elong0527/yamaa/actions/workflows/native.yml)
-[![R CMD check](https://github.com/elong0527/yamaa/actions/workflows/R-CMD-check.yaml/badge.svg?branch=main&event=schedule)](https://github.com/elong0527/yamaa/actions/workflows/R-CMD-check.yaml)
+[![Native qualification](https://img.shields.io/github/actions/workflow/status/elong0527/yamaa/native.yml?branch=main&label=native%20qualification)](https://github.com/elong0527/yamaa/actions/workflows/native.yml)
+[![R CMD check](https://github.com/elong0527/yamaa/actions/workflows/R-CMD-check.yaml/badge.svg?branch=main)](https://github.com/elong0527/yamaa/actions/workflows/R-CMD-check.yaml)
 [![Coverage](https://codecov.io/gh/elong0527/yamaa/graph/badge.svg)](https://codecov.io/gh/elong0527/yamaa)
 [![PyPI version](https://img.shields.io/pypi/v/yamaa)](https://pypi.org/project/yamaa/)
 [![rustc](https://img.shields.io/badge/rustc-1.90%2B-orange?logo=rust)](https://www.rust-lang.org)
@@ -39,12 +39,15 @@ engine, and benchmark.
 
 ## From ODM XML to SDTM and ADaM
 
-The engine reads ODM XML extracted from the EDC system and transforms it into
-one long-form clinical-item table. Each row represents one recorded item and
-retains the item's study, event, form, and item-group context. A yamaa
-specification reads the transformed data
+The Python package's `read_odm` helper reads ODM XML extracted from the EDC
+system into one long-form clinical-item table, and `write_odm_parquet` saves
+that table as Parquet. Each row represents one recorded item and retains the
+item's study, event, form, and item-group context. A yamaa specification, run
+from either package, reads the transformed data
 ([example](https://elong0527.github.io/yamaa/benchmark/sdtm-dm-basic.html))
-and derives SDTM and ADaM datasets.
+and derives SDTM and ADaM datasets. The R package has no ODM XML reader in
+0.4.0: convert ODM with Python's `write_odm_parquet`, then read the Parquet
+file in R ([#2933](https://github.com/elong0527/yamaa/issues/2933)).
 
 ## Inheritance
 
@@ -101,8 +104,8 @@ python -m pip install ./yamaa-0.4.0-<wheel-tags>.whl
 ```
 
 The release also provides a standalone Python source archive. See the
-[Python package guide](https://github.com/elong0527/yamaa/blob/main/python/README.md)
-for supported platforms, source prerequisites and checkout development builds.
+[Python package README](https://github.com/elong0527/yamaa/blob/main/python/README.md)
+for source prerequisites, development setup and supported platforms.
 
 R engine:
 
@@ -134,4 +137,7 @@ publication are later distribution work.
 
 ## License
 
-This project is licensed under the terms of the MIT license.
+This project is licensed under the terms of the MIT license. The Python and R
+packages also include third-party code under its own licenses; each package
+carries those notices in `LICENSE-THIRD-PARTY.txt` and the other files listed
+in the [release guidance](docs/release.md#source-package-contents).

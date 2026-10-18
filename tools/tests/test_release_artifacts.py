@@ -18,9 +18,12 @@ from tools.ci import select_release_artifacts as release
 from tools.paths import ROOT
 
 MATRIX = release.native
-VERSION = tomllib.loads((ROOT / "python/pyproject.toml").read_text(encoding="utf-8"))[
+PROJECT = tomllib.loads((ROOT / "python/pyproject.toml").read_text(encoding="utf-8"))[
     "project"
-]["version"]
+]
+VERSION = PROJECT["version"]
+# Every package carries the project license and these notices unchanged.
+NOTICES = PROJECT["license-files"]
 TAG = f"yamaa-v{VERSION}"
 OTHER_VERSION = (
     VERSION.rsplit(".", 1)[0] + "." + str(int(VERSION.rsplit(".", 1)[1]) + 1)
@@ -115,9 +118,7 @@ def tar(path, members):
 
 
 def downloads(root):
-    licenses = {
-        path.name: path.read_bytes() for path in (ROOT / "python").glob("LICENSE-*.txt")
-    }
+    licenses = {name: (ROOT / "python" / name).read_bytes() for name in NOTICES}
     tags = ["manylinux_2_39_x86_64", "macosx_11_0_arm64", "win_amd64"]
     for platform, tag in zip(MATRIX.PLATFORMS, tags, strict=True):
         directory = root / f"native-python-{platform}-{MATRIX.BUILD_PYTHON}"
@@ -139,8 +140,10 @@ def downloads(root):
             {
                 f"yamaa-{VERSION}/PKG-INFO": metadata,
                 f"yamaa-{VERSION}/platform.txt": platform.encode(),
+                # Vendored sources keep their own, differently worded notices.
+                f"yamaa-{VERSION}/rust/vendor/saphyr-parser/LICENSE": b"vendored\n",
                 **{
-                    f"yamaa-{VERSION}/python/{name}": payload
+                    f"yamaa-{VERSION}/{name}": payload
                     for name, payload in licenses.items()
                 },
             },
@@ -151,6 +154,8 @@ def downloads(root):
         directory / f"yamaa_{VERSION}.tar.gz",
         {
             "yamaa/DESCRIPTION": f"Package: yamaa\nVersion: {VERSION}\n".encode(),
+            # R's MIT license stub, which the full text in inst/ accompanies.
+            "yamaa/LICENSE": b"YEAR: 2026\nCOPYRIGHT HOLDER: yamaa contributors\n",
             **{f"yamaa/inst/{name}": payload for name, payload in licenses.items()},
         },
     )
@@ -417,7 +422,7 @@ class DownloadedPackages(unittest.TestCase):
                 for entry in source.infolist():
                     payload = source.read(entry.filename)
                     if defect == "missing-license" and entry.filename.endswith(
-                        "LICENSE-YAML.txt"
+                        "LICENSE-THIRD-PARTY.txt"
                     ):
                         continue
                     if entry.filename.endswith("/METADATA"):
@@ -430,7 +435,7 @@ class DownloadedPackages(unittest.TestCase):
                                 version_header, version_header + b"\n" + version_header
                             )
                     if defect == "changed-license" and entry.filename.endswith(
-                        "LICENSE-YAML.txt"
+                        "LICENSE-THIRD-PARTY.txt"
                     ):
                         payload = b"not the required notices"
                     target.writestr(entry, payload)
@@ -450,6 +455,46 @@ class DownloadedPackages(unittest.TestCase):
         tar(r_source, members)
         with self.assertRaisesRegex(ValueError, "R DESCRIPTION"):
             self.select()
+
+    def test_source_archives_carry_each_notice_at_its_package_location(self):
+        """A copy elsewhere in an archive does not replace the package notice."""
+        sdist = next(self.directory.rglob(f"yamaa-{VERSION}.tar.gz"))
+        r_source = next((self.directory / "native-r-ubuntu-24.04").iterdir())
+        stub = b"YEAR: 2026\nCOPYRIGHT HOLDER: yamaa contributors\n"
+        for path, name, moved, changed in (
+            (
+                sdist,
+                f"yamaa-{VERSION}/LICENSE-THIRD-PARTY.txt",
+                f"yamaa-{VERSION}/python/LICENSE-THIRD-PARTY.txt",
+                None,
+            ),
+            (sdist, f"yamaa-{VERSION}/LICENSE.txt", None, None),
+            (r_source, "yamaa/inst/LICENSE-THIRD-PARTY.txt", None, None),
+            (r_source, "yamaa/inst/LICENSE.txt", "yamaa/LICENSE.txt", None),
+            (r_source, "yamaa/inst/LICENSE.txt", None, stub),
+        ):
+            original = path.read_bytes()
+            with tarfile.open(path) as source:
+                members = {
+                    entry.name: source.extractfile(entry).read()
+                    for entry in source
+                    if entry.isfile()
+                }
+            payload = members.pop(name)
+            if moved is not None:
+                members[moved] = payload
+            if changed is not None:
+                members[name] = changed
+            tar(path, members)
+            try:
+                with (
+                    self.subTest(archive=path.name, member=name, moved=moved),
+                    self.assertRaisesRegex(ValueError, "required notice"),
+                ):
+                    self.select()
+            finally:
+                path.write_bytes(original)
+        self.assertEqual(len(self.select()), 5)
 
     def test_symlinks_or_subdirectories_are_not_release_assets(self):
         extra = self.directory / self.selected[0]["name"] / "unexpected"

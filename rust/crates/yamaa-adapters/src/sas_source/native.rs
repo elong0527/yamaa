@@ -449,6 +449,9 @@ pub fn parse(bytes: &[u8], source: &SourceDeclaration) -> Result<ArrowTable, Err
     if status == -5 {
         return Err(Error::Invalid("version"));
     }
+    if status == -7 {
+        return Err(Error::Invalid("deleted_records"));
+    }
     if status != 0 {
         return Err(Error::Invalid("malformed"));
     }
