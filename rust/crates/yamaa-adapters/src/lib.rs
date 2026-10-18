@@ -26,6 +26,7 @@ mod yaml_source;
 
 pub mod csv_artifact;
 pub mod csv_source;
+pub mod odm_xml;
 pub mod parquet_artifact;
 pub mod parquet_source;
 pub mod sas_source;

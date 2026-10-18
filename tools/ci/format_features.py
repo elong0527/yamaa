@@ -13,7 +13,8 @@ FORMATS = {
     "yaml": ["yaml"],
     "parquet": ["parquet"],
     "readstat": ["readstat"],
-    "all": ["yaml", "parquet", "readstat"],
+    "odm": ["odm"],
+    "all": ["yaml", "parquet", "readstat", "odm"],
 }
 
 
@@ -57,9 +58,12 @@ def main():
         ("saphyr-parser", "yaml"),
         ("parquet", "parquet"),
         ("zstd-sys", "parquet"),
+        ("quick-xml", "odm"),
     ]:
         if (package in tree) != (feature in enabled):
             raise RuntimeError(f"unexpected {package} dependency for {args.selection}")
+    if ("flate2" in tree) != bool({"parquet", "odm"}.intersection(enabled)):
+        raise RuntimeError(f"unexpected flate2 dependency for {args.selection}")
     if ("cc" in tree) != bool({"parquet", "readstat"}.intersection(enabled)):
         raise RuntimeError(f"unexpected native C build dependency for {args.selection}")
     core = packages(
@@ -76,7 +80,16 @@ def main():
         )
     )
     if core.intersection(
-        {"saphyr-parser", "parquet", "arrow-array", "arrow-ipc", "cc", "zstd-sys"}
+        {
+            "saphyr-parser",
+            "parquet",
+            "arrow-array",
+            "arrow-ipc",
+            "cc",
+            "zstd-sys",
+            "quick-xml",
+            "flate2",
+        }
     ):
         raise RuntimeError("semantic core depends on a physical reader")
     cargo("test", "--locked", "-p", "yamaa-adapters", *features)
