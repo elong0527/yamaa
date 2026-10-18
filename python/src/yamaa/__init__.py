@@ -3,8 +3,8 @@
 `spec()` and `project()` read nothing; each method runs one engine operation
 and returns a fixed result, and only a result's `save()` writes files. An
 object's first `run()` compiles its specifications and keeps them; a later
-`run()` reuses them once every file they were compiled from is unchanged, and
-compiles again when one changed.
+`run()` reuses them while its paths still name the files they were compiled
+from and every one is unchanged, and compiles again otherwise.
 """
 
 from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
@@ -37,6 +37,20 @@ def _call(function, *args):
 
 def _frame(table):
     return None if table is None else _pl.DataFrame(table)
+
+
+class _Lazy:
+    """A lazy object's native plans holder stays in its process: a copy, a
+    pickle or another process starts with an empty one and compiles again."""
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        del state["_plans"]
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self._plans = _native._plans()
 
 
 class Check:
@@ -141,14 +155,14 @@ class Submission:
         _call(self._native.save)
 
 
-class Spec:
+class Spec(_Lazy):
     """One specification, read only when a method runs."""
 
     def __init__(self, path, project=None):
         self._path = _fspath(path)
         self._project = project
         # The plan the first run() compiles; later runs reuse it while the
-        # files it was compiled from are unchanged.
+        # paths name the files it was compiled from and they are unchanged.
         self._plans = _native._plans()
 
     def check(self) -> Check:
@@ -164,7 +178,7 @@ class Spec:
         return Run(_call(_native._spec_run, self._path, self._project, self._plans))
 
 
-class Project:
+class Project(_Lazy):
     """A study's project file, read only when a method runs."""
 
     def __init__(self, path):

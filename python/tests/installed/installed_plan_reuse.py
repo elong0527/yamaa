@@ -1,13 +1,17 @@
 """Installed lazy objects reuse what their first run compiled (#2821).
 
 A spec or project object's first `run()` compiles and keeps its plans. A later
-`run()` reuses them once every file they were compiled from is unchanged, and
-compiles again when one changed, so no run is stale. Inputs are read afresh by
-every run. A compiling run's private measurements start with the
-`preparation` phase; a reusing run's start at the run.
+`run()` reuses them while the object's paths still name the files they were
+compiled from and every one is unchanged, and compiles again otherwise, so no
+run is stale and none runs a study the paths no longer name (#3069). Inputs are
+read afresh by every run. A run's private measurements say how it got its
+plan: `compiled`, `refused` or `reused`.
 """
 
+import copy
+import json
 import os
+import pickle
 import shutil
 import tempfile
 import unittest
@@ -21,9 +25,22 @@ TRUTH = load_truth(__file__, "plan-reuse")
 STUDIES = Path(__file__).parent / "project-original"
 
 
+def plan_of(run):
+    """How the run got its plan, from its private measurements."""
+    return json.loads(run._native.observations(True))["measurements"]["plan"]
+
+
 def compiled(run):
-    """Whether the run compiled: its measurements hold the preparation phase."""
-    return '"phase":"preparation"' in run._native.observations(True)
+    """Whether the run compiled rather than reused a kept plan."""
+    return plan_of(run) != "reused"
+
+
+PLAIN = (
+    "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\n"
+    "input: {SRC: {path: input.csv, types: {ID: int}}}\n"
+    "output: {path: out.csv, columns: [ID]}\n"
+    "columns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\n"
+)
 
 
 class PlanReuse(unittest.TestCase):
@@ -172,6 +189,109 @@ class PlanReuse(unittest.TestCase):
         # A spec object of the project keeps its own plan.
         spec = project.spec("DM")
         self.assertEqual([compiled(spec.run()) for _ in range(2)], [True, False])
+
+    def studies(self):
+        """Studies A and B with the same file names; B has one more row."""
+        for name, rows in (("a", "1\n2\n"), ("b", "1\n2\n3\n")):
+            self.write(f"{name}/spec.yaml", PLAIN)
+            self.write(
+                f"{name}/dm.yaml",
+                PLAIN.replace("domain: TEST", "domain: DM").replace(
+                    "out.csv", "dm.csv"
+                ),
+            )
+            self.write(
+                f"{name}/project.yaml",
+                "schema_version: '1.0'\nsdtm:\n  specs: [dm.yaml]\n",
+            )
+            self.write(f"{name}/input.csv", "ID\n" + rows)
+        previous = Path.cwd()
+        self.addCleanup(os.chdir, previous)
+
+    def test_relative_paths_after_a_working_directory_change_build_the_new_study(self):
+        self.studies()
+        os.chdir(self.root / "a")
+        spec = yamaa.spec("spec.yaml")
+        project = yamaa.project("project.yaml")
+        member = project.spec("DM")
+
+        def saved(run, study, name):
+            run.save()
+            return (self.root / study / name).read_text(encoding="utf-8")
+
+        a, b = "ID\n1\n2\n", "ID\n1\n2\n3\n"
+        first = spec.run()
+        self.assertEqual(
+            (plan_of(first), saved(first, "a", "out.csv")), ("compiled", a)
+        )
+        self.assertEqual(plan_of(spec.run()), "reused")
+        self.assertEqual(saved(project.run(), "a", "dm.csv"), a)
+        self.assertEqual(plan_of(member.run()), "compiled")
+        self.assertEqual(plan_of(member.run()), "reused")
+        # The same spellings now name study B: each object builds B and
+        # leaves A's saved files as they were.
+        os.chdir(self.root / "b")
+        moved = spec.run()
+        self.assertEqual(
+            (plan_of(moved), saved(moved, "b", "out.csv")), ("compiled", b)
+        )
+        self.assertEqual((self.root / "a/out.csv").read_text(encoding="utf-8"), a)
+        self.assertEqual(spec.check().issues.height, 0)
+        self.assertEqual(saved(project.run(), "b", "dm.csv"), b)
+        self.assertEqual((self.root / "a/dm.csv").read_text(encoding="utf-8"), a)
+        # `project.spec(name)` keeps its located specification, A's, with the
+        # project's relative path, which now names B's project.
+        self.assertEqual(plan_of(member.run()), "compiled")
+        self.assertEqual(plan_of(member.run()), "reused")
+        # Back in A, the spec object compiles A again: it keeps one plan.
+        os.chdir(self.root / "a")
+        self.assertEqual(plan_of(spec.run()), "compiled")
+
+    @unittest.skipIf(os.name == "nt", "symbolic links need privileges on Windows")
+    def test_a_path_through_a_retargeted_link_builds_the_study_it_now_names(self):
+        self.studies()
+        link = self.root / "study"
+        link.symlink_to(self.root / "a", target_is_directory=True)
+        spec = yamaa.spec(link / "spec.yaml")
+        project = yamaa.project(link / "project.yaml")
+        self.assertEqual(plan_of(spec.run()), "compiled")
+        self.assertEqual(plan_of(spec.run()), "reused")
+        self.assertEqual(project.run()["DM"].output.height, 2)
+        link.unlink()
+        link.symlink_to(self.root / "b", target_is_directory=True)
+        moved = spec.run()
+        self.assertEqual((plan_of(moved), moved.output.height), ("compiled", 3))
+        self.assertEqual(project.run()["DM"].output.height, 3)
+
+    def test_objects_pickle_and_copy_and_start_with_nothing_kept(self):
+        spec = yamaa.spec(self.write("spec.yaml", PLAIN))
+        self.write("input.csv", "ID\n1\n")
+        project = yamaa.project(
+            self.write(
+                "project.yaml", "schema_version: '1.0'\nsdtm:\n  specs: [dm.yaml]\n"
+            )
+        )
+        self.write(
+            "dm.yaml",
+            PLAIN.replace("domain: TEST", "domain: DM").replace("out.csv", "dm.csv"),
+        )
+        self.assertEqual(plan_of(spec.run()), "compiled")
+        for clone in (
+            pickle.loads(pickle.dumps(spec)),
+            copy.deepcopy(spec),
+            copy.copy(spec),
+        ):
+            with self.subTest(clone=clone):
+                self.assertIsNot(clone._plans, spec._plans)
+                self.assertEqual(plan_of(clone.run()), "compiled")
+                self.assertEqual(plan_of(clone.run()), "reused")
+        # The original keeps its own plan.
+        self.assertEqual(plan_of(spec.run()), "reused")
+        project.run()
+        for clone in (pickle.loads(pickle.dumps(project)), copy.deepcopy(project)):
+            with self.subTest(clone=clone):
+                self.assertEqual(clone.run()["DM"].output.height, 1)
+                self.assertEqual(plan_of(clone.spec("DM").run()), "compiled")
 
 
 if __name__ == "__main__":

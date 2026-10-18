@@ -104,25 +104,32 @@ fn request<'a>(specification: &'a str, project: Option<&'a str>) -> Request<'a> 
     }
 }
 
-/// The specification and project paths a kept plan was compiled from.
-type PlanKey = (String, Option<String>);
+/// The identities of a specification and of its project file, resolved as
+/// compilation resolves them: what a kept plan was compiled from.
+pub(crate) type PlanKey = (String, Option<String>);
 
 /// The compiled plans a host's lazy object keeps between runs (#2821), one
-/// for each specification and project path its runs compiled.
+/// for each specification and project identity its runs compiled.
 ///
-/// [`Engine::spec_run_reusing`] and [`Engine::project_run_reusing`] reuse a
-/// kept plan only when the run-start check finds every file it was compiled
-/// from unchanged: the specification, its layers, dictionaries and linked
-/// producing specifications, the project file, the environment file, and the
-/// lock, function definitions and codelists they declare. When one changed or
-/// is gone, the run compiles again, exactly as a one-shot run does, and keeps
-/// the new plan; a refused compilation keeps nothing. Every run reads its
-/// inputs and activates the project functions afresh, so a reused run differs
-/// from a one-shot run only in time.
+/// [`Engine::spec_run_reusing`] and [`Engine::project_run_reusing`] first
+/// resolve the request's paths exactly as compilation does: absolute against
+/// the current working directory, with each parent directory canonical. A
+/// kept plan is reused only when those identities equal the ones it was
+/// compiled from, so a relative path after a working-directory change, or a
+/// path through a retargeted link, compiles anew (#3069). Its run-start check
+/// must then find every file it was compiled from unchanged: the
+/// specification, its layers, dictionaries and linked producing
+/// specifications, the project file, the environment file, and the lock,
+/// function definitions and codelists they declare. Otherwise the run
+/// compiles again, exactly as a one-shot run does, and keeps the new plan; a
+/// refused compilation keeps nothing. Every run reads its inputs and activates
+/// the project functions afresh, so a reused run differs from a one-shot run
+/// only in time.
 ///
-/// A holder is `Send` and `Sync`. Its lock is held only to read or replace a
-/// kept plan, never across a compilation, a run or a callback, so a run
-/// started from a project function, or on another thread, works as any other.
+/// A kept plan holds no project functions or observer: it runs through the
+/// calling engine's. A holder is `Send` and `Sync`. Its lock is held only to
+/// read or replace a kept plan, never across a compilation, a run or a
+/// callback, and a replaced plan is dropped after the lock is released.
 #[derive(Default)]
 pub struct Plans {
     kept: Mutex<BTreeMap<PlanKey, Plan>>,
@@ -138,36 +145,44 @@ impl Plans {
         self.kept.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    fn key(request: &Request<'_>) -> PlanKey {
-        (
-            request.specification.to_owned(),
-            request.environment.map(str::to_owned),
-        )
+    /// The plan kept for `identity`, if any.
+    pub(crate) fn get(&self, identity: &PlanKey) -> Option<Plan> {
+        self.kept().get(identity).cloned()
     }
 
-    /// The plan kept for `request`, if any.
-    pub(crate) fn get(&self, request: &Request<'_>) -> Option<Plan> {
-        self.kept().get(&Self::key(request)).cloned()
+    /// Keep `plan` for `identity`, or forget what `identity` kept when there
+    /// is no plan to keep or its compilation was refused.
+    pub(crate) fn replace(&self, identity: PlanKey, plan: Option<&Plan>) {
+        let replaced = {
+            let mut kept = self.kept();
+            match plan.filter(|plan| plan.report().is_empty()) {
+                Some(plan) => kept.insert(identity, plan.detached()),
+                None => kept.remove(&identity),
+            }
+        };
+        drop(replaced);
     }
 
-    /// Keep the plan compiled for `request`; a refused compilation instead
-    /// drops whatever the request kept, so its next run compiles again.
-    pub(crate) fn keep(&self, request: &Request<'_>, plan: Plan) {
-        let key = Self::key(request);
-        let mut kept = self.kept();
-        if plan.report().is_empty() {
-            kept.insert(key, plan);
-        } else {
-            kept.remove(&key);
-        }
+    /// Forget every kept plan whose identity `keep` rejects.
+    pub(crate) fn retain(&self, keep: impl Fn(&PlanKey) -> bool) {
+        let dropped = {
+            let mut kept = self.kept();
+            let rejected = kept
+                .keys()
+                .filter(|identity| !keep(identity))
+                .cloned()
+                .collect::<Vec<_>>();
+            rejected
+                .into_iter()
+                .filter_map(|identity| kept.remove(&identity))
+                .collect::<Vec<_>>()
+        };
+        drop(dropped);
     }
 
-    /// Drop the plans kept for `project`'s specifications that it no longer
-    /// lists.
-    fn retain(&self, project: &str, listed: impl Fn(&str) -> bool) {
-        self.kept().retain(|(specification, owner), _| {
-            owner.as_deref() != Some(project) || listed(specification)
-        });
+    #[cfg(test)]
+    pub(crate) fn identities(&self) -> Vec<PlanKey> {
+        self.kept().keys().cloned().collect()
     }
 }
 
@@ -195,9 +210,10 @@ impl Engine {
 
     /// [`Engine::spec_run`] through `plans`, as a host's specification object
     /// runs. The first run compiles the specification and keeps its plan; a
-    /// later run reuses that plan when the run-start check finds every file
-    /// it was compiled from unchanged, and compiles again when one changed or
-    /// is gone, so no run uses stale files. See [`Plans`].
+    /// later run reuses that plan when its paths still resolve to the files
+    /// it was compiled from and the run-start check finds every one of them
+    /// unchanged, and compiles again otherwise, so no run uses stale or moved
+    /// files. See [`Plans`].
     pub fn spec_run_reusing(
         &self,
         specification: &str,
@@ -205,7 +221,13 @@ impl Engine {
         plans: &Plans,
         token: &CancellationToken,
     ) -> Result<Run, Error> {
-        self.build_reusing(plans, &request(specification, project), None, token)
+        let request = request(specification, project);
+        let identity = crate::internal::request_identity(self.shared(), &request);
+        // A spec object names one specification: a plan kept for another
+        // identity, such as the one its relative path named before the
+        // working directory changed, is dropped.
+        plans.retain(|kept| identity.as_ref() == Some(kept));
+        self.build_reusing(plans, &request, identity, None, token)
             .map(|build| Run { build })
     }
 
@@ -572,11 +594,12 @@ impl Engine {
     }
 
     /// [`Engine::project_run`] through `plans`, as a host's project object
-    /// runs. Each specification the run builds reuses the plan an earlier run
-    /// kept for it, under the rule of [`Engine::spec_run_reusing`]. The
-    /// project file is read afresh every time, so the run scope and order
-    /// follow the current file, and the plans of specifications it no longer
-    /// lists are dropped.
+    /// runs. The project file is read afresh every time, so the run scope and
+    /// order follow the current file, and each listed specification is
+    /// identified from that read: the plan an earlier run kept for the same
+    /// specification and project identities is reused under the rule of
+    /// [`Engine::spec_run_reusing`]. Plans kept for anything the file no
+    /// longer lists, or for another project file, are dropped.
     pub fn project_run_reusing(
         &self,
         project: &str,
@@ -592,11 +615,21 @@ impl Engine {
             Ok(read) => read,
             Err(issues) => return Ok(ProjectRun::refused(issues)),
         };
-        plans.retain(project, |specification| {
-            read.listed()
-                .iter()
-                .any(|listed| listed.path() == specification)
-        });
+        // Identify every listed specification from this read, with the
+        // project path resolved now rather than its raw spelling.
+        let identities = read
+            .listed()
+            .iter()
+            .map(|listed| {
+                (listed.failure().is_empty())
+                    .then(|| {
+                        let request = Request::new(listed.path()).with_environment(project);
+                        crate::internal::request_identity(self.shared(), &request)
+                    })
+                    .flatten()
+            })
+            .collect::<Vec<_>>();
+        plans.retain(|kept| identities.iter().flatten().any(|identity| identity == kept));
         let plan = read.plan(section);
         if !plan.refusal().is_empty() {
             return Ok(ProjectRun::refused(plan.refusal().to_vec()));
@@ -616,6 +649,7 @@ impl Engine {
                 self.build_reusing(
                     plans,
                     &Request::new(listed.path()).with_environment(project),
+                    identities[step.listed()].clone(),
                     Some(Arc::new(held.clone())),
                     token,
                 )?
@@ -693,5 +727,91 @@ impl Engine {
             sections: defines,
             refusal: Vec::new(),
         })
+    }
+}
+
+#[cfg(all(test, feature = "yaml"))]
+mod plan_tests {
+    use super::*;
+    use crate::{
+        Argument, CallError, EngineOptions, FunctionError, FunctionHandle, FunctionIdentity,
+        HostLanguage, LockContext, ProjectFunctions, Scalar, Signature,
+    };
+
+    struct NoFunctions;
+    impl ProjectFunctions for NoFunctions {
+        fn verify_lock(
+            &self,
+            _: &LockContext<'_>,
+            _: &[FunctionIdentity],
+        ) -> Result<(), FunctionError> {
+            Ok(())
+        }
+        fn bind(
+            &self,
+            _: &FunctionIdentity,
+            _: &Signature,
+        ) -> Result<FunctionHandle, FunctionError> {
+            unreachable!("these specifications call no project function")
+        }
+        fn invoke(&self, _: &FunctionHandle, _: &[Argument<'_>]) -> Result<Scalar, CallError> {
+            unreachable!("these specifications call no project function")
+        }
+    }
+
+    #[test]
+    fn a_project_run_drops_the_plans_of_specifications_the_project_no_longer_lists() {
+        const SPEC: &str = "schema_version: '1.0'\ndomain: DM\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\noutput: {path: dm.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\n";
+        let root = std::env::temp_dir().join(format!("yamaa-plan-drop-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let root = yamaa_adapters::canonical_path::canonicalize(root).unwrap();
+        std::fs::write(root.join("dm.yaml"), SPEC).unwrap();
+        std::fs::write(
+            root.join("ae.yaml"),
+            SPEC.replace("domain: DM", "domain: AE")
+                .replace("dm.csv", "ae.csv"),
+        )
+        .unwrap();
+        std::fs::write(root.join("input.csv"), "ID\n1\n").unwrap();
+        let listing = |specs: &str| {
+            std::fs::write(
+                root.join("project.yaml"),
+                format!("schema_version: '1.0'\nsdtm:\n  specs: [{specs}]\n"),
+            )
+            .unwrap();
+        };
+        let project = root.join("project.yaml").to_str().unwrap().to_owned();
+        let engine = Engine::new(
+            EngineOptions::new(HostLanguage::Python, "test".into(), "0".into())
+                .with_functions(Arc::new(NoFunctions)),
+        );
+        let plans = Plans::new();
+        let run = || {
+            let runs = engine
+                .project_run_reusing(&project, None, &plans, &CancellationToken::new())
+                .unwrap();
+            assert_eq!(runs.issues().rows(), 0);
+        };
+        listing("dm.yaml, ae.yaml");
+        run();
+        let names = |plans: &Plans| {
+            plans
+                .identities()
+                .into_iter()
+                .map(|(specification, project)| {
+                    let name = |path: &str| path.rsplit('/').next().unwrap().to_owned();
+                    (name(&specification), project.as_deref().map(name))
+                })
+                .collect::<Vec<_>>()
+        };
+        let kept = |name: &str| (name.to_owned(), Some("project.yaml".to_owned()));
+        assert_eq!(names(&plans), [kept("ae.yaml"), kept("dm.yaml")]);
+        // AE leaves the project: its plan goes, and DM's plan is compiled
+        // again because the project file changed.
+        listing("dm.yaml");
+        run();
+        assert_eq!(names(&plans), [kept("dm.yaml")]);
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

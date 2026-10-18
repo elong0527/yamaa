@@ -362,6 +362,11 @@ impl Engine {
         let measurements = Arc::new(yamaa_adapters::application_measurements::Measurements::new());
         let progress = self.shared.observer.as_deref();
         let plan = self.compile_observed(request, &measurements, progress);
+        measurements.plan(if plan.report().is_empty() {
+            "compiled"
+        } else {
+            "refused"
+        });
         // The compilation above has just verified the metadata it captured.
         let outcome = plan.run_observed(None, false, &measurements, progress);
         measurements.complete(outcome_accepted(&outcome));
@@ -369,9 +374,11 @@ impl Engine {
     }
 
     /// Build `request` through `plans`, as a host's lazy object runs (#2821).
-    /// A kept plan whose files the run-start check finds unchanged runs again;
+    /// `identity` is what the request resolves to now. A plan kept for that
+    /// identity, whose files the run-start check finds unchanged, runs again;
     /// otherwise the request compiles and runs exactly as [`Engine::build`],
-    /// and `plans` keeps the new plan. Either way the run uses this engine's
+    /// and `plans` keeps the new plan if the request still resolves to
+    /// `identity` once compiled. Either way the run uses this engine's
     /// project functions and observer. In a project run, an input whose
     /// `schema` link names a producer the run already built reads that `held`
     /// artifact; every other input reads its saved file.
@@ -379,6 +386,7 @@ impl Engine {
         &self,
         plans: &crate::api::Plans,
         request: &Request<'_>,
+        identity: Option<crate::api::PlanKey>,
         held: Option<Arc<yamaa_adapters::file_resources::HeldArtifacts>>,
         token: &CancellationToken,
     ) -> Result<Build, Error> {
@@ -388,16 +396,32 @@ impl Engine {
         let measurements = Arc::new(yamaa_adapters::application_measurements::Measurements::new());
         let progress = self.shared.observer.as_deref();
         // The run-start check runs outside the holder's lock.
-        let kept = plans
-            .get(request)
+        let kept = identity
+            .as_ref()
+            .and_then(|identity| plans.get(identity))
             .filter(|plan| plan.reusable_by(&self.shared));
         let outcome = match kept {
-            Some(plan) => plan.run_through(&self.shared, held, &measurements, progress),
+            Some(plan) => {
+                measurements.plan("reused");
+                plan.run_through(&self.shared, held, &measurements, progress)
+            }
             None => {
                 let plan = self.compile_observed(request, &measurements, progress);
+                measurements.plan(if plan.report().is_empty() {
+                    "compiled"
+                } else {
+                    "refused"
+                });
                 // The compilation has just captured the files it holds.
                 let outcome = plan.run_through(&self.shared, held, &measurements, progress);
-                plans.keep(request, plan);
+                if let Some(identity) = identity {
+                    // Keep the plan only for the identity it was compiled
+                    // from: a path that resolved elsewhere meanwhile keeps
+                    // nothing, so its next run compiles again.
+                    let stable = crate::internal::request_identity(&self.shared, request).as_ref()
+                        == Some(&identity);
+                    plans.replace(identity, stable.then_some(&plan));
+                }
                 outcome
             }
         };
