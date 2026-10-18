@@ -40,10 +40,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<domain_entry::Attempt>()?;
     module.add_function(wrap_pyfunction!(style::_style_same_value, module)?)?;
     module.add_class::<api_entry::Run>()?;
-    module.add(
-        "_Error",
-        module.py().get_type::<api_entry::_Error>(),
-    )?;
+    module.add("_Error", module.py().get_type::<api_entry::_Error>())?;
     module.add_function(wrap_pyfunction!(api_entry::_spec_check, module)?)?;
     module.add_function(wrap_pyfunction!(api_entry::_spec_run, module)?)?;
     module.add_function(wrap_pyfunction!(api_entry::_spec_resolve, module)?)?;

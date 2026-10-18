@@ -871,6 +871,12 @@ def _registration(export):
     if kind == "class":
         return [f"    module.add_class::<{rust}>()?;"]
     if kind == "exception":
+        arguments = f'"{name}", module.py().get_type::<{rust}>()'
+        single = f"    module.add({arguments})?;"
+        # rustfmt keeps a call on one line when its arguments fit the default
+        # fn_call_width (60) and the line fits max_width (100).
+        if len(arguments) <= 60 and len(single) <= 100:
+            return [single]
         return [
             "    module.add(",
             f'        "{name}",',
