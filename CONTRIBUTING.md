@@ -172,7 +172,9 @@ Keep workflow-specific setup in CI and reusable check logic in `tools/`.
 Pin external actions to complete commit IDs with exact release comments.
 
 PRs and the main schedule run only development checks: lint, repository
-checks, the Rust workspace, and the Python and R hosts on Linux. Release lanes
+checks, the Rust workspace, and the Python and R hosts on Linux. On PRs to
+main, the optional format workflow reports its required `formats` check as
+skipped so release qualification does not delay merging. Release lanes
 check support claims and run on each `release/**` push and on dispatch: CI's
 minimum Rust toolchain, Python 3.15 and minimum saved artifact reader lanes,
 the optional format feature selections and the macOS, Windows and R-devel
