@@ -39,12 +39,15 @@ engine, and benchmark.
 
 ## From ODM XML to SDTM and ADaM
 
-The engine reads ODM XML extracted from the EDC system and transforms it into
-one long-form clinical-item table. Each row represents one recorded item and
-retains the item's study, event, form, and item-group context. A yamaa
-specification reads the transformed data
+The Python package's `read_odm` helper reads ODM XML extracted from the EDC
+system into one long-form clinical-item table, and `write_odm_parquet` saves
+that table as Parquet. Each row represents one recorded item and retains the
+item's study, event, form, and item-group context. A yamaa specification, run
+from either package, reads the transformed data
 ([example](https://elong0527.github.io/yamaa/benchmark/sdtm-dm-basic.html))
-and derives SDTM and ADaM datasets.
+and derives SDTM and ADaM datasets. The R package has no ODM XML reader in
+0.4.0: convert ODM with Python's `write_odm_parquet`, then read the Parquet
+file in R ([#2933](https://github.com/elong0527/yamaa/issues/2933)).
 
 ## Inheritance
 
