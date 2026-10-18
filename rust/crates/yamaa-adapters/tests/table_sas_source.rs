@@ -231,7 +231,13 @@ mod table {
         fn release_field_without_a_terminator_still_parses() {
             // The header's 120-byte release block holds no NUL byte at all.
             // The reader copies the eight-byte release into a terminated
-            // buffer before scanning it.
+            // buffer before scanning it, so the scan ends at the eighth byte.
+            // Scanning the field in place would read on into the next field,
+            // which a sanitizer reports. Without one, the second file shows
+            // it: its release is "9.      ", whose number sits in the next
+            // field, "0401M6". The eight bytes name no minor version, so the
+            // file is malformed. A scan that passes the eighth byte skips the
+            // blanks, reads release 9.0401M6 and accepts it.
             use crate::support::sas7bdat::{Cell, Dataset, Kind, Layout, Page, MIX};
             let mut dataset = Dataset::new(Layout::LE32, &[("X", Kind::Num, 8)]);
             dataset.total = 1;
@@ -242,6 +248,13 @@ mod table {
             bytes[release + 8..release + 120].fill(b' ');
             assert!(!bytes[release..release + 120].contains(&0));
             assert_eq!(cells(&read_built(&bytes).unwrap()), [[float(7.0)]]);
+            bytes[release..release + 8].copy_from_slice(b"9.      ");
+            bytes[release + 8..release + 14].copy_from_slice(b"0401M6");
+            assert!(!bytes[release..release + 120].contains(&0));
+            assert!(matches!(
+                read_built(&bytes),
+                Err(Error::Invalid("malformed"))
+            ));
         }
         #[test]
         fn zero_width_character_column_reads_as_empty_text() {
@@ -1037,6 +1050,25 @@ mod table {
             ));
         }
         #[test]
+        fn marks_on_pages_after_the_counts_are_met_are_not_read() {
+            // The check compares counts over the pages the reader reaches. It
+            // finds the live record and the one counted deletion on the first
+            // page, so it stops there and never reads the marks that a later
+            // page carries beyond the count.
+            use crate::support::sas7bdat::{Cell, Dataset, Kind, Layout, Page, DATA, MIX};
+            let mut dataset = Dataset::new(Layout::LE64, &[("X", Kind::Num, 8)]);
+            dataset.total = 2;
+            dataset.deleted = 1;
+            dataset.mix_rows = 2;
+            let row = |value| dataset.row(&[Cell::Num(value)]);
+            let mut first = Page::new(MIX, dataset.metadata(), vec![row(1.0), row(2.0)]);
+            first.deleted = Some(vec![false, true]);
+            let mut later = Page::new(DATA, vec![], vec![row(3.0), row(4.0)]);
+            later.deleted = Some(vec![true, true]);
+            let table = read_built(&dataset.file(&[first, later])).unwrap();
+            assert_eq!(cells(&table), [[float(1.0)]]);
+        }
+        #[test]
         fn deleted_compressed_rows_in_a_64_bit_file_are_skipped_and_counted() {
             use crate::support::sas7bdat::{rle, Cell, Dataset, Kind, Layout, Page, Pointer, META};
             let mut dataset = Dataset::new(Layout::LE64, &[("X", Kind::Num, 8)]);
@@ -1198,6 +1230,76 @@ mod table {
                         ],
                         "{layout:?} {code:#04x}"
                     );
+                }
+            }
+        }
+        /// A compressed dataset of four records whose third moved. The moved
+        /// record, stored with `code`, comes before the reference to it: on
+        /// the page before the reference's page, or earlier on the same page.
+        fn moved_before_its_reference(
+            layout: crate::support::sas7bdat::Layout,
+            rdc: bool,
+            code: u8,
+            same_page: bool,
+        ) -> Vec<u8> {
+            use crate::support::sas7bdat::{
+                rdc as rdc_bytes, rle, Cell, Dataset, Kind, Page, Pointer, META,
+            };
+            let mut dataset = Dataset::new(layout, &[("X", Kind::Num, 8), ("T", Kind::Chr, 8)]);
+            dataset.compression = Some(if rdc { *b"SASYZCR2" } else { *b"SASYZCRL" });
+            dataset.total = 4;
+            let compress = |row: &[u8]| if rdc { rdc_bytes(row) } else { rle(row) };
+            let row =
+                |value: f64, label: &[u8]| dataset.row(&[Cell::Num(value), Cell::Text(label)]);
+            let three = row(3.0, b"three");
+            let moved = Pointer::coded(
+                if code == 0x02 {
+                    three
+                } else {
+                    compress(&three)
+                },
+                code,
+            );
+            let mut first = dataset.metadata();
+            first.push(Pointer::coded(compress(&row(1.0, b"one")), 4));
+            first.push(Pointer::coded(compress(&row(2.0, b"two")), 4));
+            let four = Pointer::coded(compress(&row(4.0, b"four")), 4);
+            let pages = if same_page {
+                let index = first.len() as u64;
+                first.extend([moved, Pointer::reference(0, index), four]);
+                vec![Page::new(META, first, vec![])]
+            } else {
+                vec![
+                    Page::new(META, first, vec![]),
+                    Page::new(META, vec![Pointer::truncated(), moved], vec![]),
+                    Page::new(META, vec![Pointer::reference(1, 1), four], vec![]),
+                ]
+            };
+            dataset.file(&pages)
+        }
+        #[test]
+        fn a_moved_record_stored_before_its_reference_is_skipped_and_read_at_the_reference() {
+            // The second pass meets the moved record first, where it skips
+            // it, and reads it when it reaches the reference. The records
+            // come out in the order of the references, with the moved one
+            // third. Codes 0x02 and 0x06 are stored uncompressed and
+            // compressed, and the compressed record is RLE or RDC.
+            use crate::support::sas7bdat::Layout;
+            for layout in [Layout::LE64, Layout::BE32] {
+                for (rdc, code) in [(false, 0x02), (false, 0x06), (true, 0x02), (true, 0x06)] {
+                    for same_page in [false, true] {
+                        let bytes = moved_before_its_reference(layout, rdc, code, same_page);
+                        assert_eq!(
+                            cells(&read_built(&bytes).unwrap()),
+                            [
+                                [float(1.0), ValueRef::Str("one")],
+                                [float(2.0), ValueRef::Str("two")],
+                                [float(3.0), ValueRef::Str("three")],
+                                [float(4.0), ValueRef::Str("four")]
+                            ],
+                            "{layout:?} rdc {rdc} {code:#04x} same page {same_page}"
+                        );
+                    }
                 }
             }
         }
