@@ -60,8 +60,8 @@ pub use scalar::{
 };
 pub use table::{
     Array, DataType, Date32Array, FFI_ArrowArrayStream, Field, Fields, Float64Array, InputFrame,
-    Int64Array, LargeStringArray, RecordBatch, SchemaRef, StringArray, StringViewArray, Table,
-    TimeUnit, TimestampSecondArray,
+    Int64Array, LargeStringArray, ListArray, RecordBatch, SchemaRef, StringArray, StringViewArray,
+    Table, TimeUnit, TimestampSecondArray,
 };
 
 /// Version of the shared core compiled into a native installation.

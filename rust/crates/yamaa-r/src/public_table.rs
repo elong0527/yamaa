@@ -1,127 +1,42 @@
-//! Explicit copying view of shared Arrow columns into exact owned R vectors.
+//! Copy shared Arrow columns into plain owned R vectors.
+//!
+//! Every value either keeps its exact value in R or the conversion fails:
+//! integers become doubles up to 2^53 in magnitude, text becomes character
+//! unless it contains NUL, dates become `Date` and zone-free datetimes
+//! `POSIXct` in UTC. List columns, which only engine-built tables such as
+//! issues carry, become lists of such vectors, with `NULL` for a missing list.
 use extendr_api::prelude::*;
 use yamaa::{
-    Array, DataType, Date32Array, Float64Array, Int64Array, LargeStringArray, StringArray,
-    StringViewArray, Table, TimeUnit, TimestampSecondArray,
+    Array, DataType, Date32Array, Float64Array, Int64Array, LargeStringArray, ListArray,
+    StringArray, StringViewArray, Table, TimeUnit, TimestampSecondArray,
 };
 
-enum Values {
-    Str(Vec<Option<String>>),
+/// The largest magnitude every integer below it holds exactly in binary64.
+const EXACT_DOUBLE_MAGNITUDE: u64 = 1 << 53;
+
+enum Column {
+    Text(Vec<Option<String>>),
     Int(Vec<Option<i64>>),
     Float(Vec<Option<f64>>),
     Date(Vec<Option<i32>>),
     DateTime(Vec<Option<i64>>),
+    List(Vec<Option<Robj>>),
 }
 
 pub(super) fn frame(table: &Table) -> std::result::Result<Robj, String> {
-    let mut columns = Vec::new();
+    let mut columns = Vec::with_capacity(table.columns().len());
     for (index, field) in table.columns().iter().enumerate() {
-        macro_rules! collect {
-            ($kind:ty) => {{
-                let mut values = Vec::with_capacity(table.rows());
-                for batch in table.batches() {
-                    let array = batch
-                        .column(index)
-                        .as_any()
-                        .downcast_ref::<$kind>()
-                        .ok_or("public Arrow column type")?;
-                    values.extend(array.iter());
-                }
-                values
-            }};
+        let mut column = empty(field.data_type(), table.rows())?;
+        for batch in table.batches() {
+            extend(&mut column, batch.column(index).as_ref())?;
         }
-        macro_rules! strings {
-            ($kind:ty) => {{
-                let mut values = Vec::with_capacity(table.rows());
-                for batch in table.batches() {
-                    let array = batch
-                        .column(index)
-                        .as_any()
-                        .downcast_ref::<$kind>()
-                        .ok_or("public Arrow string type")?;
-                    values.extend(array.iter().map(|value| value.map(str::to_owned)));
-                }
-                values
-            }};
-        }
-        let values = match field.data_type() {
-            DataType::Utf8 => Values::Str(strings!(StringArray)),
-            DataType::LargeUtf8 => Values::Str(strings!(LargeStringArray)),
-            DataType::Utf8View => Values::Str(strings!(StringViewArray)),
-            DataType::Int64 => Values::Int(collect!(Int64Array)),
-            DataType::Float64 => Values::Float(collect!(Float64Array)),
-            DataType::Date32 => Values::Date(collect!(Date32Array)),
-            DataType::Timestamp(TimeUnit::Second, None) => {
-                Values::DateTime(collect!(TimestampSecondArray))
-            }
-            _ => return Err("unsupported public Arrow column type".into()),
-        };
-        let mut value = match &values {
-            Values::Str(values) if values.iter().flatten().any(|v| v.contains('\0')) => {
-                let mut list = List::from_values(values.iter().map(|v| match v {
-                    None => NULL.into_robj(),
-                    Some(v) => Raw::from_bytes(v.as_bytes()).into_robj(),
-                }))
-                .into_robj();
-                list.set_class(["yamaa_utf8_vector"])
-                    .map_err(|_| "text vector class")?;
-                list
-            }
-            Values::Str(values) => {
-                Strings::from_values(values.iter().map(|v| v.as_deref().unwrap_or(<&str>::na())))
-                    .into_robj()
-            }
-            Values::Int(values) => {
-                let owned: Vec<Option<String>> =
-                    values.iter().map(|v| v.map(|v| v.to_string())).collect();
-                let mut value = Strings::from_values(
-                    owned.iter().map(|v| v.as_deref().unwrap_or(<&str>::na())),
-                )
-                .into_robj();
-                value
-                    .set_class(["yamaa_int64_vector"])
-                    .map_err(|_| "integer vector class")?;
-                value
-            }
-            Values::Float(values) => Doubles::from_values(
-                values
-                    .iter()
-                    .map(|v| v.map(Rfloat::from).unwrap_or(Rfloat::na())),
-            )
-            .into_robj(),
-            Values::Date(values) => Doubles::from_values(values.iter().map(|v| {
-                v.map(|v| Rfloat::from(f64::from(v)))
-                    .unwrap_or(Rfloat::na())
-            }))
-            .into_robj(),
-            Values::DateTime(values) => Doubles::from_values(
-                values
-                    .iter()
-                    .map(|v| v.map(|v| Rfloat::from(v as f64)).unwrap_or(Rfloat::na())),
-            )
-            .into_robj(),
-        };
-        match &values {
-            Values::Date(_) => {
-                value.set_class(["Date"]).map_err(|_| "date vector class")?;
-            }
-            Values::DateTime(_) => {
-                value
-                    .set_class(["POSIXct", "POSIXt"])
-                    .map_err(|_| "datetime vector class")?;
-                value
-                    .set_attrib("tzone", "UTC")
-                    .map_err(|_| "datetime timezone")?;
-            }
-            _ => {}
-        }
-        columns.push((field.name().as_str(), value));
+        columns.push((field.name().as_str(), finish(column)?));
     }
     let mut result = List::from_pairs(columns).into_robj();
     result
         .set_class(["data.frame"])
-        .map_err(|_| "output data-frame class")?;
-    let rows = i32::try_from(table.rows()).map_err(|_| "output row limit")?;
+        .map_err(|_| "data-frame class")?;
+    let rows = i32::try_from(table.rows()).map_err(|_| "R data frames hold at most 2^31 - 1 rows")?;
     result
         .set_attrib(
             "row.names",
@@ -131,6 +46,124 @@ pub(super) fn frame(table: &Table) -> std::result::Result<Robj, String> {
                 Integers::from_values([Rint::na(), Rint::from(-rows)])
             },
         )
-        .map_err(|_| "output row names")?;
+        .map_err(|_| "data-frame row names")?;
     Ok(result)
+}
+
+fn empty(data_type: &DataType, rows: usize) -> std::result::Result<Column, String> {
+    Ok(match data_type {
+        DataType::Utf8 | DataType::LargeUtf8 | DataType::Utf8View => {
+            Column::Text(Vec::with_capacity(rows))
+        }
+        DataType::Int64 => Column::Int(Vec::with_capacity(rows)),
+        DataType::Float64 => Column::Float(Vec::with_capacity(rows)),
+        DataType::Date32 => Column::Date(Vec::with_capacity(rows)),
+        DataType::Timestamp(TimeUnit::Second, None) => Column::DateTime(Vec::with_capacity(rows)),
+        DataType::List(_) => Column::List(Vec::with_capacity(rows)),
+        other => return Err(format!("unsupported Arrow column type {other}")),
+    })
+}
+
+fn extend(column: &mut Column, array: &dyn Array) -> std::result::Result<(), String> {
+    fn cast<T: 'static>(array: &dyn Array) -> std::result::Result<&T, String> {
+        array
+            .as_any()
+            .downcast_ref::<T>()
+            .ok_or_else(|| format!("Arrow array does not match its {} field", array.data_type()))
+    }
+    match column {
+        Column::Text(values) => match array.data_type() {
+            DataType::Utf8 => {
+                values.extend(cast::<StringArray>(array)?.iter().map(|v| v.map(str::to_owned)))
+            }
+            DataType::LargeUtf8 => values.extend(
+                cast::<LargeStringArray>(array)?
+                    .iter()
+                    .map(|v| v.map(str::to_owned)),
+            ),
+            _ => values.extend(
+                cast::<StringViewArray>(array)?
+                    .iter()
+                    .map(|v| v.map(str::to_owned)),
+            ),
+        },
+        Column::Int(values) => values.extend(cast::<Int64Array>(array)?.iter()),
+        Column::Float(values) => values.extend(cast::<Float64Array>(array)?.iter()),
+        Column::Date(values) => values.extend(cast::<Date32Array>(array)?.iter()),
+        Column::DateTime(values) => values.extend(cast::<TimestampSecondArray>(array)?.iter()),
+        Column::List(values) => {
+            let list = cast::<ListArray>(array)?;
+            for row in 0..list.len() {
+                values.push(if list.is_null(row) {
+                    None
+                } else {
+                    let items = list.value(row);
+                    let mut column = empty(items.data_type(), items.len())?;
+                    extend(&mut column, items.as_ref())?;
+                    Some(finish(column)?)
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+fn finish(column: Column) -> std::result::Result<Robj, String> {
+    let doubles = |values: Vec<Option<f64>>| {
+        Doubles::from_values(
+            values
+                .into_iter()
+                .map(|v| v.map(Rfloat::from).unwrap_or(Rfloat::na())),
+        )
+        .into_robj()
+    };
+    Ok(match column {
+        Column::Text(values) => {
+            if values.iter().flatten().any(|v| v.contains('\0')) {
+                return Err("text containing NUL cannot be held by an R character vector".into());
+            }
+            Strings::from_values(values.iter().map(|v| v.as_deref().unwrap_or(<&str>::na())))
+                .into_robj()
+        }
+        Column::Int(values) => doubles(
+            values
+                .into_iter()
+                .map(|v| v.map(exact_double).transpose())
+                .collect::<std::result::Result<_, _>>()?,
+        ),
+        Column::Float(values) => doubles(values),
+        Column::Date(values) => {
+            let mut value = doubles(values.into_iter().map(|v| v.map(f64::from)).collect());
+            value.set_class(["Date"]).map_err(|_| "date class")?;
+            value
+        }
+        Column::DateTime(values) => {
+            // Zone-free seconds are at most about 2^38 in magnitude for the
+            // admitted civil range, so every value is exact in binary64.
+            let mut value = doubles(values.into_iter().map(|v| v.map(|v| v as f64)).collect());
+            value
+                .set_class(["POSIXct", "POSIXt"])
+                .map_err(|_| "datetime class")?;
+            value
+                .set_attrib("tzone", "UTC")
+                .map_err(|_| "datetime timezone")?;
+            value
+        }
+        Column::List(values) => List::from_values(
+            values
+                .into_iter()
+                .map(|v| v.unwrap_or_else(|| NULL.into_robj())),
+        )
+        .into_robj(),
+    })
+}
+
+fn exact_double(value: i64) -> std::result::Result<f64, String> {
+    if value.unsigned_abs() <= EXACT_DOUBLE_MAGNITUDE {
+        Ok(value as f64)
+    } else {
+        Err(format!(
+            "integer {value} is beyond 2^53 and cannot be held exactly by an R double"
+        ))
+    }
 }
