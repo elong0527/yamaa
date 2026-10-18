@@ -33,6 +33,11 @@
 //! malformed footer or page header can panic inside the Parquet crate. Native
 //! Parquet decoding of admitted input runs through `contain_decode`, which
 //! also keeps the panic it contains off stderr.
+//!
+//! 57's footer decoder numbers row groups with an `i16` ordinal and refuses a
+//! footer that lists more than `FOOTER_ROW_GROUPS` (later releases use `i32`),
+//! so admission presents a longer row-group list in slices of at most that
+//! many (`parquet_source::row_groups`).
 #[cfg(feature = "parquet")]
 use parquet::{
     basic::{LogicalType, TimeUnit},
@@ -183,6 +188,11 @@ pub(crate) fn contain_decode<T>(decode: impl FnOnce() -> T) -> Option<T> {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(decode)).ok()
 }
 
+/// The most row groups 57's decoder reads from one footer: their ordinals
+/// `0..=i16::MAX`.
+#[cfg(feature = "parquet")]
+pub(crate) const FOOTER_ROW_GROUPS: usize = 1 << 15;
+
 /// The panic hook wrapper that keeps contained panics silent.
 mod quiet {
     use std::{cell::Cell, panic, sync::Once};
@@ -307,6 +317,13 @@ pub(crate) fn logical_type(logical: Option<&LogicalType>) -> Logical {
             },
             utc: *is_adjusted_to_u_t_c,
         },
+        Some(LogicalType::Integer {
+            bit_width,
+            is_signed,
+        }) => u8::try_from(*bit_width).map_or(Logical::Other, |bits| Logical::Integer {
+            bits,
+            signed: *is_signed,
+        }),
         _ => Logical::Other,
     }
 }

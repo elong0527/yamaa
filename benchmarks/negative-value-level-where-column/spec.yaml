@@ -1,0 +1,39 @@
+schema_version: "1.0"
+domain: ADVS
+keys: [USUBJID, PARAMCD]
+input:
+  VS:
+    path: input/vs.csv
+    types: {VSSTRESN: float}
+
+output:
+  path: advs.csv
+  columns: [USUBJID, PARAMCD, AVAL]
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: VS.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: VS.VSTESTCD
+
+  # The systolic description selects its records by the collected test code
+  # rather than by the analysis parameter.
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: VS.VSSTRESN
+    submission:
+      length: 8
+      significant_digits: 0
+      origin:
+        type: Predecessor
+        description: VS.VSSTRESN
+      value_level:
+        - id: SYSBP
+          where: {VSTESTCD: [SYSBP]}
+          label: Systolic Blood Pressure (mmHg)

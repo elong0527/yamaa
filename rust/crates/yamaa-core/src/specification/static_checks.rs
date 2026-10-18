@@ -255,10 +255,20 @@ impl PreparedSpecification {
 
     /// The contexts whose rows read lookup ranges ([`lookup_range::check`]).
     /// Without row templates the base drives every row, and its qualifier
-    /// reads the row's own record.
+    /// reads the row's own record. A dataset verification reads its lookups
+    /// for every row, as a column does.
     fn range_contexts(&self) -> Vec<lookup_range::Declared<'_>> {
+        let verified = relation_predicates::verification_predicates(&self.verifications.checks)
+            .flat_map(crate::bound_expression::BoundPredicate::bindings)
+            .filter(|binding| {
+                matches!(
+                    binding.read,
+                    crate::bound_expression::Read::Intermediate { .. }
+                )
+            })
+            .map(|binding| lookup_range::Evaluated::Name(&binding.name));
         match &self.rows {
-            Some(rows) => rows.range_contexts(&self.sources, &self.intermediates),
+            Some(rows) => rows.range_contexts(&self.sources, &self.intermediates, verified),
             None => {
                 let base = self.source().name.as_str();
                 vec![lookup_range::Declared {
@@ -268,6 +278,7 @@ impl PreparedSpecification {
                         .map(|declaration| {
                             lookup_range::Evaluated::Operation(&declaration.operation, Some(base))
                         })
+                        .chain(verified)
                         .collect(),
                     drivers: vec![base],
                 }]

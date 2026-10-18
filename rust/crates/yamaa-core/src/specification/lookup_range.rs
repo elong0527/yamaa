@@ -221,66 +221,55 @@ fn refusal(range: &RelationRange, drivers: &[usize], owner: Owner<'_>) -> Option
     })
 }
 
-/// The rows of one context of [`admit`]: the expressions each row evaluates,
-/// the named intermediates a row reads outside them, through a row template's
-/// filter, and the record port of the driver of each of those rows.
-pub(super) struct Context<'a> {
-    pub expressions: Vec<&'a Expression>,
-    pub named: Vec<usize>,
-    pub drivers: Vec<usize>,
-}
-
 /// A range value that reads an input's record must name the driver of every
-/// row that reads the lookup (LOOKUP-9). A named intermediate's range is
-/// admitted wherever the intermediate is read, through a chain of range values
-/// too. Each refused range is reported once.
+/// row that reads the lookup (LOOKUP-9). Each context pairs the expressions a
+/// row evaluates with the record ports of the drivers of those rows. A named
+/// intermediate's range is admitted wherever the intermediate is read, through
+/// a chain of range values too. Each refused range is reported once.
 pub(super) fn admit<'a>(
-    contexts: impl IntoIterator<Item = Context<'a>>,
+    contexts: impl IntoIterator<Item = (Vec<&'a Expression>, Vec<usize>)>,
     intermediates: &[Option<Intermediate>],
     findings: &mut Vec<BindFinding>,
 ) {
-    let mut seen = BTreeSet::new();
-    for context in contexts {
-        let drivers = context.drivers.as_slice();
-        for expression in context.expressions {
+    let mut seen = std::collections::BTreeSet::new();
+    let mut refuse = |range: &RelationRange,
+                      drivers: &[usize],
+                      owner: Owner<'_>,
+                      findings: &mut Vec<BindFinding>| {
+        if let Some(diagnostic) = refusal(range, drivers, owner) {
+            if seen.insert(range.path().to_string()) {
+                findings.push(BindFinding::Scalar(diagnostic));
+            }
+        }
+    };
+    for (expressions, drivers) in contexts {
+        for expression in expressions {
             crate::dataset::relation_predicates::visit_ranges(expression, &mut |range| {
-                if let Some(diagnostic) = refusal(range, drivers, Owner::Unnamed) {
-                    report(range.path(), diagnostic, &mut seen, findings);
-                }
+                refuse(range, &drivers, Owner::Unnamed, findings);
             });
             let mut named = Vec::new();
             crate::dataset::relation_predicates::visit(expression, &mut |index| named.push(index));
-            admit_named(named, drivers, intermediates, &mut seen, findings);
-        }
-        admit_named(context.named, drivers, intermediates, &mut seen, findings);
-    }
-}
-
-/// Admit the range of each named intermediate read in `named`, then of each
-/// intermediate its range value reads, last read first.
-fn admit_named(
-    mut named: Vec<usize>,
-    drivers: &[usize],
-    intermediates: &[Option<Intermediate>],
-    seen: &mut BTreeSet<String>,
-    findings: &mut Vec<BindFinding>,
-) {
-    let mut visited = BTreeSet::new();
-    while let Some(index) = named.pop() {
-        if !visited.insert(index) {
-            continue;
-        }
-        let Some(item) = intermediates.get(index).and_then(Option::as_ref) else {
-            continue;
-        };
-        let Some(range) = &item.range else {
-            continue;
-        };
-        if let Some(diagnostic) = refusal(range, drivers, Owner::Intermediate(&item.identifier)) {
-            report(range.path(), diagnostic, seen, findings);
-        }
-        if let CurrentRead::Intermediate { index, .. } = range.current().read {
-            named.push(index);
+            let mut visited = std::collections::BTreeSet::new();
+            while let Some(index) = named.pop() {
+                if !visited.insert(index) {
+                    continue;
+                }
+                let Some(item) = intermediates.get(index).and_then(Option::as_ref) else {
+                    continue;
+                };
+                let Some(range) = &item.range else {
+                    continue;
+                };
+                refuse(
+                    range,
+                    &drivers,
+                    Owner::Intermediate(&item.identifier),
+                    findings,
+                );
+                if let CurrentRead::Intermediate { index, .. } = range.current().read {
+                    named.push(index);
+                }
+            }
         }
     }
 }

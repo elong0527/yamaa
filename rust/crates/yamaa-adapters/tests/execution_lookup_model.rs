@@ -812,7 +812,8 @@ fn named_ranges(value: &str) -> String {
 /// driving no row that reads the intermediate, wherever binding does, from
 /// the declarations alone (LOOKUP-9): whichever operation of a row reads the
 /// intermediate, through another intermediate's, an aggregate's or a source
-/// binding's range value, and from an aggregate's derive binding.
+/// binding's range value, from an aggregate's derive binding, and from a
+/// dataset verification.
 #[test]
 fn check_reports_an_intermediate_range_value_of_another_input_wherever_binding_does() {
     let inputs = [
@@ -851,6 +852,18 @@ fn check_reports_an_intermediate_range_value_of_another_input_wherever_binding_d
         );
         assert_eq!(agreeing(&fixture), std::slice::from_ref(&refused), "{read}");
     }
+    // A dataset verification reads P for every row.
+    let fixture = Fixture::new(
+        &with_other(specification(
+            &named_ranges("OTHER.REFDT"),
+            "  - {name: READ, type: int, derivation: {literal: 1}}\n\
+             verifications:\n\
+             \x20 - assert: {id: dated, require: 'P.APERIOD IS NOT NULL'}\n",
+            ", READ",
+        )),
+        &inputs,
+    );
+    assert_eq!(agreeing(&fixture), std::slice::from_ref(&refused));
     // A range no row reads, and a value of the base driver's record, are
     // admitted.
     for (value, read) in [("OTHER.REFDT", "{literal: 1}"), ("AE.ASTDT", "P.APERIOD")] {
@@ -938,8 +951,8 @@ fn check_reports_a_join_or_aggregate_range_value_of_another_input_wherever_bindi
 
 /// With row templates, `check` admits a range value against the driver of
 /// every row that reads it, as binding does (LOOKUP-9): a column derivation's
-/// against the drivers of every template, and a template's derivations' and
-/// filter's against its own driver.
+/// and a dataset verification's against the drivers of every template, and a
+/// template's derivations' and filter's against its own driver.
 #[test]
 fn check_admits_a_row_template_range_value_against_the_rows_that_read_it() {
     let inputs = [
@@ -965,9 +978,13 @@ fn check_admits_a_row_template_range_value_against_the_rows_that_read_it() {
         "CLINIC.DAY",
         ("intermediate", "W"),
     );
-    // A home row has no clinic record, however its template reads W.
+    // A home row has no clinic record, however it reads W: through the column
+    // phase or a dataset verification, as every row does, or through the home
+    // template's derivations or filter.
     for specification in [
         column_phase("W.NAME", named),
+        measurements("{literal: x}", "{literal: y}", named)
+            + "verifications:\n  - assert: {id: windowed, require: 'W.NAME IS NOT NULL'}\n",
         measurements("{literal: x}", "W.NAME", named),
         measurements("{literal: x}", "{str_template: 'in {W.NAME}'}", named),
         measurements("{literal: x}", "{literal: y}", named).replace(

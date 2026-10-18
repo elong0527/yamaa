@@ -2136,6 +2136,7 @@ mod project {
                 }),
                 inventory: None,
                 row_count: None,
+                entries: None,
             }
         }
         #[test]
@@ -2445,23 +2446,28 @@ mod project {
                 .is_empty());
         }
 
+        /// A where clause selecting the rows whose column holds `later`.
+        fn later(column: usize) -> yamaa_core::dataset::WhereClause {
+            yamaa_core::dataset::WhereClause {
+                terms: vec![(column, vec!["later".into()])],
+            }
+        }
         #[test]
-        fn value_scopes_prove_a_string_discriminator_and_wait_for_its_completed_value() {
+        fn value_scopes_prove_a_string_where_column_and_wait_for_its_completed_value() {
             use yamaa_core::dataset::ValueCodelist;
             let (table, base) = setup(
                 vec![Value::Str("bad".into())],
                 ColumnType::Str,
                 vec![Value::Str("good".into())],
             );
-            let check = |discriminator| Check::ValueCodelists {
-                discriminator,
-                overrides: vec!["later".into()],
+            let check = |column| Check::ValueCodelists {
+                overrides: vec![later(column)],
                 bindings: vec![ValueCodelist {
                     id: "SELECTED".into(),
                     values: vec![Value::Str("good".into())],
-                    codes: vec!["later".into()],
+                    clauses: vec![later(column)],
                     default: false,
-                    path: "rows.later.submission.CODE.codelist".into(),
+                    path: "columns.CODE.submission.value_level.LATER.codelist".into(),
                 }],
             };
             let groups = |check| {
@@ -2473,10 +2479,12 @@ mod project {
                     }],
                 }]
             };
-            for discriminator in [0, 3] {
+            // An int column, the checked column itself and an absent column
+            // select nothing.
+            for column in [0, 1, 3] {
                 assert_eq!(
                     base.clone()
-                        .with_column_verifications(groups(check(discriminator)))
+                        .with_column_verifications(groups(check(column)))
                         .unwrap_err(),
                     yamaa_core::dataset::PlanError::InvalidColumns
                 );
@@ -2503,32 +2511,33 @@ mod project {
         }
 
         #[test]
-        fn effective_length_scopes_reject_foreign_owners_and_check_a_later_completed_discriminator()
+        fn effective_length_scopes_reject_foreign_columns_and_check_a_later_completed_where_column()
         {
             let (table, base) = setup(
                 vec![Value::Str("abcde".into())],
                 ColumnType::Str,
                 vec![Value::Str("abcde".into())],
             );
-            let check = |discriminator, max: &str| Check::ValueMaxLength {
+            let check = |column, max: &str| Check::ValueMaxLength {
                 max: yamaa_core::dataset::RowCountBound::new(max).unwrap(),
-                discriminator,
-                codes: vec!["later".into()],
-                include: true,
+                scope: yamaa_core::dataset::RowScope {
+                    clauses: vec![later(column)],
+                    include: true,
+                },
             };
             let group = |check| {
                 vec![ColumnVerifications {
                     column: 1,
                     checks: vec![Verification {
-                        path: "rows.R.submission.CODE.length".into(),
+                        path: "columns.CODE.submission.value_level.LATER.length".into(),
                         check,
                     }],
                 }]
             };
-            for discriminator in [0, 3] {
+            for column in [0, 1, 3] {
                 assert_eq!(
                     base.clone()
-                        .with_column_verifications(group(check(discriminator, "4")))
+                        .with_column_verifications(group(check(column, "4")))
                         .unwrap_err(),
                     yamaa_core::dataset::PlanError::InvalidColumns
                 );

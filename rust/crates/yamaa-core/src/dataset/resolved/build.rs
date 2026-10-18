@@ -780,7 +780,12 @@ impl<'p> Builder<'p> {
                 let site = format!("{}.invalid", operation.path());
                 let walker = Some(Walker::Imputation);
                 self.site(cx, &mut node, declared, site, H::Invalid, walker);
-                values.extend(operands.iter().map(|operand| (operand, Value, Always)));
+                // `dtc` reads a part only when every coarser part is present.
+                let stops = operation.kind().stops_at_missing();
+                for (index, operand) in operands.iter().enumerate() {
+                    let demand = if stops && index > 0 { Reached } else { Always };
+                    values.push((operand, Value, demand));
+                }
             }
             E::Extreme { operands, .. } => {
                 node.kind = ExprKind::Extreme;
@@ -1704,8 +1709,8 @@ impl<'p> Builder<'p> {
             let column = cx.column(group.column)?;
             for (position, verification) in group.checks.iter().enumerate() {
                 let mut reads = vec![Read::Column(column)];
-                for discriminator in discriminators(&verification.check) {
-                    reads.push(Read::Column(cx.column(discriminator)?));
+                for where_column in where_columns(&verification.check) {
+                    reads.push(Read::Column(cx.column(where_column)?));
                 }
                 let severity = plan.verification_severity(&verification.path);
                 let family = check_family(&verification.check);
@@ -1936,19 +1941,16 @@ fn observed_kinds(plan: &DatasetPlan) -> Result<Vec<(bool, bool)>, ResolutionErr
     Ok(kinds)
 }
 
-fn discriminators(check: &Check) -> Vec<usize> {
-    match check {
-        Check::ValueCodelists { discriminator, .. }
-        | Check::ValueMaxLength { discriminator, .. } => vec![*discriminator],
-        Check::Inventory {
-            scope: Some(scope), ..
-        } => vec![scope.discriminator],
-        Check::Mandatory(Some(scope))
-        | Check::DataType {
-            scope: Some(scope), ..
-        } => vec![scope.discriminator],
-        _ => Vec::new(),
+/// The completed where columns a value-level check selects its rows by, each
+/// once, in clause order.
+fn where_columns(check: &Check) -> Vec<usize> {
+    let mut columns = Vec::new();
+    for column in check.clauses().iter().flat_map(|clause| clause.columns()) {
+        if !columns.contains(&column) {
+            columns.push(column);
+        }
     }
+    columns
 }
 
 fn check_family(check: &Check) -> CheckFamily {
@@ -1961,6 +1963,8 @@ fn check_family(check: &Check) -> CheckFamily {
         Check::ValueCodelists { .. } => CheckFamily::ValueCodelists,
         Check::Inventory { .. } => CheckFamily::Inventory,
         Check::ValueMaxLength { .. } => CheckFamily::ValueMaxLength,
+        Check::ValueEntries(_) => CheckFamily::ValueEntries,
+        Check::ValueEntryMatch { .. } => CheckFamily::ValueEntryMatch,
         Check::Range { .. } => CheckFamily::Range,
         Check::MaxLength(_) => CheckFamily::MaxLength,
         Check::WideMaxLength(_) => CheckFamily::WideMaxLength,

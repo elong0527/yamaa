@@ -818,17 +818,19 @@ def invalid_text_phrase(node):
 
 
 # The collected precision words, finest first. A date's precision stops at
-# day; "none" belongs to a value taken whole from an imputation fallback.
+# day; "none" belongs to a value taken whole from an imputation fallback and
+# to text whose year is unknown, such as --03-15 (TIME-7).
 PRECISION_WORDS = {
     "date": (
         '"day" for a complete date, "month" for a year and month, "year" for '
-        'a year alone, "none" for an entirely imputed date'
+        'a year alone, "none" for an entirely imputed date or text with an '
+        "unknown year"
     ),
     "datetime": (
         '"second" through the second, "minute" through the minute, "hour" '
         'through the hour, "day" for a date alone, "month" for a year and '
         'month, "year" for a year alone, "none" for an entirely imputed '
-        "datetime"
+        "datetime or text with an unknown year"
     ),
 }
 

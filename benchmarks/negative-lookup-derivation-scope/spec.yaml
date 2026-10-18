@@ -1,0 +1,54 @@
+schema_version: "1.0"
+domain: VS
+keys: [USUBJID, VSDY, SOURCE]
+input:
+  CLINIC: {path: input/clinic.csv, types: {VSDY: int, SYSBP: int}}
+  HOME: {path: input/home.csv, types: {VSDY: int, SYSBP: int}}
+  WINDOWS: {path: input/windows.csv, types: {LO: int, HI: int}}
+
+output:
+  path: vs.csv
+  columns: [USUBJID, VSDY, SOURCE, VSSTRESN, VISIT]
+
+intermediates:
+  # The visit window holding the clinic measurement's study day. The day is
+  # taken from the clinic record, but home records build some of the rows,
+  # so the specification is rejected before any data is read.
+  - id: VISITWIN
+    dataset: WINDOWS
+    key: [USUBJID]
+    filter: "WINDOWS.LO <= WINDOWS.MEASDY AND WINDOWS.MEASDY <= WINDOWS.HI"
+    no_match: null
+    derivations:
+      MEASDY: CLINIC.VSDY
+
+columns:
+  - {name: USUBJID, type: str, label: Unique Subject Identifier}
+  - {name: VSDY, type: int, label: Study Day of Vital Signs}
+  - {name: SOURCE, type: str, label: Measurement Source}
+
+  - name: VSSTRESN
+    type: int
+    label: Numeric Result/Finding in Standard Units
+
+  - name: VISIT
+    type: str
+    label: Visit Name
+    derivation: VISITWIN.NAME
+
+rows:
+  - id: clinic
+    dataset: CLINIC
+    derivations:
+      USUBJID: CLINIC.USUBJID
+      VSDY: CLINIC.VSDY
+      SOURCE: {literal: CLINIC}
+      VSSTRESN: CLINIC.SYSBP
+
+  - id: home
+    dataset: HOME
+    derivations:
+      USUBJID: HOME.USUBJID
+      VSDY: HOME.VSDY
+      SOURCE: {literal: HOME}
+      VSSTRESN: HOME.SYSBP

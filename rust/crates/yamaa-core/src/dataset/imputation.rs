@@ -1,5 +1,6 @@
-//! Declarative completion, precision and imputation flags read right-truncated
-//! ISO 8601 (SDTM `--DTC`) text and preserve each collected field.
+//! Declarative completion, precision and imputation flags read collected
+//! ISO 8601 (SDTM `--DTC`) text up to its first unknown field and preserve
+//! each collected field.
 use crate::json::Value as V;
 use crate::{
     diagnostic::{ConditionCode as C, Diagnostic},
@@ -246,7 +247,8 @@ pub struct Imputation {
 #[derive(Clone, Debug, PartialEq)]
 pub enum ImputationStep {
     Value(Value),
-    /// A declared `invalid` answers text that is not a right-truncated `--DTC` value.
+    /// A declared `invalid` answers text that is not collected date text,
+    /// such as an ISO 8601 interval or duration (TIME-13).
     Recovered {
         handler: &'static str,
     },
@@ -709,12 +711,22 @@ impl Imputation {
                     None => return Ok(ImputationStep::Partial),
                 },
                 Ok(None) => return Ok(ImputationStep::Partial),
-                Err(reason) => {
+                // An interval or duration fails as `impute` and `precision`
+                // fail on one (TIME-13); other text keeps its 0.4.0 failure.
+                Err(NotCollected::IntervalOrDuration) => {
                     return Err(diagnostic(
-                        match reason {
-                            NotCollected::IntervalOrDuration => C::ToDateIntervalText,
-                            NotCollected::Invalid => C::ToDateInvalid,
-                        },
+                        C::ToDateIntervalText,
+                        &self.path,
+                        &[
+                            ("operation", Value::Str("to_date".into())),
+                            ("source", Value::Str(self.source.clone())),
+                            ("value", Value::Str(text.into())),
+                        ],
+                    ))
+                }
+                Err(NotCollected::Invalid) => {
+                    return Err(diagnostic(
+                        C::ToDateInvalid,
                         &self.path,
                         &[
                             ("operation", Value::Str("to_date".into())),

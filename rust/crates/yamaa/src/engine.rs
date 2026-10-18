@@ -362,7 +362,8 @@ impl Engine {
         let measurements = Arc::new(yamaa_adapters::application_measurements::Measurements::new());
         let progress = self.shared.observer.as_deref();
         let plan = self.compile_observed(request, &measurements, progress);
-        let outcome = plan.run_observed(None, &measurements, progress);
+        // The compilation above has just verified the metadata it captured.
+        let outcome = plan.run_observed(None, false, &measurements, progress);
         measurements.complete(outcome_accepted(&outcome));
         Ok(Build::from_outcome(outcome, measurements, &self.shared))
     }
@@ -387,12 +388,14 @@ impl Engine {
             request.environment,
             yamaa_core::application_observer::Scope::new(&bridge),
         );
+        // The compilation above has just verified the metadata it captured.
         let outcome = crate::internal::run(
             &self.shared,
             request.specification,
             &compiled,
             None,
             Some(held),
+            false,
             yamaa_core::application_observer::Scope::new(&bridge),
         );
         measurements.complete(outcome_accepted(&outcome));

@@ -791,20 +791,19 @@ mod file {
         fn original_lb_source_rejection_and_per_value_published_vocabulary_have_zero_writes() {
             let temp = Temp::fixture("sdtm-lb-metadata", true);
             let overlay = fs::read_to_string(temp.0.join("submission-spec.yaml")).unwrap();
-            // Drop the rows: block only; the style contract orders the top-level
-            // submission: block after rows:, so keep any block that follows it.
+            // Drop the completion's value_level block only, so the creatinine
+            // entry inherits the original Investigator source.
             let mut stripped = String::new();
-            let mut in_rows = false;
+            let mut in_values = false;
             for line in overlay.split_inclusive('\n') {
-                if line.trim_end() == "rows:" {
-                    in_rows = true;
-                } else if in_rows && !line.starts_with(char::is_whitespace) {
-                    in_rows = false;
-                    stripped.push_str(line);
-                } else if !in_rows {
+                if line.trim_end() == "      value_level:" {
+                    in_values = true;
+                } else if !(in_values && line.starts_with("        ")) {
+                    in_values = false;
                     stripped.push_str(line);
                 }
             }
+            assert!(!stripped.contains("value_level"));
             fs::write(temp.0.join("submission-spec.yaml"), stripped).unwrap();
             let mut run = temp.run("2026-09-11T00:00:00");
             assert!(
@@ -1114,6 +1113,12 @@ mod file {
                 .unwrap_or_else(|| panic!("{:?}", run.issues()));
             assert_eq!(refusal.condition, "value_not_permitted");
             assert_eq!(refusal.spec_paths, ["sdtm.specs[0].columns.VSDTM.type"]);
+            // The details of the specification's own refusal, beside the
+            // `detail` every composition finding carries.
+            assert_eq!(
+                refusal.context,
+                yamaa_adapters::json!({"detail": "VSDTM", "column": "VSDTM", "value": "datetime", "class": "FINDINGS", "permitted": ["str", "date"]})
+            );
             assert!(run.save().is_err());
             assert!(!temp.0.join("define.xml").exists());
         }

@@ -1,0 +1,45 @@
+schema_version: "1.0"
+domain: QS
+keys: [USUBJID, QSDTC]
+input:
+  DIARY: {path: input/diary.csv, types: {DIARYDT: date, SCORE: int}}
+  RAND: {path: input/rand.csv, types: {RANDDT: date}}
+  DM: {path: input/dm.csv, types: {RFSTDTC: date}}
+
+output:
+  path: qs.csv
+  columns: [USUBJID, QSDTC, QSSTRESN]
+
+intermediates:
+  # The subject's randomization, when it happened on or before the
+  # subject's reference start date. That date belongs to demographics,
+  # which does not build the rows, so the specification is rejected before
+  # any data is read.
+  - id: RANDOMIZED
+    dataset: RAND
+    key: [USUBJID]
+    filter: "RAND.RANDDT <= DM.RFSTDTC"
+    no_match: null
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: QSDTC
+    type: date
+    label: Date/Time of Finding
+
+  - name: QSSTRESN
+    type: int
+    label: Numeric Finding in Standard Units
+
+rows:
+  # One record per diary entry of a randomized subject.
+  - id: diary
+    dataset: DIARY
+    filter: "RANDOMIZED.ARM IS NOT NULL"
+    derivations:
+      USUBJID: DIARY.USUBJID
+      QSDTC: DIARY.DIARYDT
+      QSSTRESN: DIARY.SCORE
