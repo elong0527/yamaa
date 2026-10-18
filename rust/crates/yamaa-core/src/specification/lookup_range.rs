@@ -6,8 +6,8 @@
 use super::*;
 use crate::{
     dataset::{
-        CurrentField, CurrentRead, Intermediate, RelationRange, RelationRangeBound,
-        RelationRangeError, SecondarySource,
+        CurrentField, CurrentRead, Intermediate, IntermediateSource, RelationRange,
+        RelationRangeBound, RelationRangeError, SecondarySource,
     },
     diagnostic::{
         lookup::{self, Owner},
@@ -102,13 +102,18 @@ impl Declaration {
     }
     /// The value as a read of the current row: an output column, a field of
     /// an input's record at that input's record port, or a column a named
-    /// intermediate selects. Whether the input drives every row that reads
-    /// the lookup is admitted later, per context ([`admit`]).
+    /// intermediate selects. A value qualified by `driver`, the named
+    /// intermediate whose records build the row, reads the record that built
+    /// the row at its input's record port, as the driver's qualifier always
+    /// does (LOOKUP-1, LOOKUP-2), never a selection of the intermediate.
+    /// Whether the input drives every row that reads the lookup is admitted
+    /// later, per context ([`admit`]).
     pub(super) fn current_value(
         &self,
         catalog: &Catalog,
         secondary: &[SecondarySource],
         intermediates: &[Option<Intermediate>],
+        driver: Option<&str>,
         available: Option<&[usize]>,
         edges: &mut Vec<usize>,
     ) -> Result<Option<(CurrentRead, Option<ValueType>)>, BindError> {
@@ -153,6 +158,14 @@ impl Declaration {
             let Some(column) = item.source_column(secondary, field) else {
                 return Ok(None);
             };
+            if driver == Some(qualifier) {
+                return Ok(stored_record(item, column).map(|source| {
+                    (
+                        CurrentRead::Record { source, column },
+                        item.source_kind(secondary, column).map(Into::into),
+                    )
+                }));
+            }
             edges.extend(row_intermediates::dependencies(index, intermediates)?);
             return Ok(Some((
                 CurrentRead::Intermediate { index, column },
@@ -205,6 +218,46 @@ impl Declaration {
     pub(super) fn unknown_value(&self, owner: Owner<'_>) -> Diagnostic {
         lookup::range_reference(&format!("{}.value", self.path), owner, &self.value)
     }
+    /// Whether the value names a field that `driver`, the named intermediate
+    /// whose records build the row, derives. That field is a value of the row
+    /// (ROW-2), but a range value reads only the stored record that built the
+    /// row, so the read is refused as unsupported.
+    pub(super) fn names_derived_driver_field(
+        &self,
+        driver: &str,
+        secondary: &[SecondarySource],
+        intermediates: &[Option<Intermediate>],
+    ) -> bool {
+        self.value
+            .split_once('.')
+            .filter(|(qualifier, _)| *qualifier == driver)
+            .and_then(|(_, field)| {
+                let item = intermediates
+                    .iter()
+                    .flatten()
+                    .find(|item| item.identifier == driver)?;
+                let column = item.source_column(secondary, field)?;
+                Some(stored_record(item, column).is_none())
+            })
+            .unwrap_or(false)
+    }
+}
+
+/// The record port at which a driver intermediate's field `column` is stored:
+/// the port of the input the intermediate reads. A field it derives has none.
+fn stored_record(item: &Intermediate, column: usize) -> Option<usize> {
+    if item
+        .derivations
+        .as_ref()
+        .is_some_and(|derived| column >= derived.stored_columns)
+    {
+        return None;
+    }
+    match item.source {
+        IntermediateSource::Input(index) => Some(index + 1),
+        IntermediateSource::Primary { .. } => Some(0),
+        IntermediateSource::SelfRows { .. } => None,
+    }
 }
 
 /// A range whose value reads the record of an input that does not drive every
@@ -245,7 +298,9 @@ pub(super) fn admit<'a>(
     for (expressions, drivers) in contexts {
         for expression in expressions {
             crate::dataset::relation_predicates::visit_ranges(expression, &mut |range| {
-                refuse(range, &drivers, Owner::Unnamed, findings);
+                // A source binding's range names its variable, as binding does.
+                let owner = range.variable().map_or(Owner::Unnamed, Owner::Source);
+                refuse(range, &drivers, owner, findings);
             });
             let mut named = Vec::new();
             crate::dataset::relation_predicates::visit(expression, &mut |index| named.push(index));

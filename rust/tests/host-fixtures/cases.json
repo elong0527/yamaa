@@ -4454,6 +4454,25 @@
           ]
         },
         {
+          "name": "aggregate_between_without_bound",
+          "call": "run",
+          "specification_yaml": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: G, type: str, derivation: SRC.G}\n  - {name: V, type: int, derivation: {aggregate: {expr: 'SUM(SRC.V)', between: {value: G}}}}\noutput: {path: output.csv, columns: [ID, G, V]}\n",
+          "input_csv": "ID,G,V\na,g,2\na,g,3\n",
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "invalid_field_type",
+              "requirement": "LOOKUP-9",
+              "spec_paths": [
+                "columns.V.derivation.aggregate.between"
+              ],
+              "context": "{\"expected\":\"at least one of lower, upper\"}",
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
+        },
+        {
           "name": "two_undeclared_output_columns",
           "call": "check",
           "specification_yaml": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\noutput: {path: output.csv, columns: [ID, X, Y]}\n",

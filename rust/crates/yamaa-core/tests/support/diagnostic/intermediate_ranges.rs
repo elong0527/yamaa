@@ -146,7 +146,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         reached.insert(check(
             finding,
             "unknown_field",
-            "REQ-0121",
+            "LOOKUP-9",
             "intermediates[0].between",
             &[("intermediate", "P"), ("identifier", name)],
         ));
@@ -163,7 +163,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     reached.insert(check(
         findings.remove(0),
         "unknown_field",
-        "REQ-0121",
+        "LOOKUP-9",
         "intermediates[0].between.value",
         &[("intermediate", "P"), ("identifier", "UNKNOWN")],
     ));
@@ -180,7 +180,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     reached.insert(check(
         findings.remove(0),
         "incomparable_range_types",
-        "REQ-0121",
+        "LOOKUP-9",
         "intermediates[0].between",
         &[
             ("intermediate", "P"),

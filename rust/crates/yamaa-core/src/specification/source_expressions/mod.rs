@@ -522,7 +522,8 @@ impl Declaration {
     /// relation (LOOKUP-9): `Some(None)` without a range, and `None` when a
     /// finding refuses it. Whether a record read names the driver of every row
     /// that reads the join is admitted per context ([`lookup_range::admit`]).
-    /// `row` names the row template of a row-phase read.
+    /// `row` names the row template of a row-phase read, and `driver` the
+    /// driver whose records build the rows the binding is read for.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn bind_range(
         &self,
@@ -531,6 +532,7 @@ impl Declaration {
         secondary: &[crate::dataset::SecondarySource],
         intermediates: &[Option<crate::dataset::Intermediate>],
         row: Option<&str>,
+        driver: Option<&str>,
         available: Option<&[usize]>,
         edges: &mut Vec<usize>,
         findings: &mut Vec<BindFinding>,
@@ -568,14 +570,23 @@ impl Declaration {
                 return Ok(None);
             }
         }
+        if driver.is_some_and(|driver| {
+            range.names_derived_driver_field(driver, secondary, intermediates)
+        }) {
+            findings.push(BindFinding::Scalar(crate::application_issue::unsupported(
+                "intermediate_driver_range_value",
+                Some(&format!("{}.value", range.path())),
+            )));
+            return Ok(None);
+        }
         let Some((read, kind)) =
-            range.current_value(catalog, secondary, intermediates, available, edges)?
+            range.current_value(catalog, secondary, intermediates, driver, available, edges)?
         else {
             findings.push(wrap(range.unknown_value(owner)));
             return Ok(None);
         };
         Ok(match range.finish(read, kind, bounds, None)? {
-            Ok(range) => Some(Some(range)),
+            Ok(range) => Some(Some(range.for_variable(&self.variable))),
             Err(diagnostic) => {
                 findings.push(wrap(diagnostic));
                 None
@@ -776,6 +787,7 @@ pub(super) fn bind(
                                 catalog,
                                 secondary,
                                 intermediates,
+                                None,
                                 None,
                                 None,
                                 edges,
