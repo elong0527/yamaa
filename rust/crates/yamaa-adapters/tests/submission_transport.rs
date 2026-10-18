@@ -164,6 +164,18 @@ mod transport {
         }
         for case in &cases {
             let name = case.file_name().unwrap().to_str().unwrap();
+            // A case publishing Parquet needs the Parquet codec.
+            if !cfg!(feature = "parquet")
+                && fs::read_dir(case.join("expected")).unwrap().any(|entry| {
+                    entry
+                        .unwrap()
+                        .path()
+                        .extension()
+                        .is_some_and(|extension| extension == "parquet")
+                })
+            {
+                continue;
+            }
             for host in [Language::Python, Language::R] {
                 let temp = stage(case);
                 let metadata = yaml(&case.join("benchmark.yaml"));
@@ -229,6 +241,7 @@ mod transport {
 
     /// The written transport files read back through the repository's own
     /// SAS Transport reader profile as the published values.
+    #[cfg(feature = "readstat")]
     #[test]
     fn written_transport_files_read_back_through_the_xport_reader() {
         use yamaa_core::{
