@@ -136,27 +136,31 @@ def member_sources(member_root: Path):
                 yield path
 
 
-def local_patch_sources(workspace: Path):
-    """Retain complete, regular local dependency sources and licensing notices."""
-    manifest = tomllib.loads((workspace / "Cargo.toml").read_text())
-    # A `[patch]` or `[patch.crates-io]` section written as a scalar or an
-    # array is a malformed declaration like any other: refuse it with the
-    # ValueError every other invalid patch gets instead of leaking an
-    # AttributeError from `.get`/`.items` on the non-table value.
-    patch_section = manifest.get("patch", {})
-    if not isinstance(patch_section, dict):
-        raise ValueError("local Cargo patch section must be a table")
-    patches = patch_section.get("crates-io", {})
-    if not isinstance(patches, dict):
-        raise ValueError("local Cargo patch section must be a table")
-    for package, declaration in patches.items():
-        if declaration != {"path": f"vendor/{package}"}:
-            raise ValueError("local Cargo patches must use vendor/package paths")
-        if not re.fullmatch(r"[a-z0-9_-]+", package):
-            raise ValueError("invalid local Cargo patch package")
-        root = workspace / "vendor" / package
-        if root.parent.is_symlink() or root.is_symlink():
-            raise ValueError("local Cargo patches must not be symlinks")
+def vendored_sources(workspace: Path):
+    """Retain complete, regular vendored crate sources and licensing notices.
+
+    Workspace members depend on each crate under `vendor/` by path, which
+    reaches every graph that builds them, including a project that embeds the
+    facade. A `[patch]` applies only when this workspace is the root, so such
+    a project would silently build without it (#2929): the workspace declares
+    none.
+    """
+    if "patch" in tomllib.loads((workspace / "Cargo.toml").read_text()):
+        raise ValueError(
+            "the workspace must not declare [patch]; depend on vendored crates by path"
+        )
+    vendor = workspace / "vendor"
+    if vendor.is_symlink():
+        raise ValueError("vendored crates must not be symlinks")
+    if not vendor.exists():
+        return
+    if not vendor.is_dir():
+        raise ValueError("vendored crates must sit in a vendor directory")
+    for root in sorted(vendor.iterdir()):
+        if root.is_symlink():
+            raise ValueError("vendored crates must not be symlinks")
+        if not root.is_dir() or not re.fullmatch(r"[a-z0-9_-]+", root.name):
+            raise ValueError(f"invalid vendored crate directory: {root.name}")
         for name in (
             "Cargo.toml",
             "LICENSE",
@@ -165,17 +169,17 @@ def local_patch_sources(workspace: Path):
             "src/lib.rs",
         ):
             if not (root / name).is_file():
-                raise ValueError(f"local Cargo patch is missing {name}")
+                raise ValueError(f"vendored crate is missing {name}")
         for path in sorted(root.rglob("*")):
             if path.is_symlink():
-                raise ValueError("local Cargo patch sources must not be symlinks")
+                raise ValueError("vendored crate sources must not be symlinks")
             if any(
                 part in {"target", ".git", "__pycache__"}
                 for part in path.relative_to(root).parts
             ):
-                raise ValueError("local Cargo patch contains build or cache files")
+                raise ValueError("vendored crate contains build or cache files")
             if path.name == "Cargo.lock" or path.suffix == ".pyc":
-                raise ValueError("local Cargo patch contains build or cache files")
+                raise ValueError("vendored crate contains build or cache files")
             if path.is_file():
                 yield path
 
@@ -275,10 +279,10 @@ def preserve_workspace(archive: Path, workspace: Path, fixture_sources=()) -> No
                     else:
                         additions.append((name, path))
 
-            patch_sources = list(local_patch_sources(workspace))
-            patch_names = {
+            vendored = list(vendored_sources(workspace))
+            vendored_names = {
                 f"{root}/rust/{path.relative_to(workspace).as_posix()}"
-                for path in patch_sources
+                for path in vendored
             }
             if any(
                 entry.name.startswith(f"{root}/rust/vendor/")
@@ -286,18 +290,18 @@ def preserve_workspace(archive: Path, workspace: Path, fixture_sources=()) -> No
                 for entry in entries
             ):
                 raise ValueError(
-                    "source archive local Cargo patches must not contain links"
+                    "source archive vendored crates must not contain links"
                 )
             if any(
                 entry.isfile()
                 and entry.name.startswith(f"{root}/rust/vendor/")
-                and entry.name not in patch_names
+                and entry.name not in vendored_names
                 for entry in entries
             ):
                 raise ValueError(
-                    "source archive contains an unexpected local Cargo patch file"
+                    "source archive contains an unexpected vendored crate file"
                 )
-            for path in patch_sources:
+            for path in vendored:
                 name = f"{root}/rust/{path.relative_to(workspace).as_posix()}"
                 if name in names:
                     entry = source.getmember(name)
@@ -305,7 +309,9 @@ def preserve_workspace(archive: Path, workspace: Path, fixture_sources=()) -> No
                         not entry.isfile()
                         or source.extractfile(entry).read() != path.read_bytes()
                     ):
-                        raise ValueError("source archive changed a local Cargo patch")
+                        raise ValueError(
+                            "source archive changed a vendored crate source"
+                        )
                 else:
                     additions.append((name, path))
 
@@ -331,7 +337,7 @@ def preserve_workspace(archive: Path, workspace: Path, fixture_sources=()) -> No
                     additions.append((name, path))
 
             # Entries outside the verified sets above (member sources,
-            # local patches, fixtures, the manifest/lock/toolchain) are
+            # vendored crates, fixtures, the manifest/lock/toolchain) are
             # copied into the output archive verbatim below, so anything
             # that is not a regular file or a directory -- a symlink or
             # hard link naming a restored member's directory, a device
@@ -349,7 +355,7 @@ def preserve_workspace(archive: Path, workspace: Path, fixture_sources=()) -> No
             # verified against the entry's logical size; the verified
             # sets above have already compared those expanded bytes
             # against the repository files for every restored member,
-            # patch and fixture. Links, devices and FIFOs are still
+            # vendored crate and fixture. Links, devices and FIFOs are still
             # refused here.
             if any(not (entry.isfile() or entry.isdir()) for entry in entries):
                 raise ValueError(

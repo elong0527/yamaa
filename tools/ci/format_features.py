@@ -54,7 +54,7 @@ def main():
         )
     )
     for package, feature in [
-        ("saphyr-parser", "yaml"),
+        ("yamaa-saphyr-parser", "yaml"),
         ("parquet", "parquet"),
         ("zstd-sys", "parquet"),
     ]:
@@ -76,7 +76,14 @@ def main():
         )
     )
     if core.intersection(
-        {"saphyr-parser", "parquet", "arrow-array", "arrow-ipc", "cc", "zstd-sys"}
+        {
+            "yamaa-saphyr-parser",
+            "parquet",
+            "arrow-array",
+            "arrow-ipc",
+            "cc",
+            "zstd-sys",
+        }
     ):
         raise RuntimeError("semantic core depends on a physical reader")
     cargo("test", "--locked", "-p", "yamaa-adapters", *features)

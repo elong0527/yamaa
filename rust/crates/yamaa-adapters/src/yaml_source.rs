@@ -12,7 +12,7 @@
 use std::borrow::Cow;
 use yamaa_core::limits::{LimitExceeded, Limits};
 
-use saphyr_parser::{Event, Marker, Parser, ScalarStyle, ScanError, Span, Tag};
+use yamaa_saphyr_parser::{Event, Marker, Parser, ScalarStyle, ScanError, Span, Tag};
 
 /// An invalid string retains code points solely for key equality and diagnostics.
 /// It cannot be mistaken for successfully decoded Unicode text.

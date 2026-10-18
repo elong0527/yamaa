@@ -436,17 +436,25 @@ today: the stable codes (`yaml_reader_unavailable`,
 
 ### Distribution
 
-All crates, including the facade, stay `publish = false` for 0.4.0. Embedders
-depend on the facade by git or path dependency:
+All crates, including the facade, stay `publish = false`. Embedders depend on
+the facade by git or path dependency and need no other configuration:
 
 ```toml
 yamaa = { path = "rust/crates/yamaa", default-features = false, features = ["yaml"] }
 ```
 
-Publishing to crates.io is not decided here. It depends on #2583 -- the
-workspace `[patch.crates-io]` vendored `saphyr-parser` cannot be published as
-a patch -- and on the provenance terms of the vendored ReadStat C sources.
-Until #2583 lands, git/path is the distribution route.
+The `yaml` feature builds the reviewed YAML parser: the vendored
+`saphyr-parser` 0.2.1 with its compact-flow fix, which `yamaa-adapters`
+depends on by path under its own crate name, `yamaa-saphyr-parser`. A path
+dependency reaches the embedder's graph without a `[patch]`, and a graph that
+already holds a published `saphyr-parser` keeps that crate beside this one.
+CI's minimum-toolchain job builds the facade from the outside workspace in
+`rust/tests/embedder` and runs the parser's compact-flow controls through it.
+
+Publishing to crates.io is not decided here. It depends on #2583 -- a
+published crate cannot depend on the vendored parser by path -- and on the
+provenance terms of the vendored ReadStat C sources. Until #2583 lands,
+git/path is the distribution route.
 
 ### Host-usage mapping
 

@@ -2,12 +2,12 @@ use super::*;
 #[path = "scalar.rs"]
 mod scalar;
 use crate::yaml_source::{scan_strict, LocatedEvent, ScanFailure, SourceEvent, SourceText};
-use saphyr_parser::ScalarStyle;
 use std::collections::{BTreeSet, VecDeque};
 use yamaa_core::limits::Limits;
 use yamaa_core::schema::{
     scalar_diagnostic_label, DocumentError, DocumentNode, DocumentResource, ScalarKey,
 };
+use yamaa_saphyr_parser::ScalarStyle;
 
 impl From<ScanFailure> for DecodeFailure {
     fn from(error: ScanFailure) -> Self {

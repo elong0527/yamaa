@@ -75,6 +75,16 @@ jobs:
         run: |
           cargo check --locked --manifest-path rust/Cargo.toml --workspace --all-targets --all-features
           cargo clippy --locked --manifest-path rust/Cargo.toml --workspace --all-targets --all-features -- -D warnings
+      # An embedder builds the facade from its own workspace, where
+      # rust/Cargo.toml is not the root (#2929). This outside workspace runs
+      # the vendored YAML parser's compact-flow controls, directly and through
+      # the facade. The copied lock keeps it on the reviewed versions.
+      - name: Build the facade from an outside workspace
+        env:
+          RUSTFLAGS: -D warnings
+        run: |
+          cp rust/Cargo.lock rust/tests/embedder/Cargo.lock
+          cargo test --manifest-path rust/tests/embedder/Cargo.toml --target-dir rust/target
   python:
     runs-on: ubuntu-24.04
     timeout-minutes: 35

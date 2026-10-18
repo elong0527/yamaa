@@ -78,8 +78,12 @@ unchanged. Other Arrow and Parquet releases are unsupported: the adapter's
 version-specific APIs, confined to `storage_api.rs`, are adapted and qualified
 for 57.3.0 only. Broadening that range requires separate adapter and
 installed-host qualification first. The direct storage codec floors are brotli
-8.0.4 and lz4_flex 0.13.1. Portable libm remains exactly 0.2.16, and the
-reviewed local saphyr-parser patch remains part of every graph. The Python
+8.0.4 and lz4_flex 0.13.1. Portable libm remains exactly 0.2.16. The reviewed
+saphyr-parser 0.2.1 with its compact-flow fix is vendored as
+`yamaa-saphyr-parser`, which `yamaa-adapters` depends on by path. It is
+therefore part of every graph that builds the engine, including a project that
+depends on the facade by git or path with no other configuration; CI builds
+the facade from such an outside workspace (#2929). The Python
 binding builds with PyO3 0.27.2 through 0.30; the lock selects 0.30.1, and the
 minimum dependency graph tests 0.27.2.
 
@@ -110,7 +114,7 @@ The continuous [dependency graph lanes](https://github.com/elong0527/yamaa/blob/
 test declared direct minima and newest compatible selections on Linux with
 CPython 3.12, 3.14 and 3.15, all with R 4.6.1; on 3.15 the minima are its own
 floors. Cargo transitive dependencies use the newest
-MSRV-compatible resolution in both lanes; local patches and exact pins are
+MSRV-compatible resolution in both lanes; vendored crates and exact pins are
 preserved. Python runtime/test floors are exact in the minimum lane, while
 Python transitives are resolved compatibly. These isolated graphs do not change
 `rust/Cargo.lock` or `python/uv.lock`. The full native matrix separately qualifies
@@ -122,8 +126,8 @@ and `pip-audit` reads every package locked in `python/uv.lock`. An ignored Rust
 advisory names its id, a reason and a review date in `rust/deny.toml`. The
 scanners do not cover vendored source: the ReadStat C sources under
 `rust/crates/yamaa-adapters/vendor/readstat` are reviewed against upstream
-releases when they are updated, and the vendored `saphyr-parser` patch is
-replaced by a published release under #2583.
+releases when they are updated, and the vendored `saphyr-parser` copy,
+`yamaa-saphyr-parser`, is replaced by a published release under #2583.
 
 ## Publication
 

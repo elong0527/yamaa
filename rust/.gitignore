@@ -1,1 +1,5 @@
 /target/
+# The outside-workspace check builds tests/embedder from a copy of the
+# canonical lock; that lock and any build output there are not committed.
+/tests/embedder/Cargo.lock
+/tests/embedder/target/
