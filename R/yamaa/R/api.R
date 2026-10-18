@@ -64,7 +64,7 @@
 }
 
 .spec <- function(path, project) {
-  force(path) # an argument mistake fails the call, not the first method
+  force(path)
   object <- new.env(parent = emptyenv())
   object$check <- function() .check(.reply(.native_spec_check(path, project, .version())))
   object$resolve <- function() .reply(.native_spec_resolve(path, project, .version()))
