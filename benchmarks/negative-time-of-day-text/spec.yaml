@@ -1,0 +1,35 @@
+schema_version: "1.0"
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE: {path: input/ae.csv, types: {AESEQ: int}}
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, ASTTM]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+
+  # AE.AESTDTC has no declared input type, so it is text, and only a date
+  # and time has a time of day: the specification is rejected before any
+  # data is read.
+  - name: ASTTM
+    type: int
+    label: Analysis Start Time
+    derivation:
+      time_of_day:
+        source: AE.AESTDTC

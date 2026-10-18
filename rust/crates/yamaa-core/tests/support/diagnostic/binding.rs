@@ -149,7 +149,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
                 .unwrap()
                 .remove(0),
             "unpaired_fields",
-            Some("REQ-0119"),
+            Some("LOOKUP-10"),
             &["columns.VALUE.derivation.source"],
             vec![
                 ("operation", text("source")),
@@ -621,7 +621,7 @@ pub(crate) fn lookup_reached() -> BTreeSet<ConditionCode> {
             "ID",
             None,
             ColumnType::Int,
-            "REQ-0116",
+            "LOOKUP-5",
             "intermediates[0].key",
             vec![
                 ("identifier", text("DONOR.BAD")),
@@ -634,7 +634,7 @@ pub(crate) fn lookup_reached() -> BTreeSet<ConditionCode> {
             "BAD",
             None,
             ColumnType::Int,
-            "REQ-0117",
+            "LOOKUP-5",
             "intermediates[0].key",
             vec![("identifier", text("BAD")), ("intermediate", text("SEL"))],
         ),
@@ -654,7 +654,7 @@ pub(crate) fn lookup_reached() -> BTreeSet<ConditionCode> {
             "ID",
             None,
             ColumnType::Str,
-            "REQ-0323",
+            "LOOKUP-9",
             "intermediates[0].key",
             vec![
                 ("intermediate", text("SEL")),
@@ -686,7 +686,7 @@ pub(crate) fn lookup_reached() -> BTreeSet<ConditionCode> {
             .unwrap();
         reached.insert(check(
             projected,
-            if requirement == "REQ-0323" {
+            if requirement == "LOOKUP-9" {
                 "incompatible_input_type"
             } else {
                 "unknown_field"
@@ -783,6 +783,53 @@ pub(crate) fn source_match_reached() -> BTreeSet<ConditionCode> {
             condition,
             Some("LOOKUP-24"),
             &paths,
+            values,
+        ));
+    }
+    reached
+}
+
+/// A source binding's range states a bound, and a source that reads no
+/// implicit join has nothing for a range to narrow (LOOKUP-9).
+pub(crate) fn source_range_reached() -> BTreeSet<ConditionCode> {
+    let mut reached = BTreeSet::new();
+    for (bounds, condition, path, values) in [
+        (
+            vec![("value", T::text("ID")), ("lower", T::text("V"))],
+            "prohibited_construct",
+            "columns.VALUE.derivation.source.between",
+            vec![("identifier", text("SRC.V"))],
+        ),
+        (
+            vec![("value", T::text("ID"))],
+            "invalid_field_type",
+            "columns.VALUE.derivation.source.between",
+            vec![
+                ("expected", text("at least one of lower, upper")),
+                ("variable", text("SRC.V")),
+            ],
+        ),
+    ] {
+        let prepared = compile(
+            T::map(vec![(
+                "value",
+                T::map(vec![(
+                    "source",
+                    T::map(vec![
+                        ("variable", T::text("SRC.V")),
+                        ("between", T::map(bounds)),
+                    ]),
+                )]),
+            )]),
+            None,
+        );
+        let findings = failures(&prepared);
+        assert_eq!(findings.len(), 1);
+        reached.insert(check(
+            findings[0].diagnostics(&source()).unwrap().remove(0),
+            condition,
+            Some("LOOKUP-9"),
+            &[path],
             values,
         ));
     }
@@ -1033,7 +1080,7 @@ pub fn verification_declarations_reached() -> BTreeSet<ConditionCode> {
     reached
 }
 
-/// Inferred source keys use their own normative causes, rather than named-lookup causes.
+/// Inferred source keys share the causes of every other lookup (LOOKUP-25).
 pub(crate) fn implicit_source_reached() -> BTreeSet<ConditionCode> {
     let tree = T::map(vec![
         ("schema_version", T::text("1.0")),
@@ -1079,21 +1126,18 @@ pub(crate) fn implicit_source_reached() -> BTreeSet<ConditionCode> {
             "OTHER",
             ColumnType::Int,
             "no_applicable_keys",
-            "REQ-0152",
+            "LOOKUP-5",
             vec![
                 ("dataset", text("DONOR")),
                 ("keys", V::Array(vec![text("ID")])),
-                (
-                    "hint",
-                    text("declare an explicit `intermediate:` with `source`/`key` pairs"),
-                ),
+                ("hint", text("declare a named intermediate with its `key`")),
             ],
         ),
         (
             "ID",
             ColumnType::Str,
             "incompatible_input_type",
-            "REQ-0151",
+            "LOOKUP-9",
             vec![
                 ("source", text("ID")),
                 ("expected", text("int")),
@@ -1130,7 +1174,7 @@ pub(crate) fn implicit_source_reached() -> BTreeSet<ConditionCode> {
     reached
 }
 
-/// Omitted named keys share the inference service, while retaining their REQ-0153 cause.
+/// Omitted named keys share the inference service and the one no-applicable-keys cause.
 pub(crate) fn intermediate_key_reached() -> BTreeSet<ConditionCode> {
     let tree = T::map(vec![
         ("schema_version", T::text("1.0")),
@@ -1190,7 +1234,7 @@ pub(crate) fn intermediate_key_reached() -> BTreeSet<ConditionCode> {
             .unwrap()
             .remove(0),
         "no_applicable_keys",
-        Some("REQ-0153"),
+        Some("LOOKUP-5"),
         &["intermediates[0]"],
         vec![
             ("dataset", text("DONOR")),

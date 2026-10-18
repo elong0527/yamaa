@@ -1,9 +1,9 @@
 """Editorial validators shared by the validity gate and the docs gate.
 
 The prose-oriented validators plus their leaf helpers and constants. This
-module imports only the standard library and PyYAML and must never import
-validate_repository (cycle risk). Rule files have their own checks in
-tools.rules.check.
+module imports only the standard library, PyYAML and tools.rules.model (which
+imports only the standard library) and must never import validate_repository
+(cycle risk). Rule files have their own checks in tools.rules.check.
 """
 
 import copy
@@ -17,6 +17,7 @@ from yaml.constructor import ConstructorError
 from yaml.events import AliasEvent
 
 import yaml
+from tools.rules.model import authored_files
 
 
 class UniqueKeyLoader(yaml.SafeLoader):
@@ -226,14 +227,6 @@ UNICODE_DATA_AND_NOTICES = {
     "R/yamaa/inst/LICENSE-THIRD-PARTY.txt",
     "python/LICENSE-THIRD-PARTY.txt",
 }
-ASCII_SOURCE_IGNORED_PARTS = {
-    ".git",
-    ".pytest_cache",
-    ".venv",
-    ".venv-docs",
-    "__pycache__",
-    "venv",
-}
 
 
 def is_unicode_fixture_data(relative: Path):
@@ -256,20 +249,14 @@ def is_unicode_fixture_data(relative: Path):
 def validate_ascii_sources(root: Path):
     """Check project source bytes while preserving named Unicode data and notices."""
     errors = []
-    for path in sorted(root.rglob("*")):
+    sources = authored_files(root, ASCII_SOURCE_SUFFIXES, ASCII_SOURCE_NAMES)
+    for path in sorted(sources):
         if not path.is_file():
             continue
         relative = path.relative_to(root)
-        if any(part in ASCII_SOURCE_IGNORED_PARTS for part in relative.parts):
-            continue
         if is_unicode_fixture_data(relative):
             continue
         if relative.as_posix() in UNICODE_DATA_AND_NOTICES:
-            continue
-        if (
-            path.suffix.lower() not in ASCII_SOURCE_SUFFIXES
-            and path.name not in ASCII_SOURCE_NAMES
-        ):
             continue
 
         try:

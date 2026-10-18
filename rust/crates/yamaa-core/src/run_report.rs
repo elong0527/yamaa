@@ -262,7 +262,7 @@ pub fn handler_condition(path: &str, handler: &str) -> Option<ConditionCode> {
         H::Absent => C::SourceUnknownReference,
         H::MultipleMatches => C::DatasetMultipleMatches,
         H::NoMatch if operation == "str_extract" => C::ExtractNoMatch,
-        H::NoMatch => C::DatasetUnmatchedKey,
+        H::NoMatch => C::LookupUnmatchedKey,
         H::Unmapped => C::MappingUnmapped,
         H::Unconvertible => C::ConversionInput,
         // A missing input gives missing by default and raises nothing; only a
@@ -274,6 +274,7 @@ pub fn handler_condition(path: &str, handler: &str) -> Option<ConditionCode> {
         H::Invalid => match operation {
             "impute" | "precision" | "to_date" => C::ImputeInvalid,
             "duration_value" => C::DurationInvalid,
+            "dtc" => C::DateTextInvalid,
             _ => return None,
         },
         H::Partial | H::CrossedBounds => return None,

@@ -21,16 +21,19 @@ demographics record adds no record.
   qualifies; then the text `NOT TREATED` when neither source names a
   treatment.
 - `TRTSDT` and `TRTSDTM`: date and date/time of the earliest qualifying
-  exposure start; a start collected without a time uses `00:00:00`. Both are
-  blank when the subject has no qualifying exposure record.
+  exposure start, compared as dates and times rather than as text; a start
+  collected without a time uses `00:00:00`, and a start collected without
+  its day is passed over. Both are blank when the subject has no qualifying
+  exposure record with a full start date.
 - `TRTSTMF`: which part of the first exposure start's time was imputed:
   `H` when the start was collected without a time, `M` when it stops at
   the hour and `S` when it stops at the minute; blank when the time was
   collected to the second or there is no start.
 - `TRTEDT` and `TRTEDTM`: date and date/time of the latest exposure end
   among `VITAMIN D3` and `PLACEBO` records (a record need not have a
-  start to name an end); an end collected without a time uses `23:59:59`.
-  Both are blank when no such record has an end.
+  start to name an end); an end collected without a time uses `23:59:59`,
+  and an end collected without its day is passed over. Both are blank when
+  no such record has an end with a full date.
 - `TRTETMF`: which part of the last exposure end's time was imputed, as
   for `TRTSTMF`; blank when the time was collected to the second or there
   is no end.

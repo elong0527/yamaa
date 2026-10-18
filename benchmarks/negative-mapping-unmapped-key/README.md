@@ -32,4 +32,4 @@ intermediates:
 ```
 
 The same answer also covers a result whose test code or sex is blank: both
-find no entry (LOOKUP-13), and the run counts each under `no_match`.
+find no entry (LOOKUP-24), and the run counts each under `no_match`.

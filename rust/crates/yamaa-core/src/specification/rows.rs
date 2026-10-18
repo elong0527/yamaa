@@ -321,7 +321,8 @@ fn default_reads(
             }
         }
         "round_half_away_from_zero" => reference(text(d, field(d, payload, "source")?)?),
-        "diff" | "study_day" | "to_epoch_day" | "shift" | "duration_value" => {
+        "diff" | "study_day" | "to_epoch_day" | "shift" | "duration_value" | "dtc"
+        | "time_of_day" => {
             for &name in temporal::fields(operation) {
                 if let Some(N::Text(source)) = d.field(payload, name).map(|id| &d.nodes()[id]) {
                     reference(source);
@@ -2025,14 +2026,30 @@ impl Rows {
                 diagnostics: analyzed.diagnostics,
             });
         }
-        // A column that uses an aggregate is not row-local (REQ-1260): no template
-        // derives it, so its aggregates evaluate for the rows of every template.
-        aggregates::admit_ranges(
-            columns.iter().map(|assignment| &assignment.expression),
-            &templates
-                .iter()
-                .map(|template| template.mode.source_index())
-                .collect::<Vec<_>>(),
+        // A column derivation evaluates for the rows of every template, and a
+        // template's own derivations for its rows only.
+        lookup_range::admit(
+            std::iter::once((
+                columns
+                    .iter()
+                    .map(|assignment| &assignment.expression)
+                    .collect(),
+                templates
+                    .iter()
+                    .map(|template| template.mode.source_index())
+                    .collect(),
+            ))
+            .chain(templates.iter().map(|template| {
+                (
+                    template
+                        .assignments
+                        .iter()
+                        .map(|assignment| &assignment.expression)
+                        .collect(),
+                    vec![template.mode.source_index()],
+                )
+            })),
+            &intermediates,
             &mut findings,
         );
         for template in &templates {

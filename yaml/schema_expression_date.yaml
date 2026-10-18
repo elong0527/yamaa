@@ -104,6 +104,34 @@ expressions:
             type: variable
             required: true
             description: Date converted to days since 1970-01-01 (TIME-3).
+    dtc:
+        - year:
+            type: variable
+            required: true
+            description: Collected year, four digits as text or an integer from 1 to 9999; a missing year gives missing (TIME-19).
+        - month:
+            type: variable
+            description: Collected month, two digits as text or an integer from 1 to 12; the text stops before a missing month (TIME-19).
+        - day:
+            type: variable
+            description: Collected day within its month, declared only beside month (TIME-19).
+        - hour:
+            type: variable
+            description: Collected hour from 0 to 23, declared only beside day (TIME-19).
+        - minute:
+            type: variable
+            description: Collected minute from 0 to 59, declared only beside hour (TIME-19).
+        - second:
+            type: variable
+            description: Collected second from 0 to 59, declared only beside minute (TIME-19).
+        - invalid:
+            type: substitute_value
+            description: Result when a part the text reads is not its field's digits or lies outside its range (TIME-19).
+    time_of_day:
+        - source:
+            type: variable
+            required: true
+            description: Datetime whose time of day is returned as whole seconds since midnight (TIME-20).
 
     shift: # See REQ-1298.
         - type:

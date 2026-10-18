@@ -592,6 +592,18 @@ expression's qualified identifiers, as in `COUNT(EX.*)`, and a `COUNT(D.*)`
 whose dataset is not the expression's relation fails. It is the one reducer
 that names no column, and it counts records where `COUNT(x)` counts values.
 
+A reduction over text compares text. `MIN` and `MAX` of a `str` argument
+order its values by [VALUE-20](values.md#value-20), not as dates, so over
+collected date text ([TIME-7](temporal.md#time-7)) `2025-01` sorts before
+`2025-01-08` and `2025-01-08` before `2025-01-08T06:00`: the least text need
+not be the earliest date, and completing it afterwards can leave the result
+missing. A reduction that means the earliest or latest date completes each
+record first, with an aggregate derive binding
+([LOOKUP-22](lookup.md#lookup-22)) of type `date` or `datetime` whose
+derivation is `impute` ([TIME-8](temporal.md#time-8)), and reduces the bound
+values, which compare chronologically under
+[VALUE-21](values.md#value-21).
+
 <a id="formula-19"></a>
 
 ### FORMULA-19. SUM adds in relation record order, and MEAN divides that SUM by COUNT

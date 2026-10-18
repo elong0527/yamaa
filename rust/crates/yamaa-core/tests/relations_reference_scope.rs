@@ -714,8 +714,8 @@ mod relations {
             ] {
                 assert_eq!(plan(0, expression), Err(PlanError::InvalidIntermediate));
             }
-            // The template driver's own source (1) reads that driver's records.
-            // A row template's flag reads no input-backed selection at all.
+            // The template driver's own source (1) reads that driver's records
+            // (LOOKUP-8); a row template's flag reads no input-backed selection.
             for expression in [direct(), bound_intermediate_compute()] {
                 let plan = plan(1, expression);
                 assert!(plan.is_ok(), "{plan:?}");
@@ -2826,7 +2826,7 @@ mod relations {
                     "columns.A.derivation.source.no_match",
                     "no_match",
                     Some("A"),
-                    Some("REQ-0124"),
+                    Some("LOOKUP-24"),
                 ),
                 (
                     "columns.A.derivation.str_extract.no_match",
@@ -2899,6 +2899,12 @@ mod relations {
                     "invalid",
                     Some("E"),
                     Some("REQ-1301"),
+                ),
+                (
+                    "columns.S.derivation.dtc.invalid",
+                    "invalid",
+                    Some("S"),
+                    Some("TIME-19"),
                 ),
                 (
                     "columns.N.derivation.unconvertible",

@@ -96,7 +96,7 @@ pub struct Intermediate {
     /// Visible selected fields; donor keys, filters and order still see every slot.
     pub columns: Option<Vec<usize>>,
     /// The declared `no_match` literal; `None` answers absence with missing.
-    /// Either way the answer is counted under `no_match` (LOOKUP-13).
+    /// Either way the answer is counted under `no_match` (LOOKUP-24).
     pub no_match: Option<Value>,
     /// `require_match: true` fails an absence as `unmatched_key` instead;
     /// admission refuses it beside a declared `no_match`.

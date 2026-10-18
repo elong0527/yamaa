@@ -1,0 +1,12 @@
+phase: verification
+condition: data_type_failed
+spec_paths:
+  - columns.BRTHDTC.submission.data_type
+requirement: SUB-26
+context:
+  column: BRTHDTC
+  data_type: date
+  failure_count: 1
+  keys:
+    - STUDYID: YAMAA-01
+      USUBJID: YAMAA-01-102
