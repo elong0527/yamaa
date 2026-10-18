@@ -22,7 +22,15 @@
 //! Importing a C stream also lives here (`StreamReader`): 57's
 //! `ArrowArrayStreamReader` rebuilds each batch from its columns alone, so it
 //! refuses a zero-column batch that has rows, and it unwraps the producer's
-//! last-error message, which the C stream interface lets be NULL.
+//! last-error message, which the C stream interface lets be NULL. 57's import
+//! also keeps buffers where the producer placed them, while the interface only
+//! recommends alignment, so the reader copies any under-aligned buffer before
+//! typed arrays read it (later releases align on import).
+//!
+//! 57's thrift decoders unwrap the value of a known boolean field that
+//! carries another wire type (later releases return an error), so a malformed
+//! footer or page header can panic inside the Parquet crate. Native Parquet
+//! decoding of admitted input runs through `contain_decode`.
 #[cfg(feature = "parquet")]
 use parquet::{
     basic::{LogicalType, TimeUnit},
@@ -106,7 +114,11 @@ mod stream {
         type Item = Result<RecordBatch, ArrowError>;
 
         fn next(&mut self) -> Option<Self::Item> {
-            let get_next = self.stream.get_next?;
+            let Some(get_next) = self.stream.get_next else {
+                return Some(Err(ArrowError::CDataInterface(
+                    "input stream lost its get_next callback".to_string(),
+                )));
+            };
             let mut array = FFI_ArrowArray::empty();
             // SAFETY: as in `try_new`; the producer writes the next array, or
             // a released one at the end of the stream.
@@ -119,9 +131,12 @@ mod stream {
             }
             let kind = DataType::Struct(self.schema.fields().clone());
             // SAFETY: the producer's array has the struct type of the schema
-            // it reported for this stream.
+            // it reported for this stream. The import neither validates nor
+            // aligns its buffers; `align_buffers` below copies any
+            // under-aligned one before a typed array reads it.
             let data = unsafe { from_ffi_and_data_type(array, kind) };
-            Some(data.and_then(|data| {
+            Some(data.and_then(|mut data| {
+                data.align_buffers();
                 let rows = data.len();
                 RecordBatch::try_new_with_options(
                     self.schema.clone(),
@@ -151,6 +166,14 @@ mod stream {
         }
         ArrowError::CDataInterface(message)
     }
+}
+
+/// Run a native Parquet decode of admitted input with its panic contained;
+/// `None` reports that the Parquet crate panicked on a malformed footer or
+/// page header.
+#[cfg(feature = "parquet")]
+pub(crate) fn contain_decode<T>(decode: impl FnOnce() -> T) -> Option<T> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(decode)).ok()
 }
 
 #[cfg(feature = "parquet")]

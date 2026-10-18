@@ -1323,6 +1323,8 @@ fn bind_range(
             edges.push(column);
             Some((CurrentRead::Output(column), catalog.type_of(&range.value)))
         }
+        // The column catalog declares one dataset, the primary driver (port 0).
+        // Every other input binds below at its own record port.
         Some(reference_binding::Binding::Dataset { field, .. }) => Some((
             CurrentRead::Record {
                 source: 0,
@@ -1368,10 +1370,9 @@ fn bind_range(
         }),
     };
     let Some((read, kind)) = current else {
-        findings.push(BindFinding::AggregateDiagnostic(diagnostic(
-            C::IntermediateRangeReference,
-            &format!("{path}.value"),
-            &[("identifier", &range.value)],
+        findings.push(BindFinding::AggregateDiagnostic(range_reference(
+            &path,
+            &range.value,
         )));
         return Ok(None);
     };
@@ -1396,32 +1397,89 @@ fn bind_range(
         Err(_) => Err(BindError::Internal),
     }
 }
-/// A qualified range value reads the record that built the current row
-/// (REQ-0472, REQ-0085), so it must name the driver of each row the
-/// aggregate is derived for. Another input has no record for that row: the
-/// value is refused as unknown (REQ-0121), once however many row templates
-/// derive the aggregate.
+/// A `between.value` that names no value of the current row (REQ-0121).
+fn range_reference(path: &str, value: &str) -> crate::diagnostic::Diagnostic {
+    diagnostic(
+        crate::diagnostic::ConditionCode::IntermediateRangeReference,
+        &format!("{path}.value"),
+        &[("identifier", value)],
+    )
+}
+/// A column's aggregates evaluate for every row the column derives, and
+/// `drivers` holds the record port of each of those rows' drivers. A range
+/// value that reads an input's record must name the driver of all of them
+/// (REQ-0472); any other input's record is not a value of the current row.
 pub(super) fn admit_ranges<'a>(
     expressions: impl IntoIterator<Item = &'a Expression>,
-    driver: usize,
-    refused: &mut BTreeSet<String>,
+    drivers: &[usize],
     findings: &mut Vec<BindFinding>,
 ) {
     for expression in expressions {
-        crate::dataset::visit_ranges(expression, &mut |range| {
-            let current = range.current();
-            if matches!(current.read, crate::dataset::CurrentRead::Record { source, .. } if source != driver)
+        crate::dataset::relation_predicates::visit_aggregates(expression, &mut |aggregate| {
+            let Some(range) = aggregate.range() else {
+                return;
+            };
+            if matches!(range.current().read, crate::dataset::CurrentRead::Record { source, .. }
+                if drivers.iter().any(|&driver| driver != source))
             {
-                let path = format!("{}.value", range.path());
-                if refused.insert(path.clone()) {
-                    findings.push(BindFinding::AggregateDiagnostic(diagnostic(
-                        crate::diagnostic::ConditionCode::IntermediateRangeReference,
-                        &path,
-                        &[("identifier", &current.identifier)],
-                    )));
-                }
+                findings.push(BindFinding::AggregateDiagnostic(range_reference(
+                    range.path(),
+                    &range.current().identifier,
+                )));
             }
         });
+    }
+}
+/// `check` applies the rule of `admit_ranges` to declarations alone: `drivers`
+/// names the input whose records drive each row the column derives. A value
+/// qualified by another input fails whether or not that input stores the field.
+pub(super) fn check_ranges(
+    operation: &Operation,
+    inputs: &[SourceDeclaration],
+    drivers: &[&str],
+    findings: &mut Vec<BindFinding>,
+) {
+    match operation {
+        Operation::Aggregate(declaration) => {
+            let Some(range) = &declaration.between else {
+                return;
+            };
+            // Binding reads the value only for a qualified aggregate whose range
+            // states a bound; it reports every other form of `between` first.
+            let qualified = declaration.compiled.as_ref().is_ok_and(|compiled| {
+                if declaration.derive.is_some() {
+                    !declaration.derive_relations.is_empty()
+                } else {
+                    compiled.identifiers().any(|name| name.contains('.'))
+                        || compiled.record_relations().next().is_some()
+                }
+            });
+            if !qualified || (range.lower.is_none() && range.upper.is_none()) {
+                return;
+            }
+            if range.value.split_once('.').is_some_and(|(qualifier, _)| {
+                inputs.iter().any(|input| input.name == qualifier)
+                    && drivers.iter().any(|&driver| driver != qualifier)
+            }) {
+                findings.push(BindFinding::AggregateDiagnostic(range_reference(
+                    &format!("{}.between", declaration.path),
+                    &range.value,
+                )));
+            }
+        }
+        Operation::Case(branches) => {
+            for branch in branches {
+                check_ranges(&branch.operation, inputs, drivers, findings);
+            }
+        }
+        Operation::Scalar(operation) => {
+            if let scalar::Declaration::Concat { sources, .. } = operation.as_ref() {
+                for branch in sources {
+                    check_ranges(&branch.operation, inputs, drivers, findings);
+                }
+            }
+        }
+        _ => (),
     }
 }
 #[allow(clippy::too_many_arguments)]
