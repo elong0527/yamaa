@@ -30,7 +30,8 @@ IO callbacks and never initializes filesystem IO. Rust contains every callback
 panic before it reaches C. The parent parser lifetime contains all callbacks.
 
 Records deleted in place are refused, never skipped or returned as rows. A data
-or mix page whose type carries the deleted-rows flag `0x0080`, or a non-zero
+or mix page whose type carries the deleted-rows flag `0x0080`, checked before
+any of the page's subheaders or rows is parsed, or a non-zero
 deleted-row count in the row-size subheader (offset 56 in 64-bit files and 28
 otherwise, as upstream commit `d19f262e` reads it), stops the parse through the
 bridge's `yamaa_readstat_deleted_records` hook. Upstream's deleted-row bitmap
