@@ -1,0 +1,7 @@
+schema_version: '1.0'
+environments:
+  python: python/environment.yaml
+  r: r/environment.yaml
+sdtm:
+  specs:
+  - spec.yaml

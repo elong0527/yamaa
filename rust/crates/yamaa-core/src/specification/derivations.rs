@@ -547,7 +547,9 @@ pub(super) fn bind_row(
     intermediates: &[Option<Intermediate>],
 ) -> Result<Option<Expression>, BindError> {
     match operation {
-        Operation::Odm(operation) => odm::bind(operation, catalog, driver, row, phase, findings),
+        Operation::Odm(operation) => {
+            odm::bind(operation, catalog, driver, row, phase, false, findings)
+        }
         Operation::Aggregate(operation) => aggregates::bind(
             operation,
             catalog,
@@ -809,6 +811,7 @@ pub(super) fn bind_row(
                 phase,
                 available,
             }),
+            false,
             column,
             output,
             named,
@@ -867,12 +870,16 @@ pub(super) struct SelectionContext<'a> {
     available: Option<&'a [usize]>,
 }
 
+/// Without a row context, a source operand of a no-rows column collects the
+/// distinct readings of the key combination's records, unless `record_rows`
+/// makes each row one base record, whose value it reads.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn bind_selection(
     selection: &source_expressions::FirstAvailable,
     path: &str,
     catalog: &Catalog,
     row_context: Option<SelectionContext<'_>>,
+    record_rows: bool,
     column: usize,
     output: &TableSchema,
     named: &intermediates::Declarations,
@@ -909,7 +916,7 @@ pub(super) fn bind_selection(
             intermediates,
         )?
         .map(|expression| match expression {
-            Expression::Source(column) if row_context.is_none() => {
+            Expression::Source(column) if row_context.is_none() && !record_rows => {
                 crate::dataset::SelectionRead::Collect {
                     column,
                     identifier: source.variable.clone(),

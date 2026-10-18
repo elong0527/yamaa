@@ -1,0 +1,49 @@
+schema_version: "1.0"
+domain: VS
+keys: [USUBJID, VSSEQ]
+input:
+  ODM: input/odm.csv
+
+# The blood pressure items; the collection date is an item of the same group.
+filter: "ODM.ItemOID = 'IT.VS.SYSBP' OR ODM.ItemOID = 'IT.VS.DIABP'"
+
+output:
+  path: vs.csv
+  columns: [USUBJID, VSSEQ, VSTESTCD, VSORRES, VSDTC]
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: {str_template: "{ODM.StudyOID}-{ODM.SubjectKey}"}
+
+  # Each subject's measurements numbered by group repeat, so every collected
+  # measurement is its own record.
+  - name: VSSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [USUBJID]
+          order_by: [ODM.ItemGroupRepeatKey]
+
+  - name: VSTESTCD
+    type: str
+    label: Vital Signs Test Short Name
+    derivation:
+      str_extract:
+        source: ODM.ItemOID
+        pattern: '^IT\.VS\.(.+)$'
+        group: 1
+
+  - name: VSORRES
+    type: str
+    label: Result or Finding in Original Units
+    derivation: ODM.Value
+
+  # The date collected in the measurement's own item group.
+  - name: VSDTC
+    type: str
+    label: Date/Time of Measurements
+    derivation: {odm: ODM.IT.VS.VSDAT}

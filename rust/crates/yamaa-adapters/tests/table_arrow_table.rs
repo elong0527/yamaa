@@ -2186,8 +2186,26 @@ mod table {
             const SOURCE: &[u8] = include_bytes!("fixtures/pq/none-1-0.parquet");
 
             fn extended(kind: u8, payload: &[u8]) -> Vec<u8> {
-                // A known field follows the unknown value: num_rows = 3, explicit id 3.
-                extended_with_suffix(kind, payload, &[0x06, 6, 6])
+                // A known field follows the unknown value: the footer's last
+                // field, its column orders, moved after it under an explicit
+                // id 7. Admission refuses a repeated known field, and the
+                // footer holds every known field once.
+                let end = SOURCE.len() - 8;
+                let length = u32::from_le_bytes(SOURCE[end..end + 4].try_into().unwrap()) as usize;
+                let start = end - length;
+                // created_by, then column_orders: a 16-byte list, then STOP.
+                let orders = end - 18;
+                assert_eq!(SOURCE[orders], 0x19);
+                let mut bytes = SOURCE[..orders].to_vec();
+                bytes.extend([kind, 0xe0, 0xd4, 3]); // explicit unknown field 30000
+                bytes.extend(payload);
+                bytes.extend([0x09, 14]); // explicit field 7, a list
+                bytes.extend(&SOURCE[orders + 1..end]);
+                let length = u32::try_from(bytes.len() - start).unwrap();
+                bytes.extend(length.to_le_bytes());
+                bytes.extend(b"PAR1");
+                assert_eq!(&bytes[..start], &SOURCE[..start]); // preserve all data pages
+                bytes
             }
 
             fn extended_with_suffix(kind: u8, payload: &[u8], suffix: &[u8]) -> Vec<u8> {

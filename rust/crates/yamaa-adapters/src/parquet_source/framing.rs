@@ -93,8 +93,16 @@ fn sequence(value: Option<Value<'_>>) -> Result<Sequence<'_>, Error> {
 // Borrowed compact nodes do not allocate, but integer claims within each
 // SchemaElement can cause later allocations. The general reader
 // reserves num_children slots before discovering a truncated schema tree.
+// Returns the primitive leaves, the schema's physical columns.
 fn admit_schema(schema: Sequence<'_>) -> Result<usize, Error> {
     let mut leaves = 0;
+    // Every element without children but the message root: a primitive leaf
+    // or an empty group. An empty group holds no physical column, but the
+    // native decoder builds it like a leaf, so it counts toward the column
+    // limit too. Every other element is a group above one of these, at most
+    // `SEMANTIC_DEPTH - 1` levels up, so an admitted schema holds at most
+    // `COLUMNS * SEMANTIC_DEPTH + 1` elements.
+    let mut childless = 0;
     let mut remaining_children = Vec::new();
     for (index, element) in schema.into_iter().enumerate() {
         let element = element?;
@@ -115,11 +123,11 @@ fn admit_schema(schema: Sequence<'_>) -> Result<usize, Error> {
             .transpose()?;
         // A zero child count can describe either a primitive (some writers
         // emit it explicitly) or an empty group. Only primitives have a type.
-        if index != 0
-            && children.is_none_or(|count| count == 0)
-            && matches!(element.field(1)?, Some(Value::Integer(_)))
-        {
-            leaves += 1;
+        if index != 0 && children.is_none_or(|count| count == 0) {
+            childless += 1;
+            if matches!(element.field(1)?, Some(Value::Integer(_))) {
+                leaves += 1;
+            }
         }
         if let Some(children) = children {
             if children > schema.len() - index - 1 {
@@ -130,8 +138,19 @@ fn admit_schema(schema: Sequence<'_>) -> Result<usize, Error> {
             }
         }
     }
-    yamaa_core::limits::Limits::columns(leaves)?;
+    yamaa_core::limits::Limits::columns(childless)?;
     Ok(leaves)
+}
+
+/// Refuse a footer that lists more row groups than the row limit allows rows,
+/// counting the row groups that hold no rows. Every other row group holds at
+/// least one row, so a table within the limit needs no more, and writers
+/// write a row group without rows only for an empty table. The native
+/// decoder reads a list longer than one footer numbers in slices
+/// (`row_groups`).
+fn admit_row_groups(count: usize) -> Result<(), Error> {
+    // No columns: only the row bound applies to the count.
+    Ok(yamaa_core::limits::Limits::table(count, 0)?)
 }
 
 /// Collect borrowed page bodies from every stored column chunk in source order.
@@ -149,13 +168,22 @@ pub(super) fn admit(bytes: &[u8]) -> Result<Framing<'_>, Error> {
         .ok_or(Error::Malformed)?;
     let metadata = &bytes[start..footer];
     let (root, _) = compact::parse(metadata)?;
-    // The native decoder reads every known field by its declared type.
-    wire::check(root, Shape::FileMetaData)?;
+    // Every field the native decoder knows holds its declared type, once.
+    let lists = wire::check(root, Shape::FileMetaData)?;
     let declared_rows = count(root.field(3)?)?;
     let groups = sequence(root.field(4)?)?;
     let schema = sequence(root.field(2)?)?;
     let leaves = admit_schema(schema)?;
     yamaa_core::limits::Limits::table(declared_rows, leaves)?;
+    admit_row_groups(groups.len())?;
+    // The column orders follow the leaves one for one: the native decoder
+    // refuses any other count, but only after it has read them all. A row
+    // group's sorting columns are a subset of its columns, at most one per
+    // leaf.
+    let orders = lists.column_orders.is_some_and(|orders| orders != leaves);
+    if orders || lists.sorting_columns > leaves {
+        return Err(Error::Malformed);
+    }
     let mut result = Framing {
         metadata,
         row_groups: groups.len(),
@@ -190,6 +218,7 @@ pub(super) fn admit(bytes: &[u8]) -> Result<Framing<'_>, Error> {
             }
             while offset < end {
                 let (header, used) = compact::parse(&bytes[offset..end])?;
+                // A page header holds no list that `wire::Lists` reports.
                 wire::check(header, Shape::PageHeader)?;
                 let uncompressed = count(header.field(2)?)?;
                 let compressed = count(header.field(3)?)?;
@@ -399,6 +428,54 @@ mod tests {
         let (root, _) = compact::parse(&bytes).unwrap();
         let schema = sequence(root.field(1).unwrap()).unwrap();
         assert_eq!(admit_schema(schema).unwrap(), 1);
+    }
+
+    #[test]
+    fn empty_groups_count_toward_the_column_limit_without_holding_a_column() {
+        // A root whose children are `primitives` INT64 leaves, then `empty`
+        // elements with neither a type nor children.
+        fn admit_flat(primitives: usize, empty: usize) -> Result<usize, Error> {
+            let mut bytes = vec![0x19, 0xfc]; // field 1: extended struct list
+            unsigned(&mut bytes, (1 + primitives + empty) as u64);
+            bytes.push(0x55); // the root's num_children
+            unsigned(&mut bytes, ((primitives + empty) as u64) << 1);
+            bytes.push(0);
+            for _ in 0..primitives {
+                bytes.extend([0x15, 4, 0]);
+            }
+            bytes.resize(bytes.len() + empty, 0);
+            bytes.push(0);
+            let (root, _) = compact::parse(&bytes)?;
+            admit_schema(sequence(root.field(1)?)?)
+        }
+        let columns = |actual| {
+            move |result: Result<usize, Error>| {
+                matches!(result, Err(Error::ResourceLimit {
+                    resource: "columns",
+                    limit: 1024,
+                    actual: Some(found),
+                }) if found == actual)
+            }
+        };
+        assert_eq!(admit_flat(1023, 1).unwrap(), 1023);
+        assert_eq!(admit_flat(0, 1024).unwrap(), 0);
+        assert!(columns(1025)(admit_flat(1024, 1)));
+        assert!(columns(1025)(admit_flat(0, 1025)));
+        assert!(columns(2048)(admit_flat(1024, 1024)));
+    }
+
+    #[test]
+    fn a_footer_lists_no_more_row_groups_than_the_row_limit_has_rows() {
+        let rows = yamaa_core::limits::Limits::TABLE_ROWS;
+        admit_row_groups(rows).unwrap();
+        assert!(matches!(
+            admit_row_groups(rows + 1),
+            Err(Error::ResourceLimit {
+                resource: "table_rows",
+                limit,
+                actual: Some(actual),
+            }) if limit == rows && actual == rows + 1
+        ));
     }
 
     #[test]
