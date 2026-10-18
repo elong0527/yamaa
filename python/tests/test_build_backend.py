@@ -3,17 +3,22 @@
 import gzip
 import io
 import json
+import os
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
 from python import yamaa_build_backend as _BACKEND_MODULE
+from tools.ci.toolchain import channel
 from tools.packaging import check_cargo_lock as guard
+from tools.paths import WORKSPACE
 
 backend = _BACKEND_MODULE
 preserve_workspace = _BACKEND_MODULE.preserve_workspace
@@ -149,21 +154,70 @@ def test_preserve_workspace_rejects_malformed_members(
 @pytest.mark.parametrize(
     "manifest",
     [
+        '[patch.crates-io]\nwitness = {path = "vendor/witness"}\n',
+        '[patch."https://example.invalid/witness"]\nwitness = {path = "vendor/witness"}\n',
         "patch = 42\n",
         "[patch]\ncrates-io = 42\n",
         "[patch]\ncrates-io = 'witness'\n",
     ],
 )
-def test_local_patch_sources_reject_non_table_patch_sections(
+def test_vendored_sources_refuse_any_workspace_patch(
     tmp_path: Path, manifest: str
 ) -> None:
-    # A non-table patch section leaked an AttributeError from `.get` /
-    # `.items` instead of the ValueError every other invalid patch gets.
+    # A [patch] applies only when this workspace is the root, so a project
+    # that embeds the facade would build without it (#2929). Every form is
+    # refused, and a malformed one raises the same ValueError instead of an
+    # AttributeError.
     workspace = tmp_path / "rust"
     workspace.mkdir()
-    (workspace / "Cargo.toml").write_text(manifest)
-    with pytest.raises(ValueError, match="patch section must be a table"):
-        list(backend.local_patch_sources(workspace))
+    (workspace / "Cargo.toml").write_text(manifest + "[workspace]\nmembers = []\n")
+    with pytest.raises(ValueError, match="must not declare \\[patch\\]"):
+        list(backend.vendored_sources(workspace))
+
+
+@pytest.mark.skipif(shutil.which("cargo") is None, reason="cargo is unavailable")
+def test_source_archive_listing_writes_nothing_into_vendored_crates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # maturin lists each path dependency with `cargo package --list`. A
+    # vendored crate is its own workspace root, so the pinned Cargo created
+    # that root's target directory inside the vendored sources, and
+    # vendored_sources refused the source archive. The stand-in runs the same
+    # listing, with the pinned toolchain, on a copy of the vendored crates.
+    workspace = tmp_path / "rust"
+    shutil.copytree(WORKSPACE / "vendor", workspace / "vendor")
+    shutil.copy2(WORKSPACE / "Cargo.toml", workspace / "Cargo.toml")
+    crates = sorted((workspace / "vendor").iterdir())
+    assert crates
+    sources = list(backend.vendored_sources(workspace))
+
+    def build_sdist(sdist_directory, config_settings):
+        for crate in crates:
+            listing = subprocess.run(
+                [
+                    "cargo",
+                    "package",
+                    "--list",
+                    "--allow-dirty",
+                    "--manifest-path",
+                    str(crate / "Cargo.toml"),
+                ],
+                env=os.environ | {"RUSTUP_TOOLCHAIN": channel()},
+                capture_output=True,
+                text=True,
+            )
+            assert listing.returncode == 0, listing.stderr
+        return "yamaa.tar.gz"
+
+    monkeypatch.delenv("CARGO_TARGET_DIR", raising=False)
+    monkeypatch.setitem(
+        sys.modules, "maturin", SimpleNamespace(build_sdist=build_sdist)
+    )
+    monkeypatch.setattr(backend, "native_test_fixtures", lambda workspace: [])
+    monkeypatch.setattr(backend, "preserve_workspace", lambda *arguments: None)
+    assert backend.build_sdist(str(tmp_path)) == "yamaa.tar.gz"
+    assert list(backend.vendored_sources(workspace)) == sources
+    assert "CARGO_TARGET_DIR" not in os.environ
 
 
 def _make_archive_with_extra(
@@ -485,13 +539,10 @@ def write_archive(path, values):
 
 
 class PythonSourceWorkspaceTests(unittest.TestCase):
-    def patch_fixture(self, root):
+    def vendored_fixture(self, root):
         workspace = root / "rust"
         workspace.mkdir()
-        (workspace / "Cargo.toml").write_text(
-            "[workspace]\nmembers = []\n[patch.crates-io]\n"
-            'witness = {path = "vendor/witness"}\n'
-        )
+        (workspace / "Cargo.toml").write_text("[workspace]\nmembers = []\n")
         (workspace / "Cargo.lock").write_bytes(b"canonical lock")
         (workspace / "rust-toolchain.toml").write_bytes(b"canonical toolchain")
         package = workspace / "vendor/witness"
@@ -518,28 +569,30 @@ class PythonSourceWorkspaceTests(unittest.TestCase):
         )
         return workspace, package, archive
 
-    def test_pruned_local_patch_sources_and_both_notices_are_restored_and_guarded(self):
+    def test_pruned_vendored_sources_and_both_notices_are_restored_and_guarded(self):
         with tempfile.TemporaryDirectory() as directory:
-            workspace, _, archive = self.patch_fixture(Path(directory))
+            workspace, _, archive = self.vendored_fixture(Path(directory))
             sources = [
                 (source.relative_to(workspace).as_posix(), source.read_bytes())
-                for source in backend.local_patch_sources(workspace)
+                for source in backend.vendored_sources(workspace)
             ]
             lock = (workspace / "Cargo.lock").read_bytes()
             manifest = (workspace / "Cargo.toml").read_bytes()
-            with self.assertRaisesRegex(ValueError, "regular local Cargo patch"):
-                guard.check_archive(archive, lock, manifest, patch_sources=sources)
+            with self.assertRaisesRegex(ValueError, "regular vendored crate source"):
+                guard.check_archive(archive, lock, manifest, vendored=sources)
             backend.preserve_workspace(archive, workspace)
-            guard.check_archive(archive, lock, manifest, patch_sources=sources)
+            guard.check_archive(archive, lock, manifest, vendored=sources)
             with tarfile.open(archive) as restored:
                 for relative, payload in sources:
                     self.assertEqual(
                         restored.extractfile("yamaa/rust/" + relative).read(), payload
                     )
 
-    def test_changed_local_patch_refuses_atomically_and_archive_guard_refuses_it(self):
+    def test_changed_vendored_source_refuses_atomically_and_archive_guard_refuses_it(
+        self,
+    ):
         with tempfile.TemporaryDirectory() as directory:
-            workspace, _, archive = self.patch_fixture(Path(directory))
+            workspace, _, archive = self.vendored_fixture(Path(directory))
             source = "vendor/witness/src/lib.rs"
             values = [
                 ("yamaa/rust/Cargo.toml", (workspace / "Cargo.toml").read_bytes()),
@@ -548,7 +601,7 @@ class PythonSourceWorkspaceTests(unittest.TestCase):
             ]
             write_archive(archive, values)
             original = archive.read_bytes()
-            with self.assertRaisesRegex(ValueError, "changed a local Cargo patch"):
+            with self.assertRaisesRegex(ValueError, "changed a vendored crate source"):
                 backend.preserve_workspace(archive, workspace)
             self.assertEqual(archive.read_bytes(), original)
             with self.assertRaisesRegex(ValueError, "differs from canonical bytes"):
@@ -556,42 +609,62 @@ class PythonSourceWorkspaceTests(unittest.TestCase):
                     archive,
                     (workspace / "Cargo.lock").read_bytes(),
                     (workspace / "Cargo.toml").read_bytes(),
-                    patch_sources=[(source, (workspace / source).read_bytes())],
+                    vendored=[(source, (workspace / source).read_bytes())],
                 )
 
-    def test_local_patch_symlinks_and_escaping_declarations_refuse_before_staging(self):
+    def test_vendored_symlinks_refuse_before_staging(self):
         with tempfile.TemporaryDirectory() as directory:
-            workspace, package, _ = self.patch_fixture(Path(directory))
+            root = Path(directory)
+            workspace, package, _ = self.vendored_fixture(root)
             notice = package / "LICENSES/second-MIT"
             notice.unlink()
             try:
                 notice.symlink_to(package / "LICENSES/first-MIT")
             except OSError as error:
-                self.skipTest(f"local patch symlink control is unavailable: {error}")
+                self.skipTest(f"vendored symlink control is unavailable: {error}")
             with self.assertRaisesRegex(ValueError, "must not be symlinks"):
-                list(backend.local_patch_sources(workspace))
-            for path in ("../outside", "vendor/../outside", "/outside"):
-                (workspace / "Cargo.toml").write_text(
-                    "[workspace]\nmembers = []\n[patch.crates-io]\n"
-                    f'witness = {{path = "{path}"}}\n'
-                )
-                with self.assertRaisesRegex(ValueError, "vendor/package paths"):
-                    list(backend.local_patch_sources(workspace))
+                list(backend.vendored_sources(workspace))
+            notice.unlink()
+            notice.write_bytes(b"second notice\n")
+            # A linked crate or vendor directory could ship sources from
+            # outside the workspace.
+            outside = root / "outside"
+            shutil.copytree(package, outside)
+            (workspace / "vendor/linked").symlink_to(outside, target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, "must not be symlinks"):
+                list(backend.vendored_sources(workspace))
+            (workspace / "vendor/linked").unlink()
+            (workspace / "vendor").rename(root / "vendor")
+            (workspace / "vendor").symlink_to(root / "vendor", target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, "must not be symlinks"):
+                list(backend.vendored_sources(workspace))
 
-    def test_local_patch_sources_ignore_ancestor_build_or_cache_names(self):
+    def test_vendored_sources_admit_only_complete_crate_directories(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace, package, _ = self.vendored_fixture(Path(directory))
+            stray = workspace / "vendor/notes.txt"
+            stray.write_bytes(b"not a crate\n")
+            with self.assertRaisesRegex(ValueError, "invalid vendored crate directory"):
+                list(backend.vendored_sources(workspace))
+            stray.unlink()
+            (package / "PROVENANCE.md").unlink()
+            with self.assertRaisesRegex(ValueError, "missing PROVENANCE.md"):
+                list(backend.vendored_sources(workspace))
+
+    def test_vendored_sources_ignore_ancestor_build_or_cache_names(self):
         for ancestor in ("target", ".git", "__pycache__"):
             with self.subTest(ancestor=ancestor):
                 with tempfile.TemporaryDirectory() as directory:
                     root = Path(directory) / ancestor / "checkout"
                     root.mkdir(parents=True)
-                    workspace, package, _ = self.patch_fixture(root)
-                    sources = list(backend.local_patch_sources(workspace))
+                    workspace, package, _ = self.vendored_fixture(root)
+                    sources = list(backend.vendored_sources(workspace))
                     self.assertEqual(len(sources), 8)
                     junk = package / "target" / "junk.rs"
                     junk.parent.mkdir()
                     junk.write_bytes(b"fn junk() {}\n")
                     with self.assertRaisesRegex(ValueError, "build or cache files"):
-                        list(backend.local_patch_sources(workspace))
+                        list(backend.vendored_sources(workspace))
 
     def test_native_fixture_scan_ignores_ancestor_build_or_cache_names(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -613,12 +686,12 @@ class PythonSourceWorkspaceTests(unittest.TestCase):
             selected = backend.native_test_fixtures(workspace)
             self.assertEqual(selected[1], (name, original))
 
-    def test_extra_local_patch_build_script_cannot_enter_a_source_archive(self):
+    def test_extra_vendored_build_script_cannot_enter_a_source_archive(self):
         with tempfile.TemporaryDirectory() as directory:
-            workspace, _, archive = self.patch_fixture(Path(directory))
+            workspace, _, archive = self.vendored_fixture(Path(directory))
             sources = [
                 (source.relative_to(workspace).as_posix(), source.read_bytes())
-                for source in backend.local_patch_sources(workspace)
+                for source in backend.vendored_sources(workspace)
             ]
             with tarfile.open(archive) as original:
                 values = [
@@ -628,27 +701,23 @@ class PythonSourceWorkspaceTests(unittest.TestCase):
             values.append(("yamaa/rust/vendor/witness/build.rs", b"fn main() {}"))
             write_archive(archive, values)
             original = archive.read_bytes()
-            with self.assertRaisesRegex(
-                ValueError, "unexpected local Cargo patch file"
-            ):
+            with self.assertRaisesRegex(ValueError, "unexpected vendored crate file"):
                 backend.preserve_workspace(archive, workspace)
             self.assertEqual(archive.read_bytes(), original)
-            with self.assertRaisesRegex(
-                ValueError, "unexpected local Cargo patch file"
-            ):
+            with self.assertRaisesRegex(ValueError, "unexpected vendored crate file"):
                 guard.check_archive(
                     archive,
                     (workspace / "Cargo.lock").read_bytes(),
                     (workspace / "Cargo.toml").read_bytes(),
-                    patch_sources=sources,
+                    vendored=sources,
                 )
 
-    def test_archive_local_patch_directory_links_refuse_before_restoration(self):
+    def test_archive_vendored_directory_links_refuse_before_restoration(self):
         with tempfile.TemporaryDirectory() as directory:
-            workspace, _, archive = self.patch_fixture(Path(directory))
+            workspace, _, archive = self.vendored_fixture(Path(directory))
             sources = [
                 (source.relative_to(workspace).as_posix(), source.read_bytes())
-                for source in backend.local_patch_sources(workspace)
+                for source in backend.vendored_sources(workspace)
             ]
             with tarfile.open(archive) as original:
                 values = [
@@ -674,7 +743,7 @@ class PythonSourceWorkspaceTests(unittest.TestCase):
                         archive,
                         (workspace / "Cargo.lock").read_bytes(),
                         (workspace / "Cargo.toml").read_bytes(),
-                        patch_sources=sources,
+                        vendored=sources,
                     )
 
     def compile_fixture(self, root, declared=True):

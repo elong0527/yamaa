@@ -1,5 +1,8 @@
+# yamaa's patched copy of saphyr-parser 0.2.1 (see PROVENANCE.md). Its own
+# package and library names keep it apart from a published saphyr-parser that
+# an embedder's graph may already hold.
 [package]
-name = "saphyr-parser"
+name = "yamaa-saphyr-parser"
 version = "0.2.1"
 edition = "2024"
 rust-version = "1.85.0"
@@ -13,7 +16,7 @@ build = false
 autobins = false
 
 [lib]
-name = "saphyr_parser"
+name = "yamaa_saphyr_parser"
 path = "src/lib.rs"
 
 [features]

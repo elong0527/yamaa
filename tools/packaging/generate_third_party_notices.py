@@ -111,7 +111,7 @@ LICENSE_LIKE = re.compile(
 # listed file must exist, so a crate that moves one stops generation.
 EXTRA_FILES = {
     # The vendored parser keeps both authors' license texts in LICENSES/.
-    "saphyr-parser": {
+    "yamaa-saphyr-parser": {
         "LICENSES/ChenYuheng-Apache": "Apache-2.0",
         "LICENSES/ChenYuheng-MIT": "MIT",
         "LICENSES/Ethiraric-Apache": "Apache-2.0",

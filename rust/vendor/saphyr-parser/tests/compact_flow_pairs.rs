@@ -1,4 +1,4 @@
-use saphyr_parser::{Event, Parser, ScalarStyle, ScanError};
+use yamaa_saphyr_parser::{Event, Parser, ScalarStyle, ScanError};
 
 fn plain(value: &'static str) -> Event<'static> {
     Event::Scalar(value.into(), ScalarStyle::Plain, 0, None)

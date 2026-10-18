@@ -10,7 +10,7 @@ publish.workspace = true
 [features]
 default = ["yaml", "parquet", "readstat", "odm"]
 # Document syntax admission; owned core documents do not require this parser.
-yaml = ["dep:saphyr-parser", "dep:num-bigint"]
+yaml = ["dep:yamaa-saphyr-parser", "dep:num-bigint"]
 # Source and artifact codecs share one edge, including native Zstd compression.
 parquet = ["dep:parquet", "dep:bytes", "dep:base64", "dep:brotli", "dep:flate2", "dep:lz4_flex", "dep:zstd", "dep:snap"]
 # SAS binary input only; disabling this feature omits the bundled ReadStat build.
@@ -24,8 +24,11 @@ toml = { version = ">=0.9.8, <2", default-features = false, features = ["parse",
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = { version = "1.0.145", features = ["raw_value"] }
 # Source parsing stays at the adapter boundary; the core accepts owned documents.
-# 0.0.11 fixes comments interrupting multiline plain scalars (YAML case BS4K).
-saphyr-parser = { version = ">=0.0.11", default-features = false, optional = true }
+# The vendored saphyr-parser 0.2.1 with the reviewed compact-flow fix (#2196).
+# A path dependency reaches every graph that builds this crate, including a
+# project that embeds the facade by git or path, which a workspace [patch]
+# does not (#2929). Published releases through 0.2.2 lack the fix (#2583).
+yamaa-saphyr-parser = { version = "=0.2.1", path = "../../vendor/saphyr-parser", default-features = false, optional = true }
 num-bigint = { version = "0.5.1", default-features = false, optional = true }
 
 arrow-array = { version = "=57.3.0", default-features = false, features = ["ffi"] }

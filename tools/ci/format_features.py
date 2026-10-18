@@ -56,7 +56,7 @@ def main():
         )
     )
     for package, feature in [
-        ("saphyr-parser", "yaml"),
+        ("yamaa-saphyr-parser", "yaml"),
         ("parquet", "parquet"),
         ("zstd-sys", "parquet"),
         ("quick-xml", "odm"),
@@ -82,7 +82,7 @@ def main():
     )
     if core.intersection(
         {
-            "saphyr-parser",
+            "yamaa-saphyr-parser",
             "parquet",
             "arrow-array",
             "arrow-ipc",
