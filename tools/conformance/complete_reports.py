@@ -245,14 +245,19 @@ def project_report(raw, case):
         "tests": [],
     }:
         raise ValueError("unexpected producer entry or activation ledger")
+    # The report's environment section names the project file the owner
+    # passed and the lock its linked environment file declares, both beside
+    # the retained case.
     environment = raw["environment"]
     parent = PurePosixPath(case).parent
     lock = "uv.lock" if raw["runtime"] == "python" else "renv.lock"
     if environment != {
-        "source": (parent / "environment.yaml").as_posix(),
+        "source": (parent / "project.yaml").as_posix(),
         "lock_source": (parent / lock).as_posix(),
     }:
-        raise ValueError("producer environment is not from its actual retained owner")
+        raise ValueError(
+            "producer project or lock is not from its actual retained owner"
+        )
     protocol = copy.deepcopy({key: raw[key] for key in fields})
     protocol["example"] = PRODUCER
     for group in ("nodes", "tables", "verifications", "callbacks"):

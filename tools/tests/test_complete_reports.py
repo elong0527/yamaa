@@ -99,7 +99,7 @@ class CompletePublicTruth(unittest.TestCase):
             entry="spec.yaml",
             activation={"lock": "not_requested", "bindings": [], "tests": []},
             environment={
-                "source": f"/unit-unqualified/{host}/environment.yaml",
+                "source": f"/unit-unqualified/{host}/project.yaml",
                 "lock_source": f"/unit-unqualified/{host}/"
                 + ("uv.lock" if host == "python" else "renv.lock"),
             },
@@ -493,6 +493,12 @@ assert observed.to_dict(as_series=False) == {"VALUE": [1, 2, None]}
                     cohort.project_report(
                         raw, (owner / "case-directory.txt").read_text()
                     )
+        # The owner passes a project file; an environment file passed in its
+        # place is the retired call and is not the retained owner.
+        retired = copy.deepcopy(before)
+        retired["environment"]["source"] = "/unit-unqualified/python/environment.yaml"
+        with self.assertRaisesRegex(ValueError, "project or lock"):
+            cohort.project_report(retired, (owner / "case-directory.txt").read_text())
         (owner / "after-2/out.csv").write_bytes(b"ID\n02\n")
         with self.assertRaisesRegex(ValueError, "CSV bytes"):
             self.compare()
