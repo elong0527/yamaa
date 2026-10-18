@@ -247,7 +247,10 @@ main, on dispatch, or on a `qualification/issue-*` push. It checks public
 benchmark conformance, installed host suites, packaging, optimized Rust behavior
 and portable math. Passing ordinary CI does not qualify a release. The final
 merged revision needs complete native evidence, including strict R package
-checks with `Status: OK`.
+checks with `Status: OK`. A release tag publishes the native run that its
+`Qualified-Run` trailer names, and the daily `Release rehearsal` workflow runs
+the same selection against the latest successful main run without publishing;
+see [publication](docs/release.md#publication).
 
 Documentation deployment and Harbor evaluations have separate workflows.
 Harbor owns its task-build, oracle and changed-input checks; see its

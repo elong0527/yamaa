@@ -170,18 +170,39 @@ Before pushing the release tag, confirm on the final commit:
 4. Every [component outside the advisory scanners](#components-outside-the-advisory-scanners)
    was compared with its upstream releases and security advisories since the
    previous release, and each fix that applies is taken or has an issue.
+5. A [release rehearsal](#publication) passed against a native run of that
+   commit; the tag names that run.
 
 Record the outcome on the release's planning issue.
 
 ## Publication
 
 After the final commit is on main and its complete native qualification has
-passed, push the coordinated tag `yamaa-v0.4.0` at that exact commit.
-`.github/workflows/release.yml` accepts a completed scheduled main run, a main
-dispatch, or a same-repository `qualification/issue-*` push for the peeled tag
-commit. It requires all installed lanes, shared Rust/math, complete cohort
-comparisons and strict R package checks to have passed. Branch dispatches cannot
-release.
+passed, push the coordinated tag `yamaa-v<version>` at that exact commit. The
+tag must be annotated, and its message must end with a trailer paragraph that
+names the qualifying native run as `Qualified-Run: <run id>`. The run id is the
+number at the end of the run's URL, also listed by
+
+```sh
+gh run list --repo elong0527/yamaa --workflow native.yml --commit <commit> --status success
+```
+
+Tag and push:
+
+```sh
+git tag -a yamaa-v<version> <commit> -m "yamaa <version>" -m "Qualified-Run: <run id>"
+git push origin refs/tags/yamaa-v<version>
+```
+
+`.github/workflows/release.yml` publishes from the named run alone, so a later
+run of the same commit cannot replace the run the release was reviewed against.
+The named run must be a completed successful native run of the peeled tag
+commit: a scheduled main run, a main dispatch, or a same-repository
+`qualification/issue-*` push. It requires all installed lanes, shared
+Rust/math, complete cohort comparisons and strict R package checks to have
+passed. Branch dispatches cannot release. A lightweight tag, a missing,
+repeated or malformed trailer, or a named run that does not qualify fails
+before anything is downloaded.
 
 The workflow downloads the qualified artifacts and publishes their unchanged
 bytes: one wheel per supported OS, the tested Linux Python sdist and the tested
@@ -198,6 +219,19 @@ credentials. The workflow has no PyPI step: 0.4.0 is distributed as GitHub
 release assets only, and those assets do not establish PyPI publication. PyPI
 publication is a separate decision and requires configured authentication;
 the GitHub release assets remain the documented standalone download route.
+
+The `Release rehearsal` workflow runs the same selection and downloads, daily
+and on dispatch, against the latest successful native run on main, with its own
+read-only token. It reads no tag, does not look for an existing release and
+stops before `gh release create`. Dispatch it before tagging with
+`gh workflow run release-rehearsal.yml --repo elong0527/yamaa`; its log names
+the run it rehearsed. To rehearse another run, check out that run's commit,
+fetch `origin/main`, and run the selector with an authenticated GitHub CLI:
+
+```sh
+python -m tools.ci.select_release_artifacts --repository elong0527/yamaa \
+  --run-id <run id> --destination <new directory>
+```
 
 ## Source package contents
 
