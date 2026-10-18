@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -13,7 +14,7 @@ from pathlib import Path
 import pytest
 
 import yaml
-from evaluations.harbor import author, brief, build, check, packet, scaffold
+from evaluations.harbor import author, brief, build, check, grade, packet, scaffold
 
 ROOT = Path(__file__).parents[3]
 BENCHMARKS = ROOT / "benchmarks"
@@ -47,6 +48,24 @@ def _death_trace() -> list[dict]:
         {"prompt": sentence, "sources": ["spec.yaml: columns.DTHDT.derivation"]}
         for sentence in check.sentences(rules)
     ]
+
+
+def _python3(monkeypatch, tmp_path: Path) -> None:
+    """Put first on PATH a `python3` that runs this test's interpreter, which
+    has the packages the reference solutions import."""
+    programs = tmp_path / "bin"
+    programs.mkdir()
+    shim = programs / "python3"
+    shim.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n')
+    shim.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{programs}{os.pathsep}{os.environ['PATH']}")
+
+
+def _in_folder(language: str) -> str:
+    """adam-adae-death's reference written as a solver folder's instruction
+    asks: its `/app` paths relative to the folder it runs from."""
+    script = build.SOLUTIONS / DEATH.name / build.LANGUAGES[language]["script"]
+    return script.read_text().replace('"/app/', '"')
 
 
 @pytest.mark.parametrize("benchmark", PROMPTED)
@@ -99,6 +118,21 @@ def test_the_sources_hold_no_checks_prompts_or_solutions(tmp_path):
     # The inputs are the files the evaluated agent gets.
     task = build.build_task(BENCHMARKS / "adam-adsl-bmi", tmp_path, None, "test", "r")
     assert _tree(out / "input") == _tree(task / "environment" / "input")
+
+
+def test_writing_the_sources_replaces_only_what_it_writes(tmp_path):
+    # `--out .` must not empty the directory: an earlier sources/ and input/
+    # are replaced, and a file next to them survives.
+    out = tmp_path / "work"
+    for stale in ("sources/stale.md", "input/stale.csv"):
+        (out / stale).parent.mkdir(parents=True, exist_ok=True)
+        (out / stale).write_text("an earlier run\n")
+    (out / "notes.md").write_text("the user's own file\n")
+    packet.write(DEATH, out)
+    assert (out / "notes.md").read_text() == "the user's own file\n"
+    fresh = packet.write(DEATH, tmp_path / "fresh")
+    for part in ("sources", "input"):
+        assert _tree(out / part) == _tree(fresh / part)
 
 
 def test_a_rule_that_names_records_may_say_them():
@@ -187,6 +221,33 @@ def test_a_procedure_is_rejected_but_rules_and_literals_pass():
         "break by earliest ASTDT, then lowest AESEQ."
     )
     assert check.procedure_problems(rules) == []
+    # Codes that only start like a verb, values in capitals, and values
+    # joined with a quoted separator stay literals and rules.
+    rules = (
+        "SORTORD, GROUPINGID and COALESCEVAL are as collected. CNSDTDSC is "
+        'LAST TUMOUR ASSESSMENT. ADTM is ADT and ATM joined with "T" on '
+        "records with a time. SHIFT1 joins the baseline mark and the record's "
+        "own mark."
+    )
+    assert check.procedure_problems(rules) == []
+
+
+def test_a_join_that_names_both_inputs_reads_as_a_procedure():
+    # Its codes set aside, the join reads "Join to on".
+    assert check.procedure_problems("Join AE to DM on USUBJID.") == [
+        "reads as a procedure: 'Join to on'"
+    ]
+    for join in ("AE is joined with DM on USUBJID.", "Join DM and AE on USUBJID."):
+        assert len(check.procedure_problems(join)) == 1, join
+
+
+def test_a_procedure_verb_in_capitals_reads_as_a_procedure():
+    assert check.procedure_problems("FILTER AE to fatal records.") == [
+        "reads as a procedure: 'FILTER'"
+    ]
+    assert check.procedure_problems("SORT the records by ASTDT.") == [
+        "reads as a procedure: 'SORT the records'"
+    ]
 
 
 def test_the_writer_instruction_quotes_no_committed_prompt():
@@ -356,31 +417,106 @@ def test_a_solver_folder_holds_only_what_the_evaluated_agent_gets(tmp_path):
     task = build.build_task(
         DEATH, tmp_path / "tasks", None, "test", "python", candidate=candidate
     )
-    assert (folder / "instruction.md").read_text() == (
-        task / "instruction.md"
-    ).read_text()
+    # The evaluated agent's instruction follows verbatim, after a note that
+    # maps its /app paths to the folder and says how its script is rerun.
+    note, rule, given = (folder / "instruction.md").read_text().partition("\n\n---\n\n")
+    assert rule and given == (task / "instruction.md").read_text()
+    assert note == author.LOCAL_PATHS.format(**build.LANGUAGES["python"])
+    assert "`/app/input` means `input/`" in note
+    assert "`/app/output` means `output/`" in note
+    assert note.endswith("as `python3 output/result.py`.")
+    r = author.solver_folder(DEATH, candidate, "r", tmp_path / "folders")
+    text = (r / "instruction.md").read_text()
+    assert text.startswith(author.LOCAL_PATHS.format(**build.LANGUAGES["r"]))
+    assert "as `Rscript output/result.R`." in text
 
 
-def test_grading_solver_folders_names_columns_and_never_a_value(tmp_path):
+def test_grading_solver_folders_names_columns_and_never_a_value(tmp_path, monkeypatch):
+    _python3(monkeypatch, tmp_path)
     candidate = (build.PROMPTS / DEATH.name / "full.md").read_text()
-    folder = author.solver_folder(DEATH, candidate, "python", tmp_path)
-    assert author.grade_folders(tmp_path) == {
+    solvers = tmp_path / "solvers"
+    folder = author.solver_folder(DEATH, candidate, "python", solvers)
+    assert author.grade_folders(solvers) == {
         DEATH.name: "0 of 1 solver attempts reproduced every requested dataset.\n"
         "- adae.csv was not written: 1 of 1 attempts\n"
         "- the required script was not saved: 1 of 1 attempts\n"
     }
     output = folder / "output"
     shutil.copyfile(DEATH / "expected" / "adae.csv", output / "adae.csv")
+    # A saved dataset is not a reproduced one: rerun from a clean copy of the
+    # folder, a script that derives nothing writes nothing.
     (output / "result.py").write_text("print('derived')\n")
-    assert author.grade_folders(tmp_path) == {
+    assert author.grade_folders(solvers) == {
+        DEATH.name: "0 of 1 solver attempts reproduced every requested dataset.\n"
+        "- the script does not reproduce its datasets from a clean state: "
+        "1 of 1 attempts\n"
+    }
+    (output / "result.py").write_text(_in_folder("python"))
+    assert author.grade_folders(solvers) == {
         DEATH.name: "1 of 1 solver attempts reproduced every requested dataset.\n"
     }
     rows = (output / "adae.csv").read_text().splitlines(keepends=True)
     rows[1] = rows[1].replace("HEART ATTACK", "HEART FAILURE", 1)
     (output / "adae.csv").write_text("".join(rows))
-    text = author.grade_folders(tmp_path)[DEATH.name]
+    text = author.grade_folders(solvers)[DEATH.name]
     assert "- adae.csv AEDECOD differs: 1 of 1 attempts" in text
     assert "HEART" not in text and "KN189" not in text
+
+
+def test_a_solver_script_is_rerun_as_the_verifier_reruns_it(tmp_path, monkeypatch):
+    # From a clean copy of its folder: the benchmark's own inputs, an output
+    # folder with only the script, the track's interpreter, and the
+    # verifier's timeout. Nothing the solver left in its folder helps it.
+    _python3(monkeypatch, tmp_path)
+    candidate = (build.PROMPTS / DEATH.name / "full.md").read_text()
+    solvers = tmp_path / "solvers"
+    folder = author.solver_folder(DEATH, candidate, "python", solvers)
+    inputs = _tree(folder / "input")
+    output = folder / "output"
+    for name in ("adae.csv", "answer.csv"):
+        shutil.copyfile(DEATH / "expected" / "adae.csv", output / name)
+    (folder / "input" / "ae.csv").write_text("edited by the solver\n")
+    (output / "result.py").write_text(
+        "import shutil\nshutil.copyfile('output/answer.csv', 'output/adae.csv')\n"
+    )
+    runs = []
+
+    def run(command, cwd, timeout):
+        runs.append((command, cwd, timeout, _tree(cwd)))
+        return grade.run_script(command, cwd, timeout)
+
+    assert author.grade_folders(solvers, run=run) == {
+        DEATH.name: "0 of 1 solver attempts reproduced every requested dataset.\n"
+        "- the script does not reproduce its datasets from a clean state: "
+        "1 of 1 attempts\n"
+    }
+    [(command, cwd, timeout, tree)] = runs
+    assert command == ["python3", str(cwd / "output" / "result.py")]
+    assert timeout == grade.RERUN_TIMEOUT_SEC
+    assert tree == {
+        **{f"input/{name}": data for name, data in inputs.items()},
+        "output/result.py": (output / "result.py").read_bytes(),
+    }
+    assert cwd != folder and not cwd.exists()
+
+
+def test_a_solver_grade_without_its_runtime_is_a_file_only_check(tmp_path, monkeypatch):
+    # Without Rscript, a correct script beside a matching dataset is graded on
+    # its files alone, and the report says so instead of counting a pass.
+    monkeypatch.setenv("PATH", str(tmp_path / "no-runtimes"))
+    candidate = (build.PROMPTS / DEATH.name / "full.md").read_text()
+    solvers = tmp_path / "solvers"
+    folder = author.solver_folder(DEATH, candidate, "r", solvers)
+    shutil.copyfile(DEATH / "expected" / "adae.csv", folder / "output" / "adae.csv")
+    (folder / "output" / "result.R").write_text(_in_folder("r"))
+
+    def run(command, cwd, timeout):
+        raise AssertionError(f"ran {command} without its interpreter")
+
+    assert author.grade_folders(solvers, run=run) == {
+        DEATH.name: "0 of 1 solver attempts reproduced every requested dataset.\n"
+        "- a file-only check, result.R not rerun without Rscript: 1 of 1 attempts\n"
+    }
 
 
 def test_a_candidate_prompt_is_tried_without_a_reference_and_never_ranked(tmp_path):
