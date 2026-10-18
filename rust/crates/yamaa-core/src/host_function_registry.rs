@@ -279,11 +279,8 @@ pub fn activate_registered<'a, P: BatchFunctionPort>(
     }
     let mut failures = Vec::new();
     let mut activated = Vec::with_capacity(plans.len());
-    for (function, ((definition, plan), entry)) in functions
-        .iter()
-        .zip(plans.into_iter())
-        .zip(resolved)
-        .enumerate()
+    for (function, ((definition, plan), entry)) in
+        functions.iter().zip(plans).zip(resolved).enumerate()
     {
         let rows: Vec<BTreeMap<String, Value>> = definition
             .definition()

@@ -35,16 +35,11 @@ impl PreparedGraph {
     pub fn metadata(&self) -> &core::PreparedGraph {
         &self.metadata
     }
+    /// Keep the supplied nodes beside the sealed build of the same closure.
     pub(crate) fn into_build(
         self,
-    ) -> (
-        Vec<Arc<PreparedDocument>>,
-        yamaa_core::producer_build::PreparedBuild,
-    ) {
-        (
-            self.nodes.into_iter().map(|node| node.document).collect(),
-            self.metadata.into_build(),
-        )
+    ) -> (Vec<SuppliedNode>, yamaa_core::producer_build::PreparedBuild) {
+        (self.nodes, self.metadata.into_build())
     }
 }
 

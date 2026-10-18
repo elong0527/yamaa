@@ -63,7 +63,6 @@ pub(crate) fn single(
 
 pub(crate) fn graph(graph: &FileGraph, resources: &Resources) -> Result<ResolvedArtifact, Error> {
     let entries = graph
-        .graph()
         .nodes()
         .iter()
         .map(|node| {

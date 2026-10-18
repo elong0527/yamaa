@@ -12,8 +12,10 @@ use crate::scalar::{Scalar, ScalarRef};
 
 /// The host language selecting function admission.
 #[non_exhaustive]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum HostLanguage {
+    // The default lets `EngineOptions` derive `Default`.
+    #[default]
     Python,
     R,
 }

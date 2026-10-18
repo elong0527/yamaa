@@ -1,7 +1,7 @@
 # Local checks and PR jobs use these same targets from the repository root.
 .DEFAULT_GOAL := help
 .PHONY: help setup quick check check-lint check-repository test-rust test-python \
-        test-r docs-test docs-generate docs-build docs
+        test-r check-equivalence probe-executor docs-test docs-generate docs-build docs
 
 UV ?= uv
 PROJECT := $(UV) run --project python --no-sync
@@ -35,6 +35,12 @@ test-python:
 
 test-r:
 	$(TOOLS) tools.commands.r_tests
+
+check-equivalence:
+	$(TOOLS) tools.commands.equivalence --uv "$(UV)"
+
+probe-executor:
+	$(TOOLS) tools.commands.executor_probe
 
 docs-test:
 	$(PROJECT) python -m unittest tools.tests.test_canonical_pages tools.tests.test_build_index tools.tests.test_generate tools.tests.test_mapping_doc

@@ -131,7 +131,7 @@ class PublicContract(unittest.TestCase):
                 "_style_same_value",
             ],
         )
-        self.assertEqual(yamaa.__version__, "0.4.0")
+        self.assertEqual(yamaa.__version__, "0.5.0")
         self.assertEqual(_native._CORE_VERSION, yamaa.__version__)
 
     def test_signatures_members_and_argument_types(self):

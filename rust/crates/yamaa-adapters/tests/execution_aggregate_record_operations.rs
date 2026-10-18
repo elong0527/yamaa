@@ -1,5 +1,15 @@
 #![cfg(feature = "yaml")]
 //! Execution contracts.
+
+/// The host that each runtime name in these tests stands for.
+fn host(runtime: &str) -> yamaa_core::project_function::Language {
+    match runtime {
+        "python" => yamaa_core::project_function::Language::Python,
+        "r" => yamaa_core::project_function::Language::R,
+        other => panic!("no host for test runtime {other}"),
+    }
+}
+
 #[allow(dead_code)]
 mod support;
 mod execution {
@@ -30,6 +40,7 @@ mod execution {
             {
                 let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,
                         environment: None,
@@ -97,7 +108,7 @@ mod execution {
         )
         .unwrap();
         let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
-        let issues = file_application::check(
+        let issues = file_application::check(yamaa_core::project_function::Language::Python,
             Request {
                 specification: &specification,
                 environment: None,
@@ -175,6 +186,86 @@ mod execution {
         assert!(issues.iter().any(|issue|issue.condition==condition && issue.requirement.as_deref()==Some(requirement)),"{issues:?}");
         assert!(!fixture.0.join("result.csv").exists());
     }
+        }
+        /// A qualified `between.value` reads the record that built the row, so
+        /// it names the driver of every row the aggregate is derived for.
+        /// Another input has no record there and is refused (#2904).
+        #[test]
+        fn a_qualified_between_value_reads_only_the_rows_own_driver_record() {
+            let run = |spec: String| {
+                let fixture = Fixture::new();
+                fs::write(fixture.0.join("a.csv"), b"ID,CUT\na,1\nb,2\n").unwrap();
+                fs::write(
+                    fixture.0.join("b.csv"),
+                    b"ID,N\na,1\na,2\na,3\nb,1\nb,2\nb,3\n",
+                )
+                .unwrap();
+                // C orders the subjects the other way and keeps each limit in
+                // the column where A keeps its cutoff.
+                fs::write(fixture.0.join("c.csv"), b"ID,LIMIT\nb,3\na,2\n").unwrap();
+                fs::write(fixture.0.join("spec.yaml"), spec).unwrap();
+                let issues = match fixture.run() {
+                    Ok(mut domain) if domain.issues().is_empty() => {
+                        assert!(domain.save().unwrap());
+                        return Ok(fs::read_to_string(fixture.0.join("result.csv")).unwrap());
+                    }
+                    Ok(mut domain) => {
+                        assert!(domain.save().is_err());
+                        domain.issues()
+                    }
+                    Err(issues) => issues,
+                };
+                Err(issues
+                    .iter()
+                    .map(|issue| yamaa_adapters::json!({"phase": issue.phase, "condition": issue.condition, "requirement": issue.requirement, "spec_paths": issue.spec_paths, "context": issue.context.clone()}))
+                    .collect::<Vec<_>>())
+            };
+            let refused = |identifier: &str| {
+                Err(vec![yamaa_adapters::json!({
+                    "phase": "validation", "condition": "unknown_field", "requirement": "REQ-0121",
+                    "spec_paths": ["columns.TOTAL.derivation.aggregate.between.value"],
+                    "context": {"identifier": identifier}
+                })])
+            };
+            let operation = |value: &str| {
+                format!("        between: {{value: {value}, lower: N}}\n        expr: SUM(B.N)\n")
+            };
+            let inputs = |spec: String| {
+                spec.replace(
+                    "  B: {path: b.csv, types: {N: int}}\n",
+                    "  B: {path: b.csv, types: {N: int}}\n  C: {path: c.csv, types: {LIMIT: int}}\n",
+                )
+            };
+            // Without row templates the base input builds every row.
+            for value in ["A.CUT", "CUT"] {
+                assert_eq!(
+                    run(inputs(specification(&operation(value)))),
+                    Ok("ID,CUT,TOTAL\na,1,1\nb,2,3\n".into())
+                );
+            }
+            assert_eq!(
+                run(inputs(specification(&operation("C.LIMIT")))),
+                refused("C.LIMIT")
+            );
+            // Rows built from A and from C share the aggregate's column, so
+            // neither input supplies a record for every row.
+            let rows = |value: &str, templates: &str| {
+                format!("schema_version: '1.0'\ndomain: TEST\nkeys: [ID, ORIGIN]\ninput:\n  A: {{path: a.csv, types: {{CUT: int}}}}\n  B: {{path: b.csv, types: {{N: int}}}}\n  C: {{path: c.csv, types: {{LIMIT: int}}}}\noutput: {{path: result.csv, columns: [ID, ORIGIN, TOTAL]}}\ncolumns:\n  - {{name: ID, type: str}}\n  - {{name: ORIGIN, type: str}}\n  - name: TOTAL\n    type: float\n    derivation:\n      aggregate:\n{}rows:\n{templates}", operation(value))
+            };
+            let from_a =
+                "  - id: a\n    dataset: A\n    derivations: {ID: A.ID, ORIGIN: {literal: A}}\n";
+            let from_c =
+                "  - id: c\n    dataset: C\n    derivations: {ID: C.ID, ORIGIN: {literal: C}}\n";
+            assert_eq!(
+                run(rows("A.CUT", from_a)),
+                Ok("ID,ORIGIN,TOTAL\na,A,1\nb,A,3\n".into())
+            );
+            for value in ["A.CUT", "C.LIMIT"] {
+                assert_eq!(
+                    run(rows(value, &format!("{from_a}{from_c}"))),
+                    refused(value)
+                );
+            }
         }
         #[test]
         fn named_derive_read_requires_keep_and_uses_original_current_record() {
@@ -737,12 +828,20 @@ S1,002,2024-06
                     base_directory: ".",
                 };
                 assert_eq!(
-                    issues(&file_application::check(request(), identity())),
+                    issues(&file_application::check(
+                        yamaa_core::project_function::Language::Python,
+                        request(),
+                        identity()
+                    )),
                     case["check_issues"],
                     "{}",
                     yamaa_adapters::json_wire::encode(&case["name"])
                 );
-                let mut result = match file_application::domain(request(), identity()) {
+                let mut result = match file_application::domain(
+                    yamaa_core::project_function::Language::Python,
+                    request(),
+                    identity(),
+                ) {
                     Ok(result) => result,
                     Err(rows) => {
                         assert_eq!(
@@ -849,12 +948,19 @@ S1,002,2024-06
                     specification: &specification,
                     environment: None,
                 };
-                let checked = file_application::check(request(), identity(runtime, &specification));
-                let built =
-                    match file_application::domain(request(), identity(runtime, &specification)) {
-                        Ok(domain) => domain.issues(),
-                        Err(issues) => issues,
-                    };
+                let checked = file_application::check(
+                    crate::host(runtime),
+                    request(),
+                    identity(runtime, &specification),
+                );
+                let built = match file_application::domain(
+                    crate::host(runtime),
+                    request(),
+                    identity(runtime, &specification),
+                ) {
+                    Ok(domain) => domain.issues(),
+                    Err(issues) => issues,
+                };
                 result.push((format!("{runtime}/check"), rows(&checked)));
                 result.push((format!("{runtime}/domain"), rows(&built)));
             }
@@ -1053,11 +1159,17 @@ S1,002,2024-06
                 specification,
                 environment: None,
             };
-            let checked =
-                file_application::check(request(), identity(runtime, example, specification));
+            let checked = file_application::check(
+                crate::host(runtime),
+                request(),
+                identity(runtime, example, specification),
+            );
             assert!(!checked.is_empty(), "{example}: check reported no issues");
-            let built =
-                file_application::domain(request(), identity(runtime, example, specification));
+            let built = file_application::domain(
+                crate::host(runtime),
+                request(),
+                identity(runtime, example, specification),
+            );
             let built = match built {
                 Ok(result) => {
                     let issues = result.issues().to_vec();
@@ -1215,7 +1327,7 @@ S1,002,2024-06
         /// finding is decided from. `domain` reaches each of them once it reads or
         /// binds the inputs. A case that `check` starts to report fails until it
         /// leaves this list.
-        const NOT_REPORTED_BY_CHECK: [(&str, &str); 23] = [
+        const NOT_REPORTED_BY_CHECK: [(&str, &str); 24] = [
             (
                 "negative-adlb-computed-param",
                 "a cycle through an aggregate and a case",
@@ -1228,6 +1340,10 @@ S1,002,2024-06
             (
                 "negative-first-available-self",
                 "a cycle through first_available",
+            ),
+            (
+                "negative-forward-key-reference",
+                "column order in a specification with row templates",
             ),
             (
                 "negative-keys-missing",
@@ -1243,7 +1359,7 @@ S1,002,2024-06
             ),
             (
                 "negative-lookup-range-other-input",
-                "the rows that read a lookup range",
+                "the fields stored in the input a lookup range reads",
             ),
             (
                 "negative-lookup-unknown-key",
@@ -1355,6 +1471,7 @@ S1,002,2024-06
                 for runtime in ["python", "r"] {
                     if let Some((_, reason)) = missed {
                         let checked = file_application::check(
+                            crate::host(runtime),
                             Request {
                                 specification: &spec,
                                 environment: None,
@@ -1447,13 +1564,19 @@ S1,002,2024-06
                     environment: None,
                 };
                 for runtime in ["python", "r"] {
-                    let checked =
-                        file_application::check(request(), identity(runtime, name, &spec));
-                    let built =
-                        match file_application::domain(request(), identity(runtime, name, &spec)) {
-                            Ok(result) => result.issues().to_vec(),
-                            Err(failure) => failure,
-                        };
+                    let checked = file_application::check(
+                        crate::host(runtime),
+                        request(),
+                        identity(runtime, name, &spec),
+                    );
+                    let built = match file_application::domain(
+                        crate::host(runtime),
+                        request(),
+                        identity(runtime, name, &spec),
+                    ) {
+                        Ok(result) => result.issues().to_vec(),
+                        Err(failure) => failure,
+                    };
                     let checked = checked.iter().map(issue).collect::<Vec<_>>();
                     let built = built.iter().map(issue).collect::<Vec<_>>();
                     assert_eq!(checked, oracle, "{name} ({runtime}): check");
@@ -1514,6 +1637,7 @@ S1,002,2024-06
                     fs::remove_file(fixture.0.join("input.csv")).unwrap();
                     for runtime in ["python", "r"] {
                         let issues = file_application::check(
+                            crate::host(runtime),
                             Request {
                                 specification: &specification,
                                 environment: None,
@@ -1555,11 +1679,13 @@ S1,002,2024-06
                         environment: None,
                     };
                     assert!(file_application::check(
+                        crate::host(runtime),
                         request(),
                         identity(runtime, "precision-endpoints", &specification)
                     )
                     .is_empty());
                     let mut domain = file_application::domain(
+                        crate::host(runtime),
                         request(),
                         identity(runtime, "precision-endpoints", &specification),
                     )
@@ -2194,6 +2320,7 @@ S1,002,2024-06
                 base_directory: ".",
             };
             let outcome = file_application::domain(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &spec,
                     environment: None,
@@ -2286,6 +2413,7 @@ S1,002,2024-06
                 base_directory: ".",
             };
             let result = file_application::domain(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &path,
                     environment: None,
@@ -2607,6 +2735,7 @@ S1,002,2024-06
         fn between_run(fixture: &Fixture) -> file_application::Domain {
             let path = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
             file_application::domain(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &path,
                     environment: None,
@@ -2740,6 +2869,7 @@ S1,002,2024-06
                 fs::write(fixture.0.join("evt.csv"), "USUBJID,EVDAY\nS1,3\nS2,3\n").unwrap();
                 let path = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
                 let mut result = match file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
                         environment: None,
@@ -2769,15 +2899,21 @@ S1,002,2024-06
                 format!("columns:\n  - {{name: USUBJID, type: str, derivation: SUBJ.USUBJID}}\n  - {{name: WINDOW, type: str, derivation: {derivation}}}\n")
             };
             // The base driver's rows name no REF record: read directly, through
-            // another intermediate's value, or from an aggregate's derive step.
+            // another intermediate's value, from an aggregate's derive step, or
+            // through an aggregate's range value.
             let direct = format!("{base}{WINDOW}{}", column("W.NAME"));
             let chained = WINDOW.replace("id: W\n", "id: W2\n")
                 + &WINDOW.replace("value: REF.REFDAY", "value: W2.LO");
             let chained = format!("{base}{chained}{}", column("W.NAME"));
-            let derive = "{aggregate: {key: [USUBJID], derive: [{name: DAY, type: int, derivation: EVT.EVDAY}, {name: LOW, type: int, derivation: W.LO}], expr: 'MAX(LOW)'}}";
-            let derived = format!("{base}{WINDOW}{}", column(derive)).replace(
-                "type: str, derivation: {aggregate",
-                "type: int, derivation: {aggregate",
+            let aggregated = |derivation: &str| {
+                format!("{base}{WINDOW}{}", column(derivation)).replace(
+                    "type: str, derivation: {aggregate",
+                    "type: int, derivation: {aggregate",
+                )
+            };
+            let derived = aggregated("{aggregate: {key: [USUBJID], derive: [{name: DAY, type: int, derivation: EVT.EVDAY}, {name: LOW, type: int, derivation: W.LO}], expr: 'MAX(LOW)'}}");
+            let ranged = aggregated(
+                "{aggregate: {between: {value: W.LO, lower: EVDAY}, expr: 'COUNT(EVT.EVDAY)'}}",
             );
             let refused = |intermediate: &str| {
                 Err(vec![yamaa_adapters::json!({
@@ -2789,6 +2925,7 @@ S1,002,2024-06
             assert_eq!(run(&direct), refused("W"));
             assert_eq!(run(&chained), refused("W2"));
             assert_eq!(run(&derived), refused("W"));
+            assert_eq!(run(&ranged), refused("W"));
             // A donor record of REF supplies the value under REQ-1263.
             let reader = "  - id: R\n    dataset: REF\n    key: [USUBJID]\n    derivations: {WINNAME: W.NAME}\n";
             assert_eq!(
@@ -2843,11 +2980,19 @@ S1,002,2024-06
                     specification: &path,
                     base_directory: ".",
                 };
-                let checked = file_application::check(request(), identity())
-                    .iter()
-                    .map(issue)
-                    .collect::<Vec<_>>();
-                let built = match file_application::domain(request(), identity()) {
+                let checked = file_application::check(
+                    yamaa_core::project_function::Language::Python,
+                    request(),
+                    identity(),
+                )
+                .iter()
+                .map(issue)
+                .collect::<Vec<_>>();
+                let built = match file_application::domain(
+                    yamaa_core::project_function::Language::Python,
+                    request(),
+                    identity(),
+                ) {
                     Ok(mut result) => {
                         let issues = result.issues().iter().map(issue).collect::<Vec<_>>();
                         if issues.is_empty() {
@@ -3016,12 +3161,20 @@ S1,002,2024-06
                         environment: None,
                     };
                     assert_eq!(
-                        issues(&file_application::check(request(), identity())),
+                        issues(&file_application::check(
+                            yamaa_core::project_function::Language::Python,
+                            request(),
+                            identity()
+                        )),
                         case["check_issues"],
                         "{name}: check"
                     );
-                    let mut result = file_application::domain(request(), identity())
-                        .unwrap_or_else(|issues| panic!("{name}: {issues:?}"));
+                    let mut result = file_application::domain(
+                        yamaa_core::project_function::Language::Python,
+                        request(),
+                        identity(),
+                    )
+                    .unwrap_or_else(|issues| panic!("{name}: {issues:?}"));
                     assert_eq!(
                         issues(&result.issues()),
                         case["issues"],
@@ -3089,6 +3242,7 @@ S1,002,2024-06
                 fs::write(&specification, body).unwrap();
                 let specification = specification.to_str().unwrap();
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification,
                         environment: None,

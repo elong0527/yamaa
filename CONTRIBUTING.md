@@ -4,8 +4,9 @@ Start with [AGENTS.md](AGENTS.md), the repository map and hard rules for people
 and coding agents. Language behavior belongs in [rules/](rules/README.md) and
 [yaml/](yaml/README.md). Independently authored benchmark expectations are the
 test oracle; reproduce a discrepancy independently before changing that truth.
-Breaking changes are allowed for 0.4.0. Remove obsolete interfaces and their
-callers together instead of keeping compatibility aliases.
+A change that breaks a user-facing interface needs an owner decision and a
+migration note (see AGENTS.md). Remove obsolete interfaces and their callers
+together instead of keeping compatibility aliases.
 
 ## Where changes belong
 
@@ -61,6 +62,8 @@ tables in `tools/packaging/generate_third_party_notices.py`.
 Run `make help` at the repository root for prerequisites, configuration variables
 and supported targets. Its inventory is the command reference. Set
 `CARGO_TARGET_DIR` when separate worktrees need independent Rust build output.
+After Rust changes, rerun `make setup`: it rebuilds the Python extension whenever
+a file listed under `tool.uv.cache-keys` in `python/pyproject.toml` changes.
 
 Before a push, run `make quick` and the tests nearest the change. It runs lint
 and the repository checks, leaving out only the R binding's Clippy, and no test
@@ -79,6 +82,8 @@ installed package.
 | `make test-rust` | Run `cargo test --locked --workspace`, including both host bindings. |
 | `make test-python` | Run package/tool tests and standalone installed-host suites. |
 | `make test-r` | Build, install and strictly check a fresh R source package. |
+| `make check-equivalence` | Require unchanged results from fresh builds of both hosts (executor gate). |
+| `make probe-executor` | Time the executor probe on a release build; not part of CI. |
 | `make docs-test docs` | Test page ownership, generate dashboards and build the strict site. |
 
 For a focused Rust change, run `cargo test --locked -p <crate>` from `rust/`.
@@ -126,6 +131,20 @@ all findings, exact values, run reports, callbacks and artifact observations.
 Passing static repository validation does not establish engine release
 qualification.
 
+A change to the executor, such as rewrite 1 (#2785), must leave every result
+unchanged. Each such PR passes ordinary CI and `make check-equivalence` on its
+exact head, and says so in the PR. The gate builds the Python and R packages
+from the checkout and installs both outside it. On each host it runs public
+benchmark conformance: every active benchmark must reproduce its expected
+bytes, and every negative benchmark its first diagnostic's phase, condition,
+requirement and specification paths. On the same installs it then runs the
+installed Python suites and `R CMD check`, which carry the cross-host
+diagnostic parity truth and the host-fixture families. `make probe-executor`
+times one specification at 10,000, 100,000 and 1,000,000 rows, with and
+without one keyed intermediate lookup; `examples/executor_probe.rs` in the
+`yamaa` crate documents its shapes and arguments. Record its timings on an
+issue, never in the repository.
+
 ## CI and release qualification
 
 The ordinary CI workflow runs the same check targets listed above for each PR,
@@ -135,21 +154,35 @@ is checked on those schedules instead. While the newest main run of CI or the
 documentation deployment fails, the `Main health` workflow keeps a `main-red`
 issue open for it and closes the issue when a later main run succeeds. A PR that changes `.github/`
 also runs actionlint over every workflow.
-
-PRs and the main schedule run only development checks: lint, repository
-checks, the Rust workspace, and the Python and R hosts on Linux. Release lanes
-check support claims and run on each `release/**` push and on dispatch: the
-minimum supported saved artifact readers in CI, the optional format feature
-selections and the macOS, Windows and R-devel package checks. Dependency
-graphs, native qualification, Harbor and coverage run on dispatch (native
-qualification also on a `qualification/issue-*` push). Dispatch any of them on
-a branch to check a change that needs them before merging.
 Keep workflow-specific setup in CI and reusable check logic in `tools/`.
 Pin external actions to complete commit IDs with exact release comments.
 
-`.github/workflows/dependency-graphs.yml` resolves minimum and newest
-compatible graphs on dispatch. Run a lane locally with R and the normal
-development prerequisites installed:
+PRs and the main schedule run only development checks: lint, repository
+checks, the Rust workspace, and the Python and R hosts on Linux. Release lanes
+check support claims and run on each `release/**` push and on dispatch: CI's
+minimum Rust toolchain, Python 3.15 and minimum saved artifact reader lanes,
+the optional format feature selections and the macOS, Windows and R-devel
+package checks. Dependency graphs and advisories, native qualification, Harbor
+and coverage run on dispatch (native qualification also on a
+`qualification/issue-*` push). Dispatch any of them on a branch with
+`gh workflow run <workflow> --ref <branch>` to check a change that needs them
+before merging.
+
+CI's `rust (minimum toolchain)` release lane checks and lints the workspace with its
+declared `rust-version`, Rust 1.90.0, instead of the pinned toolchain that every
+other job uses, because embedders build the facade with their own toolchains.
+Run it locally from `rust/`, with R installed:
+
+```sh
+rustup toolchain install 1.90.0 --profile minimal --component clippy
+RUSTFLAGS='-D warnings' cargo +1.90.0 check --locked --workspace --all-targets --all-features
+RUSTFLAGS='-D warnings' cargo +1.90.0 clippy --locked --workspace --all-targets --all-features -- -D warnings
+```
+
+`.github/workflows/dependency-graphs.yml` checks both locks against the
+advisory policy in `rust/deny.toml` and `osv-scanner.toml`, and resolves
+minimum and newest compatible graphs, on dispatch. Run a lane locally
+with R and the normal development prerequisites installed:
 
 ```sh
 uv run --project python --no-sync python -m tools.ci.dependency_graphs \
@@ -199,7 +232,8 @@ requires a fresh PR and head, even if the base was later changed back to main.
 PRs above 300 changed files require bounded coverage below, including when a
 shared head already has a successful status. Triage findings outside inline
 threads as well.
-The fresh manual check above remains mandatory before every merge.
+The fresh manual check above remains mandatory before every merge, except when
+CodeRabbit cannot review the PR; AGENTS.md states what replaces it then.
 An atomic change above CodeRabbit's 300-file review limit can use bounded
 review-only PRs. Each review PR must have a distinct head commit with the
 **complete target head tree**, a synthetic base in this repository, and at

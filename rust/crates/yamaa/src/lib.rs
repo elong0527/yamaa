@@ -32,6 +32,7 @@ pub mod error;
 pub mod functions;
 pub mod observe;
 pub mod odm;
+pub mod plan;
 pub mod resolver;
 pub mod scalar;
 pub mod table;
@@ -56,6 +57,7 @@ pub use functions::{
 };
 pub use observe::{CallStage, DatasetPhase, Event, Node, Outcome, Phase, Progress, Refusal};
 pub use odm::{read_odm, OdmOptions, ODM_COLUMNS};
+pub use plan::{Plan, RunRequest};
 pub use resolver::{
     MemoryResolver, ResolverKind, ResolverOperation, ResolverReply, ResolverRequest,
     ResourceResolver,

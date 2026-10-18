@@ -78,7 +78,7 @@ fn two_studies_and_their_producers_match_the_actual_direct_preparation() {
         let artifact = study.resolve(&format!("{wrapper}/spec.yaml"));
         assert_eq!(artifact, graph.resolved_specification().unwrap());
         assert_eq!(artifact.entries().len(), 2);
-        for (record, node) in artifact.entries().iter().zip(graph.graph().nodes()) {
+        for (record, node) in artifact.entries().iter().zip(graph.nodes()) {
             let (specification, order) =
                 specification_value(node.document.model().document()).unwrap();
             assert_eq!(record.specification, specification);

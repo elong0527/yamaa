@@ -78,6 +78,8 @@ pub use row_stages::{read_requires_window, window_stages};
 mod row_drivers;
 mod windows;
 pub use windows::{ContextWindow, OrderTerm, Window, WindowKind};
+pub mod resolved;
+pub use resolved::{ResolutionError, ResolvedPlan};
 
 /// Already bound expressions; no host joins or lookup fallback are implicit.
 #[derive(Clone, Debug, PartialEq)]

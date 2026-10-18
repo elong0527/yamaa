@@ -799,10 +799,11 @@ mod report_tests {
             )
         }
         fn owned(&self, language: Language) -> OwnedAttempt<Infallible> {
-            self.graph(language)
-                .unwrap_or_else(|error| panic!("graph fixture: {:?}", error.error()))
-                .into_build()
-                .build_owned_reported(&mut NoActivation, id(), scope())
+            let graph = self
+                .graph(language)
+                .unwrap_or_else(|error| panic!("graph fixture: {:?}", error.error()));
+            let build = graph.build();
+            build.build_owned_reported(&mut build.run_scope(None), &mut NoActivation, id(), scope())
         }
         fn remove_inputs(&self) {
             for name in ["root.yaml", "producer.yaml", "input.csv"] {
@@ -904,7 +905,8 @@ mod report_tests {
                     )
                     .unwrap();
                     let result = crate::file_application::plain(
-                        prepared,
+                        &prepared,
+                        &mut prepared.run_scope(None),
                         id(),
                         yamaa_core::application_observer::Scope::default(),
                     )
@@ -914,7 +916,7 @@ mod report_tests {
                 }
                 "project" => {
                     study.write("project.yaml", "schema_version: '1.0'\n");
-                    let mut prepared = crate::file_project::FileProject::prepare(
+                    let prepared = crate::file_project::FileProject::prepare(
                         resources(),
                         "producer.yaml",
                         "project.yaml",
@@ -924,6 +926,7 @@ mod report_tests {
                     )
                     .unwrap();
                     let attempt = prepared.build(
+                        &mut prepared.run_scope(None),
                         &mut NoActivation,
                         yamaa_core::application_observer::Scope::default(),
                     );
@@ -1543,11 +1546,10 @@ mod report_tests {
     fn caller_authored_reported_success_cannot_gain_any_report_save_authority() {
         let study = Study::new();
         study.fixture(false, false, true);
-        let actual = study
-            .graph(Language::Python)
-            .unwrap()
-            .into_build()
-            .build_reported(&mut NoActivation, id(), scope());
+        let graph = study.graph(Language::Python).unwrap();
+        let build = graph.build();
+        let actual =
+            build.build_reported(&mut build.run_scope(None), &mut NoActivation, id(), scope());
         assert!(actual.accepted());
         let authored = NativeAttempt {
             provenance: Arc::clone(&actual.provenance),

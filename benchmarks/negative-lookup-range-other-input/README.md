@@ -24,8 +24,8 @@ before any data is read; no artifact is accepted.
 
 Decide which age selects the band; usually it is the subject's age as
 recorded in demographics. Bring that age onto each laboratory row as its
-own column, matched to the result by study and subject, and choose the
-band by that column:
+own column, matched to the result by study and subject and declared before
+the range limits, and choose the band by that column:
 
 ```yaml
 columns:

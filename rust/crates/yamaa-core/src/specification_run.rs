@@ -200,7 +200,7 @@ pub struct InspectionFailure<E> {
 pub fn inspection_declaration_diagnostics<'a, E>(
     prepared: &'a PreparedSpecification,
     failures: &[InspectionFailure<E>],
-) -> impl Iterator<Item = &'a crate::diagnostic::Diagnostic> {
+) -> impl Iterator<Item = &'a crate::diagnostic::Diagnostic> + use<'a, E> {
     let missing = !failures.is_empty()
         && failures
             .iter()

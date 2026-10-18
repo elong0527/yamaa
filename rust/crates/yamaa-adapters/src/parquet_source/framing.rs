@@ -1,6 +1,7 @@
 //! Admission of held Parquet framing before the general codec sees metadata.
 //! No decompression or semantic type decisions occur here.
 use super::compact::{self, Sequence, Value};
+use super::wire::{self, Shape};
 
 #[derive(Debug)]
 pub(super) enum Error {
@@ -146,6 +147,8 @@ pub(super) fn admit(bytes: &[u8]) -> Result<Framing<'_>, Error> {
         .ok_or(Error::Malformed)?;
     let metadata = &bytes[start..footer];
     let (root, _) = compact::parse(metadata)?;
+    // The native decoder reads every known field by its declared type.
+    wire::check(root, Shape::FileMetaData)?;
     let declared_rows = count(root.field(3)?)?;
     let groups = sequence(root.field(4)?)?;
     let schema = sequence(root.field(2)?)?;
@@ -184,6 +187,7 @@ pub(super) fn admit(bytes: &[u8]) -> Result<Framing<'_>, Error> {
             }
             while offset < end {
                 let (header, used) = compact::parse(&bytes[offset..end])?;
+                wire::check(header, Shape::PageHeader)?;
                 let uncompressed = count(header.field(2)?)?;
                 let compressed = count(header.field(3)?)?;
                 let payload = match integer(header.field(1)?)? {

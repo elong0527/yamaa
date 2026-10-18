@@ -228,6 +228,7 @@ mod file {
             fn build(&self) -> file_application::Domain {
                 let path = self.text("spec.yaml");
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
                         environment: None,
@@ -271,10 +272,11 @@ mod file {
             let path = study.text("spec.yaml");
             let (mut resources, entry) = file_configuration::resources(&path).unwrap();
             let original = resources.capture("input.csv").unwrap().0;
-            let mut prepared = FileSpecification::prepare(resources, &entry).unwrap();
+            let prepared = FileSpecification::prepare(resources, &entry).unwrap();
             let reads = prepared.capture_reads();
             fs::write(study.0.join("input.csv"), b"ID\n2\n").unwrap();
-            let attempt = prepared.build(Scope::default());
+            let mut run_scope = prepared.run_scope(None);
+            let attempt = prepared.build(&mut run_scope, Scope::default());
             assert!(matches!(
                 &attempt.result,
                 Err(PortError::Capture(
@@ -282,7 +284,7 @@ mod file {
                 ))
             ));
             assert!(file_preparation::opaque_resource_failure(&attempt).is_none());
-            assert_eq!(prepared.capture_reads(), reads);
+            assert_eq!(run_scope.capture_reads(), reads);
             assert_eq!(original.as_ref(), b"ID\n1\n");
             let result =
                 specification_report::build_result(prepared.run(), &attempt, identity(&path))
@@ -315,6 +317,7 @@ mod file {
             let path = study.text("absent.yaml");
             let project = study.text("absent-project.yaml");
             let issues = file_application::check(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &path,
                     environment: Some(&project),
@@ -342,6 +345,7 @@ mod file {
             .unwrap();
             let path = study.text("spec.yaml");
             let issues = file_application::domain(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &path,
                     environment: None,
@@ -368,6 +372,7 @@ mod file {
             fs::write(study.0.join("spec.yaml"), VALID).unwrap();
             let path = study.text("spec.yaml");
             assert!(file_application::check(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &path,
                     environment: None
@@ -393,6 +398,7 @@ mod file {
             .unwrap();
             let path = study.text("spec.yaml");
             let issues = file_application::domain(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &path,
                     environment: None,
@@ -412,6 +418,7 @@ mod file {
             fs::remove_dir(study.0.join("input.unknown")).unwrap();
             fs::write(study.0.join("input.unknown"), b"ID\n1\n").unwrap();
             let issues = file_application::domain(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &path,
                     environment: None,
@@ -490,16 +497,26 @@ mod file {
             let (resources, entry) =
                 file_configuration::resources(&study.text("entry/spec.yaml")).unwrap();
             assert_eq!(resources.capture_reads(), 0);
-            let mut prepared = FileSpecification::prepare(resources, &entry).unwrap();
+            let prepared = FileSpecification::prepare(resources, &entry).unwrap();
             assert_eq!(prepared.capture_reads(), 1);
-            assert!(prepared.build(Scope::default()).result.is_err());
-            assert_eq!(prepared.capture_reads(), 1);
+            let mut run_scope = prepared.run_scope(None);
+            assert!(prepared
+                .build(&mut run_scope, Scope::default())
+                .result
+                .is_err());
+            assert_eq!(run_scope.capture_reads(), 1);
             fs::write(study.0.join("entry/input.csv"), b"ID\n1\n").unwrap();
             fs::write(study.0.join("yamaa-project.yaml"), b"[changed").unwrap();
-            assert!(prepared.build(Scope::default()).result.is_ok());
-            assert_eq!(prepared.capture_reads(), 2);
-            assert!(prepared.build(Scope::default()).result.is_ok());
-            assert_eq!(prepared.capture_reads(), 2);
+            assert!(prepared
+                .build(&mut run_scope, Scope::default())
+                .result
+                .is_ok());
+            assert_eq!(run_scope.capture_reads(), 2);
+            assert!(prepared
+                .build(&mut run_scope, Scope::default())
+                .result
+                .is_ok());
+            assert_eq!(run_scope.capture_reads(), 2);
         }
         #[test]
         fn parent_and_absolute_local_paths_build_and_save_held_bytes() {
@@ -526,6 +543,7 @@ mod file {
                 .unwrap();
                 let path = study.text("entry/spec.yaml");
                 let mut result = file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
                         environment: None,
@@ -555,6 +573,7 @@ mod file {
             .unwrap();
             let path = study.text("entry/spec.yaml");
             let mut result = file_application::domain(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &path,
                     environment: None,
@@ -673,6 +692,7 @@ mod file {
             let path = root.join("spec.yaml");
             let path = path.to_str().unwrap();
             let mut result = file_application::domain(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: path,
                     environment: None,
@@ -793,10 +813,18 @@ mod file {
                         environment,
                     };
                     for issues in [
-                        file_application::check(request(), identity(&spec)),
-                        file_application::domain(request(), identity(&spec))
-                            .err()
-                            .expect("refused before execution"),
+                        file_application::check(
+                            yamaa_core::project_function::Language::Python,
+                            request(),
+                            identity(&spec),
+                        ),
+                        file_application::domain(
+                            yamaa_core::project_function::Language::Python,
+                            request(),
+                            identity(&spec),
+                        )
+                        .err()
+                        .expect("refused before execution"),
                     ] {
                         assert_eq!(issues.len(), 1, "{resource}, {environment:?}");
                         let issue = &issues[0];
@@ -821,6 +849,7 @@ mod file {
                     fs::write(study.0.join("input.csv"), "ID\n1\n").unwrap();
                     for environment in [None, Some(project.as_str())] {
                         assert!(file_application::check(
+                            yamaa_core::project_function::Language::Python,
                             Request {
                                 specification: &spec,
                                 environment,
@@ -830,6 +859,7 @@ mod file {
                         .is_empty());
                     }
                     let mut domain = file_application::domain(
+                        yamaa_core::project_function::Language::Python,
                         Request {
                             specification: &spec,
                             environment: None,
@@ -871,10 +901,18 @@ mod file {
                     environment,
                 };
                 for issues in [
-                    file_application::check(request(), identity(&spec)),
-                    file_application::domain(request(), identity(&spec))
-                        .err()
-                        .unwrap(),
+                    file_application::check(
+                        yamaa_core::project_function::Language::Python,
+                        request(),
+                        identity(&spec),
+                    ),
+                    file_application::domain(
+                        yamaa_core::project_function::Language::Python,
+                        request(),
+                        identity(&spec),
+                    )
+                    .err()
+                    .unwrap(),
                 ] {
                     assert_eq!(issues.len(), 1);
                     assert_eq!(issues[0].phase, "validation");
@@ -923,9 +961,15 @@ mod file {
                     specification: &spec,
                     environment,
                 };
-                assert!(file_application::check(request(), identity(&spec)).is_empty());
+                assert!(file_application::check(
+                    yamaa_core::project_function::Language::Python,
+                    request(),
+                    identity(&spec)
+                )
+                .is_empty());
             }
             let mut domain = file_application::domain(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &spec,
                     environment: None,
@@ -968,13 +1012,17 @@ mod file {
                     panic!("functionless row build must not invoke")
                 }
             }
-            let mut project = yamaa_adapters::project_application::prepare(
+            let project = yamaa_adapters::project_application::prepare(
                 &spec,
                 &project_file,
                 yamaa_core::project_function::Language::Python,
             )
             .unwrap();
-            let attempt = project.build(&mut NoFunctions, Scope::default());
+            let attempt = project.build(
+                &mut project.run_scope(None),
+                &mut NoFunctions,
+                Scope::default(),
+            );
             assert!(attempt.boundary.is_ok());
             let result = yamaa_adapters::project_report::build_result(
                 project.run(),
@@ -1032,6 +1080,7 @@ mod file {
             let project = study.project();
             for environment in [None, Some(project.as_str())] {
                 assert!(file_application::check(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &spec,
                         environment
@@ -1041,6 +1090,7 @@ mod file {
                 .is_empty());
             }
             let mut result = file_application::domain(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &spec,
                     environment: None,
@@ -1071,10 +1121,18 @@ mod file {
                     environment,
                 };
                 for issues in [
-                    file_application::check(request(), identity(&spec)),
-                    file_application::domain(request(), identity(&spec))
-                        .err()
-                        .unwrap(),
+                    file_application::check(
+                        yamaa_core::project_function::Language::Python,
+                        request(),
+                        identity(&spec),
+                    ),
+                    file_application::domain(
+                        yamaa_core::project_function::Language::Python,
+                        request(),
+                        identity(&spec),
+                    )
+                    .err()
+                    .unwrap(),
                 ] {
                     assert_eq!(issues.len(), 1);
                     let issue = &issues[0];
@@ -1272,10 +1330,10 @@ mod file {
             study.write("root.yaml", &root);
             let graph = study.graph().unwrap();
             assert_eq!(graph.capture_reads(), 4);
-            let nodes = graph.graph().nodes();
+            let nodes = graph.nodes();
             assert_eq!(nodes.len(), 4);
             assert_eq!(nodes[0].document.source().bytes, root.as_bytes());
-            assert_eq!(graph.graph().metadata().order(), [3, 1, 2, 0]);
+            assert_eq!(graph.metadata().order(), [3, 1, 2, 0]);
             assert!(Arc::ptr_eq(
                 &nodes[0].producers[1].document,
                 &nodes[0].producers[2].document
@@ -1284,10 +1342,7 @@ mod file {
                 &nodes[1].producers[0].document,
                 &nodes[2].producers[0].document
             ));
-            assert_eq!(
-                graph.graph().metadata().nodes()[0].dependencies(),
-                [1, 2, 2]
-            );
+            assert_eq!(graph.metadata().nodes()[0].dependencies(), [1, 2, 2]);
             let paths = graph.captured_sources().map(|(p, _)| p).collect::<Vec<_>>();
             assert!(paths.iter().all(|p| p.ends_with(".yaml")));
             for path in [
@@ -1329,8 +1384,8 @@ mod file {
         "schema_version: '1.0'\nparents: [origins/schema.yaml, origins/path.yaml]\ndomain: ROOT\n",
     );
             let graph = study.graph().unwrap();
-            let p = &graph.graph().nodes()[0].producers[0];
-            let declaration = &graph.graph().metadata().nodes()[0].producers()[0];
+            let p = &graph.nodes()[0].producers[0];
+            let declaration = &graph.metadata().nodes()[0].producers()[0];
             assert_eq!(p.schema_identity, study.path("producer/p.yaml"));
             assert_eq!(p.source_identity, study.path("data/p.csv"));
             assert_eq!(p.output_identity, study.path("data/p.csv"));
@@ -1519,11 +1574,11 @@ mod file {
             )
             .unwrap();
             assert_eq!(
-                graph.graph().nodes()[0].producers[0].schema_identity,
+                graph.nodes()[0].producers[0].schema_identity,
                 study.path("fallback/p.yaml")
             );
             assert_eq!(
-                graph.graph().nodes()[0].producers[0].output_identity,
+                graph.nodes()[0].producers[0].output_identity,
                 study.path("fallback/p.csv")
             );
             assert_eq!(graph.capture_reads(), 2);
@@ -1692,7 +1747,7 @@ mod file {
             );
             let graph = study.graph().unwrap();
             assert_eq!(
-                graph.graph().nodes()[0].producers[0].schema_identity,
+                graph.nodes()[0].producers[0].schema_identity,
                 root.join("leaf.yaml").to_str().unwrap()
             );
             assert_eq!(graph.capture_reads(), 2);
@@ -1761,7 +1816,7 @@ mod file {
         #[test]
         fn standalone_retains_entry_and_checks_without_study_capture() {
             let study = Study::new();
-            let mut prepared = study.prepare(VALID).unwrap();
+            let prepared = study.prepare(VALID).unwrap();
             assert_eq!(prepared.capture_reads(), 1);
             assert_eq!(prepared.run().document().source().bytes, VALID.as_bytes());
             assert_eq!(
@@ -1772,10 +1827,17 @@ mod file {
             // Compilation uses the retained original model rather than reopening entry YAML.
             fs::write(study.0.join("entry/spec.yaml"), b"[changed").unwrap();
             fs::write(study.0.join("entry/input.csv"), b"ID\n1\n").unwrap();
-            assert!(prepared.build(Scope::default()).result.is_ok());
-            assert_eq!(prepared.capture_reads(), 2);
-            assert!(prepared.build(Scope::default()).result.is_ok());
-            assert_eq!(prepared.capture_reads(), 2);
+            let mut run_scope = prepared.run_scope(None);
+            assert!(prepared
+                .build(&mut run_scope, Scope::default())
+                .result
+                .is_ok());
+            assert_eq!(run_scope.capture_reads(), 2);
+            assert!(prepared
+                .build(&mut run_scope, Scope::default())
+                .result
+                .is_ok());
+            assert_eq!(run_scope.capture_reads(), 2);
         }
 
         #[cfg(unix)]
@@ -1788,7 +1850,7 @@ mod file {
             fs::write(root.join("input.csv"), b"ID\n1\n").unwrap();
             let resources =
                 Resources::new(root.to_str().unwrap(), root.to_str().unwrap(), &[]).unwrap();
-            let mut prepared = FileSpecification::prepare(resources, "spec.yaml").unwrap();
+            let prepared = FileSpecification::prepare(resources, "spec.yaml").unwrap();
             assert_eq!(
                 prepared.run().document().source().identity,
                 fs::canonicalize(root.join("spec.yaml"))
@@ -1797,8 +1859,12 @@ mod file {
                     .unwrap()
             );
             assert_eq!(prepared.capture_reads(), 1);
-            assert!(prepared.build(Scope::default()).result.is_ok());
-            assert_eq!(prepared.capture_reads(), 2);
+            let mut run_scope = prepared.run_scope(None);
+            assert!(prepared
+                .build(&mut run_scope, Scope::default())
+                .result
+                .is_ok());
+            assert_eq!(run_scope.capture_reads(), 2);
         }
         #[test]
         fn entry_version_finding_precedes_parent_and_study_authority() {
@@ -1851,7 +1917,7 @@ mod file {
         fn inherited_paths_rebase_lexically_and_shared_parent_bytes_are_retained_once() {
             let study = Study::new();
             fs::write(study.0.join("parent/base.yaml"), VALID).unwrap();
-            let mut prepared = study
+            let prepared = study
         .prepare("schema_version: '1.0'\nparents: [../parent/base.yaml, ../parent/./base.yaml]\n")
         .unwrap();
             assert_eq!(prepared.capture_reads(), 2);
@@ -1867,10 +1933,17 @@ mod file {
                 "[]"
             );
             fs::write(study.0.join("parent/input.csv"), b"ID\n1\n").unwrap();
-            assert!(prepared.build(Scope::default()).result.is_ok());
-            assert_eq!(prepared.capture_reads(), 3);
-            assert!(prepared.build(Scope::default()).result.is_ok());
-            assert_eq!(prepared.capture_reads(), 3);
+            let mut run_scope = prepared.run_scope(None);
+            assert!(prepared
+                .build(&mut run_scope, Scope::default())
+                .result
+                .is_ok());
+            assert_eq!(run_scope.capture_reads(), 3);
+            assert!(prepared
+                .build(&mut run_scope, Scope::default())
+                .result
+                .is_ok());
+            assert_eq!(run_scope.capture_reads(), 3);
         }
         #[cfg(unix)]
         #[test]
@@ -1957,7 +2030,7 @@ mod file {
                 } else {
                     "spec.yaml"
                 };
-                let mut prepared = FileSpecification::prepare(
+                let prepared = FileSpecification::prepare(
                     Resources::new(case.to_str().unwrap(), case.to_str().unwrap(), &[]).unwrap(),
                     entry,
                 )
@@ -1979,6 +2052,7 @@ mod file {
                     .iter()
                     .map(|read| read["snapshots_created"].as_u64().unwrap_or(0) as usize)
                     .sum::<usize>();
+                let mut run_scope = prepared.run_scope(None);
                 for repeated in [false, true] {
                     if repeated {
                         for read in expected["source_reads"].as_array_mut().unwrap() {
@@ -1987,7 +2061,7 @@ mod file {
                             }
                         }
                     }
-                    let attempt = prepared.build(Scope::default());
+                    let attempt = prepared.build(&mut run_scope, Scope::default());
                     let result = specification_report::build_result(
                         prepared.run(),
                         &attempt,
@@ -2007,7 +2081,7 @@ mod file {
                         "{name} repeated={repeated}"
                     );
                     assert_eq!(
-                        prepared.capture_reads(),
+                        run_scope.capture_reads(),
                         preparation_reads + expected_reads,
                         "{name}"
                     );

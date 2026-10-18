@@ -71,14 +71,46 @@ pub(super) fn declaration_findings(
             finding.text("expected", "at least one match pair");
             findings.push(PreflightFinding::Scalar(finding.diagnostic()));
         }
+        // A list pairs each column with its same-named value once (REQ-0115).
+        if let Some(N::Sequence(columns)) = d.field(item, "key").map(|key| &d.nodes()[key]) {
+            for (position, &column) in columns.iter().enumerate() {
+                let column = text(d, column)?;
+                if columns[..position]
+                    .iter()
+                    .any(|&prior| text(d, prior).is_ok_and(|prior| prior == column))
+                {
+                    let mut finding = LookupFinding::new(
+                        &format!("{path}.key[{position}]"),
+                        C::IntermediateRepeatedKey,
+                    );
+                    finding.text("intermediate", name);
+                    finding.text("dataset", dataset);
+                    finding.text("identifier", column);
+                    finding.text("expected", "each column once");
+                    findings.push(PreflightFinding::Scalar(finding.diagnostic()));
+                }
+            }
+        }
         if is_rename_only(d, item) {
             let mut finding = LookupFinding::new(&path, C::IntermediateRenameOnly);
             finding.text("intermediate", name);
             finding.text("dataset", dataset);
             findings.push(PreflightFinding::Scalar(finding.diagnostic()));
         }
-        for (declared, missing) in [("order_by", "keep"), ("keep", "order_by")] {
-            if present(d, item, declared) && !present(d, item, missing) {
+        // An `order_by` with no term orders nothing, so a `keep` beside it has no
+        // order to choose by, as for a source's selection (REQ-0119).
+        let ordered = d
+            .field(item, "order_by")
+            .is_some_and(|id| matches!(&d.nodes()[id], N::Sequence(terms) if !terms.is_empty()));
+        for (declared, missing, unpaired) in [
+            (
+                "order_by",
+                "keep",
+                present(d, item, "order_by") && !present(d, item, "keep"),
+            ),
+            ("keep", "order_by", present(d, item, "keep") && !ordered),
+        ] {
+            if unpaired {
                 let mut finding = LookupFinding::new(&path, C::IntermediateSelectionUnpaired);
                 finding.text("intermediate", name);
                 finding.texts("declared", &[declared]);

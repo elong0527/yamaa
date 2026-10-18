@@ -120,7 +120,7 @@ run$output
 run$save()             # write adsl.csv
 ```
 
-Source installation requires R 4.6.1, Rust 1.90.0/Cargo and platform build tools.
+Source installation requires R 4.6.1, Rust 1.90 or later with Cargo, and platform build tools.
 To build a checkout candidate, follow
 [the R package guide](https://github.com/elong0527/yamaa/blob/main/R/yamaa/README.md).
 Release assets come from the complete native qualification workflow. CRAN and r-universe

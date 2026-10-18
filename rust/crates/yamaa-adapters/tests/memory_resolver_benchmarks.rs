@@ -987,15 +987,16 @@ impl RuntimePort for MemoryRuntime<'_> {
 
     fn plain(
         &mut self,
-        prepared: FileSpecification,
+        prepared: &FileSpecification,
         scope: Scope<'_>,
     ) -> Result<Built, file_application::Failure> {
-        file_application::plain(prepared, self.identity(), scope).map(Built::Domain)
+        let mut run_scope = prepared.run_scope(None);
+        file_application::plain(prepared, &mut run_scope, self.identity(), scope).map(Built::Domain)
     }
 
     fn project(
         &mut self,
-        mut project: Box<yamaa_adapters::file_project::FileProject>,
+        project: &yamaa_adapters::file_project::FileProject,
         scope: Scope<'_>,
     ) -> Result<Built, file_application::Failure> {
         if !project.run().compiled().called_functions().is_empty() {
@@ -1004,7 +1005,8 @@ impl RuntimePort for MemoryRuntime<'_> {
                 Some("environment"),
             ));
         }
-        let attempt = project.build(&mut NoActivation, scope);
+        let mut run_scope = project.run_scope(None);
+        let attempt = project.build(&mut run_scope, &mut NoActivation, scope);
         let result = yamaa_adapters::project_report::build_result(
             project.run(),
             &attempt,
@@ -1012,17 +1014,19 @@ impl RuntimePort for MemoryRuntime<'_> {
             &[],
         )
         .map_err(|error| error.refusal().issues())?;
-        Domain::from_project(result, &project).map(Built::Domain)
+        Domain::from_project(result, project, &run_scope).map(Built::Domain)
     }
 
     fn producer(
         &mut self,
-        graph: Box<FileGraph>,
+        graph: &FileGraph,
         scope: Scope<'_>,
     ) -> Result<Built, file_application::Failure> {
-        let mut build = graph.into_build();
+        let build = graph.build();
+        let mut run_scope = build.run_scope(None);
         let mut activation = NoActivation;
-        let owned = build.build_owned_reported(&mut activation, self.identity(), scope);
+        let owned =
+            build.build_owned_reported(&mut run_scope, &mut activation, self.identity(), scope);
         match yamaa_adapters::producer_result::prepare_owned_classified(
             &owned,
             self.identity(),

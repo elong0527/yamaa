@@ -7,7 +7,7 @@ host_truth <- read_host_fixture(host_fixture_root,"public-contract")
 messages <- host_truth[["messages"]]
 namespace <- asNamespace("yamaa")
 
-stopifnot(identical(as.character(packageVersion("yamaa")), "0.4.0"),
+stopifnot(identical(as.character(packageVersion("yamaa")), "0.5.0"),
   identical(yamaa:::.core_version(), as.character(packageVersion("yamaa"))),
   identical(sort(getNamespaceExports("yamaa")), c("yamaa_project", "yamaa_read_odm", "yamaa_spec")),
   identical(getNamespaceInfo("yamaa", "S3methods")[, 3L], "[[.yamaa_project_run"))

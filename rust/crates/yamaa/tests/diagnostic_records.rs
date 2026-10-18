@@ -159,3 +159,45 @@ fn integer_tokens_beyond_sixty_four_bits_stay_exact_numbers() {
         assert_eq!(diagnostic.operand_route, None);
     }
 }
+
+/// `check` takes the host language from the engine options, never from the
+/// runtime name: an embedder may name its runtime anything (#2838). The
+/// project links only an R environment file, which declares a field no
+/// environment file has, so only an R engine opens it and reports the field,
+/// and `check` and `build` agree on it.
+#[test]
+fn check_takes_the_host_language_from_the_options_not_the_runtime_name() {
+    const SPECIFICATION: &[u8] = b"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {VALUE: float}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n";
+    const PROJECT: &[u8] = b"schema_version: '1.0'\nenvironments: {r: environment.yaml}\n";
+    const ENVIRONMENT: &[u8] = b"schema_version: '1.0'\nlanguage: r\n";
+    for (host, opened) in [(HostLanguage::R, true), (HostLanguage::Python, false)] {
+        let resolver = Arc::new(MemoryResolver::new());
+        resolver.insert("/", "spec.yaml", "spec:1", Arc::from(SPECIFICATION));
+        resolver.insert("/", "project.yaml", "project:1", Arc::from(PROJECT));
+        resolver.insert(
+            "/project.yaml",
+            "environment.yaml",
+            "environment:1",
+            Arc::from(ENVIRONMENT),
+        );
+        let engine = Engine::new(
+            EngineOptions::new(host, "embedder".into(), "0".into()).with_resolver(resolver),
+        );
+        let token = CancellationToken::new();
+        let request = Request::new("spec.yaml").with_environment("project.yaml");
+        let checked = engine.check(&request, &token);
+        let built = engine
+            .build(&request, &token)
+            .expect("adjudicated outcomes return an owned build");
+        for (route, report) in [("check", &checked), ("build", built.report())] {
+            let reported = report.diagnostics.iter().any(|diagnostic| {
+                diagnostic.code == "unknown_field" && diagnostic.spec_path == ["language"]
+            });
+            assert_eq!(
+                reported,
+                opened && cfg!(feature = "yaml"),
+                "{host:?} {route}: {report:?}"
+            );
+        }
+    }
+}

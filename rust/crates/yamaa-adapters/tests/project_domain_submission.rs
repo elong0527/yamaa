@@ -29,6 +29,7 @@ mod project {
                 let path = self.0.join("spec.yaml");
                 let path = path.to_str().unwrap();
                 file_application::check(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: path,
                         environment: None,
@@ -80,6 +81,7 @@ mod project {
                 let path = study.0.join("spec.yaml");
                 let path = path.to_str().unwrap();
                 let mut run = file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: path,
                         environment: None,
@@ -213,6 +215,7 @@ mod project {
             let path = study.0.join("spec.yaml");
             let path = path.to_str().unwrap();
             let mut run = file_application::domain(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: path,
                     environment: None,
@@ -359,7 +362,7 @@ mod project {
         /// Build one specification on the project route; its run calls no
         /// project function, so the activation port is never entered.
         fn project_domain(path: &str, project_path: &str) -> file_application::Domain {
-            let yamaa_adapters::file_workflow::Selected::Ordinary(mut project) =
+            let yamaa_adapters::file_workflow::Selected::Ordinary(project) =
                 yamaa_adapters::file_workflow::select(
                     path,
                     project_path,
@@ -374,7 +377,8 @@ mod project {
             else {
                 panic!("ordinary metadata capability")
             };
-            let attempt = project.build(&mut NoActivation, Scope::default());
+            let mut run_scope = project.run_scope(None);
+            let attempt = project.build(&mut run_scope, &mut NoActivation, Scope::default());
             let result = yamaa_adapters::project_report::build_result(
                 project.run(),
                 &attempt,
@@ -382,7 +386,7 @@ mod project {
                 &[],
             )
             .unwrap();
-            file_application::Domain::from_project(result, &project).unwrap()
+            file_application::Domain::from_project(result, &project, &run_scope).unwrap()
         }
 
         #[test]
@@ -462,6 +466,7 @@ mod project {
                 let path = study.0.join("spec.yaml");
                 let path = path.to_str().unwrap();
                 let run = file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: path,
                         environment: None,
@@ -518,7 +523,7 @@ mod project {
                 let path = study.0.join("spec.yaml");
                 let path = path.to_str().unwrap();
                 let project_path = study.0.join("project.yaml");
-                let yamaa_adapters::file_workflow::Selected::Ordinary(mut project) =
+                let yamaa_adapters::file_workflow::Selected::Ordinary(project) =
                     yamaa_adapters::file_workflow::select(
                         path,
                         project_path.to_str().unwrap(),
@@ -543,7 +548,8 @@ mod project {
                 assert!(!study.0.join("catalog/never-read.csv").exists());
                 assert!(!study.0.join("input.csv").exists());
                 fs::write(study.0.join("input.csv"), "ID,VALUE\n1,DM\n2,renamed\n3,\n").unwrap();
-                let attempt = project.build(&mut NoActivation, Scope::default());
+                let mut run_scope = project.run_scope(None);
+                let attempt = project.build(&mut run_scope, &mut NoActivation, Scope::default());
                 let result = yamaa_adapters::project_report::build_result(
                     project.run(),
                     &attempt,
@@ -551,7 +557,8 @@ mod project {
                     &[],
                 )
                 .unwrap();
-                let run = file_application::Domain::from_project(result, &project).unwrap();
+                let run =
+                    file_application::Domain::from_project(result, &project, &run_scope).unwrap();
                 assert_eq!(run.issues().len(), 1);
                 assert_eq!(run.issues()[0].requirement.as_deref(), Some("REQ-1156"));
                 assert_eq!(yamaa_adapters::json_wire::encode(&run.issues()[0].context),"{\"column\":\"VALUE\",\"failure_count\":1,\"keys\":[{\"ID\":2}],\"values\":[\"renamed\"]}");
@@ -569,6 +576,7 @@ mod project {
             let path = study.0.join("spec.yaml");
             let path = path.to_str().unwrap();
             let run = file_application::domain(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: path,
                     environment: None,
@@ -648,6 +656,7 @@ mod project {
                 let path = study.0.join("spec.yaml");
                 let path = path.to_str().unwrap();
                 let mut run = file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: path,
                         environment: None,
@@ -687,6 +696,7 @@ mod project {
                 let path = study.0.join("spec.yaml");
                 let path = path.to_str().unwrap();
                 let mut run = file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: path,
                         environment: None,
@@ -704,6 +714,65 @@ mod project {
                     "ID,RESULT,LBTESTCD\n1,é字😀,GLUC\n2,,GLUC\n1,é字😀,CREAT\n2,,CREAT\n"
                 );
             }
+        }
+        /// A per-value check finds the rows of its code by comparing the code with
+        /// the test code column, which must therefore hold text (REQ-1164). Where
+        /// value metadata builds no such check, no code is compared.
+        #[test]
+        fn per_value_checks_over_a_nontext_test_code_fail_before_data() {
+            let integer = |raw: String| {
+                raw.replace("{name: LBTESTCD, type: str}", "{name: LBTESTCD, type: int}")
+                    .replace("{literal: GLUC}", "{literal: '1'}")
+                    .replace("{literal: CREAT}", "{literal: '2'}")
+            };
+            let study = Study::new();
+            let issues = study.check(&integer(value_length_spec("5")));
+            assert_eq!(issues.len(), 1, "{issues:?}");
+            assert_eq!(
+                (
+                    issues[0].phase.as_str(),
+                    issues[0].condition.as_str(),
+                    issues[0].requirement.as_deref()
+                ),
+                (
+                    "validation",
+                    "value_metadata_requires_literal_testcd",
+                    Some("REQ-1164")
+                )
+            );
+            assert_eq!(issues[0].spec_paths, ["rows.glucose.submission"]);
+            assert_eq!(
+                yamaa_adapters::json_wire::encode(&issues[0].context),
+                "{\"declared_type\":\"int\",\"discriminator\":\"LBTESTCD\"}"
+            );
+            let origin_only = ROW_CT.replace("codelist: DEFAULT", "length: 3").replace(
+                "{codelist: GLUCOSE}",
+                "{origin: {type: Collected, source: Vendor}}",
+            );
+            for raw in [value_length_spec("3"), origin_only] {
+                let issues = study.check(&integer(raw));
+                assert!(issues.is_empty(), "{issues:?}");
+            }
+            // A per-value codelist the project binds selects its rows the same way.
+            fs::write(study.0.join("spec.yaml"), integer(ROW_CT.into())).unwrap();
+            fs::write(study.0.join("project.yaml"), CT_PROJECT).unwrap();
+            let path = study.0.join("spec.yaml");
+            let project = study.0.join("project.yaml");
+            let Err(error) = yamaa_adapters::file_workflow::select(
+                path.to_str().unwrap(),
+                project.to_str().unwrap(),
+                yamaa_core::project_function::Language::Python,
+            ) else {
+                panic!("a per-value codelist over an integer test code was admitted");
+            };
+            let issues = yamaa_adapters::project_application::selection_failure(&error);
+            assert_eq!(issues.len(), 1, "{issues:?}");
+            assert_eq!(
+                issues[0].condition,
+                "value_metadata_requires_literal_testcd"
+            );
+            assert_eq!(issues[0].spec_paths, ["rows.glucose.submission"]);
+            assert!(!study.0.join("input.csv").exists());
         }
         #[test]
         fn effective_value_metadata_rejects_invalid_bounds_types_and_explicit_length_conflicts_before_data(

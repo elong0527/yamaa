@@ -291,7 +291,9 @@ def _wrap(document: Document, line: int) -> str | None:
     """Rewrite one overlong line by the first strategy that applies."""
     for node, column, role in _block_context(document):
         start, end = node.start_mark, node.end_mark
-        if not isinstance(node, yaml.ScalarNode) and not node.flow_style:
+        if not isinstance(node, yaml.ScalarNode) and not (
+            isinstance(node, yaml.CollectionNode) and node.flow_style
+        ):
             continue
         if not start.line <= line <= end.line:
             continue

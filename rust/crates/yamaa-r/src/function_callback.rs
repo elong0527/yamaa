@@ -17,7 +17,7 @@ const EXACT_DOUBLE_MAGNITUDE: f64 = 9_007_199_254_740_992.0;
 // R's C API for the bytes and declared encoding of one string; extendr's own
 // string views assume valid UTF-8 without checking it. A `SEXP` is an opaque
 // pointer, declared here as `void *`.
-extern "C" {
+unsafe extern "C" {
     fn STRING_ELT(x: *mut c_void, i: isize) -> *mut c_void;
     fn R_CHAR(x: *mut c_void) -> *const c_char;
     fn Rf_xlength(x: *mut c_void) -> isize;

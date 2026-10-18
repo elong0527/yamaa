@@ -60,3 +60,6 @@ windows-sys = { version = "0.61.2", features = ["Wdk_Foundation", "Wdk_Storage_F
 [build-dependencies]
 # Builds the reviewed read-only SAS input backend when readstat is enabled.
 cc = { version = "1.7.0", optional = true }
+
+[lints]
+workspace = true

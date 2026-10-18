@@ -1,7 +1,7 @@
 //! Original file preparation through retained native resources and the shipped schema.
 use crate::{
     file_metadata::Reader as Native,
-    file_resources::{Error as ResourceError, Resources},
+    file_resources::{Error as ResourceError, Resources, RunScope},
     specification_run::{CapturedAttempt, PreparedRun},
     specification_source::{InheritanceError, Source},
 };
@@ -75,7 +75,8 @@ impl Error {
     }
 }
 
-/// The prepared model and all byte authority remain owned in one application handle.
+/// The prepared model and its compile-time metadata authority. Study inputs,
+/// their snapshots and Save targets belong to each run's [`RunScope`].
 pub struct FileSpecification {
     run: PreparedRun,
     resources: Resources,
@@ -166,13 +167,22 @@ impl FileSpecification {
         crate::resolved_artifact::single(self.run.document(), &self.resources, None)
     }
 
+    /// Open one run's study scope; see [`Resources::run_scope`].
+    pub fn run_scope(
+        &self,
+        resolver: Option<Arc<dyn crate::host_resources::Resolver>>,
+    ) -> RunScope {
+        self.resources.run_scope(resolver)
+    }
     pub(crate) fn publication_target(
         &self,
+        run: &RunScope,
     ) -> Result<crate::resource_publication::AnchoredTarget, ResourceError> {
-        self.publication_field_target("path")
+        self.publication_field_target(run, "path")
     }
     pub(crate) fn publication_field_target(
         &self,
+        run: &RunScope,
         field: &str,
     ) -> Result<crate::resource_publication::AnchoredTarget, ResourceError> {
         let origin = self
@@ -180,14 +190,16 @@ impl FileSpecification {
             .document()
             .written_output_field_origin(field)
             .ok_or(ResourceError::InvalidPath)?;
-        self.resources
+        run.resources()
             .publication_target_from(origin.base_source, origin.written)
     }
+    /// Capture, decode, bind and execute in `run`; this value is unchanged.
     pub fn build(
-        &mut self,
+        &self,
+        run: &mut RunScope,
         scope: yamaa_core::application_observer::Scope<'_>,
     ) -> CapturedAttempt<ResourceError> {
-        self.run.execute_with_port(&mut self.resources, scope)
+        self.run.execute_with_port(run.resources_mut(), scope)
     }
 }
 

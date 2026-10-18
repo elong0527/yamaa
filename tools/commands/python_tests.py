@@ -12,47 +12,67 @@ from tools.conformance.supplemental_inventory import load_catalog
 from tools.paths import ROOT
 
 
-def run_suite(work, staged_path):
-    return subprocess.run(
-        [sys.executable, "-E", "-s", str(work / staged_path)],
-        cwd=work,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-    )
+def run_installed_suites(python, work, workers=None):
+    """Stage the cataloged Python suites into work and run them with python.
 
-
-def main():
+    Each suite is its own process over the staged copy, so they run in
+    parallel; their output is printed in catalog order and every failing
+    suite is reported.
+    """
     catalog = load_catalog(ROOT, ROOT / "rust/qualification/supplemental.json")
+    stage("python", work)
     suites = [
         suite["staged_path"]
         for suite in catalog["suites"]
         if suite["runtime"] == "python"
     ]
+
+    def run(staged_path):
+        return subprocess.run(
+            [str(python), "-E", "-s", str(work / staged_path)],
+            cwd=work,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+
+    with ThreadPoolExecutor(max_workers=workers or os.cpu_count() or 1) as pool:
+        results = list(pool.map(run, suites))
     failed = []
-    with tempfile.TemporaryDirectory(prefix="yamaa-python-tests-") as directory:
-        work = Path(directory)
-        stage("python", work)
-        # Each standalone suite is its own process over the staged copy, so
-        # they run beside pytest; one core stays with pytest.
-        workers = max(1, (os.cpu_count() or 2) - 1)
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            runs = [pool.submit(run_suite, work, path) for path in suites]
-            tests = subprocess.run(
-                [sys.executable, "-m", "pytest", "python/tests", "tools/tests"],
-                cwd=ROOT,
-            )
-            if tests.returncode:
-                failed.append("pytest")
-            # Report in catalog order once each suite has finished.
-            for path, run in zip(suites, runs):
-                result = run.result()
-                print(f"== {path}", flush=True)
-                print(result.stdout, end="", flush=True)
-                if result.returncode:
-                    failed.append(path)
+    for path, result in zip(suites, results):
+        print(f"== {path}", flush=True)
+        print(result.stdout, end="", flush=True)
+        if result.returncode:
+            failed.append(path)
     if failed:
-        sys.exit(f"failed: {', '.join(failed)}")
+        raise RuntimeError(f"installed suites failed: {', '.join(failed)}")
+
+
+def main():
+    failed = []
+    with (
+        tempfile.TemporaryDirectory(prefix="yamaa-python-tests-") as directory,
+        ThreadPoolExecutor(max_workers=1) as background,
+    ):
+        # The suites run beside pytest; one core stays with pytest.
+        suites = background.submit(
+            run_installed_suites,
+            sys.executable,
+            Path(directory),
+            max(1, (os.cpu_count() or 2) - 1),
+        )
+        tests = subprocess.run(
+            [sys.executable, "-m", "pytest", "python/tests", "tools/tests"],
+            cwd=ROOT,
+        )
+        if tests.returncode:
+            failed.append("pytest")
+        try:
+            suites.result()
+        except RuntimeError as error:
+            failed.append(str(error))
+    if failed:
+        sys.exit(f"failed: {'; '.join(failed)}")
 
 
 if __name__ == "__main__":

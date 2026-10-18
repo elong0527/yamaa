@@ -35,6 +35,7 @@ mod execution {
                 let specification = self.0.join("spec.yaml");
                 let specification = specification.to_str().unwrap();
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification,
                         environment: None,
@@ -417,12 +418,21 @@ mod execution {
                     base_directory: ".",
                 };
                 assert_eq!(
-                    issues(&file_application::check(request(), identity())),
+                    issues(&file_application::check(
+                        yamaa_core::project_function::Language::Python,
+                        request(),
+                        identity()
+                    )),
                     case["check_issues"],
                     "{}",
                     yamaa_adapters::json_wire::encode(&case["name"])
                 );
-                let mut result = file_application::domain(request(), identity()).unwrap();
+                let mut result = file_application::domain(
+                    yamaa_core::project_function::Language::Python,
+                    request(),
+                    identity(),
+                )
+                .unwrap();
                 assert_eq!(
                     issues(&result.issues()),
                     case["issues"],
@@ -509,6 +519,7 @@ mod execution {
                     base_directory: ".",
                 };
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,
                         environment: None,
@@ -520,6 +531,7 @@ mod execution {
             fn check(&self) -> Vec<yamaa_adapters::issue_rows::Issue> {
                 let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
                 file_application::check(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,
                         environment: None,
@@ -551,6 +563,7 @@ mod execution {
         ) -> Result<file_application::Domain, Vec<yamaa_adapters::issue_rows::Issue>> {
             let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
             file_application::domain(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &specification,
                     environment: None,
@@ -926,11 +939,20 @@ rows:
                         base_directory: ".",
                     };
                     assert_eq!(
-                        issues(&file_application::check(request(), identity())),
+                        issues(&file_application::check(
+                            yamaa_core::project_function::Language::Python,
+                            request(),
+                            identity()
+                        )),
                         expected,
                         "{row_id}: check inherited={inherited}"
                     );
-                    let built = file_application::domain(request(), identity()).unwrap();
+                    let built = file_application::domain(
+                        yamaa_core::project_function::Language::Python,
+                        request(),
+                        identity(),
+                    )
+                    .unwrap();
                     assert_eq!(
                         issues(&built.issues()),
                         expected,
@@ -976,6 +998,7 @@ rows:
             fn run(&self) -> file_application::Domain {
                 let path = self.path();
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
                         environment: None,
@@ -1058,6 +1081,7 @@ rows:
                     let study = Study::new(&source);
                     let path = study.path();
                     assert!(file_application::check(
+                        yamaa_core::project_function::Language::Python,
                         Request {
                             specification: &path,
                             environment: None
@@ -1184,7 +1208,11 @@ rows:
                     base_directory: ".",
                 };
                 assert_eq!(
-                    rows(&file_application::check(request(), identity())),
+                    rows(&file_application::check(
+                        yamaa_core::project_function::Language::Python,
+                        request(),
+                        identity()
+                    )),
                     case["check_issues"]
                 );
                 for (input, bytes) in case["inputs"].as_object().unwrap() {
@@ -1194,12 +1222,21 @@ rows:
                 }
                 for _ in 0..2 {
                     assert_eq!(
-                        rows(&file_application::check(request(), identity())),
+                        rows(&file_application::check(
+                            yamaa_core::project_function::Language::Python,
+                            request(),
+                            identity()
+                        )),
                         case["check_issues"],
                         "{}",
                         yamaa_adapters::json_wire::encode(&case["name"])
                     );
-                    let mut result = file_application::domain(request(), identity()).unwrap();
+                    let mut result = file_application::domain(
+                        yamaa_core::project_function::Language::Python,
+                        request(),
+                        identity(),
+                    )
+                    .unwrap();
                     assert_eq!(
                         rows(&result.issues()),
                         case["issues"],
@@ -1268,6 +1305,7 @@ rows:
             fn build(&self) -> file_application::Domain {
                 let path = self.0.join("spec.yaml").to_str().unwrap().to_owned();
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
                         environment: None,
@@ -1953,14 +1991,22 @@ rows:
                 };
                 // Invalid types are rejected while every input file is still absent.
                 assert_issues(
-                    &file_application::check(request(), identity()),
+                    &file_application::check(
+                        yamaa_core::project_function::Language::Python,
+                        request(),
+                        identity(),
+                    ),
                     &case["check_issue"],
                     name,
                 );
                 for (path, text) in case["inputs"].as_object().unwrap() {
                     fs::write(fixture.0.join(path), text.as_str().unwrap()).unwrap();
                 }
-                match file_application::domain(request(), identity()) {
+                match file_application::domain(
+                    yamaa_core::project_function::Language::Python,
+                    request(),
+                    identity(),
+                ) {
                     Ok(mut domain) => {
                         assert_issues(&domain.issues(), &case["run_issue"], name);
                         let reached: u64 = domain.observations()["handler_counts"]
@@ -2015,6 +2061,7 @@ rows:
             {
                 let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,
                         environment: None,
@@ -2057,6 +2104,7 @@ rows:
                 // Checking uses declaration types and never reads the absent CSV files.
                 let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
                 let issues = file_application::check(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,
                         environment: None,

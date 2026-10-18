@@ -18,6 +18,7 @@ reviews:
     base_branches:
       - "main"
       - "^review/.*-base$"        # synthetic bases for bounded review-only PRs
+      - "^release/.*$"            # release integration branches while main is frozen
   path_filters:
     - "!**/uv.lock"              # generated lock diffs are noise
     - "!**/Cargo.lock"           # same: canonical lockfile, packaging-tool checksums only

@@ -815,5 +815,61 @@ pub(super) fn admit(
     let values =
         admit_value_declarations(d, columns, rows, &by_name, &output, &intermediates, result)?;
     apply_value_bounds_and_inventory(d, columns, inventory, groups, result, rows, &values)?;
+    discriminator_type_findings(d, columns, rows, groups, &values.0, result)
+}
+
+/// A check applied only to the rows of some test codes finds them by comparing
+/// each code with `<DOMAIN>TESTCD`, so that column must hold text (REQ-1164).
+/// Value-level metadata that builds no such check compares no code.
+fn discriminator_type_findings(
+    d: &Document,
+    columns: &[usize],
+    rows: &[usize],
+    groups: &[verifications::Verifications],
+    discriminator: &str,
+    result: &mut Vec<PreflightFinding>,
+) -> Result<(), PrepareError> {
+    let Some(&column) = columns
+        .iter()
+        .find(|&&node| string(d, node, "name") == Some(discriminator))
+    else {
+        return Ok(());
+    };
+    let declared = text(d, field(d, column, "type")?)?;
+    if declared == "str" {
+        return Ok(());
+    }
+    let mut selected = BTreeSet::new();
+    for check in groups.iter().flat_map(|group| &group.checks) {
+        match &check.check {
+            Check::ValueMaxLength { codes, .. } => {
+                selected.extend(codes.iter().map(String::as_str));
+            }
+            Check::ValueCodelists { overrides, .. } => {
+                selected.extend(overrides.iter().map(String::as_str));
+            }
+            Check::Inventory {
+                scope: Some(scope), ..
+            } => selected.extend(scope.overrides.iter().map(|(code, _)| code.as_str())),
+            _ => (),
+        }
+    }
+    for &row in rows {
+        let code = present_field(d, row, "submission")
+            .and_then(|_| present_field(d, row, "derivations"))
+            .and_then(|node| present_field(d, node, discriminator))
+            .and_then(|node| d.field(node, "value"))
+            .and_then(|node| string(d, node, "literal"));
+        if code.is_some_and(|code| selected.contains(code)) {
+            result.push(finding(
+                C::SubmissionValueTestcdDynamic,
+                &format!("rows.{}.submission", text(d, field(d, row, "id")?)?),
+                &[
+                    ("discriminator", s(discriminator)),
+                    ("declared_type", s(declared)),
+                ],
+            ));
+        }
+    }
     Ok(())
 }

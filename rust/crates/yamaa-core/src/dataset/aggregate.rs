@@ -319,10 +319,10 @@ impl BoundAggregate {
                 CurrentRead::Record { source: 0, column } => {
                     primary.columns().get(column).map(|field| Some(field.kind))
                 }
-                CurrentRead::Record { source, column } => secondary
-                    .get(source - 1)
-                    .and_then(|source| source.schema.columns().get(column))
-                    .map(|field| Some(field.kind)),
+                // A range narrows a reduction for completed rows. A qualified
+                // value reads the primary record that built the row (REQ-0085);
+                // another input has no record at that row's position.
+                CurrentRead::Record { .. } => None,
                 CurrentRead::Intermediate { index, column } => {
                     intermediates.get(index).and_then(|item| {
                         item.source_schema(secondary)?.columns().get(column)?;

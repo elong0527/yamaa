@@ -351,15 +351,16 @@ fn saved_build(
     }) else {
         panic!("a producer-linked entry")
     };
-    let metadata = graph.graph().metadata();
+    let metadata = graph.metadata();
     assert_eq!(metadata.nodes().len(), 1, "the producer is not a node");
     assert_eq!(metadata.nodes()[0].saved().len(), 1);
     assert!(metadata.nodes()[0].producers().is_empty());
-    let mut build = graph.into_build();
+    let build = graph.build();
+    let mut run = build.run_scope(None);
     if let Some(held) = held {
-        build.hold(Arc::new(held));
+        run.hold(Arc::new(held));
     }
-    let owned = build.build_owned_reported(&mut NoActivation, id(), scope());
+    let owned = build.build_owned_reported(&mut run, &mut NoActivation, id(), scope());
     let origin = owned
         .graph
         .nodes
@@ -404,6 +405,7 @@ fn saved_links_read_held_or_saved_artifacts_under_the_producer_contract() {
 
 fn domain(study: &Study, name: &str) -> Domain {
     yamaa_adapters::file_application::domain(
+        Language::Python,
         yamaa_core::domain_entry::Request {
             specification: &study.path(name),
             environment: None,
@@ -425,9 +427,9 @@ fn root(study: &Study) -> RootResult {
     .unwrap_or_else(|_| panic!("a saved-link graph")) else {
         panic!("a producer-linked entry")
     };
-    let owned = graph
-        .into_build()
-        .build_owned_reported(&mut NoActivation, id(), scope());
+    let build = graph.build();
+    let owned =
+        build.build_owned_reported(&mut build.run_scope(None), &mut NoActivation, id(), scope());
     prepare_owned_classified(&owned, id(), &[]).unwrap()
 }
 

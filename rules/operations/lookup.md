@@ -134,7 +134,9 @@ the list `[TESTCD, SEX]` would have matched `TESTCD` against a current-row
 
 A written `key` names at least one pair. An empty list or mapping names no
 match: a lookup fails as `invalid_field_type`, and an aggregate fails as
-`missing_aggregate_keys` ([REQ-0140](lookup.md#req-0140)).
+`missing_aggregate_keys` ([REQ-0140](lookup.md#req-0140)). A lookup's list
+names each column once; a column listed again fails as
+`invalid_field_type` at that entry, reporting the column.
 
 <a id="req-0116"></a>
 
@@ -199,7 +201,9 @@ subject to run-time comparability when it is used as a match operand.
 <a id="req-0119"></a>
 
 **REQ-0119.** `order_by` and `keep` are declared together or not at all.
-Declaring one without the other fails as `unpaired_fields`.
+Declaring one without the other fails as `unpaired_fields`. An `order_by`
+that lists no term orders nothing, so `keep` beside it fails the same way,
+with `order_by` reported missing.
 
 <a id="req-0120"></a>
 

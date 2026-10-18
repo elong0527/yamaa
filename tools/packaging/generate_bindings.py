@@ -40,9 +40,13 @@ R declarations are reconciled against every handwritten ``#[extendr]`` function,
 including argument order/types and return types. Public R facades retain argument
 presentation, conversions, conditions and owned result views.
 
-Not generated here (separate follow-ups): the ABI tests (#2692), CI determinism
-(#2693) and the handshake runtime -- the
-handshake entry point is not among the definition's current Python exports.
+``make check-repository``, which pull request CI runs, and the ``native-rust``
+job of the native qualification lane run the default comparison, so a
+generated file that drifts from the definition fails both (#2693). The
+definition's ``handshake`` section is the design contract, not generated code:
+neither host exports a handshake entry point, and the handshake runtime (#2870)
+and the ABI compatibility and lifetime tests that depend on it (#2692) are not
+implemented.
 """
 
 import argparse

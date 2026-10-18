@@ -27,7 +27,9 @@ def _call(function, *args):
     try:
         return function(*args)
     except _native._Error as error:
-        raise Error(str(error), _pl.DataFrame(error.issues)) from None
+        # _Error is a native exception class; the binding sets `issues` on
+        # it, so it is read as a dynamic attribute.
+        raise Error(str(error), _pl.DataFrame(getattr(error, "issues"))) from None
 
 
 def _frame(table):
