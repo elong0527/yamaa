@@ -61,8 +61,8 @@ ages, measurements and complete dates. Its reduced-subject check recomputes
 answers after dropping subjects. These controls do not establish parity with
 SAS Institute software.
 
-`adam-adsl-age-quality` also declares a warning log absent from its full
-prompt. The Harbor builder excludes it because log outputs are not graded.
+`adam-adsl-age-quality` also declares a run report absent from its full
+prompt. The Harbor builder excludes it because run reports are not graded.
 
 ## Compatibility gaps and solution choices
 

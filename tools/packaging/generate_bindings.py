@@ -232,6 +232,9 @@ def _resolve_records_import(definition):
 
 def _validate_python(definition):
     python = definition["python"]
+    unknown = set(python) - {"module", "registration", "exports"}
+    if unknown:
+        raise ValueError(f"unknown Python definition keys: {sorted(unknown)}")
     if python.get("module") != "yamaa._native":
         raise ValueError(f"unexpected Python module: {python.get('module')!r}")
     if python.get("registration") != "rust/crates/yamaa-python/src/lib.rs":
@@ -316,7 +319,9 @@ def _validate_pairing(definition, r_functions):
     operations = definition["operations"]
     for operation, hosts in operations.items():
         if not hosts.get("python") or not hosts.get("r"):
-            raise ValueError(f"operation {operation} must name both a Python and an R export")
+            raise ValueError(
+                f"operation {operation} must name both a Python and an R export"
+            )
     paired_python = {ref for hosts in operations.values() for ref in hosts["python"]}
     paired_r = {ref for hosts in operations.values() for ref in hosts["r"]}
     python_members = set()
@@ -325,15 +330,20 @@ def _validate_pairing(definition, r_functions):
             python_members.add(export["name"])
         elif export["kind"] == "class":
             python_members.update(
-                f"{export['name']}.{method['name']}" for method in export.get("methods", [])
+                f"{export['name']}.{method['name']}"
+                for method in export.get("methods", [])
             )
     host_only = definition["host_only"]
     unpaired = sorted(python_members - paired_python - set(host_only["python"]))
     if unpaired:
-        raise ValueError(f"Python exports without an R counterpart: {', '.join(unpaired)}")
+        raise ValueError(
+            f"Python exports without an R counterpart: {', '.join(unpaired)}"
+        )
     unpaired = sorted(r_functions - paired_r - set(host_only["r"]))
     if unpaired:
-        raise ValueError(f"R exports without a Python counterpart: {', '.join(unpaired)}")
+        raise ValueError(
+            f"R exports without a Python counterpart: {', '.join(unpaired)}"
+        )
 
 
 def _validate_r(definition):

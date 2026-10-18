@@ -1013,7 +1013,11 @@ def stage_issue_frame_truth(destination: Path):
 
 
 def stage_public_output_truth(destination: Path):
-    """Literal typed R expectations from committed original report observations."""
+    """Literal plain R columns from committed original report observations.
+
+    Text is character, `int` and `float` are doubles, dates are `Date` and
+    datetimes UTC `POSIXct`, as the public R output holds them.
+    """
 
     def text(value):
         quoted = json.dumps(value, ensure_ascii=False)
@@ -1041,11 +1045,19 @@ def stage_public_output_truth(destination: Path):
             for row in table["rows"]:
                 scalar = row[position]
                 if scalar["type"] == "missing":
-                    cells.append(
-                        "NA_character_" if kind in ("str", "int") else "NA_real_"
-                    )
-                elif kind in ("str", "int"):
+                    cells.append("NA_character_" if kind == "str" else "NA_real_")
+                elif kind == "str":
                     cells.append(text(scalar["value"]))
+                elif kind == "int":
+                    # R returns integers as plain doubles; one beyond 2^53
+                    # has no exact double, so the public R view raises.
+                    value = int(scalar["value"])
+                    if abs(value) > 2**53:
+                        raise ValueError(
+                            "an integer beyond 2^53 has no exact R double: "
+                            + scalar["value"]
+                        )
+                    cells.append(str(value))
                 elif kind == "float":
                     raw = bytes.fromhex(scalar["value"])[::-1]
                     cells.append(
@@ -1078,11 +1090,9 @@ def stage_public_output_truth(destination: Path):
             literal = (
                 "c(" + ",".join(cells) + ")"
                 if cells
-                else ("character()" if kind in ("str", "int") else "double()")
+                else ("character()" if kind == "str" else "double()")
             )
-            if kind == "int":
-                literal = "structure(" + literal + ",class='yamaa_int64_vector')"
-            elif kind == "date":
+            if kind == "date":
                 literal = "structure(as.double(" + literal + "),class='Date')"
             elif kind == "datetime":
                 literal = (

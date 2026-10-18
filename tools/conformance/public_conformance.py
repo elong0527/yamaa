@@ -2,6 +2,8 @@
 
 Only the comparator reads independent expected truth. CSV bytes and typed host
 views compare exactly; Parquet compares logical fields, types, nulls and rows.
+A run's output and its declared run report are the compared tables. R holds a
+declared integer as a plain double, which must equal that integer exactly.
 """
 
 from __future__ import annotations
@@ -25,7 +27,10 @@ from tools.paths import ROOT
 PROTOCOL = "public-conformance/1"
 FIELD_REFERENCE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$")
 RESOLVED_REASON = "reference-only resolved specification until cutover (#1973.14)"
-LOG_INTS = {"EVALUATED_COUNT", "FAILURE_COUNT"}
+# The run report's integer columns (REQ-0392); every other column is text.
+REPORT_INTS = {"COUNT", "TOTAL"}
+# R doubles hold every integer up to this magnitude exactly.
+EXACT_DOUBLE = 2**53
 
 
 def platform_matches(runtime, platform, recorded):
@@ -481,14 +486,50 @@ def parquet_signature(path):
     ]
 
 
-def log_types(path):
+def report_types(path):
     if path.suffix == ".csv":
         columns = csv_cells(path)[0]
     else:
         import pyarrow.parquet as pq
 
         columns = pq.read_schema(path).names
-    return {c: "int" if c in LOG_INTS else "str" for c in columns}
+    return {c: "int" if c in REPORT_INTS else "str" for c in columns}
+
+
+def r_plain_table(table, expected):
+    """Read R's plain doubles as the declared integers they hold exactly.
+
+    The R package returns an `int` column as doubles, exact up to 2^53 in
+    magnitude. A double that is not such a whole number keeps its encoding,
+    so it cannot equal the independent decimal truth.
+    """
+    if table is None or expected is None:
+        return table
+    declared = {name: kind for name, kind in expected["columns"]}
+    whole = [
+        kind == "float" and declared.get(name) == "int"
+        for name, kind in table["columns"]
+    ]
+
+    def cell(value, integral):
+        if not integral or value is None:
+            return value
+        number = struct.unpack(">d", bytes.fromhex(value))[0]
+        if math.isfinite(number) and number.is_integer():
+            if abs(number) <= EXACT_DOUBLE:
+                return str(int(number))
+        return value
+
+    return {
+        "columns": [
+            [name, "int" if integral else kind]
+            for (name, kind), integral in zip(table["columns"], whole)
+        ],
+        "rows": [
+            [cell(value, integral) for value, integral in zip(row, whole)]
+            for row in table["rows"]
+        ],
+    }
 
 
 def load_metamorphic_expectations(fixtures):
@@ -510,11 +551,30 @@ def load_metamorphic_expectations(fixtures):
     return expectations
 
 
-def build_difference(reference, variant):
-    """None when two builds are metamorphically equal, else the difference."""
+def unordered_report(tables):
+    """The tables with the run report's rows as a sorted multiset.
+
+    Check rows follow column declaration order (REQ-1175), so declaring the
+    key columns in another order moves their rows; no row's facts change.
+    """
+    report = tables.get("report")
+    if report is None:
+        return tables
+    rows = sorted(report["rows"], key=lambda row: json.dumps(row))
+    return {**tables, "report": {"columns": report["columns"], "rows": rows}}
+
+
+def build_difference(reference, variant, unordered_report_rows=False):
+    """None when two builds are metamorphically equal, else the difference.
+
+    A key-order variant compares its run report's rows without their order.
+    """
     reference_issues, variant_issues = reference["issues"], variant["issues"]
     if not reference_issues and not variant_issues:
-        if reference["tables"] != variant["tables"]:
+        tables = reference["tables"], variant["tables"]
+        if unordered_report_rows:
+            tables = tuple(map(unordered_report, tables))
+        if tables[0] != tables[1]:
             return "typed tables differ"
         if reference.get("saved") != variant.get("saved"):
             return "saved outcome differs"
@@ -584,13 +644,15 @@ def judge_metamorphic(example, runtime, record, expectations):
                 f"missing reference build for variant {identity(variant)}"
             )
             continue
-        detail = build_difference(reference, by_identity[identity(variant)])
+        check = (
+            "key_order" if variant["kind"].startswith("key_order") else "empty_child"
+        )
+        detail = build_difference(
+            reference,
+            by_identity[identity(variant)],
+            unordered_report_rows=check == "key_order",
+        )
         if detail is not None:
-            check = (
-                "key_order"
-                if variant["kind"].startswith("key_order")
-                else "empty_child"
-            )
             groups.setdefault(check, []).append(
                 {"kind": variant["kind"], "entry": variant["entry"], "detail": detail}
             )
@@ -773,15 +835,13 @@ def compare_example(example, runtime, record, fixtures, observed, expectations=N
     compared = set()
     for entry, build in zip(entries, builds):
         types, output = declarations(case / entry["specification"])
-        for slot, key in (
-            ("output", "path"),
-            ("verification_log", "verification_log"),
-            ("warning_log", "warning_log"),
-        ):
+        for slot, key in (("output", "path"), ("report", "report")):
             declared = output.get(key)
             actual = build["tables"].get(slot)
             if declared is None:
-                if actual is not None:
+                # Every run that began holds its report; only a declared
+                # report file has independent truth to compare.
+                if slot == "output" and actual is not None:
                     result["findings"].append(f"undeclared {slot} host view")
                 continue
             target = Path(entry["specification"]).parent / declared
@@ -793,8 +853,10 @@ def compare_example(example, runtime, record, fixtures, observed, expectations=N
                     f"declared {slot} lacks independent expected artifact: {declared}"
                 )
                 continue
-            expected_types = types if slot == "output" else log_types(truth)
+            expected_types = types if slot == "output" else report_types(truth)
             expected = expected_table(truth, expected_types)
+            if runtime == "r":
+                actual = r_plain_table(actual, expected)
             if (
                 slot == "output"
                 and truth.suffix == ".csv"

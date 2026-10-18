@@ -245,14 +245,19 @@ def project_report(raw, case):
         "tests": [],
     }:
         raise ValueError("unexpected producer entry or activation ledger")
+    # The report's environment section names the project file the owner
+    # passed and the lock its linked environment file declares, both beside
+    # the retained case.
     environment = raw["environment"]
     parent = PurePosixPath(case).parent
     lock = "uv.lock" if raw["runtime"] == "python" else "renv.lock"
     if environment != {
-        "source": (parent / "environment.yaml").as_posix(),
+        "source": (parent / "project.yaml").as_posix(),
         "lock_source": (parent / lock).as_posix(),
     }:
-        raise ValueError("producer environment is not from its actual retained owner")
+        raise ValueError(
+            "producer project or lock is not from its actual retained owner"
+        )
     protocol = copy.deepcopy({key: raw[key] for key in fields})
     protocol["example"] = PRODUCER
     for group in ("nodes", "tables", "verifications", "callbacks"):
@@ -362,8 +367,12 @@ def installed_owner(directory, runtime, revision):
     if record["evidence"]["source_revision"] != revision:
         raise ValueError("stale installed complete-report evidence")
     suites = {suite["id"]: suite for suite in record["suites"]}
-    for suffix in ("original-specifications", "verification-logs", "producer-cohort"):
-        suite = suites[runtime + "/" + suffix]
+    # The run-report suite owns schema-verification-log, the cohort case
+    # that declares output.report; the original suite owns the others.
+    for suffix in ("original-specifications", "run-report", "producer-cohort"):
+        suite = suites.get(runtime + "/" + suffix)
+        if suite is None:
+            raise ValueError(f"installed public suite is missing: {runtime}/{suffix}")
         if suite["result"] != "pass" or suite["exit_code"] != 0:
             raise ValueError("installed public suite did not pass: " + suffix)
         log = (supplemental / suite["log"]).read_text(encoding="utf-8")
@@ -381,8 +390,7 @@ def installed_owner(directory, runtime, revision):
                 name
                 + " public domain complete Rust run report and successful save observations passed"
                 for name in COHORT
-                if (name == "schema-verification-log")
-                == (suffix == "verification-logs")
+                if (name == "schema-verification-log") == (suffix == "run-report")
             ]
         for witness in witnesses:
             if witness not in log:

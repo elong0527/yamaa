@@ -38,7 +38,7 @@ body:
           - {name: USUBJID, type: str, label: Subject, derivation: DM.USUBJID}
           - {name: AGE, type: int, label: Age, derivation: DM.AGE}
         ```
-        dm.csv: two rows with USUBJID "DUP". Run: yamaa.domain("spec.yaml")
+        dm.csv: two rows with USUBJID "DUP". Run: yamaa.spec("spec.yaml").run()
 
         Inconsistency example:
         rules/specification/structure.md names the condition `foo_bar`,

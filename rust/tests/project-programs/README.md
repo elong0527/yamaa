@@ -1,7 +1,8 @@
 # Installed project programs
 
 The five function studies share ordinary installed Python and R packages.
-Their environment metadata is explicit; there is no artifact loader or separate
+Each study's `project.yaml` links its Python and R environment files, whose
+function metadata is explicit; there is no artifact loader or separate
 contract/conformance format. Every positive expected CSV is the original truth.
 The negative study independently specifies a missing required argument (REQ-0700).
 
@@ -13,23 +14,26 @@ python/.venv/bin/python -m tools.staging.stage_project_inputs /tmp/yamaa-project
 cd /tmp/yamaa-project-studies/schema-functions
 /path/to/yamaa/python/.venv/bin/python - <<'PYTHON'
 import yamaa
-result = yamaa.domain("spec.yaml", environment="python/environment.yaml")
-result.save()
+run = yamaa.project("project.yaml").spec("TEST").run()
+run.save()
 PYTHON
 ```
 
-The stager copies the exact existing `python/uv.lock` into each isolated study.
-It refuses an existing destination. No second Python lock is committed.
+The stager copies the exact existing `python/uv.lock` beside the Python
+environment file each isolated study's project links. It refuses an existing
+destination. No second Python lock is committed.
 
 For R, install `rust/tests/project-programs/r` into the same library as the standalone
-`yamaa` package and call its declared entry. Each R environment refers to
-its hash-free `renv.lock`, which pins `yamaa` and the called project package.
+`yamaa` package and open the study's specification through its project. Each R
+environment refers to its hash-free `renv.lock`, which pins `yamaa` and the
+called project package.
 
 ```r
 install.packages("rust/tests/project-programs/r", repos = NULL, type = "source")
-yamaa::yamaa_check("spec.yaml", environment = "r/environment.yaml")
-result <- yamaa::yamaa_domain("spec.yaml", environment = "r/environment.yaml")
-result$save()
+spec <- yamaa::yamaa_project("project.yaml")$spec("TEST")
+spec$check()$issues
+run <- spec$run()
+run$save()
 ```
 
 CI runs the complete installed public environment suite in Python wheel/source

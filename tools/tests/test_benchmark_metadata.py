@@ -127,7 +127,7 @@ class BenchmarkMetadata(unittest.TestCase):
     def test_metadata_is_required_and_legacy_prose_or_scripts_cannot_supply_it(self):
         (self.case / "benchmark.yaml").unlink()
         (self.case / "README.md").write_text("**Standard:** TEST | **Domain:** TEST\n")
-        (self.case / "run.py").write_text('yamaa.domain("spec.yaml")\n')
+        (self.case / "run.py").write_text('yamaa.spec("spec.yaml").run()\n')
         self.assertEqual(benchmark.directories(self.case.parent), [self.case])
         with self.assertRaisesRegex(ValueError, "benchmark.yaml"):
             benchmark.entries(self.case)
@@ -224,6 +224,23 @@ class BenchmarkMetadata(unittest.TestCase):
                 self.write()
                 with self.assertRaises(ValueError):
                     benchmark.entries(self.case)
+
+    def test_project_name_is_the_domain_the_layers_compose(self):
+        (self.case / "common.yaml").write_text("domain: COMMON\n")
+        (self.case / "a.yaml").write_text("parents: common.yaml\ndomain: A\n")
+        (self.case / "b.yaml").write_text("parents: common.yaml\n")
+        entry = self.case / "entry.yaml"
+        # Common -> A -> B -> entry: B adds no domain, so A's replaces Common's.
+        entry.write_text("parents: [a.yaml, b.yaml]\n")
+        self.assertEqual(benchmark.specification_name(entry), "A")
+        entry.write_text("parents: [a.yaml, b.yaml]\ndomain: NO\n")
+        self.assertEqual(benchmark.specification_name(entry), "NO")
+        (self.case / "common.yaml").write_text("parents: entry.yaml\n")
+        with self.assertRaisesRegex(ValueError, "cyclic parents"):
+            benchmark.specification_name(entry)
+        (self.case / "lone.yaml").write_text("keys: [ID]\n")
+        with self.assertRaisesRegex(ValueError, "domain"):
+            benchmark.specification_name(self.case / "lone.yaml")
 
     def test_metadata_only_case_cannot_disappear_or_release_without_a_specification(
         self,

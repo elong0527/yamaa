@@ -166,8 +166,8 @@ class DashboardTests(unittest.TestCase):
             expected_cells.extend(value for row in rows[1:] for value in row)
         self.assertEqual(content.cells, expected_cells)
         spec_lines = (BENCHMARK / "spec.yaml").read_text().splitlines()
-        python_lines = ["import yamaa", "", 'yamaa.domain("spec.yaml").output']
-        r_lines = ["library(yamaa)", "", 'yamaa_domain("spec.yaml")$output']
+        python_lines = ["import yamaa", "", 'yamaa.spec("spec.yaml").run().output']
+        r_lines = ["library(yamaa)", "", 'yamaa_spec("spec.yaml")$run()$output']
         solution_lines = [
             line
             for name in generate.SOLUTION_FILES
@@ -811,13 +811,19 @@ class DashboardTests(unittest.TestCase):
         )
         self.assertEqual(
             snippets["Python"],
-            'import yamaa\n\nyamaa.domain("spec_dm.yaml").output\nyamaa.domain("spec_suppdm.yaml").output\n',
+            'import yamaa\n\nyamaa.spec("spec_dm.yaml").run().output\nyamaa.spec("spec_suppdm.yaml").run().output\n',
         )
         snippets = dict(
             generate.benchmark_code(generate.BENCHMARKS / "schema-functions")
         )
-        self.assertIn('environment="project.yaml"', snippets["Python"])
-        self.assertIn('environment="project.yaml"', snippets["R"])
+        self.assertEqual(
+            snippets["Python"],
+            'import yamaa\n\nyamaa.project("project.yaml").spec("TEST").run().output\n',
+        )
+        self.assertEqual(
+            snippets["R"],
+            'library(yamaa)\n\nyamaa_project("project.yaml")$spec("TEST")$run()$output\n',
+        )
 
     def test_dashboard_renders_lifecycle_badge_beside_summary(self):
         finalized = generate.render_benchmark(

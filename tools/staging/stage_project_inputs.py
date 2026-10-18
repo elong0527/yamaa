@@ -7,7 +7,6 @@ import shutil
 from pathlib import Path, PurePosixPath
 
 import yaml
-
 from tools.benchmark import entries
 from tools.paths import ROOT
 

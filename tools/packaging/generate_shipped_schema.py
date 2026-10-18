@@ -6,7 +6,11 @@ from tools.paths import WORKSPACE
 
 SOURCE = WORKSPACE.parent / "yaml"
 TARGET = WORKSPACE / "crates/yamaa-adapters/src/shipped_schema/data.rs"
-SEPARATE_ROOTS = {"schema_define.yaml", "schema_environment.yaml", "schema_project.yaml"}
+SEPARATE_ROOTS = {
+    "schema_define.yaml",
+    "schema_environment.yaml",
+    "schema_project.yaml",
+}
 
 
 def render():
