@@ -188,14 +188,14 @@ Partial physical records and non-padding partial rows fail.
 
 <a id="sas-8"></a>
 
-### SAS-8. A SAS dataset yields only its live records, each at its stored position
+### SAS-8. A SAS dataset yields only its live records, in stored order
 
 A `sas7bdat` input yields its live records in stored order. A record that SAS
 deleted in place, marked in its page's deleted-record bitmap or by a deletion
 code on its compressed row, is skipped. A compressed record that SAS moved to
-another page is read where the reference that replaced it stands. Each record
-that the dataset's header counts as deleted must be found marked deleted, and
-no more may be marked; otherwise ingestion fails with cause `deleted_records`.
+another page is read where the reference that replaced it stands. The number
+of records found marked deleted must equal the deleted count in the dataset's
+header; otherwise ingestion fails with cause `deleted_records`.
 
 Fails: `source_sas_invalid`.
 Evidence: `rust/crates/yamaa-adapters/tests/table_sas_source.rs::records_deleted_in_place_are_skipped_in_the_independent_haven_fixture`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::deleted_records_after_the_last_live_record_are_found_on_later_pages`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::deleted_record_counts_that_disagree_with_their_marks_are_refused`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::marks_on_pages_after_the_counts_are_met_are_not_read`, `rust/tests/host-fixtures/sas-cases.json::deleted-record-skipped`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::moved_records_are_read_at_their_reference`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::a_moved_record_stored_before_its_reference_is_skipped_and_read_at_the_reference`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::references_that_reach_each_moved_record_once_read_across_pages`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::references_that_do_not_reach_a_moved_record_are_refused`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::a_reference_with_a_zero_page_or_subheader_index_is_refused_not_skipped`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::references_bouncing_between_pages_cannot_read_more_than_the_file_holds`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::moved_records_deleted_later_count_as_deleted`.
@@ -209,12 +209,16 @@ one bit per stored record, most significant bit first. A compressed row's
 subheader pointer marks a deleted record with code `0x05`, and a moved record
 deleted later with code `0x09` or `0x0d`.
 
-A reader reads past the last live record until it has found every counted
-deletion. A deleted count above the stored count, a mark beyond the count, a
-counted deletion never found, a bitmap that does not fit its page, or a page
-row beyond the records its bitmap covers fails with cause `deleted_records`
-([SAS-7](#sas-7)). The bitmap covers the page's records, and no more than the
-dataset stores.
+A reader reads past the last live record until it has found as many marks as
+the count says. It stops after the page on which it has found every live
+record and that many marks, but reads every page of a dataset with no live
+records. A mark beyond the count fails when the reader reaches it, and a mark
+on a page it does not reach is not read. The check compares counts: it does
+not tell which records the header meant to delete. A deleted count above the
+stored count, a mark beyond the count, a counted deletion never found, a
+bitmap that does not fit its page, or a page row beyond the records its bitmap
+covers fails with cause `deleted_records` ([SAS-7](#sas-7)). The bitmap covers
+the page's records, and no more than the dataset stores.
 
 In compressed storage SAS can move an updated record that no longer fits its
 slot to another page. The slot then holds a reference, code `0x03`, whose

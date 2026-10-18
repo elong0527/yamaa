@@ -49,11 +49,15 @@ the deleted-rows flag `0x0080`, or the subheader compression code `0x05` of a
 compressed row. A moved record that no reference reaches (code `0x09` or
 `0x0d`) also counts as deleted here. The row-size subheader counts the deleted
 records (offset 56 in 64-bit files and 28 otherwise). Upstream trusts that
-count; locally, every counted deletion must be found marked. The second pass therefore reads past
-the last live record, through flagged pages and later pages, until it has
-found them all, and a count left unmatched at the end stops the parse. A count
-above the stored records, a mark beyond the count, a bitmap that does not fit
-its page and a page row beyond its bitmap also stop it. Each of these stops
+count; locally the check is a count check: the number of records found marked
+deleted must equal it. The second pass therefore reads past the last live
+record, through flagged pages and later pages, until it has found as many marks
+as the count says. It stops after the page on which it has found every live
+record and that many marks, but reads every page of a dataset with no live
+records, whose column metadata may follow, so a mark on a page it does not reach
+is not read. A count left unmatched at the end stops the parse. A count above
+the stored records, a mark beyond the count that the pass reaches, a bitmap that
+does not fit its page and a page row beyond its bitmap also stop it. Each of these stops
 goes through the bridge's `yamaa_readstat_deleted_records` hook, so it reports
 cause `deleted_records`. The bitmap extent is checked term by term against the
 rest of the page, so no 64-bit sum can wrap. The bridge never sets a row limit
