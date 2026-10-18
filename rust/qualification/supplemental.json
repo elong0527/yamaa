@@ -903,7 +903,7 @@
         "R/yamaa/tests/verification_logs.R",
         "rust/crates/yamaa-adapters/tests/scalar_language.rs",
         "python/tests/installed/installed_producer_logs.py",
-        "python/tests/installed/installed_verification_logs.py"
+        "python/tests/installed/installed_run_report.py"
       ]
     },
     {
@@ -1017,7 +1017,7 @@
         "R/yamaa/tests/public_producers.R",
         "R/yamaa/tests/producer_cohort.R",
         "R/yamaa/tests/public_environment.R",
-        "python/tests/installed/installed_verification_logs.py",
+        "python/tests/installed/installed_run_report.py",
         "R/yamaa/tests/verification_logs.R",
         "python/tests/installed/installed_producer_logs.py",
         "R/yamaa/tests/producer_logs.R",
@@ -1073,7 +1073,7 @@
     "python/public-grammar": "shared_run",
     "python/sas-sources": "shared_run",
     "python/saved-readers": "shared_run",
-    "python/verification-logs": "shared_run",
+    "python/run-report": "shared_run",
     "r/arrow-bridge": "shared_run",
     "r/column-ceilings": "shared_run",
     "r/compact-yaml": "shared_run",
