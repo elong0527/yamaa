@@ -23,11 +23,21 @@ source-authority encoding metadata treatment, early fixed table-shape
 admission, SAS physical extent validation, shared ownership of column-text
 metadata pages, unsupported compression signature
 rejection, transport physical type/offset and partial-row validation, overlapping RDC
-back-reference propagation, and exact IBM numeric precision
+back-reference propagation, refusal of records deleted in place, and exact IBM numeric precision
 facts used by narrowing. SAS metadata still records the embedded encoding but
 does not override the explicit declaration. The bridge contains snapshot memory
 IO callbacks and never initializes filesystem IO. Rust contains every callback
 panic before it reaches C. The parent parser lifetime contains all callbacks.
+
+Records deleted in place are refused, never skipped or returned as rows. A data
+or mix page whose type carries the deleted-rows flag `0x0080`, checked before
+any of the page's subheaders or rows is parsed, or a non-zero
+deleted-row count in the row-size subheader (offset 56 in 64-bit files and 28
+otherwise, as upstream commit `d19f262e` reads it), stops the parse through the
+bridge's `yamaa_readstat_deleted_records` hook. Upstream's deleted-row bitmap
+support from that commit and its follow-ups `634f40a8` and `5850fb57` is not
+ported. A deleted compressed row keeps its subheader compression code `0x05`,
+which remains unsupported compression.
 
 Rust checks the fixed source-byte and table-shape boundaries from the shared
 `Limits` policy. The C readers admit declared row/column/cell geometry before
@@ -49,6 +59,7 @@ pandas SAS reader; no lower 4,096-blob ceiling is applied.
 
 The independent adapter controls cover XPT v5/v8, long field names, multiple
 members, numeric missing tags, declared Unicode decoding, exact narrowing and
-1960 epochs, SAS uncompressed/RLE/RDC storage, malformed/truncated input,
-compressed-data corruption, and source limits. Source fixtures and licenses
-are cataloged separately; expected values are never generated with this reader.
+1960 epochs, SAS uncompressed/RLE/RDC storage, records deleted in place,
+malformed/truncated input, compressed-data corruption, and source limits.
+Source fixtures and licenses are cataloged separately; expected values are
+never generated with this reader.

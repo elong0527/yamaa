@@ -160,6 +160,13 @@ impl PreparedSpecification {
                     self.rows.is_none().then_some(&self.output),
                     findings,
                 )?;
+                // Without row templates, the base drives every row.
+                aggregates::check_ranges(
+                    &declaration.operation,
+                    &self.sources,
+                    &[self.source().name.as_str()],
+                    findings,
+                );
                 if let Some(outputs) = &outputs {
                     dependencies.push(Some(self.formula_reads(declaration, outputs, findings)));
                 }
@@ -168,7 +175,7 @@ impl PreparedSpecification {
                 self.formula_dependencies(&dependencies, findings)?;
             }
             if let Some(rows) = &self.rows {
-                rows.check_findings(findings)?;
+                rows.check_findings(&self.sources, &self.intermediates, findings)?;
             }
             Ok(())
         };

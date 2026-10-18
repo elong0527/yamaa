@@ -2369,6 +2369,14 @@ impl PreparedSpecification {
             .map(|filter| filter.bind(&self.source().name, source, &mut findings))
             .transpose()?
             .flatten();
+        // Every row is built from the base driver, the primary port.
+        aggregates::admit_ranges(
+            assignments
+                .values()
+                .map(|assignment| &assignment.expression),
+            &[0],
+            &mut findings,
+        );
         relation_predicates::admit_reads(
             assignments
                 .values()
@@ -2376,14 +2384,6 @@ impl PreparedSpecification {
             &intermediates,
             0,
             &RowMode::Keys,
-            &mut findings,
-        );
-        aggregates::admit_ranges(
-            assignments
-                .values()
-                .map(|assignment| &assignment.expression),
-            0,
-            &mut std::collections::BTreeSet::new(),
             &mut findings,
         );
         if !findings.is_empty() {

@@ -173,7 +173,15 @@ without `keep` is an error.
 <a id="req-0472"></a>
 
 **REQ-0472.** A qualified aggregate may declare `between` to narrow right-side
-records for each current row. `value` is a variable the current row can read.
+records for each current row. `value` is a variable the current row can read:
+a constructed output column, a column of a named intermediate, or a field of
+the current row's driver qualified by that driver's input dataset
+([REQ-0085](../specification/binding.md#req-0085)). The aggregate evaluates
+for every row its column derives, so a qualified field must belong to the
+driver of each of them: root `base` without row templates, and otherwise the
+driver of every row template. A value qualified by any other input dataset is
+never read through the implicit join ([REQ-0111](lookup.md#req-0111)) and
+fails as `unknown_field` under [REQ-0121](lookup.md#req-0121).
 `lower` and `upper` are bare donor-record fields of the aggregate expression's
 one right-side relation, and at least one is required. Every declared
 comparison is inclusive: `lower <= value` and `value <= upper`. Omitting one
@@ -544,8 +552,8 @@ template's input dataset, or being used by an ungrouped row template: fail.
 <a id="req-0509"></a>
 
 **REQ-0509.** A `between` on an unqualified or grouped-row aggregate, declaring
-neither bound, naming a bound outside the qualified relation, or using
-incomparable operands: fail.
+neither bound, naming a bound outside the qualified relation, naming a `value`
+the current row cannot read, or using incomparable operands: fail.
 
 <a id="req-0510"></a>
 

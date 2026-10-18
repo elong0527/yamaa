@@ -1,6 +1,7 @@
 //! Complete held-container read, followed by closed-profile admission.
 //! No filesystem reads, semantic fallback, publication or host date conversion.
 use super::{compact, compression, framing, metadata, payload, physical, profile, schema};
+use crate::storage_api::contain_decode;
 use arrow_array::{
     ArrayRef, Date32Array, Float64Array, Int64Array, LargeStringArray, RecordBatch, StringArray,
     TimestampMicrosecondArray,
@@ -10,7 +11,7 @@ use parquet::{
     arrow::arrow_reader::{ArrowReaderMetadata, ArrowReaderOptions},
     file::metadata::{ParquetMetaData, ParquetMetaDataReader},
 };
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 use yamaa_core::{table::TableSchema, value::ColumnType};
 
 #[derive(Debug, PartialEq)]
@@ -126,19 +127,54 @@ fn admit_page_counts(
     Ok(())
 }
 
+/// Copy the held file for the native page reader, presenting each page header
+/// as the footer is presented to the metadata decoder. The presentation keeps
+/// each header's length, so it is written in place and no offset moves. Page
+/// bodies keep their held bytes.
+fn native_pages(bytes: &[u8], frame: &framing::Framing<'_>) -> Result<bytes::Bytes, Error> {
+    let mut file: Option<Vec<u8>> = None;
+    for (header, _) in &frame.headers {
+        if let Cow::Owned(native) = compact::native_metadata(&bytes[header.clone()])? {
+            file.get_or_insert_with(|| bytes.to_vec())[header.clone()].copy_from_slice(&native);
+        }
+    }
+    let Some(file) = file else {
+        return Ok(bytes::Bytes::copy_from_slice(bytes));
+    };
+    // Once a header is presented, no two pages may share a byte, or the native
+    // reader could read header or body bytes that admission never saw. Written
+    // files never overlap pages, and a file with nothing to present is read
+    // exactly as held.
+    let mut extents: Vec<_> = frame
+        .headers
+        .iter()
+        .map(|(header, end)| (header.start, *end))
+        .collect();
+    extents.sort_unstable();
+    if extents.windows(2).any(|pair| pair[1].0 < pair[0].1) {
+        return Err(Error::Malformed);
+    }
+    Ok(bytes::Bytes::from(file))
+}
+
 fn read_interpreted(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
     let frame = framing::admit(bytes)?;
     let metadata = Arc::new({
         let native = compact::native_metadata(frame.metadata)?;
-        ParquetMetaDataReader::decode_metadata(&native).map_err(|_| Error::Malformed)?
+        contain_decode(|| ParquetMetaDataReader::decode_metadata(&native))
+            .ok_or(Error::Malformed)?
+            .map_err(|_| Error::Malformed)?
     });
     let hint = metadata::admit(metadata.file_metadata().key_value_metadata())?;
     let columns = metadata.file_metadata().schema_descr().columns();
     // ODM field admission uses metadata alone. Ordinary profile findings keep
     // their existing precedence after all physical chunks have been decoded.
     let odm_metadata = if odm {
-        let arrow = ArrowReaderMetadata::try_new(metadata.clone(), ArrowReaderOptions::new())
-            .map_err(|_| Error::Malformed)?;
+        let arrow = contain_decode(|| {
+            ArrowReaderMetadata::try_new(metadata.clone(), ArrowReaderOptions::new())
+        })
+        .ok_or(Error::Malformed)?
+        .map_err(|_| Error::Malformed)?;
         let arrow_schema = schema::normalize(arrow.schema(), hint.as_ref());
         let fields = arrow_schema
             .fields()
@@ -186,8 +222,11 @@ fn read_interpreted(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
     }
     let row_count =
         usize::try_from(metadata.file_metadata().num_rows()).map_err(|_| Error::Malformed)?;
-    let arrow = ArrowReaderMetadata::try_new(metadata.clone(), ArrowReaderOptions::new())
-        .map_err(|_| Error::Malformed)?;
+    let arrow = contain_decode(|| {
+        ArrowReaderMetadata::try_new(metadata.clone(), ArrowReaderOptions::new())
+    })
+    .ok_or(Error::Malformed)?
+    .map_err(|_| Error::Malformed)?;
     yamaa_core::limits::Limits::table(row_count, columns.len())?;
     let arrow_schema = schema::normalize(arrow.schema(), hint.as_ref());
     // Determine retention only. Profile errors remain deferred until every
@@ -207,7 +246,9 @@ fn read_interpreted(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
                 })
         })
         .collect();
-    let raw = physical::read(bytes, &metadata, &keep, &arrow_schema)?;
+    let source = native_pages(bytes, &frame)?;
+    let raw = contain_decode(|| physical::read(source, &metadata, &keep, &arrow_schema))
+        .ok_or(Error::Malformed)??;
     let group_rows = metadata
         .row_groups()
         .iter()
@@ -480,6 +521,140 @@ mod tests {
             let bytes = container(0, declared, declared, 3, &pages);
             assert_eq!(read(&bytes).unwrap_err(), Error::Malformed);
         }
+    }
+
+    #[test]
+    fn a_known_boolean_footer_field_with_another_wire_type_is_malformed() {
+        // RowGroup.sorting_columns = [{column_idx: 0, descending, nulls_first:
+        // true}]. The native decoder unwraps a known boolean's value, so an i32
+        // `descending` must be refused as malformed rather than panic.
+        let mut body = progression(0, 1, 2);
+        body.extend(progression(1, 0, 2));
+        body.extend(b"ab"); // a, ab
+        for (descending, valid) in [(&[0x15u8, 0][..], false), (&[0x12][..], true)] {
+            let mut bytes = container(0, 2, 2, 0, &[data_page(2, &body)]);
+            let end = bytes.len() - 8;
+            let mut sorting = vec![0x19, 0x1c, 0x15, 0];
+            sorting.extend(descending);
+            sorting.extend([0x11, 0]);
+            // Before the row group's stop byte and the file metadata's.
+            bytes.splice(end - 2..end - 2, sorting.iter().copied());
+            let length = bytes.len() - 8;
+            let footer = u32::from_le_bytes(bytes[length..length + 4].try_into().unwrap());
+            let footer = footer + u32::try_from(sorting.len()).unwrap();
+            bytes[length..length + 4].copy_from_slice(&footer.to_le_bytes());
+            let decoded = read(&bytes);
+            if valid {
+                assert_eq!(decoded.unwrap().batches[0].num_rows(), 2);
+            } else {
+                assert_eq!(decoded.unwrap_err(), Error::Malformed);
+            }
+        }
+    }
+
+    #[test]
+    fn a_known_boolean_page_header_field_with_another_wire_type_is_malformed() {
+        // A PLAIN dictionary page {a, ab}, then an RLE_DICTIONARY data page
+        // [a, ab]. The native page reader unwraps a known boolean's value, so
+        // an i32 DictionaryPageHeader.is_sorted must be refused as malformed
+        // rather than panic; false is the control.
+        let indices = [1, 3, 2]; // bit width 1; one bit-packed group 0, 1
+        let mut data = data_page(2, &indices);
+        let encoding = data.len() - indices.len() - 7;
+        data[encoding] = 16; // RLE_DICTIONARY in place of DELTA_BYTE_ARRAY
+        for (sorted, valid) in [(&[0x15u8, 0][..], false), (&[0x12][..], true)] {
+            // DICTIONARY_PAGE; both sizes 11; header: 2 values, PLAIN
+            let mut dictionary = vec![0x15, 4, 0x15, 22, 0x15, 22, 0x4c, 0x15, 4, 0x15, 0];
+            dictionary.extend(sorted);
+            dictionary.extend([0, 0, 1, 0, 0, 0, b'a', 2, 0, 0, 0, b'a', b'b']);
+            let decoded = read(&container(0, 2, 2, 0, &[dictionary, data.clone()]));
+            if valid {
+                assert_eq!(strings(&decoded.unwrap()), [Some("a"), Some("ab")]);
+            } else {
+                assert_eq!(decoded.unwrap_err(), Error::Malformed);
+            }
+        }
+    }
+
+    /// Unknown fields that parquet 57.3.0's skip cannot step over as held,
+    /// beginning with `set`, the header of the first field (a set):
+    /// set<bool>{true, false}, map<byte, bool>{-1: true}, a UUID, list<uuid>
+    /// and a 129-byte map<bool, i16>, whose binary length takes a padded
+    /// prefix.
+    fn unskippable_fields(set: u8) -> Vec<u8> {
+        let mut fields = vec![set, 0x21, 1, 2, 0x1b, 1, 0x31, 0xff, 1, 0x1d];
+        fields.extend([7; 16]);
+        fields.extend([0x19, 0x1d]);
+        fields.extend([9; 16]);
+        fields.extend([0x1b, 63, 0x14]);
+        fields.extend((0..62).flat_map(|_| [1, 0]));
+        fields.extend([1, 0x80, 0x01]);
+        fields
+    }
+
+    fn strings(decoded: &Decoded) -> Vec<Option<&str>> {
+        decoded.batches[0]
+            .column(0)
+            .as_any()
+            .downcast_ref::<StringArray>()
+            .unwrap()
+            .iter()
+            .collect()
+    }
+
+    #[test]
+    fn unskippable_unknown_footer_fields_keep_the_file_readable() {
+        let mut body = progression(0, 1, 2);
+        body.extend(progression(1, 0, 2));
+        body.extend(b"ab"); // a, ab
+        let mut bytes = container(0, 2, 2, 0, &[data_page(2, &body)]);
+        // Before the file metadata's stop byte; its last field is 4.
+        let fields = unskippable_fields(0xba);
+        let end = bytes.len() - 8;
+        bytes.splice(end - 1..end - 1, fields.iter().copied());
+        let length = bytes.len() - 8;
+        let footer = u32::from_le_bytes(bytes[length..length + 4].try_into().unwrap());
+        let footer = footer + u32::try_from(fields.len()).unwrap();
+        bytes[length..length + 4].copy_from_slice(&footer.to_le_bytes());
+        assert_eq!(strings(&read(&bytes).unwrap()), [Some("a"), Some("ab")]);
+    }
+
+    #[test]
+    fn unskippable_unknown_page_header_fields_keep_the_page_readable() {
+        let mut body = progression(0, 1, 2);
+        body.extend(progression(1, 0, 2));
+        body.extend(b"ab"); // a, ab
+        let mut page = data_page(2, &body);
+        // Before the page header's stop byte; its last field is 5.
+        let stop = page.len() - body.len() - 1;
+        page.splice(stop..stop, unskippable_fields(0xaa));
+        let bytes = container(0, 2, 2, 0, &[page]);
+        assert_eq!(strings(&read(&bytes).unwrap()), [Some("a"), Some("ab")]);
+    }
+
+    #[test]
+    fn presented_page_headers_refuse_pages_that_share_bytes() {
+        // A page header holding only an unknown empty set, which the native
+        // copy presents as a list, then a one-byte body.
+        let presented = [0x1a, 0x01, 0, 0xee];
+        let frame = |headers| framing::Framing {
+            metadata: &[],
+            pages: Vec::new(),
+            headers,
+        };
+        let mut file = presented.to_vec();
+        file.extend(presented);
+        let native = native_pages(&file, &frame(vec![(0..3, 4), (4..7, 8)])).unwrap();
+        assert_eq!(native.as_ref(), [0x19, 0x01, 0, 0xee, 0x19, 0x01, 0, 0xee]);
+        // Two chunks that name the same page share its bytes.
+        let shared = frame(vec![(0..3, 4), (0..3, 4)]);
+        assert_eq!(
+            native_pages(&presented, &shared).unwrap_err(),
+            Error::Malformed
+        );
+        // With nothing to present, the held bytes are read as they are.
+        let held = [0x19, 0x01, 0, 0xee];
+        assert_eq!(native_pages(&held, &shared).unwrap().as_ref(), held);
     }
 
     #[test]

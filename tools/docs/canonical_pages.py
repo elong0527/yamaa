@@ -1,6 +1,12 @@
-"""Render repository-owned pages without maintaining copies under docs/."""
+"""Render repository-owned pages without maintaining copies under docs/.
+
+Site pages under docs/ may also link to repository files outside docs/ by
+relative path, so a copy read at a release tag names that tag's files; the
+site, built from main, links them on main.
+"""
 
 import os
+import posixpath
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit
 
@@ -17,10 +23,19 @@ GENERATED = {
 }
 
 
+def leaves_docs(page, path):
+    """Whether a relative link on a docs page resolves outside docs/."""
+    target = posixpath.normpath(posixpath.join(posixpath.dirname(page), path))
+    return target == ".." or target.startswith("../")
+
+
 class RepositoryLinks(Treeprocessor):
-    def __init__(self, md, source_url):
+    def __init__(self, md, source_url, docs_page=None):
         super().__init__(md)
         self.source_url = source_url
+        # A page under docs/ keeps its links to other site pages for MkDocs to
+        # resolve; only a link that leaves docs/ names a repository file.
+        self.docs_page = docs_page
 
     def run(self, root):
         for element in root.iter():
@@ -30,6 +45,10 @@ class RepositoryLinks(Treeprocessor):
             destination = element.get(attribute, "")
             url = urlsplit(destination)
             if url.path and not (url.scheme or url.netloc or url.path.startswith("/")):
+                if self.docs_page is not None and not leaves_docs(
+                    self.docs_page, url.path
+                ):
+                    continue
                 source_url = self.source_url
                 if element.tag == "img":
                     source_url = source_url.replace("/blob/main/", "/raw/main/", 1)
@@ -37,14 +56,17 @@ class RepositoryLinks(Treeprocessor):
 
 
 class RepositoryLinksExtension(Extension):
-    def __init__(self, source_url):
+    def __init__(self, source_url, docs_page=None):
         super().__init__()
         self.source_url = source_url
+        self.docs_page = docs_page
 
     def extendMarkdown(self, md):
         # Resolve parsed Markdown links before MkDocs validates site links (0).
         md.treeprocessors.register(
-            RepositoryLinks(md, self.source_url), "repository_links", 2
+            RepositoryLinks(md, self.source_url, self.docs_page),
+            "repository_links",
+            2,
         )
 
 
@@ -90,7 +112,15 @@ def on_page_markdown(markdown, *, page, config, files):
         for extension in config.markdown_extensions
         if not isinstance(extension, RepositoryLinksExtension)
     ]
+    repository = config.repo_url.rstrip("/")
     if source := SOURCES.get(page.file.src_uri) or GENERATED.get(page.file.src_uri):
-        source_url = f"{config.repo_url.rstrip('/')}/blob/main/{source}"
+        source_url = f"{repository}/blob/main/{source}"
         config.markdown_extensions.append(RepositoryLinksExtension(source_url))
+    else:
+        root = Path(config.config_file_path).parent
+        docs = Path(os.path.relpath(config.docs_dir, root)).as_posix()
+        source_url = f"{repository}/blob/main/{docs}/{page.file.src_uri}"
+        config.markdown_extensions.append(
+            RepositoryLinksExtension(source_url, page.file.src_uri)
+        )
     return markdown

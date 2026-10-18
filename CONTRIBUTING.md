@@ -43,6 +43,20 @@ canonical `rust/Cargo.lock`. Host source packages carry that workspace and lock.
 The [source packaging guidance](docs/release.md#source-package-contents) links
 the vendored licenses and patch provenance.
 
+Every package ships the third-party notices generated from `rust/Cargo.lock`.
+After changing the lock, regenerate them and commit the results:
+
+```sh
+uv run --project python --no-sync python -m tools.packaging.generate_third_party_notices --write
+```
+
+`make check-repository` fails while a locked crate has no matching notice entry
+or the Python License-Expression misses a license that a linked crate is relied
+on under. The generator reads only the crate packages Cargo has unpacked. It
+stops instead of guessing when a crate needs a license outside its reviewed
+list or ships an unclassified license file; review the crate and extend the
+tables in `tools/packaging/generate_third_party_notices.py`.
+
 ## Develop and verify
 
 Run `make help` at the repository root for prerequisites, configuration variables
@@ -51,9 +65,17 @@ and supported targets. Its inventory is the command reference. Set
 After Rust changes, rerun `make setup`: it rebuilds the Python extension whenever
 a file listed under `tool.uv.cache-keys` in `python/pyproject.toml` changes.
 
+Before a push, run `make quick` and the tests nearest the change. It runs lint
+and the repository checks, leaving out only the R binding's Clippy, and no test
+suite, so it needs no R. Pull request CI runs the complete `make check`; when a
+job fails, reproduce it with that job's own target below. Run `make setup` again
+after changing `rust/` or `python/src/` before Python tests, which import the
+installed package.
+
 | Command | Purpose |
 | --- | --- |
 | `make setup` | Install the locked development environment. |
+| `make quick` | Run lint without the R binding and the repository checks, before a push. |
 | `make check` | Run the checks required by ordinary CI. |
 | `make check-lint` | Check formatting and lint across Python and Rust. |
 | `make check-repository` | Check authored specifications, layout, rules, references and the site. |
@@ -81,7 +103,9 @@ crate; do not import another crate's source into tests.
 Portable numerical behavior has independently authored controls in
 `rust/crates/yamaa-core/tests/fixtures/portable_math.tsv`.
 
-The Python and R READMEs describe user installation and APIs. Installed-host
+The Python and R READMEs describe user installation. The
+[Python package documentation](docs/articles/python.md) and the R README
+describe the host APIs. Installed-host
 [qualification](rust/qualification/README.md) owns distribution checks: tests
 run outside the checkout against an installed package, with independent inputs
 and expected bytes. A local source import does not establish package ownership
@@ -91,8 +115,8 @@ Repository orchestration imports the installed development tools package.
 Standalone installed suites use copied fixtures and readers; they must not
 import repository packages.
 
-For rule or schema changes, follow their area guides and run the corresponding
-AGENTS recipe. Repository Python checks source syntax, physical schema includes,
+For rule or schema changes, follow their area guides; `make quick` runs the
+repository checks. Repository Python checks source syntax, physical schema includes,
 fixture metadata, grammar documents, layout and editorial rules without
 importing an installed engine. Its complete-corpus test refuses imports of
 yamaa, Polars and PyArrow. Shared Rust tests own schema admission, inheritance,
@@ -125,9 +149,9 @@ issue, never in the repository.
 The ordinary CI workflow runs the same check targets listed above for each PR,
 every two hours on main, and on each push to a `release/**` branch. Merges to
 main do not start workflows other than the documentation site deployment; main
-is checked on those schedules instead. While a workflow's latest main run
-fails, the `Main health` workflow keeps a `main-red` issue open for it and
-closes the issue when a later main run succeeds. A PR that changes `.github/`
+is checked on those schedules instead. While the newest main run of CI or the
+documentation deployment fails, the `Main health` workflow keeps a `main-red`
+issue open for it and closes the issue when a later main run succeeds. A PR that changes `.github/`
 also runs actionlint over every workflow.
 Keep workflow-specific setup in CI and reusable check logic in `tools/`.
 Pin external actions to complete commit IDs with exact release comments.
@@ -264,7 +288,9 @@ Edit `README.md` for the site home and `rules/README.md` for the rules index.
 MkDocs reads those canonical files through its configured hook, resolves their
 repository-relative links and preserves their edit targets. Do not create
 copies under `docs/`. Other site pages live there; the navigation links directly
-to this contributor guide.
+to this contributor guide. A site page links a repository file outside `docs/`
+by relative path, such as `../rules/storage/csv.md`: the site points it at the
+file on main, and a copy read at a release tag names that tag's file.
 
 Requirement and schema-field references are generated from `rules/` and `yaml/`
 on every build. Edit the owning contract or schema, not a generated page.

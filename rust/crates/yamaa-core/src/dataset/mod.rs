@@ -23,7 +23,6 @@ pub use flags::{flag_condition_diagnostic, Flag, FlagBinding, FlagError, FlagRea
 mod functions;
 pub use functions::{BoundFunction, BoundProjectFunction, FunctionArgument, FunctionInput};
 mod aggregate;
-pub(crate) use aggregate::visit_ranges;
 pub use aggregate::{
     AggregateBinding, AggregateBindingError, AggregateDerivation, AggregatePhase,
     AggregateRelation, AggregateRowContext, AggregateSource, BoundAggregate,
