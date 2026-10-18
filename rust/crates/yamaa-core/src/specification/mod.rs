@@ -1986,6 +1986,14 @@ impl PreparedSpecification {
         let mut assignments = BTreeMap::new();
         let mut dependencies = Vec::new();
         for (column, declaration) in self.declarations.iter().enumerate() {
+            // A key that reads other records than its one base record has no
+            // key-phase value to bind (COLUMN-7).
+            let refused = self.key_record_findings(column);
+            if !refused.is_empty() {
+                findings.extend(refused);
+                dependencies.push(Some(Vec::new()));
+                continue;
+            }
             let declarations_reported = cases::padding_findings(&declaration.operation, findings)?;
             let mut edges = Vec::new();
             let path = &declaration.path;
@@ -2004,7 +2012,8 @@ impl PreparedSpecification {
                     catalog,
                     &self.source().name,
                     None,
-                    crate::reference_scope::Phase::Column { groups: &[] },
+                    self.odm_phase(column),
+                    self.record_rows(),
                     findings,
                 )?,
                 Operation::Aggregate(operation) => aggregates::bind(
@@ -2023,8 +2032,7 @@ impl PreparedSpecification {
                 )?,
                 Operation::Flag(operation) => flags::bind(
                     operation,
-                    column,
-                    &self.keys,
+                    self.reads_one_record(column),
                     &self.source().name,
                     catalog,
                     &self.intermediates,
@@ -2234,6 +2242,84 @@ impl PreparedSpecification {
         Ok((assignments, dependencies))
     }
 
+    /// Without row templates, a key derived by a window gives each retained
+    /// base record its own output row: the key table is the records
+    /// themselves, not their distinct key combinations.
+    pub(super) fn record_rows(&self) -> bool {
+        self.rows.is_none()
+            && self.keys.iter().any(|&key| {
+                self.declarations.get(key).is_some_and(|declaration| {
+                    matches!(declaration.operation, Operation::Window(_))
+                })
+            })
+    }
+    /// Whether a no-rows derivation of `column` reads one base record: a key
+    /// is computed per record, and with record rows every column reads its
+    /// row's one record. Otherwise a base read collects the distinct readings
+    /// of the records that feed the key combination.
+    pub(super) fn reads_one_record(&self, column: usize) -> bool {
+        self.keys.contains(&column) || self.record_rows()
+    }
+    /// The phase an `odm` read of `column` binds in without row templates.
+    /// With record rows a key is a derivation of its row's one record, as an
+    /// ungrouped row template's is; every other column is column-phase.
+    pub(super) fn odm_phase(&self, column: usize) -> crate::reference_scope::Phase<'static> {
+        if self.record_rows() && self.keys.contains(&column) {
+            crate::reference_scope::Phase::Row { group_by: None }
+        } else {
+            crate::reference_scope::Phase::Column { groups: &[] }
+        }
+    }
+    /// Without row templates, each key is computed from one base record
+    /// before any key combination exists (COLUMN-7). Unless record rows make
+    /// every record its own row, an aggregate, which reduces the records of a
+    /// key combination, and an `odm` read, which reads them, fail as
+    /// `key_dependency` at the operation, also inside a `case` branch.
+    pub(super) fn key_record_findings(&self, column: usize) -> Vec<BindFinding> {
+        fn visit(operation: &Operation, found: &mut Vec<(&'static str, String)>) {
+            match operation {
+                Operation::Aggregate(aggregate) => {
+                    found.push(("aggregate", aggregate.path().into()))
+                }
+                Operation::Odm(odm) => found.push(("odm", odm.path().into())),
+                Operation::Case(branches) => {
+                    for branch in branches {
+                        visit(&branch.operation, found);
+                    }
+                }
+                _ => (),
+            }
+        }
+        if self.rows.is_some() || self.record_rows() || !self.keys.contains(&column) {
+            return Vec::new();
+        }
+        let Some(declaration) = self.declarations.get(column) else {
+            return Vec::new();
+        };
+        let mut found = Vec::new();
+        visit(&declaration.operation, &mut found);
+        let name = &self.output.columns()[column].name;
+        found
+            .into_iter()
+            .map(|(operation, path)| {
+                BindFinding::Scalar(crate::diagnostic::Diagnostic {
+                    code: crate::diagnostic::ConditionCode::ColumnKeyRecordRead,
+                    spec_paths: vec![path],
+                    context: [
+                        ("column".into(), crate::json::Value::String(name.clone())),
+                        (
+                            "operation".into(),
+                            crate::json::Value::String(operation.into()),
+                        ),
+                    ]
+                    .into(),
+                    source_span: None,
+                    operand_route: None,
+                })
+            })
+            .collect()
+    }
+
     fn bind_project_function(
         &self,
         call: usize,
@@ -2244,7 +2330,7 @@ impl PreparedSpecification {
     ) -> Result<Option<Expression>, BindError> {
         let expression = {
             let calls = self.project_calls.as_ref().ok_or(BindError::Internal)?;
-            let record = self.keys.contains(&column);
+            let record = self.reads_one_record(column);
             let context = crate::project_call_binding::Context {
                 source_dataset: 0,
                 source_mode: if record {
@@ -2315,12 +2401,14 @@ impl PreparedSpecification {
                     // Distinct-value collection failures belong to first_available.
                     // Recursive operands retain their own expression and handler paths.
                     let read = match expression {
+                        // A row that is one base record reads that record's
+                        // value: the operand keeps its own collected read.
                         Expression::Collect {
                             column,
                             identifier,
                             filter,
                             selection: None,
-                        } => crate::dataset::SelectionRead::Collect {
+                        } if !self.record_rows() => crate::dataset::SelectionRead::Collect {
                             column,
                             identifier,
                             filter: filter.map(std::boxed::Box::new),

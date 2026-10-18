@@ -1328,3 +1328,56 @@ pub(crate) fn intermediate_key_reached() -> BTreeSet<ConditionCode> {
     )]
     .into()
 }
+
+/// Without row templates, a key computed by an aggregate reads every record
+/// of a key combination that does not exist yet (COLUMN-7). Binding and the
+/// static check report the same finding.
+pub(crate) fn key_record_reached() -> BTreeSet<ConditionCode> {
+    let mut nodes = vec![];
+    let root = T::map(vec![
+        ("schema_version", T::text("1.0")),
+        ("domain", T::text("TEST")),
+        ("base", T::text("SRC")),
+        (
+            "input",
+            T::map(vec![("SRC", T::map(vec![("path", T::text("source.csv"))]))]),
+        ),
+        ("keys", T::List(vec![T::text("ID"), T::text("TOP")])),
+        (
+            "columns",
+            T::List(vec![
+                column("ID", Some(op("source", "variable", "SRC.ID"))),
+                column("TOP", Some(op("aggregate", "expr", "MAX(SRC.V)"))),
+            ]),
+        ),
+        (
+            "output",
+            T::map(vec![
+                ("path", T::text("result.csv")),
+                ("columns", T::List(vec![T::text("ID"), T::text("TOP")])),
+            ]),
+        ),
+    ])
+    .append(&mut nodes);
+    let model = SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+        .unwrap()
+        .unwrap();
+    let prepared = PreparedSpecification::prepare(&model).unwrap();
+    let expected = |d: Diagnostic| {
+        check(
+            d,
+            "key_dependency",
+            Some("COLUMN-7"),
+            &["columns.TOP.derivation.aggregate"],
+            vec![("column", text("TOP")), ("operation", text("aggregate"))],
+        )
+    };
+    let checked = prepared.check_declaration_diagnostics();
+    assert_eq!(checked.len(), 1);
+    expected(checked[0].clone());
+    let found = failures(&prepared);
+    assert_eq!(found.len(), 1);
+    let mut diagnostics = found[0].diagnostics(prepared.source()).unwrap();
+    assert_eq!(diagnostics.len(), 1);
+    BTreeSet::from([expected(diagnostics.remove(0))])
+}
