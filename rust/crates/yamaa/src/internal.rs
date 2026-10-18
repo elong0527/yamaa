@@ -14,7 +14,7 @@ use std::sync::Arc;
 use crate::cancel::CancellationToken;
 use crate::diagnostic::Report;
 use crate::engine::SourceBytes;
-use crate::error::{Error, FunctionError, ResolverFailure};
+use crate::error::{FunctionError, ResolverFailure};
 use crate::functions::{
     Argument, CallError, FunctionHandle, FunctionIdentity, HostLanguage, LockContext, LockKind,
     ProjectFunctions, Signature,
@@ -99,9 +99,23 @@ impl yamaa_adapters::host_resources::Resolver for ResolverBridge {
     }
 }
 
-struct ObserverBridge<'a> {
+/// One observed operation: its measurements always, plus the caller's
+/// progress port when there is one.
+pub(crate) struct ObserverBridge<'a> {
     measurements: &'a yamaa_adapters::application_measurements::Measurements,
     progress: Option<&'a dyn Progress>,
+}
+
+impl<'a> ObserverBridge<'a> {
+    pub(crate) fn new(
+        measurements: &'a yamaa_adapters::application_measurements::Measurements,
+        progress: Option<&'a dyn Progress>,
+    ) -> Self {
+        Self {
+            measurements,
+            progress,
+        }
+    }
 }
 
 impl yamaa_core::application_observer::Observer for ObserverBridge<'_> {
@@ -160,6 +174,13 @@ pub(crate) fn resolver_bridge(
         .resolver
         .clone()
         .map(|bridge| bridge as Arc<dyn yamaa_adapters::host_resources::Resolver>)
+}
+
+/// Bridge one caller resolver into the adapters' resource port.
+pub(crate) fn bridge(
+    resolver: Arc<dyn ResourceResolver>,
+) -> Arc<dyn yamaa_adapters::host_resources::Resolver> {
+    Arc::new(ResolverBridge { inner: resolver })
 }
 
 struct HostPort<'a> {
@@ -291,11 +312,13 @@ pub(crate) fn snapshot_failures(
 }
 
 /// Format one retained project attempt into its public result candidate.
+/// Save targets resolve from the attempt's run scope.
 pub(crate) fn format_project_attempt(
     attempt: &ProjectAttempt,
     run: &Arc<yamaa_adapters::project_run::PreparedRun>,
     identity: yamaa_adapters::specification_report::Identity<'_>,
     project: &yamaa_adapters::file_project::FileProject,
+    run_scope: &yamaa_adapters::file_resources::RunScope,
 ) -> Result<yamaa_adapters::file_application::Domain, Vec<yamaa_adapters::issue_rows::Issue>> {
     use yamaa_adapters::project_report::Classified;
     let mut borrowed = Vec::new();
@@ -326,7 +349,9 @@ pub(crate) fn format_project_attempt(
     let formatted = yamaa_adapters::project_report::build_result(run, attempt, identity, &facts)
         .map_err(|error| error.refusal());
     match formatted {
-        Ok(result) => yamaa_adapters::file_application::Domain::from_project(result, project),
+        Ok(result) => {
+            yamaa_adapters::file_application::Domain::from_project(result, project, run_scope)
+        }
         Err(refusal) => Err(refusal.issues()),
     }
 }
@@ -392,9 +417,13 @@ pub(crate) enum BuildOutcome {
     },
 }
 
+/// Compilation reads through the engine's resolver. Each run opens its own
+/// resource scope: through the compile authority, or through the run's own
+/// resolver when it brings one.
 struct EngineRuntime<'a> {
     shared: &'a EngineShared,
     specification: &'a str,
+    run_resolver: Option<Arc<dyn yamaa_adapters::host_resources::Resolver>>,
 }
 
 impl yamaa_adapters::file_application::RuntimePort for EngineRuntime<'_> {
@@ -407,17 +436,19 @@ impl yamaa_adapters::file_application::RuntimePort for EngineRuntime<'_> {
 
     fn plain(
         &mut self,
-        prepared: yamaa_adapters::file_preparation::FileSpecification,
+        prepared: &yamaa_adapters::file_preparation::FileSpecification,
         scope: yamaa_core::application_observer::Scope<'_>,
     ) -> Result<Self::Result, Self::Error> {
         let identity = self.shared.identity("domain", self.specification);
-        let result = yamaa_adapters::file_application::plain(prepared, identity, scope);
+        let mut run_scope = prepared.run_scope(self.run_resolver.clone());
+        let result =
+            yamaa_adapters::file_application::plain(prepared, &mut run_scope, identity, scope);
         Ok(BuildOutcome::Plain { result })
     }
 
     fn project(
         &mut self,
-        mut project: Box<yamaa_adapters::file_project::FileProject>,
+        project: &yamaa_adapters::file_project::FileProject,
         scope: yamaa_core::application_observer::Scope<'_>,
     ) -> Result<Self::Result, Self::Error> {
         let Some(functions) = self.shared.functions.clone() else {
@@ -428,7 +459,9 @@ impl yamaa_adapters::file_application::RuntimePort for EngineRuntime<'_> {
                 ),
             });
         };
+        let mut run_scope = project.run_scope(self.run_resolver.clone());
         let inner = project.build_with(
+            &mut run_scope,
             |run| {
                 let bytes = run
                     .captured_environment()
@@ -444,7 +477,7 @@ impl yamaa_adapters::file_application::RuntimePort for EngineRuntime<'_> {
         let run = project.retained_run();
         scope.phase(yamaa_core::application_observer::Phase::Output);
         let identity = self.shared.identity("domain", self.specification);
-        let result = format_project_attempt(&inner, &run, identity, &project);
+        let result = format_project_attempt(&inner, &run, identity, project, &run_scope);
         scope.exit(
             yamaa_core::application_observer::Phase::Output,
             if result.is_ok() {
@@ -461,7 +494,7 @@ impl yamaa_adapters::file_application::RuntimePort for EngineRuntime<'_> {
 
     fn producer(
         &mut self,
-        graph: Box<yamaa_adapters::file_graph::FileGraph>,
+        graph: &yamaa_adapters::file_graph::FileGraph,
         scope: yamaa_core::application_observer::Scope<'_>,
     ) -> Result<Self::Result, Self::Error> {
         let Some(functions) = self.shared.functions.clone() else {
@@ -469,7 +502,8 @@ impl yamaa_adapters::file_application::RuntimePort for EngineRuntime<'_> {
                 issues: yamaa_adapters::file_application::unsupported("producer_host", None),
             });
         };
-        let mut build = graph.into_build();
+        let build = graph.build();
+        let mut run_scope = build.run_scope(self.run_resolver.clone());
         let provenance = Arc::clone(build.provenance());
         let lock_bytes = provenance
             .environment()
@@ -480,7 +514,7 @@ impl yamaa_adapters::file_application::RuntimePort for EngineRuntime<'_> {
             lock_bytes: &lock_bytes,
         };
         let identity = self.shared.identity("domain", self.specification);
-        let inner = build.build_owned_reported(&mut port, identity, scope);
+        let inner = build.build_owned_reported(&mut run_scope, &mut port, identity, scope);
         // The Output phase starts after the producer build, exactly as the
         // pre-facade host paths did: producer execution is not output work.
         scope.phase(yamaa_core::application_observer::Phase::Output);
@@ -526,6 +560,7 @@ pub(crate) fn run_check(
     }
     let identity = shared.identity("check", specification);
     yamaa_adapters::file_application::check_with_resolver(
+        shared.language,
         yamaa_core::domain_entry::Request {
             specification,
             environment,
@@ -535,29 +570,43 @@ pub(crate) fn run_check(
     )
 }
 
-pub(crate) fn run_build(
+/// One compiled request: the selected prepared route, or a refused
+/// compilation that still owns its diagnostics and the sources it captured.
+pub(crate) enum Compiled {
+    Ready(Box<yamaa_adapters::file_workflow::Selected>),
+    Refused {
+        issues: Vec<yamaa_adapters::issue_rows::Issue>,
+        sources: RetainedSources,
+    },
+}
+
+fn selection_failed(
+    error: &yamaa_adapters::file_workflow::SelectionError,
+    shared: &EngineShared,
+) -> (Vec<yamaa_adapters::issue_rows::Issue>, RetainedSources) {
+    (
+        yamaa_adapters::project_application::selection_failure(error, shared.language),
+        error.retained_sources(),
+    )
+}
+
+/// The Preparation half of a build: capture metadata through the engine's
+/// resolver, admit and compile. No study input is captured or read.
+pub(crate) fn compile(
     shared: &EngineShared,
     specification: &str,
     environment: Option<&str>,
-    token: &CancellationToken,
-    measurements: &Arc<yamaa_adapters::application_measurements::Measurements>,
-) -> Result<BuildOutcome, Error> {
-    if token.is_cancelled() {
-        return Err(Error::Cancelled);
-    }
-    let bridge = ObserverBridge {
-        measurements,
-        progress: shared.observer.as_deref(),
-    };
-    let scope = yamaa_core::application_observer::Scope::new(&bridge);
+    scope: yamaa_core::application_observer::Scope<'_>,
+) -> Compiled {
     let mut application = yamaa_adapters::file_application::Application {
         host: shared.language,
         runtime: EngineRuntime {
             shared,
             specification,
+            run_resolver: None,
         },
     };
-    match yamaa_core::domain_entry::domain(
+    match yamaa_core::domain_entry::compile(
         yamaa_core::domain_entry::Request {
             specification,
             environment,
@@ -565,12 +614,49 @@ pub(crate) fn run_build(
         &mut application,
         scope,
     ) {
-        Ok(outcome) => Ok(outcome),
+        Ok(selected) => Compiled::Ready(Box::new(selected)),
         Err(yamaa_adapters::file_application::ApplicationError::Preparation(error)) => {
-            let issues =
-                yamaa_adapters::project_application::selection_failure(&error, shared.language);
-            let sources = error.retained_sources();
-            Ok(BuildOutcome::SelectionFailed { issues, sources })
+            let (issues, sources) = selection_failed(&error, shared);
+            Compiled::Refused { issues, sources }
+        }
+        Err(yamaa_adapters::file_application::ApplicationError::Runtime(never)) => match never {},
+    }
+}
+
+/// The Build and Finished half: one run of a compiled request in its own
+/// resource scope. A refused compilation's run returns its held refusal and
+/// performs no resource, activation or study work.
+pub(crate) fn run(
+    shared: &EngineShared,
+    specification: &str,
+    compiled: &Compiled,
+    run_resolver: Option<Arc<dyn yamaa_adapters::host_resources::Resolver>>,
+    scope: yamaa_core::application_observer::Scope<'_>,
+) -> BuildOutcome {
+    let selected = match compiled {
+        Compiled::Ready(selected) => selected,
+        Compiled::Refused { issues, sources } => {
+            yamaa_core::domain_entry::finish(scope);
+            return BuildOutcome::SelectionFailed {
+                issues: issues.clone(),
+                sources: sources.clone(),
+            };
+        }
+    };
+    let mut application = yamaa_adapters::file_application::Application {
+        host: shared.language,
+        runtime: EngineRuntime {
+            shared,
+            specification,
+            run_resolver,
+        },
+    };
+    match yamaa_core::domain_entry::run(selected, &mut application, scope) {
+        Ok(outcome) => outcome,
+        // A run selects nothing; keep any selection refusal typed regardless.
+        Err(yamaa_adapters::file_application::ApplicationError::Preparation(error)) => {
+            let (issues, sources) = selection_failed(&error, shared);
+            BuildOutcome::SelectionFailed { issues, sources }
         }
         Err(yamaa_adapters::file_application::ApplicationError::Runtime(never)) => match never {},
     }

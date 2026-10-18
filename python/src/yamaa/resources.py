@@ -215,7 +215,8 @@ class MemoryResolver(ResourceResolver):
             # on the target identity, so overlapping publishes to the same
             # target cannot delete each other's provisional output. Stage is
             # atomic: a failed Stage leaves nothing to abort.
-            self.staging.pop(request.reference, None)
+            if request.reference is not None:
+                self.staging.pop(request.reference, None)
             return ResourceResult(request.reference or "aborted")
         if self.cancelled:
             raise ResourceFailure("cancelled")
@@ -249,6 +250,8 @@ class MemoryResolver(ResourceResolver):
                 self.staging.pop(token, None)
                 raise
         if request.operation == "commit":
+            if request.reference is None:
+                raise ResourceFailure("publication")
             try:
                 target, data = self.staging.pop(request.reference)
             except KeyError:

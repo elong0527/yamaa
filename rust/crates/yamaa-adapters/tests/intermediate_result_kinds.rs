@@ -81,11 +81,20 @@ fn assert_output(specification: &str, expected: &str) {
         specification: &path,
         environment: None,
     };
-    let checked = file_application::check(request(), identity(&path));
+    let checked = file_application::check(
+        yamaa_core::project_function::Language::Python,
+        request(),
+        identity(&path),
+    );
     assert!(checked.is_empty(), "{checked:?}\n{specification}");
     assert!(!study.0.join("ex.csv").exists());
     study.input();
-    let mut result = file_application::domain(request(), identity(&path)).unwrap();
+    let mut result = file_application::domain(
+        yamaa_core::project_function::Language::Python,
+        request(),
+        identity(&path),
+    )
+    .unwrap();
     assert!(
         result.issues().is_empty(),
         "{:?}\n{specification}",
@@ -187,7 +196,11 @@ fn known_date_choices_reject_incompatible_filter_types_in_check_and_build() {
             specification: &path,
             environment: None,
         };
-        let checked = file_application::check(request(), identity(&path));
+        let checked = file_application::check(
+            yamaa_core::project_function::Language::Python,
+            request(),
+            identity(&path),
+        );
         assert_eq!(checked.len(), 1, "{operation}: {checked:?}");
         assert_eq!(checked[0].condition, "incompatible_input_type");
         assert_eq!(checked[0].requirement.as_deref(), Some("REQ-0190"));
@@ -197,7 +210,12 @@ fn known_date_choices_reject_incompatible_filter_types_in_check_and_build() {
             yamaa_adapters::json!({"left_type":"date","right_type":"str"})
         );
         study.input();
-        let result = file_application::domain(request(), identity(&path)).unwrap();
+        let result = file_application::domain(
+            yamaa_core::project_function::Language::Python,
+            request(),
+            identity(&path),
+        )
+        .unwrap();
         assert_eq!(result.issues(), checked);
         assert!(result.output().is_none());
         assert!(!study.0.join("out.csv").exists());
@@ -231,14 +249,23 @@ fn unknown_choices_compare_the_actual_date_when_a_date_source_is_present() {
             specification: &path,
             environment: None,
         };
-        let checked = file_application::check(request(), identity(&path));
+        let checked = file_application::check(
+            yamaa_core::project_function::Language::Python,
+            request(),
+            identity(&path),
+        );
         assert!(checked.is_empty(), "{checked:?}");
         fs::write(
             study.0.join("ex.csv"),
             "USUBJID,EXSTDTC,EXENDTC,REFDTC\nS01,2024-01-01,2024-01-10,2024-01-01\n",
         )
         .unwrap();
-        let mut result = file_application::domain(request(), identity(&path)).unwrap();
+        let mut result = file_application::domain(
+            yamaa_core::project_function::Language::Python,
+            request(),
+            identity(&path),
+        )
+        .unwrap();
         assert!(
             result.issues().is_empty(),
             "{expression}: {:?}",
@@ -261,14 +288,23 @@ fn unknown_choices_report_the_actual_integer_when_date_sources_are_missing() {
             specification: &path,
             environment: None,
         };
-        let checked = file_application::check(request(), identity(&path));
+        let checked = file_application::check(
+            yamaa_core::project_function::Language::Python,
+            request(),
+            identity(&path),
+        );
         assert!(checked.is_empty(), "{checked:?}");
         fs::write(
             study.0.join("ex.csv"),
             "USUBJID,EXSTDTC,EXENDTC,REFDTC\nS01,,,2024-01-01\n",
         )
         .unwrap();
-        let result = file_application::domain(request(), identity(&path)).unwrap();
+        let result = file_application::domain(
+            yamaa_core::project_function::Language::Python,
+            request(),
+            identity(&path),
+        )
+        .unwrap();
         let issues = result.issues();
         assert_eq!(issues.len(), 1, "{expression}: {issues:?}");
         assert_eq!(issues[0].condition, "incompatible_input_type");
@@ -293,14 +329,23 @@ fn assert_integer_day_count(expression: &str, integer_row: &str, float_row: &str
         specification: &path,
         environment: None,
     };
-    let checked = file_application::check(request(), identity(&path));
+    let checked = file_application::check(
+        yamaa_core::project_function::Language::Python,
+        request(),
+        identity(&path),
+    );
     assert!(checked.is_empty(), "{expression}: {checked:?}");
     fs::write(
         study.0.join("ex.csv"),
         format!("USUBJID,EXSTDTC,EXENDTC,EXINT,EXFLOAT\n{integer_row}\n"),
     )
     .unwrap();
-    let mut result = file_application::domain(request(), identity(&path)).unwrap();
+    let mut result = file_application::domain(
+        yamaa_core::project_function::Language::Python,
+        request(),
+        identity(&path),
+    )
+    .unwrap();
     assert!(
         result.issues().is_empty(),
         "{expression}: {:?}",
@@ -317,7 +362,12 @@ fn assert_integer_day_count(expression: &str, integer_row: &str, float_row: &str
         format!("USUBJID,EXSTDTC,EXENDTC,EXINT,EXFLOAT\n{float_row}\n"),
     )
     .unwrap();
-    let result = file_application::domain(request(), identity(&path)).unwrap();
+    let result = file_application::domain(
+        yamaa_core::project_function::Language::Python,
+        request(),
+        identity(&path),
+    )
+    .unwrap();
     let issues = result.issues();
     assert_eq!(issues.len(), 1, "{expression}: {issues:?}");
     assert_eq!(issues[0].condition, "incompatible_input_type");
@@ -381,14 +431,23 @@ fn unknown_kind_survives_later_aliases_and_choices() {
                 specification: &path,
                 environment: None,
             };
-            let checked = file_application::check(request(), identity(&path));
+            let checked = file_application::check(
+                yamaa_core::project_function::Language::Python,
+                request(),
+                identity(&path),
+            );
             assert!(checked.is_empty(), "{expression}, {alias}: {checked:?}");
             fs::write(
                 study.0.join("ex.csv"),
                 "USUBJID,EXSTDTC,EXENDTC,REFDTC\nS01,,,2024-01-01\n",
             )
             .unwrap();
-            let mut result = file_application::domain(request(), identity(&path)).unwrap();
+            let mut result = file_application::domain(
+                yamaa_core::project_function::Language::Python,
+                request(),
+                identity(&path),
+            )
+            .unwrap();
             let issues = result.issues();
             assert!(issues.is_empty(), "{expression}, {alias}: {issues:?}");
             assert!(result.save().unwrap());
@@ -412,13 +471,23 @@ fn unknown_kind_flows_through_an_earlier_selector_in_dependency_order() {
         specification: &path,
         environment: None,
     };
-    assert!(file_application::check(request(), identity(&path)).is_empty());
+    assert!(file_application::check(
+        yamaa_core::project_function::Language::Python,
+        request(),
+        identity(&path)
+    )
+    .is_empty());
     fs::write(
         study.0.join("ex.csv"),
         "USUBJID,EXSTDTC,EXENDTC,REFDTC\nS01,2024-01-01,2024-01-10,2024-01-01\n",
     )
     .unwrap();
-    let mut result = file_application::domain(request(), identity(&path)).unwrap();
+    let mut result = file_application::domain(
+        yamaa_core::project_function::Language::Python,
+        request(),
+        identity(&path),
+    )
+    .unwrap();
     assert!(result.issues().is_empty(), "{:?}", result.issues());
     assert!(result.save().unwrap());
     assert_eq!(
@@ -442,13 +511,23 @@ fn generic_predicate_consumers_use_the_named_intermediates_unknown_kind() {
         specification: &path,
         environment: None,
     };
-    assert!(file_application::check(request(), identity(&path)).is_empty());
+    assert!(file_application::check(
+        yamaa_core::project_function::Language::Python,
+        request(),
+        identity(&path)
+    )
+    .is_empty());
     fs::write(
         study.0.join("ex.csv"),
         "USUBJID,EXSTDTC,EXENDTC,REFDTC\nS01,2024-01-01,2024-01-10,2024-01-01\n",
     )
     .unwrap();
-    let mut result = file_application::domain(request(), identity(&path)).unwrap();
+    let mut result = file_application::domain(
+        yamaa_core::project_function::Language::Python,
+        request(),
+        identity(&path),
+    )
+    .unwrap();
     assert!(result.issues().is_empty(), "{:?}", result.issues());
     assert!(result.save().unwrap());
     assert_eq!(
@@ -469,14 +548,23 @@ fn unknown_numeric_operands_do_not_invent_an_integer_result_kind() {
         specification: &path,
         environment: None,
     };
-    let checked = file_application::check(request(), identity(&path));
+    let checked = file_application::check(
+        yamaa_core::project_function::Language::Python,
+        request(),
+        identity(&path),
+    );
     assert!(checked.is_empty(), "{checked:?}");
     fs::write(
         study.0.join("ex.csv"),
         "USUBJID,EXSTDTC,EXENDTC,EXINT,EXFLOAT\nS01,2024-01-01,,,1.5\n",
     )
     .unwrap();
-    let result = file_application::domain(request(), identity(&path)).unwrap();
+    let result = file_application::domain(
+        yamaa_core::project_function::Language::Python,
+        request(),
+        identity(&path),
+    )
+    .unwrap();
     let issues = result.issues();
     assert_eq!(issues.len(), 1, "{issues:?}");
     assert_eq!(issues[0].condition, "incompatible_input_type");
@@ -522,14 +610,23 @@ fn assert_nested_lookup_output(specification: &str, input: &str, expected: &[u8]
         specification: &path,
         environment: None,
     };
-    let checked = file_application::check(request(), identity(&path));
+    let checked = file_application::check(
+        yamaa_core::project_function::Language::Python,
+        request(),
+        identity(&path),
+    );
     assert!(checked.is_empty(), "{checked:?}");
     fs::write(
         study.0.join("ex.csv"),
         format!("USUBJID,EXSTDTC,EXENDTC\n{input}"),
     )
     .unwrap();
-    let mut result = file_application::domain(request(), identity(&path)).unwrap();
+    let mut result = file_application::domain(
+        yamaa_core::project_function::Language::Python,
+        request(),
+        identity(&path),
+    )
+    .unwrap();
     assert!(result.issues().is_empty(), "{:?}", result.issues());
     assert!(result.save().unwrap());
     assert_eq!(fs::read(study.0.join("out.csv")).unwrap(), expected);
@@ -561,13 +658,23 @@ fn assert_nested_lookup_type_error(
         specification: &path,
         environment: None,
     };
-    assert!(file_application::check(request(), identity(&path)).is_empty());
+    assert!(file_application::check(
+        yamaa_core::project_function::Language::Python,
+        request(),
+        identity(&path)
+    )
+    .is_empty());
     fs::write(
         study.0.join("ex.csv"),
         "USUBJID,EXSTDTC,EXENDTC\nS01,,2024-01-01\n",
     )
     .unwrap();
-    let result = file_application::domain(request(), identity(&path)).unwrap();
+    let result = file_application::domain(
+        yamaa_core::project_function::Language::Python,
+        request(),
+        identity(&path),
+    )
+    .unwrap();
     let issues = result.issues();
     assert_eq!(issues.len(), 1, "{issues:?}");
     assert_eq!(issues[0].condition, "incompatible_input_type");

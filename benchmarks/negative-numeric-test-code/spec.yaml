@@ -1,0 +1,57 @@
+schema_version: "1.0"
+domain: LB
+keys: [STUDYID, USUBJID, LBTESTCD]
+input:
+  LB_RAW: input/lb_raw.csv
+
+output:
+  path: lb.csv
+  columns: [STUDYID, USUBJID, LBTESTCD, LBORRES]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: LB_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: LB_RAW.USUBJID
+
+  # The laboratory numbers its tests, so the test code was declared an
+  # integer. Each test's result length below applies to the rows carrying
+  # that test code, which an integer column never holds, so the
+  # specification is rejected before any data is read.
+  - name: LBTESTCD
+    type: int
+    label: Lab Test or Examination Short Name
+
+  - name: LBORRES
+    type: str
+    label: Result or Finding in Original Units
+
+rows:
+  # One glucose and one creatinine record per collected sample, each with
+  # its own maximum result length.
+  - id: glucose
+    derivations:
+      LBTESTCD: {literal: "1001"}
+      LBORRES: LB_RAW.GLUC
+    submission:
+      LBORRES:
+        length: 4
+        origin:
+          type: Collected
+          source: Vendor
+
+  - id: creatinine
+    derivations:
+      LBTESTCD: {literal: "1002"}
+      LBORRES: LB_RAW.CREAT
+    submission:
+      LBORRES:
+        length: 3
+        origin:
+          type: Collected
+          source: Vendor

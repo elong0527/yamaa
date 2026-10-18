@@ -16,10 +16,11 @@ use crate::diagnostic::Report;
 use crate::error::{Error, FunctionError};
 use crate::functions::{HostLanguage, ProjectFunctions};
 use crate::internal::{
-    outcome_accepted, outcome_report, run_build, run_check, snapshot_failures,
-    AttemptFailure as InternalFailure, BuildOutcome, EngineShared,
+    outcome_accepted, outcome_report, run_check, snapshot_failures,
+    AttemptFailure as InternalFailure, BuildOutcome, EngineShared, ObserverBridge,
 };
 use crate::observe::Progress;
+use crate::plan::Plan;
 use crate::resolver::ResourceResolver;
 use crate::table::Table;
 
@@ -54,13 +55,6 @@ pub struct EngineOptions {
     pub runtime_version: String,
     pub functions: Option<Arc<dyn ProjectFunctions>>,
     pub observer: Option<Arc<dyn Progress>>,
-}
-
-// HostLanguage needs a default for the derived Default above.
-impl Default for HostLanguage {
-    fn default() -> Self {
-        Self::Python
-    }
 }
 
 impl EngineOptions {
@@ -232,9 +226,78 @@ impl Engine {
         ))
     }
 
-    /// Prepare, bind, execute and retain one build. Every adjudicated outcome
-    /// returns an owned build carrying its outputs, logs, observations and
-    /// diagnostics; only cancellation fails the call itself.
+    /// Prepare a specification once for many runs. Compilation captures and
+    /// admits the metadata through the engine's resolver and compiles the
+    /// selected route; it reads no study data and activates nothing. A refused
+    /// compilation still returns a plan that owns its report and the sources
+    /// it captured; only cancellation fails the call itself.
+    ///
+    /// # Example
+    ///
+    /// The compile resolver holds only the specification: a valid
+    /// specification makes no input request. The plan's run reads the input
+    /// from the same resolver. Lanes without the `yaml` feature return a
+    /// refused plan carrying diagnostics.
+    ///
+    /// ```
+    /// use std::sync::Arc;
+    ///
+    /// use yamaa::{CancellationToken, Engine, EngineOptions, HostLanguage, MemoryResolver, Request,
+    ///     RunRequest};
+    ///
+    /// let resolver = Arc::new(MemoryResolver::new());
+    /// resolver.insert("/", "spec.yaml", "spec:1", Arc::from(
+    ///     &b"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n"[..],
+    /// ));
+    /// let engine = Engine::new(
+    ///     EngineOptions::new(HostLanguage::Python, "doctest".into(), "0".into())
+    ///         .with_resolver(resolver.clone()),
+    /// );
+    /// let token = CancellationToken::new();
+    /// let plan = engine.compile(&Request::new("spec.yaml"), &token).unwrap();
+    /// resolver.insert("/spec.yaml", "input.csv", "data:1", Arc::from(&b"ID\n1\n2\n"[..]));
+    /// let build = plan.run(&RunRequest::new(), &token).unwrap();
+    /// if cfg!(feature = "yaml") {
+    ///     assert!(plan.report().is_empty());
+    ///     assert_eq!(build.output().unwrap().rows(), 2);
+    /// } else {
+    ///     assert!(!plan.report().is_empty());
+    ///     assert!(build.output().is_none());
+    /// }
+    /// ```
+    pub fn compile(&self, request: &Request<'_>, token: &CancellationToken) -> Result<Plan, Error> {
+        if token.is_cancelled() {
+            return Err(Error::Cancelled);
+        }
+        let measurements = yamaa_adapters::application_measurements::Measurements::new();
+        Ok(self.compile_observed(request, &measurements, self.shared.observer.as_deref()))
+    }
+
+    fn compile_observed(
+        &self,
+        request: &Request<'_>,
+        measurements: &yamaa_adapters::application_measurements::Measurements,
+        progress: Option<&dyn Progress>,
+    ) -> Plan {
+        let bridge = ObserverBridge::new(measurements, progress);
+        let compiled = crate::internal::compile(
+            &self.shared,
+            request.specification,
+            request.environment,
+            yamaa_core::application_observer::Scope::new(&bridge),
+        );
+        Plan::new(
+            Arc::clone(&self.shared),
+            request.specification.to_owned(),
+            compiled,
+        )
+    }
+
+    /// Prepare, bind, execute and retain one build: exactly one
+    /// [`Engine::compile`] followed by one [`Plan::run`], with the same
+    /// events. Every adjudicated outcome returns an owned build carrying its
+    /// outputs, logs, observations and diagnostics; only cancellation fails
+    /// the call itself.
     ///
     /// # Example
     ///
@@ -291,14 +354,15 @@ impl Engine {
     /// }
     /// ```
     pub fn build(&self, request: &Request<'_>, token: &CancellationToken) -> Result<Build, Error> {
+        if token.is_cancelled() {
+            return Err(Error::Cancelled);
+        }
+        // One measurement owner sees both halves, so a build's evidence is
+        // the compilation's events followed by the run's.
         let measurements = Arc::new(yamaa_adapters::application_measurements::Measurements::new());
-        let outcome = run_build(
-            &self.shared,
-            request.specification,
-            request.environment,
-            token,
-            &measurements,
-        )?;
+        let progress = self.shared.observer.as_deref();
+        let plan = self.compile_observed(request, &measurements, progress);
+        let outcome = plan.run_observed(None, &measurements, progress);
         measurements.complete(outcome_accepted(&outcome));
         Ok(Build::from_outcome(outcome, measurements, &self.shared))
     }

@@ -50,6 +50,7 @@ mod scalar {
                     base_directory: ".",
                 };
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,
                         environment: None,
@@ -107,6 +108,7 @@ mod scalar {
         ) -> Result<file_application::Domain, Vec<yamaa_adapters::issue_rows::Issue>> {
             let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
             file_application::domain(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &specification,
                     environment: None,
@@ -403,7 +405,7 @@ mod scalar {
                 specification: &path,
                 base_directory: ".",
             };
-            let checked = file_application::check(
+            let checked = file_application::check(yamaa_core::project_function::Language::Python,
                 Request { specification: &path, environment: None },
                 identity,
             );
@@ -461,6 +463,7 @@ mod scalar {
             {
                 let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,
                         environment: None,
@@ -842,6 +845,7 @@ rows:
                 fs::write(self.0.join("spec.yaml"), raw).unwrap();
                 let path = self.0.join("spec.yaml").to_str().unwrap().to_owned();
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
                         environment: None,

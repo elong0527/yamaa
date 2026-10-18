@@ -41,20 +41,17 @@ mod file {
                 }) else {
                     panic!("selected producer workflow")
                 };
-                let consumer = &graph.graph().nodes()[0].document;
+                let consumer = &graph.nodes()[0].document;
                 let schema = consumer.written_input_origin("P", "schema").unwrap();
                 assert_eq!(schema.declaring_source, study.path("shared/consumer.yaml"));
                 assert_eq!(schema.base_source, path);
-                let output = graph.graph().nodes()[1]
-                    .document
-                    .written_output_origin()
-                    .unwrap();
+                let output = graph.nodes()[1].document.written_output_origin().unwrap();
                 assert_eq!(output.declaring_source, study.path("shared/producer.yaml"));
                 assert_eq!(
                     output.base_source,
                     study.path(&format!("{name}/producer.yaml"))
                 );
-                let mut build = graph.into_build();
+                let mut build = GraphBuild::new(*graph);
                 let mut activation = Activation::new(&study, Mode::Pass);
                 let owned = build.build_owned_reported(&mut activation, report_id(), scope());
                 assert!(owned.accepted());
@@ -68,6 +65,7 @@ mod file {
             study.write("third/spec.yaml", "schema_version: '1.0'\nparents: ../shared/consumer.yaml\ninput: {P: {schema: ../shared/producer.yaml}}\n");
             let path = study.path("third/spec.yaml");
             let issues = yamaa_adapters::file_application::check(
+                yamaa_core::project_function::Language::Python,
                 yamaa_core::domain_entry::Request {
                     specification: &path,
                     environment: None,
@@ -103,8 +101,8 @@ mod file {
         };
         use yamaa_adapters::{
             file_graph::FileGraph,
-            file_producer_build::{Attempt, BoundaryFailure, FileBuild},
-            file_resources::{Error as ResourceError, Resources},
+            file_producer_build::{Attempt, BoundaryFailure, OwnedAttempt, Provenance},
+            file_resources::{Error as ResourceError, Resources, RunScope},
             project_source::{self, Kind, OwnedEnvironment, ProjectCapturePort, Reply, Request},
             shipped_schema,
             specification_source::Source,
@@ -132,6 +130,56 @@ mod file {
             yamaa_core::application_observer::Scope::new(&yamaa_core::application_observer::Noop)
         }
 
+        /// One prepared graph and the single run scope all its builds share,
+        /// so repeated builds here keep each other's study snapshots.
+        struct GraphBuild {
+            graph: FileGraph,
+            run: RunScope,
+        }
+        impl GraphBuild {
+            fn new(graph: FileGraph) -> Self {
+                let run = graph.build().run_scope(None);
+                Self { graph, run }
+            }
+            fn provenance(&self) -> &Arc<Provenance> {
+                self.graph.build().provenance()
+            }
+            fn build<A: ActivationPort, R: ReportPort>(
+                &mut self,
+                activation: &mut A,
+                report: &mut R,
+                scope: Scope<'_>,
+            ) -> Attempt<A::Error, R::Report, R::Error> {
+                self.graph
+                    .build()
+                    .build(&mut self.run, activation, report, scope)
+            }
+            fn build_reported<A: ActivationPort>(
+                &mut self,
+                activation: &mut A,
+                id: yamaa_adapters::specification_report::Identity<'_>,
+                scope: Scope<'_>,
+            ) -> Attempt<
+                A::Error,
+                yamaa_adapters::report_storage::StoredReport,
+                yamaa_adapters::specification_report::Error,
+            > {
+                self.graph
+                    .build()
+                    .build_reported(&mut self.run, activation, id, scope)
+            }
+            fn build_owned_reported<A: ActivationPort>(
+                &mut self,
+                activation: &mut A,
+                id: yamaa_adapters::specification_report::Identity<'_>,
+                scope: Scope<'_>,
+            ) -> OwnedAttempt<A::Error> {
+                self.graph
+                    .build()
+                    .build_owned_reported(&mut self.run, activation, id, scope)
+            }
+        }
+
         static NEXT: AtomicUsize = AtomicUsize::new(0);
         struct Study(PathBuf);
         impl Study {
@@ -155,15 +203,16 @@ mod file {
                 fs::create_dir_all(path.parent().unwrap()).unwrap();
                 fs::write(path, bytes).unwrap();
             }
-            fn build(&self, language: Language) -> FileBuild {
-                FileGraph::prepare(
-                    Resources::new(&self.path(""), &self.path(""), &[]).unwrap(),
-                    "consumer/root.yaml",
-                    environment(language),
-                    shipped_schema::capture().unwrap(),
+            fn build(&self, language: Language) -> GraphBuild {
+                GraphBuild::new(
+                    FileGraph::prepare(
+                        Resources::new(&self.path(""), &self.path(""), &[]).unwrap(),
+                        "consumer/root.yaml",
+                        environment(language),
+                        shipped_schema::capture().unwrap(),
+                    )
+                    .unwrap_or_else(|error| panic!("graph fixture: {:?}", error.error())),
                 )
-                .unwrap_or_else(|error| panic!("graph fixture: {:?}", error.error()))
-                .into_build()
             }
             fn rounded(&self) {
                 self.write("producer/layers/base.yaml", PRODUCER);
@@ -1490,7 +1539,13 @@ columns:
                     "producer/p.yaml",
                 )
                 .unwrap();
-                let mut direct = file_application::plain(prepared, id(), Scope::default()).unwrap();
+                let mut direct = file_application::plain(
+                    &prepared,
+                    &mut prepared.run_scope(None),
+                    id(),
+                    Scope::default(),
+                )
+                .unwrap();
                 assert_eq!(direct.observations()["diagnostics"], expected);
                 assert!(direct.output().is_none());
                 assert!(direct.save().is_err());
@@ -1572,14 +1627,15 @@ columns:
             use yamaa_adapters::producer_result::{self, RootResult};
 
             fn build_at(study: &Study, entry: &str) -> RootResult {
-                let mut build = FileGraph::prepare(
-                    Resources::new(&study.path(""), &study.path(""), &[]).unwrap(),
-                    entry,
-                    environment(Language::Python),
-                    shipped_schema::capture().unwrap(),
-                )
-                .unwrap_or_else(|error| panic!("graph fixture: {:?}", error.error()))
-                .into_build();
+                let mut build = GraphBuild::new(
+                    FileGraph::prepare(
+                        Resources::new(&study.path(""), &study.path(""), &[]).unwrap(),
+                        entry,
+                        environment(Language::Python),
+                        shipped_schema::capture().unwrap(),
+                    )
+                    .unwrap_or_else(|error| panic!("graph fixture: {:?}", error.error())),
+                );
                 let attempt = build.build_owned_reported(
                     &mut Activation::new(study, Mode::Pass),
                     report_id(),
@@ -1778,6 +1834,7 @@ columns:
             );
             // The static-check facade surfaces the same row as an issue.
             let issues = yamaa_adapters::file_application::check(
+                yamaa_core::project_function::Language::Python,
                 yamaa_core::domain_entry::Request {
                     specification: &study.path("consumer/root.yaml"),
                     environment: None,
@@ -2694,13 +2751,13 @@ columns:
                 panic!("producer capability");
             };
             assert_eq!(graph.capture_reads(), 5); // environment, lock, entry, producer, parent
-            let root = Arc::clone(&graph.graph().nodes()[0].document);
-            let producer = Arc::clone(&graph.graph().nodes()[1].document);
+            let root = Arc::clone(&graph.nodes()[0].document);
+            let producer = Arc::clone(&graph.nodes()[1].document);
             assert!(Arc::ptr_eq(
-                &graph.graph().nodes()[0].producers[0].document,
-                &graph.graph().nodes()[0].producers[1].document
+                &graph.nodes()[0].producers[0].document,
+                &graph.nodes()[0].producers[1].document
             ));
-            let mut build = (*graph).into_build();
+            let mut build = GraphBuild::new(*graph);
             assert!(Arc::ptr_eq(&root, &build.provenance().documents()[0]));
             assert!(Arc::ptr_eq(&producer, &build.provenance().documents()[1]));
             let mut activation = Activation::new(&study, Mode::Pass);
@@ -2764,14 +2821,15 @@ columns:
                 )
                 .unwrap()
                 .into_owned();
-                let mut build = FileGraph::prepare(
-                    Resources::new(&study.path(""), &study.path(""), &[]).unwrap(),
-                    "root.yaml",
-                    environment,
-                    shipped_schema::capture().unwrap(),
-                )
-                .unwrap_or_else(|error| panic!("graph fixture: {:?}", error.error()))
-                .into_build();
+                let mut build = GraphBuild::new(
+                    FileGraph::prepare(
+                        Resources::new(&study.path(""), &study.path(""), &[]).unwrap(),
+                        "root.yaml",
+                        environment,
+                        shipped_schema::capture().unwrap(),
+                    )
+                    .unwrap_or_else(|error| panic!("graph fixture: {:?}", error.error())),
+                );
                 let mut activation = Activation::new(&study, Mode::Pass);
                 let owned = build.build_owned_reported(&mut activation, report_id(), scope());
                 assert!(!owned.accepted(), "{condition}");

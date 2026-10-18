@@ -197,6 +197,8 @@ impl Attempt {
     }
 }
 
+// `Python::version` builds on the PyO3 0.27.2 floor; 0.29 renamed it `version_str`.
+#[allow(deprecated)]
 fn engine(py: Python<'_>, resolver: Option<Py<PyAny>>) -> Engine {
     let mut options =
         EngineOptions::new(HostLanguage::Python, "python".into(), py.version().into())

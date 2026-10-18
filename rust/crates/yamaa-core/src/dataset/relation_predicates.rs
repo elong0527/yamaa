@@ -50,17 +50,16 @@ impl CurrentField {
             CurrentRead::Output(column) if column >= output.columns().len() => {
                 return Err(PlanError::InvalidIntermediate)
             }
-            CurrentRead::Intermediate { index, column } => {
+            CurrentRead::Intermediate { index, column }
                 if index >= item_index
                     || !items.get(index).is_some_and(|item| {
                         item.admits_column(column)
                             && item
                                 .source_schema(secondary)
                                 .is_some_and(|schema| column < schema.columns().len())
-                    })
-                {
-                    return Err(PlanError::InvalidIntermediate);
-                }
+                    }) =>
+            {
+                return Err(PlanError::InvalidIntermediate);
             }
             _ => (),
         }
@@ -263,7 +262,7 @@ pub(crate) fn visit(expression: &Expression, visitor: &mut impl FnMut(usize)) {
                 visit(&branch.assignment.expression, visitor);
             }
         }
-        // A range value and a derive binding read a selection for the current row.
+        // A range value or a derive binding reads a selection for the current row.
         Expression::Aggregate(aggregate) => {
             if let Some(CurrentRead::Intermediate { index, .. }) =
                 aggregate.range().map(|range| range.current().read)

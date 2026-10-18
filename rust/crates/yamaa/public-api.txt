@@ -7,6 +7,7 @@ yamaa: pub mod engine
 yamaa: pub mod error
 yamaa: pub mod functions
 yamaa: pub mod observe
+yamaa: pub mod plan
 yamaa: pub mod resolver
 yamaa: pub mod scalar
 yamaa: pub mod table
@@ -56,6 +57,7 @@ yamaa::Node: pub use yamaa::observe::Node
 yamaa::Outcome: pub use yamaa::observe::Outcome
 yamaa::Parameter: pub use yamaa::functions::Parameter
 yamaa::Phase: pub use yamaa::observe::Phase
+yamaa::Plan: pub use yamaa::plan::Plan
 yamaa::Progress: pub use yamaa::observe::Progress
 yamaa::ProjectFunctions: pub use yamaa::functions::ProjectFunctions
 yamaa::RecordBatch: pub use yamaa::table::RecordBatch
@@ -70,6 +72,7 @@ yamaa::ResolverOperation: pub use yamaa::resolver::ResolverOperation
 yamaa::ResolverReply: pub use yamaa::resolver::ResolverReply
 yamaa::ResolverRequest: pub use yamaa::resolver::ResolverRequest
 yamaa::ResourceResolver: pub use yamaa::resolver::ResourceResolver
+yamaa::RunRequest: pub use yamaa::plan::RunRequest
 yamaa::SaveOutcome: pub use yamaa::engine::SaveOutcome
 yamaa::Scalar: pub use yamaa::scalar::Scalar
 yamaa::ScalarDecodeError: pub use yamaa::scalar::ScalarDecodeError
@@ -179,6 +182,7 @@ yamaa::engine::Engine: impl Engine
 yamaa::engine::Engine: pub struct Engine [derive(Clone)]
 yamaa::engine::Engine::build: pub fn build(&self, request: &Request<'_>, token: &CancellationToken) -> Result<Build, Error>
 yamaa::engine::Engine::check: pub fn check(&self, request: &Request<'_>, token: &CancellationToken) -> Report
+yamaa::engine::Engine::compile: pub fn compile(&self, request: &Request<'_>, token: &CancellationToken) -> Result<Plan, Error>
 yamaa::engine::Engine::define: pub fn define(&self, request: &DefineRequest<'_>, token: &CancellationToken) -> Result<DefineBuild, Error>
 yamaa::engine::Engine::new: pub fn new(options: EngineOptions) -> Self
 yamaa::engine::Engine::resolve_specification: pub fn resolve_specification(&self, request: &Request<'_>) -> Result<ResolvedSpecification, Error>
@@ -194,7 +198,6 @@ yamaa::engine::EngineOptions::runtime_version: pub runtime_version: String
 yamaa::engine::EngineOptions::with_functions: pub fn with_functions(mut self, functions: Arc<dyn ProjectFunctions>) -> Self
 yamaa::engine::EngineOptions::with_observer: pub fn with_observer(mut self, observer: Arc<dyn Progress>) -> Self
 yamaa::engine::EngineOptions::with_resolver: pub fn with_resolver(mut self, resolver: Arc<dyn ResourceResolver>) -> Self
-yamaa::engine::HostLanguage: impl Default for HostLanguage
 yamaa::engine::Request: impl<'a> Request<'a>
 yamaa::engine::Request: pub struct Request<'a> [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::engine::Request::environment: pub environment: Option<&'a str>
@@ -298,7 +301,7 @@ yamaa::functions::FunctionIdentity: pub struct FunctionIdentity [derive(Clone, D
 yamaa::functions::FunctionIdentity::call: pub call: String
 yamaa::functions::FunctionIdentity::name: pub name: String
 yamaa::functions::HostLanguage: impl HostLanguage
-yamaa::functions::HostLanguage: pub enum HostLanguage [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::functions::HostLanguage: pub enum HostLanguage [derive(Clone, Copy, Debug, Default, Eq, PartialEq)] [non_exhaustive]
 yamaa::functions::HostLanguage::Python: Python
 yamaa::functions::HostLanguage::R: R
 yamaa::functions::LockContext: pub struct LockContext<'a> [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
@@ -365,6 +368,17 @@ yamaa::observe::Refusal: pub struct Refusal [derive(Clone, Copy, Debug, Eq, Part
 yamaa::observe::Refusal::limit: pub limit: usize
 yamaa::observe::Refusal::required: pub required: Option<usize>
 yamaa::observe::Refusal::resource: pub resource: &'static str
+yamaa::plan::Plan: impl Plan
+yamaa::plan::Plan: pub struct Plan [derive(Clone)]
+yamaa::plan::Plan::report: pub fn report(&self) -> &Report
+yamaa::plan::Plan::run: pub fn run(&self, request: &RunRequest, token: &CancellationToken) -> Result<Build, Error>
+yamaa::plan::RunRequest: impl RunRequest
+yamaa::plan::RunRequest: pub struct RunRequest [derive(Clone, Default)] [non_exhaustive]
+yamaa::plan::RunRequest::new: pub fn new() -> Self
+yamaa::plan::RunRequest::observer: pub observer: Option<Arc<dyn Progress>>
+yamaa::plan::RunRequest::resolver: pub resolver: Option<Arc<dyn ResourceResolver>>
+yamaa::plan::RunRequest::with_observer: pub fn with_observer(mut self, observer: Arc<dyn Progress>) -> Self
+yamaa::plan::RunRequest::with_resolver: pub fn with_resolver(mut self, resolver: Arc<dyn ResourceResolver>) -> Self
 yamaa::resolver::MemoryResolver: impl MemoryResolver
 yamaa::resolver::MemoryResolver: impl ResourceResolver for MemoryResolver
 yamaa::resolver::MemoryResolver: pub struct MemoryResolver [derive(Default)] [non_exhaustive]

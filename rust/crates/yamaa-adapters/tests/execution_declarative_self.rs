@@ -1,5 +1,15 @@
 #![cfg(feature = "yaml")]
 //! Execution contracts.
+
+/// The host that each runtime name in these tests stands for.
+fn host(runtime: &str) -> yamaa_core::project_function::Language {
+    match runtime {
+        "python" => yamaa_core::project_function::Language::Python,
+        "r" => yamaa_core::project_function::Language::R,
+        other => panic!("no host for test runtime {other}"),
+    }
+}
+
 #[allow(dead_code)]
 mod support;
 mod execution {
@@ -33,6 +43,7 @@ mod execution {
                 fs::write(&specification, text).unwrap();
                 let specification = specification.to_str().unwrap();
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification,
                         environment: None,
@@ -480,12 +491,20 @@ columns:
                         environment: None,
                     };
                     assert_eq!(
-                        issues(&file_application::check(request(), identity(written))),
+                        issues(&file_application::check(
+                            yamaa_core::project_function::Language::Python,
+                            request(),
+                            identity(written)
+                        )),
                         case["check_issues"],
                         "{name}: static check"
                     );
-                    let mut result =
-                        file_application::domain(request(), identity(written)).unwrap();
+                    let mut result = file_application::domain(
+                        yamaa_core::project_function::Language::Python,
+                        request(),
+                        identity(written),
+                    )
+                    .unwrap();
                     assert_eq!(
                         issues(&result.issues()),
                         case["issues"],
@@ -612,7 +631,11 @@ columns:
                     base_directory: ".",
                 };
                 assert_eq!(
-                    rows(&file_application::check(request(), identity())),
+                    rows(&file_application::check(
+                        yamaa_core::project_function::Language::Python,
+                        request(),
+                        identity()
+                    )),
                     case["check_issues"]
                 );
                 for (input, bytes) in case["inputs"].as_object().unwrap() {
@@ -622,12 +645,20 @@ columns:
                 }
                 for _ in 0..2 {
                     assert_eq!(
-                        rows(&file_application::check(request(), identity())),
+                        rows(&file_application::check(
+                            yamaa_core::project_function::Language::Python,
+                            request(),
+                            identity()
+                        )),
                         case["check_issues"],
                         "{}",
                         yamaa_adapters::json_wire::encode(&case["name"])
                     );
-                    let issues = match file_application::domain(request(), identity()) {
+                    let issues = match file_application::domain(
+                        yamaa_core::project_function::Language::Python,
+                        request(),
+                        identity(),
+                    ) {
                         Ok(mut result) => {
                             assert!(result.save().is_err());
                             result.issues().to_vec()
@@ -687,6 +718,7 @@ columns:
                 base_directory: ".",
             };
             let failure = match file_application::domain(
+                yamaa_core::project_function::Language::Python,
                 Request {
                     specification: path,
                     environment: None,
@@ -781,6 +813,7 @@ columns:
                     base_directory: ".",
                 };
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: path,
                         environment: None,
@@ -898,6 +931,7 @@ columns:
                     base_directory: ".",
                 };
                 let checked = file_application::check(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: path,
                         environment: None,
@@ -905,6 +939,7 @@ columns:
                     identity(),
                 );
                 let built = file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: path,
                         environment: None,
@@ -995,6 +1030,7 @@ columns:
                     base_directory: ".",
                 };
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: path,
                         environment: None,
@@ -1202,6 +1238,7 @@ columns:
                     base_directory: ".",
                 };
                 assert!(file_application::check(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: path,
                         environment: None
@@ -1210,6 +1247,7 @@ columns:
                 )
                 .is_empty());
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: path,
                         environment: None,
@@ -1342,12 +1380,19 @@ columns:
                     specification: &specification,
                     environment: None,
                 };
-                let checked = file_application::check(request(), identity(runtime, &specification));
-                let built =
-                    match file_application::domain(request(), identity(runtime, &specification)) {
-                        Ok(domain) => domain.issues(),
-                        Err(issues) => issues,
-                    };
+                let checked = file_application::check(
+                    crate::host(runtime),
+                    request(),
+                    identity(runtime, &specification),
+                );
+                let built = match file_application::domain(
+                    crate::host(runtime),
+                    request(),
+                    identity(runtime, &specification),
+                ) {
+                    Ok(domain) => domain.issues(),
+                    Err(issues) => issues,
+                };
                 for (route, issues) in [("check", checked), ("domain", built)] {
                     assert_eq!(issues.len(), 1, "{runtime}/{route}: {issues:?}");
                     assert_eq!(issue(&issues[0]), expected, "{runtime}/{route}: {path}");
@@ -1427,13 +1472,18 @@ columns:
                         specification: &specification,
                         environment: None,
                     };
-                    assert!(
-                        file_application::check(request(), identity(runtime, &specification))
-                            .is_empty()
-                    );
-                    let mut domain =
-                        file_application::domain(request(), identity(runtime, &specification))
-                            .unwrap();
+                    assert!(file_application::check(
+                        crate::host(runtime),
+                        request(),
+                        identity(runtime, &specification)
+                    )
+                    .is_empty());
+                    let mut domain = file_application::domain(
+                        crate::host(runtime),
+                        request(),
+                        identity(runtime, &specification),
+                    )
+                    .unwrap();
                     assert!(
                         domain.issues().is_empty(),
                         "{written}: {:?}",
@@ -1465,13 +1515,18 @@ columns:
                         specification: &specification,
                         environment: None,
                     };
-                    assert!(
-                        file_application::check(request(), identity(runtime, &specification))
-                            .is_empty()
-                    );
-                    let domain =
-                        file_application::domain(request(), identity(runtime, &specification))
-                            .unwrap();
+                    assert!(file_application::check(
+                        crate::host(runtime),
+                        request(),
+                        identity(runtime, &specification)
+                    )
+                    .is_empty());
+                    let domain = file_application::domain(
+                        crate::host(runtime),
+                        request(),
+                        identity(runtime, &specification),
+                    )
+                    .unwrap();
                     assert!(domain.issues().is_empty(), "{:?}", domain.issues());
                 }
             }
@@ -1533,14 +1588,22 @@ columns:
                 let failing = !case["issues"].as_array().unwrap().is_empty();
                 if failing {
                     assert_eq!(
-                        rows(&file_application::check(request(), identity())),
+                        rows(&file_application::check(
+                            yamaa_core::project_function::Language::Python,
+                            request(),
+                            identity()
+                        )),
                         case["issues"]
                     );
                     assert_eq!(
                         rows(
-                            &file_application::domain(request(), identity())
-                                .err()
-                                .unwrap()
+                            &file_application::domain(
+                                yamaa_core::project_function::Language::Python,
+                                request(),
+                                identity()
+                            )
+                            .err()
+                            .unwrap()
                         ),
                         case["issues"]
                     );
@@ -1551,7 +1614,11 @@ columns:
                     fs::write(input, bytes.as_str().unwrap()).unwrap();
                 }
                 for _ in 0..2 {
-                    let checked = file_application::check(request(), identity());
+                    let checked = file_application::check(
+                        yamaa_core::project_function::Language::Python,
+                        request(),
+                        identity(),
+                    );
                     assert_eq!(
                         rows(&checked),
                         case["issues"],
@@ -1561,15 +1628,24 @@ columns:
                     if failing {
                         assert_eq!(
                             rows(
-                                &file_application::domain(request(), identity())
-                                    .err()
-                                    .unwrap()
+                                &file_application::domain(
+                                    yamaa_core::project_function::Language::Python,
+                                    request(),
+                                    identity()
+                                )
+                                .err()
+                                .unwrap()
                             ),
                             case["issues"]
                         );
                         assert!(!fixture.0.join("out.csv").exists());
                     } else {
-                        let mut result = file_application::domain(request(), identity()).unwrap();
+                        let mut result = file_application::domain(
+                            yamaa_core::project_function::Language::Python,
+                            request(),
+                            identity(),
+                        )
+                        .unwrap();
                         assert!(
                             result.issues().is_empty(),
                             "{}: {:?}",
@@ -1650,12 +1726,20 @@ columns:
                     base_directory: ".",
                 };
                 assert_eq!(
-                    issues(&file_application::check(request(), identity())),
+                    issues(&file_application::check(
+                        yamaa_core::project_function::Language::Python,
+                        request(),
+                        identity()
+                    )),
                     case["check_issues"],
                     "{}",
                     yamaa_adapters::json_wire::encode(&case["name"])
                 );
-                let mut result = match file_application::domain(request(), identity()) {
+                let mut result = match file_application::domain(
+                    yamaa_core::project_function::Language::Python,
+                    request(),
+                    identity(),
+                ) {
                     Ok(result) => result,
                     Err(rows) => {
                         assert_eq!(
@@ -1748,12 +1832,20 @@ columns:
                 };
                 if !case["check_issues"].as_array().unwrap().is_empty() {
                     assert_eq!(
-                        rows(&file_application::check(request(), identity())),
+                        rows(&file_application::check(
+                            yamaa_core::project_function::Language::Python,
+                            request(),
+                            identity()
+                        )),
                         case["check_issues"],
                         "{} before input capture",
                         yamaa_adapters::json_wire::encode(&case["name"])
                     );
-                    let issues = match file_application::domain(request(), identity()) {
+                    let issues = match file_application::domain(
+                        yamaa_core::project_function::Language::Python,
+                        request(),
+                        identity(),
+                    ) {
                         Ok(mut result) => {
                             assert!(
                                 result.output().is_none(),
@@ -1786,12 +1878,20 @@ columns:
                 }
                 for _ in 0..2 {
                     assert_eq!(
-                        rows(&file_application::check(request(), identity())),
+                        rows(&file_application::check(
+                            yamaa_core::project_function::Language::Python,
+                            request(),
+                            identity()
+                        )),
                         case["check_issues"],
                         "{} check",
                         yamaa_adapters::json_wire::encode(&case["name"])
                     );
-                    let result = file_application::domain(request(), identity());
+                    let result = file_application::domain(
+                        yamaa_core::project_function::Language::Python,
+                        request(),
+                        identity(),
+                    );
                     if case["issues"].as_array().unwrap().is_empty() {
                         let mut result = result.unwrap_or_else(|issues| {
                             panic!(
@@ -1863,6 +1963,7 @@ columns:
             let refused = || {
                 let entry = entry.to_str().unwrap();
                 let mut result = file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: entry,
                         environment: None,
@@ -1970,10 +2071,18 @@ columns:
                     specification: path,
                     base_directory: ".",
                 };
-                let checked = file_application::check(request(), identity());
-                let built = file_application::domain(request(), identity())
-                    .err()
-                    .unwrap();
+                let checked = file_application::check(
+                    yamaa_core::project_function::Language::Python,
+                    request(),
+                    identity(),
+                );
+                let built = file_application::domain(
+                    yamaa_core::project_function::Language::Python,
+                    request(),
+                    identity(),
+                )
+                .err()
+                .unwrap();
                 assert_eq!(
                     checked,
                     built,
@@ -2022,6 +2131,7 @@ columns:
             fn try_build(&self) -> Result<file_application::Domain, file_application::Failure> {
                 let path = self.0.join("spec.yaml").to_str().unwrap().to_owned();
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
                         environment: None,
@@ -2294,6 +2404,7 @@ output: {path: out.csv, columns: [I, V]}
                 let entry = self.0.join("spec.yaml");
                 let entry = entry.to_str().unwrap();
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: entry,
                         environment: None,
@@ -2509,6 +2620,7 @@ output: {path: out.csv, columns: [I, V]}
                 fs::write(self.0.join("input.csv"), input).unwrap();
                 let entry = entry.to_str().unwrap();
                 file_application::domain(
+                    yamaa_core::project_function::Language::Python,
                     Request {
                         specification: entry,
                         environment: None,
@@ -2665,12 +2777,21 @@ output: {path: out.csv, columns: [I, V]}
                     base_directory: ".",
                 };
                 assert_eq!(
-                    issues(&file_application::check(request(), identity())),
+                    issues(&file_application::check(
+                        yamaa_core::project_function::Language::Python,
+                        request(),
+                        identity()
+                    )),
                     case["check_issues"],
                     "{}",
                     yamaa_adapters::json_wire::encode(&case["name"])
                 );
-                let mut result = file_application::domain(request(), identity()).unwrap();
+                let mut result = file_application::domain(
+                    yamaa_core::project_function::Language::Python,
+                    request(),
+                    identity(),
+                )
+                .unwrap();
                 assert_eq!(
                     issues(&result.issues()),
                     case["issues"],

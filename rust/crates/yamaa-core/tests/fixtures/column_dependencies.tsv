@@ -6,6 +6,8 @@ completed_dependency_keeps_ready_order	2;_;-	-	true	0,1	forward:0,2
 backward_reference	_;0	-	false	0,1	-
 forward_reference	1;_	-	false	1,0	forward:0,1
 later_key_is_available	1;_	1	false	1,0	-
+row_later_column_phase_key	1;_	1	true	1,0	forward:0,1
+row_later_key_completed_in_every_template	1;-	1	true	0	-
 self_cycle	0	-	false	-	cycle:0,0
 rotated_reachable_cycle	2;2;1	-	false	-	cycle:1,2,1;forward:0,2
 two_cycles	1;0;3;2	-	false	-	cycle:0,1,0;forward:2,3

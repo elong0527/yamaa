@@ -29,7 +29,7 @@ The Linux wheel is `manylinux_2_34` and needs glibc 2.34 or later, for example
 RHEL 9, Ubuntu 22.04 or Debian 12; on older systems, install the source archive.
 
 Or install the standalone source archive from the same release. Building it
-needs Rust 1.90.0 with Cargo, a C compiler and GNU make:
+needs Rust 1.90 or later with Cargo, a C compiler and GNU make:
 
 ```bash
 python -m pip install ./yamaa-0.4.0.tar.gz

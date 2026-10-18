@@ -150,14 +150,30 @@ fn read_matching<E>(
     if count == 0 {
         return Ok(Value::Missing);
     }
-    if count > 1 && selection.is_some() {
-        chosen = select(
-            table,
-            source,
-            context.assignment,
-            &matching,
-            selection.expect("declared source choice"),
-        )?;
+    if count > 1 {
+        let Some(selection) = selection else {
+            // Admit diagnostic copies before owning any raw driver text.
+
+            return Err(Box::new(ExecutionError::MultipleMatches {
+                path: context.assignment.path.clone(),
+                dataset: donor_name
+                    .map(String::from)
+                    .unwrap_or_else(|| context.plan.secondary()[source].name.clone()),
+                intermediate: std::format!(
+                    "intermediate({})",
+                    donor_name.unwrap_or_else(|| context.plan.secondary()[source].name.as_str())
+                ),
+                match_count: count,
+                matched_key: keys
+                    .iter()
+                    .map(|(column, value)| {
+                        (table.schema().columns()[*column].name.clone(), own(*value))
+                    })
+                    .collect(),
+                identity: failure_identity(context.candidate, context.plan.keys(), context.row)?,
+            }));
+        };
+        chosen = select(table, source, context.assignment, &matching, selection)?;
         if let Some(counter) = handlers.as_mut() {
             counter
                 .record(
@@ -166,27 +182,6 @@ fn read_matching<E>(
                 )
                 .map_err(|error| Box::new(ExecutionError::HandlerAccounting(error)))?;
         }
-    } else if count > 1 {
-        // Admit diagnostic copies before owning any raw driver text.
-
-        return Err(Box::new(ExecutionError::MultipleMatches {
-            path: context.assignment.path.clone(),
-            dataset: donor_name
-                .map(String::from)
-                .unwrap_or_else(|| context.plan.secondary()[source].name.clone()),
-            intermediate: std::format!(
-                "intermediate({})",
-                donor_name.unwrap_or_else(|| context.plan.secondary()[source].name.as_str())
-            ),
-            match_count: count,
-            matched_key: keys
-                .iter()
-                .map(|(column, value)| {
-                    (table.schema().columns()[*column].name.clone(), own(*value))
-                })
-                .collect(),
-            identity: failure_identity(context.candidate, context.plan.keys(), context.row)?,
-        }));
     }
 
     let value = cell(table, source, context.assignment, chosen, column)?;
@@ -301,14 +296,13 @@ pub(super) fn read_joined<T: TableAccess + ?Sized>(
     for (index, key) in joined.keys.iter().enumerate() {
         let value = if let Some(records) = &joined.record_keys {
             let source_row = candidate.members[0];
-            let value = current.cell(source_row, records[index]).map_err(|error| {
+            current.cell(source_row, records[index]).map_err(|error| {
                 Box::new(ExecutionError::Cell {
                     path: assignment.path.clone(),
                     source_row,
                     error,
                 })
-            })?;
-            value
+            })?
         } else {
             ValueRef::from(&candidate.values[key.output_column])
         };

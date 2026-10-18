@@ -186,10 +186,11 @@ pub fn select<P: PreparationPort>(
     }
 }
 
-/// Host ports move checked capabilities into their existing engine execution,
+/// Host ports lend checked capabilities to their existing engine execution,
 /// output and report services. Original host failures remain owned by the result.
 /// A build never accepts a publisher: publication uses only a completed result's
-/// explicit Save capability.
+/// explicit Save capability. Builds borrow the prepared value, so one preparation
+/// can serve many runs; each run's study state lives in that run alone.
 pub trait Ports {
     type Plain;
     type Project;
@@ -210,22 +211,22 @@ pub trait Ports {
     ) -> Result<Self::CheckResult, Self::Failure>;
     fn build_plain(
         &mut self,
-        prepared: Self::Plain,
+        prepared: &Self::Plain,
         scope: crate::application_observer::Scope<'_>,
     ) -> Result<Self::BuildResult, Self::Failure>;
     fn build_project(
         &mut self,
-        prepared: Self::Project,
+        prepared: &Self::Project,
         scope: crate::application_observer::Scope<'_>,
     ) -> Result<Self::BuildResult, Self::Failure>;
     fn build_producer(
         &mut self,
-        prepared: Self::Producer,
+        prepared: &Self::Producer,
         scope: crate::application_observer::Scope<'_>,
     ) -> Result<Self::BuildResult, Self::Failure>;
 }
 
-pub(crate) type PreparedRequest<P> = Result<
+pub type PreparedRequest<P> = Result<
     Prepared<<P as Ports>::Plain, <P as Ports>::Project, <P as Ports>::Producer>,
     <P as Ports>::Failure,
 >;
@@ -238,6 +239,8 @@ pub fn check<P: Ports>(request: Request<'_>, port: &mut P) -> Result<P::CheckRes
     }
 }
 
+/// A build is [`compile`] followed by one [`run`]: one admission and
+/// evaluation route whether a prepared value serves one run or many.
 /// Preparation includes the actual port's original file/environment admission.
 /// Detailed execution events come from the selected checked service, never an
 /// invented second run. Returned failures close this outer attempt; panic fences
@@ -247,25 +250,53 @@ pub fn domain<P: Ports>(
     port: &mut P,
     scope: crate::application_observer::Scope<'_>,
 ) -> Result<P::BuildResult, P::Failure> {
+    match compile(request, port, scope) {
+        Ok(prepared) => run(&prepared, port, scope),
+        Err(error) => {
+            finish(scope);
+            Err(error)
+        }
+    }
+}
+
+/// The Preparation half of a build: metadata capture, admission and
+/// compilation, with no study, activation or publication authority. Its
+/// events are a build's prefix.
+pub fn compile<P: Ports>(
+    request: Request<'_>,
+    port: &mut P,
+    scope: crate::application_observer::Scope<'_>,
+) -> PreparedRequest<P> {
     use crate::application_observer::{Outcome, Phase};
     scope.phase(Phase::Preparation);
     let prepared = port.prepare(request);
     scope.exit(Phase::Preparation, Outcome::from_result(&prepared));
+    prepared
+}
+
+/// The Build and Finished half of a build: one run that borrows the prepared
+/// value, so the same value can serve the next run unchanged.
+pub fn run<P: Ports>(
+    prepared: &Prepared<P::Plain, P::Project, P::Producer>,
+    port: &mut P,
+    scope: crate::application_observer::Scope<'_>,
+) -> Result<P::BuildResult, P::Failure> {
+    use crate::application_observer::{Outcome, Phase};
+    // Close actual metadata preparation before entering the selected
+    // runtime port.
+    scope.phase(Phase::Build);
     let result = match prepared {
-        Ok(prepared) => {
-            // Close actual metadata preparation before entering the selected
-            // runtime port.
-            scope.phase(Phase::Build);
-            let result = match prepared {
-                Prepared::Plain(prepared) => port.build_plain(prepared, scope),
-                Prepared::Ordinary(prepared) => port.build_project(prepared, scope),
-                Prepared::Producer(prepared) => port.build_producer(prepared, scope),
-            };
-            scope.exit(Phase::Build, Outcome::from_result(&result));
-            result
-        }
-        Err(error) => Err(error),
+        Prepared::Plain(prepared) => port.build_plain(prepared, scope),
+        Prepared::Ordinary(prepared) => port.build_project(prepared, scope),
+        Prepared::Producer(prepared) => port.build_producer(prepared, scope),
     };
-    scope.phase(Phase::Finished);
+    scope.exit(Phase::Build, Outcome::from_result(&result));
+    finish(scope);
     result
+}
+
+/// Close a run. A refused compilation's runs only finish: they perform no
+/// resource, activation or study work.
+pub fn finish(scope: crate::application_observer::Scope<'_>) {
+    scope.phase(crate::application_observer::Phase::Finished);
 }

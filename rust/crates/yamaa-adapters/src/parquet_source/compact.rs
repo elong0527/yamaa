@@ -57,6 +57,61 @@ impl Sequence<'_> {
     }
 }
 
+/// A forward walk over an admitted struct that reads each byte once. After
+/// each field header the caller descends into the field's struct or list, or
+/// skips its value, before it reads the next header.
+pub(super) struct Cursor<'a>(Reader<'a>);
+
+impl<'a> Cursor<'a> {
+    /// Walk the fields of an admitted struct. Any other value has no fields.
+    pub(super) fn new(value: Value<'a>) -> Self {
+        Self(Reader::new(if let Value::Struct(bytes) = value {
+            bytes
+        } else {
+            &[0]
+        }))
+    }
+
+    /// The next field's id and held wire type, or `None` at the struct's stop.
+    /// This reads the header as `Reader::field` does; a helper shared with
+    /// that hot loop measurably slowed every parse.
+    pub(super) fn field(&mut self, previous: i16) -> Result<Option<(i16, u8)>, Error> {
+        let header = self.0.byte()?;
+        let kind = header & 15;
+        if kind == 0 {
+            return Ok(None);
+        }
+        let id = match header >> 4 {
+            0 => i16::try_from(self.0.integer()?).map_err(|_| Error::Malformed)?,
+            delta => previous
+                .checked_add(i16::from(delta))
+                .ok_or(Error::Malformed)?,
+        };
+        Ok(Some((id, kind)))
+    }
+
+    /// Skip the value of a field whose wire type is `kind`.
+    pub(super) fn skip_value(&mut self, kind: u8) -> Result<(), Error> {
+        self.0.value(kind, 0).map(drop)
+    }
+
+    /// Skip one collection element whose wire type is `kind`.
+    pub(super) fn skip_element(&mut self, kind: u8) -> Result<(), Error> {
+        self.0.element(kind, 0).map(drop)
+    }
+
+    /// Read a list or set header as its element wire type and element count.
+    pub(super) fn collection(&mut self) -> Result<(u8, usize), Error> {
+        let header = self.0.byte()?;
+        let count = if header >> 4 == 15 {
+            self.0.length()?
+        } else {
+            usize::from(header >> 4)
+        };
+        Ok((header & 15, count))
+    }
+}
+
 pub(super) struct Elements<'a> {
     reader: Reader<'a>,
     kind: u8,
@@ -661,6 +716,35 @@ mod tests {
             Some((1, Value::Integer(i64::MIN)))
         );
         assert_eq!(value.field(1).unwrap(), Some(Value::Integer(i64::MAX)));
+    }
+
+    #[test]
+    fn a_cursor_reads_each_header_once_and_descends_or_skips() {
+        // i32 field 1 = 1; byte field 2 = 1; list<i64> field 3 = [1]; struct
+        // field 4 holding binary field 1 = "x"; then explicit id 300, a set.
+        let bytes = [
+            0x15, 2, 0x13, 1, 0x19, 0x16, 2, 0x1c, 0x18, 1, b'x', 0, 0x0a, 0xd8, 4, 0x15, 2, 0,
+        ];
+        let (root, used) = parse(&bytes).unwrap();
+        assert_eq!(used, bytes.len());
+        let mut cursor = Cursor::new(root);
+        assert_eq!(cursor.field(0).unwrap(), Some((1, 5)));
+        cursor.skip_value(5).unwrap();
+        assert_eq!(cursor.field(1).unwrap(), Some((2, 3)));
+        cursor.skip_value(3).unwrap();
+        assert_eq!(cursor.field(2).unwrap(), Some((3, 9)));
+        assert_eq!(cursor.collection().unwrap(), (6, 1));
+        cursor.skip_element(6).unwrap();
+        // Descend into the struct, then continue after its stop.
+        assert_eq!(cursor.field(3).unwrap(), Some((4, 12)));
+        assert_eq!(cursor.field(0).unwrap(), Some((1, 8)));
+        cursor.skip_value(8).unwrap();
+        assert_eq!(cursor.field(1).unwrap(), None);
+        assert_eq!(cursor.field(4).unwrap(), Some((300, 10)));
+        cursor.skip_value(10).unwrap();
+        assert_eq!(cursor.field(300).unwrap(), None);
+        // Only a struct has fields.
+        assert_eq!(Cursor::new(Value::Integer(1)).field(0).unwrap(), None);
     }
 
     #[test]

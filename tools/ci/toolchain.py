@@ -17,11 +17,25 @@ def channel():
     return declaration()["channel"]
 
 
+def minimum():
+    """The workspace `rust-version` as a complete release, such as 1.90.0."""
+    manifest = tomllib.loads((WORKSPACE / "Cargo.toml").read_text())
+    version = manifest["workspace"]["package"]["rust-version"]
+    return ".".join((version.split(".") + ["0", "0"])[:3])
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--install", action="store_true")
+    parser.add_argument(
+        "--minimum",
+        action="store_true",
+        help="use the workspace rust-version instead of the pinned channel",
+    )
     arguments = parser.parse_args()
     toolchain = declaration()
+    if arguments.minimum:
+        toolchain["channel"] = minimum()
     if arguments.install:
         subprocess.run(
             [

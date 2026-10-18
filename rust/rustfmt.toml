@@ -1,0 +1,4 @@
+# Formatting stays at the 2021 style edition, so moving the language to
+# edition 2024 does not reformat the workspace. Changing the style edition
+# is a separate change.
+style_edition = "2021"
