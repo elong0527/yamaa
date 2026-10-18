@@ -2,7 +2,7 @@
 //! as ordinary file builds. Project metadata capture grants no runtime authority.
 use crate::{
     file_preparation,
-    file_resources::{Error as ResourceError, Resources},
+    file_resources::{Error as ResourceError, Resources, RunScope},
     project_run::{Attempt, PreparedRun, RejectedRun},
     project_source,
     specification_source::CapturedSchema,
@@ -159,13 +159,22 @@ impl FileProject {
     pub fn capture_reads(&self) -> usize {
         self.resources.capture_reads()
     }
+    /// Open one run's study scope; see [`Resources::run_scope`].
+    pub fn run_scope(
+        &self,
+        resolver: Option<Arc<dyn crate::host_resources::Resolver>>,
+    ) -> RunScope {
+        self.resources.run_scope(resolver)
+    }
     pub(crate) fn publication_target(
         &self,
+        run: &RunScope,
     ) -> Result<crate::resource_publication::AnchoredTarget, ResourceError> {
-        self.publication_field_target("path")
+        self.publication_field_target(run, "path")
     }
     pub(crate) fn publication_field_target(
         &self,
+        run: &RunScope,
         field: &str,
     ) -> Result<crate::resource_publication::AnchoredTarget, ResourceError> {
         let origin = self
@@ -173,27 +182,30 @@ impl FileProject {
             .document()
             .written_output_field_origin(field)
             .ok_or(ResourceError::InvalidPath)?;
-        self.resources
+        run.resources()
             .publication_target_from(origin.base_source, origin.written)
     }
+    /// Activate, capture and execute in `run`; this value is unchanged.
     pub fn build<A: ActivationPort>(
-        &mut self,
+        &self,
+        run: &mut RunScope,
         activation: &mut A,
         scope: Scope<'_>,
     ) -> Attempt<ResourceError, A::Error> {
         self.run
-            .execute_with_ports(activation, &mut self.resources, scope)
+            .execute_with_ports(activation, run.resources_mut(), scope)
     }
     /// Let an installed port borrow the exact retained lock without copying it
     /// or exposing study authority. Port construction performs no activation.
     pub fn build_with<'run, A: ActivationPort>(
-        &'run mut self,
+        &'run self,
+        run: &mut RunScope,
         factory: impl FnOnce(&'run PreparedRun) -> A,
         scope: Scope<'_>,
     ) -> Attempt<ResourceError, A::Error> {
         let mut activation = factory(&self.run);
         self.run
-            .execute_with_ports(&mut activation, &mut self.resources, scope)
+            .execute_with_ports(&mut activation, run.resources_mut(), scope)
     }
 }
 

@@ -299,15 +299,17 @@ fn publication_at(
 }
 impl Domain {
     /// Use the same owned output and anchored save gate for project reports.
+    /// Save targets resolve from the run's scope.
     pub fn from_project(
         result: BuildResult,
         project: &crate::file_project::FileProject,
+        run: &crate::file_resources::RunScope,
     ) -> Result<Self, Failure> {
         Self::from_build(result, |field| {
             if field == "path" {
-                project.publication_target()
+                project.publication_target(run)
             } else {
-                project.publication_field_target(field)
+                project.publication_field_target(run, field)
             }
         })
     }
@@ -524,6 +526,7 @@ struct Native<'a> {
 }
 /// The host provides activation and original-error conversion. All route
 /// preparation, static checks and dispatch stay behind the shared application.
+/// Each run borrows the prepared value and opens its own study scope.
 pub trait RuntimePort {
     type Result;
     type Error;
@@ -532,17 +535,17 @@ pub trait RuntimePort {
     }
     fn plain(
         &mut self,
-        prepared: FileSpecification,
+        prepared: &FileSpecification,
         scope: Scope<'_>,
     ) -> Result<Self::Result, Self::Error>;
     fn project(
         &mut self,
-        prepared: Box<crate::file_project::FileProject>,
+        prepared: &crate::file_project::FileProject,
         scope: Scope<'_>,
     ) -> Result<Self::Result, Self::Error>;
     fn producer(
         &mut self,
-        prepared: Box<crate::file_graph::FileGraph>,
+        prepared: &crate::file_graph::FileGraph,
         scope: Scope<'_>,
     ) -> Result<Self::Result, Self::Error>;
 }
@@ -587,7 +590,7 @@ impl<R: RuntimePort> yamaa_core::build::Ports for Application<R> {
     }
     fn build_plain(
         &mut self,
-        prepared: FileSpecification,
+        prepared: &FileSpecification,
         scope: Scope<'_>,
     ) -> Result<R::Result, Self::Failure> {
         self.runtime
@@ -596,7 +599,7 @@ impl<R: RuntimePort> yamaa_core::build::Ports for Application<R> {
     }
     fn build_project(
         &mut self,
-        prepared: Self::Project,
+        prepared: &Self::Project,
         scope: Scope<'_>,
     ) -> Result<R::Result, Self::Failure> {
         self.runtime
@@ -605,7 +608,7 @@ impl<R: RuntimePort> yamaa_core::build::Ports for Application<R> {
     }
     fn build_producer(
         &mut self,
-        prepared: Self::Producer,
+        prepared: &Self::Producer,
         scope: Scope<'_>,
     ) -> Result<R::Result, Self::Failure> {
         self.runtime
@@ -619,75 +622,66 @@ impl RuntimePort for Native<'_> {
     fn resolver(&self) -> Option<std::sync::Arc<dyn crate::host_resources::Resolver>> {
         self.resolver.clone()
     }
-    fn plain(
-        &mut self,
-        mut prepared: FileSpecification,
-        scope: Scope<'_>,
-    ) -> Result<Domain, Failure> {
-        let attempt = prepared.build(scope);
-        if let Some(error) = file_preparation::opaque_resource_failure(&attempt) {
-            return Err(resource_failure("capture", error));
-        }
-        scope.phase(yamaa_core::application_observer::Phase::Output);
-        let converted = (|| {
-            let result = specification_report::build_result(
-                prepared.run(),
-                &attempt,
-                Identity {
-                    runtime: self.identity.runtime,
-                    runtime_version: self.identity.runtime_version,
-                    engine_version: self.identity.engine_version,
-                    example: self.identity.example,
-                    specification: self.identity.specification,
-                    base_directory: self.identity.base_directory,
-                },
-            )
-            .map_err(|error| report_failure("build", "result_projection", &error))?;
-            Domain::from_build(result, |field| {
-                if field == "path" {
-                    prepared.publication_target()
-                } else {
-                    prepared.publication_field_target(field)
-                }
-            })
-        })();
-        scope.exit(
-            yamaa_core::application_observer::Phase::Output,
-            if converted.is_ok() {
-                yamaa_core::application_observer::Outcome::Succeeded
-            } else {
-                yamaa_core::application_observer::Outcome::Failed
-            },
-        );
-        converted
+    fn plain(&mut self, prepared: &FileSpecification, scope: Scope<'_>) -> Result<Domain, Failure> {
+        let identity = Identity {
+            runtime: self.identity.runtime,
+            runtime_version: self.identity.runtime_version,
+            engine_version: self.identity.engine_version,
+            example: self.identity.example,
+            specification: self.identity.specification,
+            base_directory: self.identity.base_directory,
+        };
+        plain(prepared, &mut prepared.run_scope(None), identity, scope)
     }
     fn project(
         &mut self,
-        _: Box<crate::file_project::FileProject>,
+        _: &crate::file_project::FileProject,
         _: Scope<'_>,
     ) -> Result<Domain, Failure> {
         Err(unsupported("environment", Some("environment")))
     }
     fn producer(
         &mut self,
-        _: Box<crate::file_graph::FileGraph>,
+        _: &crate::file_graph::FileGraph,
         _: Scope<'_>,
     ) -> Result<Domain, Failure> {
         Err(unsupported("producer_host", None))
     }
 }
 
-/// Convert an already checked plain capability without recapturing metadata.
+/// Run an already checked plain capability in `run` without recapturing
+/// metadata. Inputs come from the scope and Save targets resolve there.
 pub fn plain(
-    prepared: FileSpecification,
+    prepared: &FileSpecification,
+    run: &mut crate::file_resources::RunScope,
     identity: Identity<'_>,
     scope: Scope<'_>,
 ) -> Result<Domain, Failure> {
-    Native {
-        identity,
-        resolver: None,
+    let attempt = prepared.build(run, scope);
+    if let Some(error) = file_preparation::opaque_resource_failure(&attempt) {
+        return Err(resource_failure("capture", error));
     }
-    .plain(prepared, scope)
+    scope.phase(yamaa_core::application_observer::Phase::Output);
+    let converted = (|| {
+        let result = specification_report::build_result(prepared.run(), &attempt, identity)
+            .map_err(|error| report_failure("build", "result_projection", &error))?;
+        Domain::from_build(result, |field| {
+            if field == "path" {
+                prepared.publication_target(run)
+            } else {
+                prepared.publication_field_target(run, field)
+            }
+        })
+    })();
+    scope.exit(
+        yamaa_core::application_observer::Phase::Output,
+        if converted.is_ok() {
+            yamaa_core::application_observer::Outcome::Succeeded
+        } else {
+            yamaa_core::application_observer::Outcome::Failed
+        },
+    );
+    converted
 }
 /// The host language is configured by the caller, never derived from the
 /// runtime name: an embedder may name its runtime anything.
