@@ -3,7 +3,7 @@
 //! the column it copies (SUB-16, SUB-20). Shared by the domain build and by
 //! composition; no study, host or data access.
 use crate::{
-    predicate_parser,
+    expression,
     schema::{Document, DocumentNode as N},
     specification_submission_document::OriginType,
     text_template::StringTemplate,
@@ -191,7 +191,7 @@ fn recode(document: &Document, node: usize, reads: &Reads, strict: bool) -> bool
             !branches.is_empty()
                 && branches.iter().all(|&branch| {
                     let condition = document.field(branch, "when").map_or(Some(true), |when| {
-                        let parsed = predicate_parser::parse_predicate(text(document, when)?);
+                        let parsed = expression::parse(text(document, when)?);
                         Some(parsed.ok()?.identifiers().all(|name| reads.input(name)))
                     });
                     let result = document
