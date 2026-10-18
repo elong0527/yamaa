@@ -27,31 +27,31 @@ columns:
     type: int
     label: Lab Test or Examination Short Name
 
+  # Each test states its own maximum result length.
   - name: LBORRES
     type: str
     label: Result or Finding in Original Units
+    submission:
+      length: 4
+      origin:
+        type: Collected
+        source: Vendor
+      value_level:
+        - id: GLUC
+          where: {LBTESTCD: ["1001"]}
+          length: 4
+        - id: CREAT
+          where: {LBTESTCD: ["1002"]}
+          length: 3
 
 rows:
-  # One glucose and one creatinine record per collected sample, each with
-  # its own maximum result length.
+  # One glucose and one creatinine record per collected sample.
   - id: glucose
     derivations:
       LBTESTCD: {literal: "1001"}
       LBORRES: LB_RAW.GLUC
-    submission:
-      LBORRES:
-        length: 4
-        origin:
-          type: Collected
-          source: Vendor
 
   - id: creatinine
     derivations:
       LBTESTCD: {literal: "1002"}
       LBORRES: LB_RAW.CREAT
-    submission:
-      LBORRES:
-        length: 3
-        origin:
-          type: Collected
-          source: Vendor

@@ -3,7 +3,7 @@
 //! The compiler already fixes the order: row bindings in each template's
 //! dependency order, the prewindow/window split, the column phase in the
 //! compiler's column order, column checks once their declared prefix and
-//! discriminators are complete, then output keys, dataset checks in
+//! where columns are complete, then output keys, dataset checks in
 //! declaration order and presentation order.
 use super::*;
 
@@ -123,7 +123,7 @@ fn dataset(plan: &ResolvedPlan, region: RegionId) -> Result<Vec<Step>, Resolutio
 }
 
 /// Column steps in the compiler's order. A column check group runs once
-/// every key, every column of its declared prefix and its discriminators are
+/// every key, every column of its declared prefix and its where columns are
 /// complete; groups therefore run in declared column order.
 fn column_phase(
     plan: &ResolvedPlan,

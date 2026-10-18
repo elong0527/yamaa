@@ -1,0 +1,14 @@
+phase: verification
+condition: value_level_multiple_matches
+spec_paths:
+  - columns.AVAL.submission.value_level
+requirement: SUB-13
+context:
+  column: AVAL
+  failure_count: 1
+  entries:
+    - [SYSBP, STANDING]
+  keys:
+    - USUBJID: CATH-001
+      PARAMCD: SYSBP
+      ATPT: AFTER 3 MIN STANDING

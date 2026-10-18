@@ -711,13 +711,14 @@ class DerivationShapeTests(unittest.TestCase):
             'Collected datetime precision of PC.PCDTC: "second" through the '
             'second, "minute" through the minute, "hour" through the hour, '
             '"day" for a date alone, "month" for a year and month, "year" for '
-            'a year alone, "none" for an entirely imputed datetime' + blank,
+            'a year alone, "none" for an entirely imputed datetime or text '
+            "with an unknown year" + blank,
         )
         self.assertEqual(
             rule("date"),
             'Collected date precision of PC.PCDTC: "day" for a complete date, '
             '"month" for a year and month, "year" for a year alone, "none" for '
-            "an entirely imputed date" + blank,
+            "an entirely imputed date or text with an unknown year" + blank,
         )
 
     def test_invalid_text_with_no_handler_is_an_error(self):

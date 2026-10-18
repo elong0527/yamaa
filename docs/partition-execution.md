@@ -119,19 +119,23 @@ batch cache across that barrier would be incorrect.
 This lists every current variant of `dataset::Check`, including compiler
 checkpoints. Row-local tests are classified safe-with-combine-step because the
 observable check record is global. Combine in declaration/binding order only
-after output keys and discriminator dependencies are complete, at the existing
-column-prefix or dataset checkpoint. Preserve severity and prior completed
-records on refusal; a combined report is not permission to defer a fatal check
-past later derivations.
+after output keys and the where columns of value-level checks are complete, at
+the existing column-prefix or dataset checkpoint. Preserve severity and prior
+completed records on refusal; a combined report is not permission to defer a
+fatal check past later derivations.
 
 | `Check` variant | Class | Combine or global rule |
 | --- | --- | --- |
 | `NotMissing` | Safe-with-combine-step | Sum evaluated/failed counts and concatenate original offending identities in candidate order. |
 | `AllowedValues` | Safe-with-combine-step | Same, preserving typed membership and missing-value rules. |
 | `Codelist` | Safe-with-combine-step | Same, retaining terminology id and every offending raw value in order. |
-| `ValueCodelists` | Safe-with-combine-step | Wait for the final discriminator, then combine separately in binding order with unchanged default/override selection and codelist observations. |
-| `Inventory` | Safe-with-combine-step | Check membership in the declared inventory, select optional scope from the completed discriminator, and retain all offending values/identities. This does not infer an inventory from per-batch distinct sets. |
-| `ValueMaxLength` | Safe-with-combine-step | Wait for the final discriminator and preserve include/exclude selection and exact authored bound. |
+| `Mandatory` | Safe-with-combine-step | Like `NotMissing`, over the rows an optional scope selects by value-level where clauses over completed columns. |
+| `DataType` | Safe-with-combine-step | Check each present value's ISO 8601 form over the rows an optional scope selects, and combine ordered offenders as `NotMissing` does. |
+| `ValueCodelists` | Safe-with-combine-step | Wait for the final where columns, then combine separately in binding order with unchanged default/override selection and codelist observations. |
+| `Inventory` | Safe-with-combine-step | Check membership in the declared inventory, select an optional scope by the entries' where clauses over completed columns, and retain all offending values/identities. This does not infer an inventory from per-batch distinct sets. |
+| `ValueMaxLength` | Safe-with-combine-step | Wait for the final where columns and preserve include/exclude selection and exact authored bound. |
+| `ValueEntries` | Safe-with-combine-step | Wait for the final where columns, then combine ordered offenders with the entry ids each offending row matches. |
+| `ValueEntryMatch` | Safe-with-combine-step | The artifact is the check's one unit: the entry matches when any partition holds a row its where clause selects. |
 | `Range` | Safe-with-combine-step | Preserve exact numeric bounds/comparison and ordered offenders. |
 | `MaxLength` | Safe-with-combine-step | Count Unicode scalars and combine ordered offenders. |
 | `WideMaxLength` | Safe-with-combine-step | Same, comparing against the exact wide bound without machine-integer narrowing. |

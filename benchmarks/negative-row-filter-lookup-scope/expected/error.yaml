@@ -1,0 +1,8 @@
+phase: validation
+condition: unknown_field
+spec_paths:
+  - intermediates[0].filter
+requirement: REQ-0120
+context:
+  identifier: DM.RFSTDTC
+  intermediate: RANDOMIZED

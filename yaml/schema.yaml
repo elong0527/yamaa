@@ -211,10 +211,6 @@ row_class:
         type: "dict[identifier, derivation]"
         required: true
         description: Columns this row template derives, whose coverage across row templates follows REQ-0200.
-    - submission:
-        type: "dict[identifier, submission_column_class]"
-        required: false
-        description: Per-value submission metadata for this row template's values, keyed by column (REQ-1162).
 
 variable:
     type: str
