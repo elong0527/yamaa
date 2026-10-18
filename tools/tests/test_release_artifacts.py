@@ -168,6 +168,8 @@ def downloads(root):
         directory / f"yamaa_{VERSION}.tar.gz",
         {
             "yamaa/DESCRIPTION": f"Package: yamaa\nVersion: {VERSION}\n".encode(),
+            # R's MIT license stub, which the full text in inst/ accompanies.
+            "yamaa/LICENSE": b"YEAR: 2026\nCOPYRIGHT HOLDER: yamaa contributors\n",
             **{f"yamaa/inst/{name}": payload for name, payload in licenses.items()},
         },
     )
@@ -382,7 +384,7 @@ class DownloadedPackages(unittest.TestCase):
                 for entry in source.infolist():
                     payload = source.read(entry.filename)
                     if defect == "missing-license" and entry.filename.endswith(
-                        "LICENSE-YAML.txt"
+                        "LICENSE-THIRD-PARTY.txt"
                     ):
                         continue
                     if entry.filename.endswith("/METADATA"):
@@ -395,7 +397,7 @@ class DownloadedPackages(unittest.TestCase):
                                 version_header, version_header + b"\n" + version_header
                             )
                     if defect == "changed-license" and entry.filename.endswith(
-                        "LICENSE-YAML.txt"
+                        "LICENSE-THIRD-PARTY.txt"
                     ):
                         payload = b"not the required notices"
                     target.writestr(entry, payload)
@@ -420,16 +422,18 @@ class DownloadedPackages(unittest.TestCase):
         """A copy elsewhere in an archive does not replace the package notice."""
         sdist = next(self.directory.rglob(f"yamaa-{VERSION}.tar.gz"))
         r_source = next((self.directory / "native-r-ubuntu-24.04").iterdir())
+        stub = b"YEAR: 2026\nCOPYRIGHT HOLDER: yamaa contributors\n"
         for path, name, moved, changed in (
             (
                 sdist,
-                f"yamaa-{VERSION}/LICENSE-YAML.txt",
-                f"yamaa-{VERSION}/python/LICENSE-YAML.txt",
+                f"yamaa-{VERSION}/LICENSE-THIRD-PARTY.txt",
+                f"yamaa-{VERSION}/python/LICENSE-THIRD-PARTY.txt",
                 None,
             ),
-            (sdist, f"yamaa-{VERSION}/LICENSE-READSTAT.txt", None, None),
-            (r_source, "yamaa/inst/LICENSE-YAML.txt", "yamaa/LICENSE-YAML.txt", None),
-            (r_source, "yamaa/inst/LICENSE-UNICODE.txt", None, b"edited\n"),
+            (sdist, f"yamaa-{VERSION}/LICENSE.txt", None, None),
+            (r_source, "yamaa/inst/LICENSE-THIRD-PARTY.txt", None, None),
+            (r_source, "yamaa/inst/LICENSE.txt", "yamaa/LICENSE.txt", None),
+            (r_source, "yamaa/inst/LICENSE.txt", None, stub),
         ):
             original = path.read_bytes()
             with tarfile.open(path) as source:

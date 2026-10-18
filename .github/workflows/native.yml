@@ -206,6 +206,7 @@ jobs:
         run: |
           python -m tools.packaging.check_python_package_hygiene "${RUNNER_TEMP}/native-dist"
           python -m tools.packaging.check_cargo_lock --output-dir "${RUNNER_TEMP}/rust-dependencies" "${RUNNER_TEMP}"/native-dist/*.tar.gz
+          python -m tools.packaging.generate_third_party_notices
           python -m tools.packaging.check_package_notices "${RUNNER_TEMP}"/native-dist/*.whl "${RUNNER_TEMP}"/native-dist/*.tar.gz
       - name: Preserve the reference host wheel
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
