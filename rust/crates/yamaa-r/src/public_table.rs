@@ -36,7 +36,8 @@ pub(super) fn frame(table: &Table) -> std::result::Result<Robj, String> {
     result
         .set_class(["data.frame"])
         .map_err(|_| "data-frame class")?;
-    let rows = i32::try_from(table.rows()).map_err(|_| "R data frames hold at most 2^31 - 1 rows")?;
+    let rows =
+        i32::try_from(table.rows()).map_err(|_| "R data frames hold at most 2^31 - 1 rows")?;
     result
         .set_attrib(
             "row.names",
@@ -73,9 +74,11 @@ fn extend(column: &mut Column, array: &dyn Array) -> std::result::Result<(), Str
     }
     match column {
         Column::Text(values) => match array.data_type() {
-            DataType::Utf8 => {
-                values.extend(cast::<StringArray>(array)?.iter().map(|v| v.map(str::to_owned)))
-            }
+            DataType::Utf8 => values.extend(
+                cast::<StringArray>(array)?
+                    .iter()
+                    .map(|v| v.map(str::to_owned)),
+            ),
             DataType::LargeUtf8 => values.extend(
                 cast::<LargeStringArray>(array)?
                     .iter()
