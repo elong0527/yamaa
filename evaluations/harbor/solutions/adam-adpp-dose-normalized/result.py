@@ -33,7 +33,7 @@ def dose_mg(ex_row):
     unit = ex_row["EXDOSU"].strip()
     if unit == "mg":
         return dose
-    if unit in ("ug", "µg", "mcg"):
+    if unit in ("ug", "\u00b5g", "mcg"):
         return dose / 1000.0
     return dose
 
