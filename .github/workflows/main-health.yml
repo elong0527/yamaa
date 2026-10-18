@@ -2,7 +2,9 @@ name: Main health
 
 # Main is checked on schedules rather than after every merge, so a failing
 # main run is the only sign that main is broken. Keep one open issue per
-# workflow while its latest main run fails, and close it when one succeeds.
+# workflow while its newest main run fails, and close it when one succeeds.
+# tools/ci/main_health.py ignores a run that a newer main run has overtaken,
+# such as a re-run of an older run that finishes after the newer one.
 on:
   workflow_run:
     workflows:
@@ -18,6 +20,8 @@ on:
     branches: [main]
 
 permissions:
+  # Read the other main runs of the watched workflow.
+  actions: read
   contents: read
   issues: write
 
@@ -31,7 +35,8 @@ defaults:
 
 jobs:
   report:
-    # Cancelled and skipped runs say nothing about main.
+    # Cancelled and skipped runs say nothing about main. The script ignores
+    # the same conclusions among the newer runs it compares.
     if: >-
       github.event.workflow_run.event != 'pull_request'
       && contains(fromJSON('["success", "failure", "timed_out", "startup_failure"]'), github.event.workflow_run.conclusion)
@@ -39,33 +44,14 @@ jobs:
     timeout-minutes: 5
     env:
       GH_TOKEN: ${{ github.token }}
-      GH_REPO: ${{ github.repository }}
-      WORKFLOW: ${{ github.event.workflow_run.name }}
-      CONCLUSION: ${{ github.event.workflow_run.conclusion }}
-      RUN_EVENT: ${{ github.event.workflow_run.event }}
-      RUN_URL: ${{ github.event.workflow_run.html_url }}
-      HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
     steps:
+      # A workflow_run job checks out the default branch, not the commit of
+      # the run it reports.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14'
       - name: Open, update or close the workflow's issue
-        run: |
-          title="main is red: $WORKFLOW"
-          number="$(gh issue list --state open --label main-red --limit 100 --json number,title \
-            | jq -r --arg title "$title" '[.[] | select(.title == $title)][0].number // empty')"
-          body="The latest $RUN_EVENT run of $WORKFLOW on main ended in $CONCLUSION at $HEAD_SHA.
-
-          Latest failing run: $RUN_URL
-
-          This issue closes itself when a later main run of $WORKFLOW succeeds."
-          if [ "$CONCLUSION" = success ]; then
-            if [ -n "$number" ]; then
-              gh issue close "$number" --comment "Recovered in $RUN_URL at $HEAD_SHA."
-            fi
-          elif [ -n "$number" ]; then
-            # Editing instead of commenting keeps a two-hourly failure from
-            # notifying watchers on every run.
-            gh issue edit "$number" --body "$body"
-          else
-            gh label create main-red --color B60205 \
-              --description "A main-branch check is failing" --force
-            gh issue create --title "$title" --label main-red --body "$body"
-          fi
+        run: python -m tools.ci.main_health --repository "$GITHUB_REPOSITORY" --event "$GITHUB_EVENT_PATH"
