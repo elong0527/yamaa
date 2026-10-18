@@ -196,8 +196,10 @@ deleted later with code `0x09` or `0x0d`.
 
 A reader reads past the last live record until it has found every counted
 deletion. A deleted count above the stored count, a mark beyond the count, a
-counted deletion never found, or a bitmap that does not fit its page fails
-with cause `deleted_records` ([SAS-7](#sas-7)).
+counted deletion never found, a bitmap that does not fit its page, or a page
+row beyond the records its bitmap covers fails with cause `deleted_records`
+([SAS-7](#sas-7)). The bitmap covers the page's records, and no more than the
+dataset stores.
 
 In compressed storage SAS can move an updated record that no longer fits its
 slot to another page. The slot then holds a reference, code `0x03`, whose
