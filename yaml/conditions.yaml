@@ -25,7 +25,7 @@ conditions:
   conflicting_row_construction: {phases: [validation]}
   # REQ-1167
   conflicting_value_metadata: {phases: [validation]}
-  conversion_failed: {phases: [convert]}
+  conversion_failed: {phases: [convert, validation]}
   core_mandatory_conflict: {phases: [validation]}
   correlated_derivation_with_unique_verification: {phases: [validation]}
   correlated_filter_with_unique_verification: {phases: [validation]}

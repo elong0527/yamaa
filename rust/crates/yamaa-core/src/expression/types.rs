@@ -1,5 +1,5 @@
 //! Static operand types: the type facts a site checks against its names before
-//! any value is read, and the result type a numeric expression declares.
+//! any value is read, and the result type `compute` and `aggregate` declare.
 
 use super::bind::{children, AggregateResult, CompiledExpression, ReductionOperand};
 use super::evaluate::Step;
@@ -7,7 +7,8 @@ use super::syntax::{NodeKind, TemporalKind};
 use super::{Context, Function, Reducer};
 use crate::numeric::BinaryOperator;
 use crate::reduction::NumericReducer;
-use crate::value::{comparable_types, ColumnType, ValueType};
+use crate::result_type::ResultType;
+use crate::value::{comparable_types, ValueType};
 
 /// A static type fault, found from the site's declared types alone.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -37,98 +38,122 @@ fn numeric(kind: ValueType) -> bool {
     matches!(kind, ValueType::Int | ValueType::Float)
 }
 
-/// Promote two operand types as arithmetic does; any unknown is unknown.
-pub(crate) fn unify(items: impl Iterator<Item = Option<ColumnType>>) -> Option<ColumnType> {
-    let mut kind = None;
-    for item in items {
-        let item = item?;
-        kind = match kind {
-            None => Some(item),
-            Some(previous) if previous == item => Some(item),
-            Some(ColumnType::Int | ColumnType::Float)
-                if matches!(item, ColumnType::Int | ColumnType::Float) =>
-            {
-                Some(ColumnType::Float)
-            }
-            _ => return None,
-        };
+/// An arithmetic operand's possible numbers. A name of no numeric type is a
+/// fault its site reports; its arithmetic still yields a number.
+fn number(kind: ResultType) -> ResultType {
+    match kind.numeric() {
+        numbers if numbers.is_missing() && !kind.is_missing() => ResultType::NUMBER,
+        numbers => numbers,
     }
-    kind
 }
 
-/// Require every operand to share one type; any unknown is unknown.
-pub(crate) fn unify_exact(
-    mut items: impl Iterator<Item = Option<ColumnType>>,
-) -> Option<ColumnType> {
-    let kind = items.next()??;
-    for item in items {
-        if item? != kind {
-            return None;
-        }
+/// VALUE-10's `+`, `-`, `*`, `ABS` and `MOD`: `int` for `int` operands,
+/// `float` when either is a `float`, and missing when either always is. An
+/// operand of several types gives the result for each of them.
+fn promote(left: ResultType, right: ResultType) -> ResultType {
+    if left.is_missing() || right.is_missing() {
+        return ResultType::MISSING;
     }
-    Some(kind)
-}
-
-fn column(kind: ValueType) -> Option<ColumnType> {
-    match kind {
-        ValueType::Str => Some(ColumnType::Str),
-        ValueType::Int => Some(ColumnType::Int),
-        ValueType::Float => Some(ColumnType::Float),
-        ValueType::Date => Some(ColumnType::Date),
-        ValueType::DateTime => Some(ColumnType::DateTime),
-        ValueType::Bool => None,
+    let int = left.contains(ValueType::Int) && right.contains(ValueType::Int);
+    let float = left.contains(ValueType::Float) || right.contains(ValueType::Float);
+    match (int, float) {
+        (true, true) => ResultType::NUMBER,
+        (true, false) => ResultType::INT,
+        _ => ResultType::FLOAT,
     }
 }
 
 impl CompiledExpression {
-    /// The type a numeric expression's value takes from its operand types.
-    /// Division and the real-valued functions are `float`; a missing operand
-    /// makes the type unknown, since a missing float does not promote an int.
-    pub fn result_type(&self, lookup: impl Fn(&str) -> Option<ColumnType>) -> Option<ColumnType> {
+    /// The result type of `compute` and `aggregate` (EXPR-14) from the types
+    /// `lookup` gives each name: VALUE-10 for operators and functions and
+    /// FORMULA-23 for reductions. `/` and the real-valued functions are
+    /// `float`, and `NULLIF` is a `float` when either argument is.
+    pub fn result_type(&self, lookup: impl Fn(&str) -> ResultType) -> ResultType {
         self.infer(self.syntax.root(), &lookup)
     }
 
-    fn infer(&self, id: usize, lookup: &impl Fn(&str) -> Option<ColumnType>) -> Option<ColumnType> {
+    /// The expression as the site that binds it types each name: every
+    /// `NULLIF` whose result type is `float` widens the `int` it returns
+    /// under VALUE-8, also when its `float` argument is missing.
+    pub fn typed(&self, lookup: impl Fn(&str) -> ResultType) -> Self {
+        let mut typed = self.clone();
+        typed.widened = (0..self.syntax.nodes().len())
+            .filter(|&id| {
+                matches!(
+                    &self.syntax.nodes()[id].kind,
+                    NodeKind::Call { name, .. }
+                        if Function::lookup(self.syntax.slice(*name)) == Some(Function::NullIf)
+                ) && self.infer(id, &lookup) == ResultType::FLOAT
+            })
+            .collect();
+        typed
+    }
+
+    fn infer(&self, id: usize, lookup: &impl Fn(&str) -> ResultType) -> ResultType {
         match &self.syntax.nodes()[id].kind {
-            NodeKind::Number { fractional, .. } => Some(if *fractional {
-                ColumnType::Float
-            } else {
-                ColumnType::Int
-            }),
-            NodeKind::Identifier => lookup(self.syntax.text(id)),
+            NodeKind::Number { fractional, .. } => {
+                if *fractional {
+                    ResultType::FLOAT
+                } else {
+                    ResultType::INT
+                }
+            }
+            NodeKind::Null => ResultType::MISSING,
+            NodeKind::Identifier => number(lookup(self.syntax.text(id))),
             NodeKind::Group(operand) | NodeKind::Unary { operand, .. } => {
                 self.infer(*operand, lookup)
             }
             NodeKind::Binary {
-                operator: BinaryOperator::Divide,
-                ..
-            } => Some(ColumnType::Float),
-            NodeKind::Binary { left, right, .. } => {
-                unify([self.infer(*left, lookup), self.infer(*right, lookup)].into_iter())
-            }
-            NodeKind::Call { name, arguments } => {
-                match Function::lookup(self.syntax.slice(*name))? {
-                    Function::Sqrt
-                    | Function::Exp
-                    | Function::Ln
-                    | Function::Power
-                    | Function::Ceil
-                    | Function::Floor
-                    | Function::Trunc => Some(ColumnType::Float),
-                    Function::NullIf => unify_exact(
-                        arguments
-                            .iter()
-                            .map(|&argument| self.infer(argument, lookup)),
-                    ),
-                    Function::StrContains => None,
-                    Function::Abs | Function::Mod => unify(
-                        arguments
-                            .iter()
-                            .map(|&argument| self.infer(argument, lookup)),
-                    ),
+                operator,
+                left,
+                right,
+            } => {
+                let (left, right) = (self.infer(*left, lookup), self.infer(*right, lookup));
+                match operator {
+                    BinaryOperator::Divide if left.is_missing() || right.is_missing() => {
+                        ResultType::MISSING
+                    }
+                    BinaryOperator::Divide => ResultType::FLOAT,
+                    _ => promote(left, right),
                 }
             }
-            _ => None,
+            NodeKind::Call { name, arguments } => {
+                let arguments = arguments
+                    .iter()
+                    .map(|&argument| self.infer(argument, lookup))
+                    .collect::<Vec<_>>();
+                match Function::lookup(self.syntax.slice(*name)) {
+                    Some(Function::NullIf) => {
+                        let (left, right) = (arguments[0], arguments[1]);
+                        if right.is_missing() {
+                            left
+                        } else {
+                            promote(left, right)
+                        }
+                    }
+                    Some(Function::Abs) => arguments[0],
+                    Some(Function::Mod) => promote(arguments[0], arguments[1]),
+                    _ if arguments.iter().any(|argument| argument.is_missing()) => {
+                        ResultType::MISSING
+                    }
+                    _ => ResultType::FLOAT,
+                }
+            }
+            NodeKind::Reduction { reducer, .. } => {
+                let reduction = &self.reductions[self.reduction_at(id)];
+                let reduced = match &reduction.operand {
+                    ReductionOperand::Value(name) => lookup(name),
+                    ReductionOperand::Records(_) => ResultType::UNKNOWN,
+                    ReductionOperand::Numeric => self.infer(reduction.operand_node, lookup),
+                };
+                match reducer {
+                    Reducer::Count => ResultType::INT,
+                    Reducer::Mean => ResultType::FLOAT,
+                    Reducer::Sum => number(reduced),
+                    Reducer::Min | Reducer::Max | Reducer::Only => reduced,
+                }
+            }
+            _ => ResultType::UNKNOWN,
         }
     }
 
@@ -359,14 +384,10 @@ impl<K: Fn(&str) -> Option<ValueType>> Checker<'_, K> {
             NodeKind::Identifier => (self.kind)(self.compiled.syntax.text(id)),
             NodeKind::Unary { .. } | NodeKind::Binary { .. } | NodeKind::Call { .. } => self
                 .compiled
-                .infer(id, &|name| {
-                    (self.kind)(name)
-                        .filter(|kind| numeric(*kind))
-                        .and_then(column)
-                })
-                .filter(|kind| matches!(kind, ColumnType::Int | ColumnType::Float))
-                .filter(|_| !self.faulty(id))
-                .map(Into::into),
+                .infer(id, &|name| ResultType::known((self.kind)(name)))
+                .single()
+                .filter(|kind| numeric(*kind))
+                .filter(|_| !self.faulty(id)),
             _ => None,
         }
     }

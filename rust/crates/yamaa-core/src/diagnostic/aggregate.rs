@@ -3,7 +3,7 @@ use super::{ConditionCode as C, Diagnostic, ProjectionError};
 use crate::json::Value as V;
 use crate::{
     dataset::AggregatePhase,
-    key_relation::ComparableType,
+    result_type::ResultType,
     value::{ColumnType, Value, ValueType},
 };
 
@@ -51,7 +51,7 @@ pub enum AggregateFinding<'a> {
     KeyType {
         path: &'a str,
         source: &'a str,
-        expected: ComparableType,
+        expected: ResultType,
         actual: ColumnType,
         inferred: bool,
     },
@@ -118,18 +118,6 @@ fn type_name(value: ValueType) -> &'static str {
         ValueType::DateTime => "datetime",
     }
 }
-fn comparable_name(kind: ComparableType) -> &'static str {
-    match kind {
-        ComparableType::Boolean => "bool",
-        ComparableType::Column(kind) => match kind {
-            ColumnType::Str => "str",
-            ColumnType::Int => "int",
-            ColumnType::Float => "float",
-            ColumnType::Date => "date",
-            ColumnType::DateTime => "datetime",
-        },
-    }
-}
 impl AggregateFinding<'_> {
     pub fn diagnostic(self) -> Result<Diagnostic, ProjectionError> {
         let key = match self {
@@ -168,8 +156,8 @@ impl AggregateFinding<'_> {
                 },
                 [
                     ("source".into(), text(source)),
-                    ("expected".into(), text(comparable_name(expected))),
-                    ("actual".into(), text(comparable_name(actual.into()))),
+                    ("expected".into(), text(&expected.name())),
+                    ("actual".into(), text(actual.name())),
                 ]
                 .into(),
             )),

@@ -389,24 +389,45 @@ mod scalar {
 
         #[test]
         fn duration_value_reads_signed_fractional_and_week_forms_exactly() {
+            // A float in every unit: the exact seconds are rounded once to
+            // binary64, so whole seconds beyond 2^53 take the nearest float.
             for (source, unit, expected) in [
                 ("-PT15M", U::Hour, Value::float(-0.25)),
-                ("P1DT2H3M", U::Second, Value::Int(93780)),
+                ("P1DT2H3M", U::Second, Value::float(93780.0)),
                 ("P2W", U::Day, Value::float(14.0)),
-                ("PT0.5H", U::Second, Value::Int(1800)),
+                ("PT0.5H", U::Second, Value::float(1800.0)),
                 ("PT0,5H", U::Minute, Value::float(30.0)),
                 ("P0.5D", U::Hour, Value::float(12.0)),
                 ("PT0.1S", U::Second, Value::float(0.1)),
-                ("-PT0S", U::Second, Value::Int(0)),
-                ("PT9223372036854775807S", U::Second, Value::Int(i64::MAX)),
-                ("-PT9223372036854775808S", U::Second, Value::Int(i64::MIN)),
+                ("-PT0S", U::Second, Value::float(-0.0)),
+                (
+                    "PT9007199254740993S",
+                    U::Second,
+                    Value::float(9007199254740992.0),
+                ),
+                (
+                    "PT9223372036854775807S",
+                    U::Second,
+                    Value::float(9223372036854775808.0),
+                ),
+                (
+                    "-PT9223372036854775808S",
+                    U::Second,
+                    Value::float(-9223372036854775808.0),
+                ),
             ] {
-                assert_eq!(result(K::DurationValue { unit }, &[text(source)]), expected);
+                assert_eq!(
+                    result(K::DurationValue { unit }, &[text(source)]),
+                    expected,
+                    "{source}"
+                );
             }
         }
 
         #[test]
         fn invalid_duration_text_recovers_only_when_declared() {
+            // A duration whose float is not finite is outside the numeric range.
+            let infinite = format!("PT1{}S", "0".repeat(309));
             for source in [
                 "",
                 "P",
@@ -428,7 +449,7 @@ mod scalar {
                 "PT1.S",
                 "PT1e3S",
                 "pt1s",
-                "PT9223372036854775808S",
+                infinite.as_str(),
             ] {
                 let operation = operation(K::DurationValue { unit: U::Second });
                 let error = operation

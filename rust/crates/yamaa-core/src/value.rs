@@ -30,6 +30,20 @@ pub enum ValueType {
     DateTime,
 }
 
+impl ValueType {
+    /// The type's spelling in specifications and diagnostic context.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Str => "str",
+            Self::Int => "int",
+            Self::Float => "float",
+            Self::Bool => "bool",
+            Self::Date => "date",
+            Self::DateTime => "datetime",
+        }
+    }
+}
+
 /// Column types deliberately exclude bool (REQ-0002).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ColumnType {
@@ -38,6 +52,13 @@ pub enum ColumnType {
     Float,
     Date,
     DateTime,
+}
+
+impl ColumnType {
+    /// The type's spelling in specifications and diagnostic context.
+    pub fn name(self) -> &'static str {
+        ValueType::from(self).name()
+    }
 }
 impl From<ColumnType> for ValueType {
     fn from(kind: ColumnType) -> Self {

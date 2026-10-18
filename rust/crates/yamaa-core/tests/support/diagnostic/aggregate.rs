@@ -7,7 +7,7 @@ pub(crate) use yamaa_core::{
         AggregateContextCause as Cause, AggregateEmptyKey, AggregateFinding as Finding,
         ConditionCode, ProjectionError,
     },
-    key_relation::ComparableType,
+    result_type::ResultType,
     value::{ColumnType, Value, ValueType},
 };
 
@@ -214,7 +214,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             Finding::KeyType {
                 path: "aggregate.expr",
                 source: "ID",
-                expected: ComparableType::Column(ColumnType::Str),
+                expected: ResultType::STR,
                 actual: ColumnType::Int,
                 inferred: false,
             },
@@ -230,7 +230,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             Finding::KeyType {
                 path: "aggregate.expr",
                 source: "ID",
-                expected: ComparableType::Column(ColumnType::Str),
+                expected: ResultType::STR,
                 actual: ColumnType::Int,
                 inferred: true,
             },
