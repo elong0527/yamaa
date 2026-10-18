@@ -1,0 +1,8 @@
+phase: validation
+condition: key_dependency
+spec_paths:
+  - columns.MAXDOSE.derivation.aggregate
+requirement: COLUMN-7
+context:
+  column: MAXDOSE
+  operation: aggregate

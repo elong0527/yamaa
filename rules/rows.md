@@ -191,13 +191,21 @@ records; it is required unless `input` declares exactly one dataset, which then
 supplies them.
 
 Fails: `driver_unavailable`.
-Evidence: `sdtm-se-subject-elements`, `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs`.
+Evidence: `sdtm-se-subject-elements`, `schema-window-key-records`, `schema-window-key-odm-records`, `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs`, `rust/crates/yamaa-adapters/tests/execution_no_rows_record_reads.rs`.
 Replaces: REQ-0042, REQ-0064.
 
 The key table is standalone: it has one row per unique key combination and no
 link back to the input records. The input records a key combination was
 derived from decide its column values and never how many rows the artifact
 carries.
+
+A key derived by a window numbers the base records themselves, so each
+retained record is its own key combination and builds one row. Every column
+derivation then reads that one record, whatever operation reads it, as a
+record-driven row template's derivation reads its driver record: a flag, a
+`case` condition, `first_available`, a project function argument, and an
+`odm` read, whose scope is the record's own item group occurrence
+([NAME-10](names.md#name-10)).
 
 A specification with absent or empty `rows` and no default input dataset fails
 validation with `driver_unavailable` at `base`. The default is root `base`, or

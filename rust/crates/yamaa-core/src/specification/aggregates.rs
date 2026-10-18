@@ -38,6 +38,10 @@ struct DeriveDeclaration {
     intermediate_names: Vec<String>,
 }
 impl Declaration {
+    /// The operation's path, `<derivation>.aggregate`.
+    pub(super) fn path(&self) -> &str {
+        &self.path
+    }
     pub(super) fn calls(&self, result: &mut Vec<usize>) {
         for derive in self.derive.iter().flatten() {
             derivations::calls(&derive.branch.operation, result);

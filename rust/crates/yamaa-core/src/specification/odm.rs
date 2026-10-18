@@ -72,12 +72,15 @@ pub(super) fn prepare(
     })
 }
 
+/// `record_rows` makes each no-rows output row one base record, whose item
+/// group the read takes its scope from, as an ungrouped row template does.
 pub(super) fn bind(
     declaration: &Declaration,
     catalog: &Catalog,
     driver: &str,
     row: Option<&str>,
     phase: Phase<'_>,
+    record_rows: bool,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<Expression>, BindError> {
     if !declaration.declared {
@@ -182,6 +185,7 @@ pub(super) fn bind(
                 .collect(),
         ),
         Phase::Row { group_by: None } => OdmScope::Records,
+        Phase::Column { .. } if record_rows => OdmScope::Records,
         Phase::Column { .. } => OdmScope::Keys,
     };
     let read = OdmRead {
@@ -600,6 +604,10 @@ pub(super) fn inputs(d: &Document) -> Result<BTreeSet<&str>, PrepareError> {
 }
 
 impl Declaration {
+    /// The operation's path, `<derivation>.odm`.
+    pub(super) fn path(&self) -> &str {
+        &self.path
+    }
     pub(super) fn check_findings(&self, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
         if let Some((expression, compiled)) = &self.filter {
             static_checks::predicate(

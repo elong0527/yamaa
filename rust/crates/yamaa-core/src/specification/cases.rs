@@ -229,7 +229,7 @@ fn bind_project_operation(
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<Expression>, BindError> {
     let calls = spec.project_calls.as_ref().ok_or(BindError::Internal)?;
-    let record = spec.keys.contains(&column);
+    let record = spec.reads_one_record(column);
     let context = project_call_binding::Context {
         source_dataset: 0,
         source_mode: if record {
@@ -370,8 +370,7 @@ fn bind_operation(
         Operation::Window(window) => window.bind(catalog, edges, findings)?,
         Operation::Flag(operation) => flags::bind(
             operation,
-            column,
-            &spec.keys,
+            spec.reads_one_record(column),
             &spec.source().name,
             catalog,
             &spec.intermediates,
@@ -542,11 +541,21 @@ fn bind_operation(
             findings,
             start,
         )?,
+        Operation::Odm(operation) => odm::bind(
+            operation,
+            catalog,
+            &spec.source().name,
+            None,
+            spec.odm_phase(column),
+            spec.record_rows(),
+            findings,
+        )?,
         Operation::FirstAvailable(selection) => derivations::bind_selection(
             selection,
             &branch.path,
             catalog,
             None,
+            spec.record_rows(),
             column,
             &spec.output,
             &spec.intermediates,
@@ -555,7 +564,6 @@ fn bind_operation(
             edges,
             findings,
         )?,
-        _ => return Err(BindError::Internal),
     })
 }
 

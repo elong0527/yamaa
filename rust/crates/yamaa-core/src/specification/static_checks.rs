@@ -205,6 +205,16 @@ impl PreparedSpecification {
             let mut dependencies = Vec::new();
             for (column, declaration) in self.declarations.iter().enumerate() {
                 let start = findings.len();
+                // Binding reports a key that reads other records first and
+                // binds nothing else of it (COLUMN-7).
+                let refused = self.key_record_findings(column);
+                if !refused.is_empty() {
+                    findings.extend(refused);
+                    if outputs.is_some() {
+                        dependencies.push(Some(Vec::new()));
+                    }
+                    continue;
+                }
                 operation(
                     &declaration.operation,
                     &declaration.path,
