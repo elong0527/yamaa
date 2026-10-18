@@ -217,8 +217,9 @@ constructed.
 <a id="req-0756"></a>
 
 **REQ-0756.** `output.path` and `output.report` must name different files,
-and in a producer graph no node's `output.report` may name the file of another
-node's `output.path` or `output.report` ([REQ-1330](publication.md#req-1330)).
+and in a producer graph no node's `output.path` or `output.report` may name the
+file of another node's `output.path` or `output.report`
+([REQ-1330](publication.md#req-1330)).
 In a project run, no two of these paths of the specifications in its run scope
 may name one file ([REQ-1346](../specification/project.md#req-1346)).
 Two of these paths that name one file, including two spellings that resolve to
