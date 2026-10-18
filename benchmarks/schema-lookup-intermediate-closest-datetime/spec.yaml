@@ -1,0 +1,104 @@
+schema_version: "1.0"
+domain: ADEG
+keys: [STUDYID, USUBJID, EGSEQ]
+input:
+  EG: {path: input/eg.csv, types: {EGSEQ: int, EGDTC: datetime}}
+  PC: {path: input/pc.csv, types: {PCSEQ: int, PCSTRESN: float}}
+base: EG
+
+output:
+  path: adeg.csv
+  columns: [STUDYID, USUBJID, EGSEQ, ADTM, PCSEQ, PCDTM, PCCONC, PCDIST]
+
+intermediates:
+  # The subject's sample closest in time to the ECG, before or after it.
+  # Each sample's time is completed from its collected text, and GAP is the
+  # hours from the sample to the ECG, positive for a sample taken before
+  # it; DIST drops the direction. A sample collected without a time to the
+  # minute is not placed at midnight: the filter drops it, as it drops every
+  # sample of an ECG without a date and time, whose distances are all
+  # missing. Equally close samples prefer the one taken before the ECG, then
+  # the lower sequence number, whatever their stored order.
+  - id: NEAREST
+    dataset: PC
+    key: [STUDYID, USUBJID]
+    filter: "PC.DIST IS NOT NULL AND PC.PREC IN ('minute', 'second')"
+    order_by:
+      - PC.DIST
+      - {variable: PC.GAP, direction: desc}
+      - PC.PCSEQ
+    keep: first
+    columns: [PCSEQ, PCDTM, PCSTRESN, DIST]
+    no_match: {literal: null}
+    derivations:
+      PREC: {precision: {type: datetime, source: PCDTC}}
+      PCDTM:
+        impute:
+          type: datetime
+          source: PCDTC
+          minimum_source_precision: day
+          time: first
+      GAP:
+        diff:
+          type: datetime
+          start: PCDTM
+          end: EG.EGDTC
+          unit: hour
+      DIST: {compute: {expr: "ABS(GAP)"}}
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: EG.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: EG.USUBJID
+
+  - name: EGSEQ
+    type: int
+    label: Sequence Number
+    derivation: EG.EGSEQ
+
+  - name: ADTM
+    type: datetime
+    label: Analysis Date/Time
+    derivation: EG.EGDTC
+
+  - name: PCSEQ
+    type: int
+    label: Sequence Number of the Closest Sample
+    derivation: NEAREST.PCSEQ
+
+  - name: PCDTM
+    type: datetime
+    label: Date/Time of the Closest Sample
+    derivation: NEAREST.PCDTM
+
+  - name: PCCONC
+    type: float
+    label: Concentration of the Closest Sample
+    derivation: NEAREST.PCSTRESN
+
+  - name: PCDIST
+    type: float
+    label: Hours Between Closest Sample and ECG
+    derivation: NEAREST.DIST
+
+verifications:
+  - row_count:
+      min: 4
+      max: 4
+  - all_or_none:
+      id: closest-sample-columns-travel-together
+      columns: [PCSEQ, PCDTM, PCDIST]
+  - assert:
+      id: an-ecg-without-a-time-has-no-sample
+      when: "ADTM IS NULL"
+      require: "PCSEQ IS NULL"
+  - assert:
+      id: distance-has-no-direction
+      when: "PCDIST IS NOT NULL"
+      require: "PCDIST >= 0"
