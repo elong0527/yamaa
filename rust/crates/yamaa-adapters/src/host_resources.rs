@@ -113,10 +113,28 @@ pub(crate) struct Resources {
 }
 impl Resources {
     pub fn new(resolver: Arc<dyn Resolver>, _entry: String) -> Self {
+        Self::at(resolver, "/".into())
+    }
+    /// An empty scope whose undeclared requests come from `base`.
+    pub fn at(resolver: Arc<dyn Resolver>, base: String) -> Self {
         Self {
             resolver,
-            base: "/".into(),
+            base,
             snapshots: Mutex::new(Vec::new()),
+        }
+    }
+    /// A run scope over the same resolver, starting from these snapshots.
+    /// Later captures in either owner are invisible to the other.
+    pub fn scope(&self) -> Self {
+        Self {
+            resolver: Arc::clone(&self.resolver),
+            base: self.base.clone(),
+            snapshots: Mutex::new(
+                self.snapshots
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone(),
+            ),
         }
     }
     fn call(

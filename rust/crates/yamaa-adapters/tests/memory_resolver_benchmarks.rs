@@ -918,15 +918,16 @@ impl RuntimePort for MemoryRuntime<'_> {
 
     fn plain(
         &mut self,
-        prepared: FileSpecification,
+        prepared: &FileSpecification,
         scope: Scope<'_>,
     ) -> Result<Built, file_application::Failure> {
-        file_application::plain(prepared, self.identity(), scope).map(Built::Plain)
+        let mut run_scope = prepared.run_scope(None);
+        file_application::plain(prepared, &mut run_scope, self.identity(), scope).map(Built::Plain)
     }
 
     fn project(
         &mut self,
-        _: Box<yamaa_adapters::file_project::FileProject>,
+        _: &yamaa_adapters::file_project::FileProject,
         _: Scope<'_>,
     ) -> Result<Built, file_application::Failure> {
         Err(file_application::unsupported(
@@ -937,12 +938,14 @@ impl RuntimePort for MemoryRuntime<'_> {
 
     fn producer(
         &mut self,
-        graph: Box<FileGraph>,
+        graph: &FileGraph,
         scope: Scope<'_>,
     ) -> Result<Built, file_application::Failure> {
-        let mut build = graph.into_build();
+        let build = graph.build();
+        let mut run_scope = build.run_scope(None);
         let mut activation = NoActivation;
-        let owned = build.build_owned_reported(&mut activation, self.identity(), scope);
+        let owned =
+            build.build_owned_reported(&mut run_scope, &mut activation, self.identity(), scope);
         match yamaa_adapters::producer_result::prepare_owned_classified(
             &owned,
             self.identity(),
