@@ -7,6 +7,24 @@ use std::process::Command;
 
 use serde_json::Value;
 
+/// The platform Cargo builds these tests for. Unfiltered, `cargo metadata`
+/// loads every platform's packages, and `--frozen` cannot download the ones
+/// this build did not use.
+fn host() -> String {
+    let output = Command::new(env!("CARGO")).arg("-vV").output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8(output.stdout)
+        .unwrap()
+        .lines()
+        .find_map(|line| line.strip_prefix("host: "))
+        .unwrap()
+        .to_owned()
+}
+
 #[test]
 fn the_facade_links_the_vendored_parser_by_path() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -16,8 +34,10 @@ fn the_facade_links_the_vendored_parser_by_path() {
             "--format-version",
             "1",
             "--frozen",
-            "--manifest-path",
+            "--filter-platform",
         ])
+        .arg(host())
+        .arg("--manifest-path")
         .arg(root.join("Cargo.toml"))
         .output()
         .unwrap();
