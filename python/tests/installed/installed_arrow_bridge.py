@@ -1,4 +1,8 @@
-"""Installed Arrow C Stream handoff with independent values and buffer evidence."""
+"""Installed Arrow C Stream handoff with independent values and buffer evidence.
+
+Every result table (output, issues and report) reaches Python through the
+Arrow C stream of the native run, never through IPC bytes.
+"""
 
 import gc
 import tempfile
@@ -33,7 +37,7 @@ INPUT = (
     "ID,S,I,F,D,T\n"
     "1,a\0\U0001f980,-9223372036854775808,-0.0,0001-01-01,0001-01-01T00:00:00\n"
     "2,,,,,\n"
-    "3,\u03b2,9223372036854775807,1.25,9999-12-31,9999-12-31T23:59:59\n"
+    "3,β,9223372036854775807,1.25,9999-12-31,9999-12-31T23:59:59\n"
 )
 
 
@@ -53,14 +57,14 @@ class ArrowBridge(unittest.TestCase):
         (self.root / "spec.yaml").write_text(SPEC, encoding="utf-8")
         (self.root / "input.csv").write_text(INPUT, encoding="utf-8")
 
-    def build(self):
-        result = yamaa.domain(self.root / "spec.yaml")
+    def run_spec(self):
+        result = yamaa.spec(self.root / "spec.yaml").run()
         self.assertEqual(result.issues.height, 0)
         return result
 
-    def test_exact_types_buffer_sharing_and_owned_default_views(self):
-        built = self.build()
-        first = built.output_arrow
+    def test_exact_types_buffer_sharing_and_frames_without_ipc(self):
+        run = self.run_spec()
+        first = pa.table(run._native.output())
         self.assertEqual(
             first.schema.types,
             [
@@ -72,7 +76,7 @@ class ArrowBridge(unittest.TestCase):
                 pa.timestamp("s"),
             ],
         )
-        self.assertEqual(first["S"].to_pylist(), ["a\0\U0001f980", None, "\u03b2"])
+        self.assertEqual(first["S"].to_pylist(), ["a\0\U0001f980", None, "β"])
         self.assertEqual(first["I"].to_pylist(), [-(2**63), None, 2**63 - 1])
         self.assertEqual(first["F"].to_pylist(), [-0.0, None, 1.25])
         self.assertEqual(
@@ -82,23 +86,49 @@ class ArrowBridge(unittest.TestCase):
             pc.cast(first["T"], pa.int64()).to_pylist(),
             [-62135596800, None, 253402300799],
         )
-        self.assertEqual(addresses(first), addresses(built.output_arrow))
-        # The default public result traverses the same bridge, without IPC.
-        with patch.object(
-            pl, "read_ipc_stream", side_effect=AssertionError("IPC host handoff")
+        # Each export is a fresh stream over the same held buffers.
+        self.assertEqual(addresses(first), addresses(pa.table(run._native.output())))
+        # The public frames traverse the same bridge, without IPC.
+        with (
+            patch.object(
+                pl, "read_ipc_stream", side_effect=AssertionError("IPC host handoff")
+            ),
+            patch.object(
+                pl, "read_ipc", side_effect=AssertionError("IPC host handoff")
+            ),
         ):
-            frame = built.output
+            frame = run.output
+            issues = run.issues
+            report = run.report
         self.assertEqual(frame["I"].to_list(), [-(2**63), None, 2**63 - 1])
-        self.assertEqual(frame["S"].to_list(), ["a\0\U0001f980", None, "\u03b2"])
+        self.assertEqual(frame["S"].to_list(), ["a\0\U0001f980", None, "β"])
         self.assertEqual(frame["D"].dtype, pl.Date)
         self.assertIsInstance(frame["T"].dtype, pl.Datetime)
-        del built
+        self.assertEqual(
+            pa.table(run._native.issues()).schema.types,
+            [
+                pa.string(),
+                pa.string(),
+                pa.string(),
+                pa.list_(pa.string()),
+                pa.string(),
+                pa.list_(pa.int64()),
+                pa.list_(pa.string()),
+            ],
+        )
+        self.assertTrue(issues.is_empty())
+        held = pa.table(run._native.report())
+        self.assertEqual(
+            held.schema.types, [pa.string()] * 10 + [pa.int64()] * 2 + [pa.string()] * 2
+        )
+        self.assertEqual(report.to_dict(as_series=False), held.to_pydict())
+        del run
         gc.collect()
         self.assertEqual(first["I"][0].as_py(), -(2**63))
 
     def test_failed_conversion_unconsumed_capsule_and_early_release(self):
-        built = self.build()
-        exporter = built._native.output()
+        run = self.run_spec()
+        exporter = run._native.output()
         for _ in range(30):
             capsule = exporter.__arrow_c_stream__()
             del capsule
@@ -110,7 +140,7 @@ class ArrowBridge(unittest.TestCase):
         reader = pa.RecordBatchReader.from_stream(exporter)
         batch = reader.read_next_batch()
         reader.close()
-        del reader, exporter, built
+        del reader, exporter, run
         gc.collect()
         self.assertEqual(batch["S"][0].as_py(), "a\0\U0001f980")
         with self.assertRaises(pa.ArrowInvalid):
@@ -118,8 +148,8 @@ class ArrowBridge(unittest.TestCase):
         self.assertEqual(batch["I"][2].as_py(), 2**63 - 1)
 
     def test_repeated_chunked_exports_empty_batches_and_empty_result(self):
-        built = self.build()
-        table = built.output_arrow
+        run = self.run_spec()
+        table = pa.table(run._native.output())
         expected = table.to_pydict()
         first = table.to_batches()[0]
         for _ in range(30):
@@ -139,10 +169,11 @@ class ArrowBridge(unittest.TestCase):
                 pa.RecordBatchReader.from_batches(table.schema, table.to_batches())
             )
         (self.root / "input.csv").write_text("ID,S,I,F,D,T\n", encoding="utf-8")
-        empty = self.build()
-        self.assertEqual(empty.output_arrow.shape, (0, 6))
+        empty = self.run_spec()
+        empty_table = pa.table(empty._native.output())
+        self.assertEqual(empty_table.shape, (0, 6))
         self.assertEqual(empty.output.shape, (0, 6))
-        self.assertEqual(empty.output_arrow.schema, built.output_arrow.schema)
+        self.assertEqual(empty_table.schema, pa.table(run._native.output()).schema)
 
 
 if __name__ == "__main__":

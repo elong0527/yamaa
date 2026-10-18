@@ -1096,7 +1096,6 @@
     "python/sas-sources": "shared_run",
     "python/saved-readers": "shared_run",
     "python/verification-logs": "shared_run",
-    "r/arrow-bridge": "shared_run",
     "r/column-ceilings": "shared_run",
     "r/compact-yaml": "shared_run",
     "r/longitudinal-capacity": "shared_run",
