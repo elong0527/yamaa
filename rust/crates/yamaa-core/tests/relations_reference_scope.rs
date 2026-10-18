@@ -1003,6 +1003,98 @@ mod relations {
             );
             assert_eq!(result, Err(PlanError::InvalidIntermediate));
         }
+
+        /// An aggregate's range value reads the record of the row's own driver.
+        /// Another input's record, read at the driver's record positions, is
+        /// refused before any cell is read, whatever produced the plan.
+        #[test]
+        fn an_aggregate_range_value_reads_only_its_rows_driver_record() {
+            use yamaa_core::{
+                aggregate_compiler::compile_aggregate,
+                dataset::{AggregatePhase, AggregateRelation, AggregateSource, BoundAggregate},
+            };
+            let path = "columns.N.derivation.aggregate";
+            let aggregate = |source| {
+                BoundAggregate::new(
+                    compile_aggregate("COUNT(EVT.*)", &format!("{path}.expr")).unwrap(),
+                    AggregateRelation::Matched {
+                        source: AggregateSource::Secondary(1),
+                        keys: vec![IntermediateKey {
+                            source_column: 0,
+                            path: format!("{path}.key.ID"),
+                            value: MatchValue::Variable(MatchRead::Output {
+                                column: 0,
+                                identifier: "ID".into(),
+                            }),
+                        }],
+                        group_by: vec![],
+                    },
+                    vec![],
+                    None,
+                    AggregatePhase::Derivation,
+                    None,
+                    path,
+                )
+                .unwrap()
+                .with_record_operations(
+                    Some(
+                        RelationRange::new(
+                            format!("{path}.between"),
+                            CurrentField {
+                                read: CurrentRead::Record { source, column: 1 },
+                                identifier: "DAY".into(),
+                            },
+                            Some(ValueType::Int),
+                            None,
+                            Some(RelationRangeBound {
+                                column: 1,
+                                identifier: "EVDAY".into(),
+                                kind: Some(ValueType::Int),
+                            }),
+                        )
+                        .unwrap(),
+                    ),
+                    Vec::new(),
+                    None,
+                )
+            };
+            // REF keeps an integer day at the column where the driver keeps its own.
+            let plan = |source, mode| {
+                DatasetPlan::new_with_intermediates(
+                    SourceSchemas {
+                        primary: schema(&[("ID", T::Int), ("DAY", T::Int)]),
+                        secondary: vec![
+                            SecondarySource {
+                                name: "REF".into(),
+                                schema: schema(&[("ID", T::Int), ("REFDAY", T::Int)]),
+                            },
+                            SecondarySource {
+                                name: "EVT".into(),
+                                schema: schema(&[("ID", T::Int), ("EVDAY", T::Int)]),
+                            },
+                        ],
+                    },
+                    vec![],
+                    schema(&[("ID", T::Int), ("N", T::Int)]),
+                    vec![RowTemplate {
+                        mode,
+                        assignments: vec![assign(0, Expression::Source(0))],
+                        filter: None,
+                    }],
+                    vec![assign(
+                        1,
+                        Expression::Aggregate(Box::new(aggregate(source))),
+                    )],
+                    vec![0],
+                    vec![],
+                )
+            };
+            for mode in [RowMode::Records, RowMode::Keys] {
+                let own = plan(0, mode.clone());
+                assert!(own.is_ok(), "{own:?}");
+                assert_eq!(plan(1, mode), Err(PlanError::InvalidSource));
+            }
+        }
     }
     mod relation_ranges {
         //! Inclusive range narrowing preserves original endpoint effects and exact values.
