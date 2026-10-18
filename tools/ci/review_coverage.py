@@ -14,7 +14,7 @@ from datetime import datetime
 MAX_PATHS = 300
 SHA = re.compile(r"[0-9a-f]{40}\Z")
 # A reviewed PR merges into main or into one release branch such as
-# release/1.0.0. Synthetic review-batch bases are never one of these.
+# release/0.5.0. Synthetic review-batch bases are never one of these.
 TARGET_BASE = re.compile(r"(?:main|release/[0-9]+\.[0-9]+\.[0-9]+)\Z")
 MARKER = "yamaa-review-batches"
 METADATA = re.compile(r"<!-- yamaa-review-batches:\s*(.*?)\s*-->", re.DOTALL)

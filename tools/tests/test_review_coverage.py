@@ -513,7 +513,7 @@ class ExactTrees(unittest.TestCase):
             elif mutation == "main":
                 chunk["base"]["ref"] = "main"
             elif mutation == "release":
-                chunk["base"]["ref"] = "release/1.0.0"
+                chunk["base"]["ref"] = "release/0.5.0"
             elif mutation == "closed":
                 chunk["state"] = "closed"
             else:
@@ -542,7 +542,7 @@ class CompletedBoundedReviews(unittest.TestCase):
     def test_a_release_branch_target_uses_the_same_bounded_coverage(self):
         api = Payloads()
         for version in api.pull_versions[NUMBER]:
-            version["base"]["ref"] = "release/1.0.0"
+            version["base"]["ref"] = "release/0.5.0"
         verdict = gate.verify(api, NUMBER, expected_head=HEAD)
         self.assertEqual((verdict.head, verdict.state), (HEAD, "success"))
 

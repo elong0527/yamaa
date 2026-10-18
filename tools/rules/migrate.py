@@ -1,6 +1,6 @@
 """Move rule citations to cards and summarize a conversion for review.
 
-During the 1.0.0 conversion a card absorbs legacy requirements and lists them
+During the 0.5.0 conversion a card absorbs legacy requirements and lists them
 on its ``Replaces`` line, so existing citations keep resolving. Subcommands:
 
 ``links [--base REF]``
@@ -19,7 +19,7 @@ on its ``Replaces`` line, so existing citations keep resolving. Subcommands:
     since ``REF``: the language a reviewer approves.
 
 For example: ``python -m tools.rules.migrate statements --base
-origin/release/1.0.0``.
+origin/main``.
 """
 
 import argparse

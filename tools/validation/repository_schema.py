@@ -41,7 +41,7 @@ def schema_descriptions(node, parts=(), field_entry=False):
 def description_rules(source, value, rules):
     """Return the rule IDs one schema description cites, each resolved.
 
-    During the 1.0.0 conversion a description is ``See ID.`` or free text;
+    During the 0.5.0 conversion a description is ``See ID.`` or free text;
     every rule ID it names must resolve in ``rules``, a
     :class:`tools.rules.model.RuleSet`.
     """

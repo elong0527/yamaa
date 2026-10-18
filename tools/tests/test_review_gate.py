@@ -356,7 +356,7 @@ class ExactCoverage(unittest.TestCase):
             pull(state="closed"),
             pull(branch="release"),
             pull(branch="release/next"),
-            pull(branch="release/1.0.0/extra"),
+            pull(branch="release/0.5.0/extra"),
             pull(branch="review/1-base"),
             pull(repository_id=123),
         ]:
@@ -365,7 +365,7 @@ class ExactCoverage(unittest.TestCase):
             self.assertEqual(api.published, [])
 
     def test_release_branch_pulls_are_verified_like_main_pulls(self):
-        api = Evidence(pulls=[pull(branch="release/1.0.0")])
+        api = Evidence(pulls=[pull(branch="release/0.5.0")])
         self.assertEqual(gate.verify(api, NUMBER).state, "success")
         self.assertEqual(api.published, [])
 
@@ -854,7 +854,7 @@ class TrustedRouting(unittest.TestCase):
             api = Evidence()
             second = pull()
             second["number"] = 99
-            release = pull(branch="release/1.0.0")
+            release = pull(branch="release/0.5.0")
             release["number"] = 100
             api.pages.return_value = [pull(), second, release, pull(branch="release")]
             self.assertEqual(
