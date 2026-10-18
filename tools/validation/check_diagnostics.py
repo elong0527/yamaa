@@ -1,10 +1,13 @@
 """Guard normative mappings and keep diagnostic literals in their registry.
 
 Core registry conditions and phases must be in the shared vocabulary. Rule error
-tables/refusal clauses must name registered conditions. A registered condition
-needs no core cause or separate disposition record; the vocabulary and the core
-registry are the only sources. These are static ownership checks, not a claim
-that every registered condition has executable release coverage.
+tables/refusal clauses must name registered conditions. A cause that cites a
+card reports a condition that card's Fails line names, so one fault keeps the
+one condition its card states; a legacy REQ citation has no Fails line. A
+registered condition needs no core cause or separate disposition record; the
+vocabulary and the core registry are the only sources. These are static
+ownership checks, not a claim that every registered condition has executable
+release coverage.
 Condition and requirement literals outside the canonical registry, the generated
 shipped schema and private unit tests are refused. A requirement is a legacy
 REQ ID or a card ID, read from the shared rules model.
@@ -393,6 +396,7 @@ def registry_errors(
     registered: dict[str, set[str]],
     nullable: set[tuple[str, str]],
     cause_line: re.Pattern,
+    cards: dict,
 ) -> list[str]:
     path = root / REGISTRY
     try:
@@ -428,6 +432,14 @@ def registry_errors(
                 f"core diagnostic registry:{name}: implementation condition "
                 f"{condition} at {phase} must retain a null requirement"
             )
+        else:
+            cited = requirement.removeprefix('Some("').removesuffix('")')
+            card = cards.get(cited)
+            if card is not None and condition not in card.fails:
+                errors.append(
+                    f"core diagnostic registry:{name}: {cited} does not name "
+                    f"{condition} in its Fails line"
+                )
         if condition not in registered:
             errors.append(
                 f"core diagnostic registry:{name}: unregistered condition {condition}"
@@ -457,7 +469,9 @@ def violations(root: Path) -> list[str]:
     registered, errors = vocabulary(root)
     nullable, null_errors = null_conditions(root, registered)
     errors.extend(null_errors)
-    errors.extend(registry_errors(root, registered, nullable, cause_pattern(rules)))
+    errors.extend(
+        registry_errors(root, registered, nullable, cause_pattern(rules), rules.cards)
+    )
     errors.extend(rule_vocabulary_errors(root, registered))
     requirement = rules.identifier
     for path in sources:

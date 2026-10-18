@@ -871,7 +871,7 @@ rows:
         fn empty_child_of_negative_lookup_mismatched_reports_unknown_field() {
             assert_empty_child_matches_parent(
                 "negative-lookup-mismatched",
-                "validation | unknown_field | Some(\"REQ-0117\")",
+                "validation | unknown_field | Some(\"LOOKUP-5\")",
             );
         }
     }

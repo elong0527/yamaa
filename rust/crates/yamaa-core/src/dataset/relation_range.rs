@@ -49,7 +49,7 @@ impl RelationRangeTypes {
             }
         }
         Diagnostic {
-            code: ConditionCode::IntermediateRangeTypes,
+            code: ConditionCode::LookupRangeTypes,
             spec_paths: vec![path.into()],
             context,
             source_span: None,
@@ -175,6 +175,54 @@ impl RelationRange {
             }) {
                 return Err(RelationRangeError::InvalidMetadata);
             }
+        }
+        Ok(())
+    }
+    /// Admit a lookup's range against the relation it narrows and the context
+    /// that reads it (LOOKUP-9): each bound a field of `donor` with its known
+    /// type, and the value a known read of the current row with the range's
+    /// value type. Which driver's record the value reads is admitted with the
+    /// row's other reads.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn validate_lookup(
+        &self,
+        donor: &TableSchema,
+        donor_kind: &impl Fn(usize) -> Option<ValueType>,
+        primary: &TableSchema,
+        secondary: &[SecondarySource],
+        intermediates: &[Intermediate],
+        output: &TableSchema,
+        available: &[bool],
+    ) -> Result<(), PlanError> {
+        self.validate_source(donor, donor_kind)
+            .map_err(|_| PlanError::InvalidSource)?;
+        let current_kind = match self.current.read {
+            CurrentRead::Output(column) => {
+                if !available.get(column).copied().unwrap_or(false) {
+                    return Err(PlanError::UnavailableColumn);
+                }
+                output.columns().get(column).map(|field| Some(field.kind))
+            }
+            CurrentRead::Record { source: 0, column } => {
+                primary.columns().get(column).map(|field| Some(field.kind))
+            }
+            CurrentRead::Record { source, column } => secondary
+                .get(source - 1)
+                .and_then(|source| source.schema.columns().get(column))
+                .map(|field| Some(field.kind)),
+            CurrentRead::Intermediate { index, column } => {
+                intermediates.get(index).and_then(|item| {
+                    item.source_schema(secondary)?.columns().get(column)?;
+                    Some(item.source_kind(secondary, column))
+                })
+            }
+        }
+        .ok_or(PlanError::InvalidSource)?;
+        if self
+            .value_kind
+            .is_some_and(|kind| current_kind.is_some_and(|current| kind != current.into()))
+        {
+            return Err(PlanError::InvalidSource);
         }
         Ok(())
     }
