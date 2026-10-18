@@ -1,0 +1,9 @@
+phase: validation
+condition: value_not_permitted
+spec_paths:
+  - columns.VSDTC.type
+requirement: SUB-27
+context:
+  column: VSDTC
+  value: datetime
+  class: FINDINGS

@@ -1,0 +1,39 @@
+schema_version: "1.0"
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE: {path: input/ae.csv, types: {AESEQ: int}}
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, ASTDT]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+
+  # Month 1 and day 1 give the earliest date the collected start allows; a
+  # start whose month is unknown, written 2025---15, reads as its year. A
+  # start recorded as a period between two dates names no single date, and
+  # no outcome is declared for it, so it stops the run.
+  - name: ASTDT
+    type: date
+    label: Analysis Start Date
+    derivation:
+      impute:
+        type: date
+        source: AE.AESTDTC
+        month: 1
+        day: 1

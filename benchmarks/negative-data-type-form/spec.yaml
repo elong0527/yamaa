@@ -1,0 +1,38 @@
+schema_version: "1.0"
+domain: DM
+keys: [STUDYID, USUBJID]
+input:
+  DM_RAW: input/dm_raw.csv
+
+output:
+  path: dm.csv
+  columns: [STUDYID, USUBJID, BRTHDTC]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM_RAW.USUBJID
+
+  # Submitted as a complete date, so every collected birth date must carry
+  # a year, a month and a day.
+  - name: BRTHDTC
+    type: str
+    label: Date/Time of Birth
+    derivation: DM_RAW.BRTHDTC
+    submission:
+      core: Perm
+      data_type: date
+      origin:
+        type: Collected
+
+submission:
+  label: Demographics
+  class: SPECIAL PURPOSE
+  structure: One record per subject
+  repeating: false

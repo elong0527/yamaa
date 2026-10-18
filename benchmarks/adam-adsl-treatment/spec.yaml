@@ -55,37 +55,29 @@ columns:
       - allowed_values:
           values: [VITAMIN D3, PLACEBO, NOT TREATED]
 
-  # Earliest start and latest end as collected text. A date alone gets
-  # 00:00:00 (start) or 23:59:59 (end), and the time flag H marks that; a
-  # date missing its day gives no date/time at all.
-  - name: TRTSDTC
-    type: str
-    label: Collected Date/Time of First Exposure to Treatment
-    derivation:
-      aggregate:
-        filter: "EX.EXTRT IN ('VITAMIN D3', 'PLACEBO')
-          AND EX.EXSTDTC IS NOT NULL"
-        expr: "MIN(EX.EXSTDTC)"
-
-  - name: TRTEDTC
-    type: str
-    label: Collected Date/Time of Last Exposure to Treatment
-    derivation:
-      aggregate:
-        filter: "EX.EXTRT IN ('VITAMIN D3', 'PLACEBO')
-          AND EX.EXENDTC IS NOT NULL"
-        expr: "MAX(EX.EXENDTC)"
-
+  # Each record's start becomes a date/time before the earliest is taken,
+  # since the earliest collected text is not the earliest date: 2025-01
+  # sorts before 2025-01-08. A date alone gets 00:00:00, and the time flag
+  # H marks that; a start missing its day gives no date/time and is passed
+  # over.
   - name: TRTSDTM
     type: datetime
     label: Datetime of First Exposure to Treatment
     derivation:
-      impute:
-        type: datetime
-        source: TRTSDTC
-        minimum_source_precision: day
-        time: first
-        invalid: {literal: null}
+      aggregate:
+        filter: "EX.EXTRT IN ('VITAMIN D3', 'PLACEBO')
+          AND EX.EXSTDTC IS NOT NULL"
+        derive:
+          - name: EXSTDTM
+            type: datetime
+            derivation:
+              impute:
+                type: datetime
+                source: EX.EXSTDTC
+                minimum_source_precision: day
+                time: first
+                invalid: {literal: null}
+        expr: "MIN(EXSTDTM)"
 
   - name: TRTSTMF
     type: str
@@ -98,16 +90,25 @@ columns:
       - allowed_values:
           values: [H, M, S]
 
+  # The latest end the same way: a date alone gets 23:59:59.
   - name: TRTEDTM
     type: datetime
     label: Datetime of Last Exposure to Treatment
     derivation:
-      impute:
-        type: datetime
-        source: TRTEDTC
-        minimum_source_precision: day
-        time: last
-        invalid: {literal: null}
+      aggregate:
+        filter: "EX.EXTRT IN ('VITAMIN D3', 'PLACEBO')
+          AND EX.EXENDTC IS NOT NULL"
+        derive:
+          - name: EXENDTM
+            type: datetime
+            derivation:
+              impute:
+                type: datetime
+                source: EX.EXENDTC
+                minimum_source_precision: day
+                time: last
+                invalid: {literal: null}
+        expr: "MAX(EXENDTM)"
 
   - name: TRTETMF
     type: str
