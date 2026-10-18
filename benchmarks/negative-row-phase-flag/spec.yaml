@@ -1,0 +1,72 @@
+schema_version: "1.0"
+domain: ADVS
+keys: [STUDYID, USUBJID, PARAMCD, AVISITN]
+input:
+  VS_RAW:
+    path: input/vs_raw.csv
+    types: {VSDTC: date, SYSBP: float, DIABP: float}
+
+output:
+  path: advs.csv
+  columns: [STUDYID, USUBJID, PARAMCD, AVISITN, ADT, AVAL, ABLFL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: VS_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: VS_RAW.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+
+  - name: ADT
+    type: date
+    label: Analysis Date
+    derivation: VS_RAW.VSDTC
+
+  # Each subject's visits numbered by date once every record is built; both
+  # measurements taken at one visit share its number.
+  - name: AVISITN
+    type: int
+    label: Analysis Visit (N)
+    derivation:
+      rank:
+        method: dense
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [ADT]
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+
+  - name: ABLFL
+    type: str
+    label: Baseline Record Flag
+
+rows:
+  # One systolic and one diastolic record per collected visit. Each record
+  # flags its own baseline while it is being built, from a visit number that
+  # is counted only after every record exists, so the specification is
+  # rejected before any data is read.
+  - id: systolic
+    derivations:
+      PARAMCD: {literal: SYSBP}
+      AVAL: VS_RAW.SYSBP
+      ABLFL:
+        flag:
+          condition: "AVISITN = 1"
+
+  - id: diastolic
+    derivations:
+      PARAMCD: {literal: DIABP}
+      AVAL: VS_RAW.DIABP
+      ABLFL:
+        flag:
+          condition: "AVISITN = 1"
