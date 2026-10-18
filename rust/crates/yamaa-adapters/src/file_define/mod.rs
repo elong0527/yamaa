@@ -160,73 +160,31 @@ impl NativePorts {
         self.resources.as_mut().expect("selected resource owner")
     }
     fn metadata_diagnostic(&self, identity: &str) -> Option<yamaa_core::diagnostic::Diagnostic> {
-        use yamaa_core::{resource::ResourceFailure as R, schema::DocumentNode as N};
+        use yamaa_core::resource::ResourceFailure as R;
         for (field, written, document) in &self.specifications {
-            if document.source().identity == identity {
-                return Some(R::ContentChanged.field_diagnostic(field, written));
-            }
-            if let Some(diagnostic) =
-                document.resource_diagnostic_for_identity(identity, R::ContentChanged)
-            {
+            if let Some(diagnostic) = crate::changed_metadata::specification(
+                field,
+                written,
+                document,
+                identity,
+                R::ContentChanged,
+            ) {
                 return Some(diagnostic);
             }
         }
         let environment = self.environment.as_ref()?;
-        let root = environment.root();
-        if root.source().identity == identity {
-            return Some(
-                R::ContentChanged.field_diagnostic("environment", &self.environment_written),
-            );
-        }
-        let text = |raw: &yamaa_core::schema::Document, node: usize| match &raw.nodes()[node] {
-            N::Text(written) => Some(written.to_owned()),
-            _ => None,
-        };
-        // The project declares its environment link and codelists; the linked
-        // environment file declares its lock and functions.
-        let project = &root.normalized().document;
-        let linked = environment
-            .environment_file()
-            .map(|file| (file, &file.normalized().document));
-        if linked.is_some_and(|(file, _)| file.source().identity == identity) {
-            let key = self.host.key();
-            let environments = project.field(project.root(), "environments")?;
-            let written = text(project, project.field(environments, key)?)?;
-            return Some(
-                R::ContentChanged.field_diagnostic(&format!("environments.{key}"), &written),
-            );
-        }
-        if environment
-            .lock()
-            .is_some_and(|lock| lock.source.identity == identity)
-        {
-            let (_, raw) = linked?;
-            let written = text(raw, raw.field(raw.root(), "lock")?)?;
-            return Some(R::ContentChanged.field_diagnostic("lock", &written));
-        }
-        let capture = environment
-            .captures()
-            .iter()
-            .find(|capture| capture.document.source().identity == identity)?;
-        match &capture.origin {
-            crate::project_source::Origin::Function(name) => {
-                let (_, raw) = linked?;
-                let functions = raw.field(raw.root(), "functions")?;
-                let written = text(raw, raw.field(functions, name)?)?;
-                Some(R::ContentChanged.field_diagnostic(&format!("functions.{name}"), &written))
-            }
-            crate::project_source::Origin::Codelist(index) => {
-                let codelists = project.field(project.root(), "codelists")?;
-                let N::Sequence(codelists) = &project.nodes()[codelists] else {
-                    return None;
-                };
-                let written = text(project, *codelists.get(*index)?)?;
-                Some(R::ContentChanged.field_diagnostic(&format!("codelists[{index}]"), &written))
-            }
-            crate::project_source::Origin::Lock | crate::project_source::Origin::Environment(_) => {
-                None
-            }
-        }
+        crate::changed_metadata::environment(
+            &crate::changed_metadata::Environment {
+                written: &self.environment_written,
+                host: self.host,
+                root: environment.root(),
+                environment_file: environment.environment_file(),
+                lock: environment.lock(),
+                captures: environment.captures(),
+            },
+            identity,
+            R::ContentChanged,
+        )
     }
 }
 impl Ports for NativePorts {

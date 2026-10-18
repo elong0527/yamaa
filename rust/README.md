@@ -344,6 +344,20 @@ pub enum SaveOutcome { Saved, NothingToSave }  // #[non_exhaustive]
   Save targets. Nothing a run captures, activates or produces stays in the
   plan, so a failed run leaves the plan ready for the next. A `Build` owns its
   run and outlives the plan.
+- A plan never runs stale and never recompiles implicitly. Each `run` first
+  captures every held metadata file again through the compile authority (the
+  specification, its layers, dictionaries and linked producing
+  specifications, the project file, the environment file and the lock,
+  function definitions and codelists they declare) and compares it with the
+  held reference and bytes, before activation or any study read. A file that
+  changed refuses that run with `resource_path_content_changed` (FILE-10),
+  naming the field that declared it and the path as written; a resolver
+  object that is gone refuses it with `resource_path_missing`. Activation
+  stays per run, so the host's current lock, bindings and conformance cases
+  are checked against the compiled function contracts every time. Once the
+  original is back, the next run succeeds; only an explicit `compile` picks
+  up a change. `build` skips the run-start check because its compilation has
+  just captured the same metadata.
 
 ### Handles, ownership and thread safety
 
@@ -685,11 +699,15 @@ Key files: `rust/crates/yamaa-core/src/dataset/mod.rs`,
 | `OutputDuplicateKeyFailed` (`keys` uniqueness) | `OutputKeys` (`execution/mod.rs`, `table_grouping.rs`) | `safe-with-combine-step` | Accumulates distinct key tuples across partitions with first-seen group order, first member `RowIdentity`, and member count. At finalize, `evaluated_count` is total distinct key groups, `failed_count` is groups with count $> 1$, and `offending_rows` lists `members[0]` for each duplicate group in first-seen group order. |
 | `IntermediateUnique` (`intermediates::verify`) | `Derivation` (`intermediates/mod.rs`) | `safe-with-combine-step` (`Input`) / `global` (`Primary`, `SelfRows`) | Secondary-source `unique` checks run once against immutable `secondary[index]`. Primary and `SELF` `unique` checks require the global donor table. |
 | `Check::NotMissing` | Column / `Verification` (`execution/mod.rs`, `dataset_checks.rs`) | `safe-with-combine-step` | Row-local `matches!(value, Value::Missing)`; combine sums `evaluated_count` and `failed_count`, sets `output_rows = N`, and concatenates `offending_rows` in global row order. |
+| `Check::Mandatory(scope)` | Column (`execution/mod.rs`, `dataset_checks.rs`) | `safe-with-combine-step` | As `NotMissing`, over the rows the optional `scope` selects by where clauses. |
+| `Check::DataType { form, scope }` | Column (`execution/mod.rs`, `dataset_checks.rs`) | `safe-with-combine-step` | Row-local ISO 8601 form test of each present value over the rows the optional `scope` selects; `CheckRecord` combines across partitions. |
 | `Check::AllowedValues(values)` | Column (`execution/mod.rs`, `dataset_checks.rs`) | `safe-with-combine-step` | Row-local membership test against fixed `values`; `CheckRecord` combines by addition/concatenation across partitions. |
 | `Check::Codelist { id, values }` | Column (`execution/mod.rs`, `dataset_checks.rs`) | `safe-with-combine-step` | Row-local `compare_present` test against `values`; combines `CheckRecord` counts, `offending_rows`, and `CodelistObservation { id, values }`. |
-| `Check::ValueCodelists { discriminator, overrides, bindings }` | Column (`execution/mod.rs`, `dataset_checks.rs`) | `safe-with-combine-step` | Runs once both the target column and `discriminator` are complete on the candidate. Emits one `CheckRecord` per binding in `bindings` order; each binding's counts, `offending_rows`, and `CodelistObservation.values` combine across partitions. |
-| `Check::Inventory { values, scope }` | Column (`execution/mod.rs`, `dataset_checks.rs`) | `safe-with-combine-step` | Row-local check gated by optional `scope.discriminator` on the same candidate; combines counts, `offending_rows`, and `inventory: Some(Vec<Value>)`. |
-| `Check::ValueMaxLength { max, discriminator, codes, include }` | Column (`execution/mod.rs`, `dataset_checks.rs`) | `safe-with-combine-step` | Row-local `text.chars().count()` bound check gated by `discriminator`; `CheckRecord` combines across partitions. |
+| `Check::ValueCodelists { overrides, bindings }` | Column (`execution/mod.rs`, `dataset_checks.rs`) | `safe-with-combine-step` | Runs once the target column and every where column its clauses read are complete on the candidate. Emits one `CheckRecord` per binding in `bindings` order; each binding's counts, `offending_rows`, and `CodelistObservation.values` combine across partitions. |
+| `Check::Inventory { values, scope }` | Column (`execution/mod.rs`, `dataset_checks.rs`) | `safe-with-combine-step` | Row-local check gated by the optional `scope`'s where clauses on the same candidate; combines counts, `offending_rows`, and `inventory: Some(Vec<Value>)`. |
+| `Check::ValueMaxLength { max, scope }` | Column (`execution/mod.rs`, `dataset_checks.rs`) | `safe-with-combine-step` | Row-local `text.chars().count()` bound check over the rows `scope` selects by where clauses; `CheckRecord` combines across partitions. |
+| `Check::ValueEntries(entries)` | Column (`execution/mod.rs`) | `safe-with-combine-step` | Row-local count of the entries whose where clause selects the candidate; a row two entries select offends, and `CheckRecord.entries` keeps the matched ids aligned with `offending_rows` across partitions. |
+| `Check::ValueEntryMatch { id, clause }` | Column (`execution/mod.rs`) | `safe-with-combine-step` | The artifact is the one evaluated unit: the entry matches when any partition holds a row `clause` selects. |
 | `Check::Range { min, max }` | Column (`execution/mod.rs`, `dataset_checks.rs`) | `safe-with-combine-step` | Row-local numeric range comparison against `min`/`max`; `CheckRecord` combines across partitions. |
 | `Check::MaxLength(usize)` | Column (`execution/mod.rs`, `dataset_checks.rs`) | `safe-with-combine-step` | Row-local Unicode scalar count check `text.chars().count() > max`; `CheckRecord` combines across partitions. |
 | `Check::WideMaxLength(RowCountBound)` | Column (`execution/mod.rs`, `dataset_checks.rs`) | `safe-with-combine-step` | Row-local `max.compare_count(text.chars().count()) == Ordering::Less`; `CheckRecord` combines across partitions. |

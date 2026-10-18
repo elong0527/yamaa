@@ -26,7 +26,15 @@ pub enum Logical {
     None,
     String,
     Date,
-    Timestamp { unit: Unit, utc: bool },
+    Timestamp {
+        unit: Unit,
+        utc: bool,
+    },
+    /// The `Int(bitWidth, isSigned)` annotation.
+    Integer {
+        bits: u8,
+        signed: bool,
+    },
     Other,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -34,11 +42,19 @@ pub enum Converted {
     None,
     Utf8,
     Date,
+    /// `INT_8` through `INT_64`, signed, and `UINT_8` through `UINT_64`.
+    Integer {
+        bits: u8,
+        signed: bool,
+    },
     Other,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Representation {
     Text,
+    Int8,
+    Int16,
+    Int32,
     Int64,
     Float64,
     Date32,
@@ -118,9 +134,17 @@ pub fn column_type(
             unit: Unit::Microsecond,
             utc: false,
         };
+    // A signed integer annotation of `bits`; an unsigned one never matches.
+    let signed = |bits| {
+        logical == Logical::Integer { bits, signed: true }
+            || (logical == Logical::None && converted == Converted::Integer { bits, signed: true })
+    };
     match (physical, representation) {
         (Physical::ByteArray, Representation::Text) if string => Some(ColumnType::Str),
-        (Physical::Int64, Representation::Int64) if none => Some(ColumnType::Int),
+        (Physical::Int64, Representation::Int64) if none || signed(64) => Some(ColumnType::Int),
+        (Physical::Int32, Representation::Int32) if signed(32) => Some(ColumnType::Int),
+        (Physical::Int32, Representation::Int16) if signed(16) => Some(ColumnType::Int),
+        (Physical::Int32, Representation::Int8) if signed(8) => Some(ColumnType::Int),
         (Physical::Double, Representation::Float64) if none => Some(ColumnType::Float),
         (Physical::Int32, Representation::Date32) if date => Some(ColumnType::Date),
         (

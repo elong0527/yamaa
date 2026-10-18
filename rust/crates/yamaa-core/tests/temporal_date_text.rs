@@ -151,9 +151,14 @@ mod temporal_date_text {
                 vec![text("2025"), missing.clone(), text("15")],
                 text("2025"),
             ),
-            // A part after the first missing one is never read.
+            // A part after the first missing one is never read, so neither
+            // its form nor its type is checked.
             (
                 vec![text("2025"), missing.clone(), text("99")],
+                text("2025"),
+            ),
+            (
+                vec![text("2025"), missing.clone(), Value::float(3.0)],
                 text("2025"),
             ),
             (

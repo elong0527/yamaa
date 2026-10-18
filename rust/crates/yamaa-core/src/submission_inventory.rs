@@ -46,22 +46,12 @@ pub fn requested(document: &Document) -> bool {
             _ => None,
         })
         .unwrap_or(&[]);
-    if columns
-        .iter()
-        .any(|&column| document.field(column, "submission").is_some_and(enabled))
-    {
-        return true;
-    }
-    let rows = document
-        .field(document.root(), "rows")
-        .and_then(|id| match &document.nodes()[id] {
-            N::Sequence(rows) => Some(rows.as_slice()),
-            _ => None,
-        })
-        .unwrap_or(&[]);
-    rows.iter().any(|&row| document.field(row, "submission").is_some_and(|id| {
-        matches!(&document.nodes()[id], N::Mapping(entries) if entries.iter().any(|&(_, node)| enabled(node)))
-    }))
+    columns.iter().any(|&column| {
+        document.field(column, "submission").is_some_and(enabled)
+            || crate::submission_values::entries(document, column)
+                .iter()
+                .any(|entry| enabled(entry.node))
+    })
 }
 /// Select only authored section specifications. Full Define/family admission is
 /// deliberately left with its existing composition use case (REQ-0908).
