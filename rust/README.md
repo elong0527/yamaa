@@ -68,9 +68,9 @@ malformed-source language findings. Capture and ingest boundary replies expose
 `sas_reader_unavailable`; unavailable Parquet compression retains its separate
 `parquet_codec_unavailable` code.
 
-CI's release Rust job adds two minimal facade builds: no optional formats and
-YAML + Parquet. Each runs the focused adapter capability tests, verifies the
-facade's Cargo graph, and inspects the linked test binary for ReadStat and Zstd
+The Release compatibility workflow's Rust job adds two minimal facade builds:
+no optional formats and YAML + Parquet. Each runs the focused adapter capability
+tests, verifies the facade's Cargo graph, and inspects the linked test binary for ReadStat and Zstd
 symbols. The core's dependency isolation is checked once. Run both builds from
 the repository root with `python -m tools.ci.format_features`; CI uses the
 workspace's minimum Rust toolchain. Ordinary workspace tests cover all default
@@ -450,8 +450,8 @@ not reopen it.
 
 The facade forwards the existing format features to `yamaa-adapters`:
 `yaml`, `parquet`, `readstat` and `odm`, all on by default, and it builds with any
-combination of them. Release Rust CI smoke-tests no optional formats and YAML +
-Parquet alongside the default-format workspace coverage.
+combination of them. Release compatibility smoke-tests no optional formats and
+YAML + Parquet alongside the default-format workspace coverage.
 With no format feature, CSV and Arrow routes remain, exactly as described in
 the feature table above. A capability a build omits fails the same way it does
 today: the stable codes (`yaml_reader_unavailable`,
@@ -494,8 +494,9 @@ The `yaml` feature builds the reviewed YAML parser: the vendored
 depends on by path under its own crate name, `yamaa-saphyr-parser`. A path
 dependency reaches the embedder's graph without a `[patch]`, and a graph that
 already holds a published `saphyr-parser` keeps that crate beside this one.
-CI's minimum-toolchain job builds the facade from the outside workspace in
-`rust/tests/embedder` and runs the parser's compact-flow controls through it.
+Release compatibility's minimum-toolchain job builds the facade from the
+outside workspace in `rust/tests/embedder` and runs the parser's compact-flow
+controls through it.
 
 Publishing to crates.io is not decided here. It depends on #2583 -- a
 published crate cannot depend on the vendored parser by path -- and on the
