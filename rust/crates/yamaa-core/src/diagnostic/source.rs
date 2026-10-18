@@ -70,6 +70,9 @@ pub enum SourceFinding<'a> {
         path: &'a str,
     },
 }
+/// SAS keeps records deleted in place until the dataset is rewritten.
+const SAS_DELETED_RECORDS_HINT: &str = "rewrite the SAS dataset first, for example with \
+    PROC COPY or a DATA step, to remove the records deleted in place";
 fn text(value: &str) -> V {
     V::String(value.into())
 }
@@ -124,6 +127,9 @@ impl SourceFinding<'_> {
             Self::Sas { path, cause, .. } => {
                 context.insert("path".into(), text(path));
                 context.insert("cause".into(), text(cause));
+                if cause == "deleted_records" {
+                    context.insert("hint".into(), text(SAS_DELETED_RECORDS_HINT));
+                }
                 format!("input.{dataset}.path")
             }
             Self::OrdinalCollision { field, .. } => {

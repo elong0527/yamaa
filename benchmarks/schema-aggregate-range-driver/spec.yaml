@@ -1,0 +1,38 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  ADSL_RAW:
+    path: input/adsl.csv
+    types: {TRTSDT: date}
+  AE:
+    path: input/ae.csv
+    types: {AESEQ: int, AESTDTC: date}
+base: ADSL_RAW
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, TEAENUM]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ADSL_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ADSL_RAW.USUBJID
+
+  # The subject's adverse events that start on or after the first dose date,
+  # that day included. ADSL_RAW.TRTSDT reads the subject-level record that
+  # builds the row, so no column carries the date. A subject without a first
+  # dose date admits no event, and no qualifying event leaves the count blank.
+  - name: TEAENUM
+    type: int
+    label: Number of Treatment-Emergent Adverse Events
+    derivation:
+      aggregate:
+        between: {value: ADSL_RAW.TRTSDT, upper: AESTDTC}
+        expr: "COUNT(AE.AESEQ)"

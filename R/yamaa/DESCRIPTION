@@ -12,6 +12,10 @@ Description: Builds clinical data specifications, checks declarations, and
     data frames and structured diagnostics, with explicit publication of
     retained outputs and lossless signed 64-bit integer and UTF-8 values.
 License: MIT + file LICENSE
+Copyright: The yamaa contributors, and the holders named in
+    inst/LICENSE-THIRD-PARTY.txt, inst/LICENSE-READSTAT.txt,
+    inst/LICENSE-UNICODE.txt and inst/LICENSE-YAML.txt for the bundled and
+    linked third-party code.
 Encoding: UTF-8
 Depends: R (>= 4.6.1)
 Imports: utils

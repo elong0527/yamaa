@@ -270,6 +270,10 @@ the column's declared type at completion under
 | --- | --- |
 | `variable` | Qualified source variable or unqualified constructed output column. |
 
+A field's owning contract may narrow the qualified variables it accepts. A
+`between` value qualified by an input dataset must name the current row's
+driver ([REQ-0121](../operations/lookup.md#req-0121)).
+
 <a id="req-1058"></a>
 
 **REQ-1058.** The `regex` interface has these meanings.

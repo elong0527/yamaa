@@ -2835,6 +2835,142 @@
       }
     },
     {
+      "id": "deleted-records-page-flag",
+      "file": "datetime.sas7bdat",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "datetime.sas7bdat",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD"
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "VAR1",
+            "type": "float",
+            "label": "VAR1",
+            "derivation": "SRC.VAR1"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "VAR1"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "VAR1",
+          "type": "float"
+        }
+      ],
+      "condition": "source_sas_invalid",
+      "phase": "ingest",
+      "context_fields": {
+        "dataset": "SRC",
+        "path": "datetime.sas7bdat",
+        "cause": "deleted_records",
+        "hint": "rewrite the SAS dataset first, for example with PROC COPY or a DATA step, to remove the records deleted in place"
+      },
+      "spec_paths": [
+        "input.SRC.path"
+      ],
+      "mutation": {
+        "set_byte": [
+          1040,
+          128
+        ]
+      }
+    },
+    {
+      "id": "deleted-records-count",
+      "file": "datetime.sas7bdat",
+      "specification": {
+        "schema_version": "1.0",
+        "domain": "TEST",
+        "base": "SRC",
+        "keys": [
+          "RECORD"
+        ],
+        "input": {
+          "SRC": {
+            "path": "datetime.sas7bdat",
+            "encoding": "windows-1252",
+            "ordinal": "RECORD"
+          }
+        },
+        "columns": [
+          {
+            "name": "RECORD",
+            "type": "int",
+            "label": "RECORD",
+            "derivation": "SRC.RECORD"
+          },
+          {
+            "name": "VAR1",
+            "type": "float",
+            "label": "VAR1",
+            "derivation": "SRC.VAR1"
+          }
+        ],
+        "output": {
+          "path": "result.csv",
+          "columns": [
+            "RECORD",
+            "VAR1"
+          ],
+          "decimals": 2
+        }
+      },
+      "fields": [
+        {
+          "name": "RECORD",
+          "type": "int"
+        },
+        {
+          "name": "VAR1",
+          "type": "float"
+        }
+      ],
+      "condition": "source_sas_invalid",
+      "phase": "ingest",
+      "context_fields": {
+        "dataset": "SRC",
+        "path": "datetime.sas7bdat",
+        "cause": "deleted_records",
+        "hint": "rewrite the SAS dataset first, for example with PROC COPY or a DATA step, to remove the records deleted in place"
+      },
+      "spec_paths": [
+        "input.SRC.path"
+      ],
+      "mutation": {
+        "set_byte": [
+          4668,
+          1
+        ]
+      }
+    },
+    {
       "id": "character-cannot-be-int",
       "file": "v5.xpt",
       "specification": {
