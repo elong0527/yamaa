@@ -110,6 +110,11 @@ impl<'a> Cursor<'a> {
         };
         Ok((header & 15, count))
     }
+
+    /// The bytes of the walked struct not yet read.
+    pub(super) fn remaining(&self) -> usize {
+        self.0.bytes.len() - self.0.position
+    }
 }
 
 pub(super) struct Elements<'a> {
