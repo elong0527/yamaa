@@ -5,10 +5,9 @@ specification in a project reads the same way. Each departure from it is a
 style finding. A style finding is advice, not a validation diagnostic: it has
 no phase and no condition, and a specification with style findings stays valid
 and runs exactly as its canonical form does. The layout and spelling departures
-leave the parsed value unchanged: field order has no execution meaning, block
-and flow collections parse to the same value, and a shorthand expands before
-validation. The authoring lints name a rewrite that keeps the derivation's
-behavior. The [rules](rules.md) define what a specification means; this guide
+leave the parsed value unchanged: field order has no execution meaning, and
+block and flow collections parse to the same value. The authoring lints name a
+rewrite that keeps the derivation's behavior. The [rules](rules.md) define what a specification means; this guide
 only fixes how it is written.
 
 ## Running the check
@@ -118,13 +117,12 @@ result, a `derivation` value, a row-template value or any other position. The
 block form, with the parent key on its own line and `literal: X` nested beneath
 it, parses identically but is reported as `literal_form`.
 
-A plain source expression is written as the bare string wherever the source
-shorthand applies: a `derivation` value, a row-template or lookup `derivations`
-entry, or a `case` branch `then` or `otherwise`. The single-key mapping form
-`{source: X}`, flow or block, parses identically but is reported as
-`source_form`. The mapping form stays the right spelling where the shorthand
-does not apply: nested expression arguments, the `value` of a handled
-expression, and filtered sources written `{source: {variable: ..., ...}}`.
+A value has one spelling in the language itself, so the style check names
+none of the shorthand spellings. A plain source is the bare string wherever
+the source shorthand applies, a field that takes several values is a list even
+for one, and a long form that holds only the field its shorthand fills, such
+as `{source: X}` in a `derivation` or `aggregate: {expr: E}`, fails validation
+as `redundant_long_form` rather than standing as a style finding.
 
 ## Authoring lints
 
@@ -220,8 +218,8 @@ a value. It may:
 - move a field, with the comments written directly above it, into field order;
 - insert or remove blank lines;
 - continue a flow list, a quoted scalar or a plain scalar on following lines;
-- write a one-line flow mapping other than `{literal: X}` or `{source: X}` as a
-  block mapping, keeping each member's written text.
+- write a one-line flow mapping other than `{literal: X}` as a block mapping,
+  keeping each member's written text.
 
 A fix is kept only when all of these hold for the fixed file:
 
@@ -231,8 +229,8 @@ A fix is kept only when all of these hold for the fixed file:
 - it does not change when it is fixed again.
 
 Otherwise the file stays as written and the finding stays reported. A
-`literal_form` or `source_form` finding changes the spelling of a value, and its
-author corrects it. A `repeated_row_derivation`, `redundant_intermediate` or
+`literal_form` finding changes the spelling of a value, and its author
+corrects it. A `repeated_row_derivation`, `redundant_intermediate` or
 `missing_label` finding rewrites the specification's value while keeping its
 derivation behavior, and its author corrects it; no fix is offered.
 

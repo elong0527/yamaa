@@ -189,8 +189,6 @@ def match_clauses(node, ctx=None, depth=0):
         )
     elif isinstance(key, list):
         clauses.append("matching on " + join_and([str(k) for k in key]))
-    elif isinstance(key, str):
-        clauses.append("matching on " + key)
     else:
         # An omitted key matches on the output keys the donor dataset also
         # carries (REQ-0150), so the reviewer is told a join still happens.
@@ -572,7 +570,8 @@ def describe_extreme(node, word, ctx=None, depth=0):
 def describe_aggregate(node, ctx=None, depth=0):
     """A summary over donor records, with the records it summarises named."""
     if not isinstance(node, dict):
-        return "Aggregate " + describe_expression_text(node, ctx, depth) + "."
+        # A lone formula is the shorthand for {expr: ...}.
+        node = {"expr": node}
     text = "Aggregate " + describe_expression_text(node.get("expr"), ctx, depth)
     clauses = []
     groups = node.get("group_by")
@@ -608,8 +607,7 @@ def describe_odm(node):
     ):
         value = node.get(field)
         if value:
-            names = value if isinstance(value, list) else [value]
-            text += " " + label + join_and([str(n) for n in names])
+            text += " " + label + join_and([str(n) for n in value])
     if node.get("filter"):
         text += " where " + str(node["filter"])
     return sentence(text + "; no identified record yields blank")
@@ -1329,8 +1327,6 @@ def allowed_value_codelists(columns):
     out = []
     for col in columns:
         checks = col.get("verifications") or []
-        if isinstance(checks, dict):
-            checks = [checks]
         if not isinstance(checks, list):
             checks = []
         for check in checks:

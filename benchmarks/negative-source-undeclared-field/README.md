@@ -21,8 +21,7 @@ source carries the age under its own name, copy that field:
 - name: AGE
   type: int
   label: Age
-  derivation:
-    source: DM.AGE
+  derivation: DM.AGE
 ```
 
 When the source truly lacks the field, add it to the governed source first

@@ -1471,7 +1471,7 @@
     },
     "aggregate-column-default-refused": {
       "contract": "https://github.com/elong0527/yamaa/issues/2294#issuecomment-6168847169",
-      "specification": "schema_version: '1.0'\ndomain: ADEX\nkeys: [STUDYID, USUBJID, PARAMCD]\ninput: {DM: dm.csv, EX: ex.csv}\nbase: DM\noutput: {path: result.csv, columns: [STUDYID, USUBJID, PARAMCD, AVAL]}\ncolumns:\n  - {name: STUDYID, type: str, derivation: DM.STUDYID}\n  - {name: USUBJID, type: str, derivation: DM.USUBJID}\n  - {name: PARAMCD, type: str}\n  - {name: AVAL, type: int, derivation: {aggregate: {expr: 'COUNT(EX.*)'}}}\nrows:\n  - {id: ndose, dataset: DM, derivations: {PARAMCD: {literal: NDOSE}}}\n  - {id: fixed, dataset: DM, derivations: {PARAMCD: {literal: FIXED}, AVAL: {literal: 7}}}\n",
+      "specification": "schema_version: '1.0'\ndomain: ADEX\nkeys: [STUDYID, USUBJID, PARAMCD]\ninput: {DM: dm.csv, EX: ex.csv}\nbase: DM\noutput: {path: result.csv, columns: [STUDYID, USUBJID, PARAMCD, AVAL]}\ncolumns:\n  - {name: STUDYID, type: str, derivation: DM.STUDYID}\n  - {name: USUBJID, type: str, derivation: DM.USUBJID}\n  - {name: PARAMCD, type: str}\n  - {name: AVAL, type: int, derivation: {aggregate: 'COUNT(EX.*)'}}\nrows:\n  - {id: ndose, dataset: DM, derivations: {PARAMCD: {literal: NDOSE}}}\n  - {id: fixed, dataset: DM, derivations: {PARAMCD: {literal: FIXED}, AVAL: {literal: 7}}}\n",
       "inputs": {
         "dm.csv": "STUDYID,USUBJID\nST-01,S-001\nST-01,S-002\n",
         "ex.csv": "STUDYID,USUBJID,EXSEQ,EXSTDTC\nST-01,S-001,1,2026-01-05\nST-01,S-001,2,2026-01-20\nST-01,S-002,1,2026-01-06\nST-01,S-002,2,2026-01-21\n"
@@ -1497,7 +1497,7 @@
     },
     "wrapped-template-key": {
       "contract": "https://github.com/elong0527/yamaa/issues/2294#issuecomment-6168847169",
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID, SECTION]\ninput:\n  SRC: {path: src.csv, types: {K: int}}\n  DONOR: {path: donor.csv, types: {CODE: int}}\noutput: {path: result.csv, columns: [ID, SECTION, LABEL]}\nintermediates:\n  - {id: P, dataset: DONOR, key: {CODE: MATCHK}}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: SECTION, type: str}\n  - {name: RAW, type: int, derivation: SRC.K}\n  - {name: SHIFT, type: int, derivation: {literal: 1}}\n  - {name: MATCHK, type: int, derivation: {compute: {expr: 'RAW + SHIFT'}}}\n  - {name: LABEL, type: str, derivation: {str_template: {template: 'value:{P.V}'}}}\nrows:\n  - {id: first, dataset: SRC, derivations: {SECTION: {literal: first}}}\n  - {id: fixed, dataset: SRC, derivations: {SECTION: {literal: fixed}, LABEL: {literal: fixed}}}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID, SECTION]\ninput:\n  SRC: {path: src.csv, types: {K: int}}\n  DONOR: {path: donor.csv, types: {CODE: int}}\noutput: {path: result.csv, columns: [ID, SECTION, LABEL]}\nintermediates:\n  - {id: P, dataset: DONOR, key: {CODE: MATCHK}}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: SECTION, type: str}\n  - {name: RAW, type: int, derivation: SRC.K}\n  - {name: SHIFT, type: int, derivation: {literal: 1}}\n  - {name: MATCHK, type: int, derivation: {compute: {expr: 'RAW + SHIFT'}}}\n  - {name: LABEL, type: str, derivation: {str_template: 'value:{P.V}'}}\nrows:\n  - {id: first, dataset: SRC, derivations: {SECTION: {literal: first}}}\n  - {id: fixed, dataset: SRC, derivations: {SECTION: {literal: fixed}, LABEL: {literal: fixed}}}\n",
       "inputs": {
         "src.csv": "ID,K\na,10\nb,20\n",
         "donor.csv": "CODE,V\n11,alpha\n21,beta\n"

@@ -24,7 +24,7 @@ columns:
     type: str
     label: Sex
     derivation:
-      odm: {item: ODM.IT.DM.SEX, event: SCREENING}
+      odm: {item: ODM.IT.DM.SEX, event: [SCREENING]}
 
   - name: AGE
     type: int

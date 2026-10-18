@@ -20,7 +20,7 @@ intermediates:
   # is rejected before any data is read.
   - id: EPOCHDEF
     dataset: EPOCHS
-    key: STUDYID
+    key: [STUDYID]
     between: {value: VSDTC, lower: DYLO, upper: DYHI}
 
 columns:

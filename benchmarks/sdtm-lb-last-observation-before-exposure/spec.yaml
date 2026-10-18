@@ -107,8 +107,7 @@ rows:
       LBTESTCD: LB_MAP.LBTESTCD
       LBSPEC: LB_MAP.LBSPEC
       LBORRES:
-        aggregate:
-          expr: "ONLY(ODM.Value)"
+        aggregate: "ONLY(ODM.Value)"
 
 verifications:
   - row_count:

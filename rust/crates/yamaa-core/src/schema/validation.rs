@@ -1,11 +1,93 @@
 //! Ordered decoded-value validation and post-resolution default validation.
 
 use super::{
-    ConstraintViolation, Document, DocumentKind, DocumentNode as N, SchemaAliasKind, SchemaField,
-    SchemaShape, SchemaStructure, TypeError, TypeExpression, TypeNode,
+    ConstraintViolation, Document, DocumentKind, DocumentNode as N, SchemaAliasKind, SchemaClass,
+    SchemaField, SchemaShape, SchemaStructure, TypeError, TypeExpression, TypeNode,
 };
 use crate::diagnostic::{ConditionCode, Definition};
 use std::vec;
+
+/// Value types whose bare string is the source shorthand `{source: <string>}`
+/// before registry dispatch (EXPR-5).
+pub(super) const SOURCE_SHORTHAND: [&str; 3] = [
+    "derivation",
+    "untyped_intermediate_derivation",
+    "case_result",
+];
+
+/// SCHEMA-10: the field a bare union member `shorthand` fills in `class`, when
+/// `shorthand` names no class and is the single type of the class's only
+/// required field.
+pub(super) fn shorthand_field<'s>(
+    schema: &'s SchemaStructure,
+    class: &'s SchemaClass,
+    shorthand: &str,
+) -> Option<&'s SchemaField> {
+    if schema.class_named(shorthand).is_some() {
+        return None;
+    }
+    let mut required = class
+        .fields
+        .iter()
+        .filter(|f| schema.descriptors()[f.descriptor].descriptor.required());
+    let field = required.next()?;
+    if required.next().is_some() {
+        return None;
+    }
+    let types = schema.descriptors()[field.descriptor].descriptor.members();
+    match types {
+        [only] if only.node_text(only.root()) == Some(shorthand) => Some(field),
+        _ => None,
+    }
+}
+
+/// Render a shorthand to write as compact YAML flow text; nested strings are
+/// double-quoted so the result reads back as the same value.
+fn flow_text(input: &Document, node: usize, level: usize) -> Result<String, ValidationError> {
+    depth(level)?;
+    Ok(match &input.nodes()[node] {
+        N::Text(text) if level == 0 => text.clone(),
+        N::Text(text) => {
+            let mut quoted = String::from("\"");
+            for c in text.chars() {
+                match c {
+                    '"' => quoted.push_str("\\\""),
+                    '\\' => quoted.push_str("\\\\"),
+                    '\n' => quoted.push_str("\\n"),
+                    '\t' => quoted.push_str("\\t"),
+                    c if c.is_control() => quoted.push_str(&format!("\\u{:04x}", c as u32)),
+                    c => quoted.push(c),
+                }
+            }
+            quoted.push('"');
+            quoted
+        }
+        N::Integer(text) => text.clone(),
+        N::Float(value) => format!("{value:?}"),
+        N::Boolean(value) => value.to_string(),
+        N::Null => "null".into(),
+        N::Sequence(items) => {
+            let items = items
+                .iter()
+                .map(|&item| flow_text(input, item, level + 1))
+                .collect::<Result<Vec<_>, _>>()?;
+            format!("[{}]", items.join(", "))
+        }
+        N::Mapping(items) => {
+            let items = items
+                .iter()
+                .map(|&(key, value)| {
+                    Ok(format!(
+                        "{}: {}",
+                        flow_text(input, key, level + 1)?,
+                        flow_text(input, value, level + 1)?
+                    ))
+                })
+                .collect::<Result<Vec<_>, ValidationError>>()?;
+            format!("{{{}}}", items.join(", "))
+        }
+    })
+}
 
 /// Large context values remain references until core admits the complete projection.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -122,6 +204,7 @@ pub(super) fn matches_member(
         active: active.to_vec(),
         resolved_output: false,
         nulls,
+        written: false,
     }
     .single(
         member.0,
@@ -236,6 +319,10 @@ struct Run<'a> {
     active: Vec<(usize, usize)>,
     resolved_output: bool,
     nulls: NullPolicy,
+    /// The input is the document as its author wrote it, where a long form
+    /// that only restates its shorthand fails (SCHEMA-15). A canonical document
+    /// produced by normalization holds those long forms and is never checked.
+    written: bool,
 }
 
 impl Run<'_> {
@@ -326,7 +413,11 @@ impl Run<'_> {
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
         self.step(site)?;
         let schema = self.schema;
-        let result = self.union(schema.descriptors()[id].descriptor.members(), site.deeper())?;
+        let result = self.union(
+            schema.descriptors()[id].descriptor.members(),
+            None,
+            site.deeper(),
+        )?;
         if !result.is_empty() {
             return Ok(result);
         }
@@ -531,9 +622,88 @@ impl Run<'_> {
             }
         }
     }
+    /// SCHEMA-15: after a written value matched `member` of `members`, a mapping
+    /// that holds only the field a shorthand of the same union fills restates
+    /// that shorthand. `alias` names the value type whose union this is, for the
+    /// source shorthand of EXPR-5.
+    fn restated(
+        &mut self,
+        members: &[TypeExpression],
+        member: &TypeExpression,
+        alias: Option<&str>,
+        site: Site<'_>,
+    ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
+        if !self.written || members.len() < 2 {
+            return Ok(Vec::new());
+        }
+        // Only a mapping that writes nothing but the shorthand's field restates
+        // it; any other written field, even a null, is the author's addition.
+        let N::Mapping(items) = &self.input.nodes()[site.value] else {
+            return Ok(Vec::new());
+        };
+        let &[(key, value)] = items.as_slice() else {
+            return Ok(Vec::new());
+        };
+        let N::Text(field) = &self.input.nodes()[key] else {
+            return Ok(Vec::new());
+        };
+        let source = alias.is_some_and(|name| SOURCE_SHORTHAND.contains(&name));
+        // The string of a written `{source: <string>}`, the source shorthand's
+        // long form in a derivation or case result.
+        let source_text = |node: usize| match &self.input.nodes()[node] {
+            N::Mapping(items) => match items.as_slice() {
+                &[(key, value)]
+                    if matches!(&self.input.nodes()[key], N::Text(name) if name == "source")
+                        && matches!(self.input.nodes()[value], N::Text(_)) =>
+                {
+                    Some(value)
+                }
+                _ => None,
+            },
+            _ => None,
+        };
+        let schema = self.schema;
+        let class = member
+            .node_text(member.root())
+            .and_then(|name| schema.class_named(name));
+        let shorthand = if let Some(class) = class {
+            let restates = members.iter().any(|other| {
+                other
+                    .node_text(other.root())
+                    .and_then(|text| shorthand_field(schema, class, text))
+                    .is_some_and(|filled| filled.name == *field)
+            });
+            if !restates {
+                return Ok(Vec::new());
+            }
+            // A restated handled expression that only copies a source names
+            // the bare string a derivation writes for it.
+            source
+                .then(|| source_text(value))
+                .flatten()
+                .unwrap_or(value)
+        } else if let Some(text) = source.then(|| source_text(site.value)).flatten() {
+            text
+        } else {
+            return Ok(Vec::new());
+        };
+        let shorthand = match &self.input.nodes()[shorthand] {
+            N::Sequence(_) | N::Mapping(_) => Self::text(flow_text(self.input, shorthand, 0)?),
+            _ => SchemaContext::InputValue(shorthand),
+        };
+        Ok(vec![self.diagnostic(
+            site,
+            ConditionCode::SchemaRedundantLongForm,
+            vec![
+                ("field", Self::text(field.as_str())),
+                ("shorthand", shorthand),
+            ],
+        )])
+    }
     fn union(
         &mut self,
         members: &[TypeExpression],
+        alias: Option<&str>,
         site: Site<'_>,
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
         self.step(site)?;
@@ -551,7 +721,7 @@ impl Run<'_> {
             }
             let result = self.single(member, member.root(), site.deeper())?;
             if result.is_empty() {
-                return Ok(result);
+                return self.restated(members, member, alias, site);
             }
             attempted.push((member, result));
         }
@@ -643,7 +813,7 @@ impl Run<'_> {
                 }
                 SchemaAliasKind::Descriptor(descriptor) => {
                     let members = schema.descriptors()[descriptor].descriptor.members();
-                    let diagnostics = self.union(members, site.deeper())?;
+                    let diagnostics = self.union(members, Some(name), site.deeper())?;
                     if matches!(name, "derivation" | "untyped_intermediate_derivation")
                         && !diagnostics.is_empty()
                         && !matches!(self.input.nodes()[site.value], N::Text(_) | N::Mapping(_))
@@ -866,9 +1036,11 @@ impl SchemaStructure {
             active: Vec::new(),
             resolved_output: false,
             nulls: NullPolicy::Value,
+            written: true,
         }
         .union(
             types,
+            None,
             Site {
                 value,
                 path,
@@ -913,6 +1085,8 @@ impl SchemaStructure {
             active: Vec::new(),
             resolved_output,
             nulls,
+            // A resolved document is the canonical result of normalization.
+            written: !resolved_output,
         };
         let site = Site {
             value: input.root(),
@@ -976,6 +1150,32 @@ impl SchemaStructure {
         fragment: bool,
         nulls: NullPolicy,
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
+        self.validate_descriptor_mode(descriptor, input, value, path, fragment, nulls, true)
+    }
+    /// Interpret a descriptor over a canonical document that normalization or
+    /// composition produced, whose long forms restate expanded shorthand.
+    pub(super) fn validate_canonical_descriptor(
+        &self,
+        descriptor: usize,
+        input: &Document,
+        value: usize,
+        path: &str,
+        fragment: bool,
+        nulls: NullPolicy,
+    ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
+        self.validate_descriptor_mode(descriptor, input, value, path, fragment, nulls, false)
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn validate_descriptor_mode(
+        &self,
+        descriptor: usize,
+        input: &Document,
+        value: usize,
+        path: &str,
+        fragment: bool,
+        nulls: NullPolicy,
+        written: bool,
+    ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
         if descriptor >= self.descriptors().len() || value >= input.nodes().len() {
             return Err(ValidationError::InvalidDescriptor);
         }
@@ -985,6 +1185,7 @@ impl SchemaStructure {
             active: Vec::new(),
             resolved_output: false,
             nulls,
+            written,
         }
         .descriptor(
             descriptor,
@@ -1018,8 +1219,15 @@ impl SchemaStructure {
             if let Some(value) = located.descriptor.default_node() {
                 let input = &self.modules()[located.module].document;
                 let path = format!("{}.default", located.path);
-                let diagnostics =
-                    self.validate_descriptor(descriptor, input, value, &path, false)?;
+                // A default is part of the schema, not a written document.
+                let diagnostics = self.validate_canonical_descriptor(
+                    descriptor,
+                    input,
+                    value,
+                    &path,
+                    false,
+                    NullPolicy::Value,
+                )?;
                 if !diagnostics.is_empty() {
                     result.push(DefaultDiagnostics {
                         descriptor,

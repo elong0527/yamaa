@@ -53,8 +53,8 @@ columns:
     label: Parameter Code
     derivation: PC.PCTESTCD
     verifications:
-      allowed_values:
-        values: [DRGX, MET1, DRGY]
+      - allowed_values:
+          values: [DRGX, MET1, DRGY]
 
   - name: ATPT
     type: str

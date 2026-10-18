@@ -27,5 +27,4 @@ columns:
 # The keys already make each study and subject pair present and unique;
 # this check states the same fact a second time.
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID]
+  - unique: [STUDYID, USUBJID]

@@ -40,8 +40,8 @@ columns:
     label: Vital Signs Test Short Name
     derivation: VS_RAW.VSTESTCD
     verifications:
-      allowed_values:
-        values: [HEIGHT, WEIGHT, TEMP]
+      - allowed_values:
+          values: [HEIGHT, WEIGHT, TEMP]
 
   - name: VSTEST
     type: str
@@ -63,8 +63,8 @@ columns:
         - when: "VS_RAW.VSORRES IS NOT NULL"
           then: VS_RAW.VSORRESU
     verifications:
-      allowed_values:
-        values: [cm, kg, C, LB, F]
+      - allowed_values:
+          values: [cm, kg, C, LB, F]
 
   - name: VSSTRESN
     type: float
@@ -79,8 +79,8 @@ columns:
     type: str
     label: Standard Units
     verifications:
-      allowed_values:
-        values: [cm, kg, C]
+      - allowed_values:
+          values: [cm, kg, C]
 
   - name: VSSTAT
     type: str

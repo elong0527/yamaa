@@ -361,8 +361,8 @@ columns:
           then: {literal: "Y"}
         - otherwise: {literal: null}
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 ```
 
 What changed:

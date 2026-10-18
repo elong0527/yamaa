@@ -98,7 +98,10 @@ expands to `{template: <written value>}` and adds no missing handler:
 str_template: "{METSTATR}|{ECOG0R}|{REGIONUSR}"
 ```
 
-The canonical form exposes the optional `missing` handler:
+The canonical form exposes the optional `missing` handler, and it is written
+only to declare one; a mapping holding only `template` restates the bare
+template and fails as `redundant_long_form` under
+[SCHEMA-15](reference/schema-language.md#schema-15):
 
 ```yaml
 str_template:

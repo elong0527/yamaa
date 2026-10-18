@@ -984,11 +984,7 @@ fn references_mode(
         }
     }
     if let Some(payload) = d.field(value, "aggregate") {
-        let id = if matches!(d.nodes()[payload], N::Text(_)) {
-            payload
-        } else {
-            field(d, payload, "expr")?
-        };
+        let id = field(d, payload, "expr")?;
         match compile(text(d, id)?, ExpressionContext::Aggregate, "") {
             Ok(compiled) => {
                 names.extend(
@@ -1072,11 +1068,7 @@ fn references_mode(
         }
     }
     if let Some(payload) = d.field(value, "flag") {
-        let condition = if matches!(d.nodes()[payload], N::Text(_)) {
-            payload
-        } else {
-            field(d, payload, "condition")?
-        };
+        let condition = field(d, payload, "condition")?;
         predicate_references(d, condition, names)?;
     }
     for op in ["diff", "study_day"] {

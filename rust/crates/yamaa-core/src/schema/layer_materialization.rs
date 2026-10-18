@@ -213,7 +213,8 @@ impl SchemaStructure {
                     };
                     // Normalize in schema field order, preserving failure precedence.
                     let path = format!("{}.{name}.{}", field.name, member_field.name);
-                    let findings = self.validate_descriptor_with(
+                    // The composed document holds normalized contributions.
+                    let findings = self.validate_canonical_descriptor(
                         member_field.descriptor,
                         document,
                         value,
@@ -222,7 +223,7 @@ impl SchemaStructure {
                         NullPolicy::Absent,
                     )?;
                     let normalized = if findings.is_empty() {
-                        self.normalize_descriptor_with(
+                        self.normalize_canonical_descriptor(
                             member_field.descriptor,
                             document,
                             value,

@@ -173,9 +173,16 @@ Replaces: REQ-1265, REQ-1274.
 derivation: {odm: ODM.IT.DM.AGE}
 ```
 
-`event`, `form` and `item_group` each take one OID or a list, and `filter`
-takes a predicate over the ODM input's schema fields; [NAME-12](#name-12)
-states how they identify records and [NAME-13](#name-13) what the read gives.
+`event`, `form` and `item_group` each take a list of OIDs, written as a list
+even when it holds one, and `filter` takes a predicate over the ODM input's
+schema fields; [NAME-12](#name-12) states how they identify records and
+[NAME-13](#name-13) what the read gives. A mapping holding only `item`
+restates the bare string and fails as `redundant_long_form` under
+[SCHEMA-15](reference/schema-language.md#schema-15).
+
+```yaml
+derivation: {odm: {item: ODM.IT.DM.SEX, event: [SCREENING]}}
+```
 
 <a id="name-8"></a>
 

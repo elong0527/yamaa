@@ -154,13 +154,12 @@ def specification(contract, case):
                 {"otherwise": {"literal": "no"}},
             ]
         }
+    elif field == "compute":
+        column["derivation"] = {"compute": {"expr": case["text"]}}
     else:
-        key, name = {
-            "compute": ("compute", "expr"),
-            "aggregate": ("aggregate", "expr"),
-            "string-template": ("str_template", "template"),
-        }[field]
-        column["derivation"] = {key: {name: case["text"]}}
+        # A formula or template alone is written as its shorthand.
+        key = {"aggregate": "aggregate", "string-template": "str_template"}[field]
+        column["derivation"] = {key: case["text"]}
     spec["columns"].append(column)
     return spec
 

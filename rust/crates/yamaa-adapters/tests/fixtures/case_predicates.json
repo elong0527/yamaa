@@ -62,7 +62,7 @@
       "csv": "ID,VALUE\na,ONE\nb,none\n"
     },
     "named_predicate": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: input.csv}\n  D: {path: donor.csv, types: {SEQ: int}}\nintermediates:\n  - id: P\n    dataset: D\n    key: [ID]\n    order_by: [D.SEQ]\n    keep: first\n    no_match: {literal: null}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - name: VALUE\n    type: str\n    derivation:\n      case:\n        - when: \"P.A = 'first'\"\n          then: {literal: yes}\n        - otherwise: {literal: no}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: input.csv\n  D: {path: donor.csv, types: {SEQ: int}}\nintermediates:\n  - id: P\n    dataset: D\n    key: [ID]\n    order_by: [D.SEQ]\n    keep: first\n    no_match: {literal: null}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - name: VALUE\n    type: str\n    derivation:\n      case:\n        - when: \"P.A = 'first'\"\n          then: {literal: yes}\n        - otherwise: {literal: no}\n",
       "inputs": {
         "input.csv": "ID\na\nb\nc\n",
         "donor.csv": "ID,SEQ,A\na,1,first\na,2,second\nb,1,other\n"
@@ -70,7 +70,7 @@
       "csv": "ID,VALUE\na,yes\nb,no\nc,no\n"
     },
     "wrong_kind_range": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - name: VALUE\n    type: str\n    derivation: {literal: 1}\n    verifications:\n      - range: {min: 1}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - name: VALUE\n    type: str\n    derivation: {literal: 1}\n    verifications:\n      - range: {min: 1}\n",
       "inputs": {
         "input.csv": "ID\na\n"
       },
@@ -89,7 +89,7 @@
       ]
     },
     "missing_allowed_literal": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - name: VALUE\n    type: int\n    derivation: {literal: 1}\n    verifications:\n      - allowed_values: {values: [null, false]}\n",
+      "specification": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - name: VALUE\n    type: int\n    derivation: {literal: 1}\n    verifications:\n      - allowed_values: {values: [null, false]}\n",
       "inputs": {
         "input.csv": "ID\na\n"
       },

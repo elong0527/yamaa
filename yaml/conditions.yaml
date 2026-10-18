@@ -128,6 +128,7 @@ conditions:
   range_failed: {phases: [verification]}
   redundant_declaration: {phases: [validation]}
   redundant_field_type: {phases: [validation]}
+  redundant_long_form: {phases: [validation]}
   reference_data_repeating_conflict: {phases: [validation]}
   # REQ-1168
   refuted_value_origin: {phases: [validation]}

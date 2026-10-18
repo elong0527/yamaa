@@ -20,7 +20,7 @@ intermediates:
   # as UNSCHEDULED matches none, leaving the planned number missing.
   - id: PLANNEDVISIT
     dataset: TV
-    key: VISIT
+    key: [VISIT]
     no_match: {literal: null}
 
   # The subject's element whose dates SESTDTC..SEENDTC (both ends included)
@@ -28,7 +28,7 @@ intermediates:
   # one, so the kept row is the element with the latest start.
   - id: SEHIT
     dataset: SE
-    key: USUBJID
+    key: [USUBJID]
     between:
       value: VSDTC
       lower: SESTDTC
@@ -138,8 +138,8 @@ columns:
     label: Epoch
     derivation: SEHIT.EPOCH
     verifications:
-      allowed_values:
-        values: [SCREENING, TREATMENT, FOLLOW-UP]
+      - allowed_values:
+          values: [SCREENING, TREATMENT, FOLLOW-UP]
 
 verifications:
   - row_count:

@@ -162,9 +162,6 @@ fn admit_vocabulary(
                 continue;
             }
         };
-        if op == "unique" && matches!(d.nodes()[payload], N::Sequence(_)) {
-            continue;
-        }
         for &(name, _) in mapping(d, payload)? {
             let name = text(d, name)?;
             if !allowed.contains(&name) {
@@ -273,13 +270,10 @@ pub(super) fn redundant_unique(
         if op != "unique" {
             continue;
         }
-        let columns = if matches!(d.nodes()[payload], N::Sequence(_)) {
-            sequence(d, payload)?
-        } else if let Some(columns) = d.field(payload, "columns") {
-            sequence(d, columns)?
-        } else {
+        let Some(columns) = d.field(payload, "columns") else {
             continue;
         };
+        let columns = sequence(d, columns)?;
         let names = columns
             .iter()
             .map(|&id| text(d, id))
@@ -442,11 +436,7 @@ impl Verifications {
                 }
                 check
             } else if op == "unique" || op == "all_or_none" {
-                let values = if matches!(d.nodes()[payload], N::Sequence(_)) {
-                    sequence(d, payload)?
-                } else {
-                    sequence(d, field(d, payload, "columns")?)?
-                };
+                let values = sequence(d, field(d, payload, "columns")?)?;
                 if values.is_empty() {
                     result.deferred = invalid(
                         path,

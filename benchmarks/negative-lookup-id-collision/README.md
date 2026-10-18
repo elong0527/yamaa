@@ -32,6 +32,5 @@ intermediates:
     keep: first
 
 # ...
-derivation:
-  source: FIRSTEX.EXTRT
+derivation: FIRSTEX.EXTRT
 ```

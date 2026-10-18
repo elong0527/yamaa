@@ -71,11 +71,9 @@ rows:
   - ADRISK.AEDECOD
   derivations:
     NSUBJ:
-      aggregate:
-        expr: SUM(ADRISK.EVENTN)
+      aggregate: SUM(ADRISK.EVENTN)
     PERSONDAYS:
-      aggregate:
-        expr: SUM(ADRISK.RISKDAYS)
+      aggregate: SUM(ADRISK.RISKDAYS)
 
 verifications:
 - assert:

@@ -51,8 +51,8 @@ columns:
           IT.VS.SYSBP: SYSBP
           IT.VS.DIABP: DIABP
     verifications:
-      allowed_values:
-        values: [SYSBP, DIABP]
+      - allowed_values:
+          values: [SYSBP, DIABP]
 
   - name: VSTEST
     type: str
@@ -91,15 +91,15 @@ columns:
     label: Original Units
     derivation: {literal: mmHg}
     verifications:
-      allowed_values:
-        values: [mmHg]
+      - allowed_values:
+          values: [mmHg]
 
   - name: VSDRVFL
     type: str
     label: Derived Record Flag
     verifications:
-      allowed_values:
-        values: [Y]
+      - allowed_values:
+          values: [Y]
 
   # Within a subject: by visit name, then test code (DIABP before SYSBP),
   # with each test's readings in replicate order followed by its mean.
@@ -123,8 +123,7 @@ rows:
     derivations:
       ORD: {literal: 1}
       VSREPNUM:
-        aggregate:
-          expr: "ONLY(ODM.ItemGroupRepeatKey)"
+        aggregate: "ONLY(ODM.ItemGroupRepeatKey)"
       VSSTRESN:
         aggregate:
           filter: "ODM.ItemOID = 'IT.VS.SYSBP'"
@@ -138,8 +137,7 @@ rows:
     derivations:
       ORD: {literal: 1}
       VSREPNUM:
-        aggregate:
-          expr: "ONLY(ODM.ItemGroupRepeatKey)"
+        aggregate: "ONLY(ODM.ItemGroupRepeatKey)"
       VSSTRESN:
         aggregate:
           filter: "ODM.ItemOID = 'IT.VS.DIABP'"
@@ -154,8 +152,7 @@ rows:
       ORD: {literal: 2}
       VSREPNUM: {literal: null}
       VSSTRESN:
-        aggregate:
-          expr: "MEAN(ODM.Value)"
+        aggregate: "MEAN(ODM.Value)"
       VSDRVFL: {literal: Y}
 
 verifications:

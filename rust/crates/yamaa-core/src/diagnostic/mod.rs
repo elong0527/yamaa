@@ -225,6 +225,7 @@ conditions! {
     SchemaUnknownOperation => ("validation", "unknown_operation", Some("REQ-0286")),
     SchemaVersionMismatch => ("validation", "schema_version_mismatch", Some("REQ-0281")),
     SchemaBareDerivationScalar => ("validation", "bare_derivation_scalar", Some("REQ-0320")),
+    SchemaRedundantLongForm => ("validation", "redundant_long_form", Some("SCHEMA-15")),
     SchemaCaseItems => ("validation", "invalid_field_type", Some("REQ-0339")),
     SchemaLayerInvalidFieldType => ("validation", "invalid_field_type", Some("REQ-0658")),
     SchemaLayerUnknownField => ("validation", "unknown_field", Some("REQ-0658")),

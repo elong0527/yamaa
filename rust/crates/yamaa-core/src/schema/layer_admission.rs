@@ -246,6 +246,30 @@ impl Run<'_> {
         Ok(())
     }
 
+    /// SCHEMA-15: a dataset written as a mapping that holds only `path` restates
+    /// the bare path it is the shorthand of. A clear marker beside it adds to it.
+    fn restated_path(&mut self, member: usize, path: &str) -> Result<(), NormalizationError> {
+        let N::Mapping(entries) = &self.input.nodes()[member] else {
+            return Ok(());
+        };
+        let &[(key, value)] = entries.as_slice() else {
+            return Ok(());
+        };
+        if !matches!(&self.input.nodes()[key], N::Text(name) if name == "path")
+            || !matches!(self.input.nodes()[value], N::Text(_))
+        {
+            return Ok(());
+        }
+        self.finding(
+            path,
+            ConditionCode::SchemaRedundantLongForm,
+            vec![
+                ("field", C::Text("path".into())),
+                ("shorthand", C::InputValue(value)),
+            ],
+        )
+    }
+
     fn members(
         &mut self,
         node: usize,
@@ -307,7 +331,11 @@ impl Run<'_> {
                 if kind.path_shorthand && matches!(self.input.nodes()[member], N::Text(_)) {
                     self.validate_type("project_path", member, &logical)?;
                 } else {
+                    let before = self.findings.len();
                     self.member(member, kind, &logical)?;
+                    if kind.path_shorthand && self.findings.len() == before {
+                        self.restated_path(member, &logical)?;
+                    }
                 }
             }
         }

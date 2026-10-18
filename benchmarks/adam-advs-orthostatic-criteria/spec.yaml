@@ -98,8 +98,8 @@ columns:
     label: Analysis Value (C)
     derivation: {literal: null}
     verifications:
-      allowed_values:
-        values: ["Y", "N"]
+      - allowed_values:
+          values: ["Y", "N"]
 
 rows:
   # One change record per subject and visit with both systolic readings;

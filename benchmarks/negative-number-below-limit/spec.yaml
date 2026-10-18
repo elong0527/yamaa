@@ -24,11 +24,9 @@ columns:
     label: Parameter Code
     derivation: LB.LBTESTCD
 
+  # Text that is not a number (such as <50) stops the run; an empty result
+  # is not converted and gives a missing AVAL.
   - name: AVAL
     type: float
     label: Analysis Value
-    derivation:
-      value:
-        source: LB.LBSTRESC
-      # Text that is not a number (such as <50) stops the run; an empty
-      # result is not converted and gives a missing AVAL.
+    derivation: LB.LBSTRESC
