@@ -532,7 +532,7 @@ match value must be available in the row phase; one available only in a later
 phase fails.
 
 Fails: `ungrouped_driver_field`, `unknown_field`, `phase_boundary`.
-Evidence: `negative-grouped-lookup-ungrouped-key`, `negative-grouped-range-ungrouped-value`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs`, `adam-adlb-supplb-padded-key`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`.
+Evidence: `negative-grouped-lookup-ungrouped-key`, `negative-grouped-range-ungrouped-value`, `negative-lookup-key-column-phase`, `negative-lookup-match-column-phase`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs`, `adam-adlb-supplb-padded-key`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-adapters/tests/execution_row_phase_reads.rs`.
 Replaces: REQ-0126, REQ-0156, REQ-0157.
 
 In ungrouped row construction each retained input record builds one candidate
@@ -569,7 +569,11 @@ derived by the row template that reads the lookup. The exceptions are the
 template's group keys and, for an ungrouped template, the driver record's own
 fields. [Column derivation](columns.md) orders row derivations
 before column derivation, and a match value available only in a later phase
-fails as `phase_boundary`.
+fails as `phase_boundary`. The finding is at the row template's read of the
+lookup, in a derivation or the row `filter`, and names the value, the lookup
+and the row template, whether the value is a `key` match value, the lookup's
+`between` value, or a match value of another lookup that a `between` value
+reads.
 
 ## Named intermediates
 

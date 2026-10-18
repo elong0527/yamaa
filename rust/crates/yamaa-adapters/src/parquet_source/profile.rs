@@ -195,6 +195,13 @@ mod tests {
                 DataType::Timestamp(ArrowUnit::Microsecond, None),
                 ColumnType::DateTime,
             ),
+            (
+                Physical::INT32,
+                None,
+                ConvertedType::NONE,
+                DataType::Int32,
+                ColumnType::Int,
+            ),
         ] {
             let stored = descriptor(physical, logical, converted);
             assert_eq!(column_type(&stored.column(0), &arrow), Some(expected));
@@ -254,7 +261,6 @@ mod tests {
                 ConvertedType::NONE,
                 DataType::Binary,
             ),
-            (Physical::INT32, None, ConvertedType::NONE, DataType::Int32),
         ] {
             let stored = descriptor(physical, logical, converted);
             assert_eq!(column_type(&stored.column(0), &arrow), None);
@@ -361,6 +367,13 @@ mod tests {
                 DataType::Timestamp(ArrowUnit::Microsecond, None),
                 ColumnType::DateTime,
             ),
+            (
+                Physical::INT32,
+                None,
+                ConvertedType::NONE,
+                DataType::Int32,
+                ColumnType::Int,
+            ),
         ] {
             let stored = descriptor(physical, logical, converted);
             let arrow = dictionary(DataType::Int32, value);
@@ -375,8 +388,8 @@ mod tests {
             (&binary, dictionary(DataType::Int32, DataType::Binary)),
             (&text, dictionary(DataType::Int32, DataType::Binary)),
             (
-                &descriptor(Physical::INT32, None, ConvertedType::NONE),
-                dictionary(DataType::Int32, DataType::Int32),
+                &descriptor(Physical::INT32, None, ConvertedType::UINT_8),
+                dictionary(DataType::Int32, DataType::UInt8),
             ),
             (
                 &descriptor(Physical::INT64, timestamp, ConvertedType::NONE),
