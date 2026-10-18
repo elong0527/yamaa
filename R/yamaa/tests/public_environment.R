@@ -12,7 +12,7 @@ namespace <- asNamespace("yamaa")
 spec_run_native <- get("wrap__spec_run", namespace)
 for (capabilities in list(list(), list(NULL, function(...) NULL, function(...) NULL))) {
   reply <- .Call(spec_run_native, charToRaw("absent-spec.yaml"), NULL,
-    charToRaw(as.character(getRversion())), capabilities)
+    charToRaw(as.character(getRversion())), capabilities, NULL)
   stopifnot(is.null(reply$value), identical(reply$error$message, if (length(capabilities) == 0L)
     "invalid project host capabilities" else "invalid lock capability"),
     nrow(reply$error$issues) == 0L)

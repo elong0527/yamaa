@@ -151,7 +151,9 @@ exact head, and says so in the PR. The gate builds the Python and R packages
 from the checkout and installs both outside it. On each host it runs public
 benchmark conformance: every active benchmark must reproduce its expected
 bytes, and every negative benchmark its first diagnostic's phase, condition,
-requirement and specification paths. On the same installs it then runs the
+requirement and specification paths. A repeat pass runs each entry's spec
+object a second time, reusing what the first run compiled, and requires the
+same issues, tables and saved bytes. On the same installs it then runs the
 installed Python suites and `R CMD check`, which carry the cross-host
 diagnostic parity truth and the host-fixture families. `make probe-executor`
 times one specification at 10,000, 100,000 and 1,000,000 rows, with and
@@ -164,10 +166,11 @@ issue, never in the repository.
 The ordinary CI workflow runs the same check targets listed above for each PR,
 every two hours on main, and on each push to a `release/**` branch. Merges to
 main do not start workflows other than the documentation site deployment; main
-is checked on those schedules instead. While the newest main run of CI or the
-documentation deployment fails, the `Main health` workflow keeps a `main-red`
-issue open for it and closes the issue when a later main run succeeds. A PR that changes `.github/`
-also runs actionlint over every workflow.
+is checked on those schedules instead. While the newest main run of CI, the
+nightly fuzz run or the documentation deployment fails, the `Main health`
+workflow keeps a `main-red` issue open for it and closes the issue when a later
+main run succeeds. A PR that changes `.github/` also runs actionlint over every
+workflow.
 Keep workflow-specific setup in CI and reusable check logic in `tools/`.
 Pin external actions to complete commit IDs with exact release comments.
 
@@ -185,6 +188,14 @@ run on dispatch (native qualification also on a
 `qualification/issue-*` push). Dispatch any of them on a branch with
 `gh workflow run <workflow> --ref <branch>` to check a change that needs them
 before merging.
+
+The `Fuzz` workflow fuzzes the readers that parse untrusted input under
+AddressSanitizer, with UndefinedBehaviorSanitizer for the C they compile. A PR
+runs, for three minutes each, the targets whose readers it changes; a nightly
+schedule runs every target for thirty minutes. The
+[fuzz guide](rust/fuzz/README.md) lists the targets and runs them locally with
+`python -m tools.ci.fuzz`. Fix a crash with a unit test in the owning crate and
+commit its input as a text regression beside the targets.
 
 The `Release compatibility` workflow's `rust (minimum toolchain)` job checks
 and lints the workspace with its declared `rust-version`, Rust 1.90.0, instead

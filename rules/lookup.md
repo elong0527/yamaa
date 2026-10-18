@@ -106,12 +106,18 @@ a named intermediate selects for the row, qualified by its id. A value read
 from a driver's record must name the driver of every row that reads the
 lookup, wherever the lookup is read: in a row template, that template's driver
 ([LOOKUP-2](#lookup-2)), and during column derivation, the driver of every row
-template the read can evaluate on. A value naming nothing the current row
-holds, such as a field of another input or of the lookup's own relation, fails
-as `unknown_field` at `between.value`, once per range, whichever kind of
-lookup declares it. A field of another input is never read through the
-implicit join ([LOOKUP-1](#lookup-1)); bring it onto the row as a column
-first, and name the column:
+template the read can evaluate on. A row template's `filter` reads its
+lookups for that template's rows and a dataset verification for the rows of
+every template, as a column derivation does, and a named intermediate is also
+read through an aggregate's `derive` binding and through the range value of
+another lookup. A value naming nothing the current row holds, such as a field
+of another input or of the lookup's own relation, fails as `unknown_field` at
+`between.value`, once per range, whichever kind of lookup declares it. Which
+input drives each row is declared, so `check` reports a value qualified by an
+input that drives none of the rows reading the lookup from the declarations
+alone, whether or not that input stores the field. A field of another input is
+never read through the implicit join ([LOOKUP-1](#lookup-1)); bring it onto the
+row as a column first, and name the column:
 
 ```yaml
 columns:
@@ -532,7 +538,7 @@ match value must be available in the row phase; one available only in a later
 phase fails.
 
 Fails: `ungrouped_driver_field`, `unknown_field`, `phase_boundary`.
-Evidence: `negative-grouped-lookup-ungrouped-key`, `negative-grouped-range-ungrouped-value`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs`, `adam-adlb-supplb-padded-key`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`.
+Evidence: `negative-grouped-lookup-ungrouped-key`, `negative-grouped-range-ungrouped-value`, `negative-lookup-key-column-phase`, `negative-lookup-match-column-phase`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs`, `adam-adlb-supplb-padded-key`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-adapters/tests/execution_row_phase_reads.rs`.
 Replaces: REQ-0126, REQ-0156, REQ-0157.
 
 In ungrouped row construction each retained input record builds one candidate
@@ -569,7 +575,11 @@ derived by the row template that reads the lookup. The exceptions are the
 template's group keys and, for an ungrouped template, the driver record's own
 fields. [Column derivation](columns.md) orders row derivations
 before column derivation, and a match value available only in a later phase
-fails as `phase_boundary`.
+fails as `phase_boundary`. The finding is at the row template's read of the
+lookup, in a derivation or the row `filter`, and names the value, the lookup
+and the row template, whether the value is a `key` match value, the lookup's
+`between` value, or a match value of another lookup that a `between` value
+reads.
 
 ## Named intermediates
 

@@ -65,6 +65,7 @@ yamaa::Outcome: pub use yamaa::observe::Outcome
 yamaa::Parameter: pub use yamaa::functions::Parameter
 yamaa::Phase: pub use yamaa::observe::Phase
 yamaa::Plan: pub use yamaa::plan::Plan
+yamaa::Plans: pub use yamaa::api::Plans
 yamaa::Progress: pub use yamaa::observe::Progress
 yamaa::ProjectFunctions: pub use yamaa::functions::ProjectFunctions
 yamaa::ProjectRun: pub use yamaa::api::ProjectRun
@@ -103,11 +104,13 @@ yamaa::api::Engine: impl Engine
 yamaa::api::Engine: impl Engine
 yamaa::api::Engine::project_check: pub fn project_check(&self, project: &str, token: &CancellationToken) -> Table
 yamaa::api::Engine::project_run: pub fn project_run(&self, project: &str, section: Option<&str>, token: &CancellationToken) -> Result<ProjectRun, Error>
+yamaa::api::Engine::project_run_reusing: pub fn project_run_reusing(&self, project: &str, section: Option<&str>, plans: &Plans, token: &CancellationToken) -> Result<ProjectRun, Error>
 yamaa::api::Engine::project_spec: pub fn project_spec(&self, project: &str, name: &str) -> Result<String, Failure>
 yamaa::api::Engine::project_submission: pub fn project_submission(&self, project: &str, section: Option<&str>, created: Option<&str>, installed: &str, token: &CancellationToken) -> Result<Submission, Error>
 yamaa::api::Engine::spec_check: pub fn spec_check(&self, specification: &str, project: Option<&str>, token: &CancellationToken) -> Table
 yamaa::api::Engine::spec_resolve: pub fn spec_resolve(&self, specification: &str, project: Option<&str>) -> Result<ContextValue, Failure>
 yamaa::api::Engine::spec_run: pub fn spec_run(&self, specification: &str, project: Option<&str>, token: &CancellationToken) -> Result<Run, Error>
+yamaa::api::Engine::spec_run_reusing: pub fn spec_run_reusing(&self, specification: &str, project: Option<&str>, plans: &Plans, token: &CancellationToken) -> Result<Run, Error>
 yamaa::api::Failure: impl Failure
 yamaa::api::Failure: impl std::error::Error for Failure
 yamaa::api::Failure: impl std::fmt::Display for Failure
@@ -116,6 +119,9 @@ yamaa::api::Failure::from_error: pub fn from_error(context: &str, error: &Error)
 yamaa::api::Failure::issues: pub issues: Table
 yamaa::api::Failure::message: pub message: String
 yamaa::api::Failure::new: pub fn new(message: impl Into<String>, report: &Report) -> Self
+yamaa::api::Plans: impl Plans
+yamaa::api::Plans: pub struct Plans [derive(Default)]
+yamaa::api::Plans::new: pub fn new() -> Self
 yamaa::api::ProjectRun: impl ProjectRun
 yamaa::api::ProjectRun: pub struct ProjectRun
 yamaa::api::ProjectRun::get: pub fn get(&self, name: &str) -> Option<&Run>

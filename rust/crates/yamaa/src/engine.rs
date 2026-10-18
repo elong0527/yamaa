@@ -368,36 +368,39 @@ impl Engine {
         Ok(Build::from_outcome(outcome, measurements, &self.shared))
     }
 
-    /// Build one project-run specification: an input whose `schema` link names
-    /// a producer the run already built reads that held artifact; every other
-    /// input reads its saved file.
-    pub(crate) fn build_in_project(
+    /// Build `request` through `plans`, as a host's lazy object runs (#2821).
+    /// A kept plan whose files the run-start check finds unchanged runs again;
+    /// otherwise the request compiles and runs exactly as [`Engine::build`],
+    /// and `plans` keeps the new plan. Either way the run uses this engine's
+    /// project functions and observer. In a project run, an input whose
+    /// `schema` link names a producer the run already built reads that `held`
+    /// artifact; every other input reads its saved file.
+    pub(crate) fn build_reusing(
         &self,
+        plans: &crate::api::Plans,
         request: &Request<'_>,
-        held: Arc<yamaa_adapters::file_resources::HeldArtifacts>,
+        held: Option<Arc<yamaa_adapters::file_resources::HeldArtifacts>>,
         token: &CancellationToken,
     ) -> Result<Build, Error> {
         if token.is_cancelled() {
             return Err(Error::Cancelled);
         }
         let measurements = Arc::new(yamaa_adapters::application_measurements::Measurements::new());
-        let bridge = ObserverBridge::new(&measurements, self.shared.observer.as_deref());
-        let compiled = crate::internal::compile(
-            &self.shared,
-            request.specification,
-            request.environment,
-            yamaa_core::application_observer::Scope::new(&bridge),
-        );
-        // The compilation above has just verified the metadata it captured.
-        let outcome = crate::internal::run(
-            &self.shared,
-            request.specification,
-            &compiled,
-            None,
-            Some(held),
-            false,
-            yamaa_core::application_observer::Scope::new(&bridge),
-        );
+        let progress = self.shared.observer.as_deref();
+        // The run-start check runs outside the holder's lock.
+        let kept = plans
+            .get(request)
+            .filter(|plan| plan.reusable_by(&self.shared));
+        let outcome = match kept {
+            Some(plan) => plan.run_through(&self.shared, held, &measurements, progress),
+            None => {
+                let plan = self.compile_observed(request, &measurements, progress);
+                // The compilation has just captured the files it holds.
+                let outcome = plan.run_through(&self.shared, held, &measurements, progress);
+                plans.keep(request, plan);
+                outcome
+            }
+        };
         measurements.complete(outcome_accepted(&outcome));
         Ok(Build::from_outcome(outcome, measurements, &self.shared))
     }

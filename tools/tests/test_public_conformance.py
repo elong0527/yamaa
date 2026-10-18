@@ -26,6 +26,13 @@ columns:
 METADATA = "lifecycle: draft\nstandard: TEST\ndomain: TEST\n"
 
 
+def repeated(build):
+    """The build as the runners record it: its object's second run equals the
+    first and leaves the saved files unchanged (#2821)."""
+    repeat = copy.deepcopy({key: build[key] for key in ("issues", "tables", "saved")})
+    return {**build, "repeat": {**repeat, "same_files": True}}
+
+
 class PublicConformance(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -71,7 +78,7 @@ class PublicConformance(unittest.TestCase):
         return judge.compare_example(
             self.example,
             "python",
-            {"builds": [self.build]},
+            {"builds": [repeated(self.build)]},
             self.fixtures,
             self.observed,
         )
@@ -80,6 +87,39 @@ class PublicConformance(unittest.TestCase):
         self.assertEqual(self.verdict()["verdict"], "pass")
         self.build["tables"]["output"]["columns"][0][1] = "float"
         self.assertEqual(self.verdict()["verdict"], "mismatch")
+
+    def test_a_second_run_must_equal_the_first(self):
+        def verdict(build):
+            return judge.compare_example(
+                self.example,
+                "python",
+                {"builds": [build]},
+                self.fixtures,
+                self.observed,
+            )
+
+        self.assertEqual(verdict(repeated(self.build))["verdict"], "pass")
+        missing = verdict(self.build)
+        self.assertEqual(missing["verdict"], "mismatch")
+        self.assertIn("spec.yaml was not run a second time", missing["findings"])
+        changes = {
+            "issues": lambda repeat: repeat["issues"].append(
+                {"phase": "derivation", "condition": "division_by_zero"}
+            ),
+            "tables": lambda repeat: repeat["tables"]["output"]["rows"].pop(),
+            "saved": lambda repeat: repeat.update(saved=False),
+            "saved files": lambda repeat: repeat.update(same_files=False),
+        }
+        for field, change in changes.items():
+            with self.subTest(field=field):
+                build = repeated(self.build)
+                change(build["repeat"])
+                result = verdict(build)
+                self.assertEqual(result["verdict"], "mismatch")
+                self.assertIn(
+                    {"repeat": "spec.yaml", "differs_from_first_run": field},
+                    result["findings"],
+                )
 
     def test_retired_adapter_csv_mutations_cannot_pass_public_conformance(self):
         # Preserve the independent corruption controls from the retired
@@ -296,7 +336,8 @@ class PublicConformance(unittest.TestCase):
             self.assertEqual(judge.compare(self.fixtures, self.observed, inventory), 1)
             self.assertEqual(judge.read_json(inventory)["summary"]["error"], 1)
             judge.write_json(
-                self.observed / "records/simple.json", {"builds": [self.build]}
+                self.observed / "records/simple.json",
+                {"builds": [repeated(self.build)]},
             )
             self.assertEqual(judge.compare(self.fixtures, self.observed, inventory), 0)
             (self.observed / "work/simple/result.csv").write_text("broken\n")
@@ -370,7 +411,7 @@ class PublicConformance(unittest.TestCase):
         ]
 
         def verdict(runtime):
-            record = {"builds": [self.build]}
+            record = {"builds": [repeated(self.build)]}
             return judge.compare_example(
                 self.example, runtime, record, self.fixtures, self.observed
             )["verdict"]
@@ -490,7 +531,7 @@ class PublicConformance(unittest.TestCase):
             "report": public_view(tables["adsl-checks.parquet"]),
         }
         judge.write_json(
-            self.observed / "records/simple.json", {"builds": [self.build]}
+            self.observed / "records/simple.json", {"builds": [repeated(self.build)]}
         )
         self.assertEqual(verdict()["verdict"], "pass")
         for name, table in tables.items():
@@ -684,7 +725,7 @@ class PublicConformance(unittest.TestCase):
         return judge.compare_example(
             self.example,
             "python",
-            {"builds": [self.build], "variants": variants},
+            {"builds": [repeated(self.build)], "variants": variants},
             self.fixtures,
             self.observed,
         )
@@ -827,7 +868,7 @@ class PublicConformance(unittest.TestCase):
             variant("key_order_control", "__keyorder_control_spec.yaml"),
             variant("key_order_permuted", "__keyorder_permuted_spec.yaml"),
         ]
-        record = {"builds": [self.build], "variants": variants}
+        record = {"builds": [repeated(self.build)], "variants": variants}
         verdict = judge.compare_example(
             example, "python", record, fixtures, observed, {}
         )
@@ -841,6 +882,7 @@ class PublicConformance(unittest.TestCase):
         for build in (self.build, *variants):
             build["tables"]["report"] = copy.deepcopy(report)
         variants[2]["tables"]["report"]["rows"].reverse()
+        record = {"builds": [repeated(self.build)], "variants": variants}
         verdict = judge.compare_example(
             example, "python", record, fixtures, observed, {}
         )

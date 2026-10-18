@@ -4780,6 +4780,50 @@
         "hex": "504152311500152015202c15041500150615060000010000000000000002000000000000001502192c4806736368656d6115020015042500180156001604191c191c26001c1504191500191801561500160416421642260800001642160400003b00000050415231"
       },
       "readable_csv": "V\n1\n2\n"
+    },
+    "plan-reuse": {
+      "specification_yaml": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: str, VALUE: float, ZERO: float}}}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n  - {name: ZERO, type: float, derivation: SRC.ZERO}\n  - {name: RATIO, type: float, derivation: {compute: {expr: '1 + VALUE / ZERO'}}}\noutput: {path: output.csv, columns: [ID, VALUE, ZERO, RATIO]}\n",
+      "studies": {
+        "A": {
+          "input_csv": "ID,VALUE,ZERO\nb,3,2\nc,1,4\n",
+          "output_csv": "ID,VALUE,ZERO,RATIO\nb,3,2,2.5\nc,1,4,1.25\n",
+          "issues": []
+        },
+        "B": {
+          "input_csv": "ID,VALUE,ZERO\na,2.5,0\n",
+          "output_csv": null,
+          "issues": [
+            {
+              "phase": "derivation",
+              "condition": "division_by_zero",
+              "requirement": "REQ-0430",
+              "spec_paths": [
+                "columns.RATIO.derivation.compute"
+              ],
+              "context": "{\"expr\":\"1 + VALUE / ZERO\",\"keys\":[{\"ID\":\"a\"}]}",
+              "source_span": [
+                4,
+                16
+              ],
+              "operand_route": [
+                "right"
+              ]
+            }
+          ]
+        }
+      },
+      "sequence": [
+        "A",
+        "B",
+        "A"
+      ],
+      "changed_specification_yaml": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: str, VALUE: float, ZERO: float}}}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n  - {name: ZERO, type: float, derivation: SRC.ZERO}\n  - {name: RATIO, type: float, derivation: {compute: {expr: '2 + VALUE / ZERO'}}}\noutput: {path: output.csv, columns: [ID, VALUE, ZERO, RATIO]}\n",
+      "changed_output_csv": "ID,VALUE,ZERO,RATIO\nb,3,2,3.5\nc,1,4,2.25\n",
+      "function_default": {
+        "before": "default: 2",
+        "after": "default: 1"
+      },
+      "function_output_csv": "ID,RATIO,RATIO_DEFAULT,RATIO_PCT,RATIO_ADJ_MISSING,RATIO_MISSING\nR1,2.5,2.5,250,2.5,\nR2,0.33,0.3,33.3,0.8300000000000001,\nR3,3.5,3.5,350,3.75,\nR4,0,0,0,0,\nR5,2.25,2.2,225,1.75,\nR6,,,,,\nR7,,,,,\n"
     }
   }
 }

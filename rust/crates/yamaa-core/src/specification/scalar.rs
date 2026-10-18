@@ -33,6 +33,10 @@ pub(super) fn prepare(
     })
 }
 impl Declaration {
+    /// The variables `greatest` or `least` compares, in written order.
+    pub(super) fn sources(&self) -> &[String] {
+        &self.sources
+    }
     /// EXPR-14: the type the sources share.
     pub(super) fn result_type(
         &self,

@@ -1,0 +1,72 @@
+# Fuzz targets for the readers that parse untrusted input (#2928). Like
+# tests/embedder, this is an outside workspace with its own empty [workspace],
+# so Cargo never treats rust/Cargo.toml as the root: the shipped dependency
+# graph and the canonical lock stay unchanged. Run the targets through
+# `python -m tools.ci.fuzz` (see README.md), which copies the canonical lock
+# here first, so the engine builds on the reviewed versions and only the
+# fuzzing crates resolve fresh. Neither that lock nor any build output, corpus
+# or crash artifact here is committed.
+[package]
+name = "yamaa-fuzz"
+version = "0.0.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[workspace]
+
+[dependencies]
+libfuzzer-sys = "0.4.13"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = { version = "1.0.145", features = ["raw_value"] }
+yamaa-adapters = { path = "../crates/yamaa-adapters" }
+yamaa-core = { path = "../crates/yamaa-core" }
+
+# Line tables give symbolized stacks in crash and sanitizer reports.
+[profile.release]
+debug = "line-tables-only"
+
+[[bin]]
+name = "csv"
+path = "fuzz_targets/csv.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "dataset_json"
+path = "fuzz_targets/dataset_json.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parquet"
+path = "fuzz_targets/parquet.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sas7bdat"
+path = "fuzz_targets/sas7bdat.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "specification"
+path = "fuzz_targets/specification.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "xport"
+path = "fuzz_targets/xport.rs"
+test = false
+doc = false
+bench = false
