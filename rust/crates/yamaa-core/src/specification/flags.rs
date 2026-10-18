@@ -167,11 +167,13 @@ fn finish(
     .map(|flag| Some(Expression::Flag(flag)))
     .map_err(|_| BindError::Internal)
 }
+/// `record` states whether the column reads one base record, as a key does
+/// and every column does with record rows; otherwise a base read collects the
+/// distinct readings of the key combination's records.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn bind(
     operation: &Declaration,
-    column: usize,
-    keys: &[usize],
+    record: bool,
     driver: &str,
     catalog: &Catalog,
     declarations: &intermediates::Declarations,
@@ -243,16 +245,14 @@ pub(super) fn bind(
             })
         } else {
             match catalog.bind(name) {
-                Some(reference_binding::Binding::Dataset { field, .. }) => {
-                    Some(if keys.contains(&column) {
-                        FlagRead::Read(Read::Source(field))
-                    } else {
-                        FlagRead::Collect {
-                            column: field,
-                            identifier: name.into(),
-                        }
-                    })
-                }
+                Some(reference_binding::Binding::Dataset { field, .. }) => Some(if record {
+                    FlagRead::Read(Read::Source(field))
+                } else {
+                    FlagRead::Collect {
+                        column: field,
+                        identifier: name.into(),
+                    }
+                }),
                 _ => None,
             }
         };

@@ -144,14 +144,28 @@ cycle rather than an instruction to iterate. A cycle fails as
 
 <a id="column-7"></a>
 
-### COLUMN-7. Without row templates, a key column derivation must not depend on a non-key output column
+### COLUMN-7. Without row templates, a key is computed from one base record and never from a non-key output column
 
 In a specification without `rows`, keys are derived before any row logic runs,
-and a key column derivation that depends on a non-key output column fails.
+each from one base record. A key column derivation that depends on a non-key
+output column fails, and so does one that reads records other than its own,
+an aggregate or an `odm` read, unless a key derived by a window makes each
+base record its own row.
 
 Fails: `key_dependency`.
-Evidence: `negative-keys-missing`.
+Evidence: `negative-keys-missing`, `negative-keys-aggregate`, `negative-keys-odm`, `schema-keys-record-reads`, `rust/crates/yamaa-adapters/tests/execution_no_rows_record_reads.rs`.
 Replaces: REQ-0074.
+
+A key reads its base record's fields, the keys declared before it, and a
+named intermediate's selection for that record, through any operation that
+reads one record, a formula, a flag, a `case` condition and a project
+function argument among them. An aggregate reduces the records of a key
+combination and an `odm` read reads its items, but neither exists before the
+keys do: either fails as `key_dependency` at the operation, also inside a
+`case` branch, naming the key column and the operation. When a key is a
+window, each base record is its own key combination
+([ROW-8](rows.md#row-8)), and a key is derived for that record's row as any
+column is.
 
 ## Value lifecycle
 
@@ -396,7 +410,7 @@ zero times is reportable and is not an error. The count for a source's
 `order_by` and `keep` reports only records where more than one match survived
 the filter.
 
-Evidence: `rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.json`, `rust/crates/yamaa-adapters/tests/fixtures/original_mapping_cut.json`, `rust/crates/yamaa-adapters/tests/fixtures/flag_reference.json`, `rust/crates/yamaa-core/tests/execution_numeric_lifecycle.rs::accounting_retains_zero_declarations_and_prior_firings_on_failure`.
+Evidence: `rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.json`, `rust/crates/yamaa-adapters/tests/fixtures/original_mapping_cut.json`, `rust/crates/yamaa-adapters/tests/fixtures/flag_reference.json`, `rust/crates/yamaa-core/tests/execution_numeric_lifecycle.rs::accounting_retains_zero_declarations_and_prior_firings_on_failure`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::handler_rows_register_every_path_at_zero_in_one_order`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::intermediate_derivation_handlers_count_each_build_of_the_donor_records`.
 Replaces: REQ-0356, REQ-0361.
 
 A default substitution is counted where the handler it stands for would be:
@@ -405,11 +419,40 @@ at `<operation>.missing` for `mapping`, `cut`, `str_extract`, `str_replace`,
 `<path>.absent` for a read through an implicit join, at the source binding or
 operand that makes the read ([LOOKUP-24](lookup.md#lookup-24)); and at the
 reading column's `no_match` for a named intermediate
-([LOOKUP-14](lookup.md#lookup-14)). An operation registers its `missing` and
-`absent` paths before any row is read, so a run reports them even when they
-answer nothing; a read that requires a match registers none. A lookup read
-made while a predicate is evaluated is not a handler site: its absence gives
-missing, uncounted.
+([LOOKUP-14](lookup.md#lookup-14)). A lookup read made while a predicate is
+evaluated is not a handler site: its absence gives missing, uncounted.
+
+A run registers every handler path before it reads any row, so a run reports
+a path even when it answers nothing. That covers every declared handler, every
+default substitution counted like one, and each named intermediate read: its
+reading path's `no_match`, and its `multiple_matches` when the intermediate
+declares `keep`. A read that requires a match registers no `no_match` and no
+`absent`. When an intermediate's `between` value, or a current-record operand
+of its derivations, reads another intermediate, that read's handlers count at
+the same reading path.
+
+Handler rows come in registration order. First come the `unconvertible`
+paths of the output derivations, in declaration order with the row templates'
+before the columns', then those of each intermediate's typed derivations. Then
+each derivation in the order the run evaluates it: the row templates'
+derivations, template by template, then the column derivations, then the
+intermediates' key expressions. Each lists its other paths in expression
+order: an operation's own paths before those of the expressions it reads,
+which follow in the order the operation reads them. An operation lists its own
+paths as `missing` or `fallback`, `unmapped`, `invalid`, `not_after` and
+`partial`, then a lookup's `multiple_matches` before its `no_match` or
+`absent`. Last come the paths inside intermediate derivations, intermediate by
+intermediate: each derivation in declaration order, then the key expressions
+of the intermediates those derivations read, as bound for the donor records.
+A path is registered once, where this order first reaches it.
+
+A path inside an intermediate's `derivations:`
+([LOOKUP-15](lookup.md#lookup-15)) counts the donor records it answers each
+time the run builds those records, so its count follows how often they are
+built, not the output rows. A derivation that reads the current input record
+builds them again for each current record. Another intermediate's derivation
+that reads the intermediate ([LOOKUP-16](lookup.md#lookup-16)) builds them
+again each time its own records are built.
 
 ## Diagnostic citations
 

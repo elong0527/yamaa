@@ -3,8 +3,8 @@
 //! 1. Topological validity: every data edge reads a cell that an earlier step
 //!    of the reading cell's template completed, windows and output scans read
 //!    complete relations, and every cell is completed.
-//! 2. The eagerly registered handler sites equal the registration walk that
-//!    `DatasetPlan::execute` runs today, in order.
+//! 2. The handler table equals the registration walk that
+//!    `DatasetPlan::execute` runs before any row, in order.
 //! 3. Each region's schedule equals the structural mirror of the executor's
 //!    loops ([`super::reference`]).
 //!
@@ -137,7 +137,8 @@ fn schedule(
     Ok(())
 }
 
-/// Check 2: the eager sites, in table order, equal today's registration walk.
+/// Check 2: the handler table, in order, equals the executor's registration
+/// walk.
 fn handlers(plan: &ResolvedPlan, bound: &DatasetPlan) -> Result<(), ResolutionError> {
     let mut counter = HandlerCounter::default();
     bound.register_handlers(&mut counter);
@@ -149,7 +150,6 @@ fn handlers(plan: &ResolvedPlan, bound: &DatasetPlan) -> Result<(), ResolutionEr
     let found: Vec<_> = plan
         .handlers
         .iter()
-        .take_while(|site| site.registration == Registration::Eager)
         .map(|site| (String::from(&*site.path), site.kind))
         .collect();
     for position in 0..expected.len().max(found.len()) {

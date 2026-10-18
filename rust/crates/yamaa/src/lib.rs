@@ -25,9 +25,21 @@
 //!
 //! Malformed Parquet input can make the Parquet or Arrow crate panic. The
 //! engine contains each such panic as a finding and keeps it off stderr: its
-//! first native decode wraps the process's panic hook, once, and the wrapper
-//! prints nothing for a panic the engine contains and passes every other
-//! panic to the hook it wraps. A hook installed later replaces the wrapper.
+//! first native decode wraps the process's panic hook, once. The wrapper
+//! prints nothing for a panic inside the engine's calls into those crates to
+//! decode Parquet, the file's embedded Arrow schema included. It passes every
+//! other panic to the hook it wraps: a panic anywhere else, such as in Arrow's
+//! import of a host table, and a further panic on the same thread while a
+//! contained one unwinds, after which the process aborts.
+//!
+//! Stable Rust has no atomic hook update (`std::panic::update_hook` is
+//! unstable), so the wrapper is installed in two steps: the installed hook is
+//! taken, then the wrapper set. A panic on another thread between the two is
+//! reported by Rust's default hook, and a hook that another thread sets
+//! between them is replaced. An embedder with its own hook should set it
+//! before the engine's first Parquet read. A hook set later replaces the
+//! wrapper and runs for every panic, contained ones included; when it calls
+//! the hook it replaced, only that call stays silent.
 #![deny(unsafe_code)]
 
 pub mod api;

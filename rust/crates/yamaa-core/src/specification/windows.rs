@@ -279,37 +279,10 @@ impl Declaration {
     ) -> Result<Option<crate::dataset::Expression>, BindError> {
         self.bind_available(catalog, None, None, edges, findings)
     }
-    /// A driver field the window reads is a scalar source of each row it
-    /// partitions or orders. Under grouped construction it must be a group key
-    /// (REQ-0067 for a row template, REQ-0107 at column level). A column-level
-    /// window spans every constructed row and reads the field by the position
-    /// of the record that built the row, in the input behind the first row
-    /// template. For a row grouped over another driver that position counts
-    /// the other driver's records, so the window keeps every grouped
-    /// template's `group_by` in scope there, not only those of the field's
-    /// own dataset. Returns whether any such read was refused.
-    pub(super) fn group_findings(
-        &self,
-        catalog: &Catalog,
-        driver: &str,
-        row: Option<&str>,
-        phase: crate::reference_scope::Phase<'_>,
-        findings: &mut Vec<BindFinding>,
-    ) -> Result<bool, BindError> {
-        use crate::reference_scope::{self, Finding, Phase, Reach, Scope};
-        // The column phase checks groups only for a read of the window's
-        // driver, so attributing every group to it keeps them all in scope.
-        let spanned;
-        let phase = match phase {
-            Phase::Column { groups } => {
-                spanned = groups
-                    .iter()
-                    .map(|&(_, group)| (driver, group))
-                    .collect::<Vec<_>>();
-                Phase::Column { groups: &spanned }
-            }
-            phase => phase,
-        };
+    /// Each variable the window names, with the path of the operand that
+    /// names it, in authored order: the operation's own operands, then every
+    /// `window.group_by` and `window.order_by` entry.
+    fn operands(&self) -> Vec<(&str, String)> {
         let mut reads = Vec::new();
         match &self.kind {
             Kind::RowValue { source, .. } | Kind::Locf { source, .. } => {
@@ -346,8 +319,70 @@ impl Declaration {
                 format!("{}.window.order_by[{index}]", self.path),
             ));
         }
+        reads
+    }
+    /// WINDOW-11: a column-level window spans the rows of every row template
+    /// and reads a qualified field at the record that built each row. When
+    /// the row templates do not all share one driver, a field of a dataset
+    /// whose records build some of those rows (`records`: each driver, and
+    /// the input each driver intermediate reads) names no record of the
+    /// other templates' rows. Each such read is refused at its operand,
+    /// `window.filter` names included, naming the distinct `drivers` in
+    /// construction order. Nothing here depends on a source schema.
+    fn driver_findings(
+        &self,
+        drivers: &[&str],
+        records: &[&str],
+        findings: &mut Vec<crate::diagnostic::Diagnostic>,
+    ) {
+        if drivers.len() < 2 {
+            return;
+        }
+        let filter_path = format!("{}.window.filter", self.path);
+        let filtered = self
+            .filter
+            .as_ref()
+            .and_then(|(_, compiled)| compiled.as_ref().ok())
+            .into_iter()
+            .flat_map(|plan| plan.identifiers())
+            .map(|name| (name, filter_path.clone()));
+        for (name, path) in self.operands().into_iter().chain(filtered) {
+            if !name
+                .split_once('.')
+                .is_some_and(|(qualifier, _)| records.contains(&qualifier))
+            {
+                continue;
+            }
+            let mut finding = LookupFinding::new(
+                &path,
+                crate::diagnostic::ConditionCode::WindowDriverReference,
+            );
+            finding.text("identifier", name);
+            finding.texts("drivers", drivers);
+            finding.text("operation", &self.operation);
+            findings.push(finding.diagnostic());
+        }
+    }
+    /// A driver field the window reads is a scalar source of each row it
+    /// partitions or orders. Under grouped construction it must be a group key
+    /// (REQ-0067 for a row template, REQ-0107 at column level). A column-level
+    /// window spans every constructed row, and preparation has already refused
+    /// its read of a driver that some row template does not share
+    /// (`column_driver_findings`, WINDOW-11). So every grouped template a
+    /// column-level read reaches here is over the read's own driver, as
+    /// NAME-4 checks for any column-level read. Returns whether any such read
+    /// was refused.
+    pub(super) fn group_findings(
+        &self,
+        catalog: &Catalog,
+        driver: &str,
+        row: Option<&str>,
+        phase: crate::reference_scope::Phase<'_>,
+        findings: &mut Vec<BindFinding>,
+    ) -> Result<bool, BindError> {
+        use crate::reference_scope::{self, Finding, Reach, Scope};
         let start = findings.len();
-        for (name, path) in reads {
+        for (name, path) in self.operands() {
             if !name.contains('.') {
                 continue;
             }
@@ -578,6 +613,27 @@ impl Declaration {
                 sources,
             })
         }))
+    }
+}
+
+/// WINDOW-11 for every window of one column-level derivation: the
+/// derivation itself or a `case` result, the only places a window nests
+/// (EXPR-3). `drivers` are the row templates' distinct drivers in
+/// construction order, and `records` each dataset whose records build rows.
+pub(super) fn column_driver_findings(
+    operation: &Operation,
+    drivers: &[&str],
+    records: &[&str],
+    findings: &mut Vec<crate::diagnostic::Diagnostic>,
+) {
+    match operation {
+        Operation::Window(window) => window.driver_findings(drivers, records, findings),
+        Operation::Case(branches) => {
+            for branch in branches {
+                column_driver_findings(&branch.operation, drivers, records, findings);
+            }
+        }
+        _ => (),
     }
 }
 

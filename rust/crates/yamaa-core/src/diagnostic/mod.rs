@@ -460,11 +460,16 @@ conditions! {
     ColumnForwardReference => ("validation", "forward_reference", Some("REQ-0071")),
     ColumnMissingKeyDerivation => ("validation", "key_dependency", Some("REQ-0074")),
     ColumnKeyDependency => ("validation", "key_dependency", Some("REQ-0074")),
+    ColumnKeyRecordRead => ("validation", "key_dependency", Some("COLUMN-7")),
     WindowZeroOffset => ("validation", "zero_offset", Some("REQ-0328")),
     WindowOrderRequired => ("validation", "window_order_by_required", Some("REQ-0340")),
     WindowOrderForbidden => ("validation", "window_order_by_forbidden", Some("REQ-0341")),
     WindowRepeatedGroup => ("validation", "invalid_field_type", Some("REQ-0293")),
     WindowBaselineInputType => ("validation", "incompatible_input_type", Some("REQ-0323")),
+    // A column-level window's read of a driver that some row template does
+    // not share names nothing that template's rows hold, as a range value
+    // reading such a driver does (LOOKUP-9).
+    WindowDriverReference => ("validation", "unknown_field", Some("WINDOW-11")),
     LookupSelectionReference => ("validation", "unknown_field", Some("REQ-0120")),
     LookupValueReference => ("validation", "unknown_field", Some("REQ-0125")),
     // One cause per lookup fault, whichever kind of lookup raises it

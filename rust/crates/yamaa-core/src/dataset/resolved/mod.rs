@@ -22,7 +22,8 @@
 //!
 //! 1. topological validity: every data edge reads a cell that an earlier step
 //!    of the reading cell's template completed;
-//! 2. the eagerly registered handler sites follow today's registration walk;
+//! 2. the handler table holds every handler site, donor sites included, in
+//!    the order of the executor's registration walk;
 //! 3. the schedule equals the structural mirror of the executor's loops.
 //!
 //! The current executor still runs every plan; nothing here changes an
@@ -375,19 +376,6 @@ pub enum Read {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct NodeSite {
     pub site: HandlerSiteId,
-    /// The registration walker that reaches this site, if any does.
-    pub walker: Option<Walker>,
-}
-
-/// Today's registration walkers, in the order `DatasetPlan::execute` runs them.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Walker {
-    Scalar,
-    Imputation,
-    StrCase,
-    StrExtract,
-    StrReplace,
-    StrTemplate,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -573,22 +561,12 @@ pub enum CheckFamily {
     ScopedRowCount,
 }
 
+/// One reported handler site. Every site is registered at zero before any
+/// row is read, in table order.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HandlerSite {
     pub path: Arc<str>,
     pub kind: HandlerKind,
-    pub registration: Registration,
-}
-
-/// How a site enters the attempt's handler report.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Registration {
-    /// Registered before any row, in table order; reported with zero counts.
-    Eager,
-    /// Registered when it first fires; reported in firing order.
-    OnFirstFire,
-    /// Counted inside a donor derivation and never reported.
-    Unreported,
 }
 
 /// One callback site, admitted against the function port before any table read.
@@ -671,7 +649,7 @@ pub enum ResolutionError {
         step: ReferenceStep,
         read: String,
     },
-    /// Check 2: the eager handler sites diverge from today's registration walk.
+    /// Check 2: the handler table diverges from the executor's registration walk.
     #[error("resolved handler sites diverge at position {position}: today {expected:?}, resolved {found:?}")]
     Handlers {
         position: usize,
@@ -760,7 +738,7 @@ impl ResolvedPlan {
     pub fn check(&self, id: CheckId) -> &CheckNode {
         &self.checks[id.index()]
     }
-    /// Registration order of the eager sites is the report order.
+    /// Every handler site, in report order.
     pub fn handlers(&self) -> &[HandlerSite] {
         &self.handlers
     }

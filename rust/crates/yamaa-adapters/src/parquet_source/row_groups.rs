@@ -17,8 +17,8 @@
 //! The decoder requires the row groups it reads from one footer to hold an
 //! ordinal each or none. Writers that number row groups with an `i16`
 //! ordinal reach its end after the same 32,768 row groups as the decoder:
-//! Polars writes no ordinal after them, so each slice still agrees. A
-//! repeated row-group list is presented whole, as before.
+//! Polars writes no ordinal after them, so each slice still agrees. Admission
+//! refuses a repeated row-group list (`wire`), so the footer holds one.
 use super::compact::{self, Cursor, Value};
 use super::reader::Error;
 use crate::storage_api::{contain_decode, FOOTER_ROW_GROUPS};
@@ -46,16 +46,15 @@ pub(super) fn decode(held: &[u8], row_groups: usize) -> Result<ParquetMetaData, 
 fn decode_in_slices(held: &[u8], row_groups: usize, size: usize) -> Result<ParquetMetaData, Error> {
     let native = compact::native_metadata(held)?;
     if row_groups > size {
-        if let Some(list) = locate(held, size)? {
-            return sliced(&native, &list, size);
-        }
+        return sliced(&native, &locate(held, size)?, size);
     }
     native_decode(&native, None)
 }
 
 /// Find the row-group list of the admitted footer `held` and the first row
-/// group of each slice of `size`; `None` when the footer repeats the list.
-fn locate(held: &[u8], size: usize) -> Result<Option<List>, Error> {
+/// group of each slice of `size`. A footer without exactly one list is
+/// malformed, and admission has already refused it.
+fn locate(held: &[u8], size: usize) -> Result<List, Error> {
     let mut cursor = Cursor::new(Value::Struct(held));
     let mut previous = 0;
     let mut list = None;
@@ -66,7 +65,7 @@ fn locate(held: &[u8], size: usize) -> Result<Option<List>, Error> {
             continue;
         }
         if list.is_some() {
-            return Ok(None);
+            return Err(Error::Malformed);
         }
         let start = cursor.position();
         let (kind, count) = cursor.collection()?;
@@ -86,7 +85,7 @@ fn locate(held: &[u8], size: usize) -> Result<Option<List>, Error> {
             bounds,
         });
     }
-    Ok(list)
+    list.ok_or(Error::Malformed)
 }
 
 /// Decode the presented footer `native` one slice of `list` at a time.
@@ -376,11 +375,16 @@ mod tests {
     }
 
     #[test]
-    fn a_repeated_row_group_list_is_presented_whole() {
-        let footer = footer(5, 0, 2);
-        assert_eq!(locate(&footer, 3).unwrap().map(|list| list.count), None);
-        let metadata = decode_in_slices(&footer, 5, 3).unwrap();
-        assert_eq!(metadata, whole(&footer).unwrap());
-        assert_eq!(metadata.num_row_groups(), 5);
+    fn a_footer_without_exactly_one_row_group_list_is_not_sliced() {
+        // Admission refuses both footers before they reach the slicing.
+        for lists in [0, 2] {
+            let footer = footer(5, 0, lists);
+            assert_eq!(locate(&footer, 3).unwrap_err(), Error::Malformed);
+            assert_eq!(
+                decode_in_slices(&footer, 5, 3).unwrap_err(),
+                Error::Malformed
+            );
+        }
+        assert_eq!(locate(&footer(5, 0, 1), 3).unwrap().count, 5);
     }
 }

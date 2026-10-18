@@ -470,7 +470,18 @@
     "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {KNUM: {literal: 7}}\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
     "issues": [],
     "result_type": "ExecutionSuccess",
-    "handlers": [],
+    "handlers": [
+      {
+        "spec_path": "columns.V.derivation.source.no_match",
+        "handler": "no_match",
+        "count": 0
+      },
+      {
+        "spec_path": "columns.V2.derivation.source.no_match",
+        "handler": "no_match",
+        "count": 0
+      }
+    ],
     "csv": "ID,N,V,V2\na,7,A,A\nb,259,A,A\nc,,A,A\n",
     "inputs": {
       "src.csv": "ID,N\na,7\nb,259\nc,\n",
@@ -503,7 +514,18 @@
     "specification": "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, N, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {literal: SRC.ABSENT}}\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
     "issues": [],
     "result_type": "ExecutionSuccess",
-    "handlers": [],
+    "handlers": [
+      {
+        "spec_path": "columns.V.derivation.source.no_match",
+        "handler": "no_match",
+        "count": 0
+      },
+      {
+        "spec_path": "columns.V2.derivation.source.no_match",
+        "handler": "no_match",
+        "count": 0
+      }
+    ],
     "csv": "ID,N,V,V2\na,7,TEXT,TEXT\nb,259,TEXT,TEXT\nc,,TEXT,TEXT\n",
     "inputs": {
       "src.csv": "ID,N\na,7\nb,259\nc,\n",
@@ -581,7 +603,18 @@
       "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",7,7,A\n\"     259\",259,259,B\n\"SRC.ABSENT\",9007199254740992,9007199254740992,TEXT\n"
     },
     "result_type": "ExecutionFailure",
-    "handlers": [],
+    "handlers": [
+      {
+        "spec_path": "columns.V.derivation.source.no_match",
+        "handler": "no_match",
+        "count": 0
+      },
+      {
+        "spec_path": "columns.V2.derivation.source.no_match",
+        "handler": "no_match",
+        "count": 0
+      }
+    ],
     "findings": [
       {
         "phase": "derivation",
@@ -654,7 +687,18 @@
       "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",7,7,A\n\"     259\",259,259,B\n\"SRC.ABSENT\",9007199254740992,9007199254740992,TEXT\n"
     },
     "result_type": "ExecutionFailure",
-    "handlers": [],
+    "handlers": [
+      {
+        "spec_path": "columns.V.derivation.source.no_match",
+        "handler": "no_match",
+        "count": 0
+      },
+      {
+        "spec_path": "columns.V2.derivation.source.no_match",
+        "handler": "no_match",
+        "count": 0
+      }
+    ],
     "findings": [
       {
         "phase": "validation",

@@ -30,6 +30,7 @@ pub use aggregate::{
 pub(crate) mod odm;
 pub use odm::{BoundOdm, OdmRead, OdmScope, OdmTemplateScope};
 mod intermediates;
+pub(crate) use intermediates::{read_handlers, ReadHandlers};
 pub use intermediates::{
     visit_output_dependencies, Intermediate, IntermediateDerivations, IntermediateUnique,
     RecordMatchKey, SourceSchemas,
@@ -981,20 +982,22 @@ fn key_expression(expression: &Expression) -> bool {
         | Expression::Imputation { operands, .. } => operands
             .iter()
             .all(|source| key_expression(&source.expression)),
+        // A key is computed from one base record (COLUMN-7): a formula, flag,
+        // case condition or project function reads that record, the keys
+        // completed before it, or a named intermediate's selection for it.
         Expression::Flag(flag) => flag.key_expression(),
-        Expression::Compute(expression) => expression
-            .bindings()
-            .iter()
-            .all(|binding| !matches!(binding.read, Read::Intermediate { .. })),
+        Expression::Compute(_) => true,
         Expression::Case(branches) => branches.iter().all(|branch| {
-            branch.when.as_ref().is_none_or(|when| {
-                when.collected().is_empty()
-                    && when
-                        .bindings()
-                        .iter()
-                        .all(|binding| !matches!(binding.read, Read::Intermediate { .. }))
-            }) && key_expression(&branch.assignment.expression)
+            branch
+                .when
+                .as_ref()
+                .is_none_or(|when| when.collected().is_empty())
+                && key_expression(&branch.assignment.expression)
         }),
+        Expression::ProjectFunction(function) => function
+            .arguments()
+            .iter()
+            .all(|argument| !matches!(argument.input, FunctionInput::Collect { .. })),
         _ => false,
     }
 }

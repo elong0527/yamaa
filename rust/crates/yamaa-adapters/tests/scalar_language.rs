@@ -1007,6 +1007,196 @@ rows:
             );
         }
 
+        /// The report's handler rows and the run's handler counts, as
+        /// `(path, count)` pairs in report order.
+        fn handler_rows(study: &Study, result: &file_application::Domain) -> Vec<String> {
+            let rows: Vec<String> = saved_report(study, "report.csv")
+                .lines()
+                .filter(|line| line.starts_with("out.csv,handler,"))
+                .map(String::from)
+                .collect();
+            let counts: Vec<String> = result.observations()["handler_counts"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|entry| {
+                    format!(
+                        "{},{}",
+                        entry["spec_path"].as_str().unwrap(),
+                        entry["count"].as_i64().unwrap()
+                    )
+                })
+                .collect();
+            let reported: Vec<String> = rows
+                .iter()
+                .map(|row| {
+                    let cells: Vec<&str> = row.split(',').collect();
+                    format!("{},{}", cells[2], cells[10])
+                })
+                .collect();
+            assert_eq!(reported, counts, "report rows and engine counts agree");
+            rows
+        }
+
+        #[test]
+        fn handler_rows_register_every_path_at_zero_in_one_order() {
+            let study = Study::new();
+            fs::write(
+                study.0.join("input/src.csv"),
+                "ID,NUM,CODE,ALT\n1,10,A,x\n2,y,,z\n3,30,B,\n",
+            )
+            .unwrap();
+            fs::write(
+                study.0.join("input/lkp.csv"),
+                "ID,SEQ,VAL,KEEP\n1,1,one,Y\n1,2,two,N\n2,1,uno,N\n",
+            )
+            .unwrap();
+            let mut result = study.build(
+                r#"schema_version: '1.0'
+domain: TEST
+base: SRC
+keys: [ID]
+input:
+  SRC: {path: input/src.csv, types: {ID: int}}
+  LKP: {path: input/lkp.csv, types: {ID: int, SEQ: int}}
+output: {path: out.csv, columns: [ID, N, LAST, UP, ANY, SELFV, MUSTV, BYC], report: report.csv}
+intermediates:
+  - id: PICK
+    dataset: LKP
+    key: [ID]
+    filter: "LKP.KEEP = 'Y'"
+    order_by: [LKP.SEQ]
+    keep: last
+  - id: SELFREF
+    dataset: SRC
+    key: [ID]
+    filter: "SRC.ID IS NOT NULL"
+  - id: MUST
+    dataset: SRC
+    key: [ID]
+    filter: "SRC.ID IS NOT NULL"
+    require_match: true
+  - id: BYCODE
+    dataset: LKP
+    key:
+      VAL: {mapping: {source: SRC.CODE, dict: {A: one, B: dos}}}
+    no_match: {literal: null}
+columns:
+  - {name: ID, type: int, derivation: SRC.ID}
+  - {name: N, type: int, derivation: {value: {source: SRC.NUM}, unconvertible: -1}}
+  - {name: LAST, type: str, derivation: PICK.VAL}
+  - {name: UP, type: str, derivation: {str_case: {source: PICK.VAL, to: upper}}}
+  - {name: ANY, type: str, derivation: {first_available: {sources: [PICK.VAL, SRC.ALT]}}}
+  - {name: SELFV, type: str, derivation: SELFREF.CODE}
+  - {name: MUSTV, type: str, derivation: MUST.ALT}
+  - {name: BYC, type: int, derivation: BYCODE.SEQ}
+"#,
+            );
+            assert!(result.issues().is_empty(), "{:?}", result.issues());
+            assert!(result.save().unwrap());
+            assert_eq!(
+                fs::read_to_string(study.0.join("out.csv")).unwrap(),
+                "ID,N,LAST,UP,ANY,SELFV,MUSTV,BYC\n\
+                 1,10,one,ONE,one,A,x,1\n\
+                 2,-1,,,z,,z,\n\
+                 3,30,,,,B,,\n"
+            );
+            // Every path is registered before any row: the conversion
+            // handler first, then each column derivation's paths in
+            // expression order, then the intermediate key expression. A
+            // read of PICK counts `multiple_matches` (its `keep` never chose
+            // among several) and `no_match`, declared or not; SELFREF's read
+            // never misses and MUST's read requires a match, so it has none.
+            // A read inside a `first_available` operand registers up front too.
+            assert_eq!(
+                handler_rows(&study, &result),
+                [
+                    "out.csv,handler,columns.N.derivation.unconvertible,unconvertible,,N,REQ-0013,,,,1,,,{}",
+                    "out.csv,handler,columns.LAST.derivation.source.multiple_matches,multiple_matches,,LAST,REQ-0127,,,,0,,,{}",
+                    "out.csv,handler,columns.LAST.derivation.source.no_match,no_match,,LAST,LOOKUP-24,,,,2,,,{}",
+                    "out.csv,handler,columns.UP.derivation.str_case.missing,missing,,UP,,,,,2,,,{}",
+                    "out.csv,handler,columns.UP.derivation.str_case.source.multiple_matches,multiple_matches,,UP,REQ-0127,,,,0,,,{}",
+                    "out.csv,handler,columns.UP.derivation.str_case.source.no_match,no_match,,UP,LOOKUP-24,,,,2,,,{}",
+                    "out.csv,handler,columns.ANY.derivation.first_available.missing,missing,,ANY,,,,,1,,,{}",
+                    "out.csv,handler,columns.ANY.derivation.first_available.sources[0].multiple_matches,multiple_matches,,ANY,REQ-0127,,,,0,,,{}",
+                    "out.csv,handler,columns.ANY.derivation.first_available.sources[0].no_match,no_match,,ANY,LOOKUP-24,,,,2,,,{}",
+                    "out.csv,handler,columns.SELFV.derivation.source.no_match,no_match,,SELFV,LOOKUP-24,,,,0,,,{}",
+                    "out.csv,handler,columns.BYC.derivation.source.no_match,no_match,,BYC,LOOKUP-24,,,,2,,,{}",
+                    "out.csv,handler,intermediates[3].key.VAL.mapping.missing,missing,,,,,,,1,,,{}",
+                ]
+            );
+        }
+
+        #[test]
+        fn intermediate_derivation_handlers_count_each_build_of_the_donor_records() {
+            let study = Study::new();
+            fs::write(study.0.join("input/src.csv"), "ID,REF\n1,5\n2,\n3,1\n").unwrap();
+            fs::write(
+                study.0.join("input/lab.csv"),
+                "ID,SEQ,DAY,FLAG\n1,1,2,H\n1,2,6,\n2,1,4,L\n",
+            )
+            .unwrap();
+            let mut result = study.build(
+                r#"schema_version: '1.0'
+domain: TEST
+base: SRC
+keys: [ID]
+input:
+  SRC: {path: input/src.csv, types: {ID: int, REF: int}}
+  LAB: {path: input/lab.csv, types: {ID: int, SEQ: int, DAY: int}}
+output: {path: out.csv, columns: [ID, CAT, NEAR], report: report.csv}
+intermediates:
+  - id: CODED
+    dataset: LAB
+    key: [ID]
+    derivations:
+      GRADE: {mapping: {source: FLAG, dict: {H: high, L: low}}}
+    order_by: [LAB.SEQ]
+    keep: first
+  - id: NEAREST
+    dataset: LAB
+    key: [ID]
+    derivations:
+      DIST: {compute: {expr: "ABS(DAY - SRC.REF)"}}
+      G2: CODED.GRADE
+    filter: "LAB.DIST IS NOT NULL"
+    order_by: [LAB.DIST]
+    keep: first
+    no_match: {literal: null}
+columns:
+  - {name: ID, type: int, derivation: SRC.ID}
+  - {name: CAT, type: str, derivation: CODED.GRADE}
+  - {name: NEAR, type: int, derivation: NEAREST.SEQ}
+"#,
+            );
+            assert!(result.issues().is_empty(), "{:?}", result.issues());
+            assert!(result.save().unwrap());
+            assert_eq!(
+                fs::read_to_string(study.0.join("out.csv")).unwrap(),
+                "ID,CAT,NEAR\n1,high,2\n2,low,\n3,,\n"
+            );
+            // The derivations' paths follow the dataset's, intermediate by
+            // intermediate, and count every build of the donor records. LAB
+            // record 2 has no FLAG. CODED is built once for CAT. NEAREST's
+            // DIST reads the current record, so NEAREST is built once for
+            // each of the three rows, and each build reads CODED for each LAB
+            // record, building CODED again: GRADE answers record 2 four
+            // times, and G2 chooses between subject 1's two records twice per
+            // build.
+            assert_eq!(
+                handler_rows(&study, &result),
+                [
+                    "out.csv,handler,columns.CAT.derivation.source.multiple_matches,multiple_matches,,CAT,REQ-0127,,,,1,,,{}",
+                    "out.csv,handler,columns.CAT.derivation.source.no_match,no_match,,CAT,LOOKUP-24,,,,1,,,{}",
+                    "out.csv,handler,columns.NEAR.derivation.source.multiple_matches,multiple_matches,,NEAR,REQ-0127,,,,1,,,{}",
+                    "out.csv,handler,columns.NEAR.derivation.source.no_match,no_match,,NEAR,LOOKUP-24,,,,2,,,{}",
+                    "out.csv,handler,intermediates[0].derivations.GRADE.mapping.missing,missing,,,,,,,4,,,{}",
+                    "out.csv,handler,intermediates[1].derivations.G2.source.multiple_matches,multiple_matches,,,REQ-0127,,,,6,,,{}",
+                    "out.csv,handler,intermediates[1].derivations.G2.source.no_match,no_match,,,LOOKUP-24,,,,0,,,{}",
+                ]
+            );
+        }
+
         #[test]
         fn a_grouped_row_count_names_every_offending_count_even_for_one_group() {
             let study = Study::new();

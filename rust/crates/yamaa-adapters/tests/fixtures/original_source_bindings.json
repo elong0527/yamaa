@@ -1838,6 +1838,11 @@
           "count": 1,
           "handler": "missing",
           "spec_path": "columns.V.derivation.first_available.missing"
+        },
+        {
+          "count": 0,
+          "handler": "no_match",
+          "spec_path": "columns.V.derivation.first_available.sources[1].no_match"
         }
       ],
       "nodes": [
@@ -1848,6 +1853,11 @@
               "count": 1,
               "handler": "missing",
               "spec_path": "columns.V.derivation.first_available.missing"
+            },
+            {
+              "count": 0,
+              "handler": "no_match",
+              "spec_path": "columns.V.derivation.first_available.sources[1].no_match"
             }
           ],
           "outcome": "success",

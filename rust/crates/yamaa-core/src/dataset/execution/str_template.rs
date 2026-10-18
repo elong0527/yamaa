@@ -1,43 +1,6 @@
 //! Ordered occurrence reads and complete output admission before materialization.
 use super::*;
 use crate::text_template::{Part, StringTemplate};
-pub(super) fn register(expression: &Expression, counter: &mut HandlerCounter) {
-    match expression {
-        Expression::StrTemplate {
-            operands,
-            operation,
-        } => {
-            if operation.missing().is_some() {
-                counter.register(
-                    &std::format!("{}.missing", operation.path()),
-                    HandlerKind::Missing,
-                );
-            }
-            for operand in operands {
-                register(&operand.expression, counter);
-            }
-        }
-        Expression::Case(branches) => {
-            for branch in branches {
-                register(&branch.assignment.expression, counter);
-            }
-        }
-        Expression::Extreme { operands, .. }
-        | Expression::Imputation { operands, .. }
-        | Expression::Temporal { operands, .. } => {
-            for operand in operands {
-                register(&operand.expression, counter);
-            }
-        }
-        Expression::StrCase { source, .. }
-        | Expression::StrPad { source, .. }
-        | Expression::StrExtract { source, .. }
-        | Expression::StrReplace { source, .. }
-        | Expression::MappingCut { source, .. }
-        | Expression::Round { source, .. } => register(&source.expression, counter),
-        _ => (),
-    }
-}
 #[allow(clippy::too_many_arguments)]
 pub(super) fn evaluate<T: TableAccess + ?Sized>(
     operands: &[Assignment],

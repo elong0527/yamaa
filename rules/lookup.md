@@ -797,7 +797,7 @@ record before matching, `filter`, `order_by` selection and `columns`
 projection, and behave there like stored fields.
 
 Fails: `unknown_field`, `duplicate_derivation`.
-Evidence: `schema-lookup-intermediate-derived-filter`, `schema-lookup-intermediate-correlated-derive`, `schema-window-intermediate-rank`, `negative-lookup-derivation-scope`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`.
+Evidence: `schema-lookup-intermediate-derived-filter`, `schema-lookup-intermediate-correlated-derive`, `schema-lookup-intermediate-closest-datetime`, `schema-window-intermediate-rank`, `negative-lookup-derivation-scope`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`.
 Replaces: REQ-1185.
 
 Each entry is either an untyped expression, including its
@@ -895,6 +895,22 @@ The `filter` drops every `SRC` record whose distance is missing. When the
 current input record's reference is missing, every distance is missing, no
 candidate survives, and the read takes `no_match` ([LOOKUP-24](#lookup-24)).
 
+`ABS(DAY - BASE.REF)` is the number of days between two days only on a
+numbering without a gap. A study day (`--DY`, `ADY`) has no day 0
+([TIME-6](temporal.md#time-6)), so when one study day falls before day 1 and
+the other on or after it, their difference is one more than the days between
+their dates: day -1 and day 1 are consecutive dates, yet the difference gives
+2, so a candidate on day -1 loses to one on day 2, which is no nearer a
+reference on day 1. Measure such a distance between dates instead, here the
+candidate's `ADT` and the reference's `BASE.REFDT`, with `diff`
+([TIME-4](temporal.md#time-4)):
+
+```yaml
+    derivations:
+      GAP: {diff: {type: date, start: ADT, end: BASE.REFDT, unit: day}}
+      DIST: {compute: {expr: "ABS(GAP)"}}
+```
+
 To fall back to a candidate instead, leave the filter out and place missing
 distances last. Without `nulls`, a missing distance sorts first under `asc`
 ([VALUE-22](values.md#value-22)), and a candidate without a distance is
@@ -910,6 +926,22 @@ A measured candidate is then selected ahead of every candidate without a
 distance. A selected record whose `DIST` is missing shows that no candidate had
 a distance and the tie-break chose it.
 
+`ABS` drops the direction, so a candidate before the reference and one after
+it at the same distance tie, and record order chooses between them
+([LOOKUP-10](#lookup-10)). Order next on the signed `GAP`, which is positive
+before the reference, and then on a sequence number:
+
+```yaml
+    order_by: [SRC.DIST, {variable: SRC.GAP, direction: desc}, SRC.SEQ]
+```
+
+`direction: desc` prefers the candidate before the reference, and `asc` the
+one after it ([VALUE-22](values.md#value-22)); `SEQ` decides between
+candidates that still tie, such as two records at the same time. For a
+baseline-type selection, which reads only records on or before the reference,
+filter on `SRC.GAP >= 0` rather than taking the nearest record on either
+side; a missing `GAP` never satisfies it ([LOOKUP-8](#lookup-8)).
+
 When the reference is a `datetime`, such as `BASE.REFDTM`, `impute` completes
 each candidate's collected text ([TIME-8](temporal.md#time-8)), `diff` takes
 the elapsed difference ([TIME-4](temporal.md#time-4)), and `ABS` makes it a
@@ -922,18 +954,37 @@ distance:
       DIST: {compute: {expr: "ABS(GAP)"}}
 ```
 
-`GAP`, and with it `DIST`, is missing when `ADTM` or the reference is missing.
-A candidate without a distance is dropped by the filter, or placed last by
+`diff` with `type: datetime` reads two `datetime` values
+([TIME-1](temporal.md#time-1)), so the reference must be one: a field its
+input declares `datetime`, which must hold complete text
+([VALUE-15](values.md#value-15)), or a value `impute` completed. A reference
+collected as text that may be partial or have no time, such as an SDTM
+`--DTC`, takes its own `impute` in the same derivations, and the difference
+reads the completed value:
+
+```yaml
+      REFDTM: {impute: {type: datetime, source: BASE.REFDTC, minimum_source_precision: day, time: first}}
+      GAP: {diff: {type: datetime, start: ADTM, end: REFDTM, unit: hour}}
+```
+
+`GAP`, and with it `DIST`, is missing when `ADTM` or the reference is missing,
+including a reference whose text is coarser than its minimum precision. A
+candidate without a distance is dropped by the filter, or placed last by
 `nulls: last` when the filter is left out. For each candidate's `DTC`:
 
 - A missing `DTC` gives a missing `ADTM` without any handler
   ([TIME-13](temporal.md#time-13)).
 - Partial collected text such as `2024-03` is valid
-  ([TIME-7](temporal.md#time-7)). Under `minimum_source_precision: day` it
-  gives a missing `ADTM`. A coarser minimum completes it from the rules that
-  minimum requires ([TIME-10](temporal.md#time-10)): with
-  `minimum_source_precision: month` and `day: first`, `2024-03` becomes
-  `2024-03-01T00:00:00`, and the distance is measured from that imputed value.
+  ([TIME-7](temporal.md#time-7)), so `invalid` never answers it. Under
+  `minimum_source_precision: day` it gives a missing `ADTM` and has no
+  distance ([TIME-8](temporal.md#time-8)). A coarser minimum completes it
+  from the rules that minimum requires ([TIME-10](temporal.md#time-10)):
+  with `minimum_source_precision: month` and `day: first`, `2024-03` becomes
+  `2024-03-01T00:00:00`, and the distance is measured from that imputed
+  value. To measure in days instead, complete a `date` with `impute` of
+  `type: date`, which takes no `time`, and take the day difference with
+  `diff` of `type: date`, as for study days above: `2024-03` then becomes
+  `2024-03-01`.
 - A complete date without a time, such as `2024-03-10`, takes its time from
   `time`: `2024-03-10T00:00:00` under `time: first`.
 - Text that is not collected date text, such as `2024-03-10 09:00`, fails as
@@ -941,6 +992,31 @@ A candidate without a distance is dropped by the filter, or placed last by
   One such record in `SRC` stops the run, even when no current input record
   matches its key, unless `invalid: {literal: null}` answers it with a missing
   `ADTM` ([COLUMN-10](columns.md#column-10)).
+
+`time: first` is not neutral for a distance. Against a 09:00 reference, a
+date-only candidate on the same day is imputed to 00:00, 9 hours away, and a
+14:00 candidate, 5 hours away, wins; `time: last` moves the date-only
+candidate to 23:59:59 instead. How a missing time, day or month is completed,
+for a candidate or the reference, comes from the statistical analysis plan.
+When the imputed datetime is published, publish its imputation flags beside
+it: derive `ATMF: {imputation_flag: {source: ADTM, part: time}}` after `ADTM`
+([TIME-18](temporal.md#time-18)), and a `part: date` flag as well when a
+coarser minimum supplies a day or month, and list them in `columns`. `ATMF`
+is `H` for a date-only candidate, and `seconds_collected: false` keeps a study
+that collects times to the minute from flagging every timed candidate `S`.
+
+To exclude the candidates collected without a time instead, read the
+precision of each candidate's text ([TIME-7](temporal.md#time-7)) and keep
+those collected to the minute or the second:
+
+```yaml
+    derivations:
+      PREC: {precision: {type: datetime, source: DTC}}
+      ADTM: {impute: {type: datetime, source: DTC, minimum_source_precision: day, time: first}}
+      GAP: {diff: {type: datetime, start: ADTM, end: BASE.REFDTM, unit: hour}}
+      DIST: {compute: {expr: "ABS(GAP)"}}
+    filter: "SRC.DIST IS NOT NULL AND SRC.PREC IN ('minute', 'second')"
+```
 
 <a id="lookup-16"></a>
 
