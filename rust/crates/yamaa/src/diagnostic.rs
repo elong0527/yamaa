@@ -401,7 +401,7 @@ mod tests {
     fn issues_table_keeps_every_field_and_absent_geometry() {
         use arrow_array::{Array, Int64Array, ListArray, StringArray};
         let mut located = issue();
-        located.requirement = Some("REQ-0001".into());
+        located.requirement = Some("probe-requirement".into());
         located.source_span = Some(yamaa_core::numeric_parser::SourceSpan { start: 3, end: 9 });
         located.operand_route = Some(vec!["left".into()]);
         let table = Report::from_issues(&[issue(), located]).table();
@@ -431,7 +431,7 @@ mod tests {
         assert_eq!(text(0).value(0), "input");
         assert_eq!(text(1).value(1), "conversion_probe");
         assert!(text(2).is_null(0));
-        assert_eq!(text(2).value(1), "REQ-0001");
+        assert_eq!(text(2).value(1), "probe-requirement");
         assert_eq!(text(4).value(0), CONTEXT);
         let list = |index: usize| {
             batch
