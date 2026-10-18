@@ -1,10 +1,10 @@
 name: Optional format features
 
-# Scheduled on main with CI rather than after every merge.
+# A release lane, not a development check: embedders' format feature subsets
+# are checked on each release branch push and on dispatch.
 on:
-  pull_request:
-  schedule:
-    - cron: '37 1-23/2 * * *'
+  push:
+    branches: ['release/**']
   workflow_dispatch:
 
 permissions:
@@ -12,7 +12,7 @@ permissions:
 
 concurrency:
   group: format-features-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: false
 
 defaults:
   run:
@@ -34,7 +34,7 @@ jobs:
       - name: Check fixtures, dependency edges and linked native symbols
         run: |
           failed=()
-          for selection in none yaml parquet readstat all; do
+          for selection in none yaml parquet readstat yaml-parquet all; do
             echo "::group::$selection"
             python -m tools.ci.format_features "$selection" || failed+=("$selection")
             echo "::endgroup::"
