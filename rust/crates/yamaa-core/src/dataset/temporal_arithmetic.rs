@@ -1,5 +1,5 @@
 //! Typed civil arithmetic and duration conversion share the existing temporal binder.
-use super::temporal::{ordinal, ElapsedUnit, Temporal, TemporalKind};
+use super::temporal::{ordinal, ElapsedUnit, Temporal, TemporalKind, DATE_PARTS};
 use crate::json::Value as JsonValue;
 use crate::{
     diagnostic::{ConditionCode as C, Diagnostic},
@@ -24,7 +24,10 @@ impl Temporal {
         self
     }
     pub fn with_invalid(mut self, value: Value) -> Result<Self, super::InvalidTemporal> {
-        if !matches!(self.kind, TemporalKind::DurationValue { .. }) {
+        if !matches!(
+            self.kind,
+            TemporalKind::DurationValue { .. } | TemporalKind::DateText { .. }
+        ) {
             return Err(super::InvalidTemporal::Shape);
         }
         self.invalid = Some(value);
@@ -47,6 +50,8 @@ impl Temporal {
                 "datetime"
             }
             (TemporalKind::DurationValue { .. }, _) => "str",
+            (TemporalKind::DateText { .. }, _) => "str or int",
+            (TemporalKind::TimeOfDay, _) => "datetime",
             _ => "date",
         }
     }
@@ -56,6 +61,7 @@ impl Temporal {
             "datetime" => kind == ColumnType::DateTime,
             "int" => kind == ColumnType::Int,
             "str" => kind == ColumnType::Str,
+            "str or int" => matches!(kind, ColumnType::Str | ColumnType::Int),
             _ => matches!(kind, ColumnType::Int | ColumnType::Float),
         }
     }
@@ -65,6 +71,8 @@ impl Temporal {
             TemporalKind::DateTimeDifference { .. } => C::DatetimeDifferenceInput,
             TemporalKind::DateTimeShift { .. } => C::DatetimeShiftInput,
             TemporalKind::DurationValue { .. } => C::DurationValueInput,
+            TemporalKind::DateText { .. } => C::DateTextInput,
+            TemporalKind::TimeOfDay => C::TimeOfDayInput,
             _ => C::TemporalOperand,
         };
         Diagnostic {
@@ -116,6 +124,10 @@ impl Temporal {
         for (index, value) in values.iter().enumerate() {
             self.validate_operand(index, value)
                 .expect("admitted operand index")?;
+        }
+        // A missing part ends collected date text rather than the result.
+        if let TemporalKind::DateText { .. } = self.kind {
+            return self.date_text(values);
         }
         if values.iter().any(|value| matches!(value, Value::Missing)) {
             return Ok(TemporalStep::Value(Value::Missing));
@@ -172,6 +184,13 @@ impl Temporal {
                     None => return Err(self.failure(C::DurationInvalid)),
                 }
             }
+            TemporalKind::TimeOfDay => {
+                let Value::DateTime(moment) = values[0] else {
+                    unreachable!()
+                };
+                let (_, _, _, hour, minute, second) = moment.fields();
+                Value::Int(i64::from(hour) * 3600 + i64::from(minute) * 60 + i64::from(second))
+            }
             _ => {
                 let dates: Vec<_> = values
                     .iter()
@@ -184,6 +203,76 @@ impl Temporal {
             }
         };
         Ok(TemporalStep::Value(result))
+    }
+}
+
+impl Temporal {
+    /// Assemble collected date text from the declared parts in order, stopping
+    /// before the first missing part; a missing year gives missing. A `str`
+    /// part is its field's digits at the field's width and an `int` part is
+    /// written zero-padded, each within the field's range, and a day within
+    /// its month. Parts after the first missing one are never read.
+    fn date_text(&self, values: &[Value]) -> Result<TemporalStep, Diagnostic> {
+        // (separator, width, lowest, highest) for each part of DATE_PARTS.
+        const FIELDS: [(&str, usize, i64, i64); 6] = [
+            ("", 4, 1, 9999),
+            ("-", 2, 1, 12),
+            ("-", 2, 1, 31),
+            ("T", 2, 0, 23),
+            (":", 2, 0, 59),
+            (":", 2, 0, 59),
+        ];
+        let mut text = String::new();
+        let mut read = [0i64; 2];
+        for (index, value) in values.iter().enumerate() {
+            let (separator, width, lowest, highest) = FIELDS[index];
+            let number = match value {
+                Value::Missing => break,
+                Value::Str(digits) => (digits.len() == width
+                    && digits.bytes().all(|byte| byte.is_ascii_digit()))
+                .then(|| digits.parse::<i64>().expect("ASCII digits")),
+                Value::Int(number) => Some(*number),
+                _ => unreachable!("admitted date part"),
+            };
+            let highest = if index == 2 {
+                crate::temporal::month_length(read[0] as u16, read[1] as u8)
+                    .map_or(highest, i64::from)
+            } else {
+                highest
+            };
+            let Some(number) = number.filter(|number| (lowest..=highest).contains(number)) else {
+                if self.invalid.is_some() {
+                    return Ok(TemporalStep::Invalid);
+                }
+                return Err(Diagnostic {
+                    code: C::DateTextInvalid,
+                    spec_paths: vec![self.path.clone()],
+                    context: [
+                        ("operation".into(), JsonValue::String("dtc".into())),
+                        ("part".into(), JsonValue::String(DATE_PARTS[index].into())),
+                        (
+                            "source".into(),
+                            JsonValue::String(self.sources[index].clone()),
+                        ),
+                        ("value".into(), JsonValue::from(value.clone())),
+                    ]
+                    .into_iter()
+                    .collect(),
+                    source_span: None,
+                    operand_route: None,
+                });
+            };
+            if index < 2 {
+                read[index] = number;
+            }
+            text.push_str(separator);
+            text.push_str(&format!("{number:0width$}"));
+        }
+        Ok(TemporalStep::Value(if text.is_empty() {
+            Value::Missing
+        } else {
+            Value::Str(text)
+        }))
     }
 }
 

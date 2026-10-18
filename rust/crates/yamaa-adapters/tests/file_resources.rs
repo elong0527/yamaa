@@ -1093,6 +1093,30 @@ mod file {
                     .exists());
             }
         }
+        /// SUB-27: a document composing an `sdtm` dataset refuses a
+        /// `datetime` column it carries, as the domain build does.
+        #[test]
+        fn an_sdtm_document_refuses_a_datetime_output_column() {
+            let temp = Temp::fixture("sdtm-vs-epoch-from-subject-elements", false);
+            let spec = fs::read_to_string(temp.0.join("spec.yaml")).unwrap();
+            let spec = spec
+                .replace("VSDTC, EPOCH]", "VSDTC, VSDTM, EPOCH]")
+                .replace(
+                    "        invalid: {literal: null}\n",
+                    "        invalid: {literal: null}\n    submission:\n      core: Perm\n      role: Timing\n      origin:\n        type: Derived\n        source: Sponsor\n      method: VSDTC completed to the start of its day.\n",
+                );
+            fs::write(temp.0.join("spec.yaml"), spec).unwrap();
+            let mut run = temp.run("2026-09-30T00:00:00");
+            let refusal = run
+                .issues()
+                .iter()
+                .find(|issue| issue.requirement.as_deref() == Some("SUB-27"))
+                .unwrap_or_else(|| panic!("{:?}", run.issues()));
+            assert_eq!(refusal.condition, "value_not_permitted");
+            assert_eq!(refusal.spec_paths, ["sdtm.specs[0].columns.VSDTM.type"]);
+            assert!(run.save().is_err());
+            assert!(!temp.0.join("define.xml").exists());
+        }
         #[test]
         fn semantic_failure_and_target_admission_have_zero_writes() {
             let temp = Temp::fixture("sdtm-dm-metadata", true);

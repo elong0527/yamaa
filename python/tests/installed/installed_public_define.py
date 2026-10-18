@@ -512,7 +512,7 @@ class PublicDefine(unittest.TestCase):
                         xml.xpath(
                             "//o:ItemDef[@Name='VSDTC']/@DataType", namespaces=NS
                         ),
-                        ["datetime"],
+                        ["partialDatetime"],
                     )
 
     def test_missing_artifact_only_when_requested_and_semantic_failure_zero_writes(

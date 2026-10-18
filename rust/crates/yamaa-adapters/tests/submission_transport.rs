@@ -313,6 +313,60 @@ mod transport {
         }
     }
 
+    /// XPT-9 and TIME-20: an analysis time is a numeric variable carrying its
+    /// declared `TIME8.` in its NAMESTR, and reads back as its seconds.
+    #[test]
+    fn an_analysis_time_is_a_numeric_variable_with_its_time_format() {
+        use yamaa_core::{
+            specification::{SourceDeclaration, SourceProfile},
+            table::{TableAccess, ValueRef},
+            value::ColumnType as T,
+        };
+        let case = benchmarks().join("adam-adae-analysis-time");
+        let temp = stage(&case);
+        let environment = temp.0.join("environment.yaml");
+        let text = fs::read_to_string(&environment)
+            .unwrap()
+            .replace("transport: dataset_json", "transport: xpt");
+        fs::write(&environment, text).unwrap();
+        let mut result = run(&case, &temp);
+        assert!(result.issues().is_empty(), "{:?}", result.issues());
+        assert!(result.save().unwrap());
+        let bytes = fs::read(temp.0.join("adae.xpt")).unwrap();
+        // The seventh NAMESTR, after the 640 header bytes (XPT-2, XPT-4).
+        let namestr = &bytes[640 + 140 * 6..640 + 140 * 7];
+        assert_eq!(&namestr[0..2], &[0, 1], "numeric");
+        assert_eq!(&namestr[4..6], &[0, 8], "eight bytes");
+        assert_eq!(&namestr[8..16], b"ASTTM   ");
+        assert_eq!(&namestr[56..64], b"TIME    ");
+        assert_eq!(&namestr[64..66], &[0, 8], "format width");
+        assert_eq!(&namestr[66..68], &[0, 0], "format decimals");
+        let source = SourceDeclaration {
+            name: "SRC".into(),
+            path: "adae.xpt".into(),
+            profile: SourceProfile::Xport,
+            types: [("AESEQ", T::Int), ("ASTTM", T::Int)]
+                .iter()
+                .map(|(column, kind)| ((*column).into(), *kind))
+                .collect(),
+            encoding: Some("ascii".into()),
+            empty_string_present: false,
+            ordinal: None,
+        };
+        let table = yamaa_adapters::sas_source::parse(&bytes, &source).unwrap();
+        let times: Vec<_> = (0..table.row_count())
+            .map(|row| match table.cell(row, 6).unwrap() {
+                ValueRef::Int(value) => Some(value),
+                ValueRef::Missing => None,
+                other => panic!("{other:?}"),
+            })
+            .collect();
+        assert_eq!(
+            times,
+            [Some(30615), Some(50700), Some(0), None, Some(75600)]
+        );
+    }
+
     /// JSON-9 and JSON-10: under `adam` a date or datetime keeps its ISO value
     /// in Dataset-JSON and asks for the integer the document submits.
     #[test]

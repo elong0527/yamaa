@@ -143,8 +143,9 @@ defaults from the declared column type and, for a `date` or `datetime`, from
 the family ([SUB-25](#sub-25)); each declared type admits the closed set the
 table below fixes. `data_type` never changes a value: it states how a value
 [Values](../values.md) already typed appears in the document, and no
-derivation, verification, key, order term or artifact byte can observe it. A
-`data_type` outside the admitted set fails validation.
+derivation, key, order term or artifact byte can observe it; only the check of
+a date or time type's form ([SUB-26](#sub-26)) reads it. A `data_type` outside
+the admitted set fails validation.
 
 Fails: `submission_data_type_not_admitted`.
 Evidence: `sdtm-vs-epoch-from-subject-elements`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionDataType`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::submission_fields_do_not_change_any_original_domain_artifact`.
@@ -164,7 +165,9 @@ Replaces: REQ-0868, REQ-0869, REQ-0870, REQ-0914, REQ-1145.
 
 A `str` column admits temporal submission types: a submission carries a
 partial or incomplete date as text, and [Values](../values.md)
-does not admit partial or incomplete dates as `date` or `datetime`. The two
+does not admit partial or incomplete dates as `date` or `datetime`. Each of
+those types names an ISO 8601 form, which [SUB-26](#sub-26) checks the
+column's values against. The two
 temporal column types admit only their matching submission type:
 [Values](../values.md) defines each temporal type as a
 complete value, and the submission types of the same name mean the same thing.
@@ -226,6 +229,57 @@ validation with `declared_length_conflict`, reporting the column and both
 bounds. A `str` column with neither declaration, where [SUB-7](#sub-7) requires
 a length, fails as [SUB-7](#sub-7) states.
 
+<a id="sub-26"></a>
+
+### SUB-26. A `str` column's date or time data type is an ISO 8601 form its completed values must have
+
+A `str` column whose `data_type` is a date or time type, `date`, `datetime`,
+`time` or a partial, incomplete, duration or interval type, has each present
+completed value checked against that type's ISO 8601 form, which the table
+below fixes. The check runs where [Verification](../verification.md) runs a
+column verification, after the column's length and before its terminology,
+and a value of another form fails as a column verification fails. A
+value-level `data_type` decides the rows of its test code.
+
+Fails: `data_type_failed`.
+Evidence: `sdtm-vs-epoch-from-subject-elements`, `negative-data-type-form`, `rust/crates/yamaa-core/tests/fixtures/submission_data_types.tsv`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::date_and_time_data_types_check_each_completed_value_against_their_form`.
+
+| `data_type` | Form | Examples |
+|---|---|---|
+| `date` | `YYYY-MM-DD` | `2025-03-04` |
+| `time` | `hh:mm:ss`, then an optional fraction and an optional zone | `08:30:15`, `08:30:15.5Z` |
+| `datetime` | a `date`, `T` and a `time` | `2025-03-04T08:30:15` |
+| `partialDate` | `YYYY`, then optionally `-MM` and then `-DD` | `2025`, `2025-03` |
+| `partialTime` | `hh`, then optionally `:mm` and then `:ss`, a fraction only after the second, and an optional zone | `08`, `08:30` |
+| `partialDatetime` | a `partialDate`, then after a complete date optionally `T` and a `partialTime` | `2025-03`, `2025-03-04T08:30` |
+| `incompleteDate` | a `partialDate` whose fields may each be `-`, at least one known | `2025---04`, `--03-04` |
+| `incompleteTime` | a `partialTime` whose fields may each be `-`, at least one known | `-:30`, `08:-:15` |
+| `incompleteDatetime` | a `partialDatetime` whose fields may each be `-`, at least one known | `2025-03-04T-:30`, `-----T08:30` |
+| `durationDatetime` | an ISO 8601 duration ([TIME-13](../temporal.md#time-13)) | `P3D`, `-PT15M` |
+| `intervalDatetime` | an ISO 8601 interval ([TIME-13](../temporal.md#time-13)) | `2025-01-01/2025-01-10`, `2025-01-01/P10D` |
+
+Every field has the width and range of [VALUE-15](../values.md#value-15), and
+a known day lies within its month, from `01` to `31` when the month is unknown
+and to `29` in a February of an unknown year. A fraction is `.` followed by
+one or more digits and follows only a second; a zone is `Z` or a signed
+`hh:mm` offset and follows only a time. The forms are the ISO 8601 forms the
+Define-XML data types name, so `datetime` is complete through the second, as
+[Values](../values.md) defines the column type of the same name, and text
+collected to the minute is a `partialDatetime`. A partial or incomplete form
+may stop after any field. `text` and `URI` have no form to check.
+
+The verification log records the check as a `data_type` check at
+`columns.<column>.submission.data_type`, or at
+`rows.<row>.submission.<column>.data_type` for a value-level entry, and its
+failure reports `data_type_failed` with the column, the declared data type,
+the failure count and the offending keys, at `error` severity, as the check of
+a declared length is. A value-level entry whose data type differs from its column's
+decides the rows whose completed `<DOMAIN>TESTCD` is its test code, as
+[SUB-11](#sub-11) decides `mandatory`, and the column's data type decides every
+other row. A missing value is not checked; [SUB-11](#sub-11) decides whether
+one is allowed. The check reads values and changes none, so
+[SUB-6](#sub-6)'s `data_type` still changes no value.
+
 <a id="sub-9"></a>
 
 ### SUB-9. `display_format` and `role` describe a column for a reader and never change a value
@@ -242,7 +296,10 @@ Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/s
 Replaces: REQ-0877, REQ-0878, REQ-0879.
 
 A numeric column's `display_format` is also its SAS format in a transport file
-([XPT-9](xpt.md#xpt-9)), and an `adam` date's is fixed ([SUB-25](#sub-25)). A
+([XPT-9](xpt.md#xpt-9)), and an `adam` date's is fixed ([SUB-25](#sub-25)). An
+`int` column holding seconds since midnight, such as an ADaM `*TM` time from
+`time_of_day` ([TIME-20](../temporal.md#time-20)), declares a `TIMEw.` format
+such as `TIME8.` like any other numeric display format. A
 study that wants different artifact digits declares `output.decimals`, which
 the [CSV profile](../reference/csv.md) owns. The two settings are independent,
 and this profile does not reconcile them: one is a display a document reports
@@ -565,7 +622,7 @@ Replaces: REQ-0896, REQ-0897, REQ-0898, REQ-0899, REQ-0900, REQ-0922.
 |---|---|---|
 | a bare read: a `source`, an `odm` read or an `ONLY` pivot, directly or through a plain lookup | every type | none |
 | a bare `literal` | `Assigned`, `Protocol`, `Collected`, `Other`, `Not Available` | `Derived`, `Predecessor` |
-| a recode: `mapping`, `case`, `first_available`, `str_case`, `str_pad`, `str_replace`, `str_extract`, `str_template` or `to_date`, reading only as the paragraphs below state | `Collected`, `Derived`, `Assigned`, `Other`, `Not Available` | `Protocol`, `Predecessor` |
+| a recode: `mapping`, `case`, `first_available`, `str_case`, `str_pad`, `str_replace`, `str_extract`, `str_template`, `to_date` or `dtc`, reading only as the paragraphs below state | `Collected`, `Derived`, `Assigned`, `Other`, `Not Available` | `Protocol`, `Predecessor` |
 | anything else | `Derived`, `Assigned`, `Other`, `Not Available` | `Collected`, `Protocol`, `Predecessor` |
 
 An `ONLY` pivot is an `aggregate` whose `expr` is exactly `ONLY(<variable>)`,
@@ -602,7 +659,7 @@ The graph cannot tell an investigator-recorded value from a vendor-transmitted
 or protocol-fixed value, and it refutes only what the derivation proves. An
 SDTM recode of collected terminology (`SEX` from `Male` to `M` through
 `mapping`), a case normalization (`str_case`) and an ISO 8601 assembly of
-collected date parts (`str_template` or `to_date`) admit `Collected`. A value
+collected date parts (`dtc`, `str_template` or `to_date`) admit `Collected`. A value
 printed on the case report form, such as a unit or a test name, is written as
 a bare `literal` and admits `Collected`; a bare `literal` reads no input, so it
 refutes `Derived`. A vendor- or EDC-computed value read as stored, such as an
@@ -735,7 +792,10 @@ Checked when the specification is validated on its own:
 
 - the vocabularies;
 - the required and prohibited field combinations;
-- the length binding of [SUB-8](#sub-8);
+- the length binding of [SUB-8](#sub-8) and the date and time forms of
+  [SUB-26](#sub-26);
+- the refusal of a `datetime` column under a tabulation class
+  ([SUB-27](#sub-27));
 - the graph refutations of [SUB-19](#sub-19), the form of a `Predecessor`
   description ([SUB-16](#sub-16)) and the copy it claims
   ([SUB-20](#sub-20));
@@ -783,8 +843,8 @@ wide; the declared `length` stays the bound [SUB-8](#sub-8) enforces.
 
 Evidence: `sdtm-dm-metadata`, `sdtm-dm-xpt`, `adam-adsl-xpt`, `rust/crates/yamaa-adapters/tests/submission_transport.rs::shared_column_lengths_span_datasets_and_supplemental_datasets_stand_alone`.
 
-A character column is a `str` column, and a `date` or `datetime` outside `adam`,
-which travels as its canonical text ([XPT-6](xpt.md#xpt-6)); only a `text`
+A character column is a `str` column, and a `date` outside `adam`, which
+travels as its canonical text ([XPT-6](xpt.md#xpt-6)); only a `text`
 column or value-level definition carries a `Length`. A SUPP-- dataset is one
 whose name begins with `SUPP`: its lengths come from its own values alone and
 do not lengthen another dataset's column. A dataset declared to have no data
@@ -802,7 +862,8 @@ since 1960-01-01T00:00:00 with `DATETIME20.`. The document describes each as
 `DataType` `integer`, `Length` 8 and that `def:DisplayFormat`. A declared
 `data_type` other than `integer`, or a declared `display_format` other than that
 format, fails when a document composes the specification. Under `sdtm` and
-`send` a `date` or `datetime` keeps its own type and canonical text.
+`send` a `date` keeps its own type and canonical text, and
+[SUB-27](#sub-27) refuses a `datetime`.
 
 Fails: `submission_data_type_not_admitted`, `value_not_permitted`.
 Evidence: `adam-adsl-xpt`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionDisplayFormatConflict`.
@@ -813,3 +874,31 @@ writes the number ([XPT-6](xpt.md#xpt-6)). A conflicting `display_format` fails
 with `value_not_permitted` at the column's `display_format`; a conflicting
 `data_type` fails as [SUB-6](#sub-6) states. No `length` is declared on such a
 column ([SUB-7](#sub-7)).
+
+<a id="sub-27"></a>
+
+### SUB-27. An `sdtm` or `send` dataset carries its dates and times as text, never in a `datetime` column
+
+A dataset whose `submission.class` is a tabulation class of
+[SUB-10](#sub-10), so of the `sdtm` or `send` family, must not carry a
+`datetime` column in `output.columns`: such a column writes the seconds that
+the canonical text of [VALUE-17](../values.md#value-17) always shows, collected
+or not. Its dates and times are `str` columns with a date or time `data_type`
+([SUB-26](#sub-26)). A `datetime` output column fails validation at its
+`type`; an internal one is not refused.
+
+Fails: `value_not_permitted`.
+Evidence: `negative-sdtm-datetime-column`, `sdtm-vs-epoch-from-subject-elements`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::tabulation_datasets_refuse_a_datetime_output_column`, `rust/crates/yamaa-adapters/tests/file_resources.rs::an_sdtm_document_refuses_a_datetime_output_column`.
+
+The family is read from the dataset's class, as the resolution of `mandatory`
+reads it, so the refusal needs no study document; a dataset that declares no
+class is not checked, and a document composing an `sdtm` or `send` dataset
+refuses such a column the same way. The failure reports `value_not_permitted`
+at `columns.<column>.type` with the column, the value `datetime`, the class and
+the permitted column types `str` and `date`, or at
+`<family>.specs[<n>].columns.<column>.type` when a document composes the
+dataset. A `date` column is admitted: its
+canonical text carries the day alone. An internal `datetime`, such as the
+moment an element lookup compares, never reaches the artifact. Text collected
+to the minute stays `2025-03-04T08:30` in a `str` column, where a `datetime`
+column would write `2025-03-04T08:30:00`.
