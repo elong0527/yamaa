@@ -71,6 +71,7 @@ SAS = (
     *SOURCE_DECODE,
     "rust/crates/yamaa-adapters/build.rs",
     "rust/crates/yamaa-adapters/src/arrow_temporal.rs",
+    "rust/crates/yamaa-adapters/src/ipc_table.rs",
     "rust/crates/yamaa-adapters/src/sas_source.rs",
     "rust/crates/yamaa-adapters/src/sas_source/",
     "rust/crates/yamaa-adapters/vendor/readstat/",

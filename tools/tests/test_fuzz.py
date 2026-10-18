@@ -68,6 +68,11 @@ class FuzzTargets(unittest.TestCase):
                 ["sas7bdat", "xport"],
             ),
             (["rust/crates/yamaa-core/src/typed_csv.rs"], ["csv", "dataset_json"]),
+            # The SAS reader builds its table through the shared batch writer.
+            (
+                ["rust/crates/yamaa-adapters/src/ipc_table.rs"],
+                ["csv", "dataset_json", "sas7bdat", "xport"],
+            ),
             (["rust/crates/yamaa-adapters/src/parquet_source/reader.rs"], ["parquet"]),
             (["rust/vendor/saphyr-parser/src/lib.rs"], ["specification"]),
             (["rust/fuzz/fuzz_targets/csv.rs"], ["csv"]),
