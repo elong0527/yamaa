@@ -22,8 +22,7 @@ HELP = """yamaa repository commands (run from the repository root)
   docs              Generate dashboards and build the strict site.
 
 Run setup first. Native installation qualification is a separate full matrix in
-.github/workflows/native.yml, nightly on main, on dispatch or
-qualification/issue-* pushes.
+.github/workflows/native.yml, on dispatch or qualification/issue-* pushes.
 The tools package is installed editable so python -m tools.<module> also works
 from a separate working directory. See CONTRIBUTING.md and docs/release.md.
 """

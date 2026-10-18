@@ -1,0 +1,40 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM:
+    path: input/dm.csv
+  EX:
+    path: input/ex.csv
+    types: {EXSEQ: int, EXSTDTC: date}
+  AE:
+    path: input/ae.csv
+    types: {AESEQ: int, AESTDTC: date}
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, TEAENUM]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  # The subject's adverse events that start on or after the dose date.
+  # EX.EXSTDTC names an exposure record, and a subject row is built from a
+  # demographics record, so the specification is rejected before any data
+  # is read.
+  - name: TEAENUM
+    type: int
+    label: Number of Treatment-Emergent Adverse Events
+    derivation:
+      aggregate:
+        between: {value: EX.EXSTDTC, upper: AESTDTC}
+        expr: "COUNT(AE.AESEQ)"
