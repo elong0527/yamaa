@@ -1209,6 +1209,63 @@ columns:
         }
 
         #[test]
+        fn a_read_that_feeds_another_lookup_or_a_predicate_counts_nothing() {
+            let value = "  - {name: V, type: str, derivation: P.VAL}\n";
+            let flag = "  - {name: F, type: str, derivation: {flag: {condition: \"P.VAL IS NOT NULL\", false_value: N, missing: N}}}\n";
+            let v_row = "out.csv,handler,columns.V.derivation.source.no_match,no_match,,V,LOOKUP-24,,,,2,,,{}";
+            let f_row = "out.csv,handler,columns.F.derivation.flag.missing,missing,,F,,,,,0,,,{}";
+            // Either column may read P first: the flag before the value, or
+            // the value before the flag.
+            for (first, second, rows) in
+                [(value, flag, [v_row, f_row]), (flag, value, [f_row, v_row])]
+            {
+                let study = Study::new();
+                fs::write(study.0.join("input/src.csv"), "ID\n1\n2\n3\n").unwrap();
+                fs::write(study.0.join("input/base.csv"), "ID,REF\n1,5\n3,20\n").unwrap();
+                fs::write(
+                    study.0.join("input/rng.csv"),
+                    "ID,LO,HI,VAL\n1,1,10,a\n3,1,10,c\n",
+                )
+                .unwrap();
+                let mut result = study.build(&format!(
+                    "schema_version: '1.0'\n\
+                     domain: TEST\n\
+                     base: SRC\n\
+                     keys: [ID]\n\
+                     input:\n\
+                     \x20 SRC: {{path: input/src.csv, types: {{ID: int}}}}\n\
+                     \x20 BASE: {{path: input/base.csv, types: {{ID: int, REF: int}}}}\n\
+                     \x20 RNG: {{path: input/rng.csv, types: {{ID: int, LO: int, HI: int}}}}\n\
+                     output: {{path: out.csv, columns: [ID, V, F], report: report.csv}}\n\
+                     intermediates:\n\
+                     \x20 - id: Q\n\
+                     \x20   dataset: BASE\n\
+                     \x20   key: [ID]\n\
+                     \x20   filter: \"BASE.REF IS NOT NULL\"\n\
+                     \x20 - id: P\n\
+                     \x20   dataset: RNG\n\
+                     \x20   key: [ID]\n\
+                     \x20   between: {{value: Q.REF, lower: LO, upper: HI}}\n\
+                     columns:\n\
+                     \x20 - {{name: ID, type: int, derivation: SRC.ID}}\n\
+                     {first}{second}"
+                ));
+                assert!(result.issues().is_empty(), "{:?}", result.issues());
+                assert!(result.save().unwrap());
+                assert_eq!(
+                    fs::read_to_string(study.0.join("out.csv")).unwrap(),
+                    "ID,V,F\n1,a,Y\n2,,N\n3,,N\n"
+                );
+                // Q supplies P's `between` value, so its miss for subject 2
+                // is answered uncounted, as in a predicate. P counts its own
+                // answer for subject 2, whose range value is missing, and for
+                // subject 3, whose 20 is out of range. The flag reads P in its
+                // condition and counts nothing, at any path.
+                assert_eq!(handler_rows(&study, &result), rows);
+            }
+        }
+
+        #[test]
         fn a_grouped_row_count_names_every_offending_count_even_for_one_group() {
             let study = Study::new();
             fs::write(study.0.join("input/input.csv"), "ID,ARM\n1,A\n2,A\n3,B\n").unwrap();
