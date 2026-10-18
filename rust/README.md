@@ -380,7 +380,7 @@ pub enum SaveOutcome { Saved, NothingToSave }  // #[non_exhaustive]
 | `ResolvedSpecification` | Owned, immutable | Yes | Yes | No source access after construction. |
 | `MemoryResolver` | Owned, interior-mutable | Yes | Yes | Mirrors today's `host_resources::MemoryResolver`. |
 | `CancellationToken` | Owned, cheap to clone | Yes | Yes | All clones share one flag. |
-| `dyn ResourceResolver`, `dyn ProjectFunctions`, `dyn Progress` | Caller-owned, shared as `Arc` | Required | Required | The facade never calls back into a host while holding an engine lock; the only lock, in `Plans`, is never held across a callback. |
+| `dyn ResourceResolver`, `dyn ProjectFunctions`, `dyn Progress` | Caller-owned, shared as `Arc` | Required | Required | The facade never calls back into a host while holding an engine lock; the `Plans` lock, too, is held only to read or replace a kept plan. |
 
 Project functions supplied by a host are invoked on the calling thread of the
 operation, as today; a host whose runtime is single-threaded (Python, R) owns
