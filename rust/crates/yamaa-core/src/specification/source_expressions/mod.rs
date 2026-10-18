@@ -745,6 +745,7 @@ pub(super) fn bind(
                 findings.push(BindFinding::OutputReference {
                     path: path.into(),
                     name: name.clone(),
+                    row: None,
                     finding,
                 });
                 return Ok(None);
