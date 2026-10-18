@@ -58,7 +58,7 @@ malformed-source language findings. Capture and ingest boundary replies expose
 `sas_reader_unavailable`; unavailable Parquet compression retains its separate
 `parquet_codec_unavailable` code.
 
-The optional-format CI matrix runs no-default, each individual feature and all
+The optional-format CI job runs no-default, each individual feature and all
 three features. Each lane exercises enabled-format fixtures and disabled
 capabilities, verifies the Cargo graph, and inspects the linked test binary for
 ReadStat and Zstd symbols. Run a lane locally from the repository root with
@@ -68,14 +68,15 @@ ReadStat and Zstd symbols. Run a lane locally from the repository root with
 Python/R checks and native wheel/source qualification retain the packaged default.
 
 Arrow/Parquet release-specific operations live in the adapter's
-`storage_api` module: fallible IPC schema conversion, logical timestamp/integer
-construction, and logical-type inspection. The canonical lock and manifests
-continue to select 60; using 57 requires adapting this boundary and qualifying
+`storage_api` module: fallible IPC schema conversion, C stream import,
+row-group reader construction, logical timestamp/integer construction, and
+logical-type inspection. The canonical lock and manifests select exactly
+57.3.0; using another release requires adapting this boundary and qualifying
 that dependency graph. Keep malformed-schema rejection and the closed output
 profile when adapting the boundary.
 ## Arrow host handoff
 
-The host bridge uses Arrow-rs 60.0.0 C Data/Stream callbacks, PyArrow >=23.0.1
+The host bridge uses Arrow-rs 57.3.0 C Data/Stream callbacks, PyArrow >=23.0.1
 and R nanoarrow >=0.8.0. An exported stream owns a reader with an independent
 cursor and shared immutable Arrow array references. Each emitted C Data array
 owns its own buffer references. Dropping the build, stream or exporter cannot

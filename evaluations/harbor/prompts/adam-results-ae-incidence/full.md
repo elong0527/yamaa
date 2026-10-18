@@ -1,7 +1,8 @@
-Following CDISC Analysis Results Standard v1.0, use the provided ADSL and
-ADAE datasets to create a results dataset with one record per planned
-treatment group represented in the safety population per operation: the
-subject count and percentage with at least one treatment-emergent event.
+Following CDISC ADaM standards, use the provided ADSL and ADAE datasets to
+create a RESULTS dataset in the style of the CDISC Analysis Results Standard
+v1.0, with one record per planned treatment group represented in the safety
+population per operation: the subject count and percentage with at least one
+treatment-emergent event.
 
 The output dataset should contain the following columns in this order:
 STUDYID, ANALYSISID, ANALYSISSETID, DATASET, VARIABLE, ANALYSISSET,
