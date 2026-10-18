@@ -1,0 +1,1142 @@
+# Machine-readable grammar of the one expression language.
+#
+# This file is the single source for the closed grammar written in a field
+# typed `predicate`, in `compute.expr` and in `aggregate.expr`. The grammar
+# block of the Formulas rules is rendered from `productions`, and the shared
+# parser and binder are checked against `vocabulary`, `reserved` and `cases`,
+# so the rule and the implementation cannot drift apart without failing
+# validation.
+#
+# Each case names the context it is written in. A context decides the root
+# and the constructs and functions a text may use, so the same text can be
+# admitted in one context and refused in another.
+#
+# `grammar/README.md` states the file format and the shape notation.
+schema_version: "1.0"
+contract: expression
+contract_version: "1.0.0"
+rule: formulas
+start: expression
+contexts: [predicate, compute, aggregate]
+productions:
+  - name: expression
+    definition: |-
+      disjunction
+  - name: disjunction
+    definition: |-
+      conjunction ("OR" conjunction)*
+  - name: conjunction
+    definition: |-
+      negation ("AND" negation)*
+  - name: negation
+    definition: |-
+      "NOT"* comparison
+  - name: comparison
+    definition: |-
+      sum [compare sum | membership | range | pattern | null_test]
+  - name: compare
+    definition: |-
+      "=" | "<>" | "<" | "<=" | ">" | ">="
+  - name: membership
+    definition: |-
+      ["NOT"] "IN" "(" expression ("," expression)* ")"
+  - name: range
+    definition: |-
+      ["NOT"] "BETWEEN" sum "AND" sum
+  - name: pattern
+    definition: |-
+      ["NOT"] "LIKE" sum ["ESCAPE" string]
+  - name: null_test
+    definition: |-
+      "IS" ["NOT"] "NULL"
+  - name: sum
+    definition: |-
+      product (("+" | "-") product)*
+  - name: product
+    definition: |-
+      factor (("*" | "/") factor)*
+  - name: factor
+    definition: |-
+      ["+" | "-"] primary
+  - name: primary
+    definition: |-
+      literal | reduction | call | identifier | "(" expression ")"
+  - name: reduction
+    definition: |-
+      reducer "(" expression ")" | "COUNT" "(" star ")"
+  - name: star
+    definition: |-
+      name "." "*"
+  - name: call
+    definition: |-
+      function "(" [expression ("," expression)*] ")"
+  - name: identifier
+    definition: |-
+      name ["." name]
+  - name: literal
+    definition: |-
+      number | string | temporal | "TRUE" | "FALSE" | "NULL"
+  - name: temporal
+    definition: |-
+      ("DATE" | "DATETIME") string
+  - name: number
+    definition: |-
+      digits ["." digits] [("e" | "E") ["+" | "-"] digits]
+  - name: digits
+    definition: |-
+      digit { digit }
+  - name: name
+    definition: |-
+      (letter | "_") { letter | digit | "_" }
+  - name: letter
+    definition: |-
+      "A" ... "Z" | "a" ... "z"
+  - name: digit
+    definition: |-
+      "0" ... "9"
+  - name: string
+    definition: |-
+      "'" { non_quote | "''" } "'"
+  - name: non_quote
+    prose: true
+    definition: |-
+      any Unicode scalar value other than "'"
+imports: {}
+# Both tables are closed: a name outside them, or another argument count,
+# fails with prohibited_function whatever a host dialect provides. A
+# function's result decides where it may stand; a reducer's argument forms
+# say whether it takes the record star.
+vocabulary:
+  function:
+    ABS: {min_arguments: 1, max_arguments: 1, result: numeric}
+    CEIL: {min_arguments: 1, max_arguments: 1, result: numeric}
+    FLOOR: {min_arguments: 1, max_arguments: 1, result: numeric}
+    TRUNC: {min_arguments: 1, max_arguments: 1, result: numeric}
+    SQRT: {min_arguments: 1, max_arguments: 1, result: numeric}
+    POWER: {min_arguments: 2, max_arguments: 2, result: numeric}
+    EXP: {min_arguments: 1, max_arguments: 1, result: numeric}
+    LN: {min_arguments: 1, max_arguments: 1, result: numeric}
+    MOD: {min_arguments: 2, max_arguments: 2, result: numeric}
+    NULLIF: {min_arguments: 2, max_arguments: 2, result: numeric}
+    STR_CONTAINS: {min_arguments: 2, max_arguments: 2, result: boolean}
+  reducer:
+    SUM: {argument: [expression]}
+    COUNT: {argument: [expression, star]}
+    MIN: {argument: [expression]}
+    MAX: {argument: [expression]}
+    MEAN: {argument: [expression]}
+    ONLY: {argument: [expression]}
+# A reserved word is case-insensitive and cannot be a bare identifier. A
+# qualified field may still use one of these spellings after its qualifier.
+# `DATE` and `DATETIME` begin a temporal literal only before a string, and
+# `ESCAPE` is a keyword only after a `LIKE` pattern; elsewhere each is a name.
+reserved:
+  - "AND"
+  - "BETWEEN"
+  - "FALSE"
+  - "IN"
+  - "IS"
+  - "LIKE"
+  - "NOT"
+  - "NULL"
+  - "OR"
+  - "TRUE"
+cases:
+  # Predicates: comparisons, logic and their precedence.
+  - id: equality-over-an-unqualified-identifier
+    context: predicate
+    covers: [comparison, identifier]
+    text: "SAFFL = 'Y'"
+    parse: accept
+    identifiers: [SAFFL]
+    shape: (= (id SAFFL) (str 'Y'))
+  - id: every-comparison-operator-parses
+    context: predicate
+    covers: [comparison]
+    text: "A = 1 AND B <> 2 AND C < 3 AND D <= 4 AND E > 5 AND F >= 6"
+    parse: accept
+    identifiers: [A, B, C, D, E, F]
+    shape: (and (and (and (and (and (= (id A) (int 1)) (<> (id B) (int
+      2))) (< (id C) (int 3))) (<= (id D) (int 4))) (> (id E) (int 5)))
+      (>= (id F) (int 6)))
+  - id: not-equal-bang-is-outside-the-grammar
+    context: predicate
+    covers: [comparison, rejection]
+    text: "AGE != 18"
+    parse: reject
+    condition: invalid_expression
+  - id: comparisons-do-not-associate
+    context: predicate
+    covers: [comparison, precedence, rejection]
+    text: "A = B = C"
+    parse: reject
+    condition: invalid_expression
+  - id: and-binds-tighter-than-or
+    context: predicate
+    covers: [logic, precedence]
+    text: "A = 1 OR B = 2 AND C = 3"
+    parse: accept
+    identifiers: [A, B, C]
+    shape: (or (= (id A) (int 1)) (and (= (id B) (int 2)) (= (id C)
+      (int 3))))
+  - id: parentheses-override-logical-precedence
+    context: predicate
+    covers: [logic, precedence, grouping]
+    text: "(A = 1 OR B = 2) AND C = 3"
+    parse: accept
+    identifiers: [A, B, C]
+    shape: (and (or (= (id A) (int 1)) (= (id B) (int 2))) (= (id C)
+      (int 3)))
+  - id: repeated-or-associates-from-the-left
+    context: predicate
+    covers: [logic, precedence]
+    text: "A = 1 OR B = 2 OR C = 3"
+    parse: accept
+    identifiers: [A, B, C]
+    shape: (or (or (= (id A) (int 1)) (= (id B) (int 2))) (= (id C)
+      (int 3)))
+  - id: not-binds-tighter-than-and
+    context: predicate
+    covers: [logic, precedence]
+    text: "NOT A = 1 AND B = 2"
+    parse: accept
+    identifiers: [A, B]
+    shape: (and (not (= (id A) (int 1))) (= (id B) (int 2)))
+  - id: repeated-not-nests
+    context: predicate
+    covers: [logic]
+    text: "NOT NOT TRUE"
+    parse: accept
+    identifiers: []
+    shape: (not (not true))
+  - id: boolean-literals-are-case-insensitive
+    context: predicate
+    covers: [logic, keyword-case]
+    text: "true OR False"
+    parse: accept
+    identifiers: []
+    shape: (or true false)
+  - id: keywords-are-case-insensitive
+    context: predicate
+    covers: [logic, keyword-case]
+    text: "A = 1 and B = 2 or C = 3"
+    parse: accept
+    identifiers: [A, B, C]
+    shape: (or (and (= (id A) (int 1)) (= (id B) (int 2))) (= (id C)
+      (int 3)))
+  - id: a-truth-value-is-not-a-comparison-operand
+    context: predicate
+    covers: [logic, context, rejection]
+    text: "FLAG = TRUE"
+    parse: reject
+    condition: invalid_expression
+  - id: a-bare-operand-is-not-a-predicate
+    context: predicate
+    covers: [context, rejection]
+    text: "SAFFL"
+    parse: reject
+    condition: invalid_expression
+  # Predicates: arithmetic is a comparison operand.
+  - id: arithmetic-is-a-comparison-operand
+    context: predicate
+    covers: [arithmetic, comparison]
+    text: "AVAL + 1 > 2"
+    parse: accept
+    identifiers: [AVAL]
+    shape: (> (+ (id AVAL) (int 1)) (int 2))
+  - id: arithmetic-binds-tighter-than-a-comparison
+    context: predicate
+    covers: [arithmetic, comparison, precedence]
+    text: "ALT > 3 * ULN"
+    parse: accept
+    identifiers: [ALT, ULN]
+    shape: (> (id ALT) (* (int 3) (id ULN)))
+  - id: a-numeric-function-is-a-comparison-operand
+    context: predicate
+    covers: [call, comparison]
+    text: "ABS(AVAL) > 2"
+    parse: accept
+    identifiers: [AVAL]
+    shape: (> (call ABS (id AVAL)) (int 2))
+  - id: between-bounds-may-be-arithmetic
+    context: predicate
+    covers: [between, arithmetic]
+    text: "AVAL BETWEEN BASE - 1 AND BASE + 1"
+    parse: accept
+    identifiers: [AVAL, BASE]
+    shape: (between (id AVAL) (- (id BASE) (int 1)) (+ (id BASE) (int 1)))
+  - id: the-upper-bound-of-between-binds-tighter-than-and
+    context: predicate
+    covers: [between, logic, precedence]
+    text: "AVAL BETWEEN 1 AND 10 AND SAFFL = 'Y'"
+    parse: accept
+    identifiers: [AVAL, SAFFL]
+    shape: (and (between (id AVAL) (int 1) (int 10)) (= (id SAFFL) (str
+      'Y')))
+  - id: a-null-test-may-take-arithmetic
+    context: predicate
+    covers: [null-test, arithmetic]
+    text: "A + B IS NULL"
+    parse: accept
+    identifiers: [A, B]
+    shape: (is-null (+ (id A) (id B)))
+  - id: a-reduction-is-refused-in-a-predicate
+    context: predicate
+    covers: [reduction, context, rejection]
+    text: "SUM(AVAL) > 1"
+    parse: reject
+    condition: prohibited_function
+  # Names.
+  - id: identifiers-are-case-sensitive-in-a-predicate
+    context: predicate
+    covers: [identifier, keyword-case]
+    text: "aval = AVAL"
+    parse: accept
+    identifiers: [AVAL, aval]
+    shape: (= (id aval) (id AVAL))
+  - id: a-qualified-identifier-names-its-relation
+    context: predicate
+    covers: [identifier]
+    text: "EX.EXDOSE > 0"
+    parse: accept
+    identifiers: [EX.EXDOSE]
+    shape: (> (id EX.EXDOSE) (int 0))
+  - id: a-qualified-field-may-spell-a-keyword
+    context: predicate
+    covers: [identifier, reserved]
+    text: "DM.NOT = 1"
+    parse: accept
+    identifiers: [DM.NOT]
+    shape: (= (id DM.NOT) (int 1))
+  - id: a-bare-keyword-is-not-an-identifier
+    context: predicate
+    covers: [reserved, rejection]
+    text: "LIKE = 1"
+    parse: reject
+    condition: invalid_expression
+  - id: a-temporal-keyword-without-a-string-is-a-name
+    context: predicate
+    covers: [identifier, reserved, temporal]
+    text: "DATE = DATE '2025-06-01'"
+    parse: accept
+    identifiers: [DATE]
+    shape: (= (id DATE) (date '2025-06-01'))
+  - id: an-underscore-may-open-a-name
+    context: predicate
+    covers: [identifier]
+    text: "_FLAG = 'Y'"
+    parse: accept
+    identifiers: [_FLAG]
+    shape: (= (id _FLAG) (str 'Y'))
+  - id: a-digit-may-not-open-a-name
+    context: predicate
+    covers: [identifier, rejection]
+    text: "2FLAG = 'Y'"
+    parse: reject
+    condition: invalid_expression
+  - id: a-three-part-identifier-is-outside-the-grammar
+    context: predicate
+    covers: [identifier, rejection]
+    text: "A.B.C = 1"
+    parse: reject
+    condition: invalid_expression
+  # Predicates: membership, ranges, patterns and null tests.
+  - id: in-list-keeps-its-operands-in-order
+    context: predicate
+    covers: [in]
+    text: "AEACN IN ('DRUG WITHDRAWN', 'DOSE REDUCED')"
+    parse: accept
+    identifiers: [AEACN]
+    shape: (in (id AEACN) (str 'DRUG WITHDRAWN') (str 'DOSE REDUCED'))
+  - id: not-in-negates-the-list-membership
+    context: predicate
+    covers: [in]
+    text: "AVISITN NOT IN (1, 2)"
+    parse: accept
+    identifiers: [AVISITN]
+    shape: (not-in (id AVISITN) (int 1) (int 2))
+  - id: an-empty-in-list-is-outside-the-grammar
+    context: predicate
+    covers: [in, rejection]
+    text: "AVISITN IN ()"
+    parse: reject
+    condition: invalid_expression
+  - id: between-takes-two-inclusive-endpoints
+    context: predicate
+    covers: [between]
+    text: "AVAL BETWEEN 1 AND 10"
+    parse: accept
+    identifiers: [AVAL]
+    shape: (between (id AVAL) (int 1) (int 10))
+  - id: not-between-negates-the-range
+    context: predicate
+    covers: [between]
+    text: "AVAL NOT BETWEEN 1.5 AND 10"
+    parse: accept
+    identifiers: [AVAL]
+    shape: (not-between (id AVAL) (float 1.5) (int 10))
+  - id: between-requires-its-and
+    context: predicate
+    covers: [between, rejection]
+    text: "AVAL BETWEEN 1 10"
+    parse: reject
+    condition: invalid_expression
+  - id: like-without-escape-has-no-escape-character
+    context: predicate
+    covers: [like]
+    text: "AEDECOD LIKE 'HEAD%'"
+    parse: accept
+    identifiers: [AEDECOD]
+    shape: (like (id AEDECOD) (str 'HEAD%'))
+  - id: escape-declares-one-scalar
+    context: predicate
+    covers: [like, escape]
+    text: "AEDECOD LIKE '100!%' ESCAPE '!'"
+    parse: accept
+    identifiers: [AEDECOD]
+    shape: (like (id AEDECOD) (str '100!%') (escape '!'))
+  - id: not-like-negates-the-match
+    context: predicate
+    covers: [like]
+    text: "AEDECOD NOT LIKE 'HEAD%'"
+    parse: accept
+    identifiers: [AEDECOD]
+    shape: (not-like (id AEDECOD) (str 'HEAD%'))
+  - id: escape-rejects-a-two-scalar-literal
+    context: predicate
+    covers: [like, escape, rejection]
+    text: "AEDECOD LIKE 'a' ESCAPE '!!'"
+    parse: reject
+    condition: invalid_expression
+  - id: a-dangling-escape-is-rejected
+    context: predicate
+    covers: [like, escape, rejection]
+    text: "AEDECOD LIKE 'HEAD!' ESCAPE '!'"
+    parse: reject
+    condition: invalid_expression
+  - id: a-doubled-escape-character-is-not-dangling
+    context: predicate
+    covers: [like, escape]
+    text: "AEDECOD LIKE 'HEAD!!' ESCAPE '!'"
+    parse: accept
+    identifiers: [AEDECOD]
+    shape: (like (id AEDECOD) (str 'HEAD!!') (escape '!'))
+  - id: is-null-tests-missingness
+    context: predicate
+    covers: [null-test]
+    text: "AEENDTC IS NULL"
+    parse: accept
+    identifiers: [AEENDTC]
+    shape: (is-null (id AEENDTC))
+  - id: is-not-null-tests-presence
+    context: predicate
+    covers: [null-test]
+    text: "AEENDTC IS NOT NULL"
+    parse: accept
+    identifiers: [AEENDTC]
+    shape: (is-not-null (id AEENDTC))
+  - id: is-requires-null
+    context: predicate
+    covers: [null-test, rejection]
+    text: "AEENDTC IS 'Y'"
+    parse: reject
+    condition: invalid_expression
+  - id: null-is-an-operand-of-a-comparison
+    context: predicate
+    covers: [literal, null-test, null-literal]
+    text: "AVAL = NULL"
+    parse: accept
+    identifiers: [AVAL]
+    shape: (= (id AVAL) null)
+  # Predicates: str_contains.
+  - id: str-contains-is-a-truth-valued-call
+    context: predicate
+    covers: [call]
+    text: "NOT str_contains(AETERM, '^HEAD')"
+    parse: accept
+    identifiers: [AETERM]
+    shape: (not (call STR_CONTAINS (id AETERM) (str '^HEAD')))
+  - id: str-detect-is-not-a-function
+    context: predicate
+    covers: [call, vocabulary, rejection]
+    text: "str_detect(AEDECOD, 'X')"
+    parse: reject
+    condition: prohibited_function
+  - id: str-contains-requires-two-arguments
+    context: predicate
+    covers: [call, vocabulary, rejection]
+    text: "str_contains(AEDECOD)"
+    parse: reject
+    condition: prohibited_function
+  - id: str-contains-pattern-must-be-a-string-literal
+    context: predicate
+    covers: [call, rejection]
+    text: "str_contains(AEDECOD, 1)"
+    parse: reject
+    condition: invalid_expression
+  - id: str-contains-rejects-an-invalid-pattern
+    context: predicate
+    covers: [call, rejection]
+    text: "str_contains(AEDECOD, '(')"
+    parse: reject
+    condition: invalid_expression
+  # Literals.
+  - id: an-integer-literal-has-no-fraction-or-exponent
+    context: predicate
+    covers: [literal]
+    text: "AVAL = 42"
+    parse: accept
+    identifiers: [AVAL]
+    shape: (= (id AVAL) (int 42))
+  - id: a-signed-literal-keeps-its-sign
+    context: predicate
+    covers: [literal, unary]
+    text: "AVAL = -3"
+    parse: accept
+    identifiers: [AVAL]
+    shape: (= (id AVAL) (int -3))
+  - id: a-sign-before-a-number-is-the-numbers-own
+    context: compute
+    covers: [literal, unary]
+    text: "A + -1"
+    parse: accept
+    identifiers: [A]
+    shape: (+ (id A) (int -1))
+  - id: the-least-int-is-a-signed-literal
+    context: compute
+    covers: [literal, unary]
+    text: "A + -9223372036854775808"
+    parse: accept
+    identifiers: [A]
+    shape: (+ (id A) (int -9223372036854775808))
+  - id: a-literal-outside-the-int-range-is-refused-in-a-predicate
+    context: predicate
+    covers: [literal, rejection]
+    text: "AVAL = 9223372036854775808"
+    parse: reject
+    condition: integer_overflow
+  - id: a-literal-outside-the-int-range-is-refused-in-a-formula
+    context: compute
+    covers: [literal, rejection]
+    text: "9223372036854775808 * 0"
+    parse: reject
+    condition: integer_overflow
+  - id: an-exponent-makes-a-literal-float
+    context: predicate
+    covers: [literal]
+    text: "AVAL = 1e3"
+    parse: accept
+    identifiers: [AVAL]
+    shape: (= (id AVAL) (float 1e3))
+  - id: a-fraction-makes-a-literal-float
+    context: predicate
+    covers: [literal]
+    text: "AVAL = 2.50"
+    parse: accept
+    identifiers: [AVAL]
+    shape: (= (id AVAL) (float 2.50))
+  - id: a-trailing-decimal-point-is-outside-the-grammar
+    context: predicate
+    covers: [literal, rejection]
+    text: "AVAL = 2."
+    parse: reject
+    condition: invalid_expression
+  - id: a-leading-decimal-point-is-outside-the-grammar
+    context: compute
+    covers: [literal, rejection]
+    text: "A + .5"
+    parse: reject
+    condition: invalid_expression
+  - id: a-doubled-quote-is-one-quote
+    context: predicate
+    covers: [literal, escape]
+    text: "COMMENT = 'it''s'"
+    parse: accept
+    identifiers: [COMMENT]
+    shape: (= (id COMMENT) (str 'it''s'))
+  - id: a-backslash-is-an-ordinary-scalar
+    context: predicate
+    covers: [literal, escape]
+    text: "PATH = 'C:\\new'"
+    parse: accept
+    identifiers: [PATH]
+    shape: (= (id PATH) (str 'C:\new'))
+  - id: an-unterminated-string-is-rejected
+    context: predicate
+    covers: [literal, rejection]
+    text: "COMMENT = 'open"
+    parse: reject
+    condition: invalid_expression
+  - id: a-date-literal-needs-its-keyword
+    context: predicate
+    covers: [literal, temporal]
+    text: "ADT >= DATE '2025-06-01'"
+    parse: accept
+    identifiers: [ADT]
+    shape: (>= (id ADT) (date '2025-06-01'))
+  - id: a-datetime-literal-carries-a-time
+    context: predicate
+    covers: [literal, temporal]
+    text: "ADTM >= DATETIME '2025-06-01T08:30'"
+    parse: accept
+    identifiers: [ADTM]
+    shape: (>= (id ADTM) (datetime '2025-06-01T08:30'))
+  - id: a-quoted-date-without-its-keyword-is-text
+    context: predicate
+    covers: [literal, temporal]
+    text: "ADT >= '2025-06-01'"
+    parse: accept
+    identifiers: [ADT]
+    shape: (>= (id ADT) (str '2025-06-01'))
+  - id: a-date-literal-that-names-no-day-is-rejected
+    context: predicate
+    covers: [literal, temporal, rejection]
+    text: "ADT >= DATE '2025-02-30'"
+    parse: reject
+    condition: invalid_expression
+  - id: null-is-a-literal-in-a-formula
+    context: compute
+    covers: [null-literal, literal]
+    text: "NULL"
+    parse: accept
+    identifiers: []
+    shape: "null"
+  # Arithmetic: precedence, association and signs.
+  - id: multiplication-binds-tighter-than-addition
+    context: compute
+    covers: [arithmetic, precedence]
+    text: "A + B * C"
+    parse: accept
+    identifiers: [A, B, C]
+    shape: (+ (id A) (* (id B) (id C)))
+  - id: division-binds-tighter-than-subtraction
+    context: compute
+    covers: [arithmetic, precedence]
+    text: "A - B / C"
+    parse: accept
+    identifiers: [A, B, C]
+    shape: (- (id A) (/ (id B) (id C)))
+  - id: repeated-subtraction-associates-from-the-left
+    context: compute
+    covers: [arithmetic, precedence]
+    text: "A - B - C"
+    parse: accept
+    identifiers: [A, B, C]
+    shape: (- (- (id A) (id B)) (id C))
+  - id: repeated-division-associates-from-the-left
+    context: compute
+    covers: [arithmetic, precedence]
+    text: "A / B / C"
+    parse: accept
+    identifiers: [A, B, C]
+    shape: (/ (/ (id A) (id B)) (id C))
+  - id: parentheses-override-arithmetic-precedence
+    context: compute
+    covers: [arithmetic, grouping]
+    text: "(A + B) * C"
+    parse: accept
+    identifiers: [A, B, C]
+    shape: (* (+ (id A) (id B)) (id C))
+  - id: a-unary-sign-binds-only-its-primary
+    context: compute
+    covers: [unary, precedence]
+    text: "-A * B"
+    parse: accept
+    identifiers: [A, B]
+    shape: (* (neg (id A)) (id B))
+  - id: a-leading-plus-is-a-unary-sign
+    context: compute
+    covers: [unary]
+    text: "+A + B"
+    parse: accept
+    identifiers: [A, B]
+    shape: (+ (pos (id A)) (id B))
+  - id: a-unary-sign-applies-to-a-group
+    context: compute
+    covers: [unary, grouping]
+    text: "-(A + B)"
+    parse: accept
+    identifiers: [A, B]
+    shape: (neg (+ (id A) (id B)))
+  - id: a-doubled-sign-is-outside-the-grammar
+    context: compute
+    covers: [unary, rejection]
+    text: "--A"
+    parse: reject
+    condition: invalid_expression
+  - id: identifiers-are-case-sensitive-in-a-formula
+    context: compute
+    covers: [identifier, keyword-case]
+    text: "aval + AVAL"
+    parse: accept
+    identifiers: [AVAL, aval]
+    shape: (+ (id aval) (id AVAL))
+  - id: a-qualified-identifier-reads-a-record-lookup-field
+    context: compute
+    covers: [identifier]
+    text: "LB.LBSTRESN * 2"
+    parse: accept
+    identifiers: [LB.LBSTRESN]
+    shape: (* (id LB.LBSTRESN) (int 2))
+  - id: a-three-part-identifier-is-outside-a-formula
+    context: compute
+    covers: [identifier, rejection]
+    text: "A.B.C + 1"
+    parse: reject
+    condition: invalid_expression
+  - id: a-word-of-a-construct-outside-the-grammar-is-a-name
+    context: compute
+    covers: [identifier, reserved]
+    text: "CASE + END"
+    parse: accept
+    identifiers: [CASE, END]
+    shape: (+ (id CASE) (id END))
+  - id: an-integer-literal-in-a-formula
+    context: compute
+    covers: [literal]
+    text: "A + 42"
+    parse: accept
+    identifiers: [A]
+    shape: (+ (id A) (int 42))
+  - id: a-fraction-makes-a-formula-literal-float
+    context: compute
+    covers: [literal]
+    text: "A * 0.0167"
+    parse: accept
+    identifiers: [A]
+    shape: (* (id A) (float 0.0167))
+  - id: an-exponent-makes-a-formula-literal-float
+    context: compute
+    covers: [literal]
+    text: "A * 1E-3"
+    parse: accept
+    identifiers: [A]
+    shape: (* (id A) (float 1E-3))
+  - id: a-trailing-decimal-point-is-outside-a-formula
+    context: compute
+    covers: [literal, rejection]
+    text: "A + 5."
+    parse: reject
+    condition: invalid_expression
+  # Functions.
+  - id: the-bmi-formula-parses
+    context: compute
+    covers: [call, arithmetic]
+    text: "WEIGHTKG / POWER(HEIGHTCM / 100, 2)"
+    parse: accept
+    identifiers: [HEIGHTCM, WEIGHTKG]
+    shape: (/ (id WEIGHTKG) (call POWER (/ (id HEIGHTCM) (int 100))
+      (int 2)))
+  - id: function-names-are-case-insensitive
+    context: compute
+    covers: [call, keyword-case]
+    text: "power(2, 3)"
+    parse: accept
+    identifiers: []
+    shape: (call POWER (int 2) (int 3))
+  - id: null-is-an-argument-rather-than-a-name
+    context: compute
+    covers: [call, null-literal]
+    text: "NULLIF(A, NULL)"
+    parse: accept
+    identifiers: [A]
+    shape: (call NULLIF (id A) null)
+  - id: null-is-case-insensitive
+    context: compute
+    covers: [null-literal, keyword-case]
+    text: "NULLIF(null, 0)"
+    parse: accept
+    identifiers: []
+    shape: (call NULLIF null (int 0))
+  - id: every-numeric-function-parses
+    context: compute
+    covers: [call, vocabulary]
+    text: "ABS(A) + CEIL(A) + FLOOR(A) + TRUNC(A) + SQRT(A) + EXP(A)
+      + LN(A) + MOD(A, 2) + POWER(A, 2) + NULLIF(A, 1)"
+    parse: accept
+    identifiers: [A]
+    shape: (+ (+ (+ (+ (+ (+ (+ (+ (+ (call ABS (id A)) (call CEIL (id
+      A))) (call FLOOR (id A))) (call TRUNC (id A))) (call SQRT (id A)))
+      (call EXP (id A))) (call LN (id A))) (call MOD (id A) (int 2)))
+      (call POWER (id A) (int 2))) (call NULLIF (id A) (int 1)))
+  - id: average-daily-dose-guards-its-division
+    context: compute
+    covers: [call, arithmetic]
+    text: "CUMDOSE / NULLIF(TRTDURD, 0)"
+    parse: accept
+    identifiers: [CUMDOSE, TRTDURD]
+    shape: (/ (id CUMDOSE) (call NULLIF (id TRTDURD) (int 0)))
+  - id: rounding-with-ties-away-from-zero-is-not-in-the-vocabulary
+    context: compute
+    covers: [vocabulary, rejection]
+    text: "ROUND_HALF_AWAY_FROM_ZERO(A, 1)"
+    parse: reject
+    condition: prohibited_function
+  - id: rounding-is-not-in-the-vocabulary
+    context: compute
+    covers: [vocabulary, rejection]
+    text: "ROUND(A, 2)"
+    parse: reject
+    condition: prohibited_function
+  - id: log-is-not-in-the-vocabulary
+    context: compute
+    covers: [vocabulary, rejection]
+    text: "LOG(A)"
+    parse: reject
+    condition: prohibited_function
+  - id: greatest-is-not-in-the-vocabulary
+    context: compute
+    covers: [vocabulary, rejection]
+    text: "GREATEST(A, B)"
+    parse: reject
+    condition: prohibited_function
+  - id: least-is-not-in-the-vocabulary
+    context: compute
+    covers: [vocabulary, rejection]
+    text: "LEAST(A, B)"
+    parse: reject
+    condition: prohibited_function
+  - id: coalesce-is-not-in-the-vocabulary
+    context: compute
+    covers: [vocabulary, rejection]
+    text: "COALESCE(A, B, 0)"
+    parse: reject
+    condition: prohibited_function
+  - id: abs-takes-exactly-one-argument
+    context: compute
+    covers: [vocabulary, rejection]
+    text: "ABS(A, B)"
+    parse: reject
+    condition: prohibited_function
+  - id: abs-requires-an-argument
+    context: compute
+    covers: [vocabulary, rejection]
+    text: "ABS()"
+    parse: reject
+    condition: prohibited_function
+  - id: nullif-takes-exactly-two-arguments
+    context: compute
+    covers: [vocabulary, rejection]
+    text: "NULLIF(A, B, C)"
+    parse: reject
+    condition: prohibited_function
+  # Compute: a numeric root over the current row.
+  - id: a-reduction-is-refused-in-a-formula
+    context: compute
+    covers: [reduction, context, rejection]
+    text: "SUM(A)"
+    parse: reject
+    condition: prohibited_function
+  - id: a-record-count-is-refused-in-a-formula
+    context: compute
+    covers: [star, context, rejection]
+    text: "COUNT(EX.*)"
+    parse: reject
+    condition: prohibited_function
+  - id: str-contains-is-refused-in-a-formula
+    context: compute
+    covers: [call, context, rejection]
+    text: "str_contains(A, B)"
+    parse: reject
+    condition: prohibited_function
+  - id: a-comparison-is-not-a-formula
+    context: compute
+    covers: [context, rejection]
+    text: "A > B"
+    parse: reject
+    condition: prohibited_construct
+  - id: a-boolean-operator-is-not-a-formula
+    context: compute
+    covers: [context, rejection]
+    text: "A AND B"
+    parse: reject
+    condition: prohibited_construct
+  - id: a-truth-literal-is-not-a-formula-operand
+    context: compute
+    covers: [context, literal, rejection]
+    text: "A + TRUE"
+    parse: reject
+    condition: prohibited_construct
+  - id: a-string-literal-is-not-a-formula-operand
+    context: compute
+    covers: [context, literal, rejection]
+    text: "A + 'text'"
+    parse: reject
+    condition: prohibited_construct
+  - id: a-temporal-literal-is-not-a-formula-operand
+    context: compute
+    covers: [context, temporal, rejection]
+    text: "DATE '2025-06-01'"
+    parse: reject
+    condition: prohibited_construct
+  - id: a-conditional-is-outside-the-grammar
+    context: compute
+    covers: [rejection]
+    text: "CASE WHEN A THEN 1 ELSE 2 END"
+    parse: reject
+    condition: invalid_expression
+  - id: a-window-is-outside-the-grammar
+    context: compute
+    covers: [rejection]
+    text: "A OVER B"
+    parse: reject
+    condition: invalid_expression
+  - id: an-empty-formula-is-rejected
+    context: compute
+    covers: [rejection]
+    text: ""
+    parse: reject
+    condition: invalid_expression
+  - id: an-unclosed-group-is-rejected
+    context: compute
+    covers: [grouping, rejection]
+    text: "(A + B"
+    parse: reject
+    condition: invalid_expression
+  - id: a-trailing-token-is-rejected
+    context: compute
+    covers: [rejection]
+    text: "A B"
+    parse: reject
+    condition: invalid_expression
+  - id: an-unexpected-character-is-rejected
+    context: compute
+    covers: [rejection]
+    text: "A # B"
+    parse: reject
+    condition: invalid_expression
+  # Aggregate: reductions over one relation.
+  - id: a-reduction-reads-one-relation-field
+    context: aggregate
+    covers: [reduction]
+    text: "SUM(EX.EXDOSE)"
+    parse: accept
+    identifiers: [EX.EXDOSE]
+    shape: (reduce SUM (id EX.EXDOSE))
+  - id: count-star-counts-records-rather-than-values
+    context: aggregate
+    covers: [reduction, star]
+    text: "COUNT(EX.*)"
+    parse: accept
+    identifiers: []
+    shape: (reduce COUNT (star EX))
+  - id: count-of-a-field-counts-non-missing-values
+    context: aggregate
+    covers: [reduction]
+    text: "COUNT(EX.EXDOSE)"
+    parse: accept
+    identifiers: [EX.EXDOSE]
+    shape: (reduce COUNT (id EX.EXDOSE))
+  - id: every-permitted-reducer-parses
+    context: aggregate
+    covers: [reduction, vocabulary]
+    text: "MIN(A) + MAX(A) + MEAN(A) + ONLY(A) + SUM(A) + COUNT(A)"
+    parse: accept
+    identifiers: [A]
+    shape: (+ (+ (+ (+ (+ (reduce MIN (id A)) (reduce MAX (id A)))
+      (reduce MEAN (id A))) (reduce ONLY (id A))) (reduce SUM (id A)))
+      (reduce COUNT (id A)))
+  - id: reducer-names-are-case-insensitive
+    context: aggregate
+    covers: [reduction, keyword-case]
+    text: "sum(A)"
+    parse: accept
+    identifiers: [A]
+    shape: (reduce SUM (id A))
+  - id: identifiers-are-case-sensitive-in-an-aggregate
+    context: aggregate
+    covers: [identifier, keyword-case]
+    text: "SUM(aval) + SUM(AVAL)"
+    parse: accept
+    identifiers: [AVAL, aval]
+    shape: (+ (reduce SUM (id aval)) (reduce SUM (id AVAL)))
+  - id: a-reduction-combines-with-arithmetic
+    context: aggregate
+    covers: [reduction, arithmetic]
+    text: "SUM(EX.EXDOSE) / COUNT(EX.EXSEQ)"
+    parse: accept
+    identifiers: [EX.EXDOSE, EX.EXSEQ]
+    shape: (/ (reduce SUM (id EX.EXDOSE)) (reduce COUNT (id EX.EXSEQ)))
+  - id: multiplication-binds-tighter-than-addition-over-reductions
+    context: aggregate
+    covers: [arithmetic, precedence]
+    text: "SUM(A) + B * C"
+    parse: accept
+    identifiers: [A, B, C]
+    shape: (+ (reduce SUM (id A)) (* (id B) (id C)))
+  - id: repeated-subtraction-of-reductions-associates-from-the-left
+    context: aggregate
+    covers: [arithmetic, precedence]
+    text: "SUM(A) - SUM(B) - SUM(C)"
+    parse: accept
+    identifiers: [A, B, C]
+    shape: (- (- (reduce SUM (id A)) (reduce SUM (id B))) (reduce SUM
+      (id C)))
+  - id: parentheses-override-precedence-over-reductions
+    context: aggregate
+    covers: [arithmetic, grouping]
+    text: "(SUM(A) + SUM(B)) * 2"
+    parse: accept
+    identifiers: [A, B]
+    shape: (* (+ (reduce SUM (id A)) (reduce SUM (id B))) (int 2))
+  - id: a-unary-sign-applies-to-a-reduction
+    context: aggregate
+    covers: [unary]
+    text: "-SUM(A)"
+    parse: accept
+    identifiers: [A]
+    shape: (neg (reduce SUM (id A)))
+  - id: a-function-may-wrap-a-reduction-argument
+    context: aggregate
+    covers: [call, reduction]
+    text: "SUM(ABS(A))"
+    parse: accept
+    identifiers: [A]
+    shape: (reduce SUM (call ABS (id A)))
+  - id: a-function-may-take-a-reduction
+    context: aggregate
+    covers: [call, reduction]
+    text: "NULLIF(SUM(A), 0)"
+    parse: accept
+    identifiers: [A]
+    shape: (call NULLIF (reduce SUM (id A)) (int 0))
+  - id: a-literal-and-null-are-primaries
+    context: aggregate
+    covers: [literal, null-literal]
+    text: "NULLIF(SUM(A), NULL) + 1.5"
+    parse: accept
+    identifiers: [A]
+    shape: (+ (call NULLIF (reduce SUM (id A)) null) (float 1.5))
+  - id: reductions-do-not-nest
+    context: aggregate
+    covers: [reduction, rejection]
+    text: "MAX(SUM(EX.EXDOSE))"
+    parse: reject
+    condition: nested_reduction
+  - id: a-reduction-nested-under-arithmetic-still-nests
+    context: aggregate
+    covers: [reduction, rejection]
+    text: "SUM(1 + MIN(A))"
+    parse: reject
+    condition: nested_reduction
+  - id: only-count-takes-a-star
+    context: aggregate
+    covers: [star, rejection]
+    text: "SUM(EX.*)"
+    parse: reject
+    condition: invalid_expression
+  - id: a-star-outside-a-reducer-is-rejected
+    context: aggregate
+    covers: [star, rejection]
+    text: "EX.* + 1"
+    parse: reject
+    condition: invalid_expression
+  - id: a-star-takes-no-second-argument
+    context: aggregate
+    covers: [star, rejection]
+    text: "COUNT(EX.*, 1)"
+    parse: reject
+    condition: invalid_expression
+  - id: a-reducer-takes-exactly-one-argument
+    context: aggregate
+    covers: [reduction, rejection]
+    text: "SUM(A, B)"
+    parse: reject
+    condition: invalid_expression
+  - id: avg-is-not-the-portable-reducer-name
+    context: aggregate
+    covers: [vocabulary, rejection]
+    text: "AVG(A)"
+    parse: reject
+    condition: prohibited_function
+  - id: median-is-not-in-the-vocabulary
+    context: aggregate
+    covers: [vocabulary, rejection]
+    text: "MEDIAN(A)"
+    parse: reject
+    condition: prohibited_function
+  - id: rounding-a-reduction-is-not-in-the-vocabulary
+    context: aggregate
+    covers: [vocabulary, rejection]
+    text: "ROUND(SUM(A), 2)"
+    parse: reject
+    condition: prohibited_function
+  - id: greatest-of-reductions-is-not-in-the-vocabulary
+    context: aggregate
+    covers: [vocabulary, rejection]
+    text: "GREATEST(SUM(A), SUM(B))"
+    parse: reject
+    condition: prohibited_function
+  - id: coalescing-a-reduction-is-not-in-the-vocabulary
+    context: aggregate
+    covers: [vocabulary, rejection]
+    text: "COALESCE(SUM(A), 0)"
+    parse: reject
+    condition: prohibited_function
+  - id: a-comparison-is-not-an-aggregate-expression
+    context: aggregate
+    covers: [context, rejection]
+    text: "SUM(A) > 1"
+    parse: reject
+    condition: prohibited_construct
+  - id: a-boolean-operator-is-not-an-aggregate-expression
+    context: aggregate
+    covers: [context, rejection]
+    text: "SUM(A) AND SUM(B)"
+    parse: reject
+    condition: prohibited_construct
+  - id: a-string-literal-is-not-an-aggregate-operand
+    context: aggregate
+    covers: [context, literal, rejection]
+    text: "SUM(A) + 'text'"
+    parse: reject
+    condition: prohibited_construct
+  - id: a-conditional-over-reductions-is-outside-the-grammar
+    context: aggregate
+    covers: [rejection]
+    text: "CASE WHEN A THEN 1 ELSE 2 END"
+    parse: reject
+    condition: invalid_expression
+  - id: a-window-over-a-reduction-is-outside-the-grammar
+    context: aggregate
+    covers: [rejection]
+    text: "SUM(A) OVER B"
+    parse: reject
+    condition: invalid_expression
+  - id: an-empty-aggregate-is-rejected
+    context: aggregate
+    covers: [rejection]
+    text: ""
+    parse: reject
+    condition: invalid_expression
+  - id: an-unclosed-reducer-is-rejected
+    context: aggregate
+    covers: [reduction, rejection]
+    text: "SUM(A"
+    parse: reject
+    condition: invalid_expression
+  - id: a-trailing-reduction-is-rejected
+    context: aggregate
+    covers: [rejection]
+    text: "SUM(A) SUM(B)"
+    parse: reject
+    condition: invalid_expression
+  # Predicates: the remaining refusals.
+  - id: an-empty-predicate-is-rejected
+    context: predicate
+    covers: [rejection]
+    text: ""
+    parse: reject
+    condition: invalid_expression
+  - id: an-unclosed-logical-group-is-rejected
+    context: predicate
+    covers: [grouping, rejection]
+    text: "(A = 1"
+    parse: reject
+    condition: invalid_expression
+  - id: a-trailing-comparison-is-rejected
+    context: predicate
+    covers: [rejection]
+    text: "A = 1 B = 2"
+    parse: reject
+    condition: invalid_expression

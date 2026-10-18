@@ -362,7 +362,7 @@ mod schema {
             assert!(matches!(
                 refs(&schema, text(&input), &["numeric_expression"], None),
                 Err(InheritanceReferenceError::Numeric(
-                    yamaa_core::numeric_parser::ParseError::Limit { .. }
+                    yamaa_core::expression::CompileError::Limit { .. }
                 ))
             ));
         }

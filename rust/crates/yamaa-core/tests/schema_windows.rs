@@ -509,7 +509,7 @@ mod schema {
         fn case_grammar_findings_retain_their_original_nested_paths() {
             let prepared = PreparedSpecification::prepare(&case_document("ID >", "1")).unwrap();
             let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
-                panic!("predicate grammar finding")
+                panic!("a predicate expression finding")
             };
             let diagnostics = findings[0].diagnostics(prepared.source()).unwrap();
             assert_eq!(
@@ -520,7 +520,7 @@ mod schema {
             let prepared =
                 PreparedSpecification::prepare(&case_document("ID > 0", "ID +")).unwrap();
             let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
-                panic!("numeric grammar finding")
+                panic!("a compute expression finding")
             };
             let diagnostics = findings[0].diagnostics(prepared.source()).unwrap();
             assert_eq!(
@@ -1091,10 +1091,10 @@ mod schema {
                 let diagnostic = finding.diagnostic();
                 assert_eq!(
                     diagnostic.code,
-                    yamaa_core::diagnostic::ConditionCode::PredicateIntegerOverflow
+                    yamaa_core::diagnostic::ConditionCode::LiteralIntegerOverflow
                 );
                 assert_eq!(diagnostic.spec_paths, ["rows[0].filter"]);
-                assert_eq!(diagnostic.definition().phase, "parse");
+                assert_eq!(diagnostic.definition().phase, "validation");
                 assert_eq!(diagnostic.definition().requirement, Some("REQ-0014"));
                 assert_eq!(diagnostic.context.len(), 2);
                 assert_eq!(
@@ -1165,7 +1165,7 @@ mod schema {
                 let diagnostic = finding.diagnostic();
                 assert_eq!(
                     diagnostic.code,
-                    yamaa_core::diagnostic::ConditionCode::PredicateInvalidExpression
+                    yamaa_core::diagnostic::ConditionCode::ExpressionInvalid
                 );
                 assert_eq!(diagnostic.spec_paths, [path]);
                 assert_eq!(
@@ -1247,9 +1247,9 @@ mod schema {
             let diagnostic = finding.diagnostic();
             assert_eq!(
                 diagnostic.code,
-                yamaa_core::diagnostic::ConditionCode::PredicateIntegerOverflow
+                yamaa_core::diagnostic::ConditionCode::LiteralIntegerOverflow
             );
-            assert_eq!(diagnostic.definition().phase, "parse");
+            assert_eq!(diagnostic.definition().phase, "validation");
             assert_eq!(diagnostic.definition().requirement, Some("REQ-0014"));
             assert_eq!(
                 diagnostic.spec_paths,
@@ -1287,7 +1287,7 @@ mod schema {
             let diagnostic = finding.diagnostic();
             assert_eq!(
                 diagnostic.code,
-                yamaa_core::diagnostic::ConditionCode::PredicateInvalidExpression
+                yamaa_core::diagnostic::ConditionCode::ExpressionInvalid
             );
             assert_eq!(
                 diagnostic.spec_paths,
@@ -1482,7 +1482,7 @@ mod schema {
             ));
             assert!(
                 matches!(&plan.verifications()[1].check, yamaa_core::dataset::Check::InvalidDiagnostic(d)
-        if d.code == yamaa_core::diagnostic::ConditionCode::PredicateInvalidExpression)
+        if d.code == yamaa_core::diagnostic::ConditionCode::ExpressionInvalid)
             );
         }
 

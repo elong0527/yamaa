@@ -381,7 +381,7 @@
     "diagnostics": [
       {
         "phase": "validation",
-        "condition": "invalid_predicate",
+        "condition": "invalid_expression",
         "spec_paths": [
           "columns.VSSEQ.derivation.row_number.window.filter"
         ],
@@ -393,7 +393,7 @@
       },
       {
         "phase": "validation",
-        "condition": "invalid_predicate",
+        "condition": "invalid_expression",
         "spec_paths": [
           "columns.EVALPREV.derivation.row_value.window.filter"
         ],

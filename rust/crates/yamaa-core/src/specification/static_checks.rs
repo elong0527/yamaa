@@ -4,18 +4,16 @@ use super::*;
 use crate::diagnostic::Diagnostic;
 
 pub(super) fn predicate(
-    compiled: &Result<crate::predicate::Plan, crate::predicate_compiler::Error>,
+    compiled: &Result<CompiledExpression, CompileError>,
     expression: &str,
     path: &str,
     findings: &mut Vec<BindFinding>,
 ) -> Result<(), BindError> {
     match compiled {
         Ok(_) => Ok(()),
-        Err(crate::predicate_compiler::Error::Parse(
-            crate::predicate_parser::ParseError::Grammar {
-                position, failure, ..
-            },
-        )) => {
+        Err(CompileError::Invalid {
+            position, failure, ..
+        }) => {
             findings.push(BindFinding::Lookup(LookupFinding::grammar(
                 path,
                 expression,
@@ -24,7 +22,7 @@ pub(super) fn predicate(
             )));
             Ok(())
         }
-        Err(error) => Err(BindError::PredicatePolicy(error.clone())),
+        Err(error) => Err(BindError::ExpressionPolicy(error.clone())),
     }
 }
 
@@ -50,7 +48,7 @@ pub(super) fn scoped_branch(
 /// REQ-0442: a qualified formula name must name a declared record lookup.
 /// The test reads declarations alone, so binding and check share it.
 pub(super) fn qualified_numeric_findings(
-    compiled: &CompiledNumeric,
+    compiled: &CompiledExpression,
     path: &str,
     intermediates: &intermediates::Declarations,
     findings: &mut Vec<BindFinding>,
@@ -166,7 +164,7 @@ impl PreparedSpecification {
             Ok(())
         };
         collect(&mut findings).map_err(|error| match error {
-            BindError::PredicatePolicy(error) => PrepareError::predicate(error, None),
+            BindError::ExpressionPolicy(error) => PrepareError::expression(error, None),
             _ => PrepareError::Internal,
         })?;
         for finding in findings {

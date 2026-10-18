@@ -220,21 +220,28 @@ Replaces: REQ-0946.
 
 <a id="ct-11"></a>
 
-### CT-11. An inventory-vocabulary column holds only names of datasets the study document declares
+### CT-11. An inventory-vocabulary column holds only names of datasets any submission section of the study environment declares
 
 A column carrying submission metadata may declare `inventory_vocabulary`. Every
-non-missing value of such a column must equal the name of a dataset the study
-document declares. Missing values pass, exactly as [CT-7](#ct-7) treats missing
-values, and enforcement runs where [Verification](../verification.md)
-runs a column verification, over the completed column, and fails the same way.
+non-missing value of such a column must equal the name of a dataset a
+specification some submission section of the study environment lists declares,
+whichever section composes the column. Missing values pass, exactly as
+[CT-7](#ct-7) treats missing values, and enforcement runs where
+[Verification](../verification.md) runs a column verification, over the
+completed column, and fails the same way.
 
 Fails: `allowed_values_failed`.
-Evidence: `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::inventory_uses_inherited_declared_dataset_names_and_retained_original_metadata_in_both_hosts`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::absent_study_inventory_checks_nonmissing_values_and_keeps_missing_values_admitted`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionInventoryFailed`.
+Evidence: `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::inventory_uses_inherited_declared_dataset_names_and_retained_original_metadata_in_both_hosts`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::absent_study_inventory_checks_nonmissing_values_and_keeps_missing_values_admitted`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::inventory_names_the_datasets_of_every_submission_section`, `rust/crates/yamaa-adapters/tests/file_resources.rs::predecessor_labels_and_the_dataset_inventory_span_every_section`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionInventoryFailed`.
 Replaces: REQ-1156.
 
 The admitted values are the study's dataset inventory, which no static list can
 enumerate; that distinguishes this vocabulary from a codelist, whose values
-[CT-3](#ct-3) requires be listed or deferred to a dictionary. A column that
-also prohibits absence resolves `mandatory` to true
-([SUB-11](submission.md#sub-11)). The ADaM `SRCDOM` column, whose
+[CT-3](#ct-3) requires be listed or deferred to a dictionary. The inventory is
+the `domain` of every specification the `sdtm`, `adam` and `send` sections of
+the study environment list, so an ADaM `SRCDOM` may name the SDTM `AE` domain
+the `sdtm` section lists. A domain build reads it from the environment it is
+given and admits no name without one; composition reads the other sections'
+specifications for it, and Dataset-JSON's recheck of published values uses
+the same inventory. A column that also prohibits absence resolves `mandatory`
+to true ([SUB-11](submission.md#sub-11)). The ADaM `SRCDOM` column, whose
 values name the source SDTM domain or ADaM dataset, binds this vocabulary.

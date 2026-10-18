@@ -2,7 +2,7 @@
 use super::*;
 use crate::{
     bound_expression::Read,
-    predicate::{self, Resolver},
+    expression::{ErrorKind, Resolver, Truth},
     value::Selection,
 };
 
@@ -101,10 +101,10 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
     row: usize,
     assignment: &Assignment,
     state: &mut EvaluationState<'_, T::Error>,
-) -> Result<predicate::Truth, Box<ExecutionError<T::Error>>> {
+) -> Result<Truth, Box<ExecutionError<T::Error>>> {
     filter
         .plan()
-        .evaluate(&mut Context {
+        .evaluate_truth(&mut Context {
             filter,
             donor,
             table,
@@ -115,7 +115,7 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
             state,
         })
         .map_err(|error| {
-            if matches!(&error.kind, predicate::ErrorKind::Condition(_)) {
+            if matches!(&error.kind, ErrorKind::Condition(_)) {
                 return Box::new(
                     error
                         .diagnostic()
@@ -124,8 +124,8 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
                 );
             }
             match error.kind {
-                predicate::ErrorKind::Resolution { error, .. } => error,
-                predicate::ErrorKind::Condition(_) => unreachable!("condition was projected above"),
+                ErrorKind::Resolution { error, .. } => error,
+                ErrorKind::Condition(_) => unreachable!("condition was projected above"),
             }
         })
 }

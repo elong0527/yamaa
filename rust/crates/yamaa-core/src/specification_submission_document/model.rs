@@ -157,6 +157,19 @@ impl Core {
             .map(|(_, core)| *core)
     }
 }
+impl OriginType {
+    /// Read a written origin type.
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::VALUES
+            .iter()
+            .find(|(text, _)| *text == name)
+            .map(|(_, kind)| *kind)
+    }
+    /// Every origin type, in the vocabulary's published order.
+    pub fn all() -> impl Iterator<Item = Self> {
+        Self::VALUES.iter().map(|(_, kind)| *kind)
+    }
+}
 /// The one `mandatory` resolution shared by the domain build and composition: a
 /// key column is mandatory; otherwise a declared value wins, and without one a
 /// tabulation class gives true for `Req` and false for every other designation.

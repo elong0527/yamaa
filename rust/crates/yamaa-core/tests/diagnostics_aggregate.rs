@@ -233,67 +233,64 @@ mod diagnostics {
             use crate::support::diagnostic::grammar::*;
             #[test]
 
-            fn arithmetic_after_an_operand_adds_the_compute_column_suggestion() {
+            fn arithmetic_is_a_comparison_operand_and_refusals_keep_two_fields() {
                 use yamaa_core::json::Value as V;
-                use yamaa_core::predicate_parser::{parse_predicate, ParseError};
-                let suggestion =
-                    "derive the value as a column with compute, then compare that column";
-                for (text, position) in [
-                    ("SBPSTD - SBPSUP <= -20", 7),
-                    ("VS.SBPSTD - VS.SBPSUP < 0", 10),
-                    ("ASTDT <= TRTEDT + 30", 16),
+                // Arithmetic in a comparison operand is admitted, with its names.
+                for (text, names) in [
+                    ("SBPSTD - SBPSUP <= -20", vec!["SBPSTD", "SBPSUP"]),
+                    ("VS.SBPSTD - VS.SBPSUP < 0", vec!["VS.SBPSTD", "VS.SBPSUP"]),
+                    ("ASTDT <= TRTEDT + 30", vec!["ASTDT", "TRTEDT"]),
                 ] {
-                    let Err(ParseError::Grammar {
+                    let compiled = compile(
+                        text,
+                        Field::Predicate,
+                        "columns.OHYPO.derivation.case[0].when",
+                    )
+                    .unwrap();
+                    assert_eq!(compiled.identifiers().collect::<Vec<_>>(), names, "{text}");
+                }
+                // A refused predicate reports its text and position, and nothing else.
+                for (text, position) in [("AGE >> 65", 5), ("A >", 3)] {
+                    let Err(CompileError::Invalid {
                         position: actual,
                         failure,
                         ..
-                    }) = parse_predicate(text)
+                    }) = compile(text, Field::Predicate, "filter")
                     else {
                         panic!("predicate must fail: {text}")
                     };
                     assert_eq!(actual.character, position, "{text}");
-                    for d in [
-                        failure.diagnostic("columns.OHYPO.derivation.case[0].when", text, position),
-                        failure.original_diagnostic(
-                            "columns.OHYPO.derivation.case[0].when",
-                            text,
-                            position,
-                        ),
-                    ] {
-                        assert_eq!(d.definition().condition, "invalid_predicate");
-                        assert_eq!(d.definition().requirement, Some("REQ-0188"));
-                        assert_eq!(
-                            d.context["suggestion"],
-                            V::String(suggestion.into()),
-                            "{text}"
-                        );
-                    }
-                }
-                // A failure at any other character keeps the two-field context.
-                for text in ["AGE >> 65", "A >"] {
-                    let Err(ParseError::Grammar {
-                        position, failure, ..
-                    }) = parse_predicate(text)
-                    else {
-                        panic!("predicate must fail: {text}")
-                    };
-                    let d = failure.original_diagnostic("filter", text, position.character);
-                    assert!(!d.context.contains_key("suggestion"), "{text}");
+                    let d = failure.diagnostic(Field::Predicate, "filter", text, position);
+                    assert_eq!(d.definition().condition, "invalid_expression");
+                    assert_eq!(d.definition().requirement, Some("REQ-0188"));
+                    assert_eq!(
+                        d.context,
+                        [
+                            ("predicate".into(), V::String(text.into())),
+                            ("position".into(), V::from(position)),
+                        ]
+                        .into(),
+                        "{text}"
+                    );
                 }
             }
             #[test]
 
-            fn caller_supplied_function_span_cannot_slice_a_different_expression() {
-                let Err(N::Grammar { failure, .. }) = parse_numeric("  foo(1)") else {
-                    panic!("prohibited function");
-                };
-                assert!(failure
-                    .diagnostic("columns.VALUE", "\u{03b2}\u{03b2}\u{03b2}")
-                    .is_none());
-                let Err(A::Grammar { failure, .. }) = parse_aggregate("  sumx(SRC.ID)") else {
-                    panic!("prohibited function");
-                };
-                assert!(failure.diagnostic("columns.VALUE", "").is_none());
+            fn a_function_finding_carries_its_own_written_name() {
+                for (field, written, function) in [
+                    (Field::Compute, "  foo(1)", "foo"),
+                    (Field::Aggregate, "  sumx(SRC.ID)", "sumx"),
+                ] {
+                    let Err(CompileError::Invalid { failure, .. }) =
+                        compile(written, field, "columns.VALUE")
+                    else {
+                        panic!("prohibited function");
+                    };
+                    let d =
+                        failure.diagnostic(field, "columns.VALUE", "\u{03b2}\u{03b2}\u{03b2}", 0);
+                    assert_eq!(d.definition().condition, "prohibited_function");
+                    assert_eq!(d.context["function"], text(function));
+                }
             }
         }
         mod inheritance {
@@ -447,13 +444,17 @@ mod diagnostics {
             #[test]
 
             fn original_context_projection_admits_all_fields_and_retains_rich_parser_facts() {
-                use yamaa_core::predicate_parser::{parse_predicate, GrammarFailure, ParseError};
                 for (expression, requirement, character, detail) in [
                     ("STR_CONTAINS(ID, '(')", "REQ-1244", 17, "pattern_byte"),
                     ("ID = DATE '2026-02-30'", "REQ-0188", 10, "temporal_error"),
                 ] {
-                    let error = parse_predicate(expression).unwrap_err();
-                    let ParseError::Grammar {
+                    let error = compile(
+                        expression,
+                        Context::Predicate,
+                        "columns.VALUE.derivation.row_number.window.filter",
+                    )
+                    .unwrap_err();
+                    let yamaa_core::expression::CompileError::Invalid {
                         failure,
                         position,
                         message,
@@ -465,7 +466,8 @@ mod diagnostics {
                     let detail_before = failure.syntax_diagnostic();
                     assert!(detail_before.context.contains_key(detail));
                     let message_address = message.as_ptr();
-                    let finding = failure.original_diagnostic(
+                    let finding = failure.diagnostic(
+                        Context::Predicate,
                         "columns.VALUE.derivation.row_number.window.filter",
                         expression,
                         position.character,
@@ -484,17 +486,22 @@ mod diagnostics {
                     assert_eq!(failure.syntax_diagnostic(), detail_before);
                     assert_eq!(message.as_ptr(), message_address);
                 }
-                // Preserve the recorded contradiction: native/rule ESCAPE owns REQ-0191,
-                // while the unchanged original Python report currently uses REQ-0188.
-                let ParseError::Grammar {
-                    failure: GrammarFailure::InvalidEscape,
+                // ESCAPE owns REQ-0191 under the one syntax condition.
+                let yamaa_core::expression::CompileError::Invalid {
+                    failure: failure @ yamaa_core::expression::Failure::InvalidEscape,
                     position,
                     ..
-                } = parse_predicate("ID LIKE '%' ESCAPE 'xx'").unwrap_err()
+                } = compile(
+                    "ID LIKE '%' ESCAPE 'xx'",
+                    Context::Predicate,
+                    "rows[0].filter",
+                )
+                .unwrap_err()
                 else {
                     panic!("invalid ESCAPE width")
                 };
-                let finding = GrammarFailure::InvalidEscape.original_diagnostic(
+                let finding = failure.diagnostic(
+                    Context::Predicate,
                     "rows[0].filter",
                     "ID LIKE '%' ESCAPE 'xx'",
                     position.character,
@@ -505,7 +512,8 @@ mod diagnostics {
                     V::Number(("19").parse().expect("canonical integer"))
                 );
                 let huge = "\0".repeat(1_400_000);
-                let projected = GrammarFailure::InvalidExpression.original_diagnostic(
+                let projected = yamaa_core::expression::Failure::Syntax.diagnostic(
+                    Context::Predicate,
                     "rows[0].filter",
                     &huge,
                     usize::MAX,
@@ -519,12 +527,6 @@ mod diagnostics {
                     ]
                     .into()
                 );
-                let full = GrammarFailure::InvalidExpression.original_diagnostic(
-                    "rows[0].filter",
-                    "A >",
-                    usize::MAX,
-                );
-                assert_eq!(full.context["position"], V::from(usize::MAX));
             }
             #[test]
 
@@ -540,13 +542,8 @@ mod diagnostics {
                     payload: Some(Payload { original }),
                     trace: vec![],
                 };
-                let p = plan(vec![Node::Between {
-                    value: Scalar::Identifier("v".into()),
-                    lower: Scalar::Identifier("low".into()),
-                    upper: Scalar::Identifier("high".into()),
-                    negated: false,
-                }]);
-                let Err(error) = p.evaluate(&mut port) else {
+                let p = plan("v BETWEEN low AND high");
+                let Err(error) = p.evaluate_truth(&mut port) else {
                     panic!("opaque upper error")
                 };
                 assert_eq!(port.trace, ["v", "low", "v", "high"]);
@@ -584,7 +581,11 @@ mod diagnostics {
                         Route::RepeatedValue,
                         Route::Upper,
                         Route::Pattern,
+                        Route::Unary,
+                        Route::LeftOperand,
+                        Route::RightOperand,
                     ],
+                    source_span: None,
                     kind: ErrorKind::Condition(Condition::DanglingEscape),
                 };
                 let d = error.diagnostic().unwrap();
@@ -599,7 +600,10 @@ mod diagnostics {
                         "Lower".into(),
                         "RepeatedValue".into(),
                         "Upper".into(),
-                        "Pattern".into()
+                        "Pattern".into(),
+                        "unary".into(),
+                        "left".into(),
+                        "right".into()
                     ])
                 );
                 error.route = vec![Route::Left; 65_536];

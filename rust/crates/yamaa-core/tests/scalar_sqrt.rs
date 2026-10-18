@@ -1006,7 +1006,7 @@ mod scalar {
     }
     mod text_template {
         use yamaa_core::{
-            numeric_parser::SourceSpan,
+            expression::SourceSpan,
             text_template::{AdmissionError, MaterializeError, Part, StringTemplate},
             value::Value,
         };

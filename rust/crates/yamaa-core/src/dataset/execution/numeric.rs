@@ -3,8 +3,7 @@ use super::*;
 pub use crate::bound_expression::BoundNumeric;
 use crate::bound_expression::Read;
 use crate::{
-    evaluation::{EvaluationError, EvaluationErrorKind, NumericResolver},
-    numeric_compiler::CompiledEvaluationError,
+    expression::{ErrorKind, EvaluationError, Resolver as ExpressionResolver},
     value::Selection,
 };
 
@@ -18,7 +17,7 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
     assignment: &Assignment,
     state: &mut EvaluationState<'_, T::Error>,
 ) -> Result<Value, Box<ExecutionError<T::Error>>> {
-    let result = bound.expression().evaluate(&mut Resolver {
+    let result = bound.expression().evaluate_number(&mut Resolver {
         bound,
         table,
         candidate,
@@ -32,7 +31,7 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
 
 /// Keep scalar and aggregate arithmetic failures on the same typed route.
 pub(super) fn project_result<E>(
-    result: Result<crate::numeric::Number, CompiledEvaluationError<Box<ExecutionError<E>>>>,
+    result: Result<crate::numeric::Number, Box<EvaluationError<Box<ExecutionError<E>>>>>,
     candidate: &Candidate,
     plan: &DatasetPlan,
     row: usize,
@@ -40,26 +39,28 @@ pub(super) fn project_result<E>(
     match result {
         Ok(value) => Ok(Value::from(value)),
         Err(error) => {
-            let CompiledEvaluationError {
+            let EvaluationError {
+                spec_path,
+                expression,
+                route,
                 source_span,
-                evaluation,
-            } = error;
-            let EvaluationError { location, kind } = *evaluation;
+                kind,
+            } = *error;
             match kind {
-                EvaluationErrorKind::Resolution { error, .. } => Err(error),
-                EvaluationErrorKind::Numeric(condition) => {
+                ErrorKind::Resolution { error, .. } => Err(error),
+                ErrorKind::Condition(condition) => {
                     let identity = if condition.phase() == "derivation" {
                         failure_identity(candidate, plan.keys(), row)?
                     } else {
                         None
                     };
                     Err(Box::new(ExecutionError::Numeric {
-                        error: CompiledEvaluationError {
+                        error: EvaluationError {
+                            spec_path,
+                            expression,
+                            route,
                             source_span,
-                            evaluation: Box::new(EvaluationError {
-                                location,
-                                kind: EvaluationErrorKind::Numeric(condition),
-                            }),
+                            kind: ErrorKind::Condition(condition),
                         },
                         identity,
                     }))
@@ -79,7 +80,7 @@ struct Resolver<'a, 'state, T: TableAccess + ?Sized> {
     assignment: &'a Assignment,
 }
 
-impl<T: TableAccess + ?Sized> NumericResolver for Resolver<'_, '_, T> {
+impl<T: TableAccess + ?Sized> ExpressionResolver for Resolver<'_, '_, T> {
     type Error = Box<ExecutionError<T::Error>>;
 
     /// Resolve each occurrence, including repeated identifiers, against admitted bindings.

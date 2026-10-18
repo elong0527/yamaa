@@ -1,7 +1,7 @@
 //! Immutable numeric/predicate bindings for the shared compiled specification.
 //! Admission inspects names and column availability, never table cells or hosts.
 
-use crate::{numeric_compiler::CompiledNumeric, predicate};
+use crate::expression::CompiledExpression;
 use std::collections::BTreeSet;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -112,14 +112,14 @@ fn validate_scope(
 /// A predicate owns its plan and complete, unique name-to-column map.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BoundPredicate {
-    plan: Box<predicate::Plan>,
+    plan: Box<CompiledExpression>,
     bindings: Vec<Binding>,
     collected: Vec<String>,
 }
 
 impl BoundPredicate {
     /// Admit every occurrence, including those behind a short-circuiting node.
-    pub fn new(plan: predicate::Plan, bindings: Vec<Binding>) -> Result<Self, BindingError> {
+    pub fn new(plan: CompiledExpression, bindings: Vec<Binding>) -> Result<Self, BindingError> {
         if bindings
             .iter()
             .any(|binding| matches!(binding.read, Read::Intermediate { .. } | Read::Joined(_)))
@@ -140,7 +140,7 @@ impl BoundPredicate {
     /// group. Generic donor/output filters retain their narrower constructor.
     /// Collection ownership is by authored name, not by an invented current row.
     pub fn new_contextual(
-        plan: predicate::Plan,
+        plan: CompiledExpression,
         bindings: Vec<Binding>,
         mut collected: Vec<String>,
     ) -> Result<Self, BindingError> {
@@ -183,7 +183,7 @@ impl BoundPredicate {
     ) -> Result<(), BindingError> {
         validate_scope(&self.bindings, source_width, available, false).map_err(Into::into)
     }
-    pub fn plan(&self) -> &predicate::Plan {
+    pub fn plan(&self) -> &CompiledExpression {
         &self.plan
     }
     pub fn bindings(&self) -> &[Binding] {
@@ -212,13 +212,16 @@ impl BoundPredicate {
 /// A numeric expression owns the same closed binding representation as predicates.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BoundNumeric {
-    expression: CompiledNumeric,
+    expression: CompiledExpression,
     bindings: Vec<Binding>,
 }
 
 impl BoundNumeric {
     /// Bind all names without resolving cells, converting literals or folding arithmetic.
-    pub fn new(expression: CompiledNumeric, bindings: Vec<Binding>) -> Result<Self, BindingError> {
+    pub fn new(
+        expression: CompiledExpression,
+        bindings: Vec<Binding>,
+    ) -> Result<Self, BindingError> {
         if expression.spec_path().is_empty() {
             return Err(BindingError::EmptyPath);
         }
@@ -228,7 +231,7 @@ impl BoundNumeric {
             bindings,
         })
     }
-    pub fn expression(&self) -> &CompiledNumeric {
+    pub fn expression(&self) -> &CompiledExpression {
         &self.expression
     }
     pub fn bindings(&self) -> &[Binding] {

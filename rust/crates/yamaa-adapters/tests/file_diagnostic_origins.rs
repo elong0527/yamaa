@@ -98,7 +98,7 @@ mod file {
                     yamaa_adapters::specification_check::issue_rows(prepared.run()).unwrap();
                 assert_eq!(issues.len(), 1);
                 assert_eq!(issues[0].phase, "validation");
-                assert_eq!(issues[0].condition, "invalid_predicate");
+                assert_eq!(issues[0].condition, "invalid_expression");
                 assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0188"));
                 assert_eq!(issues[0].spec_paths, ["rows[1].filter"]);
                 assert_eq!(

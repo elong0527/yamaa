@@ -9,7 +9,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::numeric_parser::SourceSpan;
+use crate::expression::SourceSpan;
 
 mod dataset;
 pub(crate) use dataset::lookup_key_type;
@@ -30,10 +30,9 @@ pub use source::{source_diagnostics, ParquetFinding, SourceFinding};
 mod inherited_dependencies;
 pub use inherited_dependencies::inheritance_dependency_diagnostics;
 
-mod grammar;
+mod expression;
 mod numeric;
-mod predicate;
-pub use predicate::PredicateDiagnosticError;
+pub use expression::EvaluationDiagnosticError;
 mod project_lock;
 pub use project_lock::{
     lock_diagnostics, LockDiagnosticError, LockFinding, LockOrigins, LockReason,
@@ -293,13 +292,12 @@ conditions! {
     OutputDuplicateOrderTerm => ("validation", "duplicate_order_term", Some("REQ-0224")),
     OutputUndeclaredOrderColumn => ("validation", "undeclared_column", Some("REQ-0224")),
     OutputPublicationFailed => ("output", "publication_failed", Some("REQ-0764")),
-    NumericInvalidExpression => ("validation", "invalid_numeric_expression", Some("REQ-0439")),
-    NumericProhibitedConstruct => ("validation", "prohibited_construct", Some("REQ-0441")),
-    NumericProhibitedFunction => ("validation", "prohibited_function", Some("REQ-0440")),
-    AggregateInvalidExpression => ("validation", "invalid_aggregate_expression", Some("REQ-0499")),
-    AggregateProhibitedConstruct => ("validation", "prohibited_construct", Some("REQ-0512")),
-    AggregateProhibitedFunction => ("validation", "prohibited_function", Some("REQ-0500")),
-    AggregateNestedReduction => ("validation", "nested_reduction", Some("REQ-0502")),
+    ExpressionInvalid => ("validation", "invalid_expression", Some("REQ-0188")),
+    ExpressionInvalidEscape => ("validation", "invalid_expression", Some("REQ-0191")),
+    ExpressionInvalidRegex => ("validation", "invalid_expression", Some("REQ-1244")),
+    ExpressionProhibitedConstruct => ("validation", "prohibited_construct", Some("REQ-0441")),
+    ExpressionProhibitedFunction => ("validation", "prohibited_function", Some("REQ-0440")),
+    ExpressionNestedReduction => ("validation", "nested_reduction", Some("REQ-0502")),
     AggregateMultipleRecords => ("derivation", "aggregate_multiple_records", Some("REQ-0501")),
     AggregateRowMultipleRecords => ("row_construction", "aggregate_multiple_records", Some("REQ-0501")),
     AggregateIdentifierNotGrouped => ("validation", "aggregate_identifier_not_grouped", Some("REQ-0503")),
@@ -413,6 +411,7 @@ conditions! {
     SubmissionValueColumnNotOutput => ("validation", "value_metadata_not_output_column", Some("REQ-1166")),
     SubmissionValueMetadataConflict => ("validation", "conflicting_value_metadata", Some("REQ-1167")),
     SubmissionValueOriginRefuted => ("validation", "refuted_value_origin", Some("REQ-1168")),
+    SubmissionPredecessorLabel => ("validation", "predecessor_label_mismatch", Some("SUB-20")),
     SubmissionStandardFamily => ("validation", "unknown_standard_family", Some("REQ-0924")),
     SubmissionDefineExtension => ("validation", "value_not_permitted", Some("REQ-1014")),
     SubmissionDefineName => ("validation", "value_not_permitted", Some("DEFINE-2")),
@@ -471,11 +470,7 @@ conditions! {
     PredicateIncompatiblePair => ("validation", "incompatible_input_type", Some("REQ-0190")),
     PredicateExpectedText => ("validation", "incompatible_input_type", Some("REQ-0190")),
     PredicateContainsExpectedText => ("validation", "incompatible_input_type", Some("REQ-1244")),
-    PredicateDanglingEscape => ("validation", "invalid_predicate", Some("REQ-0191")),
-    PredicateInvalidExpression => ("validation", "invalid_predicate", Some("REQ-0188")),
-    PredicateIntegerOverflow => ("parse", "integer_overflow", Some("REQ-0014")),
-    PredicateInvalidEscape => ("validation", "invalid_predicate", Some("REQ-0191")),
-    PredicateInvalidRegex => ("validation", "invalid_predicate", Some("REQ-1244")),
+    PredicateDanglingEscape => ("validation", "invalid_expression", Some("REQ-0191")),
     RegexInvalidPattern => ("validation", "invalid_regex", Some("REQ-0827")),
     VerificationMatchesFailed => ("verification", "matches_failed", Some("REQ-0379")),
     VerificationIdentifierType => ("validation", "invalid_declaration", Some("REQ-0374")),

@@ -168,9 +168,9 @@ A regular expression is admitted in a schema `pattern` descriptor,
 the Unicode flag, without lookahead, lookbehind, backreferences, property
 escapes `\p{...}`, flags or inline flag groups; a group name is an ASCII
 identifier. An invalid pattern fails validation with `invalid_regex`, or with
-`invalid_predicate` in `str_contains`.
+`invalid_expression` in `str_contains`.
 
-Fails: `invalid_regex`, `invalid_predicate`.
+Fails: `invalid_regex`, `invalid_expression`.
 Evidence: `negative-matches-bad-pattern`, `negative-str-replace-invalid-regex`, `negative-str-contains-invalid-regex`.
 Replaces: REQ-0796, REQ-0797, REQ-0798, REQ-0799, REQ-0800, REQ-0809, REQ-0820, REQ-0821, REQ-0826, REQ-0827, REQ-0829.
 
@@ -217,8 +217,8 @@ constructs include lookahead `(?=` and `(?!`, lookbehind `(?<=` and `(?<!`,
 backreferences `\1` to `\9` and `\k<name>`, `(?P<name>`, non-ASCII group
 names, inline flag groups such as `(?i)`, `\p{...}` and malformed escapes such
 as `\a`. The
-`str_contains` predicate call instead fails with `invalid_predicate` at parse
-time under [FORMULA-8](formulas.md#formula-8). Each consumer
+`str_contains` predicate call instead fails with `invalid_expression` when its
+expression is admitted, under [FORMULA-8](formulas.md#formula-8). Each consumer
 rejects a pattern with its stated condition whether its syntax is malformed or
 merely outside the portable grammar.
 

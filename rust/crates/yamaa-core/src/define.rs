@@ -463,6 +463,38 @@ impl<P: Ports> Application<P> {
                 ]));
             }
         }
+        // The dataset inventory (CT-11) and the predecessor columns (SUB-20)
+        // span every submission section. The other sections' specifications
+        // are read, never represented, when a composed specification needs them.
+        let mut others = Vec::new();
+        if self.specifications.iter().any(|document| {
+            let document = P::specification(document).document;
+            crate::submission_inventory::requested(document)
+                || crate::submission_origin::names_predecessor(document)
+        }) {
+            for other in declarations
+                .sections()
+                .iter()
+                .filter(|other| other.family != family)
+            {
+                let key = composition::family_name(other.family);
+                for (index, spec) in other.specs.value.iter().enumerate() {
+                    others.push(
+                        ports
+                            .capture_specification(
+                                &format!("{key}.specs[{index}]"),
+                                identity,
+                                &spec.value,
+                            )
+                            .map_err(Failure::Port)?,
+                    );
+                }
+            }
+        }
+        let others: Vec<_> = others
+            .iter()
+            .map(|document| P::specification(document).document)
+            .collect();
         let inputs: Vec<_> = self
             .specifications
             .iter()
@@ -480,6 +512,7 @@ impl<P: Ports> Application<P> {
             section,
             environment.catalogue,
             &inputs,
+            &others,
             installed,
             &created,
         )

@@ -22,7 +22,7 @@
 #
 # A case carrying `invalid: true` records a pattern outside the portable
 # subset. Every consumer rejects such a pattern, using invalid_regex except
-# the str_contains predicate call, which uses invalid_predicate. It therefore
+# the str_contains predicate call, which uses invalid_expression. It therefore
 # names no subject and no outcome.
 #
 # Subjects are YAML double-quoted scalars so that a non-ASCII scalar value is

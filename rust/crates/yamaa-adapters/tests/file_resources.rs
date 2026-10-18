@@ -1237,9 +1237,10 @@ mod file {
                     "redundant_declaration",
                     "REQ-0955",
                 ),
+                // USUBJID assembles collected identifiers, which refutes Protocol.
                 (
-                    "type: Collected",
                     "type: Derived",
+                    "type: Protocol",
                     "origin_contradicts_derivation",
                     "REQ-0922",
                 ),
@@ -1284,6 +1285,264 @@ mod file {
                 "{:?}",
                 result.issues()
             );
+        }
+        /// Rewrite the DM fixture's metadata-only environment for one section.
+        fn metadata_only(temp: &Temp, section: &str, context: &str) {
+            let environment = fs::read_to_string(temp.0.join("environment.yaml"))
+                .unwrap()
+                .replace("dataset_json: true", "dataset_json: false")
+                .replace("context: Submission", &format!("context: {context}"))
+                .replace(
+                    "sdtm:\n  standard:\n    name: SDTMIG",
+                    &format!(
+                        "{section}:\n  standard:\n    name: {}",
+                        if section == "send" {
+                            "SENDIG"
+                        } else {
+                            "SDTMIG"
+                        }
+                    ),
+                );
+            fs::write(temp.0.join("environment.yaml"), environment).unwrap();
+        }
+        fn replace_spec(temp: &Temp, from: &str, to: &str) {
+            let spec = fs::read_to_string(temp.0.join("spec.yaml")).unwrap();
+            assert!(spec.contains(from), "{from}");
+            fs::write(temp.0.join("spec.yaml"), spec.replacen(from, to, 1)).unwrap();
+        }
+        fn item<'a>(xml: &'a str, oid: &str) -> &'a str {
+            let begin = xml.find(&format!("<ItemDef OID=\"{oid}\"")).unwrap();
+            &xml[begin..begin + xml[begin..].find("</ItemDef>").unwrap()]
+        }
+        #[test]
+        fn collected_origins_name_their_form_page_under_submission() {
+            // SITEID is collected by the investigator on the first form page.
+            let paged = "role: Record Qualifier\n      length: 10\n      origin:\n        type: Collected\n        source: Investigator\n        documents:\n          - document: acrf\n            pages: {type: PhysicalRef, refs: \"1\"}\n";
+            let pageless = "role: Record Qualifier\n      length: 10\n      origin:\n        type: Collected\n        source: Investigator\n";
+            let unpaged = format!("{pageless}        documents: [acrf]\n");
+            for (replacement, context, path) in [
+                (pageless, "Submission", Some("SITEID.submission.origin")),
+                (
+                    unpaged.as_str(),
+                    "Submission",
+                    Some("SITEID.submission.origin.documents"),
+                ),
+                (pageless, "Other", None),
+                (unpaged.as_str(), "Other", None),
+            ] {
+                let temp = Temp::fixture("sdtm-dm-metadata", false);
+                replace_spec(&temp, paged, replacement);
+                metadata_only(&temp, "sdtm", context);
+                let mut run = temp.run("2026-09-11T00:00:00");
+                if let Some(path) = path {
+                    assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
+                    let issue = &run.issues()[0];
+                    assert_eq!(
+                        (
+                            issue.phase.as_str(),
+                            issue.condition.as_str(),
+                            issue.requirement.as_deref()
+                        ),
+                        ("validation", "origin_document_missing", Some("REQ-0893"))
+                    );
+                    assert_eq!(issue.spec_paths, [format!("sdtm.specs[0].columns.{path}")]);
+                    assert!(run.save().is_err());
+                    assert!(!temp.0.join("define.xml").exists());
+                } else {
+                    // Under Other the reference to the form needs no page.
+                    assert!(run.issues().is_empty(), "{:?}", run.issues());
+                    let xml = std::str::from_utf8(run.artifacts().next().unwrap().1).unwrap();
+                    assert!(xml.contains("def:Context=\"Other\""));
+                    assert!(
+                        item(xml, "IT.DM.SITEID").contains("<def:DocumentRef leafID=\"LF.acrf\"/>")
+                    );
+                }
+            }
+        }
+        #[test]
+        fn not_available_and_send_sources_follow_the_family_pairs() {
+            let assigned =
+                "codelist: AGEU\n      origin:\n        type: Assigned\n        source: Sponsor\n";
+            let not_available = "codelist: AGEU\n      origin:\n        type: Not Available\n        description: Age units were not collected.\n";
+            // An sdtm Not Available declares no source and says why.
+            let temp = Temp::fixture("sdtm-dm-metadata", false);
+            replace_spec(&temp, assigned, not_available);
+            metadata_only(&temp, "sdtm", "Submission");
+            let run = temp.run("2026-09-11T00:00:00");
+            assert!(run.issues().is_empty(), "{:?}", run.issues());
+            let xml = std::str::from_utf8(run.artifacts().next().unwrap().1).unwrap();
+            let ageu = item(xml, "IT.DM.AGEU");
+            assert!(
+                ageu.contains("<def:Origin Type=\"Not Available\">"),
+                "{ageu}"
+            );
+            assert!(ageu.contains(">Age units were not collected.</TranslatedText>"));
+            let temp = Temp::fixture("sdtm-dm-metadata", false);
+            replace_spec(
+                &temp,
+                assigned,
+                &not_available.replace("description", "source: Sponsor\n        description"),
+            );
+            metadata_only(&temp, "sdtm", "Submission");
+            let run = temp.run("2026-09-11T00:00:00");
+            assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
+            assert_eq!(run.issues()[0].condition, "origin_source_not_admitted");
+            assert_eq!(
+                run.issues()[0].spec_paths,
+                ["sdtm.specs[0].columns.AGEU.submission.origin"]
+            );
+            // send takes the sources the sdtm table admits, or none.
+            let send = |temp: &Temp| {
+                Define::prepare(
+                    temp.0.join("environment.yaml").to_str().unwrap(),
+                    "send",
+                    Some("2026-09-11T00:00:00"),
+                    "0.3.0",
+                    Language::Python,
+                )
+            };
+            let temp = Temp::fixture("sdtm-dm-metadata", false);
+            metadata_only(&temp, "send", "Submission");
+            let run = send(&temp);
+            assert!(run.issues().is_empty(), "{:?}", run.issues());
+            let xml = std::str::from_utf8(run.artifacts().next().unwrap().1).unwrap();
+            assert!(item(xml, "IT.DM.SITEID")
+                .contains("<def:Origin Type=\"Collected\" Source=\"Investigator\">"));
+            let temp = Temp::fixture("sdtm-dm-metadata", false);
+            metadata_only(&temp, "send", "Submission");
+            replace_spec(
+                &temp,
+                assigned,
+                "codelist: AGEU\n      origin:\n        type: Assigned\n",
+            );
+            let run = send(&temp);
+            assert!(run.issues().is_empty(), "{:?}", run.issues());
+            let xml = std::str::from_utf8(run.artifacts().next().unwrap().1).unwrap();
+            assert!(item(xml, "IT.DM.AGEU").contains("<def:Origin Type=\"Assigned\"/>"));
+            for origin in [
+                "codelist: AGEU\n      origin:\n        type: Assigned\n        source: Investigator\n",
+                not_available.replace("description", "source: Sponsor\n        description").as_str(),
+            ] {
+                let temp = Temp::fixture("sdtm-dm-metadata", false);
+                metadata_only(&temp, "send", "Submission");
+                replace_spec(&temp, assigned, origin);
+                let run = send(&temp);
+                assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
+                assert_eq!(run.issues()[0].condition, "origin_source_not_admitted");
+                assert_eq!(
+                    run.issues()[0].spec_paths,
+                    ["send.specs[0].columns.AGEU.submission.origin"]
+                );
+            }
+        }
+        const STUDY_LB: &str = "schema_version: '1.0'\ndomain: LB\nkeys: [USUBJID, LBTESTCD]\ninput: {RAW: raw.csv}\noutput: {path: lb.csv, columns: [USUBJID, LBTESTCD]}\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: RAW.USUBJID\n    submission: {core: Req, length: 20, origin: {type: Assigned, source: Sponsor}}\n  - name: LBTESTCD\n    type: str\n    label: Lab Test or Examination Short Name\n    derivation: RAW.LBTESTCD\n    submission: {core: Req, length: 8, origin: {type: Assigned, source: Sponsor}}\nsubmission: {label: Laboratory Test Results, class: FINDINGS, structure: One record per lab test per subject, repeating: true}\n";
+        const STUDY_ADLB: &str = "schema_version: '1.0'\ndomain: ADLB\nkeys: [USUBJID, PARAMCD]\ninput: {LB: lb.csv}\noutput: {path: adlb.csv, columns: [USUBJID, PARAMCD, SRCDOM]}\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: LB.USUBJID\n    submission: {core: Req, mandatory: true, length: 20, origin: {type: Predecessor, description: LB.USUBJID}}\n  - name: PARAMCD\n    type: str\n    label: Parameter Code\n    derivation: LB.LBTESTCD\n    submission: {core: Req, mandatory: true, length: 8, origin: {type: Predecessor, description: LB.LBTESTCD}}\n  - name: SRCDOM\n    type: str\n    label: Source Data\n    derivation: {literal: LB}\n    submission: {core: Perm, mandatory: false, length: 8, inventory_vocabulary: true, origin: {type: Assigned}}\nsubmission: {label: Laboratory Analysis Dataset, class: BASIC DATA STRUCTURE, structure: One record per subject per parameter, repeating: true}\n";
+        const STUDY_SDTM: &str = "sdtm:\n  standard: {name: SDTMIG, version: '3.4', status: Final}\n  specs: [sdtm/lb.yaml]\n  define: sdtm/define.xml\n";
+        const STUDY_ADAM: &str = "schema_version: '1.0'\nstudy: {id: STUDY, name: Study, description: Cross-section witness, protocol_name: Protocol}\nadam:\n  standard: {name: ADaMIG, version: '1.3', status: Final}\n  specs: [adlb.yaml]\n  define: define.xml\n  dataset_json: true\n  source_system_version: '1.0'\n";
+        fn cross_section(adlb: &str, published: &str, sdtm: bool) -> (Temp, Define) {
+            let temp = Temp::new();
+            fs::create_dir(temp.0.join("sdtm")).unwrap();
+            fs::write(temp.0.join("sdtm/lb.yaml"), STUDY_LB).unwrap();
+            fs::write(temp.0.join("adlb.yaml"), adlb).unwrap();
+            fs::write(temp.0.join("adlb.csv"), published).unwrap();
+            let environment = if sdtm {
+                format!("{STUDY_ADAM}{STUDY_SDTM}")
+            } else {
+                STUDY_ADAM.into()
+            };
+            fs::write(temp.0.join("environment.yaml"), environment).unwrap();
+            let run = Define::prepare(
+                temp.0.join("environment.yaml").to_str().unwrap(),
+                "adam",
+                Some("2026-09-30T00:00:00"),
+                "0.3.0",
+                Language::Python,
+            );
+            (temp, run)
+        }
+        #[test]
+        fn predecessor_labels_and_the_dataset_inventory_span_every_section() {
+            // ADLB copies LB from the sdtm section: USUBJID keeps its name and
+            // label, PARAMCD renames LBTESTCD with its own label, and SRCDOM
+            // names the sdtm section's LB.
+            let published = "USUBJID,PARAMCD,SRCDOM\nS01-001,GLUC,LB\n";
+            let (temp, mut run) = cross_section(STUDY_ADLB, published, true);
+            assert!(run.issues().is_empty(), "{:?}", run.issues());
+            let artifacts: Vec<_> = run
+                .artifacts()
+                .map(|(name, bytes, _)| (name.to_owned(), bytes.to_vec()))
+                .collect();
+            assert_eq!(
+                artifacts.iter().map(|a| a.0.as_str()).collect::<Vec<_>>(),
+                ["adlb.json", "define.xml"]
+            );
+            let xml = std::str::from_utf8(&artifacts[1].1).unwrap();
+            let paramcd = item(xml, "IT.ADLB.PARAMCD");
+            assert!(paramcd.contains(">Parameter Code</TranslatedText>"));
+            assert!(
+                paramcd.contains("<def:Origin Type=\"Predecessor\">"),
+                "{paramcd}"
+            );
+            assert!(paramcd.contains(">LB.LBTESTCD</TranslatedText>"));
+            assert!(
+                !xml.contains("IG.LB"),
+                "the sdtm section is read, not represented"
+            );
+            assert!(run.save().unwrap());
+            assert!(temp.0.join("adlb.json").is_file());
+            assert!(!temp.0.join("sdtm/define.xml").exists());
+            // A copy that keeps the predecessor's name keeps its label.
+            let (temp, mut run) = cross_section(
+                &STUDY_ADLB.replacen(
+                    "label: Unique Subject Identifier",
+                    "label: Subject Identifier",
+                    1,
+                ),
+                published,
+                true,
+            );
+            assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
+            let issue = &run.issues()[0];
+            assert_eq!(
+                (
+                    issue.phase.as_str(),
+                    issue.condition.as_str(),
+                    issue.requirement.as_deref()
+                ),
+                ("validation", "predecessor_label_mismatch", Some("SUB-20"))
+            );
+            assert_eq!(issue.spec_paths, ["adam.specs[0].columns.USUBJID.label"]);
+            assert_eq!(
+                issue.context,
+                yamaa_adapters::json!({"detail": "USUBJID", "label": "Subject Identifier", "predecessor": "LB.USUBJID", "predecessor_label": "Unique Subject Identifier"})
+            );
+            assert!(run.save().is_err());
+            assert!(!temp.0.join("define.xml").exists());
+            // A name outside the study's inventory fails the published recheck.
+            let (_, run) = cross_section(STUDY_ADLB, &published.replace(",LB\n", ",XX\n"), true);
+            assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
+            assert_eq!(
+                (
+                    run.issues()[0].condition.as_str(),
+                    run.issues()[0].requirement.as_deref()
+                ),
+                ("allowed_values_failed", Some("REQ-1156"))
+            );
+            assert_eq!(run.issues()[0].context["value"], "XX");
+            // Without the sdtm section, LB names no dataset of the study and
+            // no predecessor column is declared to compare.
+            let (_, run) = cross_section(
+                &STUDY_ADLB.replacen(
+                    "label: Unique Subject Identifier",
+                    "label: Subject Identifier",
+                    1,
+                ),
+                published,
+                false,
+            );
+            assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
+            assert_eq!(run.issues()[0].condition, "allowed_values_failed");
+            assert_eq!(run.issues()[0].context["value"], "LB");
         }
     }
 }

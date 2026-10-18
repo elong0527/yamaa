@@ -70,10 +70,9 @@ Evidence: `schema-expressions`.
 Replaces: REQ-0290, REQ-0291, REQ-0292.
 
 `case` selects among expressions, and a key match value computes the operand
-it matches. [FORMULA-10](formulas.md#formula-10),
-[Text](text.md) and
-[FORMULA-17](formulas.md#formula-17) resolve the identifiers of the three leaf
-types.
+it matches. [FORMULA-9](formulas.md#formula-9) resolves the identifiers of
+`numeric_expression` and `aggregate_expression` leaves, and
+[Text](text.md) those of `string_template`.
 
 A plain string is a value unless its schema field is typed `variable`,
 `function_arg`, `predicate` or `string_template`.

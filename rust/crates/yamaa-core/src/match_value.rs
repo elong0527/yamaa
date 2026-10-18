@@ -43,7 +43,7 @@ pub fn result_type(catalog: &Catalog, expression: Expression<'_>) -> Option<Comp
             ("diff", Some(Date)) | ("rank" | "row_number" | "study_day" | "to_epoch_day", _) => {
                 Some(Int.into())
             }
-            ("compute", _) => Some(crate::numeric_compiler::NUMERIC_RESULT_TYPE.into()),
+            ("compute", _) => Some(crate::expression::NUMERIC_RESULT_TYPE.into()),
             ("round_half_away_from_zero", _) => Some(Float.into()),
             (
                 "baseline_flag" | "cut" | "imputation_flag" | "precision" | "str_case"

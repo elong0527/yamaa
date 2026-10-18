@@ -77,6 +77,9 @@ columns:
       origin:
         type: Collected
         source: Investigator
+        documents:
+          - document: acrf
+            pages: {type: PhysicalRef, refs: "1"}
 
   - name: AGE
     type: int

@@ -1101,6 +1101,7 @@ mod schema {
                 &declared.sections()[0],
                 &Catalogue::admit(vec![]).unwrap(),
                 &inputs,
+                &[],
                 "1.0",
                 "2026-09-11T00:00:00",
             )
@@ -2287,8 +2288,9 @@ mod schema {
                     literal
                 };
                 let derivations = a.map(vec![("LBTESTCD", literal)]);
+                // A literal refutes Derived: the value is read from no input.
                 let origin_type = if case == "refuted origin" && index == 0 {
-                    "Collected"
+                    "Derived"
                 } else {
                     "Assigned"
                 };
@@ -2349,6 +2351,7 @@ mod schema {
                     artifact: "lb.csv",
                     href: Some("lb.csv"),
                 }],
+                &[],
                 "0.3.0",
                 "2026-09-11T00:00:00",
             )

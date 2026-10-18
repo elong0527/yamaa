@@ -127,6 +127,7 @@ mod project {
                 yamaa_adapters::json_wire::encode(&issues[0].context),
                 "{\"column\":\"VALUE\",\"length\":-99999999999999999999999999999}"
             );
+            // A bare source admits Derived, which still needs its method.
             let issues =
                 study.check(&VALID.replace("origin: {type: Assigned}", "origin: {type: Derived}"));
             assert_eq!(
@@ -134,7 +135,7 @@ mod project {
                     .iter()
                     .map(|issue| issue.condition.as_str())
                     .collect::<Vec<_>>(),
-                ["method_missing", "origin_contradicts_derivation"]
+                ["method_missing"]
             );
             let raw = VALID.replace(
                 "submission: {length: 3",
@@ -975,6 +976,309 @@ mod project {
                 );
             }
             assert!(!study.0.join("input.csv").exists());
+        }
+
+        /// SUB-19's recode, literal and stored-value rows, as an SDTM study
+        /// declares them: each origin below is admitted by its derivation.
+        const ORIGINS: &str = r#"schema_version: '1.0'
+domain: DM
+keys: [ID]
+input: {SRC: {path: input.csv, types: {ID: int, AGE: int, EGFR: float, WEIGHT: float, HEIGHT: float}}}
+output: {path: output.csv, columns: [ID, SEX, RACE, BRTHDTC, RFICDT, HEIGHTU, EGFR, DTHDTC, AGE, BMI, AGEGR1, ARMCD]}
+columns:
+  - {name: ID, type: int, derivation: SRC.ID}
+  - name: SEX
+    type: str
+    derivation: {mapping: {source: SRC.SEX, dict: {Male: M, Female: F}}}
+    submission: {origin: {type: Collected, source: Investigator}}
+  - name: RACE
+    type: str
+    derivation:
+      case:
+        - {when: "SRC.RACE = 'white'", then: {literal: WHITE}}
+        - {otherwise: {str_case: {source: SRC.RACE, to: upper}}}
+    submission: {origin: {type: Collected, source: Investigator}}
+  - name: BRTHDTC
+    type: str
+    derivation: {str_template: "{SRC.BRTHYR}-{SRC.BRTHMO}-{SRC.BRTHDY}"}
+    submission: {origin: {type: Collected, source: Subject}}
+  - name: RFICDT
+    type: date
+    derivation: {to_date: {source: SRC.RFICDTC}}
+    submission: {origin: {type: Collected, source: Investigator}}
+  - name: HEIGHTU
+    type: str
+    derivation: {literal: cm}
+    submission: {origin: {type: Collected, source: Investigator}}
+  - name: EGFR
+    type: float
+    derivation: SRC.EGFR
+    submission:
+      origin: {type: Derived, source: Vendor}
+      method: Estimated by the central laboratory from serum creatinine.
+  - name: DTHDTC
+    type: str
+    derivation: {literal: null}
+    submission: {origin: {type: Not Available, description: Death date was not collected.}}
+  - {name: AGE, type: int, derivation: SRC.AGE}
+  - {name: WEIGHT, type: float, derivation: SRC.WEIGHT}
+  - {name: HEIGHT, type: float, derivation: SRC.HEIGHT}
+  - name: BMI
+    type: float
+    derivation: {compute: {expr: "WEIGHT / (HEIGHT * HEIGHT)"}}
+    submission:
+      origin: {type: Derived, source: Sponsor}
+      method: Weight in kilograms divided by the square of height in metres.
+  - name: AGEGR1
+    type: str
+    derivation:
+      case:
+        - {when: "AGE >= 65", then: {literal: '>=65'}}
+        - {otherwise: {literal: '<65'}}
+    submission:
+      origin: {type: Derived, source: Sponsor}
+      method: Age grouped at 65 years.
+  - name: ARMCD
+    type: str
+    derivation: {mapping: {source: SRC.ARM, dict: {Placebo: PBO, Active: ACT}}}
+    submission: {origin: {type: Assigned, source: Sponsor}}
+"#;
+        #[test]
+        fn recodes_literals_and_stored_values_admit_their_published_origins() {
+            // A recode of collected terminology, a case over collected values,
+            // an ISO 8601 assembly of date parts, a printed unit and a value
+            // computed upstream and read as stored keep the origin a study
+            // declares for them; Not Available is admitted by every derivation.
+            let study = Study::new();
+            let issues = study.check(ORIGINS);
+            assert!(issues.is_empty(), "{issues:?}");
+            for (column, declared) in [
+                ("BMI", "Not Available, description: Not derived."),
+                ("AGEGR1", "Not Available, description: Not derived."),
+                ("HEIGHTU", "Protocol, source: Sponsor"),
+                ("EGFR", "Collected, source: Vendor"),
+            ] {
+                let raw = replace_origin(ORIGINS, column, declared);
+                let issues = study.check(&raw);
+                assert!(issues.is_empty(), "{column}: {issues:?}");
+            }
+            assert!(!study.0.join("input.csv").exists());
+        }
+        /// Replace one column's declared origin in [`ORIGINS`].
+        fn replace_origin(raw: &str, column: &str, origin: &str) -> String {
+            let start = raw.find(&format!("name: {column}\n")).unwrap();
+            let at = start + raw[start..].find("origin: {type: ").unwrap();
+            let end = at + raw[at..].find('}').unwrap();
+            format!("{}origin: {{type: {origin}{}", &raw[..at], &raw[end..])
+        }
+        #[test]
+        fn computed_values_and_case_reads_of_derived_columns_refute_collected() {
+            let study = Study::new();
+            for (column, declared, admitted) in [
+                // Arithmetic computes the value.
+                (
+                    "BMI",
+                    "Collected, source: Vendor",
+                    &["Assigned", "Derived", "Not Available", "Other"][..],
+                ),
+                // A case whose condition reads an output column classifies a
+                // derived value rather than recoding a collected one.
+                (
+                    "AGEGR1",
+                    "Collected, source: Investigator",
+                    &["Assigned", "Derived", "Not Available", "Other"],
+                ),
+                // A recode refutes Protocol and a literal refutes Derived.
+                (
+                    "ARMCD",
+                    "Protocol, source: Sponsor",
+                    &["Assigned", "Collected", "Derived", "Not Available", "Other"],
+                ),
+                (
+                    "HEIGHTU",
+                    "Derived, source: Sponsor",
+                    &[
+                        "Assigned",
+                        "Collected",
+                        "Not Available",
+                        "Other",
+                        "Protocol",
+                    ],
+                ),
+            ] {
+                let raw = replace_origin(ORIGINS, column, declared);
+                let issues = study.check(&raw);
+                let refuted: Vec<_> = issues
+                    .iter()
+                    .filter(|issue| issue.condition == "origin_contradicts_derivation")
+                    .collect();
+                assert_eq!(refuted.len(), 1, "{column}: {issues:?}");
+                assert_eq!(refuted[0].requirement.as_deref(), Some("REQ-0922"));
+                assert_eq!(
+                    refuted[0].spec_paths,
+                    [format!("columns.{column}.submission")]
+                );
+                let context = refuted[0].context.clone();
+                assert_eq!(context["column"], column);
+                assert_eq!(context["origin_type"], declared.split(',').next().unwrap());
+                assert_eq!(context["admitted"], yamaa_adapters::json!(admitted));
+            }
+            // Reading a declared input dataset instead makes AGEGR1 a recode.
+            let raw = replace_origin(
+                &ORIGINS.replace("when: \"AGE >= 65\"", "when: \"SRC.AGE >= 65\""),
+                "AGEGR1",
+                "Collected, source: Investigator",
+            );
+            assert!(study.check(&raw).is_empty());
+            assert!(!study.0.join("input.csv").exists());
+        }
+
+        const PREDECESSORS: &str = r#"schema_version: '1.0'
+domain: ADSL
+keys: [USUBJID]
+input: {DM: dm.csv, SUPPDM: suppdm.csv}
+base: DM
+output: {path: adsl.csv, columns: [USUBJID, AGE, RACEOTH]}
+columns:
+  - {name: USUBJID, type: str, label: Unique Subject Identifier, derivation: DM.USUBJID}
+  - name: AGE
+    type: str
+    label: Age
+    derivation: DM.AGE
+    submission: {origin: {type: Predecessor, description: DM.AGE}}
+  - name: RACEOTH
+    type: str
+    label: Race, Other
+    derivation: {source: {variable: SUPPDM.QVAL, filter: "SUPPDM.QNAM = 'RACEOTH'"}}
+    submission: {origin: {type: Predecessor, description: "SUPPDM.QVAL where QNAM = 'RACEOTH'"}}
+"#;
+        #[test]
+        fn predecessor_columns_copy_the_column_their_description_names() {
+            let study = Study::new();
+            let issues = study.check(PREDECESSORS);
+            assert!(issues.is_empty(), "{issues:?}");
+            for (from, to, column, reason, predecessor) in [
+                (
+                    "derivation: DM.AGE",
+                    "derivation: DM.USUBJID",
+                    "AGE",
+                    "predecessor_source",
+                    "DM.AGE",
+                ),
+                (
+                    "derivation: {source: {variable: SUPPDM.QVAL, filter: \"SUPPDM.QNAM = 'RACEOTH'\"}}",
+                    "derivation: SUPPDM.QVAL",
+                    "RACEOTH",
+                    "predecessor_filter",
+                    "SUPPDM.QVAL",
+                ),
+            ] {
+                let issues = study.check(&PREDECESSORS.replace(from, to));
+                assert_eq!(issues.len(), 1, "{column}: {issues:?}");
+                assert_eq!(
+                    (
+                        issues[0].condition.as_str(),
+                        issues[0].requirement.as_deref()
+                    ),
+                    ("origin_contradicts_derivation", Some("REQ-0922"))
+                );
+                assert_eq!(issues[0].spec_paths, [format!("columns.{column}.submission")]);
+                let context = issues[0].context.clone();
+                assert_eq!(context["column"], column);
+                assert_eq!(context["origin_type"], "Predecessor");
+                assert_eq!(context["predecessor"], predecessor);
+                assert_eq!(context["reason"], reason);
+            }
+            // A description that names no `<dataset>.<column>` is not the form.
+            let issues = study.check(&PREDECESSORS.replace(
+                "description: DM.AGE}",
+                "description: Copied from demographics}",
+            ));
+            assert_eq!(issues.len(), 1, "{issues:?}");
+            assert_eq!(
+                (
+                    issues[0].condition.as_str(),
+                    issues[0].requirement.as_deref()
+                ),
+                ("origin_description_missing", Some("REQ-0920"))
+            );
+            assert_eq!(
+                issues[0].spec_paths,
+                ["columns.AGE.submission.origin.description"]
+            );
+            assert_eq!(issues[0].context["reason"], "predecessor_form");
+            // A computed column cannot claim to be a copy.
+            let issues = study.check(&PREDECESSORS.replace(
+                "derivation: DM.AGE",
+                "derivation: {str_template: \"{DM.AGE} years\"}",
+            ));
+            assert_eq!(issues.len(), 1, "{issues:?}");
+            assert_eq!(issues[0].condition, "origin_contradicts_derivation");
+            // A value-level Predecessor is checked against its row's derivation.
+            let values = "schema_version: '1.0'\ndomain: LB\nkeys: [ID, LBTESTCD]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, LBTESTCD, LBORRES]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: LBTESTCD, type: str}\n  - {name: LBORRES, type: str, submission: {origin: {type: Assigned}}}\nrows:\n  - id: glucose\n    derivations: {LBTESTCD: {literal: GLUC}, LBORRES: SRC.GLUC}\n    submission: {LBORRES: {origin: {type: Predecessor, description: SRC.GLUC}}}\n  - id: creatinine\n    derivations: {LBTESTCD: {literal: CREAT}, LBORRES: SRC.CREAT}\n";
+            assert!(study.check(values).is_empty());
+            let issues =
+                study.check(&values.replacen("LBORRES: SRC.GLUC", "LBORRES: SRC.CREAT", 1));
+            assert_eq!(issues.len(), 1, "{issues:?}");
+            assert_eq!(
+                (
+                    issues[0].condition.as_str(),
+                    issues[0].requirement.as_deref()
+                ),
+                ("refuted_value_origin", Some("REQ-1168"))
+            );
+            assert_eq!(issues[0].spec_paths, ["rows.glucose.submission.LBORRES"]);
+            assert_eq!(
+                issues[0].context,
+                yamaa_adapters::json!({"column": "LBORRES", "derivation_kind": "source", "origin_type": "Predecessor", "reason": "predecessor_source", "testcd": "GLUC"})
+            );
+            assert!(!study.0.join("dm.csv").exists());
+        }
+        #[test]
+        fn inventory_names_the_datasets_of_every_submission_section() {
+            // An ADaM SRCDOM names the SDTM domain another section lists.
+            let study = Study::new();
+            fs::create_dir(study.0.join("sdtm")).unwrap();
+            fs::write(
+                study.0.join("spec.yaml"),
+                inventory_spec().replace("domain: TEST", "domain: ADAE"),
+            )
+            .unwrap();
+            fs::write(
+                study.0.join("sdtm/ae.yaml"),
+                VALID
+                    .replace("domain: TEST", "domain: AE")
+                    .replace("input.csv", "never-read.csv"),
+            )
+            .unwrap();
+            fs::write(
+                study.0.join("environment.yaml"),
+                "schema_version: '1.0'\nstudy: {id: STUDY, name: Study, description: Study dataset inventory, protocol_name: Protocol}\nsdtm:\n  standard: {name: SDTMIG, version: '3.4', status: Final}\n  specs: [sdtm/ae.yaml]\n  define: sdtm/define.xml\nadam:\n  standard: {name: ADaMIG, version: '1.3', status: Final}\n  specs: [spec.yaml]\n  define: define.xml\n",
+            )
+            .unwrap();
+            fs::write(
+                study.0.join("input.csv"),
+                "ID,VALUE\n1,AE\n2,ADAE\n3,XX\n4,\n",
+            )
+            .unwrap();
+            let path = study.0.join("spec.yaml");
+            let environment = study.0.join("environment.yaml");
+            let run = project_domain(path.to_str().unwrap(), environment.to_str().unwrap());
+            assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
+            assert_eq!(
+                (
+                    run.issues()[0].phase.as_str(),
+                    run.issues()[0].condition.as_str(),
+                    run.issues()[0].requirement.as_deref()
+                ),
+                ("verification", "allowed_values_failed", Some("REQ-1156"))
+            );
+            assert_eq!(
+                yamaa_adapters::json_wire::encode(&run.issues()[0].context),
+                "{\"column\":\"VALUE\",\"failure_count\":1,\"keys\":[{\"ID\":3}],\"values\":[\"XX\"]}"
+            );
+            assert!(!study.0.join("sdtm/never-read.csv").exists());
+            assert!(!study.0.join("define.xml").exists());
         }
     }
     mod producer_links {

@@ -1,109 +1,278 @@
 # Formulas
 
-Three closed text languages are written inside a specification: predicates
-in fields typed `predicate`, numeric formulas in `compute`, and reducer
-expressions in `aggregate`. Each grammar has one source under
-[yaml/grammar/](../yaml/grammar/README.md), rendered into the card that owns
-it.
+One closed expression language is written inside a specification: in fields
+typed `predicate`, in `compute.expr` and in `aggregate.expr`. Its grammar has
+one source under [yaml/grammar/](../yaml/grammar/README.md), rendered into
+[FORMULA-1](#formula-1), and the field a text is written in decides the root
+it has and what it may use ([FORMULA-27](#formula-27)). String templates keep
+their own grammar ([TEXT-3](text.md#text-3)).
 
-## Predicates
+## The language
 
 <a id="formula-1"></a>
 
-### FORMULA-1. A predicate is one Boolean text in the closed predicate grammar
+### FORMULA-1. An expression is one text in the closed expression grammar
 
-A field typed `predicate` holds one Boolean text in the grammar below. Row,
-aggregate, window, record-lookup and multiple-match filters, `case` and the
-`assert` verification use it. An operand is only a name or a literal:
-arithmetic, `CASE`, aggregates, windows, subqueries, host-language calls and
-`!=` are not in the grammar, and the one function call is `str_contains`
-([FORMULA-8](#formula-8)). Text that does not parse as one predicate,
-including a prohibited operator or construct, fails.
+Fields typed `predicate`, `compute.expr` and `aggregate.expr` each hold one
+text in the grammar below. Comparisons, Boolean logic, arithmetic, the closed
+functions and the reducers are the whole language: `CASE`, windows,
+subqueries, host-language calls and `!=` are not in it. The whole text is
+read, and checked against its field, before any name is resolved or value
+read. Text that does not parse as one expression fails, as does a truth value
+where a value belongs or a value where a truth value belongs.
 
-Fails: `invalid_predicate`.
-Evidence: `schema-predicates`, `negative-review-arithmetic`, `yaml/grammar/predicate.yaml`.
-Replaces: REQ-0158, REQ-0160, REQ-0162, REQ-0188.
+Fails: `invalid_expression`.
+Evidence: `schema-predicates`, `schema-numeric-functions`, `schema-aggregation`, `negative-flag-condition`, `yaml/grammar/expression.yaml`.
+Replaces: REQ-0158, REQ-0160, REQ-0162, REQ-0188, REQ-0413, REQ-0439,
+REQ-0475, REQ-0499, REQ-1089, REQ-1120.
 
-<!-- grammar: predicate -->
+<!-- grammar: expression -->
 
 ```text
-predicate   := disjunction
+expression  := disjunction
 disjunction := conjunction ("OR" conjunction)*
 conjunction := negation ("AND" negation)*
-negation    := "NOT"* boolean
-boolean     := comparison | null_test | call | "(" predicate ")" | "TRUE" | "FALSE"
-comparison  := operand compare operand
-             | operand ["NOT"] "IN" "(" operand ("," operand)* ")"
-             | operand ["NOT"] "BETWEEN" operand "AND" operand
-             | operand ["NOT"] "LIKE" operand ["ESCAPE" string]
-null_test   := operand "IS" ["NOT"] "NULL"
-call        := "str_contains" "(" operand "," string ")"
+negation    := "NOT"* comparison
+comparison  := sum [compare sum | membership | range | pattern | null_test]
 compare     := "=" | "<>" | "<" | "<=" | ">" | ">="
-operand     := identifier | literal
+membership  := ["NOT"] "IN" "(" expression ("," expression)* ")"
+range       := ["NOT"] "BETWEEN" sum "AND" sum
+pattern     := ["NOT"] "LIKE" sum ["ESCAPE" string]
+null_test   := "IS" ["NOT"] "NULL"
+sum         := product (("+" | "-") product)*
+product     := factor (("*" | "/") factor)*
+factor      := ["+" | "-"] primary
+primary     := literal | reduction | call | identifier | "(" expression ")"
+reduction   := reducer "(" expression ")" | "COUNT" "(" star ")"
+star        := name "." "*"
+call        := function "(" [expression ("," expression)*] ")"
 identifier  := name ["." name]
-name        := (letter | "_") { letter | digit | "_" }
-literal     := number | string | temporal | "NULL"
-number      := ["+" | "-"] digits ["." digits]
-               [("e" | "E") ["+" | "-"] digits]
+literal     := number | string | temporal | "TRUE" | "FALSE" | "NULL"
+temporal    := ("DATE" | "DATETIME") string
+number      := digits ["." digits] [("e" | "E") ["+" | "-"] digits]
 digits      := digit { digit }
+name        := (letter | "_") { letter | digit | "_" }
 letter      := "A" ... "Z" | "a" ... "z"
 digit       := "0" ... "9"
 string      := "'" { non_quote | "''" } "'"
 non_quote   := any Unicode scalar value other than "'"
-temporal    := "DATE" string | "DATETIME" string
 ```
 
-The block renders `yaml/grammar/predicate.yaml`, the grammar's single
-source. Its `reserved` list closes the keywords of
-[FORMULA-2](#formula-2), and its cases record the texts the language accepts
-and rejects, the identifiers in each accepted text and each accepted parse.
-Text that does not parse fails with `invalid_predicate`. A value computed
-before comparison is first bound to a named column; an internal column may be
-omitted from `output.columns`.
+The block renders `yaml/grammar/expression.yaml`, the grammar's single
+source. Its vocabulary closes the functions of [FORMULA-13](#formula-13) and
+[FORMULA-8](#formula-8) and the reducers of [FORMULA-18](#formula-18), its
+`reserved` list closes the keywords of [FORMULA-2](#formula-2), and its cases
+record, in each context of [FORMULA-27](#formula-27), the texts the language
+accepts and rejects, the identifiers an accepted text binds and its parse.
+The grammar is a subset of SQL.
+
+A text is admitted in this order: the whole text is tokenized, then parsed,
+then its integer literals are checked ([FORMULA-3](#formula-3)), then its
+field refuses the constructs it does not admit, and then each function,
+reduction and operand is checked, an inner one before the one that contains
+it. The first fault found is the one reported. Text that does not parse fails
+with `invalid_expression`, reporting the field's text and, in a predicate, the
+character position of the fault.
+
+`AND`, `OR` and `NOT` take truth values, the root of a predicate is a truth
+value, and every other operand is a value. `A = TRUE` and `A + (B = 1) = 2`
+place a truth value where a value belongs, and a predicate `A` or `NOT 1`
+places a value where a truth value belongs; each fails with
+`invalid_expression`.
 
 <a id="formula-2"></a>
 
-### FORMULA-2. Predicate keywords are reserved and case-insensitive, and NOT binds before AND before OR
+### FORMULA-2. Keywords and the names of functions and reducers are case-insensitive, and a sign binds tightest and OR loosest
 
 Whitespace may separate tokens but cannot occur inside a number, identifier or
-keyword. Precedence is `NOT`, then `AND`, then `OR`; repeated binary operators
-associate from the left, and parentheses override precedence. Keywords,
-`NULL`, `TRUE` and `FALSE` are case-insensitive, and identifiers are
-case-sensitive. The keywords are reserved as bare names, but a qualified field
-may use one of those spellings after its qualifier.
+keyword. From loosest to tightest, precedence is `OR`, `AND`, `NOT`, a
+comparison, binary `+` and `-`, `*` and `/`, then a unary sign. Repeated
+binary operators associate from the left, a comparison does not associate,
+and parentheses override precedence. Keywords and function and reducer names
+are case-insensitive, and identifiers are case-sensitive. A reserved keyword
+is not a bare name, but a qualified field may use one after its qualifier.
 
-Evidence: `yaml/grammar/predicate.yaml`, `schema-predicates`.
-Replaces: REQ-0161.
+Evidence: `yaml/grammar/expression.yaml`, `schema-predicates`.
+Replaces: REQ-0161, REQ-0414, REQ-0476.
 
-The reserved keywords are `AND`, `BETWEEN`, `DATE`, `DATETIME`, `ESCAPE`,
-`FALSE`, `IN`, `IS`, `LIKE`, `NOT`, `NULL`, `OR` and `TRUE`.
+The reserved keywords are `AND`, `BETWEEN`, `FALSE`, `IN`, `IS`, `LIKE`,
+`NOT`, `NULL`, `OR` and `TRUE`. `DATE` and `DATETIME` begin a temporal
+literal only directly before a string literal, and `ESCAPE` is a keyword only
+after a `LIKE` pattern; anywhere else each is an ordinary name, as are `CASE`,
+`WHEN`, `THEN`, `ELSE`, `END` and `OVER`. A function or reducer name is not
+reserved either: `SUM` without `(` is a name.
+
+`A = B = C` does not parse, since a comparison takes two sums.
+`ALT > 3 * ULN` compares `ALT` with `3 * ULN`, and the upper bound of
+`BETWEEN` binds tighter than `AND`: `X BETWEEN 1 AND Y + 1 AND Z = 2` is
+`(X BETWEEN 1 AND (Y + 1)) AND (Z = 2)`. `-A * B` is `(-A) * B`, and `--A`
+does not parse.
 
 <a id="formula-3"></a>
 
-### FORMULA-3. A predicate literal has a fixed runtime type, and a temporal literal needs its keyword
+### FORMULA-3. A literal has a fixed runtime type, an integer literal fits int, and a temporal literal needs its keyword
 
-A `number` has the number form of the numeric grammar
-([FORMULA-10](#formula-10)) and may have a leading sign; it has runtime type
-`int` when it has neither a fractional part nor an exponent, and `float`
-otherwise. A `string` is delimited by single quotes, a doubled quote denotes
-one quote, backslash has no escape meaning, and its type is `str`. `DATE '...'`
-and `DATETIME '...'` are temporal literals whose text must parse under
-[Values](values.md) for the named type.
+A `number` with neither a fractional part nor an exponent is an `int`, any
+other is a `float`, and a sign written before a number belongs to it. An
+integer literal must lie in the `int` range. A `string` is delimited by single
+quotes, a doubled quote denotes one quote, backslash has no escape meaning,
+and its type is `str`. `TRUE` and `FALSE` are truth values and `NULL` is
+missing. `DATE '...'` and `DATETIME '...'` are temporal literals whose text
+must parse under [Values](values.md) for the named type.
 
-Fails: `invalid_predicate`.
-Evidence: `yaml/grammar/predicate.yaml`, `rust/crates/yamaa-adapters/tests/fixtures/predicate_diagnostics.tsv`.
+Fails: `invalid_expression`, `integer_overflow`.
+Evidence: `yaml/grammar/expression.yaml`, `rust/crates/yamaa-adapters/tests/fixtures/predicate_diagnostics.tsv`, `rust/crates/yamaa-core/tests/fixtures/numeric_literals.tsv`.
 Replaces: REQ-0163, REQ-0164, REQ-0165, REQ-0192.
+
+`-9223372036854775808` is the least `int`, and `- 1` is the literal `-1`. An
+integer literal outside the `int` range of [VALUE-5](values.md#value-5),
+sign included, fails validation with `integer_overflow` at the field's path,
+wherever it is written, once the whole text parses. A `float` literal beyond
+the binary64 range is non-finite and becomes missing under
+[VALUE-4](values.md#value-4).
 
 `'C:\new'` contains a backslash, and a string literal is text under
 [Values](values.md). The temporal keyword is required:
 `'2025-06-01'` alone is a `str`, not a `date`.
 
-A temporal literal that [Values](values.md) rejects while
-the predicate is parsed fails with `invalid_predicate`. The parser finding
-keeps the literal kind and the applicable temporal cause, which standalone
-syntax diagnostic context reports; a finding in the original document keeps
-the predicate and its character position. Temporal operations outside the
-predicate grammar keep their own temporal conditions.
+A temporal literal that [Values](values.md) rejects fails with
+`invalid_expression`. The finding keeps the literal kind and the applicable
+temporal cause, which standalone syntax diagnostic context reports; a finding
+in the original document keeps the field's text and, in a predicate, its
+character position. Temporal operations outside the grammar keep their own
+temporal conditions. Which literals a field admits is
+[FORMULA-27](#formula-27)'s.
+
+<a id="formula-27"></a>
+
+### FORMULA-27. The field an expression is written in fixes its root and the constructs it admits
+
+A predicate has a truth-valued root and admits comparisons, Boolean logic,
+every literal, `str_contains`, and arithmetic and the numeric functions in an
+operand. `compute.expr` has a numeric root over numbers, `NULL`, names,
+arithmetic and the numeric functions. `aggregate.expr` admits what
+`compute.expr` admits and the reducers. A reduction is refused outside
+`aggregate.expr`, and a refused construct fails wherever it is written. A
+call of a function or reducer its field does not admit fails, as does an
+admitted function called with another number of arguments.
+
+Fails: `prohibited_construct`, `prohibited_function`.
+Evidence: `negative-formula-flag`, `negative-row-aggregate`, `yaml/grammar/expression.yaml`, `rust/crates/yamaa-adapters/tests/fixtures/grammar_diagnostics.tsv`.
+Replaces: REQ-0407, REQ-0441, REQ-0512, REQ-1119, REQ-1121.
+
+| Written in | Root | Admits | Refuses |
+| --- | --- | --- | --- |
+| a field typed `predicate` | a truth value, under [FORMULA-4](#formula-4) | comparisons, `IN`, `BETWEEN`, `LIKE`, `IS NULL`, `AND`, `OR`, `NOT`, every literal, `str_contains`, and in an operand arithmetic and the numeric functions | a reduction |
+| `compute.expr` | a number for each current row | numbers, `NULL`, names, arithmetic and the numeric functions | comparisons and `IN`, `BETWEEN`, `LIKE` and `IS NULL`; `AND`, `OR`, `NOT`, `TRUE` and `FALSE`; a string or temporal literal; `str_contains`; a reduction |
+| `aggregate.expr` | a number, or a reduction that is the whole expression and keeps the type it reduces ([FORMULA-23](#formula-23)) | what `compute.expr` admits, and the reducers of [FORMULA-18](#formula-18) | what `compute.expr` refuses, except a reduction |
+
+A refused construct fails with `prohibited_construct`, naming it:
+`comparison`, `boolean`, `string` or `temporal`. When a text holds several,
+the one written first is reported. A call of a name outside the field's
+functions, including a reducer outside `aggregate.expr` and `str_contains`
+outside a predicate, fails with `prohibited_function` naming the function as
+written; an admitted function called with another number of arguments also
+reports the count. `SUM(AVAL)` in `compute.expr` fails with
+`prohibited_function`, and `AVAL > ANRHI` in `compute.expr` fails with
+`prohibited_construct`.
+
+Arithmetic in a predicate has the numeric semantics of `compute`:
+[FORMULA-12](#formula-12) types its operands, [FORMULA-14](#formula-14)
+propagates missing and [FORMULA-15](#formula-15) fails it, and its result
+compares under [FORMULA-5](#formula-5). `ALT > 3 * ULN` is `TRUE` for a row
+whose `ALT` exceeds three times its `ULN`, and `UNKNOWN` when either is
+missing.
+
+`compute` evaluates `expr` over constructed output columns, fields of a
+declared record lookup and numeric literals, and returns one numeric value per
+current row. [Values](values.md)' representation, promotion and overflow rules
+apply to every operator and function. `aggregate` reduces one relation under
+[FORMULA-17](#formula-17).
+
+<a id="formula-9"></a>
+
+### FORMULA-9. An identifier names a value visible at its site, and any other name fails
+
+Each site sees the names the table below gives, under
+[Column derivation](columns.md), and `compute.expr` resolves a name as a
+predicate does in the same phase. An identifier in a right-side predicate is
+qualified by the right-side dataset's ID, and one over a completed or
+candidate output row is unqualified. No expression reaches an undeclared
+relation. Identifiers are collected for dependency ordering, so an unresolved
+name fails rather than leaving an expression dependency-free.
+
+Fails: `unresolvable_name`, `unknown_field`, `qualified_identifier`.
+Evidence: `negative-review-unknown-date`, `negative-direct-dose-read`, `adam-adsl-bmi`, `rust/crates/yamaa-adapters/tests/fixtures/flag_reference.json`, `rust/crates/yamaa-adapters/tests/scalar_language.rs`.
+Replaces: REQ-0178, REQ-0179, REQ-0180, REQ-0181, REQ-0182, REQ-0183,
+REQ-0184, REQ-0185, REQ-0186, REQ-0189, REQ-0408, REQ-0409, REQ-0410,
+REQ-0411, REQ-0412, REQ-0442, REQ-0443.
+
+| Site | Visible names |
+| --- | --- |
+| Ungrouped row filter | The names [ROW-6](rows.md#row-6) defines |
+| Grouped row filter | Only unqualified columns derived by that row |
+| Aggregate, record-lookup and multiple-match filters | Records of their owning right-side dataset |
+| Window filter | Constructed output columns in row construction; in an intermediate derivation, the augmented donor records [LOOKUP-15](lookup.md#lookup-15) describes |
+| Verification | Completed columns and record intermediates resolved for the completed row |
+| `case` | The values available to its enclosing derivation |
+| `compute.expr` in column derivation | Constructed output columns, and fields of a declared record lookup |
+| `compute.expr` in row construction | The names the paragraphs below give |
+| `aggregate.expr` | The relation [LOOKUP-18](lookup.md#lookup-18) gives, and grouping columns ([FORMULA-22](#formula-22)) |
+
+An enclosing column derivation may also bind a qualified dataset or
+record-lookup field under [Name binding](names.md) and
+[Lookup and joins](lookup.md). A verification may read a declared record
+lookup for its completed row.
+
+An identifier that is unavailable at its site fails. An unqualified
+identifier that names a field of an in-scope dataset fails with
+`unresolvable_name` and suggests the qualified spelling; any other unavailable
+identifier fails with `unknown_field`. Both report under
+[Column derivation](columns.md).
+
+During column derivation an unqualified identifier in `compute.expr` is a
+constructed output column, and a qualified identifier is permitted only when
+its qualifier is a declared record lookup `id`; it reads the named field of
+that lookup's selected record. An arbitrary `DATASET.VARIABLE` reference is
+not permitted there: bind the source variable to a column first and compute
+from that column. Omitting that binding column from `output.columns` keeps it
+out of the final dataset. A qualified identifier whose qualifier is not a
+declared record lookup fails with `qualified_identifier`, and an identifier
+that resolves to neither a declared output column nor a field of a declared
+record lookup fails with `unknown_field`.
+
+During ungrouped row construction an identifier in `compute.expr` is either a
+variable of the row template's input dataset, qualified exactly as
+`row.filter` qualifies a variable, or an unqualified column derived by the
+same `rows` entry. A value from another dataset reaches the expression only
+through such a column, bound by a row-phase source or lookup under
+[LOOKUP-2](lookup.md#lookup-2).
+
+During grouped row construction an identifier qualified to the row template's
+input dataset must be one of the enclosing `row.group_by` variables. Other
+values are first reduced to a row-derived column with `aggregate`. A value
+from another dataset is first bound to a row-derived column with a source or
+lookup under [LOOKUP-2](lookup.md#lookup-2); the expression itself qualifies
+no dataset but its own.
+
+```yaml
+- name: HEIGHTCM
+  type: float
+  derivation:
+    source: DM.HEIGHTCM
+- name: BMI
+  type: float
+  derivation:
+    compute:
+      expr: "WEIGHTKG / POWER(HEIGHTCM / 100, 2)"
+```
+
+A lookup field carries the type [Inputs](inputs.md) assigns to the field in
+the lookup's dataset. [Column derivation](columns.md) collects the
+identifiers of every expression and the lookup source dependencies, so a
+`compute` derivation takes part in dependency ordering as a predicate does.
+
+## Predicates
 
 <a id="formula-4"></a>
 
@@ -132,8 +301,9 @@ Replaces: REQ-0159, REQ-0166, REQ-0171.
 | **FALSE** | TRUE | FALSE | UNKNOWN |
 | **UNKNOWN** | TRUE | UNKNOWN | UNKNOWN |
 
-[Verification](verification.md) defines every other consequence of
-a predicate's result.
+An operand whose arithmetic yields missing ([FORMULA-14](#formula-14)) is a
+missing operand. [Verification](verification.md) defines every other
+consequence of a predicate's result.
 
 <a id="formula-5"></a>
 
@@ -160,10 +330,11 @@ Replaces: REQ-0167, REQ-0168, REQ-0169, REQ-0190.
 | `datetime` with `datetime` | Chronological under [Values](values.md) |
 
 Strings use the equality and total order [Values](values.md)
-defines. `9007199254740993 = 9007199254740992.0` is `FALSE`.
-Two non-missing operands that are not mutually comparable, or a non-string
-operand to `LIKE` ([FORMULA-7](#formula-7)), fail with
-`incompatible_input_type`.
+defines. `9007199254740993 = 9007199254740992.0` is `FALSE`. An arithmetic
+operand has the numeric type of its result: `X + 0 = 9007199254740993` keeps
+an exact `int`, while `X * 1.0` is a `float`. Two non-missing operands that are
+not mutually comparable, or a non-string operand to `LIKE`
+([FORMULA-7](#formula-7)), fail with `incompatible_input_type`.
 
 <a id="formula-6"></a>
 
@@ -192,13 +363,14 @@ case-sensitive. No escape character exists by default. `ESCAPE` declares a
 string literal of exactly one scalar value, which marks the next pattern scalar
 as literal. An invalid `ESCAPE` literal or a trailing escape character fails.
 
-Fails: `incompatible_input_type`, `invalid_predicate`.
+Fails: `incompatible_input_type`, `invalid_expression`.
 Evidence: `adam-adae-protocol-review`, `schema-predicates`, `rust/crates/yamaa-adapters/tests/fixtures/syntax_controls.json`.
 Replaces: REQ-0176, REQ-0177, REQ-0191.
 
 A non-string operand fails with `incompatible_input_type`. An invalid
 `ESCAPE` literal, or a pattern with a dangling escape, fails with
-`invalid_predicate`.
+`invalid_expression`: a literal pattern when the expression is admitted, and
+a pattern read from a value when it is evaluated.
 
 ```yaml
 filter: "AEDECOD LIKE '100!%' ESCAPE '!'"
@@ -206,178 +378,65 @@ filter: "AEDECOD LIKE '100!%' ESCAPE '!'"
 
 <a id="formula-8"></a>
 
-### FORMULA-8. str_contains is the one predicate function and searches its source for a portable regex
+### FORMULA-8. str_contains is the one truth-valued function and searches its source for a portable regex
 
 `str_contains(source, pattern)` takes any operand as `source` and a string
 literal holding a portable regex as `pattern`. It is `TRUE` when the regex
 finds a match anywhere in the source, `FALSE` when it does not, and `UNKNOWN`
 when the source is missing, including under `NOT`. A non-`str` source fails
 with `incompatible_input_type`; a pattern the portable regex contract rejects
-fails with `invalid_predicate` at parse time.
+fails with `invalid_expression` when the expression is admitted.
 
-Fails: `incompatible_input_type`, `invalid_predicate`.
+Fails: `incompatible_input_type`, `invalid_expression`, `prohibited_function`.
 Evidence: `schema-str-contains`, `negative-str-contains-invalid-regex`.
 Replaces: REQ-1244.
 
 The portable regex contract is the one of
-[Text operations](text.md#text-6). Function-name matching is
-case-insensitive, so `STR_CONTAINS(...)` is the same call. `str_contains` is
-the sole Boolean function the grammar permits: any other `name(...)` is
-`invalid_predicate`, and a bare `str_contains` without `(` stays an
-identifier.
+[Text operations](text.md#text-6). Each pattern is compiled once, when its
+expression is admitted. Function-name matching is case-insensitive, so
+`STR_CONTAINS(...)` is the same call, and a bare `str_contains` without `(`
+stays an identifier. `str_contains` stands where a truth value belongs, in a
+predicate only ([FORMULA-27](#formula-27)). Called with other than two
+arguments it fails with `prohibited_function`, and a pattern that is not a
+string literal fails with `invalid_expression`.
 
-<a id="formula-9"></a>
-
-### FORMULA-9. A predicate identifier names a value visible at its site, and any other name fails
-
-Each predicate site sees the names the table below gives, under
-[Column derivation](columns.md). An identifier in a right-side
-predicate is qualified by the right-side dataset's ID, and an identifier over
-a completed or candidate output row is unqualified. No predicate can reach an
-undeclared relation. Predicate identifiers are collected for dependency
-ordering, so the parser rejects an unresolved name rather than treating a
-predicate as dependency-free.
-
-Fails: `unresolvable_name`, `unknown_field`.
-Evidence: `negative-review-unknown-date`, `rust/crates/yamaa-adapters/tests/fixtures/flag_reference.json`.
-Replaces: REQ-0178, REQ-0179, REQ-0180, REQ-0181, REQ-0182, REQ-0183,
-REQ-0184, REQ-0185, REQ-0186, REQ-0189.
-
-| Predicate site | Visible names |
-| --- | --- |
-| Ungrouped row filter | The names [ROW-6](rows.md#row-6) defines |
-| Grouped row filter | Only unqualified columns derived by that row |
-| Aggregate, record-lookup and multiple-match filters | Records of their owning right-side dataset |
-| Window filter | Constructed output columns in row construction; in an intermediate derivation, the augmented donor records [LOOKUP-15](lookup.md#lookup-15) describes |
-| Verification | Completed columns and record intermediates resolved for the completed row |
-| `case` | The values available to its enclosing derivation |
-
-An enclosing column derivation may also bind a qualified dataset or
-record-lookup field under [Name binding](names.md) and
-[Lookup and joins](lookup.md). A verification may read a declared record
-lookup for its completed row.
-
-An identifier that is unavailable at its predicate site fails. An unqualified
-identifier that names a field of an in-scope dataset fails with
-`unresolvable_name` and suggests the qualified spelling; any other unavailable
-identifier fails with `unknown_field`. Both report under
-[Column derivation](columns.md).
-
-## Numeric formulas
-
-<a id="formula-10"></a>
-
-### FORMULA-10. compute evaluates one closed numeric formula per row
-
-`compute` evaluates `expr`, a formula in the closed numeric grammar below, over
-constructed output columns, fields of a declared record lookup and numeric
-literals, and returns one numeric value per current row.
-[Values](values.md)' representation, promotion and overflow
-rules apply to every operator and function. Precedence is unary sign, then `*`
-and `/`, then binary `+` and `-`, all left-associative, and parentheses
-override it. Function names and `NULL` are case-insensitive; identifiers are
-not. A formula that does not parse fails.
-
-Evidence: `schema-numeric-functions`, `adam-adsl-bmi`, `yaml/grammar/numeric.yaml`.
-Replaces: REQ-0407, REQ-0413, REQ-0414, REQ-0439, REQ-1119, REQ-1120,
-REQ-1121.
-
-<!-- grammar: numeric -->
-
-```text
-expr       := term (("+" | "-") term)*
-term       := factor (("*" | "/") factor)*
-factor     := ("-" | "+")? primary
-primary    := number | "NULL" | identifier | call | "(" expr ")"
-identifier := name ["." name]
-call       := function "(" [expr ("," expr)*] ")"
-number     := digits ["." digits] [("e" | "E") ["+" | "-"] digits]
-```
-
-The block renders `yaml/grammar/numeric.yaml`, the grammar's single source.
-Its vocabulary closes the function list of [FORMULA-13](#formula-13), and its
-cases record the texts the language accepts and rejects, the identifiers an
-accepted text binds and the resulting parse. The grammar is a subset of SQL.
-
-<a id="formula-11"></a>
-
-### FORMULA-11. A formula identifier resolves as a predicate identifier does in the same phase
-
-A formula identifier resolves as a predicate identifier does in the same
-phase, so a formula and a predicate never disagree about a name. During column
-derivation an unqualified identifier is a constructed output column, and a
-qualified identifier is permitted only when its qualifier is a declared record
-lookup `id`; it reads the named field of that lookup's selected record. An
-identifier that does not resolve in its phase fails.
-
-Evidence: `negative-direct-dose-read`, `rust/crates/yamaa-adapters/tests/scalar_language.rs`, `adam-adsl-bmi`.
-Replaces: REQ-0408, REQ-0409, REQ-0410, REQ-0411, REQ-0412, REQ-0442,
-REQ-0443.
-
-An arbitrary `DATASET.VARIABLE` reference is not permitted during column
-derivation: bind the source variable to a column first and compute from that
-column. Omitting that binding column from `output.columns` keeps it out of the
-final dataset. A qualified identifier whose qualifier is not a declared record
-lookup fails, as does an identifier that resolves to neither a declared output
-column nor a field of a declared record lookup.
-
-During ungrouped row construction an identifier is either a variable of the
-row template's input dataset, qualified exactly as `row.filter` qualifies a
-variable, or an unqualified column derived by the same `rows` entry. A value
-from another dataset reaches the formula only through such a column, bound by
-a row-phase source or lookup under [LOOKUP-2](lookup.md#lookup-2).
-
-During grouped row construction an identifier qualified to the row template's
-input dataset must be one of the enclosing `row.group_by` variables. Other
-values are first reduced to a row-derived column with `aggregate`. A value
-from another dataset is first bound to a row-derived column with a source or
-lookup under [LOOKUP-2](lookup.md#lookup-2); the formula itself qualifies no
-dataset but its own.
-
-```yaml
-- name: HEIGHTCM
-  type: float
-  derivation:
-    source: DM.HEIGHTCM
-- name: BMI
-  type: float
-  derivation:
-    compute:
-      expr: "WEIGHTKG / POWER(HEIGHTCM / 100, 2)"
-```
-
-A lookup field carries the type [Inputs](inputs.md)
-assigns to the field in the lookup's dataset.
-[Column derivation](columns.md) collects formula identifiers and
-lookup source dependencies, so a `compute` derivation takes part in dependency
-ordering as a predicate does.
+## Arithmetic
 
 <a id="formula-12"></a>
 
-### FORMULA-12. Every formula identifier must be numeric
+### FORMULA-12. Every operand of arithmetic or of a numeric function must be numeric
 
-Every identifier in a `compute` formula must have runtime type `int` or
-`float`, and an identifier of any other type fails.
+An operand of `+`, `-`, `*`, `/`, a unary sign or a numeric function, and the
+root of `compute.expr`, must have runtime type `int` or `float`, in every
+field; an operand of any other type fails.
 [VALUE-2](values.md#value-2) forbids implicit conversion between
-operation inputs, and formulas do not relax that rule: a collected string is
-converted by binding it to a numeric column first.
+operation inputs, and expressions do not relax that rule: a collected string
+is converted by binding it to a numeric column first.
 
-Evidence: `rust/crates/yamaa-core/tests/fixtures/evaluation.tsv`, `rust/crates/yamaa-core/tests/fixtures/numeric_integral.tsv`.
+Fails: `incompatible_input_type`.
+Evidence: `negative-review-arithmetic`, `rust/crates/yamaa-core/tests/fixtures/evaluation.tsv`, `rust/crates/yamaa-core/tests/fixtures/numeric_integral.tsv`.
 Replaces: REQ-0307, REQ-0426, REQ-0444.
+
+The failure reports the expression, the operand as written, `numeric` and the
+operand's actual type, once however often the operand is written; a
+comparison over that arithmetic reports nothing more. `ASTDT <= TRTEDT + 30`
+over a `date` `TRTEDT` fails: carry the day count in its own column, for
+example with `diff` ([TIME-4](temporal.md#time-4)), and compare that column.
+The types of `aggregate.expr` follow [FORMULA-23](#formula-23).
 
 <a id="formula-13"></a>
 
 ### FORMULA-13. The numeric functions are a closed list, each with a fixed argument count
 
-The permitted functions are exactly those below, and each takes exactly the
-arguments shown. Any other function name or argument count fails, as do an
-operator outside the grammar, a string literal, a comparison or Boolean
-operator, `CASE`, an aggregate function, a window function or `OVER`, a
-subquery and a host-language call. `LOG` is excluded: write `LN(x)` or
-`LN(x) / LN(b)`. Widening the vocabulary amends this list.
+The numeric functions are exactly those below, and each takes exactly the
+arguments shown. Any other function name or argument count fails, and
+`str_contains` ([FORMULA-8](#formula-8)) is the only other function. `LOG` is
+excluded: write `LN(x)` or `LN(x) / LN(b)`. Widening the vocabulary amends
+this list.
 
-Evidence: `schema-numeric-functions`, `negative-formula-flag`, `negative-row-aggregate`.
-Replaces: REQ-0415, REQ-0416, REQ-0417, REQ-0425, REQ-0440, REQ-0441.
+Fails: `prohibited_function`.
+Evidence: `schema-numeric-functions`, `yaml/grammar/expression.yaml`, `rust/crates/yamaa-adapters/tests/fixtures/grammar_diagnostics.tsv`.
+Replaces: REQ-0415, REQ-0416, REQ-0417, REQ-0425, REQ-0440.
 
 - `ABS(x)`: absolute value.
 - `CEIL(x)`: least integer value not less than `x`.
@@ -389,6 +448,11 @@ Replaces: REQ-0415, REQ-0416, REQ-0417, REQ-0425, REQ-0440, REQ-0441.
 - `LN(x)`: natural logarithm.
 - `MOD(x, y)`: remainder of `x / y`, taking the sign of `x`.
 - `NULLIF(x, y)`: `NULL` when `x = y`, otherwise `x`.
+
+A call of any other name fails with `prohibited_function` naming the function
+as written, and a listed function called with another number of arguments
+also reports the count. Every field admits the numeric functions; in a
+predicate they stand in an operand ([FORMULA-27](#formula-27)).
 
 No function in this grammar picks a row-wise extreme or the first present
 value. Those are the `greatest`, `least` and `first_available` expressions
@@ -409,23 +473,38 @@ missing input. A formula that must yield missing rather than fail uses
 Evidence: `rust/crates/yamaa-core/tests/fixtures/numeric_selection.tsv`, `rust/crates/yamaa-core/tests/fixtures/evaluation.tsv`, `adam-adsl-bmi`.
 Replaces: REQ-0427, REQ-0428.
 
+In a predicate, a comparison whose arithmetic operand is missing is
+`UNKNOWN` under [FORMULA-4](#formula-4); the logical operators and `IS NULL`
+follow their own tables rather than this rule.
+
 <a id="formula-15"></a>
 
-### FORMULA-15. Division by zero and an invalid root, logarithm or power fail the run
+### FORMULA-15. Division by zero, an invalid root, logarithm or power, and int overflow fail the run
 
 Division by zero, by `/` or by `MOD`, `SQRT` of a negative argument, `LN` of a
-zero or negative argument, and `POWER` with a zero base and a negative
-exponent or a negative base and a non-integer exponent each fail the run. A
-failure is never silently converted to missing, and `NULLIF(denominator, 0)`
-chooses missing explicitly. A failure reports the expression and the operation
-that failed.
+zero or negative argument, `POWER` with a zero base and a negative exponent or
+a negative base and a non-integer exponent, and an `int` result outside the
+`int` range each fail the run, in every field. A failure is never silently
+converted to missing, and `NULLIF(denominator, 0)` chooses missing
+explicitly. A failure reports the expression and the operation that failed.
 
-Fails: `invalid_power`.
-Evidence: `negative-zero-division`, `negative-negative-sqrt`, `negative-log-zero`.
-Replaces: REQ-0429, REQ-0430, REQ-0431, REQ-0432, REQ-0433, REQ-0445.
+Fails: `division_by_zero`, `sqrt_of_negative`, `ln_of_nonpositive`, `invalid_power`, `integer_overflow`.
+Evidence: `negative-zero-division`, `negative-negative-sqrt`, `negative-log-zero`, `negative-integer-overflow`.
+Replaces: REQ-0429, REQ-0430, REQ-0431, REQ-0432, REQ-0433, REQ-0445,
+REQ-0496, REQ-0513.
 
-An invalid `POWER` fails with `invalid_power`. Failing rather than yielding
-missing is consistent with [Column derivation](columns.md).
+An invalid `POWER` fails with `invalid_power`, and an `int` result outside
+the range fails with `integer_overflow` under [VALUE-5](values.md#value-5).
+Failing rather than yielding missing is consistent with
+[Column derivation](columns.md). In a predicate, a failed operand fails the
+run rather than making its comparison `UNKNOWN`.
+
+In `aggregate.expr`, arithmetic over reductions and inside a reduction's
+argument fails the same way, and the failure reports the expression and the
+column that failed. `SUM` fails on integer overflow under the same condition,
+and `MEAN`, defined by `SUM`, fails on that intermediate overflow even when
+the mathematical mean would fit. The non-finite normalization of
+[Values](values.md) applies after every arithmetic or reduction result.
 
 <a id="formula-16"></a>
 
@@ -449,8 +528,8 @@ Replaces: REQ-0418, REQ-0419, REQ-1172.
 `1.0049999999` (`1e-8` below the tie) rounds to `1.01`, while `1.004999999`
 (`1e-7` below) rounds to `1.00`. The `round_half_away_from_zero` verb takes a numeric `source` and an
 integer `digits`; missing stays missing and the result is a `float`. The
-`compute` grammar has no rounding function, and a derivation must not round by
-any other spelling. A non-numeric source is an `incompatible_input_type`
+expression grammar has no rounding function, and a derivation must not round
+by any other spelling. A non-numeric source is an `incompatible_input_type`
 validation error. Analysis datasets otherwise carry
 computed values at full precision; reporting decides the displayed places.
 [Values](values.md) has the same rule at conversion, where
@@ -458,9 +537,9 @@ a non-integral value fails rather than being truncated.
 
 `CEIL`, `FLOOR` and `TRUNC` are not presentation rounding: they return an
 integral part, with no mode to choose. `FLOOR(a / b)` floors the binary64
-quotient under [VALUE-10](values.md#value-10) and returns an integral
-`float` under [VALUE-10](values.md#value-10). It need not equal the
-floor of the exact integer quotient.
+quotient and returns an integral `float`, both under
+[VALUE-10](values.md#value-10). It need not equal the floor of the exact
+integer quotient.
 
 ## Aggregate expressions
 
@@ -469,50 +548,31 @@ floor of the exact integer quotient.
 ### FORMULA-17. aggregate reduces one relation to one value with a closed reducer expression
 
 `aggregate` is the only aggregate expression. It reduces one relation, or the
-current input group, to one value with `expr`, a reducer expression in the
-closed grammar below, in one of the contexts
-[LOOKUP-18](lookup.md#lookup-18) permits. Precedence, associativity and the
-permitted functions follow the numeric grammar ([FORMULA-10](#formula-10),
-[FORMULA-13](#formula-13)). Reducer and function names and `NULL` are
-case-insensitive, and identifiers are case-sensitive. An expression that does
-not parse fails.
+current input group, to one value with `expr`, which admits the reducers
+([FORMULA-27](#formula-27)), in one of the relation forms
+[LOOKUP-18](lookup.md#lookup-18) permits. A reduction that is the whole
+expression keeps the type it reduces, and any other expression is numeric
+([FORMULA-23](#formula-23)).
 
-Evidence: `schema-aggregation`, `yaml/grammar/aggregate.yaml`, `rust/crates/yamaa-core/tests/numeric_aggregate_parser.rs`.
-Replaces: REQ-0295, REQ-0475, REQ-0476, REQ-0499, REQ-1089, REQ-1091,
-REQ-1092.
+Evidence: `schema-aggregation`, `rust/crates/yamaa-core/tests/numeric_aggregate_parser.rs`.
+Replaces: REQ-0295, REQ-1091, REQ-1092.
 
-<!-- grammar: aggregate -->
-
-```text
-expr       := term (("+" | "-") term)*
-term       := factor (("*" | "/") factor)*
-factor     := ("-" | "+")? primary
-primary    := number | "NULL" | identifier | reduction | call | "(" expr ")"
-reduction  := reducer "(" (expr | star) ")"
-star       := name "." "*"
-call       := function "(" [expr ("," expr)*] ")"
-identifier := name ["." name]
-number     := digits ["." digits] [("e" | "E") ["+" | "-"] digits]
-```
-
-The block renders `yaml/grammar/aggregate.yaml`, the grammar's single source.
-Its vocabulary closes the reducers of [FORMULA-18](#formula-18), and its cases
-record the texts the language accepts and rejects, how accepted identifiers
-bind and the parse each case produces.
+The grammar is [FORMULA-1](#formula-1)'s, and its vocabulary closes the
+reducers of [FORMULA-18](#formula-18). `100 * SUM(EX.EXDOSE) / EX.EXPLDOS`
+divides a reduction by a grouping column ([FORMULA-22](#formula-22)).
 
 <a id="formula-18"></a>
 
 ### FORMULA-18. The reducers are exactly SUM, COUNT, MIN, MAX, MEAN and ONLY
 
-A reduction applies one of the reducers below to an expression, or `COUNT` to
-`D.*`. Any other reducer name or argument count fails, as do a window function
-or `OVER`, a subquery, `CASE`, a comparison or Boolean operator, a string
-literal and a host-language call. `AVG` is not an alias: the reducer name is
-`MEAN`, and no median is registered. Any new reduction amends this table.
+A reduction applies one of the reducers below to one expression, or `COUNT` to
+`D.*`. Any other reducer name or argument count fails. `AVG` is not an alias:
+the reducer name is `MEAN`, and no median is registered. Any new reduction
+amends this table.
 
+Fails: `prohibited_function`, `invalid_expression`.
 Evidence: `schema-aggregation`, `adam-adlb-mean`, `rust/crates/yamaa-core/tests/numeric_aggregate_parser.rs`.
-Replaces: REQ-0477, REQ-0478, REQ-0481, REQ-0484, REQ-0500, REQ-0505,
-REQ-0512.
+Replaces: REQ-0477, REQ-0478, REQ-0481, REQ-0484, REQ-0500, REQ-0505.
 
 | Reducer | Result |
 |---|---|
@@ -523,6 +583,10 @@ REQ-0512.
 | `MAX(x)` | largest non-missing value |
 | `MEAN(x)` | arithmetic mean of the non-missing numeric values |
 | `ONLY(x)` | value from the group's only record; more than one fails |
+
+A name outside the reducers and functions, such as `AVG(x)`, fails with
+`prohibited_function`. A reducer written with other than one argument, and a
+record star outside `COUNT`, fail with `invalid_expression`.
 
 `COUNT(D.*)` takes no other argument. `D` stands for the relation named by the
 expression's qualified identifiers, as in `COUNT(EX.*)`, and a `COUNT(D.*)`
@@ -583,7 +647,8 @@ that artifact as an ordinary source under
 [Name binding](names.md), linking its producing specification
 through `dataset_class.schema`.
 
-Evidence: `yaml/grammar/aggregate.yaml`, `rust/crates/yamaa-core/tests/numeric_aggregate_parser.rs`, `rust/crates/yamaa-adapters/tests/fixtures/syntax_controls.json`.
+Fails: `nested_reduction`.
+Evidence: `yaml/grammar/expression.yaml`, `rust/crates/yamaa-core/tests/numeric_aggregate_parser.rs`, `rust/crates/yamaa-adapters/tests/fixtures/syntax_controls.json`.
 Replaces: REQ-0483, REQ-0502.
 
 The link through `dataset_class.schema`
@@ -614,6 +679,7 @@ column, which is constant within the group and may be used directly.
 the failure reports the identifier. For a grouped-row aggregate, the
 enclosing `row.group_by` supplies the grouped columns.
 
+Fails: `aggregate_identifier_not_grouped`.
 Evidence: `negative-dose-intensity`, `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`.
 Replaces: REQ-0485, REQ-0486, REQ-0503.
 
@@ -679,36 +745,18 @@ reduction results follows [FORMULA-14](#formula-14): a missing reduction
 propagates through an operator, and a formula that must yield missing rather
 than fail says so with `NULLIF`.
 
-<a id="formula-25"></a>
-
-### FORMULA-25. Numeric failures and integer overflow inside an aggregate fail the run
-
-The failure conditions of [FORMULA-15](#formula-15) apply to aggregate
-arithmetic unchanged: division by zero, `SQRT` of a negative argument, `LN` of
-a non-positive argument, an invalid `POWER` and integer overflow each fail the
-run. `SUM` fails on integer overflow under the same condition, and `MEAN`,
-defined by `SUM`, fails on that intermediate overflow even when the
-mathematical mean would fit. The failure reports the expression and the column
-that failed.
-
-Replaces: REQ-0496, REQ-0513.
-
-The non-finite normalization of [Values](values.md)
-applies after every arithmetic or reduction result.
-
 ## Evaluation
 
 <a id="formula-26"></a>
 
-### FORMULA-26. Formulas evaluate deterministically and exactly as written
+### FORMULA-26. Expressions evaluate deterministically and exactly as written
 
-Evaluating a predicate, numeric formula or aggregate expression is
-deterministic and free of side effects. Evaluation follows the written
-association: no expression is reassociated, redistributed or algebraically
-simplified, and no numeric option that does any of these is enabled. `/`
-never truncates. String comparison uses [Values](values.md), and no
-implicit coercion, collation, `LIKE` escape or missing-value behavior is taken
-from a host SQL engine.
+Evaluating an expression is deterministic and free of side effects, in every
+field. Evaluation follows the written association: no expression is
+reassociated, redistributed or algebraically simplified, and no numeric option
+that does any of these is enabled. `/` never truncates. String comparison uses
+[Values](values.md), and no implicit coercion, collation, `LIKE` escape or
+missing-value behavior is taken from a host SQL engine.
 
 Evidence: `rust/crates/yamaa-core/tests/fixtures/arithmetic.tsv`, `rust/crates/yamaa-core/tests/portable_math_golden.rs`, `tools/tests/test_portable_math.py`.
 Replaces: REQ-0187, REQ-0436, REQ-0437, REQ-0438, REQ-0497.

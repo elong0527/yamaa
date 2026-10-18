@@ -115,8 +115,13 @@ pub(super) fn evaluate<T: TableAccess + ?Sized>(
         if let Some(filter) = &read.filter {
             let truth =
                 crate::dataset::execution::predicates::evaluate(filter, table, source_row, &[])
-                    .map_err(|error| Box::new(ExecutionError::Predicate { source_row, error }))?;
-            if truth != crate::predicate::Truth::True {
+                    .map_err(|error| {
+                        Box::new(ExecutionError::Predicate {
+                            source_row,
+                            error: *error,
+                        })
+                    })?;
+            if truth != crate::expression::Truth::True {
                 continue;
             }
         }

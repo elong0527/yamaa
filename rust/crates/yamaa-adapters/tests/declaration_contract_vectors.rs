@@ -5,21 +5,17 @@ mod support;
 mod declaration {
     mod contract_vectors {
         //! Direct native checks of unchanged authored grammar, regex and rounding truth.
-        use a::Reducer;
-        use n::NumericFunction;
         use std::collections::BTreeSet;
         use yamaa_adapters::json;
         use yamaa_adapters::yaml_decode::decode_yaml;
-        use yamaa_core::json::Value as Json;
-        use yamaa_core::schema::{Document, DocumentNode};
-        use yamaa_core::{
-            aggregate_parser as a,
-            numeric::{BinaryOperator, UnaryOperator},
-            numeric_parser as n,
-            predicate::Comparison,
-            predicate_parser as p,
-            text_template::{Part, StringTemplate},
+        use yamaa_core::expression::{
+            compile, Comparison, CompileError, CompiledExpression, Context, Function, NodeKind,
+            Reducer, TemporalKind, RESERVED,
         };
+        use yamaa_core::json::Value as Json;
+        use yamaa_core::numeric::{BinaryOperator, UnaryOperator};
+        use yamaa_core::schema::{Document, DocumentNode};
+        use yamaa_core::text_template::{Part, StringTemplate};
 
         // Exhaustive matches force a new native variant to enter the YAML inventory.
         macro_rules! vocabulary {
@@ -33,12 +29,24 @@ mod declaration {
     };
 }
         vocabulary!(
-            numeric_vocabulary,
-            NumericFunction,
-            [Abs, Ceil, Floor, Trunc, Sqrt, Power, Exp, Ln, Mod, NullIf]
+            function_vocabulary,
+            Function,
+            [
+                Abs,
+                Ceil,
+                Floor,
+                Trunc,
+                Sqrt,
+                Power,
+                Exp,
+                Ln,
+                Mod,
+                NullIf,
+                StrContains
+            ]
         );
         vocabulary!(
-            aggregate_vocabulary,
+            reducer_vocabulary,
             Reducer,
             [Sum, Count, Min, Max, Mean, Only]
         );
@@ -62,147 +70,64 @@ mod declaration {
                 UnaryOperator::Abs => unreachable!("ABS is a call"),
             }
         }
-        fn numeric(parsed: &n::ParsedNumeric, id: usize) -> String {
-            let node = &parsed.nodes()[id];
-            let text = &parsed.expression()[node.span.start..node.span.end];
-            match &node.kind {
-                n::ParsedKind::Number { fractional } => {
-                    format!("({} {text})", if *fractional { "float" } else { "int" })
-                }
-                n::ParsedKind::Null => "null".into(),
-                n::ParsedKind::Identifier => format!("(id {text})"),
-                n::ParsedKind::Group { operand } => numeric(parsed, *operand),
-                n::ParsedKind::Unary { operator, operand } => {
-                    format!("({} {})", unary(*operator), numeric(parsed, *operand))
-                }
-                n::ParsedKind::Binary {
-                    operator,
-                    left,
-                    right,
-                } => format!(
-                    "({} {} {})",
-                    binary(*operator),
-                    numeric(parsed, *left),
-                    numeric(parsed, *right)
-                ),
-                n::ParsedKind::Call {
-                    function,
-                    arguments,
-                    ..
-                } => format!(
-                    "(call {} {})",
-                    function.name(),
-                    arguments
-                        .iter()
-                        .map(|&id| numeric(parsed, id))
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                ),
+        fn comparison(op: Comparison) -> &'static str {
+            match op {
+                Comparison::Equal => "=",
+                Comparison::NotEqual => "<>",
+                Comparison::Less => "<",
+                Comparison::LessEqual => "<=",
+                Comparison::Greater => ">",
+                Comparison::GreaterEqual => ">=",
             }
         }
-        fn aggregate(parsed: &a::ParsedAggregate, id: usize) -> String {
-            let node = &parsed.nodes()[id];
-            let text = &parsed.expression()[node.span.start..node.span.end];
-            match &node.kind {
-                a::ParsedKind::Number { fractional } => {
+        /// The README's fully parenthesized prefix form of one admitted parse.
+        fn shape(compiled: &CompiledExpression, id: usize) -> String {
+            let syntax = compiled.syntax();
+            let text = syntax.text(id);
+            let child = |id| shape(compiled, id);
+            match &syntax.nodes()[id].kind {
+                NodeKind::Number { fractional, text } => {
                     format!("({} {text})", if *fractional { "float" } else { "int" })
                 }
-                a::ParsedKind::Null => "null".into(),
-                a::ParsedKind::Identifier => format!("(id {text})"),
-                a::ParsedKind::Star => format!("(star {})", text.strip_suffix(".*").unwrap()),
-                a::ParsedKind::Group { operand } => aggregate(parsed, *operand),
-                a::ParsedKind::Unary { operator, operand } => {
-                    format!("({} {})", unary(*operator), aggregate(parsed, *operand))
-                }
-                a::ParsedKind::Binary {
-                    operator,
-                    left,
-                    right,
-                } => format!(
-                    "({} {} {})",
-                    binary(*operator),
-                    aggregate(parsed, *left),
-                    aggregate(parsed, *right)
-                ),
-                a::ParsedKind::Call {
-                    function,
-                    arguments,
-                    ..
-                } => format!(
-                    "(call {} {})",
-                    function.name(),
-                    arguments
-                        .iter()
-                        .map(|&id| aggregate(parsed, id))
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                ),
-                a::ParsedKind::Reduction {
-                    reducer, operand, ..
-                } => format!(
-                    "(reduce {} {})",
-                    reducer.name(),
-                    aggregate(parsed, *operand)
-                ),
-            }
-        }
-        fn predicate(parsed: &p::ParsedPredicate, id: usize) -> String {
-            let node = &parsed.nodes()[id];
-            let text = &parsed.expression()[node.span.start..node.span.end];
-            let child = |id| predicate(parsed, id);
-            match &node.kind {
-                p::ParsedKind::Number { fractional } => {
-                    format!("({} {text})", if *fractional { "float" } else { "int" })
-                }
-                p::ParsedKind::String(value) => format!("(str {})", quote(value)),
-                p::ParsedKind::Temporal { kind, value } => format!(
+                NodeKind::String(value) => format!("(str {})", quote(value)),
+                NodeKind::Temporal { kind, value } => format!(
                     "({} {})",
                     match kind {
-                        p::TemporalKind::Date => "date",
-                        p::TemporalKind::DateTime => "datetime",
+                        TemporalKind::Date => "date",
+                        TemporalKind::DateTime => "datetime",
                     },
                     quote(value)
                 ),
-                p::ParsedKind::Null => "null".into(),
-                p::ParsedKind::Identifier => format!("(id {text})"),
-                p::ParsedKind::Boolean(value) => value.to_string(),
-                p::ParsedKind::Group(id) => child(*id),
-                p::ParsedKind::Not(id) => format!("(not {})", child(*id)),
-                p::ParsedKind::And(left, right) => {
-                    format!("(and {} {})", child(*left), child(*right))
-                }
-                p::ParsedKind::Or(left, right) => {
-                    format!("(or {} {})", child(*left), child(*right))
-                }
-                p::ParsedKind::Compare {
+                NodeKind::Boolean(value) => value.to_string(),
+                NodeKind::Null => "null".into(),
+                NodeKind::Identifier => format!("(id {text})"),
+                NodeKind::Star => format!("(star {})", text.strip_suffix(".*").unwrap()),
+                NodeKind::Group(inner) => child(*inner),
+                NodeKind::Not(inner) => format!("(not {})", child(*inner)),
+                NodeKind::And(left, right) => format!("(and {} {})", child(*left), child(*right)),
+                NodeKind::Or(left, right) => format!("(or {} {})", child(*left), child(*right)),
+                NodeKind::Compare {
                     operator,
                     left,
                     right,
                 } => format!(
                     "({} {} {})",
-                    match operator {
-                        Comparison::Equal => "=",
-                        Comparison::NotEqual => "<>",
-                        Comparison::Less => "<",
-                        Comparison::LessEqual => "<=",
-                        Comparison::Greater => ">",
-                        Comparison::GreaterEqual => ">=",
-                    },
+                    comparison(*operator),
                     child(*left),
                     child(*right)
                 ),
-                p::ParsedKind::IsNull { value, negated } => format!(
+                NodeKind::IsNull { value, negated } => format!(
                     "({} {})",
                     if *negated { "is-not-null" } else { "is-null" },
                     child(*value)
                 ),
-                p::ParsedKind::In {
+                NodeKind::In {
                     value,
                     items,
                     negated,
                 } => format!(
                     "({} {} {})",
-                    if *negated { "not-in" } else { "in" },
+                    negated_name(*negated, "in"),
                     child(*value),
                     items
                         .iter()
@@ -210,35 +135,59 @@ mod declaration {
                         .collect::<Vec<_>>()
                         .join(" ")
                 ),
-                p::ParsedKind::Between {
+                NodeKind::Between {
                     value,
                     lower,
                     upper,
                     negated,
                 } => format!(
                     "({} {} {} {})",
-                    if *negated { "not-between" } else { "between" },
+                    negated_name(*negated, "between"),
                     child(*value),
                     child(*lower),
                     child(*upper)
                 ),
-                p::ParsedKind::Like {
+                NodeKind::Like {
                     value,
                     pattern,
                     escape,
                     negated,
                 } => format!(
                     "({} {} {}{})",
-                    if *negated { "not-like" } else { "like" },
+                    negated_name(*negated, "like"),
                     child(*value),
                     child(*pattern),
                     escape
                         .map(|c| format!(" (escape {})", quote(&c.to_string())))
                         .unwrap_or_default()
                 ),
-                p::ParsedKind::Contains { source, pattern } => {
-                    format!("(call STR_CONTAINS {} {})", child(*source), child(*pattern))
+                NodeKind::Unary { operator, operand } => {
+                    format!("({} {})", unary(*operator), child(*operand))
                 }
+                NodeKind::Binary {
+                    operator,
+                    left,
+                    right,
+                } => format!("({} {} {})", binary(*operator), child(*left), child(*right)),
+                NodeKind::Call { name, arguments } => format!(
+                    "(call {} {})",
+                    syntax.slice(*name).to_ascii_uppercase(),
+                    arguments
+                        .iter()
+                        .map(|&id| child(id))
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                ),
+                NodeKind::Reduction {
+                    reducer, operand, ..
+                } => format!("(reduce {} {})", reducer.name(), child(*operand)),
+            }
+        }
+        fn negated_name(negated: bool, name: &str) -> String {
+            if negated {
+                format!("not-{name}")
+            } else {
+                name.into()
             }
         }
         fn template(parsed: &StringTemplate) -> String {
@@ -299,34 +248,31 @@ mod declaration {
             value(&decoded.document, decoded.document.root())
         }
 
-        fn observation(contract: &str, text: &str) -> Result<(String, Vec<String>), String> {
+        fn context(name: &str) -> Context {
+            match name {
+                "predicate" => Context::Predicate,
+                "compute" => Context::Compute,
+                "aggregate" => Context::Aggregate,
+                _ => panic!("unknown expression context: {name}"),
+            }
+        }
+
+        fn observation(
+            contract: &str,
+            field: Option<&str>,
+            text: &str,
+        ) -> Result<(String, Vec<String>), String> {
             let (shape, mut identifiers) = match contract {
-                "numeric" => match n::parse_numeric(text) {
-                    Ok(parsed) => (
-                        numeric(&parsed, parsed.root()),
-                        parsed.identifiers().map(String::from).collect::<Vec<_>>(),
+                "expression" => match compile(
+                    text,
+                    context(field.expect("an expression case states its context")),
+                    "columns.RESULT.derivation.expr",
+                ) {
+                    Ok(compiled) => (
+                        shape(&compiled, compiled.syntax().root()),
+                        compiled.identifiers().map(String::from).collect::<Vec<_>>(),
                     ),
-                    Err(n::ParseError::Grammar { failure, .. }) => {
-                        return Err(failure.condition().into())
-                    }
-                    Err(error) => panic!("grammar vector exceeds resource policy: {error:?}"),
-                },
-                "aggregate" => match a::parse_aggregate(text) {
-                    Ok(parsed) => (
-                        aggregate(&parsed, parsed.root()),
-                        parsed.identifiers().map(String::from).collect::<Vec<_>>(),
-                    ),
-                    Err(a::ParseError::Grammar { failure, .. }) => {
-                        return Err(failure.condition().into())
-                    }
-                    Err(error) => panic!("grammar vector exceeds resource policy: {error:?}"),
-                },
-                "predicate" => match p::parse_predicate(text) {
-                    Ok(parsed) => (
-                        predicate(&parsed, parsed.root()),
-                        parsed.identifiers().map(String::from).collect::<Vec<_>>(),
-                    ),
-                    Err(p::ParseError::Grammar { failure, .. }) => {
+                    Err(CompileError::Invalid { failure, .. }) => {
                         return Err(failure.condition().into())
                     }
                     Err(error) => panic!("grammar vector exceeds resource policy: {error:?}"),
@@ -355,7 +301,7 @@ mod declaration {
                 "{contract}/{}",
                 yamaa_adapters::json_wire::encode(&case["id"])
             );
-            let actual = observation(contract, text);
+            let actual = observation(contract, case["context"].as_str(), text);
             if case["parse"] == "reject" {
                 assert_eq!(
                     actual.unwrap_err(),
@@ -383,129 +329,186 @@ mod declaration {
             }
         }
 
-        #[test]
-        fn unchanged_shared_grammars_have_exact_shapes_dependencies_decisions_and_vocabularies() {
-            let documents = [
-                ("numeric", "formulas"),
-                ("aggregate", "formulas"),
-                ("predicate", "formulas"),
-                ("string-template", "text"),
-            ]
-            .map(|(contract, rule)| {
-                let document = yaml(&format!("yaml/grammar/{contract}.yaml"));
-                assert_eq!(document["contract"], contract);
-                assert_eq!(document["rule"], rule);
-                (contract, document)
-            });
-            let numeric_doc = &documents[0].1;
-            let vocabulary = |key: &str| {
-                documents
-                    .iter()
-                    .find_map(|(contract, doc)| (*contract == key).then_some(doc))
-                    .unwrap()
+        /// Expand the closed vocabularies into independent acceptance boundaries.
+        /// The same expansion is staged for the installed host suites.
+        fn expansions(document: &Json) -> Vec<Json> {
+            let mut cases = Vec::new();
+            let mut case = |context: &str, text: String, accepted: bool, condition: &str| {
+                cases.push(json!({"id":format!("{context}: {text}"), "context":context, "text":text, "parse":if accepted { "accept" } else { "reject" }, "condition":condition}));
             };
+            let contexts = ["predicate", "compute", "aggregate"];
+            for (name, arity) in document["vocabulary"]["function"].as_object().unwrap() {
+                let lower = arity["min_arguments"].as_u64().unwrap() as usize;
+                let upper = arity["max_arguments"].as_u64().map(|value| value as usize);
+                let numeric = arity["result"] == "numeric";
+                let mut counts = BTreeSet::from([0, lower - 1, lower, lower + 1, 8]);
+                if let Some(upper) = upper {
+                    counts.insert(upper + 1);
+                }
+                for count in counts {
+                    let fits = count >= lower && upper.is_none_or(|upper| count <= upper);
+                    let call = |pattern: bool| {
+                        let arguments = (0..count)
+                            .map(|index| if pattern && index > 0 { "'a'" } else { "A" })
+                            .collect::<Vec<_>>();
+                        format!("{}({})", name.to_ascii_lowercase(), arguments.join(", "))
+                    };
+                    for context in contexts {
+                        match (context, numeric) {
+                            ("predicate", true) => case(
+                                context,
+                                format!("{} = 1", call(false)),
+                                fits,
+                                "prohibited_function",
+                            ),
+                            ("predicate", false) => {
+                                case(context, call(true), fits, "prohibited_function")
+                            }
+                            (_, true) => case(context, call(false), fits, "prohibited_function"),
+                            (_, false) => case(context, call(false), false, "prohibited_function"),
+                        }
+                    }
+                }
+            }
+            for word in document["reserved"].as_array().unwrap() {
+                let word = word.as_str().unwrap();
+                let literal = word == "NULL";
+                let truth = matches!(word, "TRUE" | "FALSE");
+                case(
+                    "predicate",
+                    format!("{} = 1", word.to_ascii_lowercase()),
+                    literal,
+                    "invalid_expression",
+                );
+                case("predicate", format!("D.{word} = 1"), true, "");
+                for context in ["compute", "aggregate"] {
+                    case(
+                        context,
+                        format!("1 + {}", word.to_ascii_lowercase()),
+                        literal,
+                        if truth {
+                            "prohibited_construct"
+                        } else {
+                            "invalid_expression"
+                        },
+                    );
+                    case(context, format!("D.{word} + 1"), true, "");
+                }
+            }
+            let compare = document["productions"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|value| value["name"] == "compare")
+                .unwrap();
+            for operator in compare["definition"]
+                .as_str()
+                .unwrap()
+                .split('"')
+                .skip(1)
+                .step_by(2)
+            {
+                case("predicate", format!("A {operator} 1"), true, "");
+                for context in ["compute", "aggregate"] {
+                    case(
+                        context,
+                        format!("A {operator} 1"),
+                        false,
+                        "prohibited_construct",
+                    );
+                }
+            }
+            for (name, declaration) in document["vocabulary"]["reducer"].as_object().unwrap() {
+                let star = declaration["argument"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|value| value == "star");
+                for argument in ["A", "A+1", "ABS(A)", "D.*", "", "A,B", "SUM(A)"] {
+                    let text = format!("{}({argument})", name.to_ascii_lowercase());
+                    let syntax = matches!(argument, "" | "A,B") || (argument == "D.*" && !star);
+                    let condition = |admitted: &'static str| {
+                        if syntax {
+                            "invalid_expression"
+                        } else {
+                            admitted
+                        }
+                    };
+                    case(
+                        "aggregate",
+                        text.clone(),
+                        !syntax && argument != "SUM(A)",
+                        condition("nested_reduction"),
+                    );
+                    case(
+                        "compute",
+                        text.clone(),
+                        false,
+                        condition("prohibited_function"),
+                    );
+                    case(
+                        "predicate",
+                        format!("{text} = 1"),
+                        false,
+                        condition("prohibited_function"),
+                    );
+                }
+            }
+            cases
+        }
+
+        #[test]
+        fn shared_grammars_have_exact_shapes_dependencies_decisions_and_vocabularies() {
+            let documents = [("expression", "formulas"), ("string-template", "text")].map(
+                |(contract, rule)| {
+                    let document = yaml(&format!("yaml/grammar/{contract}.yaml"));
+                    assert_eq!(document["contract"], contract);
+                    assert_eq!(document["rule"], rule);
+                    (contract, document)
+                },
+            );
             for (contract, document) in &documents {
                 for case in document["cases"].as_array().unwrap() {
                     grammar_case(contract, case);
                 }
-                if matches!(*contract, "numeric" | "aggregate") {
-                    for (name, arity) in numeric_doc["vocabulary"]["function"].as_object().unwrap()
-                    {
-                        let lower = arity["min_arguments"].as_u64().unwrap() as usize;
-                        let upper = arity["max_arguments"].as_u64().map(|value| value as usize);
-                        let mut counts = BTreeSet::from([0, lower - 1, lower, lower + 1, 8]);
-                        if let Some(upper) = upper {
-                            counts.insert(upper + 1);
-                        }
-                        for count in counts {
-                            let accepted =
-                                count >= lower && upper.is_none_or(|upper| count <= upper);
-                            grammar_case(
-                                contract,
-                                &json!({
-                                    "id":format!("arity-{name}-{count}"),
-                                    "text":format!("{}({})", name.to_ascii_lowercase(), vec!["A"; count].join(", ")),
-                                    "parse": if accepted { "accept" } else { "reject" },
-                                    "condition":"prohibited_function"
-                                }),
-                            );
-                        }
-                    }
-                    for word in numeric_doc["prohibited"].as_object().unwrap().keys() {
-                        grammar_case(
-                            contract,
-                            &json!({"id":format!("prohibited-{word}"), "text":format!("A {} B",word.to_ascii_lowercase()), "parse":"reject", "condition":"prohibited_construct"}),
-                        );
-                        grammar_case(
-                            contract,
-                            &json!({"id":format!("qualified-{word}"), "text":format!("A.{word}"), "parse":"accept"}),
-                        );
-                    }
-                }
-                if *contract == "aggregate" {
-                    for (name, declaration) in
-                        document["vocabulary"]["reducer"].as_object().unwrap()
-                    {
-                        for argument in ["A", "A+1", "ABS(A)", "D.*", "", "A,B", "SUM(A)"] {
-                            let accepted = matches!(argument, "A" | "A+1" | "ABS(A)")
-                                || (argument == "D.*"
-                                    && declaration["argument"]
-                                        .as_array()
-                                        .unwrap()
-                                        .iter()
-                                        .any(|value| value == "star"));
-                            grammar_case(
-                                contract,
-                                &json!({"id":format!("reducer-{name}-{argument}"), "text":format!("{}({argument})",name.to_ascii_lowercase()), "parse":if accepted { "accept" } else { "reject" }, "condition":if argument == "SUM(A)" { "nested_reduction" } else { "invalid_aggregate_expression" }}),
-                            );
-                        }
-                    }
-                }
-                if *contract == "predicate" {
-                    for word in document["reserved"].as_array().unwrap() {
-                        let word = word.as_str().unwrap();
-                        grammar_case(
-                            contract,
-                            &json!({"id":format!("reserved-{word}"), "text":format!("{} = 1",word.to_ascii_lowercase()), "parse":if word == "NULL" { "accept" } else { "reject" }, "condition":"invalid_predicate", "identifiers":[]}),
-                        );
-                        grammar_case(
-                            contract,
-                            &json!({"id":format!("qualified-{word}"), "text":format!("D.{word} = 1"), "parse":"accept"}),
-                        );
-                    }
-                    let comparison = document["productions"]
-                        .as_array()
-                        .unwrap()
-                        .iter()
-                        .find(|value| value["name"] == "compare")
-                        .unwrap();
-                    for operator in comparison["definition"]
-                        .as_str()
-                        .unwrap()
-                        .split('"')
-                        .skip(1)
-                        .step_by(2)
-                    {
-                        grammar_case(
-                            contract,
-                            &json!({"id":format!("comparison-{operator}"), "text":format!("A {operator} 1"), "parse":"accept"}),
-                        );
-                    }
-                }
             }
-            for (contract, key, names) in [
-                ("numeric", "function", numeric_vocabulary()),
-                ("aggregate", "reducer", aggregate_vocabulary()),
+            let expression = &documents[0].1;
+            for case in expansions(expression) {
+                grammar_case("expression", &case);
+            }
+            for (key, names) in [
+                ("function", function_vocabulary()),
+                ("reducer", reducer_vocabulary()),
             ] {
                 let actual = names.into_iter().collect::<BTreeSet<_>>();
-                let declared = vocabulary(contract)["vocabulary"][key]
+                let declared = expression["vocabulary"][key]
                     .as_object()
                     .unwrap()
                     .keys()
                     .map(String::as_str)
                     .collect::<BTreeSet<_>>();
-                assert_eq!(actual, declared, "{contract} closed native vocabulary");
+                assert_eq!(actual, declared, "{key}: closed native vocabulary");
             }
+            for function in Function::ALL {
+                let declared = &expression["vocabulary"]["function"][function.name()];
+                assert_eq!(declared["min_arguments"], function.arity() as u64);
+                assert_eq!(declared["max_arguments"], function.arity() as u64);
+                assert_eq!(
+                    declared["result"],
+                    if function.is_numeric() {
+                        "numeric"
+                    } else {
+                        "boolean"
+                    }
+                );
+            }
+            let reserved = expression["reserved"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|name| name.as_str().unwrap())
+                .collect::<Vec<_>>();
+            assert_eq!(reserved, RESERVED);
         }
 
         fn regex_observation(pattern: &str, subject: &str) -> Json {
@@ -884,9 +887,10 @@ mod declaration {
         }
 
         #[test]
-        fn original_closed_keyword_metadata_keeps_native_construct_classes() {
-            let predicate_doc = yaml("yaml/grammar/predicate.yaml");
-            let reserved = predicate_doc["reserved"]
+        fn closed_keywords_and_refused_constructs_keep_their_names() {
+            let document = yaml("yaml/grammar/expression.yaml");
+            assert!(document.get("prohibited").is_none());
+            let reserved = document["reserved"]
                 .as_array()
                 .unwrap()
                 .iter()
@@ -895,11 +899,10 @@ mod declaration {
             assert_eq!(
                 reserved,
                 BTreeSet::from([
-                    "AND", "BETWEEN", "DATE", "DATETIME", "ESCAPE", "FALSE", "IN", "IS", "LIKE",
-                    "NOT", "NULL", "OR", "TRUE"
+                    "AND", "BETWEEN", "FALSE", "IN", "IS", "LIKE", "NOT", "NULL", "OR", "TRUE"
                 ])
             );
-            let comparison = predicate_doc["productions"]
+            let comparison = document["productions"]
                 .as_array()
                 .unwrap()
                 .iter()
@@ -915,25 +918,38 @@ mod declaration {
                     .collect::<Vec<_>>(),
                 ["=", "<>", "<", "<=", ">", ">="]
             );
-            let numeric_doc = yaml("yaml/grammar/numeric.yaml");
-            let prohibited = json!({"AND":"boolean", "BETWEEN":"comparison", "CASE":"conditional", "ELSE":"conditional", "END":"conditional", "FALSE":"boolean", "IN":"comparison", "IS":"comparison", "LIKE":"comparison", "NOT":"boolean", "OR":"boolean", "OVER":"window", "THEN":"conditional", "TRUE":"boolean", "WHEN":"conditional"});
-            assert_eq!(numeric_doc["prohibited"], prohibited);
-            for (word, construct) in prohibited.as_object().unwrap() {
+            for (text, construct) in [
+                ("A AND B", "boolean"),
+                ("A OR B", "boolean"),
+                ("NOT A", "boolean"),
+                ("TRUE", "boolean"),
+                ("A = B", "comparison"),
+                ("A IN (1)", "comparison"),
+                ("A NOT BETWEEN 1 AND 2", "comparison"),
+                ("A LIKE B", "comparison"),
+                ("A IS NOT NULL", "comparison"),
+                ("'text'", "string"),
+                ("DATE '2025-06-01'", "temporal"),
+            ] {
                 for family in ["numeric", "aggregate"] {
-                    let actual =
-                        syntax_outcome(family, &format!("A {} B", word.to_ascii_lowercase()));
-                    assert_eq!(actual["condition"], "prohibited_construct");
-                    assert_eq!(&actual["context"]["construct"], construct);
+                    let actual = syntax_outcome(family, text);
+                    assert_eq!(
+                        actual["condition"], "prohibited_construct",
+                        "{family}: {text}"
+                    );
+                    assert_eq!(
+                        actual["context"]["construct"], construct,
+                        "{family}: {text}"
+                    );
                 }
             }
-            let aggregate_doc = yaml("yaml/grammar/aggregate.yaml");
-            for (name, declaration) in aggregate_doc["vocabulary"]["reducer"].as_object().unwrap() {
+            for (name, declaration) in document["vocabulary"]["reducer"].as_object().unwrap() {
                 assert_eq!(
                     declaration["argument"],
                     if name == "COUNT" {
-                        json!(["expr", "star"])
+                        json!(["expression", "star"])
                     } else {
-                        json!(["expr"])
+                        json!(["expression"])
                     }
                 );
             }

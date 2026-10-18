@@ -4,7 +4,7 @@ use crate::json::Value as V;
 use crate::{
     column_dependencies,
     diagnostic::{ConditionCode as C, Context, Diagnostic},
-    numeric_parser::ParseError,
+    expression::{CompileError, Context as Field},
     reference_binding, reference_scope,
     schema::quoted_diagnostic_text,
 };
@@ -161,12 +161,26 @@ impl BindFinding {
                 path,
                 expression,
                 error,
-            } => return Some(vec![error.diagnostic(path, expression)?]),
+            } => {
+                return Some(vec![error.diagnostic(
+                    Field::Aggregate,
+                    path,
+                    expression,
+                    0,
+                )])
+            }
             Self::Numeric {
                 path,
                 expression,
-                error: ParseError::Grammar { failure, .. },
-            } => return Some(vec![failure.diagnostic(path, expression)?]),
+                error: CompileError::Invalid { failure, .. },
+            } => {
+                return Some(vec![failure.diagnostic(
+                    Field::Compute,
+                    path,
+                    expression,
+                    0,
+                )])
+            }
             Self::AggregateScope {
                 path,
                 expression,

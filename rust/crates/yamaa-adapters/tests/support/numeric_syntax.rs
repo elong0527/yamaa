@@ -1,127 +1,108 @@
-//! Private typed parser observations for independent differential fixtures.
+//! Private typed compute observations for independent differential fixtures.
 use super::syntax_spans as spans;
 use yamaa_adapters::json;
+use yamaa_core::expression::{CompiledExpression, Context, NodeKind};
 use yamaa_core::json::Value;
-use yamaa_core::{
-    numeric::{BinaryOperator, UnaryOperator},
-    numeric_parser::{
-        parse_numeric, GrammarFailure, ParseError, ParseResource, ParsedKind, ParsedNumeric,
-    },
-};
+use yamaa_core::numeric::{BinaryOperator, UnaryOperator};
+
 pub fn observe_with_spans(expression: &str) -> Value {
     let mut outcome = observe(expression);
-    if let Ok(parsed) = parse_numeric(expression) {
-        annotate(&parsed, parsed.root(), &mut outcome["outcome"]["ast"]);
-    } else if let Err(ParseError::Grammar {
-        failure: GrammarFailure::ProhibitedFunction { name, .. },
-        ..
-    }) = parse_numeric(expression)
-    {
-        outcome["outcome"]["span"] = spans::span(expression, name);
+    match spans::compiled(Context::Compute, expression) {
+        Ok(compiled) => annotate(
+            &compiled,
+            compiled.syntax().root(),
+            &mut outcome["outcome"]["ast"],
+        ),
+        Err(error) => {
+            if let Some(name) = spans::function_name(&error) {
+                outcome["outcome"]["span"] = spans::span(expression, name);
+            }
+        }
     }
     outcome
 }
 
-fn annotate(parsed: &ParsedNumeric, id: usize, value: &mut Value) {
-    let node = &parsed.nodes()[id];
-    let expression = parsed.expression();
+pub(super) fn annotate(compiled: &CompiledExpression, id: usize, value: &mut Value) {
+    let syntax = compiled.syntax();
+    let node = &syntax.nodes()[id];
+    let expression = syntax.expression();
     match &node.kind {
-        ParsedKind::Unary { operand, .. } => {
-            annotate(parsed, *operand, &mut value["value"]);
+        NodeKind::Unary { operand, .. } => {
+            annotate(compiled, *operand, &mut value["value"]);
             value["operator_span"] = spans::operator(
                 expression,
                 node.span.start,
-                parsed.nodes()[*operand].span.start,
+                syntax.nodes()[*operand].span.start,
             );
         }
-        ParsedKind::Binary { left, right, .. } => {
-            annotate(parsed, *left, &mut value["left"]);
-            annotate(parsed, *right, &mut value["right"]);
+        NodeKind::Binary { left, right, .. } => {
+            annotate(compiled, *left, &mut value["left"]);
+            annotate(compiled, *right, &mut value["right"]);
             value["operator_span"] = spans::operator(
                 expression,
-                parsed.nodes()[*left].span.end,
-                parsed.nodes()[*right].span.start,
+                syntax.nodes()[*left].span.end,
+                syntax.nodes()[*right].span.start,
             );
         }
-        ParsedKind::Call {
-            name, arguments, ..
-        } => {
-            value["name"] = json!(&expression[name.start..name.end]);
+        NodeKind::Call { name, arguments } => {
+            value["name"] = json!(syntax.slice(*name));
             value["name_span"] = spans::span(expression, *name);
             for (index, child) in arguments.iter().enumerate() {
-                annotate(parsed, *child, &mut value["arguments"][index]);
+                annotate(compiled, *child, &mut value["arguments"][index]);
             }
         }
-        ParsedKind::Group { operand } => annotate(parsed, *operand, value),
+        NodeKind::Reduction { name, operand, .. } => {
+            value["name"] = json!(syntax.slice(*name));
+            value["name_span"] = spans::span(expression, *name);
+            annotate(compiled, *operand, &mut value["argument"]);
+        }
+        NodeKind::Group(operand) => annotate(compiled, *operand, value),
         _ => {}
     }
     value["span"] = spans::span(expression, node.span);
 }
+
 pub fn observe(expression: &str) -> Value {
-    let outcome = match parse_numeric(expression) {
-        Ok(parsed) => json!({"status":"parsed", "ast": ast(&parsed, parsed.root()),
-                "identifiers":parsed.identifiers().collect::<Vec<_>>() }),
-        Err(ParseError::Grammar { position, failure }) => {
-            let context = match &failure {
-                GrammarFailure::InvalidExpression => json!({}),
-                GrammarFailure::ProhibitedConstruct { construct } => json!({"construct":construct}),
-                GrammarFailure::ProhibitedFunction {
-                    name,
-                    argument_count,
-                } => {
-                    let mut context = json!({"function": &expression[name.start..name.end]});
-                    if let Some(count) = argument_count {
-                        context["argument_count"] = json!(count);
-                    }
-                    context
-                }
-            };
-            json!({"status":"invalid", "condition":failure.condition(),"requirement":failure.requirement(),
-                    "position":{"byte":position.byte,"character":position.character},"context":context})
-        }
-        Err(ParseError::Limit {
-            position,
-            resource,
-            limit,
-        }) => {
-            let resource = match resource {
-                ParseResource::Depth => "depth",
-            };
-            json!({"status":"resource_limit","resource":resource,"limit":limit,
-                    "position":{"byte":position.byte,"character":position.character}})
-        }
+    let outcome = match spans::compiled(Context::Compute, expression) {
+        Ok(compiled) => json!({"status":"parsed", "ast": ast(&compiled, compiled.syntax().root()),
+                "identifiers":compiled.identifiers().collect::<Vec<_>>() }),
+        Err(error) => spans::refusal(&error, false),
     };
     json!({"outcome":outcome})
 }
 
 /// Serialize each tree occurrence once, eliding groups without changing association.
-/// The validated arena caps recursion at 128 and retains numbers as exact strings.
-fn ast(parsed: &ParsedNumeric, id: usize) -> Value {
-    let node = &parsed.nodes()[id];
-    let written = &parsed.expression()[node.span.start..node.span.end];
+/// Numbers keep their written spelling, a sign written before one included.
+pub(super) fn ast(compiled: &CompiledExpression, id: usize) -> Value {
+    let syntax = compiled.syntax();
+    let node = &syntax.nodes()[id];
+    let written = syntax.text(id);
     match &node.kind {
-        ParsedKind::Number { fractional } => {
-            json!({"kind":"number","type":if *fractional {"float"} else {"int"},"value":written})
+        NodeKind::Number { fractional, text } => {
+            json!({"kind":"number","type":if *fractional {"float"} else {"int"},"value":text})
         }
-        ParsedKind::Null => json!({"kind":"null"}),
-        ParsedKind::Identifier => json!({"kind":"identifier","name":written}),
-        ParsedKind::Unary { operator, operand } => {
-            json!({"kind":"unary","operator":match operator {UnaryOperator::Plus=>"+",UnaryOperator::Negate=>"-",UnaryOperator::Abs=>unreachable!("ABS parses as a call")},"value":ast(parsed,*operand)})
+        NodeKind::Null => json!({"kind":"null"}),
+        NodeKind::Identifier => json!({"kind":"identifier","name":written}),
+        NodeKind::Star => json!({"kind":"star","dataset":&written[..written.len()-2]}),
+        NodeKind::Unary { operator, operand } => {
+            json!({"kind":"unary","operator":match operator {UnaryOperator::Plus=>"+",UnaryOperator::Negate=>"-",UnaryOperator::Abs=>unreachable!("ABS parses as a call")},"value":ast(compiled,*operand)})
         }
-        ParsedKind::Binary {
+        NodeKind::Binary {
             operator,
             left,
             right,
         } => {
-            json!({"kind":"binary","operator":match operator {BinaryOperator::Add=>"+",BinaryOperator::Subtract=>"-",BinaryOperator::Multiply=>"*",BinaryOperator::Divide=>"/",BinaryOperator::Modulo=>unreachable!("MOD parses as a call")},"left":ast(parsed,*left),"right":ast(parsed,*right)})
+            json!({"kind":"binary","operator":match operator {BinaryOperator::Add=>"+",BinaryOperator::Subtract=>"-",BinaryOperator::Multiply=>"*",BinaryOperator::Divide=>"/",BinaryOperator::Modulo=>unreachable!("MOD parses as a call")},"left":ast(compiled,*left),"right":ast(compiled,*right)})
         }
-        ParsedKind::Call {
-            function,
-            arguments,
-            ..
+        NodeKind::Call { name, arguments } => {
+            json!({"kind":"call","name":syntax.slice(*name).to_ascii_uppercase(),"arguments":arguments.iter().map(|&id|ast(compiled,id)).collect::<Vec<_>>()})
+        }
+        NodeKind::Reduction {
+            reducer, operand, ..
         } => {
-            json!({"kind":"call","name":function.name(),"arguments":arguments.iter().map(|&id|ast(parsed,id)).collect::<Vec<_>>()})
+            json!({"kind":"reduction","name":reducer.name(),"argument":ast(compiled,*operand),"text":written})
         }
-        ParsedKind::Group { operand } => ast(parsed, *operand),
+        NodeKind::Group(operand) => ast(compiled, *operand),
+        other => unreachable!("a numeric context admits no {other:?}"),
     }
 }

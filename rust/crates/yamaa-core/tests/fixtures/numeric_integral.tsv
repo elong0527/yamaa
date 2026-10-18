@@ -28,7 +28,7 @@ ceil-nonfinite	CEIL(1e9999)	-	missing	-	-
 ceil-absent	CEIL(A)	-	error:unknown_field:REQ-0443:A	A	unary
 ceil-bool	CEIL(A)	A=bool:true	error:incompatible_input_type:REQ-0444:A:bool	A	unary
 ceil-text	CEIL(A)	A=str:3	error:incompatible_input_type:REQ-0444:A:str	A	unary
-ceil-overflow	CEIL(9223372036854775808)	-	error:integer_overflow:REQ-0434:9223372036854775808	-	unary
+ceil-overflow	CEIL(9223372036854775808)	-	error:integer_overflow:REQ-0014	-	-
 ceil-divide-zero	CEIL(A / 0)	A=int:1	error:division_by_zero:REQ-0430	A	unary
 ceil-missing-still-resolves	CEIL(A + B)	A=missing	error:unknown_field:REQ-0443:B	A,B	unary,right
 floor-missing	FLOOR(A)	A=missing	missing	A	-
@@ -60,7 +60,7 @@ floor-nonfinite	FLOOR(1e9999)	-	missing	-	-
 floor-absent	FLOOR(A)	-	error:unknown_field:REQ-0443:A	A	unary
 floor-bool	FLOOR(A)	A=bool:true	error:incompatible_input_type:REQ-0444:A:bool	A	unary
 floor-text	FLOOR(A)	A=str:3	error:incompatible_input_type:REQ-0444:A:str	A	unary
-floor-overflow	FLOOR(9223372036854775808)	-	error:integer_overflow:REQ-0434:9223372036854775808	-	unary
+floor-overflow	FLOOR(9223372036854775808)	-	error:integer_overflow:REQ-0014	-	-
 floor-divide-zero	FLOOR(A / 0)	A=int:1	error:division_by_zero:REQ-0430	A	unary
 floor-missing-still-resolves	FLOOR(A + B)	A=missing	error:unknown_field:REQ-0443:B	A,B	unary,right
 trunc-missing	TRUNC(A)	A=missing	missing	A	-
@@ -92,7 +92,7 @@ trunc-nonfinite	TRUNC(1e9999)	-	missing	-	-
 trunc-absent	TRUNC(A)	-	error:unknown_field:REQ-0443:A	A	unary
 trunc-bool	TRUNC(A)	A=bool:true	error:incompatible_input_type:REQ-0444:A:bool	A	unary
 trunc-text	TRUNC(A)	A=str:3	error:incompatible_input_type:REQ-0444:A:str	A	unary
-trunc-overflow	TRUNC(9223372036854775808)	-	error:integer_overflow:REQ-0434:9223372036854775808	-	unary
+trunc-overflow	TRUNC(9223372036854775808)	-	error:integer_overflow:REQ-0014	-	-
 trunc-divide-zero	TRUNC(A / 0)	A=int:1	error:division_by_zero:REQ-0430	A	unary
 trunc-missing-still-resolves	TRUNC(A + B)	A=missing	error:unknown_field:REQ-0443:B	A,B	unary,right
 integral-nested	CEIL(FLOOR(TRUNC(A)))	A=float:-1.75	float:bff0000000000000	A	-

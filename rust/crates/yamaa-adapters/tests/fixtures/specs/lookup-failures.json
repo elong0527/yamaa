@@ -6,7 +6,7 @@
     "diagnostics": [
       {
         "phase": "validation",
-        "condition": "invalid_predicate",
+        "condition": "invalid_expression",
         "requirement": "REQ-0188",
         "spec_paths": [
           "intermediates[0].filter"

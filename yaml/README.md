@@ -80,17 +80,17 @@ rule, grammar, or fixture:
   become a second place a governed fact lives.
 - Declare nothing a rule derives. For `sdtm` and `send`, `Mandatory` comes
   from `core`; for `adam` the two are independently declared. A submission
-  length comes from `max_length`, an ADaM origin source from its type, and a
-  collected value's annotated-CRF reference from the document that declares
-  it.
+  length comes from `max_length`, an ADaM origin source from its type, and,
+  under the `Other` context, a collected value's page-less annotated-CRF
+  reference from the document that declares it.
 - Declare a codelist once in the study environment and bind columns to its
   identifier, as required by the
   [terminology contract](../rules/profiles/terminology.md).
 - Change a closed grammar in its `grammar/` file first. The rule's grammar
-  block is rendered from that file, each parser's closed vocabulary is
-  compared with it, and both implementations replay its vectors, so a change
-  made anywhere else fails validation. Add a vector for every behavior the
-  change decides.
+  block is rendered from that file, the shared parser's closed vocabulary is
+  compared with it, and both hosts replay its vectors, so a change made
+  anywhere else fails validation. Add a vector for every behavior the change
+  decides, in each context that decides it.
 - Keep repository-authored source ASCII-only. Spell non-ASCII characters by
   code point in rules, documentation, schemas, specifications, and tests;
   literal Unicode belongs only in input and expected-output data fixtures.

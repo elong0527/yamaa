@@ -1215,7 +1215,7 @@ S1,002,2024-06
         /// finding is decided from. `domain` reaches each of them once it reads or
         /// binds the inputs. A case that `check` starts to report fails until it
         /// leaves this list.
-        const NOT_REPORTED_BY_CHECK: [(&str, &str); 22] = [
+        const NOT_REPORTED_BY_CHECK: [(&str, &str); 23] = [
             (
                 "negative-adlb-computed-param",
                 "a cycle through an aggregate and a case",
@@ -1257,6 +1257,10 @@ S1,002,2024-06
             (
                 "negative-path-symlink",
                 "whether the input file is a symbolic link",
+            ),
+            (
+                "negative-review-arithmetic",
+                "the type of an arithmetic operand in a flag condition",
             ),
             (
                 "negative-review-date-text",
@@ -1952,15 +1956,10 @@ S1,002,2024-06
                         );
                         assert_eq!(aggregate.expression().reductions().len(), 1);
                         let reduction = &aggregate.expression().reductions()[0];
-                        assert_eq!(
-                            reduction.reducer,
-                            yamaa_core::aggregate_parser::Reducer::Sum
-                        );
+                        assert_eq!(reduction.reducer, yamaa_core::expression::Reducer::Sum);
                         assert_eq!(
                             reduction.operand,
-                            yamaa_core::aggregate_compiler::AggregateOperand::Value(
-                                "LB.LBSTRESN".into()
-                            )
+                            yamaa_core::expression::ReductionOperand::Value("LB.LBSTRESN".into())
                         );
                     }
                     "schema-window-functions" => {

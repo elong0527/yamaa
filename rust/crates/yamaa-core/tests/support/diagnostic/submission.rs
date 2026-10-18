@@ -128,9 +128,23 @@ pub(crate) fn compose(
     installed: &str,
     created: &str,
 ) -> Result<Study, Vec<Finding>> {
+    compose_study(env, docs, Vec::new(), catalogue, installed, created)
+}
+/// Compose the first section; `others` are the specifications the study's
+/// other submission sections list.
+pub(crate) fn compose_study(
+    env: Tree,
+    docs: Vec<Tree>,
+    others: Vec<Tree>,
+    catalogue: &ct::Catalogue,
+    installed: &str,
+    created: &str,
+) -> Result<Study, Vec<Finding>> {
     let env = env.document();
     let declared = submission_document::decode(&env, env.root()).unwrap();
     let docs: Vec<_> = docs.into_iter().map(Tree::document).collect();
+    let others: Vec<_> = others.into_iter().map(Tree::document).collect();
+    let others: Vec<_> = others.iter().collect();
     let inputs: Vec<_> = docs
         .iter()
         .map(|document| Input {
@@ -145,6 +159,7 @@ pub(crate) fn compose(
         &declared.sections()[0],
         catalogue,
         &inputs,
+        &others,
         installed,
         created,
     )
@@ -436,11 +451,11 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             8 => {
                 *spec.at(&["columns", "0", "submission", "origin", "type"]) = Tree::text("Derived")
             }
+            // A bare literal refutes Derived: the value is read from no input.
             9 => {
-                *spec.at(&["columns", "0", "submission", "origin", "type"]) =
-                    Tree::text("Collected");
-                *spec.at(&["columns", "0", "submission", "origin", "source"]) =
-                    Tree::text("Vendor");
+                *spec.at(&["columns", "0", "submission", "origin", "type"]) = Tree::text("Derived");
+                spec.at(&meta)
+                    .set(&["method"], Tree::text("Independent algorithm"));
             }
             10 | 11 => {
                 *spec.at(&["columns", "0", "submission", "origin", "type"]) =
@@ -653,13 +668,16 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                     "row 1",
                     "CODE",
                     "VALUE",
-                    Tree::map(vec![(
-                        "origin",
-                        Tree::map(vec![
-                            ("type", Tree::text("Collected")),
-                            ("source", Tree::text("Vendor")),
-                        ]),
-                    )]),
+                    Tree::map(vec![
+                        (
+                            "origin",
+                            Tree::map(vec![
+                                ("type", Tree::text("Derived")),
+                                ("source", Tree::text("Sponsor")),
+                            ]),
+                        ),
+                        ("method", Tree::text("Independent algorithm")),
+                    ]),
                     true,
                 )
             }
@@ -681,11 +699,59 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 ("row", "row 1"),
                 ("testcd", "CODE"),
                 ("derivation_kind", "literal"),
-                ("origin_type", "Collected"),
+                ("origin_type", "Derived"),
             ] {
                 assert_eq!(finding.context[key], JsonValue::String(value.into()));
             }
         }
+    }
+    // A Predecessor that keeps its predecessor's name keeps its label, wherever
+    // another section of the study declares that column.
+    let mut spec = specification();
+    spec.set(&["input"], Tree::map(vec![("P0", Tree::text("p0.csv"))]));
+    *spec.at(&["columns", "0", "derivation"]) = Tree::map(vec![("source", Tree::text("P0.VALUE"))]);
+    *spec.at(&["columns", "0", "submission", "origin"]) = Tree::map(vec![
+        ("type", Tree::text("Predecessor")),
+        ("description", Tree::text("P0.VALUE")),
+    ]);
+    let mut predecessor = specification();
+    *predecessor.at(&["domain"]) = Tree::text("P0");
+    *predecessor.at(&["columns", "0", "label"]) = Tree::text("Predecessor column");
+    let created = "2026-09-30T00:00:00";
+    assert!(compose_study(
+        environment(),
+        vec![spec.clone()],
+        vec![],
+        &empty,
+        "1.0",
+        created
+    )
+    .is_ok());
+    let findings = compose_study(
+        environment(),
+        vec![spec],
+        vec![predecessor],
+        &empty,
+        "1.0",
+        created,
+    )
+    .unwrap_err();
+    reached_finding(
+        &mut reached,
+        &findings,
+        SubmissionPredecessorLabel,
+        "validation",
+        "predecessor_label_mismatch",
+        "SUB-20",
+    );
+    assert_eq!(findings.len(), 1, "{findings:?}");
+    assert_eq!(findings[0].path, "sdtm.specs[0].columns.VALUE.label");
+    for (key, value) in [
+        ("predecessor", "P0.VALUE"),
+        ("label", "Independent column"),
+        ("predecessor_label", "Predecessor column"),
+    ] {
+        assert_eq!(findings[0].context[key], JsonValue::String(value.into()));
     }
     for (code, condition, requirement, change) in [
         (
