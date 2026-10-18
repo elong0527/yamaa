@@ -3,13 +3,15 @@ name: Main health
 # Main is checked on schedules rather than after every merge, so a failing
 # main run is the only sign that main is broken. Keep one open issue per
 # workflow while its newest main run fails, and close it when one succeeds.
-# Only CI, on its schedule, and Docs, on each merge, run on main without a
-# person starting them; whoever dispatches a release lane sees its result.
+# Only CI and Fuzz, on their schedules, and Docs, on each merge, run on main
+# without a person starting them; whoever dispatches a release lane sees its
+# result.
 on:
   workflow_run:
     workflows:
       - CI
       - Docs
+      - Fuzz
     types: [completed]
     branches: [main]
 

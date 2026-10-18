@@ -1330,7 +1330,7 @@ S1,002,2024-06
         /// finding is decided from. `domain` reaches each of them once it reads or
         /// binds the inputs. A case that `check` starts to report fails until it
         /// leaves this list.
-        const NOT_REPORTED_BY_CHECK: [(&str, &str); 31] = [
+        const NOT_REPORTED_BY_CHECK: [(&str, &str); 33] = [
             (
                 "negative-adlb-computed-param",
                 "a cycle through an aggregate and a case",
@@ -1369,8 +1369,16 @@ S1,002,2024-06
                 "the driver of each row template that reads a lookup derivation",
             ),
             (
+                "negative-lookup-key-column-phase",
+                "the phase of a column a row template's lookup matches on",
+            ),
+            (
                 "negative-lookup-key-other-template",
                 "the driver of each row template that reads a lookup key",
+            ),
+            (
+                "negative-lookup-match-column-phase",
+                "the phase of a column a row template's lookup range reads",
             ),
             (
                 "negative-lookup-mismatched",
