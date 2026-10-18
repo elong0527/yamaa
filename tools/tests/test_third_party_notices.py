@@ -105,14 +105,14 @@ def shipped_graph(root):
     )
     flatbuffers = graph.crate("flatbuffers", "25.12.19", "Apache-2.0")
     parser = graph.crate(
-        "saphyr-parser",
+        "yamaa-saphyr-parser",
         "0.2.1",
         "MIT OR Apache-2.0",
         {"LICENSE": "Both authors' licenses are in LICENSES.\n"},
         source=None,
         directory=root / "rust/vendor/saphyr-parser",
     )
-    for license in notices.EXTRA_FILES["saphyr-parser"]:
+    for license in notices.EXTRA_FILES["yamaa-saphyr-parser"]:
         author = license.split("/")[1].split("-")[0]
         text = APACHE if license.endswith("Apache") else MIT.format(holder=author)
         (root / "rust/vendor/saphyr-parser" / license).parent.mkdir(exist_ok=True)
@@ -214,15 +214,15 @@ class LockedClosure(unittest.TestCase):
                 "derive",
                 "flatbuffers",
                 "pyo3",
-                "saphyr-parser",
                 "tiny-keccak",
                 "windows-sys",
+                "yamaa-saphyr-parser",
             ],
         )
         linked = notices.dependency_closure(metadata, linked=True)
         self.assertEqual(
             self.names(linked) - {"yamaa-python", "yamaa-r", "yamaa-core"},
-            {"arrow", "flatbuffers", "pyo3", "saphyr-parser", "windows-sys"},
+            {"arrow", "flatbuffers", "pyo3", "windows-sys", "yamaa-saphyr-parser"},
         )
 
     def test_texts_follow_the_relied_license_and_fall_back_to_spdx(self):
@@ -238,7 +238,7 @@ class LockedClosure(unittest.TestCase):
         )
         self.assertEqual(selected["flatbuffers"].texts, ())
         self.assertEqual(selected["flatbuffers"].fallbacks, ("Apache-2.0",))
-        parser = selected["saphyr-parser"]
+        parser = selected["yamaa-saphyr-parser"]
         self.assertEqual(parser.source, "rust/vendor/saphyr-parser")
         self.assertEqual(
             [name for name, _ in parser.texts],
@@ -270,9 +270,9 @@ class LockedClosure(unittest.TestCase):
                 ("derive", "1.0.0"),
                 ("flatbuffers", "25.12.19"),
                 ("pyo3", "0.27.2"),
-                ("saphyr-parser", "0.2.1"),
                 ("tiny-keccak", "2.0.2"),
                 ("windows-sys", "0.61.2"),
+                ("yamaa-saphyr-parser", "0.2.1"),
             },
         )
 
@@ -311,7 +311,7 @@ class LockedClosure(unittest.TestCase):
         (directory / "LICENSE-OTHER").write_text(MIT.format(holder="PyO3"))
         with self.assertRaisesRegex(ValueError, "classify the license file"):
             notices.crate_notice(package)
-        parser = self.graph.packages["saphyr-parser@0.2.1"]
+        parser = self.graph.packages["yamaa-saphyr-parser@0.2.1"]
         (Path(parser["manifest_path"]).parent / "LICENSES/Ethiraric-MIT").unlink()
         with self.assertRaisesRegex(ValueError, "Ethiraric-MIT is missing"):
             notices.crate_notice(parser)
