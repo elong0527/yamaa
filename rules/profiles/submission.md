@@ -697,9 +697,9 @@ intermediate or, in a `case`, from an output column, is anything else.
 
 Anything else computes its value: arithmetic and rounding (`compute`,
 `round_half_away_from_zero`), every aggregation but an `ONLY` pivot, windows,
-temporal computation (the date and datetime operations other than `to_date`),
-`flag`, `cut`, `greatest` and `least`, `function`, and every read through a
-named intermediate that is not a plain lookup: one that declares
+temporal computation (the date and datetime operations other than `to_date`
+and `dtc`), `flag`, `cut`, `greatest` and `least`, `function`, and every read
+through a named intermediate that is not a plain lookup: one that declares
 `derivations`, whose fields it computes, or one over `SELF`, the completed
 output rows. Each type it refutes asserts the value arrived as it stands, and
 the specification shows it did not.
