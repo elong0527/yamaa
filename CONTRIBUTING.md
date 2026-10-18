@@ -90,9 +90,9 @@ crate; do not import another crate's source into tests.
 Portable numerical behavior has independently authored controls in
 `rust/crates/yamaa-core/tests/fixtures/portable_math.tsv`.
 
-The Python and R READMEs describe user installation. The
-[Python package documentation](docs/articles/python.md) and the R README
-describe the host APIs. Installed-host
+The Python and R READMEs describe user installation, and the
+[R and Python API](docs/articles/api.md) page describes both host APIs.
+Installed-host
 [qualification](rust/qualification/README.md) owns distribution checks: tests
 run outside the checkout against an installed package, with independent inputs
 and expected bytes. A local source import does not establish package ownership
@@ -114,8 +114,9 @@ Installed Python and R conformance compares actual public results and saved
 artifacts with independent truth. A negative benchmark's `expected/error.yaml`
 is a partial structured assertion: the expected first issue, every declared
 path and context facts must match. Complete authored reports additionally pin
-all findings, exact values, logs, callbacks and artifact observations. Passing
-static repository validation does not establish engine release qualification.
+all findings, exact values, run reports, callbacks and artifact observations.
+Passing static repository validation does not establish engine release
+qualification.
 
 ## CI and release qualification
 

@@ -113,10 +113,11 @@ R is distributed as a standalone source tarball attached to its
 ```r
 install.packages("yamaa_0.4.0.tar.gz", repos = NULL, type = "source")
 library(yamaa)
-result <- yamaa_domain("spec.yaml")
-result$output
-yamaa_check("spec.yaml")$issues
-result$save()
+spec <- yamaa_spec("spec.yaml")
+spec$check()$issues    # check the specification without reading data
+run <- spec$run()      # build the dataset in memory
+run$output
+run$save()             # write adsl.csv
 ```
 
 Source installation requires R 4.6.1, Rust 1.90.0/Cargo and platform build tools.
@@ -128,6 +129,7 @@ publication are later distribution work.
 ## Where to go next
 
 - New here? [Introduction](https://elong0527.github.io/yamaa/articles/intro/) explains the model in five minutes.
+- Running specifications? [R and Python API](https://elong0527.github.io/yamaa/articles/api/) shows every call in both languages.
 - Coming from Excel specs? [Excel to yamaa](https://elong0527.github.io/yamaa/articles/excel/) translates what you already know.
 - Looking for worked examples? [Benchmarks](https://elong0527.github.io/yamaa/benchmark/) illustrate the ideas.
 - Developing the engine? [Contributing](CONTRIBUTING.md) describes the shared architecture and checks; [release guidance](docs/release.md) records supported platforms and migration notes.
