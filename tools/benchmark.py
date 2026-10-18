@@ -174,8 +174,9 @@ def entries(case, metadata=None):
     """Preserve authored call order and the explicit project each call passes.
 
     A case's root `project.yaml` is the default for every call in both hosts;
-    its `environments` key links each host's environment file. The project
-    still travels as the `environment` argument of the public calls.
+    its `environments` key links each host's environment file. An entry's
+    `environment` field names that project file, or is None for a call that
+    opens its specification without a project.
     """
     metadata = load_metadata(case) if metadata is None else metadata
     declared = metadata.get("entries")
@@ -218,12 +219,48 @@ def entries(case, metadata=None):
     return result
 
 
+def specification_name(path):
+    """The `domain` a project names a listed specification by (REQ-1338).
+
+    Layers contribute in REQ-0620 order, each parent list left to right and
+    depth first with every layer once, and a later layer's `domain` replaces
+    an earlier one (REQ-0621).
+    """
+    import yaml12
+
+    names, complete = [], set()
+
+    def visit(layer, active):
+        identity = layer.resolve()
+        require(identity not in active, f"{path}: cyclic parents at {layer}")
+        if identity in complete:
+            return
+        try:
+            document = yaml12.parse_yaml(layer.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValueError) as error:
+            raise ValueError(f"{layer}: {error}") from error
+        require(isinstance(document, dict), f"{layer}: expected a mapping")
+        parents = document.get("parents") or []
+        for parent in [parents] if isinstance(parents, str) else parents:
+            visit(layer.parent / parent, (*active, identity))
+        complete.add(identity)
+        if "domain" in document:
+            names.append(document["domain"])
+
+    visit(Path(path), ())
+    require(
+        bool(names) and isinstance(names[-1], str) and names[-1],
+        f"{path}: no layer names the specification's domain",
+    )
+    return names[-1]
+
+
 def main():
     """Run a case's declared Python entries without publishing output files."""
     parser = argparse.ArgumentParser(description=main.__doc__)
     parser.add_argument("case", type=Path, help="benchmark directory")
     case = parser.parse_args().case.resolve()
-    from yamaa import domain
+    import yamaa
 
     from tools.staging.stage_project_inputs import stage_case
 
@@ -236,11 +273,14 @@ def main():
             ignore=shutil.ignore_patterns("expected", "README.md", "benchmark.yaml"),
         )
         for call in calls:
-            environment = call["environment"]
-            result = domain(
-                staged / call["specification"],
-                environment=None if environment is None else staged / environment,
-            )
+            specification = staged / call["specification"]
+            project = call["environment"]
+            if project is None:
+                spec = yamaa.spec(specification)
+            else:
+                name = specification_name(specification)
+                spec = yamaa.project(staged / project).spec(name)
+            result = spec.run()
             output = result.output
             if output is None:
                 parser.exit(1, f"{call['specification']}: {result.issues}\n")
