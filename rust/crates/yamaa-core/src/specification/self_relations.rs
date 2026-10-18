@@ -168,21 +168,38 @@ impl<'a> FirstTemplate<'a> {
         self.findings
     }
     fn register(&mut self, name: String, path: &str) {
-        if !self
-            .named
-            .reference(&name)
-            .is_some_and(|(index, _)| self.named.is_self(index))
-        {
-            return;
+        // Reading another selector also runs the selector its `between.value`
+        // names, for the same row, so the read reaches SELF through each such
+        // value. Report the read, then each value in the order followed.
+        let mut paths = vec![path.to_owned()];
+        let mut followed = Vec::new();
+        let mut reached = name;
+        loop {
+            let Some((index, _)) = self.named.reference(&reached) else {
+                return;
+            };
+            if self.named.is_self(index) {
+                break;
+            }
+            // Binding reports a value that reaches back to its own selector.
+            let Some((value, between)) = self.named.range_value(index) else {
+                return;
+            };
+            if followed.contains(&index) {
+                return;
+            }
+            followed.push(index);
+            paths.push(between);
+            reached = value.into();
         }
         self.findings
             .push(PreflightFinding::Scalar(crate::diagnostic::Diagnostic {
                 code: crate::diagnostic::ConditionCode::IntermediateSelfPhaseBoundary,
                 source_span: None,
                 operand_route: None,
-                spec_paths: vec![path.into()],
+                spec_paths: paths,
                 context: [
-                    ("identifier".into(), crate::json::Value::String(name)),
+                    ("identifier".into(), crate::json::Value::String(reached)),
                     (
                         "available_phase".into(),
                         crate::json::Value::String("completed_prior_row_template".into()),
