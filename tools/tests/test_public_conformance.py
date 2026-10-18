@@ -772,6 +772,36 @@ class PublicConformance(unittest.TestCase):
             example, "python", record, fixtures, observed, {}
         )
         self.assertEqual(verdict["verdict"], "pass")
+        # Check rows follow column declaration order (REQ-1175): permuting
+        # the key columns moves their rows, which compare as a multiset.
+        report = {
+            "columns": [["SPEC_PATH", "str"], ["COUNT", "int"]],
+            "rows": [["ID", "0"], ["VALUE", "0"]],
+        }
+        for build in (self.build, *variants):
+            build["tables"]["report"] = copy.deepcopy(report)
+        variants[2]["tables"]["report"]["rows"].reverse()
+        verdict = judge.compare_example(
+            example, "python", record, fixtures, observed, {}
+        )
+        self.assertEqual(verdict["verdict"], "pass")
+        variants[2]["tables"]["report"]["rows"][0][1] = "1"
+        verdict = judge.compare_example(
+            example, "python", record, fixtures, observed, {}
+        )
+        self.assertEqual(verdict["verdict"], "mismatch")
+        self.assertEqual(verdict["metamorphic"]["differences"][0]["check"], "key_order")
+        # An empty child composes the same declarations in the same order.
+        variants[2]["tables"]["report"] = copy.deepcopy(report)
+        variants[0]["tables"]["report"]["rows"].reverse()
+        verdict = judge.compare_example(
+            example, "python", record, fixtures, observed, {}
+        )
+        self.assertEqual(verdict["verdict"], "mismatch")
+        self.assertEqual(
+            verdict["metamorphic"]["differences"][0]["check"], "empty_child"
+        )
+        variants[0]["tables"]["report"] = copy.deepcopy(report)
         variants[2]["tables"]["output"]["rows"][0][0] = "1"
         verdict = judge.compare_example(
             example, "python", record, fixtures, observed, {}

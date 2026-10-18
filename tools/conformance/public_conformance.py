@@ -551,11 +551,30 @@ def load_metamorphic_expectations(fixtures):
     return expectations
 
 
-def build_difference(reference, variant):
-    """None when two builds are metamorphically equal, else the difference."""
+def unordered_report(tables):
+    """The tables with the run report's rows as a sorted multiset.
+
+    Check rows follow column declaration order (REQ-1175), so declaring the
+    key columns in another order moves their rows; no row's facts change.
+    """
+    report = tables.get("report")
+    if report is None:
+        return tables
+    rows = sorted(report["rows"], key=lambda row: json.dumps(row))
+    return {**tables, "report": {"columns": report["columns"], "rows": rows}}
+
+
+def build_difference(reference, variant, unordered_report_rows=False):
+    """None when two builds are metamorphically equal, else the difference.
+
+    A key-order variant compares its run report's rows without their order.
+    """
     reference_issues, variant_issues = reference["issues"], variant["issues"]
     if not reference_issues and not variant_issues:
-        if reference["tables"] != variant["tables"]:
+        tables = reference["tables"], variant["tables"]
+        if unordered_report_rows:
+            tables = tuple(map(unordered_report, tables))
+        if tables[0] != tables[1]:
             return "typed tables differ"
         if reference.get("saved") != variant.get("saved"):
             return "saved outcome differs"
@@ -625,13 +644,15 @@ def judge_metamorphic(example, runtime, record, expectations):
                 f"missing reference build for variant {identity(variant)}"
             )
             continue
-        detail = build_difference(reference, by_identity[identity(variant)])
+        check = (
+            "key_order" if variant["kind"].startswith("key_order") else "empty_child"
+        )
+        detail = build_difference(
+            reference,
+            by_identity[identity(variant)],
+            unordered_report_rows=check == "key_order",
+        )
         if detail is not None:
-            check = (
-                "key_order"
-                if variant["kind"].startswith("key_order")
-                else "empty_child"
-            )
             groups.setdefault(check, []).append(
                 {"kind": variant["kind"], "entry": variant["entry"], "detail": detail}
             )
