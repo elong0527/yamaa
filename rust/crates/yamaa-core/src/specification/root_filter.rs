@@ -97,7 +97,17 @@ impl RootFilter {
         if findings.len() != start {
             return Ok(None);
         }
-        BoundPredicate::new(plan.clone(), bindings)
+        let typed = plan.typed(|name| {
+            crate::result_type::ResultType::declared(
+                name.split_once('.')
+                    .filter(|(dataset, _)| *dataset == driver)
+                    .and_then(|(_, field)| {
+                        source.columns().iter().find(|column| column.name == field)
+                    })
+                    .map(|column| column.kind),
+            )
+        });
+        BoundPredicate::new(typed, bindings)
             .map(Some)
             .map_err(BindError::InvalidPredicateBinding)
     }

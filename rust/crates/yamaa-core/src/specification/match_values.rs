@@ -2,8 +2,7 @@
 use super::*;
 use crate::{
     dataset::{MatchRead, MatchValue},
-    key_relation::ComparableType,
-    match_value::{self, LiteralKind},
+    result_type::ResultType,
 };
 
 #[derive(Clone, Copy)]
@@ -26,9 +25,6 @@ pub(super) enum Declaration {
     Expression {
         branch: cases::Branch,
         references: Vec<String>,
-        operation: String,
-        /// The temporal type the operation declares with `type`, if any.
-        target: Option<ColumnType>,
     },
 }
 impl Declaration {
@@ -119,18 +115,7 @@ impl Declaration {
                     templates,
                 )?;
                 reject_deferred_owners(&branch, extra);
-                let target = match d.field(payload, "type").map(|id| text(d, id)).transpose()? {
-                    Some("date") => Some(ColumnType::Date),
-                    Some("datetime") => Some(ColumnType::DateTime),
-                    Some(_) => return Err(PrepareError::Internal),
-                    None => None,
-                };
-                Self::Expression {
-                    branch,
-                    references,
-                    operation: op.into(),
-                    target,
-                }
+                Self::Expression { branch, references }
             }
             _ => {
                 reject(extra, op, operation_path);
@@ -180,29 +165,17 @@ impl Declaration {
             _ => format!("key[{field}]"),
         }
     }
-    pub(super) fn result_type(&self, catalog: &Catalog) -> Option<ComparableType> {
-        let expression = match self {
-            Self::Variable(name) | Self::Source(name) => match_value::Expression::Source(name),
-            Self::StrPad(_) => match_value::Expression::Operation {
-                name: "str_pad",
-                target: None,
-            },
-            Self::Expression {
-                operation, target, ..
-            } => match_value::Expression::Operation {
-                name: operation,
-                target: *target,
-            },
-            Self::Literal(value) => match_value::Expression::Literal(match value {
-                crate::value::Value::Missing => LiteralKind::Missing,
-                crate::value::Value::Str(_) => LiteralKind::Str,
-                crate::value::Value::Int(_) => LiteralKind::Int,
-                crate::value::Value::Float(_) => LiteralKind::Float,
-                crate::value::Value::Bool(_) => LiteralKind::Bool,
-                _ => LiteralKind::Other,
-            }),
-        };
-        match_value::result_type(catalog, expression)
+    /// The match value's result type (EXPR-14): the read variable's, a
+    /// literal's, `str_pad`'s text, or the expression's over the names the
+    /// current row types. LOOKUP-6 compares it with the key column's type.
+    pub(super) fn result_type(&self, catalog: &Catalog) -> ResultType {
+        let input = |name: &str| ResultType::declared(catalog.type_of(name));
+        match self {
+            Self::Variable(name) | Self::Source(name) => input(name),
+            Self::Literal(value) => ResultType::of_value(value),
+            Self::StrPad(pad) => Operation::StrPad(pad.clone()).result_type(&input),
+            Self::Expression { branch, .. } => branch.operation.result_type(&input),
+        }
     }
     pub(super) fn bind(
         &self,
@@ -431,7 +404,7 @@ impl Declaration {
 fn reject_deferred_owners(branch: &cases::Branch, extra: &mut Vec<UnsupportedFeature>) {
     let operation = match branch.operation.as_ref() {
         Operation::Case(_) => Some("case"),
-        Operation::ProjectFunction(_) => Some("function"),
+        Operation::ProjectFunction { .. } => Some("function"),
         Operation::Aggregate(_) => Some("aggregate"),
         Operation::Odm(_) => Some("odm"),
         Operation::Flag(_) => Some("flag"),

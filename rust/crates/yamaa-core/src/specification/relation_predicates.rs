@@ -101,7 +101,7 @@ pub(super) fn bind(
     // A type refusal still retains the donor's bound fields for later checks.
     // Only unresolved references prevent constructing this partial plan.
     let references_resolved = findings.len() == before;
-    let type_findings = static_types::predicate_kinds(plan, |name| {
+    let kind = |name: &str| -> Option<crate::value::ValueType> {
         let binding = bindings.iter().find(|binding| binding.name == name)?;
         let (schema, column) = match binding.read {
             Read::Source(column) => return donor_kind(column).map(Into::into),
@@ -124,17 +124,18 @@ pub(super) fn bind(
             .columns()
             .get(column)
             .map(|column| column.kind.into())
-    });
+    };
+    let type_findings = static_types::predicate_kinds(plan, kind);
     if static_filter_types {
         findings.extend(type_findings.iter().cloned().map(BindFinding::Predicate));
     }
     if !references_resolved {
         return Ok(None);
     }
+    let typed = plan.typed(|name| crate::result_type::ResultType::known(kind(name)));
     Ok(Some(
         RelationPredicate::new(
-            BoundPredicate::new(plan.clone(), bindings)
-                .map_err(BindError::InvalidPredicateBinding)?,
+            BoundPredicate::new(typed, bindings).map_err(BindError::InvalidPredicateBinding)?,
             current,
         )
         .map_err(BindError::InvalidPredicateBinding)?

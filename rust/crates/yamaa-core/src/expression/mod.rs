@@ -6,22 +6,20 @@
 //! takes the field's [`Context`] and checks, once, the constructs and
 //! functions the context admits, the root, reductions and literal policy, and
 //! compiles each regular-expression literal. Static operand types are checked
-//! against the site's names by [`CompiledExpression::type_findings`], and one
-//! evaluator runs every context.
+//! against the site's names by [`CompiledExpression::type_findings`], the
+//! result type of `compute` and `aggregate` is
+//! [`CompiledExpression::result_type`], and one evaluator runs every context.
 
 mod bind;
 mod evaluate;
 mod syntax;
 mod types;
 
-pub use bind::{
-    compile, AggregateResult, CompiledExpression, Reduction, ReductionOperand, NUMERIC_RESULT_TYPE,
-};
+pub use bind::{compile, AggregateResult, CompiledExpression, Reduction, ReductionOperand};
 pub use evaluate::{Condition, ErrorKind, EvaluationError, Resolved, Resolver, Step, Truth};
 pub use syntax::{
     parse, Comparison, Node, NodeKind, Parsed, SourcePosition, SourceSpan, TemporalKind, RESERVED,
 };
-pub(crate) use types::unify_exact;
 pub use types::TypeFinding;
 
 use crate::temporal::TemporalError;

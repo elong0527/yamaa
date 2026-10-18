@@ -76,10 +76,9 @@ impl Catalog {
                 let Some(Binding::Dataset { field, .. }) = self.bind(&identifier) else {
                     return Err(Error::InvalidAvailableOutput);
                 };
-                if let Some(column_type) = self
-                    .type_of(&identifier)
-                    .filter(|kind| !crate::key_relation::comparable((*kind).into(), actual.into()))
-                {
+                if let Some(column_type) = self.type_of(&identifier).filter(|kind| {
+                    !crate::result_type::ResultType::from(*kind).comparable(actual.into())
+                }) {
                     return Ok(Some(Err(JoinedFinding::KeyType {
                         source: name.clone(),
                         expected: column_type,

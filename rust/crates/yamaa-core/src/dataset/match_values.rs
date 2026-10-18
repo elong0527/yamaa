@@ -1,9 +1,6 @@
 //! Destination-free scalar values for named matching, never output assignments.
 use super::*;
-use crate::{
-    key_relation::ComparableType,
-    value::{ColumnType, ValueType},
-};
+use crate::{result_type::ResultType, value::ColumnType};
 
 /// The current candidate owns these reads, independently of the donor record.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -157,22 +154,17 @@ impl MatchValue {
             Self::Literal(_) | Self::Expression(_) => None,
         }
     }
-    pub fn result_type(&self, read_kind: Option<ColumnType>) -> Option<ComparableType> {
+    /// The compiled match value's result type (EXPR-14): an expression's as
+    /// compiled, a read's declared type, a literal's, or `str_pad`'s text.
+    pub fn result_type(&self, read_kind: Option<ColumnType>) -> ResultType {
         match self {
             Self::Expression(expression) => expression.result_type,
-            Self::Variable(_) | Self::Source(_) => read_kind.map(Into::into),
+            Self::Variable(_) | Self::Source(_) => ResultType::declared(read_kind),
             Self::StrPad { .. } | Self::Contextual(ContextualMatch::StrPad { .. }) => {
-                Some(ColumnType::Str.into())
+                ResultType::STR
             }
-            Self::Contextual(_) => None,
-            Self::Literal(value) => value.value_type().map(|kind| match kind {
-                ValueType::Str => ColumnType::Str.into(),
-                ValueType::Int => ColumnType::Int.into(),
-                ValueType::Float => ColumnType::Float.into(),
-                ValueType::Bool => ComparableType::Boolean,
-                ValueType::Date => ColumnType::Date.into(),
-                ValueType::DateTime => ColumnType::DateTime.into(),
-            }),
+            Self::Contextual(_) => ResultType::UNKNOWN,
+            Self::Literal(value) => ResultType::of_value(value),
         }
     }
     fn kind(
@@ -182,7 +174,7 @@ impl MatchValue {
         output: &TableSchema,
         available: &[bool],
         read_kind: &impl Fn(&MatchRead, ColumnType) -> Option<ColumnType>,
-    ) -> Result<Option<ComparableType>, PlanError> {
+    ) -> Result<ResultType, PlanError> {
         if let Self::Expression(expression) = self {
             expression.validate(primary, secondary, output, available)?;
         }
@@ -258,12 +250,10 @@ pub(super) fn validate_declaration(
                 return Err(PlanError::InvalidIntermediate);
             }
         }
-        if key
+        let kind = key
             .value
-            .kind(primary, secondary, output, available, read_kind)?
-            .zip(donor_kind(key.source_column))
-            .is_some_and(|(kind, donor)| !crate::key_relation::comparable(kind, donor.into()))
-        {
+            .kind(primary, secondary, output, available, read_kind)?;
+        if donor_kind(key.source_column).is_some_and(|donor| !kind.comparable(donor.into())) {
             return Err(PlanError::InvalidLookup);
         }
     }

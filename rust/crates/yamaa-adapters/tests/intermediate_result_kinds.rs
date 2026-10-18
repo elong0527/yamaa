@@ -345,12 +345,83 @@ fn numeric_choices_preserve_a_selected_integer_for_an_integer_only_operation() {
     }
 }
 
+/// VALUE-10: `NULLIF` over an `int` and a `float` is a `float`, also where the
+/// `float` is missing, so binding refuses it as integer days before any row
+/// is evaluated, the integer row included.
 #[test]
-fn nullif_preserves_an_integer_until_a_present_float_operand_promotes_it() {
-    assert_integer_day_count(
-        "{compute: {expr: 'NULLIF(EXINT, EXFLOAT)'}}",
-        "S01,2024-01-01,,1,",
-        "S01,2024-01-01,,1,0.0",
+fn nullif_over_an_int_and_a_float_is_refused_as_integer_days_when_bound() {
+    let specification = SPECIFICATION
+        .replace("EX: ex.csv", "EX: {path: ex.csv, types: {EXINT: int, EXFLOAT: float}}")
+        .replace(
+            "EXENDT: DERIVATION",
+            "SELECTED: {compute: {expr: 'NULLIF(EXINT, EXFLOAT)'}}\n      EXENDT: {shift: {type: date, source: EXSTDT, days: SELECTED}}",
+        );
+    let study = Study::new(&specification);
+    let path = study.specification();
+    let request = || Request {
+        specification: &path,
+        environment: None,
+    };
+    let assert_refused = |issues: &[yamaa_adapters::issue_rows::Issue]| {
+        assert_eq!(issues.len(), 1, "{issues:?}");
+        assert_eq!(issues[0].condition, "incompatible_input_type");
+        assert_eq!(issues[0].requirement.as_deref(), Some("REQ-1298"));
+        assert_eq!(
+            issues[0].spec_paths,
+            ["intermediates[0].derivations.EXENDT.shift.days"]
+        );
+        assert_eq!(
+            issues[0].context.clone(),
+            yamaa_adapters::json!({"source":"SELECTED","expected":"int","actual":"float"})
+        );
+    };
+    // Shift operands of an intermediate derivation are typed when bound.
+    let checked = file_application::check(request(), identity(&path));
+    assert!(checked.is_empty(), "{checked:?}");
+    fs::write(
+        study.0.join("ex.csv"),
+        "USUBJID,EXSTDTC,EXENDTC,EXINT,EXFLOAT\nS01,2024-01-01,,1,\n",
+    )
+    .unwrap();
+    let result = file_application::domain(request(), identity(&path)).unwrap();
+    assert_refused(&result.issues());
+    assert!(result.output().is_none());
+}
+
+/// VALUE-10 at run time: the `int` `NULLIF` returns widens to its `float`
+/// type when the `float` argument is missing, as when it is present.
+#[test]
+fn nullif_widens_its_int_result_when_the_float_argument_is_missing() {
+    let specification = "schema_version: '1.0'
+domain: ADSL
+keys: [USUBJID]
+input: {EX: {path: ex.csv, types: {EXINT: int, EXFLOAT: float}}}
+base: EX
+output: {path: out.csv, columns: [USUBJID, VALUE]}
+columns:
+  - {name: USUBJID, type: str, derivation: EX.USUBJID}
+  - {name: EXINT, type: int, derivation: EX.EXINT}
+  - {name: EXFLOAT, type: float, derivation: EX.EXFLOAT}
+  - {name: VALUE, type: str, derivation: {compute: {expr: 'NULLIF(EXINT, EXFLOAT)'}}}
+";
+    let study = Study::new(specification);
+    let path = study.specification();
+    let request = || Request {
+        specification: &path,
+        environment: None,
+    };
+    assert!(file_application::check(request(), identity(&path)).is_empty());
+    fs::write(
+        study.0.join("ex.csv"),
+        "USUBJID,EXINT,EXFLOAT\nS01,9007199254740993,\nS02,9007199254740993,0.5\nS03,3,3.0\n",
+    )
+    .unwrap();
+    let mut result = file_application::domain(request(), identity(&path)).unwrap();
+    assert!(result.issues().is_empty(), "{:?}", result.issues());
+    assert!(result.save().unwrap());
+    assert_eq!(
+        fs::read(study.0.join("out.csv")).unwrap(),
+        b"USUBJID,VALUE\nS01,9007199254740992\nS02,9007199254740992\nS03,\n"
     );
 }
 
