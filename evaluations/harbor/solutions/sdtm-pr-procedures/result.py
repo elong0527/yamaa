@@ -4,118 +4,102 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build the SDTM PR dataset from the ODM extract.
 
-import polars as pl
+One record per prior-procedure form (prior cancer surgery form and
+prior radiotherapy form) collected for a subject.
+"""
+
+import csv
+import os
+from collections import OrderedDict
+
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
+
+COLUMNS = [
+    "DOMAIN", "STUDYID", "USUBJID", "PRSEQ", "PRTRT", "PRCAT",
+    "PRPRESP", "PROCCUR", "PRLOC", "PRLAT", "PRDOSE", "PRDOSU",
+    "PRSTDTC", "PRENDTC",
+]
 
 
-def _present(value) -> bool:
-    return value is not None and str(value) != ""
+def item_name(item_oid):
+    """Last component of an item OID, e.g. IT.PR.PRTRT -> PRTRT."""
+    return item_oid.rsplit(".", 1)[-1]
 
 
-odm = pl.read_csv("/app/input/odm.csv", infer_schema=False)
+def main():
+    with open(os.path.join(INPUT_DIR, "odm.csv"), newline="") as f:
+        rows = list(csv.DictReader(f))
 
-# One record per reported procedure and per answer to the pre-specified
-# radiotherapy question: each form occurrence is a record.
-groups: dict[tuple, dict] = {}
-for row in odm.to_dicts():
-    key = (
-        str(row["StudyOID"]),
-        str(row["SubjectKey"]),
-        str(row["StudyEventOID"]),
-        str(row["ItemGroupOID"]),
-        str(row["ItemGroupRepeatKey"]),
-    )
-    groups.setdefault(key, {})[str(row["ItemOID"])] = row["Value"]
+    # Group item values by subject and form instance.
+    forms = OrderedDict()
+    for row in rows:
+        key = (
+            row["StudyOID"],
+            row["SubjectKey"],
+            row["ItemGroupOID"],
+            row["ItemGroupRepeatKey"],
+        )
+        form = forms.setdefault(
+            key,
+            {
+                "study": row["StudyOID"],
+                "subject": row["SubjectKey"],
+                "group": row["ItemGroupOID"],
+                "items": {},
+            },
+        )
+        form["items"][item_name(row["ItemOID"])] = row["Value"]
 
-cat_by_group = {
-    "IG.PR.SURGERY": "PRIOR CANCER SURGERY",
-    "IG.PR.RADIOTHERAPY": "PRIOR RADIOTHERAPY",
-}
+    records = []
+    for form in forms.values():
+        items = form["items"]
+        if "PRTRT" not in items and "RTPRSP" not in items:
+            continue
+        rec = {c: "" for c in COLUMNS}
+        rec["DOMAIN"] = "PR"
+        rec["STUDYID"] = form["study"]
+        rec["USUBJID"] = form["study"] + "-" + form["subject"]
+        rec["PRTRT"] = items.get("PRTRT", "")
+        if "RTPRSP" in items or "RADIOTHERAPY" in form["group"]:
+            # Prior radiotherapy form: pre-specified question asked.
+            rec["PRCAT"] = "PRIOR RADIOTHERAPY"
+            rec["PRPRESP"] = "Y"
+            rec["PROCCUR"] = items.get("RTPRSP", "")
+            rec["PRDOSE"] = items.get("PRDOSE", "")
+            rec["PRDOSU"] = items.get("PRDOSU", "")
+        else:
+            # Prior cancer surgery form.
+            rec["PRCAT"] = "PRIOR CANCER SURGERY"
+            rec["PRLOC"] = items.get("PRLOC", "")
+            rec["PRLAT"] = items.get("PRLAT", "")
+        # Dates keep the precision collected.
+        rec["PRSTDTC"] = items.get("PRSTDTC", "")
+        rec["PRENDTC"] = items.get("PRENDTC", "")
+        records.append(rec)
 
-rows = []
-for (studyid, subjkey, _event, group_oid, _rep), values in groups.items():
-    # USUBJID carries the study prefix when the ODM subject key does not.
-    usubjid = subjkey if subjkey.startswith(studyid + "-") else f"{studyid}-{subjkey}"
-    is_radio = group_oid == "IG.PR.RADIOTHERAPY"
-    occurs = str(values.get("IT.PR.RTPRSP") or "") if is_radio else ""
-    prtrt = str(values.get("IT.PR.PRTRT") or "")
-    if is_radio:
-        prpresp, procur = "Y", occurs if _present(occurs) else None
-    else:
-        prpresp, procur = None, None
-    # Dose only when the procedure occurred; a "No" keeps no dose or dates.
-    if is_radio and procur == "Y":
-        dose = str(values.get("IT.PR.PRDOSE") or "")
-        dose = dose if _present(dose) else None
-        dosu = str(values.get("IT.PR.PRDOSU") or "")
-        dosu = dosu if _present(dosu) else None
-        stdtc = str(values.get("IT.PR.PRSTDTC") or "")
-        stdtc = stdtc if _present(stdtc) else None
-        endtc = str(values.get("IT.PR.PRENDTC") or "")
-        endtc = endtc if _present(endtc) else None
-    elif not is_radio:
-        dose = dosu = None
-        stdtc = str(values.get("IT.PR.PRSTDTC") or "")
-        stdtc = stdtc if _present(stdtc) else None
-        endtc = None
-        # Surgery has no end date in the form.
-        if "IT.PR.PRENDTC" in values and _present(values.get("IT.PR.PRENDTC")):
-            endtc = str(values.get("IT.PR.PRENDTC"))
-    else:
-        dose = dosu = stdtc = endtc = None
-    rows.append(
-        {
-            "DOMAIN": "PR",
-            "STUDYID": studyid,
-            "USUBJID": usubjid,
-            "PRTRT": prtrt,
-            "PRCAT": cat_by_group[group_oid],
-            "PRPRESP": prpresp,
-            "PROCCUR": procur,
-            "PRLOC": str(values.get("IT.PR.PRLOC") or "") or None,
-            "PRLAT": str(values.get("IT.PR.PRLAT") or "") or None,
-            "PRDOSE": dose,
-            "PRDOSU": dosu,
-            "PRSTDTC": stdtc,
-            "PRENDTC": endtc,
-        }
-    )
+    # PRSEQ numbers each subject's records from 1 by start date,
+    # then by procedure name.
+    by_subject = OrderedDict()
+    for rec in records:
+        by_subject.setdefault(rec["USUBJID"], []).append(rec)
+    ordered = []
+    for group in by_subject.values():
+        group.sort(
+            key=lambda r: (r["PRSTDTC"] == "", r["PRSTDTC"], r["PRTRT"])
+        )
+        for i, rec in enumerate(group, start=1):
+            rec["PRSEQ"] = str(i)
+        ordered.extend(group)
 
-# PRSEQ numbers each subject's records by start date, then procedure name.
-rows.sort(key=lambda r: (r["USUBJID"], r["PRSTDTC"] is None, r["PRSTDTC"] or "", r["PRTRT"]))
-seq_by_subject: dict[str, int] = {}
-for row in rows:
-    seq_by_subject[row["USUBJID"]] = seq_by_subject.get(row["USUBJID"], 0) + 1
-    row["PRSEQ"] = str(seq_by_subject[row["USUBJID"]])
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    with open(os.path.join(OUTPUT_DIR, "pr.csv"), "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=COLUMNS)
+        writer.writeheader()
+        writer.writerows(ordered)
 
-pr = (
-    pl.DataFrame(
-        rows,
-        schema={
-            "DOMAIN": pl.String,
-            "STUDYID": pl.String,
-            "USUBJID": pl.String,
-            "PRSEQ": pl.String,
-            "PRTRT": pl.String,
-            "PRCAT": pl.String,
-            "PRPRESP": pl.String,
-            "PROCCUR": pl.String,
-            "PRLOC": pl.String,
-            "PRLAT": pl.String,
-            "PRDOSE": pl.String,
-            "PRDOSU": pl.String,
-            "PRSTDTC": pl.String,
-            "PRENDTC": pl.String,
-        },
-    )
-    .with_columns(pl.col("PRSEQ").cast(pl.Int64).alias("_seq"))
-    .sort(["USUBJID", "_seq"])
-    .select(
-        "DOMAIN", "STUDYID", "USUBJID", "PRSEQ", "PRTRT", "PRCAT", "PRPRESP",
-        "PROCCUR", "PRLOC", "PRLAT", "PRDOSE", "PRDOSU", "PRSTDTC", "PRENDTC",
-    )
-)
 
-Path("/app/output").mkdir(exist_ok=True)
-pr.write_csv("/app/output/pr.csv")
+if __name__ == "__main__":
+    main()

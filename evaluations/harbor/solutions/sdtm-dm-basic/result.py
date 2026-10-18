@@ -4,57 +4,77 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build the SDTM DM dataset from the long-format ODM extract.
 
-import polars as pl
+One record per subject, with columns:
+DOMAIN, STUDYID, USUBJID, SUBJID, SEX, AGE, ARM, ACTARM, ARMNRS
+"""
 
-odm = pl.read_csv("/app/input/odm.csv", infer_schema=False)
+import csv
+from collections import OrderedDict
 
-wide = odm.pivot(
-    index=["StudyOID", "SubjectKey"],
-    on="ItemOID",
-    values="Value",
-    aggregate_function="first",
-)
+INPUT_PATH = "/app/input/odm.csv"
+OUTPUT_PATH = "/app/output/dm.csv"
 
-rows = []
-for record in wide.to_dicts():
-    sex_raw = record.get("IT.DM.SEX")
-    # M for Male, F for Female; anything missing, blank, uncollected, or
-    # otherwise recorded becomes U.
-    sex = {"Male": "M", "Female": "F"}.get(sex_raw, "U")
-    age_raw = (record.get("IT.DM.AGE") or "").strip()
-    age = int(float(age_raw)) if age_raw else None
-    arm = (record.get("IT.DM.ARM") or "").strip() or None
-    # The actual arm always equals the planned arm.
-    rows.append(
-        {
-            "DOMAIN": "DM",
-            "STUDYID": record["StudyOID"],
-            "USUBJID": record["SubjectKey"],
-            "SUBJID": record["SubjectKey"],
-            "SEX": sex,
-            "AGE": age,
-            "ARM": arm,
-            "ACTARM": arm,
-            "ARMNRS": "Not assigned to treatment arm" if arm is None else None,
-        }
-    )
+ITEM_SEX = "IT.DM.SEX"
+ITEM_AGE = "IT.DM.AGE"
+ITEM_ARM = "IT.DM.ARM"
 
-dm = pl.DataFrame(
-    rows,
-    schema={
-        "DOMAIN": pl.String,
-        "STUDYID": pl.String,
-        "USUBJID": pl.String,
-        "SUBJID": pl.String,
-        "SEX": pl.String,
-        "AGE": pl.Int64,
-        "ARM": pl.String,
-        "ACTARM": pl.String,
-        "ARMNRS": pl.String,
-    },
-).sort("USUBJID")
 
-Path("/app/output").mkdir(exist_ok=True)
-dm.write_csv("/app/output/dm.csv")
+def main():
+    subjects = OrderedDict()  # SubjectKey -> {ItemOID: Value}
+    study_ids = {}  # SubjectKey -> StudyOID
+    with open(INPUT_PATH, newline="", encoding="utf-8") as fh:
+        for row in csv.DictReader(fh):
+            key = row["SubjectKey"]
+            if key not in subjects:
+                subjects[key] = {}
+                study_ids[key] = row["StudyOID"]
+            subjects[key][row["ItemOID"]] = row["Value"]
+
+    rows = []
+    for key, items in subjects.items():
+        collected_sex = items.get(ITEM_SEX, "")
+        if collected_sex == "Male":
+            sex = "M"
+        elif collected_sex == "Female":
+            sex = "F"
+        else:
+            sex = "U"
+        age = items.get(ITEM_AGE, "") or ""
+        arm = items.get(ITEM_ARM, "") or ""
+        actarm = arm
+        armnrs = "" if arm else "Not assigned to treatment arm"
+        rows.append(
+            {
+                "DOMAIN": "DM",
+                "STUDYID": study_ids[key],
+                "USUBJID": key,
+                "SUBJID": key,
+                "SEX": sex,
+                "AGE": age,
+                "ARM": arm,
+                "ACTARM": actarm,
+                "ARMNRS": armnrs,
+            }
+        )
+
+    fieldnames = [
+        "DOMAIN",
+        "STUDYID",
+        "USUBJID",
+        "SUBJID",
+        "SEX",
+        "AGE",
+        "ARM",
+        "ACTARM",
+        "ARMNRS",
+    ]
+    with open(OUTPUT_PATH, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+if __name__ == "__main__":
+    main()

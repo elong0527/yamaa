@@ -4,58 +4,74 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build SUPPMH from MH and MH_SUPP_RAW.
 
-import polars as pl
+One SUPPMH record per collected qualifier on a condition. The parent MH
+record is found by subject and condition term; its sequence number is
+carried as text in IDVARVAL.
+"""
 
-mh = pl.read_csv("/app/input/mh.csv", infer_schema=False)
-raw = pl.read_csv("/app/input/mh_supp_raw.csv", infer_schema=False)
+import csv
+import os
 
-labels = {"MHFAMHX": "Family History", "MHCONF": "Confirmed by Medical Records"}
+INPUT = "/app/input"
+OUTPUT = "/app/output"
 
-# The parent sequence number, matched on subject and condition term.
-parents = mh.select("STUDYID", "USUBJID", "MHSEQ", "MHTERM")
+QUALIFIERS = [
+    ("MHFAMHX", "MHFAMHX", "Family History"),
+    ("MHCONF", "MHCONF", "Confirmed by Medical Records"),
+]
 
-records = []
-for qnam in ("MHFAMHX", "MHCONF"):
-    collected = (
-        raw.filter(pl.col(qnam).is_not_null() & (pl.col(qnam) != ""))
-        .join(parents, on=["STUDYID", "USUBJID", "MHTERM"], how="inner")
-        .select(
-            "STUDYID",
-            "USUBJID",
-            "MHSEQ",
-            QNAM=pl.lit(qnam),
-            QLABEL=pl.lit(labels[qnam]),
-            QVAL=pl.col(qnam),
-        )
-    )
-    records.append(collected)
+COLUMNS = [
+    "STUDYID", "RDOMAIN", "USUBJID", "IDVAR", "IDVARVAL",
+    "QNAM", "QLABEL", "QVAL", "QORIG", "QEVAL",
+]
 
-suppmh = (
-    pl.concat(records)
-    .with_columns(
-        RDOMAIN=pl.lit("MH"),
-        IDVAR=pl.lit("MHSEQ"),
-        IDVARVAL=pl.col("MHSEQ"),
-        QORIG=pl.lit("Collected"),
-        QEVAL=pl.lit(None, dtype=pl.String),
-    )
-    .with_columns(pl.col("MHSEQ").cast(pl.Int64).alias("_seq"))
-    .sort(["USUBJID", "_seq", "QNAM"])
-    .select(
-        "STUDYID",
-        "RDOMAIN",
-        "USUBJID",
-        "IDVAR",
-        "IDVARVAL",
-        "QNAM",
-        "QLABEL",
-        "QVAL",
-        "QORIG",
-        "QEVAL",
-    )
-)
 
-Path("/app/output").mkdir(exist_ok=True)
-suppmh.write_csv("/app/output/suppmh.csv")
+def read_csv(path):
+    with open(path, newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
+
+
+def main():
+    mh = read_csv(os.path.join(INPUT, "mh.csv"))
+    raw = read_csv(os.path.join(INPUT, "mh_supp_raw.csv"))
+
+    mhseq_by_key = {}
+    for row in mh:
+        key = (row["STUDYID"], row["USUBJID"], row["MHTERM"])
+        mhseq_by_key[key] = row["MHSEQ"]
+
+    records = []
+    for row in raw:
+        key = (row["STUDYID"], row["USUBJID"], row["MHTERM"])
+        mhseq = mhseq_by_key.get(key)
+        if mhseq is None:
+            continue
+        for source, qnam, qlabel in QUALIFIERS:
+            answer = (row.get(source) or "").strip()
+            if not answer:
+                continue
+            records.append({
+                "STUDYID": row["STUDYID"],
+                "RDOMAIN": "MH",
+                "USUBJID": row["USUBJID"],
+                "IDVAR": "MHSEQ",
+                "IDVARVAL": str(mhseq),
+                "QNAM": qnam,
+                "QLABEL": qlabel,
+                "QVAL": answer,
+                "QORIG": "Collected",
+                "QEVAL": "",
+            })
+
+    os.makedirs(OUTPUT, exist_ok=True)
+    with open(os.path.join(OUTPUT, "suppmh.csv"), "w", newline="",
+              encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=COLUMNS)
+        writer.writeheader()
+        writer.writerows(records)
+
+
+if __name__ == "__main__":
+    main()

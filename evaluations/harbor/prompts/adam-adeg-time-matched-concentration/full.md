@@ -1,27 +1,28 @@
-Following CDISC ADaM standards, use the provided ADEG_RAW and ADPC datasets
-to create an ADEG dataset with one record per subject per parameter per
-analysis period per nominal period day per nominal time point.
+Following CDISC ADaM standards, use the provided ADEG_RAW and ADPC datasets to
+create an ADEG dataset with one record per subject, parameter, analysis
+period, nominal day within the period, and nominal time point.
 
 The output dataset should contain the following columns in this order:
-STUDYID, USUBJID, TRTA, PARAMCD, PARAM, APERIOD, APERDAY, ATPT, ATPTN,
-AVAL, AVALU, ABLFL, BASE, CHG, BASETYPE, ECGPCFL, PKCONC, CQTANLFL
+STUDYID, USUBJID, TRTA, PARAMCD, PARAM, APERIOD, APERDAY, ATPT, ATPTN, AVAL,
+AVALU, ABLFL, BASE, CHG, BASETYPE, ECGPCFL, PKCONC, CQTANLFL
 
-Each ADEG_RAW record gives one output record; an ADPC sample without an
-ECG record adds none. An ECG record's sample is the ADPC record of the
-parent drug (PARAMCD "DRGX") with the same subject, analysis period
-(APERIOD), nominal period day (APERDAY) and nominal time point (ATPTN).
-The match is exact: a sample at another time point, even the nearest one,
-and a metabolite record are never used.
-- ECGPCFL is "Y" when the record has such a sample, whatever its result,
-  also a result below the limit of quantification; otherwise it has no
-  value.
-- PKCONC is the sample's AVAL as recorded, not rounded, on records of any
-  treatment. Nothing is imputed: PKCONC has no value for a result below
-  the limit of quantification and when the record has no sample. The one
-  exception is placebo: a record whose TRTA is "Placebo" has PKCONC 0
-  whenever it has no quantified result, on the baseline day too.
-- CQTANLFL is "Y" when the record has both a CHG and a PKCONC value;
-  otherwise it has no value.
+ECGPCFL is Y when the concentrations hold a sample of the parent drug
+DRGX for the same subject, period, period day, and nominal time point; it
+has no value otherwise. A sample whose result is below the lower limit of
+quantification still matches. A sample at another time point, even the
+nearest one, never matches, and neither does a metabolite result.
+
+PKCONC is the matching sample's concentration in ng/mL, as recorded and
+not rounded, on records of any treatment. PKCONC has no value when the
+matching sample's result is below the lower limit of quantification or
+when no sample matches. On placebo records, where TRTA is "Placebo",
+PKCONC is 0 whenever no quantified result exists, on the baseline day as
+on any other day. Whether a record is a placebo record follows its own
+period's treatment.
+
+CQTANLFL is Y when the record has both a change from baseline and a
+concentration; it has no value otherwise. A PK sample with no ECG record
+at its time point adds no record.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/adeg.csv.

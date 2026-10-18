@@ -575,9 +575,9 @@ class DashboardTests(unittest.TestCase):
                 page,
             )
         self.assertIn(
-            "DTHFL is Y or has no value.", (prompts / "conventions.md").read_text()
+            'DTHFL is "Y" or has no value.', (prompts / "conventions.md").read_text()
         )
-        self.assertIn("<p>DTHFL is Y or has no value.</p>", page)
+        self.assertIn("<p>DTHFL is &quot;Y&quot; or has no value.</p>", page)
         for name in generate.SOLUTION_FILES:
             self.assertIn(f'data-filename="solutions/adam-adae-death/{name}"', page)
             self.assertIn(
@@ -639,24 +639,16 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(
             tab_ids("negative-ambiguous-type"), ["tab-comments", "tab-mapping-spec"]
         )
-        # Its only solution is result.sas, and the solution tab lists it alone.
+        # A schema benchmark has no Harbor prompt or solutions, so it
+        # carries neither tab and lists no solution files.
         self.assertEqual(
-            tab_ids("adam-adsl-age-quality"),
-            [
-                "tab-comments",
-                "tab-mapping-spec",
-                "tab-prompt",
-                "tab-code",
-                "tab-solution",
-            ],
+            tab_ids("schema-adsl-age-quality"),
+            ["tab-comments", "tab-mapping-spec", "tab-code"],
         )
         page = generate.render_benchmark(
-            generate.BENCHMARKS / "adam-adsl-age-quality"
+            generate.BENCHMARKS / "schema-adsl-age-quality"
         ).decode("ascii")
-        self.assertEqual(
-            re.findall(r'data-filename="(solutions/[^"]+)"', page),
-            ["solutions/adam-adsl-age-quality/result.sas"],
-        )
+        self.assertEqual(re.findall(r'data-filename="(solutions/[^"]+)"', page), [])
 
     def test_multi_level_spec_renders_panes_with_resolved_default(self):
         # The committed benchmark no longer carries its resolved history

@@ -4,118 +4,126 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
+"""Build the SDTM AE dataset from DM and ODM long-format inputs.
+
+One record per adverse event (one AE form repeat per subject). Start and
+end dates are assembled from their separately collected year, month, and
+day items and written as ISO 8601 text at the precision collected; nothing
+is imputed. Study days are computed only for complete dates and only when
+the subject has a reference start date (RFSTDTC) in DM.
+"""
+
+import csv
 from datetime import date
-from pathlib import Path
 
-import polars as pl
+INPUT_DIR = "/app/input"
+OUTPUT_PATH = "/app/output/ae.csv"
+
+COLUMNS = [
+    "DOMAIN",
+    "STUDYID",
+    "USUBJID",
+    "AESEQ",
+    "AETERM",
+    "AESTDTC",
+    "AEENDTC",
+    "AESTDY",
+    "AEENDY",
+]
 
 
-def compose(yr: str | None, mo: str | None, dy: str | None) -> str | None:
-    if yr is None or yr == "":
+def read_csv(path):
+    with open(path, newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
+
+
+def assemble_date(parts, prefix):
+    """Join collected year/month/day items at the precision collected."""
+    year = parts.get(prefix + "YR", "").strip()
+    if not year:
+        return ""
+    month = parts.get(prefix + "MO", "").strip()
+    if not month:
+        return year
+    day = parts.get(prefix + "DY", "").strip()
+    if not day:
+        return f"{year}-{int(month):02d}"
+    return f"{year}-{int(month):02d}-{int(day):02d}"
+
+
+def parse_full_date(text):
+    """Return a date for a complete ISO date string, else None."""
+    if len(text) != 10:
         return None
-    if mo is None or mo == "":
-        return yr
-    mo = mo.zfill(2)
-    if dy is None or dy == "":
-        return f"{yr}-{mo}"
-    return f"{yr}-{mo}-{dy.zfill(2)}"
-
-
-def complete(yr: str | None, mo: str | None, dy: str | None) -> bool:
-    return bool(yr) and bool(mo) and bool(dy)
-
-
-def study_day(adt: date | None, ref: date | None) -> int | None:
-    if adt is None or ref is None:
-        return None
-    delta = (adt - ref).days
-    return delta + 1 if delta >= 0 else delta
-
-
-odm = pl.read_csv("/app/input/odm.csv", infer_schema=False)
-dm = pl.read_csv("/app/input/dm.csv", infer_schema=False)
-
-# One record per form repeat; the repeat number is the sequence number.
-# Dates stay at the precision collected: nothing is imputed.
-wide = (
-    odm.filter(pl.col("ItemGroupOID") == "IG.AE")
-    .pivot(
-        index=["StudyOID", "SubjectKey", "FormRepeatKey"],
-        on="ItemOID",
-        values="Value",
-        aggregate_function="first",
-    )
-    .with_columns(AESEQ=pl.col("FormRepeatKey").cast(pl.Int64))
-)
-
-ref = {
-    row["USUBJID"]: (row["RFSTDTC"] or None) for row in dm.to_dicts()
-}
-
-rows = []
-for record in wide.to_dicts():
-    usubjid = record["SubjectKey"]
-    stdtc = compose(
-        record.get("IT.AE.AESTYR"), record.get("IT.AE.AESTMO"), record.get("IT.AE.AESTDY")
-    )
-    endtc = compose(
-        record.get("IT.AE.AEENYR"), record.get("IT.AE.AEENMO"), record.get("IT.AE.AEENDY")
-    )
-    # Only a complete date gets a study day, and only when the reference
-    # start date is known. Day 1 is the reference date; there is no day 0.
-    rf_raw = ref.get(usubjid)
     try:
-        rf = date.fromisoformat(rf_raw) if rf_raw else None
+        year, month, day = (int(piece) for piece in text.split("-"))
+        return date(year, month, day)
     except ValueError:
-        rf = None
-    if complete(
-        record.get("IT.AE.AESTYR"), record.get("IT.AE.AESTMO"), record.get("IT.AE.AESTDY")
-    ):
-        try:
-            adt = date.fromisoformat(stdtc) if stdtc else None
-        except ValueError:
-            adt = None
-        stdy = study_day(adt, rf)
-    else:
-        stdy = None
-    if complete(
-        record.get("IT.AE.AEENYR"), record.get("IT.AE.AEENMO"), record.get("IT.AE.AEENDY")
-    ):
-        try:
-            adt = date.fromisoformat(endtc) if endtc else None
-        except ValueError:
-            adt = None
-        endy = study_day(adt, rf)
-    else:
-        endy = None
-    rows.append(
-        {
-            "DOMAIN": "AE",
-            "STUDYID": record["StudyOID"],
-            "USUBJID": usubjid,
-            "AESEQ": record["AESEQ"],
-            "AETERM": record.get("IT.AE.AETERM"),
-            "AESTDTC": stdtc,
-            "AEENDTC": endtc,
-            "AESTDY": stdy,
-            "AEENDY": endy,
-        }
-    )
+        return None
 
-ae = pl.DataFrame(
-    rows,
-    schema={
-        "DOMAIN": pl.String,
-        "STUDYID": pl.String,
-        "USUBJID": pl.String,
-        "AESEQ": pl.Int64,
-        "AETERM": pl.String,
-        "AESTDTC": pl.String,
-        "AEENDTC": pl.String,
-        "AESTDY": pl.Int64,
-        "AEENDY": pl.Int64,
-    },
-).sort(["USUBJID", "AESEQ"])
 
-Path("/app/output").mkdir(exist_ok=True)
-ae.write_csv("/app/output/ae.csv")
+def study_day(date_text, ref_start):
+    """SDTM study day of a complete date relative to the reference start.
+
+    The reference start date itself is day 1; the day before it is day -1
+    (there is no day 0). Partial dates and missing reference dates have
+    no study day.
+    """
+    value = parse_full_date(date_text)
+    if value is None or ref_start is None:
+        return ""
+    delta = (value - ref_start).days
+    return str(delta + 1 if delta >= 0 else delta)
+
+
+def main():
+    dm_rows = read_csv(f"{INPUT_DIR}/dm.csv")
+    ref_start_by_subject = {}
+    for row in dm_rows:
+        ref = parse_full_date((row.get("RFSTDTC") or "").strip())
+        ref_start_by_subject[row["USUBJID"]] = ref
+
+    odm_rows = read_csv(f"{INPUT_DIR}/odm.csv")
+
+    # Group the AE form items by subject and form repeat key (AESEQ),
+    # keeping first-appearance order of subjects and events.
+    events = {}
+    order = []
+    for row in odm_rows:
+        if row["FormOID"] != "FO.AE":
+            continue
+        key = (row["StudyOID"], row["SubjectKey"], row["FormRepeatKey"])
+        if key not in events:
+            events[key] = {}
+            order.append(key)
+        item = row["ItemOID"].rsplit(".", 1)[-1]
+        events[key][item] = row["Value"]
+
+    out_rows = []
+    for study_oid, subject_key, repeat_key in order:
+        items = events[(study_oid, subject_key, repeat_key)]
+        start_dtc = assemble_date(items, "AEST")
+        end_dtc = assemble_date(items, "AEEN")
+        ref_start = ref_start_by_subject.get(subject_key)
+        out_rows.append(
+            {
+                "DOMAIN": "AE",
+                "STUDYID": study_oid,
+                "USUBJID": subject_key,
+                "AESEQ": repeat_key,
+                "AETERM": items.get("AETERM", ""),
+                "AESTDTC": start_dtc,
+                "AEENDTC": end_dtc,
+                "AESTDY": study_day(start_dtc, ref_start),
+                "AEENDY": study_day(end_dtc, ref_start),
+            }
+        )
+
+    with open(OUTPUT_PATH, "w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=COLUMNS)
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,59 +1,88 @@
-# Reference solution for the yamaa benchmark
-# adam-adsl-crossover-sequence (Python track).
+# Reference solution for the yamaa benchmark adam-adsl-crossover-sequence (Python track).
 #
 # Written from the benchmark's full prompt and its inputs alone, as an agent
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Create ADSL planned treatment sequence from DM, TA and TE.
 
-import polars as pl
+One record per subject in DM. TRT01P/TRT02P are the names (from TE) of the
+first and second treatment elements of the subject's planned arm (DM ARMCD),
+taking the arm's elements from TA in TAETORD order and counting only
+elements whose epoch name begins with "TREATMENT". TRTSEQP joins the two
+with "/". Subjects with no planned arm code get no values.
+"""
 
-dm = pl.read_csv("/app/input/dm.csv", infer_schema=False)
-ta = pl.read_csv("/app/input/ta.csv", infer_schema=False).with_columns(
-    pl.col("TAETORD").cast(pl.Int64, strict=False)
-)
-te = pl.read_csv("/app/input/te.csv", infer_schema=False)
+import csv
+import os
 
-# The treatment elements of each arm, numbered in planned order: only the
-# elements in an epoch whose name begins with TREATMENT are counted.
-ranked = (
-    ta.filter(pl.col("EPOCH").str.starts_with("TREATMENT"))
-    .sort(["STUDYID", "ARMCD", "TAETORD"])
-    .with_columns(
-        TRTNUM=pl.col("ETCD").cum_count().over(["STUDYID", "ARMCD"])
-    )
-    .join(
-        te.select("STUDYID", "ETCD", "ELEMENT"),
-        on=["STUDYID", "ETCD"],
-        how="left",
-        maintain_order="left",
-    )
-)
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-period1 = ranked.filter(pl.col("TRTNUM") == 1).select(
-    "STUDYID", "ARMCD", TRT01P="ELEMENT"
-)
-period2 = ranked.filter(pl.col("TRTNUM") == 2).select(
-    "STUDYID", "ARMCD", TRT02P="ELEMENT"
-)
 
-adsl = (
-    dm.join(
-        period1, on=["STUDYID", "ARMCD"], how="left", maintain_order="left"
-    )
-    .join(period2, on=["STUDYID", "ARMCD"], how="left", maintain_order="left")
-    .with_columns(
-        TRTSEQP=pl.when(
-            pl.col("TRT01P").is_not_null() & pl.col("TRT02P").is_not_null()
+def read_csv(name):
+    with open(os.path.join(INPUT_DIR, name), newline="", encoding="utf-8") as f:
+        return list(csv.DictReader(f))
+
+
+def main():
+    dm = read_csv("dm.csv")
+    ta = read_csv("ta.csv")
+    te = read_csv("te.csv")
+
+    # Element code -> element name, per study.
+    element_name = {}
+    for row in te:
+        element_name[(row["STUDYID"], row["ETCD"])] = row["ELEMENT"]
+
+    # Planned arm -> ordered treatment element codes, per study.
+    arm_elements = {}
+    for row in ta:
+        if not row["EPOCH"].startswith("TREATMENT"):
+            continue
+        key = (row["STUDYID"], row["ARMCD"])
+        arm_elements.setdefault(key, []).append(
+            (int(row["TAETORD"]), row["ETCD"])
         )
-        .then(
-            pl.concat_str([pl.col("TRT01P"), pl.col("TRT02P")], separator="/")
-        )
-        .otherwise(None)
-    )
-    .select("STUDYID", "USUBJID", "TRT01P", "TRT02P", "TRTSEQP")
-)
+    for key in arm_elements:
+        arm_elements[key] = [
+            etcd for _, etcd in sorted(arm_elements[key])
+        ]
 
-Path("/app/output").mkdir(exist_ok=True)
-adsl.write_csv("/app/output/adsl.csv")
+    out_rows = []
+    for subj in dm:
+        studyid = subj["STUDYID"]
+        armcd = subj.get("ARMCD", "")
+        trt01p = trt02p = trtseqp = ""
+        if armcd:
+            codes = arm_elements.get((studyid, armcd), [])
+            names = [element_name.get((studyid, c), "") for c in codes]
+            if len(names) >= 1:
+                trt01p = names[0]
+            if len(names) >= 2:
+                trt02p = names[1]
+            parts = [n for n in (trt01p, trt02p) if n]
+            if parts:
+                trtseqp = "/".join(parts)
+        out_rows.append(
+            {
+                "STUDYID": studyid,
+                "USUBJID": subj["USUBJID"],
+                "TRT01P": trt01p,
+                "TRT02P": trt02p,
+                "TRTSEQP": trtseqp,
+            }
+        )
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    fieldnames = ["STUDYID", "USUBJID", "TRT01P", "TRT02P", "TRTSEQP"]
+    with open(
+        os.path.join(OUTPUT_DIR, "adsl.csv"), "w", newline="", encoding="utf-8"
+    ) as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+
+if __name__ == "__main__":
+    main()

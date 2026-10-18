@@ -4,135 +4,147 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build the SDTM LB dataset from the ODM extract in /app/input.
+
+One record per laboratory result (per form occurrence). Character
+(dipstick) results are folded to their standardized spellings, numeric
+results carry LBSTRESN, and censored results (< / >) drive LBNRIND.
+"""
+
+import re
 
 import polars as pl
 
-odm = pl.read_csv("/app/input/odm.csv", infer_schema=False)
+INPUT = "/app/input"
+OUTPUT = "/app/output"
 
-forms = {}
-study_of = {}
-for r in odm.to_dicts():
-    study_of[r["SubjectKey"]] = r["StudyOID"]
-    key = (r["SubjectKey"], r["FormOID"], r["FormRepeatKey"])
-    forms.setdefault(key, {})[r["ItemOID"]] = r["Value"]
-
-form_info = {
-    "FO.LB_PROT": ("PROT", "Protein", 0),
-    "FO.LB_CK": ("CK", "Creatine Kinase", 1),
-    "FO.LB_GLUC": ("GLUC", "Glucose", 2),
-    "FO.LB_KETON": ("KETON", "Ketones", 3),
-    "FO.LB_CREAT": ("CREAT", "Creatinine", 4),
+# Collection order of the tests, with their short and long names.
+TEST_ORDER = {
+    "FO.LB_PROT": (1, "PROT", "Protein"),
+    "FO.LB_CK": (2, "CK", "Creatine Kinase"),
+    "FO.LB_GLUC": (3, "GLUC", "Glucose"),
+    "FO.LB_KETON": (4, "KETON", "Ketones"),
+    "FO.LB_CREAT": (5, "CREAT", "Creatinine"),
 }
 
+# Known dipstick spellings (matched case-insensitively) and the
+# standardized result each folds to.
+DIPSTICK_FOLDS = {
+    "NEGATIVE": "NEGATIVE",
+    "NEG": "NEGATIVE",
+    "TRACE": "TRACE",
+    "TR": "TRACE",
+    "1+": "1+",
+    "+1": "1+",
+    "1 PLUS": "1+",
+    "2+": "2+",
+    "+2": "2+",
+}
 
-def standardize(raw):
-    if raw is None:
-        return None
-    t = raw.strip()
-    low = t.lower().replace(" ", "")
-    if low in ("negative", "neg"):
-        return "NEGATIVE"
-    if low in ("trace", "tr"):
-        return "TRACE"
-    if low in ("1+", "+1", "1plus"):
-        return "1+"
-    if low in ("2+", "+2", "2plus"):
-        return "2+"
-    return raw
+PLAIN_NUMBER = re.compile(r"^[+-]?\d+(\.\d+)?$")
+
+COLUMNS = [
+    "DOMAIN",
+    "STUDYID",
+    "USUBJID",
+    "LBSEQ",
+    "LBTESTCD",
+    "LBTEST",
+    "LBORRES",
+    "LBORRESU",
+    "LBSTRESC",
+    "LBSTRESN",
+    "LBSTRESU",
+    "LBNRIND",
+    "LBDTC",
+]
 
 
-def as_number(text):
-    if text is None or text == "":
-        return None
-    try:
-        return float(text)
-    except ValueError:
-        return None
+def standardize(collected):
+    """Fold known dipstick spellings; keep anything else as collected."""
+    return DIPSTICK_FOLDS.get(collected.strip().upper(), collected)
 
 
-rows = []
-for (subj, formoid, formrep), items in forms.items():
-    if formoid not in form_info:
-        continue
-    code, name, order = form_info[formoid]
-    raw = items.get("IT.LB.RESULT")
-    if raw is None or raw == "":
-        continue
-    lbdtc = items.get("IT.LB.LBDTC")
-    unit = items.get("IT.LB.LBORRESU")
-    unit = unit if unit not in (None, "") else None
-    stresc = standardize(raw)
-    # A true numeric result only: grades and censored values have no number.
-    stresn = as_number(raw)
-    if stresc in ("NEGATIVE", "TRACE", "1+", "2+"):
-        stresn = None
-    if raw.strip().startswith("<") or raw.strip().startswith(">"):
-        stresn = None
-    nrind = None
-    if raw.strip().startswith("<"):
-        nrind = "LOW"
-    elif raw.strip().startswith(">"):
-        nrind = "HIGH"
-    rows.append(
-        {
+def main():
+    odm = pl.read_csv(f"{INPUT}/odm.csv", infer_schema_length=0).fill_null("")
+
+    # Gather the items of each form occurrence.
+    occurrences = {}
+    subject_order = []
+    for row in odm.iter_rows(named=True):
+        key = (row["SubjectKey"], row["FormOID"], row["FormRepeatKey"])
+        if row["SubjectKey"] not in subject_order:
+            subject_order.append(row["SubjectKey"])
+        occ = occurrences.setdefault(
+            key,
+            {
+                "STUDYID": row["StudyOID"],
+                "USUBJID": row["SubjectKey"],
+                "FormOID": row["FormOID"],
+                "FormRepeatKey": row["FormRepeatKey"],
+                "LBORRES": "",
+                "LBORRESU": "",
+                "LBDTC": "",
+            },
+        )
+        if row["ItemOID"] == "IT.LB.RESULT":
+            occ["LBORRES"] = row["Value"]
+        elif row["ItemOID"] == "IT.LB.LBDTC":
+            occ["LBDTC"] = row["Value"]
+        elif row["ItemOID"] == "IT.LB.LBORRESU":
+            occ["LBORRESU"] = row["Value"]
+
+    # Order records: subject (first appearance), then collection order
+    # of the test, then form repeat.
+    records = sorted(
+        occurrences.values(),
+        key=lambda o: (
+            subject_order.index(o["USUBJID"]),
+            TEST_ORDER[o["FormOID"]][0],
+            int(o["FormRepeatKey"]),
+        ),
+    )
+
+    out = {name: [] for name in COLUMNS}
+    seq_by_subject = {}
+    for occ in records:
+        _, testcd, test = TEST_ORDER[occ["FormOID"]]
+        orres = occ["LBORRES"]
+        unit = occ["LBORRESU"]
+        stresc = standardize(orres)
+        stresn = stresc if PLAIN_NUMBER.match(stresc.strip()) else ""
+        if stresc.startswith("<"):
+            nrind = "LOW"
+        elif stresc.startswith(">"):
+            nrind = "HIGH"
+        else:
+            nrind = ""
+        seq_by_subject[occ["USUBJID"]] = seq_by_subject.get(occ["USUBJID"], 0) + 1
+        values = {
             "DOMAIN": "LB",
-            "STUDYID": study_of[subj],
-            "USUBJID": subj,
-            "ORDER": order,
-            "REP": int(formrep),
-            "LBTESTCD": code,
-            "LBTEST": name,
-            "LBORRES": raw,
+            "STUDYID": occ["STUDYID"],
+            "USUBJID": occ["USUBJID"],
+            "LBSEQ": seq_by_subject[occ["USUBJID"]],
+            "LBTESTCD": testcd,
+            "LBTEST": test,
+            "LBORRES": orres,
             "LBORRESU": unit,
             "LBSTRESC": stresc,
             "LBSTRESN": stresn,
             "LBSTRESU": unit,
             "LBNRIND": nrind,
-            "LBDTC": lbdtc,
+            "LBDTC": occ["LBDTC"],
         }
-    )
+        for name in COLUMNS:
+            out[name].append(values[name])
 
-lb = (
-    pl.DataFrame(
-        rows,
-        schema={
-            "DOMAIN": pl.String,
-            "STUDYID": pl.String,
-            "USUBJID": pl.String,
-            "ORDER": pl.Int64,
-            "REP": pl.Int64,
-            "LBTESTCD": pl.String,
-            "LBTEST": pl.String,
-            "LBORRES": pl.String,
-            "LBORRESU": pl.String,
-            "LBSTRESC": pl.String,
-            "LBSTRESN": pl.Float64,
-            "LBSTRESU": pl.String,
-            "LBNRIND": pl.String,
-            "LBDTC": pl.String,
-        },
-    )
-    .sort(["STUDYID", "USUBJID", "ORDER", "REP"])
-    .with_columns(
-        pl.int_range(1, pl.len() + 1).over(["STUDYID", "USUBJID"]).alias("LBSEQ")
-    )
-    .select(
-        "DOMAIN",
-        "STUDYID",
-        "USUBJID",
-        "LBSEQ",
-        "LBTESTCD",
-        "LBTEST",
-        "LBORRES",
-        "LBORRESU",
-        "LBSTRESC",
-        "LBSTRESN",
-        "LBSTRESU",
-        "LBNRIND",
-        "LBDTC",
-    )
-)
+    # Blank values go in as nulls so they are written as empty fields.
+    for name in COLUMNS:
+        if name != "LBSEQ":
+            out[name] = [v if v != "" else None for v in out[name]]
+    lb = pl.DataFrame(out).select(COLUMNS)
+    lb.write_csv(f"{OUTPUT}/lb.csv")
 
-Path("/app/output").mkdir(parents=True, exist_ok=True)
-lb.write_csv("/app/output/lb.csv")
+
+if __name__ == "__main__":
+    main()

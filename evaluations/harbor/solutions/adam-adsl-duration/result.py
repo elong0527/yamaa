@@ -4,62 +4,73 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
+import csv
 import calendar
 from datetime import date
-from pathlib import Path
 
-import polars as pl
-
-
-def add_months(day: date, n: int) -> date:
-    total = day.month - 1 + n
-    year = day.year + total // 12
-    month = total % 12 + 1
-    last = calendar.monthrange(year, month)[1]
-    return date(year, month, min(day.day, last))
+IN_DIR = "/app/input"
+OUT_DIR = "/app/output"
 
 
-def whole_months(start: date | None, end: date | None) -> int | None:
-    """Monthly anniversaries of start on or before end; negated when reversed."""
-    if start is None or end is None:
+def parse_date(text):
+    text = (text or "").strip()
+    if not text:
         return None
-    if end < start:
-        back = whole_months(end, start)
-        return None if back is None else -back
-    months = (end.year - start.year) * 12 + (end.month - start.month)
-    while months > 0 and add_months(start, months) > end:
-        months -= 1
-    while add_months(start, months + 1) <= end:
-        months += 1
-    return months
+    return date.fromisoformat(text)
 
 
-def whole_weeks(start: date | None, end: date | None) -> int | None:
-    """Whole seven-day blocks from start to end; negated when reversed."""
+def add_months(d, months):
+    """Date `months` months after d, on the same day of month, or on the
+    last day of the target month when it has no such day."""
+    total = (d.year * 12 + (d.month - 1)) + months
+    year, month0 = divmod(total, 12)
+    month = month0 + 1
+    day = min(d.day, calendar.monthrange(year, month)[1])
+    return date(year, month, day)
+
+
+def durations(start, end):
+    """(DURW, DURM) from start to end; both blank if either is missing."""
     if start is None or end is None:
-        return None
-    if end < start:
-        back = whole_weeks(end, start)
-        return None if back is None else -back
-    return (end - start).days // 7
+        return "", ""
+    sign = 1
+    lo, hi = start, end
+    if hi < lo:
+        sign = -1
+        lo, hi = hi, lo
+    durw = (hi - lo).days // 7
+    durm = 0
+    while add_months(lo, durm + 1) <= hi:
+        durm += 1
+    return sign * durw, sign * durm
 
 
-dm = pl.read_csv("/app/input/dm.csv", infer_schema=False).with_columns(
-    pl.col("STDT").str.to_date(strict=False),
-    pl.col("ENDT").str.to_date(strict=False),
-)
+def main():
+    with open(f"{IN_DIR}/dm.csv", newline="") as f:
+        rows = list(csv.DictReader(f))
 
-adsl = (
-    dm.with_columns(
-        DURW=pl.struct(["STDT", "ENDT"]).map_elements(
-            lambda r: whole_weeks(r["STDT"], r["ENDT"]), return_dtype=pl.Int64
-        ),
-        DURM=pl.struct(["STDT", "ENDT"]).map_elements(
-            lambda r: whole_months(r["STDT"], r["ENDT"]), return_dtype=pl.Int64
-        ),
-    )
-    .select("STUDYID", "USUBJID", "STDT", "ENDT", "DURW", "DURM")
-)
+    out_rows = []
+    for row in rows:
+        stdt = parse_date(row.get("STDT"))
+        endt = parse_date(row.get("ENDT"))
+        durw, durm = durations(stdt, endt)
+        out_rows.append(
+            {
+                "STUDYID": row.get("STUDYID", ""),
+                "USUBJID": row.get("USUBJID", ""),
+                "STDT": row.get("STDT", ""),
+                "ENDT": row.get("ENDT", ""),
+                "DURW": durw,
+                "DURM": durm,
+            }
+        )
 
-Path("/app/output").mkdir(exist_ok=True)
-adsl.write_csv("/app/output/adsl.csv")
+    fieldnames = ["STUDYID", "USUBJID", "STDT", "ENDT", "DURW", "DURM"]
+    with open(f"{OUT_DIR}/adsl.csv", "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+
+if __name__ == "__main__":
+    main()

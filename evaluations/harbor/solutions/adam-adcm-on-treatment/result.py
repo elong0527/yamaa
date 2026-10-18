@@ -4,56 +4,96 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Create ADCM (one record per concomitant medication) from ADSL and CM.
+
+ONTRTFL is "Y" when the medication's analysis dates overlap the subject's
+treatment period (TRTSDT through TRTEDT, inclusive). A medication with a
+missing start or end date is treated as overlapping unless its known dates
+rule overlap out. A missing TRTEDT leaves the period open-ended, and a
+subject with no TRTSDT is never flagged.
+"""
 
 import polars as pl
 
-cm = pl.read_csv("/app/input/cm.csv", infer_schema=False).with_columns(
-    pl.col("CMSEQ").cast(pl.Int64)
-)
-adsl = pl.read_csv("/app/input/adsl.csv", infer_schema=False).select(
-    "USUBJID", "TRTSDT", "TRTEDT"
-)
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-adcm = cm.join(adsl, on="USUBJID", how="left").with_columns(
-    ASTDT=pl.col("CMSTDTC"), AENDT=pl.col("CMENDTC")
-)
+COLUMNS = [
+    "STUDYID",
+    "USUBJID",
+    "CMSEQ",
+    "CMTRT",
+    "ASTDT",
+    "AENDT",
+    "TRTSDT",
+    "TRTEDT",
+    "ONTRTFL",
+]
 
-# The medication overlaps the treatment period. A missing medication date is
-# assumed to overlap unless the known dates rule it out; a missing treatment
-# end leaves the period open, while no treatment start is never flagged.
-# ISO dates sort as text.
-adcm = (
-    adcm.with_columns(
-        ONTRTFL=pl.when(pl.col("TRTSDT").is_null() | (pl.col("TRTSDT") == ""))
-        .then(None)
-        .when(
-            pl.col("AENDT").is_not_null()
-            & (pl.col("AENDT") != "")
-            & (pl.col("AENDT") < pl.col("TRTSDT"))
-        )
-        .then(None)
-        .when(
-            pl.col("ASTDT").is_not_null()
-            & (pl.col("ASTDT") != "")
-            & pl.col("TRTEDT").is_not_null()
-            & (pl.col("TRTEDT") != "")
-            & (pl.col("ASTDT") > pl.col("TRTEDT"))
-        )
-        .then(None)
-        .otherwise(pl.lit("Y"))
-    ).select(
-        "STUDYID",
-        "USUBJID",
-        "CMSEQ",
-        "CMTRT",
-        "ASTDT",
-        "AENDT",
-        "TRTSDT",
-        "TRTEDT",
-        "ONTRTFL",
+
+def read_csv(name):
+    frame = pl.read_csv(
+        f"{INPUT_DIR}/{name}",
+        schema_overrides={
+            "STUDYID": pl.String,
+            "USUBJID": pl.String,
+            "CMSEQ": pl.String,
+            "CMTRT": pl.String,
+            "CMSTDTC": pl.String,
+            "CMENDTC": pl.String,
+            "TRTSDT": pl.String,
+            "TRTEDT": pl.String,
+        },
     )
-)
+    return frame.fill_null("")
 
-Path("/app/output").mkdir(exist_ok=True)
-adcm.write_csv("/app/output/adcm.csv")
+
+def main():
+    adsl = read_csv("adsl.csv")
+    cm = read_csv("cm.csv")
+
+    trt = {
+        row["USUBJID"]: (row["TRTSDT"], row["TRTEDT"])
+        for row in adsl.iter_rows(named=True)
+    }
+
+    records = []
+    for row in cm.iter_rows(named=True):
+        astdt, aendt = row["CMSTDTC"], row["CMENDTC"]
+        trtsdt, trtedt = trt.get(row["USUBJID"], ("", ""))
+
+        ontrtfl = ""
+        if trtsdt:
+            ends_before_start = bool(aendt) and aendt < trtsdt
+            starts_after_end = bool(astdt) and bool(trtedt) and astdt > trtedt
+            if not ends_before_start and not starts_after_end:
+                ontrtfl = "Y"
+
+        records.append(
+            {
+                "STUDYID": row["STUDYID"],
+                "USUBJID": row["USUBJID"],
+                "CMSEQ": row["CMSEQ"],
+                "CMTRT": row["CMTRT"],
+                "ASTDT": astdt,
+                "AENDT": aendt,
+                "TRTSDT": trtsdt,
+                "TRTEDT": trtedt,
+                "ONTRTFL": ontrtfl,
+            }
+        )
+
+    adcm = pl.DataFrame(records, schema={name: pl.String for name in COLUMNS})
+    # Write empty values as bare empty fields, not quoted "" strings.
+    adcm = adcm.select(
+        pl.when(pl.col(name) == "")
+        .then(pl.lit(None, dtype=pl.String))
+        .otherwise(pl.col(name))
+        .alias(name)
+        for name in COLUMNS
+    )
+    adcm.write_csv(f"{OUTPUT_DIR}/adcm.csv")
+
+
+if __name__ == "__main__":
+    main()

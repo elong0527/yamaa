@@ -4,123 +4,90 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build the SDTM DS dataset from the collected ODM extract.
 
-import polars as pl
+One record per subject per collected form (study event). Reads
+/app/input/odm.csv (long EAV form: one row per collected item) and
+writes /app/output/ds.csv.
+"""
 
-odm = pl.read_csv("/app/input/odm.csv", infer_schema=False)
+import csv
+import os
+from collections import OrderedDict
 
-wide = (
-    odm.group_by("StudyOID", "SubjectKey", "StudyEventOID")
-    .agg(
-        pl.col("Value").filter(pl.col("ItemOID") == "IT.DS.DTC").first().alias("DTC"),
-        pl.col("Value").filter(pl.col("ItemOID") == "IT.DS.COMP").first().alias("COMP"),
-        pl.col("Value").filter(pl.col("ItemOID") == "IT.DS.REASON").first().alias("REASON"),
-        pl.col("Value")
-        .filter(pl.col("ItemOID") == "IT.DS.REASONCD")
-        .first()
-        .alias("REASONCD"),
-    )
-)
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
+
+# StudyEventOID -> (DSCAT, DSSCAT, controlled term for a milestone)
+EVENT_INFO = {
+    "CONSENT": ("PROTOCOL MILESTONE", "INFORMED CONSENT",
+                "INFORMED CONSENT OBTAINED"),
+    "RAND": ("PROTOCOL MILESTONE", "RANDOMIZATION", "RANDOMIZED"),
+    "EOT": ("DISPOSITION EVENT", "END OF TREATMENT", None),
+    "EOS": ("DISPOSITION EVENT", "END OF STUDY", None),
+}
+
+COLUMNS = ["DOMAIN", "STUDYID", "USUBJID", "DSSEQ", "DSTERM", "DSDECOD",
+           "DSCAT", "DSSCAT", "DSSTDTC"]
 
 
-def build_row(event: str, dtc, comp, reason, reasoncd) -> dict | None:
-    if event == "CONSENT":
-        return {
-            "DSTERM": "INFORMED CONSENT OBTAINED",
-            "DSDECOD": "INFORMED CONSENT OBTAINED",
-            "DSCAT": "PROTOCOL MILESTONE",
-            "DSSCAT": "INFORMED CONSENT",
-        }
-    if event == "RAND":
-        return {
-            "DSTERM": "RANDOMIZED",
-            "DSDECOD": "RANDOMIZED",
-            "DSCAT": "PROTOCOL MILESTONE",
-            "DSSCAT": "RANDOMIZATION",
-        }
-    if event == "EOT":
-        if comp == "COMPLETED":
-            term, decod = "COMPLETED", "COMPLETED"
+def main():
+    with open(os.path.join(INPUT_DIR, "odm.csv"), newline="") as f:
+        rows = list(csv.DictReader(f))
+
+    # Group the EAV rows into forms: one form per subject, study event
+    # and repeat keys. A study event with no form gives no record.
+    forms = OrderedDict()
+    for row in rows:
+        key = (row["StudyOID"], row["SubjectKey"], row["StudyEventOID"],
+               row["StudyEventRepeatKey"], row["ItemGroupOID"],
+               row["ItemGroupRepeatKey"])
+        forms.setdefault(key, {})[row["ItemOID"]] = row["Value"] or ""
+
+    records = []
+    for (study_oid, subject_key, event_oid, *_), items in forms.items():
+        dscat, dsscat, milestone_term = EVENT_INFO[event_oid]
+        completion = items.get("IT.DS.COMP", "")
+        if milestone_term is not None:
+            dsterm = dsdecod = milestone_term
+        elif completion == "COMPLETED":
+            dsterm = dsdecod = "COMPLETED"
+        elif event_oid == "EOS" and completion == "SCREEN FAILURE":
+            dsterm = dsdecod = "SCREEN FAILURE"
         else:
-            term, decod = reason, reasoncd
-        return {
-            "DSTERM": term,
-            "DSDECOD": decod,
-            "DSCAT": "DISPOSITION EVENT",
-            "DSSCAT": "END OF TREATMENT",
-        }
-    if event == "EOS":
-        if comp == "COMPLETED":
-            term, decod = "COMPLETED", "COMPLETED"
-        elif comp == "SCREEN FAILURE":
-            term, decod = "SCREEN FAILURE", "SCREEN FAILURE"
-        else:
-            term, decod = reason, reasoncd
-        return {
-            "DSTERM": term,
-            "DSDECOD": decod,
-            "DSCAT": "DISPOSITION EVENT",
-            "DSSCAT": "END OF STUDY",
-        }
-    return None
+            dsterm = items.get("IT.DS.REASON", "")
+            dsdecod = items.get("IT.DS.REASONCD", "")
+        records.append({
+            "DOMAIN": "DS",
+            "STUDYID": study_oid,
+            "USUBJID": "{}-{}".format(study_oid, subject_key),
+            "DSTERM": dsterm,
+            "DSDECOD": dsdecod,
+            "DSCAT": dscat,
+            "DSSCAT": dsscat,
+            "DSSTDTC": items.get("IT.DS.DTC", ""),
+        })
+
+    # DSSEQ numbers each subject's records from 1 in the order they
+    # happened, by DSSTDTC and then by DSTERM.
+    by_subject = OrderedDict()
+    for record in records:
+        by_subject.setdefault(record["USUBJID"], []).append(record)
+
+    out_rows = []
+    for subject_records in by_subject.values():
+        subject_records.sort(key=lambda r: (r["DSSTDTC"], r["DSTERM"]))
+        for seq, record in enumerate(subject_records, start=1):
+            record["DSSEQ"] = seq
+            out_rows.append(record)
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    with open(os.path.join(OUTPUT_DIR, "ds.csv"), "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=COLUMNS)
+        writer.writeheader()
+        for record in out_rows:
+            writer.writerow({col: record[col] for col in COLUMNS})
 
 
-records: list[dict] = []
-for row in wide.to_dicts():
-    study = row["StudyOID"]
-    subj = row["SubjectKey"]
-    event = row["StudyEventOID"]
-    out = build_row(event, row["DTC"], row["COMP"], row["REASON"], row["REASONCD"])
-    if out is None:
-        continue
-    usubjid = f"{study}-{subj}"
-    records.append(
-        {
-            "STUDYID": study,
-            "USUBJID": usubjid,
-            "DSTERM": out["DSTERM"] if out["DSTERM"] != "" else None,
-            "DSDECOD": out["DSDECOD"] if out["DSDECOD"] != "" else None,
-            "DSCAT": out["DSCAT"],
-            "DSSCAT": out["DSSCAT"],
-            "DSSTDTC": row["DTC"] if row["DTC"] != "" else None,
-        }
-    )
-
-ds = pl.DataFrame(
-    records,
-    schema={
-        "STUDYID": pl.String,
-        "USUBJID": pl.String,
-        "DSTERM": pl.String,
-        "DSDECOD": pl.String,
-        "DSCAT": pl.String,
-        "DSSCAT": pl.String,
-        "DSSTDTC": pl.String,
-    },
-).with_columns(
-    DOMAIN=pl.lit("DS"),
-    DSSTDTC_DT=pl.col("DSSTDTC").str.to_date(strict=False),
-)
-
-ds = (
-    ds.sort(["USUBJID", "DSSTDTC_DT", "DSTERM"])
-    .with_columns(
-        DSSEQ=pl.col("USUBJID").cum_count().over("USUBJID"),
-    )
-    .with_columns(DSSEQ=pl.col("DSSEQ").cast(pl.Int64))
-    .select(
-        "DOMAIN",
-        "STUDYID",
-        "USUBJID",
-        "DSSEQ",
-        "DSTERM",
-        "DSDECOD",
-        "DSCAT",
-        "DSSCAT",
-        "DSSTDTC",
-    )
-)
-
-Path("/app/output").mkdir(exist_ok=True)
-ds.write_csv("/app/output/ds.csv")
+if __name__ == "__main__":
+    main()

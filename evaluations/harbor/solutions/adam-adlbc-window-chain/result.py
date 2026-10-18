@@ -4,40 +4,92 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+import csv
 
-import polars as pl
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-lb = pl.read_csv("/app/input/lb.csv", infer_schema=False).with_columns(
-    pl.col("LBSTRESN").cast(pl.Float64),
-    pl.col("VISITNUM").cast(pl.Int64),
-)
 
-# Albumin results with a numeric value; a record without one gets no row,
-# so the lag compares against the latest earlier visit with a result.
-alb = (
-    lb.filter(pl.col("LBTESTCD") == "ALB", pl.col("LBSTRESN").is_not_null())
-    .with_columns(
-        PARAMCD=pl.lit("_ALB"),
-        AVISITN=pl.col("VISITNUM"),
-        AVAL=pl.col("LBSTRESN"),
-    )
-    .sort(["STUDYID", "USUBJID", "AVISITN"])
-)
+def fmt(value):
+    if value is None:
+        return ""
+    return repr(float(value))
 
-# The change since the previous visit with a result, and its lag: the
-# previous visit's change. A zero change is a real value.
-adlbc = (
-    alb.with_columns(
-        PREV_AVAL=pl.col("AVAL").shift(1).over(["STUDYID", "USUBJID"]),
-    )
-    .with_columns(CHG=pl.col("AVAL") - pl.col("PREV_AVAL"))
-    .with_columns(PREV2=pl.col("CHG").shift(1).over(["STUDYID", "USUBJID"]))
-    .select(
-        "STUDYID", "USUBJID", "PARAMCD", "AVISITN",
-        "AVAL", "PREV_AVAL", "CHG", "PREV2",
-    )
-)
 
-Path("/app/output").mkdir(exist_ok=True)
-adlbc.write_csv("/app/output/adlbc.csv")
+def main():
+    with open(f"{INPUT_DIR}/lb.csv", newline="") as f:
+        rows = list(csv.DictReader(f))
+
+    # Keep only albumin records with a numeric result.
+    records = []
+    for row in rows:
+        if row["LBTESTCD"] != "ALB":
+            continue
+        raw = (row["LBSTRESN"] or "").strip()
+        if raw == "":
+            continue
+        try:
+            aval = float(raw)
+        except ValueError:
+            continue
+        records.append(
+            {
+                "STUDYID": row["STUDYID"],
+                "USUBJID": row["USUBJID"],
+                "AVISITN": int(row["VISITNUM"]),
+                "AVAL": aval,
+            }
+        )
+
+    # Order by subject (first appearance) then visit number.
+    subject_order = {}
+    for rec in records:
+        if rec["USUBJID"] not in subject_order:
+            subject_order[rec["USUBJID"]] = len(subject_order)
+    records.sort(key=lambda r: (subject_order[r["USUBJID"]], r["AVISITN"]))
+
+    out = []
+    prev_aval = {}
+    prev_chg = {}
+    for rec in records:
+        subj = rec["USUBJID"]
+        p_aval = prev_aval.get(subj)
+        chg = None if p_aval is None else rec["AVAL"] - p_aval
+        p_chg = prev_chg.get(subj)
+        out.append(
+            {
+                "STUDYID": rec["STUDYID"],
+                "USUBJID": subj,
+                "PARAMCD": "_ALB",
+                "AVISITN": rec["AVISITN"],
+                "AVAL": rec["AVAL"],
+                "PREV_AVAL": p_aval,
+                "CHG": chg,
+                "PREV2": p_chg,
+            }
+        )
+        prev_aval[subj] = rec["AVAL"]
+        prev_chg[subj] = chg
+
+    fieldnames = ["STUDYID", "USUBJID", "PARAMCD", "AVISITN", "AVAL",
+                  "PREV_AVAL", "CHG", "PREV2"]
+    with open(f"{OUTPUT_DIR}/adlbc.csv", "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in out:
+            writer.writerow(
+                {
+                    "STUDYID": row["STUDYID"],
+                    "USUBJID": row["USUBJID"],
+                    "PARAMCD": row["PARAMCD"],
+                    "AVISITN": row["AVISITN"],
+                    "AVAL": fmt(row["AVAL"]),
+                    "PREV_AVAL": fmt(row["PREV_AVAL"]),
+                    "CHG": fmt(row["CHG"]),
+                    "PREV2": fmt(row["PREV2"]),
+                }
+            )
+
+
+if __name__ == "__main__":
+    main()

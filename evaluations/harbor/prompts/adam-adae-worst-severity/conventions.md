@@ -1,12 +1,12 @@
-Following CDISC ADaM standards, use the provided ADAE_RAW dataset to
-create an ADAE dataset with one record per adverse event.
+Following CDISC ADaM standards, use the provided ADAE_RAW dataset to create an
+ADAE dataset with one record per adverse event.
 
 The output dataset should contain the following columns in this order:
-STUDYID, USUBJID, AESEQ, AEBODSYS, AEDECOD, ASTDT, AESEV, TRTEMFL,
-ASEVN, AOCCPIFL
+STUDYID, USUBJID, AESEQ, AEBODSYS, AEDECOD, ASTDT, AESEV, TRTEMFL, ASEVN,
+AOCCPIFL
 
-ASEVN is the numeric rank of AESEV: 1 for MILD through 3 for SEVERE.
-AOCCPIFL is Y on a flagged event.
+ASEVN is the numeric rank of AESEV: 1 for "MILD", 2 for "MODERATE", and
+3 for "SEVERE", or has no value. AOCCPIFL is "Y" or has no value.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/adae.csv.

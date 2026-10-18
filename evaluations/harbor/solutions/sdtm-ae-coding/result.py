@@ -4,35 +4,60 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
+"""Create the SDTM AE dataset by coding reported terms against MedDRA 26.1.
+
+Reads AE_RAW and MEDDRA_26_1 from /app/input and writes ae.csv to
+/app/output with one record per adverse event. AETERM is matched exactly
+(including letter case) to the dictionary's lowest-level term; the
+preferred term and body system come from the matched entry. A term with
+no exact match, or a blank term, is coded "NOT CODED" in both fields.
+"""
+
+import csv
 from pathlib import Path
 
-import polars as pl
+INPUT = Path("/app/input")
+OUTPUT = Path("/app/output")
 
-ae_raw = pl.read_csv("/app/input/ae_raw.csv", infer_schema=False).with_columns(
-    pl.col("AESEQ").cast(pl.Int64)
-)
-meddra = pl.read_csv("/app/input/meddra_26_1.csv", infer_schema=False)
+NOT_CODED = "NOT CODED"
 
-# The preferred term and body system of the entry whose lowest-level term
-# equals the reported term exactly, including letter case. A blank term or
-# one with no exact match is not coded.
-ae = (
-    ae_raw.join(meddra, left_on="AETERM", right_on="LLTNAME", how="left")
-    .with_columns(
-        AEDECOD=pl.when(
-            (pl.col("AETERM").fill_null("") == "") | pl.col("PTNAME").is_null()
+
+def read_rows(path):
+    with open(path, newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
+
+
+def main():
+    dictionary = {}
+    for entry in read_rows(INPUT / "meddra_26_1.csv"):
+        dictionary[entry["LLTNAME"]] = (entry["PTNAME"], entry["SOCNAME"])
+
+    records = []
+    for event in read_rows(INPUT / "ae_raw.csv"):
+        term = event["AETERM"]
+        if term and term in dictionary:
+            decoded, body_system = dictionary[term]
+        else:
+            decoded, body_system = NOT_CODED, NOT_CODED
+        records.append(
+            {
+                "DOMAIN": "AE",
+                "STUDYID": event["STUDYID"],
+                "USUBJID": event["USUBJID"],
+                "AESEQ": event["AESEQ"],
+                "AETERM": term,
+                "AEDECOD": decoded,
+                "AEBODSYS": body_system,
+            }
         )
-        .then(pl.lit("NOT CODED"))
-        .otherwise(pl.col("PTNAME")),
-        AEBODSYS=pl.when(
-            (pl.col("AETERM").fill_null("") == "") | pl.col("SOCNAME").is_null()
-        )
-        .then(pl.lit("NOT CODED"))
-        .otherwise(pl.col("SOCNAME")),
-        DOMAIN=pl.lit("AE"),
-    )
-    .select("DOMAIN", "STUDYID", "USUBJID", "AESEQ", "AETERM", "AEDECOD", "AEBODSYS")
-)
 
-Path("/app/output").mkdir(exist_ok=True)
-ae.write_csv("/app/output/ae.csv")
+    OUTPUT.mkdir(parents=True, exist_ok=True)
+    columns = ["DOMAIN", "STUDYID", "USUBJID", "AESEQ", "AETERM", "AEDECOD", "AEBODSYS"]
+    with open(OUTPUT / "ae.csv", "w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=columns)
+        writer.writeheader()
+        writer.writerows(records)
+
+
+if __name__ == "__main__":
+    main()

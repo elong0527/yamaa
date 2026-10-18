@@ -4,86 +4,95 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+import csv
+import os
 
-import polars as pl
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
+
+COLUMNS = ["STUDYID", "USUBJID", "RDOMAIN", "IDVAR", "IDVARVAL",
+           "RELTYPE", "RELID"]
 
 
-def _present(value) -> bool:
-    return value is not None and str(value).strip() != ""
+def read_rows(name):
+    with open(os.path.join(INPUT_DIR, name), newline="") as f:
+        return list(csv.DictReader(f))
 
 
-ae = pl.read_csv("/app/input/ae.csv", infer_schema=False)
-cm = pl.read_csv("/app/input/cm.csv", infer_schema=False)
-tr = pl.read_csv("/app/input/tr.csv", infer_schema=False)
-tu = pl.read_csv("/app/input/tu.csv", infer_schema=False)
+def clean(value):
+    return "" if value is None else value.strip()
 
-studyid = str(ae["STUDYID"][0]) if len(ae) else str(tr["STUDYID"][0])
 
-rows = [
-    # Whole domains rather than subject records: one tumor identification
-    # relates to many tumor results.
-    {
+def main():
+    ae = read_rows("ae.csv")
+    cm = read_rows("cm.csv")
+    tr = read_rows("tr.csv")
+    tu = read_rows("tu.csv")
+
+    rows = []
+
+    # Dataset-level rows: the TU and TR datasets relate as a whole.
+    # One tumor identification (TU) relates to many tumor results (TR).
+    studyid = ""
+    if tu:
+        studyid = tu[0]["STUDYID"]
+    elif tr:
+        studyid = tr[0]["STUDYID"]
+    rows.append({
         "STUDYID": studyid,
-        "USUBJID": None,
+        "USUBJID": "",
         "RDOMAIN": "TU",
         "IDVAR": "TULNKID",
-        "IDVARVAL": None,
+        "IDVARVAL": "",
         "RELTYPE": "ONE",
         "RELID": "1",
-    },
-    {
+    })
+    rows.append({
         "STUDYID": studyid,
-        "USUBJID": None,
+        "USUBJID": "",
         "RDOMAIN": "TR",
         "IDVAR": "TRLNKID",
-        "IDVARVAL": None,
+        "IDVARVAL": "",
         "RELTYPE": "MANY",
         "RELID": "1",
-    },
-]
+    })
 
-for row in ae.to_dicts():
-    if not _present(row.get("AELNKID")):
-        continue
-    rows.append(
-        {
-            "STUDYID": row["STUDYID"],
-            "USUBJID": row["USUBJID"],
+    # Record-level rows: one per AE record carrying a link identifier.
+    for rec in ae:
+        lnkid = clean(rec.get("AELNKID"))
+        if not lnkid:
+            continue
+        rows.append({
+            "STUDYID": rec["STUDYID"],
+            "USUBJID": rec["USUBJID"],
             "RDOMAIN": "AE",
             "IDVAR": "AESEQ",
-            "IDVARVAL": str(row["AESEQ"]).strip(),
-            "RELTYPE": None,
-            "RELID": str(row["AELNKID"]).strip(),
-        }
-    )
-for row in cm.to_dicts():
-    if not _present(row.get("CMLNKID")):
-        continue
-    rows.append(
-        {
-            "STUDYID": row["STUDYID"],
-            "USUBJID": row["USUBJID"],
+            "IDVARVAL": clean(rec["AESEQ"]),
+            "RELTYPE": "",
+            "RELID": lnkid,
+        })
+
+    # Record-level rows: one per CM record carrying a link identifier.
+    for rec in cm:
+        lnkid = clean(rec.get("CMLNKID"))
+        if not lnkid:
+            continue
+        rows.append({
+            "STUDYID": rec["STUDYID"],
+            "USUBJID": rec["USUBJID"],
             "RDOMAIN": "CM",
             "IDVAR": "CMSEQ",
-            "IDVARVAL": str(row["CMSEQ"]).strip(),
-            "RELTYPE": None,
-            "RELID": str(row["CMLNKID"]).strip(),
-        }
-    )
+            "IDVARVAL": clean(rec["CMSEQ"]),
+            "RELTYPE": "",
+            "RELID": lnkid,
+        })
 
-relrec = pl.DataFrame(
-    rows,
-    schema={
-        "STUDYID": pl.String,
-        "USUBJID": pl.String,
-        "RDOMAIN": pl.String,
-        "IDVAR": pl.String,
-        "IDVARVAL": pl.String,
-        "RELTYPE": pl.String,
-        "RELID": pl.String,
-    },
-).select("STUDYID", "USUBJID", "RDOMAIN", "IDVAR", "IDVARVAL", "RELTYPE", "RELID")
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    with open(os.path.join(OUTPUT_DIR, "relrec.csv"), "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=COLUMNS)
+        writer.writeheader()
+        writer.writerows(rows)
 
-Path("/app/output").mkdir(exist_ok=True)
-relrec.write_csv("/app/output/relrec.csv")
+
+if __name__ == "__main__":
+    main()

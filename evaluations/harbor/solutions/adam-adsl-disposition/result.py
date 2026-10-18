@@ -4,84 +4,97 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+import csv
 
-import polars as pl
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
+OUTPUT_FILE = OUTPUT_DIR + "/adsl.csv"
 
-dm = pl.read_csv("/app/input/dm.csv", infer_schema=False)
-ds = pl.read_csv("/app/input/ds.csv", infer_schema=False).with_columns(
-    pl.col("DSSEQ").cast(pl.Int64, strict=False),
-    pl.col("DSSTDTC").str.to_date(strict=False),
-)
 
-# The last dated disposition event per track: latest date, highest sequence
-# on a tie. The study track reads every epoch but TREATMENT; the treatment
-# track reads only TREATMENT.
-last_study = (
-    ds.filter(
-        (pl.col("DSCAT") == "DISPOSITION EVENT")
-        & (pl.col("EPOCH") != "TREATMENT")
-        & pl.col("DSSTDTC").is_not_null()
-    )
-    .sort(["DSSTDTC", "DSSEQ"], descending=True, nulls_last=True)
-    .unique(["STUDYID", "USUBJID"], keep="first", maintain_order=True)
-    .select("STUDYID", "USUBJID", EOSDT="DSSTDTC", EOSDECOD="DSDECOD", EOSREAS="DSTERM")
-)
+def read_csv(path):
+    with open(path, newline="") as f:
+        return list(csv.DictReader(f))
 
-last_trt = (
-    ds.filter(
-        (pl.col("DSCAT") == "DISPOSITION EVENT")
-        & (pl.col("EPOCH") == "TREATMENT")
-        & pl.col("DSSTDTC").is_not_null()
-    )
-    .sort(["DSSTDTC", "DSSEQ"], descending=True, nulls_last=True)
-    .unique(["STUDYID", "USUBJID"], keep="first", maintain_order=True)
-    .select("STUDYID", "USUBJID", EOTDT="DSSTDTC", EOTDECOD="DSDECOD", EOTREAS="DSTERM")
-)
 
-adsl = (
-    dm.join(last_study, on=["STUDYID", "USUBJID"], how="left", maintain_order="left")
-    .join(last_trt, on=["STUDYID", "USUBJID"], how="left", maintain_order="left")
-    .with_columns(
-        EOSSTT=pl.when(pl.col("EOSDECOD") == "COMPLETED")
-        .then(pl.lit("COMPLETED"))
-        .when(pl.col("EOSDECOD").is_not_null())
-        .then(pl.lit("DISCONTINUED"))
-        .otherwise(pl.lit("ONGOING")),
-        DCSREAS=pl.when(
-            pl.col("EOSDECOD").is_not_null() & (pl.col("EOSDECOD") != "COMPLETED")
-        )
-        .then(pl.col("EOSREAS"))
-        .otherwise(None),
-        EOTSTT=pl.when(pl.col("EOTDECOD") == "COMPLETED")
-        .then(pl.lit("COMPLETED"))
-        .when(pl.col("EOTDT").is_not_null())
-        .then(pl.lit("DISCONTINUED"))
-        .otherwise(pl.lit("ONGOING")),
-        DCTREAS=pl.when(
-            pl.col("EOTDT").is_not_null()
-            & (pl.col("EOTDECOD").fill_null("") != "COMPLETED")
-        )
-        .then(pl.col("EOTREAS"))
-        .otherwise(None),
-        DCSREASP=pl.when(pl.col("EOTDECOD") == "OTHER")
-        .then(pl.col("EOTREAS"))
-        .otherwise(None),
-    )
-    .select(
-        "STUDYID",
-        "USUBJID",
-        "EOSDT",
-        "EOSDECOD",
-        "EOSREAS",
-        "EOSSTT",
-        "DCSREAS",
-        "EOTDT",
-        "EOTSTT",
-        "DCTREAS",
-        "DCSREASP",
-    )
-)
+def last_record(records):
+    """Last record: latest DSSTDTC, ties broken by higher DSSEQ."""
+    if not records:
+        return None
+    return max(records, key=lambda r: (r["DSSTDTC"], float(r["DSSEQ"])))
 
-Path("/app/output").mkdir(exist_ok=True)
-adsl.write_csv("/app/output/adsl.csv")
+
+def main():
+    dm = read_csv(INPUT_DIR + "/dm.csv")
+    ds = read_csv(INPUT_DIR + "/ds.csv")
+
+    # Only DISPOSITION EVENT records with a date ever count.
+    counted = {}
+    for row in ds:
+        if row["DSCAT"] != "DISPOSITION EVENT":
+            continue
+        if not row["DSSTDTC"]:
+            continue
+        counted.setdefault(row["USUBJID"], []).append(row)
+
+    fieldnames = [
+        "STUDYID", "USUBJID", "EOSDT", "EOSDECOD", "EOSREAS", "EOSSTT",
+        "DCSREAS", "EOTDT", "EOTSTT", "DCTREAS", "DCSREASP",
+    ]
+
+    out_rows = []
+    for subj in dm:
+        usubjid = subj["USUBJID"]
+        records = counted.get(usubjid, [])
+        study = [r for r in records if r["EPOCH"] != "TREATMENT"]
+        treat = [r for r in records if r["EPOCH"] == "TREATMENT"]
+
+        last_study = last_record(study)
+        last_treat = last_record(treat)
+
+        # End-of-study summary.
+        if last_study is None:
+            eosdt = eosdecod = eosreas = ""
+            eosstt = "ONGOING"
+        else:
+            eosdt = last_study["DSSTDTC"]
+            eosdecod = last_study["DSDECOD"]
+            eosreas = last_study["DSTERM"]
+            eosstt = "COMPLETED" if eosdecod == "COMPLETED" else "DISCONTINUED"
+        dcsreas = eosreas if eosstt == "DISCONTINUED" else ""
+
+        # End-of-treatment summary.
+        if last_treat is None:
+            eotdt = ""
+            eotstt = "ONGOING"
+            treat_term = ""
+            treat_decod = ""
+        else:
+            eotdt = last_treat["DSSTDTC"]
+            treat_decod = last_treat["DSDECOD"]
+            treat_term = last_treat["DSTERM"]
+            eotstt = "COMPLETED" if treat_decod == "COMPLETED" else "DISCONTINUED"
+        dctreas = treat_term if eotstt == "DISCONTINUED" else ""
+        dcsreasp = treat_term if treat_decod == "OTHER" else ""
+
+        out_rows.append({
+            "STUDYID": subj["STUDYID"],
+            "USUBJID": usubjid,
+            "EOSDT": eosdt,
+            "EOSDECOD": eosdecod,
+            "EOSREAS": eosreas,
+            "EOSSTT": eosstt,
+            "DCSREAS": dcsreas,
+            "EOTDT": eotdt,
+            "EOTSTT": eotstt,
+            "DCTREAS": dctreas,
+            "DCSREASP": dcsreasp,
+        })
+
+    with open(OUTPUT_FILE, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+
+if __name__ == "__main__":
+    main()

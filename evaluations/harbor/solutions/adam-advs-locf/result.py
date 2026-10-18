@@ -4,26 +4,58 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Create the ADVS dataset from the VS dataset.
 
-import polars as pl
+One record per subject per parameter per analysis visit. AVAL is the
+collected value when the record has one; otherwise it is the value from
+the closest earlier visit, in visit-number order, that has one, for the
+same subject and parameter (last observation carried forward). A gap
+before the first collected value has no value. A collected value of
+zero is carried like any other value.
+"""
 
-vs = pl.read_csv("/app/input/vs.csv", infer_schema=False).with_columns(
-    pl.col("AVISITN").cast(pl.Int64, strict=False),
-    pl.col("AVALCOL").cast(pl.Float64, strict=False),
-)
+import csv
 
-# The collected value, otherwise the closest earlier visit with one, in
-# visit-number order; a gap before the first stays missing.
-advs = (
-    vs.sort(["USUBJID", "PARAMCD", "AVISITN"])
-    .with_columns(
-        AVAL=pl.col("AVALCOL")
-        .fill_null(strategy="forward")
-        .over(["USUBJID", "PARAMCD"])
+INPUT_PATH = "/app/input/vs.csv"
+OUTPUT_PATH = "/app/output/advs.csv"
+
+
+def main() -> None:
+    with open(INPUT_PATH, newline="") as f:
+        rows = list(csv.DictReader(f))
+
+    # Walk the records in subject / parameter / visit-number order so
+    # each record can see the closest earlier collected value of its
+    # group, then map the results back to the original record order.
+    order = sorted(
+        range(len(rows)),
+        key=lambda i: (
+            rows[i]["USUBJID"],
+            rows[i]["PARAMCD"],
+            int(rows[i]["AVISITN"]),
+        ),
     )
-    .select("USUBJID", "PARAMCD", "AVISITN", "AVAL")
-)
 
-Path("/app/output").mkdir(parents=True, exist_ok=True)
-advs.write_csv("/app/output/advs.csv")
+    last_value = {}
+    aval = [""] * len(rows)
+    for i in order:
+        row = rows[i]
+        key = (row["USUBJID"], row["PARAMCD"])
+        collected = row["AVALCOL"]
+        if collected != "":
+            last_value[key] = collected
+            aval[i] = collected
+        else:
+            aval[i] = last_value.get(key, "")
+
+    with open(OUTPUT_PATH, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["USUBJID", "PARAMCD", "AVISITN", "AVAL"])
+        for i, row in enumerate(rows):
+            writer.writerow(
+                [row["USUBJID"], row["PARAMCD"], row["AVISITN"], aval[i]]
+            )
+
+
+if __name__ == "__main__":
+    main()

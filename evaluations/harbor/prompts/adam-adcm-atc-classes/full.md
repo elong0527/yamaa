@@ -1,17 +1,18 @@
-Following CDISC ADaM standards, use the provided CM, FACM, and ATCDICT
-datasets to create an ADCM dataset with one record per medication.
+Following CDISC ADaM standards, use the provided ATC_DICT, CM, and FACM
+datasets to create an ADCM dataset with one record per medication record.
 
 The output dataset should contain the following columns in this order:
-STUDYID, USUBJID, CMSEQ, CMTRT, CMDECOD, ATC1, ATC2, ATC3, ATC4,
-ATC1CD, ATC2CD, ATC3CD, ATC4CD
+STUDYID, USUBJID, CMSEQ, CMTRT, CMDECOD, ATC1, ATC2, ATC3, ATC4, ATC1CD,
+ATC2CD, ATC3CD, ATC4CD
 
-Each FACM row assigns one ATC level to one medication record, and the
-dictionary maps each code to its class name. ATC1CD through ATC4CD are
-the ATC codes at levels 1 to 4 for the medication's own record, and
-ATC1 through ATC4 are the class names the dictionary gives for those
-codes. A coded medication carries the full four-level path. A
-medication with no coded name keeps all eight ATC columns empty. Path
-rows that name no level from ATC1 to ATC4, or that point at no
+ATC1CD, ATC2CD, ATC3CD, and ATC4CD hold the codes in FAORRES on the
+medication's FACM rows whose FATESTCD is ATC1, ATC2, ATC3, and ATC4,
+matched to the medication record by STUDYID, USUBJID, and CMSEQ. ATC1,
+ATC2, ATC3, and ATC4 hold the class name in ATCNAME in the ATC_DICT row
+whose ATCCODE is the medication's ATC1CD, ATC2CD, ATC3CD, and ATC4CD. A
+medication with no coded name and no FACM rows for it has no value in
+ATC1, ATC2, ATC3, ATC4, ATC1CD, ATC2CD, ATC3CD, and ATC4CD. FACM rows
+whose FATESTCD is none of ATC1 to ATC4, and FACM rows that match no
 medication record, change nothing.
 
 Read the source datasets from /app/input and save the completed dataset as

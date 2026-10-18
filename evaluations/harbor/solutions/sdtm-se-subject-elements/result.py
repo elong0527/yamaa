@@ -4,122 +4,151 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
+"""Build the SDTM SE (Subject Elements) dataset from DM and ODM extracts.
+
+One record per subject per element the subject entered. Dates and study
+days follow the epoch-based rules described in the task.
+"""
+
+import csv
 from datetime import date
-from pathlib import Path
 
-import polars as pl
-
-
-def _present(value) -> bool:
-    return value is not None and str(value) != ""
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
 
-def _parse(value) -> date | None:
-    if not _present(value):
+def parse_date(value):
+    """Parse an ISO date (or the date part of an ISO datetime).
+
+    Returns a datetime.date, or None when there is no usable value.
+    """
+    if value is None:
         return None
-    return date.fromisoformat(str(value))
-
-
-def _study_day(ref: date | None, day: date | None) -> str | None:
-    if ref is None or day is None:
+    text = str(value).strip()
+    if not text:
         return None
-    delta = (day - ref).days
-    return str(delta + 1 if delta >= 0 else delta)
+    try:
+        return date.fromisoformat(text[:10])
+    except ValueError:
+        return None
 
 
-dm = pl.read_csv("/app/input/dm.csv", infer_schema=False)
-odm = pl.read_csv("/app/input/odm.csv", infer_schema=False)
+def study_day(target, reference):
+    """SDTM study day of target counted from the reference start date.
 
-# Planned element per study event, and dosing dates per subject.
-elements: dict[tuple, dict] = {}
-dosing: dict[str, dict] = {}
-for row in odm.to_dicts():
-    subj = str(row["SubjectKey"])
-    event = str(row["StudyEventOID"])
-    oid, value = str(row["ItemOID"]), row["Value"]
-    if oid == "IT.TE.ELEMENT":
-        elements.setdefault((subj, event), {})["element"] = str(value)
-    elif oid == "IT.TA.TAETORD":
-        elements.setdefault((subj, event), {})["order"] = str(value)
-    elif oid == "IT.TA.EPOCH":
-        elements.setdefault((subj, event), {})["epoch"] = str(value)
-    elif oid == "IT.EX.FIRSTDTC":
-        dosing.setdefault(subj, {})["first"] = str(value) if _present(value) else None
-    elif oid == "IT.EX.LASTDTC":
-        dosing.setdefault(subj, {})["last"] = str(value) if _present(value) else None
+    No value when either date has no value. There is no day zero: the
+    reference date itself is day 1 and the day before it is day -1.
+    """
+    if target is None or reference is None:
+        return ""
+    diff = (target - reference).days
+    return diff + 1 if diff >= 0 else diff
 
-dm_by_subj = {str(r["USUBJID"]): r for r in dm.to_dicts()}
 
-rows = []
-for (subj, etcd), info in elements.items():
-    subject = dm_by_subj.get(subj)
-    if subject is None:
-        continue
-    studyid = str(subject["STUDYID"])
-    usubjid = str(subject["USUBJID"])
-    epoch = info.get("epoch")
-    order = info.get("order")
-    first = (dosing.get(subj) or {}).get("first")
-    last = (dosing.get(subj) or {}).get("last")
-    rfic = str(subject.get("RFICDTC") or "")
-    rfic = rfic if _present(rfic) else None
-    rfstd = str(subject.get("RFSTDTC") or "")
-    rfstd = rfstd if _present(rfstd) else None
-    rfpen = str(subject.get("RFPENDTC") or "")
-    rfpen = rfpen if _present(rfpen) else None
-    if epoch == "SCREENING":
-        stdtc, endtc = rfic, first
-    elif epoch == "TREATMENT":
-        stdtc, endtc = first, last
-    else:
-        # Follow-up, and any other or missing epoch.
-        stdtc, endtc = last, rfpen
-    ref = _parse(rfstd)
-    rows.append(
-        {
-            "DOMAIN": "SE",
-            "STUDYID": studyid,
-            "USUBJID": usubjid,
-            "SESEQ": order,
-            "ETCD": etcd,
-            "ELEMENT": info.get("element"),
-            "TAETORD": order,
-            "EPOCH": epoch,
-            "SESTDTC": stdtc,
-            "SEENDTC": endtc,
-            "SESTDY": _study_day(ref, _parse(stdtc)),
-            "SEENDY": _study_day(ref, _parse(endtc)),
-            "SEUPDES": None,
-        }
-    )
+def main():
+    # DM: one row per subject with the dates the SE rules draw on.
+    dm = {}
+    with open(f"{INPUT_DIR}/dm.csv", newline="", encoding="utf-8") as handle:
+        for row in csv.DictReader(handle):
+            dm[row["USUBJID"]] = {
+                "rficdtc": (row.get("RFICDTC") or "").strip(),
+                "rfstdtc": parse_date(row.get("RFSTDTC")),
+                "rfpendtc": (row.get("RFPENDTC") or "").strip(),
+            }
 
-rows.sort(key=lambda r: (r["USUBJID"], int(r["TAETORD"] or 0)))
+    # ODM extract: one element record per subject per study event, plus
+    # the subject's first and last dosing dates (the same on every event).
+    elements = {}
+    subject_order = []
+    with open(f"{INPUT_DIR}/odm.csv", newline="", encoding="utf-8") as handle:
+        for row in csv.DictReader(handle):
+            subject = row["SubjectKey"]
+            if subject not in elements:
+                elements[subject] = {}
+                subject_order.append(subject)
+            record = elements[subject].setdefault(
+                row["StudyEventOID"],
+                {
+                    "studyid": row["StudyOID"],
+                    "usubjid": subject,
+                    "etcd": row["StudyEventOID"],
+                    "element": "",
+                    "taetord": "",
+                    "epoch": "",
+                    "firstdtc": "",
+                    "lastdtc": "",
+                },
+            )
+            item = row["ItemOID"]
+            value = (row.get("Value") or "").strip()
+            if item == "IT.TE.ELEMENT":
+                record["element"] = value
+            elif item == "IT.TA.TAETORD":
+                record["taetord"] = value
+            elif item == "IT.TA.EPOCH":
+                record["epoch"] = value
+            elif item == "IT.EX.FIRSTDTC":
+                record["firstdtc"] = value
+            elif item == "IT.EX.LASTDTC":
+                record["lastdtc"] = value
 
-se = (
-    pl.DataFrame(
-        rows,
-        schema={
-            "DOMAIN": pl.String,
-            "STUDYID": pl.String,
-            "USUBJID": pl.String,
-            "SESEQ": pl.String,
-            "ETCD": pl.String,
-            "ELEMENT": pl.String,
-            "TAETORD": pl.String,
-            "EPOCH": pl.String,
-            "SESTDTC": pl.String,
-            "SEENDTC": pl.String,
-            "SESTDY": pl.String,
-            "SEENDY": pl.String,
-            "SEUPDES": pl.String,
-        },
-    )
-    .sort(["USUBJID", "TAETORD"])
-    .select(
-        "DOMAIN", "STUDYID", "USUBJID", "SESEQ", "ETCD", "ELEMENT", "TAETORD",
-        "EPOCH", "SESTDTC", "SEENDTC", "SESTDY", "SEENDY", "SEUPDES",
-    )
-)
+    rows = []
+    for subject in subject_order:
+        subject_dm = dm.get(subject, {})
+        reference = subject_dm.get("rfstdtc")
+        records = sorted(
+            elements[subject].values(),
+            key=lambda rec: (int(rec["taetord"]) if rec["taetord"] else 0),
+        )
+        for record in records:
+            epoch = record["epoch"]
+            if epoch == "SCREENING":
+                sestdtc = subject_dm.get("rficdtc", "")
+                seendtc = record["firstdtc"]
+            elif epoch == "TREATMENT":
+                sestdtc = record["firstdtc"]
+                seendtc = record["lastdtc"]
+            else:
+                sestdtc = record["lastdtc"]
+                seendtc = subject_dm.get("rfpendtc", "")
+            rows.append(
+                {
+                    "DOMAIN": "SE",
+                    "STUDYID": record["studyid"],
+                    "USUBJID": record["usubjid"],
+                    "SESEQ": record["taetord"],
+                    "ETCD": record["etcd"],
+                    "ELEMENT": record["element"],
+                    "TAETORD": record["taetord"],
+                    "EPOCH": epoch,
+                    "SESTDTC": sestdtc,
+                    "SEENDTC": seendtc,
+                    "SESTDY": study_day(parse_date(sestdtc), reference),
+                    "SEENDY": study_day(parse_date(seendtc), reference),
+                    "SEUPDES": "",
+                }
+            )
 
-Path("/app/output").mkdir(exist_ok=True)
-se.write_csv("/app/output/se.csv")
+    columns = [
+        "DOMAIN",
+        "STUDYID",
+        "USUBJID",
+        "SESEQ",
+        "ETCD",
+        "ELEMENT",
+        "TAETORD",
+        "EPOCH",
+        "SESTDTC",
+        "SEENDTC",
+        "SESTDY",
+        "SEENDY",
+        "SEUPDES",
+    ]
+    with open(f"{OUTPUT_DIR}/se.csv", "w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=columns)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+if __name__ == "__main__":
+    main()

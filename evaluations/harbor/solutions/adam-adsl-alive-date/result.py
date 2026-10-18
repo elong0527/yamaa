@@ -4,47 +4,133 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
+"""Create ADSL with last-contact and last-alive dates.
+
+Reads ADAE, ADSL and ADVS from /app/input and writes /app/output/adsl.csv
+with one record per subject and columns:
+STUDYID, USUBJID, TRTEDT, LSTCNTDC, LSTCNTDT, LSTALVDT.
+"""
+
+import csv
+import re
+from datetime import date
 from pathlib import Path
 
-import polars as pl
+INPUT_DIR = Path("/app/input")
+OUTPUT_DIR = Path("/app/output")
 
-adsl_raw = pl.read_csv("/app/input/adsl.csv", infer_schema=False).with_columns(
-    pl.col("TRTEDT").str.to_date("%Y-%m-%d", strict=False)
-)
-adae = pl.read_csv("/app/input/adae.csv", infer_schema=False).with_columns(
-    pl.col("AENDT").str.to_date("%Y-%m-%d", strict=False)
-)
-advs = pl.read_csv("/app/input/advs.csv", infer_schema=False).with_columns(
-    pl.col("ADATE").str.to_date("%Y-%m-%d", strict=False)
-)
+FULL_DATE_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$")
+YEAR_MONTH_RE = re.compile(r"^(\d{4})-(\d{2})$")
+YEAR_RE = re.compile(r"^(\d{4})$")
 
-# The contact text completed to a day: a full date stands, a year and month
-# take the month's first day, a year alone takes January first, and anything
-# else leaves the date missing.
-adsl_raw = adsl_raw.with_columns(
-    LSTCNTDT=pl.coalesce(
-        pl.col("LSTCNTDC").str.to_date("%Y-%m-%d", strict=False),
-        (pl.col("LSTCNTDC") + "-01").str.to_date("%Y-%m-%d", strict=False),
-        (pl.col("LSTCNTDC") + "-01-01").str.to_date("%Y-%m-%d", strict=False),
-    )
-)
 
-# Each subject's latest adverse event end and vital signs dates.
-adae_last = adae.group_by(["STUDYID", "USUBJID"]).agg(
-    ADAE_LST=pl.col("AENDT").max()
-)
-advs_last = advs.group_by(["STUDYID", "USUBJID"]).agg(
-    ADVS_LST=pl.col("ADATE").max()
-)
+def parse_full_date(text):
+    """Parse a complete YYYY-MM-DD date; return None when unreadable."""
+    if text is None:
+        return None
+    match = FULL_DATE_RE.match(text.strip())
+    if not match:
+        return None
+    try:
+        return date(int(match.group(1)), int(match.group(2)), int(match.group(3)))
+    except ValueError:
+        return None
 
-adsl = (
-    adsl_raw.join(adae_last, on=["STUDYID", "USUBJID"], how="left", maintain_order="left")
-    .join(advs_last, on=["STUDYID", "USUBJID"], how="left", maintain_order="left")
-    .with_columns(
-        LSTALVDT=pl.max_horizontal("TRTEDT", "LSTCNTDT", "ADAE_LST", "ADVS_LST")
-    )
-    .select("STUDYID", "USUBJID", "TRTEDT", "LSTCNTDC", "LSTCNTDT", "LSTALVDT")
-)
 
-Path("/app/output").mkdir(exist_ok=True)
-adsl.write_csv("/app/output/adsl.csv")
+def complete_date(text):
+    """Complete a partial date text to a day.
+
+    A full date keeps its day, a year-month takes the first day of that
+    month, and a year alone takes the first day of January. Text that
+    cannot be read as a date has no value.
+    """
+    if text is None:
+        return None
+    text = text.strip()
+    if not text:
+        return None
+    full = parse_full_date(text)
+    if full is not None:
+        return full
+    match = YEAR_MONTH_RE.match(text)
+    if match:
+        try:
+            return date(int(match.group(1)), int(match.group(2)), 1)
+        except ValueError:
+            return None
+    match = YEAR_RE.match(text)
+    if match:
+        try:
+            return date(int(match.group(1)), 1, 1)
+        except ValueError:
+            return None
+    return None
+
+
+def fmt(value):
+    return value.isoformat() if value is not None else ""
+
+
+def main():
+    with open(INPUT_DIR / "adsl.csv", newline="") as handle:
+        adsl_rows = list(csv.DictReader(handle))
+    with open(INPUT_DIR / "adae.csv", newline="") as handle:
+        adae_rows = list(csv.DictReader(handle))
+    with open(INPUT_DIR / "advs.csv", newline="") as handle:
+        advs_rows = list(csv.DictReader(handle))
+
+    latest_aendt = {}
+    for row in adae_rows:
+        value = parse_full_date(row.get("AENDT"))
+        if value is None:
+            continue
+        key = (row["STUDYID"], row["USUBJID"])
+        if key not in latest_aendt or value > latest_aendt[key]:
+            latest_aendt[key] = value
+
+    latest_adate = {}
+    for row in advs_rows:
+        value = parse_full_date(row.get("ADATE"))
+        if value is None:
+            continue
+        key = (row["STUDYID"], row["USUBJID"])
+        if key not in latest_adate or value > latest_adate[key]:
+            latest_adate[key] = value
+
+    out_rows = []
+    for row in adsl_rows:
+        key = (row["STUDYID"], row["USUBJID"])
+        trtedt = parse_full_date(row.get("TRTEDT"))
+        lstcntdt = complete_date(row.get("LSTCNTDC"))
+        candidates = [
+            value
+            for value in (
+                trtedt,
+                lstcntdt,
+                latest_aendt.get(key),
+                latest_adate.get(key),
+            )
+            if value is not None
+        ]
+        lstalvdt = max(candidates) if candidates else None
+        out_rows.append(
+            {
+                "STUDYID": row["STUDYID"],
+                "USUBJID": row["USUBJID"],
+                "TRTEDT": row.get("TRTEDT") or "",
+                "LSTCNTDC": row.get("LSTCNTDC") or "",
+                "LSTCNTDT": fmt(lstcntdt),
+                "LSTALVDT": fmt(lstalvdt),
+            }
+        )
+
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    fieldnames = ["STUDYID", "USUBJID", "TRTEDT", "LSTCNTDC", "LSTCNTDT", "LSTALVDT"]
+    with open(OUTPUT_DIR / "adsl.csv", "w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+
+if __name__ == "__main__":
+    main()

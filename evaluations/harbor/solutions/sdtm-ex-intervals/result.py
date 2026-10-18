@@ -4,41 +4,85 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build the EX dataset (one record per constant-dose interval) from EC_RAW.
 
-import polars as pl
+Reads /app/input/ec_raw.csv and writes /app/output/ex.csv with columns:
+DOMAIN, STUDYID, USUBJID, EXSEQ, EXTRT, EXDOSE, EXDOSU, EXDOSFRQ,
+EXSTDTC, EXENDTC, EXADJ.
+"""
 
-ec_raw = pl.read_csv("/app/input/ec_raw.csv", infer_schema=False)
+import csv
+import os
 
-ec = ec_raw.with_columns(
-    EXDOSE_NUM=pl.col("ECDOSE").cast(pl.Float64, strict=False),
-    ECSTDTC_DT=pl.col("ECSTDTC").str.to_date(strict=False),
-    ECADJ_CLEAN=pl.col("ECADJ").map_elements(
-        lambda v: None if v is None or v == "" else v, return_dtype=pl.String
-    ),
-)
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-grouped = (
-    ec.group_by("STUDYID", "USUBJID", "ECTRT", "EXDOSE_NUM", "ECDOSU", "ECDOSFRQ")
-    .agg(
-        pl.col("ECSTDTC_DT").min().alias("START_DT"),
-        pl.col("ECSTDTC_DT").max().alias("END_DT"),
-        pl.col("ECADJ_CLEAN").drop_nulls().unique().sort().first().alias("EXADJ"),
-        pl.col("ECDOSE").first().alias("EXDOSE_RAW"),
-    )
-    .with_columns(
-        DOMAIN=pl.lit("EX"),
-        EXTRT=pl.col("ECTRT"),
-        EXDOSE=pl.col("EXDOSE_NUM"),
-        EXDOSU=pl.col("ECDOSU"),
-        EXDOSFRQ=pl.col("ECDOSFRQ"),
-        EXSTDTC=pl.col("START_DT"),
-        EXENDTC=pl.col("END_DT"),
-    )
-    .sort(["STUDYID", "USUBJID", "START_DT", "EXTRT"])
-    .with_columns(EXSEQ=pl.col("USUBJID").cum_count().over(["STUDYID", "USUBJID"]))
-    .with_columns(EXSEQ=pl.col("EXSEQ").cast(pl.Int64))
-    .select(
+
+def main():
+    with open(os.path.join(INPUT_DIR, "ec_raw.csv"), newline="") as f:
+        rows = list(csv.DictReader(f))
+
+    # Administrations of one subject and treatment, in date order.
+    rows.sort(key=lambda r: (r["USUBJID"], r["ECTRT"], r["ECSTDTC"]))
+
+    # Consecutive administrations at one dose, dose unit, and dosing
+    # frequency form one interval. A dose interruption (dose 0 with a
+    # recorded reason) is its own interval like any other dose level.
+    intervals = []
+    for r in rows:
+        key = (
+            r["STUDYID"],
+            r["USUBJID"],
+            r["ECTRT"],
+            r["ECDOSE"],
+            r["ECDOSU"],
+            r["ECDOSFRQ"],
+        )
+        if intervals and intervals[-1]["key"] == key:
+            iv = intervals[-1]
+            iv["end"] = r["ECSTDTC"]
+            if not iv["adj"] and r["ECADJ"]:
+                iv["adj"] = r["ECADJ"]
+        else:
+            intervals.append(
+                {
+                    "key": key,
+                    "start": r["ECSTDTC"],
+                    "end": r["ECSTDTC"],
+                    "adj": r["ECADJ"],
+                }
+            )
+
+    # EXSEQ numbers each subject's intervals from 1 in the order they
+    # started, by start date then treatment.
+    by_subject = {}
+    for iv in intervals:
+        by_subject.setdefault(iv["key"][1], []).append(iv)
+
+    out_rows = []
+    for usubjid in sorted(by_subject):
+        subject_intervals = sorted(
+            by_subject[usubjid], key=lambda iv: (iv["start"], iv["key"][2])
+        )
+        for seq, iv in enumerate(subject_intervals, start=1):
+            studyid, _, trt, dose, dosu, dosfrq = iv["key"]
+            out_rows.append(
+                {
+                    "DOMAIN": "EX",
+                    "STUDYID": studyid,
+                    "USUBJID": usubjid,
+                    "EXSEQ": seq,
+                    "EXTRT": trt,
+                    "EXDOSE": dose,
+                    "EXDOSU": dosu,
+                    "EXDOSFRQ": dosfrq,
+                    "EXSTDTC": iv["start"],
+                    "EXENDTC": iv["end"],
+                    "EXADJ": iv["adj"],
+                }
+            )
+
+    fieldnames = [
         "DOMAIN",
         "STUDYID",
         "USUBJID",
@@ -50,8 +94,13 @@ grouped = (
         "EXSTDTC",
         "EXENDTC",
         "EXADJ",
-    )
-)
+    ]
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    with open(os.path.join(OUTPUT_DIR, "ex.csv"), "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(out_rows)
 
-Path("/app/output").mkdir(exist_ok=True)
-grouped.write_csv("/app/output/ex.csv")
+
+if __name__ == "__main__":
+    main()

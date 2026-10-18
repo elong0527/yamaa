@@ -4,65 +4,71 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
+"""Build ADVS growth percentiles from ADVS_RAW and LMS_REF.
+
+For each collected BMI or WEIGHT measurement, compute the LMS z-score
+using the reference coefficients matched on measurement code, sex, and
+age in days, then convert to a percentile via the standard normal CDF.
+"""
+
+import csv
 import math
-from pathlib import Path
+import os
 
-import polars as pl
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-raw = pl.read_csv("/app/input/advs_raw.csv", infer_schema=False).with_columns(
-    pl.col("AVAL").cast(pl.Float64, strict=False),
-    pl.col("AGE").cast(pl.Int64, strict=False),
-)
-ref = pl.read_csv("/app/input/lms_ref.csv", infer_schema=False).with_columns(
-    pl.col("AGE").cast(pl.Int64, strict=False),
-    pl.col("L").cast(pl.Float64, strict=False),
-    pl.col("M").cast(pl.Float64, strict=False),
-    pl.col("S").cast(pl.Float64, strict=False),
-)
+PARAM_MAP = {
+    "BMI": ("BMIPCTL", "BMI-for-Age Percentile"),
+    "WEIGHT": ("WGTPCTL", "Weight-for-Age Percentile"),
+}
 
 
-def percentile(aval: float | None, ell: float | None, emm: float | None, ess: float | None) -> float | None:
-    if aval is None or ell is None or emm is None or ess is None:
-        return None
-    if emm == 0 or ess == 0:
-        return None
-    if ell == 0:
-        z = math.log(aval / emm) / ess
-    else:
-        z = ((aval / emm) ** ell - 1) / (ell * ess)
-    return 100 * 0.5 * (1 + math.erf(z / math.sqrt(2)))
+def norm_cdf(z):
+    return 0.5 * (1.0 + math.erf(z / math.sqrt(2.0)))
 
 
-joined = raw.join(ref, on=["PARAMCD", "SEX", "AGE"], how="left")
+def main():
+    with open(os.path.join(INPUT_DIR, "lms_ref.csv"), newline="") as f:
+        ref = {}
+        for row in csv.DictReader(f):
+            key = (row["PARAMCD"], row["SEX"], int(row["AGE"]))
+            ref[key] = (float(row["L"]), float(row["M"]), float(row["S"]))
 
-rows = []
-for record in joined.sort(["USUBJID", "AVISIT", "PARAMCD"]).iter_rows(named=True):
-    if record["PARAMCD"] == "BMI":
-        out_code, out_label = "BMIPCTL", "BMI-for-Age Percentile"
-    else:
-        out_code, out_label = "WGTPCTL", "Weight-for-Age Percentile"
-    rows.append(
-        {
-            "STUDYID": record["STUDYID"],
-            "USUBJID": record["USUBJID"],
-            "AVISIT": record["AVISIT"],
-            "PARAMCD": out_code,
-            "PARAM": out_label,
-            "AVAL": percentile(record["AVAL"], record["L"], record["M"], record["S"]),
-        }
-    )
+    with open(os.path.join(INPUT_DIR, "advs_raw.csv"), newline="") as f:
+        raw_rows = list(csv.DictReader(f))
 
-advs = pl.DataFrame(
-    rows,
-    schema={
-        "STUDYID": pl.String,
-        "USUBJID": pl.String,
-        "AVISIT": pl.String,
-        "PARAMCD": pl.String,
-        "PARAM": pl.String,
-        "AVAL": pl.Float64,
-    },
-)
+    out_rows = []
+    for row in raw_rows:
+        code = row["PARAMCD"]
+        paramcd, param = PARAM_MAP[code]
+        aval = ""
+        value_text = (row["AVAL"] or "").strip()
+        coeffs = ref.get((code, row["SEX"], int(row["AGE"])))
+        if value_text != "" and coeffs is not None:
+            x = float(value_text)
+            L, M, S = coeffs
+            z = ((x / M) ** L - 1.0) / (L * S)
+            aval = 100.0 * norm_cdf(z)
+        out_rows.append(
+            {
+                "STUDYID": row["STUDYID"],
+                "USUBJID": row["USUBJID"],
+                "AVISIT": row["AVISIT"],
+                "PARAMCD": paramcd,
+                "PARAM": param,
+                "AVAL": aval,
+            }
+        )
 
-Path("/app/output").mkdir(parents=True, exist_ok=True)
-advs.write_csv("/app/output/advs.csv")
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    with open(os.path.join(OUTPUT_DIR, "advs.csv"), "w", newline="") as f:
+        writer = csv.DictWriter(
+            f, fieldnames=["STUDYID", "USUBJID", "AVISIT", "PARAMCD", "PARAM", "AVAL"]
+        )
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+
+if __name__ == "__main__":
+    main()

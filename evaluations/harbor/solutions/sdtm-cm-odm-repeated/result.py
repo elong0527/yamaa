@@ -4,63 +4,101 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+import csv
+from collections import OrderedDict
 
-import polars as pl
+INPUT = "/app/input/odm.csv"
+OUTPUT = "/app/output/cm.csv"
 
-odm = pl.read_csv("/app/input/odm.csv", infer_schema=False)
+# Visit ordering: screening before baseline; any other visit follows in
+# order of first appearance in the data.
+VISIT_ORDER = {"SCREENING": 0, "BASELINE": 1}
 
-# One course per form repeat within a visit repeat: subject, visit, visit
-# repeat, and form repeat. A course without a reported treatment name gives
-# no record; a repeat number reused at a later visit starts a new course.
-courses = (
-    odm.filter(pl.col("ItemGroupOID") == "IG.CM")
-    .pivot(
-        index=[
-            "StudyOID",
-            "SubjectKey",
-            "StudyEventOID",
-            "StudyEventRepeatKey",
-            "ItemGroupRepeatKey",
+with open(INPUT, newline="", encoding="utf-8") as f:
+    rows = list(csv.DictReader(f))
+
+visit_seen = {}
+for row in rows:
+    v = row["StudyEventOID"]
+    if v not in visit_seen:
+        visit_seen[v] = len(visit_seen)
+
+
+def visit_key(visit):
+    if visit in VISIT_ORDER:
+        return (0, VISIT_ORDER[visit])
+    return (1, visit_seen[visit])
+
+
+# Group IG.CM items into courses keyed by subject, visit, visit repeat,
+# and form repeat.
+courses = OrderedDict()
+for row in rows:
+    if row["ItemGroupOID"] != "IG.CM":
+        continue
+    key = (
+        row["StudyOID"],
+        row["SubjectKey"],
+        row["StudyEventOID"],
+        int(row["StudyEventRepeatKey"]),
+        int(row["ItemGroupRepeatKey"]),
+    )
+    item = row["ItemOID"].rsplit(".", 1)[-1]
+    courses.setdefault(key, {})[item] = row["Value"]
+
+records = []
+for (studyid, usubjid, visit, visit_rep, form_rep), items in courses.items():
+    cmtrt = items.get("CMTRT", "")
+    if not cmtrt:
+        # A course with no reported treatment name contributes no record.
+        continue
+    records.append(
+        {
+            "STUDYID": studyid,
+            "USUBJID": usubjid,
+            "CMTRT": cmtrt,
+            "CMSTDTC": items.get("CMSTDTC", ""),
+            "CMENDTC": items.get("CMENDTC", ""),
+            "CMROUTE": items.get("CMROUTE", ""),
+            "CMINDC": items.get("CMINDC", ""),
+            "_sort": (usubjid, visit_key(visit), visit_rep, form_rep),
+        }
+    )
+
+records.sort(key=lambda r: r["_sort"])
+
+out = []
+seq_by_subject = {}
+for rec in records:
+    seq_by_subject[rec["USUBJID"]] = seq_by_subject.get(rec["USUBJID"], 0) + 1
+    out.append(
+        {
+            "DOMAIN": "CM",
+            "STUDYID": rec["STUDYID"],
+            "USUBJID": rec["USUBJID"],
+            "CMSEQ": seq_by_subject[rec["USUBJID"]],
+            "CMTRT": rec["CMTRT"],
+            "CMSTDTC": rec["CMSTDTC"],
+            "CMENDTC": rec["CMENDTC"],
+            "CMROUTE": rec["CMROUTE"],
+            "CMINDC": rec["CMINDC"],
+        }
+    )
+
+with open(OUTPUT, "w", newline="", encoding="utf-8") as f:
+    writer = csv.DictWriter(
+        f,
+        fieldnames=[
+            "DOMAIN",
+            "STUDYID",
+            "USUBJID",
+            "CMSEQ",
+            "CMTRT",
+            "CMSTDTC",
+            "CMENDTC",
+            "CMROUTE",
+            "CMINDC",
         ],
-        on="ItemOID",
-        values="Value",
-        aggregate_function="first",
     )
-    .with_columns(
-        CMTRT=pl.col("IT.CM.CMTRT"),
-        CMSTDTC=pl.col("IT.CM.CMSTDTC"),
-        CMENDTC=pl.col("IT.CM.CMENDTC"),
-        CMROUTE=pl.col("IT.CM.CMROUTE"),
-        CMINDC=pl.col("IT.CM.CMINDC"),
-    )
-    .filter(pl.col("CMTRT").fill_null("") != "")
-    # Courses run by visit (screening before baseline), visit repeat, and
-    # form repeat; the same medication in two courses stays two records.
-    .with_columns(
-        VISITORD=pl.when(pl.col("StudyEventOID") == "SCREENING")
-        .then(0)
-        .when(pl.col("StudyEventOID") == "BASELINE")
-        .then(1)
-        .otherwise(2),
-        VISITREP=pl.col("StudyEventRepeatKey").cast(pl.Int64),
-        IGREP=pl.col("ItemGroupRepeatKey").cast(pl.Int64),
-    )
-    .sort(["SubjectKey", "VISITORD", "VISITREP", "IGREP"])
-    .with_columns(CMSEQ=pl.col("SubjectKey").cum_count().over("SubjectKey"))
-    .with_columns(DOMAIN=pl.lit("CM"), STUDYID=pl.col("StudyOID"), USUBJID=pl.col("SubjectKey"))
-    .select(
-        "DOMAIN",
-        "STUDYID",
-        "USUBJID",
-        "CMSEQ",
-        "CMTRT",
-        "CMSTDTC",
-        "CMENDTC",
-        "CMROUTE",
-        "CMINDC",
-    )
-)
-
-Path("/app/output").mkdir(exist_ok=True)
-courses.write_csv("/app/output/cm.csv")
+    writer.writeheader()
+    writer.writerows(out)

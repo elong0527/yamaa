@@ -4,49 +4,65 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+import csv
+import re
 
-import polars as pl
+INPUT = "/app/input/ae.csv"
+OUTPUT = "/app/output/adae.csv"
 
-ae = pl.read_csv("/app/input/ae.csv", infer_schema=False).with_columns(
-    pl.col("AESEQ").cast(pl.Int64)
-)
+COLUMNS = [
+    "STUDYID",
+    "USUBJID",
+    "AESEQ",
+    "AESPID",
+    "AEREFNUM",
+    "AETERM",
+    "AETERMLO",
+    "AERELLC",
+    "AREL",
+]
 
-# AE, a hyphen, and exactly three digits; missing is 0, any other shape is
-# -1, and the digits give the number.
-aerefnum = (
-    pl.when(pl.col("AESPID").is_null() | (pl.col("AESPID") == ""))
-    .then(0)
-    .when(pl.col("AESPID").str.contains(r"^AE-[0-9]{3}$"))
-    .then(pl.col("AESPID").str.slice(3).cast(pl.Int64))
-    .otherwise(-1)
-    .cast(pl.Int64)
-)
-aerellc = (
-    pl.when(pl.col("AEREL").is_null() | (pl.col("AEREL") == ""))
-    .then(pl.lit("not reported"))
-    .otherwise(pl.col("AEREL").str.to_lowercase())
-)
+REFNUM_PATTERN = re.compile(r"^AE-(\d{3})$")
 
-adae = (
-    ae.with_columns(
-        AEREFNUM=aerefnum,
-        AETERMLO=pl.col("AETERM").str.to_lowercase(),
-        AERELLC=aerellc,
-    )
-    .with_columns(AREL=pl.col("AERELLC").str.to_uppercase())
-    .select(
-        "STUDYID",
-        "USUBJID",
-        "AESEQ",
-        "AESPID",
-        "AEREFNUM",
-        "AETERM",
-        "AETERMLO",
-        "AERELLC",
-        "AREL",
-    )
-)
 
-Path("/app/output").mkdir(exist_ok=True)
-adae.write_csv("/app/output/adae.csv")
+def aerefnum(aespid):
+    if aespid is None or aespid == "":
+        return 0
+    match = REFNUM_PATTERN.match(aespid)
+    if match:
+        return int(match.group(1))
+    return -1
+
+
+def main():
+    with open(INPUT, newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+
+    out_rows = []
+    for row in rows:
+        aespid = row.get("AESPID") or ""
+        aeterm = row.get("AETERM") or ""
+        aerel = row.get("AEREL") or ""
+        aerellc = aerel.lower() if aerel != "" else "not reported"
+        out_rows.append(
+            {
+                "STUDYID": row.get("STUDYID") or "",
+                "USUBJID": row.get("USUBJID") or "",
+                "AESEQ": row.get("AESEQ") or "",
+                "AESPID": aespid,
+                "AEREFNUM": aerefnum(aespid),
+                "AETERM": aeterm,
+                "AETERMLO": aeterm.lower(),
+                "AERELLC": aerellc,
+                "AREL": aerellc.upper(),
+            }
+        )
+
+    with open(OUTPUT, "w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=COLUMNS)
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+
+if __name__ == "__main__":
+    main()

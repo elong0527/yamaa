@@ -4,54 +4,57 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+import csv
+from datetime import date
 
-import polars as pl
+INPUT = "/app/input/adtr_raw.csv"
+OUTPUT = "/app/output/adtr.csv"
 
-raw = pl.read_csv("/app/input/adtr_raw.csv", infer_schema=False, null_values="").with_columns(
-    pl.col("AVISITN").cast(pl.Int64, strict=False),
-    pl.col("ADT").str.to_date(strict=False),
-    pl.col("AVAL").cast(pl.Float64, strict=False),
-    pl.col("NMEAS").cast(pl.Int64, strict=False),
-    pl.col("NTARGET").cast(pl.Int64, strict=False),
-)
-
-# Complete dated assessments carry the nadir candidates; a complete
-# assessment with no date never counts toward any nadir, its own
-# included. An incomplete current assessment keeps the nadir set by an
-# earlier complete one, while a current record with no date has none.
-complete = [
-    (r["USUBJID"], r["ADT"], r["AVAL"])
-    for r in raw.to_dicts()
-    if r["ANL01FL"] == "Y" and r["ADT"] is not None and r["AVAL"] is not None
+COLUMNS = [
+    "STUDYID", "USUBJID", "AVISIT", "AVISITN", "ADT", "PARAMCD", "PARAM",
+    "AVAL", "NMEAS", "NTARGET", "ANL01FL", "NADIR",
 ]
 
-nadirs = []
-for r in raw.to_dicts():
-    if r["ADT"] is None:
-        nadirs.append(None)
-        continue
-    cands = [v for (u, d, v) in complete if u == r["USUBJID"] and d <= r["ADT"]]
-    nadirs.append(min(cands) if cands else None)
 
-adtr = (
-    raw.with_columns(NADIR=pl.Series(nadirs, dtype=pl.Float64))
-    .select(
-        "STUDYID",
-        "USUBJID",
-        "AVISIT",
-        "AVISITN",
-        "ADT",
-        "PARAMCD",
-        "PARAM",
-        "AVAL",
-        "NMEAS",
-        "NTARGET",
-        "ANL01FL",
-        "NADIR",
-    )
-    .sort(["USUBJID", "AVISITN"])
-)
+def parse_date(text):
+    text = (text or "").strip()
+    if not text:
+        return None
+    return date.fromisoformat(text)
 
-Path("/app/output").mkdir(parents=True, exist_ok=True)
-adtr.write_csv("/app/output/adtr.csv", null_value="")
+
+def fmt_num(value):
+    if value is None:
+        return ""
+    if float(value).is_integer():
+        return str(int(value))
+    return str(value)
+
+
+with open(INPUT, newline="") as f:
+    rows = list(csv.DictReader(f))
+
+# Complete assessments per subject: ANL01FL "Y" with a dated ADT.
+complete = {}
+for row in rows:
+    if (row.get("ANL01FL") or "").strip() == "Y":
+        adt = parse_date(row.get("ADT"))
+        aval_text = (row.get("AVAL") or "").strip()
+        if adt is not None and aval_text:
+            complete.setdefault(row["USUBJID"], []).append((adt, float(aval_text)))
+
+for row in rows:
+    adt = parse_date(row.get("ADT"))
+    nadir = None
+    if adt is not None:
+        candidates = [aval for d, aval in complete.get(row["USUBJID"], [])
+                      if d <= adt]
+        if candidates:
+            nadir = min(candidates)
+    row["NADIR"] = fmt_num(nadir)
+
+with open(OUTPUT, "w", newline="") as f:
+    writer = csv.DictWriter(f, fieldnames=COLUMNS)
+    writer.writeheader()
+    for row in rows:
+        writer.writerow({c: row.get(c, "") for c in COLUMNS})

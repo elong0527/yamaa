@@ -1,5 +1,5 @@
-Following CDISC ADaM standards, use the provided EX dataset to create
-an ADEX dataset with one record per exposure administration.
+Following CDISC ADaM standards, use the provided EX dataset to create an ADEX
+dataset with one record per exposure administration.
 
 The output dataset should contain the following columns in this order:
 STUDYID, USUBJID, EXSEQ, EXSTDTM, EXDOSE, DOSREDFL

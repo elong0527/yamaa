@@ -4,26 +4,53 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Create ADSL (one record per subject) from DM.
 
-import polars as pl
+CMNT carries the investigator comment exactly as recorded; CMNTFL is
+"Y" when a comment was collected and "N" when none was. An empty
+comment field (quoted or not) counts as no comment; a field holding
+only spaces is still a comment and its spaces are kept.
+"""
 
-dm = pl.read_csv("/app/input/dm.csv", infer_schema=False, null_values="")
+import csv
+import os
 
-# An empty comment field, quoted or not, counts as no comment collected,
-# while a field holding only spaces is still a comment and the spaces
-# are kept. Reading with null_values="" turns both empty forms into
-# null and keeps spaces as-is.
-adsl = (
-    dm.with_columns(
-        CMNT=pl.col("COMMENT"),
-        CMNTFL=pl.when(pl.col("COMMENT").is_null())
-        .then(pl.lit("N"))
-        .otherwise(pl.lit("Y")),
-    )
-    .select("STUDYID", "USUBJID", "CMNT", "CMNTFL")
-    .sort("USUBJID")
-)
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-Path("/app/output").mkdir(parents=True, exist_ok=True)
-adsl.write_csv("/app/output/adsl.csv", null_value="")
+FIELDNAMES = ["STUDYID", "USUBJID", "CMNT", "CMNTFL"]
+
+
+def main():
+    with open(
+        os.path.join(INPUT_DIR, "dm.csv"), newline="", encoding="utf-8"
+    ) as handle:
+        dm_rows = list(csv.DictReader(handle))
+
+    adsl_rows = []
+    for row in dm_rows:
+        comment = row.get("COMMENT") or ""
+        collected = comment != ""
+        adsl_rows.append(
+            {
+                "STUDYID": row["STUDYID"],
+                "USUBJID": row["USUBJID"],
+                "CMNT": comment if collected else "",
+                "CMNTFL": "Y" if collected else "N",
+            }
+        )
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    with open(
+        os.path.join(OUTPUT_DIR, "adsl.csv"),
+        "w",
+        newline="",
+        encoding="utf-8",
+    ) as handle:
+        writer = csv.DictWriter(handle, fieldnames=FIELDNAMES)
+        writer.writeheader()
+        writer.writerows(adsl_rows)
+
+
+if __name__ == "__main__":
+    main()

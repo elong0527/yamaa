@@ -4,44 +4,88 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Build ADAE from AE with protocol-review flags (ADaM)."""
 
-import polars as pl
+import csv
+from datetime import date, datetime
 
-ae = pl.read_csv("/app/input/ae.csv", infer_schema=False).with_columns(
-    pl.col("AESEQ").cast(pl.Int64), pl.col("SCORE").cast(pl.Float64)
-)
+INPUT_CSV = "/app/input/ae.csv"
+OUTPUT_CSV = "/app/output/adae.csv"
 
-adae = (
-    ae.with_columns(
-        ASTDT=pl.when(pl.col("AESTDTC").is_not_null() & (pl.col("AESTDTC") != ""))
-        .then(pl.col("AESTDTC"))
-        .otherwise(None),
-        ASTDT2=pl.when(pl.col("AESTDTM").is_not_null() & (pl.col("AESTDTM") != ""))
-        .then(pl.col("AESTDTM").str.extract(r"^(\d{4}-\d{2}-\d{2})", group_index=1))
-        .otherwise(None),
-    )
-    .with_columns(
-        REVIEWFL=pl.when(
-            (
-                pl.col("ASTDT").is_not_null()
-                & pl.col("ASTDT").str.starts_with("2025-01")
-                | (
-                    pl.col("AESTDTM").is_not_null()
-                    & (pl.col("AESTDTM") != "")
-                    & (pl.col("AESTDTM") >= "2025-02-01T09:30")
-                )
-            )
-            & pl.col("AETERM").is_not_null()
-            & pl.col("AETERM").str.starts_with("INF_")
-            & pl.col("SCORE").is_not_null()
-            & (pl.col("SCORE") >= -1.5)
+COLUMNS = ["STUDYID", "USUBJID", "AESEQ", "ASTDT", "ASTDT2", "REVIEWFL"]
+
+
+def parse_date(text):
+    try:
+        return date.fromisoformat(text)
+    except ValueError:
+        return None
+
+
+def parse_datetime(text):
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        return None
+
+
+def in_window(aestdtc, aestdtm):
+    if aestdtc:
+        d = parse_date(aestdtc)
+        if d is not None and d.year == 2025 and d.month == 1:
+            return True
+    if aestdtm:
+        dt = parse_datetime(aestdtm)
+        if dt is not None and dt >= datetime(2025, 2, 1, 9, 30):
+            return True
+    return False
+
+
+def main():
+    with open(INPUT_CSV, newline="") as f:
+        rows = list(csv.DictReader(f))
+
+    out_rows = []
+    for row in rows:
+        aestdtc = (row.get("AESTDTC") or "").strip()
+        aestdtm = (row.get("AESTDTM") or "").strip()
+        aeterm = row.get("AETERM") or ""
+        score_text = (row.get("SCORE") or "").strip()
+
+        astdt = aestdtc
+        astdt2 = ""
+        if aestdtm:
+            dt = parse_datetime(aestdtm)
+            if dt is not None:
+                astdt2 = dt.date().isoformat()
+
+        window_ok = in_window(aestdtc, aestdtm)
+        term_ok = aeterm.startswith("INF_")
+        score_ok = False
+        if score_text:
+            try:
+                score_ok = float(score_text) >= -1.5
+            except ValueError:
+                score_ok = False
+
+        reviewfl = "Y" if (window_ok and term_ok and score_ok) else "N"
+
+        out_rows.append(
+            {
+                "STUDYID": row.get("STUDYID", ""),
+                "USUBJID": row.get("USUBJID", ""),
+                "AESEQ": row.get("AESEQ", ""),
+                "ASTDT": astdt,
+                "ASTDT2": astdt2,
+                "REVIEWFL": reviewfl,
+            }
         )
-        .then(pl.lit("Y"))
-        .otherwise(pl.lit("N"))
-    )
-    .select("STUDYID", "USUBJID", "AESEQ", "ASTDT", "ASTDT2", "REVIEWFL")
-)
 
-Path("/app/output").mkdir(exist_ok=True)
-adae.write_csv("/app/output/adae.csv")
+    with open(OUTPUT_CSV, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=COLUMNS)
+        writer.writeheader()
+        writer.writerows(out_rows)
+
+
+if __name__ == "__main__":
+    main()

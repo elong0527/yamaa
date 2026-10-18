@@ -4,58 +4,19 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-from pathlib import Path
+"""Create ADCM with ATC class levels 1-4 per medication record.
+
+Reads CM, FACM and ATC_DICT from /app/input and writes adcm.csv to
+/app/output with one record per CM medication record.
+"""
 
 import polars as pl
 
-cm = pl.read_csv("/app/input/cm.csv", infer_schema=False).with_columns(
-    pl.col("CMSEQ").cast(pl.Int64)
-)
-facm = pl.read_csv("/app/input/facm.csv", infer_schema=False).with_columns(
-    pl.col("CMSEQ").cast(pl.Int64, strict=False)
-)
-atcdict = pl.read_csv("/app/input/atc_dict.csv", infer_schema=False)
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
 
-levels = ["ATC1", "ATC2", "ATC3", "ATC4"]
-
-# One ATC level per finding row; rows naming no level from ATC1 to ATC4, or
-# pointing at no medication record, change nothing.
-codes = (
-    facm.filter(pl.col("FATESTCD").is_in(levels))
-    .pivot(
-        index=["USUBJID", "CMSEQ"],
-        on="FATESTCD",
-        values="FAORRES",
-        aggregate_function="first",
-    )
-    .rename({level: f"{level}CD" for level in levels})
-)
-
-lookup = atcdict.select("ATCCODE", "ATCNAME")
-
-adcm = cm.join(codes, on=["USUBJID", "CMSEQ"], how="left")
-
-# A medication with no coded name keeps every ATC column empty.
-uncoded = pl.col("CMDECOD").is_null() | (pl.col("CMDECOD") == "")
-for level in levels:
-    code = f"{level}CD"
-    if code not in adcm.columns:
-        adcm = adcm.with_columns(pl.lit(None).cast(pl.String).alias(code))
-    adcm = adcm.with_columns(
-        pl.when(uncoded).then(None).otherwise(pl.col(code)).alias(code)
-    )
-
-for level in levels:
-    code, name = f"{level}CD", level
-    adcm = (
-        adcm.join(
-            lookup.rename({"ATCCODE": code, "ATCNAME": name}),
-            on=code,
-            how="left",
-        )
-    )
-
-adcm = adcm.select(
+LEVELS = ["ATC1", "ATC2", "ATC3", "ATC4"]
+OUT_COLUMNS = [
     "STUDYID",
     "USUBJID",
     "CMSEQ",
@@ -69,7 +30,61 @@ adcm = adcm.select(
     "ATC2CD",
     "ATC3CD",
     "ATC4CD",
-)
+]
 
-Path("/app/output").mkdir(exist_ok=True)
-adcm.write_csv("/app/output/adcm.csv")
+
+def read_strings(name: str) -> pl.DataFrame:
+    """Read a CSV with every column as a string, preserving blanks."""
+    return pl.read_csv(f"{INPUT_DIR}/{name}", infer_schema_length=0)
+
+
+def main() -> None:
+    cm = read_strings("cm.csv")
+    facm = read_strings("facm.csv")
+    atc_dict = read_strings("atc_dict.csv")
+
+    # ATC code -> class name lookup.
+    code_to_name = dict(
+        zip(
+            atc_dict["ATCCODE"].to_list(),
+            atc_dict["ATCNAME"].to_list(),
+        )
+    )
+
+    # (STUDYID, USUBJID, CMSEQ, FATESTCD) -> FAORRES code, for ATC1-ATC4
+    # FACM rows only. FACM rows for other tests are ignored; rows that
+    # match no medication record simply never get looked up.
+    facm_codes = {}
+    for row in facm.iter_rows(named=True):
+        if row["FATESTCD"] in LEVELS:
+            key = (row["STUDYID"], row["USUBJID"], row["CMSEQ"], row["FATESTCD"])
+            facm_codes[key] = row["FAORRES"]
+
+    records = []
+    for row in cm.iter_rows(named=True):
+        codes = {}
+        for level in LEVELS:
+            key = (row["STUDYID"], row["USUBJID"], row["CMSEQ"], level)
+            codes[level] = facm_codes.get(key) or None
+        record = {
+            "STUDYID": row["STUDYID"],
+            "USUBJID": row["USUBJID"],
+            "CMSEQ": row["CMSEQ"],
+            "CMTRT": row["CMTRT"],
+            "CMDECOD": row["CMDECOD"] or None,
+        }
+        for level in LEVELS:
+            code = codes[level]
+            record[level] = code_to_name.get(code) if code else None
+        for level in LEVELS:
+            record[f"{level}CD"] = codes[level]
+        records.append(record)
+
+    adcm = pl.DataFrame(
+        records, schema={col: pl.Utf8 for col in OUT_COLUMNS}
+    )
+    adcm.write_csv(f"{OUTPUT_DIR}/adcm.csv")
+
+
+if __name__ == "__main__":
+    main()

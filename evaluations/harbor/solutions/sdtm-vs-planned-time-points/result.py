@@ -4,136 +4,139 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
+"""Build the SDTM VS dataset from DM, ODM, and VS_MAPPING.
+
+One record per collected vital-signs result. Each vital-signs form fixes
+the planned time point of every result on it; the form's datetime item
+gives the actual collection datetime for all results on that form.
+"""
+
+import csv
 from datetime import date, datetime
 from pathlib import Path
 
-import polars as pl
+INPUT = Path("/app/input")
+OUTPUT = Path("/app/output")
+
+# Form OID -> (VSTPT, VSTPTNUM, VSELTM)
+FORM_TIMEPOINTS = {
+    "FO.VS_PREDOSE": ("PRE-DOSE", 1, "-PT15M"),
+    "FO.VS_30MIN": ("30 MIN POST-DOSE", 2, "PT30M"),
+    "FO.VS_1H": ("1 H POST-DOSE", 3, "PT1H"),
+    "FO.VS_4H": ("4 H POST-DOSE", 4, "PT4H"),
+}
+
+# Test order within a time point for VSSEQ.
+TEST_ORDER = {"PULSE": 0, "SYSBP": 1, "DIABP": 2}
+
+COLUMNS = [
+    "DOMAIN", "STUDYID", "USUBJID", "VSSEQ", "VISIT", "VSTPT",
+    "VSTPTNUM", "VSELTM", "VSTESTCD", "VSORRES", "VSORRESU",
+    "VSSTRESN", "VSSTRESU", "VSDTC", "VSDY",
+]
 
 
-def parse_date(text: str | None) -> date | None:
-    if text is None or text == "":
-        return None
-    try:
-        return datetime.fromisoformat(text).date()
-    except ValueError:
-        try:
-            return date.fromisoformat(text[:10])
-        except ValueError:
-            return None
+def read_csv(path):
+    with open(path, newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
 
 
-def study_day(ref: date | None, coll: date | None) -> int | None:
-    if ref is None or coll is None:
-        return None
-    delta = (coll - ref).days
+def study_day(collection, reference):
+    """SDTM study day: reference day is day 1, no day zero."""
+    if not collection or not reference:
+        return ""
+    delta = (collection - reference).days
     return delta + 1 if delta >= 0 else delta
 
 
-def time_point(form: str) -> tuple[str, int, str] | None:
-    # The planned time point for each collection form, in schedule order.
-    name = form.upper()
-    if "PREDOSE" in name:
-        return ("PRE-DOSE", 1, "-PT15M")
-    if "30MIN" in name:
-        return ("30 MIN POST-DOSE", 2, "PT30M")
-    if "1H" in name:
-        return ("1 H POST-DOSE", 3, "PT1H")
-    if "4H" in name:
-        return ("4 H POST-DOSE", 4, "PT4H")
-    return None
+def numeric_text(value):
+    number = float(value)
+    return str(int(number)) if number == int(number) else str(number)
 
 
-dm = pl.read_csv("/app/input/dm.csv", infer_schema=False)
-odm = pl.read_csv("/app/input/odm.csv", infer_schema=False)
-mapping = pl.read_csv("/app/input/vs_mapping.csv", infer_schema=False)
+def main():
+    dm_rows = read_csv(INPUT / "dm.csv")
+    odm_rows = read_csv(INPUT / "odm.csv")
+    mapping_rows = read_csv(INPUT / "vs_mapping.csv")
 
-ref_map = {row["USUBJID"]: parse_date(row["RFSTDTC"]) for row in dm.to_dicts()}
-test_map = {
-    row["ItemOID"]: (row["VSTESTCD"], row["UNIT"]) for row in mapping.to_dicts()
-}
-# Within each time point: pulse, systolic, then diastolic.
-test_order = {"PULSE": 1, "SYSBP": 2, "DIABP": 3}
-
-# One form per subject per planned time point: its datetime and results.
-forms: dict[tuple[str, str], dict] = {}
-for row in odm.to_dicts():
-    if row["StudyEventOID"] != "SE.D1":
-        continue
-    if not row["FormOID"].startswith("FO.VS_"):
-        continue
-    key = (row["SubjectKey"], row["FormOID"])
-    entry = forms.setdefault(
-        key,
-        {
-            "subject": row["SubjectKey"],
-            "study": row["StudyOID"],
-            "form": row["FormOID"],
-            "dt": None,
-            "results": {},
-        },
-    )
-    if row["ItemOID"] == "IT.VS.VSDTC":
-        entry["dt"] = row["Value"]
-    elif row["ItemOID"] in test_map:
-        entry["results"][row["ItemOID"]] = row["Value"]
-
-records = []
-for entry in forms.values():
-    point = time_point(entry["form"])
-    if point is None or entry["dt"] in (None, ""):
-        continue
-    vstpt, vstptnum, vseltm = point
-    coll = parse_date(entry["dt"])
-    vsdy = study_day(ref_map.get(entry["subject"]), coll)
-    for item, value in entry["results"].items():
-        if value is None or value == "":
-            continue
-        testcd, unit = test_map[item]
-        records.append(
-            {
-                "DOMAIN": "VS",
-                "STUDYID": entry["study"],
-                "USUBJID": entry["subject"],
-                "VISIT": "DAY 1",
-                "VSTPT": vstpt,
-                "VSTPTNUM": vstptnum,
-                "VSELTM": vseltm,
-                "VSTESTCD": testcd,
-                "_tord": test_order.get(testcd, 9),
-                "VSORRES": value,
-                "VSORRESU": unit,
-                "VSSTRESN": float(value),
-                "VSSTRESU": unit,
-                "VSDTC": entry["dt"],
-                "VSDY": vsdy,
-            }
+    reference_start = {}
+    for row in dm_rows:
+        value = (row.get("RFSTDTC") or "").strip()
+        reference_start[row["USUBJID"]] = (
+            datetime.strptime(value[:10], "%Y-%m-%d").date() if value else None
         )
 
-vs = (
-    pl.DataFrame(records)
-    .sort(["USUBJID", "VSTPTNUM", "_tord"])
-    .with_columns(
-        VSSEQ=pl.int_range(1, pl.len() + 1).over("USUBJID"),
-    )
-    .sort(["USUBJID", "VSSEQ"])
-    .select(
-        "DOMAIN",
-        "STUDYID",
-        "USUBJID",
-        "VSSEQ",
-        "VISIT",
-        "VSTPT",
-        "VSTPTNUM",
-        "VSELTM",
-        "VSTESTCD",
-        "VSORRES",
-        "VSORRESU",
-        "VSSTRESN",
-        "VSSTRESU",
-        "VSDTC",
-        "VSDY",
-    )
-)
+    dictionary = {
+        row["ItemOID"]: (row["VSTESTCD"], row["UNIT"]) for row in mapping_rows
+    }
 
-Path("/app/output").mkdir(exist_ok=True)
-vs.write_csv("/app/output/vs.csv")
+    # Group ODM item rows by subject and form occurrence.
+    forms = {}
+    for row in odm_rows:
+        form_oid = row["FormOID"]
+        if form_oid not in FORM_TIMEPOINTS:
+            continue
+        key = (
+            row["StudyOID"],
+            row["SubjectKey"],
+            row["StudyEventOID"],
+            row["StudyEventRepeatKey"],
+            form_oid,
+            row["FormRepeatKey"],
+            row["ItemGroupOID"],
+            row["ItemGroupRepeatKey"],
+        )
+        forms.setdefault(key, {})[row["ItemOID"]] = row["Value"]
+
+    records = []
+    for key, items in forms.items():
+        study_id, subject = key[0], key[1]
+        vstpt, vstptnum, vseltm = FORM_TIMEPOINTS[key[4]]
+        vsdtc = (items.get("IT.VS.VSDTC") or "").strip()
+        collection_date = (
+            datetime.strptime(vsdtc[:10], "%Y-%m-%d").date() if vsdtc else None
+        )
+        vsdy = study_day(collection_date, reference_start.get(subject))
+        for item_oid, (testcd, unit) in dictionary.items():
+            if item_oid not in items:
+                continue
+            value = items[item_oid]
+            records.append(
+                {
+                    "DOMAIN": "VS",
+                    "STUDYID": study_id,
+                    "USUBJID": subject,
+                    "VISIT": "DAY 1",
+                    "VSTPT": vstpt,
+                    "VSTPTNUM": vstptnum,
+                    "VSELTM": vseltm,
+                    "VSTESTCD": testcd,
+                    "VSORRES": value,
+                    "VSORRESU": unit,
+                    "VSSTRESN": numeric_text(value),
+                    "VSSTRESU": unit,
+                    "VSDTC": vsdtc,
+                    "VSDY": vsdy,
+                    "_test_order": TEST_ORDER[testcd],
+                }
+            )
+
+    records.sort(
+        key=lambda r: (r["USUBJID"], r["VSTPTNUM"], r["_test_order"])
+    )
+    counters = {}
+    for record in records:
+        subject = record["USUBJID"]
+        counters[subject] = counters.get(subject, 0) + 1
+        record["VSSEQ"] = counters[subject]
+        del record["_test_order"]
+
+    OUTPUT.mkdir(parents=True, exist_ok=True)
+    with open(OUTPUT / "vs.csv", "w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=COLUMNS)
+        writer.writeheader()
+        writer.writerows(records)
+
+
+if __name__ == "__main__":
+    main()
