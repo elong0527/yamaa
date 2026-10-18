@@ -86,9 +86,9 @@ columns:
     label: Age
     derivation: DM_RAW.AGE
     verifications:
-      range:
-        min: 0
-        max: 120
+      - range:
+          min: 0
+          max: 120
     submission:
       core: Exp
       role: Record Qualifier

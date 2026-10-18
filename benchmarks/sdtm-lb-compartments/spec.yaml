@@ -79,8 +79,8 @@ columns:
         - when: "LBORRES IS NULL"
           then: {literal: NOT DONE}
     verifications:
-      allowed_values:
-        values: [NOT DONE]
+      - allowed_values:
+          values: [NOT DONE]
 
 rows:
   # Only for a subject whose cohort is recorded and is not NONAD.

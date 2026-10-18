@@ -64,8 +64,8 @@ columns:
         source: ASTDTM
         part: date
     verifications:
-      allowed_values:
-        values: [Y, M, D]
+      - allowed_values:
+          values: [Y, M, D]
 
   - name: ASTTMF
     type: str
@@ -75,8 +75,8 @@ columns:
         source: ASTDTM
         part: time
     verifications:
-      allowed_values:
-        values: [H, M, S]
+      - allowed_values:
+          values: [H, M, S]
 
 verifications:
   - row_count:

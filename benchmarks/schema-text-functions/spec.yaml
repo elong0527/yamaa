@@ -37,8 +37,8 @@ columns:
     label: Raw Text
     derivation: DM.RAWTXT
     verifications:
-      max_length:
-        max: 6
+      - max_length:
+          max: 6
 
   - name: PEERTXT
     type: str

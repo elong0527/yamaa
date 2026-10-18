@@ -120,8 +120,8 @@ columns:
         compute:
           expr: FULLDAYS + 30
   verifications:
-    range:
-      min: 1
+    - range:
+        min: 1
 
 rows:
 - id: diarrhoea

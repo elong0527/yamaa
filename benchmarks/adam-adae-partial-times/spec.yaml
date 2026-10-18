@@ -66,8 +66,8 @@ columns:
         source: ASTDTM
         part: time
     verifications:
-      allowed_values:
-        values: [H, M, S]
+      - allowed_values:
+          values: [H, M, S]
 
   # The end is completed the same way with the latest value of each part.
   - name: AENDTM
@@ -89,8 +89,8 @@ columns:
         source: AENDTM
         part: time
     verifications:
-      allowed_values:
-        values: [H, M, S]
+      - allowed_values:
+          values: [H, M, S]
 
 verifications:
   - row_count:

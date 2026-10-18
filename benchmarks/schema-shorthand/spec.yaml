@@ -1,8 +1,10 @@
 schema_version: "1.0"
 domain: ADSL
 keys: [USUBJID]
+# A bare path names an input read as stored. The weight file is written
+# out in full because it also types two of its fields.
 input:
-  DM: {path: input/dm.csv, types: {AGE: int}}
+  DM: input/dm.csv
   WT: {path: input/wt.csv, types: {WTSEQ: int, WT: float}}
 base: DM
 
@@ -11,13 +13,13 @@ output:
   columns: [STUDYID, USUBJID, SEX, AGE, AGE65FL, SUBJLBL, WTMAX, LASTWT]
 
 intermediates:
-  # The subject's latest dated weight record. The match key is written
-  # as a lone key, and the ordering value as a lone value; both expand
-  # to their full forms before the run.
+  # The subject's latest dated weight record. A bare ordering value sorts
+  # earliest-first, so the last record kept is the latest one. A key of
+  # one column is still written as a list.
   - id: LAST_WT
     dataset: WT
-    key: USUBJID
-    order_by: ["WT.WTDTC"]
+    key: [USUBJID]
+    order_by: [WT.WTDTC]
     keep: last
 
 columns:
@@ -26,19 +28,21 @@ columns:
     label: Study Identifier
     derivation: {literal: YAMAA-01}
 
+  # A bare string reads the named column.
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
     derivation: DM.USUBJID
 
-  # The completeness check is written as a lone check; it expands to a
-  # one-check list.
+  # One check is still written as a one-check list.
   - name: SEX
     type: str
     label: Sex
     derivation: DM.SEX
-    verifications: {not_missing: {}}
+    verifications:
+      - not_missing: {}
 
+  # The collected text converts once, to the column's integer type.
   - name: AGE
     type: int
     label: Age
@@ -59,17 +63,20 @@ columns:
     derivation:
       str_template: "Subject {USUBJID} ({SEX})"
 
-  # The grouping key is written as a lone key over the weight records.
+  # A lone summary formula reduces the subject's weight records, matched
+  # on the output key the weight file also carries.
   - name: WTMAX
     type: float
     label: Maximum Collected Weight
     derivation:
-      aggregate:
-        key: USUBJID
-        expr: "MAX(WT.WT)"
+      aggregate: "MAX(WT.WT)"
 
   # Read off the selected latest weight record.
   - name: LASTWT
     type: float
     label: Latest Collected Weight
     derivation: LAST_WT.WT
+
+# A plain list names the columns a uniqueness check covers.
+verifications:
+  - unique: [SUBJLBL]

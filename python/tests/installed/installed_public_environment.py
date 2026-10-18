@@ -891,9 +891,7 @@ class PublicEnvironment(unittest.TestCase):
                         {
                             "id": "records",
                             "dataset": "SOURCE",
-                            "derivations": {
-                                "RESULT": {"value": copy.deepcopy(expression)}
-                            },
+                            "derivations": {"RESULT": copy.deepcopy(expression)},
                         }
                     ]
                 if context == "case":

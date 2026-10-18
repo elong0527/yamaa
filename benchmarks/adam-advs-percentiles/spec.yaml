@@ -54,8 +54,8 @@ columns:
         - when: "ADVS_RAW.PARAMCD = 'WEIGHT'"
           then: {literal: WGTPCTL}
     verifications:
-      allowed_values:
-        values: [BMIPCTL, WGTPCTL]
+      - allowed_values:
+          values: [BMIPCTL, WGTPCTL]
 
   - name: PARAM
     type: str

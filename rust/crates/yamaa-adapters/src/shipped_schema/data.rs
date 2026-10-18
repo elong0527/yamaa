@@ -62,9 +62,9 @@ root_class:
         required: false
         description: Row templates constructing output rows from input records or groups; it cannot be declared with `filter`.
     - verifications:
-        type: [dataset_verification, "list[dataset_verification]"]
+        type: "list[dataset_verification]"
         required: false
-        description: Assertions over the completed dataset.
+        description: Assertions over the completed dataset, written as a list even when there is one (CHECK-1).
     - submission:
         type: submission_dataset_class
         required: false
@@ -178,9 +178,9 @@ column_class:
         required: false
         description: How the column's value is produced (SPEC-4).
     - verifications:
-        type: [column_verification, "list[column_verification]"]
+        type: "list[column_verification]"
         required: false
-        description: Assertions over this column's completed values.
+        description: Assertions over this column's completed values, written as a list even when there is one (CHECK-1).
     - submission:
         type: submission_column_class
         required: false
@@ -227,8 +227,8 @@ match_key:
     description: See REQ-0115.
 
 match_key_columns:
-    type: [identifier, "list[identifier]"]
-    description: See REQ-0115.
+    type: "list[identifier]"
+    description: Lookup columns, each paired with the same-named current-row value, written as a list even when there is one (LOOKUP-5).
 
 match_value:
     type: [variable, expression]
@@ -732,14 +732,14 @@ odm_class:
         required: true
         description: The ODM input and the complete ItemOID, written as DATASET.ItemOID (NAME-7).
     - event:
-        type: [odm_oid, "list[odm_oid]"]
-        description: StudyEventOID values an identified record carries; one OID or a list (NAME-12).
+        type: "list[odm_oid]"
+        description: StudyEventOID values an identified record carries, written as a list even when there is one (NAME-12).
     - form:
-        type: [odm_oid, "list[odm_oid]"]
-        description: FormOID values an identified record carries; one OID or a list (NAME-12).
+        type: "list[odm_oid]"
+        description: FormOID values an identified record carries, written as a list even when there is one (NAME-12).
     - item_group:
-        type: [odm_oid, "list[odm_oid]"]
-        description: ItemGroupOID values an identified record carries; one OID or a list (NAME-12).
+        type: "list[odm_oid]"
+        description: ItemGroupOID values an identified record carries, written as a list even when there is one (NAME-12).
     - filter:
         type: predicate
         description: Predicate over the ODM input's schema fields that an identified record satisfies (NAME-12).

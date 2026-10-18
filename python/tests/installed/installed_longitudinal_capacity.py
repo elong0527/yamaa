@@ -56,15 +56,17 @@ class LongitudinalCapacity(unittest.TestCase):
                     "schema_version": "1.0",
                     "domain": "WIDE",
                     "keys": ["ID"],
+                    # A typed csv source is a mapping; an untyped parquet
+                    # source is written as its bare path.
                     "input": {
-                        "SRC": {
-                            "path": source.name,
-                            **(
-                                {"types": dict.fromkeys(names, "int")}
-                                if source_profile == "csv"
-                                else {}
-                            ),
-                        }
+                        "SRC": (
+                            {
+                                "path": source.name,
+                                "types": dict.fromkeys(names, "int"),
+                            }
+                            if source_profile == "csv"
+                            else source.name
+                        )
                     },
                     "columns": [
                         {

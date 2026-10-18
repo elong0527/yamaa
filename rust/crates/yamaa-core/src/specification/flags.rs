@@ -43,19 +43,12 @@ impl Declaration {
         }
     }
 }
-fn condition(d: &Document, payload: usize) -> Result<&str, PrepareError> {
-    if matches!(&d.nodes()[payload], N::Text(_)) {
-        text(d, payload)
-    } else {
-        text(d, field(d, payload, "condition")?)
-    }
-}
 pub(super) fn prepare(
     d: &Document,
     payload: usize,
     path: &str,
 ) -> Result<Declaration, PrepareError> {
-    let expression = condition(d, payload)?;
+    let expression = text(d, field(d, payload, "condition")?)?;
     let condition_path = format!("{path}.condition");
     let compiled = match compile(expression, ExpressionContext::Predicate, &condition_path) {
         Ok(plan) => Ok(plan),

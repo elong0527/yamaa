@@ -1,7 +1,7 @@
 //! Validated schema normalization with request-wide storage and traversal policies.
 
 use super::{
-    validation::{matches_member, NullPolicy, MAPPING_MEMBERS},
+    validation::{matches_member, shorthand_field, NullPolicy, MAPPING_MEMBERS, SOURCE_SHORTHAND},
     DefaultDiagnostics, Document, DocumentError, DocumentNode as N, SchemaAliasKind,
     SchemaDiagnostic, SchemaField, SchemaShape, SchemaStructure, TypeExpression, TypeNode,
     ValidationError,
@@ -290,55 +290,16 @@ impl Run<'_> {
         site: Site<'_>,
     ) -> Result<usize, NormalizationError> {
         self.step(site)?;
-        if members.len() == 2 {
-            for member in members {
-                let TypeNode::List(inner) = member.expression.nodes()[member.node] else {
-                    continue;
-                };
-                let inner = member.child(inner);
-                if !members.iter().any(|m| m.text() == inner.text()) {
-                    continue;
-                }
-                if self.matches(*member, site)? {
-                    return self.single(*member, site.deeper());
-                }
-                if self.matches(inner, site)? {
-                    let value = self.members(&[inner], site.deeper())?;
-                    return Ok(self.emit(
-                        N::Sequence(vec![value]),
-                        SchemaOrigin {
-                            generated: true,
-                            ..site.origin()
-                        },
-                    ));
-                }
-            }
+        if members.len() >= 2 {
             let schema = self.schema;
             for class_member in members {
                 let Some(class) = schema.class_named(class_member.text()) else {
                     continue;
                 };
-                let mut required = class
-                    .fields
-                    .iter()
-                    .filter(|f| schema.descriptors()[f.descriptor].descriptor.required());
-                let Some(field) = required.next() else {
-                    continue;
-                };
-                if required.next().is_some() {
-                    continue;
-                }
-                let types = schema.descriptors()[field.descriptor].descriptor.members();
-                if types.len() != 1 {
-                    continue;
-                }
                 for member in members {
-                    if member.text() == class_member.text()
-                        || schema.class_named(member.text()).is_some()
-                        || member.text() != Member::root(&types[0]).text()
-                    {
+                    let Some(field) = shorthand_field(schema, class, member.text()) else {
                         continue;
-                    }
+                    };
                     if !self.matches(*member, site)? {
                         continue;
                     }
@@ -447,17 +408,15 @@ impl Run<'_> {
         match kind {
             SchemaAliasKind::Descriptor(descriptor) => {
                 let members = schema.descriptors()[descriptor].descriptor.members();
-                if matches!(
-                    name,
-                    "derivation" | "untyped_intermediate_derivation" | "case_result"
-                ) {
+                if SOURCE_SHORTHAND.contains(&name) {
                     let members: Vec<_> = members
                         .iter()
                         .map(Member::root)
                         .filter(|m| m.text() != "str")
                         .collect();
                     if let N::Text(text) = &site.input.nodes()[site.value] {
-                        let generated = self.derivation(text, name != "case_result")?;
+                        // A bare string is only ever a source reference (EXPR-5).
+                        let generated = self.source(text)?;
                         let scope = self.scope()?;
                         return self.members(
                             &members,
@@ -501,43 +460,16 @@ impl Run<'_> {
             }
         }
     }
-    fn derivation(&mut self, text: &str, calls: bool) -> Result<Document, NormalizationError> {
-        let trimmed =
-            text.trim_matches(|c: char| c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c));
-        let call = if calls {
-            trimmed.split_once('(').and_then(|(name, tail)| {
-                let argument = tail.strip_suffix(')')?;
-                if name.is_empty()
-                    || !name.as_bytes()[0].is_ascii_alphabetic() && name.as_bytes()[0] != b'_'
-                    || !name.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_')
-                    || argument.contains(['(', ')'])
-                {
-                    return None;
-                }
-                Some((
-                    name,
-                    argument.trim_matches(|c: char| {
-                        c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c)
-                    }),
-                ))
-            })
-        } else {
-            None
-        };
-        let argument = call.map_or(text, |(_, argument)| argument);
-        let mut nodes = vec![
-            N::Text("source".into()),
-            N::Text(argument.into()),
-            N::Mapping(vec![(0, 1)]),
-        ];
-        let root = if let Some((operation, _)) = call {
-            nodes.push(N::Text(operation.into()));
-            nodes.push(N::Mapping(vec![(3, 2)]));
-            4
-        } else {
-            2
-        };
-        Document::new(nodes, root).map_err(NormalizationError::Document)
+    fn source(&mut self, text: &str) -> Result<Document, NormalizationError> {
+        Document::new(
+            vec![
+                N::Text("source".into()),
+                N::Text(text.into()),
+                N::Mapping(vec![(0, 1)]),
+            ],
+            2,
+        )
+        .map_err(NormalizationError::Document)
     }
     fn finish(self, root: usize) -> Result<NormalizedDocument, NormalizationError> {
         let document = Document::new(self.nodes, root).map_err(NormalizationError::Document)?;
@@ -672,15 +604,49 @@ impl SchemaStructure {
         fragment: bool,
         nulls: NullPolicy,
     ) -> Result<NormalizedDocument, NormalizationError> {
+        self.normalize_descriptor_mode(descriptor, input, value, fragment, nulls, true)
+    }
+    /// Normalize a descriptor value of a canonical document, such as a composed
+    /// member, whose long forms restate shorthand an earlier pass expanded.
+    pub(super) fn normalize_canonical_descriptor(
+        &self,
+        descriptor: usize,
+        input: &Document,
+        value: usize,
+        fragment: bool,
+        nulls: NullPolicy,
+    ) -> Result<NormalizedDocument, NormalizationError> {
+        self.normalize_descriptor_mode(descriptor, input, value, fragment, nulls, false)
+    }
+    fn normalize_descriptor_mode(
+        &self,
+        descriptor: usize,
+        input: &Document,
+        value: usize,
+        fragment: bool,
+        nulls: NullPolicy,
+        written: bool,
+    ) -> Result<NormalizedDocument, NormalizationError> {
         self.normalization_defaults()?;
-        let findings = self.validate_descriptor_with(
-            descriptor,
-            input,
-            value,
-            "<normalization>",
-            fragment,
-            nulls,
-        )?;
+        let findings = if written {
+            self.validate_descriptor_with(
+                descriptor,
+                input,
+                value,
+                "<normalization>",
+                fragment,
+                nulls,
+            )?
+        } else {
+            self.validate_canonical_descriptor(
+                descriptor,
+                input,
+                value,
+                "<normalization>",
+                fragment,
+                nulls,
+            )?
+        };
         if !findings.is_empty() {
             return Err(NormalizationError::Invalid(findings));
         }

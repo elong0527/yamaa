@@ -52,8 +52,8 @@ columns:
         source: TRT01SRC
         to: upper
     verifications:
-      allowed_values:
-        values: [VITAMIN D3, PLACEBO, NOT TREATED]
+      - allowed_values:
+          values: [VITAMIN D3, PLACEBO, NOT TREATED]
 
   # Earliest start and latest end as collected text. A date alone gets
   # 00:00:00 (start) or 23:59:59 (end), and the time flag H marks that; a
@@ -95,8 +95,8 @@ columns:
         source: TRTSDTM
         part: time
     verifications:
-      allowed_values:
-        values: [H, M, S]
+      - allowed_values:
+          values: [H, M, S]
 
   - name: TRTEDTM
     type: datetime
@@ -117,8 +117,8 @@ columns:
         source: TRTEDTM
         part: time
     verifications:
-      allowed_values:
-        values: [H, M, S]
+      - allowed_values:
+          values: [H, M, S]
 
   - name: TRTSDT
     type: date
@@ -145,8 +145,8 @@ columns:
         unit: day
         bounds: inclusive
     verifications:
-      range:
-        min: 1
+      - range:
+          min: 1
 
   - name: SAFFL
     type: str

@@ -224,12 +224,13 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             context,
         ));
     }
+    // Model documents hold the canonical class of the `unique` shorthand.
     let unique = || {
         (
             "verifications",
             Tree::List(vec![Tree::map(vec![(
                 "unique",
-                Tree::List(vec![Tree::text("ID")]),
+                Tree::map(vec![("columns", Tree::List(vec![Tree::text("ID")]))]),
             )])]),
         )
     };
@@ -311,13 +312,13 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
                 "verifications",
                 Tree::List(vec![Tree::map(vec![(
                     "unique",
-                    Tree::List(vec![Tree::text("ABSENT")]),
+                    Tree::map(vec![("columns", Tree::List(vec![Tree::text("ABSENT")]))]),
                 )])]),
             )],
             false,
             "unknown_field",
             "REQ-1245",
-            "intermediates[0].verifications[0].unique[0]",
+            "intermediates[0].verifications[0].unique.columns[0]",
             vec![
                 ("intermediate", text("P")),
                 ("identifier", text("D.ABSENT")),

@@ -53,8 +53,8 @@ columns:
         false_value: "N"
         missing: "N"
     verifications:
-      allowed_values:
-        values: [Y, N]
+      - allowed_values:
+          values: [Y, N]
 
 verifications:
   - row_count:

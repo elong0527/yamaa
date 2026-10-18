@@ -87,11 +87,11 @@ columns:
               missing: {literal: null}
               unmapped: {literal: null}
     verifications:
-      allowed_values:
-        values: [AMERICAN INDIAN OR ALASKA NATIVE, ASIAN,
-          BLACK OR AFRICAN AMERICAN,
-          NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER, WHITE, MULTIPLE,
-          OTHER, NOT REPORTED, UNKNOWN]
+      - allowed_values:
+          values: [AMERICAN INDIAN OR ALASKA NATIVE, ASIAN,
+            BLACK OR AFRICAN AMERICAN,
+            NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER, WHITE, MULTIPLE,
+            OTHER, NOT REPORTED, UNKNOWN]
 
   # No ethnicity record, or an answer not listed, gives a blank.
   - name: ETHNIC
@@ -108,9 +108,9 @@ columns:
         missing: {literal: null}
         unmapped: {literal: null}
     verifications:
-      allowed_values:
-        values: [HISPANIC OR LATINO, NOT HISPANIC OR LATINO,
-          NOT REPORTED, UNKNOWN]
+      - allowed_values:
+          values: [HISPANIC OR LATINO, NOT HISPANIC OR LATINO,
+            NOT REPORTED, UNKNOWN]
 
 verifications:
   - row_count:

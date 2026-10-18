@@ -85,8 +85,8 @@ columns:
           then: {literal: DISCONTINUED}
         - otherwise: {literal: ONGOING}
     verifications:
-      allowed_values:
-        values: [COMPLETED, DISCONTINUED, ONGOING]
+      - allowed_values:
+          values: [COMPLETED, DISCONTINUED, ONGOING]
 
   - name: DCSREAS
     type: str
@@ -119,8 +119,8 @@ columns:
           then: {literal: DISCONTINUED}
         - otherwise: {literal: ONGOING}
     verifications:
-      allowed_values:
-        values: [COMPLETED, DISCONTINUED, ONGOING]
+      - allowed_values:
+          values: [COMPLETED, DISCONTINUED, ONGOING]
 
   - name: DCTREAS
     type: str

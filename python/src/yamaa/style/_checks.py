@@ -24,7 +24,6 @@ FINDINGS: tuple[str, ...] = (
     "blank_lines",
     "line_width",
     "literal_form",
-    "source_form",
     "invalid_suppression",
     "repeated_row_derivation",
     "redundant_intermediate",
@@ -111,7 +110,6 @@ def check(document: Document, orders: Mapping[str, Sequence[str]]) -> list[Depar
     found.extend(_blank_lines(document))
     found.extend(_line_width(document, paths))
     found.extend(_literal_form(document))
-    found.extend(_source_form(document))
     # The authoring lints read the specification value; they stay silent
     # when the file has no value (invalid YAML) and never change it.
     # Imported lazily so the layout checks remain usable on their own.
@@ -257,7 +255,7 @@ def _line_width(document: Document, paths: Mapping[int, str]) -> Iterator[Depart
 
 
 def _mapping_nodes(document: Document) -> Iterator[yaml.MappingNode]:
-    """Mappings `literal_form` and `source_form` visit: values and list items."""
+    """Mappings `literal_form` visits: values and list items."""
 
     def visit(node: yaml.Node) -> Iterator[yaml.MappingNode]:
         yield node
@@ -309,72 +307,6 @@ def _literal_form(document: Document) -> Iterator[Departure]:
                     paths.get(id(value), "$"),
                     "write the literal on one line as {literal: ...}",
                 )
-
-
-def _is_plain_source(value: yaml.Node) -> bool:
-    return (
-        isinstance(value, yaml.MappingNode)
-        and len(value.value) == 1
-        and isinstance(value.value[0][0], yaml.ScalarNode)
-        and value.value[0][0].value == "source"
-        and isinstance(value.value[0][1], yaml.ScalarNode)
-    )
-
-
-def _source_form(document: Document) -> Iterator[Departure]:
-    """`source_form`: a plain source written `{source: X}` where shorthand applies.
-
-    The shorthand positions are a `derivation` value, a `derivations` entry,
-    and a `case` branch `then` or `otherwise`. A filtered source, a nested
-    expression argument, the `value` of a handled expression, and a
-    verification's `then` keep the mapping form.
-    """
-    paths = {id(node): path for path, node in walk(document.root)}
-    found: list[Departure] = []
-
-    def report(key: yaml.Node, value: yaml.Node) -> None:
-        found.append(
-            Departure(
-                "source_form",
-                key.start_mark.line,
-                key.start_mark.column,
-                paths.get(id(value), "$"),
-                "write the source as the bare string",
-            )
-        )
-
-    def visit(mapping: yaml.MappingNode, in_case: bool = False) -> None:
-        for key, value in mapping.value:
-            name = key.value if isinstance(key, yaml.ScalarNode) else None
-            if name == "case" and isinstance(value, yaml.SequenceNode):
-                for item in value.value:
-                    if isinstance(item, yaml.MappingNode):
-                        visit(item, True)
-                continue
-            shorthand = name == "derivation" or (
-                in_case and name in ("then", "otherwise")
-            )
-            if shorthand and _is_plain_source(value):
-                report(key, value)
-            elif name == "derivations" and isinstance(value, yaml.MappingNode):
-                for entry_key, entry_value in value.value:
-                    if _is_plain_source(entry_value):
-                        report(entry_key, entry_value)
-            if isinstance(value, yaml.MappingNode):
-                visit(value, in_case)
-            elif isinstance(value, yaml.SequenceNode):
-                for item in value.value:
-                    if isinstance(item, yaml.MappingNode):
-                        visit(item, in_case)
-
-    root = document.root
-    if isinstance(root, yaml.MappingNode):
-        visit(root)
-    elif isinstance(root, yaml.SequenceNode):
-        for item in root.value:
-            if isinstance(item, yaml.MappingNode):
-                visit(item)
-    return iter(found)
 
 
 def suppressed(

@@ -97,7 +97,7 @@ columns:
           THRESHOLD: THRESHOLD MET
           OTHERWISE: THRESHOLD NOT MET
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   # No branch for NOT EVALUABLE, so AVAL stays empty there.
   - name: AVAL

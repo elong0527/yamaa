@@ -107,12 +107,10 @@ columns:
       case:
         - when: "AEST_DY IS NOT NULL"
           then:
-            str_template:
-              template: "{AEST_YR}-{AEST_MO}-{AEST_DY}"
+            str_template: "{AEST_YR}-{AEST_MO}-{AEST_DY}"
         - when: "AEST_MO IS NOT NULL"
           then:
-            str_template:
-              template: "{AEST_YR}-{AEST_MO}"
+            str_template: "{AEST_YR}-{AEST_MO}"
         - when: "AEST_YR IS NOT NULL"
           then: AEST_YR
 
@@ -124,12 +122,10 @@ columns:
       case:
         - when: "AEEN_DY IS NOT NULL"
           then:
-            str_template:
-              template: "{AEEN_YR}-{AEEN_MO}-{AEEN_DY}"
+            str_template: "{AEEN_YR}-{AEEN_MO}-{AEEN_DY}"
         - when: "AEEN_MO IS NOT NULL"
           then:
-            str_template:
-              template: "{AEEN_YR}-{AEEN_MO}"
+            str_template: "{AEEN_YR}-{AEEN_MO}"
         - when: "AEEN_YR IS NOT NULL"
           then: AEEN_YR
 

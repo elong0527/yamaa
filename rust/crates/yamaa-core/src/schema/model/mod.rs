@@ -312,21 +312,17 @@ impl Run<'_> {
                 )?);
             }
         }
-        if result.is_empty() {
-            if model.name == "IntermediateUnique"
-                && self
-                    .document
-                    .field(id, "id")
-                    .is_some_and(|id| matches!(self.document.nodes()[id], N::Null))
-            {
-                return self.finding(
-                    path,
-                    "Value error, an explicit verification id must be nonempty text",
-                );
-            }
-            if model.name == "IntermediateVerification" && self.document.field(id, "unique").is_some_and(|id| matches!(&self.document.nodes()[id], N::Sequence(items) if items.is_empty())) {
-                return self.finding(path, "Value error, a uniqueness check requires at least one column");
-            }
+        if result.is_empty()
+            && model.name == "IntermediateUnique"
+            && self
+                .document
+                .field(id, "id")
+                .is_some_and(|id| matches!(self.document.nodes()[id], N::Null))
+        {
+            return self.finding(
+                path,
+                "Value error, an explicit verification id must be nonempty text",
+            );
         }
         Ok(result)
     }

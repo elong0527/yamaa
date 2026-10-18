@@ -40,7 +40,7 @@ columns:
     label: Time to Event Origin Date for Subject
     derivation: ADSL.RESPDT
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   # The therapy start as a date: ADSL is read as text, and the comparisons
   # below need a date.
@@ -169,7 +169,7 @@ columns:
       first_available:
         sources: [EVENTDT, CENSORDT]
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   - name: AVAL
     type: int

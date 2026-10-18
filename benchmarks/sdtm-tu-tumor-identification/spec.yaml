@@ -48,16 +48,16 @@ columns:
           then:
             str_template: "NEW{TU_RAW.LESION_NUM}"
     verifications:
-      matches:
-        pattern: "^(T|NT|NEW)[0-9]+$"
+      - matches:
+          pattern: "^(T|NT|NEW)[0-9]+$"
 
   - name: TUTESTCD
     type: str
     label: Tumor Identification Test Short Name
     derivation: {literal: TUMIDENT}
     verifications:
-      allowed_values:
-        values: [TUMIDENT]
+      - allowed_values:
+          values: [TUMIDENT]
 
   - name: TUTEST
     type: str
@@ -72,8 +72,8 @@ columns:
         source: TU_RAW.LESION_CATEGORY
         to: upper
     verifications:
-      allowed_values:
-        values: [TARGET, NON-TARGET, NEW]
+      - allowed_values:
+          values: [TARGET, NON-TARGET, NEW]
 
   - name: TUSTRESC
     type: str
@@ -123,8 +123,7 @@ columns:
     derivation: TU_RAW.TUDTC
 
 verifications:
-  - unique:
-      columns: [STUDYID, USUBJID, TULNKID]
+  - unique: [STUDYID, USUBJID, TULNKID]
   - row_count:
       min: 6
       max: 6

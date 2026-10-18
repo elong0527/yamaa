@@ -106,8 +106,8 @@ columns:
         right: false
         missing: {literal: null}
     verifications:
-      allowed_values:
-        values: [SCREENING, BASELINE, WEEK 2, WEEK 4, POST-TREATMENT]
+      - allowed_values:
+          values: [SCREENING, BASELINE, WEEK 2, WEEK 4, POST-TREATMENT]
 
   - name: AVISITN
     type: int

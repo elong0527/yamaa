@@ -31,7 +31,7 @@ columns:
     label: Reported Term for the Medical History Condition
     derivation: MH_FORM.MHTERM
     verifications:
-      not_missing: {}
+      - not_missing: {}
 
   # The collected start year alone, or year and month joined with a hyphen.
   # A month with no year, or no year at all, leaves the start empty.
@@ -44,8 +44,7 @@ columns:
           then: MH_FORM.MHSTYY
         - when: "MH_FORM.MHSTYY IS NOT NULL AND MH_FORM.MHSTMM IS NOT NULL"
           then:
-            str_template:
-              template: "{MH_FORM.MHSTYY}-{MH_FORM.MHSTMM}"
+            str_template: "{MH_FORM.MHSTYY}-{MH_FORM.MHSTMM}"
 
   - name: MHENDTC
     type: str
@@ -65,8 +64,8 @@ columns:
         - when: "MHENDTC < MH_FORM.SCRFDTC"
           then: {literal: BEFORE}
     verifications:
-      allowed_values:
-        values: [ONGOING, BEFORE]
+      - allowed_values:
+          values: [ONGOING, BEFORE]
 
   - name: MHENTPT
     type: str

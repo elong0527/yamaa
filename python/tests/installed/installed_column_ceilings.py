@@ -33,19 +33,21 @@ class ColumnCeilings(unittest.TestCase):
         names = ["ID", *[f"C{index:04d}" for index in range(1, columns)]]
         header = ["ID", *[f"F{index:04d}" for index in range(1, fields)]]
         values = {field: ["S-001" if field == "ID" else "x"] for field in header}
-        source = {"path": f"input.{source_format}"}
+        path = f"input.{source_format}"
         if source_format == "parquet":
-            pq.write_table(pa.table(values), root / source["path"])
+            pq.write_table(pa.table(values), root / path)
         else:
-            (root / source["path"]).write_text(
+            (root / path).write_text(
                 ",".join(header)
                 + "\n"
                 + ",".join(value[0] for value in values.values())
                 + "\n",
                 encoding="ascii",
             )
+        # A dataset is written as its bare path unless it also types fields.
+        source = path
         if typed:
-            source["types"] = {field: "str" for field in header}
+            source = {"path": path, "types": {field: "str" for field in header}}
         document = {
             "schema_version": "1.0",
             "domain": "TEST",
