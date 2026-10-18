@@ -81,9 +81,11 @@ that dependency graph. Keep malformed-schema rejection and the closed output
 profile when adapting the boundary.
 ## Arrow host handoff
 
-The host bridge uses Arrow-rs 57.3.0 C Data/Stream callbacks, PyArrow >=23.0.1
-and R nanoarrow >=0.8.0. An exported stream owns a reader with an independent
-cursor and shared immutable Arrow array references. Each emitted C Data array
+The Python bridge uses Arrow-rs 57.3.0 C Data/Stream callbacks and PyArrow
+>=23.0.1. The R binding instead copies each table into plain R vectors in Rust,
+so no Arrow stream crosses the R boundary. An exported stream owns a reader
+with an independent cursor and shared immutable Arrow array references. Each
+emitted C Data array
 owns its own buffer references. Dropping the build, stream or exporter cannot
 invalidate arrays already imported by the consumer. Releasing a stream early
 drops unread batches; imported batches retain their buffers. Moving a header
@@ -92,19 +94,15 @@ once, and destruction of moved-from headers only frees the shell.
 
 Python uses a named `arrow_array_stream` PyCapsule. PyO3 owns its header shell;
 capsule destruction releases an unconsumed stream, or frees an already consumed
-shell. R fills a fresh `nanoarrow_allocate_array_stream()` header. Nanoarrow
-owns that allocation and invokes the Arrow-rs release callback on explicit
-release or garbage collection, including after a failed conversion. Low-level
-consumers should use an exit handler to release a stream they stop consuming.
-No callback calls back into
-Python or R, so buffer destruction requires neither interpreter nor build
-handle. Native consumers/exporters must obey the Arrow ABI; forged pointers
-are outside this memory-safety contract.
+shell. Low-level consumers should use an exit handler to release a stream they
+stop consuming. No callback calls back into Python or R, so buffer destruction
+requires neither interpreter nor build handle. Native consumers/exporters must
+obey the Arrow ABI; forged pointers are outside this memory-safety contract.
 
 The zero-copy promise covers retained public Arrow buffers through standard
 stream import/export, including sliced and chunked arrays. Build result
-materialization, Polars conversion and the established R data-frame views can
-copy. Public dates project Date32 days and zone-free datetimes project whole
+materialization, Polars conversion and R data-frame conversion can copy.
+Public dates project Date32 days and zone-free datetimes project whole
 TimestampSecond values, preserving existing public semantics; collected
 precision remains private to execution. Import accepts UTF-8 (including large
 and view arrays), Int64, Float64, Date32 and zone-free TimestampSecond. Other
@@ -112,9 +110,10 @@ types, fractional units and timezones require an explicit preserving conversion
 before import. Nonfinite floats become missing under the existing engine rule.
 Imported public temporals share their value buffers and allocate only a complete
 precision child; public exports share the value buffer and parent validity.
-R's exact i64 text and NUL raw-list views remain explicit copying conversions;
-conversion to an incapable R vector preserves the value or raises an error.
-Requested Python schema conversion is refused rather than silently narrowed.
+R's data-frame conversion holds integers as doubles and text as character, and
+raises an error for an integer beyond 2^53 or text containing NUL rather than
+change the value. Requested Python schema conversion is refused rather than
+silently narrowed.
 
 ## Resolved specification artifact
 
