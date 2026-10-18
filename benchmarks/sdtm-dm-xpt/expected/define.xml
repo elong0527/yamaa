@@ -56,7 +56,9 @@
           <TranslatedText xml:lang="en">Subject Identifier for the Study</TranslatedText>
         </Description>
         <def:Origin Type="Collected" Source="Investigator">
-          <def:DocumentRef leafID="LF.acrf"/>
+          <def:DocumentRef leafID="LF.acrf">
+            <def:PDFPageRef PageRefs="1" Type="PhysicalRef"/>
+          </def:DocumentRef>
         </def:Origin>
       </ItemDef>
       <ItemDef OID="IT.DM.RFSTDTC" Name="RFSTDTC" DataType="date" SASFieldName="RFSTDTC">
@@ -64,7 +66,9 @@
           <TranslatedText xml:lang="en">Subject Reference Start Date/Time</TranslatedText>
         </Description>
         <def:Origin Type="Collected" Source="Investigator">
-          <def:DocumentRef leafID="LF.acrf"/>
+          <def:DocumentRef leafID="LF.acrf">
+            <def:PDFPageRef PageRefs="1" Type="PhysicalRef"/>
+          </def:DocumentRef>
         </def:Origin>
       </ItemDef>
       <ItemDef OID="IT.DM.SITEID" Name="SITEID" DataType="text" Length="6" SASFieldName="SITEID">
@@ -72,7 +76,9 @@
           <TranslatedText xml:lang="en">Study Site Identifier</TranslatedText>
         </Description>
         <def:Origin Type="Collected" Source="Investigator">
-          <def:DocumentRef leafID="LF.acrf"/>
+          <def:DocumentRef leafID="LF.acrf">
+            <def:PDFPageRef PageRefs="1" Type="PhysicalRef"/>
+          </def:DocumentRef>
         </def:Origin>
       </ItemDef>
       <ItemDef OID="IT.DM.AGE" Name="AGE" DataType="integer" Length="3" SASFieldName="AGE">
@@ -80,7 +86,9 @@
           <TranslatedText xml:lang="en">Age</TranslatedText>
         </Description>
         <def:Origin Type="Collected" Source="Investigator">
-          <def:DocumentRef leafID="LF.acrf"/>
+          <def:DocumentRef leafID="LF.acrf">
+            <def:PDFPageRef PageRefs="1" Type="PhysicalRef"/>
+          </def:DocumentRef>
         </def:Origin>
       </ItemDef>
       <ItemDef OID="IT.DM.AGEU" Name="AGEU" DataType="text" Length="5" SASFieldName="AGEU">
@@ -94,7 +102,9 @@
           <TranslatedText xml:lang="en">Sex</TranslatedText>
         </Description>
         <def:Origin Type="Collected" Source="Investigator">
-          <def:DocumentRef leafID="LF.acrf"/>
+          <def:DocumentRef leafID="LF.acrf">
+            <def:PDFPageRef PageRefs="1" Type="PhysicalRef"/>
+          </def:DocumentRef>
         </def:Origin>
       </ItemDef>
       <ItemDef OID="IT.DM.RACE" Name="RACE" DataType="text" Length="25" SASFieldName="RACE">
@@ -102,7 +112,9 @@
           <TranslatedText xml:lang="en">Race</TranslatedText>
         </Description>
         <def:Origin Type="Collected" Source="Investigator">
-          <def:DocumentRef leafID="LF.acrf"/>
+          <def:DocumentRef leafID="LF.acrf">
+            <def:PDFPageRef PageRefs="1" Type="PhysicalRef"/>
+          </def:DocumentRef>
         </def:Origin>
       </ItemDef>
       <ItemDef OID="IT.DM.COUNTRY" Name="COUNTRY" DataType="text" Length="3" SASFieldName="COUNTRY">
@@ -110,7 +122,9 @@
           <TranslatedText xml:lang="en">Country</TranslatedText>
         </Description>
         <def:Origin Type="Collected" Source="Investigator">
-          <def:DocumentRef leafID="LF.acrf"/>
+          <def:DocumentRef leafID="LF.acrf">
+            <def:PDFPageRef PageRefs="1" Type="PhysicalRef"/>
+          </def:DocumentRef>
         </def:Origin>
       </ItemDef>
       <def:leaf ID="LF.acrf" xlink:href="acrf.pdf">
