@@ -17,8 +17,11 @@ open gates live in GitHub issues and pull requests, not here.
   CRAN and r-universe are later work.
 
 `.github/workflows/native.yml` builds, installs and tests every supported
-combination nightly on main and on manual dispatch. A release is cut
-from a commit whose complete native run passed.
+combination on manual dispatch. A release is cut from a commit whose complete
+native run passed. Development PRs do not run the release lanes, so before a
+release also dispatch R-CMD-check, Optional format features and Dependency
+graphs on the candidate, and CI for its minimum toolchain, Python 3.15 and
+minimum saved artifact reader lanes.
 
 Python, R and Cargo versions move together;
 `tools.packaging.check_shared_release_versions` checks that they agree. The
@@ -125,7 +128,7 @@ interpreter. So is lxml's: 6.1.3 is the first release that loads no external
 parameter entities by default, and 6.1.1 patched the libxslt that its Linux
 wheels bundle.
 
-The continuous [dependency graph lanes](https://github.com/elong0527/yamaa/blob/main/CONTRIBUTING.md#ci-and-release-qualification)
+The [dependency graph lanes](https://github.com/elong0527/yamaa/blob/main/CONTRIBUTING.md#ci-and-release-qualification)
 test declared direct minima and newest compatible selections on Linux with
 CPython 3.12, 3.14 and 3.15, all with R 4.6.1; on 3.15 the minima are its own
 floors. Cargo transitive dependencies use the newest

@@ -2,9 +2,12 @@ name: CI
 
 # Pull requests are the gate. Main is checked on a schedule rather than after
 # every merge; the scheduled runs also save the Rust caches that pull requests
-# restore. Odd hours at :37 keep clear of the start times of the nightly
-# R CMD check (02:47) and native qualification (05:17) runs.
-# Schedules only check main, so release branches are checked on each push.
+# restore. Schedules only check main, so release branches are checked on each
+# push. Pull requests and the schedule run the development lanes: lint,
+# repository checks, the Rust workspace and the Linux Python and R hosts. The
+# minimum Rust toolchain, Python 3.15 and the minimum supported saved artifact
+# readers are release lanes: they run on release branch pushes and on
+# dispatch, with the other release workflows.
 on:
   pull_request:
   push:
@@ -51,10 +54,9 @@ jobs:
         with:
           r: runtime
       - run: make test-rust
-      - name: Test adapters without the optional SAS reader
-        run: cargo test --locked --manifest-path rust/Cargo.toml -p yamaa-adapters --no-default-features --features yaml,parquet
   rust-minimum:
     name: rust (minimum toolchain)
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -95,9 +97,7 @@ jobs:
       - uses: ./.github/actions/setup
       - run: make test-python
   python-minimum:
-    # The minimum dependency graph also tests these floors, and neither
-    # runs on PRs into a release integration branch.
-    if: github.event_name != 'pull_request' || github.base_ref == 'main'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -110,6 +110,7 @@ jobs:
       - run: make test-python
   python-newest:
     name: python (3.15)
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -131,8 +132,10 @@ jobs:
         with:
           r: check
       - name: Install the minimum supported R saved artifact readers
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         run: Rscript --vanilla tools/ci/install_minimum_r_readers.R
       - name: Install the oldest supported R Arrow bridge
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         run: |
           curl --fail --location --silent --show-error \
             https://github.com/apache/arrow-nanoarrow/archive/refs/tags/apache-arrow-nanoarrow-0.8.0.tar.gz \

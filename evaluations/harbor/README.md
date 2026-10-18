@@ -68,7 +68,7 @@ packages and runs opensas oracle checks in the built image.
 `images verify` checks approved packages, foreign-runtime isolation and
 OpenCode permissions before and after Harbor's pinned installer. A local
 provider tests both allowed and denied calls without a model credential.
-The `Harbor` workflow runs every six hours on main and on manual dispatch.
+The `Harbor` workflow runs on manual dispatch.
 Its `solutions` job checks references and prompts; its `oracle` job runs the
 harness controls, image checks and real oracle/nop trials.
 

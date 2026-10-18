@@ -13,6 +13,7 @@ FORMATS = {
     "yaml": ["yaml"],
     "parquet": ["parquet"],
     "readstat": ["readstat"],
+    "yaml-parquet": ["yaml", "parquet"],
     "all": ["yaml", "parquet", "readstat"],
 }
 
