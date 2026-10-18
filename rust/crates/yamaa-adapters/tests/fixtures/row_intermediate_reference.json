@@ -1203,7 +1203,7 @@
           "spec_paths": [
             "intermediates[0]"
           ],
-          "requirement": "REQ-0124",
+          "requirement": "LOOKUP-24",
           "context": {
             "intermediate": "P",
             "dataset": "DONOR",

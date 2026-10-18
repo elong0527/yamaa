@@ -2101,7 +2101,7 @@ rows:
                             .iter()
                             .find(|issue| issue.condition == condition)
                             .unwrap();
-                        assert_eq!(issue.requirement.as_deref(), Some("REQ-0323"));
+                        assert_eq!(issue.requirement.as_deref(), Some("LOOKUP-9"));
                         assert_eq!(issue.spec_paths, ["intermediates[0].key"]);
                     }
                 } else {

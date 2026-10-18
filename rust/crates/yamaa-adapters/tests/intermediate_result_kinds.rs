@@ -754,7 +754,7 @@ fn assert_nested_lookup_type_error(
     let issues = result.issues();
     assert_eq!(issues.len(), 1, "{issues:?}");
     assert_eq!(issues[0].condition, "incompatible_input_type");
-    assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0323"));
+    assert_eq!(issues[0].requirement.as_deref(), Some("LOOKUP-9"));
     assert_eq!(issues[0].spec_paths, [expected_path]);
     assert_eq!(
         issues[0].context.clone(),
@@ -789,20 +789,20 @@ fn nested_lookup_keys_report_actual_incompatible_types_instead_of_no_match() {
     }
 }
 
+/// A missing key value seeks no record. A record's key is compared before the
+/// filter narrows the matched records, so a filter cannot hide a key value
+/// that cannot compare (LOOKUP-25).
 #[test]
-fn unknown_keys_keep_no_match_when_missing_or_filtered_donors_cannot_compare() {
-    for (specification, input) in [
-        (nested_lookup_specification().to_owned(), "S01,,\n"),
-        (
-            nested_lookup_specification().replace(
-                "    key: {DATE:",
-                "    filter: \"EX.USUBJID = 'S02'\"\n    key: {DATE:",
-            ),
-            "S01,,2024-01-01\n",
+fn unknown_keys_keep_no_match_when_missing_and_refuse_an_incomparable_filtered_donor() {
+    assert_nested_lookup_no_match(nested_lookup_specification(), "S01,,\n");
+    assert_nested_lookup_type_error(
+        &nested_lookup_specification().replace(
+            "    key: {DATE:",
+            "    filter: \"EX.USUBJID = 'S02'\"\n    key: {DATE:",
         ),
-    ] {
-        assert_nested_lookup_no_match(&specification, input);
-    }
+        "key[DATE]",
+        "intermediates[0].key.DATE",
+    );
 }
 
 fn assert_nested_lookup_no_match(specification: &str, input: &str) {

@@ -148,7 +148,9 @@ pub(super) fn bind(
 }
 
 /// A globally declared filter is checked against each context that actually reads it.
-/// A chained `between` value runs the selector it names for the same row.
+/// A chained `between` value runs the selector it names for the same row; the
+/// range values themselves are admitted with every other lookup's range
+/// ([`lookup_range::admit`]).
 pub(super) fn admit_reads<'a>(
     expressions: impl IntoIterator<Item = &'a Expression>,
     items: &[Option<Intermediate>],
@@ -218,7 +220,6 @@ pub(super) fn admit_reads<'a>(
             let Some(range) = &item.range else {
                 return;
             };
-            intermediate_range::admit_read(range, &item.identifier, source, findings);
             let CurrentRead::Intermediate { index: chained, .. } = range.current().read else {
                 return;
             };

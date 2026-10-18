@@ -2,7 +2,7 @@ phase: validation
 condition: no_applicable_keys
 spec_paths:
   - intermediates[0]
-requirement: REQ-0153
+requirement: LOOKUP-5
 context:
   dataset: LBRANGE
   keys:

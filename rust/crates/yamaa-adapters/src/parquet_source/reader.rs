@@ -621,20 +621,45 @@ mod tests {
             .collect()
     }
 
+    /// Where a two-row `container` writes the file metadata's row_groups
+    /// field header: after version, schema and num_rows.
+    fn row_groups(bytes: &[u8]) -> usize {
+        let trailer = bytes.len() - 8;
+        let length = u32::from_le_bytes(bytes[trailer..trailer + 4].try_into().unwrap());
+        let position = trailer - length as usize + 27;
+        // num_rows 2, then row_groups: a list of one struct.
+        assert_eq!(bytes[position - 2..position + 2], [0x16, 4, 0x19, 0x1c]);
+        position
+    }
+
+    /// Replace `range` of the footer with `with`, and update the footer
+    /// length in the trailer.
+    fn splice_footer(bytes: &mut Vec<u8>, range: std::ops::Range<usize>, with: &[u8]) {
+        let trailer = bytes.len() - 8;
+        let length = u32::from_le_bytes(bytes[trailer..trailer + 4].try_into().unwrap());
+        let length = length as usize - range.len() + with.len();
+        bytes.splice(range, with.iter().copied());
+        let trailer = bytes.len() - 8;
+        let length = u32::try_from(length).unwrap().to_le_bytes();
+        bytes[trailer..trailer + 4].copy_from_slice(&length);
+    }
+
     #[test]
     fn unskippable_unknown_footer_fields_keep_the_file_readable() {
         let mut body = progression(0, 1, 2);
         body.extend(progression(1, 0, 2));
         body.extend(b"ab"); // a, ab
         let mut bytes = container(0, 2, 2, 0, &[data_page(2, &body)]);
-        // Before the file metadata's stop byte; its last field is 4.
-        let fields = unskippable_fields(0xba);
-        let end = bytes.len() - 8;
-        bytes.splice(end - 1..end - 1, fields.iter().copied());
-        let length = bytes.len() - 8;
-        let footer = u32::from_le_bytes(bytes[length..length + 4].try_into().unwrap());
-        let footer = footer + u32::try_from(fields.len()).unwrap();
-        bytes[length..length + 4].copy_from_slice(&footer.to_le_bytes());
+        // The native decoder ends the file metadata at the first stop byte it
+        // reads and ignores the bytes after it, so after the last field a
+        // wrongly presented value, such as a binary prefix of the wrong width,
+        // could still decode. Before row_groups, a misread loses that
+        // required field. The fields follow num_rows (3), so row_groups takes
+        // an explicit id.
+        let position = row_groups(&bytes);
+        let mut fields = unskippable_fields(0xca);
+        fields.extend([0x09, 8]); // a list, field id 4
+        splice_footer(&mut bytes, position..position + 1, &fields);
         assert_eq!(strings(&read(&bytes).unwrap()), [Some("a"), Some("ab")]);
     }
 
@@ -675,6 +700,42 @@ mod tests {
         // With nothing to present, the held bytes are read as they are.
         let held = [0x19, 0x01, 0, 0xee];
         assert_eq!(native_pages(&held, &shared).unwrap().as_ref(), held);
+    }
+
+    /// The shared-bytes guard of `native_pages`, end to end: two row groups
+    /// whose chunks name the same page.
+    #[test]
+    fn a_file_whose_chunks_name_one_presented_page_is_malformed() {
+        let mut body = progression(0, 1, 2);
+        body.extend(progression(1, 0, 2));
+        body.extend(b"ab"); // a, ab
+        let plain = data_page(2, &body);
+        // The same page, with unknown fields that its header must present.
+        let mut unskippable = plain.clone();
+        let stop = plain.len() - body.len() - 1;
+        unskippable.splice(stop..stop, unskippable_fields(0xaa));
+        for (page, presented) in [(plain, false), (unskippable, true)] {
+            let mut bytes = container(0, 2, 2, 0, &[page]);
+            // A second row group, a copy of the first, so its chunk names the
+            // same page; the file then declares four rows.
+            let position = row_groups(&bytes);
+            let trailer = bytes.len() - 8;
+            let group = bytes[position + 2..trailer - 1].to_vec();
+            bytes[position - 1] = 8; // num_rows: 4
+            bytes[position + 1] = 0x2c; // two row groups
+            splice_footer(&mut bytes, trailer - 1..trailer - 1, &group);
+            let decoded = read(&bytes);
+            if presented {
+                assert_eq!(decoded.unwrap_err(), Error::Malformed);
+            } else {
+                // With nothing to present, the shared page is read as held.
+                let decoded = decoded.unwrap();
+                assert_eq!(
+                    strings(&decoded),
+                    [Some("a"), Some("ab"), Some("a"), Some("ab")]
+                );
+            }
+        }
     }
 
     #[test]

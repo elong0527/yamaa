@@ -248,7 +248,7 @@ def no_match_phrase(lookup, depth=0):
 
     A sponsor's variable sheet is written in sentences, so this is worded as
     one rather than bracketed like a code comment. `require_match: true` makes
-    an unmatched row fatal (LOOKUP-13), which is the reviewable fact; without
+    an unmatched row fatal (LOOKUP-24), which is the reviewable fact; without
     it the declared `no_match` answers, or a blank when none is declared. A
     lookup reached through another lookup answers in the shorter form, so its
     clause cannot be mistaken for the outer lookup's own answer at the end of

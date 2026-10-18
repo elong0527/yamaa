@@ -2442,13 +2442,13 @@
           "condition": "no_applicable_keys",
           "context": {
             "dataset": "DONOR",
-            "hint": "declare an explicit `intermediate:` with `source`/`key` pairs",
+            "hint": "declare a named intermediate with its `key`",
             "keys": [
               "ID"
             ]
           },
           "phase": "validation",
-          "requirement": "REQ-0152",
+          "requirement": "LOOKUP-5",
           "spec_paths": [
             "columns.V.derivation.source"
           ]
@@ -2465,13 +2465,13 @@
               "condition": "no_applicable_keys",
               "context": {
                 "dataset": "DONOR",
-                "hint": "declare an explicit `intermediate:` with `source`/`key` pairs",
+                "hint": "declare a named intermediate with its `key`",
                 "keys": [
                   "ID"
                 ]
               },
               "phase": "validation",
-              "requirement": "REQ-0152",
+              "requirement": "LOOKUP-5",
               "spec_paths": [
                 "columns.V.derivation.source"
               ]

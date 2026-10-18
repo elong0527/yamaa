@@ -1,0 +1,53 @@
+schema_version: "1.0"
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE: {path: input/ae.csv, types: {AESEQ: int, ASTDT: date}}
+  PERIODS:
+    path: input/periods.csv
+    types: {APERIOD: int, APERSDT: date, APEREDT: date}
+base: AE
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AETERM, ASTDT, APERIOD]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation: AE.AETERM
+
+  - name: ASTDT
+    type: date
+    label: Analysis Start Date
+    derivation: AE.ASTDT
+
+  # The subject's period whose first and last days, both inclusive, hold the
+  # event's start date. The implicit join matches the subject on STUDYID and
+  # USUBJID, the output keys the period table carries, and the range narrows
+  # the subject's periods to the one holding ASTDT. An event outside every
+  # period finds no record; with no `absent` declared, the period is missing
+  # and the row is counted under `absent`.
+  - name: APERIOD
+    type: int
+    label: Period
+    derivation:
+      source:
+        variable: PERIODS.APERIOD
+        between: {value: ASTDT, lower: APERSDT, upper: APEREDT}

@@ -1,63 +1,26 @@
 //! Pure range/projection binding; donor data and native effects remain in execution.
 use super::*;
 use crate::{
-    dataset::{
-        CurrentField, CurrentRead, Intermediate, RelationRange, RelationRangeBound,
-        RelationRangeError,
-    },
-    diagnostic::ConditionCode as C,
+    dataset::{CurrentRead, Intermediate, RelationRange},
+    diagnostic::{lookup::Owner, ConditionCode as C},
 };
-#[derive(Debug)]
-pub(super) struct Declaration {
-    pub value: String,
-    lower: Option<String>,
-    upper: Option<String>,
-    path: String,
-}
-impl Declaration {
-    pub(super) fn donor_fields(&self) -> impl Iterator<Item = &str> {
-        self.lower
-            .iter()
-            .chain(self.upper.iter())
-            .map(String::as_str)
-    }
-}
+/// A named intermediate's range (LOOKUP-9), refused at preparation when it
+/// states neither bound.
 pub(super) fn prepare(
     d: &Document,
     node: usize,
     path: &str,
     intermediate: &str,
-) -> Result<Option<Declaration>, PrepareError> {
-    let Some(node) = d
-        .field(node, "between")
-        .filter(|&node| !matches!(d.nodes()[node], N::Null))
-    else {
+) -> Result<Option<lookup_range::Declaration>, PrepareError> {
+    let Some(declaration) = lookup_range::Declaration::prepare(d, node, path)? else {
         return Ok(None);
     };
-    let value = text(d, field(d, node, "value")?)?.into();
-    let bound = |name| {
-        d.field(node, name)
-            .filter(|&node| !matches!(d.nodes()[node], N::Null))
-            .map(|node| text(d, node).map(String::from))
-            .transpose()
-    };
-    let lower = bound("lower")?;
-    let upper = bound("upper")?;
-    let path = format!("{path}.between");
-    if lower.is_none() && upper.is_none() {
-        let mut finding = LookupFinding::new(&path, C::IntermediateRangeDeclaration);
-        finding.text("intermediate", intermediate);
-        finding.text("expected", "at least one of lower, upper");
+    if let Some(finding) = declaration.bounds_finding(Owner::Intermediate(intermediate)) {
         return Err(PrepareError::Invalid(vec![PreflightFinding::Scalar(
-            finding.diagnostic(),
+            finding,
         )]));
     }
-    Ok(Some(Declaration {
-        value,
-        lower,
-        upper,
-        path,
-    }))
+    Ok(Some(declaration))
 }
 fn reference(path: &str, name: &str, intermediate: &str, code: C, findings: &mut Vec<BindFinding>) {
     let mut finding = LookupFinding::new(path, code);
@@ -65,150 +28,65 @@ fn reference(path: &str, name: &str, intermediate: &str, code: C, findings: &mut
     finding.text("identifier", name);
     findings.push(BindFinding::Lookup(finding));
 }
+/// Bind a named intermediate's range. The value names a value of the row that
+/// reads the intermediate, or, in a donor derivation, a bare field of the donor
+/// record; an input's record keeps that input's record port, and every context
+/// that reads the intermediate admits it (LOOKUP-9).
 #[allow(clippy::too_many_arguments)]
 pub(super) fn bind(
-    declaration: &Declaration,
+    declaration: &lookup_range::Declaration,
     intermediate: &str,
     donor: &TableSchema,
     donor_kind: &impl Fn(usize) -> Option<ColumnType>,
     admits: &impl Fn(usize) -> bool,
     catalog: &Catalog,
-    sources: &[SourceDeclaration],
-    schemas: &[&TableSchema],
-    driver: usize,
+    driver: &TableSchema,
     previous: &[Option<Intermediate>],
     secondary: &[crate::dataset::SecondarySource],
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<RelationRange>, BindError> {
-    let mut failed = false;
-    let mut bound = |name: &Option<String>| {
-        name.as_ref().and_then(|name| {
-            let field = donor
-                .columns()
-                .iter()
-                .enumerate()
-                .find(|(column, field)| field.name == *name && admits(*column));
-            if let Some((column, field)) = field {
-                Some(RelationRangeBound {
-                    column,
-                    identifier: field.name.clone(),
-                    kind: donor_kind(column).map(Into::into),
+    let owner = Owner::Intermediate(intermediate);
+    let wrap = |diagnostic| BindFinding::Lookup(LookupFinding::from_diagnostic(diagnostic));
+    let mut diagnostics = Vec::new();
+    // All stated donor bounds precede current-reference validation.
+    let bounds = declaration.bind_bounds(owner, donor, donor_kind, admits, &mut diagnostics);
+    findings.extend(diagnostics.into_iter().map(wrap));
+    let Some(bounds) = bounds else {
+        return Ok(None);
+    };
+    let name = declaration.value.as_str();
+    let current = declaration
+        .current_value(catalog, secondary, previous, None, &mut Vec::new())?
+        .or_else(|| {
+            // A bare name that no output column takes is a donor record field.
+            (!name.contains('.'))
+                .then(|| {
+                    driver
+                        .columns()
+                        .iter()
+                        .position(|column| column.name == name)
                 })
-            } else {
-                reference(
-                    &declaration.path,
-                    name,
-                    intermediate,
-                    C::IntermediateRangeReference,
-                    findings,
-                );
-                failed = true;
+                .flatten()
+                .map(|column| {
+                    (
+                        CurrentRead::Record { source: 0, column },
+                        Some(driver.columns()[column].kind.into()),
+                    )
+                })
+        });
+    let Some((read, kind)) = current else {
+        findings.push(wrap(declaration.unknown_value(owner)));
+        return Ok(None);
+    };
+    Ok(
+        match declaration.finish(read, kind, bounds, Some(intermediate))? {
+            Ok(range) => Some(range),
+            Err(diagnostic) => {
+                findings.push(wrap(diagnostic));
                 None
             }
-        })
-    };
-    // All stated donor bounds precede current-reference validation.
-    let lower = bound(&declaration.lower);
-    let upper = bound(&declaration.upper);
-    if failed {
-        return Ok(None);
-    }
-    let name = &declaration.value;
-    let current = match catalog.bind(name) {
-        Some(reference_binding::Binding::Output {
-            column,
-            column_type,
-        }) => Some((CurrentRead::Output(column), Some(column_type.into()))),
-        // The catalog lists the driver first and the other inputs in source
-        // order, so a dataset index is the named input's record port.
-        Some(reference_binding::Binding::Dataset {
-            dataset,
-            field,
-            column_type,
-        }) => Some((
-            CurrentRead::Record {
-                source: dataset,
-                column: field,
-            },
-            Some(column_type.into()),
-        )),
-        None => {
-            if let Some((qualifier, field)) = name.split_once('.') {
-                // Every input binds above when it has the field.
-                if sources.iter().any(|source| source.name == qualifier) {
-                    None
-                } else {
-                    previous.iter().enumerate().find_map(|(index, item)| {
-                        let item = item.as_ref()?;
-                        if item.identifier != qualifier {
-                            return None;
-                        }
-                        let column = item.source_column(secondary, field)?;
-                        let kind = item.source_kind(secondary, column).map(Into::into);
-                        Some((CurrentRead::Intermediate { index, column }, kind))
-                    })
-                }
-            } else {
-                schemas[driver]
-                    .columns()
-                    .iter()
-                    .position(|column| column.name == *name)
-                    .map(|column| {
-                        (
-                            CurrentRead::Record { source: 0, column },
-                            Some(schemas[driver].columns()[column].kind.into()),
-                        )
-                    })
-            }
-        }
-    };
-    let Some((read, kind)) = current else {
-        reference(
-            &format!("{}.value", declaration.path),
-            name,
-            intermediate,
-            C::IntermediateRangeReference,
-            findings,
-        );
-        return Ok(None);
-    };
-    match RelationRange::new(
-        declaration.path.clone(),
-        CurrentField {
-            read,
-            identifier: name.clone(),
         },
-        kind,
-        lower,
-        upper,
-    ) {
-        Ok(range) => Ok(Some(range)),
-        Err(RelationRangeError::Incomparable(types)) => {
-            findings.push(BindFinding::Lookup(LookupFinding::from_diagnostic(
-                types.diagnostic(&declaration.path, intermediate),
-            )));
-            Ok(None)
-        }
-        Err(_) => Err(BindError::Internal),
-    }
-}
-/// A qualified `value` reads the record of the reading row's driver port
-/// (REQ-0085). Another input's record is not a current-row value (REQ-0121).
-pub(super) fn admit_read(
-    range: &RelationRange,
-    intermediate: &str,
-    driver: usize,
-    findings: &mut Vec<BindFinding>,
-) {
-    if matches!(range.current().read, CurrentRead::Record { source, .. } if source != driver) {
-        reference(
-            &format!("{}.value", range.path()),
-            &range.current().identifier,
-            intermediate,
-            C::IntermediateRangeReference,
-            findings,
-        );
-    }
+    )
 }
 pub(super) fn prepare_columns(
     d: &Document,
@@ -270,124 +148,4 @@ pub(super) fn bind_columns(
         columns.dedup();
         columns
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::json::Value as JsonValue;
-
-    fn schema(names: &[&str]) -> TableSchema {
-        TableSchema::new(
-            names
-                .iter()
-                .map(|&name| Column {
-                    name: name.into(),
-                    kind: ColumnType::Int,
-                })
-                .collect(),
-        )
-        .unwrap()
-    }
-    fn source(name: &str) -> SourceDeclaration {
-        SourceDeclaration {
-            name: name.into(),
-            path: format!("{name}.csv"),
-            types: Vec::new(),
-            profile: SourceProfile::Csv,
-            encoding: None,
-            empty_string_present: false,
-            ordinal: None,
-        }
-    }
-    fn fields(schema: &TableSchema) -> Vec<reference_binding::Field<'_>> {
-        schema
-            .columns()
-            .iter()
-            .map(|column| reference_binding::Field {
-                name: &column.name,
-                column_type: column.kind,
-            })
-            .collect()
-    }
-
-    /// The driver is the second input, so source order differs from port
-    /// order, and the driver holds another field at the named column.
-    #[test]
-    fn a_qualified_value_keeps_its_input_port_and_admits_only_that_driver() {
-        let other = schema(&["ID", "REFDAY"]);
-        let driver = schema(&["ID", "DAY"]);
-        let donor = schema(&["ID", "LO", "HI"]);
-        let (other_fields, driver_fields, donor_fields) =
-            (fields(&other), fields(&driver), fields(&donor));
-        // Intermediates bind against the driver first, then the other inputs.
-        let catalog = Catalog::compile(
-            &[],
-            &[
-                reference_binding::Dataset {
-                    name: "DRIVER",
-                    fields: &driver_fields,
-                },
-                reference_binding::Dataset {
-                    name: "OTHER",
-                    fields: &other_fields,
-                },
-                reference_binding::Dataset {
-                    name: "DONOR",
-                    fields: &donor_fields,
-                },
-            ],
-        )
-        .unwrap();
-        let declaration = Declaration {
-            value: "OTHER.REFDAY".into(),
-            lower: Some("LO".into()),
-            upper: Some("HI".into()),
-            path: "intermediates[0].between".into(),
-        };
-        let mut findings = Vec::new();
-        let range = bind(
-            &declaration,
-            "W",
-            &donor,
-            &|column| donor.columns().get(column).map(|column| column.kind),
-            &|_| true,
-            &catalog,
-            &[source("OTHER"), source("DRIVER"), source("DONOR")],
-            &[&other, &driver, &donor],
-            1,
-            &[],
-            &[],
-            &mut findings,
-        )
-        .unwrap()
-        .unwrap();
-        assert!(findings.is_empty());
-        assert_eq!(
-            range.current().read,
-            CurrentRead::Record {
-                source: 1,
-                column: 1
-            }
-        );
-        admit_read(&range, "W", 1, &mut findings);
-        assert!(findings.is_empty());
-        admit_read(&range, "W", 0, &mut findings);
-        let [BindFinding::Lookup(finding)] = findings.as_slice() else {
-            panic!("one range finding: {findings:?}");
-        };
-        let diagnostic = finding.diagnostic();
-        assert_eq!(diagnostic.code, C::IntermediateRangeReference);
-        assert_eq!(diagnostic.spec_paths, ["intermediates[0].between.value"]);
-        assert_eq!(
-            diagnostic.context,
-            BTreeMap::from([
-                (
-                    "identifier".into(),
-                    JsonValue::String("OTHER.REFDAY".into())
-                ),
-                ("intermediate".into(), JsonValue::String("W".into())),
-            ])
-        );
-    }
 }
