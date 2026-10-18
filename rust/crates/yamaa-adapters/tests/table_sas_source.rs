@@ -100,6 +100,48 @@ mod table {
             assert_eq!(cells(&table), expected);
         }
         #[test]
+        fn compressed_row_after_uncompressed_rows_gets_its_own_row_buffer() {
+            // Columns are submitted at the first row. Here that row is in a
+            // mix page's data area, so no compressed row buffer exists yet
+            // when an RLE row follows on the next page. The reader must
+            // allocate it rather than decompress through a null buffer.
+            use crate::support::sas7bdat::{Cell, Dataset, Kind, Layout, Page, Pointer, META, MIX};
+            let mut dataset =
+                Dataset::new(Layout::LE32, &[("X", Kind::Num, 8), ("T", Kind::Chr, 8)]);
+            dataset.compression = Some(*b"SASYZCRL");
+            dataset.total = 2;
+            dataset.mix_rows = 1;
+            let first = dataset.row(&[Cell::Num(4.0), Cell::Text(b"mix")]);
+            let second = dataset.row(&[Cell::Num(-0.5), Cell::Text(b"rle")]);
+            let bytes = dataset.file(&[
+                Page::new(MIX, dataset.metadata(), vec![first]),
+                Page::new(META, vec![Pointer::rle_row(&second)], vec![]),
+            ]);
+            assert_eq!(
+                cells(&read_built(&bytes).unwrap()),
+                [
+                    [float(4.0), ValueRef::Str("mix")],
+                    [float(-0.5), ValueRef::Str("rle")]
+                ]
+            );
+        }
+        #[test]
+        fn release_field_without_a_terminator_still_parses() {
+            // The header's 120-byte release block holds no NUL byte at all.
+            // The reader copies the eight-byte release into a terminated
+            // buffer before scanning it.
+            use crate::support::sas7bdat::{Cell, Dataset, Kind, Layout, Page, MIX};
+            let mut dataset = Dataset::new(Layout::LE32, &[("X", Kind::Num, 8)]);
+            dataset.total = 1;
+            dataset.mix_rows = 1;
+            let row = dataset.row(&[Cell::Num(7.0)]);
+            let mut bytes = dataset.file(&[Page::new(MIX, dataset.metadata(), vec![row])]);
+            let release = dataset.release_offset();
+            bytes[release + 8..release + 120].fill(b' ');
+            assert!(!bytes[release..release + 120].contains(&0));
+            assert_eq!(cells(&read_built(&bytes).unwrap()), [[float(7.0)]]);
+        }
+        #[test]
         fn big_endian_64_bit_signatures_keep_their_four_byte_layout() {
             // In a 64-bit big-endian file the row-size signature is followed
             // by four unspecified bytes, and only 0xFFFFFFFF opens the

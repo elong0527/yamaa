@@ -429,6 +429,13 @@ static readstat_error_t sas7bdat_handle_data_value(readstat_variable_t *variable
     } else if (col_info->type == READSTAT_TYPE_DOUBLE) {
         uint64_t  val = 0;
         double dval = NAN;
+        if (col_info->width < 1 || col_info->width > 8) {
+            /* A DOUBLE is 3-8 bytes on disk, but col_info can be mutated by a
+             * COLUMN_ATTRS subheader after the columns were validated. Guard
+             * here so a corrupt width can't produce an undefined shift below. */
+            retval = READSTAT_ERROR_PARSE;
+            goto cleanup;
+        }
         if (ctx->little_endian) {
             int k;
             for (k=0; k<col_info->width; k++) {
@@ -522,8 +529,8 @@ cleanup:
 static readstat_error_t sas7bdat_parse_subheader_rdc(const char *subheader, size_t len, sas7bdat_ctx_t *ctx) {
     readstat_error_t retval = READSTAT_OK;
     const unsigned char *input = (const unsigned char *)subheader;
-    char *buffer = readstat_malloc(ctx->row_length);
-    if (!buffer) return READSTAT_ERROR_MALLOC;
+    char *buffer = ctx->row;
+    if (buffer == NULL) return READSTAT_ERROR_PARSE;
     char *output = buffer;
     while (input + 2 <= (const unsigned char *)subheader + len) {
         int i;
@@ -607,14 +614,15 @@ static readstat_error_t sas7bdat_parse_subheader_rdc(const char *subheader, size
     }
     retval = sas7bdat_parse_single_row(buffer, ctx);
 cleanup:
-    free(buffer);
-
     return retval;
 }
 
 static readstat_error_t sas7bdat_parse_subheader_rle(const char *subheader, size_t len, sas7bdat_ctx_t *ctx) {
     if (ctx->row_limit == ctx->parsed_row_count)
         return READSTAT_OK;
+    /* Without an output buffer the decompressor only counts bytes. */
+    if (ctx->row == NULL)
+        return READSTAT_ERROR_PARSE;
 
     readstat_error_t retval = READSTAT_OK;
     ssize_t bytes_decompressed = 0;
@@ -638,6 +646,10 @@ cleanup:
 }
 
 static readstat_error_t sas7bdat_parse_subheader_compressed(const char *subheader, size_t len, sas7bdat_ctx_t *ctx) {
+    /* Columns submitted for uncompressed rows allocated no row buffer. They
+     * already fit the admitted row length, so allocate it on first use. */
+    if (ctx->row == NULL && ctx->row_length)
+        READSTAT_RESIZE_OR_RETURN(ctx->row, ctx->row_length);
     if (ctx->rdc_compression)
         return sas7bdat_parse_subheader_rdc(subheader, len, ctx);
 

@@ -47,8 +47,9 @@ Rust checks the fixed source-byte and table-shape boundaries from the shared
 `Limits` policy. The C readers admit declared row/column/cell geometry before
 table-sized metadata allocation. Allocation arithmetic and source page/header
 extents are checked. Compressed SAS row buffers are allocated only after
-physical scalar widths and offsets pass. Snapshot reads and seeks validate
-their ranges against the held input.
+physical scalar widths and offsets pass, when columns are submitted for a
+compressed row or, if uncompressed rows came first, at the first compressed
+row. Snapshot reads and seeks validate their ranges against the held input.
 The SAS header/page sizes are bounded by the captured snapshot framing, rather
 than a separate 16 MiB threshold. Their minimum framing sizes still apply.
 Text-blob count follows the 65,536 slots addressable by source uint16 references.
@@ -69,6 +70,10 @@ by hand, inside the local changes above, or declined here with its reason.
 | Upstream commits | Change | Status |
 | --- | --- | --- |
 | `365c743e`, `78bb8a94` | A 64-bit subheader's eight-byte signature is compared in full, so a row stored uncompressed in a compressed dataset is not read as metadata when its first four bytes match a signature. Big-endian files keep their four-byte layout. | Ported |
+| `da9fcaa4` | A numeric value whose column width is outside 1 to 8 bytes fails instead of shifting by an undefined amount. | Ported |
+| `5850fb57` (release field) | The header's release field is copied into a terminated buffer before `sscanf` reads it. The deleted-row part of this commit is listed below. | Ported |
+| `a0aa9f3` | RDC decompresses into the dataset's row buffer instead of allocating one per row. | Ported |
+| `3c68974f` | Allocation failures are checked. | Already covered by the local checked allocations |
 
 ## Tests
 
