@@ -65,6 +65,8 @@ pub(super) enum Payload {
 #[derive(Debug)]
 pub(super) struct Framing<'a> {
     pub metadata: &'a [u8],
+    /// How many row groups the footer lists.
+    pub row_groups: usize,
     pub pages: Vec<Page<'a>>,
     /// Each page header's byte range in the held file and the end of the
     /// page's body, in page order.
@@ -156,6 +158,7 @@ pub(super) fn admit(bytes: &[u8]) -> Result<Framing<'_>, Error> {
     yamaa_core::limits::Limits::table(declared_rows, leaves)?;
     let mut result = Framing {
         metadata,
+        row_groups: groups.len(),
         pages: Vec::new(),
         headers: Vec::new(),
     };
