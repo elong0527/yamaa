@@ -624,7 +624,10 @@ Evidence: `schema-ordering`, `adam-adae-review-order`, `adam-adae-serious-sequen
 Replaces: REQ-0297, REQ-0298, REQ-0299, REQ-0300, REQ-0301, REQ-0302, REQ-0312, REQ-1102, REQ-1103.
 
 The bare form is a [Schema language](reference/schema-language.md) shorthand
-union, whichever operation declares the list. `direction` defaults to `asc`.
+union, whichever operation declares the list, and a mapping holding only
+`variable` restates it and fails as `redundant_long_form` under
+[SCHEMA-15](reference/schema-language.md#schema-15). `direction` defaults to
+`asc`.
 `nulls` has no schema default: a resolved specification leaves an omitted
 `nulls` omitted, and the placement it then means follows `direction`. Each
 term has its own direction and placement:
