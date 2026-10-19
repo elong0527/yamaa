@@ -208,9 +208,7 @@ mod numeric {
     mod bound_expression {
         use std::convert::Infallible;
         use yamaa_core::{
-            bound_expression::{
-                Binding, BindingError, BoundNumeric, BoundPredicate, Read, ScopeError,
-            },
+            bound_expression::{Binding, BindingError, BoundNumeric, BoundPredicate, Read},
             expression::{compile, CompileError, Context, Failure, Resolver},
             value::{Selection, Value},
         };
@@ -246,7 +244,6 @@ mod numeric {
                 admitted.bindings(),
                 &[binding("A", Read::Source(0)), binding("B", Read::Column(1))]
             );
-            assert_eq!(admitted.validate(1, &[false, true], false), Ok(()));
             assert!(admitted.reads_source());
             assert_eq!(
                 numeric("A + B", vec![binding("A", Read::Source(0))]),
@@ -282,50 +279,7 @@ mod numeric {
             assert_eq!(predicate("", vec![]), Err(BindingError::EmptyPath));
             let admitted =
                 predicate("rows[0].filter", vec![binding("A", Read::Column(0))]).unwrap();
-            assert_eq!(admitted.validate(0, &[true], true), Ok(()));
-            assert_eq!(
-                admitted.validate(0, &[false], false),
-                Err(BindingError::UnavailableColumn)
-            );
-            assert_eq!(
-                admitted.validate(0, &[], false),
-                Err(BindingError::UnavailableColumn)
-            );
             assert_eq!(admitted.plan().spec_path(), "rows[0].filter");
-        }
-
-        #[test]
-        fn scope_validation_preserves_group_and_sorted_name_error_precedence() {
-            let admitted = numeric(
-                "A + B",
-                vec![binding("B", Read::Column(0)), binding("A", Read::Source(2))],
-            )
-            .unwrap();
-            assert_eq!(
-                admitted.validate(1, &[], true),
-                Err(ScopeError::GroupedSource)
-            );
-            assert_eq!(
-                admitted.validate(1, &[], false),
-                Err(ScopeError::InvalidSource)
-            );
-            assert_eq!(
-                admitted.validate(3, &[], false),
-                Err(ScopeError::UnavailableColumn)
-            );
-            assert_eq!(admitted.validate(3, &[true], false), Ok(()));
-            let source = predicate("filter", vec![binding("A", Read::Source(2))]).unwrap();
-            assert_eq!(
-                source.validate(1, &[], true),
-                Err(BindingError::GroupedSource)
-            );
-            assert_eq!(
-                source.validate(1, &[], false),
-                Err(BindingError::InvalidSource)
-            );
-            let output = numeric("A", vec![binding("A", Read::Column(0))]).unwrap();
-            assert!(!output.reads_source());
-            assert_eq!(output.validate(0, &[true], true), Ok(()));
         }
 
         #[derive(Default)]
@@ -380,10 +334,6 @@ mod numeric {
             assert!(collected.collects("A"));
             assert!(!collected.collects("B"));
             assert_eq!(
-                collected.validate(1, &[], false),
-                Err(BindingError::InvalidSource)
-            );
-            assert_eq!(
                 BoundPredicate::new_contextual(
                     original.plan().clone(),
                     vec![binding("A", Read::Column(0))],
@@ -411,10 +361,6 @@ mod numeric {
                 vec![],
             )
             .unwrap();
-            assert_eq!(
-                kept.validate(0, &[], false),
-                Err(BindingError::InvalidSource)
-            );
             assert_eq!(
                 BoundPredicate::new(original.plan().clone(), kept.bindings().to_vec()),
                 Err(BindingError::InvalidSource)

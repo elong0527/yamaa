@@ -66,11 +66,7 @@ pub(crate) fn visit_execution_failure<'a, E>(
     error: &'a ExecutionError<E>,
     visit: &mut impl FnMut(&'static str, &'a E),
 ) {
-    match error {
-        ExecutionError::Function { error, .. } => invocation("derivation", &error.kind, visit),
-        ExecutionError::ProjectFunction { error, .. } => {
-            invocation("derivation", &error.kind, visit)
-        }
-        _ => {}
+    if let ExecutionError::ProjectFunction { error, .. } = error {
+        invocation("derivation", &error.kind, visit)
     }
 }

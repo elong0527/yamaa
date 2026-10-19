@@ -557,10 +557,7 @@ mod relations {
     mod relation_shapes {
         //! Metadata never coerces an unknown derivation into a stored-column kind.
         use yamaa_core::{
-            dataset::{
-                CurrentField, CurrentRead, RelationField, RelationFieldOrigin, RelationRange,
-                RelationRangeBound, RelationRangeError, RelationShape, RelationShapeError,
-            },
+            dataset::{RelationField, RelationFieldOrigin, RelationShape, RelationShapeError},
             value::{ColumnType, ValueType},
         };
         fn fields() -> Vec<RelationField> {
@@ -650,37 +647,6 @@ mod relations {
             assert_eq!(
                 RelationShape::new(fields(1024), Some(vec![usize::MAX])),
                 Err(RelationShapeError::InvalidProjection)
-            );
-        }
-
-        #[test]
-        fn unknown_derived_bound_kind_survives_while_forged_coordinates_or_kinds_are_rejected() {
-            let shape = RelationShape::new(fields(), None).unwrap();
-            let make = |column, kind| {
-                RelationRange::new(
-                    "range".into(),
-                    CurrentField {
-                        read: CurrentRead::Output(0),
-                        identifier: "V".into(),
-                    },
-                    None,
-                    Some(RelationRangeBound {
-                        column,
-                        identifier: "DERIVED".into(),
-                        kind,
-                    }),
-                    None,
-                )
-                .unwrap()
-            };
-            assert!(make(2, None).validate_shape(&shape).is_ok());
-            assert_eq!(
-                make(2, Some(ValueType::Str)).validate_shape(&shape),
-                Err(RelationRangeError::InvalidMetadata)
-            );
-            assert_eq!(
-                make(usize::MAX, None).validate_shape(&shape),
-                Err(RelationRangeError::InvalidMetadata)
             );
         }
     }

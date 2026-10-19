@@ -236,7 +236,7 @@ impl Temporal {
             }
         })
     }
-    /// Admitted operation arity is enforced by the immutable dataset plan.
+    /// The compiler binds one operand per source, so the arity holds.
     pub fn apply(&self, operands: &[Option<Date>]) -> Option<Value> {
         if operands.len() != self.sources.len() {
             return None;

@@ -181,12 +181,6 @@ pub enum ExecutionError<E> {
     FunctionBinding {
         slot: usize,
     },
-    /// Fatal invocation failure, before result conversion or its recovery handler.
-    Function {
-        path: String,
-        error: crate::function_invocation::InvocationFailure<E>,
-        identity: Option<RowIdentity>,
-    },
     /// Versionless package failure retains the original host payload and name/call.
     ProjectFunction {
         path: String,

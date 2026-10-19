@@ -34,32 +34,6 @@ impl MatchRead {
             _ => None,
         }
     }
-    pub(super) fn kind(
-        &self,
-        primary: &TableSchema,
-        secondary: &[SecondarySource],
-        output: &TableSchema,
-        available: &[bool],
-    ) -> Result<ColumnType, PlanError> {
-        if self.identifier().is_empty() {
-            return Err(PlanError::InvalidIntermediate);
-        }
-        let column = match self {
-            Self::Output { column, .. } => {
-                if !available.get(*column).copied().unwrap_or(false) {
-                    return Err(PlanError::InvalidLookup);
-                }
-                output.columns().get(*column)
-            }
-            Self::Record { column, .. } => primary.columns().get(*column),
-            Self::SecondaryRecord { source, column, .. } => secondary
-                .get(*source)
-                .and_then(|source| source.schema.columns().get(*column)),
-        };
-        column
-            .map(|column| column.kind)
-            .ok_or(PlanError::InvalidIntermediate)
-    }
 }
 
 /// Authored current operands whose actual donor scope is not known yet.
@@ -101,7 +75,7 @@ impl ContextualMatch {
 }
 
 /// Padding has no output type conversion. None retains a deferred declaration
-/// defect during binding only; DatasetPlan admission refuses it before execution.
+/// defect during binding only; the compiler refuses it before a plan exists.
 #[derive(Clone, Debug, PartialEq)]
 pub enum MatchValue {
     Contextual(ContextualMatch),
@@ -167,44 +141,6 @@ impl MatchValue {
             Self::Literal(value) => ResultType::of_value(value),
         }
     }
-    fn kind(
-        &self,
-        primary: &TableSchema,
-        secondary: &[SecondarySource],
-        output: &TableSchema,
-        available: &[bool],
-        read_kind: &impl Fn(&MatchRead, ColumnType) -> Option<ColumnType>,
-    ) -> Result<ResultType, PlanError> {
-        if let Self::Expression(expression) = self {
-            expression.validate(primary, secondary, output, available)?;
-        }
-        let read_kind = self
-            .read()
-            .map(|read| {
-                read.kind(primary, secondary, output, available)
-                    .map(|physical| read_kind(read, physical))
-            })
-            .transpose()?
-            .flatten();
-        if matches!(
-            self,
-            Self::StrPad {
-                operation: None,
-                ..
-            } | Self::Contextual(ContextualMatch::StrPad {
-                operation: None,
-                ..
-            })
-        ) {
-            return Err(PlanError::InvalidIntermediate);
-        }
-        if let Self::Contextual(declaration) = self {
-            if declaration.identifier().is_empty() {
-                return Err(PlanError::InvalidIntermediate);
-            }
-        }
-        Ok(self.result_type(read_kind))
-    }
 }
 
 /// One authored donor field and its current scalar match value, in written order.
@@ -213,76 +149,4 @@ pub struct IntermediateKey {
     pub source_column: usize,
     pub path: String,
     pub value: MatchValue,
-}
-
-#[allow(clippy::too_many_arguments)]
-pub(super) fn validate_declaration(
-    keys: &[IntermediateKey],
-    primary: &TableSchema,
-    secondary: &[SecondarySource],
-    donor: &TableSchema,
-    donor_kind: &impl Fn(usize) -> Option<ColumnType>,
-    output: &TableSchema,
-    available: &[bool],
-    read_kind: &impl Fn(&MatchRead, ColumnType) -> Option<ColumnType>,
-) -> Result<(), PlanError> {
-    if keys.is_empty() || keys.len() > crate::limits::Limits::KEYS {
-        return Err(PlanError::InvalidIntermediate);
-    }
-    for (index, key) in keys.iter().enumerate() {
-        if key.path.is_empty()
-            || keys[..index]
-                .iter()
-                .any(|prior| prior.source_column == key.source_column)
-        {
-            return Err(PlanError::InvalidIntermediate);
-        }
-        donor
-            .columns()
-            .get(key.source_column)
-            .ok_or(PlanError::InvalidIntermediate)?;
-        for read in key.value.reads() {
-            if keys[..index]
-                .iter()
-                .flat_map(|prior| prior.value.reads())
-                .any(|prior| prior.identifier() == read.identifier() && prior != read)
-            {
-                return Err(PlanError::InvalidIntermediate);
-            }
-        }
-        let kind = key
-            .value
-            .kind(primary, secondary, output, available, read_kind)?;
-        if donor_kind(key.source_column).is_some_and(|donor| !kind.comparable(donor.into())) {
-            return Err(PlanError::InvalidLookup);
-        }
-    }
-    Ok(())
-}
-
-pub(super) fn validate(
-    keys: &[IntermediateKey],
-    primary: &TableSchema,
-    secondary: &[SecondarySource],
-    donor: &TableSchema,
-    donor_kind: &impl Fn(usize) -> Option<ColumnType>,
-    output: &TableSchema,
-    available: &[bool],
-) -> Result<(), PlanError> {
-    if keys
-        .iter()
-        .any(|key| matches!(key.value, MatchValue::Contextual(_)))
-    {
-        return Err(PlanError::InvalidIntermediate);
-    }
-    validate_declaration(
-        keys,
-        primary,
-        secondary,
-        donor,
-        donor_kind,
-        output,
-        available,
-        &|_, kind| Some(kind),
-    )
 }

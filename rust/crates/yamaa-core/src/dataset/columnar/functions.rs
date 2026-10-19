@@ -4,7 +4,7 @@ use super::buffer::Values;
 use super::relations::Site;
 use super::{Cx, Fail, Run};
 use crate::dataset::execution::ExecutionError;
-use crate::dataset::resolved::{ExprId, FunctionSignature, Op, ResolvedPlan};
+use crate::dataset::resolved::{ExprId, Op, ResolvedPlan};
 use crate::dataset::{FunctionArgument, FunctionInput};
 use crate::function_invocation::FunctionPort;
 use crate::value::Value;
@@ -17,13 +17,7 @@ pub(super) fn admit<E>(
     functions: &dyn FunctionPort<Error = E>,
 ) -> Result<(), Fail<E>> {
     for slot in plan.functions() {
-        let admitted = match &slot.signature {
-            FunctionSignature::Host(signature) => functions.signature(slot.slot) == Some(signature),
-            FunctionSignature::Project(signature) => {
-                functions.project_signature(slot.slot) == Some(signature)
-            }
-        };
-        if !admitted {
+        if functions.project_signature(slot.slot) != Some(&slot.signature) {
             return Err(Box::new(ExecutionError::FunctionBinding {
                 slot: slot.slot,
             }));
@@ -44,24 +38,6 @@ pub(super) fn evaluate<E>(
     let mut values = Values::missing(0);
     for &row in rows {
         let value = match &node.op {
-            Op::Function(function) => {
-                let supplied = supplied(run, cx, expr, function.arguments(), row)?;
-                match crate::function_invocation::invoke_at(
-                    function.signature(),
-                    &supplied,
-                    function.slot(),
-                    &mut *run.functions,
-                ) {
-                    Ok(value) => value,
-                    Err(error) => {
-                        return Err(Box::new(ExecutionError::Function {
-                            path: node.path.to_string(),
-                            identity: run.failure_identity(cx, row),
-                            error,
-                        }))
-                    }
-                }
-            }
             Op::ProjectFunction(function) => {
                 let supplied = supplied(run, cx, expr, function.arguments(), row)?;
                 match crate::function_invocation::invoke_project_at(
