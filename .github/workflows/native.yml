@@ -441,7 +441,9 @@ jobs:
     name: native-r (${{ matrix.os }})
     needs: r-dist
     runs-on: ${{ matrix.os }}
-    timeout-minutes: ${{ matrix.os == 'windows-latest' && 40 || 20 }}
+    # The package installs twice, once on its own and once inside R CMD
+    # check, and each build runs at most two Cargo jobs, as CRAN requires.
+    timeout-minutes: ${{ matrix.os == 'windows-latest' && 75 || 40 }}
     strategy:
       fail-fast: false
       matrix:
