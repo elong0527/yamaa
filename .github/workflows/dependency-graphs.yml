@@ -52,11 +52,11 @@ jobs:
             --lockfile rust/Cargo.lock --lockfile python/uv.lock
 
   graph:
-    # Rust 1.90 is the workspace rust-version that both graphs resolve
+    # Rust 1.82 is the workspace rust-version that both graphs resolve
     # against. They build with the pinned toolchain; Release compatibility
     # checks the minimum toolchain. Branch rulesets require these names, so
     # moving the pin leaves them unchanged.
-    name: ${{ matrix.graph }} (Python ${{ matrix.python }}, Rust 1.90, R 4.6.1)
+    name: ${{ matrix.graph }} (Python ${{ matrix.python }}, Rust 1.82, R 4.6.1)
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     strategy:
