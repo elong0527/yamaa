@@ -371,7 +371,8 @@ impl Declaration {
     /// (`column_driver_findings`, WINDOW-11). So every grouped template a
     /// column-level read reaches here is over the read's own driver, as
     /// NAME-4 checks for any column-level read. Returns whether any such read
-    /// was refused.
+    /// was refused. `check` reports the same refusals without a source schema
+    /// ([`Self::declared_group_findings`]).
     pub(super) fn group_findings(
         &self,
         catalog: &Catalog,
@@ -734,7 +735,19 @@ impl Declaration {
         }
     }
 
-    pub(super) fn check_findings(&self, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
+    /// The findings binding reports for this window that the declarations
+    /// decide, in binding's order: the grouping refusals of
+    /// [`Self::group_findings`], the authored defects, then each read of a
+    /// dataset other than the driver of the rows (`scope`). Without a scope
+    /// it reports the authored defects alone.
+    pub(super) fn check_findings(
+        &self,
+        scope: Option<static_checks::Scope<'_>>,
+        findings: &mut Vec<BindFinding>,
+    ) -> Result<(), BindError> {
+        if let Some(scope) = scope {
+            self.declared_group_findings(scope, findings);
+        }
         if matches!(self.kind, Kind::RowValue { offset: 0, .. }) {
             findings.push(BindFinding::Window(WindowFinding::ZeroOffset {
                 path: format!("{}.offset", self.path),
@@ -761,6 +774,75 @@ impl Declaration {
                 findings,
             )?;
         }
+        if let Some(scope) = scope {
+            self.foreign_findings(scope.drivers, findings);
+        }
         Ok(())
+    }
+
+    /// [`Self::group_findings`] from the declarations alone: under grouped
+    /// construction, each operand that names a field of the driver of the
+    /// rows must be a group key (REQ-0067 for a row template, REQ-0107 at
+    /// column level). Binding decides it only for a field the driver stores,
+    /// and reports any other as unknown; without source schemas every such
+    /// field is taken as stored.
+    fn declared_group_findings(
+        &self,
+        scope: static_checks::Scope<'_>,
+        findings: &mut Vec<BindFinding>,
+    ) {
+        let Some(phase) = scope.phase else {
+            return;
+        };
+        for (name, path) in self.operands() {
+            if !name
+                .split_once('.')
+                .is_some_and(|(qualifier, _)| scope.drivers.contains(&qualifier))
+            {
+                continue;
+            }
+            if let Some(finding) = crate::reference_scope::group_finding(name, phase) {
+                findings.push(BindFinding::QualifiedReference {
+                    path,
+                    name: name.into(),
+                    row: scope.row.map(String::from),
+                    finding,
+                });
+            }
+        }
+    }
+
+    /// A window reads a qualified field only at the record that built each
+    /// row. Binding's catalog holds one dataset, the driver of those rows, so
+    /// it refuses a field of any other dataset whether or not that dataset
+    /// stores it (REQ-0103, `resolve` in [`Self::bind_available`]). The
+    /// declarations decide that refusal: each operand naming a dataset that
+    /// is none of `drivers`, in binding's order. That is the operation's own
+    /// operands, each `window.group_by` and `window.order_by` entry, then
+    /// each name of the filter once, in sorted order. Whether a driver stores
+    /// a field is known only to binding.
+    fn foreign_findings(&self, drivers: &[&str], findings: &mut Vec<BindFinding>) {
+        let filtered = self
+            .filter
+            .as_ref()
+            .and_then(|(_, compiled)| compiled.as_ref().ok())
+            .into_iter()
+            .flat_map(|plan| {
+                let names: BTreeSet<_> = plan.identifiers().collect();
+                names
+                    .into_iter()
+                    .map(|name| (name, plan.spec_path().to_owned()))
+            });
+        for (name, path) in self.operands().into_iter().chain(filtered) {
+            if name
+                .split_once('.')
+                .is_some_and(|(qualifier, _)| !drivers.contains(&qualifier))
+            {
+                findings.push(BindFinding::UnknownReference {
+                    path,
+                    name: name.into(),
+                });
+            }
+        }
     }
 }
