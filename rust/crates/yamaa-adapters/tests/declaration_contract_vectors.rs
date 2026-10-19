@@ -2009,18 +2009,21 @@ mod declaration {
             // #2293: an inherited dependency_cycle names the cycle's derivation paths,
             // exactly as the flat build of each parent benchmark records in its
             // committed expected/error.yaml, instead of collapsing to ["columns"].
+            // One detector also names the same closed loop (#2844, decision 1).
             let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../benchmarks");
-            for (name, paths) in [
+            for (name, paths, cycle) in [
                 (
                     "negative-adlb-computed-param",
                     &[
                         "columns.ALTVAL.derivation.aggregate",
                         "columns.AVAL.derivation.case",
                     ][..],
+                    "[ALTVAL, AVAL, ALTVAL]",
                 ),
                 (
                     "negative-first-available-self",
                     &["columns.SEVAL.derivation.first_available"][..],
+                    "[SEVAL, SEVAL]",
                 ),
                 (
                     "negative-row-value-self",
@@ -2028,6 +2031,7 @@ mod declaration {
                         "columns.AVALF.derivation.first_available",
                         "columns.PRIORF.derivation.row_value",
                     ][..],
+                    "[AVALF, PRIORF, AVALF]",
                 ),
             ] {
                 let dir = root.join(name);
@@ -2043,6 +2047,10 @@ mod declaration {
                         "{name}: flat expectation pins {path}"
                     );
                 }
+                assert!(
+                    expected.contains(&format!("cycle: {cycle}")),
+                    "{name}: flat expectation pins {cycle}"
+                );
                 let mut host = new_host(&parent);
                 let error = shipped_schema::prepare(
                     source(b"schema_version: '1.0'\nparent: parent.yaml\n".to_vec()),
@@ -2059,6 +2067,11 @@ mod declaration {
                 assert_eq!(diagnostic["condition"], "dependency_cycle", "{name}");
                 assert_eq!(diagnostic["requirement"], "REQ-0072", "{name}");
                 assert_eq!(diagnostic["spec_paths"], json!(paths), "{name}");
+                let members = cycle
+                    .trim_matches(['[', ']'])
+                    .split(", ")
+                    .collect::<Vec<_>>();
+                assert_eq!(diagnostic["context"], json!({"cycle": members}), "{name}");
             }
         }
     }

@@ -225,7 +225,7 @@ pub fn failure_ref<T>(error: &InheritanceError<T>) -> Result<String, &T> {
             errors::validation(*error).unwrap_or_else(|_| rejected("validation_policy"))
         }
         E::Dependencies(error) => literal(
-            errors::inheritance_dependencies(error.clone())
+            errors::inheritance_dependencies(error.as_ref().clone())
                 .unwrap_or_else(|_| rejected("dependency_policy")),
         ),
         E::Model(findings) => normalized(
@@ -291,7 +291,7 @@ pub fn failure<T>(error: InheritanceError<T>) -> Result<String, T> {
             errors::validation(error).unwrap_or_else(|_| rejected("validation_policy"))
         }
         E::Dependencies(error) => literal(
-            errors::inheritance_dependencies(error)
+            errors::inheritance_dependencies(*error)
                 .unwrap_or_else(|_| rejected("dependency_policy")),
         ),
         E::Model(findings) => normalized(schema, None, NormalizationError::Invalid(findings), &[]),

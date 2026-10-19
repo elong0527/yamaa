@@ -16,7 +16,7 @@ pub enum Error {
     #[error("standalone preparation normalize: {0:?}")]
     Normalize(Box<FailureContext>),
     #[error("standalone preparation dependencies: {0:?}")]
-    Dependencies(resolution::Error),
+    Dependencies(Box<resolution::Error>),
     #[error("standalone preparation validation: {0:?}")]
     Validation(ValidationError),
     /// Final model findings have no document-value references.
@@ -101,7 +101,7 @@ pub fn prepare(schema: &SchemaStructure, raw: Document) -> Result<PreparedStanda
     )
     .map_err(|failure| match failure {
         Failure::Normalize { error, input } => normalization_failure(error, input),
-        Failure::Prune(error) => Error::Dependencies(error),
+        Failure::Prune(error) => Error::Dependencies(Box::new(error)),
         Failure::Validation(error) => Error::Validation(error),
         Failure::Model(findings) => Error::Model(findings),
     })?;

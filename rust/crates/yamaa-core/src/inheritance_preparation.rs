@@ -32,7 +32,7 @@ pub enum Error<E> {
     #[error("inheritance preparation normalize: {0:?}")]
     Normalize(Box<FailureContext<NormalizationError>>),
     #[error("inheritance preparation dependencies: {0:?}")]
-    Dependencies(resolution::Error),
+    Dependencies(Box<resolution::Error>),
     #[error("inheritance preparation validation: {0:?}")]
     Validation(ValidationError),
     #[error("inheritance preparation model: {0:?}")]
@@ -224,7 +224,7 @@ pub fn prepare<P: PathPort>(
         Failure::Normalize { error, input } => {
             Error::Normalize(normalization_context(error, input, &provenance, &layers))
         }
-        Failure::Prune(error) => Error::Dependencies(error),
+        Failure::Prune(error) => Error::Dependencies(Box::new(error)),
         Failure::Validation(error) => Error::Validation(error),
         Failure::Model(findings) => Error::Model(findings),
     })?;

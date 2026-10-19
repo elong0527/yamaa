@@ -7,8 +7,6 @@ mod descriptor;
 mod diagnostic_projection;
 mod dictionary_resources;
 mod document;
-mod inheritance_dependencies;
-mod inheritance_references;
 mod layer_admission;
 mod layer_materialization;
 mod layers;
@@ -37,10 +35,6 @@ pub use dictionary_resources::{AdmittedMappingDictionary, MappingDictionaryRefer
 pub(crate) use document::canonical_integer;
 pub use document::{
     Document, DocumentError, DocumentKind, DocumentNode, DocumentResource, ScalarKey,
-};
-pub use inheritance_dependencies::{InheritanceDependencyError, InheritanceDependencyIssue};
-pub use inheritance_references::{
-    InheritanceReference, InheritanceReferenceError, InheritanceReferenceKind,
 };
 pub use layer_materialization::LayerCompositionError;
 pub use layers::{ComposedLayers, LayerNodeOrigin, LayerProvenance};

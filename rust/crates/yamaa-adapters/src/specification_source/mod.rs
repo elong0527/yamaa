@@ -281,7 +281,7 @@ impl CapturedSchema {
                 });
             }
             Err(StandaloneError::Validation(error)) => return Err(Error::Validation(error)),
-            Err(StandaloneError::Dependencies(error)) => return Err(Error::Dependencies(error)),
+            Err(StandaloneError::Dependencies(error)) => return Err(Error::Dependencies(*error)),
             Err(StandaloneError::Model(findings)) => {
                 return Err(Error::Findings(Box::new(CapturedFindings {
                     schema: Arc::clone(self),
@@ -414,7 +414,7 @@ fn standalone_dispatch_error(
             error => Error::Normalize(error),
         },
         Failure::Validation(error) => Error::Validation(error),
-        Failure::Dependencies(error) => Error::Dependencies(error),
+        Failure::Dependencies(error) => Error::Dependencies(*error),
         Failure::Model(findings) => Error::Findings(Box::new(CapturedFindings {
             schema: Arc::clone(schema),
             source,

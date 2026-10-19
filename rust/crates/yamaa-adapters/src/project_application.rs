@@ -433,7 +433,7 @@ fn inheritance_issues<'a>(
             E::Normalize(failure) => matches!(&failure.error, N::Invalid(_)),
             E::Model(_) => true,
             E::Composition(failure) => matches!(&failure.error, N::Invalid(_)),
-            E::Dependencies(error) => matches!(error, D::Invalid(_)),
+            E::Dependencies(error) => matches!(**error, D::Invalid(_)),
             _ => false,
         },
         _ => false,

@@ -124,15 +124,17 @@ impl<'a> Live<'a> {
         }
     }
 
-    /// The names `root` reads in `scope`. A range bound names a donor field,
-    /// not a read, and an aggregate's own binding is local.
+    /// The names `root` reads in `scope` ([`Spec::reads`]), except an
+    /// aggregate's own bindings and a range bound, which names a donor field;
+    /// and the key columns of an aggregate, each paired with the current
+    /// row's same-named value.
     fn read(&self, root: ExprId, scope: Scope, out: &mut Vec<Reading>) -> Result<(), Error> {
         let spec = self.spec;
         let mut bounds = BTreeSet::new();
         let mut predicates = BTreeSet::new();
         let mut items = BTreeSet::new();
         let mut failure = None;
-        spec.walk(root, scope, |at, scope| {
+        spec.walk(root, scope, |at, _| {
             match &spec.expr(at).kind {
                 ExprKind::Formula(formula) => {
                     if let Err(error @ CompileError::Limit { .. }) = &formula.compiled {
@@ -146,7 +148,6 @@ impl<'a> Live<'a> {
                         predicates.extend(formula.names.iter().map(|&(_, name)| name));
                     }
                 }
-                // A key column pairs with the current row's same-named value.
                 ExprKind::Aggregate(aggregate) => {
                     if let Some(JoinKey::Columns { columns, .. }) = &aggregate.key {
                         out.extend(columns.iter().map(Reading::variable));
@@ -154,21 +155,6 @@ impl<'a> Live<'a> {
                 }
                 ExprKind::Odm(odm) => {
                     items.insert(odm.item);
-                }
-                ExprKind::Ref(name)
-                    if !matches!(scope, Scope::Local(_)) && !bounds.contains(&at) =>
-                {
-                    let kind = if items.contains(&at) {
-                        Kind::Item
-                    } else if predicates.contains(&at) {
-                        Kind::Predicate
-                    } else {
-                        Kind::Variable
-                    };
-                    out.push(Reading {
-                        name: name.0.clone(),
-                        kind,
-                    });
                 }
                 _ => {}
             }
@@ -179,7 +165,26 @@ impl<'a> Live<'a> {
             );
             Step::Continue
         });
-        failure.map_or(Ok(()), Err)
+        if let Some(failure) = failure {
+            return Err(failure);
+        }
+        for read in spec.reads(root, scope) {
+            if matches!(read.scope, Scope::Local(_)) || bounds.contains(&read.at) {
+                continue;
+            }
+            let kind = if items.contains(&read.at) {
+                Kind::Item
+            } else if predicates.contains(&read.at) {
+                Kind::Predicate
+            } else {
+                Kind::Variable
+            };
+            out.push(Reading {
+                name: read.name.0,
+                kind,
+            });
+        }
+        Ok(())
     }
 
     /// The reads that match a lookup's records to the current row: its key,
@@ -716,23 +721,18 @@ pub fn resolve<O: Origin>(
     origins: &[O],
     order: Order,
 ) -> Result<Resolved<O>, Failure> {
-    let expanded = match schema.expand_named_windows(&composed, false) {
-        Ok(expanded) => expanded,
-        Err(error) => {
-            return Err(Failure::Normalize {
-                error,
-                input: composed,
-            })
-        }
-    };
+    let expanded = schema
+        .expand_named_windows(&composed, false)
+        .map_err(|error| Failure::Normalize {
+            error,
+            input: composed,
+        })?;
     let expanded_origins = expanded
         .origins
         .iter()
         .map(|&node| origins[node])
         .collect::<Vec<_>>();
-    let pruned = prune(&expanded.document, order);
-    comparison::compare(schema, &expanded.document, order, &pruned);
-    let pruned = pruned.map_err(Failure::Prune)?;
+    let pruned = prune(&expanded.document, order).map_err(Failure::Prune)?;
     let pruned_origins = pruned
         .origins
         .iter()
@@ -752,15 +752,12 @@ pub fn resolve<O: Origin>(
         .iter()
         .map(|&origin| O::through(origin, &pruned_origins))
         .collect::<Vec<_>>();
-    let strict = match schema.expand_named_windows(&normalized.document, true) {
-        Ok(strict) => strict,
-        Err(error) => {
-            return Err(Failure::Normalize {
-                error,
-                input: normalized.document,
-            })
-        }
-    };
+    let strict = schema
+        .expand_named_windows(&normalized.document, true)
+        .map_err(|error| Failure::Normalize {
+            error,
+            input: normalized.document,
+        })?;
     let traced = strict
         .origins
         .iter()
@@ -818,150 +815,4 @@ fn surviving(pruned: &Document, references: Vec<WindowReference>) -> Vec<WindowR
             true
         })
         .collect()
-}
-
-/// Review only (#3134): the old pruning beside the new one on every spec.
-mod comparison {
-    use super::{Error, Issue, Order};
-    use crate::expression::Context;
-    use crate::schema::{
-        Document, DocumentNode as N, InheritanceDependencyError as Old,
-        InheritanceDependencyIssue as OldIssue, InheritanceReferenceError as R, NormalizedDocument,
-        SchemaStructure,
-    };
-    use std::io::Write;
-
-    fn names(d: &Document, field: &str, identity: Option<&str>) -> Vec<String> {
-        let Some(node) = d.field(d.root(), field) else {
-            return Vec::new();
-        };
-        match (&d.nodes()[node], identity) {
-            (N::Sequence(items), Some(identity)) => items
-                .iter()
-                .filter_map(|&item| match &d.nodes()[d.field(item, identity)?] {
-                    N::Text(text) => Some(text.clone()),
-                    _ => None,
-                })
-                .collect(),
-            (N::Mapping(entries), None) => entries
-                .iter()
-                .filter_map(|&(key, _)| match &d.nodes()[key] {
-                    N::Text(text) => Some(text.clone()),
-                    _ => None,
-                })
-                .collect(),
-            _ => Vec::new(),
-        }
-    }
-
-    fn summary(d: &Document) -> String {
-        let domain = match d.field(d.root(), "domain").map(|n| &d.nodes()[n]) {
-            Some(N::Text(text)) => text.clone(),
-            _ => String::new(),
-        };
-        format!(
-            "{domain}\tinputs={:?}\tintermediates={:?}\tcolumns={:?}",
-            names(d, "input", None),
-            names(d, "intermediates", Some("id")),
-            names(d, "columns", Some("name")),
-        )
-    }
-
-    fn same_issue(old: &OldIssue, new: &Issue) -> bool {
-        match (old, new) {
-            (
-                OldIssue::Unknown { column, dependency },
-                Issue::Unknown {
-                    column: c,
-                    dependency: d,
-                },
-            ) => column == c && dependency == d,
-            (OldIssue::Cycle { cycle, paths, .. }, Issue::Cycle { cycle: c, paths: p }) => {
-                cycle == c && paths == p
-            }
-            _ => false,
-        }
-    }
-
-    pub(super) fn compare(
-        schema: &SchemaStructure,
-        document: &Document,
-        order: Order,
-        new: &Result<NormalizedDocument, Error>,
-    ) {
-        compare_one(schema, document, order, new, "");
-        // A standalone spec also runs the layered order, for coverage.
-        if order == Order::Declared {
-            let ordered = super::prune(document, Order::Dependencies);
-            compare_one(schema, document, Order::Dependencies, &ordered, "extra");
-        }
-    }
-
-    fn compare_one(
-        schema: &SchemaStructure,
-        document: &Document,
-        order: Order,
-        new: &Result<NormalizedDocument, Error>,
-        label: &str,
-    ) {
-        let old = match order {
-            Order::Declared => schema.prune_inheritance_dependencies(document),
-            Order::Dependencies => schema.resolve_inheritance_dependencies(document),
-        };
-        let same = match (&old, new) {
-            (Ok(old), Ok(new)) => old == new,
-            (Err(Old::Invalid(old)), Err(Error::Invalid(new))) => {
-                old.len() == new.len() && old.iter().zip(new).all(|(o, n)| same_issue(o, n))
-            }
-            (Err(Old::Reference(R::Numeric(old))), Err(Error::Limit { context, error }))
-                if *context == Context::Compute =>
-            {
-                old == error
-            }
-            (Err(Old::Reference(R::Aggregate(old))), Err(Error::Limit { context, error }))
-                if *context == Context::Aggregate =>
-            {
-                old == error
-            }
-            (Err(Old::Reference(R::Predicate(old))), Err(Error::Limit { context, error }))
-                if *context == Context::Predicate =>
-            {
-                old == error
-            }
-            _ => false,
-        };
-        let cycle_context = matches!(&old, Err(Old::Invalid(issues)) if issues.iter().any(|issue| matches!(issue, OldIssue::Cycle { columns, cycle, .. } if columns[..] != cycle[..cycle.len() - 1])));
-        let Some(path) = std::env::var_os("YAMAA_PRUNING_COMPARISON") else {
-            assert!(
-                same,
-                "old and new pruning differ\nold: {old:?}\nnew: {new:?}"
-            );
-            return;
-        };
-        let verdict = if same { "same" } else { "differs" };
-        let mut line = format!(
-            "{verdict}\t{order:?}{label}\tcycle_context_changed={cycle_context}\t{}",
-            summary(document)
-        );
-        match (&old, new) {
-            (Ok(old), Ok(_)) => line.push_str(&format!("\tok\t{}", summary(&old.document))),
-            (old, new) => line.push_str(&format!("\told={old:?}\tnew={new:?}")),
-        }
-        if !same {
-            if let (Ok(old), Ok(new)) = (&old, new) {
-                line.push_str(&format!(
-                    "\told={}\tnew={}",
-                    summary(&old.document),
-                    summary(&new.document)
-                ));
-            }
-        }
-        line.push('\n');
-        let mut file = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)
-            .expect("comparison log");
-        file.write_all(line.as_bytes()).expect("comparison log");
-    }
 }
