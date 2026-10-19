@@ -15,10 +15,12 @@ installs both outside it, and runs on those installs:
 
 First, until #2843 swaps in the executor over the resolved plan, it runs the
 `yamaa-adapters` and `yamaa` test suites with the test-only executor
-selector set to `compare`: every plan those suites execute, the whole
-benchmark corpus included, runs on both executors, and the two attempts must
-be equal (output, diagnostics, handler counts in order, retained check
-records, callback order and observer events; Q7 of #2840).
+selector set to `compare`: every plan those suites execute runs on both
+executors, and the two attempts must be equal (output, diagnostics, handler
+counts in order, retained check records, callback order and observer events;
+Q7 of #2840). That is every benchmark except those the `EXEMPTIONS` list of
+`memory_resolver_benchmarks.rs` names, which call project functions, expect a
+file-ingest diagnostic or judge filesystem paths.
 
 Building fresh means the gate never judges a stale development extension.
 """

@@ -151,11 +151,14 @@ unchanged. Each such PR passes ordinary CI and `make check-equivalence` on its
 exact head, and says so in the PR. Until the executor over the resolved plan
 replaces today's (#2843), the gate first runs the `yamaa-adapters` and `yamaa`
 test suites with the test-only `executor-comparison` feature and
-`YAMAA_EXECUTOR=compare`. Every plan those suites execute, the whole benchmark
-corpus included, then runs on both executors. The two attempts must be equal:
-output, diagnostics, handler counts in order, retained check records, callback
-order and observer events. A difference aborts the test with both attempts
-printed. The gate then builds the Python and R packages
+`YAMAA_EXECUTOR=compare`. Every plan those suites execute then runs on both
+executors: that is every benchmark except those the `EXEMPTIONS` list of
+`memory_resolver_benchmarks.rs` names, which call project functions, expect a
+file-ingest diagnostic or judge filesystem paths. The two attempts must be
+equal: output, diagnostics, handler counts in order, retained check records,
+callback order and observer events. A difference, or a panic in either
+executor, aborts the test with the report printed. The gate then builds the
+Python and R packages
 from the checkout and installs both outside it. On each host it runs public
 benchmark conformance: every active benchmark must reproduce its expected
 bytes, and every negative benchmark its first diagnostic's phase, condition,

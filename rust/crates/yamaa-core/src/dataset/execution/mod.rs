@@ -101,6 +101,7 @@ impl Dataset {
         &self.rows
     }
     /// Complete owned rows in their final order.
+    #[cfg(any(test, feature = "executor-comparison"))]
     pub(crate) fn from_rows(schema: TableSchema, rows: Vec<Vec<Value>>) -> Self {
         Self { schema, rows }
     }
