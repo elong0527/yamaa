@@ -4,7 +4,8 @@ Part of the [1.0 interface RFC](../interface-1.0.md). This page gives the
 disposition of each rule contradiction of #3030 Phase 0 item 6, the rules
 items of #3048, the requirement-to-rule rewrite of D28, and the proposed text
 of every card the RFC would change. Nothing here changes a card: Phase 1
-writes the cards after the owner approves.
+writes the cards. The owner approved the proposed text on 2026-10-19 (#3030
+D71).
 
 `rules/README.md` sets the approval level. A change to a card's title or
 statement changes the language and needs the maintainer's approval; a change

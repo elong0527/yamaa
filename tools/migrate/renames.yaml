@@ -1,14 +1,15 @@
-# yamaa 1.0 rename table (proposed)
+# yamaa 1.0 rename table (approved)
 #
-# Phase 0 of #3030, item 2. Status: a proposal for the owner to approve on
-# #3030. Nothing is renamed or converted before that approval. The design
-# document docs/design/interface-1.0.md gives the reasons, the measurements
-# and the options not taken; the item ids below (P-...) are its RFC items.
+# Phase 0 of #3030, item 2. Status: approved. The owner approved the table
+# as a whole on #3030 (D58, 2026-10-19), with the answers to the design
+# document's questions (D59 to D70). The design document
+# docs/design/interface-1.0.md gives the reasons, the measurements and the
+# options not taken; the item ids below (P-...) are its RFC items.
 #
 # What this file is. It maps every field, registry keyword and enumerated
 # value of today's schemas (yaml/schema*.yaml, 0.5.0) to its 1.0 spelling,
 # or to "removed" with the reason, and lists the fields 1.0 adds. Phase 2's
-# internal converter (tools/migrate/, D35) is driven by it once approved.
+# internal converter (tools/migrate/, D35) is driven by it.
 # No tool reads this file yet, and no repository check interprets it beyond
 # the generic YAML, ASCII and rule-citation checks.
 #
@@ -53,9 +54,9 @@
 #                 an enumerated value that changes; unchanged values are
 #                 `keep`.
 #   proposed      the 1.0 spelling, when it differs from `today`.
-#   decision      `decided (Dn)` when an owner decision on #3030 fixes the
-#                 entry, or `proposed` when this RFC proposes it, including
-#                 a proposal to keep today's spelling (kind keep).
+#   decision      `decided (Dn)`: the owner decision on #3030 that fixes the
+#                 entry. D58 decided every entry the RFC proposed, including
+#                 each proposal to keep today's spelling (kind keep).
 #   ref           the RFC item id in the design document.
 #   reason        why, citing rule cards by id.
 #   field_kind    the D31 kind of the 1.0 field: expression (grammar text),
@@ -72,30 +73,25 @@
 #                 hosts (python/, R/), docs (docs/, rules/, yaml/), tools
 #                 (tools/, evaluations/), and total.
 #
-# How the owner approves it. The owner approves the table on #3030, item by
-# item through the design document's RFC table or as a whole. An approved
-# `proposed` entry becomes decided; a rejected rename or reshape becomes
-# `kind: keep`. A later change to this file follows the same approval.
+# How it was approved. The owner approved the table as a whole on #3030
+# (D58), so every entry the RFC proposed is decided. A later change to this
+# file needs the owner's approval on #3030 in the same way.
 
 format: yamaa.rename-table
 format_version: 1
-status: proposed
+status: approved
 measured_at: 1758ad145
 design: docs/design/interface-1.0.md
 summary:
   entries: 636
   changes: 64
   by_kind_and_decision:
-    keep, decided: 148
-    keep, proposed: 424
-    new, decided: 13
-    new, proposed: 8
-    removed, decided: 8
-    removed, proposed: 2
-    rename, proposed: 9
-    reshape, decided: 11
-    reshape, proposed: 8
-    value, proposed: 5
+    keep, decided: 572
+    new, decided: 21
+    removed, decided: 10
+    rename, decided: 9
+    reshape, decided: 19
+    value, decided: 5
   conditions: 19
   paths: 13
   reserved: 22
@@ -165,7 +161,7 @@ entries:
   today: parent
   type: path
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: path
   convert: {action: none}
   measurement: {bench: 14, rust: 95, hosts: 35, docs: 0, tools: 8, total: 152}
@@ -177,7 +173,7 @@ entries:
   type: identifier
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   ref: P-WORD-1
   reason: 'Kept: it names the output dataset; 1,785 uses, PROJECT-5''s spec names and every harness read
     depend on it.'
@@ -192,7 +188,7 @@ entries:
   type: list[identifier]
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: identifier
   convert: {action: none}
   measurement: {bench: 433, rust: 1163, hosts: 92, docs: 13, tools: 7, total: 1708}
@@ -204,7 +200,7 @@ entries:
   type: dict[identifier, dataset_source]
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: structure
   convert: {action: none}
   measurement: {bench: 446, rust: 1175, hosts: 99, docs: 14, tools: 9, total: 1743}
@@ -238,7 +234,7 @@ entries:
   type: output_class
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: structure
   convert: {action: none}
   measurement: {bench: 434, rust: 1169, hosts: 94, docs: 7, tools: 14, total: 1718}
@@ -249,7 +245,7 @@ entries:
   today: windows
   type: dict[identifier, window_spec]
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: structure
   convert: {action: none}
   measurement: {bench: 9, rust: 8, hosts: 2, docs: 1, tools: 0, total: 20}
@@ -260,7 +256,7 @@ entries:
   today: intermediates
   type: list[intermediate_class]
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   ref: P-WORD-1
   reason: 'Kept: an intermediate can also drive row templates (ROW-2), which is not a lookup; the schema
     description says "named intermediate".'
@@ -275,7 +271,7 @@ entries:
   type: list[column_class]
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: structure
   convert: {action: none}
   measurement: {bench: 440, rust: 1204, hosts: 115, docs: 15, tools: 15, total: 1789}
@@ -319,7 +315,7 @@ entries:
   today: metadata
   type: dict[str, str]
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 16, rust: 12, hosts: 0, docs: 0, tools: 1, total: 29}
@@ -354,7 +350,7 @@ entries:
   today: decimals
   type: int
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 2, rust: 72, hosts: 2, docs: 0, tools: 1, total: 77}
@@ -388,7 +384,7 @@ entries:
   today: order_by
   type: list[order_by_term]
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 45, rust: 4, hosts: 2, docs: 1, tools: 0, total: 52}
@@ -400,7 +396,7 @@ entries:
   type: bool
   default: false
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
@@ -412,7 +408,7 @@ entries:
   type: str
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 20, rust: 6, hosts: 0, docs: 0, tools: 0, total: 26}
@@ -424,7 +420,7 @@ entries:
   type: dataset_class_name
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 20, rust: 6, hosts: 0, docs: 0, tools: 0, total: 26}
@@ -435,7 +431,7 @@ entries:
   today: subclass
   type: dataset_subclass_name
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
@@ -447,7 +443,7 @@ entries:
   type: str
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 20, rust: 6, hosts: 0, docs: 0, tools: 0, total: 26}
@@ -459,7 +455,7 @@ entries:
   type: bool
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 20, rust: 6, hosts: 0, docs: 0, tools: 0, total: 26}
@@ -471,7 +467,7 @@ entries:
   type: bool
   default: false
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 2, rust: 0, hosts: 0, docs: 0, tools: 0, total: 2}
@@ -482,7 +478,7 @@ entries:
   today: domain
   type: identifier
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: identifier
   convert: {action: none}
   measurement: {bench: 1, rust: 0, hosts: 0, docs: 0, tools: 0, total: 1}
@@ -493,7 +489,7 @@ entries:
   today: comment
   type: submission_comment
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 1, rust: 0, hosts: 0, docs: 0, tools: 0, total: 1}
@@ -504,7 +500,7 @@ entries:
   today: group_by
   type: list[variable]
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 107, rust: 53, hosts: 0, docs: 6, tools: 0, total: 166}
@@ -515,7 +511,7 @@ entries:
   today: order_by
   type: list[order_by_term]
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 95, rust: 100, hosts: 2, docs: 6, tools: 0, total: 203}
@@ -526,7 +522,7 @@ entries:
   today: filter
   type: predicate
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: expression
   convert: {action: none}
   measurement: {bench: 19, rust: 14, hosts: 0, docs: 0, tools: 0, total: 33}
@@ -538,7 +534,7 @@ entries:
   type: intermediate_id
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: identifier
   convert: {action: none}
   measurement: {bench: 186, rust: 377, hosts: 25, docs: 17, tools: 0, total: 605}
@@ -550,7 +546,7 @@ entries:
   type: identifier
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   ref: P-WORD-1
   reason: 'Kept: the relation a construct reads; P-COPY-1 reuses the word.'
   field_kind: identifier
@@ -579,7 +575,7 @@ entries:
   today: between
   type: record_between_class
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: structure
   convert: {action: none}
   measurement: {bench: 21, rust: 17, hosts: 0, docs: 2, tools: 0, total: 40}
@@ -590,7 +586,7 @@ entries:
   today: filter
   type: predicate
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: expression
   convert: {action: none}
   measurement: {bench: 81, rust: 81, hosts: 6, docs: 8, tools: 0, total: 176}
@@ -601,7 +597,7 @@ entries:
   today: order_by
   type: list[order_by_term]
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 52, rust: 87, hosts: 7, docs: 9, tools: 0, total: 155}
@@ -612,7 +608,7 @@ entries:
   today: keep
   type: keep_policy
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 51, rust: 87, hosts: 7, docs: 7, tools: 0, total: 152}
@@ -623,7 +619,7 @@ entries:
   today: columns
   type: list[identifier]
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: identifier
   convert: {action: none}
   measurement: {bench: 10, rust: 6, hosts: 0, docs: 2, tools: 0, total: 18}
@@ -635,7 +631,7 @@ entries:
   type: substitute_value
   kind: rename
   proposed: absent
-  decision: proposed
+  decision: decided (D58)
   ref: P-HND-1
   reason: 'One handler name per meaning: a lookup with no candidate answers absence (LOOKUP-24), spelled
     `absent` on a source binding and `no_match` on an intermediate, while `str_extract.no_match` means
@@ -652,7 +648,7 @@ entries:
   today: require_match
   type: bool
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   ref: P-HND-2
   reason: 'Kept: `require_match: true` stays the one way to make lookup absence fail, beside the `absent`
     answer; declaring both fails as `conflicting_absence_policy` (LOOKUP-24).'
@@ -666,7 +662,7 @@ entries:
   today: derivations
   type: dict[identifier, intermediate_derivation]
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: expression
   convert: {action: none}
   measurement: {bench: 22, rust: 94, hosts: 16, docs: 7, tools: 0, total: 139}
@@ -689,7 +685,7 @@ entries:
   type: identifier
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: identifier
   convert: {action: none}
   measurement: {bench: 3268, rust: 3652, hosts: 173, docs: 40, tools: 24, total: 7157}
@@ -701,7 +697,7 @@ entries:
   type: column_type
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   ref: P-WORD-1
   reason: 'Kept: `type` is tied to its class in each position (SCHEMA-5), as Define-XML uses Type for
     origins, methods and page references.'
@@ -715,7 +711,7 @@ entries:
   today: label
   type: str
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 3209, rust: 1496, hosts: 55, docs: 22, tools: 5, total: 4787}
@@ -726,7 +722,7 @@ entries:
   today: derivation
   type: derivation
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: expression
   convert: {action: none}
   measurement: {bench: 2865, rust: 3201, hosts: 205, docs: 47, tools: 12, total: 6330}
@@ -759,7 +755,7 @@ entries:
   today: metadata
   type: dict[str, str]
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 4, rust: 7, hosts: 2, docs: 0, tools: 1, total: 14}
@@ -771,7 +767,7 @@ entries:
   type: row_id
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: identifier
   convert: {action: none}
   measurement: {bench: 210, rust: 421, hosts: 8, docs: 5, tools: 0, total: 644}
@@ -782,7 +778,7 @@ entries:
   today: dataset
   type: identifier
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   ref: P-WORD-1
   reason: 'Kept: the relation a row template reads (ROW-1).'
   field_kind: identifier
@@ -795,7 +791,7 @@ entries:
   today: group_by
   type: list[variable]
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 87, rust: 113, hosts: 0, docs: 1, tools: 0, total: 201}
@@ -806,7 +802,7 @@ entries:
   today: filter
   type: predicate
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: expression
   convert: {action: none}
   measurement: {bench: 132, rust: 107, hosts: 0, docs: 3, tools: 0, total: 242}
@@ -819,7 +815,7 @@ entries:
   required: true
   kind: reshape
   proposed: derivations (optional)
-  decision: proposed
+  decision: decided (D58)
   ref: P-HND-4
   reason: 'Proposal: optional instead of required; 42 documents write `derivations: {}` for a template
     that derives nothing row-locally (ROW-1).'
@@ -833,7 +829,7 @@ entries:
   today: id
   type: verification_id
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: identifier
   convert: {action: none}
   measurement: {bench: 37, rust: 9, hosts: 0, docs: 0, tools: 0, total: 46}
@@ -845,7 +841,7 @@ entries:
   type: list[variable]
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 37, rust: 17, hosts: 0, docs: 0, tools: 0, total: 54}
@@ -857,7 +853,7 @@ entries:
   type: verification_severity
   default: error
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
@@ -868,7 +864,7 @@ entries:
   today: id
   type: verification_id
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: identifier
   convert: {action: none}
   measurement: {bench: 239, rust: 59, hosts: 0, docs: 2, tools: 0, total: 300}
@@ -879,7 +875,7 @@ entries:
   today: when
   type: predicate
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: expression
   convert: {action: none}
   measurement: {bench: 205, rust: 67, hosts: 1, docs: 2, tools: 0, total: 275}
@@ -891,7 +887,7 @@ entries:
   type: predicate
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: expression
   convert: {action: none}
   measurement: {bench: 239, rust: 82, hosts: 1, docs: 2, tools: 0, total: 324}
@@ -903,7 +899,7 @@ entries:
   type: verification_severity
   default: error
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 0, rust: 5, hosts: 0, docs: 0, tools: 0, total: 5}
@@ -914,7 +910,7 @@ entries:
   today: id
   type: verification_id
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: identifier
   convert: {action: none}
   measurement: {bench: 15, rust: 5, hosts: 0, docs: 1, tools: 0, total: 21}
@@ -925,7 +921,7 @@ entries:
   today: group_by
   type: list[variable]
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 11, rust: 5, hosts: 0, docs: 0, tools: 0, total: 16}
@@ -936,7 +932,7 @@ entries:
   today: filter
   type: predicate
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: expression
   convert: {action: none}
   measurement: {bench: 15, rust: 14, hosts: 0, docs: 1, tools: 0, total: 30}
@@ -947,7 +943,7 @@ entries:
   today: when
   type: predicate
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: expression
   convert: {action: none}
   measurement: {bench: 1, rust: 7, hosts: 0, docs: 0, tools: 0, total: 8}
@@ -958,7 +954,7 @@ entries:
   today: min
   type: int
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 164, rust: 89, hosts: 1, docs: 0, tools: 0, total: 254}
@@ -969,7 +965,7 @@ entries:
   today: max
   type: int
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 165, rust: 53, hosts: 0, docs: 0, tools: 0, total: 218}
@@ -980,7 +976,7 @@ entries:
   today: min_fraction
   type: float
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 1, rust: 3, hosts: 0, docs: 0, tools: 0, total: 4}
@@ -991,7 +987,7 @@ entries:
   today: max_fraction
   type: float
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 3, rust: 3, hosts: 0, docs: 1, tools: 0, total: 7}
@@ -1003,7 +999,7 @@ entries:
   type: verification_severity
   default: error
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 1, rust: 4, hosts: 0, docs: 1, tools: 0, total: 6}
@@ -1015,7 +1011,7 @@ entries:
   type: variable
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   reason: 'Kept: the current-row value whose forms #2934 P1 and P3 decided.'
   field_kind: name
   convert: {action: none}
@@ -1027,7 +1023,7 @@ entries:
   today: lower
   type: identifier
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: identifier
   convert: {action: none}
   measurement: {bench: 27, rust: 29, hosts: 0, docs: 3, tools: 0, total: 59}
@@ -1038,7 +1034,7 @@ entries:
   today: upper
   type: identifier
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: identifier
   convert: {action: none}
   measurement: {bench: 28, rust: 27, hosts: 0, docs: 3, tools: 0, total: 58}
@@ -1049,7 +1045,7 @@ entries:
   today: core
   type: core_designation
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 140, rust: 17, hosts: 0, docs: 1, tools: 0, total: 158}
@@ -1060,7 +1056,7 @@ entries:
   today: mandatory
   type: bool
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 28, rust: 14, hosts: 0, docs: 0, tools: 0, total: 42}
@@ -1071,7 +1067,7 @@ entries:
   today: role
   type: str
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 88, rust: 0, hosts: 0, docs: 1, tools: 0, total: 89}
@@ -1082,7 +1078,7 @@ entries:
   today: data_type
   type: define_data_type
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 4, rust: 1, hosts: 0, docs: 0, tools: 0, total: 5}
@@ -1093,7 +1089,7 @@ entries:
   today: length
   type: int
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 132, rust: 19, hosts: 0, docs: 1, tools: 0, total: 152}
@@ -1104,7 +1100,7 @@ entries:
   today: significant_digits
   type: int
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 8, rust: 1, hosts: 0, docs: 0, tools: 0, total: 9}
@@ -1115,7 +1111,7 @@ entries:
   today: display_format
   type: str
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 4, rust: 0, hosts: 0, docs: 1, tools: 0, total: 5}
@@ -1126,7 +1122,7 @@ entries:
   today: codelist
   type: identifier
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: identifier
   convert: {action: none}
   measurement: {bench: 12, rust: 3, hosts: 2, docs: 4, tools: 0, total: 21}
@@ -1137,7 +1133,7 @@ entries:
   today: inventory_vocabulary
   type: bool
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 0, rust: 2, hosts: 0, docs: 0, tools: 0, total: 2}
@@ -1149,7 +1145,7 @@ entries:
   type: submission_origin_class
   kind: rename
   proposed: origins
-  decision: proposed
+  decision: decided (D58)
   ref: P-ORIGIN-1
   reason: 'D16 decides several origins per variable, as Define-XML 2.1 allows (zero or more def:Origin
     per ItemDef). SCHEMA-10 forbids a union of one value and a list, so the field becomes a list, and
@@ -1165,7 +1161,7 @@ entries:
   today: method
   type: submission_method
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 11, rust: 3, hosts: 0, docs: 0, tools: 0, total: 14}
@@ -1176,7 +1172,7 @@ entries:
   today: comment
   type: submission_comment
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 1, rust: 0, hosts: 0, docs: 0, tools: 0, total: 1}
@@ -1187,7 +1183,7 @@ entries:
   today: value_level
   type: list[submission_value_class]
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: structure
   convert: {action: none}
   measurement: {bench: 14, rust: 5, hosts: 0, docs: 0, tools: 0, total: 19}
@@ -1222,7 +1218,7 @@ entries:
   today: types
   type: dict[identifier, column_type]
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 343, rust: 921, hosts: 39, docs: 3, tools: 2, total: 1308}
@@ -1233,7 +1229,7 @@ entries:
   today: encoding
   type: str
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   ref: P-UNU-1
   reason: Kept for SAS and Transport inputs, where SAS-2 requires it; CSV stays UTF-8 (D15).
   field_kind: value
@@ -1246,7 +1242,7 @@ entries:
   today: schema
   type: project_path
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: path
   convert: {action: none}
   measurement: {bench: 6, rust: 12, hosts: 7, docs: 1, tools: 2, total: 28}
@@ -1258,7 +1254,7 @@ entries:
   type: str
   default: missing
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 1, rust: 10, hosts: 4, docs: 0, tools: 0, total: 15}
@@ -1269,7 +1265,7 @@ entries:
   today: ordinal
   type: identifier
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: identifier
   convert: {action: none}
   measurement: {bench: 2, rust: 53, hosts: 3, docs: 2, tools: 0, total: 60}
@@ -1280,7 +1276,7 @@ entries:
   today: require_match
   type: bool
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   ref: P-HND-2
   reason: Kept, as on an intermediate (LOOKUP-1, LOOKUP-24).
   field_kind: value
@@ -1293,7 +1289,7 @@ entries:
   today: id
   type: verification_id
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: identifier
   convert: {action: none}
   measurement: {bench: 0, rust: 32, hosts: 0, docs: 0, tools: 0, total: 32}
@@ -1305,7 +1301,7 @@ entries:
   type: verification_severity
   default: error
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 0, rust: 1, hosts: 0, docs: 0, tools: 0, total: 1}
@@ -1316,7 +1312,7 @@ entries:
   today: id
   type: verification_id
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: identifier
   convert: {action: none}
   measurement: {bench: 0, rust: 20, hosts: 0, docs: 0, tools: 0, total: 20}
@@ -1328,7 +1324,7 @@ entries:
   type: list[literal_value]
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 169, rust: 54, hosts: 0, docs: 2, tools: 1, total: 226}
@@ -1340,7 +1336,7 @@ entries:
   type: verification_severity
   default: error
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
@@ -1351,7 +1347,7 @@ entries:
   today: id
   type: verification_id
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: identifier
   convert: {action: none}
   measurement: {bench: 0, rust: 19, hosts: 2, docs: 0, tools: 0, total: 21}
@@ -1362,7 +1358,7 @@ entries:
   today: min
   type: float
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 21, rust: 24, hosts: 0, docs: 1, tools: 0, total: 46}
@@ -1373,7 +1369,7 @@ entries:
   today: max
   type: float
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 15, rust: 14, hosts: 2, docs: 1, tools: 0, total: 32}
@@ -1385,7 +1381,7 @@ entries:
   type: verification_severity
   default: error
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 3, rust: 1, hosts: 2, docs: 1, tools: 0, total: 7}
@@ -1396,7 +1392,7 @@ entries:
   today: id
   type: verification_id
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: identifier
   convert: {action: none}
   measurement: {bench: 0, rust: 13, hosts: 0, docs: 0, tools: 0, total: 13}
@@ -1408,7 +1404,7 @@ entries:
   type: int
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 4, rust: 14, hosts: 0, docs: 0, tools: 0, total: 18}
@@ -1420,7 +1416,7 @@ entries:
   type: verification_severity
   default: error
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
@@ -1431,7 +1427,7 @@ entries:
   today: id
   type: verification_id
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: identifier
   convert: {action: none}
   measurement: {bench: 0, rust: 39, hosts: 0, docs: 0, tools: 0, total: 39}
@@ -1443,7 +1439,7 @@ entries:
   type: regex
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 7, rust: 45, hosts: 1, docs: 1, tools: 0, total: 54}
@@ -1455,7 +1451,7 @@ entries:
   type: verification_severity
   default: error
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 0, rust: 1, hosts: 0, docs: 0, tools: 0, total: 1}
@@ -1467,7 +1463,7 @@ entries:
   type: origin_type
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 154, rust: 42, hosts: 2, docs: 4, tools: 0, total: 202}
@@ -1478,7 +1474,7 @@ entries:
   today: source
   type: origin_source
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 115, rust: 15, hosts: 0, docs: 1, tools: 0, total: 131}
@@ -1489,7 +1485,7 @@ entries:
   today: description
   type: str
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 25, rust: 8, hosts: 0, docs: 0, tools: 0, total: 33}
@@ -1500,7 +1496,7 @@ entries:
   today: documents
   type: list[document_reference]
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: identifier
   convert: {action: none}
   measurement: {bench: 42, rust: 0, hosts: 0, docs: 0, tools: 0, total: 42}
@@ -1511,7 +1507,7 @@ entries:
   today: id
   type: verification_id
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: identifier
   convert: {action: none}
   measurement: {bench: 0, rust: 2, hosts: 0, docs: 1, tools: 0, total: 3}
@@ -1523,7 +1519,7 @@ entries:
   type: list[variable]
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 0, rust: 3, hosts: 0, docs: 1, tools: 1, total: 5}
@@ -1535,7 +1531,7 @@ entries:
   type: verification_severity
   default: error
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 1, total: 1}
@@ -1547,7 +1543,7 @@ entries:
   type: str
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 1, rust: 0, hosts: 0, docs: 0, tools: 0, total: 1}
@@ -1558,7 +1554,7 @@ entries:
   today: documents
   type: list[document_reference]
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: identifier
   convert: {action: none}
   measurement: {bench: 1, rust: 0, hosts: 0, docs: 0, tools: 0, total: 1}
@@ -1570,7 +1566,7 @@ entries:
   type: variable
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 33, rust: 24, hosts: 0, docs: 4, tools: 0, total: 61}
@@ -1582,7 +1578,7 @@ entries:
   type: str
   default: asc
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 25, rust: 21, hosts: 0, docs: 3, tools: 0, total: 49}
@@ -1593,7 +1589,7 @@ entries:
   today: nulls
   type: str
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 9, rust: 6, hosts: 0, docs: 1, tools: 0, total: 16}
@@ -1605,7 +1601,7 @@ entries:
   type: list[filtered_source]
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 27, rust: 33, hosts: 1, docs: 1, tools: 0, total: 62}
@@ -1616,7 +1612,7 @@ entries:
   today: missing
   type: substitute_value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 9, rust: 18, hosts: 0, docs: 1, tools: 0, total: 28}
@@ -1628,7 +1624,7 @@ entries:
   type: list[variable]
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 8, rust: 8, hosts: 0, docs: 0, tools: 0, total: 16}
@@ -1640,7 +1636,7 @@ entries:
   type: list[variable]
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 11, rust: 3, hosts: 0, docs: 0, tools: 0, total: 14}
@@ -1652,7 +1648,7 @@ entries:
   type: filtered_source
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 81, rust: 42, hosts: 3, docs: 3, tools: 0, total: 129}
@@ -1664,7 +1660,7 @@ entries:
   type: '[dict[str, substitute_value], project_path]'
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   ref: P-DICT-1
   reason: 'Kept: an inline map, or the path of a header-less dictionary file, which holds the value of
     one field and is data, not a yamaa document (EXPR-11).'
@@ -1679,7 +1675,7 @@ entries:
   type: bool
   default: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 6, rust: 7, hosts: 0, docs: 0, tools: 0, total: 13}
@@ -1690,7 +1686,7 @@ entries:
   today: missing
   type: substitute_value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 35, rust: 21, hosts: 0, docs: 2, tools: 0, total: 58}
@@ -1701,7 +1697,7 @@ entries:
   today: unmapped
   type: substitute_value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 22, rust: 15, hosts: 0, docs: 1, tools: 0, total: 38}
@@ -1713,7 +1709,7 @@ entries:
   type: filtered_source
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 15, rust: 14, hosts: 0, docs: 2, tools: 0, total: 31}
@@ -1725,7 +1721,7 @@ entries:
   type: list[float]
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 15, rust: 14, hosts: 0, docs: 2, tools: 0, total: 31}
@@ -1737,7 +1733,7 @@ entries:
   type: list[str]
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 15, rust: 14, hosts: 0, docs: 2, tools: 0, total: 31}
@@ -1750,7 +1746,7 @@ entries:
   default: false
   kind: reshape
   proposed: closed
-  decision: proposed
+  decision: decided (D58)
   ref: P-ORD-2
   reason: '`right: true` is right-closed intervals, `false` (default) left-closed (EXPR-13); one `closed`
     vocabulary for intervals.'
@@ -1764,7 +1760,7 @@ entries:
   today: missing
   type: substitute_value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 5, rust: 6, hosts: 0, docs: 2, tools: 0, total: 13}
@@ -1776,7 +1772,7 @@ entries:
   type: variable
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 4, rust: 32, hosts: 0, docs: 1, tools: 0, total: 37}
@@ -1788,7 +1784,7 @@ entries:
   type: int
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 4, rust: 32, hosts: 0, docs: 1, tools: 0, total: 37}
@@ -1800,7 +1796,7 @@ entries:
   type: variable
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 12, rust: 33, hosts: 0, docs: 2, tools: 0, total: 47}
@@ -1812,7 +1808,7 @@ entries:
   type: regex
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 12, rust: 33, hosts: 0, docs: 2, tools: 0, total: 47}
@@ -1824,7 +1820,7 @@ entries:
   type: int
   default: 0
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 10, rust: 32, hosts: 0, docs: 1, tools: 0, total: 43}
@@ -1835,7 +1831,7 @@ entries:
   today: missing
   type: substitute_value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 9, rust: 6, hosts: 0, docs: 0, tools: 0, total: 15}
@@ -1846,7 +1842,7 @@ entries:
   today: no_match
   type: substitute_value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 7, rust: 8, hosts: 0, docs: 0, tools: 0, total: 15}
@@ -1858,7 +1854,7 @@ entries:
   type: variable
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 7, rust: 0, hosts: 0, docs: 1, tools: 0, total: 8}
@@ -1870,7 +1866,7 @@ entries:
   type: regex
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 7, rust: 0, hosts: 0, docs: 1, tools: 0, total: 8}
@@ -1882,7 +1878,7 @@ entries:
   type: str
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 7, rust: 0, hosts: 0, docs: 1, tools: 0, total: 8}
@@ -1893,7 +1889,7 @@ entries:
   today: missing
   type: substitute_value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 3, rust: 0, hosts: 0, docs: 0, tools: 0, total: 3}
@@ -1905,7 +1901,7 @@ entries:
   type: variable
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 21, rust: 44, hosts: 1, docs: 0, tools: 0, total: 66}
@@ -1917,7 +1913,7 @@ entries:
   type: str
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 21, rust: 44, hosts: 1, docs: 0, tools: 0, total: 66}
@@ -1928,7 +1924,7 @@ entries:
   today: missing
   type: substitute_value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 6, rust: 18, hosts: 0, docs: 0, tools: 0, total: 24}
@@ -1954,7 +1950,7 @@ entries:
   type: variable
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 4, rust: 2, hosts: 0, docs: 0, tools: 0, total: 6}
@@ -1966,7 +1962,7 @@ entries:
   type: int
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 4, rust: 2, hosts: 0, docs: 0, tools: 0, total: 6}
@@ -1978,7 +1974,7 @@ entries:
   type: temporal_type
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 24, rust: 9, hosts: 0, docs: 4, tools: 0, total: 37}
@@ -1990,7 +1986,7 @@ entries:
   type: variable
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   reason: 'Kept: two ordered roles that give the sign (TIME-4).'
   field_kind: name
   convert: {action: none}
@@ -2003,7 +1999,7 @@ entries:
   type: variable
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   reason: Kept, with `start`.
   field_kind: name
   convert: {action: none}
@@ -2016,7 +2012,7 @@ entries:
   type: str
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 24, rust: 9, hosts: 0, docs: 4, tools: 0, total: 37}
@@ -2029,7 +2025,7 @@ entries:
   default: exclusive
   kind: rename
   proposed: closed
-  decision: proposed
+  decision: decided (D58)
   ref: P-ORD-2
   reason: 'One spelling of endpoint inclusion for intervals: `closed: left | right | both | neither`,
     the vocabulary of pandas and Polars intervals. `exclusive` counts (start, end], `inclusive` [start,
@@ -2045,7 +2041,7 @@ entries:
   type: temporal_type
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 39, rust: 12, hosts: 1, docs: 3, tools: 0, total: 55}
@@ -2057,7 +2053,7 @@ entries:
   type: variable
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 39, rust: 12, hosts: 1, docs: 3, tools: 0, total: 55}
@@ -2068,7 +2064,7 @@ entries:
   today: month
   type: int
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 25, rust: 6, hosts: 0, docs: 0, tools: 0, total: 31}
@@ -2079,7 +2075,7 @@ entries:
   today: day
   type: '[int, day_rule]'
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 29, rust: 8, hosts: 0, docs: 0, tools: 0, total: 37}
@@ -2091,7 +2087,7 @@ entries:
   type: str
   default: year
   kind: removed
-  decision: proposed
+  decision: decided (D58)
   ref: P-IMP-1
   reason: 'Declare each fact once (I2): TIME-10 requires `month` exactly when the minimum is year and
     `day` exactly when it is year or month, so the minimum follows from the rules supplied. Retires month_required,
@@ -2107,7 +2103,7 @@ entries:
   today: time
   type: time_rule
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 12, rust: 4, hosts: 0, docs: 3, tools: 0, total: 19}
@@ -2118,7 +2114,7 @@ entries:
   today: not_before
   type: variable
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 2, rust: 2, hosts: 0, docs: 0, tools: 0, total: 4}
@@ -2129,7 +2125,7 @@ entries:
   today: not_after
   type: variable
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 2, rust: 4, hosts: 0, docs: 0, tools: 0, total: 6}
@@ -2140,7 +2136,7 @@ entries:
   today: fallback
   type: variable
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 1, rust: 0, hosts: 0, docs: 0, tools: 0, total: 1}
@@ -2151,7 +2147,7 @@ entries:
   today: invalid
   type: substitute_value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 15, rust: 7, hosts: 0, docs: 0, tools: 0, total: 22}
@@ -2163,7 +2159,7 @@ entries:
   type: temporal_type
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 12, rust: 6, hosts: 0, docs: 1, tools: 0, total: 19}
@@ -2175,7 +2171,7 @@ entries:
   type: variable
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 12, rust: 6, hosts: 0, docs: 1, tools: 0, total: 19}
@@ -2186,7 +2182,7 @@ entries:
   today: invalid
   type: substitute_value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 3, rust: 1, hosts: 0, docs: 0, tools: 0, total: 4}
@@ -2198,7 +2194,7 @@ entries:
   type: variable
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 15, rust: 0, hosts: 0, docs: 0, tools: 0, total: 15}
@@ -2210,7 +2206,7 @@ entries:
   type: str
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 15, rust: 0, hosts: 0, docs: 0, tools: 0, total: 15}
@@ -2222,7 +2218,7 @@ entries:
   type: bool
   default: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
@@ -2234,7 +2230,7 @@ entries:
   type: variable
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 18, rust: 22, hosts: 0, docs: 0, tools: 0, total: 40}
@@ -2247,7 +2243,7 @@ entries:
   required: true
   kind: rename
   proposed: source
-  decision: proposed
+  decision: decided (D58)
   ref: P-OP-1
   reason: 'One name for an operation''s one input: 17 single-input verbs already call it `source`; `date`
     is also a column type, a temporal literal keyword and an `imputation_flag.part` value (TIME-6).'
@@ -2262,7 +2258,7 @@ entries:
   type: variable
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 17, rust: 8, hosts: 0, docs: 0, tools: 0, total: 25}
@@ -2274,7 +2270,7 @@ entries:
   type: variable
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 3, rust: 2, hosts: 0, docs: 0, tools: 0, total: 5}
@@ -2286,7 +2282,7 @@ entries:
   type: variable
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 4, rust: 1, hosts: 0, docs: 0, tools: 0, total: 5}
@@ -2297,7 +2293,7 @@ entries:
   today: month
   type: variable
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 4, rust: 1, hosts: 0, docs: 0, tools: 0, total: 5}
@@ -2308,7 +2304,7 @@ entries:
   today: day
   type: variable
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 3, rust: 1, hosts: 0, docs: 0, tools: 0, total: 4}
@@ -2319,7 +2315,7 @@ entries:
   today: hour
   type: variable
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
@@ -2330,7 +2326,7 @@ entries:
   today: minute
   type: variable
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
@@ -2341,7 +2337,7 @@ entries:
   today: second
   type: variable
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
@@ -2352,7 +2348,7 @@ entries:
   today: invalid
   type: substitute_value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
@@ -2364,7 +2360,7 @@ entries:
   type: variable
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 3, rust: 0, hosts: 0, docs: 0, tools: 0, total: 3}
@@ -2376,7 +2372,7 @@ entries:
   type: temporal_type
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 5, rust: 23, hosts: 0, docs: 0, tools: 0, total: 28}
@@ -2388,7 +2384,7 @@ entries:
   type: variable
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 5, rust: 23, hosts: 0, docs: 0, tools: 0, total: 28}
@@ -2399,7 +2395,7 @@ entries:
   today: days
   type: '[variable, int]'
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 3, rust: 11, hosts: 0, docs: 0, tools: 0, total: 14}
@@ -2410,7 +2406,7 @@ entries:
   today: amount
   type: '[variable, int, float]'
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 2, rust: 12, hosts: 0, docs: 0, tools: 0, total: 14}
@@ -2421,7 +2417,7 @@ entries:
   today: unit
   type: str
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 2, rust: 12, hosts: 0, docs: 0, tools: 0, total: 14}
@@ -2433,7 +2429,7 @@ entries:
   type: variable
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 1, rust: 11, hosts: 0, docs: 0, tools: 0, total: 12}
@@ -2445,7 +2441,7 @@ entries:
   type: str
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 1, rust: 11, hosts: 0, docs: 0, tools: 0, total: 12}
@@ -2456,7 +2452,7 @@ entries:
   today: invalid
   type: substitute_value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 1, rust: 4, hosts: 0, docs: 0, tools: 0, total: 5}
@@ -2467,7 +2463,7 @@ entries:
   today: window
   type: window_selection
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: structure
   convert: {action: none}
   measurement: {bench: 68, rust: 70, hosts: 2, docs: 3, tools: 0, total: 143}
@@ -2479,7 +2475,7 @@ entries:
   type: str
   default: competition
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 8, rust: 0, hosts: 0, docs: 0, tools: 0, total: 8}
@@ -2490,7 +2486,7 @@ entries:
   today: window
   type: window_selection
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: structure
   convert: {action: none}
   measurement: {bench: 11, rust: 3, hosts: 0, docs: 0, tools: 0, total: 14}
@@ -2502,7 +2498,7 @@ entries:
   type: variable
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 14, rust: 13, hosts: 0, docs: 0, tools: 0, total: 27}
@@ -2514,7 +2510,7 @@ entries:
   type: int
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 14, rust: 13, hosts: 0, docs: 0, tools: 0, total: 27}
@@ -2525,7 +2521,7 @@ entries:
   today: window
   type: window_selection
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: structure
   convert: {action: none}
   measurement: {bench: 14, rust: 14, hosts: 0, docs: 0, tools: 0, total: 28}
@@ -2537,7 +2533,7 @@ entries:
   type: variable
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 14, rust: 2, hosts: 0, docs: 2, tools: 0, total: 18}
@@ -2549,7 +2545,7 @@ entries:
   type: bool
   default: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 7, rust: 1, hosts: 0, docs: 1, tools: 0, total: 9}
@@ -2560,7 +2556,7 @@ entries:
   today: window
   type: window_selection
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: structure
   convert: {action: none}
   measurement: {bench: 14, rust: 2, hosts: 0, docs: 2, tools: 0, total: 18}
@@ -2572,7 +2568,7 @@ entries:
   type: variable
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   reason: 'Kept: the date that orders eligible rows (WINDOW-9).'
   field_kind: name
   convert: {action: none}
@@ -2586,7 +2582,7 @@ entries:
   required: true
   kind: rename
   proposed: reference
-  decision: proposed
+  decision: decided (D58)
   ref: P-OP-3
   reason: Same role and spelling as `study_day.reference`, the date a row's date is compared with (WINDOW-9,
     TIME-6).
@@ -2602,7 +2598,7 @@ entries:
   required: true
   kind: rename
   proposed: source
-  decision: proposed
+  decision: decided (D58)
   ref: P-OP-2
   reason: The analysis value the baseline is for is the verb's input (WINDOW-9); `value` also names the
     handled-expression wrapper, the codelist item value and `between.value`.
@@ -2617,7 +2613,7 @@ entries:
   type: bool
   default: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   ref: P-ORD-2
   reason: 'Kept: one bound compared with one date reads more plainly as inclusive than as an interval.'
   field_kind: value
@@ -2631,7 +2627,7 @@ entries:
   type: list[order_by_term]
   kind: reshape
   proposed: 'window.order_by: [<date>, ...tie_break]'
-  decision: proposed
+  decision: decided (D58)
   ref: P-ORD-1
   reason: '`order_by` everywhere: the baseline orders eligible rows by `date` and then the tie-break terms
     (WINDOW-9), which is one order term list; WINDOW-5 then admits `window.order_by` for baseline_flag,
@@ -2646,7 +2642,7 @@ entries:
   today: window
   type: window_selection
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: structure
   convert: {action: none}
   measurement: {bench: 12, rust: 18, hosts: 0, docs: 1, tools: 0, total: 31}
@@ -2658,7 +2654,7 @@ entries:
   type: identifier
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: identifier
   convert: {action: none}
   measurement: {bench: 15, rust: 19, hosts: 20, docs: 0, tools: 0, total: 54}
@@ -2670,7 +2666,7 @@ entries:
   type: dict[identifier, function_arg]
   default: {}
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: expression
   convert: {action: none}
   measurement: {bench: 15, rust: 19, hosts: 20, docs: 0, tools: 0, total: 54}
@@ -2695,7 +2691,7 @@ entries:
   today: unconvertible
   type: substitute_value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 12, rust: 22, hosts: 0, docs: 1, tools: 0, total: 35}
@@ -2841,7 +2837,7 @@ entries:
   type: submission_origin_class
   kind: rename
   proposed: origins
-  decision: proposed
+  decision: decided (D58)
   ref: P-ORIGIN-1
   reason: As for the column's origin (D16, SCHEMA-10).
   field_kind: structure
@@ -2877,7 +2873,7 @@ entries:
   type: column_type
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 1, rust: 26, hosts: 0, docs: 1, tools: 0, total: 28}
@@ -2889,7 +2885,7 @@ entries:
   type: untyped_intermediate_derivation
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: expression
   convert: {action: none}
   measurement: {bench: 1, rust: 21, hosts: 0, docs: 1, tools: 0, total: 23}
@@ -2900,7 +2896,7 @@ entries:
   today: unconvertible
   type: substitute_value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 0, rust: 12, hosts: 0, docs: 1, tools: 0, total: 13}
@@ -2911,7 +2907,7 @@ entries:
   today: id
   type: verification_id
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: identifier
   convert: {action: none}
   measurement: {bench: 0, rust: 1, hosts: 0, docs: 0, tools: 0, total: 1}
@@ -2923,7 +2919,7 @@ entries:
   type: list[variable]
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 0, rust: 1, hosts: 0, docs: 0, tools: 0, total: 1}
@@ -2934,7 +2930,7 @@ entries:
   today: name
   type: str
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
@@ -2946,7 +2942,7 @@ entries:
   type: method_type
   default: Computation
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
@@ -2958,7 +2954,7 @@ entries:
   type: str
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
@@ -2969,7 +2965,7 @@ entries:
   today: expression
   type: formal_expression_class
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: structure
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
@@ -2980,7 +2976,7 @@ entries:
   today: documents
   type: list[document_reference]
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: identifier
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
@@ -2992,7 +2988,7 @@ entries:
   type: variable
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   reason: 'Kept: the binding is itself `source`, so renaming its field would give `source: {source: X}`.'
   field_kind: name
   convert: {action: none}
@@ -3004,7 +3000,7 @@ entries:
   today: between
   type: record_between_class
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: structure
   convert: {action: none}
   measurement: {bench: 2, rust: 7, hosts: 0, docs: 1, tools: 0, total: 10}
@@ -3015,7 +3011,7 @@ entries:
   today: filter
   type: predicate
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: expression
   convert: {action: none}
   measurement: {bench: 42, rust: 54, hosts: 1, docs: 1, tools: 0, total: 98}
@@ -3026,7 +3022,7 @@ entries:
   today: order_by
   type: list[order_by_term]
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 16, rust: 26, hosts: 0, docs: 1, tools: 0, total: 43}
@@ -3037,7 +3033,7 @@ entries:
   today: keep
   type: keep_policy
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 16, rust: 28, hosts: 0, docs: 1, tools: 0, total: 45}
@@ -3048,7 +3044,7 @@ entries:
   today: absent
   type: substitute_value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   ref: P-HND-5
   reason: 'Kept as the answer to a lookup with no record (LOOKUP-24). Proposed: it no longer answers for
     a variable that does not exist, which then always fails as an unknown name (NAME-3; the bind row of
@@ -3063,7 +3059,7 @@ entries:
   today: require_match
   type: bool
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   ref: P-HND-2
   reason: Kept, as on an intermediate (LOOKUP-24).
   field_kind: value
@@ -3077,7 +3073,7 @@ entries:
   type: predicate
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: expression
   convert: {action: none}
   measurement: {bench: 22, rust: 35, hosts: 0, docs: 0, tools: 0, total: 57}
@@ -3089,7 +3085,7 @@ entries:
   type: substitute_value
   default: Y
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 3, rust: 4, hosts: 0, docs: 0, tools: 0, total: 7}
@@ -3100,7 +3096,7 @@ entries:
   today: false_value
   type: substitute_value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 20, rust: 33, hosts: 0, docs: 0, tools: 0, total: 53}
@@ -3111,7 +3107,7 @@ entries:
   today: missing
   type: substitute_value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 19, rust: 25, hosts: 0, docs: 0, tools: 0, total: 44}
@@ -3123,7 +3119,7 @@ entries:
   type: string_template
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: expression
   convert: {action: none}
   measurement: {bench: 4, rust: 6, hosts: 0, docs: 1, tools: 0, total: 11}
@@ -3134,7 +3130,7 @@ entries:
   today: missing
   type: substitute_value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 4, rust: 6, hosts: 0, docs: 1, tools: 0, total: 11}
@@ -3145,7 +3141,7 @@ entries:
   today: key
   type: match_key
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   ref: P-KEY-1
   reason: 'Kept, optional. Proposed: a qualified aggregate without `key` matches on its input''s declared
     `key`, as an implicit join does, and fails when the input declares none (P1). 55 benchmark qualified
@@ -3160,7 +3156,7 @@ entries:
   today: between
   type: record_between_class
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: structure
   convert: {action: none}
   measurement: {bench: 9, rust: 9, hosts: 0, docs: 0, tools: 0, total: 18}
@@ -3171,7 +3167,7 @@ entries:
   today: filter
   type: predicate
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: expression
   convert: {action: none}
   measurement: {bench: 212, rust: 14, hosts: 2, docs: 0, tools: 0, total: 228}
@@ -3182,7 +3178,7 @@ entries:
   today: group_by
   type: list[variable]
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: name
   convert: {action: none}
   measurement: {bench: 31, rust: 9, hosts: 0, docs: 0, tools: 0, total: 40}
@@ -3194,7 +3190,7 @@ entries:
   type: list[derive_binding_class]
   kind: reshape
   proposed: 'derivations: {NAME: {type: T, derivation: E}}'
-  decision: proposed
+  decision: decided (D58)
   ref: P-BIND-1
   reason: One shape for per-record bindings, the intermediate `derivations` map of LOOKUP-15, keyed by
     name so that it composes by key under LAYER-6 instead of being replaced as a list; `type` stays required
@@ -3210,7 +3206,7 @@ entries:
   type: aggregate_expression
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: expression
   convert: {action: none}
   measurement: {bench: 235, rust: 65, hosts: 3, docs: 0, tools: 0, total: 303}
@@ -3222,7 +3218,7 @@ entries:
   type: odm_item
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   ref: P-ODM-1
   reason: 'Kept: an ODM ItemOID reference, not a variable (NAME-7). The `odm` read is the idiom the docs
     teach; `scope` beside it is reserved (P-ODM-1).'
@@ -3236,7 +3232,7 @@ entries:
   today: event
   type: list[odm_oid]
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: identifier
   convert: {action: none}
   measurement: {bench: 2, rust: 2, hosts: 0, docs: 1, tools: 0, total: 5}
@@ -3247,7 +3243,7 @@ entries:
   today: form
   type: list[odm_oid]
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: identifier
   convert: {action: none}
   measurement: {bench: 0, rust: 2, hosts: 0, docs: 0, tools: 0, total: 2}
@@ -3258,7 +3254,7 @@ entries:
   today: item_group
   type: list[odm_oid]
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: identifier
   convert: {action: none}
   measurement: {bench: 0, rust: 2, hosts: 0, docs: 0, tools: 0, total: 2}
@@ -3269,7 +3265,7 @@ entries:
   today: filter
   type: predicate
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: expression
   convert: {action: none}
   measurement: {bench: 0, rust: 4, hosts: 0, docs: 0, tools: 0, total: 4}
@@ -3281,7 +3277,7 @@ entries:
   type: str
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
@@ -3293,7 +3289,7 @@ entries:
   type: str
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
@@ -3305,7 +3301,7 @@ entries:
   type: expression
   required: true
   kind: removed
-  decision: proposed
+  decision: decided (D58)
   ref: P-BIND-2
   reason: 'An untyped intermediate derivation may be written `{value: E}`, a wrapper that cannot carry
     `unconvertible` (LOOKUP-15) and so only restates `E`; the handled wrapper''s equivalent is refused
@@ -3321,7 +3317,7 @@ entries:
   type: identifier
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: identifier
   convert: {action: none}
   measurement: {bench: 42, rust: 0, hosts: 0, docs: 0, tools: 0, total: 42}
@@ -3332,7 +3328,7 @@ entries:
   today: pages
   type: page_reference_class
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: structure
   convert: {action: none}
   measurement: {bench: 42, rust: 0, hosts: 0, docs: 0, tools: 0, total: 42}
@@ -3344,7 +3340,7 @@ entries:
   type: predicate
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: expression
   convert: {action: none}
   measurement: {bench: 363, rust: 97, hosts: 3, docs: 4, tools: 0, total: 467}
@@ -3356,7 +3352,7 @@ entries:
   type: case_result
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: expression
   convert: {action: none}
   measurement: {bench: 363, rust: 97, hosts: 3, docs: 4, tools: 0, total: 467}
@@ -3368,7 +3364,7 @@ entries:
   type: case_result
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: expression
   convert: {action: none}
   measurement: {bench: 137, rust: 71, hosts: 3, docs: 2, tools: 0, total: 213}
@@ -3381,7 +3377,7 @@ entries:
   required: true
   kind: reshape
   proposed: map key of `derivations`
-  decision: proposed
+  decision: decided (D58)
   ref: P-BIND-1
   reason: See aggregate `derive`.
   field_kind: identifier
@@ -3395,7 +3391,7 @@ entries:
   type: column_type
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 13, rust: 22, hosts: 2, docs: 0, tools: 0, total: 37}
@@ -3407,7 +3403,7 @@ entries:
   type: derivation
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: expression
   convert: {action: none}
   measurement: {bench: 13, rust: 22, hosts: 2, docs: 0, tools: 0, total: 37}
@@ -3460,7 +3456,7 @@ entries:
   type: str
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 42, rust: 0, hosts: 0, docs: 0, tools: 0, total: 42}
@@ -3472,7 +3468,7 @@ entries:
   type: str
   required: true
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 42, rust: 0, hosts: 0, docs: 0, tools: 0, total: 42}
@@ -3483,7 +3479,7 @@ entries:
   today: title
   type: str
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   field_kind: value
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
@@ -3701,7 +3697,7 @@ entries:
   type: str
   kind: rename
   proposed: transport
-  decision: proposed
+  decision: decided (D58)
   ref: P-PRJ-1
   reason: '#2855 decision 18 named the field `transport` (`xpt` or `dataset_json`); `datasets` is overloaded
     (input/output datasets, `dataset` keys) and the field selects a transport format, not datasets.'
@@ -4020,7 +4016,7 @@ entries:
   today: alias
   type: str
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   ref: P-PRJ-3
   reason: 'Kept: Define-XML 2.1 writes the NCI code as an Alias element (Context nci:ExtCodeID), and no
     reserved spelling gives `alias` another meaning, so the condition for a rename does not hold (CT-6).'
@@ -4136,7 +4132,7 @@ entries:
   today: alias
   type: str
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   ref: P-PRJ-3
   reason: 'Kept: Define-XML 2.1 writes the NCI code as an Alias element (Context nci:ExtCodeID), and no
     reserved spelling gives `alias` another meaning, so the condition for a rename does not hold (CT-6).'
@@ -4397,7 +4393,7 @@ entries:
   required: true
   kind: reshape
   proposed: bare text typed by the declared parameter or return type
-  decision: proposed
+  decision: decided (D58)
   ref: P-FN-1
   reason: Function-file values (test args, results, defaults) are value fields whose type the definition
     declares (FUNC-5, FUNC-9), so the tag restates the type; optional.
@@ -4413,7 +4409,7 @@ entries:
   required: true
   kind: reshape
   proposed: bare text typed by the declared parameter or return type
-  decision: proposed
+  decision: decided (D58)
   ref: P-FN-1
   reason: As for date.
   field_kind: value
@@ -4426,7 +4422,7 @@ entries:
   today: unique
   type: registry keyword (dataset_verifications)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 7, rust: 3, hosts: 1, docs: 1, tools: 1, total: 13}
 - id: spec.dataset_verifications.all_or_none
@@ -4436,7 +4432,7 @@ entries:
   today: all_or_none
   type: registry keyword (dataset_verifications)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 37, rust: 17, hosts: 0, docs: 0, tools: 0, total: 54}
 - id: spec.dataset_verifications.assert
@@ -4446,7 +4442,7 @@ entries:
   today: assert
   type: registry keyword (dataset_verifications)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 239, rust: 82, hosts: 1, docs: 2, tools: 0, total: 324}
 - id: spec.dataset_verifications.row_count
@@ -4456,7 +4452,7 @@ entries:
   today: row_count
   type: registry keyword (dataset_verifications)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 172, rust: 96, hosts: 1, docs: 1, tools: 0, total: 270}
 - id: spec.intermediate_verifications.unique
@@ -4466,7 +4462,7 @@ entries:
   today: unique
   type: registry keyword (intermediate_verifications)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 17, rust: 7, hosts: 0, docs: 1, tools: 0, total: 25}
 - id: spec.column_verifications.not_missing
@@ -4477,7 +4473,7 @@ entries:
   type: registry keyword (column_verifications)
   kind: reshape
   proposed: bare keyword `- not_missing` when no field is written
-  decision: proposed
+  decision: decided (D58)
   ref: P-HND-4
   reason: '70 documents write `not_missing: {}`; a registry entry whose payload has no required field
     may be written as its bare keyword (SCHEMA-7 gains a shorthand). #2836 adds optional fields later,
@@ -4491,7 +4487,7 @@ entries:
   today: allowed_values
   type: registry keyword (column_verifications)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 169, rust: 54, hosts: 0, docs: 2, tools: 1, total: 226}
 - id: spec.column_verifications.range
@@ -4501,7 +4497,7 @@ entries:
   today: range
   type: registry keyword (column_verifications)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 21, rust: 30, hosts: 2, docs: 1, tools: 0, total: 54}
 - id: spec.column_verifications.max_length
@@ -4511,7 +4507,7 @@ entries:
   today: max_length
   type: registry keyword (column_verifications)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 4, rust: 14, hosts: 0, docs: 0, tools: 0, total: 18}
 - id: spec.column_verifications.matches
@@ -4521,7 +4517,7 @@ entries:
   today: matches
   type: registry keyword (column_verifications)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 7, rust: 45, hosts: 1, docs: 1, tools: 0, total: 54}
 - id: spec.missing_values.literal
@@ -4568,7 +4564,7 @@ entries:
   today: first_available
   type: registry keyword (expressions)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 27, rust: 33, hosts: 1, docs: 1, tools: 0, total: 62}
 - id: spec.expressions.greatest
@@ -4578,7 +4574,7 @@ entries:
   today: greatest
   type: registry keyword (expressions)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 8, rust: 8, hosts: 0, docs: 0, tools: 0, total: 16}
 - id: spec.expressions.least
@@ -4588,7 +4584,7 @@ entries:
   today: least
   type: registry keyword (expressions)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 11, rust: 3, hosts: 0, docs: 0, tools: 0, total: 14}
 - id: spec.expressions.case
@@ -4598,7 +4594,7 @@ entries:
   today: case
   type: registry keyword (expressions)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 240, rust: 92, hosts: 3, docs: 2, tools: 0, total: 337}
 - id: spec.expressions.flag
@@ -4608,7 +4604,7 @@ entries:
   today: flag
   type: registry keyword (expressions)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 63, rust: 73, hosts: 3, docs: 0, tools: 0, total: 139}
 - id: spec.expressions.mapping
@@ -4618,7 +4614,7 @@ entries:
   today: mapping
   type: registry keyword (expressions)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 84, rust: 44, hosts: 3, docs: 4, tools: 0, total: 135}
 - id: spec.expressions.cut
@@ -4628,7 +4624,7 @@ entries:
   today: cut
   type: registry keyword (expressions)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 15, rust: 14, hosts: 0, docs: 2, tools: 0, total: 31}
 - id: spec.expressions.str_pad
@@ -4638,7 +4634,7 @@ entries:
   today: str_pad
   type: registry keyword (expressions)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 4, rust: 32, hosts: 0, docs: 1, tools: 0, total: 37}
 - id: spec.expressions.str_extract
@@ -4648,7 +4644,7 @@ entries:
   today: str_extract
   type: registry keyword (expressions)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 12, rust: 33, hosts: 0, docs: 2, tools: 0, total: 47}
 - id: spec.expressions.str_replace
@@ -4658,7 +4654,7 @@ entries:
   today: str_replace
   type: registry keyword (expressions)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 7, rust: 0, hosts: 0, docs: 1, tools: 0, total: 8}
 - id: spec.expressions.str_template
@@ -4668,7 +4664,7 @@ entries:
   today: str_template
   type: registry keyword (expressions)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 24, rust: 54, hosts: 0, docs: 3, tools: 0, total: 81}
 - id: spec.expressions.str_case
@@ -4678,7 +4674,7 @@ entries:
   today: str_case
   type: registry keyword (expressions)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 21, rust: 44, hosts: 1, docs: 0, tools: 0, total: 66}
 - id: spec.expressions.compute
@@ -4699,7 +4695,7 @@ entries:
   today: round_half_away_from_zero
   type: registry keyword (expressions)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 4, rust: 2, hosts: 0, docs: 0, tools: 0, total: 6}
 - id: spec.expressions.diff
@@ -4709,7 +4705,7 @@ entries:
   today: diff
   type: registry keyword (expressions)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 24, rust: 9, hosts: 0, docs: 4, tools: 0, total: 37}
 - id: spec.expressions.impute
@@ -4719,7 +4715,7 @@ entries:
   today: impute
   type: registry keyword (expressions)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 39, rust: 12, hosts: 1, docs: 3, tools: 0, total: 55}
 - id: spec.expressions.precision
@@ -4729,7 +4725,7 @@ entries:
   today: precision
   type: registry keyword (expressions)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 12, rust: 6, hosts: 0, docs: 1, tools: 0, total: 19}
 - id: spec.expressions.imputation_flag
@@ -4739,7 +4735,7 @@ entries:
   today: imputation_flag
   type: registry keyword (expressions)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 15, rust: 0, hosts: 0, docs: 0, tools: 0, total: 15}
 - id: spec.expressions.to_date
@@ -4749,7 +4745,7 @@ entries:
   today: to_date
   type: registry keyword (expressions)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 18, rust: 22, hosts: 0, docs: 0, tools: 0, total: 40}
 - id: spec.expressions.study_day
@@ -4759,7 +4755,7 @@ entries:
   today: study_day
   type: registry keyword (expressions)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 17, rust: 8, hosts: 0, docs: 0, tools: 0, total: 25}
 - id: spec.expressions.to_epoch_day
@@ -4769,7 +4765,7 @@ entries:
   today: to_epoch_day
   type: registry keyword (expressions)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 3, rust: 2, hosts: 0, docs: 0, tools: 0, total: 5}
 - id: spec.expressions.dtc
@@ -4779,7 +4775,7 @@ entries:
   today: dtc
   type: registry keyword (expressions)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 4, rust: 1, hosts: 0, docs: 0, tools: 0, total: 5}
 - id: spec.expressions.time_of_day
@@ -4789,7 +4785,7 @@ entries:
   today: time_of_day
   type: registry keyword (expressions)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 3, rust: 0, hosts: 0, docs: 0, tools: 0, total: 3}
 - id: spec.expressions.shift
@@ -4799,7 +4795,7 @@ entries:
   today: shift
   type: registry keyword (expressions)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 5, rust: 23, hosts: 0, docs: 0, tools: 0, total: 28}
 - id: spec.expressions.duration_value
@@ -4809,7 +4805,7 @@ entries:
   today: duration_value
   type: registry keyword (expressions)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 1, rust: 11, hosts: 0, docs: 0, tools: 0, total: 12}
 - id: spec.expressions.row_number
@@ -4819,7 +4815,7 @@ entries:
   today: row_number
   type: registry keyword (expressions)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 68, rust: 72, hosts: 2, docs: 3, tools: 0, total: 145}
 - id: spec.expressions.rank
@@ -4829,7 +4825,7 @@ entries:
   today: rank
   type: registry keyword (expressions)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 11, rust: 4, hosts: 0, docs: 0, tools: 0, total: 15}
 - id: spec.expressions.row_value
@@ -4839,7 +4835,7 @@ entries:
   today: row_value
   type: registry keyword (expressions)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 14, rust: 14, hosts: 0, docs: 0, tools: 0, total: 28}
 - id: spec.expressions.locf
@@ -4849,7 +4845,7 @@ entries:
   today: locf
   type: registry keyword (expressions)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 14, rust: 2, hosts: 0, docs: 2, tools: 0, total: 18}
 - id: spec.expressions.baseline_flag
@@ -4859,7 +4855,7 @@ entries:
   today: baseline_flag
   type: registry keyword (expressions)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 12, rust: 21, hosts: 0, docs: 1, tools: 0, total: 34}
 - id: spec.expressions.aggregate
@@ -4869,7 +4865,7 @@ entries:
   today: aggregate
   type: registry keyword (expressions)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 294, rust: 135, hosts: 3, docs: 0, tools: 0, total: 432}
 - id: spec.expressions.odm
@@ -4879,7 +4875,7 @@ entries:
   today: odm
   type: registry keyword (expressions)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 39, rust: 39, hosts: 0, docs: 3, tools: 0, total: 81}
 - id: spec.expressions.function
@@ -4889,7 +4885,7 @@ entries:
   today: function
   type: registry keyword (expressions)
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 15, rust: 19, hosts: 20, docs: 0, tools: 0, total: 54}
 - id: spec.output_class.relative_to=declaring
@@ -4899,7 +4895,7 @@ entries:
   today: declaring
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 4, hosts: 0, docs: 0, tools: 0, total: 4}
 - id: spec.output_class.relative_to=entry
@@ -4909,7 +4905,7 @@ entries:
   today: entry
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 9, hosts: 4, docs: 0, tools: 0, total: 13}
 - id: spec.submission_dataset_class.class=ADAM OTHER
@@ -4919,7 +4915,7 @@ entries:
   today: ADAM OTHER
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 1, hosts: 0, docs: 0, tools: 0, total: 1}
 - id: spec.submission_dataset_class.class=BASIC DATA STRUCTURE
@@ -4929,7 +4925,7 @@ entries:
   today: BASIC DATA STRUCTURE
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 1, rust: 2, hosts: 0, docs: 0, tools: 0, total: 3}
 - id: spec.submission_dataset_class.class=DEVICE LEVEL ANALYSIS DATASET
@@ -4939,7 +4935,7 @@ entries:
   today: DEVICE LEVEL ANALYSIS DATASET
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.submission_dataset_class.class=EVENTS
@@ -4949,7 +4945,7 @@ entries:
   today: EVENTS
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 1, rust: 0, hosts: 0, docs: 0, tools: 0, total: 1}
 - id: spec.submission_dataset_class.class=FINDINGS
@@ -4959,7 +4955,7 @@ entries:
   today: FINDINGS
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 3, rust: 2, hosts: 0, docs: 0, tools: 0, total: 5}
 - id: spec.submission_dataset_class.class=FINDINGS ABOUT
@@ -4969,7 +4965,7 @@ entries:
   today: FINDINGS ABOUT
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.submission_dataset_class.class=INTERVENTIONS
@@ -4979,7 +4975,7 @@ entries:
   today: INTERVENTIONS
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.submission_dataset_class.class=MEDICAL DEVICE BASIC DATA STRUCTURE
@@ -4989,7 +4985,7 @@ entries:
   today: MEDICAL DEVICE BASIC DATA STRUCTURE
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.submission_dataset_class.class=MEDICAL DEVICE OCCURRENCE DATA STRUCTURE
@@ -4999,7 +4995,7 @@ entries:
   today: MEDICAL DEVICE OCCURRENCE DATA STRUCTURE
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.submission_dataset_class.class=OCCURRENCE DATA STRUCTURE
@@ -5009,7 +5005,7 @@ entries:
   today: OCCURRENCE DATA STRUCTURE
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 1, rust: 0, hosts: 0, docs: 0, tools: 0, total: 1}
 - id: spec.submission_dataset_class.class=REFERENCE DATA STRUCTURE
@@ -5019,7 +5015,7 @@ entries:
   today: REFERENCE DATA STRUCTURE
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.submission_dataset_class.class=RELATIONSHIP
@@ -5029,7 +5025,7 @@ entries:
   today: RELATIONSHIP
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 1, rust: 0, hosts: 0, docs: 0, tools: 0, total: 1}
 - id: spec.submission_dataset_class.class=SPECIAL PURPOSE
@@ -5039,7 +5035,7 @@ entries:
   today: SPECIAL PURPOSE
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 10, rust: 0, hosts: 0, docs: 0, tools: 0, total: 10}
 - id: spec.submission_dataset_class.class=STUDY REFERENCE
@@ -5049,7 +5045,7 @@ entries:
   today: STUDY REFERENCE
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.submission_dataset_class.class=SUBJECT LEVEL ANALYSIS DATASET
@@ -5059,7 +5055,7 @@ entries:
   today: SUBJECT LEVEL ANALYSIS DATASET
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 2, rust: 0, hosts: 0, docs: 0, tools: 0, total: 2}
 - id: spec.submission_dataset_class.class=TRIAL DESIGN
@@ -5069,7 +5065,7 @@ entries:
   today: TRIAL DESIGN
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 1, rust: 0, hosts: 0, docs: 0, tools: 0, total: 1}
 - id: spec.submission_dataset_class.subclass=ADVERSE EVENT
@@ -5079,7 +5075,7 @@ entries:
   today: ADVERSE EVENT
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.submission_dataset_class.subclass=MEDICAL DEVICE TIME-TO-EVENT
@@ -5089,7 +5085,7 @@ entries:
   today: MEDICAL DEVICE TIME-TO-EVENT
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.submission_dataset_class.subclass=NON-COMPARTMENTAL ANALYSIS
@@ -5099,7 +5095,7 @@ entries:
   today: NON-COMPARTMENTAL ANALYSIS
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.submission_dataset_class.subclass=POPULATION PHARMACOKINETIC ANALYSIS
@@ -5109,7 +5105,7 @@ entries:
   today: POPULATION PHARMACOKINETIC ANALYSIS
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.submission_dataset_class.subclass=TIME-TO-EVENT
@@ -5119,7 +5115,7 @@ entries:
   today: TIME-TO-EVENT
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.intermediate_class.keep=first
@@ -5129,7 +5125,7 @@ entries:
   today: first
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 28, rust: 56, hosts: 6, docs: 3, tools: 0, total: 93}
 - id: spec.intermediate_class.keep=last
@@ -5139,7 +5135,7 @@ entries:
   today: last
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 23, rust: 31, hosts: 1, docs: 4, tools: 0, total: 59}
 - id: spec.column_class.type=str
@@ -5149,7 +5145,7 @@ entries:
   today: str
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 2051, rust: 1924, hosts: 65, docs: 25, tools: 9, total: 4074}
 - id: spec.column_class.type=int
@@ -5159,7 +5155,7 @@ entries:
   today: int
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 533, rust: 1353, hosts: 76, docs: 6, tools: 3, total: 1971}
 - id: spec.column_class.type=float
@@ -5169,7 +5165,7 @@ entries:
   today: float
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 357, rust: 192, hosts: 25, docs: 4, tools: 1, total: 579}
 - id: spec.column_class.type=date
@@ -5179,7 +5175,7 @@ entries:
   today: date
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 262, rust: 114, hosts: 2, docs: 0, tools: 0, total: 378}
 - id: spec.column_class.type=datetime
@@ -5189,7 +5185,7 @@ entries:
   today: datetime
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 41, rust: 44, hosts: 2, docs: 2, tools: 0, total: 89}
 - id: spec.dataset_verifications.all_or_none.severity=error
@@ -5199,7 +5195,7 @@ entries:
   today: error
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.dataset_verifications.all_or_none.severity=warning
@@ -5209,7 +5205,7 @@ entries:
   today: warning
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.dataset_verifications.assert.severity=error
@@ -5219,7 +5215,7 @@ entries:
   today: error
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.dataset_verifications.assert.severity=warning
@@ -5229,7 +5225,7 @@ entries:
   today: warning
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 5, hosts: 0, docs: 0, tools: 0, total: 5}
 - id: spec.dataset_verifications.row_count.severity=error
@@ -5239,7 +5235,7 @@ entries:
   today: error
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.dataset_verifications.row_count.severity=warning
@@ -5249,7 +5245,7 @@ entries:
   today: warning
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 1, rust: 4, hosts: 0, docs: 1, tools: 0, total: 6}
 - id: spec.submission_column_class.core=Req
@@ -5259,7 +5255,7 @@ entries:
   today: Req
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 97, rust: 9, hosts: 0, docs: 1, tools: 0, total: 107}
 - id: spec.submission_column_class.core=Exp
@@ -5269,7 +5265,7 @@ entries:
   today: Exp
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 27, rust: 0, hosts: 0, docs: 0, tools: 0, total: 27}
 - id: spec.submission_column_class.core=Perm
@@ -5279,7 +5275,7 @@ entries:
   today: Perm
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 11, rust: 8, hosts: 0, docs: 0, tools: 0, total: 19}
 - id: spec.submission_column_class.core=Cond
@@ -5289,7 +5285,7 @@ entries:
   today: Cond
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 5, rust: 0, hosts: 0, docs: 0, tools: 0, total: 5}
 - id: spec.submission_column_class.data_type=text
@@ -5299,7 +5295,7 @@ entries:
   today: text
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.submission_column_class.data_type=integer
@@ -5309,7 +5305,7 @@ entries:
   today: integer
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.submission_column_class.data_type=float
@@ -5319,7 +5315,7 @@ entries:
   today: float
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.submission_column_class.data_type=date
@@ -5329,7 +5325,7 @@ entries:
   today: date
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 1, rust: 0, hosts: 0, docs: 0, tools: 0, total: 1}
 - id: spec.submission_column_class.data_type=datetime
@@ -5339,7 +5335,7 @@ entries:
   today: datetime
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.submission_column_class.data_type=time
@@ -5349,7 +5345,7 @@ entries:
   today: time
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.submission_column_class.data_type=partialDate
@@ -5359,7 +5355,7 @@ entries:
   today: partialDate
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 1, rust: 0, hosts: 0, docs: 0, tools: 0, total: 1}
 - id: spec.submission_column_class.data_type=partialTime
@@ -5369,7 +5365,7 @@ entries:
   today: partialTime
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.submission_column_class.data_type=partialDatetime
@@ -5379,7 +5375,7 @@ entries:
   today: partialDatetime
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 2, rust: 0, hosts: 0, docs: 0, tools: 0, total: 2}
 - id: spec.submission_column_class.data_type=incompleteDate
@@ -5389,7 +5385,7 @@ entries:
   today: incompleteDate
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.submission_column_class.data_type=incompleteTime
@@ -5399,7 +5395,7 @@ entries:
   today: incompleteTime
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.submission_column_class.data_type=incompleteDatetime
@@ -5409,7 +5405,7 @@ entries:
   today: incompleteDatetime
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.submission_column_class.data_type=durationDatetime
@@ -5419,7 +5415,7 @@ entries:
   today: durationDatetime
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.submission_column_class.data_type=intervalDatetime
@@ -5429,7 +5425,7 @@ entries:
   today: intervalDatetime
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.submission_column_class.data_type=URI
@@ -5439,7 +5435,7 @@ entries:
   today: URI
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.dataset_class.relative_to=declaring
@@ -5449,7 +5445,7 @@ entries:
   today: declaring
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 5, hosts: 0, docs: 0, tools: 0, total: 5}
 - id: spec.dataset_class.relative_to=entry
@@ -5459,7 +5455,7 @@ entries:
   today: entry
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 8, hosts: 4, docs: 0, tools: 0, total: 12}
 - id: spec.dataset_class.types=str
@@ -5469,7 +5465,7 @@ entries:
   today: str
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 12, rust: 363, hosts: 15, docs: 0, tools: 3, total: 393}
 - id: spec.dataset_class.types=int
@@ -5479,7 +5475,7 @@ entries:
   today: int
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 253, rust: 926, hosts: 39, docs: 3, tools: 0, total: 1221}
 - id: spec.dataset_class.types=float
@@ -5489,7 +5485,7 @@ entries:
   today: float
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 150, rust: 126, hosts: 18, docs: 1, tools: 1, total: 296}
 - id: spec.dataset_class.types=date
@@ -5499,7 +5495,7 @@ entries:
   today: date
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 159, rust: 126, hosts: 2, docs: 1, tools: 0, total: 288}
 - id: spec.dataset_class.types=datetime
@@ -5509,7 +5505,7 @@ entries:
   today: datetime
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 21, rust: 49, hosts: 2, docs: 0, tools: 0, total: 72}
 - id: spec.dataset_class.encoding=utf-8
@@ -5519,7 +5515,7 @@ entries:
   today: utf-8
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 4, hosts: 0, docs: 1, tools: 0, total: 5}
 - id: spec.dataset_class.encoding=windows-1252
@@ -5529,7 +5525,7 @@ entries:
   today: windows-1252
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 37, hosts: 1, docs: 1, tools: 0, total: 39}
 - id: spec.dataset_class.encoding=iso-8859-1
@@ -5539,7 +5535,7 @@ entries:
   today: iso-8859-1
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.dataset_class.encoding=ascii
@@ -5549,7 +5545,7 @@ entries:
   today: ascii
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 2, hosts: 0, docs: 0, tools: 0, total: 2}
 - id: spec.dataset_class.empty_string=missing
@@ -5559,7 +5555,7 @@ entries:
   today: missing
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 6, hosts: 0, docs: 0, tools: 0, total: 6}
 - id: spec.dataset_class.empty_string=present
@@ -5569,7 +5565,7 @@ entries:
   today: present
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 1, rust: 3, hosts: 2, docs: 0, tools: 0, total: 6}
 - id: spec.column_verifications.not_missing.severity=error
@@ -5579,7 +5575,7 @@ entries:
   today: error
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 1, hosts: 0, docs: 0, tools: 0, total: 1}
 - id: spec.column_verifications.not_missing.severity=warning
@@ -5589,7 +5585,7 @@ entries:
   today: warning
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.column_verifications.allowed_values.severity=error
@@ -5599,7 +5595,7 @@ entries:
   today: error
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.column_verifications.allowed_values.severity=warning
@@ -5609,7 +5605,7 @@ entries:
   today: warning
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.column_verifications.range.severity=error
@@ -5619,7 +5615,7 @@ entries:
   today: error
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.column_verifications.range.severity=warning
@@ -5629,7 +5625,7 @@ entries:
   today: warning
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 3, rust: 1, hosts: 2, docs: 1, tools: 0, total: 7}
 - id: spec.column_verifications.max_length.severity=error
@@ -5639,7 +5635,7 @@ entries:
   today: error
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.column_verifications.max_length.severity=warning
@@ -5649,7 +5645,7 @@ entries:
   today: warning
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.column_verifications.matches.severity=error
@@ -5659,7 +5655,7 @@ entries:
   today: error
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.column_verifications.matches.severity=warning
@@ -5669,7 +5665,7 @@ entries:
   today: warning
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.submission_origin_class.type=Assigned
@@ -5679,7 +5675,7 @@ entries:
   today: Assigned
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 50, rust: 21, hosts: 2, docs: 3, tools: 0, total: 76}
 - id: spec.submission_origin_class.type=Collected
@@ -5689,7 +5685,7 @@ entries:
   today: Collected
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 53, rust: 10, hosts: 0, docs: 1, tools: 0, total: 64}
 - id: spec.submission_origin_class.type=Derived
@@ -5699,7 +5695,7 @@ entries:
   today: Derived
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 8, rust: 3, hosts: 0, docs: 0, tools: 0, total: 11}
 - id: spec.submission_origin_class.type=Not Available
@@ -5709,7 +5705,7 @@ entries:
   today: Not Available
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 1, hosts: 0, docs: 0, tools: 0, total: 1}
 - id: spec.submission_origin_class.type=Other
@@ -5719,7 +5715,7 @@ entries:
   today: Other
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.submission_origin_class.type=Predecessor
@@ -5729,7 +5725,7 @@ entries:
   today: Predecessor
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 25, rust: 7, hosts: 0, docs: 0, tools: 0, total: 32}
 - id: spec.submission_origin_class.type=Protocol
@@ -5739,7 +5735,7 @@ entries:
   today: Protocol
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 18, rust: 0, hosts: 0, docs: 0, tools: 0, total: 18}
 - id: spec.submission_origin_class.source=Investigator
@@ -5749,7 +5745,7 @@ entries:
   today: Investigator
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 43, rust: 5, hosts: 0, docs: 1, tools: 0, total: 49}
 - id: spec.submission_origin_class.source=Sponsor
@@ -5759,7 +5755,7 @@ entries:
   today: Sponsor
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 65, rust: 7, hosts: 0, docs: 0, tools: 0, total: 72}
 - id: spec.submission_origin_class.source=Subject
@@ -5769,7 +5765,7 @@ entries:
   today: Subject
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 1, hosts: 0, docs: 0, tools: 0, total: 1}
 - id: spec.submission_origin_class.source=Vendor
@@ -5779,7 +5775,7 @@ entries:
   today: Vendor
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 7, rust: 2, hosts: 0, docs: 0, tools: 0, total: 9}
 - id: spec.dataset_unique_arguments.severity=error
@@ -5789,7 +5785,7 @@ entries:
   today: error
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 1, total: 1}
 - id: spec.dataset_unique_arguments.severity=warning
@@ -5799,7 +5795,7 @@ entries:
   today: warning
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.order_term_class.direction=asc
@@ -5809,7 +5805,7 @@ entries:
   today: asc
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 2, rust: 2, hosts: 0, docs: 0, tools: 0, total: 4}
 - id: spec.order_term_class.direction=desc
@@ -5819,7 +5815,7 @@ entries:
   today: desc
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 23, rust: 19, hosts: 0, docs: 3, tools: 0, total: 45}
 - id: spec.order_term_class.nulls=first
@@ -5829,7 +5825,7 @@ entries:
   today: first
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 1, rust: 4, hosts: 0, docs: 0, tools: 0, total: 5}
 - id: spec.order_term_class.nulls=last
@@ -5839,7 +5835,7 @@ entries:
   today: last
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 8, rust: 2, hosts: 0, docs: 1, tools: 0, total: 11}
 - id: spec.str_case.to=upper
@@ -5849,7 +5845,7 @@ entries:
   today: upper
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 12, rust: 33, hosts: 1, docs: 0, tools: 0, total: 46}
 - id: spec.str_case.to=lower
@@ -5859,7 +5855,7 @@ entries:
   today: lower
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 5, rust: 4, hosts: 0, docs: 0, tools: 0, total: 9}
 - id: spec.str_case.to=sentence
@@ -5869,7 +5865,7 @@ entries:
   today: sentence
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 2, rust: 3, hosts: 0, docs: 0, tools: 0, total: 5}
 - id: spec.str_case.to=title
@@ -5879,7 +5875,7 @@ entries:
   today: title
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 1, rust: 4, hosts: 0, docs: 0, tools: 0, total: 5}
 - id: spec.diff.type=date
@@ -5889,7 +5885,7 @@ entries:
   today: date
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 20, rust: 2, hosts: 0, docs: 1, tools: 0, total: 23}
 - id: spec.diff.type=datetime
@@ -5899,7 +5895,7 @@ entries:
   today: datetime
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 4, rust: 7, hosts: 0, docs: 3, tools: 0, total: 14}
 - id: spec.diff.unit=day
@@ -5909,7 +5905,7 @@ entries:
   today: day
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 12, rust: 2, hosts: 0, docs: 1, tools: 0, total: 15}
 - id: spec.diff.unit=week
@@ -5919,7 +5915,7 @@ entries:
   today: week
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 1, rust: 0, hosts: 0, docs: 0, tools: 0, total: 1}
 - id: spec.diff.unit=month
@@ -5929,7 +5925,7 @@ entries:
   today: month
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 4, rust: 0, hosts: 0, docs: 0, tools: 0, total: 4}
 - id: spec.diff.unit=year
@@ -5939,7 +5935,7 @@ entries:
   today: year
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 3, rust: 0, hosts: 0, docs: 0, tools: 0, total: 3}
 - id: spec.diff.unit=second
@@ -5949,7 +5945,7 @@ entries:
   today: second
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 1, hosts: 0, docs: 0, tools: 0, total: 1}
 - id: spec.diff.unit=minute
@@ -5959,7 +5955,7 @@ entries:
   today: minute
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 1, rust: 0, hosts: 0, docs: 0, tools: 0, total: 1}
 - id: spec.diff.unit=hour
@@ -5969,7 +5965,7 @@ entries:
   today: hour
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 3, rust: 6, hosts: 0, docs: 3, tools: 0, total: 12}
 - id: spec.diff.bounds=exclusive
@@ -5980,7 +5976,7 @@ entries:
   type: enumerated value
   kind: value
   proposed: right
-  decision: proposed
+  decision: decided (D58)
   ref: P-ORD-2
   reason: Counts (start, end].
   convert: {action: rename_value, field: closed, new_value: right}
@@ -5993,7 +5989,7 @@ entries:
   type: enumerated value
   kind: value
   proposed: both
-  decision: proposed
+  decision: decided (D58)
   ref: P-ORD-2
   reason: Counts [start, end].
   convert: {action: rename_value, field: closed, new_value: both}
@@ -6006,7 +6002,7 @@ entries:
   type: enumerated value
   kind: value
   proposed: neither
-  decision: proposed
+  decision: decided (D58)
   ref: P-ORD-2
   reason: Counts (start, end).
   convert: {action: rename_value, field: closed, new_value: neither}
@@ -6018,7 +6014,7 @@ entries:
   today: date
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 27, rust: 8, hosts: 1, docs: 0, tools: 0, total: 36}
 - id: spec.impute.type=datetime
@@ -6028,7 +6024,7 @@ entries:
   today: datetime
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 12, rust: 4, hosts: 0, docs: 3, tools: 0, total: 19}
 - id: spec.impute.day=first
@@ -6038,7 +6034,7 @@ entries:
   today: first
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 9, rust: 4, hosts: 0, docs: 0, tools: 0, total: 13}
 - id: spec.impute.day=last
@@ -6048,7 +6044,7 @@ entries:
   today: last
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 5, rust: 3, hosts: 0, docs: 0, tools: 0, total: 8}
 - id: spec.impute.minimum_source_precision=year
@@ -6058,7 +6054,7 @@ entries:
   today: year
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 6, rust: 0, hosts: 0, docs: 0, tools: 0, total: 6}
 - id: spec.impute.minimum_source_precision=month
@@ -6068,7 +6064,7 @@ entries:
   today: month
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 4, rust: 2, hosts: 0, docs: 0, tools: 0, total: 6}
 - id: spec.impute.minimum_source_precision=day
@@ -6078,7 +6074,7 @@ entries:
   today: day
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 10, rust: 4, hosts: 0, docs: 3, tools: 0, total: 17}
 - id: spec.impute.time=first
@@ -6088,7 +6084,7 @@ entries:
   today: first
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 10, rust: 2, hosts: 0, docs: 3, tools: 0, total: 15}
 - id: spec.impute.time=last
@@ -6098,7 +6094,7 @@ entries:
   today: last
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 2, rust: 2, hosts: 0, docs: 0, tools: 0, total: 4}
 - id: spec.precision.type=date
@@ -6108,7 +6104,7 @@ entries:
   today: date
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 7, rust: 2, hosts: 0, docs: 0, tools: 0, total: 9}
 - id: spec.precision.type=datetime
@@ -6118,7 +6114,7 @@ entries:
   today: datetime
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 5, rust: 4, hosts: 0, docs: 1, tools: 0, total: 10}
 - id: spec.imputation_flag.part=date
@@ -6128,7 +6124,7 @@ entries:
   today: date
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 8, rust: 0, hosts: 0, docs: 0, tools: 0, total: 8}
 - id: spec.imputation_flag.part=time
@@ -6138,7 +6134,7 @@ entries:
   today: time
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 7, rust: 0, hosts: 0, docs: 0, tools: 0, total: 7}
 - id: spec.shift.type=date
@@ -6148,7 +6144,7 @@ entries:
   today: date
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 3, rust: 11, hosts: 0, docs: 0, tools: 0, total: 14}
 - id: spec.shift.type=datetime
@@ -6158,7 +6154,7 @@ entries:
   today: datetime
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 2, rust: 12, hosts: 0, docs: 0, tools: 0, total: 14}
 - id: spec.shift.unit=second
@@ -6168,7 +6164,7 @@ entries:
   today: second
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 1, rust: 4, hosts: 0, docs: 0, tools: 0, total: 5}
 - id: spec.shift.unit=minute
@@ -6178,7 +6174,7 @@ entries:
   today: minute
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 1, hosts: 0, docs: 0, tools: 0, total: 1}
 - id: spec.shift.unit=hour
@@ -6188,7 +6184,7 @@ entries:
   today: hour
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 1, rust: 7, hosts: 0, docs: 0, tools: 0, total: 8}
 - id: spec.shift.unit=day
@@ -6198,7 +6194,7 @@ entries:
   today: day
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.duration_value.unit=second
@@ -6208,7 +6204,7 @@ entries:
   today: second
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 5, hosts: 0, docs: 0, tools: 0, total: 5}
 - id: spec.duration_value.unit=minute
@@ -6218,7 +6214,7 @@ entries:
   today: minute
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 1, rust: 0, hosts: 0, docs: 0, tools: 0, total: 1}
 - id: spec.duration_value.unit=hour
@@ -6228,7 +6224,7 @@ entries:
   today: hour
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 5, hosts: 0, docs: 0, tools: 0, total: 5}
 - id: spec.duration_value.unit=day
@@ -6238,7 +6234,7 @@ entries:
   today: day
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 1, hosts: 0, docs: 0, tools: 0, total: 1}
 - id: spec.rank.method=competition
@@ -6248,7 +6244,7 @@ entries:
   today: competition
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 2, rust: 0, hosts: 0, docs: 0, tools: 0, total: 2}
 - id: spec.rank.method=dense
@@ -6258,7 +6254,7 @@ entries:
   today: dense
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 5, rust: 0, hosts: 0, docs: 0, tools: 0, total: 5}
 - id: spec.submission_value_class.core=Req
@@ -6458,7 +6454,7 @@ entries:
   today: str
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 1, hosts: 0, docs: 0, tools: 0, total: 1}
 - id: spec.intermediate_binding_class.type=int
@@ -6468,7 +6464,7 @@ entries:
   today: int
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 1, rust: 15, hosts: 0, docs: 1, tools: 0, total: 17}
 - id: spec.intermediate_binding_class.type=float
@@ -6478,7 +6474,7 @@ entries:
   today: float
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 1, hosts: 0, docs: 0, tools: 0, total: 1}
 - id: spec.intermediate_binding_class.type=date
@@ -6488,7 +6484,7 @@ entries:
   today: date
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 2, hosts: 0, docs: 0, tools: 0, total: 2}
 - id: spec.intermediate_binding_class.type=datetime
@@ -6498,7 +6494,7 @@ entries:
   today: datetime
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 2, hosts: 0, docs: 0, tools: 0, total: 2}
 - id: spec.submission_method_class.type=Computation
@@ -6508,7 +6504,7 @@ entries:
   today: Computation
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.submission_method_class.type=Imputation
@@ -6518,7 +6514,7 @@ entries:
   today: Imputation
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: spec.source_binding_class.keep=first
@@ -6528,7 +6524,7 @@ entries:
   today: first
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 10, rust: 15, hosts: 0, docs: 1, tools: 0, total: 26}
 - id: spec.source_binding_class.keep=last
@@ -6538,7 +6534,7 @@ entries:
   today: last
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 6, rust: 13, hosts: 0, docs: 0, tools: 0, total: 19}
 - id: spec.derive_binding_class.type=str
@@ -6548,7 +6544,7 @@ entries:
   today: str
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 2, hosts: 0, docs: 0, tools: 0, total: 2}
 - id: spec.derive_binding_class.type=int
@@ -6558,7 +6554,7 @@ entries:
   today: int
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 1, rust: 14, hosts: 0, docs: 0, tools: 0, total: 15}
 - id: spec.derive_binding_class.type=float
@@ -6568,7 +6564,7 @@ entries:
   today: float
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 10, rust: 3, hosts: 2, docs: 0, tools: 0, total: 15}
 - id: spec.derive_binding_class.type=date
@@ -6578,7 +6574,7 @@ entries:
   today: date
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 3, hosts: 0, docs: 0, tools: 0, total: 3}
 - id: spec.derive_binding_class.type=datetime
@@ -6588,7 +6584,7 @@ entries:
   today: datetime
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 2, rust: 0, hosts: 0, docs: 0, tools: 0, total: 2}
 - id: spec.page_reference_class.type=PhysicalRef
@@ -6598,7 +6594,7 @@ entries:
   today: PhysicalRef
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 42, rust: 0, hosts: 0, docs: 0, tools: 0, total: 42}
 - id: spec.page_reference_class.type=NamedDestination
@@ -6608,7 +6604,7 @@ entries:
   today: NamedDestination
   type: enumerated value
   kind: keep
-  decision: proposed
+  decision: decided (D58)
   convert: {action: none}
   measurement: {bench: 0, rust: 0, hosts: 0, docs: 0, tools: 0, total: 0}
 - id: project.submission_section_class.datasets=json
@@ -6619,7 +6615,7 @@ entries:
   type: enumerated value
   kind: value
   proposed: dataset_json
-  decision: proposed
+  decision: decided (D58)
   ref: P-PRJ-1
   reason: '#2855 decision 18 spelling; `json` alone does not name Dataset-JSON (Dataset-JSON 1.1 also
     defines an NDJSON representation).'
@@ -6633,7 +6629,7 @@ entries:
   type: enumerated value
   kind: value
   proposed: xpt
-  decision: proposed
+  decision: decided (D58)
   ref: P-PRJ-1
   reason: Unchanged value under the renamed field.
   convert: {action: rename_value, field: transport, new_value: xpt}
@@ -7065,7 +7061,7 @@ entries:
   today: null
   kind: new
   proposed: 'type: codelists'
-  decision: proposed
+  decision: decided (D58)
   ref: P-TYPE-1
   reason: The type names what the file holds, several codelists of one source, and matches the project
     field that lists it; `terminology` is the alternative.
@@ -7152,7 +7148,7 @@ entries:
   today: null
   kind: new
   proposed: 'submission: {standard: NAME}'
-  decision: proposed
+  decision: decided (D58)
   ref: P-STD-1
   reason: D16 decides that a specification selects a section standard by name, the first entry being the
     default; the spelling is this RFC's. Names are unique within a section, so the selection is unambiguous
@@ -7165,7 +7161,7 @@ entries:
   today: null
   kind: new
   proposed: Provisional
-  decision: proposed
+  decision: decided (D58)
   ref: P-STD-1
   reason: Define-XML 2.1 and its schema admit Draft, Provisional and Final; today's list lacks Provisional.
     Additive.
@@ -7177,7 +7173,7 @@ entries:
   today: null
   kind: new
   proposed: '{comparator: NE | NOTIN, values: [V, ...]} beside today''s list of values'
-  decision: proposed
+  decision: decided (D58)
   ref: P-VLM-1
   reason: D17 reserves more comparators; this RFC proposes to admit NE and NOTIN in 1.0, so rows that
     differ only by DTYPE can be described (#3048). The list stays the spelling of EQ and IN; the class
@@ -7190,7 +7186,7 @@ entries:
   today: '# yamaa-style: allow <finding> -- <reason>'
   kind: rename
   proposed: '# yamaa-lint: allow <finding> -- <reason>'
-  decision: proposed
+  decision: decided (D58)
   ref: P-LINT-1
   reason: The verb is `lint` (D40), and the style tool moves to Rust under that name.
   convert: {action: transform, transform: suppression_comment}
@@ -7200,7 +7196,7 @@ entries:
   today: null
   kind: new
   proposed: 'model: SDTM | SEND | ADaM'
-  decision: proposed
+  decision: decided (D58)
   ref: P-MODEL-1
   reason: 'D25 decides the field; spelling and requirement are this RFC''s: values SDTM, SEND and ADaM
     (the CDISC spellings), required when the specification declares root or column `submission` or a project
@@ -7214,7 +7210,7 @@ entries:
   today: null
   kind: new
   proposed: 'copy: {dataset: INPUT, columns: [NAME, ...], submission: {core, mandatory, role}}'
-  decision: proposed
+  decision: decided (D58)
   ref: P-COPY-1
   reason: 'D19 decides the copy entry; the spelling is this RFC''s. `dataset` already names the relation
     a construct reads (intermediates, row templates); #3030''s sketch writes `from`. Same-name copies
@@ -7229,7 +7225,7 @@ entries:
   today: null
   kind: new
   proposed: 'key: [COLUMN, ...]'
-  decision: proposed
+  decision: decided (D58)
   ref: P-JOIN-1
   reason: 'D23 decides that an implicit join takes its keys from a declaration on the input; the spelling
     is this RFC''s: `key`, a list of the input''s columns, each paired with the current row''s same-named
@@ -7257,7 +7253,7 @@ entries:
   today: null
   kind: new
   proposed: 'closed: left | right (default left)'
-  decision: proposed
+  decision: decided (D58)
   ref: P-ORD-2
   reason: 'Replaces cut.right: `closed: right` gives right-closed intervals, and the default `left` keeps
     today''s default (EXPR-13).'
@@ -7267,7 +7263,7 @@ conditions:
 - today: schema_version_mismatch
   kind: rename
   proposed: unsupported_language_version
-  decision: proposed
+  decision: decided (D58)
   ref: P-VER-1
   reason: 'D4 replaces SCHEMA-2''s exact match: an engine refuses a file that declares a newer version
     than it reads, with one condition naming the version needed. Layers may declare different versions
@@ -7276,7 +7272,7 @@ conditions:
   - 'negative-version-mismatch (condition and context change: Q2)'
 - today: month_required
   kind: removed
-  decision: proposed
+  decision: decided (D58)
   ref: P-IMP-1
   reason: 'Retires with minimum_source_precision: the minimum follows from the month and day rules supplied
     (TIME-10).'
@@ -7284,24 +7280,24 @@ conditions:
   - 'negative-impute-missing-month (retired: Q3)'
 - today: month_not_permitted
   kind: removed
-  decision: proposed
+  decision: decided (D58)
   ref: P-IMP-1
   reason: As month_required.
   negative_benchmarks:
   - 'negative-impute-unreachable-month (retired: Q3)'
 - today: day_required
   kind: removed
-  decision: proposed
+  decision: decided (D58)
   ref: P-IMP-1
   reason: As month_required.
 - today: day_not_permitted
   kind: removed
-  decision: proposed
+  decision: decided (D58)
   ref: P-IMP-1
   reason: As month_required.
 - today: window_order_by_forbidden
   kind: removed
-  decision: proposed
+  decision: decided (D58)
   ref: P-ORD-1
   reason: baseline_flag admits window.order_by, which absorbs tie_break (WINDOW-5, WINDOW-9).
 - today: bare_derivation_scalar
@@ -7328,76 +7324,76 @@ conditions:
 - today: unknown_standard_family
   kind: rename
   proposed: standard_model_mismatch
-  decision: proposed
+  decision: decided (D58)
   ref: P-MODEL-1
   reason: The specification declares its model (D25), so the failure is a bound standard that is not an
     implementation guide of that model; the rules say model, not family (SUB-3).
 - today: project_environment_missing
   kind: rename
   proposed: function_implementation_missing
-  decision: proposed
+  decision: decided (D58)
   ref: P-FN-2
   reason: D8 removes environment files. A call fails before data when the running host has no implementation
     in the function file (FUNC-1, PROJECT-2).
 - today: project_environment_invalid
   kind: rename
   proposed: function_file_invalid
-  decision: proposed
+  decision: decided (D58)
   ref: P-FN-2
   reason: An invalid function file, test, lock or duplicate definition (FUNC-2, FUNC-3); an invalid project
     file keeps PROJECT-1's conditions.
 - today: null
   kind: new
   proposed: project_binding_missing
-  decision: proposed
+  decision: decided (D58)
   ref: P-RULE-7
   reason: 'D32: a specification checked or run without a project file fails validation at each codelist
     binding, inventory_vocabulary or function call (CT-1, CT-9, CT-11 change).'
 - today: null
   kind: new
   proposed: nothing_to_save
-  decision: proposed
+  decision: decided (D58)
   ref: P-RULE-9
   reason: PROJECT-12 and PROJECT-13 say that saving a run or submission that built nothing fails, with
     no registered condition; phase output.
 - today: null
   kind: new
   proposed: source_odm_transactional
-  decision: proposed
+  decision: decided (D58)
   ref: P-ODMIN-1
   reason: An ODM input or read_odm source whose FileType is Transactional or that carries TransactionType
     Remove; phase ingest, before any record is read.
 - today: null
   kind: new
   proposed: source_odm_no_clinical_data
-  decision: proposed
+  decision: decided (D58)
   ref: P-ODMIN-1
   reason: An ODM document with no ClinicalData, such as a define.xml or a metadata-only export; phase
     ingest.
 - today: null
   kind: new
   proposed: conflicting_origins
-  decision: proposed
+  decision: decided (D58)
   ref: P-ORIGIN-1
   reason: Two origins with the same type and source, or Predecessor or Not Available beside another origin;
     phase validation (SUB-14).
 - today: null
   kind: new
   proposed: unexpected_file_type
-  decision: proposed
+  decision: decided (D58)
   ref: P-VER-1
   reason: 'A file whose type: is not the type the call expects (yamaa.spec() given a project file), or
     a layer chain that mixes types (D4); phase validation.'
 - today: unknown_standard
   kind: restated
-  decision: proposed
+  decision: decided (D58)
   ref: P-STD-1
   reason: Registered and on DEFINE-8's Fails line, but raised by no cause today; D16 makes it reachable
     for a submission.standard that names no entry of the section's standards.
 paths:
 - today: intermediates[N] and rows[N]
   proposed: intermediates.<id> and rows.<id>
-  decision: proposed
+  decision: decided (D58)
   ref: P-CLR-2
   reason: Diagnostics address keyed members by identity, as they address columns and inputs and as clear
     does; lists without identity keep [N].
@@ -7415,44 +7411,44 @@ paths:
   measurement: {negative_error_yaml: 1, rust: 26, hosts: 3, docs: 0, tools: 0}
 - today: intermediates[N].no_match
   proposed: intermediates.<id>.absent
-  decision: proposed
+  decision: decided (D58)
   ref: P-HND-1
   reason: The intermediate's absence answer is spelled absent.
   measurement: {negative_error_yaml: 1, rust: 190, hosts: 83, docs: 1, tools: 1}
 - today: <read>.no_match in a run report's lookup handler rows
   proposed: <read>.absent
-  decision: proposed
+  decision: decided (D58)
   ref: P-HND-1
   reason: LOOKUP-14 reports lookup handlers in one vocabulary, so the report follows the field's name;
     no golden pins these rows.
   measurement: {negative_error_yaml: 0}
 - today: study_day.date
   proposed: study_day.source
-  decision: proposed
+  decision: decided (D58)
   ref: P-OP-1
   reason: Operand rename.
   measurement: {negative_error_yaml: 1, rust: 3, hosts: 2, docs: 0, tools: 0}
 - today: baseline_flag.reference_date and baseline_flag.value
   proposed: baseline_flag.reference and baseline_flag.source
-  decision: proposed
+  decision: decided (D58)
   ref: P-OP-2, P-OP-3
   reason: Operand renames.
   measurement: {negative_error_yaml: 0, rust: 0, hosts: 7, docs: 0, tools: 0}
 - today: diff.bounds
   proposed: diff.closed
-  decision: proposed
+  decision: decided (D58)
   ref: P-ORD-2
   reason: Endpoint inclusion is spelled closed.
   measurement: {negative_error_yaml: 1, rust: 1, hosts: 2, docs: 0, tools: 0}
 - today: aggregate.derive[N]
   proposed: aggregate.derivations.<name>
-  decision: proposed
+  decision: decided (D58)
   ref: P-BIND-1
   reason: The binding list becomes a map.
   measurement: {negative_error_yaml: 0, rust: 6, hosts: 1, docs: 0, tools: 0}
 - today: <section>.datasets
   proposed: <section>.transport
-  decision: proposed
+  decision: decided (D58)
   ref: P-PRJ-1
   reason: Project field rename.
   measurement: {negative_error_yaml: 0, rust: 1, hosts: 0, docs: 0, tools: 0}
@@ -7463,7 +7459,7 @@ paths:
   measurement: {negative_error_yaml: 0, rust: 4, hosts: 0, docs: 2, tools: 0}
 - today: submission.origin
   proposed: submission.origins[N]
-  decision: proposed
+  decision: decided (D58)
   ref: P-ORIGIN-1
   reason: Several origins.
   measurement: {negative_error_yaml: 0, rust: 3, hosts: 0, docs: 0, tools: 0}
@@ -7489,116 +7485,116 @@ reserved:
 - spelling: '{comparator: LT | LE | GT | GE, values: [V]}'
   where: a value-level where column
   ref: P-VLM-1
-  decision: proposed
+  decision: decided (D58)
   meaning: Define-XML RangeCheck comparators beyond EQ, IN, NE and NOTIN.
 - spelling: 'where_any: [{COLUMN: [V, ...]}, ...]'
   where: a value-level entry, instead of where
   ref: P-VLM-1
-  decision: proposed
+  decision: decided (D58)
   meaning: Several WhereClauseRef on one ItemRef, combined with OR. A separate list field, since SCHEMA-10
     forbids a union of one mapping and a list.
 - spelling: qualified where columns, such as DM.COUNTRY
   where: a value-level where
   ref: P-VLM-1
-  decision: proposed
+  decision: decided (D58)
   meaning: A where column of another subject-level dataset, with a required comment describing the join.
 - spelling: 'methods: [{id, name, type, description, expressions, documents}]'
   where: a project section
   ref: P-POOL-1
-  decision: proposed
+  decision: decided (D58)
   meaning: A method pool; generated MethodDef MT.<id>.
 - spelling: 'method: {id: NAME}'
   where: column and value-level submission
   ref: P-POOL-1
-  decision: proposed
+  decision: decided (D58)
   meaning: A reference to a pooled method; a mapping holding only id.
 - spelling: 'comments: [{id, text, documents}]'
   where: a project section
   ref: P-POOL-1
-  decision: proposed
+  decision: decided (D58)
   meaning: A comment pool; generated CommentDef COM.<id>.
 - spelling: 'comment: {id: NAME}'
   where: dataset, column and value-level submission
   ref: P-POOL-1
-  decision: proposed
+  decision: decided (D58)
   meaning: A reference to a pooled comment.
 - spelling: 'columns: [{name, type, label, submission}]'
   where: a project section
   ref: P-POOL-1
-  decision: proposed
+  decision: decided (D58)
   meaning: Shared variable definitions.
 - spelling: 'use: NAME'
   where: a column entry, instead of name
   ref: P-POOL-1
-  decision: proposed
+  decision: decided (D58)
   meaning: A column taken from the shared definitions.
 - spelling: 'submission: {non_standard: true}'
   where: a column
   ref: P-SUPP-1
-  decision: proposed
+  decision: decided (D58)
   meaning: 'A non-standard variable: def:IsNonStandard, or a SUPPQUAL qualifier when generation lands
     (D29).'
 - spelling: 'submission: {evaluator: TEXT}'
   where: a column
   ref: P-SUPP-1
-  decision: proposed
+  decision: decided (D58)
   meaning: QEVAL of a generated SUPPQUAL qualifier.
 - spelling: 'submission: {supplemental: {dataset: NAME, idvar: COLUMN}}'
   where: a dataset
   ref: P-SUPP-1
-  decision: proposed
+  decision: decided (D58)
   meaning: Overrides of the derivable SUPP-- name and IDVAR.
 - spelling: 'submission: {non_standard: true}'
   where: a dataset
   ref: P-SUPP-1
-  decision: proposed
+  decision: decided (D58)
   meaning: 'A custom domain or a non-ADaM analysis dataset: def:IsNonStandard, no def:StandardOID.'
 - spelling: 'submission: {split: {by: COLUMN, datasets: {NAME: [V, ...]}}}'
   where: a dataset
   ref: P-SUPP-1
-  decision: proposed
+  decision: decided (D58)
   meaning: Split datasets defined once, written into split/ beside define.xml (SDTM-MSG 2.0 packaging
     mode A).
 - spelling: 'submission: {has_no_data: true}'
   where: a column
   ref: P-CDISC-1
-  decision: proposed
+  decision: decided (D58)
   meaning: ItemRef def:HasNoData, with a required comment.
 - spelling: 'pages: {type, first, last}'
   where: a document reference
   ref: P-CDISC-1
-  decision: proposed
+  decision: decided (D58)
   meaning: PDFPageRef FirstPage and LastPage. Several page references to one document are several documents
     entries, never a list in pages (SCHEMA-10).
 - spelling: 'expressions: [{context, code}, ...]'
   where: a method, instead of expression
   ref: P-CDISC-1
-  decision: proposed
+  decision: decided (D58)
   meaning: Several FormalExpression elements. A plural list field, since SCHEMA-10 forbids a union of
     one class and a list.
 - spelling: 'external: {ref: PATH}'
   where: an external codelist
   ref: P-CDISC-1
-  decision: proposed
+  decision: decided (D58)
   meaning: ExternalCodeList ref, a local instance of the dictionary.
 - spelling: 'submission: {standard: {name: NAME, version: TEXT}}'
   where: a dataset
   ref: P-STD-1
-  decision: proposed
+  decision: decided (D58)
   meaning: The SCHEMA-10 long form of the standard selector, for a section that lists two versions of
     one implementation guide.
 - spelling: 'transactions: replay'
   where: an ODM input
   ref: P-ODMIN-1
-  decision: proposed
+  decision: decided (D58)
   meaning: Replay transactional ODM content into a snapshot; its absence keeps the 1.0 refusal.
 - spelling: 'archive_member: NAME'
   where: an ODM input
   ref: P-ODMIN-1
-  decision: proposed
+  decision: decided (D58)
   meaning: Read one member of a TAR archive, as read_odm does.
 - spelling: 'odm: {item: D.I, scope: subject | event | form | item_group}'
   where: an odm read
   ref: P-ODM-1
-  decision: proposed
+  decision: decided (D58)
   meaning: Read a collected item at a declared hierarchy level of the row's ODM scope (NAME-10, NAME-12).

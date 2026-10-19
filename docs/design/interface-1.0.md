@@ -3,15 +3,16 @@
 This is the Phase 0 RFC of
 [#3030](https://github.com/elong0527/yamaa/issues/3030): the field-by-field
 design of the yamaa 1.0 interface. It settles each RFC item of #3030
-section 2 with a measurement and a recommendation, for the owner to approve
-on #3030. Decided items (D1 to D53 in #3030 section 4) are fixed; this page
-restates them only where it fills in their detail, and it re-proposes
-nothing under "Decided against".
+section 2 with a measurement and a recommendation, which the owner approved
+on #3030 (D58 to D71). Decided items (D1 to D53 in #3030 section 4) are
+fixed; this page restates them only where it fills in their detail, and it
+re-proposes nothing under "Decided against".
 
-**Status: proposed.** Nothing here changes the language, a schema, a rule
-card, the engine or a benchmark. Nothing is renamed or converted until the
-owner approves the rename table. Phase 1 writes the schemas and cards, and
-Phase 2's converter applies the approved table.
+**Status: approved.** On 2026-10-19 the owner approved the rename table as a
+whole (#3030 D58), accepted the recommended answer to each question below
+(D59 to D70) and approved the proposed card text (D71). This page changes no
+language, schema, rule card, engine or benchmark by itself: Phase 1 writes
+the schemas and cards, and Phase 2's converter applies the approved table.
 
 **Measured at main `1758ad145`.** Every count names its corpus: "benchmark"
 counts come from the files under `benchmarks/`, "in all" adds the Rust, host,
@@ -80,8 +81,8 @@ The bindings draft is
 4. Read the section of this page, and the reference page, for any item you
    want to question.
 
-Approve on #3030, item by item or as a whole. An approved `proposed` entry
-becomes decided; a rejected rename becomes `kind: keep`.
+The owner approved the table as a whole on #3030 (D58), so every `proposed`
+entry is decided.
 
 ## RFC items and recommended answers
 
@@ -156,7 +157,9 @@ touches under `benchmarks/`.
 ## Questions for the owner
 
 Each question names its recommendation. Q1, Q2, Q4 and Q5 concern decided
-text; the others choose between options or widen a decision.
+text; the others choose between options or widen a decision. The owner
+accepted every recommendation on 2026-10-19, recorded on #3030 as D59 (Q1)
+to D70 (Q12), in order.
 
 1. **D28 and the expected files (P-RULE-1).** Renaming `requirement` to
    `rule` rewrites the `requirement:` key of all 189 negative
@@ -898,8 +901,9 @@ move only in minor releases, announced in the release notes.
 ## Rule contradictions (Phase 0 item 6)
 
 Card text for each is on the [rules page](interface-1.0/rules.md). A title or
-statement change needs the maintainer's approval (`rules/README.md`); a
-detail change needs ordinary review. None is made in this pull request.
+statement change needs the maintainer's approval (`rules/README.md`), which
+the owner gave for the proposed text (D71); a detail change needs ordinary
+review. Phase 1 makes the changes.
 
 | Id | Contradiction | Disposition | Change |
 | --- | --- | --- | --- |
@@ -1018,7 +1022,8 @@ stated on the issue.
 ## What this RFC does not change
 
 - No rule card, schema, condition registration, engine or host code, test or
-  benchmark. The proposed card text is on the rules page; Phase 1 writes it.
+  benchmark. The approved card text (D71) is on the rules page; Phase 1
+  writes it.
 - No expected file. Q1 and Q2 ask for the decisions that Phase 2's golden
   changes need.
 - No `rust/interface/bindings.yaml` change; the generator never reads
