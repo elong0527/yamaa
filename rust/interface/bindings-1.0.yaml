@@ -5,15 +5,17 @@
 # and the options not taken.
 #
 # Status: a proposal for owner review. No generator or repository check reads
-# it. tools/packaging/generate_bindings.py reads only bindings.yaml (format
-# 1): it refuses unknown top-level keys, and it reconciles every declared
-# export with the handwritten #[pyclass], #[pymethods], #[pyfunction] and
-# #[extendr] surfaces, so declaring the unimplemented 1.0 exports there would
-# fail `make check-repository` and tools/tests/test_bindings.py. This file is
-# read only by the generic YAML, ASCII and rule-citation checks, and no source
-# package stages rust/interface/. Phase 3 (#2845 for the Python and R hosts,
-# #3060 for the command line) merges it into bindings.yaml as format_version
-# 2, extends the generator to the new sections, and deletes this file.
+# it. tools/packaging/generate_bindings.py reads only bindings.yaml, which is
+# format 2 and declares today's surface: it reconciles every declared export
+# with the handwritten #[pyclass], #[pymethods], #[pyfunction] and #[extendr]
+# surfaces and checks every vocabulary and table against the facade constant
+# it names, so declaring the unimplemented 1.0 surface there would fail
+# `make check-repository` and the generator's tests. This file is read only by
+# the generic YAML, ASCII and rule-citation checks, and no source package
+# stages rust/interface/. Each Phase 3 pull request (#2845 for the Python and
+# R hosts, #3060 for the command line) moves the part it implements into
+# bindings.yaml, in format 2's grammar (README.md), and the last deletes this
+# file.
 #
 # Sections:
 #   values, tables, records   frozen vocabularies and table columns

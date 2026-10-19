@@ -94,6 +94,7 @@ def test_installed_distribution_contains_only_the_retained_modules() -> None:
         "__init__.py",
         "_locked_functions.py",
         "_native.pyi",
+        "_support.py",
         "py.typed",
         "style",
     }

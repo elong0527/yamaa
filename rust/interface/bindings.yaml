@@ -1,9 +1,21 @@
-# Authoritative declaration input for the Python/R generators specified in README.md.
-# Both hosts' registrations and native declarations are generated from this file;
-# make check-repository and the native qualification lane compare the generated
-# files with it.
+# Authoritative declaration input for the generators specified in README.md.
+# Both hosts' native registrations and declarations, and their public layers,
+# are generated from this file, with the normalized manifest of its frozen
+# sections; make check-repository and the native qualification lane compare
+# the generated files with it.
+#
+# Sections (format 2):
+#   values, tables, records   closed vocabularies, table columns and records,
+#                             each checked against the facade constant it names
+#   public                    the user-facing surface of each host
+#   cli                       the command line (empty until #3060)
+#   python, r                 native registrations (private)
+#   operations, host_only     each operation's counterpart in every host
+#
+# This file declares today's surface only. The 1.0 surface drafted in
+# bindings-1.0.yaml moves here with the pull request that implements it.
 format: yamaa.host-interface
-format_version: 1
+format_version: 2
 boundary: rust_generated_host_glue
 contract: README.md
 
@@ -33,6 +45,332 @@ handshake:
     format_odm: yamaa-adapters/odm
   failure_record: records.diagnostic
   result_record: records.result
+
+# Closed value vocabularies of the public surface. Each names the facade
+# constant that owns it, and the generator refuses any difference from that
+# constant, order included.
+values:
+  # The phases of the registered conditions (yaml/conditions.yaml), in run
+  # order.
+  phase:
+    rust: yamaa::PHASES
+    values:
+      - validation
+      - planning
+      - ingest
+      - row_construction
+      - join
+      - mapping
+      - impute
+      - derivation
+      - convert
+      - verification
+      - output
+      - engine
+  severity:
+    rust: yamaa::SEVERITIES
+    values: [error, warning]
+  report_kind:
+    rust: yamaa::REPORT_KINDS
+    values: [run, input, rows, handler, column, check]
+  report_outcome:
+    rust: yamaa::REPORT_OUTCOMES
+    values: [succeeded, failed, held, violated]
+
+# Table columns, in order. Each table names the facade constant that holds
+# its column names, and the generator refuses any difference. Column types are
+# the language's: str, int, float, date and datetime, with list<T> and
+# optional<T>; a column's `values` names a vocabulary above, or the condition
+# registry.
+tables:
+  issues:
+    rust: yamaa::ISSUE_COLUMNS
+    order: report order, the first issue first
+    columns:
+      - {name: phase, type: str, values: phase}
+      - {name: condition, type: str, values: yaml/conditions.yaml}
+      - {name: requirement, type: optional<str>, meaning: the requirement or card the condition cites}
+      - {name: spec_paths, type: list<str>, meaning: "every spec path the issue concerns, possibly none"}
+      - {name: context, type: str, meaning: "canonical JSON text (RFC 8785) of the condition's facts"}
+      - name: source_span
+        type: optional<list<int>>
+        meaning: "[start, end] UTF-8 byte offsets into the expression text"
+      - name: operand_route
+        type: optional<list<str>>
+        meaning: operand steps from the expression root to the failing node
+  report:
+    rust: yamaa::REPORT_COLUMNS
+    order: CHECK-23
+    columns:
+      - {name: ARTIFACT, type: str}
+      - {name: KIND, type: str, values: report_kind}
+      - {name: SPEC_PATH, type: str}
+      - {name: NAME, type: optional<str>}
+      - {name: ID, type: optional<str>}
+      - {name: TARGET, type: optional<str>}
+      - {name: RULE, type: optional<str>}
+      - {name: SEVERITY, type: optional<str>, values: severity}
+      - {name: OUTCOME, type: optional<str>, values: report_outcome}
+      - {name: CONDITION, type: optional<str>}
+      - {name: COUNT, type: optional<int>}
+      - {name: TOTAL, type: optional<int>}
+      - {name: KEYS, type: optional<str>}
+      - {name: DETAILS, type: str}
+  odm_items:
+    rust: yamaa::ODM_COLUMNS
+    order: the clinical items in source order
+    columns:
+      - {name: ODMVersion, type: optional<str>}
+      - {name: FileOID, type: optional<str>}
+      - {name: StudyOID, type: optional<str>}
+      - {name: MetaDataVersionOID, type: optional<str>}
+      - {name: SubjectKey, type: optional<str>}
+      - {name: StudySubjectID, type: optional<str>}
+      - {name: SubjectStatus, type: optional<str>}
+      - {name: StudyEventOID, type: optional<str>}
+      - {name: StudyEventRepeatKey, type: optional<str>}
+      - {name: EventName, type: optional<str>}
+      - {name: StartDate, type: optional<str>}
+      - {name: EventStatus, type: optional<str>}
+      - {name: EventWorkflowStatus, type: optional<str>}
+      - {name: FormOID, type: optional<str>}
+      - {name: FormRepeatKey, type: optional<str>}
+      - {name: FormName, type: optional<str>}
+      - {name: FormLayoutOID, type: optional<str>}
+      - {name: FormStatus, type: optional<str>}
+      - {name: FormWorkflowStatus, type: optional<str>}
+      - {name: OpenQueries, type: optional<str>}
+      - {name: ItemGroupOID, type: optional<str>}
+      - {name: ItemGroupRepeatKey, type: optional<str>}
+      - {name: ItemGroupName, type: optional<str>}
+      - {name: TransactionType, type: optional<str>}
+      - {name: ItemOID, type: optional<str>}
+      - {name: ItemName, type: optional<str>}
+      - {name: Value, type: optional<str>}
+      - {name: ValuePresent, type: str, meaning: "`true` or `false`"}
+      - {name: IsNull, type: str, meaning: "`true` or `false`"}
+      - {name: SourceOrdinal, type: int, meaning: "the item's position in source order, from one"}
+
+# Named records a host returns as a dict or named list. None today.
+records: {}
+
+# The user-facing surface of each host: names, arguments with their order and
+# defaults, members and result types. The generator writes the Python public
+# module and R's exported functions, S3 methods and NAMESPACE from it, and the
+# manifest records what the stability contract freezes. README.md defines the
+# member kinds and how `holds` and `calls` delegate to the native exports.
+public:
+  python:
+    version: __version__
+    doc: |-
+      Run yamaa clinical data specifications through the shared Rust engine.
+
+      `spec()` and `project()` read nothing; each method runs one engine operation
+      and returns a fixed result, and only a result's `save()` writes files. An
+      object's first `run()` compiles its specifications and keeps them; a later
+      `run()` reuses them while its paths still name the files they were compiled
+      from and every one is unchanged, and compiles again otherwise.
+
+  # Host projections of the type tokens used below.
+  types:
+    path: {python: "str or os.PathLike, unannotated", r: "character(1)"}
+    text: {python: str, r: "character(1)"}
+    optional_text: {python: "str | None", r: "character(1) or NULL"}
+    count: {python: int, r: "numeric(1), a whole number"}
+    flag: {python: bool, r: "logical(1)"}
+    names: {python: "list[str]", r: "character()"}
+    tree: {python: dict, r: named list}
+    table: {python: polars.DataFrame, r: data.frame}
+    optional_table: {python: "polars.DataFrame | None", r: data.frame or NULL}
+    nothing: {python: None, r: "NULL, invisibly"}
+
+  functions:
+    - name: spec
+      python: yamaa.spec
+      r: yamaa_spec
+      args: {path: path}
+      returns: Spec
+      doc: One specification; nothing is read until a method runs.
+    - name: project
+      python: yamaa.project
+      r: yamaa_project
+      args: {path: path}
+      returns: Project
+      doc: A project file; nothing is read until a method runs.
+    - name: read_odm
+      python: yamaa.read_odm
+      r: yamaa_read_odm
+      args:
+        source: path
+        archive_member: optional_text = None
+        max_archive_members: count = 10000
+        max_expanded_bytes: count = 268435456
+        max_xml_depth: count = 64
+      keyword_only: [archive_member, max_archive_members, max_expanded_bytes, max_xml_depth]
+      returns: table
+      table: odm_items
+      raises: refusal
+      calls: read_odm
+      doc: Read the clinical items of an ODM XML file, or of one member of a TAR.
+
+  # Result and lazy classes, in definition order: a class is defined before
+  # any class that returns it.
+  classes:
+    Check:
+      python: yamaa.Check
+      r: yamaa_check
+      holds: {table: issues}
+      doc: Static findings; `issues` is empty when nothing is wrong.
+      members:
+        - {name: issues, kind: field, returns: table, table: issues}
+    Run:
+      python: yamaa.Run
+      r: yamaa_run
+      holds: {native: handle}
+      interrupt: run_interrupt
+      doc: One specification run; nothing is written until `save()`.
+      members:
+        - name: output
+          kind: property
+          returns: optional_table
+          calls: run_output
+          doc: The output dataset, or None when the run failed.
+        - name: issues
+          kind: property
+          returns: table
+          table: issues
+          calls: run_issues
+          doc: What is wrong, one row per finding.
+        - name: report
+          kind: property
+          returns: optional_table
+          table: report
+          calls: run_report
+          doc: What the run read, counted and checked.
+        - name: save
+          kind: method
+          returns: nothing
+          raises: refusal
+          calls: run_save
+          doc: Write the declared report file and the output dataset.
+        # Installed-run evidence for qualification suites: R's
+        # `.run_observations(run)`; Python reads `run._native.observations()`.
+        - name: observations
+          kind: private
+          args: {include_measurements: flag = false}
+          returns: optional_text
+          calls: run_observations
+    MemberRun:
+      python: yamaa.MemberRun
+      r: yamaa_member_run
+      holds: {native: handle, name: name}
+      doc: One specification's run inside a project run; save the project run.
+      members:
+        - {name: output, kind: property, returns: optional_table, raises: refusal, calls: project_run_output}
+        - name: issues
+          kind: property
+          returns: table
+          table: issues
+          raises: refusal
+          calls: project_run_member_issues
+        - name: report
+          kind: property
+          returns: optional_table
+          table: report
+          raises: refusal
+          calls: project_run_member_report
+    ProjectRun:
+      python: yamaa.ProjectRun
+      r: yamaa_project_run
+      holds: {native: handle}
+      interrupt: project_run_interrupt
+      doc: Every specification a project run built, by `domain` name.
+      members:
+        - name: names
+          kind: property
+          returns: names
+          calls: project_run_names
+          doc: The specifications in the run scope, in run order.
+        # An absent name raises the refusal that the member's issues give.
+        - name: member
+          kind: index
+          python: __getitem__
+          r: "[["
+          args: {name: text}
+          returns: MemberRun
+          raises: refusal
+          calls: project_run_member_issues
+        - {name: contains, kind: protocol, python: __contains__}
+        - {name: iterate, kind: protocol, python: __iter__, doc: "The names, as `names` lists them."}
+        - {name: issues, kind: property, returns: table, table: issues, calls: project_run_issues}
+        - {name: report, kind: property, returns: table, table: report, calls: project_run_report}
+        - {name: save, kind: method, returns: nothing, raises: refusal, calls: project_run_save}
+    Submission:
+      python: yamaa.Submission
+      r: yamaa_submission
+      holds: {native: handle}
+      doc: define.xml and each selected section's Dataset-JSON or SAS Transport files.
+      members:
+        - {name: issues, kind: property, returns: table, table: issues, calls: submission_issues}
+        - {name: save, kind: method, returns: nothing, raises: refusal, calls: submission_save}
+    Spec:
+      python: yamaa.Spec
+      r: yamaa_spec
+      holds: {path: specification, project: project}
+      doc: One specification, read only when a method runs.
+      members:
+        - name: check
+          kind: method
+          returns: Check
+          raises: refusal
+          calls: spec_check
+          doc: Report problems without reading study data or running project code.
+        - name: resolve
+          kind: method
+          returns: tree
+          raises: refusal
+          calls: spec_resolve
+          doc: The specification after its layers are composed.
+        - {name: run, kind: method, returns: Run, raises: refusal, calls: spec_run, doc: Build the dataset in memory.}
+    Project:
+      python: yamaa.Project
+      r: yamaa_project
+      holds: {path: project}
+      doc: A study's project file, read only when a method runs.
+      members:
+        - name: spec
+          kind: method
+          args: {name: text}
+          returns: Spec
+          raises: refusal
+          calls: project_spec
+          doc: The listed specification whose `domain` is `name`.
+        - {name: check, kind: method, returns: Check, raises: refusal, calls: project_check}
+        - name: run
+          kind: method
+          args: {section: optional_text = None}
+          returns: ProjectRun
+          raises: refusal
+          calls: project_run
+          doc: Build every specification of one section, or of all sections.
+        - name: submission
+          kind: method
+          args: {section: optional_text = None, created: optional_text = None}
+          keyword_only: [created]
+          returns: Submission
+          raises: refusal
+          calls: project_submission
+
+  errors:
+    refusal:
+      python: {class: yamaa.Error, base: Exception, attributes: {issues: table}}
+      r: {class: [yamaa_error, error, condition], fields: {message: text, call: "NULL", issues: table}}
+      table: issues
+      doc: A yamaa operation could not complete; `issues` says why.
+
+# The command line (D12), which #3060 adds. README.md gives its grammar.
+cli: {}
+
 
 # Complete current registrations, in source order. Both hosts expose the same
 # operations: every export is paired with its counterpart under `operations`

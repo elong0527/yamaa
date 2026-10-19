@@ -48,6 +48,7 @@ yamaa::FunctionHandle: pub use yamaa::functions::FunctionHandle
 yamaa::FunctionIdentity: pub use yamaa::functions::FunctionIdentity
 yamaa::HostLanguage: pub use yamaa::functions::HostLanguage
 yamaa::HostPayload: pub use yamaa::error::HostPayload
+yamaa::ISSUE_COLUMNS: pub use yamaa::diagnostic::ISSUE_COLUMNS
 yamaa::InputFrame: pub use yamaa::table::InputFrame
 yamaa::Int64Array: pub use yamaa::table::Int64Array
 yamaa::LargeStringArray: pub use yamaa::table::LargeStringArray
@@ -62,6 +63,7 @@ yamaa::ODM_COLUMNS: pub use yamaa::odm::ODM_COLUMNS
 yamaa::OdmError: pub use yamaa::error::OdmError
 yamaa::OdmOptions: pub use yamaa::odm::OdmOptions
 yamaa::Outcome: pub use yamaa::observe::Outcome
+yamaa::PHASES: pub use yamaa::diagnostic::PHASES
 yamaa::Parameter: pub use yamaa::functions::Parameter
 yamaa::Phase: pub use yamaa::observe::Phase
 yamaa::Plan: pub use yamaa::plan::Plan
@@ -69,6 +71,9 @@ yamaa::Plans: pub use yamaa::api::Plans
 yamaa::Progress: pub use yamaa::observe::Progress
 yamaa::ProjectFunctions: pub use yamaa::functions::ProjectFunctions
 yamaa::ProjectRun: pub use yamaa::api::ProjectRun
+yamaa::REPORT_COLUMNS: pub use yamaa::diagnostic::REPORT_COLUMNS
+yamaa::REPORT_KINDS: pub use yamaa::diagnostic::REPORT_KINDS
+yamaa::REPORT_OUTCOMES: pub use yamaa::diagnostic::REPORT_OUTCOMES
 yamaa::RecordBatch: pub use yamaa::table::RecordBatch
 yamaa::Refusal: pub use yamaa::observe::Refusal
 yamaa::RenvLock: pub use yamaa::functions::RenvLock
@@ -83,6 +88,7 @@ yamaa::ResolverRequest: pub use yamaa::resolver::ResolverRequest
 yamaa::ResourceResolver: pub use yamaa::resolver::ResourceResolver
 yamaa::Run: pub use yamaa::api::Run
 yamaa::RunRequest: pub use yamaa::plan::RunRequest
+yamaa::SEVERITIES: pub use yamaa::diagnostic::SEVERITIES
 yamaa::SaveOutcome: pub use yamaa::engine::SaveOutcome
 yamaa::Scalar: pub use yamaa::scalar::Scalar
 yamaa::ScalarDecodeError: pub use yamaa::scalar::ScalarDecodeError
@@ -174,12 +180,18 @@ yamaa::diagnostic::DiagnosticContext::is_empty: pub fn is_empty(&self) -> bool
 yamaa::diagnostic::DiagnosticContext::iter: pub fn iter(&self) -> impl Iterator<Item = (&String, &ContextValue)>
 yamaa::diagnostic::DiagnosticContext::len: pub fn len(&self) -> usize
 yamaa::diagnostic::DiagnosticContext::to_json: pub fn to_json(&self) -> &str
+yamaa::diagnostic::ISSUE_COLUMNS: pub const ISSUE_COLUMNS: [&str; 7]
+yamaa::diagnostic::PHASES: pub const PHASES: [&str; 12]
+yamaa::diagnostic::REPORT_COLUMNS: pub const REPORT_COLUMNS: &[&str]
+yamaa::diagnostic::REPORT_KINDS: pub const REPORT_KINDS: [&str; 6]
+yamaa::diagnostic::REPORT_OUTCOMES: pub const REPORT_OUTCOMES: [&str; 4]
 yamaa::diagnostic::Report: impl Report
 yamaa::diagnostic::Report: pub struct Report [derive(Clone, Debug, Default, PartialEq)] [non_exhaustive]
 yamaa::diagnostic::Report::diagnostics: pub diagnostics: Vec<Diagnostic>
 yamaa::diagnostic::Report::is_empty: pub fn is_empty(&self) -> bool
 yamaa::diagnostic::Report::len: pub fn len(&self) -> usize
 yamaa::diagnostic::Report::table: pub fn table(&self) -> Table
+yamaa::diagnostic::SEVERITIES: pub const SEVERITIES: [&str; 2]
 yamaa::diagnostic::Severity: pub enum Severity [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::diagnostic::Severity::Error: Error
 yamaa::diagnostic::Severity::Warning: Warning
