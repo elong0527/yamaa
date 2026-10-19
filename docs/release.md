@@ -7,15 +7,21 @@ open gates live in GitHub issues and pull requests, not here.
 ## Supported platforms
 
 - CPython 3.12, 3.13, 3.14 and 3.15 wheels and source builds on Linux
-  x86_64, macOS arm64 and Windows x64. The Linux wheel is `manylinux_2_34`
-  and needs glibc 2.34 or later, for example RHEL 9, Ubuntu 22.04 or
-  Debian 12; older systems build from the Python source archive.
-- R source builds with R 4.4.0 or later on the same three hosts, each passing
-  strict `R CMD check` with **Status: OK** on R 4.6.1. The floor follows an
-  audit of the R C API that the binding calls; R 4.4 is checked on Linux.
-- Other runtimes and architectures, free-threaded Python, musl and R binary
-  packages are not supported. R is distributed as a GitHub source tarball,
-  and from 1.0.0 on CRAN, as [CRAN submission](#cran-submission) describes.
+  x86_64 and aarch64, macOS arm64 and Windows x64. The Linux wheels are
+  `manylinux_2_28` and need glibc 2.28 or later, for example RHEL 8, Ubuntu
+  20.04 or Debian 10; older systems build from the Python source archive.
+  Each Linux wheel is built in the manylinux_2_28 container of its
+  architecture, and native qualification also installs it on AlmaLinux 8,
+  which has glibc 2.28, and runs the conformance corpus there with that
+  system's Python 3.12.
+- R source builds with R 4.4.0 or later on Linux x86_64, macOS arm64 and
+  Windows x64, each passing strict `R CMD check` with **Status: OK** on R
+  4.6.1. The floor follows an audit of the R C API that the binding calls;
+  R 4.4 is checked on Linux.
+- Other runtimes and architectures, macOS x86_64 among them (#3030 D49),
+  free-threaded Python, musl and R binary packages are not supported. R is
+  distributed as a GitHub source tarball, and from 1.0.0 on CRAN, as
+  [CRAN submission](#cran-submission) describes.
 
 Source builds compile the Rust workspace, so they need Rust 1.90.0 or later
 with Cargo and a C compiler. The R source package carries the locked crates
@@ -262,9 +268,10 @@ test keeps this table equal to it:
 
 | Asset | File | Native artifact |
 | --- | --- | --- |
-| Python wheel for Linux x86_64 | `yamaa-<Python version>-cp312-abi3-manylinux_*_x86_64.whl` | `native-python-ubuntu-24.04-3.14` |
+| Python wheel for Linux x86_64 | `yamaa-<Python version>-cp312-abi3-manylinux_2_28_x86_64.whl` | `native-python-ubuntu-24.04-3.14` |
 | Python wheel for macOS arm64 | `yamaa-<Python version>-cp312-abi3-macosx_*_arm64.whl` | `native-python-macos-15-3.14` |
 | Python wheel for Windows x64 | `yamaa-<Python version>-cp312-abi3-win_amd64.whl` | `native-python-windows-latest-3.14` |
+| Python wheel for Linux aarch64 | `yamaa-<Python version>-cp312-abi3-manylinux_2_28_aarch64.whl` | `native-python-ubuntu-24.04-arm-3.14` |
 | Python source archive | `yamaa-<Python version>.tar.gz` | `native-python-ubuntu-24.04-3.14` |
 | R source package | `yamaa_<R version>.tar.gz` | `native-r-ubuntu-24.04` |
 
@@ -283,8 +290,8 @@ The release body of a final release X.Y.Z is its committed notes,
 links the native run attempt and lists the selected artifacts. A release
 candidate is created as a GitHub pre-release. Its body first says that it is
 release candidate N of X.Y.Z and not the final release, where to report
-feedback, which version its Python packages carry, and that the R package keeps
-version X.Y.Z, so R users reinstall it when X.Y.Z is released. Then come the
+feedback, how to install it from PyPI, and that the R package keeps version
+X.Y.Z, so R users reinstall it when X.Y.Z is released. Then come the
 changes since the previous candidate, from the committed
 `docs/releases/X.Y.Z-rc.N.md`, with a link that compares the two tags, and then
 the notes of X.Y.Z so far and the native evidence. Candidate N follows
@@ -292,11 +299,26 @@ candidate N-1: that candidate's tag must exist and be an ancestor of the tag
 commit. A body longer than GitHub's limit of 125,000 characters fails before
 the downloads.
 
-This route uses the workflow's GitHub token and needs no package-index
-credentials. The workflow has no PyPI step: 0.4.0 is distributed as GitHub
-release assets only, and those assets do not establish PyPI publication. PyPI
-publication is a separate decision and requires configured authentication;
-the GitHub release assets remain the documented standalone download route.
+The GitHub release uses the workflow's GitHub token. Once it exists, the
+workflow's `pypi` job uploads the release's Python packages to PyPI: the
+wheels and the source archive, the same bytes, handed over from the publishing
+job and never rebuilt. The R source package stays a GitHub release asset. The
+upload uses PyPI trusted publishing, so the repository stores no PyPI
+credential: the job runs in the `pypi` environment with only the
+`id-token: write` permission, and `pypa/gh-action-pypi-publish` exchanges its
+OpenID Connect token for a short-lived upload token. The trusted publisher of
+the `yamaa` project on PyPI names the repository `elong0527/yamaa`, the
+workflow `release.yml` and the environment `pypi`; configuring it is an owner
+action (#3063, #3030 D47). If the upload fails after the GitHub release
+exists, fix the cause and re-run the failed `pypi` job: it uploads the same
+files and skips those already on PyPI.
+
+A final release is installed with `pip install yamaa`. A candidate's version,
+X.Y.ZrcN, is a PyPI pre-release, which a bare `pip install yamaa` does not
+install reliably, so its release body gives
+`pip install --pre yamaa==X.Y.ZrcN`. yamaa 0.4.0 was distributed as GitHub
+release assets only. The GitHub release assets remain the standalone download
+route for every package.
 
 The `Release rehearsal` workflow runs the same selection and downloads, on
 dispatch, against the latest successful native run on main, with its own
@@ -324,7 +346,8 @@ remaining note. A release reaches its channels in this order:
    describes.
 2. The GitHub release that `release.yml` creates from the tag's qualified
    native run.
-3. The Python packages on PyPI.
+3. The Python packages on PyPI, which the workflow's `pypi` job uploads once
+   the GitHub release exists.
 4. The R source tarball on CRAN: the `yamaa_X.Y.Z.tar.gz` asset of that final
    GitHub release, unchanged, submitted through CRAN's web form by the
    maintainer that `DESCRIPTION` names. A candidate's R tarball carries the
@@ -494,8 +517,9 @@ owns decoding behavior.
 - The `yamaa` facade crate is the only supported Rust surface;
   `yamaa-adapters` and `yamaa-core` are internal and may change in any
   release.
-- Distribute 0.4.0 as GitHub release assets only; `release.yml` has no PyPI
-  step.
+- Distribute 0.4.0 as GitHub release assets only. From the 1.0.0
+  candidates, `release.yml` also uploads each release's Python packages to
+  PyPI with trusted publishing (#3030 D13, D14, D47).
 - Publish release candidates as GitHub pre-releases from `yamaa-vX.Y.Z-rc.N`
   tags, with Python version `X.Y.ZrcN` and Cargo version `X.Y.Z-rc.N`. The R
   package keeps `X.Y.Z` through the candidates, and each candidate's release

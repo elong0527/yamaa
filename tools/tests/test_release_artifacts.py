@@ -301,7 +301,7 @@ class QualificationSelection(unittest.TestCase):
         self,
     ):
         selected = self.select(native_artifacts())
-        self.assertEqual(len(selected), 4)
+        self.assertEqual(len(selected), len(release_assets.artifacts(ASSETS)))
         for index in range(len(selected)):
             for defect in (
                 "missing",
@@ -460,11 +460,18 @@ class DownloadedPackages(unittest.TestCase):
         self.assertEqual(len(self.select()), len(ASSETS))
 
     def test_filename_version_host_abi_and_extra_package_ambiguity_fail(self):
-        wheel = next((self.directory / "native-python-ubuntu-24.04-3.14").glob("*.whl"))
+        wheel = next(
+            (self.directory / f"native-python-{MATRIX.SOURCE_PLATFORM}-3.14").glob(
+                "*.whl"
+            )
+        )
+        platform_tag = wheel.name.removesuffix(".whl").rsplit("-", 1)[1]
         for bad in [
             wheel.name.replace(VERSION, OTHER_VERSION, 1),
             wheel.name.replace("abi3", "cp312"),
-            wheel.name.replace("manylinux_2_39_x86_64", "win_amd64"),
+            wheel.name.replace(platform_tag, "win_amd64"),
+            wheel.name.replace(platform_tag, "linux_x86_64"),
+            wheel.name.replace(platform_tag, platform_tag.replace("2_28", "2_34")),
         ]:
             replacement = wheel.with_name(bad)
             wheel.rename(replacement)
@@ -478,8 +485,10 @@ class DownloadedPackages(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "no release asset declares"):
             self.select()
         extra.unlink()
-        extra = wheel.with_name(wheel.name.replace("2_39", "2_40"))
-        extra.write_bytes(wheel.read_bytes())
+        # Two files that one declared name pattern admits.
+        macos = next((self.directory / "native-python-macos-15-3.14").glob("*.whl"))
+        extra = macos.with_name(macos.name.replace("2_39", "2_40"))
+        extra.write_bytes(macos.read_bytes())
         with self.assertRaisesRegex(ValueError, "missing or ambiguous release asset"):
             self.select()
 
@@ -749,7 +758,7 @@ class PublicationBoundary(unittest.TestCase):
             RELEASE_TEST_PUBLICATION=str(marker),
         )
 
-        def publish():
+        def publish(pypi_packages=None):
             marker.unlink(missing_ok=True)
             subprocess.run(
                 [
@@ -765,7 +774,9 @@ class PublicationBoundary(unittest.TestCase):
             )
             try:
                 with patch.dict(os.environ, environment, clear=True):
-                    publisher.publish(checkout, artifacts, tag, REPOSITORY["full_name"])
+                    publisher.publish(
+                        checkout, artifacts, tag, REPOSITORY["full_name"], pypi_packages
+                    )
             except (subprocess.CalledProcessError, ValueError):
                 self.assertFalse(marker.exists(), "a refused release must not publish")
                 return None
@@ -855,6 +866,35 @@ class PublicationBoundary(unittest.TestCase):
                     "".join(name + "\n" for name in listed)
                 )
                 self.assertIsNone(publish())
+
+    def test_pypi_receives_the_published_python_packages_unchanged(self):
+        identity = Identity("1.0.0", 1)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _, artifacts, publish = self.publication(root, identity)
+            for path in (artifacts / "asset-paths.txt").read_text().splitlines():
+                Path(path).write_bytes(Path(path).name.encode())
+            self.assertIsNotNone(publish(root / "pypi"))
+            python = [
+                example_name(asset, identity)
+                for asset in ASSETS
+                if asset.kind in release_assets.PYTHON_KINDS
+            ]
+            self.assertEqual(
+                sorted(path.name for path in (root / "pypi").iterdir()), sorted(python)
+            )
+            # The wheels and the source archive, never the R package.
+            self.assertTrue(all(name.startswith("yamaa-") for name in python))
+            for name in python:
+                self.assertEqual((root / "pypi" / name).read_bytes(), name.encode())
+
+    def test_pypi_gets_nothing_unless_the_github_release_was_created(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _, _, publish = self.publication(root, Identity("1.0.0", 1))
+            (root / "bin/gh").write_text("#!/bin/sh\nexit 1\n")
+            self.assertIsNone(publish(root / "pypi"))
+            self.assertFalse((root / "pypi").exists())
 
     def test_publication_refuses_a_tag_the_tree_does_not_prepare(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -963,7 +1003,7 @@ class PublicationBoundary(unittest.TestCase):
         self.assertEqual(
             any("/releases?" in endpoint for endpoint in endpoints), tag is not None
         )
-        self.assertEqual(len(commands), 4)
+        self.assertEqual(len(commands), len(release_assets.artifacts(ASSETS)))
         self.assertEqual(
             {command[2] for command in commands},
             {
@@ -1197,6 +1237,48 @@ class PublicationBoundary(unittest.TestCase):
                 release.select_release(ROOT, REPOSITORY["full_name"], TAG, destination)
             download.assert_not_called()
             self.assertFalse(destination.exists())
+
+
+class ReleaseWorkflow(unittest.TestCase):
+    def setUp(self):
+        self.text = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        self.jobs = yaml.load(self.text, Loader=UniqueKeyLoader)["jobs"]
+
+    def test_the_publish_job_hands_the_published_python_packages_to_pypi(self):
+        steps = self.jobs["publish"]["steps"]
+        [publication] = [
+            step for step in steps if "tools.ci.publish_release" in step.get("run", "")
+        ]
+        self.assertIn(
+            '--pypi-packages "${RUNNER_TEMP}/pypi-packages"', publication["run"]
+        )
+        handoff = steps[steps.index(publication) + 1]
+        self.assertEqual(handoff["uses"].split("@")[0], "actions/upload-artifact")
+        self.assertEqual(
+            handoff["with"],
+            {
+                "name": "pypi-packages",
+                "path": "${{ runner.temp }}/pypi-packages",
+                "if-no-files-found": "error",
+            },
+        )
+
+    def test_pypi_uploads_those_bytes_with_trusted_publishing_and_never_builds(self):
+        job = self.jobs["pypi"]
+        self.assertEqual(job["needs"], "publish")
+        self.assertEqual(job["permissions"], {"id-token": "write"})
+        self.assertEqual(job["environment"]["name"], "pypi")
+        download, upload = job["steps"]
+        self.assertEqual(download["uses"].split("@")[0], "actions/download-artifact")
+        self.assertEqual(download["with"], {"name": "pypi-packages", "path": "dist"})
+        self.assertEqual(upload["uses"].split("@")[0], "pypa/gh-action-pypi-publish")
+        self.assertEqual(upload["with"]["packages-dir"], "dist")
+        self.assertNotIn("password", upload["with"])
+        # A full commit ID, with its exact release in a comment.
+        self.assertRegex(
+            self.text,
+            r"uses: pypa/gh-action-pypi-publish@[0-9a-f]{40} # v[0-9]+\.[0-9]+\.[0-9]+\n",
+        )
 
 
 class ReleaseRehearsalWorkflow(unittest.TestCase):
@@ -1483,7 +1565,7 @@ class CandidateReleaseBody(unittest.TestCase):
             "**This is release candidate 2 of yamaa 1.0.0, published for testing "
             "and feedback. It is not the final release.**",
             "https://github.com/elong0527/yamaa/issues/new/choose",
-            "The Python packages are version `1.0.0rc2`.",
+            "Install it from PyPI with `pip install --pre yamaa==1.0.0rc2`",
             # #3030 D53: R users reinstall the final release.
             "The R package is version `1.0.0` in every candidate and in the final "
             "release",

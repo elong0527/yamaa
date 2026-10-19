@@ -1,6 +1,7 @@
 """Publish already selected package bytes after rechecking the remote tag."""
 
 import argparse
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -9,11 +10,13 @@ from tools.packaging import release_identity
 from tools.paths import ROOT
 
 
-def publish(root, destination, tag, repository):
+def publish(root, destination, tag, repository, pypi_packages=None):
     """Create the GitHub release of `tag` from the files the selector chose.
 
     The files must be exactly the declared release assets of the release the
-    tree prepares. A release candidate is created as a pre-release.
+    tree prepares. A release candidate is created as a pre-release. Once the
+    release exists, the Python packages among the files are copied unchanged
+    into the new directory `pypi_packages`, for the PyPI upload.
     """
     revision = (destination / "source-revision.txt").read_text().strip()
     subprocess.run(
@@ -43,7 +46,7 @@ def publish(root, destination, tag, repository):
     ]
     if not all(path.is_file() for path in assets):
         raise ValueError("a selected release asset is missing")
-    release_assets.match(assets, release_assets.declared(), identity)
+    pairs = release_assets.match(assets, release_assets.declared(), identity)
     subprocess.run(
         [
             "gh",
@@ -63,6 +66,11 @@ def publish(root, destination, tag, repository):
         cwd=root,
         check=True,
     )
+    if pypi_packages is not None:
+        pypi_packages.mkdir(parents=True)
+        for asset, path in pairs:
+            if asset.kind in release_assets.PYTHON_KINDS:
+                shutil.copyfile(path, pypi_packages / path.name)
 
 
 def main():
@@ -70,8 +78,19 @@ def main():
     parser.add_argument("--repository", required=True)
     parser.add_argument("--tag", required=True)
     parser.add_argument("--destination", type=Path, required=True)
+    parser.add_argument(
+        "--pypi-packages",
+        type=Path,
+        help="new directory that receives the published Python packages for PyPI",
+    )
     args = parser.parse_args()
-    publish(ROOT, args.destination.resolve(), args.tag, args.repository)
+    publish(
+        ROOT,
+        args.destination.resolve(),
+        args.tag,
+        args.repository,
+        args.pypi_packages and args.pypi_packages.resolve(),
+    )
 
 
 if __name__ == "__main__":

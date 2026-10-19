@@ -4,6 +4,8 @@ name: Publish qualified release
 # yamaa-vX.Y.Z-rc.N publishes its release candidate N as a GitHub
 # pre-release. The selector refuses any other tag, and any tag other than the
 # one that tools/packaging/release.toml names, before anything is downloaded.
+# Once the GitHub release exists, the pypi job uploads its Python packages,
+# the same bytes, to PyPI; a candidate's version makes it a PyPI pre-release.
 on:
   push:
     tags: ['yamaa-v*']
@@ -47,4 +49,37 @@ jobs:
         run: |
           python -m tools.ci.publish_release \
             --repository "${GITHUB_REPOSITORY}" --tag "${RELEASE_TAG}" \
-            --destination "${RUNNER_TEMP}/qualified-release"
+            --destination "${RUNNER_TEMP}/qualified-release" \
+            --pypi-packages "${RUNNER_TEMP}/pypi-packages"
+      - name: Hand the published Python packages to the PyPI upload
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: pypi-packages
+          path: ${{ runner.temp }}/pypi-packages
+          if-no-files-found: error
+
+  pypi:
+    needs: publish
+    if: github.repository == 'elong0527/yamaa'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # Trusted publishing: PyPI accepts this job's OpenID Connect token for the
+    # publisher that names this repository, release.yml and the pypi
+    # environment, so no PyPI credential is stored here.
+    environment:
+      name: pypi
+      url: https://pypi.org/project/yamaa/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: pypi-packages
+          path: dist
+      - name: Upload the published Python packages to PyPI
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          packages-dir: dist
+          # A re-run after a partial upload skips the files already on PyPI,
+          # which are these same bytes.
+          skip-existing: true
