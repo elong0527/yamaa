@@ -90,6 +90,7 @@ fn every_reported_kind_raises_its_file_rule_condition() {
         assert_eq!(
             engine(&resolver)
                 .spec_check("spec.yaml", None, &token)
+                .unwrap()
                 .rows(),
             0,
             "{kind:?}"
