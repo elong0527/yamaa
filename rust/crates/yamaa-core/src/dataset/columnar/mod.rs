@@ -43,6 +43,7 @@ mod frame;
 mod functions;
 mod group;
 mod handlers;
+mod index;
 mod joins;
 mod keygrain;
 mod odm;
@@ -73,10 +74,12 @@ enum Table<'a, E> {
         rows: usize,
     },
     /// A donor's input while its derivations run: the donor frame's stored
-    /// and derived fields, then the current row's values.
+    /// and derived fields, then the current row's values: one set for every
+    /// record, or with a `stride`, one set per record.
     Input {
         frame: &'a Frame,
         current: &'a [Value],
+        stride: usize,
         schema: &'a TableSchema,
     },
 }
@@ -122,7 +125,12 @@ impl<'a, E> Table<'a, E> {
                     Err(CellError::OutOfBounds { row, column })
                 }
             }
-            Self::Input { frame, current, .. } => {
+            Self::Input {
+                frame,
+                current,
+                stride,
+                ..
+            } => {
                 if row >= frame.rows() {
                     return Err(CellError::OutOfBounds { row, column });
                 }
@@ -130,7 +138,7 @@ impl<'a, E> Table<'a, E> {
                     Ok(frame.get(row, column))
                 } else {
                     current
-                        .get(column - frame.width())
+                        .get(row * stride + column - frame.width())
                         .map(ValueRef::from)
                         .ok_or(CellError::OutOfBounds { row, column })
                 }
@@ -211,6 +219,11 @@ struct Run<'p, 'a, E> {
     pub relations: relations::State,
     /// Window runs of the unit being evaluated, by window slot.
     pub windows: windows::Runs,
+    /// Whether the unit being evaluated may call the host, so nothing in it
+    /// may be undone and evaluated again.
+    pub calls: bool,
+    /// Key indexes and filter answers over source ports, for every region.
+    pub ports: index::Ports,
 }
 
 /// What a batch unit restores before it replays in row mode.
@@ -228,9 +241,15 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
     }
 
     fn rollback(&mut self, checkpoint: Checkpoint) {
+        self.undo(checkpoint);
+        self.windows = windows::Runs::default();
+    }
+
+    /// Undo the handler counts and relation entries since `checkpoint`,
+    /// keeping the window runs of the unit being evaluated.
+    fn undo(&mut self, checkpoint: Checkpoint) {
         self.handlers.restore(checkpoint.handlers);
         self.relations.restore(checkpoint.relations);
-        self.windows = windows::Runs::default();
     }
 
     /// Count one firing of a handler site.
@@ -283,6 +302,8 @@ impl ResolvedPlan {
             handlers: Handlers::new(self),
             relations: relations::State::new(self, RegionId::DATASET),
             windows: windows::Runs::default(),
+            calls: false,
+            ports: index::Ports::default(),
         };
         let mut records = Vec::new();
         let mut templates = Vec::new();
@@ -708,7 +729,10 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         mut unit: impl FnMut(&mut Self, &mut Frame, bool) -> Result<(), Fail<E>>,
     ) -> Result<(), Fail<E>> {
         if callbacks {
-            return unit(self, frame, true);
+            let outer = std::mem::replace(&mut self.calls, true);
+            let result = unit(self, frame, true);
+            self.calls = outer;
+            return result;
         }
         let checkpoint = self.checkpoint();
         let result = unit(self, frame, false);

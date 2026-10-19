@@ -3,6 +3,7 @@
 //! without a record (LOOKUP-24).
 use super::buffer::Values;
 use super::eval::owned;
+use super::index::exact;
 use super::relations::{candidates, select, Probe, Refusal, Site};
 use super::{Cx, Fail, Run, Table};
 use crate::bound_expression::BoundPredicate;
@@ -347,24 +348,47 @@ fn matching<E>(
     if probe.incomplete() {
         return absent(run, cx, owner, &donor, keys, row, site, counted);
     }
+    // The join operator (#2842): the records whose keys equal the match
+    // values come from the port's key index when every pair can be answered
+    // exactly; the range and the filter then run on them in stored order.
+    let bucket = bucket(run, table, &probe_keys, &kinds, |source_row, field| {
+        cell(&donor, &path, source_row, field)
+    })?;
+    let indexed = Probe {
+        keys: &[],
+        kinds: &[],
+        range: probe.range,
+    };
+    let (rows, probe) = match &bucket {
+        Some(rows) => (Rows::Bucket(rows.iter()), &indexed),
+        None => (Rows::Scan(0..table.row_count()), &probe),
+    };
+    let expr = owner.expr;
     let found = candidates(
-        0..table.row_count(),
-        &probe,
+        rows,
+        probe,
         |source_row, field| cell(&donor, &path, source_row, field),
-        |source_row, _: &mut ()| match filter {
+        |source_row, run: &mut Run<'_, '_, E>| match filter {
             None => Ok(true),
             Some(filter) => {
-                super::predicates::row_truth(filter, table, source_row, |_| ValueRef::Missing)
-                    .map(|truth| truth == crate::expression::Truth::True)
-                    .map_err(|error| {
-                        Box::new(ExecutionError::Predicate {
-                            source_row,
-                            error: *error,
+                let evaluate = || {
+                    super::predicates::row_truth(filter, table, source_row, |_| ValueRef::Missing)
+                        .map(|truth| truth == crate::expression::Truth::True)
+                        .map_err(|error| {
+                            Box::new(ExecutionError::Predicate {
+                                source_row,
+                                error: *error,
+                            })
                         })
-                    })
+                };
+                match expr {
+                    // The filter reads only the record: one answer each.
+                    Some(expr) => run.ports.kept(expr, table, source_row, evaluate),
+                    None => evaluate(),
+                }
             }
         },
-        &mut (),
+        run,
     )
     .map_err(|refusal| match refusal {
         Refusal::Failed(error) => error,
@@ -422,6 +446,42 @@ fn matching<E>(
         }
     }
     Ok(owned(cell(&donor, &path, chosen, column)?))
+}
+
+/// The records a match reads, in stored order: an index bucket, or every
+/// record for the scan.
+pub(super) enum Rows<'b> {
+    Bucket(std::slice::Iter<'b, usize>),
+    Scan(std::ops::Range<usize>),
+}
+
+impl Iterator for Rows<'_> {
+    type Item = usize;
+    fn next(&mut self) -> Option<usize> {
+        match self {
+            Self::Bucket(rows) => rows.next().copied(),
+            Self::Scan(rows) => rows.next(),
+        }
+    }
+}
+
+/// The records of a port whose keys equal the match values, from the port's
+/// key index when every pair can be answered exactly, or none for the scan.
+pub(super) fn bucket<'t, E>(
+    run: &mut Run<'_, '_, E>,
+    table: Table<'t, E>,
+    keys: &[(usize, ValueRef<'_>)],
+    kinds: &[Option<ValueType>],
+    read: impl FnMut(usize, usize) -> Result<ValueRef<'t>, Fail<E>>,
+) -> Result<Option<Vec<usize>>, Fail<E>> {
+    if keys.is_empty() || !exact(keys, kinds) {
+        return Ok(None);
+    }
+    let columns: Vec<usize> = keys.iter().map(|(column, _)| *column).collect();
+    Ok(run
+        .ports
+        .keys(table, &columns, read)?
+        .map(|index| index.matching_pairs(keys).to_vec()))
 }
 
 /// The name a join's donor is known by in diagnostics.

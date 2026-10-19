@@ -25,6 +25,7 @@ unsafe extern "C" {
         rows: usize,
         columns: usize,
         cells: usize,
+        source_bytes: usize,
         metadata: unsafe extern "C" fn(i64, c_int, c_int, *const c_char, *mut c_void) -> c_int,
         variable: unsafe extern "C" fn(c_int, *const c_char, usize, c_int, *mut c_void) -> c_int,
         value: unsafe extern "C" fn(
@@ -410,6 +411,8 @@ pub fn parse(bytes: &[u8], source: &SourceDeclaration) -> Result<ArrowTable, Err
             Limits::TABLE_ROWS,
             Limits::COLUMNS,
             Limits::TABLE_CELLS,
+            // Bytes that decompressing compressed records writes.
+            Limits::SOURCE_BYTES,
             metadata,
             variable,
             value,
@@ -429,6 +432,7 @@ pub fn parse(bytes: &[u8], source: &SourceDeclaration) -> Result<ArrowTable, Err
             1 => "table_rows",
             2 => "columns",
             3 => "table_cells",
+            4 => "source_bytes",
             _ => return Err(Error::Internal),
         };
         return Err(Error::Limit {
@@ -603,6 +607,7 @@ mod tests {
                 Limits::TABLE_ROWS,
                 Limits::COLUMNS,
                 Limits::TABLE_CELLS,
+                Limits::SOURCE_BYTES,
                 meta,
                 field,
                 cell,
@@ -951,6 +956,7 @@ mod tests {
                     Limits::TABLE_ROWS,
                     Limits::COLUMNS,
                     Limits::TABLE_CELLS,
+                    Limits::SOURCE_BYTES,
                     meta,
                     field,
                     cell,

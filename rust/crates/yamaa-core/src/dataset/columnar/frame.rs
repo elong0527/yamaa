@@ -16,6 +16,53 @@ pub(super) enum Identity {
     Candidate(usize),
 }
 
+/// Hashes identities, which are row numbers the executor assigns: one
+/// multiplication per word, where the default hasher's rounds would cost
+/// more than the map. Data never chooses an identity.
+#[derive(Clone, Copy, Default)]
+pub(super) struct IdentityHasher(u64);
+
+impl IdentityHasher {
+    fn add(&mut self, word: u64) {
+        self.0 = (self.0.rotate_left(5) ^ word).wrapping_mul(0x517c_c1b7_2722_0a95);
+    }
+}
+
+impl std::hash::Hasher for IdentityHasher {
+    fn finish(&self) -> u64 {
+        // Multiplication spreads bits upward only; fold the high bits into
+        // the low ones a table indexes by.
+        let mut hash = self.0;
+        hash ^= hash >> 33;
+        hash = hash.wrapping_mul(0xff51_afd7_ed55_8ccd);
+        hash ^ (hash >> 33)
+    }
+    fn write(&mut self, bytes: &[u8]) {
+        let (words, rest) = bytes.as_chunks::<8>();
+        for word in words {
+            self.add(u64::from_le_bytes(*word));
+        }
+        if !rest.is_empty() {
+            let mut last = [0; 8];
+            last[..rest.len()].copy_from_slice(rest);
+            self.add(u64::from_le_bytes(last));
+        }
+    }
+    fn write_u64(&mut self, value: u64) {
+        self.add(value);
+    }
+    fn write_usize(&mut self, value: usize) {
+        self.add(value as u64);
+    }
+    fn write_isize(&mut self, value: isize) {
+        self.add(value as u64);
+    }
+}
+
+/// A map keyed by identities.
+pub(super) type IdentityMap<K, V> =
+    std::collections::HashMap<K, V, std::hash::BuildHasherDefault<IdentityHasher>>;
+
 /// No template: a key-grain candidate or a donor record.
 pub(super) const NO_TEMPLATE: u32 = u32::MAX;
 

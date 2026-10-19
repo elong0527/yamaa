@@ -1,19 +1,42 @@
-//! Private fixture observation of a typed decoded IPC table; no installed probe.
+//! Private fixture observation of a typed table that the engine wrote as an
+//! IPC stream; no installed probe. The independent Arrow reader decodes it.
+use arrow_schema::DataType;
 use serde::{
     ser::{SerializeSeq, SerializeStruct},
     Serialize, Serializer,
 };
-use yamaa_adapters::{
-    arrow_table::ArrowTable,
-    ipc_table::{self, TableError},
-};
+use yamaa_adapters::{arrow_table::ArrowTable, ipc_table};
 use yamaa_core::{
-    table::{TableAccess, ValueRef},
+    table::{Column, TableAccess, TableSchema, ValueRef},
     value::ColumnType,
 };
-pub fn table_snapshot(input: &[u8]) -> Result<String, TableError> {
-    let table = ipc_table::decode_snapshot(input)?;
-    ipc_table::serialize_json(&Snapshot(&table))
+/// The typed table of an IPC stream the engine wrote: each field's physical
+/// type names its column type, as `arrow_table::physical_schema` writes it.
+pub fn decode(input: &[u8]) -> ArrowTable {
+    let reader = arrow_ipc::reader::StreamReader::try_new(input, None).unwrap();
+    let columns = reader
+        .schema()
+        .fields()
+        .iter()
+        .map(|field| Column {
+            name: field.name().clone(),
+            kind: match field.data_type() {
+                DataType::Utf8 => ColumnType::Str,
+                DataType::Int64 => ColumnType::Int,
+                DataType::Float64 => ColumnType::Float,
+                DataType::Struct(children) if children[0].data_type() == &DataType::Date32 => {
+                    ColumnType::Date
+                }
+                DataType::Struct(_) => ColumnType::DateTime,
+                other => panic!("no column type is written as {other}"),
+            },
+        })
+        .collect();
+    let batches = reader.collect::<Result<Vec<_>, _>>().unwrap();
+    ArrowTable::try_new(TableSchema::new(columns).unwrap(), batches).unwrap()
+}
+pub fn table_snapshot(input: &[u8]) -> String {
+    ipc_table::serialize_json(&Snapshot(&decode(input))).unwrap()
 }
 fn scalar(value: yamaa_core::value::Value) -> yamaa_core::json::Value {
     use yamaa_adapters::json;

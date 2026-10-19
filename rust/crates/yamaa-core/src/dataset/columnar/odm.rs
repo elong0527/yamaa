@@ -109,7 +109,28 @@ fn odm_value<E>(
     let candidates: Vec<usize> = if keyed {
         members.to_vec()
     } else {
-        (0..table.row_count()).collect()
+        // The join operator (#2842): the records whose scope fields and item
+        // OID equal the read's, from the port's text index; every check
+        // below still runs on them in stored order.
+        let mut columns = fields.to_vec();
+        columns.push(9);
+        let indexed = run
+            .ports
+            .texts(table, &columns, |source_row, column| {
+                cell(table, bound, source_row, column)
+            })?
+            .map(|index| {
+                index
+                    .matching(
+                        scope
+                            .iter()
+                            .map(|(_, value)| ValueRef::from(value))
+                            .chain([ValueRef::Str(&read.item_oid)]),
+                        super::index::Equality::Grouping,
+                    )
+                    .to_vec()
+            });
+        indexed.unwrap_or_else(|| (0..table.row_count()).collect())
     };
     let mut selected = Vec::new();
     for source_row in candidates {
