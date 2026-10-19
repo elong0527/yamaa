@@ -1002,22 +1002,6 @@ class PublicationBoundary(unittest.TestCase):
         self.assertEqual(
             (destination / "source-revision.txt").read_text(), REVISION + "\n"
         )
-        # PyPI receives the wheels and the source archive, never the R package.
-        python = [
-            path
-            for asset, path in zip(ASSETS, assets, strict=True)
-            if asset.kind in release_assets.PYTHON_KINDS
-        ]
-        self.assertEqual(
-            sorted(path.name for path in (destination / "pypi-packages").iterdir()),
-            sorted(path.name for path in python),
-        )
-        self.assertTrue(all(path.name.startswith("yamaa-") for path in python))
-        for path in python:
-            self.assertEqual(
-                (destination / "pypi-packages" / path.name).read_bytes(),
-                path.read_bytes(),
-            )
         for path in assets:
             self.assertEqual(
                 path.read_bytes(),
@@ -1229,7 +1213,12 @@ class ReleaseWorkflow(unittest.TestCase):
         self.text = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         self.jobs = yaml.load(self.text, Loader=UniqueKeyLoader)["jobs"]
 
-    def test_the_selection_is_handed_to_pypi_before_the_release_exists(self):
+    def test_the_tag_publishes_the_github_release_and_nothing_else(self):
+        # The owner uploads Python packages to PyPI from the release assets;
+        # the workflow holds no PyPI step or credential (#3030 D57).
+        self.assertEqual(list(self.jobs), ["publish"])
+        self.assertNotIn("id-token", self.text)
+        self.assertNotIn("pypi-publish", self.text)
         steps = self.jobs["publish"]["steps"]
         runs = [step.get("run", "") for step in steps]
         [selection] = [
@@ -1238,39 +1227,10 @@ class ReleaseWorkflow(unittest.TestCase):
         [publication] = [
             index for index, run in enumerate(runs) if "tools.ci.publish_release" in run
         ]
-        # A failed handoff leaves no release behind, so the workflow can run again.
-        self.assertEqual(publication, selection + 2)
-        handoff = steps[selection + 1]
-        self.assertEqual(handoff["uses"].split("@")[0], "actions/upload-artifact")
-        self.assertEqual(
-            handoff["with"],
-            {
-                "name": "pypi-packages",
-                "path": "${{ runner.temp }}/qualified-release/pypi-packages",
-                # A re-run after a failed release creation hands over again.
-                "overwrite": True,
-                "if-no-files-found": "error",
-            },
-        )
+        self.assertEqual(publication, selection + 1)
+        self.assertEqual(publication, len(steps) - 1)
         self.assertIn(
             '--destination "${RUNNER_TEMP}/qualified-release"', runs[selection]
-        )
-
-    def test_pypi_uploads_those_bytes_with_trusted_publishing_and_never_builds(self):
-        job = self.jobs["pypi"]
-        self.assertEqual(job["needs"], "publish")
-        self.assertEqual(job["permissions"], {"id-token": "write"})
-        self.assertEqual(job["environment"]["name"], "pypi")
-        download, upload = job["steps"]
-        self.assertEqual(download["uses"].split("@")[0], "actions/download-artifact")
-        self.assertEqual(download["with"], {"name": "pypi-packages", "path": "dist"})
-        self.assertEqual(upload["uses"].split("@")[0], "pypa/gh-action-pypi-publish")
-        self.assertEqual(upload["with"]["packages-dir"], "dist")
-        self.assertNotIn("password", upload["with"])
-        # A full commit ID, with its exact release in a comment.
-        self.assertRegex(
-            self.text,
-            r"uses: pypa/gh-action-pypi-publish@[0-9a-f]{40} # v[0-9]+\.[0-9]+\.[0-9]+\n",
         )
 
 
