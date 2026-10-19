@@ -781,8 +781,10 @@ jobs:
           name: native-reference-ubuntu-24.04-${{ env.NATIVE_BUILD_PYTHON }}
           path: ${{ runner.temp }}/cohort-reference
       - name: Install the qualified package for comparison only
+        # The comparison reads the reports with the locked readers of the test
+        # extra (PyYAML, py-yaml12, PyArrow, pydantic), as the qualify lanes do.
         run: |
-          uv export --project python --locked --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/cohort-requirements.txt"
+          uv export --project python --locked --extra test --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/cohort-requirements.txt"
           python -m pip install --no-deps -r "${RUNNER_TEMP}/cohort-requirements.txt" "${RUNNER_TEMP}"/cohort-reference/*.whl
       - name: Compare complete installed host reports
         working-directory: ${{ runner.temp }}
