@@ -2818,6 +2818,7 @@ tooling = [
     { name = "mdurl" },
     { name = "mkdocs" },
     { name = "mkdocs-material" },
+    { name = "py-yaml12" },
     { name = "yamaa-tools" },
 ]
 
@@ -2851,6 +2852,7 @@ tooling = [
     { name = "mdurl", specifier = "==0.1.2" },
     { name = "mkdocs", specifier = "==1.6.1" },
     { name = "mkdocs-material", specifier = "==9.7.7" },
+    { name = "py-yaml12", specifier = ">=0.2" },
     { name = "yamaa-tools", editable = "../" },
 ]
 
