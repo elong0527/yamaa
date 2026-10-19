@@ -1,4 +1,4 @@
-"""The installed public API works without the style and qualification extras."""
+"""The installed public API works without the test extra's readers."""
 
 import subprocess
 import sys

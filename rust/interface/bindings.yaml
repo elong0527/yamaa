@@ -522,11 +522,6 @@ python:
       rust: api_entry::_lint
       args: {paths: "list<text>", fix: "bool = false"}
       returns: _ArrowTable
-    - kind: function
-      name: _style_same_value
-      rust: style::_style_same_value
-      args: {before: bytes, after: bytes}
-      returns: bool
 
 r:
   module: yamaa
@@ -605,7 +600,7 @@ operations:
   submission_save: {python: [_Submission.save], r: [submission_save]}
   lint: {python: [_lint], r: [lint]}
 # Host transport: Python checks interrupts inside the native calls, R through
-# these two helpers; the style command and the Arrow capsule are Python-only.
+# these two helpers; the Arrow capsule is Python-only.
 host_only:
-  python: [_style_same_value, _ArrowTable.__arrow_c_stream__]
+  python: [_ArrowTable.__arrow_c_stream__]
   r: [run_interrupt, project_run_interrupt]

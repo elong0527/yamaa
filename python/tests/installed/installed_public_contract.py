@@ -159,7 +159,6 @@ class PublicContract(unittest.TestCase):
                 "_spec_check",
                 "_spec_resolve",
                 "_spec_run",
-                "_style_same_value",
             ],
         )
         self.assertEqual(yamaa.__version__, "0.5.0")

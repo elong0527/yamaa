@@ -2831,10 +2831,6 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
-style = [
-    { name = "py-yaml12" },
-    { name = "pyyaml" },
-]
 test = [
     { name = "jsonschema" },
     { name = "lxml" },
@@ -2871,7 +2867,6 @@ requires-dist = [
     { name = "packaging", specifier = ">=25" },
     { name = "polars", marker = "python_full_version < '3.15'", specifier = ">=1.35.2" },
     { name = "polars", marker = "python_full_version >= '3.15'", specifier = ">=2.0.0" },
-    { name = "py-yaml12", marker = "extra == 'style'", specifier = ">=0.2" },
     { name = "py-yaml12", marker = "extra == 'test'", specifier = ">=0.2" },
     { name = "pyarrow", marker = "python_full_version >= '3.15' and extra == 'test'", specifier = ">=26.0.0" },
     { name = "pyarrow", marker = "python_full_version < '3.15' and extra == 'test'", specifier = ">=23.0.1" },
@@ -2879,12 +2874,11 @@ requires-dist = [
     { name = "pydantic", marker = "python_full_version < '3.15' and extra == 'test'", specifier = ">=2.12.4" },
     { name = "pyrefly", marker = "extra == 'test'", specifier = ">=1.4.0" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=9.1.1" },
-    { name = "pyyaml", marker = "extra == 'style'", specifier = ">=6.0.3" },
     { name = "pyyaml", marker = "extra == 'test'", specifier = ">=6.0.3" },
     { name = "ruff", marker = "extra == 'test'", specifier = ">=0.16.7" },
     { name = "types-pyyaml", marker = "extra == 'test'", specifier = ">=6.0.12" },
 ]
-provides-extras = ["style", "test"]
+provides-extras = ["test"]
 
 [package.metadata.requires-dev]
 benchmark = [{ name = "yamaa-benchmarks", editable = "../rust/tests/project-programs/python" }]
