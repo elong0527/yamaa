@@ -1,6 +1,6 @@
 //! The scalar operation families over buffers: each operand is evaluated
-//! once over the selection, then the family's own operation, unchanged from
-//! the row-at-a-time executor, runs over each row's values.
+//! once over the selection, then the family's own operation runs over each
+//! row's values.
 use super::buffer::{Assembly, Values};
 use super::eval::owned;
 use super::{Cx, Fail, Run};

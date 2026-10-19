@@ -1,7 +1,7 @@
 //! Compiled expressions over buffers: formulas, flags, conditions and
 //! filters. The one expression evaluator runs per row; each identifier
-//! occurrence is resolved afresh, as the row-at-a-time executor does, so a
-//! repeated named or joined read counts its handler once per occurrence.
+//! occurrence is resolved afresh, so a repeated named or joined read counts
+//! its handler once per occurrence.
 use super::buffer::Values;
 use super::eval::owned;
 use super::relations::{JoinSite, Site};

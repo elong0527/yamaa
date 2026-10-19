@@ -1,160 +1,15 @@
-//! The three resolution checks, run on every bind whatever the build profile.
+//! The resolution check, run on every bind whatever the build profile:
+//! topological validity. Every data edge reads a cell that an earlier step of
+//! the reading cell's template completed, windows and output scans read
+//! complete relations, and every cell is completed.
 //!
-//! 1. Topological validity: every data edge reads a cell that an earlier step
-//!    of the reading cell's template completed, windows and output scans read
-//!    complete relations, and every cell is completed.
-//! 2. The handler table equals the registration walk that
-//!    `DatasetPlan::execute` runs before any row, in order.
-//! 3. Each region's schedule equals the structural mirror of the executor's
-//!    loops ([`super::reference`]).
-//!
-//! The first failure refuses the plan and names the step that diverges.
-use super::build::RegionPlans;
-use super::reference::{donor_reference_order, reference_order};
+//! The first failure refuses the plan and names the step that fails.
 use super::schedule::step_exprs;
 use super::*;
-use crate::numeric_lifecycle::HandlerCounter;
 
-pub(super) fn verify(plan: &ResolvedPlan, plans: &RegionPlans<'_>) -> Result<(), ResolutionError> {
+pub(super) fn verify(plan: &ResolvedPlan) -> Result<(), ResolutionError> {
     for index in 0..plan.regions.len() {
         topology(plan, RegionId(index as u32))?;
-    }
-    handlers(plan, plans[0])?;
-    for (index, bound) in plans.iter().enumerate() {
-        schedule(plan, RegionId(index as u32), bound)?;
-    }
-    Ok(())
-}
-
-/// A resolved step in its region's bound-plan coordinates.
-fn reference(
-    plan: &ResolvedPlan,
-    region: RegionId,
-    step: Step,
-) -> Result<ReferenceStep, ResolutionError> {
-    use ReferenceStep as S;
-    let entry = plan.region(region);
-    let template = |id: TemplateId| (id.0 - entry.templates.start) as usize;
-    let row = |id: BindingId| match plan.binding(id).origin {
-        BindingOrigin::Template {
-            template,
-            assignment,
-        } => Ok((template as usize, assignment as usize)),
-        BindingOrigin::Column { .. } => Err(ResolutionError::Unsupported(format!(
-            "column binding scheduled as a row step: {}",
-            plan.binding(id).path
-        ))),
-    };
-    Ok(match step {
-        Step::Admit => S::Admit,
-        Step::VerifyIntermediates { self_rows } => S::VerifyIntermediates { self_rows },
-        Step::KeyGrain => S::KeyGrain,
-        Step::Driver(id) => S::Driver {
-            template: template(id),
-        },
-        Step::Row(id) => {
-            let (template, assignment) = row(id)?;
-            S::Row {
-                template,
-                assignment,
-            }
-        }
-        Step::Window(id) => {
-            let (template, assignment) = row(id)?;
-            S::Window {
-                template,
-                assignment,
-            }
-        }
-        Step::Filter(id) => S::Filter {
-            template: template(id),
-        },
-        Step::PostwindowFilter(id) => S::PostwindowFilter {
-            template: template(id),
-        },
-        Step::PublishSelf(id) => S::PublishSelf {
-            template: template(id),
-        },
-        Step::Column(id) => S::Column {
-            column: (id.0 - entry.columns.start) as usize,
-        },
-        Step::Checks(id) => {
-            let check = plan.check(id);
-            match check.scope {
-                CheckScope::Column(column) => S::ColumnCheck {
-                    column: (column.0 - entry.columns.start) as usize,
-                    check: check.position as usize,
-                },
-                CheckScope::Dataset => S::DatasetCheck {
-                    verification: check.position as usize,
-                },
-                CheckScope::OutputKeys | CheckScope::Intermediate(_) => {
-                    return Err(ResolutionError::Unsupported(format!(
-                        "check scheduled outside its step: {}",
-                        check.path
-                    )))
-                }
-            }
-        }
-        Step::UnobservedFilterTypes => S::UnobservedFilterTypes,
-        Step::OutputKeys => S::OutputKeys,
-        Step::Order => S::Order,
-    })
-}
-
-/// Check 3: the schedule equals today's evaluation order, step for step.
-fn schedule(
-    plan: &ResolvedPlan,
-    region: RegionId,
-    bound: &DatasetPlan,
-) -> Result<(), ResolutionError> {
-    let expected = match plan.region(region).kind {
-        RegionKind::Dataset => reference_order(bound),
-        RegionKind::Donor { stored_columns, .. } => {
-            donor_reference_order(bound, stored_columns as usize)
-        }
-    };
-    let found = plan
-        .region_schedule(region)
-        .iter()
-        .map(|info| reference(plan, region, info.step))
-        .collect::<Result<Vec<_>, _>>()?;
-    for position in 0..expected.len().max(found.len()) {
-        if expected.get(position) != found.get(position) {
-            return Err(ResolutionError::Schedule {
-                region: region.index(),
-                position,
-                expected: expected.get(position).copied(),
-                found: found.get(position).copied(),
-            });
-        }
-    }
-    Ok(())
-}
-
-/// Check 2: the handler table, in order, equals the executor's registration
-/// walk.
-fn handlers(plan: &ResolvedPlan, bound: &DatasetPlan) -> Result<(), ResolutionError> {
-    let mut counter = HandlerCounter::default();
-    bound.register_handlers(&mut counter);
-    let expected: Vec<_> = counter
-        .snapshot()
-        .iter()
-        .map(|entry| (entry.spec_path.clone(), entry.handler))
-        .collect();
-    let found: Vec<_> = plan
-        .handlers
-        .iter()
-        .map(|site| (String::from(&*site.path), site.kind))
-        .collect();
-    for position in 0..expected.len().max(found.len()) {
-        if expected.get(position) != found.get(position) {
-            return Err(ResolutionError::Handlers {
-                position,
-                expected: expected.get(position).cloned(),
-                found: found.get(position).cloned(),
-            });
-        }
     }
     Ok(())
 }
@@ -173,7 +28,7 @@ enum Scope<'a> {
     Candidates,
 }
 
-/// Check 1: topological validity of one region's schedule.
+/// Topological validity of one region's schedule.
 fn topology(plan: &ResolvedPlan, region: RegionId) -> Result<(), ResolutionError> {
     let entry = plan.region(region);
     let steps = plan.region_schedule(region);
@@ -271,7 +126,7 @@ impl Topology<'_> {
         ResolutionError::Topology {
             region: self.region.index(),
             position: self.position,
-            step: reference(self.plan, self.region, step).unwrap_or(ReferenceStep::Admit),
+            step,
             read,
         }
     }

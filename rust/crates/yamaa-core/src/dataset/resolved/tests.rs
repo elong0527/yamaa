@@ -1,5 +1,5 @@
 //! Resolution of hand-built plans: slots, schedule, registration and the
-//! three checks, including their refusals.
+//! topology check, including its refusal.
 use super::*;
 use crate::bound_expression::{Binding as Bound, BoundPredicate, Read as BoundRead};
 use crate::conversion::LiteralHandler;
@@ -118,7 +118,7 @@ fn records_plan() -> DatasetPlan {
 }
 
 #[test]
-fn a_record_template_resolves_cells_phases_and_the_executor_schedule() {
+fn a_record_template_resolves_cells_phases_and_the_schedule() {
     let plan = records_plan();
     let resolved = plan.resolve().unwrap();
     let dataset = RegionId::DATASET;
@@ -579,16 +579,6 @@ fn registration_registers_every_site_up_front_in_expression_order() {
             ("columns.C4.derivation.no_match", H::NoMatch),
         ]
     );
-    // The walk the executor runs registers the whole table, zeros included.
-    let mut counter = crate::numeric_lifecycle::HandlerCounter::default();
-    plan.register_handlers(&mut counter);
-    let walked: Vec<_> = counter
-        .snapshot()
-        .iter()
-        .map(|entry| (entry.spec_path.as_str(), entry.handler))
-        .collect();
-    assert_eq!(walked, table);
-    assert!(counter.snapshot().iter().all(|entry| entry.count == 0));
     let up = resolved.binding(BindingId(1));
     assert_eq!(up.unconvertible, Some(HandlerSiteId(0)));
     let read = resolved.binding(BindingId(4));
@@ -653,20 +643,11 @@ fn a_named_read_has_a_no_match_site_unless_it_requires_a_match() {
         )
         .unwrap();
         let resolved = plan.resolve().unwrap();
-        let mut counter = crate::numeric_lifecycle::HandlerCounter::default();
-        plan.register_handlers(&mut counter);
-        let table: Vec<_> = resolved
+        resolved
             .handlers()
             .iter()
             .map(|site| (site.path.to_string(), site.kind))
-            .collect();
-        let walked: Vec<_> = counter
-            .snapshot()
-            .iter()
-            .map(|entry| (entry.spec_path.clone(), entry.handler))
-            .collect();
-        assert_eq!(table, walked);
-        table
+            .collect::<Vec<_>>()
     };
     let no_match = || {
         (
@@ -689,8 +670,7 @@ fn a_named_read_has_a_no_match_site_unless_it_requires_a_match() {
 
 /// A value-level `mandatory` or `data_type` check selects its rows by a where
 /// column. When the column phase completes that column after the checked one,
-/// the check waits for it in the schedule and in the executor's reference
-/// order alike, so the plan resolves.
+/// the check waits for it in the schedule, so the plan resolves.
 #[test]
 fn a_scoped_check_waits_for_a_where_column_the_column_phase_completes() {
     use crate::dataset::{RowScope, WhereClause};
@@ -744,30 +724,6 @@ fn a_scoped_check_waits_for_a_where_column_the_column_phase_completes() {
 }
 
 #[test]
-fn a_reordered_schedule_is_refused_at_the_first_diverging_step() {
-    let plan = records_plan();
-    let (mut resolved, plans) = build::resolve(&plan).unwrap();
-    // The two row bindings are independent, so only the order check sees it.
-    let first = position(&resolved, Step::Row(BindingId(0)));
-    resolved.schedule.swap(first, first + 1);
-    assert_eq!(
-        verify::verify(&resolved, &plans),
-        Err(ResolutionError::Schedule {
-            region: 0,
-            position: first,
-            expected: Some(ReferenceStep::Row {
-                template: 0,
-                assignment: 0
-            }),
-            found: Some(ReferenceStep::Row {
-                template: 0,
-                assignment: 1
-            }),
-        })
-    );
-}
-
-#[test]
 fn a_read_before_its_cell_is_complete_is_refused() {
     let plan = DatasetPlan::new(
         ints(&["ID"]),
@@ -785,41 +741,20 @@ fn a_read_before_its_cell_is_complete_is_refused() {
         vec![],
     )
     .unwrap();
-    let (mut resolved, plans) = build::resolve(&plan).unwrap();
+    let mut resolved = build::resolve(&plan).unwrap();
     let first = position(&resolved, Step::Row(BindingId(0)));
     resolved.schedule.swap(first, first + 1);
-    let error = verify::verify(&resolved, &plans).unwrap_err();
+    let error = verify::verify(&resolved).unwrap_err();
     assert_eq!(
         error,
         ResolutionError::Topology {
             region: 0,
             position: first,
-            step: ReferenceStep::Row {
-                template: 0,
-                assignment: 1
-            },
+            step: Step::Row(BindingId(1)),
             read: "reads column ID of template 0 before any step completes it".into(),
         }
     );
     assert!(error.to_string().contains("reads before completion"));
-}
-
-#[test]
-fn a_diverging_handler_table_is_refused() {
-    let plan = handler_plan();
-    let (mut resolved, plans) = build::resolve(&plan).unwrap();
-    resolved.handlers.swap(1, 2);
-    assert_eq!(
-        verify::verify(&resolved, &plans),
-        Err(ResolutionError::Handlers {
-            position: 1,
-            expected: Some(("columns.UP.derivation.missing".into(), HandlerKind::Missing)),
-            found: Some((
-                "columns.ALT.derivation.missing".into(),
-                HandlerKind::Missing
-            )),
-        })
-    );
 }
 
 /// Records the order in which the executor admits callback signatures.
