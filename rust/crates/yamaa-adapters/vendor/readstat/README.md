@@ -5,7 +5,7 @@ upstream commit `104ba03a8da116eb8c094abc18bc2530b733eda9` from
 <https://github.com/WizardMac/ReadStat>, with the later upstream fixes listed
 under [Upstream changes after 1.1.9](#upstream-changes-after-119), ported by
 hand. Upstream `dev` was last reviewed through commit
-`1e3c2f68ab36b0f171eb88de93a33d8ef7c666ad` (2026-10-18), the review baseline:
+`65d410762b9fcd1f1573ff97a4fb3f8ca8e49508` (2026-10-18), the review baseline:
 every upstream commit up to it that changes a vendored file is listed there.
 The upstream license is in `LICENSE`.
 SAS writer/header-construction helpers are omitted from the shared upstream
