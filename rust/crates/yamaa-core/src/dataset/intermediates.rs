@@ -185,7 +185,6 @@ impl Intermediate {
             && !derived
                 .plan
                 .columns()
-                .iter()
                 .any(|assignment| contains_window(&assignment.expression))
     }
 }
