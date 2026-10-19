@@ -974,7 +974,7 @@
         "spec_paths": [
           "columns.RESULT.derivation.str_extract.source"
         ],
-        "requirement": "REQ-0308",
+        "requirement": "NAME-3",
         "context": {
           "identifier": "UNKNOWN"
         }
@@ -1090,7 +1090,7 @@
         "spec_paths": [
           "columns.RESULT.derivation.str_extract.source"
         ],
-        "requirement": "REQ-0308",
+        "requirement": "NAME-3",
         "context": {
           "identifier": "UNKNOWN"
         }

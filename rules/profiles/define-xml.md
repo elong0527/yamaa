@@ -160,6 +160,7 @@ section's family. The `sdtm`, `adam` and `send` sections produce separate
 documents, and each document carries the controlled-terminology standards cited
 by its bound codelists' sources.
 
+Fails: `value_not_permitted`.
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionStandardFamily`, `rust/crates/yamaa-core/tests/schema_submission.rs::every_shipped_guide_spelling_is_closed_metadata_not_family_composition`.
 Replaces: REQ-0965, REQ-1074.
 
@@ -176,7 +177,7 @@ column in its `output.columns` must declare both `label` and
 `root.submission`, or an output column with no `label` or no
 `column.submission`, fails.
 
-Fails: `submission_metadata_missing`.
+Fails: `submission_metadata_missing`, `value_not_permitted`.
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionMetadataMissing`, `rust/crates/yamaa-core/tests/service_build_metadata.rs::missing_study_is_the_real_typed_owner_before_any_metadata_verification`.
 Replaces: REQ-0967, REQ-1015.
 
@@ -332,6 +333,7 @@ order, from `study.name`, `study.description` and `study.protocol_name`.
 `Description` when declared, and `def:DefineVersion` from `define_version`, in
 that order.
 
+Fails: `source_system_incomplete`.
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionSourceVersion`, `python/tests/installed/installed_public_define.py::test_source_version_defaults_and_schema_facet_failures`.
 Replaces: REQ-0979, REQ-0980, REQ-0981.
 
@@ -348,10 +350,11 @@ Replaces: REQ-0979, REQ-0980, REQ-0981.
 
 Each section may declare a non-empty `source_system_version`. Its value
 overrides the source-system version metadata in both Define-XML and
-Dataset-JSON, and omission selects the actual installed yamaa version.
-Qualification retains the actual generator version separately from this
-metadata override. The generated Define-XML release is `2.1.11`, and
-`SourceSystem` is `yamaa`.
+Dataset-JSON, and omission selects the actual installed yamaa version. A
+source-system version that would be written empty fails with
+`source_system_incomplete`. Qualification retains the actual generator version
+separately from this metadata override. The generated Define-XML release is
+`2.1.11`, and `SourceSystem` is `yamaa`.
 
 <a id="define-13"></a>
 

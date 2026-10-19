@@ -77,7 +77,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             },
             "derivation",
             "ambiguous_baseline",
-            "REQ-0322",
+            "WINDOW-9",
             vec![
                 ("column", text("A")),
                 ("operation", text("baseline_flag")),

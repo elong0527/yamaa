@@ -80,7 +80,7 @@ mod execution {
                     "LOOKUP-24",
                     "LOOKUP-24",
                     "REQ-0127",
-                    "REQ-0322",
+                    "WINDOW-9",
                     "REQ-0510",
                 ]) {
                     let finding = error.diagnostic().unwrap().unwrap();

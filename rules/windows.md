@@ -213,6 +213,7 @@ on that side of it within its partition yields missing, which does not
 distinguish an absent row from a present row whose value is missing. An
 `offset` of zero fails.
 
+Fails: `zero_offset`.
 Evidence: `schema-window-functions`, `negative-row-no-prior`.
 Replaces: REQ-0328, REQ-1125.
 

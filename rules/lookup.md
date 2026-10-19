@@ -702,7 +702,7 @@ unfinished rows are never eligible, and a read from the first template fails.
 `SELF` is reserved for this purpose, cannot also name an input, and is read
 only through a named intermediate, never as a directly qualified source.
 
-Fails: `phase_boundary`.
+Fails: `phase_boundary`, `unknown_field`.
 Evidence: `adam-adae-prior-serious-event`, `adam-advs-windows`, `negative-self-window-first-template`, `negative-self-filter-first-template`, `rust/crates/yamaa-adapters/tests/execution_declarative_self.rs`.
 Replaces: REQ-0120.
 
@@ -1117,7 +1117,7 @@ run after each completed template. A repeated combination fails the run, and
 there is no warning severity. A lookup whose key is verified unique needs
 neither `keep` nor `order_by`.
 
-Fails: `duplicate_intermediate_records`, `unknown_field`, `correlated_derivation_with_unique_verification`.
+Fails: `duplicate_intermediate_records`, `unknown_field`, `correlated_filter_with_unique_verification`, `correlated_derivation_with_unique_verification`.
 Evidence: `schema-lookup-intermediate-unique`, `negative-lookup-duplicate-intermediate`.
 Replaces: REQ-1245.
 
@@ -1143,10 +1143,10 @@ A repeated combination fails as `duplicate_intermediate_records` at the
 a stored field or a derived name, or fail as `unknown_field`. A `filter` or
 `derivations:` entry that fails to materialize fails the run here as well. A
 `filter` that references the current input record is evaluated per record and
-cannot combine with `verifications:`; the combination fails validation. A
-derivation that reads the current input record likewise cannot combine with
-`verifications:` and fails as
-`correlated_derivation_with_unique_verification`. `keep` stays a positional
+cannot combine with `verifications:`; the combination fails validation as
+`correlated_filter_with_unique_verification`. A derivation that reads the
+current input record likewise cannot combine with `verifications:` and fails
+as `correlated_derivation_with_unique_verification`. `keep` stays a positional
 selection requiring `order_by`, and an unordered `keep: first` is not an
 exactly-one assertion.
 
@@ -1165,6 +1165,7 @@ grouped row template, and the expression reduces the current input group to
 one candidate-row value. Every other context fails, and the forms must not be
 mixed.
 
+Fails: `invalid_aggregate_context`, `mixed_relations`.
 Evidence: `schema-aggregation`, `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`, `rust/crates/yamaa-adapters/tests/fixtures/row_reductions.json`.
 Replaces: REQ-0296, REQ-0329, REQ-0465, REQ-0466, REQ-0467, REQ-0468,
 REQ-0469, REQ-0504, REQ-0506, REQ-1088.
@@ -1219,6 +1220,7 @@ over the whole output is not registered. A grouped-row aggregate declares no
 local `group_by`: the enclosing `row.group_by` already fixes its current
 relation and keys.
 
+Fails: `invalid_aggregate_context`.
 Evidence: `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`, `rust/crates/yamaa-core/tests/schema_windows.rs`.
 Replaces: REQ-0331, REQ-0470, REQ-0507, REQ-0508.
 
@@ -1241,7 +1243,7 @@ values bound by earlier bindings. The reducer expression names each bound
 variable by its unqualified `name`. A binding cannot use a window operation,
 and `derive` is not available on unqualified or grouped-input aggregates.
 
-Fails: `invalid_derive_step`.
+Fails: `invalid_derive_step`, `unknown_derive_variable`.
 Evidence: `schema-derive-text-score`, `schema-derive-date-epoch`, `schema-aggregate-derive-intermediate`, `negative-donor-function-unkept`, `rust/crates/yamaa-core/tests/support/diagnostic/project_functions.rs::donor_keep_reached`.
 Replaces: REQ-1189, REQ-1190, REQ-1191, REQ-1192, REQ-1242.
 
@@ -1261,6 +1263,10 @@ conversion.
 The window operations are `row_number`, `rank`, `row_value`, `locf` and
 `baseline_flag`, including inside `case`; validation reports
 `invalid_derive_step` at the window's path.
+
+A binding's derivation that names an unqualified variable no earlier binding
+binds, or a reducer expression that names one no binding binds, fails
+validation as `unknown_derive_variable`.
 
 The relation a derived aggregate reduces is the one relation its derive
 bindings and filter name, and naming two relations is an error. A reducer

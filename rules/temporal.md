@@ -142,13 +142,15 @@ before `end`, each anniversary's day clamped to its month's length. With
 `second`, and in `minute`, `hour` or `day` a `float`, divided by 60, 3600 or
 86400. An earlier `end` gives a negative result in every unit.
 
-Fails: `value_not_permitted`.
+Fails: `value_not_permitted`, `incompatible_input_type`.
 Evidence: `adam-adsl-analysis-age`, `adam-adsl-duration`, `sdtm-dm-age`, `adam-adpc-relative-times`, `adam-adex-infusion-duration`, `rust/crates/yamaa-core/tests/support/diagnostic/temporal_arithmetic.rs`.
 Replaces: REQ-0594, REQ-0595, REQ-0596, REQ-0597, REQ-1104, REQ-1299.
 
 A `unit` the declared type does not count in fails with `value_not_permitted`
 where the specification is read: `type: date` counts in `day`, `week`, `month`
-and `year`, and `type: datetime` in `second`, `minute`, `hour` and `day`.
+and `year`, and `type: datetime` in `second`, `minute`, `hour` and `day`. A
+`start` or `end` not of the declared type is an incompatible input under
+[TIME-1](#time-1).
 
 Three boundary cases pin the anniversary rule: `2025-01-31` to `2025-02-28` is
 one month, `2024-02-29` to `2025-02-28` is twelve months and one year, and
@@ -214,6 +216,7 @@ first unknown field. `precision` returns a word of the ladder of
 carries, at most `day` with `type: date`; for a value of the declared type,
 its collected precision.
 
+Fails: `incompatible_input_type`.
 Evidence: `sdtm-ae-partial-dates`, `sdtm-dm-age`, `schema-birth-date`, `adam-adpc-relative-times`, `rust/crates/yamaa-adapters/tests/fixtures/temporal_imputation_reference.json`, `rust/crates/yamaa-core/tests/fixtures/collected_date_text.tsv`.
 Replaces: REQ-0578, REQ-0580, REQ-0581, REQ-0582, REQ-1106, REQ-1183, REQ-1326, REQ-1327, REQ-1329.
 
@@ -304,6 +307,7 @@ for a datetime, `time: first` or `last` the missing time fields.
 completed; a coarser source gives missing. The result keeps the source's
 collected precision.
 
+Fails: `incompatible_input_type`.
 Evidence: `adam-adae-partial-dates`, `adam-adae-partial-times`, `adam-adsl-alive-date`, `schema-birth-date`, `schema-impute-text-with-time`, `schema-imputation-flags`.
 Replaces: REQ-0579, REQ-0583, REQ-0584, REQ-0587, REQ-1105, REQ-1109, REQ-0589, REQ-1182, REQ-1184, REQ-1328.
 
@@ -336,6 +340,9 @@ and every field after it are completed as if not collected: `2025---15`
 completes as `2025` does, and with `type: datetime` and `time: first`,
 `2025-03-15T-:30` completes to `2025-03-15T00:00:00` with `day`. Text whose
 year is unknown gives missing, as a source coarser than the minimum does.
+
+A source whose type is neither `str` nor the declared type is an incompatible
+input under [TIME-1](#time-1).
 
 The parameters apply in this order: a missing source, then invalid text, then
 the minimum precision, then completion from `month`, `day` and `time`, then

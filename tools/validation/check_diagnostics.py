@@ -1,9 +1,10 @@
 """Guard normative mappings and keep diagnostic literals in their registry.
 
 Core registry conditions and phases must be in the shared vocabulary. Rule error
-tables/refusal clauses must name registered conditions. A cause that cites a
-card reports a condition that card's Fails line names, so one fault keeps the
-one condition its card states; a legacy REQ citation has no Fails line. A
+tables/refusal clauses must name registered conditions. A cause's citation names
+a card, directly or as a REQ ID the card's Replaces line lists, and that card's
+Fails line names the cause's condition, so one fault keeps the one condition its
+card states. A legacy requirement block has no Fails line and cannot be cited. A
 registered condition needs no core cause or separate disposition record; the
 vocabulary and the core registry are the only sources. These are static
 ownership checks, not a claim that every registered condition has executable
@@ -391,12 +392,40 @@ def null_conditions(
     return exceptions, errors
 
 
+def citation_error(name: str, condition: str, cited: str, rules) -> str | None:
+    """Why a cause's citation names no card stating its condition, or None.
+
+    A card ID names its card and a REQ ID names the card whose Replaces line
+    lists it; that card's Fails line must name the condition. An ID that names
+    nothing is reported where literals are checked, as an undefined requirement.
+    """
+    card = rules.cards.get(cited) or rules.replaced.get(cited)
+    if card is None:
+        if cited not in rules.requirements:
+            return None
+        return (
+            f"core diagnostic registry:{name}: {cited} is a legacy requirement "
+            f"with no Fails line naming {condition}"
+        )
+    if condition in card.fails:
+        return None
+    if card.id == cited:
+        return (
+            f"core diagnostic registry:{name}: {cited} does not name "
+            f"{condition} in its Fails line"
+        )
+    return (
+        f"core diagnostic registry:{name}: {cited} is replaced by {card.id}, "
+        f"which does not name {condition} in its Fails line"
+    )
+
+
 def registry_errors(
     root: Path,
     registered: dict[str, set[str]],
     nullable: set[tuple[str, str]],
     cause_line: re.Pattern,
-    cards: dict,
+    rules,
 ) -> list[str]:
     path = root / REGISTRY
     try:
@@ -434,12 +463,9 @@ def registry_errors(
             )
         else:
             cited = requirement.removeprefix('Some("').removesuffix('")')
-            card = cards.get(cited)
-            if card is not None and condition not in card.fails:
-                errors.append(
-                    f"core diagnostic registry:{name}: {cited} does not name "
-                    f"{condition} in its Fails line"
-                )
+            error = citation_error(name, condition, cited, rules)
+            if error is not None:
+                errors.append(error)
         if condition not in registered:
             errors.append(
                 f"core diagnostic registry:{name}: unregistered condition {condition}"
@@ -470,7 +496,7 @@ def violations(root: Path) -> list[str]:
     nullable, null_errors = null_conditions(root, registered)
     errors.extend(null_errors)
     errors.extend(
-        registry_errors(root, registered, nullable, cause_pattern(rules), rules.cards)
+        registry_errors(root, registered, nullable, cause_pattern(rules), rules)
     )
     errors.extend(rule_vocabulary_errors(root, registered))
     requirement = rules.identifier

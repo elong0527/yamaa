@@ -311,7 +311,7 @@ fn baseline_tie_break_terms_pick_the_last_same_date_row_or_fail_when_still_tied(
         yamaa_adapters::json!({
             "phase": "derivation",
             "condition": "ambiguous_baseline",
-            "requirement": "REQ-0322",
+            "requirement": "WINDOW-9",
             "spec_paths": ["columns.BLFL.derivation.baseline_flag"],
             "context": {"date": "2025-01-03", "match_count": 2, "keys": [{"G": "a"}]}
         })
