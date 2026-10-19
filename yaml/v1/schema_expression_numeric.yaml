@@ -1,0 +1,12 @@
+version: "1.0"
+
+expressions:
+    round_half_away_from_zero: # See FORMULA-16.
+        - source:
+            type: variable
+            required: true
+            description: Numeric variable to round (FORMULA-16).
+        - digits:
+            type: int
+            required: true
+            description: Integer decimal places; negative rounds left of the decimal point (FORMULA-16).

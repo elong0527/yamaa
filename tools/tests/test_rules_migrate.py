@@ -1,12 +1,22 @@
 """The migration helper moves citations to cards and reports a conversion."""
 
+import contextlib
+import io
+import os
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-from tools.rules.migrate import legacy_report, migrate_links, statement_report
+from tools.rules.migrate import (
+    citation_summary,
+    legacy_report,
+    main,
+    migrate_citations,
+    migrate_links,
+    statement_report,
+)
 from tools.rules.model import load, load_ref
 from tools.tests.rules_fixture import write
 
@@ -334,6 +344,327 @@ class MigrationTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("would rewrite", result.stdout)
         self.assertIn("UNRESOLVED: rust/README.md:4", result.stderr)
+
+
+CITATION_INDEX = """\
+# Rules
+
+## Rule files
+
+| File | Prefix | Covers |
+| --- | --- | --- |
+| [Inheritance](inheritance.md) | LAYER | Layers. |
+| [Types](values/types.md) | REQ | Types. |
+"""
+
+CITATION_CARDS = """\
+# Inheritance
+
+## Layers
+
+<a id="layer-1"></a>
+
+### LAYER-1. Layers compose depth first
+
+Layers compose depth first; a null clears an inherited field.
+
+Replaces: REQ-0010,
+REQ-0011.
+
+Detail cites REQ-0012.
+
+<a id="layer-2"></a>
+
+### LAYER-2. Parents are local files
+
+A parent is a local file.
+
+Replaces: REQ-0012.
+"""
+
+CITATION_CONTRACT = """\
+---
+id: values/types
+title: Types
+status: normative
+---
+
+# Types
+
+## Requirements
+
+<a id="req-0001"></a>
+
+**REQ-0001.** A column has one type.
+"""
+
+PARQUET = b"PAR1\x00\x15\x08REQ-0012\x00\x00PAR1"
+
+CITING = {
+    "rules/README.md": CITATION_INDEX,
+    "rules/inheritance.md": CITATION_CARDS,
+    "rules/values/types.md": CITATION_CONTRACT,
+    "rust/src/lib.rs": (
+        "//! Layers compose depth first (REQ-0010); a column has one type (REQ-0001).\n"
+        'const RULE: &str = "REQ-0011";\n'
+    ),
+    "benchmarks/negative-cycle/expected/error.yaml": (
+        "phase: validation\ncondition: inheritance_cycle\nrequirement: REQ-0011\n"
+    ),
+    "benchmarks/schema-checks/expected/checks.csv": (
+        "RULE,status\r\nREQ-0012,held\r\nLAYER-1,held\r\n"
+    ),
+    "benchmarks/schema-checks/input/dm.csv": "USUBJID,NOTE\nS-1,REQ-0010\n",
+    "docs/page.md": "Layers follow REQ-0010, as LAYER-2 says.\n",
+    "docs/releases/0.4.0.md": "REQ-0010 becomes LAYER-1.\n",
+    "tools/unknown.py": 'UNKNOWN = "REQ-9999"\n',
+    "tools/plain.py": "PLAIN = 1\n",
+}
+
+
+class CitationTests(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        for relative, text in CITING.items():
+            path = self.root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(text.encode("utf-8"))
+        parquet = self.root / "benchmarks/schema-checks/expected/checks.parquet"
+        parquet.write_bytes(PARQUET)
+
+    def read(self, relative):
+        return (self.root / relative).read_bytes().decode("utf-8")
+
+    def snapshot(self):
+        return {
+            path.relative_to(self.root).as_posix(): path.read_bytes()
+            for path in sorted(self.root.rglob("*"))
+            if path.is_file()
+        }
+
+    def test_citations_move_to_the_replacing_card(self):
+        migration = migrate_citations(self.root)
+        self.assertEqual(migration.refused, [])
+        self.assertEqual(
+            sorted(migration.rewrites),
+            [
+                (
+                    "benchmarks/negative-cycle/expected/error.yaml",
+                    3,
+                    "REQ-0011",
+                    "LAYER-1",
+                ),
+                (
+                    "benchmarks/schema-checks/expected/checks.csv",
+                    2,
+                    "REQ-0012",
+                    "LAYER-2",
+                ),
+                ("docs/page.md", 1, "REQ-0010", "LAYER-1"),
+                ("rules/inheritance.md", 14, "REQ-0012", "LAYER-2"),
+                ("rust/src/lib.rs", 1, "REQ-0010", "LAYER-1"),
+                ("rust/src/lib.rs", 2, "REQ-0011", "LAYER-1"),
+            ],
+        )
+        self.assertEqual(
+            self.read("rust/src/lib.rs"),
+            "//! Layers compose depth first (LAYER-1); a column has one type (REQ-0001).\n"
+            'const RULE: &str = "LAYER-1";\n',
+        )
+        self.assertEqual(
+            self.read("benchmarks/negative-cycle/expected/error.yaml"),
+            "phase: validation\ncondition: inheritance_cycle\nrequirement: LAYER-1\n",
+        )
+        # Line endings stay as written.
+        self.assertEqual(
+            self.read("benchmarks/schema-checks/expected/checks.csv"),
+            "RULE,status\r\nLAYER-2,held\r\nLAYER-1,held\r\n",
+        )
+        # The cards keep their Replaces lines; their detail moves.
+        self.assertEqual(
+            self.read("rules/inheritance.md"),
+            CITATION_CARDS.replace("Detail cites REQ-0012.", "Detail cites LAYER-2."),
+        )
+        self.assertEqual(migration.replaces, 3)
+        # A legacy requirement still defined and a sentinel stay.
+        self.assertEqual(
+            sorted(migration.kept),
+            [
+                ("rules/values/types.md", 13, "REQ-0001"),
+                ("rust/src/lib.rs", 1, "REQ-0001"),
+                ("tools/unknown.py", 1, "REQ-9999"),
+            ],
+        )
+        self.assertEqual(self.read("rules/values/types.md"), CITATION_CONTRACT)
+        self.assertEqual(self.read("tools/unknown.py"), 'UNKNOWN = "REQ-9999"\n')
+
+    def test_binary_files_are_listed_and_not_edited(self):
+        migration = migrate_citations(self.root)
+        self.assertEqual(
+            migration.binary,
+            {
+                "benchmarks/schema-checks/expected/checks.parquet": [
+                    ("REQ-0012", 1, "LAYER-2")
+                ]
+            },
+        )
+        parquet = self.root / "benchmarks/schema-checks/expected/checks.parquet"
+        self.assertEqual(parquet.read_bytes(), PARQUET)
+
+    def test_inputs_release_notes_and_rule_fixtures_stay_as_written(self):
+        write(self.root, "tools/tests/test_rules_model.py", 'ID = "REQ-0010"\n')
+        write(self.root, "docs/design/interface-1.0/rules.md", "REQ-0011 moves.\n")
+        migration = migrate_citations(self.root)
+        self.assertEqual(
+            migration.left,
+            {
+                "benchmarks/schema-checks/input/dm.csv": "benchmark inputs are data",
+                "docs/design/interface-1.0/rules.md": (
+                    "the design quotes the IDs it measured"
+                ),
+                "docs/releases/0.4.0.md": (
+                    "release notes name the requirements of their release"
+                ),
+                "tools/tests/test_rules_model.py": "builds a rule set of its own",
+            },
+        )
+        self.assertEqual(
+            self.read("benchmarks/schema-checks/input/dm.csv"),
+            CITING["benchmarks/schema-checks/input/dm.csv"],
+        )
+        self.assertEqual(
+            self.read("docs/releases/0.4.0.md"), "REQ-0010 becomes LAYER-1.\n"
+        )
+        self.assertEqual(
+            self.read("tools/tests/test_rules_model.py"), 'ID = "REQ-0010"\n'
+        )
+
+    def test_a_second_run_changes_nothing(self):
+        migrate_citations(self.root)
+        written = self.snapshot()
+        again = migrate_citations(self.root)
+        self.assertEqual((again.rewrites, again.texts, again.refused), ([], {}, []))
+        self.assertEqual(self.snapshot(), written)
+
+    def test_a_dry_run_reports_without_writing(self):
+        before = self.snapshot()
+        migration = migrate_citations(self.root, dry_run=True)
+        self.assertEqual(len(migration.rewrites), 6)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_an_id_that_names_no_rule_is_refused_and_nothing_is_written(self):
+        write(self.root, "docs/other.md", "See REQ-0500 and REQ-0010.\n")
+        before = self.snapshot()
+        migration = migrate_citations(self.root)
+        self.assertEqual(
+            migration.refused, [("docs/other.md", 1, "REQ-0500", "names no rule")]
+        )
+        self.assertEqual(len(migration.rewrites), 7)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_ranges_and_abbreviated_lists_are_refused(self):
+        write(
+            self.root,
+            "docs/spans.md",
+            "Covers REQ-0010 to REQ-0012, REQ-0010/0012 and REQ-0011-0012.\n"
+            "Also REQ-0010 through\nREQ-0012 and REQ-0040-0041.\n"
+            "Not spans: REQ-0010-style, REQ-0011/REQ-0012.\n",
+        )
+        before = self.snapshot()
+        migration = migrate_citations(self.root)
+        naming = "names IDs it does not write out; rewrite it by hand, naming "
+        self.assertEqual(
+            migration.refused,
+            [
+                (
+                    "docs/spans.md",
+                    1,
+                    "REQ-0010 to REQ-0012",
+                    naming + "LAYER-1, LAYER-2",
+                ),
+                ("docs/spans.md", 1, "REQ-0010/0012", naming + "LAYER-1, LAYER-2"),
+                ("docs/spans.md", 1, "REQ-0011-0012", naming + "LAYER-1, LAYER-2"),
+                (
+                    "docs/spans.md",
+                    2,
+                    "REQ-0010 through REQ-0012",
+                    naming + "LAYER-1, LAYER-2",
+                ),
+                ("docs/spans.md", 3, "REQ-0040-0041", "names no rule"),
+            ],
+        )
+        self.assertIn(("docs/spans.md", 4, "REQ-0010", "LAYER-1"), migration.rewrites)
+        self.assertIn(("docs/spans.md", 4, "REQ-0012", "LAYER-2"), migration.rewrites)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_symlinks_are_not_followed(self):
+        try:
+            os.symlink(self.root / "docs/page.md", self.root / "docs/link.md")
+        except OSError as exc:
+            self.skipTest(f"cannot create a symbolic link: {exc}")
+        migration = migrate_citations(self.root)
+        self.assertNotIn("docs/link.md", migration.found)
+        self.assertEqual(
+            self.read("docs/link.md"), "Layers follow LAYER-1, as LAYER-2 says.\n"
+        )
+
+    def test_summary_accounts_by_extension(self):
+        summary = citation_summary(migrate_citations(self.root, dry_run=True), True)
+        self.assertEqual(
+            summary.splitlines(),
+            [
+                "Would rewrite 6 REQ IDs in 5 files, of 15 found in 10 files.",
+                "",
+                "| Extension | Files | REQ IDs | Rewritten |",
+                "| --- | ---: | ---: | ---: |",
+                "| `.md` | 4 | 7 | 2 |",
+                "| `.rs` | 1 | 3 | 2 |",
+                "| `.csv` | 2 | 2 | 1 |",
+                "| `.parquet` | 1 | 1 | 0 |",
+                "| `.py` | 1 | 1 | 0 |",
+                "| `.yaml` | 1 | 1 | 1 |",
+                "| Total | 10 | 15 | 6 |",
+                "",
+                "Expected files: 2, holding 2 values: 1 `expected/error.yaml` file, and:",
+                "- `benchmarks/schema-checks/expected/checks.csv`: 1 value",
+                "",
+                "Kept: 3 REQ IDs on the cards' Replaces lines, 1 sentinel ID, 2 IDs of "
+                "legacy requirements still defined.",
+                "",
+                "Left as written: 2 files.",
+                "- `benchmarks/schema-checks/input/dm.csv` (1): benchmark inputs are data",
+                "- `docs/releases/0.4.0.md` (1): release notes name the requirements of "
+                "their release",
+                "",
+                "Binary files to edit by hand: 1.",
+                "- `benchmarks/schema-checks/expected/checks.parquet`: REQ-0012 "
+                "(LAYER-2), 1 time",
+            ],
+        )
+
+    def test_command_line(self):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            status = main(["--root", str(self.root), "citations", "--dry-run"])
+        self.assertEqual(status, 0)
+        self.assertIn("rust/src/lib.rs:2: REQ-0011 -> LAYER-1\n", output.getvalue())
+        self.assertIn("Would rewrite 6 REQ IDs in 5 files", output.getvalue())
+        self.assertIn("REQ-0011", self.read("rust/src/lib.rs"))
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(main(["--root", str(self.root), "citations"]), 0)
+        self.assertNotIn("REQ-0011", self.read("rust/src/lib.rs"))
+        write(self.root, "docs/other.md", "See REQ-0500.\n")
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            status = main(["--root", str(self.root), "citations"])
+        self.assertEqual(status, 1)
+        self.assertIn(
+            "Refused, so nothing is written: 1.\n"
+            "- `docs/other.md:1`: `REQ-0500` names no rule\n",
+            output.getvalue(),
+        )
 
 
 if __name__ == "__main__":

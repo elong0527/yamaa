@@ -1,5 +1,7 @@
-"""Public compact flow verification controls for the installed parser (#2196)."""
+"""Public controls for the installed YAML parser: compact flow verifications
+(#2196) and raw NUL refusal (#3125)."""
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -86,6 +88,32 @@ class CompactYaml(unittest.TestCase):
                 with self.subTest(verification=verification, operation=operation):
                     self.assertEqual(
                         result.issues["condition"].to_list(), ["invalid_yaml"]
+                    )
+
+    def test_raw_nul_is_invalid_yaml_at_the_nul(self):
+        # A raw NUL used to end the specification silently: the verification
+        # after it was dropped, or the fields after it were reported missing.
+        for text, line, column in (
+            (SPEC + "\0verifications: [row_count: {min: 4}]\n", 14, 1),
+            (SPEC.replace("keys: [ID]", "ke\0ys: [ID]"), 3, 3),
+        ):
+            self.spec.write_text(text, encoding="ascii")
+            specification = yamaa.spec(self.spec)
+            for operation, result in (
+                ("check", specification.check()),
+                ("run", specification.run()),
+            ):
+                with self.subTest(line=line, operation=operation):
+                    self.assertEqual(
+                        result.issues["condition"].to_list(), ["invalid_yaml"]
+                    )
+                    self.assertEqual(
+                        json.loads(result.issues["context"][0]),
+                        {
+                            "line": line,
+                            "column": column,
+                            "reason": "found unprintable character",
+                        },
                     )
 
 

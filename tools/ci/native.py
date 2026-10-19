@@ -6,7 +6,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-PLATFORMS = ("ubuntu-24.04", "macos-15", "windows-latest")
+# Fixed runner images, never a -latest label: GitHub moves those to newer
+# images, which can change the system and its toolchains (MSVC on Windows)
+# under a lane. tools/tests/test_workflow_runners.py checks every workflow.
+PLATFORMS = ("ubuntu-24.04", "macos-15", "windows-2025")
 # The Python wheels are also built and qualified for Linux aarch64 (#3030 D49).
 PYTHON_PLATFORMS = (*PLATFORMS, "ubuntu-24.04-arm")
 PYTHONS = ("3.12", "3.13", "3.14", "3.15")

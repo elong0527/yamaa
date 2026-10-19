@@ -1,11 +1,11 @@
 //! Complete inherited-column dependency findings in resolver order.
 use super::{ConditionCode as C, Diagnostic};
 use crate::json::Value as JsonValue;
-use crate::schema::InheritanceDependencyIssue as Issue;
+use crate::resolution::Issue;
 use std::vec;
 
-/// Preserve all dependency findings in the resolver's order. Cycle membership is
-/// the unresolved authored column list, rather than a closed traversal loop.
+/// Preserve all dependency findings in the resolver's order. A cycle names
+/// its closed loop, as the single-file compiler does (#2844, decision 1).
 pub fn inheritance_dependency_diagnostics(issues: &[Issue]) -> Vec<Diagnostic> {
     issues
         .iter()
@@ -20,11 +20,11 @@ pub fn inheritance_dependency_diagnostics(issues: &[Issue]) -> Vec<Diagnostic> {
                         vec![format!("columns.{column}.derivation")],
                     )
                 }
-                Issue::Cycle { columns, paths, .. } => {
+                Issue::Cycle { cycle, paths } => {
                     context.insert(
                         "cycle".into(),
                         JsonValue::Array(
-                            columns
+                            cycle
                                 .iter()
                                 .map(|column| JsonValue::String(column.clone()))
                                 .collect(),

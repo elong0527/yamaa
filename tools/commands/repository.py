@@ -21,6 +21,7 @@ CHECKS = (
     "tools.packaging.check_minimum_rust",
     "tools.packaging.generate_style_orders",
     "tools.packaging.generate_shipped_schema",
+    "tools.packaging.generate_json_schema",
     "tools.packaging.generate_facade_api",
     "tools.packaging.generate_bindings",
     "tools.validation.validate_repository",
@@ -105,6 +106,16 @@ def main():
     else:
         for module in CHECKS:
             run(sys.executable, "-m", module)
+        # No pull request job installs the Harbor evaluation's own project, so
+        # its lock is checked here against its manifest and the packages it
+        # takes from the checkout. `uv run` names its own binary in UV.
+        run(
+            os.environ.get("UV", "uv"),
+            "lock",
+            "--check",
+            "--project",
+            "evaluations/harbor",
+        )
         run(
             sys.executable,
             "-m",

@@ -2,399 +2,82 @@
 #[allow(dead_code)]
 mod support;
 mod schema {
-    mod schema_inheritance_references {
-        use yamaa_core::schema::{
-            Document, DocumentNode as N, InheritanceReference, InheritanceReferenceError,
-            InheritanceReferenceKind as K, SchemaModule, SchemaStructure,
-        };
+    mod resolution_pruning {
+        //! LAYER-11 pruning and the LAYER-13 order on the AST (#3134), over
+        //! documents in the normalized form both lifecycles prune.
+        use yamaa_core::expression::{CompileError, Context};
+        use yamaa_core::resolution::{prune, Error as E, Issue as I, Order};
+        use yamaa_core::schema::{Document, DocumentNode as N, NormalizedDocument, SchemaSource};
 
         use crate::support::document::Tree as V;
 
         fn text(s: &str) -> V {
             V::text(s)
         }
-        fn document(value: V) -> Document {
-            value.document()
+        fn texts(names: &[&str]) -> V {
+            V::List(names.iter().map(|name| text(name)).collect())
         }
-        fn descriptor(kind: V) -> V {
-            V::map(vec![("type", kind)])
+        fn op(name: &str, payload: V) -> V {
+            V::map(vec![(name, payload)])
         }
-        fn field(name: &'static str, kind: &str) -> V {
-            V::map(vec![(name, descriptor(text(kind)))])
+        fn variable(name: &str) -> V {
+            V::map(vec![("variable", text(name))])
         }
-        fn schema() -> SchemaStructure {
-            let mut declarations = vec![
-                ("version", text("1.0")),
-                (
-                    "root_class",
-                    V::List(vec![
-                        field("base", "identifier"),
-                        field("input", "dict[identifier, dataset_class]"),
-                        field("intermediates", "list[intermediate_class]"),
-                        field("filter", "predicate"),
-                        field("verifications", "list[variable]"),
-                        field("keys", "list[identifier]"),
-                        field("description", "identifier"),
-                        field("columns", "list[column_class]"),
-                        field("output", "output_class"),
-                        field("operations", "list[expression]"),
-                        field("rows", "list[row_class]"),
-                    ]),
-                ),
-                (
-                    "column_class",
-                    V::List(vec![
-                        field("name", "identifier"),
-                        field("label", "identifier"),
-                        field("derivation", "derivation"),
-                        field("verifications", "list[variable]"),
-                    ]),
-                ),
-                (
-                    "output_class",
-                    V::List(vec![field("columns", "list[identifier]")]),
-                ),
-                (
-                    "row_class",
-                    V::List(vec![
-                        field("id", "identifier"),
-                        field("dataset", "identifier"),
-                        field("derivations", "dict[identifier, derivation]"),
-                        field("group_by", "list[variable]"),
-                        field("filter", "predicate"),
-                    ]),
-                ),
-                ("dataset_class", V::List(vec![field("path", "str")])),
-                (
-                    "intermediate_class",
-                    V::List(vec![
-                        field("id", "identifier"),
-                        field("dataset", "identifier"),
-                        field("key", "variable"),
-                        field("filter", "predicate"),
-                        field("order_by", "list[variable]"),
-                    ]),
-                ),
-                (
-                    "derivation",
-                    descriptor(V::List(vec![text("variable"), text("expression")])),
-                ),
-                (
-                    "aggregate_class",
-                    V::List(vec![
-                        field("expr", "aggregate_expression"),
-                        field("filter", "predicate"),
-                        field("derive", "list[derive_binding_class]"),
-                    ]),
-                ),
-                (
-                    "derive_binding_class",
-                    V::List(vec![
-                        field("name", "identifier"),
-                        field("derivation", "derivation"),
-                    ]),
-                ),
-                ("variable", descriptor(text("str"))),
-                ("identifier", descriptor(text("str"))),
-                ("numeric_expression", descriptor(text("str"))),
-                ("aggregate_expression", descriptor(text("str"))),
-                ("predicate", descriptor(text("str"))),
-                ("string_template", descriptor(text("str"))),
-                (
-                    "literal_first",
-                    descriptor(V::List(vec![text("str"), text("variable")])),
-                ),
-                (
-                    "reference_first",
-                    descriptor(V::List(vec![text("variable"), text("str")])),
-                ),
-                (
-                    "expression",
-                    V::map(vec![("registry", text("expressions"))]),
-                ),
-                (
-                    "expressions",
-                    V::map(vec![
-                        ("source", descriptor(text("variable"))),
-                        ("compute", descriptor(text("numeric_expression"))),
-                        (
-                            "aggregate",
-                            descriptor(V::List(vec![
-                                text("aggregate_expression"),
-                                text("aggregate_class"),
-                            ])),
-                        ),
-                        ("template", descriptor(text("string_template"))),
-                        ("literal", descriptor(text("str"))),
-                        (
-                            "join",
-                            V::List(vec![field("source", "variable"), field("label", "str")]),
-                        ),
-                    ]),
-                ),
-            ];
-            // Recursive alias fallback must terminate without interpreting a literal as a variable.
-            declarations.push((
-                "recursive",
-                descriptor(V::List(vec![text("recursive"), text("str")])),
-            ));
-            SchemaStructure::admit(
-                vec![SchemaModule {
-                    name: "schema.yaml".into(),
-                    document: document(V::map(declarations)),
-                }],
-                0,
-                "root_class",
-            )
-            .unwrap()
+        fn source(name: &str) -> V {
+            op("source", variable(name))
         }
-
-        fn refs(
-            schema: &SchemaStructure,
-            value: V,
-            types: &[&str],
-            scope: Option<(&str, &str)>,
-        ) -> Result<Vec<InheritanceReference>, InheritanceReferenceError> {
-            let input = document(value);
-            let types = schema
-                .parse_query_types(&types.iter().map(|s| (*s).into()).collect::<Vec<_>>())
-                .unwrap();
-            schema.inheritance_references(&types, &input, input.root(), scope)
+        fn compute(expr: &str) -> V {
+            op("compute", V::map(vec![("expr", text(expr))]))
         }
-        fn variable(name: &str) -> InheritanceReference {
-            InheritanceReference {
-                kind: K::Variable,
-                name: name.into(),
-            }
+        fn literal(value: &str) -> V {
+            op("literal", text(value))
         }
-        fn predicate_variable(name: &str) -> InheritanceReference {
-            InheritanceReference {
-                kind: K::PredicateVariable,
-                name: name.into(),
-            }
+        fn aggregate(fields: Vec<(&str, V)>) -> V {
+            op("aggregate", V::map(fields))
         }
-        fn dataset(name: &str) -> InheritanceReference {
-            InheritanceReference {
-                kind: K::Dataset,
-                name: name.into(),
-            }
+        fn derivation(expression: V) -> V {
+            V::map(vec![("value", expression)])
         }
-
-        #[test]
-        fn identifiers_are_references_only_in_semantic_roles() {
-            let schema = schema();
-            let input = V::map(vec![
-                ("base", text("DM")),
-                ("description", text("NOT_A_DEPENDENCY")),
-                ("keys", V::List(vec![text("ID")])),
-                (
-                    "columns",
-                    V::List(vec![V::map(vec![
-                        ("name", text("RESULT")),
-                        ("label", text("LITERAL")),
-                        ("derivation", text("DM.VALUE")),
-                    ])]),
-                ),
-                (
-                    "output",
-                    V::map(vec![("columns", V::List(vec![text("RESULT")]))]),
-                ),
-                (
-                    "rows",
-                    V::List(vec![V::map(vec![
-                        ("id", text("ROW_LITERAL")),
-                        ("dataset", text("EX")),
-                    ])]),
-                ),
-            ]);
-            assert_eq!(
-                refs(&schema, input, &["root_class"], None).unwrap(),
-                vec![
-                    dataset("DM"),
-                    variable("ID"),
-                    variable("RESULT"),
-                    variable("DM.VALUE"),
-                    dataset("EX")
-                ]
-            );
-            assert_eq!(
-                refs(&schema, text("DM"), &["identifier"], None).unwrap(),
-                vec![]
-            );
+        fn column(name: &str, expression: V) -> V {
+            V::map(vec![
+                ("name", text(name)),
+                ("type", text("str")),
+                ("derivation", derivation(expression)),
+            ])
         }
-
-        #[test]
-        fn first_matching_union_and_registry_payloads_preserve_literal_boundaries() {
-            let schema = schema();
-            assert_eq!(
-                refs(&schema, text("A"), &["literal_first"], None).unwrap(),
-                vec![]
-            );
-            assert_eq!(
-                refs(&schema, text("A"), &["reference_first"], None).unwrap(),
-                vec![variable("A")]
-            );
-            assert_eq!(
-                refs(&schema, text("A"), &["int", "variable"], None).unwrap(),
-                vec![variable("A")]
-            );
-            assert_eq!(
-                refs(&schema, text("A"), &["recursive"], None).unwrap(),
-                vec![]
-            );
-            let input = V::List(vec![
-                V::map(vec![("literal", text("WRONG"))]),
-                V::map(vec![("source", text("DM.X"))]),
-                V::map(vec![(
-                    "join",
-                    V::map(vec![("label", text("WRONG")), ("source", text("OTHER"))]),
-                )]),
-            ]);
-            assert_eq!(
-                refs(&schema, input, &["list[expression]"], None).unwrap(),
-                vec![variable("DM.X"), variable("OTHER")]
-            );
+        fn bare(name: &str) -> V {
+            V::map(vec![("name", text(name)), ("type", text("str"))])
         }
-
-        #[test]
-        fn dictionaries_visit_values_and_scope_survives_containers() {
-            let schema = schema();
-            assert_eq!(
-                refs(
-                    &schema,
-                    V::map(vec![("KEY_LITERAL", text("A")), ("OTHER_KEY", text("A"))]),
-                    &["dict[str, variable]"],
-                    None
-                )
-                .unwrap(),
-                vec![variable("A")]
-            );
-            assert_eq!(
-                refs(
-                    &schema,
-                    V::List(vec![text("A"), text("B")]),
-                    &["list[identifier]"],
-                    Some(("output_class", "columns"))
-                )
-                .unwrap(),
-                vec![variable("A"), variable("B")]
-            );
-            // Matching is complete, not fragment validation or a permissive structural walk.
-            assert_eq!(
-                refs(
-                    &schema,
-                    V::List(vec![text("A"), V::integer("7")]),
-                    &["list[variable]"],
-                    None
-                )
-                .unwrap(),
-                vec![]
-            );
+        fn binding(name: &str, expression: V) -> V {
+            V::map(vec![
+                ("name", text(name)),
+                ("type", text("float")),
+                ("derivation", derivation(expression)),
+            ])
         }
-
-        #[test]
-        fn closed_languages_retain_field_and_record_count_dependencies() {
-            let schema = schema();
-            for (kind, input, expected) in [
-                (
-                    "numeric_expression",
-                    "A + DM.X + A",
-                    vec![variable("A"), variable("DM.X")],
-                ),
-                (
-                    "aggregate_expression",
-                    "COUNT(EX.*) + SUM(EX.DOSE)",
-                    vec![variable("EX.DOSE"), variable("EX.*")],
-                ),
-                (
-                    "aggregate_expression",
-                    "COUNT(EX.*)",
-                    vec![variable("EX.*")],
-                ),
-                (
-                    "predicate",
-                    "A = 'LITERAL' AND DM.X > 0",
-                    vec![predicate_variable("A"), predicate_variable("DM.X")],
-                ),
-                (
-                    "string_template",
-                    "{{{A}}} {DM.X} {A}",
-                    vec![variable("A"), variable("DM.X")],
-                ),
-            ] {
-                assert_eq!(
-                    refs(&schema, text(input), &[kind], None).unwrap(),
-                    expected,
-                    "{kind}: {input}"
-                );
-            }
-        }
-
-        #[test]
-        fn malformed_language_has_no_partial_dependencies() {
-            let schema = schema();
-            for (kind, input) in [
-                ("numeric_expression", "A +"),
-                ("aggregate_expression", "SUM(A) +"),
-                ("predicate", "A ="),
-                ("string_template", "{A} {bad-name}"),
-                ("string_template", "{A} }"),
-                ("string_template", "{A} {"),
-                ("string_template", "{A..B}"),
-            ] {
-                assert_eq!(
-                    refs(&schema, text(input), &[kind], None).unwrap(),
-                    vec![],
-                    "{kind}: {input}"
-                );
-            }
-            for input in ["{{literal}}", "plain unicode café", ""] {
-                assert!(refs(&schema, text(input), &["string_template"], None)
-                    .unwrap()
-                    .is_empty());
-            }
-        }
-
-        #[test]
-        fn parser_refusal_is_not_an_empty_reference_set() {
-            let schema = schema();
-            let input = format!("{}A{}", "(".repeat(129), ")".repeat(129));
-            assert!(matches!(
-                refs(&schema, text(&input), &["numeric_expression"], None),
-                Err(InheritanceReferenceError::Numeric(
-                    yamaa_core::expression::CompileError::Limit { .. }
-                ))
-            ));
-        }
-
-        #[test]
-        fn independent_reference_requests_keep_written_identifiers() {
-            let schema = schema();
-            let input = document(text("A + B"));
-            let types = schema
-                .parse_query_types(&["numeric_expression".into()])
-                .unwrap();
-            for _ in 0..3 {
-                assert_eq!(
-                    schema
-                        .inheritance_references(&types, &input, input.root(), None)
-                        .unwrap(),
-                    vec![variable("A"), variable("B")]
-                );
-            }
-        }
-
-        fn column(name: &str, derivation: V) -> V {
-            V::map(vec![("name", text(name)), ("derivation", derivation)])
-        }
-        fn operation(name: &'static str, value: &str) -> V {
-            V::map(vec![(name, text(value))])
-        }
-        fn source(path: &str) -> V {
+        fn dataset(path: &str) -> V {
             V::map(vec![("path", text(path))])
         }
+        /// A spec whose output names `output`, with `fields` after it.
+        fn tree(output: &[&str], fields: Vec<(&str, V)>) -> V {
+            let mut all = vec![
+                ("schema_version", text("1.0")),
+                ("domain", text("TEST")),
+                (
+                    "output",
+                    V::map(vec![("path", text("out.csv")), ("columns", texts(output))]),
+                ),
+            ];
+            all.extend(fields);
+            V::map(all)
+        }
+        fn spec(output: &[&str], fields: Vec<(&str, V)>) -> Document {
+            tree(output, fields).document()
+        }
         fn names(d: &Document, collection: &str, identity: &str) -> Vec<String> {
-            let node = d.field(d.root(), collection).unwrap();
+            let Some(node) = d.field(d.root(), collection) else {
+                return Vec::new();
+            };
             let N::Sequence(items) = &d.nodes()[node] else {
                 panic!()
             };
@@ -418,6 +101,14 @@ mod schema {
                 })
                 .collect()
         }
+        fn inputs(d: &Document) -> Vec<String> {
+            d.field(d.root(), "input")
+                .map(|node| keys(d, node))
+                .unwrap_or_default()
+        }
+        fn columns(result: &NormalizedDocument) -> Vec<String> {
+            names(&result.document, "columns", "name")
+        }
         fn same(a: &Document, ai: usize, b: &Document, bi: usize) {
             match (&a.nodes()[ai], &b.nodes()[bi]) {
                 (N::Sequence(x), N::Sequence(y)) => {
@@ -438,53 +129,301 @@ mod schema {
         }
 
         #[test]
-        fn prunes_dead_sources_follows_count_and_stably_orders_without_changing_output() {
-            let schema = schema();
-            let input = document(V::map(vec![
-                ("base", text("DM")),
-                (
-                    "input",
+        fn only_semantic_roles_read_names() {
+            // A label, a metadata value and a row id name columns without
+            // reading them; `base` and a row's dataset are live inputs.
+            let mut result = column("RESULT", source("DM.VALUE"));
+            result.set(&["label"], text("LABEL"));
+            let input = spec(
+                &["RESULT"],
+                vec![
+                    ("base", text("DM")),
+                    (
+                        "input",
+                        V::map(vec![
+                            ("DM", dataset("dm.csv")),
+                            ("EX", dataset("ex.csv")),
+                            ("UNUSED", dataset("unused.csv")),
+                        ]),
+                    ),
+                    ("keys", texts(&["ID"])),
+                    ("metadata", V::map(vec![("note", text("NOTE"))])),
+                    (
+                        "columns",
+                        V::List(vec![
+                            column("ID", source("DM.ID")),
+                            result,
+                            column("LABEL", literal("label")),
+                            column("NOTE", literal("note")),
+                            column("ROW", literal("row")),
+                        ]),
+                    ),
+                    (
+                        "rows",
+                        V::List(vec![V::map(vec![
+                            ("id", text("ROW")),
+                            ("dataset", text("EX")),
+                            ("derivations", V::map(vec![])),
+                        ])]),
+                    ),
+                ],
+            );
+            for order in [Order::Declared, Order::Dependencies] {
+                let result = prune(&input, order).unwrap();
+                assert_eq!(inputs(&result.document), ["DM", "EX"]);
+                assert_eq!(columns(&result), ["ID", "RESULT"]);
+            }
+        }
+
+        #[test]
+        fn literal_values_are_not_reads() {
+            let case = op(
+                "case",
+                V::List(vec![
                     V::map(vec![
-                        ("DM", source("dm.csv")),
-                        ("EX", source("ex.csv")),
-                        ("DEAD", source("never.csv")),
+                        ("when", text("FLAG = 'Y'")),
+                        ("then", literal("WRONG")),
                     ]),
-                ),
-                (
-                    "output",
-                    V::map(vec![("columns", V::List(vec![text("OUT"), text("N")]))]),
-                ),
-                (
+                    V::map(vec![("otherwise", source("OTHER"))]),
+                ]),
+            );
+            let flag = op(
+                "flag",
+                V::map(vec![
+                    ("condition", text("FLAG = 'Y'")),
+                    ("true_value", text("WRONG")),
+                ]),
+            );
+            let input = spec(
+                &["OUT", "MARK"],
+                vec![(
                     "columns",
                     V::List(vec![
-                        column("OUT", operation("compute", "INNER + 1")),
-                        column("N", operation("aggregate", "COUNT(EX.*)")),
-                        column("INNER", text("DM.X")),
-                        column("DEAD", text("GHOST")),
+                        column("OUT", case),
+                        column("MARK", flag),
+                        column("FLAG", literal("Y")),
+                        column("WRONG", literal("w")),
+                        column("OTHER", literal("o")),
                     ]),
-                ),
-                ("intermediates", V::List(vec![])),
-            ]));
-            let result = schema.resolve_inheritance_dependencies(&input).unwrap();
-            let expected = document(V::map(vec![
-                ("base", text("DM")),
-                (
-                    "input",
-                    V::map(vec![("DM", source("dm.csv")), ("EX", source("ex.csv"))]),
-                ),
-                (
-                    "output",
-                    V::map(vec![("columns", V::List(vec![text("OUT"), text("N")]))]),
-                ),
-                (
+                )],
+            );
+            let result = prune(&input, Order::Declared).unwrap();
+            assert_eq!(columns(&result), ["OUT", "MARK", "FLAG", "OTHER"]);
+        }
+
+        #[test]
+        fn dictionary_entries_are_values_not_reads() {
+            let mapping = op(
+                "mapping",
+                V::map(vec![
+                    ("source", variable("CODE")),
+                    ("dict", V::map(vec![("KEY", text("VALUE"))])),
+                ]),
+            );
+            let input = spec(
+                &["OUT", "SPARE"],
+                vec![(
                     "columns",
                     V::List(vec![
-                        column("N", operation("aggregate", "COUNT(EX.*)")),
-                        column("INNER", text("DM.X")),
-                        column("OUT", operation("compute", "INNER + 1")),
+                        column("OUT", mapping),
+                        column("CODE", literal("c")),
+                        column("KEY", literal("k")),
+                        column("VALUE", literal("v")),
+                        bare("SPARE"),
                     ]),
+                )],
+            );
+            let result = prune(&input, Order::Declared).unwrap();
+            assert_eq!(columns(&result), ["OUT", "CODE", "SPARE"]);
+        }
+
+        #[test]
+        fn closed_languages_retain_field_and_record_count_dependencies() {
+            // Every grammar is parsed for its names: a numeric expression, a
+            // reducer expression, a predicate and a string template (COLUMN-3).
+            // Each name keeps its column live and orders it first.
+            let flag = |predicate: &str| op("flag", V::map(vec![("condition", text(predicate))]));
+            let template =
+                |template: &str| op("str_template", V::map(vec![("template", text(template))]));
+            for (expression, live_columns, live_inputs) in [
+                (compute("A + DM.X + A"), &["A", "OUT"][..], &["DM"][..]),
+                (
+                    aggregate(vec![("expr", text("COUNT(EX.*) + SUM(EX.DOSE)"))]),
+                    &["OUT"][..],
+                    &["EX"][..],
                 ),
-            ]));
+                (
+                    aggregate(vec![("expr", text("COUNT(EX.*)"))]),
+                    &["OUT"][..],
+                    &["EX"][..],
+                ),
+                (
+                    flag("A = 'LITERAL' AND DM.X > 0"),
+                    &["A", "OUT"][..],
+                    &["DM"][..],
+                ),
+                (
+                    template("{{{A}}} {DM.X} {A}"),
+                    &["A", "OUT"][..],
+                    &["DM"][..],
+                ),
+            ] {
+                let input = spec(
+                    &["OUT"],
+                    vec![
+                        (
+                            "input",
+                            V::map(vec![
+                                ("DM", dataset("dm.csv")),
+                                ("EX", dataset("ex.csv")),
+                                ("UNUSED", dataset("unused.csv")),
+                            ]),
+                        ),
+                        (
+                            "columns",
+                            V::List(vec![
+                                column("OUT", expression.clone()),
+                                column("A", literal("a")),
+                                column("LITERAL", literal("literal")),
+                            ]),
+                        ),
+                    ],
+                );
+                let result = prune(&input, Order::Dependencies).unwrap();
+                assert_eq!(columns(&result), live_columns, "{expression:?}");
+                assert_eq!(inputs(&result.document), live_inputs, "{expression:?}");
+            }
+        }
+
+        #[test]
+        fn malformed_texts_read_nothing() {
+            let template =
+                |template: &str| op("str_template", V::map(vec![("template", text(template))]));
+            let flag = |predicate: &str| op("flag", V::map(vec![("condition", text(predicate))]));
+            for expression in [
+                compute("A +"),
+                aggregate(vec![("expr", text("SUM(A) +"))]),
+                flag("A ="),
+                template("{A} {bad-name}"),
+                template("{A} }"),
+                template("{A} {"),
+                template("{A..B}"),
+                template("{{A}}"),
+            ] {
+                let input = spec(
+                    &["OUT"],
+                    vec![(
+                        "columns",
+                        V::List(vec![
+                            column("OUT", expression.clone()),
+                            column("A", literal("a")),
+                        ]),
+                    )],
+                );
+                let result = prune(&input, Order::Dependencies).unwrap();
+                assert_eq!(columns(&result), ["OUT"], "{expression:?}");
+            }
+        }
+
+        #[test]
+        fn parser_refusal_is_not_an_empty_reference_set() {
+            // A live text over the parser's depth refuses the spec, so that a
+            // policy refusal never makes the declarations it reads dead.
+            let deep = format!("{}A{}", "(".repeat(129), ")".repeat(129));
+            let flag = op(
+                "flag",
+                V::map(vec![("condition", text(&format!("{deep} > 0")))]),
+            );
+            for (expression, context) in [
+                (compute(&deep), Context::Compute),
+                (aggregate(vec![("expr", text(&deep))]), Context::Aggregate),
+                (flag, Context::Predicate),
+            ] {
+                let live = spec(
+                    &["OUT"],
+                    vec![("columns", V::List(vec![column("OUT", expression.clone())]))],
+                );
+                let refused = prune(&live, Order::Declared);
+                assert!(
+                    matches!(
+                        &refused,
+                        Err(E::Limit { context: refused, error: CompileError::Limit { .. } })
+                            if *refused == context
+                    ),
+                    "{refused:?}"
+                );
+                // A dead declaration's text is never followed.
+                let dead = spec(
+                    &["A"],
+                    vec![(
+                        "columns",
+                        V::List(vec![column("A", literal("a")), column("DEAD", expression)]),
+                    )],
+                );
+                assert_eq!(columns(&prune(&dead, Order::Declared).unwrap()), ["A"]);
+            }
+        }
+
+        #[test]
+        fn repeated_pruning_keeps_written_identifiers() {
+            let input = spec(
+                &["OUT"],
+                vec![(
+                    "columns",
+                    V::List(vec![
+                        column("OUT", compute("A + B")),
+                        column("A", literal("a")),
+                        column("B", literal("b")),
+                    ]),
+                )],
+            );
+            let original = input.clone();
+            let first = prune(&input, Order::Dependencies).unwrap();
+            for _ in 0..2 {
+                assert_eq!(prune(&input, Order::Dependencies).unwrap(), first);
+            }
+            assert_eq!(columns(&first), ["A", "B", "OUT"]);
+            assert_eq!(input, original);
+        }
+
+        #[test]
+        fn prunes_dead_sources_follows_count_and_stably_orders_without_changing_output() {
+            let fields = |columns: Vec<V>, inputs: Vec<(&'static str, V)>| {
+                vec![
+                    ("base", text("DM")),
+                    ("input", V::map(inputs)),
+                    ("columns", V::List(columns)),
+                ]
+            };
+            let count = || aggregate(vec![("expr", text("COUNT(EX.*)"))]);
+            let mut written = fields(
+                vec![
+                    column("OUT", compute("INNER + 1")),
+                    column("N", count()),
+                    column("INNER", source("DM.X")),
+                    column("DEAD", source("GHOST")),
+                ],
+                vec![
+                    ("DM", dataset("dm.csv")),
+                    ("EX", dataset("ex.csv")),
+                    ("DEAD", dataset("never.csv")),
+                ],
+            );
+            // An intermediate list none of whose entries survives goes.
+            written.push(("intermediates", V::List(vec![])));
+            let input = spec(&["OUT", "N"], written);
+            let result = prune(&input, Order::Dependencies).unwrap();
+            let expected = spec(
+                &["OUT", "N"],
+                fields(
+                    vec![
+                        column("N", count()),
+                        column("INNER", source("DM.X")),
+                        column("OUT", compute("INNER + 1")),
+                    ],
+                    vec![("DM", dataset("dm.csv")), ("EX", dataset("ex.csv"))],
+                ),
+            );
             same(
                 &result.document,
                 result.document.root(),
@@ -493,7 +432,7 @@ mod schema {
             );
             assert_eq!(result.origins.len(), result.document.nodes().len());
             for (id, origin) in result.origins.iter().enumerate() {
-                assert_eq!(origin.source, yamaa_core::schema::SchemaSource::Input);
+                assert_eq!(origin.source, SchemaSource::Input);
                 assert!(!origin.generated);
                 if !matches!(result.document.nodes()[id], N::Sequence(_) | N::Mapping(_)) {
                     assert_eq!(result.document.nodes()[id], input.nodes()[origin.node]);
@@ -503,126 +442,115 @@ mod schema {
 
         #[test]
         fn rows_and_assertions_are_roots_and_lookup_matching_inputs_precede_users() {
-            let schema = schema();
-            let input = document(V::map(vec![
-                (
-                    "input",
-                    V::map(vec![
-                        ("DM", source("dm")),
-                        ("EX", source("ex")),
-                        ("ROW", source("row")),
-                        ("DEAD", source("dead")),
-                    ]),
-                ),
-                ("base", text("DM")),
-                (
-                    "output",
-                    V::map(vec![("columns", V::List(vec![text("LIVE")]))]),
-                ),
-                ("verifications", V::List(vec![text("CHECK")])),
-                (
-                    "columns",
-                    V::List(vec![
-                        column("LIVE", operation("literal", "fixed")),
-                        column("KEY", text("DM.ID")),
-                        column("CHECK", text("DM.X")),
+            let mut asserted = bare("ASSERT");
+            asserted.set(
+                &["verifications"],
+                V::List(vec![op("not_missing", V::map(vec![]))]),
+            );
+            let input = spec(
+                &["LIVE"],
+                vec![
+                    (
+                        "input",
                         V::map(vec![
-                            ("name", text("ASSERT")),
-                            ("verifications", V::List(vec![text("CHECK")])),
+                            ("DM", dataset("dm")),
+                            ("EX", dataset("ex")),
+                            ("ROW", dataset("row")),
+                            ("DEAD", dataset("dead")),
                         ]),
-                        column("UNUSED", text("MISSING")),
-                    ]),
-                ),
-                (
-                    "intermediates",
-                    V::List(vec![
-                        V::map(vec![
-                            ("id", text("LOOKUP")),
-                            ("dataset", text("EX")),
-                            ("key", text("KEY")),
+                    ),
+                    ("base", text("DM")),
+                    (
+                        "verifications",
+                        V::List(vec![op("unique", texts(&["CHECK"]))]),
+                    ),
+                    (
+                        "columns",
+                        V::List(vec![
+                            column("LIVE", literal("fixed")),
+                            column("KEY", source("DM.ID")),
+                            column("CHECK", source("DM.X")),
+                            asserted,
+                            column("UNUSED", source("MISSING")),
                         ]),
-                        V::map(vec![
-                            ("id", text("UNUSED_LOOKUP")),
-                            ("dataset", text("DEAD")),
-                            ("require_match", V::boolean(true)),
+                    ),
+                    (
+                        "intermediates",
+                        V::List(vec![
+                            V::map(vec![
+                                ("id", text("LOOKUP")),
+                                ("dataset", text("EX")),
+                                ("key", texts(&["KEY"])),
+                            ]),
+                            V::map(vec![
+                                ("id", text("UNUSED_LOOKUP")),
+                                ("dataset", text("DEAD")),
+                                ("require_match", V::boolean(true)),
+                            ]),
                         ]),
-                    ]),
-                ),
-                (
-                    "rows",
-                    V::List(vec![
-                        V::map(vec![
-                            ("id", text("R1")),
-                            ("dataset", text("ROW")),
-                            (
-                                "derivations",
-                                V::map(vec![
-                                    ("LIVE", text("LOOKUP.VALUE")),
-                                    ("UNUSED", text("DEAD.X")),
-                                ]),
-                            ),
+                    ),
+                    (
+                        "rows",
+                        V::List(vec![
+                            V::map(vec![
+                                ("id", text("R1")),
+                                ("dataset", text("ROW")),
+                                (
+                                    "derivations",
+                                    V::map(vec![
+                                        ("LIVE", derivation(source("LOOKUP.VALUE"))),
+                                        ("UNUSED", derivation(source("DEAD.X"))),
+                                    ]),
+                                ),
+                            ]),
+                            V::map(vec![("id", text("R2")), ("derivations", V::map(vec![]))]),
                         ]),
-                        V::map(vec![("id", text("R2")), ("derivations", V::map(vec![]))]),
-                    ]),
-                ),
-            ]));
-            let result = schema.resolve_inheritance_dependencies(&input).unwrap();
+                    ),
+                ],
+            );
+            let result = prune(&input, Order::Dependencies).unwrap();
             let d = &result.document;
-            assert_eq!(
-                keys(d, d.field(d.root(), "input").unwrap()),
-                vec!["DM", "EX", "ROW"]
-            );
-            assert_eq!(
-                names(d, "columns", "name"),
-                vec!["KEY", "LIVE", "CHECK", "ASSERT"]
-            );
-            assert_eq!(names(d, "intermediates", "id"), vec!["LOOKUP"]);
-            assert_eq!(names(d, "rows", "id"), vec!["R1", "R2"]);
+            assert_eq!(inputs(d), ["DM", "EX", "ROW"]);
+            assert_eq!(columns(&result), ["KEY", "LIVE", "CHECK", "ASSERT"]);
+            assert_eq!(names(d, "intermediates", "id"), ["LOOKUP"]);
+            assert_eq!(names(d, "rows", "id"), ["R1", "R2"]);
             let N::Sequence(rows) = &d.nodes()[d.field(d.root(), "rows").unwrap()] else {
                 panic!()
             };
-            assert_eq!(
-                keys(d, d.field(rows[0], "derivations").unwrap()),
-                vec!["LIVE"]
-            );
+            assert_eq!(keys(d, d.field(rows[0], "derivations").unwrap()), ["LIVE"]);
             assert!(keys(d, d.field(rows[1], "derivations").unwrap()).is_empty());
+            // A standalone spec keeps the same declarations in declaration order.
+            let declared = prune(&input, Order::Declared).unwrap();
+            assert_eq!(columns(&declared), ["LIVE", "KEY", "CHECK", "ASSERT"]);
         }
 
         #[test]
         fn unknown_dependencies_are_lexical_and_precede_cycle_reporting() {
-            use yamaa_core::schema::{
-                InheritanceDependencyError as E, InheritanceDependencyIssue as I,
-            };
-            let input = document(V::map(vec![
-                (
-                    "output",
-                    V::map(vec![("columns", V::List(vec![text("X")]))]),
-                ),
-                (
+            // B also reads itself; the unknown names are reported first, in
+            // name order, and only a layered spec is ordered (COLUMN-5).
+            let input = spec(
+                &["X"],
+                vec![(
                     "columns",
                     V::List(vec![
-                        column("X", operation("compute", "Z + B + A")),
-                        column("B", text("B")),
+                        column("X", compute("Z + B + A")),
+                        column("B", source("B")),
                     ]),
-                ),
-            ]));
-            assert_eq!(
-                schema().resolve_inheritance_dependencies(&input),
-                Err(E::Invalid(vec![
-                    I::Unknown {
-                        column: "X".into(),
-                        dependency: "A".into()
-                    },
-                    I::Unknown {
-                        column: "X".into(),
-                        dependency: "Z".into()
-                    }
-                ]))
+                )],
             );
-            let E::Invalid(issues) = schema()
-                .resolve_inheritance_dependencies(&input)
-                .unwrap_err()
-            else {
+            let unknown = |dependency: &str| I::Unknown {
+                column: "X".into(),
+                dependency: dependency.into(),
+            };
+            assert_eq!(
+                prune(&input, Order::Dependencies),
+                Err(E::Invalid(vec![unknown("A"), unknown("Z")]))
+            );
+            assert_eq!(
+                columns(&prune(&input, Order::Declared).unwrap()),
+                ["X", "B"]
+            );
+            let Err(E::Invalid(issues)) = prune(&input, Order::Dependencies) else {
                 panic!("expected completed dependency findings")
             };
             let diagnostics = yamaa_core::diagnostic::inheritance_dependency_diagnostics(&issues);
@@ -640,80 +568,102 @@ mod schema {
         }
 
         #[test]
-        fn cycle_reports_all_unscheduled_columns_in_original_order() {
-            use yamaa_core::schema::{
-                InheritanceDependencyError as E, InheritanceDependencyIssue as I,
+        fn a_layered_cycle_names_its_closed_loop() {
+            // One detector names the closed loop, as a single-file spec's
+            // does, not every column the cycle leaves unscheduled (#2844,
+            // decision 1).
+            let cycle = I::Cycle {
+                cycle: vec!["A".into(), "B".into(), "A".into()],
+                paths: vec![
+                    "columns.A.derivation.source".into(),
+                    "columns.B.derivation.source".into(),
+                ],
             };
-            let input = document(V::map(vec![
-                (
-                    "output",
-                    V::map(vec![(
-                        "columns",
-                        V::List(vec![text("DOWNSTREAM"), text("FREE")]),
-                    )]),
-                ),
-                (
+            let input = spec(
+                &["DOWNSTREAM", "FREE"],
+                vec![(
                     "columns",
                     V::List(vec![
-                        column("DOWNSTREAM", text("A")),
-                        column("A", text("B")),
-                        column("B", text("A")),
-                        column("FREE", operation("literal", "no reference")),
+                        column("DOWNSTREAM", source("A")),
+                        column("A", source("B")),
+                        column("B", source("A")),
+                        column("FREE", literal("no reference")),
                     ]),
-                ),
-            ]));
+                )],
+            );
             assert_eq!(
-                schema().resolve_inheritance_dependencies(&input),
-                Err(E::Invalid(vec![I::Cycle {
-                    columns: vec!["DOWNSTREAM".into(), "A".into(), "B".into()],
-                    cycle: vec!["A".into(), "B".into(), "A".into()],
-                    paths: vec!["columns.A.derivation".into(), "columns.B.derivation".into()],
-                }]))
+                prune(&input, Order::Dependencies),
+                Err(E::Invalid(vec![cycle.clone()]))
+            );
+            let diagnostics = yamaa_core::diagnostic::inheritance_dependency_diagnostics(
+                std::slice::from_ref(&cycle),
+            );
+            assert_eq!(
+                diagnostics[0].context["cycle"],
+                yamaa_core::json::Value::Array(
+                    ["A", "B", "A"]
+                        .into_iter()
+                        .map(|name| yamaa_core::json::Value::String(name.into()))
+                        .collect()
+                )
+            );
+            // A member only a row template derives cites its operation under
+            // the column, as the single-file compiler does.
+            let input = spec(
+                &["A"],
+                vec![
+                    (
+                        "columns",
+                        V::List(vec![bare("A"), column("B", source("A"))]),
+                    ),
+                    (
+                        "rows",
+                        V::List(vec![V::map(vec![
+                            ("id", text("R1")),
+                            ("derivations", V::map(vec![("A", derivation(source("B")))])),
+                        ])]),
+                    ),
+                ],
+            );
+            assert_eq!(
+                prune(&input, Order::Dependencies),
+                Err(E::Invalid(vec![cycle]))
             );
         }
 
         #[test]
-        fn independent_dependency_requests_keep_the_complete_document() {
-            let schema = schema();
-            let input = document(V::map(vec![
-                (
-                    "output",
-                    V::map(vec![("columns", V::List(vec![text("A")]))]),
-                ),
-                (
-                    "columns",
-                    V::List(vec![column("A", operation("literal", "constant"))]),
-                ),
-            ]));
-            let first = schema.resolve_inheritance_dependencies(&input).unwrap();
-            let second = schema.resolve_inheritance_dependencies(&input).unwrap();
+        fn repeated_dependency_requests_keep_the_complete_document() {
+            let input = spec(
+                &["A"],
+                vec![("columns", V::List(vec![column("A", literal("constant"))]))],
+            );
+            let first = prune(&input, Order::Dependencies).unwrap();
+            let second = prune(&input, Order::Dependencies).unwrap();
             assert_eq!(first, second);
-            assert_eq!(names(&first.document, "columns", "name"), vec!["A"]);
+            assert_eq!(columns(&first), ["A"]);
         }
 
         #[test]
         fn unknown_dependency_retains_its_authored_column_and_name() {
-            use yamaa_core::schema::{
-                InheritanceDependencyError as E, InheritanceDependencyIssue as I,
-            };
-            let input = document(V::map(vec![
-                (
-                    "output",
-                    V::map(vec![("columns", V::List(vec![text("X")]))]),
-                ),
-                ("columns", V::List(vec![column("X", text("MISSING"))])),
-            ]));
+            let input = spec(
+                &["X"],
+                vec![("columns", V::List(vec![column("X", source("MISSING"))]))],
+            );
             assert_eq!(
-                schema().resolve_inheritance_dependencies(&input),
+                prune(&input, Order::Dependencies),
                 Err(E::Invalid(vec![I::Unknown {
                     column: "X".into(),
                     dependency: "MISSING".into()
                 }]))
             );
+            // A predicate's own validation reports its unknown names (REQ-0627).
+            let flag = op("flag", V::map(vec![("condition", text("MISSING = 'Y'"))]));
+            let input = spec(&["X"], vec![("columns", V::List(vec![column("X", flag)]))]);
+            assert_eq!(columns(&prune(&input, Order::Dependencies).unwrap()), ["X"]);
         }
 
         #[test]
-        fn inheritance_and_graph_analysis_match_independently_declared_schedules() {
+        fn dependency_order_matches_the_shared_analysis() {
             use yamaa_core::dependency_analysis::analyze;
             let cases = [
                 (vec![vec![2], vec![2], vec![], vec![]], vec![2, 0, 1, 3]),
@@ -724,42 +674,31 @@ mod schema {
             for (graph, expected) in cases {
                 let column_names: Vec<_> =
                     (0..graph.len()).map(|index| format!("N{index}")).collect();
-                let columns = graph
+                let declared = graph
                     .iter()
                     .zip(&column_names)
                     .map(|(edges, name)| {
-                        let derivation = if edges.is_empty() {
-                            operation("literal", "constant")
+                        let expression = if edges.is_empty() {
+                            literal("constant")
                         } else {
                             let expression = edges
                                 .iter()
                                 .map(|&index| column_names[index].as_str())
                                 .collect::<Vec<_>>()
                                 .join(" + ");
-                            operation("compute", &expression)
+                            compute(&expression)
                         };
-                        column(name, derivation)
+                        column(name, expression)
                     })
                     .collect();
-                let input = document(V::map(vec![
-                    (
-                        "output",
-                        V::map(vec![(
-                            "columns",
-                            V::List(column_names.iter().map(|name| text(name)).collect()),
-                        )]),
-                    ),
-                    ("columns", V::List(columns)),
-                ]));
-                let normalized = schema().resolve_inheritance_dependencies(&input).unwrap();
+                let output = column_names.iter().map(String::as_str).collect::<Vec<_>>();
+                let input = spec(&output, vec![("columns", V::List(declared))]);
+                let result = prune(&input, Order::Dependencies).unwrap();
                 let expected_names: Vec<_> = expected
                     .iter()
                     .map(|&index| column_names[index].as_str())
                     .collect();
-                assert_eq!(
-                    names(&normalized.document, "columns", "name"),
-                    expected_names
-                );
+                assert_eq!(columns(&result), expected_names);
                 let analyzed = analyze(&graph).unwrap();
                 assert_eq!(analyzed.order, expected);
                 assert_eq!(analyzed.cycle, None);
@@ -767,42 +706,30 @@ mod schema {
         }
 
         #[test]
-        fn shared_schedule_keeps_inheritance_residuals_distinct_from_first_cycle() {
-            use yamaa_core::{
-                dependency_analysis::analyze,
-                schema::{InheritanceDependencyError as E, InheritanceDependencyIssue as I},
-            };
-            let input = document(V::map(vec![
-                (
-                    "output",
-                    V::map(vec![(
-                        "columns",
-                        V::List(
-                            ["DOWNSTREAM", "A", "B", "FREE", "SELF", "FREE_READER"]
-                                .iter()
-                                .map(|name| text(name))
-                                .collect(),
-                        ),
-                    )]),
-                ),
-                (
+        fn the_order_names_only_the_first_cycle() {
+            use yamaa_core::dependency_analysis::analyze;
+            let input = spec(
+                &["DOWNSTREAM", "A", "B", "FREE", "SELF", "FREE_READER"],
+                vec![(
                     "columns",
                     V::List(vec![
-                        column("DOWNSTREAM", text("A")),
-                        column("A", text("B")),
-                        column("B", text("A")),
-                        column("FREE", operation("literal", "constant")),
-                        column("SELF", text("SELF")),
-                        column("FREE_READER", text("FREE")),
+                        column("DOWNSTREAM", source("A")),
+                        column("A", source("B")),
+                        column("B", source("A")),
+                        column("FREE", literal("constant")),
+                        column("SELF", source("SELF")),
+                        column("FREE_READER", source("FREE")),
                     ]),
-                ),
-            ]));
+                )],
+            );
             assert_eq!(
-                schema().resolve_inheritance_dependencies(&input),
+                prune(&input, Order::Dependencies),
                 Err(E::Invalid(vec![I::Cycle {
-                    columns: vec!["DOWNSTREAM".into(), "A".into(), "B".into(), "SELF".into()],
                     cycle: vec!["A".into(), "B".into(), "A".into()],
-                    paths: vec!["columns.A.derivation".into(), "columns.B.derivation".into()],
+                    paths: vec![
+                        "columns.A.derivation.source".into(),
+                        "columns.B.derivation.source".into()
+                    ],
                 }]))
             );
             let analyzed = analyze(&[vec![1], vec![2], vec![1], vec![], vec![4], vec![3]]).unwrap();
@@ -811,83 +738,124 @@ mod schema {
         }
 
         #[test]
-        fn independent_scheduler_requests_keep_authored_column_order_and_input() {
-            let input = document(V::map(vec![
-                (
-                    "output",
-                    V::map(vec![("columns", V::List(vec![text("A"), text("B")]))]),
-                ),
-                (
-                    "columns",
-                    V::List(vec![
-                        V::map(vec![("name", text("A"))]),
-                        V::map(vec![("name", text("B"))]),
-                    ]),
-                ),
-            ]));
+        fn declared_order_and_unordered_input_are_kept() {
+            let input = spec(
+                &["A", "B"],
+                vec![
+                    (
+                        "columns",
+                        V::List(vec![column("A", source("B")), bare("B")]),
+                    ),
+                    ("keys", texts(&["A"])),
+                ],
+            );
             let original = input.clone();
-            let schema = schema();
             for _ in 0..2 {
                 assert_eq!(
-                    names(
-                        &schema
-                            .resolve_inheritance_dependencies(&input)
-                            .unwrap()
-                            .document,
-                        "columns",
-                        "name"
-                    ),
-                    vec!["A", "B"]
+                    columns(&prune(&input, Order::Declared).unwrap()),
+                    ["A", "B"]
+                );
+                assert_eq!(
+                    columns(&prune(&input, Order::Dependencies).unwrap()),
+                    ["B", "A"]
                 );
             }
             assert_eq!(input, original);
         }
 
         #[test]
-        fn aggregate_binding_scope_preserves_filters_external_reads_and_invalid_forward_reads() {
-            let schema = schema();
-            let aggregate = V::map(vec![(
-                "aggregate",
-                V::map(vec![
-                    ("expr", text("SUM(B)")),
-                    ("filter", text("A > 0")),
-                    (
-                        "derive",
-                        V::List(vec![
-                            V::map(vec![("name", text("A")), ("derivation", text("DM.X"))]),
-                            V::map(vec![
-                                ("name", text("B")),
-                                ("derivation", V::map(vec![("compute", text("A + OFFSET"))])),
-                            ]),
-                        ]),
-                    ),
-                ]),
-            )]);
-            assert_eq!(
-                refs(&schema, aggregate, &["expression"], None).unwrap(),
+        fn aggregate_bindings_are_local_to_their_aggregate() {
+            // The filter reads outside the bindings; the reducer and the
+            // bindings read every binding of their aggregate locally.
+            let total = aggregate(vec![
+                ("filter", text("A > 0")),
+                (
+                    "derive",
+                    V::List(vec![
+                        binding("A", source("DM.X")),
+                        binding("B", compute("A + OFFSET")),
+                    ]),
+                ),
+                ("expr", text("SUM(B)")),
+            ]);
+            let fields = |expression: V| {
                 vec![
-                    predicate_variable("A"),
-                    variable("DM.X"),
-                    variable("OFFSET")
-                ]
-            );
-            let forward = V::map(vec![(
-                "aggregate",
-                V::map(vec![
                     (
-                        "derive",
+                        "input",
+                        V::map(vec![("DM", dataset("dm.csv")), ("EX", dataset("ex.csv"))]),
+                    ),
+                    (
+                        "columns",
                         V::List(vec![
-                            V::map(vec![("name", text("A")), ("derivation", text("B"))]),
-                            V::map(vec![("name", text("B")), ("derivation", text("DM.X"))]),
+                            column("TOTAL", expression),
+                            column("A", literal("a")),
+                            column("B", literal("b")),
+                            column("OFFSET", literal("o")),
                         ]),
                     ),
-                    ("expr", text("SUM(A)")),
+                ]
+            };
+            let result = prune(&spec(&["TOTAL"], fields(total)), Order::Dependencies).unwrap();
+            assert_eq!(columns(&result), ["A", "OFFSET", "TOTAL"]);
+            assert_eq!(inputs(&result.document), ["DM"]);
+            // A later binding is the aggregate's too.
+            let forward = aggregate(vec![
+                (
+                    "derive",
+                    V::List(vec![
+                        binding("A", source("B")),
+                        binding("B", source("DM.X")),
+                    ]),
+                ),
+                ("expr", text("SUM(A)")),
+            ]);
+            let result = prune(&spec(&["TOTAL"], fields(forward)), Order::Dependencies).unwrap();
+            assert_eq!(columns(&result), ["TOTAL"]);
+        }
+
+        #[test]
+        fn odm_items_name_their_input_and_range_bounds_name_donor_fields() {
+            let read = op("odm", V::map(vec![("item", text("RAW.IT.WEIGHT"))]));
+            let ranged = op(
+                "source",
+                V::map(vec![
+                    ("variable", text("EX.DOSE")),
+                    (
+                        "between",
+                        V::map(vec![
+                            ("value", text("ADT")),
+                            ("lower", text("START")),
+                            ("upper", text("END")),
+                        ]),
+                    ),
                 ]),
-            )]);
-            assert_eq!(
-                refs(&schema, forward, &["expression"], None).unwrap(),
-                vec![variable("B"), variable("DM.X")]
             );
+            let input = spec(
+                &["WEIGHT", "DOSE"],
+                vec![
+                    (
+                        "input",
+                        V::map(vec![
+                            ("RAW", dataset("raw.csv")),
+                            ("EX", dataset("ex.csv")),
+                            ("UNUSED", dataset("unused.csv")),
+                        ]),
+                    ),
+                    (
+                        "columns",
+                        V::List(vec![
+                            column("WEIGHT", read),
+                            column("DOSE", ranged),
+                            column("ADT", literal("2026-01-01")),
+                            column("START", literal("s")),
+                            column("END", literal("e")),
+                        ]),
+                    ),
+                ],
+            );
+            let result = prune(&input, Order::Dependencies).unwrap();
+            assert_eq!(inputs(&result.document), ["RAW", "EX"]);
+            assert_eq!(columns(&result), ["WEIGHT", "ADT", "DOSE"]);
         }
     }
     mod schema_layer_admission {

@@ -2,7 +2,8 @@
 
 The pages are views of ``rules/`` and ``yaml/`` rendered on every docs build;
 they add no semantics. Their relative links resolve from
-``rules/reference/`` and become repository links on the site.
+``rules/reference/`` and become repository links on the site. The 0.5 schema
+fields page reads ``yaml/schema*.yaml`` and the 1.0 page ``yaml/v1/``.
 """
 
 import argparse
@@ -15,19 +16,26 @@ from tools.rules.model import (
     REQUIREMENT_INDEX,
     RULES_SUMMARY,
     SCHEMA_FIELDS,
+    SCHEMA_FIELDS_V1,
     edit_lines,
     load,
     markdown_links,
 )
 from tools.validation.repository_schema import (
     POINTER,
+    SchemaSourceError,
     description_rules,
     load_schema,
     schema_descriptions,
 )
+from tools.validation.schema_bundle import Bundle
 
 PAGE_DIRECTORY = posixpath.dirname(REQUIREMENT_INDEX)
 GENERATED_MARK = "<!-- generated: generate_rule_reference.py -->"
+# A link between two generated pages names the site page: a relative link on
+# a generated page becomes a repository link, and generated pages are not
+# committed.
+SCHEMA_FIELDS_SITE = "https://elong0527.github.io/yamaa/reference/schema-fields/"
 
 
 def descriptors(node, parts=(), classes=None, active=()):
@@ -160,6 +168,88 @@ def schema_fields(root, rules):
     return "\n".join(lines)
 
 
+def schema_fields_v1(root, rules):
+    """The 1.0 schema files: each field's shape, kind and default."""
+    lines = [
+        "# Schema fields (1.0)",
+        "",
+        GENERATED_MARK,
+        "",
+        "This table is a generated view of the 1.0 schema files in `yaml/v1/`,",
+        "which define the `spec`, `project`, `codelists` and `function` file",
+        "types: each field's shape, kind and default. Follow the rule link for",
+        "behavior. It is not an additional semantic contract.",
+        "",
+        "Until the engine reads 1.0 files it reads the 0.5 schema files, shown",
+        f"on the [schema fields]({SCHEMA_FIELDS_SITE}) page, and `yaml/README.md`",
+        "says how long both sets exist. A field that 1.0 adds or changes links",
+        "the rule that will own it.",
+        "",
+        "A field's kind comes from its type and says what a bare scalar in it is:",
+        "",
+        "| Kind | A bare scalar is |",
+        "| --- | --- |",
+        "| `expression` | Text of the closed grammar, in which a bare name is a reference and quoted text a literal; a YAML number, Boolean or null is a literal. |",
+        "| `name` | One variable name, bare or qualified. |",
+        "| `identifier` | A declared name, or a reference to one. |",
+        "| `value` | A constant: text is text, and YAML null is missing where the type admits it. |",
+        "| `path` | A local path. |",
+        "| `structure` | Nothing: the field holds a class, a list or mapping of classes, or a registry value. |",
+        "",
+    ]
+    directory = root / "yaml" / "v1"
+    paths = sorted(directory.glob("schema*.yaml"))
+    if not paths:
+        return "\n".join(lines)
+    bundle = Bundle(directory)
+    for path in paths:
+        for field, value in schema_descriptions(bundle.modules[path.name]):
+            description_rules(f"v1/{path.name}:{field}", value, rules)
+    for path in paths:
+        lines.extend(
+            [
+                f"## {path.name}",
+                "",
+                "| Field or value type | Type | Kind | Required | Default | Constraints | Contract |",
+                "| --- | --- | --- | --- | --- | --- | --- |",
+            ]
+        )
+        for name, descriptor in descriptors(
+            bundle.modules[path.name], classes=bundle.classes
+        ):
+            owner, _, rest = name.partition(".")
+            # A registry entry's payload is no field, so it has no kind.
+            if owner in bundle.registries and "." not in rest:
+                kind = "--"
+            else:
+                try:
+                    kind = code_span(bundle.descriptor_kind(descriptor, name))
+                except SchemaSourceError as exc:
+                    raise ValueError(f"v1/{path.name}: {exc}") from exc
+            contract = (
+                contract_cell(
+                    rules,
+                    f"v1/{path.name}:{name}.description",
+                    descriptor["description"],
+                )
+                if "description" in descriptor
+                else "Schema constraint"
+            )
+            constraints = {
+                k: descriptor[k]
+                for k in ("values", "pattern", "min_length", "size")
+                if k in descriptor
+            }
+            default = (
+                cell(descriptor["default"]) if "default" in descriptor else "Absent"
+            )
+            lines.append(
+                f"| {code_span(name)} | {cell(descriptor['type'])} | {kind} | {cell(descriptor.get('required', False))} | {default} | {cell(constraints) if constraints else '--'} | {contract} |"
+            )
+        lines.append("")
+    return "\n".join(lines)
+
+
 def requirement_index(rules):
     lines = [
         "# Requirement index",
@@ -265,6 +355,7 @@ def generated(root):
     rules = load(root)
     pages = {
         SCHEMA_FIELDS: schema_fields(root, rules),
+        SCHEMA_FIELDS_V1: schema_fields_v1(root, rules),
         REQUIREMENT_INDEX: requirement_index(rules),
         RULES_SUMMARY: rules_summary(rules),
     }

@@ -1,8 +1,10 @@
 //! Lower today's admitted specification into the AST.
 //!
 //! Lowering runs once per spec, after composition and pruning, on the
-//! normalized document the specification model admitted. Each 0.5 form
-//! lowers to the node its 1.0 spelling lowers to (#2844, design section 4).
+//! normalized document the specification model admitted. Pruning lowers the
+//! composed document before that, only to find what each declaration reads
+//! ([`lower_document`]). Each 0.5 form lowers to the node its 1.0 spelling
+//! lowers to (#2844, design section 4).
 //! Some nodes exist only for this surface and go with it: inputs with
 //! [`KeyDecl::Inferred`], lookups with [`JoinKey::Applicable`], a declared
 //! `minimum_source_precision`, a written `window.order_by` on
@@ -69,7 +71,14 @@ impl Lowered {
 /// Lower one admitted spec. Without positions every span is
 /// [`Span::UNKNOWN`].
 pub fn lower(spec: &SpecificationDocument, positions: Option<&Positions>) -> Lowered {
-    let d = spec.document();
+    lower_document(spec.document(), positions)
+}
+
+/// Lower a document the model has not admitted yet, such as a composed
+/// spec before pruning (LAYER-11 precedes requiredness, LAYER-12). Lowering
+/// stays total: a missing required field lowers to an unsupported node, and
+/// final validation still reports it.
+pub fn lower_document(d: &Document, positions: Option<&Positions>) -> Lowered {
     let mut lower = Lower {
         d,
         positions,

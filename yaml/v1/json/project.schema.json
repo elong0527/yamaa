@@ -1,0 +1,640 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "yamaa 1.0 project file",
+  "description": "One file of the 1.0 project type. Each field carries its kind as x-yamaa-kind and its schema-notation type as x-yamaa-type. Generated from yaml/v1/ by tools/packaging/generate_json_schema.py.",
+  "$ref": "#/$defs/project_class",
+  "$defs": {
+    "codelist_class": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier",
+          "description": "Name column bindings refer to this codelist by (CT-1).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "identifier"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of the codelist, unique within the document.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "data_type": {
+          "type": "string",
+          "enum": [
+            "text",
+            "integer",
+            "float"
+          ],
+          "default": "text",
+          "description": "Type of the coded values.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "extensible": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether the published list admits sponsor items marked extended (CT-6).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "bool"
+        },
+        "alias": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Published concept identifier of the codelist itself.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "format_name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Transport format name carried for a reader.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/codelist_item_class"
+          },
+          "description": "Coded values this codelist admits, the whole value set of a bound column, in the order the document presents them (CT-7).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "list[codelist_item_class]"
+        },
+        "external": {
+          "$ref": "#/$defs/external_codelist_class",
+          "description": "Dictionary this codelist defers to instead of listing values.",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "external_codelist_class"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "codelist_item_class": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "$ref": "#/$defs/literal_value",
+          "description": "The coded value itself.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "literal_value"
+        },
+        "decode": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Text the coded value stands for.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "rank": {
+          "type": "integer",
+          "description": "Ordering significance of this value relative to the others.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "int"
+        },
+        "alias": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Published concept identifier of this value.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "extended": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether the sponsor added this value to an extensible published list (CT-6).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "bool"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "codelist_source": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/project_path"
+        },
+        {
+          "$ref": "#/$defs/codelist_source_class"
+        }
+      ],
+      "description": "Inline codelist source, or the path of a codelist file holding one (CT-1)."
+    },
+    "codelist_source_class": {
+      "type": "object",
+      "properties": {
+        "standard": {
+          "$ref": "#/$defs/terminology_standard_class",
+          "description": "Published terminology the source's codelists are drawn from; a source without one is sponsor-defined (CT-2).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "terminology_standard_class"
+        },
+        "codelists": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/codelist_class"
+          },
+          "description": "Codelists this source declares (CT-1).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "list[codelist_class]"
+        }
+      },
+      "required": [
+        "codelists"
+      ],
+      "additionalProperties": false
+    },
+    "define_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$",
+      "description": "Identifier a generated OID is built from."
+    },
+    "document_class": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier",
+          "description": "Name references to this document use.",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "identifier"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "annotated_crf",
+            "supplemental",
+            "other"
+          ],
+          "description": "Where the document is listed; an other document is listed only where it is referenced.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "link": {
+          "$ref": "#/$defs/relative_href",
+          "description": "File the document is, relative to the directory holding the generated document.",
+          "x-yamaa-kind": "path",
+          "x-yamaa-type": "relative_href"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Label a reader sees for the document.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "link",
+        "title"
+      ],
+      "additionalProperties": false
+    },
+    "environments_class": {
+      "type": "object",
+      "properties": {
+        "python": {
+          "$ref": "#/$defs/host_environment_class",
+          "description": "Environment of the Python host (PROJECT-2).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "host_environment_class"
+        },
+        "r": {
+          "$ref": "#/$defs/host_environment_class",
+          "description": "Environment of the R host (PROJECT-2).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "host_environment_class"
+        }
+      },
+      "additionalProperties": false
+    },
+    "external_codelist_class": {
+      "type": "object",
+      "properties": {
+        "dictionary": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of the external dictionary.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Version of that dictionary.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "href": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Location the dictionary is published at.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        }
+      },
+      "required": [
+        "dictionary",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "host_environment_class": {
+      "type": "object",
+      "properties": {
+        "lock": {
+          "$ref": "#/$defs/project_path",
+          "description": "Packaging lock the installed called packages are verified against, relative to the project file (FUNC-3).",
+          "x-yamaa-kind": "path",
+          "x-yamaa-type": "project_path"
+        }
+      },
+      "required": [
+        "lock"
+      ],
+      "additionalProperties": false
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+      "description": "Single-token identifier; the field's own description states which naming list it belongs to, such as a declared dataset, a declared column, a document or a function (SPEC-2)."
+    },
+    "implementation_guide_class": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/standard_name",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "standard_name"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "Draft",
+            "Final",
+            "Provisional"
+          ],
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        }
+      },
+      "required": [
+        "name",
+        "version",
+        "status"
+      ],
+      "additionalProperties": false
+    },
+    "language_tag": {
+      "type": "string",
+      "pattern": "^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$",
+      "description": "Language tag carried by every generated translated text."
+    },
+    "language_version": {
+      "type": "string",
+      "enum": [
+        "1.0"
+      ],
+      "description": "Language version a file declares in `yamaa`, the oldest that admits every field it writes (SCHEMA-2)."
+    },
+    "literal_value": {
+      "type": [
+        "string",
+        "integer",
+        "number",
+        "boolean",
+        "null"
+      ],
+      "description": "Scalar constant in which YAML null is the missing value; a non-finite float becomes missing (VALUE-4)."
+    },
+    "metadata_version_class": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/define_id",
+          "description": "Identifier this metadata version's generated identity is built from (DEFINE-9).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "define_id"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of this metadata version.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Description of what this metadata version covers.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "project_class": {
+      "type": "object",
+      "properties": {
+        "yamaa": {
+          "$ref": "#/$defs/language_version",
+          "description": "Oldest language version this project file needs, always quoted (SCHEMA-2).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "language_version"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "project"
+          ],
+          "description": "File type of a project file (SCHEMA-2).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "functions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/project_path"
+          },
+          "description": "Function files defining the project functions specifications may call, each relative to the project file (FUNC-1).",
+          "x-yamaa-kind": "path",
+          "x-yamaa-type": "list[project_path]"
+        },
+        "environments": {
+          "$ref": "#/$defs/environments_class",
+          "description": "Lock of each host language, by language key; a host that declares no lock has no entry (PROJECT-2).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "environments_class"
+        },
+        "codelists": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/codelist_source"
+          },
+          "description": "Codelist sources supplying study terminology (CT-1).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "list[codelist_source]"
+        },
+        "study": {
+          "$ref": "#/$defs/study_class",
+          "description": "Study the specifications belong to; Define-XML requires it (DEFINE-1, DEFINE-28).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "study_class"
+        },
+        "sdtm": {
+          "$ref": "#/$defs/submission_section_class",
+          "description": "Tabulation specifications and the submission metadata composing them into one Define-XML document (PROJECT-3).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "submission_section_class"
+        },
+        "adam": {
+          "$ref": "#/$defs/submission_section_class",
+          "description": "Analysis specifications and the submission metadata composing them into one Define-XML document (PROJECT-3).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "submission_section_class"
+        },
+        "send": {
+          "$ref": "#/$defs/submission_section_class",
+          "description": "Nonclinical tabulation specifications and the submission metadata composing them into one Define-XML document (PROJECT-3).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "submission_section_class"
+        }
+      },
+      "required": [
+        "yamaa",
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "project_path": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Local resource a run reads or publishes; a relative spelling uses the base its declaration selects and an absolute spelling names its local location (FILE-2)."
+    },
+    "relative_href": {
+      "type": "string",
+      "pattern": "^(?:[^./\\\\][^/\\\\]*|\\.(?:[^./\\\\][^/\\\\]*|\\.[^/\\\\]+)?)(?:/(?:[^./\\\\][^/\\\\]*|\\.(?:[^./\\\\][^/\\\\]*|\\.[^/\\\\]+)?)?)*$",
+      "description": "Location referenced from the generated document, relative to the directory holding it and never leaving that directory, which need not exist when the document is generated."
+    },
+    "standard_name": {
+      "type": "string",
+      "enum": [
+        "ADaMIG",
+        "ADaMIG-MD",
+        "BIMO",
+        "CDISC/NCI",
+        "SDTMIG",
+        "SDTMIG-AP",
+        "SDTMIG-MD",
+        "SENDIG",
+        "SENDIG-AR",
+        "SENDIG-DART",
+        "SENDIG-GENETOX"
+      ],
+      "description": "Standard name, in the exact case Define-XML 2.1 publishes."
+    },
+    "study_class": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/define_id",
+          "description": "Identifier the study's generated identity is built from (DEFINE-9).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "define_id"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of the study.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Description of the study.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "protocol_name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Protocol the study runs under.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description",
+        "protocol_name"
+      ],
+      "additionalProperties": false
+    },
+    "submission_section_class": {
+      "type": "object",
+      "properties": {
+        "specs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/path"
+          },
+          "description": "Ordered specifications of this model, resolved with their parent layers; the only field a run needs (PROJECT-3, DEFINE-5).",
+          "x-yamaa-kind": "path",
+          "x-yamaa-type": "list[path]"
+        },
+        "standards": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/implementation_guide_class"
+          },
+          "description": "Implementation guides that bind the selected datasets, the first being the one a specification takes when it names none; Define-XML requires them (DEFINE-6, DEFINE-28).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "list[implementation_guide_class]"
+        },
+        "define": {
+          "$ref": "#/$defs/path",
+          "description": "Define-XML publication target, relative to the project file; Define-XML requires it (DEFINE-2, DEFINE-28).",
+          "x-yamaa-kind": "path",
+          "x-yamaa-type": "path"
+        },
+        "documents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/document_class"
+          },
+          "description": "Supporting document IDs, kinds, literal links and titles (DEFINE-13).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "list[document_class]"
+        },
+        "transport": {
+          "type": "string",
+          "enum": [
+            "dataset_json",
+            "xpt"
+          ],
+          "description": "Optional transport file written for each composed dataset in the document's directory, read from its published artifact, dataset_json for Dataset-JSON and xpt for SAS Transport; omission writes only the Define-XML document (JSON-1, XPT-1).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "context": {
+          "type": "string",
+          "enum": [
+            "Submission",
+            "Other"
+          ],
+          "default": "Submission",
+          "description": "Submission or Other; defaults to Submission (DEFINE-4).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "xml_lang": {
+          "$ref": "#/$defs/language_tag",
+          "default": "en",
+          "description": "Language of generated translated text; defaults to en (DEFINE-21).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "language_tag"
+        },
+        "file_oid": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional nonempty file-identity text that admits the existing URL-style spellings; generated object and leaf identifiers are validated separately (DEFINE-3).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "metadata_version": {
+          "$ref": "#/$defs/metadata_version_class",
+          "description": "Optional metadata-version ID, name and description overrides (DEFINE-3).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "metadata_version_class"
+        },
+        "originator": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional submitting party (DEFINE-12).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "stylesheet": {
+          "$ref": "#/$defs/relative_href",
+          "description": "Optional relative stylesheet link (DEFINE-23).",
+          "x-yamaa-kind": "path",
+          "x-yamaa-type": "relative_href"
+        },
+        "source_system_version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional nonempty XML and JSON source-system version; omission selects the installed package version (DEFINE-12).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        }
+      },
+      "required": [
+        "specs"
+      ],
+      "additionalProperties": false
+    },
+    "terminology_standard_class": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of the published terminology (CT-2).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "publishing_set": {
+          "type": "string",
+          "enum": [
+            "ADaM",
+            "CDASH",
+            "DEFINE-XML",
+            "SDTM",
+            "SEND"
+          ],
+          "description": "Publishing set of the published terminology (CT-2).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Version of the published terminology (CT-2).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        }
+      },
+      "required": [
+        "name",
+        "publishing_set",
+        "version"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

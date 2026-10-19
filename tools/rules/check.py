@@ -31,6 +31,7 @@ from pathlib import Path, PurePosixPath
 import yaml
 from tools.docs.pages import CANONICAL, GENERATED, GENERATED_DIRECTORIES
 from tools.paths import ROOT
+from tools.rules.migrate import SENTINELS
 from tools.rules.model import (
     GENERATED_PAGES,
     LEGACY_PREFIX,
@@ -117,6 +118,8 @@ CITATION_EXEMPT = {
     # A synthetic diagnostic record that names no rule, and this table.
     "python/tests/test_native_results.py": frozenset({"REQ-0000"}),
     "tools/rules/check.py": frozenset({"REQ-0000", "VALUE-32"}),
+    # The sentinel IDs the citations command leaves as written.
+    "tools/rules/migrate.py": SENTINELS,
     "tools/tests/test_diagnostics.py": None,
     "tools/tests/test_rule_reference.py": None,
     "tools/tests/test_rules_check.py": None,
@@ -601,12 +604,17 @@ def link_errors(root, rules):
 def schema_errors(root, rules):
     """Schema comments point at a rule; descriptions cite rules that resolve."""
     errors = []
-    for path in sorted((root / "yaml").glob("schema*.yaml")):
+    # The 0.5 schema files and, until Phase 2 removes those, the 1.0 ones.
+    directory = root / "yaml"
+    paths = [*sorted(directory.glob("schema*.yaml"))]
+    paths += sorted((directory / "v1").glob("schema*.yaml"))
+    for path in paths:
+        label = path.relative_to(directory).as_posix()
         text = path.read_text(encoding="utf-8")
         for comment in SCHEMA_COMMENT.findall(text):
             pointer = POINTER.fullmatch(comment)
             if pointer is None or rules.resolve(pointer["id"]) is None:
-                errors.append(f"schema comment has no canonical owner: {path.name}")
+                errors.append(f"schema comment has no canonical owner: {label}")
         try:
             document = load_schema(path)
         except SchemaSourceError as exc:
@@ -614,7 +622,7 @@ def schema_errors(root, rules):
             continue
         for field, value in schema_descriptions(document):
             try:
-                description_rules(f"{path.name}:{field}", value, rules)
+                description_rules(f"{label}:{field}", value, rules)
             except SchemaSourceError as exc:
                 errors.append(str(exc))
     return errors

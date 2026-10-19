@@ -23,6 +23,7 @@ live on Harbor Hub or in the chosen output directory.
 | `leaderboards/task-populations.json` | frozen benchmark populations for versioned boards |
 | `leaderboard.py`, `hub.py`, `run.py` | result aggregation and private Hub publication |
 | `tests/` | prompt, reference, grading, isolation and Hub controls |
+| `pyproject.toml`, `uv.lock` | the evaluation's own environment, locked apart from the package: Harbor, the engine built from the checkout and the repository tools |
 
 Benchmark lifecycle, standard, domain and track exclusions come from each
 case's `benchmarks/<name>/benchmark.yaml`. Adding a benchmark needs its
@@ -48,14 +49,14 @@ output directory, while preserving completed jobs.
 ## Setup and local checks
 
 Use a Docker engine with nftables `fib` support for Harbor's network
-allowlist, such as Linux or OrbStack. Install the locked Python tools and
-Harbor dependencies from the repository root:
+allowlist, such as Linux or OrbStack. Install the locked evaluation
+environment from the repository root:
 
 ```bash
-uv sync --project python --group harbor
-uv run --project python --no-sync python -m evaluations.harbor.images build
-uv run --project python --no-sync python -m evaluations.harbor.images verify
-uv run --project python --no-sync pytest evaluations/harbor/tests
+uv sync --project evaluations/harbor
+uv run --project evaluations/harbor --no-sync python -m evaluations.harbor.images build
+uv run --project evaluations/harbor --no-sync python -m evaluations.harbor.images verify
+uv run --project evaluations/harbor --no-sync pytest evaluations/harbor/tests
 ```
 
 Images are separate agent/verifier pairs for R, Python and opensas. Each
@@ -70,12 +71,13 @@ OpenCode permissions before and after Harbor's pinned installer. A local
 provider tests both allowed and denied calls without a model credential.
 The `Harbor` workflow runs on manual dispatch.
 Its `solutions` job checks references and prompts; its `oracle` job runs the
-harness controls, image checks and real oracle/nop trials.
+harness controls, image checks and real oracle/nop trials; its `advisories`
+job checks `uv.lock` with pip-audit and OSV-Scanner.
 
 Run an offline Docker preflight before spending model tokens:
 
 ```bash
-uv run --project python --no-sync python -m evaluations.harbor.smoke \
+uv run --project evaluations/harbor --no-sync python -m evaluations.harbor.smoke \
     --out /tmp/yamaa-harbor-preflight
 ```
 
@@ -88,10 +90,10 @@ verifier, with no model API calls.
 ## Build and run a model
 
 ```bash
-uv run --project python --no-sync python -m evaluations.harbor.build \
+uv run --project evaluations/harbor --no-sync python -m evaluations.harbor.build \
     --model openai/<model> --language python --prompt full \
     --out /tmp/yamaa-harbor-model
-uv run --project python --no-sync python -m evaluations.harbor.run \
+uv run --project evaluations/harbor --no-sync python -m evaluations.harbor.run \
     -c /tmp/yamaa-harbor-model/configs/<generated-job>.json
 ```
 
@@ -173,7 +175,7 @@ includes guesses about sponsor choices omitted from that prompt.
 For manual export of restored jobs:
 
 ```bash
-uv run --project python --no-sync python -m evaluations.harbor.leaderboard \
+uv run --project evaluations/harbor --no-sync python -m evaluations.harbor.leaderboard \
     export <board-name> <job-directory> --out /tmp/yamaa-harbor-export
 ```
 

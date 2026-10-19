@@ -288,6 +288,7 @@ mod diagnostics {
             reached.extend(project_functions::donor_keep_reached());
             reached.extend(project_environment::reached());
             reached.extend(project_environment::extended_alias_reached());
+            reached.extend(project_environment::format_name_reached());
             reached.extend(project_lock::reached());
             reached.extend(project_scope::reached());
             let lock = yamaa_core::application_issue::lock_mismatch(

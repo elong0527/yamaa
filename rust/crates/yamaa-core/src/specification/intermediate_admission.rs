@@ -11,9 +11,8 @@ use crate::{
 
 /// Without a relation change or `require_match`, an intermediate whose absence
 /// answer is missing, by default or as `no_match: {literal: null}`, reads what
-/// the implicit join reads (LOOKUP-4). The inheritance resolver also uses this
-/// predicate before pruning declarations.
-pub(crate) fn is_rename_only(d: &Document, item: usize) -> bool {
+/// the implicit join reads (LOOKUP-4).
+fn is_rename_only(d: &Document, item: usize) -> bool {
     let changes_relation = [
         "key",
         "between",

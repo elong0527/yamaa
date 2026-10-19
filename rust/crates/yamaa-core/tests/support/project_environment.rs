@@ -68,6 +68,54 @@ pub fn extended_alias_reached() -> BTreeSet<ConditionCode> {
     assert_eq!(finding.context.len(), 3);
     BTreeSet::from([finding.code])
 }
+/// CT-12: a text codelist names a character format, so its `format_name`
+/// begins with `$`; the compliant list beside it passes.
+pub fn format_name_reached() -> BTreeSet<ConditionCode> {
+    let list = |id: &str, format: &str| Codelist {
+        id: id.into(),
+        name: id.into(),
+        data_type: DataType::Text,
+        extensible: false,
+        alias: None,
+        format_name: Some(format.into()),
+        items: Some(vec![Item {
+            value: Value::Str("Y".into()),
+            decode: None,
+            rank: None,
+            alias: None,
+            extended: false,
+        }]),
+        external: None,
+    };
+    let mut draft = draft();
+    draft.codelists = vec![Source {
+        standard: None,
+        codelists: vec![list("NY", "$NY"), list("SEX", "SEX")],
+    }];
+    let findings = project_environment::validate(Language::Python, &draft);
+    let projected = project_environment_diagnostics::diagnostics(&draft, &findings).unwrap();
+    assert_eq!(projected.len(), 1, "{projected:?}");
+    let finding = &projected[0];
+    assert_eq!(
+        (
+            finding.definition().phase,
+            finding.definition().condition,
+            finding.definition().requirement
+        ),
+        ("validation", "value_not_permitted", Some("CT-12"))
+    );
+    assert_eq!(
+        finding.spec_paths,
+        ["codelists[0].codelists[1].format_name"]
+    );
+    for (key, value) in [("codelist", "SEX"), ("value", "SEX"), ("data_type", "text")] {
+        assert_eq!(finding.context[key], JsonValue::String(value.into()));
+    }
+    assert_eq!(finding.context.len(), 3);
+    assert_eq!(finding.source_span, None);
+    assert_eq!(finding.operand_route, None);
+    BTreeSet::from([finding.code])
+}
 /// A project that links a Python environment file with no functions and
 /// declares two invalid codelists of its own.
 pub fn draft() -> Draft {

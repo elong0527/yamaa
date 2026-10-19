@@ -1,10 +1,12 @@
 """Independent benchmark metadata and call-selection refusal controls."""
 
 import copy
+import io
 import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import yaml
 from tools import benchmark
@@ -258,6 +260,22 @@ class BenchmarkMetadata(unittest.TestCase):
         (self.case / "lone.yaml").write_text("keys: [ID]\n")
         with self.assertRaisesRegex(ValueError, "domain"):
             benchmark.specification_name(self.case / "lone.yaml")
+
+    def test_a_project_that_fails_admission_reports_its_issues(self):
+        from tools.paths import ROOT
+
+        # The project refuses to name the spec: the run reports the project's
+        # issues as a failed run does, not a traceback.
+        case = ROOT / "benchmarks/negative-format-name-without-dollar"
+        with (
+            mock.patch("sys.argv", ["benchmark", str(case)]),
+            mock.patch("sys.stderr", new_callable=io.StringIO) as stderr,
+            self.assertRaises(SystemExit) as exited,
+        ):
+            benchmark.main()
+        self.assertEqual(exited.exception.code, 1)
+        self.assertTrue(stderr.getvalue().startswith("spec.yaml: "))
+        self.assertIn("CT-12", stderr.getvalue())
 
     def test_metadata_only_case_cannot_disappear_or_release_without_a_specification(
         self,

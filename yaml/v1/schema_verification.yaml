@@ -1,0 +1,92 @@
+version: "1.0"
+
+column_verification:
+    type: [column_verification_keyword, column_verification_entry]
+    kind: structure
+
+column_verification_keyword:
+    type: str
+    values: [not_missing]
+    description: A column verification written as its bare keyword, which declares no field (CHECK-5).
+
+column_verification_entry:
+    registry: column_verifications
+
+column_verifications:
+    not_missing:
+        - id: {type: verification_id, required: false}
+        - severity: {type: verification_severity, required: false, default: error}
+    allowed_values:
+        - id: {type: verification_id, required: false}
+        - values: {type: "list[literal_value]", required: true}
+        - severity: {type: verification_severity, required: false, default: error}
+    range:
+        - id: {type: verification_id, required: false}
+        - min: {type: float, required: false}
+        - max: {type: float, required: false}
+        - severity: {type: verification_severity, required: false, default: error}
+    max_length:
+        - id: {type: verification_id, required: false}
+        - max: {type: int, required: true}
+        - severity: {type: verification_severity, required: false, default: error}
+    matches:
+        - id: {type: verification_id, required: false}
+        - pattern: {type: regex, required: true}
+        - severity: {type: verification_severity, required: false, default: error}
+
+dataset_verification:
+    registry: dataset_verifications
+
+dataset_verifications:
+    unique:
+        type: ["list[variable]", dataset_unique_arguments]
+    all_or_none:
+        - id: {type: verification_id, required: false}
+        - columns: {type: "list[variable]", required: true}
+        - severity: {type: verification_severity, required: false, default: error}
+    assert:
+        - id: {type: verification_id, required: false}
+        - when:
+            type: predicate
+            required: false
+            description: See CHECK-12.
+        - require: {type: predicate, required: true}
+        - severity: {type: verification_severity, required: false, default: error}
+    row_count: # See CHECK-13.
+        - id: {type: verification_id, required: false}
+        - group_by: {type: "list[variable]", required: false}
+        - filter: {type: predicate, required: false}
+        - when:
+            type: predicate
+            required: false
+            description: A predicate over one constructed output row that binds a group when at least one of its rows evaluates it to TRUE, leaving a group with no such row exempt (CHECK-14).
+        - min: {type: int, required: false}
+        - max: {type: int, required: false}
+        - min_fraction: {type: float, required: false}
+        - max_fraction: {type: float, required: false}
+        - severity: {type: verification_severity, required: false, default: error}
+
+intermediate_verification:
+    registry: intermediate_verifications
+
+intermediate_verifications:
+    unique:
+        type: ["list[variable]", intermediate_unique_arguments]
+
+dataset_unique_arguments:
+    - id: {type: verification_id, required: false}
+    - columns: {type: "list[variable]", required: true}
+    - severity: {type: verification_severity, required: false, default: error}
+
+intermediate_unique_arguments:
+    - id: {type: verification_id, required: false}
+    - columns: {type: "list[variable]", required: true}
+
+verification_id:
+    type: str
+    min_length: 1
+    kind: identifier
+
+verification_severity:
+    type: str
+    values: [error, warning]

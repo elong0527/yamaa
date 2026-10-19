@@ -254,7 +254,7 @@ workspace folder otherwise.
 ### Running writers and solvers
 
 Run from the repository root, prefixing each command with
-`uv run --project python --no-sync`.
+`uv run --project evaluations/harbor --no-sync`.
 
 Before a round, prove the checkout the round starts from provides the
 flow: `python -m evaluations.harbor.author prepare --help` offers

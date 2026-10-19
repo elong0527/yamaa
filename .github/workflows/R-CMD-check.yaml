@@ -47,14 +47,14 @@ jobs:
 
     name: ${{ matrix.config.os }} (${{ matrix.config.r }})
 
-    timeout-minutes: ${{ matrix.config.os == 'windows-latest' && 60 || 45 }}
+    timeout-minutes: ${{ matrix.config.os == 'windows-2025' && 60 || 45 }}
 
     strategy:
       fail-fast: false
       matrix:
         config:
           - {os: macos-15, r: release}
-          - {os: windows-latest, r: release}
+          - {os: windows-2025, r: release}
           - {os: ubuntu-24.04, r: devel, http-user-agent: release}
           - {os: ubuntu-24.04, r: release}
           - {os: ubuntu-24.04, r: '4.4'}
@@ -212,11 +212,11 @@ jobs:
     name: offline install (${{ matrix.os }})
     needs: source-package
     runs-on: ${{ matrix.os }}
-    timeout-minutes: ${{ matrix.os == 'windows-latest' && 60 || 40 }}
+    timeout-minutes: ${{ matrix.os == 'windows-2025' && 60 || 40 }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, windows-latest]
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, windows-2025]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
