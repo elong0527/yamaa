@@ -178,11 +178,13 @@ plan. Record its timings on an issue, never in the repository.
 The ordinary CI workflow runs the same check targets listed above for each PR,
 every two hours on main, and on each push to a `release/**` branch. Merges to
 main do not start workflows other than the documentation site deployment; main
-is checked on those schedules instead. While the newest main run of CI, the
-nightly fuzz run or the documentation deployment fails, the `Main health`
-workflow keeps a `main-red` issue open for it and closes the issue when a later
-main run succeeds. A PR that changes `.github/` also runs actionlint over every
-workflow.
+is checked on those schedules instead. While the newest main run of CI or the
+documentation deployment fails, the `Main health` workflow keeps a `main-red`
+issue open for it and closes the issue when a later main run succeeds. A
+failing fuzz run on main opens such an issue, or comments on the open one, and
+a person closes it: a later green run does not show that the crash is fixed,
+because the next run may not find the same input again. A PR that changes
+`.github/` also runs actionlint over every workflow.
 Keep workflow-specific setup in CI and reusable check logic in `tools/`.
 Pin external actions to complete commit IDs with exact release comments.
 
@@ -204,7 +206,8 @@ before merging.
 The `Fuzz` workflow fuzzes the readers that parse untrusted input under
 AddressSanitizer, with UndefinedBehaviorSanitizer for the C they compile. A PR
 runs, for three minutes each, the targets whose readers it changes; a nightly
-schedule runs every target for thirty minutes. The
+schedule runs every target for thirty minutes. The repository checks also run
+Clippy over the targets, so a change that breaks one fails on its PR. The
 [fuzz guide](rust/fuzz/README.md) lists the targets and runs them locally with
 `python -m tools.ci.fuzz`. Fix a crash with a unit test in the owning crate and
 commit its input as a text regression beside the targets.
