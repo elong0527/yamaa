@@ -52,7 +52,7 @@ changes. Harbor's oracle preflight additionally runs the actual Linux image,
 sandbox and held-out/changed-input verifier:
 
 ```bash
-uv run --project python --no-sync python -m evaluations.harbor.smoke \
+uv run --project evaluations/harbor --no-sync python -m evaluations.harbor.smoke \
     --language opensas --all-cases --out /tmp/yamaa-opensas-check
 ```
 

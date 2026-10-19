@@ -215,7 +215,10 @@ OSV with `osv-scanner.toml`. OSV also carries GitHub's reviewed advisories,
 which the other two databases can lack. An ignored advisory names its id, a
 reason and a review date in the file of each scanner that reports it. An
 OSV-Scanner ignore lapses on its review date, so the check fails again until
-the advisory is reviewed.
+the advisory is reviewed. The Harbor evaluation's packages ship in no release
+and are locked apart, in `evaluations/harbor/uv.lock`; the Harbor workflow
+checks that lock with pip-audit and OSV-Scanner, so an advisory there does
+not fail this lane.
 
 ### Components outside the advisory scanners
 
@@ -303,7 +306,7 @@ test keeps this table equal to it:
 | --- | --- | --- |
 | Python wheel for Linux x86_64 | `yamaa-<Python version>-cp312-abi3-manylinux_2_28_x86_64.whl` | `native-python-ubuntu-24.04-3.14` |
 | Python wheel for macOS arm64 | `yamaa-<Python version>-cp312-abi3-macosx_*_arm64.whl` | `native-python-macos-15-3.14` |
-| Python wheel for Windows x64 | `yamaa-<Python version>-cp312-abi3-win_amd64.whl` | `native-python-windows-latest-3.14` |
+| Python wheel for Windows x64 | `yamaa-<Python version>-cp312-abi3-win_amd64.whl` | `native-python-windows-2025-3.14` |
 | Python wheel for Linux aarch64 | `yamaa-<Python version>-cp312-abi3-manylinux_2_28_aarch64.whl` | `native-python-ubuntu-24.04-arm-3.14` |
 | Python source archive | `yamaa-<Python version>.tar.gz` | `native-python-ubuntu-24.04-3.14` |
 | R source package | `yamaa_<R version>.tar.gz` | `native-r-ubuntu-24.04` |

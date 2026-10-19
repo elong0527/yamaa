@@ -8,28 +8,44 @@ on its ``Replaces`` line, so existing citations keep resolving. Subcommands:
     card that replaces it, point every link whose text is a rule ID at that
     rule's anchor, and rewrite bare replaced IDs under ``rules/`` to their
     card. With ``--base``, a link to a rule file deleted or moved since
-    ``REF`` follows its rules to the one file that now holds them. Rust,
-    YAML and other non-markdown citations keep resolving through
-    ``Replaces``.
+    ``REF`` follows its rules to the one file that now holds them. Other
+    citations keep resolving through ``Replaces`` until ``citations``
+    moves them.
 ``report --base REF``
     List each legacy requirement defined at ``REF`` that a card now replaces,
     that moved, or that is no longer defined, for a pull request body.
 ``statements --base REF``
     List the cards whose title or statement was added, changed or removed
     since ``REF``: the language a reviewer approves.
+``citations [--dry-run]``
+    Rewrite every REQ ID in the authored text files to the card whose
+    ``Replaces`` line lists it, keeping those lines, and account for the run
+    by file extension. Files whose REQ IDs are not citations of the current
+    rules stay as written, and binary files that spell a REQ ID are listed
+    for an edit by hand. Nothing is written while an ID is refused: one that
+    names no rule, other than the sentinel IDs, or one that opens a range or
+    an abbreviated list, such as ``REQ-NNNN to REQ-NNNN`` or
+    ``REQ-NNNN/NNNN``, which names IDs it does not write out. A second run
+    changes nothing.
 
 For example: ``python -m tools.rules.migrate statements --base
 origin/main``.
 """
 
 import argparse
+import fnmatch
 import posixpath
 import re
 import sys
-from pathlib import Path
+from bisect import bisect_right
+from collections import Counter
+from dataclasses import dataclass, field
+from itertools import accumulate
+from pathlib import Path, PurePosixPath
 
 from tools.paths import ROOT
 from tools.rules.model import (
+    LEGACY_ID,
     RuleSourceError,
     anchors,
     authored_files,
@@ -42,6 +58,35 @@ from tools.rules.model import (
 )
 
 LEGACY_ANCHOR = re.compile(r"req-(?P<number>\d{4,})")
+LEGACY_CITATION = re.compile(rf"\b{LEGACY_ID}\b")
+LEGACY_BYTES = re.compile(LEGACY_CITATION.pattern.encode())
+# What continues a REQ ID into a range or an abbreviated list: a dash, "to" or
+# "through" before the range's last ID, written with or without its prefix, or
+# a slash before the next ID's number.
+SPAN = re.compile(
+    r"(?:[ \t]*[-\u2013\u2014][ \t]*|\s+(?:to|through)\s+)"
+    r"(?:REQ-)?(?P<last>\d{4,})\b|/(?P<next>\d{4,})\b"
+)
+# REQ IDs the rules tools' tests cite on purpose because they name no rule.
+SENTINELS = frozenset({"REQ-0000", "REQ-0099", "REQ-9999", "REQ-999999"})
+# Files whose REQ IDs are not citations of the current rules, which the
+# citations command leaves as written: path patterns, and why.
+BUILDS_RULES = "builds a rule set of its own"
+RELEASED = "release notes name the requirements of their release"
+LEFT_AS_WRITTEN = {
+    "benchmarks/*/input/*": "benchmark inputs are data",
+    "docs/design/*": "the design quotes the IDs it measured",
+    "docs/releases/0.4.0.md": RELEASED,
+    "docs/releases/0.5.0.md": RELEASED,
+    "tools/tests/rules_fixture.py": BUILDS_RULES,
+    "tools/tests/test_canonical_pages.py": BUILDS_RULES,
+    "tools/tests/test_diagnostics.py": BUILDS_RULES,
+    "tools/tests/test_rationale_phrases.py": BUILDS_RULES,
+    "tools/tests/test_rule_reference.py": BUILDS_RULES,
+    "tools/tests/test_rules_check.py": BUILDS_RULES,
+    "tools/tests/test_rules_migrate.py": BUILDS_RULES,
+    "tools/tests/test_rules_model.py": BUILDS_RULES,
+}
 
 
 def file_moves(base, current):
@@ -66,6 +111,17 @@ def file_moves(base, current):
         else:
             unmapped[path] = sorted(destinations)
     return moves, unmapped
+
+
+def replaces_lines(current):
+    """The line numbers of every card's ``Replaces`` entry, by repository path."""
+    lines = {}
+    for card in current.all_cards():
+        for entry in card.metadata:
+            if entry.label == "Replaces":
+                numbers = lines.setdefault(f"rules/{card.file}", set())
+                numbers.update(range(entry.line, entry.end + 1))
+    return lines
 
 
 def _replace_ids(current, text):
@@ -174,15 +230,7 @@ class LinkMigration:
     def id_edits(self, source, text, links):
         """Edits that rewrite bare replaced IDs in rules prose, outside links."""
         current = self.current
-        relative = source.removeprefix("rules/")
-        protected = {
-            number
-            for card in current.all_cards()
-            if card.file == relative
-            for entry in card.metadata
-            if entry.label == "Replaces"
-            for number in range(entry.line, entry.end + 1)
-        }
+        protected = replaces_lines(current).get(source, set())
         edits = []
         for number, line in enumerate(prose_lines(text), 1):
             if number in protected:
@@ -229,6 +277,244 @@ def migrate_links(root, base=None, dry_run=False):
         if text is not None and not dry_run:
             path.write_text(text, encoding="utf-8", newline="")
     return migration
+
+
+def left_as_written(relative):
+    """Why the citations command leaves a repository path as written, or None."""
+    return next(
+        (
+            reason
+            for pattern, reason in LEFT_AS_WRITTEN.items()
+            if fnmatch.fnmatchcase(relative, pattern)
+        ),
+        None,
+    )
+
+
+def _spanned(text, match):
+    """The end of the range or abbreviated list a REQ ID opens, and its IDs.
+
+    Returns None when the ID stands alone.
+    """
+    numbers = [int(match[0].removeprefix("REQ-"))]
+    end = match.end()
+    while more := SPAN.match(text, end):
+        if more["next"]:
+            numbers.append(int(more["next"]))
+        else:
+            last = int(more["last"])
+            numbers += (
+                range(numbers[-1] + 1, last + 1) if last > numbers[-1] else [last]
+            )
+        end = more.end()
+    if end == match.end():
+        return None
+    return end, [f"REQ-{number:04d}" for number in numbers]
+
+
+@dataclass
+class CitationMigration:
+    """What one citations run found, rewrote, kept and refused, by repository path.
+
+    ``rewrites`` holds ``(path, line, legacy ID, card ID)``; ``kept`` the
+    sentinel IDs and the IDs of legacy requirements still defined, as
+    ``(path, line, ID)``; ``binary`` the ``(ID, count, card ID or None)`` of
+    each binary file; ``refused`` holds ``(path, line, text, problem)``.
+    """
+
+    found: Counter = field(default_factory=Counter)
+    rewrites: list = field(default_factory=list)
+    replaces: int = 0
+    kept: list = field(default_factory=list)
+    left: dict = field(default_factory=dict)
+    binary: dict = field(default_factory=dict)
+    refused: list = field(default_factory=list)
+    texts: dict = field(default_factory=dict)
+
+    def rewrite(self, rules, relative, text, protected):
+        """Record one text file's citations and keep its rewritten text."""
+        ends = list(accumulate(len(line) for line in text.splitlines(keepends=True)))
+        edits = []
+        spanned = 0
+        for match in LEGACY_CITATION.finditer(text):
+            self.found[relative] += 1
+            if match.start() < spanned:
+                continue  # Within a range or list already refused.
+            identifier = match[0]
+            line = bisect_right(ends, match.start()) + 1
+            if line in protected:
+                self.replaces += 1
+                continue
+            span = _spanned(text, match)
+            if span is not None:
+                spanned, named = span
+                cards = dict.fromkeys(
+                    rules.replaced[item].id for item in named if item in rules.replaced
+                )
+                problem = (
+                    "names IDs it does not write out; rewrite it by hand, naming "
+                    + ", ".join(cards)
+                    if cards
+                    else "names no rule"
+                )
+                written = " ".join(text[match.start() : spanned].split())
+                self.refused.append((relative, line, written, problem))
+            elif identifier in rules.requirements or identifier in SENTINELS:
+                self.kept.append((relative, line, identifier))
+            elif identifier in rules.replaced:
+                card = rules.replaced[identifier].id
+                edits.append((match.start(), match.end(), card))
+                self.rewrites.append((relative, line, identifier, card))
+            else:
+                self.refused.append((relative, line, identifier, "names no rule"))
+        if edits:
+            pieces = []
+            position = 0
+            for start, end, card in edits:
+                pieces += [text[position:start], card]
+                position = end
+            self.texts[relative] = "".join([*pieces, text[position:]])
+
+
+def migrate_citations(root, dry_run=False):
+    """Rewrite the REQ IDs of every authored text file; return the run's record.
+
+    Nothing is written while an ID is refused, or with ``dry_run``.
+    """
+    root = Path(root)
+    rules = load(root)
+    protected = replaces_lines(rules)
+    migration = CitationMigration()
+    for path in authored_files(root):
+        if path.is_symlink():
+            continue  # Its target is read where it lives.
+        relative = path.relative_to(root).as_posix()
+        try:
+            data = path.read_bytes()
+        except OSError:
+            continue
+        if b"REQ-" not in data:
+            continue
+        try:
+            text = data.decode("utf-8")
+        except UnicodeDecodeError:
+            text = None
+        if text is not None and "\0" in text:
+            text = None
+        reason = left_as_written(relative)
+        if reason is None and text is not None:
+            migration.rewrite(rules, relative, text, protected.get(relative, set()))
+            continue
+        identifiers = Counter(
+            LEGACY_CITATION.findall(text)
+            if text is not None
+            else (item.decode() for item in LEGACY_BYTES.findall(data))
+        )
+        if not identifiers:
+            continue
+        migration.found[relative] = identifiers.total()
+        if reason is not None:
+            migration.left[relative] = reason
+            continue
+        migration.binary[relative] = [
+            (
+                identifier,
+                count,
+                card.id if (card := rules.resolve(identifier)) else None,
+            )
+            for identifier, count in sorted(identifiers.items())
+        ]
+    if not dry_run and not migration.refused:
+        for relative, text in migration.texts.items():
+            (root / relative).write_bytes(text.encode("utf-8"))
+    return migration
+
+
+def _extension(relative):
+    path = PurePosixPath(relative)
+    return path.suffix or path.name
+
+
+def _count(number, noun):
+    """``1 file``, ``2 files``: a count and its noun."""
+    return f"{number:,} {noun}{'' if number == 1 else 's'}"
+
+
+def citation_summary(migration, dry_run=False):
+    """Markdown accounting for a citations run, for a pull request body."""
+    rewritten = Counter(relative for relative, *_ in migration.rewrites)
+    files, found, changed = Counter(), Counter(), Counter()
+    for relative, count in migration.found.items():
+        extension = _extension(relative)
+        files[extension] += 1
+        found[extension] += count
+        changed[extension] += rewritten[relative]
+    verb = "Rewrote" if not (dry_run or migration.refused) else "Would rewrite"
+    lines = [
+        f"{verb} {_count(len(migration.rewrites), 'REQ ID')} in "
+        f"{_count(len(rewritten), 'file')}, of {found.total():,} found in "
+        f"{_count(len(migration.found), 'file')}.",
+        "",
+        "| Extension | Files | REQ IDs | Rewritten |",
+        "| --- | ---: | ---: | ---: |",
+    ]
+    lines += [
+        f"| `{extension}` | {files[extension]:,} | {found[extension]:,} "
+        f"| {changed[extension]:,} |"
+        for extension in sorted(found, key=lambda item: (-found[item], item))
+    ]
+    lines.append(
+        f"| Total | {len(migration.found):,} | {found.total():,} "
+        f"| {len(migration.rewrites):,} |"
+    )
+    expected = [
+        relative
+        for relative in sorted(rewritten)
+        if fnmatch.fnmatchcase(relative, "benchmarks/*/expected/*")
+    ]
+    if expected:
+        errors = [relative for relative in expected if relative.endswith("/error.yaml")]
+        others = [relative for relative in expected if relative not in errors]
+        values = sum(rewritten[relative] for relative in expected)
+        lines += [
+            "",
+            f"Expected files: {len(expected):,}, holding {_count(values, 'value')}: "
+            f"{_count(len(errors), '`expected/error.yaml` file')}"
+            + (", and:" if others else "."),
+            *(f"- `{item}`: {_count(rewritten[item], 'value')}" for item in others),
+        ]
+    sentinels = sum(identifier in SENTINELS for *_, identifier in migration.kept)
+    kept = [
+        f"{_count(migration.replaces, 'REQ ID')} on the cards' Replaces lines",
+        _count(sentinels, "sentinel ID"),
+    ]
+    if defined := len(migration.kept) - sentinels:
+        kept.append(f"{_count(defined, 'ID')} of legacy requirements still defined")
+    lines += ["", f"Kept: {', '.join(kept)}."]
+    if migration.left:
+        lines += ["", f"Left as written: {_count(len(migration.left), 'file')}."]
+        lines += [
+            f"- `{relative}` ({migration.found[relative]:,}): {reason}"
+            for relative, reason in sorted(migration.left.items())
+        ]
+    if migration.binary:
+        lines += ["", f"Binary files to edit by hand: {len(migration.binary):,}."]
+        for relative, identifiers in sorted(migration.binary.items()):
+            named = "; ".join(
+                f"{identifier} ({card or 'no rule'}), {_count(count, 'time')}"
+                for identifier, count, card in identifiers
+            )
+            lines.append(f"- `{relative}`: {named}")
+    if migration.refused:
+        lines += [
+            "",
+            f"Refused, so nothing is written: {len(migration.refused):,}.",
+            *(
+                f"- `{relative}:{line}`: `{written}` {problem}"
+                for relative, line, written, problem in migration.refused
+            ),
+        ]
+    return "\n".join(lines) + "\n"
 
 
 def legacy_report(base, current, ref):
@@ -350,7 +636,18 @@ def main(argv=None):
     ):
         command = commands.add_parser(name, help=summary)
         command.add_argument("--base", required=True, help="Git revision to compare")
+    citations = commands.add_parser("citations", help="rewrite REQ IDs to cards")
+    citations.add_argument(
+        "--dry-run", action="store_true", help="report, do not write"
+    )
     arguments = parser.parse_args(argv)
+    if arguments.command == "citations":
+        migration = migrate_citations(arguments.root, arguments.dry_run)
+        for relative, line, identifier, card in migration.rewrites:
+            print(f"{relative}:{line}: {identifier} -> {card}")
+        print()
+        sys.stdout.write(citation_summary(migration, arguments.dry_run))
+        return int(bool(migration.refused))
     try:
         base = load_ref(arguments.root, arguments.base) if arguments.base else None
     except RuleSourceError as exc:

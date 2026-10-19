@@ -30,7 +30,7 @@ PYTHON_KINDS = frozenset({"wheel", "sdist"})
 WHEEL_PLATFORMS = {
     "ubuntu-24.04": ("Linux x86_64", "manylinux_2_28_x86_64"),
     "macos-15": ("macOS arm64", "macosx_*_arm64"),
-    "windows-latest": ("Windows x64", "win_amd64"),
+    "windows-2025": ("Windows x64", "win_amd64"),
     "ubuntu-24.04-arm": ("Linux aarch64", "manylinux_2_28_aarch64"),
 }
 

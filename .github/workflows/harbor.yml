@@ -60,23 +60,27 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # The Harbor project builds its own engine; the development package
+      # would go unused.
       - uses: ./.github/actions/setup
+        with:
+          package: 'false'
       - name: Install the locked Harbor runner
-        run: uv sync --project python --extra test --group benchmark --group tooling --group harbor --locked --no-editable --config-setting build-args=--profile=dev
+        run: uv sync --project evaluations/harbor --locked --no-editable --config-setting build-args=--profile=dev
       - name: Check the harness and regression tests
-        run: uv run --project python --no-sync pytest evaluations/harbor/tests
+        run: uv run --project evaluations/harbor --no-sync pytest evaluations/harbor/tests
       - name: Build agent and verifier images
-        run: uv run --project python --no-sync python -m evaluations.harbor.images build
+        run: uv run --project evaluations/harbor --no-sync python -m evaluations.harbor.images build
       - name: Verify language isolation after Harbor setup
-        run: uv run --project python --no-sync python -m evaluations.harbor.images verify --out "${RUNNER_TEMP}/harbor-images"
+        run: uv run --project evaluations/harbor --no-sync python -m evaluations.harbor.images verify --out "${RUNNER_TEMP}/harbor-images"
       - name: Check every opensas case through Harbor
         run: >-
-          uv run --project python --no-sync python -m evaluations.harbor.smoke
+          uv run --project evaluations/harbor --no-sync python -m evaluations.harbor.smoke
           --language opensas --all-cases --prompt full --n-concurrent 6
           --out "${RUNNER_TEMP}/harbor-opensas"
       - name: Check a reproducible R and Python sample across all prompt tiers
         run: >-
-          uv run --project python --no-sync python -m evaluations.harbor.smoke
+          uv run --project evaluations/harbor --no-sync python -m evaluations.harbor.smoke
           --language r python --prompt full conventions brief --n-concurrent 6
           --out "${RUNNER_TEMP}/harbor"
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
@@ -92,3 +96,29 @@ jobs:
             ${{ runner.temp }}/harbor-opensas/sample.json
             ${{ runner.temp }}/harbor-opensas/summary.json
           if-no-files-found: warn
+  # Harbor's packages ship in no release, so their lock is checked here rather
+  # than in the Dependency graphs release lane.
+  advisories:
+    name: Advisories in the Harbor lock
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          version: '0.13.0'
+      - name: Check the Harbor lock against PyPI advisories
+        run: |
+          uv export --project evaluations/harbor --frozen \
+            --no-emit-project --no-emit-local > "$RUNNER_TEMP/requirements.txt"
+          uvx --from pip-audit==2.10.1 pip-audit --strict --disable-pip \
+            --require-hashes -r "$RUNNER_TEMP/requirements.txt"
+      - name: Check the Harbor lock against OSV advisories
+        run: |
+          curl --fail --location --silent --show-error \
+            https://github.com/google/osv-scanner/releases/download/v2.7.0/osv-scanner_linux_amd64 \
+            --output "$RUNNER_TEMP/osv-scanner"
+          chmod +x "$RUNNER_TEMP/osv-scanner"
+          "$RUNNER_TEMP/osv-scanner" scan source --lockfile evaluations/harbor/uv.lock
