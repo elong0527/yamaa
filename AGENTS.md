@@ -80,7 +80,8 @@ their prerequisites. Local targets and CI share the owned scripts under
 
 - One issue per pull request, referenced with `Closes #N`. Branch from and
   target `main`; `release/1.0.0` is cut only to qualify release candidates.
-  The planning issues are #3050 for the current milestone and #3030 for 1.0.0.
+  The planning issue is #3030, for 1.0.0; #2848 tracks the 0.5.0 GitHub
+  release.
 - Before merging, bring the branch up to date with its base and wait for
   green CI on that exact head. A pull request that is green against an older
   base can still fail to compile against the current one.
