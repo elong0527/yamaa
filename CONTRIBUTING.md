@@ -353,9 +353,10 @@ in the PR body, not a committed evidence ledger.
 
 Native qualification is separate: `.github/workflows/native.yml` builds and
 installs the supported Python wheel/source and R source combinations on
-dispatch or on a `qualification/issue-*` push. It checks public
+dispatch, on a `qualification/issue-*` push and weekly on main. It checks public
 benchmark conformance, installed host suites, packaging, optimized Rust behavior
-and portable math. Passing ordinary CI does not qualify a release. The final
+and portable math, and runs CRAN's incoming checks on the R source archive that
+a release publishes (its `native-cran` jobs). Passing ordinary CI does not qualify a release. The final
 merged revision needs complete native evidence, including the R package
 checks below. A release tag publishes the native run that its
 `Qualified-Run` trailer names, and the `Release rehearsal` workflow, dispatched

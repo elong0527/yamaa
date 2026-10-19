@@ -154,6 +154,28 @@ class FindingsTests(unittest.TestCase):
             check_r.report(log(HEAD, BASHISMS, status="1 WARNING, 1 NOTE"))
 
 
+class TarballTests(unittest.TestCase):
+    def test_a_tarball_above_the_requested_limit_fails(self):
+        limit = check_r.TARBALL_LIMIT
+        for size, allowed in ((limit, True), (limit + 1, False)):
+            with self.subTest(size=size):
+                text = log(HEAD.replace("14539245", str(size)), status="1 NOTE")
+                self.assertEqual(check_r.unexpected(text) == [], allowed)
+        with tempfile.TemporaryDirectory() as directory:
+            archive = Path(directory) / "yamaa_0.5.0.tar.gz"
+            with archive.open("wb") as stream:
+                stream.truncate(limit + 1)
+            with self.assertRaisesRegex(RuntimeError, "above the"):
+                check_r.check(archive, Path(directory) / "check")
+
+    def test_cran_comments_requests_the_limit(self):
+        comments = (ROOT / "R/yamaa/cran-comments.md").read_text(encoding="utf-8")
+        self.assertIn(
+            f"we request a limit of {check_r.TARBALL_LIMIT // 1_000_000} MB",
+            " ".join(comments.split()),
+        )
+
+
 class CranCommentsTests(unittest.TestCase):
     def test_the_expected_notes_are_the_ones_cran_comments_explains(self):
         comments = (ROOT / "R/yamaa/cran-comments.md").read_text(encoding="utf-8")

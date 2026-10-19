@@ -1,7 +1,7 @@
 # yamaa <img src="https://raw.githubusercontent.com/elong0527/yamaa/main/docs/assets/logo.jpeg" align="right" width="120" alt="yamaa logo" />
 
 [![CI](https://github.com/elong0527/yamaa/actions/workflows/ci.yml/badge.svg?branch=main&event=schedule)](https://github.com/elong0527/yamaa/actions/workflows/ci.yml)
-[![Release checks](https://img.shields.io/github/actions/workflow/status/elong0527/yamaa/native.yml?branch=main&label=release%20checks)](https://github.com/elong0527/yamaa/actions/workflows/native.yml "Builds and tests Python and R release packages on Linux, macOS, and Windows")
+[![Release checks](https://img.shields.io/github/actions/workflow/status/elong0527/yamaa/native.yml?branch=main&label=release%20checks)](https://github.com/elong0527/yamaa/actions/workflows/native.yml "Builds and tests Python and R release packages on Linux, macOS, and Windows, and runs CRAN's incoming checks on the R source package")
 [![R CMD check](https://github.com/elong0527/yamaa/actions/workflows/R-CMD-check.yaml/badge.svg?branch=main&event=workflow_dispatch)](https://github.com/elong0527/yamaa/actions/workflows/R-CMD-check.yaml?query=branch%3Amain+event%3Aworkflow_dispatch)
 [![Coverage](https://codecov.io/gh/elong0527/yamaa/graph/badge.svg)](https://codecov.io/gh/elong0527/yamaa)
 [![PyPI version](https://img.shields.io/pypi/v/yamaa)](https://pypi.org/project/yamaa/)
@@ -123,10 +123,13 @@ run$save()             # write adsl.csv
 Source installation requires R 4.4.0 or later, Rust 1.82 or later with Cargo, and platform build tools; it needs no network.
 To build a checkout candidate, follow
 [the R package guide](https://github.com/elong0527/yamaa/blob/main/R/yamaa/README.md).
-The **Release checks** badge shows the latest release package checks on `main`:
-Python and R installation, benchmark conformance, and numerical consistency across
-Linux, macOS, and Windows. Release assets come from that workflow. CRAN and
-r-universe publication are later distribution work.
+The **Release checks** badge shows the latest release package checks on `main`,
+which run weekly and before each release: Python and R installation, benchmark
+conformance, and numerical consistency across Linux, macOS, and Windows, and
+CRAN's incoming checks of the R source package (`R CMD check --as-cran` with
+R-devel, R-release and R 4.4 and the minimum Rust, and in a CRAN-like Fedora
+container). Release assets come from that workflow. CRAN and r-universe
+publication are later distribution work.
 
 ## Where to go next
 

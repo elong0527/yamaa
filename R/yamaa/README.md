@@ -99,7 +99,10 @@ repository qualification, outside the source package's test dependency graph.
 
 A successful repository check is not a CRAN acceptance decision. Before a
 submission, run `R CMD check --as-cran` on the built tarball with current R
-release and R-devel, and validate Windows and macOS as well as Linux.
+release and R-devel, and validate Windows and macOS as well as Linux. Native
+qualification's `native-cran` jobs do so on every run, for the tarball that a
+release publishes: with R-devel, R-release and R 4.4 on all three platforms
+and Rust 1.82, and in R-hub's Fedora `gcc16` container with Fedora's Rust.
 
 The build follows CRAN's
 [Rust guidance](https://cran.r-project.org/web/packages/using_rust.html):

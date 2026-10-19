@@ -256,6 +256,37 @@ class NativeWorkflowContract(unittest.TestCase):
                     [r_source],
                 )
 
+    def test_cran_checks_run_on_the_published_r_source_archive(self):
+        # CRAN's incoming checks judge the bytes that a release publishes.
+        r_source = f"native-r-{native.SOURCE_PLATFORM}"
+        jobs = [
+            f"native-cran ({platform}, R {version})"
+            for platform in self.coverage["cran"]["os"]
+            for version in self.coverage["cran"]["r"]
+        ] + [
+            f"native-cran ({platform})"
+            for platform in self.coverage["cran_container"]["platform"]
+        ]
+        self.assertEqual(set(self.coverage["cran"]["r"]), {"devel", "release", "4.4"})
+        for job in jobs:
+            with self.subTest(job=job):
+                self.assertEqual(
+                    [
+                        name
+                        for name in self.jobs[job]["downloads"]
+                        if name.startswith("native-r-")
+                    ],
+                    [r_source],
+                )
+                [check] = [
+                    step
+                    for step in self.jobs[job]["definitions"]
+                    if step.get("name") == "Check the R source package as CRAN does"
+                ]
+                self.assertIn("-m tools.commands.check_r --archive", check["run"])
+                # Without a network: connections go to a refusing proxy.
+                self.assertEqual(check["env"]["http_proxy"], "http://127.0.0.1:9")
+
     def test_every_python_lane_is_compared_beside_r_reports_of_its_os(self):
         # Linux aarch64 has no R lane yet; its lanes use Linux x86_64's.
         commands = []

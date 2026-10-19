@@ -46,6 +46,12 @@ EXPECTED_NOTES = {
         r"(grammar-original|host-fixtures|libs|specification-original) +\d+\.\d+Mb",
     ),
 }
+# CRAN's Repository Policy: tarballs "should if possible not exceed 10MB", and
+# "a modestly increased limit can be requested at submission" for bundled
+# third-party sources. cran-comments.md requests this limit (a test keeps the
+# two equal), and a larger tarball fails the check.
+TARBALL_LIMIT = 15_000_000
+TARBALL_SIZE = re.compile(r"Size of tarball: (\d+) bytes")
 # On Unix, --as-cran runs the checkbashisms script over configure and cleanup,
 # and warns instead when it is not installed, as on macOS runners and most
 # development machines. CRAN's machines have it, and CI's Linux R jobs install
@@ -162,6 +168,10 @@ def unexpected(log, expected=EXPECTED_NOTES, checkbashisms=True):
         for line in finding.lines:
             if not matches([line], patterns):
                 problems.append(f"NOTE: checking {finding.check}: {line}")
+            elif (size := TARBALL_SIZE.fullmatch(line)) and int(
+                size[1]
+            ) > TARBALL_LIMIT:
+                problems.append(tarball_problem(int(size[1])))
     seen = dict.fromkeys(COUNTED, 0)
     for finding in found:
         if finding.status in seen:
@@ -169,6 +179,13 @@ def unexpected(log, expected=EXPECTED_NOTES, checkbashisms=True):
     if seen != counts:
         problems.append(f"the Status line counts {counts}, the log shows {seen}")
     return problems
+
+
+def tarball_problem(size):
+    return (
+        f"the tarball is {size} bytes, above the {TARBALL_LIMIT} that "
+        "cran-comments.md requests"
+    )
 
 
 def report(log, checkbashisms=True):
@@ -246,6 +263,8 @@ def check(archive, work, environment=None):
         raise ValueError("R package checks must run outside the checkout")
     if not archive.is_file():
         raise ValueError("archive must identify the built source archive")
+    if archive.stat().st_size > TARBALL_LIMIT:
+        raise RuntimeError(tarball_problem(archive.stat().st_size))
     work.mkdir(parents=True)
     revision = subprocess.check_output(
         ["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True

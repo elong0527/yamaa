@@ -22,6 +22,12 @@ BUILD_PYTHON = "3.14"
 # The host whose Python and R source archives a release publishes. Every
 # source lane, on every platform, installs those same archives.
 SOURCE_PLATFORM = "ubuntu-24.04"
+# CRAN's incoming checks of that R source archive: R CMD check --as-cran with
+# these R versions on each R platform, with the workspace's minimum Rust, and
+# in these R-hub containers, which carry CRAN's check configurations, with
+# their distribution's Rust.
+CRAN_R_VERSIONS = ("devel", "release", "4.4")
+CRAN_CONTAINERS = ("gcc16",)
 
 
 def coverage():
@@ -47,6 +53,8 @@ def coverage():
         },
         "glibc": {"os": list(GLIBC_PLATFORMS)},
         "r": {"os": list(R_PLATFORMS)},
+        "cran": {"os": list(R_PLATFORMS), "r": list(CRAN_R_VERSIONS)},
+        "cran_container": {"platform": list(CRAN_CONTAINERS)},
     }
 
 
