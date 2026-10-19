@@ -240,10 +240,12 @@ def required_jobs(coverage):
         ),
         "public-cohort-complete-runs": ("Compare complete installed host reports",),
     }
+    for lane in coverage["rust"]["include"]:
+        jobs[f"native-rust ({lane['os']}, {lane['python']})"] = (
+            "Test shared workspace",
+        )
     for lane in coverage["build"]["include"]:
-        suffix = f"({lane['os']}, {lane['python']})"
-        jobs[f"native-rust {suffix}"] = ("Test shared workspace",)
-        jobs[f"native-dist {suffix}"] = (
+        jobs[f"native-dist ({lane['os']}, {lane['python']})"] = (
             "Build wheel and source archive",
             "Check Python distribution contents",
         )
@@ -252,6 +254,13 @@ def required_jobs(coverage):
             "Install the wheel"
             if lane["form"] == "wheel"
             else "Rebuild and install from the source archive",
+            "Report installed Python public benchmark conformance",
+            "Qualify the installed package outside checkout",
+        )
+    # Each Linux wheel, installed on glibc 2.28.
+    for platform in coverage["glibc"]["os"]:
+        jobs[f"native-glibc ({platform})"] = (
+            "Install the wheel",
             "Report installed Python public benchmark conformance",
             "Qualify the installed package outside checkout",
         )
@@ -383,7 +392,7 @@ def archive_payloads(path):
 def check_package(asset, path, identity, root):
     """Check one release file's own name, version and notices."""
     payloads = archive_payloads(path)
-    if asset.kind in {"wheel", "sdist"}:
+    if asset.kind in release_assets.PYTHON_KINDS:
         metadata = [
             payload
             for name, payload in payloads.items()
@@ -599,7 +608,9 @@ def candidate_introduction(root, identity, repository):
         "",
         "- **Feedback.** Report problems and comments in a GitHub issue: "
         f"{site}/issues/new/choose",
-        f"- **Python.** The Python packages are version `{identity.python}`.",
+        "- **Python.** Install it from PyPI with "
+        f"`pip install --pre yamaa=={identity.python}`; a bare "
+        "`pip install yamaa` does not install a candidate reliably.",
         f"- **R.** The R package is version `{identity.r}` in every candidate and "
         "in the final release, because an R version cannot mark a candidate. R "
         "does not offer the final release as an update to a candidate, so "

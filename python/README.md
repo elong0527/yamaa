@@ -30,7 +30,22 @@ specification language.
 
 ## Installation
 
-Download the wheel for your platform from the
+From its 1.0.0 release candidates on, yamaa is published on
+[PyPI](https://pypi.org/project/yamaa/). A candidate is a pre-release there, so
+name it, for example `python -m pip install --pre yamaa==1.0.0rc1`. Once 1.0.0
+is out, install the newest release with:
+
+```bash
+python -m pip install yamaa
+```
+
+The wheels cover CPython 3.12 and later on Linux x86_64 and aarch64, macOS
+arm64 and Windows x64. The Linux wheels are `manylinux_2_28` and need glibc
+2.28 or later, for example RHEL 8, Ubuntu 20.04 or Debian 10; elsewhere, pip
+builds the source archive, as described below.
+
+Every release is also published as GitHub release assets, and yamaa 0.4.0 only
+there: download the wheel for your platform from the
 [GitHub release](https://github.com/elong0527/yamaa/releases/tag/yamaa-v0.4.0),
 then install it:
 
@@ -38,8 +53,7 @@ then install it:
 python -m pip install ./yamaa-0.4.0-<wheel-tags>.whl
 ```
 
-The Linux wheel is `manylinux_2_34` and needs glibc 2.34 or later, for example
-RHEL 9, Ubuntu 22.04 or Debian 12; on older systems, install the source archive.
+The 0.4.0 Linux wheel is `manylinux_2_34` and needs glibc 2.34 or later.
 
 Or install the standalone source archive from the same release. Building it
 uses your default Rust toolchain, which must be Rust 1.90 or later, with Cargo,
@@ -68,8 +82,7 @@ from a source checkout, install it with `python -m pip install './python[style]'
 The `test` extra also includes these readers, plus PyArrow, lxml and Pydantic
 for independent artifact and conformance checks. `make setup` installs it.
 
-yamaa 0.4.0 is published as GitHub release assets, not on PyPI. The
-[release guidance](https://github.com/elong0527/yamaa/blob/yamaa-v0.4.0/docs/release.md#supported-platforms)
+The [release guidance](https://elong0527.github.io/yamaa/release/#supported-platforms)
 lists the supported Python versions and platforms.
 
 ## Contributing

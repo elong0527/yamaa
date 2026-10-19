@@ -9,6 +9,8 @@ release tag is pushed.
 import itertools
 import re
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
 import yaml
 from tools.ci import native, release_assets
@@ -106,6 +108,7 @@ def native_run_jobs():
                 "downloads": [],
                 "definitions": job["steps"],
                 "context": context,
+                "job": job,
             }
             for step in job["steps"]:
                 jobs[name]["steps"].append(step.get("name"))
@@ -180,6 +183,47 @@ class NativeWorkflowContract(unittest.TestCase):
                     job not in sources,
                 )
 
+    def test_each_linux_wheel_builds_in_its_manylinux_container(self):
+        for lane in self.coverage["build"]["include"]:
+            job = "native-dist ({os}, {python})".format(**lane)
+            [build] = [
+                step
+                for step in self.jobs[job]["definitions"]
+                if step.get("name") == "Build wheel and source archive"
+            ]
+            with self.subTest(job=job):
+                self.assertNotIn("if", build)
+                self.assertIn(
+                    'if [ "${RUNNER_OS}" = Linux ]; then\n'
+                    '    python -m tools.ci.manylinux --out "${RUNNER_TEMP}/native-dist"\n'
+                    "  else\n"
+                    '    maturin build --release --locked --out "${RUNNER_TEMP}/native-dist"\n',
+                    build["run"],
+                )
+
+    def test_each_linux_wheel_is_qualified_on_glibc_2_28(self):
+        linux = {
+            lane["os"]
+            for lane in self.coverage["build"]["include"]
+            if lane["os"].startswith("ubuntu-")
+        }
+        self.assertEqual(set(self.coverage["glibc"]["os"]), linux)
+        for platform in self.coverage["glibc"]["os"]:
+            job = f"native-glibc ({platform})"
+            with self.subTest(job=job):
+                # AlmaLinux 8 has glibc 2.28, pinned by a dated tag.
+                self.assertRegex(
+                    self.jobs[job]["job"]["container"], r"almalinux:8\.10-[0-9]{8}"
+                )
+                self.assertEqual(
+                    [
+                        name
+                        for name in self.jobs[job]["downloads"]
+                        if name.startswith("native-python-")
+                    ],
+                    [f"native-python-{platform}-{native.BUILD_PYTHON}"],
+                )
+
     def test_every_source_lane_installs_the_published_source_archives(self):
         # macOS and Windows install the Linux-built archives a release
         # publishes, rather than building their own.
@@ -210,6 +254,30 @@ class NativeWorkflowContract(unittest.TestCase):
                         if name.startswith("native-r-")
                     ],
                     [r_source],
+                )
+
+    def test_every_python_lane_is_compared_beside_r_reports_of_its_os(self):
+        # Linux aarch64 has no R lane yet; its lanes use Linux x86_64's.
+        commands = []
+        with patch.object(
+            native.subprocess,
+            "run",
+            side_effect=lambda command, **kwargs: commands.append(command),
+        ):
+            native.compare_cohorts(self.coverage["qualify"], ROOT, "a" * 40)
+        self.assertEqual(len(commands), len(self.coverage["qualify"]["include"]))
+        for lane, command in zip(
+            self.coverage["qualify"]["include"], commands, strict=True
+        ):
+            r_platform = native.R_EVIDENCE.get(lane["os"], lane["os"])
+            with self.subTest(lane=lane):
+                self.assertIn(r_platform, native.R_PLATFORMS)
+                evidence = command[command.index("--r-evidence") + 1]
+                self.assertEqual(
+                    Path(evidence),
+                    Path("cohort-input")
+                    / f"native-r-qualification-{r_platform}"
+                    / "r-source",
                 )
 
     def test_the_expression_subset_follows_github_operand_results(self):

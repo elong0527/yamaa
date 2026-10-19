@@ -15,20 +15,23 @@ from dataclasses import dataclass
 from tools.ci import native
 
 # Placeholders in a declared file name. In a wheel's platform tag, `*` stands
-# for the platform version, such as the 2_34 of manylinux_2_34_x86_64 or the
-# 11_0 of macosx_11_0_arm64.
+# for the platform version, such as the 11_0 of macosx_11_0_arm64.
 PLACEHOLDERS = {
     "<Python version>": lambda identity: re.escape(identity.python),
     "<R version>": lambda identity: re.escape(identity.r),
     "*": lambda identity: "[0-9]+_[0-9]+",
 }
 
+# The asset kinds that PyPI receives as well: the wheels and the source archive.
+PYTHON_KINDS = frozenset({"wheel", "sdist"})
+
 # The platform that each Python build lane builds its wheel for, and the
-# platform tag of that wheel.
+# platform tag of that wheel. tools/ci/manylinux.py builds the Linux wheels.
 WHEEL_PLATFORMS = {
-    "ubuntu-24.04": ("Linux x86_64", "manylinux_*_x86_64"),
+    "ubuntu-24.04": ("Linux x86_64", "manylinux_2_28_x86_64"),
     "macos-15": ("macOS arm64", "macosx_*_arm64"),
     "windows-latest": ("Windows x64", "win_amd64"),
+    "ubuntu-24.04-arm": ("Linux aarch64", "manylinux_2_28_aarch64"),
 }
 
 
