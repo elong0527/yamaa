@@ -1083,9 +1083,10 @@ mod file {
                 assert_eq!(xml.contains("<def:AnnotatedCRF>"), has_acrf);
                 assert!(xml.contains(&format!("OID=\"CL.{codelist}\"")));
                 if id == "AE" {
-                    // SDTMIG requires the dictionary-derived term.
+                    // SDTMIG requires the dictionary-derived term, a synonym
+                    // of the reported term.
                     assert!(xml.contains(
-                        "<ItemRef ItemOID=\"IT.AE.AEDECOD\" OrderNumber=\"6\" Mandatory=\"Yes\""
+                        "<ItemRef ItemOID=\"IT.AE.AEDECOD\" OrderNumber=\"6\" Mandatory=\"Yes\" Role=\"Synonym Qualifier\""
                     ));
                 }
                 assert!(!temp

@@ -476,6 +476,14 @@ class PublicDefine(unittest.TestCase):
                         xml.xpath("//o:ExternalCodeList/@Dictionary", namespaces=NS),
                         ["MedDRA"],
                     )
+                    # The dictionary-derived term is a synonym of the reported
+                    # term.
+                    self.assertEqual(
+                        xml.xpath(
+                            "//o:ItemRef[@ItemOID='IT.AE.AEDECOD']/@Role", namespaces=NS
+                        ),
+                        ["Synonym Qualifier"],
+                    )
                     self.assertEqual(
                         xml.xpath("//o:MethodDef/@OID", namespaces=NS),
                         ["MT.AE.AEDECOD", "MT.AE.AEBODSYS"],
