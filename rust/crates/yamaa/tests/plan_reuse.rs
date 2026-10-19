@@ -369,12 +369,16 @@ fn a_run_started_from_a_project_function_reuses_the_same_holder() {
 /// `schema` link.
 struct Study(PathBuf);
 impl Study {
-    fn new(name: &str) -> Self {
+    /// An empty directory for a test of its own.
+    fn empty(name: &str) -> Self {
         let root =
             std::env::temp_dir().join(format!("yamaa-plan-reuse-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
-        let study = Self(yamaa_adapters::canonical_path::canonicalize(root).unwrap());
+        Self(yamaa_adapters::canonical_path::canonicalize(root).unwrap())
+    }
+    fn new(name: &str) -> Self {
+        let study = Self::empty(name);
         study.write("raw/dm.csv", "USUBJID,AGE\nS1,30\nS2,41\n");
         study.write("sdtm/dm.yaml", "schema_version: '1.0'\ndomain: DM\nkeys: [USUBJID]\ninput: {RAW: {path: ../raw/dm.csv, types: {AGE: int}}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}\n  - {name: AGE, type: int, label: Age, derivation: RAW.AGE}\noutput: {path: ../out/dm.csv, columns: [USUBJID, AGE]}\n");
         study.write("adam/adsl.yaml", "schema_version: '1.0'\ndomain: ADSL\nkeys: [USUBJID]\ninput: {DM: {path: ../out/dm.csv, schema: ../sdtm/dm.yaml}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: DM.USUBJID}\n  - {name: AGE, type: int, label: Age, derivation: DM.AGE}\noutput: {path: ../out/adsl.csv, columns: [USUBJID, AGE]}\n");
@@ -394,16 +398,6 @@ impl Study {
         #[cfg(windows)]
         let path = path.replace('\\', "/");
         path
-    }
-}
-impl Study {
-    /// An empty directory for a test of its own.
-    fn empty(name: &str) -> Self {
-        let root =
-            std::env::temp_dir().join(format!("yamaa-plan-reuse-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-        Self(yamaa_adapters::canonical_path::canonicalize(root).unwrap())
     }
 }
 impl Drop for Study {
@@ -474,12 +468,14 @@ fn project_runs_reuse_each_specifications_plan_and_compile_only_what_changed() {
     assert_eq!(project_run(&engine, &study, &plans), rows([false, false]));
 }
 
-/// A specification without project functions: its output repeats its input.
-const PLAIN: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
-
+/// Symbolic links need privileges on Windows, so this test runs on Unix only,
+/// as the host suites' link tests do. Its specification is declared inside it,
+/// so a platform that skips the test does not compile that text unused.
 #[cfg(unix)]
 #[test]
 fn a_path_through_a_retargeted_link_compiles_the_study_it_now_names() {
+    /// A specification without project functions: its output repeats its input.
+    const PLAIN: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
     let study = Study::empty("link");
     for (name, input) in [("a", "ID\n1\n2\n"), ("b", "ID\n1\n2\n3\n")] {
         study.write(&format!("{name}/spec.yaml"), PLAIN);
