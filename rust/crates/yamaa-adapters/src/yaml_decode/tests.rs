@@ -59,6 +59,31 @@ fn yaml_error(source: &str, line: usize, column: usize, reason: &str) {
 }
 
 #[test]
+fn raw_nul_is_invalid_yaml_at_the_nul_and_escaped_nul_is_text() {
+    // YAML admits no raw NUL. It is refused at its own position rather than
+    // ending the stream and dropping what follows (#3125); inside a quoted
+    // scalar it leaves that scalar unterminated. The `\0` escape is text.
+    for (source, line, column) in [
+        ("key: a\0b\n", 1, 7),
+        ("a: 1\n\0b: 2\n", 2, 1),
+        ("k\0ey: a\n", 1, 2),
+        ("# note\0\nkey: a\n", 1, 7),
+        ("key: [a, \0b]\n", 1, 10),
+        ("key: |\n  a\0b\n", 2, 4),
+        ("key: a\n\0", 2, 1),
+    ] {
+        yaml_error(source, line, column, "found unprintable character");
+    }
+    for source in ["key: \"a\0b\"\n", "key: 'a\0b'\n"] {
+        assert!(
+            matches!(error(source), DecodeFailure::InvalidYaml { .. }),
+            "{source:?}"
+        );
+    }
+    assert_eq!(scalar(r#""a\0b""#), N::Text("a\0b".into()));
+}
+
+#[test]
 fn core_booleans_nulls_and_text_do_not_use_yaml11_resolvers() {
     for spelling in ["true", "True", "TRUE"] {
         assert_eq!(scalar(spelling), N::Boolean(true));

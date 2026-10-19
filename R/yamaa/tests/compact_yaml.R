@@ -1,4 +1,5 @@
-# Installed compact flow verification parity and refusal controls (#2196).
+# Installed compact flow verification parity and refusal controls (#2196), and
+# the raw NUL refusal (#3125).
 library(yamaa)
 
 check <- function(path) yamaa_spec(path)$check()
@@ -52,6 +53,15 @@ run_compact_yaml <- function() {
     for (operation in list(check, run)) {
       stopifnot(identical(operation(spec)$issues$condition, "invalid_yaml"))
     }
+  }
+  # A raw NUL used to end the specification silently, dropping the verification
+  # after it. R strings cannot hold NUL, so the bytes are written directly.
+  writeBin(c(charToRaw(paste0(paste(base, collapse = "\n"), "\n")), as.raw(0L),
+             charToRaw("verifications: [row_count: {min: 4}]\n")), spec)
+  for (operation in list(check, run)) {
+    issues <- operation(spec)$issues
+    stopifnot(identical(issues$condition, "invalid_yaml"), identical(issues$context,
+      '{"column":1,"line":14,"reason":"found unprintable character"}'))
   }
 }
 
