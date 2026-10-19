@@ -241,10 +241,14 @@ def main(argv=None):
                 # A project that fails admission refuses to name its specs.
                 # The spec-with-project object, which R's runner opens for
                 # every project build, then refuses its runs with the
-                # project's issues, which the record keeps. Any other refusal
-                # stays this record's error.
+                # project's issues, which the record keeps. A refusal that
+                # this spec's check does not reproduce exactly stays this
+                # record's error.
                 spec = yamaa.Spec(case / specification, os.fspath(case / listing))
-                if not spec.check().issues.height:
+                checked = spec.check().issues
+                if not checked.height or (
+                    checked.to_dicts() != refusal.issues.to_dicts()
+                ):
                     raise refusal
         first = spec.run()
         record = {
