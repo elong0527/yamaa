@@ -206,7 +206,8 @@ before merging.
 The `Fuzz` workflow fuzzes the readers that parse untrusted input under
 AddressSanitizer, with UndefinedBehaviorSanitizer for the C they compile. A PR
 runs, for three minutes each, the targets whose readers it changes; a nightly
-schedule runs every target for thirty minutes. The
+schedule runs every target for thirty minutes. The repository checks also run
+Clippy over the targets, so a change that breaks one fails on its PR. The
 [fuzz guide](rust/fuzz/README.md) lists the targets and runs them locally with
 `python -m tools.ci.fuzz`. Fix a crash with a unit test in the owning crate and
 commit its input as a text regression beside the targets.

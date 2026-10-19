@@ -9,12 +9,15 @@ schedule.
 """
 
 import argparse
+import gzip
+import io
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
+import tarfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -48,13 +51,19 @@ CODEGEN = ("--codegen-units", "16")
 TIMEOUT_SECONDS = 30
 RSS_LIMIT_MB = 4096
 
-# A change to these runs every target: the harness, its build, this tool, and
-# the reader crates' dependencies and features.
+# A change to these runs every target: the harness, its build, this tool, the
+# reader crates' dependencies and features, the fixed limits every reader
+# enforces, and the core table, value and source decode types that the readers
+# build and the harness matches exhaustively.
 SHARED = (
     ".github/workflows/fuzz.yml",
     "rust/Cargo.lock",
     "rust/crates/yamaa-adapters/Cargo.toml",
     "rust/crates/yamaa-core/Cargo.toml",
+    "rust/crates/yamaa-core/src/limits.rs",
+    "rust/crates/yamaa-core/src/specification_run.rs",
+    "rust/crates/yamaa-core/src/table.rs",
+    "rust/crates/yamaa-core/src/value.rs",
     "rust/fuzz/Cargo.toml",
     "rust/fuzz/src/",
     "tools/ci/fuzz.py",
@@ -98,6 +107,9 @@ class Target:
     readers: tuple[str, ...]
     # The longest input libFuzzer generates; it truncates longer seeds.
     max_len: int
+    # Also seed each fixture as the only member of TAR archives, which a reader
+    # detects by their content.
+    archives: bool = False
 
 
 TARGETS = {
@@ -110,6 +122,20 @@ TARGETS = {
             "rust/crates/yamaa-core/src/submission_json.rs",
         ),
         65536,
+    ),
+    # The ODM XML reader with its TAR and gzip admission, and the table it
+    # builds.
+    "odm_xml": Target(
+        ("*.xml",),
+        (
+            "rust/crates/yamaa-adapters/src/arrow_table.rs",
+            "rust/crates/yamaa-adapters/src/ipc_table.rs",
+            "rust/crates/yamaa-adapters/src/odm_xml/",
+            "rust/crates/yamaa-adapters/src/public_table.rs",
+            "rust/crates/yamaa-core/src/odm_items.rs",
+        ),
+        65536,
+        archives=True,
     ),
     "parquet": Target(
         ("*.parquet",),
@@ -205,24 +231,64 @@ def regressions(name):
     return sorted((FUZZ / "regressions" / name).glob("*.hex"))
 
 
+# A member name longer than the 100 bytes a ustar header holds, so the GNU and
+# PAX archives below carry a long-name entry and a path record.
+LONG_MEMBER = "study/" + "nested/" * 14 + "{name}"
+
+
+def archives(path):
+    """One fixture as the only member of a TAR archive in each header format
+    the ODM reader reads (ustar, GNU and PAX), and of a gzip-compressed ustar
+    archive. Fixed metadata and timestamps keep the bytes reproducible."""
+    data = path.read_bytes()
+    written = {}
+    for label, form, member in (
+        ("ustar", tarfile.USTAR_FORMAT, path.name),
+        ("gnu", tarfile.GNU_FORMAT, LONG_MEMBER.format(name=path.name)),
+        ("pax", tarfile.PAX_FORMAT, LONG_MEMBER.format(name=path.name)),
+    ):
+        buffer = io.BytesIO()
+        with tarfile.open(fileobj=buffer, mode="w", format=form) as archive:
+            info = tarfile.TarInfo(member)
+            info.size = len(data)
+            info.mtime = 0
+            info.mode = 0o644
+            archive.addfile(info, io.BytesIO(data))
+        written[label] = buffer.getvalue()
+    written["ustar-gzip"] = gzip.compress(written["ustar"], mtime=0)
+    return written
+
+
 def seed(name, destination):
     """Write one target's seeds to a new directory: committed fixtures first,
-    then its regression inputs. Names keep no extension, so no seed reads as
-    a repository source file."""
+    each followed by its archives when the target reads them, then its
+    regression inputs. Names keep no extension, so no seed reads as a
+    repository source file."""
     destination.mkdir(parents=True)
-    fixtures = committed(TARGETS[name].seeds)
+    target = TARGETS[name]
+    fixtures = committed(target.seeds)
     for index, path in enumerate(fixtures):
         label = re.sub(r"[^A-Za-z0-9]+", "-", path.relative_to(ROOT).as_posix())
         shutil.copyfile(path, destination / f"{index:04d}-{label}")
+        if target.archives:
+            for kind, data in archives(path).items():
+                (destination / f"{index:04d}-{label}-{kind}").write_bytes(data)
     for path in regressions(name):
         (destination / f"regression-{path.stem}").write_bytes(regression(path))
     return len(fixtures)
 
 
+def copy_lock():
+    """Copy the canonical lock into the fuzz workspace, so the engine builds
+    on the reviewed versions and only the fuzzing crates resolve, at the
+    exact versions the fuzz manifest pins."""
+    shutil.copyfile(WORKSPACE / "Cargo.lock", FUZZ / "Cargo.lock")
+
+
 def cargo_fuzz(command, *arguments):
     """Run cargo-fuzz from rust/ with the pinned nightly, on a copy of the
     canonical lock and with the C sanitizers."""
-    shutil.copyfile(WORKSPACE / "Cargo.lock", FUZZ / "Cargo.lock")
+    copy_lock()
     return subprocess.run(
         ["cargo", f"+{NIGHTLY}", "fuzz", command, *CODEGEN, *arguments],
         cwd=WORKSPACE,

@@ -4,8 +4,8 @@
 # graph and the canonical lock stay unchanged. Run the targets through
 # `python -m tools.ci.fuzz` (see README.md), which copies the canonical lock
 # here first, so the engine builds on the reviewed versions and only the
-# fuzzing crates resolve fresh. Neither that lock nor any build output, corpus
-# or crash artifact here is committed.
+# fuzzing crates resolve, at the exact versions pinned below. Neither that lock
+# nor any build output, corpus or crash artifact here is committed.
 [package]
 name = "yamaa-fuzz"
 version = "0.0.0"
@@ -19,7 +19,11 @@ cargo-fuzz = true
 [workspace]
 
 [dependencies]
-libfuzzer-sys = "0.4.13"
+# The two crates the canonical lock does not hold, pinned exactly so every run
+# builds the same versions. arbitrary is a dependency of libfuzzer-sys alone;
+# naming it here pins the version that resolves.
+arbitrary = "=1.5.0"
+libfuzzer-sys = "=0.4.13"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = { version = "1.0.145", features = ["raw_value"] }
 yamaa-adapters = { path = "../crates/yamaa-adapters" }
@@ -39,6 +43,13 @@ bench = false
 [[bin]]
 name = "dataset_json"
 path = "fuzz_targets/dataset_json.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "odm_xml"
+path = "fuzz_targets/odm_xml.rs"
 test = false
 doc = false
 bench = false
