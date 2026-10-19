@@ -51,6 +51,15 @@ use yamaa_core::limits::Limits;
 /// the column limit serves as the bound.
 const KEY_VALUES: usize = Limits::COLUMNS;
 
+/// The most geospatial types a column chunk's statistics may list. The format
+/// asks only that the codes be distinct, and its table names the most common
+/// ones rather than all. It defines these statistics for geometry and
+/// geography columns alone, which the engine does not read, so no file the
+/// engine reads lists any. The column limit serves as the bound, as for
+/// key-value metadata: a geospatial file's own list, a few of the codes the
+/// table names, still reaches the refusal of its field type.
+const GEOSPATIAL_TYPES: usize = Limits::COLUMNS;
+
 /// A Thrift struct or union that the native decoder reads field by field.
 #[derive(Clone, Copy, Debug)]
 pub(super) enum Shape {
@@ -256,6 +265,7 @@ impl Shape {
         match (self, id) {
             (Shape::FileMetaData, 5) => Some(KEY_VALUES),
             (Shape::ColumnMetaData, 13) => Some(ENCODING_STATS),
+            (Shape::GeospatialStatistics, 2) => Some(GEOSPATIAL_TYPES),
             // A level histogram holds one count for each level from zero to
             // the column's highest, which is below the schema depth that
             // admission allows.
@@ -873,14 +883,16 @@ mod tests {
     /// file the engine reads holds, and one more is malformed.
     #[test]
     fn a_list_longer_than_any_file_the_engine_reads_is_malformed() {
-        use super::{Limits, ENCODING_STATS, KEY_VALUES};
+        use super::{Limits, ENCODING_STATS, GEOSPATIAL_TYPES, KEY_VALUES};
         let list = |count, element: &[u8]| repeated(12, count, element, element);
         let entries = move |count| list(count, &[0x18, 0, 0]);
         let stats = move |count| list(count, &[0x15, 0, 0x15, 0, 0x15, 2, 0]);
         // Zero-valued i64 counts.
         let levels = |count| repeated(6, count, &[0], &[0]);
+        // Geospatial statistics listing `count` codes, each 1 (a point).
+        let geospatial = |count| Fields::default().raw(2, 9, &repeated(5, count, &[2], &[2]));
         type Case = (&'static str, usize, Box<dyn Fn(usize) -> Vec<u8>>);
-        let cases: [Case; 6] = [
+        let cases: [Case; 7] = [
             (
                 "key_value_metadata",
                 KEY_VALUES,
@@ -890,6 +902,11 @@ mod tests {
                 "encoding_stats",
                 ENCODING_STATS,
                 Box::new(move |n| file(&[7], At::Meta, |f| f.raw(13, 9, &stats(n)))),
+            ),
+            (
+                "geospatial_types",
+                GEOSPATIAL_TYPES,
+                Box::new(move |n| file(&[7], At::Meta, |f| f.strct(17, geospatial(n)))),
             ),
             (
                 "repetition_level_histogram",
@@ -933,11 +950,16 @@ mod tests {
         let orders = list(1, &[0x1c, 0, 0]);
         let fewer = columnless(&leaves(2), |f| f.raw(4, 9, &[0x0c]).raw(7, 9, &orders));
         assert!(malformed(&fewer));
-        // The key-value cap is the column limit, and a file listing that many
-        // entries reads.
+        // The key-value and geospatial caps are the column limit, and a file
+        // listing that many entries or types reads.
         assert_eq!(KEY_VALUES, Limits::COLUMNS);
         let keys = file(&[7], At::File, |f| f.raw(5, 9, &entries(KEY_VALUES)));
         assert_eq!(reader::read(&keys).unwrap().batches[0].num_rows(), 1);
+        assert_eq!(GEOSPATIAL_TYPES, Limits::COLUMNS);
+        let types = file(&[7], At::Meta, |f| {
+            f.strct(17, geospatial(GEOSPATIAL_TYPES))
+        });
+        assert_eq!(reader::read(&types).unwrap().batches[0].num_rows(), 1);
     }
 
     /// `walk` gives each known field id one bit of a `u32`.
