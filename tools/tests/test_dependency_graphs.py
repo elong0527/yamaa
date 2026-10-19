@@ -1,6 +1,7 @@
 """The dependency lanes must select floors without changing release inputs."""
 
 import json
+import os
 import re
 import subprocess
 import tempfile
@@ -276,7 +277,11 @@ class DependencyGraphsTests(unittest.TestCase):
             destination = Path(temporary) / "graph"
             destination.mkdir()
             commands = self.lane_commands(ROOT, destination)
-        python = str(destination / "python/.venv/bin/python")
+        python = str(
+            destination
+            / "python/.venv"
+            / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+        )
         install = ("uv", "pip", "install", "--python", python, "--no-deps")
 
         def step(*prefix):
