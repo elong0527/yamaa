@@ -508,7 +508,7 @@ fn a_deferred_lookup_match_has_its_authored_filter_phase_witness() {
 
 #[test]
 fn input_backed_defaults_join_self_donors_while_self_backed_columns_stay_late() {
-    use crate::dataset::Expression;
+    use crate::dataset::resolved::{ExprKind, Op, Read, RegionId};
 
     for (named, self_backed) in [(false, false), (true, false), (true, true)] {
         let prior = Tree::map(vec![
@@ -585,46 +585,50 @@ fn input_backed_defaults_join_self_donors_while_self_backed_columns_stay_late() 
             // row defaults under REQ-1260. LATE and ALIAS are therefore derived
             // in every template and available to its completed SELF donors.
             let plan = spec.bind(&schema).unwrap();
-            assert!(plan.column_bindings().is_empty());
-            assert_eq!(plan.templates().len(), 2);
+            let dataset = RegionId::DATASET;
+            assert!(plan.column_order(dataset).is_empty());
+            assert_eq!(plan.region_templates(dataset).count(), 2);
+            let output = &plan.region(dataset).output;
             assert_eq!(
-                plan.output()
+                output
                     .columns()
                     .iter()
                     .map(|column| (column.name.as_str(), column.kind))
                     .collect::<Vec<_>>(),
                 ["ID", "SEQ", "PRIOR", "LATE", "ALIAS"].map(|name| (name, ColumnType::Int))
             );
-            let donor = &plan.intermediates()[0];
+            let secondary = &plan.region(dataset).secondary;
+            let named_read = |index| plan.named(dataset, index).unwrap();
+            let donor = plan.relation(named_read(0)).named.as_deref().unwrap();
             assert!(donor.source.is_self());
-            assert_eq!(
-                donor.source_schema(plan.secondary()).unwrap(),
-                plan.output()
-            );
-            assert_eq!(donor.source_column(plan.secondary(), "LATE"), Some(3));
-            assert_eq!(donor.source_column(plan.secondary(), "ALIAS"), Some(4));
-            for template in plan.templates() {
-                let assignment = |column| {
-                    template
-                        .assignments
-                        .iter()
-                        .find(|assignment| assignment.column == column)
+            assert_eq!(donor.source_schema(secondary).unwrap(), output);
+            assert_eq!(donor.source_column(secondary, "LATE"), Some(3));
+            assert_eq!(donor.source_column(secondary, "ALIAS"), Some(4));
+            for template in plan.region_templates(dataset) {
+                let binding = |column| {
+                    plan.row_bindings(template)
+                        .map(|binding| plan.binding(binding))
+                        .find(|binding| binding.column.index() == column)
                         .unwrap()
                 };
-                assert_eq!(assignment(3).path, "columns.LATE.derivation.source");
-                assert_eq!(
-                    assignment(3).expression,
-                    if named {
-                        Expression::Intermediate {
-                            index: 1,
-                            column: 1,
-                        }
-                    } else {
-                        Expression::Source(1)
-                    }
-                );
-                assert_eq!(assignment(4).path, "columns.ALIAS.derivation.source");
-                assert_eq!(assignment(4).expression, Expression::Column(3));
+                let late = binding(3);
+                assert_eq!(&*late.path, "columns.LATE.derivation.source");
+                let node = plan.expr(late.expr);
+                if named {
+                    assert_eq!(node.kind, ExprKind::Intermediate(named_read(1)));
+                    assert_eq!(node.op, Op::Intermediate { column: 1 });
+                    assert_eq!(plan.reads(late.expr), [Read::Relation(named_read(1), 1)]);
+                } else {
+                    assert_eq!(node.kind, ExprKind::Source);
+                    assert_eq!(plan.reads(late.expr), [Read::Field(1)]);
+                }
+                let alias = binding(4);
+                assert_eq!(&*alias.path, "columns.ALIAS.derivation.source");
+                assert_eq!(plan.expr(alias.expr).kind, ExprKind::Column);
+                assert!(matches!(
+                    plan.reads(alias.expr),
+                    [Read::Column(column)] if column.index() == 3
+                ));
             }
         } else {
             // SELF-backed LATE remains a column derivation over all completed

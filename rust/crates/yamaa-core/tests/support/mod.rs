@@ -54,3 +54,5 @@ pub mod document;
 pub mod diagnostic;
 
 pub mod dataset;
+
+pub mod resolved;

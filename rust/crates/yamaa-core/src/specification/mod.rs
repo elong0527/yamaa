@@ -3,7 +3,9 @@
 //! Admission never reads study data; binding consumes only the captured source schema.
 use crate::{
     bound_expression::{Binding, Read},
-    dataset::{Assignment, BoundNumeric, DatasetPlan, Expression, RowMode, RowTemplate},
+    dataset::{
+        Assignment, BoundNumeric, DatasetPlan, Expression, ResolvedPlan, RowMode, RowTemplate,
+    },
 };
 use crate::{
     column_dependencies,
@@ -1846,13 +1848,14 @@ impl PreparedSpecification {
         self.project_calls.as_ref()
     }
     /// Bind only immutable source metadata. No cell reads or expression evaluation.
-    pub fn bind(&self, source: &TableSchema) -> Result<DatasetPlan, BindError> {
+    pub fn bind(&self, source: &TableSchema) -> Result<ResolvedPlan, BindError> {
         self.bind_sources(&[source])
     }
     /// Schemas follow authored input order, independently of the selected driver.
-    /// Every bound plan, on the rows and the no-rows route alike, resolves into
-    /// its slot graph and passes the resolution check before it is returned.
-    pub fn bind_sources(&self, schemas: &[&TableSchema]) -> Result<DatasetPlan, BindError> {
+    /// Every bound plan, on the rows and the no-rows route alike, resolves once
+    /// into its slot graph and passes the resolution check. Binding returns that
+    /// resolved plan for runs to execute and drops the bound plan it lowered.
+    pub fn bind_sources(&self, schemas: &[&TableSchema]) -> Result<ResolvedPlan, BindError> {
         if schemas.len() != self.sources.len() {
             return Err(BindError::SourceCount);
         }
@@ -1884,8 +1887,7 @@ impl PreparedSpecification {
         if !unsupported.is_empty() {
             return Err(BindError::Invalid(unsupported));
         }
-        plan.resolve().map_err(BindError::Resolution)?;
-        Ok(plan)
+        plan.resolve().map_err(BindError::Resolution)
     }
 
     fn bind_rows_plan(

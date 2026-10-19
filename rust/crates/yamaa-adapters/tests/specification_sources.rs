@@ -2188,7 +2188,11 @@ output: {{path: output.csv, columns: [I, S]}}
                     .collect::<Vec<_>>();
                 let schemas = tables.iter().map(TableAccess::schema).collect::<Vec<_>>();
                 let plan = prepared.bind_sources(&schemas).unwrap();
-                let order = &plan.intermediates()[0].selection.as_ref().unwrap().order_by[0];
+                let named = plan
+                    .named(yamaa_core::dataset::resolved::RegionId::DATASET, 0)
+                    .unwrap();
+                let item = plan.relation(named).named.as_deref().unwrap();
+                let order = &item.selection.as_ref().unwrap().order_by[0];
                 assert_eq!(order.descending, !omit_direction);
                 // An omitted placement sorts missing lowest: first ascending and
                 // last descending. The declared `nulls: first` never flips.

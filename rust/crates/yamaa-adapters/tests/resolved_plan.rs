@@ -9,7 +9,7 @@ use support::specification_run::{prepare, schema, Source};
 use yamaa_core::{
     dataset::{
         resolved::{ColumnPhase, Grain, RegionId, RegionKind, Stage, Step},
-        DatasetPlan,
+        ResolvedPlan,
     },
     specification::{PreparedSpecification, SourceInterpretation},
     table::{Column, TableSchema},
@@ -22,7 +22,8 @@ fn root() -> PathBuf {
 
 /// Bind one benchmark against the schemas a run decodes before binding: the
 /// fixed ODM fields, or the CSV header with the declared input types.
-fn bind(case: &str) -> DatasetPlan {
+/// Binding returns the plan already resolved.
+fn bind(case: &str) -> ResolvedPlan {
     let root = root();
     let case = root.join("benchmarks").join(case);
     let captured = schema(&root.join("yaml"));
@@ -61,8 +62,7 @@ fn bind(case: &str) -> DatasetPlan {
 fn a_derived_intermediate_resolves_its_donor_plan_as_its_own_region() {
     // QT derives RRPAIR from RR for every QT record; the third row template
     // is driven by QT.
-    let plan = bind("adam-adeg-replicate-qtc-average");
-    let resolved = plan.resolve().unwrap();
+    let resolved = bind("adam-adeg-replicate-qtc-average");
     assert_eq!(resolved.regions().len(), 2);
     let qt = resolved
         .relations()
@@ -121,7 +121,7 @@ fn a_derived_intermediate_resolves_its_donor_plan_as_its_own_region() {
 
 #[test]
 fn named_relation_indices_cannot_select_an_aggregate_or_another_region() {
-    let resolved = bind("adam-adeg-replicate-qtc-average").resolve().unwrap();
+    let resolved = bind("adam-adeg-replicate-qtc-average");
     let dataset = RegionId::DATASET;
     let rr = resolved.named(dataset, 0).unwrap();
     let qt = resolved.named(dataset, 1).unwrap();
@@ -158,10 +158,9 @@ fn every_benchmark_node_carries_the_operation_of_its_kind() {
     entries.sort();
     for case in entries {
         let name = case.file_name().unwrap().to_str().unwrap().to_owned();
-        let Some(plan) = try_bind(&name) else {
+        let Some(resolved) = try_bind(&name) else {
             continue;
         };
-        let resolved = plan.resolve().unwrap();
         for node in resolved.exprs() {
             assert!(
                 node.op.fits(node.kind),
@@ -177,7 +176,7 @@ fn every_benchmark_node_carries_the_operation_of_its_kind() {
 
 /// Bind one benchmark when its specification prepares and binds against the
 /// headers of CSV inputs or the ODM fields; none otherwise.
-fn try_bind(case: &str) -> Option<DatasetPlan> {
+fn try_bind(case: &str) -> Option<ResolvedPlan> {
     let root = root();
     let case = root.join("benchmarks").join(case);
     let bytes = std::fs::read(case.join("spec.yaml")).ok()?;
@@ -228,8 +227,7 @@ fn try_bind(case: &str) -> Option<DatasetPlan> {
 
 #[test]
 fn a_specification_without_rows_resolves_one_key_grain_template() {
-    let plan = bind("adam-adsl-age-group");
-    let resolved = plan.resolve().unwrap();
+    let resolved = bind("adam-adsl-age-group");
     assert_eq!(resolved.regions().len(), 1);
     assert_eq!(resolved.templates().len(), 1);
     assert_eq!(resolved.templates()[0].driver.grain, Grain::Keys);
@@ -256,8 +254,7 @@ fn a_dtc_part_after_the_year_is_read_only_when_reached() {
     use yamaa_core::dataset::resolved::{Demand, ExprId, ExprKind};
     // `dtc` stops at its first missing part (TIME-19), so only the year is
     // always read; `study_day` reads both of its dates.
-    let plan = bind("sdtm-ae-partial-dates");
-    let resolved = plan.resolve().unwrap();
+    let resolved = bind("sdtm-ae-partial-dates");
     let demands = |operation: &str| {
         (0..resolved.exprs().len())
             .map(|index| ExprId::try_from(index).unwrap())

@@ -5,11 +5,15 @@ mod project {
     mod specification_project_rows {
         use crate::support::id_source_schema as source;
         use crate::support::project_call_compiler as support;
+        use crate::support::resolved;
         use support::{call, function, specification_with_rows, Tree};
         use yamaa_core::json::Value as JsonValue;
         use yamaa_core::{
             bound_expression::Read,
-            dataset::{Expression, FunctionInput},
+            dataset::{
+                resolved::{Grain, Op, OperandRole},
+                FunctionInput,
+            },
             schema::DocumentNode as N,
             specification::{BindError, PrepareError, PreparedSpecification},
             table::{Column, TableSchema},
@@ -113,24 +117,16 @@ mod project {
             .unwrap();
             assert_eq!(prepared.called_functions(), [1]);
             let plan = prepared.bind(&source()).unwrap();
-            assert!(plan.column_bindings().is_empty());
+            assert!(resolved::columns(&plan).is_empty());
             assert_eq!(
-                plan.templates()[0]
-                    .assignments
-                    .iter()
-                    .map(|a| a.column)
-                    .collect::<Vec<_>>(),
+                resolved::completed(&resolved::row(&plan, 0)),
                 [0, 3, 2, 1, 4]
             );
             assert_eq!(
-                plan.templates()[1]
-                    .assignments
-                    .iter()
-                    .map(|a| a.column)
-                    .collect::<Vec<_>>(),
+                resolved::completed(&resolved::row(&plan, 1)),
                 [0, 2, 1, 3, 4]
             );
-            let Expression::ProjectFunction(bound) = &plan.templates()[0].assignments[2].expression
+            let Op::ProjectFunction(bound) = resolved::op(&plan, resolved::row(&plan, 0)[2].expr)
             else {
                 panic!("inherited B function")
             };
@@ -393,7 +389,7 @@ mod project {
             let prepared =
                 PreparedSpecification::prepare_with_project(&spec, &[function("id")]).unwrap();
             let plan = prepared.bind(&source()).unwrap();
-            let Expression::ProjectFunction(bound) = &plan.templates()[0].assignments[1].expression
+            let Op::ProjectFunction(bound) = resolved::op(&plan, resolved::row(&plan, 0)[1].expr)
             else {
                 panic!("group function")
             };
@@ -459,11 +455,10 @@ mod project {
             let prepared =
                 PreparedSpecification::prepare_with_project(&spec, &[function("id")]).unwrap();
             let plan = prepared.bind(&source()).unwrap();
-            assert_eq!(plan.templates()[0].assignments.len(), 1);
-            assert_eq!(plan.columns().map(|a| a.column).collect::<Vec<_>>(), [1, 2]);
-            let Expression::ProjectFunction(bound) =
-                &plan.column_bindings()[1].assignment.expression
-            else {
+            assert_eq!(resolved::row(&plan, 0).len(), 1);
+            let columns = resolved::columns(&plan);
+            assert_eq!(resolved::completed(&columns), [1, 2]);
+            let Op::ProjectFunction(bound) = resolved::op(&plan, columns[1].expr) else {
                 panic!("column call")
             };
             assert_eq!(
@@ -549,16 +544,9 @@ mod project {
             let prepared =
                 PreparedSpecification::prepare_with_project(&spec, &[function("id")]).unwrap();
             let plan = prepared.bind(&source()).unwrap();
-            assert!(plan.column_bindings().is_empty());
-            assert_eq!(
-                plan.templates()[0]
-                    .assignments
-                    .iter()
-                    .map(|a| a.column)
-                    .collect::<Vec<_>>(),
-                [0, 1, 2]
-            );
-            assert!(plan.templates()[0].filter.is_some());
+            assert!(resolved::columns(&plan).is_empty());
+            assert_eq!(resolved::completed(&resolved::row(&plan, 0)), [0, 1, 2]);
+            assert!(resolved::templates(&plan)[0].filter.is_some());
             let spec = specification_with_rows(
                 vec![("A", "int", literal(7)), ("B", "int", literal(0))],
                 vec![row(
@@ -581,15 +569,8 @@ mod project {
             ])
             .unwrap();
             let plan = prepared.bind(&source).unwrap();
-            assert_eq!(
-                plan.templates()[0]
-                    .assignments
-                    .iter()
-                    .map(|a| a.column)
-                    .collect::<Vec<_>>(),
-                [0, 2]
-            );
-            assert_eq!(plan.column_bindings()[0].assignment.column, 1);
+            assert_eq!(resolved::completed(&resolved::row(&plan, 0)), [0, 2]);
+            assert_eq!(resolved::columns(&plan)[0].column.index(), 1);
         }
 
         #[test]
@@ -728,25 +709,18 @@ mod project {
                     }
                     let prepared = prepared.unwrap();
                     let plan = prepared.bind(&source()).unwrap();
-                    assert!(plan.column_bindings().is_empty());
-                    assert_eq!(
-                        plan.templates()[0]
-                            .assignments
-                            .iter()
-                            .map(|assignment| assignment.column)
-                            .collect::<Vec<_>>(),
-                        [0, 1, 2]
-                    );
-                    let a = &plan.templates()[0].assignments[1];
+                    assert!(resolved::columns(&plan).is_empty());
+                    assert_eq!(resolved::completed(&resolved::row(&plan, 0)), [0, 1, 2]);
+                    let a = resolved::row(&plan, 0)[1];
                     if overridden {
-                        assert_eq!(a.expression, Expression::Literal(Value::Int(7)));
+                        assert_eq!(resolved::op(&plan, a.expr), &Op::Literal(Value::Int(7)));
                     } else {
-                        assert_eq!(a.path, format!("columns.A.derivation.{operation}"));
+                        assert_eq!(&*a.path, format!("columns.A.derivation.{operation}"));
                         assert!(matches!(
-                            a.expression,
-                            Expression::Window(_)
-                                | Expression::ContextWindow(_)
-                                | Expression::FirstAvailable(_)
+                            resolved::op(&plan, a.expr),
+                            Op::Window { .. }
+                                | Op::ContextWindow { .. }
+                                | Op::FirstAvailable { .. }
                         ));
                     }
                 }
@@ -858,19 +832,14 @@ mod project {
             .unwrap();
             assert_eq!(prepared.called_functions(), [0, 1]);
             let plan = prepared.bind(&source()).unwrap();
-            assert!(plan.column_bindings().is_empty());
-            assert_eq!(
-                plan.templates()[0]
-                    .assignments
-                    .iter()
-                    .map(|assignment| assignment.column)
-                    .collect::<Vec<_>>(),
-                [0, 2, 1, 3]
-            );
-            let Expression::Case(branches) = &plan.templates()[0].assignments[3].expression else {
+            assert!(resolved::columns(&plan).is_empty());
+            assert_eq!(resolved::completed(&resolved::row(&plan, 0)), [0, 2, 1, 3]);
+            let case = resolved::row(&plan, 0)[3].expr;
+            let Op::Case = resolved::op(&plan, case) else {
                 panic!("case")
             };
-            let Expression::ProjectFunction(function) = &branches[0].assignment.expression else {
+            let branch = resolved::operands(&plan, case, OperandRole::Branch)[0];
+            let Op::ProjectFunction(function) = resolved::op(&plan, branch) else {
                 panic!("nested function")
             };
             assert_eq!(
@@ -880,14 +849,13 @@ mod project {
         }
 
         fn bound_assignment(
-            plan: &yamaa_core::dataset::DatasetPlan,
+            plan: &yamaa_core::dataset::ResolvedPlan,
             template: usize,
             column: usize,
-        ) -> &yamaa_core::dataset::Assignment {
-            plan.templates()[template]
-                .assignments
-                .iter()
-                .find(|assignment| assignment.column == column)
+        ) -> &yamaa_core::dataset::resolved::Binding {
+            resolved::row(plan, template)
+                .into_iter()
+                .find(|binding| binding.column.index() == column)
                 .unwrap()
         }
 
@@ -930,43 +898,37 @@ mod project {
             // expected assignments, paths and grouping modes.
             for _ in 0..2 {
                 let plan = prepared.bind(&source()).unwrap();
-                assert_eq!(plan.templates().len(), 3);
+                assert_eq!(resolved::templates(&plan).len(), 3);
+                let literal = |binding: &yamaa_core::dataset::resolved::Binding| {
+                    resolved::op(&plan, binding.expr).clone()
+                };
                 let big = |template: usize| bound_assignment(&plan, template, 1);
+                assert_eq!(literal(big(0)), Op::Literal(Value::Str(large.clone())));
+                assert_eq!(&*big(0).path, "columns.BIG.derivation.literal");
                 assert_eq!(
-                    big(0).expression,
-                    Expression::Literal(Value::Str(large.clone()))
+                    literal(big(1)),
+                    Op::Literal(Value::Str("big-override".into()))
                 );
-                assert_eq!(big(0).path, "columns.BIG.derivation.literal");
-                assert_eq!(
-                    big(1).expression,
-                    Expression::Literal(Value::Str("big-override".into()))
-                );
-                assert_eq!(big(1).path, "rows[1].derivations.BIG.literal");
-                assert_eq!(
-                    big(2).expression,
-                    Expression::Literal(Value::Str(large.clone()))
-                );
-                assert_eq!(big(2).path, "columns.BIG.derivation.literal");
+                assert_eq!(&*big(1).path, "rows[1].derivations.BIG.literal");
+                assert_eq!(literal(big(2)), Op::Literal(Value::Str(large.clone())));
+                assert_eq!(&*big(2).path, "columns.BIG.derivation.literal");
                 assert!(matches!(
-                    plan.templates()[2].mode,
-                    yamaa_core::dataset::RowMode::Groups(_)
+                    resolved::grain(resolved::templates(&plan)[2]),
+                    Grain::Groups(_)
                 ));
                 let note = |template: usize| bound_assignment(&plan, template, 2);
+                assert_eq!(literal(note(0)), Op::Literal(Value::Str("note-a".into())));
+                assert_eq!(&*note(0).path, "rows[0].derivations.NOTE.literal");
                 assert_eq!(
-                    note(0).expression,
-                    Expression::Literal(Value::Str("note-a".into()))
+                    literal(note(1)),
+                    Op::Literal(Value::Str("note-default".into()))
                 );
-                assert_eq!(note(0).path, "rows[0].derivations.NOTE.literal");
+                assert_eq!(&*note(1).path, "columns.NOTE.derivation.literal");
                 assert_eq!(
-                    note(1).expression,
-                    Expression::Literal(Value::Str("note-default".into()))
+                    literal(note(2)),
+                    Op::Literal(Value::Str("note-default".into()))
                 );
-                assert_eq!(note(1).path, "columns.NOTE.derivation.literal");
-                assert_eq!(
-                    note(2).expression,
-                    Expression::Literal(Value::Str("note-default".into()))
-                );
-                assert_eq!(note(2).path, "columns.NOTE.derivation.literal");
+                assert_eq!(&*note(2).path, "columns.NOTE.derivation.literal");
             }
         }
 

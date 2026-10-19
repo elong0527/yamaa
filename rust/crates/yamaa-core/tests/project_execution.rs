@@ -1881,6 +1881,7 @@ mod project {
     }
     mod specification_project_codelists {
         use crate::support::project_codelist_compiler as support;
+        use crate::support::resolved;
         use support::{environment, schema, spec};
         use yamaa_core::{
             dataset::Check,
@@ -1904,10 +1905,11 @@ mod project {
                     None
                 );
                 let plan = prepared.bind(&schema()).unwrap();
-                assert_eq!(plan.column_verifications().len(), 1);
-                assert_eq!(plan.column_verifications()[0].column, 1);
+                let groups = resolved::column_verifications(&plan);
+                assert_eq!(groups.len(), 1);
+                assert_eq!(groups[0].0, 1);
                 assert!(
-                    matches!(&plan.column_verifications()[0].checks[0].check,Check::Codelist {id,values} if id=="SEX" && values==&[Value::Str("F".into())])
+                    matches!(groups[0].1[0],Check::Codelist {id,values} if id=="SEX" && values==&[Value::Str("F".into())])
                 );
             }
         }
@@ -1959,9 +1961,10 @@ mod project {
             )
             .unwrap();
             let plan = prepared.bind(&schema()).unwrap();
-            assert_eq!(plan.column_verifications()[0].checks.len(), 1);
+            let groups = resolved::column_verifications(&plan);
+            assert_eq!(groups[0].1.len(), 1);
             assert!(
-                matches!(&plan.column_verifications()[0].checks[0].check,Check::Codelist {id,values} if id=="SEX" && values==&[Value::Str("F".into())])
+                matches!(groups[0].1[0],Check::Codelist {id,values} if id=="SEX" && values==&[Value::Str("F".into())])
             );
             let Err(PrepareError::Invalid(findings)) =
                 PreparedSpecification::prepare_with_environment(
@@ -2040,11 +2043,12 @@ mod project {
     mod specification_project_functions {
         use crate::support::id_source_schema as source;
         use crate::support::project_call_compiler as support;
+        use crate::support::resolved;
         use support::{call, function, specification, Tree};
         use yamaa_core::json::Value as JsonValue;
         use yamaa_core::{
             bound_expression::Read,
-            dataset::{Expression, FunctionInput},
+            dataset::{resolved::Op, FunctionInput},
             schema::DocumentNode as N,
             specification::{
                 BindError, BindFinding, FunctionCause, PreflightFinding, PrepareError,
@@ -2195,12 +2199,16 @@ mod project {
             .unwrap();
             assert_eq!(prepared.called_functions(), [0, 1]);
             let plan = prepared.bind(&source()).unwrap();
-            assert_eq!(plan.columns().map(|a| a.column).collect::<Vec<_>>(), [1, 2]);
-            for (assignment, slot, column) in [
-                (&plan.column_bindings()[0].assignment, 1, 0),
-                (&plan.column_bindings()[1].assignment, 0, 1),
-            ] {
-                let Expression::ProjectFunction(bound) = &assignment.expression else {
+            let columns = resolved::columns(&plan);
+            assert_eq!(
+                columns
+                    .iter()
+                    .map(|binding| binding.column.index())
+                    .collect::<Vec<_>>(),
+                [1, 2]
+            );
+            for (binding, slot, column) in [(columns[0], 1, 0), (columns[1], 0, 1)] {
+                let Op::ProjectFunction(bound) = resolved::op(&plan, binding.expr) else {
                     panic!("versionless function expression")
                 };
                 assert_eq!(bound.slot(), slot);
@@ -2328,8 +2336,7 @@ mod project {
             let prepared =
                 PreparedSpecification::prepare_with_project(&spec, &[function("id")]).unwrap();
             let plan = prepared.bind(&source()).unwrap();
-            let Expression::ProjectFunction(bound) =
-                &plan.column_bindings()[0].assignment.expression
+            let Op::ProjectFunction(bound) = resolved::op(&plan, resolved::columns(&plan)[0].expr)
             else {
                 panic!("function")
             };

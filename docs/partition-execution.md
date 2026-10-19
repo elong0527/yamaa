@@ -13,10 +13,10 @@ Splitting a table into batches does not make those batches logical groups.
 
 ## Whole-table equivalence
 
-Fix an admitted `DatasetPlan`, ordered primary and secondary snapshots (including
+Fix an admitted `ResolvedPlan`, ordered primary and secondary snapshots (including
 schemas and missing values), terminology, function contracts, and the same
 callback responses or failures at the same logical invocations. Let `W` be the
-current `DatasetPlan::execute` attempt. For every physical division of those
+current `ResolvedPlan::execute` attempt. For every physical division of those
 snapshots, including empty batches and a logical group spanning batches, a
 partitioned attempt `P` must have the same observable result as `W`:
 

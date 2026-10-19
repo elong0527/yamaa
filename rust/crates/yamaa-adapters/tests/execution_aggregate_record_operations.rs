@@ -1771,7 +1771,10 @@ S1,002,2024-06
         use yamaa_core::inheritance::{Source as Identity, SourceError};
         use yamaa_core::{
             bound_expression::{Binding, Read},
-            dataset::{DatasetPlan, Expression, RowMode, WindowKind},
+            dataset::{
+                resolved::{self as slots, BindingOrigin, CheckScope, Grain, Op, RegionId},
+                Intermediate, ResolvedPlan, WindowKind,
+            },
             schema::DocumentNode as N,
             specification::{PrepareError, PreparedSpecification},
             table::TableSchema,
@@ -1843,21 +1846,42 @@ S1,002,2024-06
             .unwrap();
             (document, parents)
         }
-        fn names(plan: &DatasetPlan) -> Vec<&str> {
-            plan.output()
+        // Binding returns the resolved plan; its dataset region carries the
+        // bound plan's output, bindings, relations and checks.
+        fn output_schema(plan: &ResolvedPlan) -> &TableSchema {
+            &plan.region(RegionId::DATASET).output
+        }
+        fn names(plan: &ResolvedPlan) -> Vec<&str> {
+            output_schema(plan)
                 .columns()
                 .iter()
                 .map(|column| column.name.as_str())
                 .collect()
         }
-        fn provenance(document: &PreparedDocument, plan: &DatasetPlan, inherited: bool) {
-            for assignment in plan
-                .templates()
-                .iter()
-                .flat_map(|template| &template.assignments)
-                .chain(plan.columns())
-            {
-                let declaring = document.declaring_source(&assignment.path).unwrap();
+        /// The column-phase bindings, one per binding of the bound plan.
+        fn columns(plan: &ResolvedPlan) -> Vec<&slots::Binding> {
+            let mut previous = None;
+            plan.region_bindings(RegionId::DATASET)
+                .map(|binding| plan.binding(binding))
+                .filter(|binding| match binding.origin {
+                    BindingOrigin::Column { assignment } => {
+                        previous.replace(assignment) != Some(assignment)
+                    }
+                    BindingOrigin::Template { .. } => false,
+                })
+                .collect()
+        }
+        fn intermediates(plan: &ResolvedPlan) -> Vec<&Intermediate> {
+            (0..)
+                .map_while(|index| plan.named(RegionId::DATASET, index))
+                .map(|relation| plan.relation(relation).named.as_deref().unwrap())
+                .collect()
+        }
+        fn provenance(document: &PreparedDocument, plan: &ResolvedPlan, inherited: bool) {
+            for binding in plan.region_bindings(RegionId::DATASET) {
+                let declaring = document
+                    .declaring_source(&plan.binding(binding).path)
+                    .unwrap();
                 assert_eq!(
                     declaring,
                     if inherited {
@@ -2047,7 +2071,7 @@ S1,002,2024-06
                     _ => unreachable!(),
                 };
                 assert_eq!(
-                    plan.output()
+                    output_schema(&plan)
                         .columns()
                         .iter()
                         .map(|column| column.kind)
@@ -2063,15 +2087,29 @@ S1,002,2024-06
                     _ => output.to_vec(),
                 };
                 assert_eq!(compiled.projection(), projection, "{name}");
-                assert_eq!(plan.keys(), keys, "{name}");
-                assert_eq!(plan.templates().len(), templates, "{name}");
-                assert_eq!(plan.verifications().len(), checks, "{name}");
+                assert_eq!(
+                    plan.keys()
+                        .iter()
+                        .map(|key| key.index())
+                        .collect::<Vec<_>>(),
+                    keys,
+                    "{name}"
+                );
+                let template_ids: Vec<_> = plan.region_templates(RegionId::DATASET).collect();
+                assert_eq!(template_ids.len(), templates, "{name}");
+                assert_eq!(
+                    plan.checks()
+                        .iter()
+                        .filter(|check| check.scope == CheckScope::Dataset)
+                        .count(),
+                    checks,
+                    "{name}"
+                );
                 provenance(&document, &plan, name == "schema-inheritance");
                 match name {
                     "negative-zero-division" | "negative-integer-overflow" => {
-                        let Expression::Compute(numeric) =
-                            &plan.column_bindings().last().unwrap().assignment.expression
-                        else {
+                        let last = columns(&plan).last().unwrap().expr;
+                        let Op::Compute(numeric) = &plan.expr(last).op else {
                             panic!("numeric derivation")
                         };
                         assert_eq!(
@@ -2108,14 +2146,20 @@ S1,002,2024-06
                         assert_eq!(numeric.bindings(), bindings);
                     }
                     "adam-adlb-ordered-sum" => {
-                        assert_eq!(plan.templates()[0].mode, RowMode::Records);
-                        assert_eq!(plan.templates()[1].mode, RowMode::Groups(vec![0, 1, 5]));
-                        let total = plan.templates()[1]
-                            .assignments
-                            .iter()
-                            .find(|assignment| assignment.column == 5)
+                        // Both templates are driven by the dataset's own input.
+                        for &template in &template_ids {
+                            let driver = &plan.template(template).driver;
+                            assert_eq!((driver.source.index(), driver.named), (0, None));
+                        }
+                        let grain = |index: usize| &plan.template(template_ids[index]).driver.grain;
+                        assert_eq!(grain(0), &Grain::Records);
+                        assert_eq!(grain(1), &Grain::Groups(vec![0, 1, 5]));
+                        let total = plan
+                            .row_bindings(template_ids[1])
+                            .map(|binding| plan.binding(binding))
+                            .find(|binding| binding.column.index() == 5)
                             .unwrap();
-                        let Expression::Aggregate(aggregate) = &total.expression else {
+                        let Op::Aggregate(aggregate) = &plan.expr(total.expr).op else {
                             panic!("the authored grouped SUM is a bound aggregate");
                         };
                         assert_eq!(
@@ -2139,10 +2183,10 @@ S1,002,2024-06
                         );
                     }
                     "schema-window-functions" => {
-                        let kinds = plan
-                            .columns()
-                            .filter_map(|assignment| match &assignment.expression {
-                                Expression::Window(window) => Some(window.kind),
+                        let kinds = columns(&plan)
+                            .into_iter()
+                            .filter_map(|binding| match &plan.expr(binding.expr).op {
+                                Op::Window { window, .. } => Some(window.kind),
                                 _ => None,
                             })
                             .collect::<Vec<_>>();
@@ -2182,15 +2226,16 @@ S1,002,2024-06
                         );
                     }
                     "schema-lookup" => {
+                        let intermediates = intermediates(&plan);
                         assert_eq!(
-                            plan.intermediates()
+                            intermediates
                                 .iter()
                                 .map(|item| item.identifier.as_str())
                                 .collect::<Vec<_>>(),
                             ["DEATHEV", "MEDDRA_PT"]
                         );
                         assert_eq!(
-                            plan.intermediates()[0].keys,
+                            intermediates[0].keys,
                             [yamaa_core::dataset::IntermediateKey {
                                 source_column: 0,
                                 path: "intermediates[0].key".into(),
@@ -2203,7 +2248,7 @@ S1,002,2024-06
                             }]
                         );
                         assert_eq!(
-                            plan.intermediates()[1].keys,
+                            intermediates[1].keys,
                             [yamaa_core::dataset::IntermediateKey {
                                 source_column: 0,
                                 path: "intermediates[1].key".into(),
@@ -2216,7 +2261,8 @@ S1,002,2024-06
                             }]
                         );
                         assert_eq!(
-                            plan.secondary()
+                            plan.region(RegionId::DATASET)
+                                .secondary
                                 .iter()
                                 .map(|source| source.name.as_str())
                                 .collect::<Vec<_>>(),

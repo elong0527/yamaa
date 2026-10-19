@@ -849,7 +849,7 @@ fn callback_sites_follow_the_admission_order() {
         plan: signature.clone(),
         admitted: Default::default(),
     };
-    let attempt = plan.execute(&Empty(ints(&["ID"])), &[], &mut port, None);
+    let attempt = resolved.execute(&Empty(ints(&["ID"])), &[], &mut port, None);
     assert!(attempt.result.is_ok());
     let slots: Vec<_> = resolved.functions().iter().map(|call| call.slot).collect();
     assert_eq!(slots, [3, 1, 2]);
@@ -993,7 +993,7 @@ fn a_column_bound_per_driver_reads_each_rows_own_record() {
     // second. Each row reads its own driver's record.
     let primary_rows = Rows(ints(&["ID", "A"]), vec![vec![1, 10], vec![2, 20]]);
     let secondary_rows = Rows(ints(&["ID", "B", "C"]), vec![vec![3, 30, 300]]);
-    let attempt = plan.execute(
+    let attempt = resolved.execute(
         &primary_rows,
         &[&secondary_rows],
         &mut crate::function_invocation::NoFunctions::new(),
