@@ -5,7 +5,10 @@ section 2.5's RFC items, D16, D17, D19, D23 to D26 and D29, section 2.7's
 vocabularies, and the two CDISC items of #3048).
 
 Every CDISC statement here is a paraphrase with a section citation; nothing is
-copied from an implementation guide. Measured at main `1758ad145`.
+copied from an implementation guide. Measured at main `1758ad145` by the
+submission walker of the [method page](method.md), whose corpus extracts
+fewer test strings than the spelling walker's, so its totals can differ
+slightly (174 origins against 202, for example).
 
 ## Sources
 

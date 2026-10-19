@@ -566,8 +566,8 @@ Another 40% of benchmark columns read a same-named column of an input with no
 | O2 | `origin`, always a list | Keeps the name; a singular name for a list field |
 | **O3** | **`origins`, always a list** | **Follows SCHEMA-10 and D16's own `standard` to `standards`** |
 
-Every origin converts mechanically to a one-entry list (174 declarations,
-145 in benchmark files); no negative path names an origin. The rules, in
+Every origin converts mechanically to a one-entry list (202 in all, 145 in
+28 benchmark files); no negative path names an origin. The rules, in
 either form: at least one origin (SUB-14); two with the same type and source,
 or `Predecessor` or `Not Available` beside another, fail as
 `conflicting_origins`; SUB-15 to SUB-17 apply to each; `method` is required

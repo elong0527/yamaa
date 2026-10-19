@@ -426,4 +426,4 @@ function file in 1.0 (today it sits under an environment file's
 | `yamaa` | yamaa: "1.N" | value | | decided (D4) |
 | `type` | type: function | value | | decided (D8) |
 | `name` | name: IDENTIFIER | identifier | | decided (D8) |
-| `implementations` | implementations: {python: CALLABLE, r: CALLABLE} | value | | decided (D8) |
+| `implementations` | implementations: {python: CALLABLE, r: CALLABLE} | identifier | | decided (D8) |

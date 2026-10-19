@@ -7111,7 +7111,7 @@ entries:
   decision: decided (D8)
   reason: Each host's statically named callable (FUNC-8); a spec that calls a function fails before data
     when the running host has none.
-  field_kind: value
+  field_kind: identifier
   convert: {action: transform, transform: write_new_field}
 - id: new.project.functions
   file_type: project
