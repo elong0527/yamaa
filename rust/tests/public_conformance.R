@@ -111,6 +111,18 @@ declared_types <- function(spec, columns) {
 issue_rows <- function(frame) lapply(seq_len(nrow(frame)), function(index) list(
   phase=frame$phase[[index]], condition=frame$condition[[index]], requirement=frame$requirement[[index]],
   spec_paths=as.list(frame$spec_paths[[index]]), context=raw_json(frame$context[[index]])))
+# How a run got its plan, from its private observations: compiled, refused or
+# reused, or NULL when they name none. The measurements close the
+# observations, so their plan is the last one named. Match and slice bytes. On
+# Windows, R's default regular expressions count UTF-16 code units, two for a
+# character outside the Basic Multilingual Plane, while a character slice
+# counts it once: each one before the plan (an emoji in an output table or a
+# saved file) would move the slice one character on.
+observed_plan <- function(text) {
+  found <- regmatches(text, gregexpr('"plan":"[a-z]+"', text, useBytes=TRUE))[[1L]]
+  if (!length(found)) return(NULL)
+  sub('^"plan":"([a-z]+)"$', "\\1", found[[length(found)]])
+}
 # A planned build runs one specification, with the project the plan names in
 # its environment column. Generated metamorphic variants are not listed in
 # their project, so project builds use the package's spec-with-project
@@ -175,15 +187,7 @@ run_conformance <- function(args = commandArgs(trailingOnly = TRUE)) {
       readBin(file, "raw", n=file.info(file)$size)
     }), paths)
   }
-  # How a run got its plan, from its private observations: compiled, refused
-  # or reused. The measurements close the observations, so their plan is the
-  # last one named.
-  plan_of <- function(built) {
-    text <- yamaa:::.run_observations(built, include_measurements=TRUE)
-    found <- regmatches(text, gregexpr('"plan":"[a-z]+"', text))[[1L]]
-    if (!length(found)) return(NULL)
-    sub('^"plan":"([a-z]+)"$', "\\1", found[[length(found)]])
-  }
+  plan_of <- function(built) observed_plan(yamaa:::.run_observations(built, include_measurements=TRUE))
   build_one <- function(case, specification, environment, repeat_run=FALSE) {
     spec <- open_spec(case, specification, environment)
     first <- spec$run()
