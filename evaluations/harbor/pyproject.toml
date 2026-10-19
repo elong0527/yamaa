@@ -1,0 +1,27 @@
+# The Harbor evaluation's own environment and lock. Harbor and the packages it
+# brings never reach python/uv.lock, so their advisories stay out of the
+# release lane; the Harbor workflow audits this lock. Install it from the
+# repository root with `uv sync --project evaluations/harbor`.
+[project]
+name = "yamaa-harbor"
+version = "0.0.0"
+description = "The Harbor agent evaluation environment; not a released yamaa package"
+requires-python = ">=3.12"
+dependencies = [
+  "harbor==0.23.0",
+  # The harness and its tests import the engine, its test readers and the
+  # repository tools; an engine run over a benchmark finds the benchmarks'
+  # project functions, as in the development environment.
+  "yamaa[test]",
+  "yamaa-benchmarks",
+  "yamaa-tools",
+]
+
+[tool.uv]
+# Only the dependencies are installed; the modules run from the checkout.
+package = false
+
+[tool.uv.sources]
+yamaa = { path = "../../python" }
+yamaa-benchmarks = { path = "../../rust/tests/project-programs/python", editable = true }
+yamaa-tools = { path = "../..", editable = true }

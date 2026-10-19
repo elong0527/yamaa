@@ -105,6 +105,16 @@ def main():
     else:
         for module in CHECKS:
             run(sys.executable, "-m", module)
+        # No pull request job installs the Harbor evaluation's own project, so
+        # its lock is checked here against its manifest and the packages it
+        # takes from the checkout. `uv run` names its own binary in UV.
+        run(
+            os.environ.get("UV", "uv"),
+            "lock",
+            "--check",
+            "--project",
+            "evaluations/harbor",
+        )
         run(
             sys.executable,
             "-m",

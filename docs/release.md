@@ -215,7 +215,10 @@ OSV with `osv-scanner.toml`. OSV also carries GitHub's reviewed advisories,
 which the other two databases can lack. An ignored advisory names its id, a
 reason and a review date in the file of each scanner that reports it. An
 OSV-Scanner ignore lapses on its review date, so the check fails again until
-the advisory is reviewed.
+the advisory is reviewed. The Harbor evaluation's packages ship in no release
+and are locked apart, in `evaluations/harbor/uv.lock`; the Harbor workflow
+checks that lock with pip-audit and OSV-Scanner, so an advisory there does
+not fail this lane.
 
 ### Components outside the advisory scanners
 
