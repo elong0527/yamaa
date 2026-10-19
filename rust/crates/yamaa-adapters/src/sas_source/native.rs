@@ -319,7 +319,7 @@ fn decode_text(bytes: &[u8], encoding: &str) -> Result<String, Error> {
 }
 
 fn admit_xport(bytes: &[u8]) -> Result<(), Error> {
-    if bytes.len() < 640 || !bytes.len().is_multiple_of(80) {
+    if bytes.len() < 640 || bytes.len() % 80 != 0 {
         return Err(Error::Invalid("framing"));
     }
     let header = |index: usize, kind: &[u8]| {

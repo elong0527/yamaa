@@ -16,21 +16,22 @@ authors = [
     "Bingjun Wang",
     "Jingwei Xiong",
 ]
-edition = "2024"
-rust-version = "1.90"
+edition = "2021"
+rust-version = "1.82"
 license = "MIT"
 publish = false
 
 # Every unsafe operation sits in its own `unsafe {}` block, also inside an
-# `unsafe fn`. Edition 2024 only warns about this; the workspace denies it.
+# `unsafe fn`. Edition 2021 allows this by default; the workspace denies it.
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
 
-# Edition 2024 has let-chains, so Clippy now asks to collapse every nested
-# `if let` into one (178 sites). Adopting let-chains is a separate change
-# from the edition move.
 [workspace.lints.clippy]
-collapsible_if = "allow"
+# Clippy 1.82, the minimum toolchain's, warns on an `if` chain that compares
+# the same two values and on `format!` collected into a string; the pinned
+# Clippy moved both lints to pedantic.
+comparison_chain = "allow"
+format_collect = "allow"
 
 [profile.release]
 lto = "thin"

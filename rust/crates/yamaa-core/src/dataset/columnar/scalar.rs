@@ -1,6 +1,6 @@
 //! The scalar operation families over buffers: each operand is evaluated
-//! once over the selection, then the family's own operation, unchanged from
-//! the row-at-a-time executor, runs over each row's values.
+//! once over the selection, then the family's own operation runs over each
+//! row's values.
 use super::buffer::{Assembly, Values};
 use super::eval::owned;
 use super::{Cx, Fail, Run};
@@ -9,7 +9,7 @@ use crate::dataset::execution::ExecutionError;
 use crate::dataset::resolved::{BindingId, ExprId, Op, OperandRole};
 use crate::dataset::{ImputationStep, TemporalStep};
 use crate::numeric_lifecycle::HandlerKind;
-use crate::table::{TableAccess, ValueRef};
+use crate::table::ValueRef;
 use crate::value::Value;
 
 /// Convert each completed result to its column's type, recovering through
@@ -750,84 +750,4 @@ fn field_of(read: crate::dataset::resolved::Read) -> usize {
         | crate::dataset::resolved::Read::Relation(_, field) => field as usize,
         _ => unreachable!("a record read addresses a field"),
     }
-}
-
-/// Count grouped records, or present values of one field, without coercion.
-pub(super) fn count<E>(
-    run: &mut Run<'_, '_, E>,
-    cx: &Cx<'_, E>,
-    expr: ExprId,
-    rows: &[usize],
-) -> Result<Values, Fail<E>> {
-    let plan = run.plan;
-    let column = plan.reads(expr).first().map(|&read| field_of(read));
-    let mut values = Values::missing(0);
-    for &row in rows {
-        let (table, members) = cx.records(row);
-        let counted =
-            crate::table_reduction::count_selected(&table, column, members).map_err(|error| {
-                Box::new(ExecutionError::Reduction {
-                    path: plan.expr(expr).path.to_string(),
-                    error,
-                    identity: None,
-                })
-            })?;
-        values.push_value(Value::from(counted));
-    }
-    Ok(values)
-}
-
-/// A numeric reduction over the records feeding each row.
-pub(super) fn reduce<E>(
-    run: &mut Run<'_, '_, E>,
-    cx: &Cx<'_, E>,
-    expr: ExprId,
-    rows: &[usize],
-) -> Result<Values, Fail<E>> {
-    use crate::table_reduction::{reduce_column, TableReductionError};
-    let plan = run.plan;
-    let node = plan.expr(expr);
-    let Op::Reduce {
-        identifier,
-        reducer,
-        text,
-    } = &node.op
-    else {
-        unreachable!("a reduction node holds its reducer")
-    };
-    let column = field_of(plan.reads(expr)[0]);
-    let mut values = Values::missing(0);
-    for &row in rows {
-        let (table, members) = cx.records(row);
-        match reduce_column(&table, column, members, *reducer, text) {
-            Ok(value) => values.push_value(Value::from(value)),
-            Err(TableReductionError::Reduction(
-                crate::reduction::ReductionError::IncompatibleInputType { actual, .. },
-            )) => {
-                return Err(Box::new(ExecutionError::ReductionType {
-                    path: node.path.to_string(),
-                    expression: text.clone(),
-                    reducer: *reducer,
-                    source: identifier
-                        .clone()
-                        .unwrap_or_else(|| table.schema().columns()[column].name.clone()),
-                    actual,
-                }));
-            }
-            Err(error) => {
-                let identity = if matches!(&error, TableReductionError::Reduction(crate::reduction::ReductionError::Arithmetic { error, .. }) if error.phase() == "derivation")
-                {
-                    run.failure_identity(cx, row)
-                } else {
-                    None
-                };
-                return Err(Box::new(ExecutionError::Reduction {
-                    path: node.path.to_string(),
-                    error,
-                    identity,
-                }));
-            }
-        }
-    }
-    Ok(values)
 }

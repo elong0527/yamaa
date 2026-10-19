@@ -32,29 +32,6 @@ pub enum BindingError {
     UnavailableColumn,
     #[error("bound expression invalid source")]
     InvalidSource,
-    #[error("bound expression grouped source")]
-    GroupedSource,
-}
-
-/// Only scope failures are possible after the immutable name map is admitted.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
-pub enum ScopeError {
-    #[error("bound expression unavailable column")]
-    UnavailableColumn,
-    #[error("bound expression invalid source")]
-    InvalidSource,
-    #[error("bound expression grouped source")]
-    GroupedSource,
-}
-
-impl From<ScopeError> for BindingError {
-    fn from(error: ScopeError) -> Self {
-        match error {
-            ScopeError::UnavailableColumn => Self::UnavailableColumn,
-            ScopeError::InvalidSource => Self::InvalidSource,
-            ScopeError::GroupedSource => Self::GroupedSource,
-        }
-    }
 }
 
 fn bind_names<'a>(
@@ -79,34 +56,6 @@ fn bind_names<'a>(
         return Err(BindingError::MissingName);
     }
     Ok(bindings)
-}
-
-fn validate_scope(
-    bindings: &[Binding],
-    source_width: usize,
-    available: &[bool],
-    grouped: bool,
-) -> Result<(), ScopeError> {
-    for binding in bindings {
-        match binding.read {
-            Read::Source(_) if grouped => return Err(ScopeError::GroupedSource),
-            Read::Source(index) if index >= source_width => return Err(ScopeError::InvalidSource),
-            Read::Column(index) if !available.get(index).copied().unwrap_or(false) => {
-                return Err(ScopeError::UnavailableColumn)
-            }
-            Read::Joined(ref read)
-                if read.record_keys.is_none()
-                    && read
-                        .keys
-                        .iter()
-                        .any(|key| !available.get(key.output_column).copied().unwrap_or(false)) =>
-            {
-                return Err(ScopeError::UnavailableColumn)
-            }
-            _ => {}
-        }
-    }
-    Ok(())
 }
 
 /// A predicate owns its plan and complete, unique name-to-column map.
@@ -174,38 +123,11 @@ impl BoundPredicate {
             .binary_search_by(|candidate| candidate.as_str().cmp(name))
             .is_ok()
     }
-    /// Case owners additionally admit kept-record coordinates against their
-    /// named relation schemas; generic filters cannot acquire those coordinates.
-    pub(crate) fn validate_contextual(
-        &self,
-        source_width: usize,
-        available: &[bool],
-    ) -> Result<(), BindingError> {
-        validate_scope(&self.bindings, source_width, available, false).map_err(Into::into)
-    }
     pub fn plan(&self) -> &CompiledExpression {
         &self.plan
     }
     pub fn bindings(&self) -> &[Binding] {
         &self.bindings
-    }
-
-    /// A grouped filter sees completed output columns, never source records.
-    pub fn validate(
-        &self,
-        source_width: usize,
-        available: &[bool],
-        grouped: bool,
-    ) -> Result<(), BindingError> {
-        if !self.collected.is_empty()
-            || self
-                .bindings
-                .iter()
-                .any(|binding| matches!(binding.read, Read::Intermediate { .. } | Read::Joined(_)))
-        {
-            return Err(BindingError::InvalidSource);
-        }
-        validate_scope(&self.bindings, source_width, available, grouped).map_err(Into::into)
     }
 }
 
@@ -243,13 +165,5 @@ impl BoundNumeric {
         self.bindings
             .iter()
             .any(|binding| matches!(binding.read, Read::Source(_)))
-    }
-    pub fn validate(
-        &self,
-        source_width: usize,
-        available: &[bool],
-        grouped: bool,
-    ) -> Result<(), ScopeError> {
-        validate_scope(&self.bindings, source_width, available, grouped)
     }
 }

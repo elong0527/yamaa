@@ -1,7 +1,7 @@
 //! Typed column buffers: one per closed value type with a validity mask,
 //! text in one byte arena, and a mixed buffer for raw results whose type
 //! varies by row. A buffer changes layout, never a value: every read lends
-//! the same `ValueRef` the row-at-a-time executor reads.
+//! the same `ValueRef` a table port would.
 use crate::{
     table::ValueRef,
     temporal::{Date, DateTime},
@@ -67,7 +67,7 @@ impl Bits {
     }
 
     pub(super) fn push(&mut self, value: bool) {
-        if self.len.is_multiple_of(64) {
+        if self.len % 64 == 0 {
             self.words.push(0);
         }
         self.len += 1;

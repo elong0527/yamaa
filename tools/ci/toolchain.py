@@ -23,7 +23,7 @@ def channel():
 
 
 def minimum():
-    """The workspace `rust-version` as a complete release, such as 1.90.0."""
+    """The workspace `rust-version` as a complete release, such as 1.82.0."""
     manifest = tomllib.loads((WORKSPACE / "Cargo.toml").read_text())
     version = manifest["workspace"]["package"]["rust-version"]
     return ".".join((version.split(".") + ["0", "0"])[:3])

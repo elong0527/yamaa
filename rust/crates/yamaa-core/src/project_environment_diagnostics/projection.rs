@@ -332,7 +332,7 @@ fn authored_node<'a>(
         Origin::Codelist(index) => Ok((root, codelist_node(root, index)?)),
     }
 }
-fn declaration<'a>(origin: Origin<'a>) -> Result<Path<'a>, CoreError> {
+fn declaration(origin: Origin<'_>) -> Result<Path<'_>, CoreError> {
     let mut path = Path::new();
     match origin {
         Origin::Environment(key) => {

@@ -15,23 +15,16 @@
 //! phase is served by a binding with its own [`DriverContext`], and cells with
 //! equal contexts share one binding.
 //!
-//! The [`ResolvedPlan::schedule`] reproduces the order in which today's
-//! executor visits steps. Resolution checks three properties on every bind,
-//! whatever the build profile, and refuses the plan as internal when one
-//! fails, naming the first step that diverges:
-//!
-//! 1. topological validity: every data edge reads a cell that an earlier step
-//!    of the reading cell's template completed;
-//! 2. the handler table holds every handler site, donor sites included, in
-//!    the order of the executor's registration walk;
-//! 3. the schedule equals the structural mirror of the executor's loops.
+//! The [`ResolvedPlan::schedule`] orders every step of a run. Resolution
+//! checks on every bind, whatever the build profile, that each data edge
+//! reads a cell an earlier step of the reading cell's template completed, and
+//! refuses the plan as internal when one does not, naming the step.
 //!
 //! Every node carries its evaluation payload, copied from the bound plan: an
 //! expression node its [`Op`], a named relation its intermediate, a check its
 //! declaration, a region its output schema and inputs. The plan is therefore
-//! self-contained, which the executor over this graph (#2841) and the
-//! compile-once plan handle (#2821) need. The current executor still runs
-//! every plan; nothing here changes an output.
+//! self-contained, which the executor over this graph and the compile-once
+//! plan handle (#2821) need.
 use crate::{
     numeric_lifecycle::HandlerKind,
     table::TableSchema,
@@ -40,21 +33,18 @@ use crate::{
 use std::{ops::Range, sync::Arc};
 
 mod build;
-mod reference;
 mod registration;
 mod schedule;
 #[cfg(test)]
 mod tests;
 mod verify;
 
-pub use reference::ReferenceStep;
-
 use super::{
-    AggregateRowContext, BoundAggregate, BoundFunction, BoundNumeric, BoundOdm,
-    BoundProjectFunction, Check, ContextWindow, DatasetPlan, Flag, Imputation, Intermediate,
-    IntermediateUnique, JoinAbsence, JoinedRead, Keep, Lookup, OdmTemplateScope, RelationRange,
-    Rounding, RowLookup, SourceSelection, StringCase, StringExtract, StringPad, StringReplace,
-    StringTemplate, Temporal, VerificationSeverity, Window,
+    AggregateRowContext, BoundAggregate, BoundNumeric, BoundOdm, BoundProjectFunction, Check,
+    ContextWindow, DatasetPlan, Flag, Imputation, Intermediate, IntermediateUnique, JoinAbsence,
+    JoinedRead, Keep, Lookup, OdmTemplateScope, RelationRange, Rounding, SourceSelection,
+    StringCase, StringExtract, StringPad, StringReplace, StringTemplate, Temporal,
+    VerificationSeverity, Window,
 };
 use crate::bound_expression::BoundPredicate;
 use crate::conversion::LiteralHandler;
@@ -329,14 +319,6 @@ pub enum Op {
         identifier: String,
         selection: Option<SourceSelection>,
     },
-    Reduce {
-        identifier: Option<String>,
-        reducer: crate::reduction::NumericReducer,
-        text: String,
-    },
-    Count {
-        text: String,
-    },
     /// Reads follow the bindings in order.
     Compute(BoundNumeric),
     /// Reads follow the bindings in order.
@@ -377,8 +359,6 @@ pub enum Op {
         sources: Vec<String>,
     },
     /// Reads follow the read and collected arguments in order.
-    Function(BoundFunction),
-    /// Reads follow the read and collected arguments in order.
     ProjectFunction(BoundProjectFunction),
     /// A window and the column of the assignment that reads it.
     Window {
@@ -407,8 +387,6 @@ pub enum Op {
         selection: Option<SourceSelection>,
         absence: Option<JoinAbsence>,
     },
-    Lookup(Lookup),
-    RowLookup(RowLookup),
     /// Operands are the expression keys, then one wrapper per derivation.
     Aggregate(Box<BoundAggregate>),
     Odm(Box<BoundOdm>),
@@ -431,8 +409,6 @@ impl Op {
                 | (K::Source, Op::Read | Op::MatchOperand { .. })
                 | (K::Column, Op::Read)
                 | (K::Collect, Op::Collect { .. })
-                | (K::Reduce, Op::Reduce { .. })
-                | (K::Count, Op::Count { .. })
                 | (K::Compute, Op::Compute(_))
                 | (K::Flag, Op::Flag(_))
                 | (K::Case, Op::Case)
@@ -449,7 +425,6 @@ impl Op {
                 | (K::StrPad, Op::StrPad(_))
                 | (K::SourceBinding, Op::SourceBinding { .. })
                 | (K::FirstAvailable, Op::FirstAvailable { .. })
-                | (K::Function, Op::Function(_))
                 | (K::ProjectFunction, Op::ProjectFunction(_))
                 | (K::Window(_), Op::Window { .. })
                 | (K::ContextWindow(_), Op::ContextWindow { .. })
@@ -457,8 +432,6 @@ impl Op {
                 | (K::Joined(_), Op::Joined(_))
                 | (K::JoinedSource(_), Op::JoinedSource { .. })
                 | (K::SourceLookup(_), Op::SourceLookup { .. })
-                | (K::Lookup(_), Op::Lookup(_))
-                | (K::RowLookup(_), Op::RowLookup(_))
                 | (K::Aggregate(_), Op::Aggregate(_))
                 | (K::Odm(_), Op::Odm(_))
                 | (K::Derivation, Op::Derivation { .. })
@@ -473,8 +446,6 @@ pub enum ExprKind {
     Source,
     Column,
     Collect,
-    Reduce,
-    Count,
     Compute,
     Flag,
     Case,
@@ -492,7 +463,6 @@ pub enum ExprKind {
     StrPad,
     SourceBinding,
     FirstAvailable,
-    Function,
     ProjectFunction,
     Window(WindowId),
     ContextWindow(WindowId),
@@ -500,8 +470,6 @@ pub enum ExprKind {
     Joined(RelationId),
     JoinedSource(RelationId),
     SourceLookup(RelationId),
-    Lookup(RelationId),
-    RowLookup(RelationId),
     Aggregate(RelationId),
     Odm(RelationId),
     /// One aggregate derivation and its conversion handler.
@@ -768,13 +736,7 @@ pub struct HandlerSite {
 pub struct FunctionSlot {
     pub expr: ExprId,
     pub slot: usize,
-    pub signature: FunctionSignature,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum FunctionSignature {
-    Host(crate::function_signature::InvocationPlan),
-    Project(crate::function_signature::ProjectInvocationPlan),
+    pub signature: crate::function_signature::ProjectInvocationPlan,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -793,7 +755,7 @@ pub struct StepInfo {
     pub effects: Effects,
 }
 
-/// One step of the schedule, in the order today's executor visits it.
+/// One step of the schedule, in the order a run visits it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Step {
     Admit,
@@ -835,37 +797,22 @@ pub enum ResolutionError {
     /// The bound plan has a shape resolution does not represent.
     #[error("resolved plan unsupported: {0}")]
     Unsupported(String),
-    /// Check 1: a data edge reads a cell no earlier step completed.
+    /// A data edge reads a cell no earlier step completed.
     #[error("resolved plan reads before completion in region {region} at step {position} ({step:?}): {read}")]
     Topology {
         region: usize,
         position: usize,
-        step: ReferenceStep,
+        step: Step,
         read: String,
-    },
-    /// Check 2: the handler table diverges from the executor's registration walk.
-    #[error("resolved handler sites diverge at position {position}: today {expected:?}, resolved {found:?}")]
-    Handlers {
-        position: usize,
-        expected: Option<(String, HandlerKind)>,
-        found: Option<(String, HandlerKind)>,
-    },
-    /// Check 3: the schedule diverges from today's evaluation order.
-    #[error("resolved schedule diverges in region {region} at step {position}: today {expected:?}, resolved {found:?}")]
-    Schedule {
-        region: usize,
-        position: usize,
-        expected: Option<ReferenceStep>,
-        found: Option<ReferenceStep>,
     },
 }
 
 impl DatasetPlan {
-    /// Compile this bound plan into its resolved graph and run the three
-    /// resolution checks. Binding calls this on every plan it returns.
+    /// Compile this bound plan into its resolved graph and check its
+    /// topology. Binding calls this on every plan it returns.
     pub fn resolve(&self) -> Result<ResolvedPlan, ResolutionError> {
-        let (resolved, plans) = build::resolve(self)?;
-        verify::verify(&resolved, &plans)?;
+        let resolved = build::resolve(self)?;
+        verify::verify(&resolved)?;
         Ok(resolved)
     }
 }

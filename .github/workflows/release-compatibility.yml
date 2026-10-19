@@ -53,6 +53,68 @@ jobs:
           cargo test --manifest-path rust/tests/embedder/Cargo.toml --target-dir rust/target
       - name: Check minimal format builds
         run: python -m tools.ci.format_features
+  # CRAN asks to test a package that uses Rust with a cargo at least two
+  # years old, and the workspace rust-version is that minimum. The source
+  # package is staged with the pinned toolchain, which vendors the crates,
+  # then installed and checked with Cargo and rustc at the rust-version: its
+  # build runs Cargo outside the bundled workspace, with the caller's toolchain.
+  r-minimum:
+    name: r (minimum toolchain)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      _R_CHECK_CRAN_INCOMING_REMOTE_: 'false'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: r-lib/actions/setup-pandoc@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+        with:
+          working-directory: R/yamaa
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install repository tools and the pinned Rust toolchain
+        run: |
+          python -m pip install --no-deps -e .
+          python -m tools.ci.toolchain --install
+      - name: Install the shared grammar fixture codec and PyYAML
+        run: python -m pip install py-yaml12==0.2.0 pyyaml==6.0.3
+      - name: Stage and build the standalone R package
+        run: |
+          python -m tools.staging.stage_r_package minimum-rust/yamaa
+          (cd minimum-rust && R CMD build --no-build-vignettes --no-manual yamaa)
+      # Later steps run Cargo and rustc at the workspace rust-version.
+      - name: Activate the workspace rust-version toolchain
+        run: python -m tools.ci.toolchain --minimum --install
+      # As every R package check, R CMD check --as-cran may report only the
+      # notes that R/yamaa/cran-comments.md explains (tools/commands/check_r.py).
+      - name: Check the source package as CRAN does
+        env:
+          R_LIBS: ${{ env.R_LIBS_USER }}
+        run: |
+          python -m tools.commands.check_r --archive minimum-rust/yamaa_*.tar.gz \
+            --work-dir "${RUNNER_TEMP}/r-check"
+      - name: Confirm that the build used the minimum toolchain
+        run: |
+          grep -F "using rustc ${RUSTUP_TOOLCHAIN} " "${RUNNER_TEMP}/r-check/yamaa.Rcheck/00install.out"
+          grep -F "using cargo ${RUSTUP_TOOLCHAIN} " "${RUNNER_TEMP}/r-check/yamaa.Rcheck/00install.out"
+      - name: Preserve the check results
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: r-check-minimum-rust
+          path: |
+            ${{ runner.temp }}/r-check/yamaa.Rcheck/00check.log
+            ${{ runner.temp }}/r-check/yamaa.Rcheck/00install.out
+            ${{ runner.temp }}/r-check/yamaa.Rcheck/tests/*.Rout*
+          if-no-files-found: ignore
   python-minimum:
     runs-on: ubuntu-24.04
     timeout-minutes: 35

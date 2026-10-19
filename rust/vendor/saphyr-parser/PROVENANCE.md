@@ -15,7 +15,9 @@ library.
 
 `Cargo.toml` retains the released version, features and dependency
 requirements, with upstream tools, benchmarks and development dependencies
-omitted. It names the package `yamaa-saphyr-parser` and the library
+omitted. It declares edition 2021 and `rust-version` 1.82.0, yamaa's minimum,
+where the release declares edition 2024 and 1.85.0; the sources compile
+unchanged under both. It names the package `yamaa-saphyr-parser` and the library
 `yamaa_saphyr_parser`, so a graph that already holds a published
 `saphyr-parser` gets a distinct crate rather than a second copy under the same
 name: no duplicate package and no rustdoc output collision (#2825).

@@ -1,5 +1,5 @@
 //! Resolution of hand-built plans: slots, schedule, registration and the
-//! three checks, including their refusals.
+//! topology check, including its refusal.
 use super::*;
 use crate::bound_expression::{Binding as Bound, BoundPredicate, Read as BoundRead};
 use crate::conversion::LiteralHandler;
@@ -106,7 +106,6 @@ fn records_plan() -> DatasetPlan {
             },
         )],
     )
-    .unwrap()
     .with_column_verifications(vec![ColumnVerifications {
         column: 2,
         checks: vec![verification(
@@ -114,11 +113,10 @@ fn records_plan() -> DatasetPlan {
             Check::NotMissing,
         )],
     }])
-    .unwrap()
 }
 
 #[test]
-fn a_record_template_resolves_cells_phases_and_the_executor_schedule() {
+fn a_record_template_resolves_cells_phases_and_the_schedule() {
     let plan = records_plan();
     let resolved = plan.resolve().unwrap();
     let dataset = RegionId::DATASET;
@@ -216,8 +214,7 @@ fn a_grouped_filter_that_reads_a_window_runs_after_the_window_stage() {
         vec![],
         vec![0],
         vec![],
-    )
-    .unwrap();
+    );
     let resolved = plan.resolve().unwrap();
     let template = TemplateId(0);
     let node = resolved.template(template);
@@ -244,12 +241,15 @@ fn column_phase_cells_are_bound_per_driver_context() {
     // The first template is driven by the primary input, the second by the
     // secondary input. Both need Y in the column phase; only the second
     // still needs X there.
-    let plan = DatasetPlan::new_with_sources(
-        ints(&["ID", "V"]),
-        vec![SecondarySource {
-            name: "SEC".into(),
-            schema: ints(&["ID", "W"]),
-        }],
+    let plan = DatasetPlan::new_with_intermediates(
+        SourceSchemas {
+            primary: ints(&["ID", "V"]),
+            secondary: vec![SecondarySource {
+                name: "SEC".into(),
+                schema: ints(&["ID", "W"]),
+            }],
+        },
+        vec![],
         ints(&["ID", "X", "Y"]),
         vec![
             RowTemplate {
@@ -275,8 +275,7 @@ fn column_phase_cells_are_bound_per_driver_context() {
         ],
         vec![0],
         vec![],
-    )
-    .unwrap();
+    );
     let resolved = plan.resolve().unwrap();
     let (primary, secondary) = (TemplateId(0), TemplateId(1));
     let (x, y) = (ColumnId(1), ColumnId(2));
@@ -342,8 +341,7 @@ fn a_deferred_odm_read_is_bound_per_template_with_that_template_s_scope() {
         vec![assign(1, Expression::Odm(Box::new(read)))],
         vec![0],
         vec![],
-    )
-    .unwrap();
+    );
     let resolved = plan.resolve().unwrap();
     let value = ColumnId(1);
     let bindings: Vec<_> = resolved.column_bindings(value).collect();
@@ -393,7 +391,6 @@ fn key_grain_filters_every_record_before_its_key_bindings() {
             },
         )],
     )
-    .unwrap()
     .with_column_verifications(vec![
         ColumnVerifications {
             column: 0,
@@ -409,8 +406,7 @@ fn key_grain_filters_every_record_before_its_key_bindings() {
                 Check::NotMissing,
             )],
         },
-    ])
-    .unwrap();
+    ]);
     let resolved = plan.resolve().unwrap();
     let template = TemplateId(0);
     assert_eq!(resolved.template(template).driver.grain, Grain::Keys);
@@ -547,7 +543,6 @@ fn handler_plan() -> DatasetPlan {
         vec![0],
         vec![],
     )
-    .unwrap()
     .with_conversion_handlers(vec![ConversionHandler {
         assignment_path: "columns.C1.derivation".into(),
         handler: LiteralHandler {
@@ -555,7 +550,6 @@ fn handler_plan() -> DatasetPlan {
             value: Value::Missing,
         },
     }])
-    .unwrap()
 }
 
 #[test]
@@ -579,16 +573,6 @@ fn registration_registers_every_site_up_front_in_expression_order() {
             ("columns.C4.derivation.no_match", H::NoMatch),
         ]
     );
-    // The walk the executor runs registers the whole table, zeros included.
-    let mut counter = crate::numeric_lifecycle::HandlerCounter::default();
-    plan.register_handlers(&mut counter);
-    let walked: Vec<_> = counter
-        .snapshot()
-        .iter()
-        .map(|entry| (entry.spec_path.as_str(), entry.handler))
-        .collect();
-    assert_eq!(walked, table);
-    assert!(counter.snapshot().iter().all(|entry| entry.count == 0));
     let up = resolved.binding(BindingId(1));
     assert_eq!(up.unconvertible, Some(HandlerSiteId(0)));
     let read = resolved.binding(BindingId(4));
@@ -650,23 +634,13 @@ fn a_named_read_has_a_no_match_site_unless_it_requires_a_match() {
             vec![],
             vec![0],
             vec![],
-        )
-        .unwrap();
+        );
         let resolved = plan.resolve().unwrap();
-        let mut counter = crate::numeric_lifecycle::HandlerCounter::default();
-        plan.register_handlers(&mut counter);
-        let table: Vec<_> = resolved
+        resolved
             .handlers()
             .iter()
             .map(|site| (site.path.to_string(), site.kind))
-            .collect();
-        let walked: Vec<_> = counter
-            .snapshot()
-            .iter()
-            .map(|entry| (entry.spec_path.clone(), entry.handler))
-            .collect();
-        assert_eq!(table, walked);
-        table
+            .collect::<Vec<_>>()
     };
     let no_match = || {
         (
@@ -689,8 +663,7 @@ fn a_named_read_has_a_no_match_site_unless_it_requires_a_match() {
 
 /// A value-level `mandatory` or `data_type` check selects its rows by a where
 /// column. When the column phase completes that column after the checked one,
-/// the check waits for it in the schedule and in the executor's reference
-/// order alike, so the plan resolves.
+/// the check waits for it in the schedule, so the plan resolves.
 #[test]
 fn a_scoped_check_waits_for_a_where_column_the_column_phase_completes() {
     use crate::dataset::{RowScope, WhereClause};
@@ -726,45 +699,19 @@ fn a_scoped_check_waits_for_a_where_column_the_column_phase_completes() {
             vec![0],
             vec![],
         )
-        .unwrap()
         .with_column_verifications(vec![ColumnVerifications {
             column: 1,
             checks: vec![verification(
                 "columns.RES.submission.value_level.ONSET",
                 check,
             )],
-        }])
-        .unwrap();
+        }]);
         let resolved = plan.resolve().unwrap();
         assert!(
             position(&resolved, Step::Column(ColumnId(2)))
                 < position(&resolved, Step::Checks(CheckId(0)))
         );
     }
-}
-
-#[test]
-fn a_reordered_schedule_is_refused_at_the_first_diverging_step() {
-    let plan = records_plan();
-    let (mut resolved, plans) = build::resolve(&plan).unwrap();
-    // The two row bindings are independent, so only the order check sees it.
-    let first = position(&resolved, Step::Row(BindingId(0)));
-    resolved.schedule.swap(first, first + 1);
-    assert_eq!(
-        verify::verify(&resolved, &plans),
-        Err(ResolutionError::Schedule {
-            region: 0,
-            position: first,
-            expected: Some(ReferenceStep::Row {
-                template: 0,
-                assignment: 0
-            }),
-            found: Some(ReferenceStep::Row {
-                template: 0,
-                assignment: 1
-            }),
-        })
-    );
 }
 
 #[test]
@@ -783,53 +730,34 @@ fn a_read_before_its_cell_is_complete_is_refused() {
         vec![],
         vec![0],
         vec![],
-    )
-    .unwrap();
-    let (mut resolved, plans) = build::resolve(&plan).unwrap();
+    );
+    let mut resolved = build::resolve(&plan).unwrap();
     let first = position(&resolved, Step::Row(BindingId(0)));
     resolved.schedule.swap(first, first + 1);
-    let error = verify::verify(&resolved, &plans).unwrap_err();
+    let error = verify::verify(&resolved).unwrap_err();
     assert_eq!(
         error,
         ResolutionError::Topology {
             region: 0,
             position: first,
-            step: ReferenceStep::Row {
-                template: 0,
-                assignment: 1
-            },
+            step: Step::Row(BindingId(1)),
             read: "reads column ID of template 0 before any step completes it".into(),
         }
     );
     assert!(error.to_string().contains("reads before completion"));
 }
 
-#[test]
-fn a_diverging_handler_table_is_refused() {
-    let plan = handler_plan();
-    let (mut resolved, plans) = build::resolve(&plan).unwrap();
-    resolved.handlers.swap(1, 2);
-    assert_eq!(
-        verify::verify(&resolved, &plans),
-        Err(ResolutionError::Handlers {
-            position: 1,
-            expected: Some(("columns.UP.derivation.missing".into(), HandlerKind::Missing)),
-            found: Some((
-                "columns.ALT.derivation.missing".into(),
-                HandlerKind::Missing
-            )),
-        })
-    );
-}
-
 /// Records the order in which the executor admits callback signatures.
 struct Recording {
-    plan: crate::function_signature::InvocationPlan,
+    plan: crate::function_signature::ProjectInvocationPlan,
     admitted: std::cell::RefCell<Vec<usize>>,
 }
 impl crate::function_invocation::FunctionPort for Recording {
     type Error = std::convert::Infallible;
-    fn signature(&self, slot: usize) -> Option<&crate::function_signature::InvocationPlan> {
+    fn project_signature(
+        &self,
+        slot: usize,
+    ) -> Option<&crate::function_signature::ProjectInvocationPlan> {
         self.admitted.borrow_mut().push(slot);
         Some(&self.plan)
     }
@@ -857,13 +785,13 @@ impl TableAccess for Empty {
 
 #[test]
 fn callback_sites_follow_the_admission_order() {
-    use crate::dataset::{BoundFunction, FunctionArgument, FunctionInput};
-    use crate::function_signature::{FunctionIdentity, InvocationPlan, Parameter, Presence};
-    let signature = InvocationPlan::new(
-        FunctionIdentity {
+    use crate::dataset::{BoundProjectFunction, FunctionArgument, FunctionInput};
+    use crate::function_signature::{
+        Parameter, Presence, ProjectFunctionIdentity, ProjectInvocationPlan,
+    };
+    let signature = ProjectInvocationPlan::new(
+        ProjectFunctionIdentity {
             name: "identity".into(),
-            contract_version: "1".into(),
-            implementation_version: "1".into(),
             call: "identity".into(),
         },
         vec![Parameter {
@@ -878,8 +806,8 @@ fn callback_sites_follow_the_admission_order() {
     )
     .unwrap();
     let call = |slot, read| {
-        Expression::Function(
-            BoundFunction::new(
+        Expression::ProjectFunction(
+            BoundProjectFunction::new_project(
                 slot,
                 signature.clone(),
                 vec![FunctionArgument {
@@ -915,8 +843,7 @@ fn callback_sites_follow_the_admission_order() {
         vec![assign(3, call(2, BoundRead::Column(1)))],
         vec![0],
         vec![],
-    )
-    .unwrap();
+    );
     let resolved = plan.resolve().unwrap();
     let mut port = Recording {
         plan: signature.clone(),
@@ -983,9 +910,7 @@ impl TableAccess for Rows {
 /// Three templates, told apart by T: the first over the primary input derives
 /// V itself, the second over SEC and the third over the primary leave V to
 /// `columns`.
-fn driver_bindings_plan(
-    columns: Vec<crate::dataset::ColumnBinding>,
-) -> Result<DatasetPlan, crate::dataset::PlanError> {
+fn driver_bindings_plan(columns: Vec<crate::dataset::ColumnBinding>) -> DatasetPlan {
     let template = |mode: RowMode, tag: i64| RowTemplate {
         mode,
         assignments: std::iter::once(assign(0, Expression::Source(0)))
@@ -1041,8 +966,7 @@ fn a_column_bound_per_driver_reads_each_rows_own_record() {
     let plan = driver_bindings_plan(vec![
         binding(Expression::Source(1), vec![1], Template),
         binding(Expression::Source(1), vec![2], Template),
-    ])
-    .unwrap();
+    ]);
     let resolved = plan.resolve().unwrap();
     let value = ColumnId(1);
     assert_eq!(resolved.column(value).phase, ColumnPhase::Mixed);
@@ -1096,8 +1020,7 @@ fn a_whole_dataset_binding_reads_through_the_primary_port() {
         Expression::Literal(Value::Int(9)),
         vec![1, 2],
         Dataset,
-    )])
-    .unwrap();
+    )]);
     let resolved = plan.resolve().unwrap();
     let bindings: Vec<_> = resolved.column_bindings(ColumnId(1)).collect();
     // Both templates share the primary port, so they share one binding.
@@ -1133,8 +1056,7 @@ fn column_bindings_register_their_sites_one_binding_after_another() {
     let plan = driver_bindings_plan(vec![
         binding(source, vec![1], Template),
         binding(first_available, vec![2], Template),
-    ])
-    .unwrap();
+    ]);
     let resolved = plan.resolve().unwrap();
     let sites: Vec<_> = resolved
         .handlers()
@@ -1150,34 +1072,5 @@ fn column_bindings_register_their_sites_one_binding_after_another() {
                 HandlerKind::Missing
             ),
         ]
-    );
-}
-
-#[test]
-fn column_bindings_serve_each_template_that_leaves_the_column_once() {
-    use crate::dataset::{ColumnScope::Template, PlanError};
-    let literal = |templates| binding(Expression::Literal(Value::Int(1)), templates, Template);
-    // A template served twice, or one that derives the column itself.
-    assert_eq!(
-        driver_bindings_plan(vec![literal(vec![1, 2]), literal(vec![2])]),
-        Err(PlanError::DuplicateAssignment)
-    );
-    assert_eq!(
-        driver_bindings_plan(vec![literal(vec![0, 1, 2])]),
-        Err(PlanError::DuplicateAssignment)
-    );
-    // A template left unserved.
-    assert_eq!(
-        driver_bindings_plan(vec![literal(vec![1])]),
-        Err(PlanError::IncompleteRow)
-    );
-    // Templates listed out of order or outside the plan.
-    assert_eq!(
-        driver_bindings_plan(vec![literal(vec![2, 1])]),
-        Err(PlanError::InvalidColumns)
-    );
-    assert_eq!(
-        driver_bindings_plan(vec![literal(vec![1, 2, 3])]),
-        Err(PlanError::InvalidColumns)
     );
 }

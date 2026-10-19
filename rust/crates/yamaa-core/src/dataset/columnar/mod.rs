@@ -10,15 +10,11 @@
 //! binding, a post-window filter, one column step, the key bindings of the
 //! key grain, one derivation of a donor. A unit first runs in batch: every
 //! node once over the whole selection. If any row fails, the unit's effects
-//! are rolled back and it replays in row mode, one row at a time in today's
-//! order, which reproduces the first failure in base-record order, its
-//! diagnostic identity and the handler counts before it. A unit whose
-//! effects include host callbacks runs in row mode from the start, so
-//! callbacks keep their logical row order (REQ-0685).
-//!
-//! The row-at-a-time executor in `dataset/execution` still runs every
-//! production plan; this one runs behind the test-only selector until #2843
-//! swaps it in.
+//! are rolled back and it replays in row mode, one row at a time, which
+//! reproduces the first failure in base-record order, its diagnostic
+//! identity and the handler counts before it. A unit whose effects include
+//! host callbacks runs in row mode from the start, so callbacks keep their
+//! logical row order (REQ-0685).
 use super::execution::{
     CheckRecord, Dataset, Execution, ExecutionAttempt, ExecutionError, ExecutionEvent,
     ExecutionPhase, Resource, TemplateRows,
@@ -35,8 +31,6 @@ use std::ops::Range;
 mod aggregates;
 mod buffer;
 mod checks;
-#[cfg(feature = "executor-comparison")]
-pub(crate) mod compare;
 mod donor;
 mod eval;
 mod frame;
@@ -936,7 +930,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
                 run.windows = windows::Runs::default();
                 // Bindings split from one column binding share its expression,
                 // and a column-level window over it is prepared once, through
-                // the first one's driver, as today's executor does.
+                // the first one's driver.
                 let mut prepared = None;
                 for (binding, served) in &bindings {
                     let expr = plan.binding(*binding).expr;
@@ -964,8 +958,8 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
 
     /// One column-phase binding over `rows`, through its driver's port: a
     /// row's own template's driver, or the primary for a whole-dataset
-    /// binding. Its first call prepares a direct window over every candidate,
-    /// as today's executor does before its row loop, even for no rows.
+    /// binding. Its first call prepares a direct window over every candidate
+    /// before any row, even for no rows.
     fn complete_column(
         &mut self,
         frame: &mut Frame,

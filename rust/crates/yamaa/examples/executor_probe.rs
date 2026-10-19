@@ -440,7 +440,7 @@ fn grouped(value: usize) -> String {
     let digits = value.to_string();
     let mut text = String::new();
     for (position, digit) in digits.chars().enumerate() {
-        if position > 0 && (digits.len() - position).is_multiple_of(3) {
+        if position > 0 && (digits.len() - position) % 3 == 0 {
             text.push(',');
         }
         text.push(digit);

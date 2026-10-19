@@ -91,7 +91,6 @@ pub(super) fn expression_deferred(
         Expression::Column(column) => deferred[*column],
         Expression::Compute(plan) => plan.bindings().iter().any(|binding| read_deferred(binding.read.clone(), deferred, intermediates)),
         Expression::Flag(plan) => plan.bindings().iter().any(|binding| matches!(&binding.read, FlagRead::Read(read) if read_deferred(read.clone(),deferred,intermediates))),
-        Expression::Function(function) => function.arguments().iter().any(|argument| matches!(&argument.input, FunctionInput::Read(read) if read_deferred(read.clone(),deferred,intermediates))),
         Expression::ProjectFunction(function) => function.arguments().iter().any(|argument| matches!(&argument.input, FunctionInput::Read(read) if read_deferred(read.clone(),deferred,intermediates))),
         Expression::Case(branches) => branches.iter().any(|branch| branch.when.as_ref().is_some_and(|predicate| predicate.bindings().iter().any(|binding| read_deferred(binding.read.clone(),deferred,intermediates))) || expression_deferred(&branch.assignment.expression,deferred,intermediates)),
         Expression::Extreme {operands,..} | Expression::StrTemplate {operands,..} | Expression::Imputation {operands,..} | Expression::Temporal {operands,..} => operands.iter().any(|operand| expression_deferred(&operand.expression,deferred,intermediates)),
@@ -104,8 +103,7 @@ pub(super) fn expression_deferred(
         }),
         Expression::SourceLookup { lookup, range, .. } => lookup.keys.iter().any(|key| deferred[key.output_column]) || range_deferred(range.as_ref(), deferred, intermediates),
         Expression::Intermediate {index,..} => intermediate_deferred(*index, deferred, intermediates),
-        Expression::Lookup(lookup) => lookup.keys.iter().any(|key| deferred[key.output_column]),
-        Expression::Odm(_) | Expression::Literal(_) | Expression::Source(_) | Expression::Collect {..} | Expression::RowLookup(_) | Expression::Reduce {..} | Expression::Count {..} => false,
+        Expression::Odm(_) | Expression::Literal(_) | Expression::Source(_) | Expression::Collect {..} => false,
     }
 }
 /// Dependency order is already admitted; a window and every transitive reader

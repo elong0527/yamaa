@@ -1851,7 +1851,7 @@ impl PreparedSpecification {
     }
     /// Schemas follow authored input order, independently of the selected driver.
     /// Every bound plan, on the rows and the no-rows route alike, resolves into
-    /// its slot graph and passes the resolution checks before it is returned.
+    /// its slot graph and passes the resolution check before it is returned.
     pub fn bind_sources(&self, schemas: &[&TableSchema]) -> Result<DatasetPlan, BindError> {
         if schemas.len() != self.sources.len() {
             return Err(BindError::SourceCount);
@@ -1919,12 +1919,11 @@ impl PreparedSpecification {
             intermediates,
             findings,
         )
-        .and_then(|plan| {
+        .map(|plan| {
             plan.with_column_verifications(self.column_verification_groups())
-                .and_then(|plan| plan.with_warning_verifications(self.warning_verification_paths()))
-                .and_then(|plan| plan.with_output_order(self.bound_output_order()))
-                .map(|plan| plan.with_required_matches(self.required_matches.iter().cloned()))
-                .map_err(BindError::InvalidPlan)
+                .with_warning_verifications(self.warning_verification_paths())
+                .with_output_order(self.bound_output_order())
+                .with_required_matches(self.required_matches.iter().cloned())
         })
     }
 
@@ -2655,7 +2654,7 @@ impl PreparedSpecification {
         let record_windows = key_assignments
             .iter()
             .any(|a| a.expression.window().is_some());
-        DatasetPlan::new_with_intermediates(
+        Ok(DatasetPlan::new_with_intermediates(
             crate::dataset::SourceSchemas {
                 primary: source.clone(),
                 secondary,
@@ -2678,26 +2677,24 @@ impl PreparedSpecification {
             self.keys.clone(),
             verifications,
         )
-        .and_then(|plan| plan.with_column_verifications(self.column_verification_groups()))
-        .and_then(|plan| plan.with_warning_verifications(self.warning_verification_paths()))
-        .and_then(|plan| plan.with_output_order(self.bound_output_order()))
-        .map(|plan| plan.with_required_matches(self.required_matches.iter().cloned()))
-        .and_then(|plan| {
-            plan.with_conversion_handlers(
-                self.declarations
-                    .iter()
-                    .filter_map(|declaration| {
-                        declaration.handler.as_ref().map(|handler| {
-                            crate::dataset::ConversionHandler {
-                                assignment_path: declaration.path.clone(),
-                                handler: handler.clone(),
-                            }
+        .with_column_verifications(self.column_verification_groups())
+        .with_warning_verifications(self.warning_verification_paths())
+        .with_output_order(self.bound_output_order())
+        .with_required_matches(self.required_matches.iter().cloned())
+        .with_conversion_handlers(
+            self.declarations
+                .iter()
+                .filter_map(|declaration| {
+                    declaration
+                        .handler
+                        .as_ref()
+                        .map(|handler| crate::dataset::ConversionHandler {
+                            assignment_path: declaration.path.clone(),
+                            handler: handler.clone(),
                         })
-                    })
-                    .collect(),
-            )
-        })
-        .map_err(BindError::InvalidPlan)
+                })
+                .collect(),
+        ))
     }
 }
 

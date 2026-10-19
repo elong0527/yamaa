@@ -6,7 +6,7 @@
 #    becomes a buildable source package after the shared Rust crates are
 #    staged into it, so the staged tree is what gets built and checked.
 # 2. DESCRIPTION requires R >= 4.4.0 and a Rust toolchain (Cargo and
-#    rustc 1.90 or later); the matrix keeps release on all three operating
+#    rustc 1.82 or later); the matrix keeps release on all three operating
 #    systems plus devel and the 4.4 floor on Ubuntu, and installs the
 #    pinned Rust toolchain before checking.
 # 3. Platform checks are release lanes, not development checks: they run

@@ -1,4 +1,4 @@
-# Installed Parquet containment: parquet 57.3.0's metadata decoder panics on
+# Installed Parquet containment: parquet 55.2.0's metadata decoder panics on
 # an INT96 statistic longer than 12 bytes. The engine contains that panic as
 # source_parquet_invalid (REQ-1038), prints nothing, and later reads in the
 # same process still work. On Windows this runs the GNU build, whose unwinding

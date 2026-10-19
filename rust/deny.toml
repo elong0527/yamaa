@@ -17,5 +17,7 @@ all-features = true
 # in osv-scanner.toml as well, with the same reason and review date.
 yanked = "deny"
 ignore = [
-    { id = "RUSTSEC-2024-0436", reason = "paste is unmaintained, not vulnerable, and a procedural macro that runs only at compile time. It arrives through extendr-api 0.9.0, the latest release, and through parquet 57.3.0, which the engine pins exactly; parquet 57.3.1 still requires it. Review by 2027-04-30." },
+    { id = "RUSTSEC-2024-0436", reason = "paste is unmaintained, not vulnerable, and a procedural macro that runs only at compile time. It arrives through extendr-api 0.9.0, the latest release, and through parquet 55.2.0, which the engine pins exactly as the newest release that builds with Rust 1.82. Review by 2027-04-30." },
+    { id = "RUSTSEC-2026-0176", reason = "PyO3 0.27.2 is the newest release that builds with the workspace's minimum Rust 1.82 (#3111); the fix, 0.29.0, needs Rust 1.83, which CRAN's two-year-old cargo rule allows from 2026-11-28. The Python binding iterates a PyList or PyTuple only with next, through for loops and collect, and never calls Iterator::nth or nth_back on one. Review by 2026-11-28." },
+    { id = "RUSTSEC-2026-0177", reason = "PyO3 0.27.2 is the newest release that builds with the workspace's minimum Rust 1.82 (#3111); the fix, 0.29.0, needs Rust 1.83, which CRAN's two-year-old cargo rule allows from 2026-11-28. The Python binding never calls PyCFunction::new_closure. Review by 2026-11-28." },
 ]

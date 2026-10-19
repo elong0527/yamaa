@@ -584,12 +584,12 @@ pub(crate) fn location_findings(
         })
         .collect::<Vec<_>>();
     let mut findings = Vec::new();
-    if let [(_, _, primary), (_, written, report)] = own.as_slice()
-        && same_location(primary, report)
-    {
-        findings.push(PreflightFinding::Report(ReportFinding::Collision {
-            path: (*written).into(),
-        }));
+    if let [(_, _, primary), (_, written, report)] = own.as_slice() {
+        if same_location(primary, report) {
+            findings.push(PreflightFinding::Report(ReportFinding::Collision {
+                path: (*written).into(),
+            }));
+        }
     }
     // A producer that several inputs link is compared once.
     let mut producers: Vec<&str> = Vec::new();

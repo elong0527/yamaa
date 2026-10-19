@@ -38,9 +38,10 @@ impl std::hash::Hasher for IdentityHasher {
         hash ^ (hash >> 33)
     }
     fn write(&mut self, bytes: &[u8]) {
-        let (words, rest) = bytes.as_chunks::<8>();
+        let words = bytes.chunks_exact(8);
+        let rest = words.remainder();
         for word in words {
-            self.add(u64::from_le_bytes(*word));
+            self.add(u64::from_le_bytes(word.try_into().unwrap()));
         }
         if !rest.is_empty() {
             let mut last = [0; 8];

@@ -1,8 +1,8 @@
-//! Pure dataset declarations and admission. No study data or host effects.
+//! Pure dataset declarations. No study data or host effects.
 use super::*;
 use crate::{
     bound_expression::Read,
-    function_signature::{InvocationPlan, LogicalSignature, Presence, ProjectInvocationPlan},
+    function_signature::{LogicalSignature, Presence, ProjectInvocationPlan},
 };
 use std::collections::BTreeSet;
 /// Already admitted literal or statically bound current-candidate value.
@@ -26,27 +26,10 @@ pub struct FunctionArgument {
 
 /// Immutable invocation plus source/output bindings; activation remains an outer gate.
 #[derive(Clone, Debug, PartialEq)]
-pub struct BoundFunction<S = InvocationPlan> {
+pub struct BoundFunction<S> {
     slot: usize,
     signature: S,
     arguments: Vec<FunctionArgument>,
-}
-
-impl BoundFunction {
-    /// Reject duplicate/unknown names and absent required declarations before execution.
-    /// Metadata and literal admission belong to the compiler, as for InvocationPlan.
-    pub fn new(
-        slot: usize,
-        signature: InvocationPlan,
-        arguments: Vec<FunctionArgument>,
-    ) -> Result<Self, PlanError> {
-        validate_arguments(signature.signature(), &arguments)?;
-        Ok(Self {
-            slot,
-            signature,
-            arguments,
-        })
-    }
 }
 
 /// Versionless call to a package admitted from the explicit environment.
@@ -105,48 +88,5 @@ impl<S> BoundFunction<S> {
     /// Borrow supplied arguments in authored order without changing the admitted call.
     pub fn arguments(&self) -> &[FunctionArgument] {
         &self.arguments
-    }
-
-    /// Validate completed outputs and record/group source scope without reading cells.
-    pub(super) fn validate(
-        &self,
-        source: &TableSchema,
-        secondary: &[SecondarySource],
-        output: &TableSchema,
-        available: &[bool],
-        mode: &RowMode,
-    ) -> Result<(), PlanError> {
-        for argument in &self.arguments {
-            match &argument.input {
-                // The enclosing plan validates selected relations and key dependencies.
-                FunctionInput::Read(Read::Intermediate { .. }) => {}
-                FunctionInput::Read(Read::Joined(read)) => {
-                    read.validate(source, secondary, output, available, mode)?
-                }
-                FunctionInput::Read(Read::Source(column)) => {
-                    if *column >= source.columns().len() {
-                        return Err(PlanError::InvalidSource);
-                    }
-                    if matches!(mode, RowMode::Groups(keys) if !keys.contains(column)) {
-                        return Err(PlanError::NonGroupSource);
-                    }
-                }
-                FunctionInput::Read(Read::Column(column))
-                    if !available.get(*column).copied().unwrap_or(false) =>
-                {
-                    return Err(PlanError::UnavailableColumn);
-                }
-                FunctionInput::Collect { column, identifier } => {
-                    if *column >= source.columns().len() {
-                        return Err(PlanError::InvalidSource);
-                    }
-                    if !matches!(mode, RowMode::Keys) || identifier.is_empty() {
-                        return Err(PlanError::InvalidKeyMode);
-                    }
-                }
-                _ => {}
-            }
-        }
-        Ok(())
     }
 }

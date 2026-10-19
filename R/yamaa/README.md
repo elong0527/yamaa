@@ -46,7 +46,7 @@ install.packages("yamaa_0.4.0.tar.gz", repos = NULL, type = "source")
 ```
 
 Installation compiles the Rust engine, so it needs R 4.4.0 or later, a C
-compiler, and Cargo and rustc 1.90 or later, from [rustup](https://rustup.rs/)
+compiler, and Cargo and rustc 1.82 or later, from [rustup](https://rustup.rs/)
 or from system packages that are that recent. The build uses your default
 Rust toolchain, found on the PATH or in `~/.cargo/bin`, and rustup installs
 none; installation stops first, with advice, when Cargo or rustc is missing
@@ -106,7 +106,7 @@ The build follows CRAN's
 `configure` checks that Cargo and rustc are present and at least the
 workspace's `rust-version`, reports their versions before compiling and never
 installs a toolchain, and the Makevars run `cargo build --offline -j 2` from
-the bundled crates with a Cargo home inside the build tree. Rust 1.90, the
+the bundled crates with a Cargo home inside the build tree. Rust 1.82, the
 minimum, builds the full locked dependency graph, not only our workspace.
 `cran-comments.md` explains the notes that a submission reports, and
 `make test-r` fails on any other.

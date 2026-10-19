@@ -10,7 +10,6 @@
 use super::Fault;
 use quick_xml::events::{BytesPI, Event as Token};
 use std::{
-    borrow::Cow,
     collections::HashSet,
     io::{self, BufRead, Read},
     ops::Range,
@@ -213,18 +212,25 @@ impl<R: Read> Xml<R> {
         }
     }
 
-    /// The source byte offset of the next event.
-    fn position(&self) -> u64 {
-        self.reader.buffer_position() + self.reader.get_ref().bom()
-    }
-
     /// Read the next admitted event.
     pub(super) fn next(&mut self) -> Result<Event<'_>, Error> {
-        let position = self.position();
+        // The tokenizer's offsets leave out the UTF-8 byte order mark that it
+        // skips, which the byte source finds on its first read, so the event's
+        // source offset is known only once the event is read.
+        let start = self.reader.buffer_position();
         self.buf.clear();
-        let token = match self.reader.read_event_into(&mut self.buf) {
+        let read = self.reader.read_event_into(&mut self.buf);
+        let position = start + self.reader.get_ref().bom();
+        let token = match read {
             Ok(token) => token,
             Err(error) => {
+                // quick-xml checks end-tag names and comment hyphens once it
+                // has read the markup's bytes. Decoding those bytes as UTF-8
+                // comes first (`utf8`), so an invalid byte in them is reported
+                // instead.
+                if matches!(error, quick_xml::Error::IllFormed(_)) {
+                    utf8(&self.buf, position)?;
+                }
                 let bom = self.reader.get_ref().bom();
                 let at = match &error {
                     quick_xml::Error::Syntax(_) | quick_xml::Error::IllFormed(_) => {
@@ -239,8 +245,11 @@ impl<R: Read> Xml<R> {
             }
         };
         let first = std::mem::replace(&mut self.first, false);
-        match token {
+        // Text that the event holds as read is returned from `self.buf`, at
+        // this range, once the event no longer borrows it.
+        let held = match token {
             Token::Decl(declaration) => {
+                let declaration = utf8(&declaration, position + 2)?;
                 if !first {
                     return Err(malformed(
                         position,
@@ -251,25 +260,35 @@ impl<R: Read> Xml<R> {
                     Declaration::Malformed(reason) => malformed(position, reason),
                     Declaration::Encoding(encoding) => Error::Encoding { encoding },
                 })?;
-                Ok(Event::Skip)
+                return Ok(Event::Skip);
             }
-            Token::DocType(_) => Err(Error::Doctype),
+            Token::DocType(doctype) => {
+                // The name follows `<!DOCTYPE` and any whitespace; `>` ends it.
+                let after = self.reader.buffer_position() + self.reader.get_ref().bom();
+                let read = usize::try_from(after - position).unwrap_or(usize::MAX);
+                let offset = read.saturating_sub(doctype.len() + 1);
+                utf8(&doctype, position + offset as u64)?;
+                return Err(Error::Doctype);
+            }
             Token::PI(instruction) => {
+                utf8(&instruction, position + 2)?;
                 self.run = 0;
                 check_instruction(&instruction).map_err(|error| error.at(position))?;
-                Ok(Event::Skip)
+                return Ok(Event::Skip);
             }
             Token::Comment(comment) => {
+                utf8(&comment, position + 4)?;
                 self.run = 0;
                 if comment.len() > MAX_TOKEN_BYTES {
                     return Err(token_limit("comment"));
                 }
-                Ok(Event::Skip)
+                return Ok(Event::Skip);
             }
             Token::Text(text) => {
-                let content = text.into_inner();
+                // Read up to markup, a reference or the end: the whole buffer.
+                let content = utf8(&text, position)?;
                 if self.root != Root::Inside {
-                    if !is_spaces(&content) {
+                    if !is_spaces(content) {
                         return Err(malformed(
                             position,
                             "content is not allowed outside the root element",
@@ -287,35 +306,33 @@ impl<R: Read> Xml<R> {
                 if self.run > MAX_TOKEN_BYTES {
                     return Err(token_limit("text node"));
                 }
-                match content {
-                    Cow::Borrowed(content) if !content.contains('\r') => Ok(Event::Text(content)),
-                    content => {
-                        self.text = normalize_line_ends(&content);
-                        Ok(Event::Text(&self.text))
-                    }
+                if content.contains('\r') {
+                    self.text = normalize_line_ends(content);
+                    return Ok(Event::Text(&self.text));
                 }
+                0..content.len()
             }
             Token::CData(data) => {
+                // The data follows `<![CDATA[`.
+                let content = utf8(&data, position + 9)?;
                 if self.root != Root::Inside {
                     return Err(malformed(
                         position,
                         "CDATA is not allowed outside the root element",
                     ));
                 }
-                let content = data.into_inner();
                 self.run = self.run.saturating_add(content.len());
                 if self.run > MAX_TOKEN_BYTES {
                     return Err(token_limit("text node"));
                 }
-                match content {
-                    Cow::Borrowed(content) if !content.contains('\r') => Ok(Event::Text(content)),
-                    content => {
-                        self.text = normalize_line_ends(&content);
-                        Ok(Event::Text(&self.text))
-                    }
+                if content.contains('\r') {
+                    self.text = normalize_line_ends(content);
+                    return Ok(Event::Text(&self.text));
                 }
+                9..9 + content.len()
             }
             Token::GeneralRef(reference) => {
+                let reference = utf8(&reference, position + 1)?;
                 if self.root != Root::Inside {
                     return Err(malformed(
                         position,
@@ -323,21 +340,22 @@ impl<R: Read> Xml<R> {
                     ));
                 }
                 let character =
-                    resolve_reference(&reference).map_err(|reason| malformed(position, reason))?;
+                    resolve_reference(reference).map_err(|reason| malformed(position, reason))?;
                 self.run = self.run.saturating_add(reference.len() + 2);
                 if self.run > MAX_TOKEN_BYTES {
                     return Err(token_limit("text node"));
                 }
                 self.text.clear();
                 self.text.push(character);
-                Ok(Event::Text(&self.text))
+                return Ok(Event::Text(&self.text));
             }
             Token::Start(start) => {
+                let content = utf8(&start, position + 1)?;
                 if self.root == Root::After {
                     return Err(malformed(position, "extra content after the root element"));
                 }
                 self.scopes.open();
-                parse_start(&start, &mut self.tag, &mut self.raw, &mut self.scopes)
+                parse_start(content, &mut self.tag, &mut self.raw, &mut self.scopes)
                     .map_err(|error| error.at(position))?;
                 if self.open >= self.depth_limit {
                     return Err(Error::Limit(Limit::Depth(self.depth_limit)));
@@ -345,20 +363,23 @@ impl<R: Read> Xml<R> {
                 self.open += 1;
                 self.root = Root::Inside;
                 self.run = 0;
-                Ok(Event::Start(&self.tag))
+                return Ok(Event::Start(&self.tag));
             }
-            Token::End(_) => {
+            Token::End(end) => {
+                utf8(&end, position + 2)?;
                 self.scopes.close();
                 self.open = self.open.saturating_sub(1);
                 if self.open == 0 {
                     self.root = Root::After;
                 }
                 self.run = 0;
-                Ok(Event::End)
+                return Ok(Event::End);
             }
-            Token::Empty(_) => Err(malformed(position, "unexpected unexpanded empty element")),
+            Token::Empty(_) => {
+                return Err(malformed(position, "unexpected unexpanded empty element"))
+            }
             Token::Eof => {
-                if self.open > 0 {
+                return if self.open > 0 {
                     Err(malformed(
                         position,
                         "premature end of data: an element is not closed",
@@ -367,10 +388,24 @@ impl<R: Read> Xml<R> {
                     Err(malformed(position, "document has no root element"))
                 } else {
                     Ok(Event::Eof)
-                }
+                };
             }
-        }
+        };
+        // Decoded above, so this cannot fail.
+        Ok(Event::Text(utf8(&self.buf[held], position)?))
     }
+}
+
+/// The text of event bytes that begin `at` in the source. quick-xml hands
+/// over each markup, text run and reference as read, and the reader decodes
+/// it as UTF-8 before it reads anything inside it.
+fn utf8(bytes: &[u8], at: u64) -> Result<&str, Error> {
+    std::str::from_utf8(bytes).map_err(|error| {
+        malformed(
+            at + error.valid_up_to() as u64,
+            "invalid UTF-8 byte sequence",
+        )
+    })
 }
 
 fn malformed(position: u64, reason: impl Into<String>) -> Error {
@@ -853,12 +888,14 @@ fn check_declaration(content: &str) -> Result<(), Declaration> {
     Ok(())
 }
 
-/// Processing instructions need a colon-free target other than `xml`.
+/// Processing instructions need a colon-free target other than `xml`. The
+/// caller has decoded the instruction as UTF-8.
 fn check_instruction(instruction: &BytesPI<'_>) -> Result<(), TagError> {
     if instruction.len() > MAX_TOKEN_BYTES {
         return Err(TagError::Limit(token_limit("processing instruction")));
     }
-    let target = instruction.target();
+    let target = std::str::from_utf8(instruction.target())
+        .map_err(|_| TagError::from("invalid UTF-8 byte sequence"))?;
     if target.eq_ignore_ascii_case("xml") {
         return Err("processing instruction target xml is reserved".into());
     }

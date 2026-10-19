@@ -549,10 +549,6 @@ mod schema {
                 when.bindings()[0].read,
                 yamaa_core::bound_expression::Read::Source(0)
             );
-            assert_eq!(
-                when.validate(source().columns().len(), &[true, false], false),
-                Err(yamaa_core::bound_expression::BindingError::InvalidSource)
-            );
         }
 
         #[test]

@@ -47,7 +47,8 @@ WIDTH = 78
 # Licenses a shipped crate may be relied on under, in preference order. Where a
 # crate offers a choice, the first offered license whose text the crate ships
 # is relied on. A crate usable only under another license stops generation
-# until its license has been reviewed and added here.
+# until its license has been reviewed and added here. Zlib is zlib-rs's only
+# license: Parquet 55 selects that flate2 backend.
 ACCEPTED = (
     "MIT",
     "Apache-2.0",
@@ -55,6 +56,7 @@ ACCEPTED = (
     "Unicode-3.0",
     "Apache-2.0 WITH LLVM-exception",
     "CC0-1.0",
+    "Zlib",
 )
 
 # Phrases, compared case-insensitively with whitespace collapsed, that each
@@ -75,6 +77,10 @@ MARKERS = {
         "llvm exceptions to the apache 2.0 license",
     ),
     "CC0-1.0": ("cc0 1.0 universal",),
+    "Zlib": (
+        "this software is provided 'as-is', without any express or implied warranty",
+        "permission is granted to anyone to use this software for any purpose",
+    ),
 }
 
 # Root files named for one license of a crate's choice, by lowercase name. Each

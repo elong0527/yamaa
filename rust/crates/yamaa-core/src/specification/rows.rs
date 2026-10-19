@@ -956,11 +956,8 @@ fn bind_template_filter(
     // instead of manufacturing a transport error for their incomplete bindings.
     let filter = if findings.len() != before_filter
         || grouped
-            && predicate.is_some_and(|plan| {
-                plan.identifiers()
-                    .into_iter()
-                    .any(|name| name.contains('.'))
-            }) {
+            && predicate.is_some_and(|plan| plan.identifiers().any(|name| name.contains('.')))
+    {
         None
     } else {
         predicate
@@ -2209,7 +2206,7 @@ impl Rows {
         if !findings.is_empty() {
             return Err(BindError::Invalid(findings));
         }
-        DatasetPlan::new_with_bindings(
+        let plan = DatasetPlan::new_with_bindings(
             crate::dataset::SourceSchemas {
                 primary: source.clone(),
                 secondary,
@@ -2223,55 +2220,52 @@ impl Rows {
             columns,
             keys.to_vec(),
             verifications.to_vec(),
-        )
-        .and_then(|plan| {
-            let contexts = self
-                .templates
-                .iter()
-                .zip(plan.templates())
-                .map(|(declaration, template)| {
-                    match (&declaration.groups, template.mode.local_mode()) {
-                        (Some(names), RowMode::Groups(columns)) => {
-                            Some(crate::dataset::AggregateRowContext {
-                                row: declaration.id.clone(),
-                                groups: names
-                                    .iter()
-                                    .map(|name| {
-                                        String::from(
-                                            name.split_once('.')
-                                                .map_or(name.as_str(), |(_, field)| field),
-                                        )
-                                    })
-                                    .zip(columns.iter().copied())
-                                    .collect(),
-                            })
-                        }
-                        _ => None,
+        );
+        let contexts = self
+            .templates
+            .iter()
+            .zip(plan.templates())
+            .map(|(declaration, template)| {
+                match (&declaration.groups, template.mode.local_mode()) {
+                    (Some(names), RowMode::Groups(columns)) => {
+                        Some(crate::dataset::AggregateRowContext {
+                            row: declaration.id.clone(),
+                            groups: names
+                                .iter()
+                                .map(|name| {
+                                    String::from(
+                                        name.split_once('.')
+                                            .map_or(name.as_str(), |(_, field)| field),
+                                    )
+                                })
+                                .zip(columns.iter().copied())
+                                .collect(),
+                        })
                     }
+                    _ => None,
+                }
+            })
+            .collect();
+        let plan = plan.with_row_contexts(contexts);
+        // Repeated defaults in several templates share one declaration and
+        // one counter. Only effective row declarations register handlers.
+        let mut seen = std::collections::BTreeSet::new();
+        let handlers = self
+            .templates
+            .iter()
+            .flat_map(|template| &template.declarations)
+            .chain(&self.columns)
+            .filter_map(|declaration| {
+                declaration.handler.as_ref().and_then(|handler| {
+                    seen.insert(&declaration.path)
+                        .then(|| crate::dataset::ConversionHandler {
+                            assignment_path: declaration.path.clone(),
+                            handler: handler.clone(),
+                        })
                 })
-                .collect();
-            let plan = plan.with_row_contexts(contexts)?;
-            // Repeated defaults in several templates share one declaration and
-            // one counter. Only effective row declarations register handlers.
-            let mut seen = std::collections::BTreeSet::new();
-            let handlers = self
-                .templates
-                .iter()
-                .flat_map(|template| &template.declarations)
-                .chain(&self.columns)
-                .filter_map(|declaration| {
-                    declaration.handler.as_ref().and_then(|handler| {
-                        seen.insert(&declaration.path)
-                            .then(|| crate::dataset::ConversionHandler {
-                                assignment_path: declaration.path.clone(),
-                                handler: handler.clone(),
-                            })
-                    })
-                })
-                .collect();
-            plan.with_conversion_handlers(handlers)
-        })
-        .map_err(BindError::InvalidPlan)
+            })
+            .collect();
+        Ok(plan.with_conversion_handlers(handlers))
     }
 }
 

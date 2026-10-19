@@ -27,6 +27,6 @@ Encoding: UTF-8
 Depends: R (>= 4.4.0)
 Imports: utils
 Suggests: arrow (>= 23.0.1), jsonlite (>= 2.0.0)
-SystemRequirements: Cargo (Rust's package manager) (>= 1.90.0),
-    rustc (>= 1.90.0)
+SystemRequirements: Cargo (Rust's package manager) (>= 1.82.0),
+    rustc (>= 1.82.0)
 NeedsCompilation: yes

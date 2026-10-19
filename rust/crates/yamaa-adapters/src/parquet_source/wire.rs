@@ -1,21 +1,18 @@
 //! The wire type of each Thrift field the native decoder reads.
 //!
-//! parquet 57.3.0 reads a known field id by its declared type whatever wire
-//! type its field header carries, reads each element of a known list by its
-//! declared type whatever element type the list header carries, and takes a
-//! known `bool` from the field header, panicking when there is none. It skips
-//! only an unknown id by that field's own wire type. A known field with
-//! another wire type would make the native decoder read other bytes, or other
-//! values, than the ones admission checked. Admission therefore refuses it as
-//! malformed wherever it occurs.
+//! parquet 55.2.0 decodes footers and page headers with the readers that the
+//! Thrift compiler generated (`parquet::format`). They read a known field id
+//! by its declared type whatever wire type its field header carries, and each
+//! element of a known list by its declared type whatever element type the
+//! list header carries. They skip only an unknown id, by that field's own
+//! wire type. A known field with another wire type would make the native
+//! decoder read other bytes, or other values, than the ones admission
+//! checked. Admission therefore refuses it as malformed wherever it occurs.
 //!
-//! A known field also occurs at most once. The native decoder decodes the
-//! first copy of a repeated schema and skips the others, merges the copies of
-//! a column chunk's metadata, appends those of a row group's columns, and
-//! keeps the last copy of other fields, while admission reads the last copy.
-//! It could then act on a schema or page offsets that admission never
-//! checked. Writers never repeat a field, so admission refuses a repeated
-//! known field as malformed in every struct it walks.
+//! A known field also occurs at most once. The native decoder keeps the last
+//! copy of a repeated field, as admission reads it, but writers never repeat
+//! a field, so admission refuses a repeated known field as malformed in every
+//! struct it walks.
 //!
 //! The native decoder also reserves room for every element a known list
 //! declares before it reads the first. The compact parser bounds a count only
@@ -31,24 +28,24 @@
 //! that framing compares with the schema's leaves (`Lists`). Framing bounds
 //! the schema and the row groups themselves.
 //!
-//! The table follows parquet 57.3.0's readers as this build calls them:
-//! `parquet_metadata_from_bytes`, `read_row_group`, `read_column_chunk`,
-//! `read_column_metadata` and the page header readers in
-//! `file/metadata/thrift/mod.rs`; the readers `thrift_struct!`
-//! (`parquet_macros.rs`) generates for the structs declared there, in
-//! `file/metadata/mod.rs` and in `basic.rs`; and the hand-written readers of
-//! `LogicalType`, `ColumnOrder` and `EncodingMask` in `basic.rs`. The native
-//! page reader uses `PageHeader::read_thrift_without_stats`, since page
-//! statistics are off by default, so it skips data page statistics like any
-//! unknown field. This build does not enable parquet's `encryption` feature,
-//! so it also skips the encryption fields of `FileMetaData` and `ColumnChunk`.
+//! The table follows the generated readers as this build calls them: the
+//! metadata decoder (`ParquetMetaDataReader::decode_metadata`) reads
+//! `FileMetaData` and everything below it, and the page reader reads each
+//! `PageHeader`. They read every field that the format's Thrift definition
+//! declares, whatever features the build enables: the encryption fields of
+//! `FileMetaData` and `ColumnChunk`, a column chunk's path and key-value
+//! metadata, and each data page header's statistics. The table also keeps the
+//! later fields that parquet 57 reads: the variant, geometry and geography
+//! logical types, which 55 refuses, and geospatial statistics, which it
+//! skips. Checking their types refuses only files that no writer produces.
+
 use super::compact::{Cursor, Error, Value};
 use crate::storage_api::ENCODING_STATS;
 use yamaa_core::limits::Limits;
 
-/// The most key-value metadata entries a footer may declare. The format
-/// bounds them by nothing; writers write a few and the engine reads one, so
-/// the column limit serves as the bound.
+/// The most key-value metadata entries a footer, or a column chunk's
+/// metadata, may declare. The format bounds them by nothing; writers write a
+/// few and the engine reads one, so the column limit serves as the bound.
 const KEY_VALUES: usize = Limits::COLUMNS;
 
 /// The most geospatial types a column chunk's statistics may list. The format
@@ -88,6 +85,13 @@ pub(super) enum Shape {
     KeyValue,
     /// A union whose one known variant is an empty struct.
     ColumnOrder,
+    /// A union of `AesGcmV1` and `AesGcmCtrV1`.
+    EncryptionAlgorithm,
+    /// `AesGcmV1` and `AesGcmCtrV1`, which share one declaration.
+    AesGcm,
+    /// A union: an empty struct, or `EncryptionWithColumnKey`.
+    ColumnCryptoMetaData,
+    EncryptionWithColumnKey,
     PageHeader,
     DataPageHeader,
     DataPageHeaderV2,
@@ -163,6 +167,8 @@ impl Shape {
             (FileMetaData, 5) => List(&Wire::Struct(KeyValue)),
             (FileMetaData, 6) => Binary,
             (FileMetaData, 7) => List(&Wire::Struct(ColumnOrder)),
+            (FileMetaData, 8) => Wire::Struct(EncryptionAlgorithm),
+            (FileMetaData, 9) => Binary,
             (SchemaElement, 1..=3 | 5..=9) => I32,
             (SchemaElement, 4) => Binary,
             (SchemaElement, 10) => Wire::Struct(LogicalType),
@@ -183,9 +189,8 @@ impl Shape {
             (VariantType, 1) => Byte,
             (GeometryType | GeographyType, 1) => Binary,
             (GeographyType, 2) => I32,
-            // total_compressed_size (6) is skipped.
             (RowGroup, 1) => List(&Wire::Struct(ColumnChunk)),
-            (RowGroup, 2 | 3 | 5) => I64,
+            (RowGroup, 2 | 3 | 5 | 6) => I64,
             (RowGroup, 4) => List(&Wire::Struct(SortingColumn)),
             (RowGroup, 7) => I16,
             (SortingColumn, 1) => I32,
@@ -194,9 +199,12 @@ impl Shape {
             (ColumnChunk, 2 | 4 | 6) => I64,
             (ColumnChunk, 3) => Wire::Struct(ColumnMetaData),
             (ColumnChunk, 5 | 7) => I32,
-            // path_in_schema (3) and key_value_metadata (8) are skipped.
+            (ColumnChunk, 8) => Wire::Struct(ColumnCryptoMetaData),
+            (ColumnChunk, 9) => Binary,
             (ColumnMetaData, 1 | 4 | 15) => I32,
             (ColumnMetaData, 2) => List(&I32),
+            (ColumnMetaData, 3) => List(&Binary),
+            (ColumnMetaData, 8) => List(&Wire::Struct(KeyValue)),
             (ColumnMetaData, 5..=7 | 9..=11 | 14) => I64,
             (ColumnMetaData, 12) => Wire::Struct(Statistics),
             (ColumnMetaData, 13) => List(&Wire::Struct(PageEncodingStats)),
@@ -213,15 +221,23 @@ impl Shape {
             (BoundingBox, 1..=8) => Double,
             (KeyValue, 1 | 2) => Binary,
             (ColumnOrder, 1) => Wire::Struct(Empty),
+            (EncryptionAlgorithm, 1 | 2) => Wire::Struct(AesGcm),
+            (AesGcm, 1 | 2) => Binary,
+            (AesGcm, 3) => Bool,
+            (ColumnCryptoMetaData, 1) => Wire::Struct(Empty),
+            (ColumnCryptoMetaData, 2) => Wire::Struct(EncryptionWithColumnKey),
+            (EncryptionWithColumnKey, 1) => List(&Binary),
+            (EncryptionWithColumnKey, 2) => Binary,
             (PageHeader, 1..=4) => I32,
             (PageHeader, 5) => Wire::Struct(DataPageHeader),
             (PageHeader, 6) => Wire::Struct(Empty),
             (PageHeader, 7) => Wire::Struct(DictionaryPageHeader),
             (PageHeader, 8) => Wire::Struct(DataPageHeaderV2),
-            // Each data page header's statistics are skipped.
             (DataPageHeader, 1..=4) => I32,
+            (DataPageHeader, 5) => Wire::Struct(Statistics),
             (DataPageHeaderV2, 1..=6) => I32,
             (DataPageHeaderV2, 7) => Bool,
+            (DataPageHeaderV2, 8) => Wire::Struct(Statistics),
             (DictionaryPageHeader, 1 | 2) => I32,
             (DictionaryPageHeader, 3) => Bool,
             _ => return None,
@@ -250,10 +266,14 @@ impl Shape {
             // The required key.
             KeyValue => (3, 3),
             // Exactly one variant, whose value can take no byte, as an unknown
-            // boolean variant does.
+            // boolean variant does. The decoder refuses any variant but the
+            // empty TYPE_ORDER struct, a byte longer, and reserves nothing for
+            // the list, whose elements then hold nothing.
             ColumnOrder => (2, 2),
-            // The stop byte. The decoder reserves no column chunk by the
-            // declared count: it first compares that count with the schema's.
+            // The required file offset. Framing refuses a chunk without the
+            // metadata it locates pages by before the decoder sees the list.
+            ColumnChunk => (3, 3),
+            // The stop byte.
             _ => (1, 1),
         }
     }
@@ -263,13 +283,16 @@ impl Shape {
     /// its bytes, or by the schema.
     fn most(self, id: i16) -> Option<usize> {
         match (self, id) {
-            (Shape::FileMetaData, 5) => Some(KEY_VALUES),
+            (Shape::FileMetaData, 5) | (Shape::ColumnMetaData, 8) => Some(KEY_VALUES),
             (Shape::ColumnMetaData, 13) => Some(ENCODING_STATS),
             (Shape::GeospatialStatistics, 2) => Some(GEOSPATIAL_TYPES),
             // A level histogram holds one count for each level from zero to
             // the column's highest, which is below the schema depth that
-            // admission allows.
-            (Shape::SizeStatistics, 2 | 3) => Some(Limits::SEMANTIC_DEPTH),
+            // admission allows; a column's path holds one name for each level
+            // below the root.
+            (Shape::SizeStatistics, 2 | 3)
+            | (Shape::ColumnMetaData, 3)
+            | (Shape::EncryptionWithColumnKey, 1) => Some(Limits::SEMANTIC_DEPTH),
             _ => None,
         }
     }
@@ -570,10 +593,26 @@ mod tests {
     #[test]
     fn a_mistyped_known_field_of_each_struct_is_malformed() {
         type Case = (&'static str, At, fn(Fields, bool) -> Fields);
-        let cases: [Case; 27] = [
+        let cases: [Case; 37] = [
             // created_by as a UUID, which the native copy presents as a binary.
             ("FileMetaData", At::File, |f, wrong| {
                 f.pick(wrong, |f| f.uuid(6), |f| f.binary(6, b"yamaa test"))
+            }),
+            ("FileMetaData", At::File, |f, wrong| {
+                f.pick(wrong, |f| f.i32(9, 0), |f| f.binary(9, b"key"))
+            }),
+            // AES_GCM_V1 as an empty binary, one byte like an empty struct.
+            ("EncryptionAlgorithm", At::File, |f, wrong| {
+                let union = Fields::default().pick(
+                    wrong,
+                    |u| u.binary(1, b""),
+                    |u| u.strct(1, Fields::default()),
+                );
+                f.strct(8, union)
+            }),
+            ("AesGcm", At::File, |f, wrong| {
+                let aes = Fields::default().pick(wrong, |a| a.i32(3, 0), |a| a.bool(3, false));
+                f.strct(8, Fields::default().strct(2, aes))
             }),
             ("SchemaElement", At::Leaf, |f, wrong| {
                 f.pick(wrong, |f| f.binary(9, b"7"), |f| f.i32(9, 7))
@@ -630,6 +669,9 @@ mod tests {
             ("RowGroup", At::Group, |f, wrong| {
                 f.pick(wrong, |g| g.binary(5, b"4"), |g| g.i64(5, 4))
             }),
+            ("RowGroup", At::Group, |f, wrong| {
+                f.pick(wrong, |g| g.binary(6, b"0"), |g| g.i64(6, 0))
+            }),
             ("SortingColumn", At::Group, |f, wrong| {
                 let column = Fields::default().i32(1, 0);
                 let column = column.pick(wrong, |s| s.i32(2, 0), |s| s.bool(2, false));
@@ -639,8 +681,37 @@ mod tests {
             ("ColumnChunk", At::Chunk, |f, wrong| {
                 f.pick(wrong, |c| c.uuid(5), |c| c.i32(5, 16))
             }),
+            ("ColumnChunk", At::Chunk, |f, wrong| {
+                f.pick(wrong, |c| c.i32(9, 0), |c| c.binary(9, b"sealed"))
+            }),
+            // ENCRYPTION_WITH_FOOTER_KEY as an empty binary.
+            ("ColumnCryptoMetaData", At::Chunk, |f, wrong| {
+                let union = Fields::default().pick(
+                    wrong,
+                    |u| u.binary(1, b""),
+                    |u| u.strct(1, Fields::default()),
+                );
+                f.strct(8, union)
+            }),
+            // The column key's path as one binary rather than a list.
+            ("EncryptionWithColumnKey", At::Chunk, |f, wrong| {
+                let key = Fields::default().pick(
+                    wrong,
+                    |k| k.binary(1, b"V"),
+                    |k| k.list(1, 8, &[b"\x01V".to_vec()]),
+                );
+                f.strct(8, Fields::default().strct(2, key))
+            }),
             ("ColumnMetaData", At::Meta, |f, wrong| {
                 f.pick(wrong, |m| m.binary(14, b"0"), |m| m.i64(14, 0))
+            }),
+            // key_value_metadata holding binaries rather than entries.
+            ("ColumnMetaData", At::Meta, |f, wrong| {
+                f.pick(
+                    wrong,
+                    |m| m.list(8, 8, &[b"\x01k".to_vec()]),
+                    |m| m.list(8, 12, &[Fields::default().binary(1, b"k").end()]),
+                )
             }),
             ("Statistics", At::Meta, |f, wrong| {
                 let stats = Fields::default().i64(3, 0);
@@ -690,11 +761,29 @@ mod tests {
             ("DataPageHeader", At::Data, |f, wrong| {
                 f.pick(wrong, |d| d.raw(4, 3, &[3]), |d| d.i32(4, 3))
             }),
+            // The page's statistics as an empty binary.
+            ("DataPageHeader", At::Data, |f, wrong| {
+                let f = f.i32(4, 3);
+                f.pick(
+                    wrong,
+                    |d| d.binary(5, b""),
+                    |d| d.strct(5, Fields::default()),
+                )
+            }),
             // A V2 header the native decoder reads although the page is V1.
             ("DataPageHeaderV2", At::Page, |f, wrong| {
                 let v2 = Fields::default().i32(1, 1).i32(2, 0);
                 let v2 = v2.pick(wrong, |v| v.binary(3, b"1"), |v| v.i32(3, 1));
                 f.strct(8, v2.i32(4, 0).i32(5, 0).i32(6, 0))
+            }),
+            ("DataPageHeaderV2", At::Page, |f, wrong| {
+                let v2 = Fields::default().i32(1, 1).i32(2, 0).i32(3, 1).i32(4, 0);
+                let v2 = v2.i32(5, 0).i32(6, 0).pick(
+                    wrong,
+                    |v| v.binary(8, b""),
+                    |v| v.strct(8, Fields::default()),
+                );
+                f.strct(8, v2)
             }),
             ("DictionaryPageHeader", At::Page, |f, wrong| {
                 let dictionary = Fields::default().i32(1, 0).i32(2, 0);
@@ -723,9 +812,17 @@ mod tests {
     #[test]
     fn a_repeated_known_field_of_each_struct_is_malformed() {
         type Case = (&'static str, At, fn(Fields, bool) -> Fields);
-        let cases: [Case; 25] = [
+        let cases: [Case; 31] = [
             ("FileMetaData", At::File, |f, repeat| {
                 f.twice(repeat, |f| f.binary(6, b"yamaa test"))
+            }),
+            ("EncryptionAlgorithm", At::File, |f, repeat| {
+                let union = Fields::default().twice(repeat, |u| u.strct(1, Fields::default()));
+                f.strct(8, union)
+            }),
+            ("AesGcm", At::File, |f, repeat| {
+                let aes = Fields::default().twice(repeat, |a| a.binary(1, b"aad"));
+                f.strct(8, Fields::default().strct(1, aes))
             }),
             ("SchemaElement", At::Leaf, |f, repeat| {
                 f.twice(repeat, |f| f.i32(9, 7))
@@ -773,8 +870,22 @@ mod tests {
             ("ColumnChunk", At::Chunk, |f, repeat| {
                 f.twice(repeat, |c| c.i32(5, 16))
             }),
+            ("ColumnCryptoMetaData", At::Chunk, |f, repeat| {
+                let union = Fields::default().twice(repeat, |u| u.strct(1, Fields::default()));
+                f.strct(8, union)
+            }),
+            ("EncryptionWithColumnKey", At::Chunk, |f, repeat| {
+                let key = Fields::default().twice(repeat, |k| k.binary(2, b"key"));
+                let key = key.list(1, 8, &[b"\x01V".to_vec()]);
+                f.strct(8, Fields::default().strct(2, key))
+            }),
             ("ColumnMetaData", At::Meta, |f, repeat| {
                 f.twice(repeat, |m| m.i64(14, 0))
+            }),
+            ("ColumnMetaData", At::Meta, |f, repeat| {
+                f.twice(repeat, |m| {
+                    m.list(8, 12, &[Fields::default().binary(1, b"k").end()])
+                })
             }),
             ("Statistics", At::Meta, |f, repeat| {
                 let stats = Fields::default().twice(repeat, |s| s.i64(3, 0));
@@ -812,6 +923,9 @@ mod tests {
             ("DataPageHeader", At::Data, |f, repeat| {
                 f.twice(repeat, |d| d.i32(4, 3))
             }),
+            ("DataPageHeader", At::Data, |f, repeat| {
+                f.i32(4, 3).twice(repeat, |d| d.strct(5, Fields::default()))
+            }),
             ("DataPageHeaderV2", At::Page, |f, repeat| {
                 let v2 = Fields::default().twice(repeat, |v| v.i32(1, 1));
                 let v2 = v2.i32(2, 0).i32(3, 1).i32(4, 0);
@@ -830,7 +944,7 @@ mod tests {
         }
     }
 
-    /// parquet 57.3.0 decodes the first copy of a repeated schema, and merges
+    /// parquet 57.3.0 decoded the first copy of a repeated schema, and merged
     /// the copies of a column chunk's metadata, while admission read the
     /// last copy. Neither copy is read once the field is refused.
     #[test]
@@ -891,12 +1005,28 @@ mod tests {
         let levels = |count| repeated(6, count, &[0], &[0]);
         // Geospatial statistics listing `count` codes, each 1 (a point).
         let geospatial = |count| Fields::default().raw(2, 9, &repeated(5, count, &[2], &[2]));
+        // A column key's path of `count` empty names.
+        let names = |count| repeated(8, count, &[0], &[0]);
         type Case = (&'static str, usize, Box<dyn Fn(usize) -> Vec<u8>>);
-        let cases: [Case; 7] = [
+        let cases: [Case; 9] = [
             (
                 "key_value_metadata",
                 KEY_VALUES,
                 Box::new(move |n| file(&[7], At::File, |f| f.raw(5, 9, &entries(n)))),
+            ),
+            (
+                "column key_value_metadata",
+                KEY_VALUES,
+                Box::new(move |n| file(&[7], At::Meta, |f| f.raw(8, 9, &entries(n)))),
+            ),
+            (
+                "column key path_in_schema",
+                Limits::SEMANTIC_DEPTH,
+                Box::new(move |n| {
+                    let key = |f: Fields| f.raw(1, 9, &names(n));
+                    let crypto = |f: Fields| f.strct(2, key(Fields::default()));
+                    file(&[7], At::Chunk, |f| f.strct(8, crypto(Fields::default())))
+                }),
             ),
             (
                 "encoding_stats",
@@ -946,6 +1076,18 @@ mod tests {
             framing::admit(&file(most)).unwrap_or_else(|error| panic!("{name}: {error:?}"));
             assert!(malformed(&file(most + 1)), "{name}");
         }
+        // A column's path, which the authored file writes once, checked here
+        // within its metadata alone.
+        let path = |count| {
+            let meta = Fields::default().raw(3, 9, &names(count)).end();
+            let (value, _) = super::super::compact::parse(&meta).unwrap();
+            super::check(value, super::Shape::ColumnMetaData).map(drop)
+        };
+        assert_eq!(path(Limits::SEMANTIC_DEPTH), Ok(()));
+        assert_eq!(
+            path(Limits::SEMANTIC_DEPTH + 1),
+            Err(super::Error::Malformed)
+        );
         // Each leaf has exactly one column order.
         let orders = list(1, &[0x1c, 0, 0]);
         let fewer = columnless(&leaves(2), |f| f.raw(4, 9, &[0x0c]).raw(7, 9, &orders));
@@ -966,7 +1108,7 @@ mod tests {
     #[test]
     fn every_known_field_id_has_a_bit_of_its_own() {
         use super::Shape::{self, *};
-        let shapes: [Shape; 26] = [
+        let shapes: [Shape; 30] = [
             FileMetaData,
             SchemaElement,
             LogicalType,
@@ -988,6 +1130,10 @@ mod tests {
             BoundingBox,
             KeyValue,
             ColumnOrder,
+            EncryptionAlgorithm,
+            AesGcm,
+            ColumnCryptoMetaData,
+            EncryptionWithColumnKey,
             PageHeader,
             DataPageHeader,
             DataPageHeaderV2,
@@ -1031,8 +1177,7 @@ mod tests {
             (At::Group, |f| f.list(4, 0, &[])),
             (At::Meta, |f| {
                 let set = f.uuid(90).collection(91, 10, 5, &[zigzag(1)]);
-                set.raw(92, 11, &[0])
-                    .binary(3, b"path_in_schema is skipped")
+                set.raw(92, 11, &[0]).binary(93, b"an unknown binary")
             }),
             (At::Leaf, |f| {
                 f.strct(10, Fields::default().binary(9, b"reserved"))
@@ -1138,6 +1283,48 @@ mod tests {
         }
     }
 
+    /// Admission checks the types of the column orders and logical types
+    /// that later format versions add, but the native decoder reads only the
+    /// ones its own version names: it refuses a file that holds another.
+    #[test]
+    fn a_column_order_or_logical_type_the_decoder_does_not_know_is_malformed() {
+        // TYPE_ORDER, then the IEEE 754 total order, also an empty struct.
+        for (variant, readable) in [(1, true), (2, false)] {
+            let bytes = file(&[7], At::File, move |f| {
+                f.list(
+                    7,
+                    12,
+                    &[Fields::default().strct(variant, Fields::default()).end()],
+                )
+            });
+            framing::admit(&bytes).unwrap();
+            assert_eq!(reader::read(&bytes).is_ok(), readable, "order {variant}");
+        }
+        // VARIANT, GEOMETRY and GEOGRAPHY annotations of the INT64 leaf.
+        for variant in [16, 17, 18] {
+            let bytes = file(&[7], At::Leaf, move |f| {
+                f.strct(10, Fields::default().strct(variant, Fields::default()))
+            });
+            framing::admit(&bytes).unwrap();
+            let error = reader::read(&bytes).unwrap_err();
+            assert_eq!(error, reader::Error::Malformed, "logical type {variant}");
+        }
+    }
+
+    /// The native decoder reads a skipped binary as UTF-8 text, so an
+    /// unknown binary field that is not UTF-8 refuses the file, in the footer
+    /// and in a page header alike.
+    #[test]
+    fn an_unknown_binary_that_is_not_utf8_is_malformed() {
+        for at in [At::File, At::Page] {
+            for (bytes, readable) in [(&b"text"[..], true), (&[0xff][..], false)] {
+                let held = file(&[7], at, move |f| f.binary(90, bytes));
+                framing::admit(&held).unwrap();
+                assert_eq!(reader::read(&held).is_ok(), readable, "{at:?} {bytes:?}");
+            }
+        }
+    }
+
     #[test]
     fn a_crc_binary_cannot_hide_another_data_page_header() {
         use yamaa_core::diagnostic::{ParquetFinding, SourceFinding};
@@ -1165,8 +1352,10 @@ mod tests {
 
     #[test]
     fn mistyped_known_booleans_are_malformed_before_the_native_decoder_unwraps_them() {
-        // parquet 57.3.0 takes a known boolean from its field header and
-        // panics when an i32 zero carries it instead.
+        // The native decoder takes a known boolean from its field header, or
+        // reads it from the next byte when an i32 zero carries it instead,
+        // so it would read other bytes than admission checked. (parquet
+        // 57.3.0 panicked there.)
         for bytes in [
             file(&[7], At::Group, |f| {
                 let sorting = Fields::default().i32(1, 0).i32(2, 0).bool(3, true);
@@ -1219,8 +1408,8 @@ mod tests {
     }
 
     /// The issue's crafted footers held 64 Mi empty key-value entries and 64
-    /// Mi empty schema elements, and parquet 57.3.0 reserved about 3 and 6 GiB
-    /// for them before it refused the first. Here they are scaled down to as
+    /// Mi empty schema elements, and the native decoder reserves about 3 and
+    /// 6.5 GiB for them before it refuses the first. Here they are scaled down to as
     /// many elements as each list may declare, beside the other lists the
     /// decoder reserves by their declared count: a list of empty structs is
     /// malformed, and a list of elements the decoder accepts, each as short

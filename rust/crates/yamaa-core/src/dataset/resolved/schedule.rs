@@ -1,4 +1,4 @@
-//! The schedule: today's evaluation order, built from the resolved graph.
+//! The schedule: the evaluation order, built from the resolved graph.
 //!
 //! The compiler already fixes the order: row bindings in each template's
 //! dependency order, the prewindow/window split, the column phase in the
@@ -408,27 +408,18 @@ impl Classes<'_> {
                 continue;
             }
             class = class.max(match plan.expr(expr).kind {
-                ExprKind::Collect | ExprKind::Count | ExprKind::Odm(_) => {
-                    PartitionClass::CombineStep
-                }
-                ExprKind::Reduce
-                | ExprKind::Function
-                | ExprKind::ProjectFunction
+                ExprKind::Collect | ExprKind::Odm(_) => PartitionClass::CombineStep,
+                ExprKind::ProjectFunction
                 | ExprKind::Window(_)
                 | ExprKind::ContextWindow(_)
                 | ExprKind::Intermediate(_)
                 | ExprKind::Joined(_)
                 | ExprKind::JoinedSource(_)
                 | ExprKind::SourceLookup(_)
-                | ExprKind::Lookup(_)
-                | ExprKind::RowLookup(_)
                 | ExprKind::Aggregate(_) => PartitionClass::Global,
                 _ => PartitionClass::Safe,
             });
-            if matches!(
-                plan.expr(expr).kind,
-                ExprKind::Function | ExprKind::ProjectFunction
-            ) {
+            if plan.expr(expr).kind == ExprKind::ProjectFunction {
                 effects = effects.max(Effects::Callbacks);
             }
             if !plan.sites(expr).is_empty() {

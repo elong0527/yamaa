@@ -23,7 +23,7 @@ open gates live in GitHub issues and pull requests, not here.
   distributed as a GitHub source tarball, and from 1.0.0 on CRAN, as
   [CRAN submission](#cran-submission) describes.
 
-Source builds compile the Rust workspace, so they need Rust 1.90.0 or later
+Source builds compile the Rust workspace, so they need Rust 1.82.0 or later
 with Cargo and a C compiler. The R source package carries the locked crates
 and builds offline, as [Source package contents](#source-package-contents)
 describes. For the Python source archive, Cargo downloads the locked crates
@@ -38,9 +38,10 @@ describes.
 combination on manual dispatch. A release is cut from a commit whose complete
 native run passed. Development PRs do not run the release lanes, so before a
 release also dispatch R-CMD-check, Dependency graphs and Release compatibility
-on the candidate. Release compatibility checks the minimum toolchain, minimal
-format builds, Python 3.15 and minimum Python saved artifact readers; dispatch
-CI for its minimum R saved artifact reader checks.
+on the candidate. Release compatibility checks the minimum toolchain, the R
+source package built with it, minimal format builds, Python 3.15 and minimum
+Python saved artifact readers; dispatch CI for its minimum R saved artifact
+reader checks.
 
 A release has one identity, written once in `tools/packaging/release.toml`:
 the final version X.Y.Z and, for a release candidate, its number N. Each
@@ -105,18 +106,23 @@ the public project submission API.
 
 ## Supported dependency combinations
 
-The Rust workspace declares MSRV 1.90 and builds with Rust 1.99.1, the
+The Rust workspace declares MSRV 1.82 and builds with Rust 1.99.1, the
 toolchain that `rust/rust-toolchain.toml` pins; a CI job checks and lints it
-with Rust 1.90.0. The R source package runs Cargo from outside its bundled
-workspace, so it builds with the caller's toolchain, whose Cargo and rustc
-must each be 1.90 or later: Windows R builds need the GNU target on that
-toolchain, `rustup target add x86_64-pc-windows-gnu`. Canonical
+with Rust 1.82.0, and another builds and checks the R source package with it.
+Rust 1.82.0 was released on 2024-10-17, so it is at least the two-year-old
+Cargo that CRAN's guidance for packages using Rust asks to test with, on any
+submission date (#3111). The R source package runs Cargo from outside its
+bundled workspace, so it builds with the caller's toolchain, whose Cargo and
+rustc must each be 1.82 or later: Windows R builds need the GNU target on that
+toolchain, `rustup target add x86_64-pc-windows-gnu`. `make check-repository`
+refuses a locked package that a supported target compiles and that needs a
+newer Rust. Canonical
 release builds use `rust/Cargo.lock`, including unchanged copies in both source
-packages. Arrow and Parquet are supported at exactly 57.3.0 with flatbuffers
-25.12.19, so an embedder whose graph holds Arrow 57.3.0 builds the engine
-unchanged. Other Arrow and Parquet releases are unsupported: the adapter's
-version-specific APIs, confined to `storage_api.rs`, are adapted and qualified
-for 57.3.0 only. Broadening that range requires separate adapter and
+packages. Arrow and Parquet are supported at exactly 55.2.0, the newest
+release that builds with Rust 1.82, with flatbuffers 25.12.19, so an embedder
+whose graph holds Arrow 55.2.0 builds the engine unchanged. Other Arrow and
+Parquet releases are unsupported: the adapter's version-specific APIs, confined
+to `storage_api.rs`, are adapted and qualified for 55.2.0 only. Broadening that range requires separate adapter and
 installed-host qualification first. The direct storage codec floors are brotli
 8.0.4 and lz4_flex 0.13.1. Portable libm remains exactly 0.2.16. The reviewed
 saphyr-parser 0.2.1 with its compact-flow fix is vendored as
@@ -125,25 +131,30 @@ therefore part of every graph that builds the engine, including a project that
 depends on the facade by git or path with no other configuration; the Release
 compatibility workflow's minimum-toolchain job builds the facade from such an
 outside workspace (#2929). The Python
-binding builds with PyO3 0.27.2 through 0.30; the lock selects 0.30.1, and the
-minimum dependency graph tests 0.27.2.
+binding builds with PyO3 0.27, the newest release that builds with Rust 1.82;
+the lock and the minimum dependency graph select 0.27.2.
 
 The engine deliberately links two versions of four crates, because yamaa's
-direct floors differ from Parquet 57.3.0's: lz4_flex 0.13 beside Parquet's
-0.12, zstd 0.14 beside 0.13, base64 0.23 beside 0.22, and num-bigint 0.5
+direct floors differ from Parquet 55.2.0's: lz4_flex 0.13 beside Parquet's
+0.11, zstd 0.14 beside 0.13, base64 0.23 beside 0.22, and num-bigint 0.5
 beside the 0.4 that Parquet and arrow-buffer use. Aligning them would lower
-yamaa's floors or move Parquet off its exact pin; Parquet 57.3.1 requires the
-same versions as 57.3.0. Both zstd copies, through zstd-safe 7 and 8, build
-one `zstd-sys`, so the engine links a single zstd library. The other duplicate
-versions that `cargo tree -d` lists add no second linked copy: syn serves
-procedural macros, and the extra getrandom and r-efi versions serve build
-tools or other targets.
+yamaa's floors or move Parquet off its exact pin. Both zstd copies, through
+zstd-safe 7 and 8, build one `zstd-sys`, so the engine links a single zstd
+library. The other duplicate versions that `cargo tree -d` lists add no second
+linked copy: syn serves procedural macros, and the extra getrandom version
+serves a procedural macro too.
+
+Parquet 55 turns on flate2's zlib-rs backend whenever it reads GZIP pages, and
+flate2 then prefers it to the rust_backend (miniz_oxide) that yamaa names, so
+the engine's own GZIP decoding, for Parquet page admission and ODM archives,
+uses zlib-rs as well. zlib-rs is pure Rust under the Zlib license, which the
+license notices now accept.
 
 Python supports CPython 3.12 through 3.15 with the runtime ranges in
 `python/pyproject.toml`. On CPython 3.12 to 3.14, their declared floors are
 lxml 6.1.3, Polars 1.35.2, py-yaml12 0.2, PyArrow 23.0.1, Pydantic 2.12.4,
 packaging 25 and PyYAML 6.0.3.
-The Parquet 57.3.0 writer records only type-defined column orders, which
+The Parquet 55.2.0 writer records only type-defined column orders, which
 Polars 1.35.2 reads; the IEEE 754 total-order form that later writers record
 for floating-point columns needs Polars 1.43.2. R supports R 4.4.0 and later
 and uses the shared Rust graph; its host qualification readers are the
@@ -373,7 +384,7 @@ notices remain in the distributed `LICENSE-YAML.txt`.
 Both source packages carry `rust/rust-toolchain.toml` unchanged, and neither
 installation reads it. The R package runs Cargo from `src/`, and pip builds
 the Python source archive from its root, both outside that declaration, so
-both build with the caller's default toolchain, which must be Rust 1.90 or
+both build with the caller's default toolchain, which must be Rust 1.82 or
 later. The R build also sets `RUSTUP_AUTO_INSTALL=0`, so rustup installs no
 toolchain even where a `rust-toolchain.toml` in a parent directory names one.
 The file names Rust 1.99.1 in rustup's minimal profile and no other
@@ -435,9 +446,9 @@ that library. `LICENSE-READSTAT.txt`,
 sources, the Unicode data in yamaa's own tables and the vendored YAML parser.
 The R package keeps its `MIT + file LICENSE` declaration, and its `Copyright`
 field names these files. The Python License-Expression,
-`MIT AND Apache-2.0 AND BSD-3-Clause AND Unicode-3.0`, covers the project, the
-crates linked into the wheels and the standard library, which is relied on
-under MIT, with Unicode-3.0 for the Unicode tables in `core`.
+`MIT AND Apache-2.0 AND BSD-3-Clause AND Unicode-3.0 AND Zlib`, covers the
+project, the crates linked into the wheels and the standard library, which is
+relied on under MIT, with Unicode-3.0 for the Unicode tables in `core`.
 
 `tools.packaging.generate_third_party_notices` generates the crate notices
 from `rust/Cargo.lock` and the standard library section from the toolchain
@@ -513,10 +524,14 @@ owns decoding behavior.
 - Promote row defaults per template: a column can be row-phase for the
   templates that need it and column-phase for the rest, and a candidate a
   template filter suppresses never reads a lookup it does not need.
-- Pin Arrow and Parquet to exactly 57.3.0, with brotli 8.0.4 and lz4_flex
-  0.13.1 floors, so embedders on Arrow 57.3.0 build the engine unchanged. The
-  57.3.0 writer's type-defined column orders return the Python Polars floor to
-  1.35.2, with no vendored Parquet writer.
+- Pin Arrow and Parquet to exactly 55.2.0, the newest release that builds
+  with the minimum Rust (#3111), with brotli 8.0.4 and lz4_flex 0.13.1
+  floors, so embedders on Arrow 55.2.0 build the engine unchanged. The 55.2.0
+  writer's type-defined column orders keep the Python Polars floor at 1.35.2,
+  with no vendored Parquet writer.
+- Build from Rust 1.82, the release that CRAN's two-year-old cargo rule
+  allows on any submission date, with edition 2021 (#3111). Keeping 1.85 and
+  holding the CRAN submission until 2027-02-20 was rejected.
 - Ship the reviewed vendored `saphyr-parser` compact-flow patch in every
   supported graph; replacing it with a published parser is 0.5.0 work.
 - Keep Cargo dependency floors where the minimum dependency-graph lane tests

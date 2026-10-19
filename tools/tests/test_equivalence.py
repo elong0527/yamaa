@@ -61,26 +61,9 @@ class EquivalenceGateTests(unittest.TestCase):
             str(ROOT / "benchmarks"),
         )
         self.assertEqual(gate.compared, ["python", "r"])
-        executors, python_runner, project_install, test_r_runner, r_runner = (
+        python_runner, project_install, test_r_runner, r_runner = (
             call.args[0] for call in gate.subprocess.call_args_list
         )
-        self.assertEqual(
-            executors,
-            [
-                "cargo",
-                "test",
-                "--locked",
-                "-p",
-                "yamaa-adapters",
-                "-p",
-                "yamaa",
-                "--features",
-                "yamaa-core/executor-comparison",
-            ],
-        )
-        comparison = gate.subprocess.call_args_list[0].kwargs
-        self.assertEqual(comparison["env"]["YAMAA_EXECUTOR"], "compare")
-        self.assertIs(comparison["check"], True)
         self.assertEqual(
             python_runner[:3],
             [
@@ -106,31 +89,12 @@ class EquivalenceGateTests(unittest.TestCase):
             test_r_runner[2], str(ROOT / "rust/tests/test_public_conformance.R")
         )
         self.assertEqual(r_runner[2], str(ROOT / "rust/tests/public_conformance.R"))
-        r_environment = gate.subprocess.call_args_list[4].kwargs["env"]
+        r_environment = gate.subprocess.call_args_list[3].kwargs["env"]
         self.assertEqual(r_environment["R_LIBS"], "fresh-library")
         self.assertEqual(r_environment["PUBLIC_CONFORMANCE_PACKAGE_FORM"], "source")
         self.assertEqual(gate.suites.call_args.args[0], Path("venv/bin/python"))
         self.assertEqual(gate.check.call_args.args[0], gate.archive)
         self.assertIs(gate.check.call_args.args[2], gate.environment)
-
-    def test_a_differing_attempt_stops_the_gate_before_any_host(self):
-        """The executor comparison runs first; its failure builds no host."""
-        failure = equivalence.subprocess.CalledProcessError(1, ["cargo", "test"])
-        with (
-            mock.patch.object(
-                equivalence.subprocess, "run", side_effect=failure
-            ) as run,
-            mock.patch.object(
-                equivalence.subprocess, "check_output", return_value="abc123\n"
-            ),
-            mock.patch.object(equivalence.public_conformance, "main") as conformance,
-            mock.patch.object(equivalence, "install_python") as install_python,
-            self.assertRaises(equivalence.subprocess.CalledProcessError),
-        ):
-            equivalence.main([])
-        self.assertEqual(run.call_args.args[0][:2], ["cargo", "test"])
-        conformance.assert_not_called()
-        install_python.assert_not_called()
 
     def test_a_python_mismatch_fails_before_the_r_build(self):
         """A failing Python comparison stops the gate with a nonzero status."""

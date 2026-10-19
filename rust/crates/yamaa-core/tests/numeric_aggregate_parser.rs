@@ -208,9 +208,7 @@ mod numeric {
     mod bound_expression {
         use std::convert::Infallible;
         use yamaa_core::{
-            bound_expression::{
-                Binding, BindingError, BoundNumeric, BoundPredicate, Read, ScopeError,
-            },
+            bound_expression::{Binding, BindingError, BoundNumeric, BoundPredicate, Read},
             expression::{compile, CompileError, Context, Failure, Resolver},
             value::{Selection, Value},
         };
@@ -246,7 +244,6 @@ mod numeric {
                 admitted.bindings(),
                 &[binding("A", Read::Source(0)), binding("B", Read::Column(1))]
             );
-            assert_eq!(admitted.validate(1, &[false, true], false), Ok(()));
             assert!(admitted.reads_source());
             assert_eq!(
                 numeric("A + B", vec![binding("A", Read::Source(0))]),
@@ -282,50 +279,7 @@ mod numeric {
             assert_eq!(predicate("", vec![]), Err(BindingError::EmptyPath));
             let admitted =
                 predicate("rows[0].filter", vec![binding("A", Read::Column(0))]).unwrap();
-            assert_eq!(admitted.validate(0, &[true], true), Ok(()));
-            assert_eq!(
-                admitted.validate(0, &[false], false),
-                Err(BindingError::UnavailableColumn)
-            );
-            assert_eq!(
-                admitted.validate(0, &[], false),
-                Err(BindingError::UnavailableColumn)
-            );
             assert_eq!(admitted.plan().spec_path(), "rows[0].filter");
-        }
-
-        #[test]
-        fn scope_validation_preserves_group_and_sorted_name_error_precedence() {
-            let admitted = numeric(
-                "A + B",
-                vec![binding("B", Read::Column(0)), binding("A", Read::Source(2))],
-            )
-            .unwrap();
-            assert_eq!(
-                admitted.validate(1, &[], true),
-                Err(ScopeError::GroupedSource)
-            );
-            assert_eq!(
-                admitted.validate(1, &[], false),
-                Err(ScopeError::InvalidSource)
-            );
-            assert_eq!(
-                admitted.validate(3, &[], false),
-                Err(ScopeError::UnavailableColumn)
-            );
-            assert_eq!(admitted.validate(3, &[true], false), Ok(()));
-            let source = predicate("filter", vec![binding("A", Read::Source(2))]).unwrap();
-            assert_eq!(
-                source.validate(1, &[], true),
-                Err(BindingError::GroupedSource)
-            );
-            assert_eq!(
-                source.validate(1, &[], false),
-                Err(BindingError::InvalidSource)
-            );
-            let output = numeric("A", vec![binding("A", Read::Column(0))]).unwrap();
-            assert!(!output.reads_source());
-            assert_eq!(output.validate(0, &[true], true), Ok(()));
         }
 
         #[derive(Default)]
@@ -380,10 +334,6 @@ mod numeric {
             assert!(collected.collects("A"));
             assert!(!collected.collects("B"));
             assert_eq!(
-                collected.validate(1, &[], false),
-                Err(BindingError::InvalidSource)
-            );
-            assert_eq!(
                 BoundPredicate::new_contextual(
                     original.plan().clone(),
                     vec![binding("A", Read::Column(0))],
@@ -412,10 +362,6 @@ mod numeric {
             )
             .unwrap();
             assert_eq!(
-                kept.validate(0, &[], false),
-                Err(BindingError::InvalidSource)
-            );
-            assert_eq!(
                 BoundPredicate::new(original.plan().clone(), kept.bindings().to_vec()),
                 Err(BindingError::InvalidSource)
             );
@@ -426,111 +372,6 @@ mod numeric {
                     vec![]
                 ),
                 Err(BindingError::DuplicateName)
-            );
-        }
-
-        #[test]
-        fn contextual_case_collection_reads_its_own_drivers_records() {
-            // A column binding reads each row through its own template's
-            // driver port (#2829), so a collection never borrows the
-            // primary's coordinates: the primary and ALT have the same width
-            // but different values at the row's record.
-            use yamaa_core::{
-                dataset::{
-                    Assignment, CaseBranch, DatasetPlan, Expression, RowMode, RowTemplate,
-                    SecondarySource,
-                },
-                function_invocation::NoFunctions,
-                table::{CellError, Column, TableAccess, TableSchema, ValueRef},
-                value::ColumnType,
-            };
-            struct Rows(TableSchema, Vec<Vec<Value>>);
-            impl TableAccess for Rows {
-                type Error = std::convert::Infallible;
-                fn schema(&self) -> &TableSchema {
-                    &self.0
-                }
-                fn row_count(&self) -> usize {
-                    self.1.len()
-                }
-                fn cell(
-                    &self,
-                    row: usize,
-                    column: usize,
-                ) -> Result<ValueRef<'_>, CellError<Self::Error>> {
-                    self.1
-                        .get(row)
-                        .and_then(|values| values.get(column))
-                        .map(ValueRef::from)
-                        .ok_or(CellError::OutOfBounds { row, column })
-                }
-            }
-            let schema = TableSchema::new(vec![
-                Column {
-                    name: "ID".into(),
-                    kind: ColumnType::Int,
-                },
-                Column {
-                    name: "V".into(),
-                    kind: ColumnType::Int,
-                },
-            ])
-            .unwrap();
-            let original = BoundPredicate::new(
-                compile("A = 9", Context::Predicate, "columns.V.case[0].when").unwrap(),
-                vec![binding("A", Read::Source(1))],
-            )
-            .unwrap();
-            let when = BoundPredicate::new_contextual(
-                original.plan().clone(),
-                original.bindings().to_vec(),
-                vec!["A".into()],
-            )
-            .unwrap();
-            let plan = DatasetPlan::new_with_sources(
-                schema.clone(),
-                vec![SecondarySource {
-                    name: "ALT".into(),
-                    schema: schema.clone(),
-                }],
-                schema.clone(),
-                vec![RowTemplate {
-                    mode: RowMode::Driver {
-                        source: 1,
-                        mode: Box::new(RowMode::Records),
-                    },
-                    assignments: vec![Assignment {
-                        column: 0,
-                        expression: Expression::Source(0),
-                        path: "rows[0].ID".into(),
-                    }],
-                    filter: None,
-                }],
-                vec![Assignment {
-                    column: 1,
-                    path: "columns.V.case".into(),
-                    expression: Expression::Case(vec![CaseBranch {
-                        when: Some(when),
-                        assignment: Box::new(Assignment {
-                            column: 1,
-                            expression: Expression::Literal(Value::Int(7)),
-                            path: "columns.V.case[0].then".into(),
-                        }),
-                    }]),
-                }],
-                vec![0],
-                vec![],
-            )
-            .unwrap();
-            let primary = Rows(schema.clone(), vec![vec![Value::Int(1), Value::Int(5)]]);
-            let alt = Rows(schema, vec![vec![Value::Int(1), Value::Int(9)]]);
-            let execution = plan
-                .execute(&primary, &[&alt], &mut NoFunctions::new(), None)
-                .result
-                .unwrap();
-            assert_eq!(
-                execution.dataset.rows(),
-                &[vec![Value::Int(1), Value::Int(7)]]
             );
         }
     }

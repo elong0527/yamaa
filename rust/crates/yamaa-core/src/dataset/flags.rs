@@ -107,61 +107,6 @@ impl Flag {
                 .map_or(ValueRef::Missing, ValueRef::from),
         }
     }
-    pub(super) fn key_expression(&self) -> bool {
-        self.bindings
-            .iter()
-            .all(|b| !matches!(b.read, FlagRead::Collect { .. }))
-    }
-    pub(super) fn validate(
-        &self,
-        source: &TableSchema,
-        available: &[bool],
-        secondary: &[SecondarySource],
-        intermediates: &[Intermediate],
-        output: &TableSchema,
-        mode: &RowMode,
-    ) -> Result<(), PlanError> {
-        for binding in &self.bindings {
-            match &binding.read {
-                FlagRead::Read(Read::Joined(read)) => {
-                    read.validate(source, secondary, output, available, mode)?
-                }
-                FlagRead::Read(Read::Source(column)) => {
-                    if *column >= source.columns().len() {
-                        return Err(PlanError::InvalidSource);
-                    }
-                    if matches!(mode, RowMode::Groups(groups) if !groups.contains(column)) {
-                        return Err(PlanError::NonGroupSource);
-                    }
-                }
-                FlagRead::Read(Read::Column(column)) => {
-                    if !available.get(*column).copied().unwrap_or(false) {
-                        return Err(PlanError::UnavailableColumn);
-                    }
-                }
-                FlagRead::Read(Read::Intermediate { index, column }) => {
-                    let item = intermediates
-                        .get(*index)
-                        .ok_or(PlanError::InvalidIntermediate)?;
-                    if !matches!(mode, RowMode::Keys) && !item.source.is_self() {
-                        return Err(PlanError::InvalidIntermediate);
-                    }
-                    super::intermediates::validate_context_read(
-                        item, *column, source, secondary, available, output, mode,
-                    )?;
-                }
-                FlagRead::Collect { column, identifier } => {
-                    if !matches!(mode, RowMode::Keys) || *column >= source.columns().len() {
-                        return Err(PlanError::InvalidSource);
-                    }
-                    if identifier.is_empty() {
-                        return Err(PlanError::EmptyPath);
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
 }
 
 /// Flag predicates own their public validation vocabulary, including regex input

@@ -113,11 +113,6 @@ impl<'a> Cursor<'a> {
         Ok((header & 15, count))
     }
 
-    /// The offset of the next byte to read, from the start of the struct.
-    pub(super) fn position(&self) -> usize {
-        self.0.position
-    }
-
     /// The bytes of the walked struct not yet read.
     pub(super) fn remaining(&self) -> usize {
         self.0.bytes.len() - self.0.position
@@ -162,8 +157,9 @@ struct Reader<'a> {
 }
 
 /// The kind the native decoder skips in place of `kind`: it cannot skip a
-/// set, map or UUID at all, so a set becomes the identically encoded list and
-/// a map or UUID becomes a binary of the same length (`native_binary`).
+/// set or map in a footer or a UUID anywhere, so a set becomes the
+/// identically encoded list and a map or UUID becomes a binary of the same
+/// length (`native_binary`).
 fn native_opaque(kind: u8) -> u8 {
     match kind {
         10 => 9,
@@ -192,7 +188,9 @@ impl<'a> Reader<'a> {
     /// Present the value at `start..position` to the native copy as one binary
     /// of the same length, so no later offset moves: its first bytes become
     /// the varint length of the rest, padded to fill exactly the bytes they
-    /// replace. The native decoder skips the value without reading it.
+    /// replace. The native decoder skips the value without interpreting it,
+    /// but reads a skipped binary as UTF-8 text, so a rest that is not UTF-8
+    /// becomes zero bytes.
     fn native_binary(&mut self, start: usize) {
         let Some(bytes) = &mut self.native_metadata else {
             return;
@@ -215,6 +213,10 @@ impl<'a> Reader<'a> {
         let range = start..start + width;
         if bytes[range.clone()] != prefix[..width] {
             bytes.to_mut()[range].copy_from_slice(&prefix[..width]);
+        }
+        let rest = start + width..self.position;
+        if std::str::from_utf8(&bytes[rest.clone()]).is_err() {
+            bytes.to_mut()[rest].fill(0);
         }
     }
 
@@ -403,19 +405,21 @@ pub(super) fn parse(bytes: &[u8]) -> Result<(Value<'_>, usize), Error> {
     Ok((value, reader.position))
 }
 
-/// Work around parquet 57.3.0's unknown-field skip in one held footer or page
-/// header. It treats a boolean collection element like an inline struct-field
-/// boolean and consumes no byte, and it cannot skip a set, map or UUID at all.
-/// The current Parquet footer and page header schemas have no known boolean
+/// Work around parquet 55.2.0's unknown-field skip in one held footer or page
+/// header. The footer decoder's compact protocol cannot read a set or map at
+/// all, neither decoder knows the UUID type, and both read a skipped binary
+/// as UTF-8 text. (parquet 57.3.0 also misread boolean collection elements,
+/// which 55 reads byte by byte like the bytes they are presented as.) The
+/// current Parquet footer and page header schemas have no known boolean
 /// collections and no known set, map or UUID fields. Present validated
 /// one-byte boolean elements as bytes, a set as the identically encoded list,
-/// and a map or UUID as one opaque binary of the same length, only to the
-/// native decoder; every field header and id stays. The result has the
-/// input's length, so a page header is presented in place in the held file.
-/// Keep the original metadata for admission and the original data pages for
-/// reads. This independently authored correction copies the struct only when
-/// needed, changes no values the native decoder reads from a well-typed
-/// struct, and never turns invalid booleans into bytes.
+/// and a map or UUID as one opaque binary of the same length whose bytes are
+/// UTF-8, only to the native decoder; every field header and id stays. The result has the input's length, so a page header is
+/// presented in place in the held file. Keep the original metadata for
+/// admission and the original data pages for reads. This independently
+/// authored correction copies the struct only when needed, changes no values
+/// the native decoder reads from a well-typed struct, and never turns invalid
+/// booleans into bytes.
 pub(super) fn native_metadata(bytes: &[u8]) -> Result<Cow<'_, [u8]>, Error> {
     let mut reader = Reader::new(bytes);
     reader.native_metadata = Some(Cow::Borrowed(bytes));
@@ -428,7 +432,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn native_skip_compatibility_changes_only_unskippable_headers_and_prefixes() {
+    fn native_skip_compatibility_changes_only_unskippable_values() {
         // Inline true/false fields, an opaque binary payload, then a nested
         // struct containing a bool list and bool->list<bool> map.
         let bytes = [
@@ -494,18 +498,29 @@ mod tests {
         assert_eq!(native_metadata(&wide).unwrap().as_ref(), native);
         // 129 map bytes are one too many for a one-byte prefix of 128, so a
         // two-byte prefix holds 127, padded with a zero continuation byte.
+        // The last value, 64, takes two bytes, the first a continuation byte
+        // that is not UTF-8, so the binary's other bytes become zero.
         let mut odd = vec![0x1b, 63, 0x14]; // map<bool,i16>: 63 pairs
         odd.extend((0..62).flat_map(|_| [1, 0]));
-        odd.extend([1, 0x80, 0x01]); // the last value, 64, takes two bytes
+        odd.extend([1, 0x80, 0x01]);
         assert_eq!(odd.len() - 1, 129);
         odd.push(0);
         let mut native = odd.clone();
         native[0] = 0x18;
         native[1..3].copy_from_slice(&[0xff, 0x00]);
+        native[3..130].fill(0);
         assert_eq!(native_metadata(&odd).unwrap().as_ref(), native);
         let (root, used) = parse(&native).unwrap();
         assert_eq!(used, native.len());
-        assert_eq!(root.field(1).unwrap(), Some(Value::Binary(&odd[3..130])));
+        assert_eq!(root.field(1).unwrap(), Some(Value::Binary(&[0; 127])));
+        // A UUID whose bytes are not UTF-8 likewise presents zero bytes.
+        let mut opaque = vec![0x1d];
+        opaque.extend([0xff; 16]);
+        opaque.push(0);
+        let mut native = vec![0x18, 15];
+        native.extend([0; 15]);
+        native.push(0);
+        assert_eq!(native_metadata(&opaque).unwrap().as_ref(), native);
         // Ordinary metadata and empty collections keep borrowing the source.
         for bytes in [&[0x11, 0x12, 0][..], &[0x19, 0x01, 0x19, 0x0b, 0]] {
             assert!(matches!(native_metadata(bytes).unwrap(), Cow::Borrowed(_)));

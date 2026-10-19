@@ -656,7 +656,7 @@ order. A term is a bare variable or a mapping declaring `variable`,
 `desc`. A declared `nulls: first` or `nulls: last` places missing values there
 under either direction.
 
-Evidence: `schema-ordering`, `adam-adae-review-order`, `adam-adae-serious-sequence`, `schema-baseline-tie-break`, `rust/crates/yamaa-adapters/tests/execution_declarative_self.rs::windows_and_presentation_sort_an_undeclared_missing_value_lowest`, `rust/crates/yamaa-adapters/tests/execution_declarative_self.rs::source_and_lookup_selection_sort_an_undeclared_missing_value_lowest`, `rust/crates/yamaa-core/tests/dataset_ordering.rs::presentation_order_preserves_all_types_ties_and_direction_independent_nulls`.
+Evidence: `schema-ordering`, `adam-adae-review-order`, `adam-adae-serious-sequence`, `schema-baseline-tie-break`, `rust/crates/yamaa-adapters/tests/execution_declarative_self.rs::windows_and_presentation_sort_an_undeclared_missing_value_lowest`, `rust/crates/yamaa-adapters/tests/execution_declarative_self.rs::source_and_lookup_selection_sort_an_undeclared_missing_value_lowest`, `rust/crates/yamaa-adapters/tests/execution_value_semantics.rs::output_order_sorts_every_type_places_missing_by_nulls_and_keeps_ties_in_construction_order`.
 Replaces: REQ-0297, REQ-0298, REQ-0299, REQ-0300, REQ-0301, REQ-0302, REQ-0312, REQ-1102, REQ-1103.
 
 The bare form is a [Schema language](reference/schema-language.md) shorthand
@@ -700,5 +700,5 @@ ordering uses the same tie-break. Ties are valid and must not change between
 runs over the same input. A specification may declare an additional term to
 break a tie.
 
-Evidence: `schema-ordering`, `rust/crates/yamaa-core/tests/dataset_ordering.rs::presentation_order_preserves_all_types_ties_and_direction_independent_nulls`.
+Evidence: `schema-ordering`, `rust/crates/yamaa-adapters/tests/execution_value_semantics.rs::output_order_sorts_every_type_places_missing_by_nulls_and_keeps_ties_in_construction_order`.
 Replaces: REQ-0225.

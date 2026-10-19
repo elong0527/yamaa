@@ -956,7 +956,7 @@ fn bound_relation(
                     .as_ref()
                     .and_then(|(_, plan)| plan.as_ref().ok())
                     .filter(|plan| {
-                        plan.identifiers().into_iter().any(|name| {
+                        plan.identifiers().any(|name| {
                             name.split_once('.')
                                 .is_some_and(|(owner, _)| owner == relation)
                         })

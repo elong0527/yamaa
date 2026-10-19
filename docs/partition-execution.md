@@ -82,14 +82,14 @@ The inventory follows `Expression`, `RowMode` and the execution stages in
 | Plain record templates and named/secondary drivers (`Driver`, `IntermediateDriver`) | Safe-with-combine-step | Enumerate drivers in original order and reassemble template-first candidates. Finish assignments before their pre-window filter, retaining failures on candidates later filtered out. Named drivers require their complete materialized relation. |
 | Group templates (`Groups`) and `table_grouping::partition` | Safe-with-combine-step | Merge equal keys across physical boundaries, retain the minimum source position for group order and every increasing member position. Missing keys compare equal; text is exact; float zero signs and temporal precision do not distinguish grouping keys. |
 | Key-grain rows (`Keys`) and `Collect` | Safe-with-combine-step | Finish the entire source filter before key lifecycles. Merge equal complete keys and distinct present raw readings across batches before conversion/choice. Preserve each missing-key record separately and the full feeding membership. |
-| `Joined`, `Lookup`, `RowLookup`, `SourceLookup`, `JoinedSource` | Global | Match against the complete donor relation, detect multiplicity across batches, and apply eligibility, stable order/keep and no-match behavior in the assignment's original phase. A local match cannot prove global uniqueness. |
+| `Joined`, `SourceLookup`, `JoinedSource` | Global | Match against the complete donor relation, detect multiplicity across batches, and apply eligibility, stable order/keep and no-match behavior in the assignment's original phase. A local match cannot prove global uniqueness. |
 | Named `Intermediate` reads, correlated derivations, range/filter selection | Global | Preserve the full eligible donor set and per-candidate choice/materialization. Resolve expression keys and correlated current values at their existing checkpoints; share a chosen record across reads without replaying handlers. |
 | `SELF` intermediates and template-to-template dependencies | Global | Later templates observe the completed prior-template relation. Publish/invalidate `SELF` state only at the existing template barrier; do not expose a partially constructed prior template. |
-| `Count` / aggregate `COUNT` | Safe-with-combine-step | Combine exact present-value or record counts over the complete selected relation, with checked capacity and the distinction between no records (missing) and existing all-missing records (zero for value counts). |
-| `Reduce` / aggregate `SUM`, `MEAN` | Global | Collect arguments before folding; replay the current ordered fold, including type/arithmetic error argument positions, missing handling, integer-to-float transitions and signed zero. Partial sums/means cannot be merged without changing semantics. |
+| Aggregate `COUNT` | Safe-with-combine-step | Combine exact present-value or record counts over the complete selected relation, with checked capacity and the distinction between no records (missing) and existing all-missing records (zero for value counts). |
+| Aggregate `SUM`, `MEAN` | Global | Collect arguments before folding; replay the current ordered fold, including type/arithmetic error argument positions, missing handling, integer-to-float transitions and signed zero. Partial sums/means cannot be merged without changing semantics. |
 | Aggregate `MIN`, `MAX`, `ONLY` and aggregate expressions | Global | Preserve relation order, original selected value/type on ties, first incompatible argument, and `ONLY` record cardinality including missing-valued records. Retain aggregate selection/filter and donor-derived dependencies before reduction. |
 | `Window`, `ContextWindow`, nested and row-template windows | Global | Finish the complete logical window group in its declared scope before evaluation. Preserve pre-window versus post-window filters and group order; see the window inventory below. |
-| `Function`, `ProjectFunction` | Global | Use the same activated function port and ordered invocation/conversion sequence. Callbacks may be stateful or interrupt; do not assume purity, regroup calls or move them to host-incompatible threads. Chunked invocation must preserve its all-or-nothing cancellation contract. |
+| `ProjectFunction` | Global | Use the same activated function port and ordered invocation/conversion sequence. Callbacks may be stateful or interrupt; do not assume purity, regroup calls or move them to host-incompatible threads. Chunked invocation must preserve its all-or-nothing cancellation contract. |
 | Output key presence and uniqueness | Safe-with-combine-step | Combine missing-key rows and duplicate groups across all candidates, including templates; retain first group representatives and current key-failure order before dataset verification. |
 | Final `output_order` | Global | Stable merge/sort the complete accepted relation after verification with the original construction position as final tie breaker. |
 
@@ -154,33 +154,35 @@ fatal check past later derivations.
 
 These are implementation seams for subsequent work, not new callable APIs.
 
-1. **Admission to derivation:** `DatasetPlan::execute_inner` admits function
+1. **Admission to derivation:** `ResolvedPlan::execute` admits function
    bindings, schemas and complete source geometry before entering derivation.
    Capture stable source coordinates here; never bind schemas independently
-   from incomplete batches.
-2. **Driver/group construction:** `build_candidates`, `process_template`,
-   `table_grouping::partition` and `key_grain::construct` separate driver
-   membership from value evaluation. A future coordinator can combine memberships
-   here, retaining first occurrences and then scheduling whole logical groups.
-3. **Intermediate boundaries:** `intermediates::Run` holds eligibility, string
-   indexes, choices and materialized relations for one attempt. Keep these
-   attempt-local and use global `SelectionIdentity` values, not batch-local
+   from incomplete batches. Each step of the resolved schedule carries its
+   class from this inventory (`StepInfo::partition`).
+2. **Driver/group construction:** the row stage of each template
+   (`process_template` in `dataset/columnar/mod.rs`), `table_grouping::partition`
+   and `keygrain::construct` separate driver membership from value evaluation.
+   A future coordinator can combine memberships here, retaining first
+   occurrences and then scheduling whole logical groups.
+3. **Intermediate boundaries:** `relations::State` holds narrowed records, key
+   indexes, choices and materialized donors for one attempt. Keep these
+   attempt-local and use global selection identities, not batch-local
    counters. Coordinate complete donor relations and correlated materializations;
    retain lazy reads, `verify`, `publish_self` and `begin_columns` barriers.
-4. **Template/window completion:** `row_windows::complete` and
-   `apply_postwindow_filter` must finish before publishing a template's `SELF`
-   relation or starting a dependent template. `windows::Run` requires complete
-   memberships, order and eligible rows before answers become visible.
-5. **Column completion:** `complete_columns` completes each assignment over
+4. **Template/window completion:** a template's window stage and post-window
+   filter must finish before publishing its `SELF` relation or starting a
+   dependent template. A window run requires complete memberships, order and
+   eligible rows before answers become visible.
+5. **Column completion:** `complete_columns` completes each binding over
    candidates and advances `check_columns` only through the available declared
    prefix. Local scalar evaluation can be divided inside a column, but its
    ordered effects and checks must finish before dependent/later work. Preserve
    the final unobserved-intermediate filter-type check, including empty output.
 6. **Output keys to verification to ordering:** `verify_output` checks all key
-   presence/uniqueness before dataset checks. `verification.rs` owns predicate
-   and scoped-count evaluation; `CheckRecord` retains global observations.
-   `ordering::apply` runs last. This is the final reconciliation barrier before
-   an accepted `Dataset` can leave core.
+   presence/uniqueness before dataset checks, and evaluates the predicate and
+   scoped-count checks; `CheckRecord` retains global observations.
+   `checks::output_order` runs last. This is the final reconciliation barrier
+   before an accepted `Dataset` can leave core.
 7. **Adapter result and Save:** core returns one `ExecutionAttempt`; adapters
    retain success/failure evidence and publish held bytes only through explicit
    Save. Streaming batches must stay provisional until all preceding barriers

@@ -130,7 +130,7 @@ a unary sign, so `-A` is `(neg (id A))`.
 
 ## Running the vectors
 
-From the repository root, with Rust 1.90.0 and `py-yaml12==0.2.0` installed:
+From the repository root, with Rust 1.82.0 or later and `py-yaml12==0.2.0` installed:
 
 ```bash
 python3 -m tools.validation.validate_repository --root .

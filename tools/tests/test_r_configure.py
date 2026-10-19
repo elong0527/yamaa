@@ -133,8 +133,12 @@ class ConfigureTests(unittest.TestCase):
             ({"CARGO_HOME": str(self.root / "cargo")}, self.root / "cargo/bin"),
         ):
             with self.subTest(directory=directory):
-                rustc = tool(directory, "rustc", "rustc 1.90.0 (1159e78c4 2025-09-14)")
-                cargo = tool(directory, "cargo", "cargo 1.90.0 (840b83a10 2025-07-30)")
+                rustc = tool(
+                    directory, "rustc", f"rustc {toolchain.minimum()} (0 2024-10-15)"
+                )
+                cargo = tool(
+                    directory, "cargo", f"cargo {toolchain.minimum()} (0 2024-10-15)"
+                )
                 result = self.configure(**environment)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertIn(f"from {rustc}\n", result.stdout)
@@ -155,17 +159,19 @@ class ConfigureTests(unittest.TestCase):
         self.assert_refused(self.configure(), "No 'cargo' command was found")
 
     def test_older_tools_than_the_workspace_rust_version_are_refused(self):
+        major, minor, _ = map(int, toolchain.minimum().split("."))
+        older = f"{major}.{minor - 1}.0"
         for rustc, cargo, refused in (
-            ("1.89.0", "1.99.1", "rustc"),
-            ("1.99.1", "1.89.0", "cargo"),
+            (older, "1.99.1", "rustc"),
+            ("1.99.1", older, "cargo"),
         ):
             with self.subTest(refused=refused):
-                tool(self.bin, "rustc", f"rustc {rustc} (00000000 2025-08-01)")
-                tool(self.bin, "cargo", f"cargo {cargo} (00000000 2025-08-01)")
+                tool(self.bin, "rustc", f"rustc {rustc} (00000000 2024-08-01)")
+                tool(self.bin, "cargo", f"cargo {cargo} (00000000 2024-08-01)")
                 self.assert_refused(
                     self.configure(),
                     f"yamaa needs {refused} {toolchain.minimum()} or later",
-                    f"is {refused} 1.89.0",
+                    f"is {refused} {older}",
                     "rustup update",
                 )
 

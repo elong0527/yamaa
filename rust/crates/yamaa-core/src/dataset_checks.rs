@@ -1,9 +1,9 @@
 //! Pure column checks over completed values; effect order belongs to the engine.
 use crate::json::Value as JsonValue;
 use crate::{
-    dataset::{Check, PlanError},
+    dataset::Check,
     diagnostic::{ConditionCode, Definition, Diagnostic},
-    value::{compare_present, ColumnType, Value},
+    value::{compare_present, Value},
 };
 use std::vec;
 
@@ -30,94 +30,6 @@ pub(crate) fn not_missing_diagnostic(
 impl NotMissingResult {
     pub fn diagnostic(&self, path: String, column: String) -> Option<Diagnostic> {
         not_missing_diagnostic(path, column, self.offending_rows.len())
-    }
-}
-
-/// Validate the already compiled column-check payload without reading values.
-pub(crate) fn validate(check: &Check, kind: ColumnType) -> Result<(), PlanError> {
-    match check {
-        Check::AllowedValues(values) => {
-            if values.is_empty()
-                || values.iter().any(|value| {
-                    !matches!(
-                        (kind, value),
-                        (ColumnType::Str, Value::Str(_))
-                            | (ColumnType::Int, Value::Int(_))
-                            | (ColumnType::Float, Value::Float(_))
-                            | (ColumnType::Date, Value::Date(_))
-                            | (ColumnType::DateTime, Value::DateTime(_))
-                    )
-                })
-            {
-                return Err(PlanError::InvalidColumns);
-            }
-        }
-        Check::Codelist { id, values } => validate_codelist(id, values, kind)?,
-        Check::Inventory { values, .. } => {
-            if kind != ColumnType::Str || values.iter().any(|value| !matches!(value, Value::Str(_)))
-            {
-                return Err(PlanError::InvalidColumns);
-            }
-        }
-        Check::ValueCodelists { bindings, .. } => {
-            if bindings.is_empty()
-                || bindings.iter().enumerate().any(|(index, binding)| {
-                    bindings[..index].iter().any(|prior| prior.id == binding.id)
-                        || validate_codelist(&binding.id, &binding.values, kind).is_err()
-                })
-            {
-                return Err(PlanError::InvalidColumns);
-            }
-        }
-        Check::Range { min, max } => {
-            if !matches!(kind, ColumnType::Int | ColumnType::Float)
-                || (min.is_none() && max.is_none())
-                || min
-                    .iter()
-                    .chain(max)
-                    .any(|value| !matches!(value, Value::Int(_) | Value::Float(_)))
-                || min.as_ref().zip(max.as_ref()).is_some_and(|(min, max)| {
-                    compare_present(min, max) != Ok(std::cmp::Ordering::Less)
-                        && compare_present(min, max) != Ok(std::cmp::Ordering::Equal)
-                })
-            {
-                return Err(PlanError::InvalidBounds);
-            }
-        }
-        Check::ValueMaxLength { max, .. }
-            if kind != ColumnType::Str || max.compare_count(0) != std::cmp::Ordering::Greater =>
-        {
-            return Err(PlanError::InvalidBounds)
-        }
-        Check::MaxLength(max) if kind != ColumnType::Str || *max == 0 => {
-            return Err(PlanError::InvalidBounds)
-        }
-        Check::WideMaxLength(max)
-            if kind != ColumnType::Str || max.compare_count(0) != std::cmp::Ordering::Greater =>
-        {
-            return Err(PlanError::InvalidBounds)
-        }
-        Check::Matches(_) | Check::DataType { .. } if kind != ColumnType::Str => {
-            return Err(PlanError::InvalidColumns)
-        }
-        _ => {}
-    }
-    Ok(())
-}
-
-fn validate_codelist(id: &str, values: &[Value], kind: ColumnType) -> Result<(), PlanError> {
-    if id.is_empty()
-        || values.iter().any(|value| match (kind, value) {
-            (ColumnType::Str, Value::Str(_))
-            | (ColumnType::Int, Value::Int(_))
-            | (ColumnType::Float, Value::Int(_) | Value::Float(_)) => false,
-            (ColumnType::Int, Value::Float(value)) => value.get() % 1.0 != 0.0,
-            _ => true,
-        })
-    {
-        Err(PlanError::InvalidColumns)
-    } else {
-        Ok(())
     }
 }
 

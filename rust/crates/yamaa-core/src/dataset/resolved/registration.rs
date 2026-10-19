@@ -20,7 +20,7 @@ use super::*;
 pub(super) struct Call {
     pub(super) expr: ExprId,
     pub(super) slot: usize,
-    pub(super) signature: FunctionSignature,
+    pub(super) signature: crate::function_signature::ProjectInvocationPlan,
 }
 
 pub(super) fn build(
@@ -218,7 +218,7 @@ fn admit(plan: &ResolvedPlan, expr: ExprId, found: &mut Vec<ExprId>) {
                 }
             }
         }
-        K::Function | K::ProjectFunction => found.push(expr),
+        K::ProjectFunction => found.push(expr),
         K::Case => follow(OperandRole::Branch, found),
         K::FirstAvailable => follow(OperandRole::Selection, found),
         K::Extreme

@@ -58,6 +58,7 @@ PREBUILT = {
     # through wasip2: WebAssembly objects and an archive of them.
     "wit-bindgen": (
         "src/rt/libwit_bindgen_cabi.a",
+        "src/rt/wit_bindgen_cabi.o",
         "src/rt/wit_bindgen_cabi_realloc.o",
         "src/rt/wit_bindgen_cabi_wasip3.o",
         "wasi-cli@0.2.0.wasm",

@@ -38,10 +38,11 @@ The package follows "Using Rust in CRAN packages":
   `src/rust/vendor.tar.xz`, an xz-compressed tar written with
   `cargo vendor --locked --versioned-dirs` by `tools/vendor_crates.py`, which
   the package carries. Nothing is downloaded at installation.
-- `SystemRequirements: Cargo (Rust's package manager) (>= 1.90.0), rustc
-  (>= 1.90.0)`. 1.90 is the `rust-version` that the bundled workspace
-  declares (edition 2024); it is newer than the two-year-old Cargo that the
-  guidance suggests testing with.
+- `SystemRequirements: Cargo (Rust's package manager) (>= 1.82.0), rustc
+  (>= 1.82.0)`. 1.82 is the `rust-version` that the bundled workspace
+  declares (edition 2021). Rust 1.82.0 was released on 2024-10-17, so it is
+  at least the two-year-old Cargo that the guidance suggests testing with,
+  and CI builds and checks the package with it.
 - `configure` and `configure.win` run `tools/configure.R`, which looks for
   `cargo` and `rustc` on the PATH and then in `~/.cargo/bin`, requires each to
   be at least the declared `rust-version`, prints both versions in the

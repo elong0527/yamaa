@@ -116,7 +116,7 @@ pub(crate) fn diagnostic(issue: Issue) -> Result<Value, report::Error> {
     Ok(issue.as_value())
 }
 
-fn project_error<'a, C, E>(error: invocation::Error<'a, E>) -> Error<'a, C, E> {
+fn project_error<C, E>(error: invocation::Error<'_, E>) -> Error<'_, C, E> {
     match error {
         invocation::Error::Opaque(error) => Error::Opaque(error),
         invocation::Error::InvalidContext => invalid(),

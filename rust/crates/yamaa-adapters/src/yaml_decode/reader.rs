@@ -99,10 +99,11 @@ fn build(events: Vec<LocatedEvent>) -> Result<(Vec<Node>, usize), DecodeFailure>
                     return Err(DecodeFailure::Internal);
                 }
                 let value = if frame.mapping {
-                    let (pairs, []) = frame.children.as_chunks::<2>() else {
+                    let pairs = frame.children.chunks_exact(2);
+                    if !pairs.remainder().is_empty() {
                         return Err(DecodeFailure::Internal);
-                    };
-                    Value::Mapping(pairs.iter().map(|&[key, value]| (key, value)).collect())
+                    }
+                    Value::Mapping(pairs.map(|pair| (pair[0], pair[1])).collect())
                 } else {
                     Value::Sequence(frame.children)
                 };

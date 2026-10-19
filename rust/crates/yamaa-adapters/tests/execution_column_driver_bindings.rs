@@ -196,6 +196,20 @@ fn second_template_driver_reads_its_own_record_in_a_flag_condition() {
 }
 
 #[test]
+fn second_template_driver_reads_its_own_record_in_a_case_condition() {
+    // Without an otherwise, S2's DM row matches no branch and is missing.
+    Fixture::new(&specification(
+        "str",
+        "{case: [{when: \"DM.SEX = 'F'\", then: {literal: Y}}]}",
+        &["ae", "dm"],
+        &["ae"],
+    ))
+    .saved(&format!(
+        "USUBJID,SRC,SEQ,X\n{OWN_AE}S1,DM,0,Y\nS2,DM,0,\nS3,DM,0,Y\n"
+    ));
+}
+
+#[test]
 fn each_driver_reads_its_own_record_and_joins_the_other() {
     // AE and DM both leave X to the column; CM states it. The AE rows join DM
     // on USUBJID, the one output key DM carries; the DM rows read their own
