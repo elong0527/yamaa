@@ -10,7 +10,7 @@ from tools.paths import WORKSPACE
 
 # Repository checks lint and format with these. The toolchain file names only
 # what a build needs, because both source packages carry it and rustup would
-# otherwise add these to every R source installation.
+# otherwise add these to every build inside a bundled workspace.
 CHECK_COMPONENTS = ("clippy", "rustfmt")
 
 

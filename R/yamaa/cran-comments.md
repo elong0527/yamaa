@@ -37,8 +37,8 @@ The package follows "Using Rust in CRAN packages":
   2024); it is newer than the two-year-old Cargo that the guidance suggests
   testing with, and the build stops with a clear message on an older rustc.
 - `src/Makevars` and `src/Makevars.win` look for `cargo` and `rustc` on the
-  PATH and in `~/.cargo/bin`, ask the user to install them when they are
-  missing, and print both versions before compiling. They run
+  PATH (on Unix also in `~/.cargo/bin`), ask the user to install them when
+  they are missing, and print both versions before compiling. They run
   `cargo build --locked --offline -j 2` with a Cargo home below
   `src/rust/target`, which they remove after linking with the rest of the
   build tree, so the installation uses at most two jobs and writes nothing
