@@ -67,7 +67,7 @@ impl Bits {
     }
 
     pub(super) fn push(&mut self, value: bool) {
-        if self.len.is_multiple_of(64) {
+        if self.len % 64 == 0 {
             self.words.push(0);
         }
         self.len += 1;

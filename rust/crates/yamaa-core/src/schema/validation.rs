@@ -233,7 +233,7 @@ struct Site<'a> {
     members: bool,
 }
 impl<'a> Site<'a> {
-    fn child<'b>(self, value: usize, path: &'b str) -> Site<'b> {
+    fn child(self, value: usize, path: &str) -> Site<'_> {
         Site {
             value,
             path,

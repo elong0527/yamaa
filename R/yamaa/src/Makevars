@@ -25,7 +25,7 @@ $(SHLIB): $(RUST_LIB)
 $(RUST_LIB): FORCE
 	@PATH="$(PATH):$(HOME)/.cargo/bin"; export PATH; \
 	if command -v cargo > /dev/null 2>&1 && command -v rustc > /dev/null 2>&1; then :; else \
-	  echo "yamaa needs Cargo and rustc 1.90 or later. Install them with the system's"; \
+	  echo "yamaa needs Cargo and rustc 1.82 or later. Install them with the system's"; \
 	  echo "package manager, for example 'apt-get install cargo rustc' or"; \
 	  echo "'dnf install cargo', or with rustup from https://rustup.rs/."; \
 	  exit 1; \
@@ -33,8 +33,8 @@ $(RUST_LIB): FORCE
 	echo "using `rustc --version`"; \
 	echo "using `cargo --version`"; \
 	set -- `rustc --version | sed 's/^rustc \([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1 \2/'`; \
-	if [ "$$1" -gt 1 ] 2> /dev/null || { [ "$$1" -eq 1 ] && [ "$$2" -ge 90 ]; } 2> /dev/null; then :; else \
-	  echo "yamaa needs rustc 1.90 or later. Update Rust, for example with 'rustup update'."; \
+	if [ "$$1" -gt 1 ] 2> /dev/null || { [ "$$1" -eq 1 ] && [ "$$2" -ge 82 ]; } 2> /dev/null; then :; else \
+	  echo "yamaa needs rustc 1.82 or later. Update Rust, for example with 'rustup update'."; \
 	  exit 1; \
 	fi
 	rm -rf "$(CARGO_HOME_DIR)" "$(CARGO_TARGET_DIR)/vendor"

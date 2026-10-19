@@ -12,8 +12,8 @@
 [package]
 name = "embedder"
 version = "0.0.0"
-edition = "2024"
-rust-version = "1.90"
+edition = "2021"
+rust-version = "1.82"
 license = "MIT"
 publish = false
 

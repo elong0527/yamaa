@@ -76,15 +76,11 @@ impl<'a> Integers<'a> {
         if count > expected_values {
             return Err(Error::Malformed);
         }
-        if block == 0
-            || !block.is_multiple_of(128)
-            || miniblocks == 0
-            || !block.is_multiple_of(miniblocks)
-        {
+        if block == 0 || block % 128 != 0 || miniblocks == 0 || block % miniblocks != 0 {
             return Err(Error::Malformed);
         }
         let per_mini = block / miniblocks;
-        if per_mini == 0 || !per_mini.is_multiple_of(32) {
+        if per_mini == 0 || per_mini % 32 != 0 {
             return Err(Error::Malformed);
         }
         let previous = cursor.signed(bits)?;

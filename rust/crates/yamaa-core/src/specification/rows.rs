@@ -956,11 +956,8 @@ fn bind_template_filter(
     // instead of manufacturing a transport error for their incomplete bindings.
     let filter = if findings.len() != before_filter
         || grouped
-            && predicate.is_some_and(|plan| {
-                plan.identifiers()
-                    .into_iter()
-                    .any(|name| name.contains('.'))
-            }) {
+            && predicate.is_some_and(|plan| plan.identifiers().any(|name| name.contains('.')))
+    {
         None
     } else {
         predicate
