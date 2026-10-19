@@ -155,7 +155,7 @@ does a window that reads a neighboring row with a missing value. In row
 construction, a `window.filter` that is not a Boolean predicate over
 constructed output columns fails.
 
-Evidence: `rust/crates/yamaa-core/tests/dataset_windows.rs::window_filters_preserve_rows_and_number_only_true_in_sorted_partitions`, `schema-window-functions`.
+Evidence: `schema-window-functions`, `rust/crates/yamaa-adapters/tests/execution_window_semantics.rs::baseline_flag_judges_each_row_by_its_own_reference_and_skips_filtered_rows`.
 Replaces: REQ-0294, REQ-0327.
 
 <a id="window-5"></a>
@@ -187,7 +187,7 @@ as equal. With `method: competition`, the default, tied rows take the lowest
 position they occupy and the next distinct value takes its own position; with
 `dense`, the next distinct value takes the following number.
 
-Evidence: `schema-window-functions`, `adam-adae-severity-rank`, `rust/crates/yamaa-core/tests/dataset_windows.rs::numbering_preserves_output_order_exact_integers_nulls_and_partition_ties`.
+Evidence: `schema-window-functions`, `adam-adae-severity-rank`, `rust/crates/yamaa-adapters/tests/execution_window_semantics.rs::numbering_and_rank_keep_exact_order_null_placement_and_ties_within_partitions`.
 Replaces: REQ-0303, REQ-1123, REQ-1124.
 
 The tie-break settles positions, not equality. `row_number`, `row_value`,
@@ -213,7 +213,7 @@ on that side of it within its partition yields missing, which does not
 distinguish an absent row from a present row whose value is missing. An
 `offset` of zero fails.
 
-Evidence: `schema-window-functions`, `negative-row-no-prior`, `rust/crates/yamaa-core/tests/dataset_windows.rs::value_window_offsets_use_only_eligible_positions_and_keep_excluded_results_missing`.
+Evidence: `schema-window-functions`, `negative-row-no-prior`.
 Replaces: REQ-0328, REQ-1125.
 
 The current row's own value is `source`, and a window must not be a second
@@ -230,7 +230,7 @@ one result can cross any number of consecutive gaps. With
 instead. With `include_current: false` the current row is never a candidate.
 A row with no qualifying source yields missing.
 
-Evidence: `adam-advs-locf`, `adam-adqs-missed-visit-locf`, `adam-advs-carryforward`, `schema-window-functions`, `rust/crates/yamaa-core/tests/dataset_windows.rs::locf_excluding_current_crosses_long_gaps`.
+Evidence: `adam-advs-locf`, `adam-adqs-missed-visit-locf`, `adam-advs-carryforward`, `schema-window-functions`.
 Replaces: REQ-1126, REQ-1239.
 
 `locf` preserves row count and the selected value's type and temporal
@@ -275,7 +275,7 @@ its own direction and missing placement. Eligible rows tied for last on `date`
 and every term fail.
 
 Fails: `ambiguous_baseline`, `incompatible_input_type`.
-Evidence: `negative-tied-baseline`, `negative-baseline-unresolved-tie`, `schema-baseline-tie-break`, `schema-baseline-exclusive`, `schema-baseline-missing-value`, `schema-window-functions`, `adam-adae-worsening-emergence`, `rust/crates/yamaa-core/tests/dataset_windows.rs::baseline_tie_break_terms_pick_the_last_same_date_row_or_fail_when_still_tied`, `rust/crates/yamaa-core/tests/dataset_windows.rs::baseline_requires_a_present_value_and_honors_an_exclusive_reference`, `rust/crates/yamaa-core/tests/dataset_windows.rs::baseline_filters_exclude_later_rows_and_ties_without_dropping_output`.
+Evidence: `negative-tied-baseline`, `negative-baseline-unresolved-tie`, `schema-baseline-tie-break`, `schema-baseline-exclusive`, `schema-baseline-missing-value`, `schema-window-functions`, `adam-adae-worsening-emergence`, `rust/crates/yamaa-adapters/tests/execution_window_semantics.rs::baseline_tie_break_terms_pick_the_last_same_date_row_or_fail_when_still_tied`, `rust/crates/yamaa-adapters/tests/execution_window_semantics.rs::baseline_flag_judges_each_row_by_its_own_reference_and_skips_filtered_rows`.
 Replaces: REQ-1127.
 
 `date` and `reference_date` are both `date` columns or both `datetime`

@@ -252,6 +252,23 @@ rows:
         }
 
         #[test]
+        fn hidden_first_template_first_available_source_preserves_its_authored_phase_path() {
+            let fixture = Fixture::new();
+            let body = BODY.replace(
+                "SECTION: {literal: first}",
+                "SECTION: {first_available: {sources: [P.K], missing: first}}",
+            );
+            assert_eq!(
+                issues(fixture.run(&body)),
+                vec![yamaa_adapters::json!({
+                    "phase":"validation", "condition":"phase_boundary", "requirement":"REQ-0120",
+                    "spec_paths":["rows[0].derivations.SECTION.first_available.sources[0]"],
+                    "context":{"identifier":"P.K","available_phase":"completed_prior_row_template","required_phase":"row_construction"}
+                })]
+            );
+        }
+
+        #[test]
         fn aggregate_first_template_proof_keeps_full_references_including_record_star() {
             for (replacement, identifier, path) in [
                 (

@@ -180,6 +180,26 @@ fn empty_matches_and_literal_replacement_survive_file_application() {
         json!([{"spec_path":"columns.RESULT.derivation.str_replace.missing","handler":"missing","count":0}])
     );
 }
+/// A compiled pattern completes every match in time linear in the subject
+/// (TEXT-12): `(a+)+$` cannot match before the final `!`, so the scan finds
+/// no match, the value is returned unchanged and no handler is reached.
+#[test]
+fn a_catastrophic_pattern_without_a_match_leaves_the_value_unchanged() {
+    let subject = "a".repeat(30) + "!";
+    let fixture = Fixture::bespoke(
+        &specification(
+            "str",
+            json!({"str_replace": {"source": "TEXT", "pattern": "(a+)+$", "replacement": "-", "missing": {"literal": null}}}),
+        ),
+        &format!("ID,TEXT\nrow1,{subject}\n"),
+    );
+    let (csv, handlers) = saved(&fixture);
+    assert_eq!(csv, format!("ID,TEXT,RESULT\nrow1,{subject},{subject}\n"));
+    assert_eq!(
+        handlers,
+        json!([{"spec_path":"columns.RESULT.derivation.str_replace.missing","handler":"missing","count":0}])
+    );
+}
 #[test]
 fn missing_source_without_handler_gives_missing_counted_as_the_default() {
     let fixture = Fixture::bespoke(

@@ -616,7 +616,7 @@ non-missing value, `MEAN(x)` is that ordered `SUM(x)` divided by `COUNT(x)`
 with the numeric `/`, and it inherits the binary64 rounding of `SUM`. A
 reduction does not sort the records.
 
-Evidence: `adam-adlb-ordered-sum`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`, `rust/crates/yamaa-core/tests/execution_case_predicates.rs::correlated_sum_and_mean_keep_donor_order_through_cancellation_and_missing_values`.
+Evidence: `adam-adlb-ordered-sum`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`, `rust/crates/yamaa-adapters/tests/execution_value_semantics.rs::sum_adds_matched_donor_records_in_stored_order_and_mean_divides_that_sum`.
 Replaces: REQ-0479, REQ-0480, REQ-0498.
 
 The `filter`, when present, removes records and keeps the order of the records
