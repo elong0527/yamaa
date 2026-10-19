@@ -127,8 +127,13 @@ resolved exactly as it is when the caller names its file together with the
 project file.
 
 Fails: `unknown_specification_name`.
-Evidence: `rust/crates/yamaa/tests/project_operations.rs::names_select_listed_specifications_and_refuse_unknown_or_shared_names`, `rust/crates/yamaa-core/tests/support/diagnostic/project_scope.rs`.
+Evidence: `rust/crates/yamaa/tests/project_operations.rs::names_select_listed_specifications_and_refuse_unknown_or_shared_names`, `rust/crates/yamaa/tests/project_operations.rs::a_project_run_refuses_a_name_it_did_not_build`, `rust/crates/yamaa-core/tests/support/diagnostic/project_scope.rs`.
 Replaces: REQ-1339.
+
+Selecting one specification's run from a project run by name accepts only a
+name of that run. Any other name, one that another section lists included,
+fails with `unknown_specification_name`, naming the requested name and, in
+sorted order, every name the run has.
 
 ## Checking a project
 
@@ -255,7 +260,7 @@ primary artifact. When any specification failed, the save publishes no primary
 artifact: it replaces, in run order, the report file of every specification
 that ran and declares one, then fails with every run's findings.
 
-Fails: `artifact_path_collision`.
+Fails: `artifact_path_collision`, `nothing_to_save`.
 Evidence: `rust/crates/yamaa/tests/project_operations.rs::every_target_is_validated_before_the_first_file_is_written`, `rust/crates/yamaa/tests/project_operations.rs::a_save_that_would_write_nothing_fails`, `rust/crates/yamaa-adapters/tests/project_scope.rs::the_preflight_refuses_two_results_that_write_one_file`, `rust/crates/yamaa-adapters/tests/project_scope.rs::report_only_saves_write_the_report_file_and_no_primary_artifact`.
 Replaces: REQ-1346.
 
@@ -264,7 +269,8 @@ paths of one specification, two spellings of one file included. Each
 specification orders its own files as [OUTPUT-10](../output.md#output-10)
 states. A failure while replacing one file stops the publication there: the
 files already replaced remain, and no later target is touched. A project run
-that built no specification has nothing to save, and saving it fails.
+that built no specification has nothing to save, and saving it fails with
+`nothing_to_save`.
 
 ## Project submissions
 
@@ -279,6 +285,7 @@ that declares `datasets` ([JSON-1](dataset-json.md#json-1)). Its findings are
 those of its sections in that order. Saving publishes the sections in that
 order; the first section whose publication fails stops the save.
 
+Fails: `nothing_to_save`.
 Evidence: `rust/crates/yamaa/tests/project_operations.rs::a_submission_composes_the_selected_section`, `rust/crates/yamaa/tests/project_operations.rs::a_submission_without_a_section_composes_each_section_that_names_define_in_order`, `rust/crates/yamaa/tests/project_operations.rs::two_sections_that_write_one_file_save_neither`, `rust/crates/yamaa/tests/project_operations.rs::a_save_that_would_write_nothing_fails`, `python/tests/installed/installed_public_define.py::test_every_declared_define_section_is_composed_without_a_section`.
 Replaces: REQ-1347.
 
@@ -286,5 +293,5 @@ Saving first compares the targets of every section: two sections that name
 one file fail the save before any file is written. A section whose own target
 cannot be admitted is left to its own publication, which reports and records
 that failure. A submission that composed no section has nothing to save, and
-saving it fails. Each section publishes its transport files before its
-document under [JSON-14](dataset-json.md#json-14).
+saving it fails with `nothing_to_save`. Each section publishes its transport
+files before its document under [JSON-14](dataset-json.md#json-14).

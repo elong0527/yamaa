@@ -45,6 +45,15 @@ impl Failure {
     fn from_issues(message: impl Into<String>, issues: &[Issue]) -> Self {
         Self::new(message, &Report::from_issues(issues))
     }
+
+    /// A refusal that one registered finding explains.
+    fn from_finding(
+        message: impl Into<String>,
+        finding: yamaa_core::diagnostic::Diagnostic,
+    ) -> Self {
+        let issue = Issue::from_core(finding).expect("a registered finding is portable");
+        Self::from_issues(message, &[issue])
+    }
 }
 
 impl std::fmt::Display for Failure {
@@ -188,14 +197,16 @@ impl Plans {
 
 impl Engine {
     /// Check one specification without reading study data or running project
-    /// code, with the project's codelists and functions when it has one.
+    /// code, with the project's codelists and functions when it has one. Only
+    /// cancellation fails the call.
     pub fn spec_check(
         &self,
         specification: &str,
         project: Option<&str>,
         token: &CancellationToken,
-    ) -> Table {
-        self.check(&request(specification, project), token).table()
+    ) -> Result<Table, Error> {
+        self.check(&request(specification, project), token)
+            .map(|report| report.table())
     }
 
     /// Build one specification in memory; nothing is written until `save`.
@@ -241,17 +252,25 @@ impl Engine {
         let resolved = self
             .resolve_specification(&request(specification, project))
             .map_err(|error| Failure::from_error("cannot resolve the specification", &error))?;
-        let text = resolved
-            .to_json()
-            .map_err(|error| Failure::from_error("cannot resolve the specification", &error))?;
-        let value = yamaa_adapters::json_wire::decode(&text).map_err(|_| {
-            Failure::new(
-                "cannot resolve the specification: invalid resolved facts",
-                &Report::default(),
-            )
-        })?;
-        Ok(context_value_from_core(&value))
+        resolved_value(resolved.to_json())
     }
+}
+
+/// The resolved tree read back from the artifact's JSON text. Facts the
+/// engine cannot write or read back are an engine fault, refused with
+/// `engine_rejected`.
+fn resolved_value(text: Result<String, Error>) -> Result<ContextValue, Failure> {
+    let refused = |message: String| {
+        Failure::from_issues(
+            message,
+            &yamaa_adapters::file_application::rejected("resolve", "artifact_representation"),
+        )
+    };
+    let text =
+        text.map_err(|error| refused(format!("cannot resolve the specification: {error}")))?;
+    let value = yamaa_adapters::json_wire::decode(&text)
+        .map_err(|_| refused("cannot resolve the specification: invalid resolved facts".into()))?;
+    Ok(context_value_from_core(&value))
 }
 
 /// The section a caller names: `sdtm`, `adam` or `send`; any other text is a
@@ -338,20 +357,23 @@ impl ProjectRun {
     }
 
     /// The run of the specification named `name`, or the refusal every host
-    /// reports for a name the run does not have.
+    /// reports for a name the run does not have: `unknown_specification_name`,
+    /// naming every name the run has (PROJECT-6).
     pub fn member(&self, name: &str) -> Result<&Run, Failure> {
         self.get(name).ok_or_else(|| {
             let names = self.names();
-            Failure::new(
-                if names.is_empty() {
-                    format!("the project run has no specification named {name:?}; it built none")
-                } else {
-                    format!(
-                        "the project run has no specification named {name:?}; it has {}",
-                        names.join(", ")
-                    )
-                },
-                &Report::default(),
+            let message = if names.is_empty() {
+                format!("the project run has no specification named {name:?}; it built none")
+            } else {
+                format!(
+                    "the project run has no specification named {name:?}; it has {}",
+                    names.join(", ")
+                )
+            };
+            let available = names.iter().map(String::as_str).collect::<Vec<_>>();
+            Failure::from_finding(
+                message,
+                yamaa_core::project_scope::unknown_name(name, &available),
             )
         })
     }
@@ -384,7 +406,9 @@ impl ProjectRun {
     /// specification succeeded, each publishes its declared report and then
     /// its primary artifact. When any failed, only the report files of the
     /// specifications that ran are written, and the save fails with every
-    /// run's issues. The first file that cannot be written stops the save.
+    /// run's issues. The first file that cannot be written stops the save. A
+    /// run that built no specification fails with `nothing_to_save`
+    /// (PROJECT-12).
     pub fn save(&mut self) -> Result<(), Failure> {
         if !self.refusal.is_empty() {
             return Err(Failure::from_issues(
@@ -393,9 +417,9 @@ impl ProjectRun {
             ));
         }
         if self.steps.is_empty() {
-            return Err(Failure::new(
+            return Err(Failure::from_finding(
                 "the project run built no specification, so nothing was saved",
-                &Report::default(),
+                yamaa_core::project_scope::run_nothing_to_save(),
             ));
         }
         let failed = self.steps.iter().any(|step| step.run.output().is_none());
@@ -466,7 +490,8 @@ impl Submission {
 
     /// Publish the sections in the order `sdtm`, `adam`, `send`, after
     /// checking that no two sections write one file; the first section that
-    /// fails stops the save.
+    /// fails stops the save. A submission that composed no section fails with
+    /// `nothing_to_save` (PROJECT-13).
     pub fn save(&mut self) -> Result<(), Failure> {
         if !self.refusal.is_empty() {
             return Err(Failure::from_issues(
@@ -475,9 +500,9 @@ impl Submission {
             ));
         }
         if self.sections.is_empty() {
-            return Err(Failure::new(
+            return Err(Failure::from_finding(
                 "the submission composed no section, so nothing was saved",
-                &Report::default(),
+                yamaa_core::project_scope::submission_nothing_to_save(),
             ));
         }
         let mut preflight = yamaa_adapters::project_scope::Preflight::new();
@@ -551,29 +576,30 @@ impl Engine {
     /// Static check of every listed specification with the project's codelists
     /// and functions, plus the project findings: shared names, inputs that
     /// read a listed artifact without a `schema` link, and colliding files.
-    pub fn project_check(&self, project: &str, token: &CancellationToken) -> Table {
+    /// Only cancellation fails the call, with no table: a check cancelled
+    /// between specifications returns none of the findings it gathered.
+    pub fn project_check(&self, project: &str, token: &CancellationToken) -> Result<Table, Error> {
         if token.is_cancelled() {
-            return Report::from_issues(&[crate::internal::cancelled_issue()]).table();
+            return Err(Error::Cancelled);
         }
         let read = match Project::read(project, self.shared().language) {
             Ok(read) => read,
-            Err(issues) => return Report::from_issues(&issues).table(),
+            Err(issues) => return Ok(Report::from_issues(&issues).table()),
         };
         let mut issues = read.check_findings();
         for listed in read.listed() {
             if token.is_cancelled() {
-                issues.push(crate::internal::cancelled_issue());
-                break;
+                return Err(Error::Cancelled);
             }
             let mut rows = if listed.failure().is_empty() {
-                crate::internal::run_check(self.shared(), listed.path(), Some(project), token)
+                crate::internal::run_check(self.shared(), listed.path(), Some(project), token)?
             } else {
                 listed.failure().to_vec()
             };
             identify(&mut rows, listed.identity());
             issues.extend(rows);
         }
-        Report::from_issues(&issues).table()
+        Ok(Report::from_issues(&issues).table())
     }
 
     /// Build every listed specification of `section` ("sdtm", "adam", "send"),
@@ -813,5 +839,78 @@ mod plan_tests {
         run();
         assert_eq!(names(&plans), [kept("dm.yaml")]);
         std::fs::remove_dir_all(root).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::table::{Array, StringArray};
+
+    /// The text cells of one column of an issues table, in row order.
+    fn cells(table: &Table, column: &str) -> Vec<Option<String>> {
+        table
+            .batches()
+            .iter()
+            .flat_map(|batch| {
+                let column = batch
+                    .column_by_name(column)
+                    .unwrap()
+                    .as_any()
+                    .downcast_ref::<StringArray>()
+                    .unwrap();
+                (0..column.len())
+                    .map(|row| (!column.is_null(row)).then(|| column.value(row).to_owned()))
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+
+    /// Resolved facts the engine cannot write or read back are refused as the
+    /// registered engine fault, each refusal keeping its message.
+    #[test]
+    fn unrepresentable_resolved_facts_are_an_engine_fault() {
+        let fault = yamaa_core::diagnostic::ConditionCode::ApplicationRejected.definition();
+        let unwritten = Error::Internal {
+            code: "resolved_serialization",
+        };
+        for (text, message) in [
+            (
+                Ok("not json".to_owned()),
+                "cannot resolve the specification: invalid resolved facts".to_owned(),
+            ),
+            (
+                Err(unwritten.clone()),
+                format!("cannot resolve the specification: {unwritten}"),
+            ),
+        ] {
+            let failure = resolved_value(text).unwrap_err();
+            assert_eq!(failure.message, message);
+            assert_eq!(
+                cells(&failure.issues, "phase"),
+                [Some(fault.phase.to_owned())]
+            );
+            assert_eq!(
+                cells(&failure.issues, "condition"),
+                [Some(fault.condition.to_owned())]
+            );
+            assert_eq!(cells(&failure.issues, "requirement"), [None]);
+            assert_eq!(
+                cells(&failure.issues, "context"),
+                [Some(
+                    r#"{"code":"artifact_representation","stage":"resolve"}"#.to_owned()
+                )]
+            );
+        }
+        assert_eq!(
+            resolved_value(Ok(r#"{"entry":"spec.yaml"}"#.to_owned())).unwrap(),
+            ContextValue::Map(
+                [(
+                    "entry".to_owned(),
+                    ContextValue::Text("spec.yaml".to_owned())
+                )]
+                .into()
+            )
+        );
     }
 }

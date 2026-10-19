@@ -108,6 +108,26 @@ pub fn producer_not_completed(dataset: &str, producer: &str) -> Diagnostic {
     )
 }
 
+/// A project run that built no specification has nothing to save, so saving
+/// it fails.
+pub fn run_nothing_to_save() -> Diagnostic {
+    finding(
+        ConditionCode::ProjectRunNothingToSave,
+        Vec::new(),
+        Vec::new(),
+    )
+}
+
+/// A project submission that composed no section has nothing to save, so
+/// saving it fails.
+pub fn submission_nothing_to_save() -> Diagnostic {
+    finding(
+        ConditionCode::ProjectSubmissionNothingToSave,
+        Vec::new(),
+        Vec::new(),
+    )
+}
+
 /// A link on a dependency cycle among run-scope specifications. `cycle` names
 /// the specifications from the first one entered back to itself, as a
 /// producer graph reports a cycle.

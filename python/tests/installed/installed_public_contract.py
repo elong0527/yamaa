@@ -59,6 +59,33 @@ def public_names(value):
     return sorted(name for name in dir(value) if not name.startswith("_"))
 
 
+def unknown_member(available):
+    """The one issue of a project run asked for ADSL, which it did not build;
+    `available` is the canonical JSON of the names it has."""
+    return {
+        "phase": "validation",
+        "condition": "unknown_specification_name",
+        "requirement": "REQ-1339",
+        "spec_paths": [],
+        "context": '{"available":' + available + ',"name":"ADSL"}',
+        "source_span": None,
+        "operand_route": None,
+    }
+
+
+def nothing_to_save(rule):
+    """The one issue of a save with nothing to write, under `rule`."""
+    return {
+        "phase": "output",
+        "condition": "nothing_to_save",
+        "requirement": rule,
+        "spec_paths": [],
+        "context": "{}",
+        "source_span": None,
+        "operand_route": None,
+    }
+
+
 def arguments(function):
     return list(inspect.signature(function).parameters)
 
@@ -560,12 +587,21 @@ class PublicContract(unittest.TestCase):
         self.assertTrue(runs.report.equals(member.report))
         error = self.refusal(lambda: runs["ADSL"])
         self.assertEqual(str(error), MESSAGES["unknown_member"])
+        self.assertEqual(error.issues.to_dicts(), [unknown_member('["TEST"]')])
         # Membership and iteration go by name, like indexing.
         self.assertIn("TEST", runs)
         self.assertNotIn("ADSL", runs)
         self.assertEqual(list(runs), ["TEST"])
         self.assertEqual(project.run("adam").names, ["TEST"])
         self.assertEqual(project.run("sdtm").names, [])
+        # A run or a submission that built nothing has nothing to save.
+        for result, message, rule in (
+            (project.run("sdtm"), "empty_project_run_save", "PROJECT-12"),
+            (project.submission(), "empty_submission_save", "PROJECT-13"),
+        ):
+            error = self.refusal(result.save)
+            self.assertEqual(str(error), MESSAGES[message])
+            self.assertEqual(error.issues.to_dicts(), [nothing_to_save(rule)])
         self.assertFalse((case / "test.csv").exists())
         self.assertIsNone(runs.save())
         self.assertEqual((case / "test.csv").read_bytes(), b"ID,RESULT\n01,1.5\n")
@@ -678,7 +714,7 @@ class PublicContract(unittest.TestCase):
         self.assertEqual(error.issues.to_dicts(), unread)
         error = self.refusal(lambda: runs["ADSL"])
         self.assertEqual(str(error), MESSAGES["no_member_built"])
-        self.assertTrue(error.issues.is_empty())
+        self.assertEqual(error.issues.to_dicts(), [unknown_member("[]")])
         submission = project.submission("sdtm", created="2026-09-11T00:00:00")
         self.assertEqual(public_names(submission), TRUTH["members"]["submission"])
         self.assertEqual(self.issues(submission).to_dicts(), unread)

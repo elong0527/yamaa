@@ -57,7 +57,7 @@ pub fn main() {
     let token = CancellationToken::new();
     let request = Request::new("spec.yaml");
 
-    let report = engine.check(&request, &token);
+    let report = engine.check(&request, &token).unwrap();
     let mut build = engine.build(&request, &token).unwrap();
     if cfg!(feature = "yaml") {
         assert!(report.is_empty());
@@ -86,7 +86,7 @@ pub fn main() {
     }
 
     // Typed diagnostics out: a missing entry reports records, never text.
-    let missing = engine.check(&Request::new("missing.csv"), &token);
+    let missing = engine.check(&Request::new("missing.csv"), &token).unwrap();
     assert!(!missing.is_empty());
     assert!(!missing.diagnostics[0].code.is_empty());
     println!(

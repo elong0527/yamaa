@@ -95,9 +95,16 @@ impl Run {
 
 #[pyfunction]
 #[pyo3(signature=(specification, project=None))]
-pub fn _spec_check(py: Python<'_>, specification: &str, project: Option<&str>) -> ArrowTable {
+pub fn _spec_check(
+    py: Python<'_>,
+    specification: &str,
+    project: Option<&str>,
+) -> PyResult<ArrowTable> {
     let token = CancellationToken::new();
-    ArrowTable::from(&engine(py).spec_check(specification, project, &token))
+    engine(py)
+        .spec_check(specification, project, &token)
+        .map(|issues| ArrowTable::from(&issues))
+        .map_err(|error| raise_error(py, "cannot check the specification", error))
 }
 
 /// The compiled plans one lazy specification or project object keeps between
@@ -252,8 +259,11 @@ pub fn _project_spec(py: Python<'_>, project: &str, name: &str) -> PyResult<Stri
 }
 
 #[pyfunction]
-pub fn _project_check(py: Python<'_>, project: &str) -> ArrowTable {
-    ArrowTable::from(&engine(py).project_check(project, &CancellationToken::new()))
+pub fn _project_check(py: Python<'_>, project: &str) -> PyResult<ArrowTable> {
+    engine(py)
+        .project_check(project, &CancellationToken::new())
+        .map(|issues| ArrowTable::from(&issues))
+        .map_err(|error| raise_error(py, "cannot check the project", error))
 }
 
 #[pyfunction]

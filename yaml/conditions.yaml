@@ -106,6 +106,8 @@ conditions:
   no_applicable_keys: {phases: [validation]}
   non_ascii_source: {phases: [validation]}
   not_missing_failed: {phases: [verification]}
+  # PROJECT-12 and PROJECT-13
+  nothing_to_save: {phases: [output]}
   odm_not_unique: {phases: [derivation, row_construction]}
   odm_schema_field_ambiguous: {phases: [validation]}
   odm_schema_field_missing: {phases: [validation]}

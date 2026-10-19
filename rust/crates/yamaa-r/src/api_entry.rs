@@ -219,11 +219,13 @@ fn table(table: Option<&yamaa::Table>) -> std::result::Result<Robj, Refusal> {
 fn spec_check(specification: Raw, project: Robj, version: Raw) -> List {
     reply(|| {
         let project = optional_text(&project)?;
-        let issues = engine(&version, None)?.spec_check(
-            &text(&specification)?,
-            project.as_deref(),
-            &CancellationToken::new(),
-        );
+        let issues = engine(&version, None)?
+            .spec_check(
+                &text(&specification)?,
+                project.as_deref(),
+                &CancellationToken::new(),
+            )
+            .map_err(|error| from_error("cannot check the specification", &error))?;
         Ok(crate::public_table::frame(&issues)?)
     })
 }
@@ -383,8 +385,9 @@ fn project_spec(project: Raw, name: Raw, version: Raw) -> List {
 #[extendr]
 fn project_check(project: Raw, version: Raw) -> List {
     reply(|| {
-        let issues =
-            engine(&version, None)?.project_check(&text(&project)?, &CancellationToken::new());
+        let issues = engine(&version, None)?
+            .project_check(&text(&project)?, &CancellationToken::new())
+            .map_err(|error| from_error("cannot check the project", &error))?;
         Ok(crate::public_table::frame(&issues)?)
     })
 }

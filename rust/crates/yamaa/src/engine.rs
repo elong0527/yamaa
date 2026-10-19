@@ -162,10 +162,10 @@ impl Engine {
         }
     }
 
-    /// Static checks only, infallible at the boundary: admission and
-    /// preparation failures come back as diagnostics in the returned report,
-    /// never as a second error channel. A cancelled token returns a report
-    /// with a single cancelled diagnostic.
+    /// Static checks only: admission and preparation failures come back as
+    /// diagnostics in the returned report, never as a second error channel.
+    /// Only cancellation fails the call: a cancelled token returns
+    /// [`Error::Cancelled`], with no report.
     ///
     /// # Example
     ///
@@ -210,20 +210,21 @@ impl Engine {
     ///         .with_resolver(resolver.clone()),
     /// );
     /// let token = CancellationToken::new();
-    /// let report = engine.check(&Request::new("spec.yaml"), &token);
+    /// let report = engine.check(&Request::new("spec.yaml"), &token).unwrap();
     /// if cfg!(feature = "yaml") {
     ///     assert!(report.is_empty());
     /// } else {
     ///     assert!(!report.is_empty());
     /// }
     /// ```
-    pub fn check(&self, request: &Request<'_>, token: &CancellationToken) -> Report {
-        Report::from_issues(&run_check(
+    pub fn check(&self, request: &Request<'_>, token: &CancellationToken) -> Result<Report, Error> {
+        run_check(
             &self.shared,
             request.specification,
             request.environment,
             token,
-        ))
+        )
+        .map(|issues| Report::from_issues(&issues))
     }
 
     /// Prepare a specification once for many runs. Compilation captures and
@@ -1007,6 +1008,8 @@ mod tests {
         fn observe(&self, _event: crate::observe::Event) {}
     }
 
+    /// A cancelled call returns `Error::Cancelled`, with no result and no
+    /// issue; a check is no exception.
     #[test]
     fn cancelled_tokens_fail_operations_before_entry() {
         let engine = Engine::new(options());
@@ -1021,9 +1024,10 @@ mod tests {
             engine.define(&DefineRequest::new("env", "std", "1.0"), &token),
             Err(Error::Cancelled)
         ));
-        let report = engine.check(&request, &token);
-        assert_eq!(report.len(), 1);
-        assert_eq!(report.diagnostics[0].code, "cancelled");
+        assert!(matches!(
+            engine.check(&request, &token),
+            Err(Error::Cancelled)
+        ));
     }
 
     #[test]
@@ -1032,7 +1036,7 @@ mod tests {
         let token = CancellationToken::new();
         let missing = missing_spec();
         let request = Request::new(missing.to_str().unwrap());
-        let report = engine.check(&request, &token);
+        let report = engine.check(&request, &token).unwrap();
         assert!(!report.is_empty());
         let build = engine.build(&request, &token).unwrap();
         assert!(build.output().is_none());
@@ -1130,7 +1134,7 @@ mod plain_build_tests {
         ));
         let token = CancellationToken::new();
         let request = Request::new(entry.to_str().unwrap());
-        let report = engine.check(&request, &token);
+        let report = engine.check(&request, &token).unwrap();
         assert!(report.is_empty());
         let mut build = engine.build(&request, &token).unwrap();
         assert!(build.report().is_empty());

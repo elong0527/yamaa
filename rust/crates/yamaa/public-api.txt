@@ -102,12 +102,12 @@ yamaa::TimestampSecondArray: pub use yamaa::table::TimestampSecondArray
 yamaa::VERSION: pub const VERSION: &str
 yamaa::api::Engine: impl Engine
 yamaa::api::Engine: impl Engine
-yamaa::api::Engine::project_check: pub fn project_check(&self, project: &str, token: &CancellationToken) -> Table
+yamaa::api::Engine::project_check: pub fn project_check(&self, project: &str, token: &CancellationToken) -> Result<Table, Error>
 yamaa::api::Engine::project_run: pub fn project_run(&self, project: &str, section: Option<&str>, token: &CancellationToken) -> Result<ProjectRun, Error>
 yamaa::api::Engine::project_run_reusing: pub fn project_run_reusing(&self, project: &str, section: Option<&str>, plans: &Plans, token: &CancellationToken) -> Result<ProjectRun, Error>
 yamaa::api::Engine::project_spec: pub fn project_spec(&self, project: &str, name: &str) -> Result<String, Failure>
 yamaa::api::Engine::project_submission: pub fn project_submission(&self, project: &str, section: Option<&str>, created: Option<&str>, installed: &str, token: &CancellationToken) -> Result<Submission, Error>
-yamaa::api::Engine::spec_check: pub fn spec_check(&self, specification: &str, project: Option<&str>, token: &CancellationToken) -> Table
+yamaa::api::Engine::spec_check: pub fn spec_check(&self, specification: &str, project: Option<&str>, token: &CancellationToken) -> Result<Table, Error>
 yamaa::api::Engine::spec_resolve: pub fn spec_resolve(&self, specification: &str, project: Option<&str>) -> Result<ContextValue, Failure>
 yamaa::api::Engine::spec_run: pub fn spec_run(&self, specification: &str, project: Option<&str>, token: &CancellationToken) -> Result<Run, Error>
 yamaa::api::Engine::spec_run_reusing: pub fn spec_run_reusing(&self, specification: &str, project: Option<&str>, plans: &Plans, token: &CancellationToken) -> Result<Run, Error>
@@ -224,7 +224,7 @@ yamaa::engine::DefineRequest::with_created: pub fn with_created(mut self, create
 yamaa::engine::Engine: impl Engine
 yamaa::engine::Engine: pub struct Engine [derive(Clone)]
 yamaa::engine::Engine::build: pub fn build(&self, request: &Request<'_>, token: &CancellationToken) -> Result<Build, Error>
-yamaa::engine::Engine::check: pub fn check(&self, request: &Request<'_>, token: &CancellationToken) -> Report
+yamaa::engine::Engine::check: pub fn check(&self, request: &Request<'_>, token: &CancellationToken) -> Result<Report, Error>
 yamaa::engine::Engine::compile: pub fn compile(&self, request: &Request<'_>, token: &CancellationToken) -> Result<Plan, Error>
 yamaa::engine::Engine::define: pub fn define(&self, request: &DefineRequest<'_>, token: &CancellationToken) -> Result<DefineBuild, Error>
 yamaa::engine::Engine::new: pub fn new(options: EngineOptions) -> Self

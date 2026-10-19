@@ -101,6 +101,7 @@ fn study() -> Study {
 
 #[derive(Debug)]
 struct Row {
+    phase: String,
     condition: String,
     requirement: Option<String>,
     spec_paths: Vec<String>,
@@ -119,8 +120,12 @@ fn rows(table: &Table) -> Vec<Row> {
                 .unwrap()
                 .clone()
         };
-        let (condition, requirement, context) =
-            (text("condition"), text("requirement"), text("context"));
+        let (phase, condition, requirement, context) = (
+            text("phase"),
+            text("condition"),
+            text("requirement"),
+            text("context"),
+        );
         let paths = batch
             .column_by_name("spec_paths")
             .unwrap()
@@ -132,6 +137,7 @@ fn rows(table: &Table) -> Vec<Row> {
             let values = paths.value(row);
             let values = values.as_any().downcast_ref::<StringArray>().unwrap();
             rows.push(Row {
+                phase: phase.value(row).to_owned(),
                 condition: condition.value(row).to_owned(),
                 requirement: (!requirement.is_null(row)).then(|| requirement.value(row).to_owned()),
                 spec_paths: (0..values.len())
@@ -203,7 +209,7 @@ fn names_select_listed_specifications_and_refuse_unknown_or_shared_names() {
     assert_eq!(issues[0].requirement.as_deref(), Some("REQ-1338"));
     assert_eq!(issues[0].spec_paths, ["sdtm.specs[0]", "adam.specs[1]"]);
     assert_eq!(issues[0].context["name"], text("DM"));
-    let check = conditions(&engine.project_check(&study.project(), &token));
+    let check = conditions(&engine.project_check(&study.project(), &token).unwrap());
     assert!(check.iter().any(|c| c == "duplicate_specification_name"));
     let mut run = engine.project_run(&study.project(), None, &token).unwrap();
     assert!(run.names().is_empty());
@@ -242,7 +248,7 @@ fn a_project_spelled_through_a_linked_directory_keeps_its_authority() {
     let project = link.0.join("project.yaml").to_str().unwrap().to_owned();
     let engine = engine();
     let token = CancellationToken::new();
-    let check = engine.project_check(&project, &token);
+    let check = engine.project_check(&project, &token).unwrap();
     assert_eq!(check.rows(), 0, "{:?}", rows(&check));
     let run = engine.project_run(&project, None, &token).unwrap();
     assert_eq!(run.names(), ["DM", "AE", "ADSL"]);
@@ -250,7 +256,7 @@ fn a_project_spelled_through_a_linked_directory_keeps_its_authority() {
     // A selected specification is checked and run as the caller named it.
     let path = engine.project_spec(&project, "DM").unwrap();
     assert_eq!(path, study.path("sdtm/dm.yaml"));
-    let check = engine.spec_check(&path, Some(&project), &token);
+    let check = engine.spec_check(&path, Some(&project), &token).unwrap();
     assert_eq!(check.rows(), 0, "{:?}", rows(&check));
     let run = engine.spec_run(&path, Some(&project), &token).unwrap();
     assert_eq!(run.issues().rows(), 0, "{:?}", rows(&run.issues()));
@@ -337,6 +343,20 @@ fn a_user_interrupt_stops_the_project_run() {
     assert_eq!(functions.0.load(Ordering::Relaxed), 1);
 }
 
+/// The one issue of a save that had nothing to write, under `rule`.
+fn assert_nothing_to_save(issues: &Table, rule: &str) {
+    let issues = rows(issues);
+    assert_eq!(issues.len(), 1, "{issues:?}");
+    assert_eq!(issues[0].phase, "output");
+    assert_eq!(issues[0].condition, "nothing_to_save");
+    assert_eq!(issues[0].requirement.as_deref(), Some(rule));
+    assert!(issues[0].spec_paths.is_empty());
+    assert_eq!(
+        issues[0].context.as_object().map(|context| context.len()),
+        Some(0)
+    );
+}
+
 #[test]
 fn a_save_that_would_write_nothing_fails() {
     let study = study();
@@ -349,22 +369,100 @@ fn a_save_that_would_write_nothing_fails() {
     assert!(send.names().is_empty());
     assert_eq!(send.issues().rows(), 0);
     let failure = send.save().unwrap_err();
-    assert!(
-        failure.message.contains("nothing was saved"),
-        "{}",
-        failure.message
+    assert_eq!(
+        failure.message,
+        "the project run built no specification, so nothing was saved"
     );
+    assert_nothing_to_save(&failure.issues, "PROJECT-12");
     // No section names `define`: the submission composes nothing.
     let mut submission = engine
         .project_submission(&study.project(), None, None, "0.4.0", &token)
         .unwrap();
     assert_eq!(submission.issues().rows(), 0);
     let failure = submission.save().unwrap_err();
-    assert!(
-        failure.message.contains("nothing was saved"),
-        "{}",
-        failure.message
+    assert_eq!(
+        failure.message,
+        "the submission composed no section, so nothing was saved"
     );
+    assert_nothing_to_save(&failure.issues, "PROJECT-13");
+    assert_eq!(std::fs::read_dir(study.0.join("out")).unwrap().count(), 0);
+}
+
+#[test]
+fn a_project_run_refuses_a_name_it_did_not_build() {
+    let study = study();
+    let engine = engine();
+    let token = CancellationToken::new();
+    // The SDTM run builds DM and AE. ADSL is listed too, in another section.
+    let sdtm = engine
+        .project_run(&study.project(), Some("sdtm"), &token)
+        .unwrap();
+    assert_eq!(sdtm.names(), ["DM", "AE"]);
+    for name in ["ADSL", "ADXX"] {
+        let failure = sdtm.member(name).err().unwrap();
+        assert_eq!(
+            failure.message,
+            format!("the project run has no specification named {name:?}; it has DM, AE")
+        );
+        let issues = rows(&failure.issues);
+        assert_eq!(issues.len(), 1, "{issues:?}");
+        assert_eq!(issues[0].phase, "validation");
+        assert_eq!(issues[0].condition, "unknown_specification_name");
+        assert_eq!(issues[0].requirement.as_deref(), Some("REQ-1339"));
+        assert!(issues[0].spec_paths.is_empty());
+        assert_eq!(issues[0].context["name"], text(name));
+        // Every name the run has, sorted.
+        assert_eq!(
+            issues[0].context["available"],
+            Value::Array(vec![text("AE"), text("DM")])
+        );
+    }
+    // A run that built nothing has no name to offer.
+    let send = engine
+        .project_run(&study.project(), Some("send"), &token)
+        .unwrap();
+    let failure = send.member("DM").err().unwrap();
+    assert_eq!(
+        failure.message,
+        "the project run has no specification named \"DM\"; it built none"
+    );
+    let issues = rows(&failure.issues);
+    assert_eq!(issues.len(), 1, "{issues:?}");
+    assert_eq!(issues[0].condition, "unknown_specification_name");
+    assert_eq!(issues[0].context["name"], text("DM"));
+    assert_eq!(issues[0].context["available"], Value::Array(Vec::new()));
+}
+
+/// A cancelled call returns `Error::Cancelled`, with no result and no issue:
+/// a check, a run and a submission alike.
+#[test]
+fn a_cancelled_call_returns_no_result_and_no_issue() {
+    let study = study();
+    let engine = engine();
+    let token = CancellationToken::new();
+    token.cancel();
+    let project = study.project();
+    let path = study.path("sdtm/dm.yaml");
+    assert!(matches!(
+        engine.spec_check(&path, Some(&project), &token),
+        Err(yamaa::Error::Cancelled)
+    ));
+    assert!(matches!(
+        engine.project_check(&project, &token),
+        Err(yamaa::Error::Cancelled)
+    ));
+    assert!(matches!(
+        engine.spec_run(&path, Some(&project), &token),
+        Err(yamaa::Error::Cancelled)
+    ));
+    assert!(matches!(
+        engine.project_run(&project, None, &token),
+        Err(yamaa::Error::Cancelled)
+    ));
+    assert!(matches!(
+        engine.project_submission(&project, None, None, "0.4.0", &token),
+        Err(yamaa::Error::Cancelled)
+    ));
     assert_eq!(std::fs::read_dir(study.0.join("out")).unwrap().count(), 0);
 }
 
@@ -387,7 +485,9 @@ fn project_check_reports_every_specification_and_the_project_findings() {
         "project.yaml",
         PROJECT.replace("[adam/adsl.yaml]", "[adam/adsl.yaml, adam/adae.yaml]"),
     );
-    let table = engine().project_check(&study.project(), &CancellationToken::new());
+    let table = engine()
+        .project_check(&study.project(), &CancellationToken::new())
+        .unwrap();
     let issues = rows(&table);
     let ae = study.path("sdtm/ae.yaml");
     let adae = study.path("adam/adae.yaml");

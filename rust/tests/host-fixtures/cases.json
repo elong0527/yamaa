@@ -4610,7 +4610,9 @@
         "refused_project_run_save": "the project run was refused; see issues",
         "refused_submission_save": "the submission was refused; see issues",
         "no_member_built": "the project run has no specification named \"ADSL\"; it built none",
-        "unknown_member": "the project run has no specification named \"ADSL\"; it has TEST"
+        "unknown_member": "the project run has no specification named \"ADSL\"; it has TEST",
+        "empty_project_run_save": "the project run built no specification, so nothing was saved",
+        "empty_submission_save": "the submission composed no section, so nothing was saved"
       },
       "interrupt_message": "public contract activation interrupt",
       "report_output_yaml": "columns: [ID, VALUE], report: checks.csv}",

@@ -247,7 +247,8 @@ impl<'a> Request<'a> {
 
 impl Engine {
     pub fn new(options: EngineOptions) -> Engine;
-    pub fn check(&self, request: &Request<'_>, token: &CancellationToken) -> Report;
+    pub fn check(&self, request: &Request<'_>, token: &CancellationToken)
+        -> Result<Report, Error>;
     pub fn build(&self, request: &Request<'_>, token: &CancellationToken)
         -> Result<Build, Error>;
     pub fn compile(&self, request: &Request<'_>, token: &CancellationToken)
@@ -314,9 +315,10 @@ pub enum SaveOutcome { Saved, NothingToSave }  // #[non_exhaustive]
   `#[non_exhaustive]`, so external crates cannot use struct literals; the
   `new` plus `with_*` constructors above are the only way to build them, which
   keeps additive field changes non-breaking.
-- `check` is infallible at the boundary, as today's `check_with_resolver` is:
-  admission and preparation failures come back as diagnostics in the returned
-  `Report`, never as a second error channel.
+- `check` reports admission and preparation failures as diagnostics in the
+  returned `Report`, as today's `check_with_resolver` does, never as a second
+  error channel. Only cancellation fails it: a cancelled call returns
+  `Error::Cancelled`, with no report and no issue, as every operation does.
 - `build` mirrors today's `Result<Domain, Failure>`: a rejected build returns
   `Error::Rejected(Report)`; a successful `Build` carries the same output,
   run report and observations as today's `Domain`.
