@@ -1,5 +1,7 @@
 //! Facade-owned host resource authority.
 //!
+//! Every operation reads through one resolver: the engine's own local file
+//! resolver unless [`crate::EngineOptions::with_resolver`] supplies another.
 //! A resolver may serve local objects, opaque URI identities or warehouse
 //! data. References are immutable host identities, never content digests.
 //! Only public resource facts cross this boundary.
@@ -76,6 +78,69 @@ impl ResolverKind {
     }
 }
 
+/// The kind of entry a name reaches. A resolver serves a regular file; for
+/// any other name it fails with [`ResolverFailure::from_kind`], naming the
+/// first entry that stops the name. The engine raises the file rules'
+/// conditions from that report alone: a link of any sort, a junction or
+/// another reparse point included, fails as `resource_path_symlink` (FILE-8),
+/// any other entry that is not a regular file as
+/// `resource_path_not_regular_file` (FILE-7), and a missing name as
+/// `resource_path_missing`.
+///
+/// [`ResolverFailure::from_kind`]: crate::error::ResolverFailure::from_kind
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ResourceKind {
+    /// A regular file, reported where a directory is required.
+    File,
+    /// A directory.
+    Directory,
+    /// A symbolic link.
+    SymbolicLink,
+    /// A Windows directory junction.
+    Junction,
+    /// Any other Windows reparse point.
+    ReparsePoint,
+    /// A FIFO, socket, device or any other entry.
+    Other,
+    /// No entry.
+    Missing,
+}
+
+impl ResourceKind {
+    /// Return the stable kind name, which is also the failure code that
+    /// reports it.
+    pub fn name(self) -> &'static str {
+        self.into_core().name()
+    }
+
+    pub(crate) fn into_core(self) -> yamaa_adapters::host_resources::ResourceKind {
+        use yamaa_adapters::host_resources::ResourceKind as Core;
+        match self {
+            Self::File => Core::File,
+            Self::Directory => Core::Directory,
+            Self::SymbolicLink => Core::SymbolicLink,
+            Self::Junction => Core::Junction,
+            Self::ReparsePoint => Core::ReparsePoint,
+            Self::Other => Core::Other,
+            Self::Missing => Core::Missing,
+        }
+    }
+
+    pub(crate) fn from_core(kind: yamaa_adapters::host_resources::ResourceKind) -> Self {
+        use yamaa_adapters::host_resources::ResourceKind as Core;
+        match kind {
+            Core::File => Self::File,
+            Core::Directory => Self::Directory,
+            Core::SymbolicLink => Self::SymbolicLink,
+            Core::Junction => Self::Junction,
+            Core::ReparsePoint => Self::ReparsePoint,
+            Core::Other => Self::Other,
+            Core::Missing => Self::Missing,
+        }
+    }
+}
+
 /// One resolver request. The held reference rides freshness and publication
 /// requests; the host must reject a changed reference.
 #[non_exhaustive]
@@ -112,9 +177,10 @@ impl ResolverReply {
 }
 
 /// Host resource authority. Implementations must return closed failures and
-/// must not panic. Stage creates a private provisional object, commit
-/// atomically publishes it, and abort removes it after any failed or
-/// interrupting stage or commit.
+/// must not panic. Inspect and capture serve a regular file or report the
+/// [`ResourceKind`] the name reaches. Stage creates a private provisional
+/// object, commit atomically publishes it, and abort removes it after any
+/// failed or interrupting stage or commit.
 pub trait ResourceResolver: Send + Sync {
     /// Serve one resource request on the calling thread of the operation.
     fn request(
@@ -156,6 +222,12 @@ impl MemoryResolver {
         self.inner.insert(declaring, written, reference, bytes);
     }
 
+    /// Report `kind` for these declaring and written names instead of
+    /// serving them, as a file resolver reports a directory or a link.
+    pub fn insert_kind(&self, declaring: &str, written: &str, kind: ResourceKind) {
+        self.inner.insert_kind(declaring, written, kind.into_core());
+    }
+
     /// Cancel every operation served through this resolver.
     pub fn cancel(&self) {
         self.inner.cancel();
@@ -186,6 +258,7 @@ impl ResourceResolver for MemoryResolver {
                 written: request.written,
                 reference: request.reference,
                 bytes: request.bytes,
+                limit: None,
             })
             .map(|reply| ResolverReply {
                 reference: reply.reference,
@@ -204,6 +277,37 @@ mod tests {
     fn operation_and_kind_names_are_stable() {
         assert_eq!(ResolverOperation::Capture.name(), "capture");
         assert_eq!(ResolverKind::Input.name(), "input");
+        let names = [
+            (ResourceKind::File, "file"),
+            (ResourceKind::Directory, "directory"),
+            (ResourceKind::SymbolicLink, "symbolic_link"),
+            (ResourceKind::Junction, "junction"),
+            (ResourceKind::ReparsePoint, "reparse_point"),
+            (ResourceKind::Other, "other"),
+            (ResourceKind::Missing, "missing"),
+        ];
+        for (kind, name) in names {
+            assert_eq!(kind.name(), name);
+            assert_eq!(ResourceKind::from_core(kind.into_core()), kind);
+        }
+    }
+
+    #[test]
+    fn memory_kind_facts_fail_with_their_kind() {
+        let resolver = MemoryResolver::new();
+        resolver.insert_kind("spec", "input/link.csv", ResourceKind::SymbolicLink);
+        let failure = resolver
+            .request(ResolverRequest {
+                operation: ResolverOperation::Inspect,
+                kind: ResolverKind::Input,
+                declaring: "spec",
+                written: "input/link.csv",
+                reference: None,
+                bytes: None,
+            })
+            .unwrap_err();
+        assert_eq!(failure.code(), "symbolic_link");
+        assert_eq!(failure.kind(), Some(ResourceKind::SymbolicLink));
     }
 
     #[test]

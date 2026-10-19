@@ -8,9 +8,16 @@
 //! other column is nullable text, so the table is an ordinary engine input.
 //! Refusals arrive as [`Error::Odm`] with a stable code; a build without the
 //! `odm` feature returns [`Error::Unavailable`].
+//!
+//! The source is captured once through a resolver, as every other read is:
+//! [`read_odm`] reads a local caller path through the local file resolver,
+//! whose parent it selects and whose file must be a regular file, never a
+//! link (FILE-7, FILE-8). [`Engine::read_odm`] reads through the engine's
+//! resolver.
 
 use std::path::Path;
 
+use crate::engine::Engine;
 use crate::error::{Error, OdmError, TableError};
 use crate::table::Table;
 
@@ -90,7 +97,8 @@ impl OdmOptions {
     }
 }
 
-/// Read every clinical item of one ODM 1.3 or 2.0 file into a table.
+/// Read every clinical item of one ODM 1.3 or 2.0 file into a table. The
+/// file is captured once through the local file resolver.
 ///
 /// # Example
 ///
@@ -122,8 +130,61 @@ impl OdmOptions {
 /// }
 /// ```
 pub fn read_odm(path: &Path, options: &OdmOptions) -> Result<Table, Error> {
+    table(yamaa_adapters::odm_xml::read(path, &options.to_core()))
+}
+
+impl Engine {
+    /// [`read_odm`] through this engine's resolver, which serves `source`
+    /// under that name: one capture, as an input. Without a resolver,
+    /// `source` is a local path read exactly as [`read_odm`] reads it.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use std::sync::Arc;
+    ///
+    /// use yamaa::{Engine, EngineOptions, Error, HostLanguage, MemoryResolver, OdmOptions};
+    ///
+    /// let resolver = Arc::new(MemoryResolver::new());
+    /// resolver.insert("/", "study/odm.xml", "odm:1", Arc::from(
+    ///     &br#"<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3">
+    ///   <ClinicalData StudyOID="S" MetaDataVersionOID="M">
+    ///     <SubjectData SubjectKey="01"><StudyEventData StudyEventOID="E">
+    ///       <FormData FormOID="F"><ItemGroupData ItemGroupOID="G">
+    ///         <ItemData ItemOID="AGE" Value="42"/>
+    ///       </ItemGroupData></FormData>
+    ///     </StudyEventData></SubjectData>
+    ///   </ClinicalData>
+    /// </ODM>"#[..],
+    /// ));
+    /// let engine = Engine::new(
+    ///     EngineOptions::new(HostLanguage::Python, "doctest".into(), "0".into())
+    ///         .with_resolver(resolver),
+    /// );
+    /// let result = engine.read_odm("study/odm.xml", &OdmOptions::new());
+    /// if cfg!(feature = "odm") {
+    ///     assert_eq!(result.unwrap().rows(), 1);
+    /// } else {
+    ///     assert!(matches!(result, Err(Error::Unavailable { feature: "odm" })));
+    /// }
+    /// ```
+    pub fn read_odm(&self, source: &str, options: &OdmOptions) -> Result<Table, Error> {
+        match crate::internal::resolver_bridge(self.shared()) {
+            Some(resolver) => table(yamaa_adapters::odm_xml::read_with_resolver(
+                resolver,
+                source,
+                &options.to_core(),
+            )),
+            None => read_odm(Path::new(source), options),
+        }
+    }
+}
+
+fn table(
+    result: Result<yamaa_adapters::public_table::PublicTable, yamaa_adapters::odm_xml::Error>,
+) -> Result<Table, Error> {
     use yamaa_adapters::odm_xml;
-    match odm_xml::read(path, &options.to_core()) {
+    match result {
         Ok(table) => Ok(Table::from_adapter(&table)),
         Err(odm_xml::Error::Unavailable) => Err(Error::Unavailable { feature: "odm" }),
         Err(odm_xml::Error::Read(error)) => Err(Error::Odm(OdmError::from_core(&error))),

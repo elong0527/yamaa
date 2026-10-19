@@ -361,3 +361,9 @@ CSV or Parquet; Dataset-JSON and SAS Transport version 5 files come from
 
 A relative path resolves from the YAML file that writes it, so
 `../raw/odm.parquet` in `sdtm/dm.yaml` is the study's `raw/odm.parquet`.
+
+On Windows, a specification, project or ODM file you pass may sit on a network
+share (`\\server\share\study\project.yaml`) or a mapped drive, and the paths
+its YAML writes resolve on that share. Paths inside YAML keep forward slashes.
+Below the directory you pass, symbolic links, junctions and other reparse
+points are refused on every drive.

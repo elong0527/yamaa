@@ -21,20 +21,24 @@ impl From<model::Error> for Error {
     }
 }
 
-/// Initial resolution uses precisely the existing preparation/compilation routes.
-/// Once returned, the owned artifact has no file reader, callback or executable plan.
+/// Initial resolution uses precisely the existing preparation/compilation routes,
+/// reading through `resolver`: the caller's, or the local file resolver
+/// without one. Once returned, the owned artifact has no file reader,
+/// callback or executable plan.
 pub fn resolve(
     specification: &str,
     environment: Option<&str>,
     host: Language,
+    resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
 ) -> Result<ResolvedArtifact, crate::file_application::Failure> {
-    let selected = crate::file_workflow::select_request(
-        yamaa_core::build::Request {
-            specification,
-            environment,
-        },
-        host,
-    )
+    let request = yamaa_core::build::Request {
+        specification,
+        environment,
+    };
+    let selected = match resolver {
+        Some(resolver) => crate::file_workflow::select_with_resolver(request, host, resolver),
+        None => crate::file_workflow::select_request(request, host),
+    }
     .map_err(|error| crate::project_application::selection_failure(&error))?;
     let artifact = match selected {
         yamaa_core::build::Prepared::Plain(prepared) => prepared.resolved_specification(),

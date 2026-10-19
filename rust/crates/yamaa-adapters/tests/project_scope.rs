@@ -104,7 +104,7 @@ fn study() -> Study {
 }
 
 fn read(study: &Study) -> Project {
-    Project::read(&study.path("project.yaml"), Language::Python)
+    Project::read(&study.path("project.yaml"), Language::Python, None)
         .unwrap_or_else(|issues| panic!("{issues:?}"))
 }
 
@@ -167,7 +167,7 @@ fn listings_follow_section_run_order_and_names_are_their_domains() {
 #[test]
 fn an_unreadable_project_fails_as_a_check_reports_it() {
     let study = Study::new();
-    let issues = Project::read(&study.path("project.yaml"), Language::Python)
+    let issues = Project::read(&study.path("project.yaml"), Language::Python, None)
         .err()
         .unwrap();
     assert_eq!(condition(&issues), ["project_environment_missing"]);

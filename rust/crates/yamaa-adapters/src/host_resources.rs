@@ -1,7 +1,10 @@
 //! Host resource authority, separate from codecs, credentials and language rules.
 //!
-//! References are immutable host identities, never content digests. Captures
-//! retain their original bytes and compare those bytes on every freshness check.
+//! Every resource an operation reads goes through one [`Resolver`]: the local
+//! file resolver ([`crate::file_resolver::FileResolver`]) unless the caller
+//! brings its own, such as a [`MemoryResolver`]. References are immutable host
+//! identities, never content digests. Captures retain their original bytes and
+//! compare those bytes on every freshness check.
 use std::{
     collections::BTreeMap,
     sync::{Arc, Mutex},
@@ -43,6 +46,64 @@ impl Kind {
         }
     }
 }
+/// The kind of entry a name reaches (FILE-7, FILE-8). A resolver serves a
+/// regular file; for any other name it reports, with [`Failure::Kind`], the
+/// kind of the first entry that stops the name: a link of any sort, a
+/// directory where a file is required, a file where a directory is required,
+/// or another kind of entry. The engine raises FILE-7's and FILE-8's
+/// conditions from that report alone, so every resolver can model them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ResourceKind {
+    /// A regular file.
+    File,
+    /// A directory.
+    Directory,
+    /// A symbolic link.
+    SymbolicLink,
+    /// A Windows directory junction: a mount-point reparse point.
+    Junction,
+    /// Any other Windows reparse point.
+    ReparsePoint,
+    /// A FIFO, socket, device or any other entry.
+    Other,
+    /// No entry.
+    Missing,
+}
+impl ResourceKind {
+    /// Every kind, in declaration order.
+    pub const ALL: [Self; 7] = [
+        Self::File,
+        Self::Directory,
+        Self::SymbolicLink,
+        Self::Junction,
+        Self::ReparsePoint,
+        Self::Other,
+        Self::Missing,
+    ];
+    /// The stable kind name.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::File => "file",
+            Self::Directory => "directory",
+            Self::SymbolicLink => "symbolic_link",
+            Self::Junction => "junction",
+            Self::ReparsePoint => "reparse_point",
+            Self::Other => "other",
+            Self::Missing => "missing",
+        }
+    }
+    /// The kind a stable name spells.
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|kind| kind.name() == name)
+    }
+    /// Whether the entry is a link of any sort, which FILE-8 refuses.
+    pub fn is_link(self) -> bool {
+        matches!(
+            self,
+            Self::SymbolicLink | Self::Junction | Self::ReparsePoint
+        )
+    }
+}
 /// Only public resource facts cross this boundary. Credentials belong to the
 /// resolver closure and must not appear in references or returned errors.
 pub struct Request<'a> {
@@ -54,6 +115,10 @@ pub struct Request<'a> {
     /// commit and abort. The host must reject a changed reference.
     pub reference: Option<&'a str>,
     pub bytes: Option<&'a [u8]>,
+    /// The most bytes a Capture may return. A resolver may refuse a larger
+    /// resource before reading it, with [`Failure::Limit`]; the engine refuses
+    /// a larger reply either way.
+    pub limit: Option<usize>,
 }
 #[derive(Clone, Debug)]
 pub struct Reply {
@@ -61,6 +126,35 @@ pub struct Reply {
     pub reference: String,
     /// Present only for Capture. Inspect and Target must never read data.
     pub bytes: Option<Arc<[u8]>>,
+    /// The identity the resource has from now on, from which its own
+    /// relative declarations resolve: the canonical path a walk reached. Without
+    /// it the engine names the resource by its lexical location, the
+    /// declaring identity's directory joined with the written path.
+    pub location: Option<String>,
+}
+impl Reply {
+    /// A reply with a reference and nothing else.
+    pub fn reference(reference: String) -> Self {
+        Self {
+            frame: None,
+            reference,
+            bytes: None,
+            location: None,
+        }
+    }
+}
+/// A local path the file resolver refuses before it walks anything.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PathRefusal {
+    /// The written form fails FILE-4 or FILE-5.
+    WrittenForm(yamaa_core::resource::ResourceFailure),
+    /// A spelling the resolver cannot interpret: a NUL byte, a rooted path
+    /// with `.` or `..` under explicit roots, or a malformed identity.
+    Invalid,
+    /// A root directory the resolver cannot select.
+    Root,
+    /// A location outside every explicit root.
+    OutsideRoots,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Failure {
@@ -70,30 +164,60 @@ pub enum Failure {
     Rejected,
     Publication,
     Cleanup,
+    /// The name reaches an entry of this kind where a regular file, or on
+    /// the way a directory, is required. [`ResourceKind::Missing`] is
+    /// [`Failure::Missing`].
+    Kind(ResourceKind),
+    /// The resource exists and cannot be read.
+    Unreadable,
+    /// The resource holds more bytes than the request's limit: its size,
+    /// when the resolver knows it.
+    Limit(Option<u64>),
+    /// The resolver refuses the local path itself.
+    Path(PathRefusal),
+}
+impl From<ResourceKind> for Failure {
+    fn from(kind: ResourceKind) -> Self {
+        match kind {
+            ResourceKind::Missing => Self::Missing,
+            kind => Self::Kind(kind),
+        }
+    }
 }
 impl Failure {
     /// Translate a host resolver protocol failure name. Both host resolver
-    /// ports speak the same closed name set; any other name is `Rejected`.
+    /// ports speak the same closed name set: the protocol failures and the
+    /// [`ResourceKind`] names; any other name is `Rejected`.
     pub fn from_name(name: &str) -> Self {
         match name {
-            "missing" => Self::Missing,
             "changed" => Self::Changed,
             "cancelled" => Self::Cancelled,
             "publication" => Self::Publication,
             "cleanup" => Self::Cleanup,
-            _ => Self::Rejected,
+            "unreadable" => Self::Unreadable,
+            name => ResourceKind::from_name(name).map_or(Self::Rejected, Self::from),
+        }
+    }
+    /// The kind a failure reports, when it reports one.
+    pub fn resource_kind(self) -> Option<ResourceKind> {
+        match self {
+            Self::Missing | Self::Kind(ResourceKind::Missing) => Some(ResourceKind::Missing),
+            Self::Kind(kind) => Some(kind),
+            _ => None,
         }
     }
 }
 /// A resolver may serve local objects, opaque URI identities or warehouse data.
-/// Stage creates a private provisional object and returns its staging token;
-/// Commit atomically publishes it; Abort removes it after a failed Commit or
-/// an interrupted Stage that returned a token. Stage is atomic by contract:
-/// a failed Stage must not leave provisional output, so Abort receives only
-/// the staging token and never the target reference. Abort is idempotent and
-/// token-scoped. Implementations must return closed failures and must not
-/// panic. Python and R adapters contain exceptions/conditions, retaining their
-/// original objects.
+/// Inspect and Capture name one resource: a resolver serves a regular file,
+/// or reports what else the name reaches with [`Failure::Kind`] or
+/// [`Failure::Missing`]. Stage creates a private provisional object and
+/// returns its staging token; Commit atomically publishes it; Abort removes it
+/// after a failed Commit or an interrupted Stage that returned a token. Stage
+/// is atomic by contract: a failed Stage must not leave provisional output, so
+/// Abort receives only the staging token and never the target reference. Abort
+/// is idempotent and token-scoped. Implementations must return closed failures
+/// and must not panic. Python and R adapters contain exceptions/conditions,
+/// retaining their original objects.
 pub trait Resolver: Send + Sync {
     fn request(&self, request: Request<'_>) -> Result<Reply, Failure>;
 }
@@ -103,9 +227,13 @@ struct Snapshot {
     written: String,
     kind: Kind,
     reference: String,
+    /// The identity the capture's reply gave the resource, if any.
+    location: Option<String>,
     bytes: Arc<[u8]>,
     frame: Option<Arc<crate::arrow_table::ArrowTable>>,
 }
+/// The snapshots one scope captured through one resolver: every capture of
+/// an operation, whatever resolver serves it, is held and verified here.
 pub(crate) struct Resources {
     pub resolver: Arc<dyn Resolver>,
     pub base: String,
@@ -144,6 +272,7 @@ impl Resources {
         declaring: &str,
         written: &str,
         reference: Option<&str>,
+        limit: Option<usize>,
     ) -> Result<Reply, Failure> {
         let reply = self.resolver.request(Request {
             operation,
@@ -152,18 +281,25 @@ impl Resources {
             written,
             reference,
             bytes: None,
+            limit,
         })?;
-        if reply.reference.is_empty()
-            || reply.reference.contains('\0')
+        let invalid = |text: &str| text.is_empty() || text.contains('\0');
+        if invalid(&reply.reference)
+            || reply.location.as_deref().is_some_and(invalid)
             || (operation != Operation::Capture && (reply.bytes.is_some() || reply.frame.is_some()))
         {
             return Err(Failure::Rejected);
         }
         Ok(reply)
     }
+    /// The identity of the resource `written` names from `declaring`: the
+    /// location the resolver's reply gives it, else its lexical location.
     pub fn resolve(&self, declaring: &str, written: &str, kind: Kind) -> Result<String, Failure> {
-        self.call(Operation::Inspect, kind, declaring, written, None)?;
-        Self::location(declaring, written)
+        let reply = self.call(Operation::Inspect, kind, declaring, written, None, None)?;
+        match reply.location {
+            Some(location) => Ok(location),
+            None => Self::location(declaring, written),
+        }
     }
     /// Logical declaring locations remain independent of the backend identity.
     /// A returned URI is retained evidence and is never interpreted as a path.
@@ -190,9 +326,21 @@ impl Resources {
         Ok(format!("/{}", parts.join("/")))
     }
     pub fn target(&self, declaring: &str, written: &str) -> Result<String, Failure> {
-        self.call(Operation::Target, Kind::Output, declaring, written, None)
-            .map(|reply| reply.reference)
+        self.call(
+            Operation::Target,
+            Kind::Output,
+            declaring,
+            written,
+            None,
+            None,
+        )
+        .map(|reply| reply.reference)
     }
+    /// Capture at most `maximum` bytes. Every capture that reuses a held
+    /// snapshot, the same request again or another spelling the resolver
+    /// gives the same reference, captures each request that snapshot holds
+    /// again and requires it unchanged (FILE-9, FILE-10), so a substituted
+    /// name cannot redirect a read silently.
     pub fn capture(
         &self,
         declaring: &str,
@@ -200,85 +348,55 @@ impl Resources {
         kind: Kind,
         maximum: usize,
     ) -> Result<(Arc<[u8]>, bool), Failure> {
+        let same =
+            |s: &Snapshot| s.declaring == declaring && s.written == written && s.kind == kind;
         let old = self
             .snapshots
             .lock()
             .map_err(|_| Failure::Rejected)?
             .iter()
-            .find(|s| s.declaring == declaring && s.written == written && s.kind == kind)
+            .find(|s| same(s))
             .cloned();
+        if let Some(old) = old {
+            if old.bytes.len() > maximum {
+                return Err(Failure::Limit(u64::try_from(old.bytes.len()).ok()));
+            }
+            self.check_aliases(&old.reference)?;
+            return Ok((old.bytes, false));
+        }
         let reply = self.call(
             Operation::Capture,
             kind,
             declaring,
             written,
-            old.as_ref().map(|s| s.reference.as_str()),
+            None,
+            Some(maximum),
         )?;
         if (reply.bytes.is_some() == reply.frame.is_some())
             || (kind != Kind::Input && reply.frame.is_some())
         {
             return Err(Failure::Rejected);
         }
-        let bytes = reply.bytes.unwrap_or_else(|| Arc::from([]));
-        let same_frame =
-            |old: &Option<Arc<crate::arrow_table::ArrowTable>>,
-             new: &Option<Arc<crate::arrow_table::ArrowTable>>| {
-                use yamaa_core::table::TableAccess;
-                match (old, new) {
-                    (None, None) => true,
-                    (Some(left), Some(right))
-                        if left.schema() == right.schema()
-                            && left.row_count() == right.row_count() =>
-                    {
-                        (0..left.row_count()).all(|row| {
-                            (0..left.schema().columns().len()).all(|column| {
-                                match (left.cell(row, column), right.cell(row, column)) {
-                                    (
-                                        Ok(yamaa_core::table::ValueRef::Float(left)),
-                                        Ok(yamaa_core::table::ValueRef::Float(right)),
-                                    ) => left.get().to_bits() == right.get().to_bits(),
-                                    (
-                                        Ok(yamaa_core::table::ValueRef::Date(left)),
-                                        Ok(yamaa_core::table::ValueRef::Date(right)),
-                                    ) => {
-                                        left.fields() == right.fields()
-                                            && left.collected_precision()
-                                                == right.collected_precision()
-                                    }
-                                    (
-                                        Ok(yamaa_core::table::ValueRef::DateTime(left)),
-                                        Ok(yamaa_core::table::ValueRef::DateTime(right)),
-                                    ) => {
-                                        left.fields() == right.fields()
-                                            && left.collected_precision()
-                                                == right.collected_precision()
-                                    }
-                                    (Ok(left), Ok(right)) => left == right,
-                                    _ => false,
-                                }
-                            })
-                        })
-                    }
-                    _ => false,
-                }
-            };
+        let bytes = reply.bytes.clone().unwrap_or_else(|| Arc::from([]));
         if bytes.len() > maximum {
-            return Err(Failure::Rejected);
+            return Err(Failure::Limit(u64::try_from(bytes.len()).ok()));
         }
-        if let Some(old) = old {
-            if old.reference != reply.reference
-                || old.bytes != bytes
-                || !same_frame(&old.frame, &reply.frame)
-            {
+        let known = self
+            .snapshots
+            .lock()
+            .map_err(|_| Failure::Rejected)?
+            .iter()
+            .find(|s| s.reference == reply.reference)
+            .cloned();
+        if let Some(known) = &known {
+            if known.bytes != bytes || !same_frame(&known.frame, &reply.frame) {
                 return Err(Failure::Changed);
             }
-            return Ok((old.bytes, false));
+            self.check_aliases(&known.reference)?;
         }
         let mut snapshots = self.snapshots.lock().map_err(|_| Failure::Rejected)?;
-        if let Some(old) = snapshots
-            .iter()
-            .find(|s| s.declaring == declaring && s.written == written && s.kind == kind)
-        {
+        if let Some(old) = snapshots.iter().find(|s| same(s)) {
+            // Another owner of this scope captured the same request meanwhile.
             if old.reference != reply.reference
                 || old.bytes != bytes
                 || !same_frame(&old.frame, &reply.frame)
@@ -287,24 +405,62 @@ impl Resources {
             }
             return Ok((Arc::clone(&old.bytes), false));
         }
-        let known = snapshots.iter().find(|s| s.reference == reply.reference);
-        if let Some(old) = known {
-            if old.bytes != bytes || !same_frame(&old.frame, &reply.frame) {
-                return Err(Failure::Changed);
-            }
-        }
         let created = known.is_none();
-        let bytes = known.map_or(bytes, |old| Arc::clone(&old.bytes));
-        let frame = known.map_or(reply.frame.clone(), |old| old.frame.clone());
+        let (bytes, frame) = match known {
+            Some(known) => (known.bytes, known.frame),
+            None => (bytes, reply.frame),
+        };
         snapshots.push(Snapshot {
             declaring: declaring.into(),
             written: written.into(),
             kind,
             reference: reply.reference,
+            location: reply.location,
             bytes: Arc::clone(&bytes),
             frame,
         });
         Ok((bytes, created))
+    }
+    /// Capture every held request for `reference` again, each unchanged.
+    fn check_aliases(&self, reference: &str) -> Result<(), Failure> {
+        let aliases = self
+            .snapshots
+            .lock()
+            .map_err(|_| Failure::Rejected)?
+            .iter()
+            .filter(|s| s.reference == reference)
+            .cloned()
+            .collect::<Vec<_>>();
+        aliases.iter().try_for_each(|alias| self.check(alias))
+    }
+    /// Capture one held request again: the resolver must give it the same
+    /// reference and the same content, and may refuse a resource longer than
+    /// the held bytes before reading it.
+    fn check(&self, snapshot: &Snapshot) -> Result<(), Failure> {
+        let reply = match self.call(
+            Operation::Capture,
+            snapshot.kind,
+            &snapshot.declaring,
+            &snapshot.written,
+            Some(&snapshot.reference),
+            Some(snapshot.bytes.len()),
+        ) {
+            Err(Failure::Limit(_)) => return Err(Failure::Changed),
+            result => result?,
+        };
+        if (reply.bytes.is_some() == reply.frame.is_some())
+            || (snapshot.kind != Kind::Input && reply.frame.is_some())
+        {
+            return Err(Failure::Rejected);
+        }
+        let bytes = reply.bytes.unwrap_or_else(|| Arc::from([]));
+        if reply.reference != snapshot.reference
+            || bytes != snapshot.bytes
+            || !same_frame(&snapshot.frame, &reply.frame)
+        {
+            return Err(Failure::Changed);
+        }
+        Ok(())
     }
     pub fn frame(
         &self,
@@ -337,12 +493,15 @@ impl Resources {
     pub fn verify(&self, count: usize) -> Result<(), (String, Failure)> {
         self.verify_named(count, |snapshot| snapshot.reference.clone())
     }
-    /// [`Self::verify`], naming a failed snapshot by its logical location:
-    /// the identity [`Self::resolve`] gave the document it holds.
+    /// [`Self::verify`], naming a failed snapshot by the identity
+    /// [`Self::resolve`] gave the document it holds: the location of its
+    /// capture's reply, else its lexical location.
     pub fn verify_located(&self, count: usize) -> Result<(), (String, Failure)> {
         self.verify_named(count, |snapshot| {
-            Self::location(&snapshot.declaring, &snapshot.written)
-                .unwrap_or_else(|_| snapshot.reference.clone())
+            snapshot.location.clone().unwrap_or_else(|| {
+                Self::location(&snapshot.declaring, &snapshot.written)
+                    .unwrap_or_else(|_| snapshot.reference.clone())
+            })
         })
     }
     fn verify_named(
@@ -359,29 +518,67 @@ impl Resources {
             return Err((String::new(), Failure::Rejected));
         }
         for snapshot in snapshots.into_iter().take(count) {
-            self.capture(
-                &snapshot.declaring,
-                &snapshot.written,
-                snapshot.kind,
-                snapshot.bytes.len(),
-            )
-            .map_err(|failure| (name(&snapshot), failure))?;
+            self.check(&snapshot)
+                .map_err(|failure| (name(&snapshot), failure))?;
         }
         Ok(())
     }
 }
 
+/// Whether two held frames have the same cells: floats by bits, and dates and
+/// datetimes with their collected precision.
+fn same_frame(
+    old: &Option<Arc<crate::arrow_table::ArrowTable>>,
+    new: &Option<Arc<crate::arrow_table::ArrowTable>>,
+) -> bool {
+    use yamaa_core::table::{TableAccess, ValueRef};
+    match (old, new) {
+        (None, None) => true,
+        (Some(left), Some(right))
+            if left.schema() == right.schema() && left.row_count() == right.row_count() =>
+        {
+            (0..left.row_count()).all(|row| {
+                (0..left.schema().columns().len()).all(|column| {
+                    match (left.cell(row, column), right.cell(row, column)) {
+                        (Ok(ValueRef::Float(left)), Ok(ValueRef::Float(right))) => {
+                            left.get().to_bits() == right.get().to_bits()
+                        }
+                        (Ok(ValueRef::Date(left)), Ok(ValueRef::Date(right))) => {
+                            left.fields() == right.fields()
+                                && left.collected_precision() == right.collected_precision()
+                        }
+                        (Ok(ValueRef::DateTime(left)), Ok(ValueRef::DateTime(right))) => {
+                            left.fields() == right.fields()
+                                && left.collected_precision() == right.collected_precision()
+                        }
+                        (Ok(left), Ok(right)) => left == right,
+                        _ => false,
+                    }
+                })
+            })
+        }
+        _ => false,
+    }
+}
+
 /// Deterministic object store for tests and host-owned local/remote adapters.
 /// Replacing a value with a new reference models a remote object-version change.
+/// A name can also hold a kind fact: requests for it report that kind, as a
+/// file resolver reports a directory, link or other entry (FILE-7, FILE-8).
 #[derive(Default)]
 pub struct MemoryResolver {
-    objects: Mutex<BTreeMap<(String, String), Reply>>,
+    objects: Mutex<BTreeMap<(String, String), Object>>,
     staged: Mutex<StagedObjects>,
     published: Mutex<BTreeMap<String, Arc<[u8]>>>,
     cancelled: std::sync::atomic::AtomicBool,
     next_stage: std::sync::atomic::AtomicU64,
 }
 type StagedObjects = BTreeMap<String, (String, Arc<[u8]>)>;
+#[derive(Clone)]
+enum Object {
+    Served(Reply),
+    Kind(ResourceKind),
+}
 impl MemoryResolver {
     pub fn insert_frame(
         &self,
@@ -392,22 +589,29 @@ impl MemoryResolver {
     ) {
         self.objects.lock().unwrap().insert(
             (declaring.into(), written.into()),
-            Reply {
-                reference: reference.into(),
-                bytes: None,
+            Object::Served(Reply {
                 frame: Some(frame),
-            },
+                ..Reply::reference(reference.into())
+            }),
         );
     }
     pub fn insert(&self, declaring: &str, written: &str, reference: &str, bytes: Arc<[u8]>) {
         self.objects.lock().unwrap().insert(
             (declaring.into(), written.into()),
-            Reply {
-                reference: reference.into(),
+            Object::Served(Reply {
                 bytes: Some(bytes),
-                frame: None,
-            },
+                ..Reply::reference(reference.into())
+            }),
         );
+    }
+    /// Report `kind` for this name instead of serving it. A
+    /// [`ResourceKind::File`] fact names a file where a directory is
+    /// required, as a walk reports one on the way to a deeper name.
+    pub fn insert_kind(&self, declaring: &str, written: &str, kind: ResourceKind) {
+        self.objects
+            .lock()
+            .unwrap()
+            .insert((declaring.into(), written.into()), Object::Kind(kind));
     }
     pub fn cancel(&self) {
         self.cancelled
@@ -431,20 +635,11 @@ impl Resolver for MemoryResolver {
                 .lock()
                 .map_err(|_| Failure::Cleanup)?
                 .retain(|token, _| token != reference);
-            return Ok(Reply {
-                reference: request.reference.unwrap().into(),
-                bytes: None,
-                frame: None,
-            });
+            return Ok(Reply::reference(reference.into()));
         }
         if self.cancelled.load(std::sync::atomic::Ordering::SeqCst) {
             return Err(Failure::Cancelled);
         }
-        let empty = |reference: String| Reply {
-            reference,
-            bytes: None,
-            frame: None,
-        };
         match request.operation {
             Operation::Inspect | Operation::Capture => {
                 let object = self
@@ -454,6 +649,10 @@ impl Resolver for MemoryResolver {
                     .get(&(request.declaring.into(), request.written.into()))
                     .cloned()
                     .ok_or(Failure::Missing)?;
+                let object = match object {
+                    Object::Served(reply) => reply,
+                    Object::Kind(kind) => return Err(Failure::from(kind)),
+                };
                 if request
                     .reference
                     .is_some_and(|held| held != object.reference)
@@ -461,13 +660,13 @@ impl Resolver for MemoryResolver {
                     return Err(Failure::Changed);
                 }
                 Ok(if request.operation == Operation::Inspect {
-                    empty(object.reference)
+                    Reply::reference(object.reference)
                 } else {
                     object
                 })
             }
             Operation::Target => Resources::location(request.declaring, request.written)
-                .map(|path| empty(format!("memory:{path}"))),
+                .map(|path| Reply::reference(format!("memory:{path}"))),
             Operation::Stage => {
                 let reference = request.reference.ok_or(Failure::Rejected)?;
                 let bytes = Arc::from(request.bytes.ok_or(Failure::Rejected)?);
@@ -483,7 +682,7 @@ impl Resolver for MemoryResolver {
                     return Err(Failure::Publication);
                 }
                 staged.insert(token.clone(), (reference.into(), bytes));
-                Ok(empty(token))
+                Ok(Reply::reference(token))
             }
             Operation::Commit => {
                 let token = request.reference.ok_or(Failure::Rejected)?;
@@ -497,7 +696,7 @@ impl Resolver for MemoryResolver {
                     .lock()
                     .map_err(|_| Failure::Publication)?
                     .insert(target.clone(), bytes);
-                Ok(empty(target))
+                Ok(Reply::reference(target))
             }
             Operation::Abort => unreachable!(),
         }
@@ -515,7 +714,38 @@ mod tests {
         assert_eq!(Failure::from_name("cancelled"), Failure::Cancelled);
         assert_eq!(Failure::from_name("publication"), Failure::Publication);
         assert_eq!(Failure::from_name("cleanup"), Failure::Cleanup);
+        assert_eq!(Failure::from_name("unreadable"), Failure::Unreadable);
         assert_eq!(Failure::from_name("anything-else"), Failure::Rejected);
         assert_eq!(Failure::from_name(""), Failure::Rejected);
+        for kind in ResourceKind::ALL {
+            let failure = Failure::from_name(kind.name());
+            assert_eq!(failure, Failure::from(kind));
+            assert_eq!(failure.resource_kind(), Some(kind));
+            assert_eq!(ResourceKind::from_name(kind.name()), Some(kind));
+        }
+        assert_eq!(Failure::from(ResourceKind::Missing), Failure::Missing);
+        assert_eq!(ResourceKind::from_name("link"), None);
+    }
+
+    #[test]
+    fn memory_kind_facts_report_their_kind_without_a_snapshot() {
+        let resolver = Arc::new(MemoryResolver::default());
+        for kind in ResourceKind::ALL {
+            resolver.insert_kind("/spec.yaml", kind.name(), kind);
+        }
+        let resources = Resources::at(resolver, "/spec.yaml".into());
+        for kind in ResourceKind::ALL {
+            for result in [
+                resources
+                    .resolve("/spec.yaml", kind.name(), Kind::Input)
+                    .map(drop),
+                resources
+                    .capture("/spec.yaml", kind.name(), Kind::Input, 16)
+                    .map(drop),
+            ] {
+                assert_eq!(result.unwrap_err().resource_kind(), Some(kind));
+            }
+        }
+        assert_eq!(resources.len(), 0);
     }
 }

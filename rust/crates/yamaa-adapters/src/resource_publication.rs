@@ -40,6 +40,7 @@ impl AnchoredTarget {
                         written,
                         reference: Some(reference),
                         bytes: None,
+                        limit: None,
                     })
                     .map_err(file::Error::Host)?;
                 if reply.reference != *reference || (reply.bytes.is_some() || reply.frame.is_some())
@@ -96,6 +97,7 @@ impl Publisher {
                     written,
                     reference: Some(token),
                     bytes,
+                    limit: None,
                 };
                 let staged = resolver.request(request(Operation::Stage, reference, Some(bytes)));
                 // Attempt-owned cleanup: only a Stage that returned a token

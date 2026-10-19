@@ -80,6 +80,7 @@ yamaa::ResolverKind: pub use yamaa::resolver::ResolverKind
 yamaa::ResolverOperation: pub use yamaa::resolver::ResolverOperation
 yamaa::ResolverReply: pub use yamaa::resolver::ResolverReply
 yamaa::ResolverRequest: pub use yamaa::resolver::ResolverRequest
+yamaa::ResourceKind: pub use yamaa::resolver::ResourceKind
 yamaa::ResourceResolver: pub use yamaa::resolver::ResourceResolver
 yamaa::Run: pub use yamaa::api::Run
 yamaa::RunRequest: pub use yamaa::plan::RunRequest
@@ -321,6 +322,8 @@ yamaa::error::ResolverFailure: impl ResolverFailure
 yamaa::error::ResolverFailure: pub struct ResolverFailure [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::error::ResolverFailure::code: pub fn code(&self) -> &'static str
 yamaa::error::ResolverFailure::from_code: pub fn from_code(code: &str) -> Self
+yamaa::error::ResolverFailure::from_kind: pub fn from_kind(kind: ResourceKind) -> Self
+yamaa::error::ResolverFailure::kind: pub fn kind(&self) -> Option<ResourceKind>
 yamaa::error::ResolverFailure::message: pub fn message(&self) -> &str
 yamaa::error::TableError: impl TableError
 yamaa::error::TableError: pub struct TableError [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
@@ -421,6 +424,8 @@ yamaa::observe::Refusal: pub struct Refusal [derive(Clone, Copy, Debug, Eq, Part
 yamaa::observe::Refusal::limit: pub limit: usize
 yamaa::observe::Refusal::required: pub required: Option<usize>
 yamaa::observe::Refusal::resource: pub resource: &'static str
+yamaa::odm::Engine: impl Engine
+yamaa::odm::Engine::read_odm: pub fn read_odm(&self, source: &str, options: &OdmOptions) -> Result<Table, Error>
 yamaa::odm::ODM_COLUMNS: pub const ODM_COLUMNS: [&str; 30]
 yamaa::odm::OdmOptions: impl Default for OdmOptions
 yamaa::odm::OdmOptions: impl OdmOptions
@@ -453,6 +458,7 @@ yamaa::resolver::MemoryResolver: pub struct MemoryResolver [derive(Default)] [no
 yamaa::resolver::MemoryResolver::cancel: pub fn cancel(&self)
 yamaa::resolver::MemoryResolver::insert: pub fn insert(&self, declaring: &str, written: &str, reference: &str, bytes: Arc<[u8]>)
 yamaa::resolver::MemoryResolver::insert_frame: pub fn insert_frame(&self, declaring: &str, written: &str, reference: &str, frame: &InputFrame)
+yamaa::resolver::MemoryResolver::insert_kind: pub fn insert_kind(&self, declaring: &str, written: &str, kind: ResourceKind)
 yamaa::resolver::MemoryResolver::new: pub fn new() -> Self
 yamaa::resolver::MemoryResolver::published: pub fn published(&self, reference: &str) -> Option<Arc<[u8]>>
 yamaa::resolver::MemoryResolver::staged_count: pub fn staged_count(&self) -> usize
@@ -484,6 +490,16 @@ yamaa::resolver::ResolverRequest::kind: pub kind: ResolverKind
 yamaa::resolver::ResolverRequest::operation: pub operation: ResolverOperation
 yamaa::resolver::ResolverRequest::reference: pub reference: Option<&'a str>
 yamaa::resolver::ResolverRequest::written: pub written: &'a str
+yamaa::resolver::ResourceKind: impl ResourceKind
+yamaa::resolver::ResourceKind: pub enum ResourceKind [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::resolver::ResourceKind::Directory: Directory
+yamaa::resolver::ResourceKind::File: File
+yamaa::resolver::ResourceKind::Junction: Junction
+yamaa::resolver::ResourceKind::Missing: Missing
+yamaa::resolver::ResourceKind::Other: Other
+yamaa::resolver::ResourceKind::ReparsePoint: ReparsePoint
+yamaa::resolver::ResourceKind::SymbolicLink: SymbolicLink
+yamaa::resolver::ResourceKind::name: pub fn name(self) -> &'static str
 yamaa::resolver::ResourceResolver: pub trait ResourceResolver: Send + Sync
 yamaa::resolver::ResourceResolver::request: fn request(&self, request: ResolverRequest<'_>) -> Result<ResolverReply, yamaa::error::ResolverFailure> [required]
 yamaa::scalar::Date: impl Date

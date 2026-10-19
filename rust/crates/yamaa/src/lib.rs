@@ -77,7 +77,7 @@ pub use observe::{CallStage, DatasetPhase, Event, Outcome, Phase, Progress, Refu
 pub use odm::{read_odm, OdmOptions, ODM_COLUMNS};
 pub use plan::{Plan, RunRequest};
 pub use resolver::{
-    MemoryResolver, ResolverKind, ResolverOperation, ResolverReply, ResolverRequest,
+    MemoryResolver, ResolverKind, ResolverOperation, ResolverReply, ResolverRequest, ResourceKind,
     ResourceResolver,
 };
 pub use scalar::{Date, DateTime, EncodedScalar, Scalar, ScalarDecodeError, ScalarRef};

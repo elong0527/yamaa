@@ -12,6 +12,10 @@
 //! typed-CSV rule); authored Parquet is read with the plain Parquet
 //! Arrow reader. The engine's decoded tables are never fed back.
 //!
+//! A directory or symbolic link in a case is served as a kind fact: the
+//! resolver reports it instead of serving bytes, as the file resolver does,
+//! and the engine raises the file rules' conditions from that report.
+//!
 //! Benchmarks that cannot run this way are listed in `EXEMPTIONS` with
 //! the concrete reason; the full-corpus test asserts the list stays
 //! exact — an exempt case that starts passing fails as stale. In a
@@ -31,7 +35,7 @@ use yamaa_adapters::{
     arrow_table::{self, ArrowTable},
     file_application::{self, Domain, RuntimePort},
     file_preparation::FileSpecification,
-    host_resources::MemoryResolver,
+    host_resources::{MemoryResolver, ResourceKind},
     issue_rows::Issue,
     specification_report::Identity,
     yaml_decode::decode_yaml,
@@ -583,9 +587,26 @@ fn plan_entries(case: &Path) -> Vec<EntryCall> {
     }]
 }
 
-/// Every file a case may reference, as case-relative POSIX paths
+/// Every regular file a case may reference, as case-relative POSIX paths
 /// (the authored `expected/` truth is never served).
 fn case_files(case: &Path) -> Vec<(String, PathBuf)> {
+    case_entries(case)
+        .into_iter()
+        .filter_map(|(written, path, kind)| (kind == ResourceKind::File).then_some((written, path)))
+        .collect()
+}
+
+/// Every directory and symbolic link in a case, which the memory resolver
+/// reports as kind facts instead of serving.
+fn case_kinds(case: &Path) -> Vec<(String, ResourceKind)> {
+    case_entries(case)
+        .into_iter()
+        .filter_map(|(written, _, kind)| (kind != ResourceKind::File).then_some((written, kind)))
+        .collect()
+}
+
+/// Every entry of a case with its kind, judged without following links.
+fn case_entries(case: &Path) -> Vec<(String, PathBuf, ResourceKind)> {
     let mut out = Vec::new();
     let mut stack = vec![(String::new(), case.to_path_buf())];
     while let Some((prefix, dir)) = stack.pop() {
@@ -600,14 +621,20 @@ fn case_files(case: &Path) -> Vec<(String, PathBuf)> {
                 continue;
             }
             let path = item.path();
-            if path.is_dir() {
+            let kind = item.file_type().unwrap();
+            if kind.is_symlink() {
+                out.push((written, path, ResourceKind::SymbolicLink));
+            } else if kind.is_dir() {
+                out.push((written.clone(), path.clone(), ResourceKind::Directory));
                 stack.push((written, path));
-            } else if path.is_file() {
-                out.push((written, path));
+            } else if kind.is_file() {
+                out.push((written, path, ResourceKind::File));
+            } else {
+                out.push((written, path, ResourceKind::Other));
             }
         }
     }
-    out.sort();
+    out.sort_by(|left, right| left.0.cmp(&right.0));
     out
 }
 
@@ -739,6 +766,13 @@ fn backend_for(
         for declaring in &identities {
             for spelling in spellings(declaring, written) {
                 backend.insert(declaring, &spelling, &reference, Arc::clone(&bytes));
+            }
+        }
+    }
+    for (written, kind) in case_kinds(case) {
+        for declaring in &identities {
+            for spelling in spellings(declaring, &written) {
+                backend.insert_kind(declaring, &spelling, kind);
             }
         }
     }
@@ -2445,17 +2479,6 @@ const EXEMPTIONS: &[(&str, &str)] = &[
     (
         "negative-source-unterminated-quote",
         "expected diagnostic is ingest source_quote_unterminated: quoting is a property of file text; frames carry values, not quoted text",
-    ),
-    // Filesystem path semantics (4): the expected diagnostics judge
-    // filesystem paths. A memory resolver holds references and content,
-    // not paths, so the judged properties do not exist on this route.
-    (
-        "negative-path-directory",
-        "expected diagnostic resource_path_not_regular_file: a memory resolver holds no directories; the held reference resolves as content instead",
-    ),
-    (
-        "negative-path-symlink",
-        "expected diagnostic judges a symlinked filesystem path; a memory resolver holds no symlinks, so the input resolves and the build succeeds",
     ),
 ];
 

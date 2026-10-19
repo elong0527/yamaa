@@ -41,7 +41,7 @@ pub(crate) fn environment_path(environment: &str) -> Result<String, crate::file_
         return Err(Error::InvalidPath);
     }
     let environment = std::path::absolute(environment).map_err(|_| Error::InvalidPath)?;
-    crate::file_resources::caller_path(&environment)
+    crate::file_resolver::caller_path(&environment)
 }
 fn refused(stage: &str) -> Failure {
     file_application::rejected(stage, "issue_projection")

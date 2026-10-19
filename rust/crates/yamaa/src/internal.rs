@@ -81,18 +81,11 @@ impl yamaa_adapters::host_resources::Resolver for ResolverBridge {
                     reference: reply.reference,
                     bytes: reply.bytes,
                     frame: reply.frame.map(crate::table::InputFrame::into_adapter),
+                    location: None,
                 },
             )
             .map_err(|failure: ResolverFailure| {
-                use yamaa_adapters::host_resources::Failure;
-                match failure.code() {
-                    "missing" => Failure::Missing,
-                    "changed" => Failure::Changed,
-                    "cancelled" => Failure::Cancelled,
-                    "publication" => Failure::Publication,
-                    "cleanup" => Failure::Cleanup,
-                    _ => Failure::Rejected,
-                }
+                yamaa_adapters::host_resources::Failure::from_name(failure.code())
             })
     }
 }
@@ -172,6 +165,15 @@ pub(crate) fn resolver_bridge(
         .resolver
         .clone()
         .map(|bridge| bridge as Arc<dyn yamaa_adapters::host_resources::Resolver>)
+}
+
+/// Read a project file and its listed specifications through the engine's
+/// resolver: the caller's, or the local file resolver.
+pub(crate) fn read_project(
+    shared: &EngineShared,
+    project: &str,
+) -> Result<yamaa_adapters::project_scope::Project, Vec<yamaa_adapters::issue_rows::Issue>> {
+    yamaa_adapters::project_scope::Project::read(project, shared.language, resolver_bridge(shared))
 }
 
 /// Bridge one caller resolver into the adapters' resource port.

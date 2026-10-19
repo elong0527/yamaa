@@ -441,7 +441,9 @@ impl Engine {
         &self.shared
     }
 
-    /// Compose submission metadata without running a specification.
+    /// Compose submission metadata without running a specification. The
+    /// project file and everything it declares are read through the engine's
+    /// resolver, and the composed files publish through it on save.
     ///
     /// # Example
     ///
@@ -481,13 +483,15 @@ impl Engine {
             request.created,
             request.installed,
             self.shared.language,
+            crate::internal::resolver_bridge(&self.shared),
         );
         Ok(DefineBuild::from_define(inner))
     }
 
-    /// Resolve one specification entry into its owned inspection artifact.
-    /// The artifact carries no reusable executable code; loading it performs
-    /// no source access, path resolution, callbacks or recompilation.
+    /// Resolve one specification entry into its owned inspection artifact,
+    /// reading through the engine's resolver. The artifact carries no
+    /// reusable executable code; loading it performs no source access, path
+    /// resolution, callbacks or recompilation.
     ///
     /// # Example
     ///
@@ -541,6 +545,7 @@ impl Engine {
             request.specification,
             request.environment,
             self.shared.language,
+            crate::internal::resolver_bridge(&self.shared),
         ) {
             Ok(artifact) => Ok(ResolvedSpecification { inner: artifact }),
             Err(issues) => Err(Error::Rejected(Report::from_issues(&issues))),

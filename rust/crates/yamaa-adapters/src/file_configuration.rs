@@ -55,6 +55,6 @@ pub fn caller_identity(written: &str) -> Result<String, Error> {
         .and_then(|name| name.to_str())
         .filter(|name| !name.is_empty())
         .ok_or(Error::Path(ResourceError::InvalidPath))?;
-    crate::file_resources::file_identity(&parent, name)
+    crate::file_resolver::file_identity(&parent, name)
         .ok_or(Error::Path(ResourceError::InvalidPath))
 }

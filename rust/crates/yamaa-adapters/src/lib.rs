@@ -66,6 +66,7 @@ pub mod file_publication;
 #[cfg(windows)]
 #[path = "file_publication_windows.rs"]
 pub mod file_publication;
+pub mod file_resolver;
 pub mod file_resources;
 pub mod file_workflow;
 pub mod host_resources;

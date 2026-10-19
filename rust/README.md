@@ -256,6 +256,7 @@ impl Engine {
         -> Result<DefineBuild, Error>;
     pub fn resolve_specification(&self, request: &Request<'_>)
         -> Result<ResolvedSpecification, Error>;
+    pub fn read_odm(&self, source: &str, options: &OdmOptions) -> Result<Table, Error>;
 }
 
 #[derive(Clone)]
@@ -323,6 +324,16 @@ pub enum SaveOutcome { Saved, NothingToSave }  // #[non_exhaustive]
 - `save` is a method on the build handle, as `Domain::save` is today; it is
   the only mutating operation and publishes through the resolver.
 - `define` mirrors `file_define::Define::prepare` plus its save step.
+- Every operation reads through the engine's resolver: checks, builds,
+  plans, project reads, `define`, `resolve_specification` and `read_odm`.
+  Without one, the engine's local file resolver serves the same requests, so a
+  resolver that records them sees every access. A resolver serves a regular
+  file or reports what else a name reaches with
+  `ResolverFailure::from_kind(ResourceKind)`: a link of any sort, a junction
+  or another reparse point included, fails as `resource_path_symlink`
+  (FILE-8), a directory or other entry as `resource_path_not_regular_file`
+  and a missing name as `resource_path_missing`. `MemoryResolver::insert_kind`
+  models these.
 - `resolve_specification` stays public, as decided for 0.4.0 in #2725. The
   facade type is `ResolvedSpecification`; the internal `ResolvedArtifact`
   (above) is its implementation and wire format, not a public type.
