@@ -4,8 +4,9 @@
 //! inspects or captures goes through it, exactly as a caller's resolver would
 //! be asked, and [`crate::file_resources::Resources`] holds and verifies the
 //! snapshots. Its references and locations are canonical paths in the
-//! engine's spelling. Publication stays with [`crate::file_publication`],
-//! which this resolver only anchors.
+//! engine's spelling, and each reply names the physical file it reached, so
+//! two hard links to one file bind one snapshot (FILE-9). Publication stays
+//! with [`crate::file_publication`], which this resolver only anchors.
 #[cfg(windows)]
 use crate::windows_file::{Directory as OwnedFd, Kind as FileType};
 #[cfg(unix)]
@@ -22,7 +23,9 @@ use std::{
 
 use crate::{
     file_resources::Error,
-    host_resources::{Failure, Operation, PathRefusal, Reply, Request, Resolver, ResourceKind},
+    host_resources::{
+        Failure, Operation, PathRefusal, PhysicalFile, Reply, Request, Resolver, ResourceKind,
+    },
 };
 
 type Identity = (i128, i128, FileType);
@@ -42,6 +45,8 @@ struct Anchor {
 struct Opened {
     file: File,
     key: Segments,
+    /// The physical file the walk opened.
+    physical: PhysicalFile,
 }
 
 /// Local files under the caller-selected directories. Each request names a
@@ -161,29 +166,41 @@ impl FileResolver {
             .next()
             .ok_or(Error::OutsideRoots)
     }
-    /// Read the file `written` names, refusing it before reading when it holds
-    /// more than `limit` bytes, and read it again to confirm one snapshot.
-    fn capture(
+    /// The caller's own file `name` in the selected directory `base`, a base
+    /// identity [`Self::for_entry`] returned, opened for reading: one name
+    /// below that directory's held descriptor, a regular file and never a
+    /// link (FILE-7, FILE-8). `name` is the host file name of a path the
+    /// caller passed, not a written path, so FILE-5's written form does not
+    /// apply to it: on Unix it may hold a `:` or a `\`. Windows refuses a
+    /// `:` in a name, which would name a stream of another file.
+    pub(crate) fn open_named(&self, base: &str, name: &str) -> Result<File, Failure> {
+        self.named(base, name).map(|opened| opened.file)
+    }
+    /// [`Self::open_named`], read under `limit` bytes and confirmed as one
+    /// snapshot as every capture is.
+    pub(crate) fn capture_named(
         &self,
-        base: &[String],
-        written: &str,
+        base: &str,
+        name: &str,
         limit: usize,
-        held: Option<&str>,
-    ) -> Result<(String, Arc<[u8]>), Failure> {
-        let mut opened = self.open_at(base, written)?;
-        let key = path_text(&opened.key);
-        if held.is_some_and(|held| held != key) {
-            return Err(Failure::Changed);
+    ) -> Result<Arc<[u8]>, Failure> {
+        capture(|| self.named(base, name), limit, None).map(|(_, bytes)| bytes)
+    }
+    fn named(&self, base: &str, name: &str) -> Result<Opened, Failure> {
+        let separators: &[char] = if cfg!(windows) {
+            &['/', '\\', ':', '\0']
+        } else {
+            &['/', '\0']
+        };
+        if matches!(name, "" | "." | "..") || name.contains(separators) {
+            return Err(Failure::Path(PathRefusal::Invalid));
         }
-        let content = read_bounded(&mut opened.file, limit)?;
-        let mut current = self.open_at(base, written).map_err(|_| Failure::Changed)?;
-        if current.key != opened.key
-            || read_bounded(&mut current.file, content.len()).map_err(|_| Failure::Changed)?
-                != content
-        {
-            return Err(Failure::Changed);
-        }
-        Ok((key, content.into()))
+        let base = declaring_directory(base).ok_or(Failure::Path(PathRefusal::Invalid))?;
+        let anchor = {
+            let roots = self.roots.read().unwrap_or_else(PoisonError::into_inner);
+            relative_anchor(&roots, &base, name).map_err(refusal)?
+        };
+        open_anchor(anchor)
     }
     fn is_caller(&self, written: &str) -> bool {
         self.callers
@@ -333,25 +350,28 @@ impl Resolver for FileResolver {
             declaring_directory(request.declaring).ok_or(Failure::Path(PathRefusal::Invalid))?;
         match request.operation {
             Operation::Inspect => {
-                let key = path_text(&self.open_at(&base, request.written)?.key);
+                let opened = self.open_at(&base, request.written)?;
+                let key = path_text(&opened.key);
                 if request.reference.is_some_and(|held| held != key) {
                     return Err(Failure::Changed);
                 }
                 Ok(Reply {
                     location: Some(key.clone()),
+                    physical: Some(opened.physical),
                     ..Reply::reference(key)
                 })
             }
             Operation::Capture => {
-                let (key, bytes) = self.capture(
-                    &base,
-                    request.written,
+                let (opened, bytes) = capture(
+                    || self.open_at(&base, request.written),
                     request.limit.unwrap_or(usize::MAX),
                     request.reference,
                 )?;
+                let key = path_text(&opened.key);
                 Ok(Reply {
                     bytes: Some(bytes),
                     location: Some(key.clone()),
+                    physical: Some(opened.physical),
                     ..Reply::reference(key)
                 })
             }
@@ -360,6 +380,29 @@ impl Resolver for FileResolver {
             }
         }
     }
+}
+
+/// Read the file `open` reaches, refusing it before reading when it holds
+/// more than `limit` bytes, and open and read it again to confirm one
+/// snapshot: the second read is compared chunk by chunk, never held whole. A
+/// held reference the first open no longer reaches has changed.
+fn capture(
+    open: impl Fn() -> Result<Opened, Failure>,
+    limit: usize,
+    held: Option<&str>,
+) -> Result<(Opened, Arc<[u8]>), Failure> {
+    let mut opened = open()?;
+    if held.is_some_and(|held| held != path_text(&opened.key)) {
+        return Err(Failure::Changed);
+    }
+    let content = read_bounded(&mut opened.file, limit)?;
+    let mut current = open().map_err(|_| Failure::Changed)?;
+    if current.key != opened.key
+        || !holds(&mut current.file, &content).map_err(|_| Failure::Changed)?
+    {
+        return Err(Failure::Changed);
+    }
+    Ok((opened, content.into()))
 }
 
 /// An anchor failure as the protocol reports it.
@@ -505,7 +548,7 @@ fn open_anchor(anchor: Anchor) -> Result<Opened, Failure> {
         if directory {
             directories.push(descriptor);
         } else {
-            file = Some(File::from(descriptor));
+            file = Some((File::from(descriptor), physical(identity(&status))));
         }
     }
     // Verify the complete retained parent chain, including the file entry.
@@ -525,10 +568,11 @@ fn open_anchor(anchor: Anchor) -> Result<Opened, Failure> {
             return Err(Failure::Changed);
         }
     }
-    let file = file.ok_or(Failure::Kind(ResourceKind::Directory))?;
+    let (file, physical) = file.ok_or(Failure::Kind(ResourceKind::Directory))?;
     Ok(Opened {
         file,
         key: anchor.key,
+        physical,
     })
 }
 #[cfg(windows)]
@@ -584,7 +628,7 @@ fn open_anchor(anchor: Anchor) -> Result<Opened, Failure> {
                 identity(&crate::windows_file::status(&opened).map_err(|_| Failure::Unreadable)?);
             canonical
                 .push(crate::windows_file::file_name(&opened).map_err(|_| Failure::Unreadable)?);
-            file = Some(opened);
+            file = Some((opened, physical(opened_identity)));
         }
         if opened_identity != identity(&initial) {
             return Err(Failure::Changed);
@@ -604,10 +648,11 @@ fn open_anchor(anchor: Anchor) -> Result<Opened, Failure> {
             return Err(Failure::Changed);
         }
     }
-    let file = file.ok_or(Failure::Kind(ResourceKind::Directory))?;
+    let (file, physical) = file.ok_or(Failure::Kind(ResourceKind::Directory))?;
     Ok(Opened {
         file,
         key: canonical,
+        physical,
     })
 }
 
@@ -735,7 +780,7 @@ fn share_root(path: &str, shares: bool) -> Option<(&str, &str)> {
 /// `/` (marker ``), a drive (`C:`) or, when `shares` admits them, a network
 /// share (`//server/share`, D15). A root with nothing below it has no
 /// segments. Any other spelling is not rooted.
-fn split_rooted(path: &str, shares: bool) -> Option<Segments> {
+pub(crate) fn split_rooted(path: &str, shares: bool) -> Option<Segments> {
     if path.starts_with("//") && shares {
         let (root, rest) = share_root(path, true)?;
         let mut result = vec![root.to_owned()];
@@ -759,6 +804,30 @@ fn split_rooted(path: &str, shares: bool) -> Option<Segments> {
         result.extend(rest.split('/').map(str::to_owned));
     }
     Some(result)
+}
+/// The physical file a walk identity names: device and inode on Unix, volume
+/// serial number and file ID on Windows.
+fn physical((volume, file, _): Identity) -> PhysicalFile {
+    PhysicalFile { volume, file }
+}
+/// Whether `file` holds exactly `content`, from its current position: read
+/// in bounded chunks and compared as they arrive, so confirming a capture
+/// never holds a second copy of the file.
+fn holds(file: &mut File, content: &[u8]) -> std::io::Result<bool> {
+    let mut buffer = [0u8; 65_536];
+    let mut offset = 0;
+    loop {
+        // One byte past the expected end shows a file that grew.
+        let wanted = (content.len() - offset).saturating_add(1).min(buffer.len());
+        let count = file.read(&mut buffer[..wanted])?;
+        if count == 0 {
+            return Ok(offset == content.len());
+        }
+        if count > content.len() - offset || buffer[..count] != content[offset..offset + count] {
+            return Ok(false);
+        }
+        offset += count;
+    }
 }
 fn read_bounded(file: &mut File, maximum: usize) -> Result<Vec<u8>, Failure> {
     let length = file.metadata().map_err(|_| Failure::Unreadable)?.len();
@@ -1074,6 +1143,48 @@ mod walk_tests {
         );
     }
 
+    #[test]
+    fn walks_report_the_physical_file_they_reach() {
+        let fixture = Fixture::new();
+        std::fs::write(fixture.0.join("data.csv"), b"ID\n1\n").unwrap();
+        std::fs::hard_link(fixture.0.join("data.csv"), fixture.0.join("link.csv")).unwrap();
+        std::fs::write(fixture.0.join("copy.csv"), b"ID\n1\n").unwrap();
+        let (resolver, base) = FileResolver::for_entry(fixture.0.to_str().unwrap()).unwrap();
+        for operation in [Operation::Inspect, Operation::Capture] {
+            let physical = |written| {
+                ask(&resolver, &base, operation, written, None)
+                    .unwrap()
+                    .physical
+                    .unwrap()
+            };
+            // Two hard links are one physical file under two references.
+            assert_eq!(physical("data.csv"), physical("link.csv"));
+            assert_eq!(physical("data.csv"), physical("./data.csv"));
+            assert_ne!(physical("data.csv"), physical("copy.csv"));
+        }
+    }
+
+    #[test]
+    fn a_confirming_read_compares_every_byte_and_the_length() {
+        let fixture = Fixture::new();
+        let content = (0..200_000_u32)
+            .map(|n| (n % 251) as u8)
+            .collect::<Vec<_>>();
+        let path = fixture.0.join("data.bin");
+        std::fs::write(&path, &content).unwrap();
+        let open = || File::open(&path).unwrap();
+        assert!(holds(&mut open(), &content).unwrap());
+        let mut other = content.clone();
+        other[150_000] ^= 1;
+        assert!(!holds(&mut open(), &other).unwrap());
+        // A file longer or shorter than the held bytes holds other content.
+        assert!(!holds(&mut open(), &content[..content.len() - 1]).unwrap());
+        assert!(!holds(&mut open(), &[content.as_slice(), b"x"].concat()).unwrap());
+        std::fs::write(&path, b"").unwrap();
+        assert!(holds(&mut open(), b"").unwrap());
+        assert!(!holds(&mut open(), b"x").unwrap());
+    }
+
     #[cfg(windows)]
     #[test]
     fn walks_report_junctions_and_reparse_points_as_links() {
@@ -1093,14 +1204,34 @@ mod walk_tests {
             .output()
             .unwrap();
         assert!(output.status.success(), "{output:?}");
+        // Reparse points other than a junction: symbolic links to a directory
+        // and to a file, each refused on the way to a name and as the name.
+        std::os::windows::fs::symlink_dir(fixture.0.join("folder"), fixture.0.join("linked"))
+            .unwrap();
+        std::os::windows::fs::symlink_file(
+            fixture.0.join("folder/inner.csv"),
+            fixture.0.join("link.csv"),
+        )
+        .unwrap();
         let (resolver, base) = FileResolver::for_entry(fixture.0.to_str().unwrap()).unwrap();
         for operation in [Operation::Inspect, Operation::Capture] {
-            assert_eq!(
-                ask(&resolver, &base, operation, "joined/inner.csv", None).unwrap_err(),
-                Failure::Kind(ResourceKind::Junction)
-            );
+            for (written, kind) in [
+                ("joined/inner.csv", ResourceKind::Junction),
+                ("joined", ResourceKind::Junction),
+                ("linked/inner.csv", ResourceKind::SymbolicLink),
+                ("linked", ResourceKind::SymbolicLink),
+                ("link.csv", ResourceKind::SymbolicLink),
+            ] {
+                assert_eq!(
+                    ask(&resolver, &base, operation, written, None).unwrap_err(),
+                    Failure::Kind(kind),
+                    "{written}"
+                );
+            }
             assert!(ask(&resolver, &base, operation, "folder/inner.csv", None).is_ok());
         }
         std::fs::remove_dir(link).unwrap();
+        std::fs::remove_dir(fixture.0.join("linked")).unwrap();
+        std::fs::remove_file(fixture.0.join("link.csv")).unwrap();
     }
 }
