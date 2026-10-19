@@ -33,9 +33,21 @@ on the candidate. Release compatibility checks the minimum toolchain, minimal
 format builds, Python 3.15 and minimum Python saved artifact readers; dispatch
 CI for its minimum R saved artifact reader checks.
 
-Python, R and Cargo versions move together;
-`tools.packaging.check_shared_release_versions` checks that they agree. The
-previous Python release is the `yamaa-py-0.3.0` tag.
+A release has one identity, written once in `tools/packaging/release.toml`:
+the final version X.Y.Z and, for a release candidate, its number N. Each
+package format spells it in its own syntax, and
+`tools.packaging.check_shared_release_versions` requires every package
+manifest, lock and benchmark R environment to carry its spelling:
+
+| Release | Python | Cargo | R | Tag |
+| --- | --- | --- | --- | --- |
+| Final release | `X.Y.Z` | `X.Y.Z` | `X.Y.Z` | `yamaa-vX.Y.Z` |
+| Release candidate N | `X.Y.ZrcN` | `X.Y.Z-rc.N` | `X.Y.Z` | `yamaa-vX.Y.Z-rc.N` |
+
+An R version cannot mark a candidate, so the R package keeps the final version
+through the candidates (#3030 D53), and R does not offer the final release as
+an update to a candidate. The previous Python release is the `yamaa-py-0.3.0`
+tag.
 
 ## Saved artifact readers
 
@@ -201,26 +213,31 @@ Before pushing the release tag, confirm on the final commit:
    lists them, with each vendored file named by its path under `src/`.
 6. A [release rehearsal](#publication) passed against a native run of that
    commit; the tag names that run.
+7. For a release candidate, `docs/releases/X.Y.Z-rc.N.md` says what changed
+   since the previous candidate, and the rehearsal shows the release body
+   that the tag will publish.
 
 Record the outcome on the release's planning issue.
 
 ## Publication
 
 After the final commit is on main and its complete native qualification has
-passed, push the coordinated tag `yamaa-v<version>` at that exact commit. The
-tag must be annotated, and its message must end with a trailer paragraph that
-names the qualifying native run as `Qualified-Run: <run id>`. The run id is the
-number at the end of the run's URL, also listed by
+passed, push the release tag at that exact commit: `yamaa-vX.Y.Z` for a final
+release, or `yamaa-vX.Y.Z-rc.N` for release candidate N, as the
+[release identity](#supported-platforms) names it. The tag must be annotated,
+and its message must end with a trailer paragraph that names the qualifying
+native run as `Qualified-Run: <run id>`. The run id is the number at the end of
+the run's URL, also listed by
 
 ```sh
 gh run list --repo elong0527/yamaa --workflow native.yml --commit <commit> --status success
 ```
 
-Tag and push:
+Tag and push, with `<tag>` such as `yamaa-v1.0.0-rc.1`:
 
 ```sh
-git tag -a yamaa-v<version> <commit> -m "yamaa <version>" -m "Qualified-Run: <run id>"
-git push origin refs/tags/yamaa-v<version>
+git tag -a <tag> <commit> -m "yamaa <version>" -m "Qualified-Run: <run id>"
+git push origin refs/tags/<tag>
 ```
 
 `.github/workflows/release.yml` publishes from the named run alone, so a later
@@ -229,21 +246,49 @@ The named run must be a completed successful native run of the peeled tag
 commit: a scheduled main run, a main dispatch, or a same-repository
 `qualification/issue-*` push. It requires all installed lanes, shared
 Rust/math, complete cohort comparisons and strict R package checks to have
-passed. Branch dispatches cannot release. A lightweight tag, a missing,
-repeated or malformed trailer, or a named run that does not qualify fails
-before anything is downloaded.
+passed. Branch dispatches cannot release. A tag other than the one the release
+identity names fails before any request: a candidate tag on a final release, a
+final release tag on a candidate, or another version or candidate number. So
+does a lightweight tag or a missing, repeated or malformed trailer, and a named
+run that does not qualify fails before anything is downloaded.
 
 The workflow downloads the qualified artifacts and publishes their unchanged
-bytes: one wheel per supported OS, the Linux-built Python sdist and the
-Linux-built R source tarball. Every native source lane, on Linux, macOS and
-Windows, installs and tests those same two archives. Missing, expired or
-ambiguous artifacts fail publication; an existing
-release is never overwritten. Re-running failed jobs or all jobs keeps a run
-eligible: earlier attempts' artifacts stay on the run, and the workflow takes
-only the copy that its uploading job created during the execution the run's
-final attempt lists. The release body is the committed notes from
-`docs/releases/<version>.md`, then a "Qualified native artifacts" section that
-links the native run attempt and lists the selected artifacts.
+bytes. `tools/ci/release_assets.py` declares the release assets once; the
+selector, the publisher and the release rehearsal read that declaration, and a
+test keeps this table equal to it:
+
+| Asset | File | Native artifact |
+| --- | --- | --- |
+| Python wheel for Linux x86_64 | `yamaa-<Python version>-cp312-abi3-manylinux_*_x86_64.whl` | `native-python-ubuntu-24.04-3.14` |
+| Python wheel for macOS arm64 | `yamaa-<Python version>-cp312-abi3-macosx_*_arm64.whl` | `native-python-macos-15-3.14` |
+| Python wheel for Windows x64 | `yamaa-<Python version>-cp312-abi3-win_amd64.whl` | `native-python-windows-latest-3.14` |
+| Python source archive | `yamaa-<Python version>.tar.gz` | `native-python-ubuntu-24.04-3.14` |
+| R source package | `yamaa_<R version>.tar.gz` | `native-r-ubuntu-24.04` |
+
+Each native artifact holds exactly the assets listed for it, so a release
+publishes every asset that the native run built, or nothing: a missing,
+ambiguous, undeclared or expired file fails publication, and nothing is
+rebuilt. Every native source lane, on Linux, macOS and Windows, installs and
+tests the two Linux-built source archives; the other hosts build a Python
+source archive only to check it. An existing release is never overwritten.
+Re-running failed jobs or all jobs keeps a run eligible: earlier attempts'
+artifacts stay on the run, and the workflow takes only the copy that its
+uploading job created during the execution the run's final attempt lists.
+
+The release body of a final release X.Y.Z is its committed notes,
+`docs/releases/X.Y.Z.md`, then a "Qualified native artifacts" section that
+links the native run attempt and lists the selected artifacts. A release
+candidate is created as a GitHub pre-release. Its body first says that it is
+release candidate N of X.Y.Z and not the final release, where to report
+feedback, which version its Python packages carry, and that the R package keeps
+version X.Y.Z, so R users reinstall it when X.Y.Z is released. Then come the
+changes since the previous candidate, from the committed
+`docs/releases/X.Y.Z-rc.N.md`, with a link that compares the two tags, and then
+the notes of X.Y.Z so far and the native evidence. Candidate N follows
+candidate N-1: that candidate's tag must exist and be an ancestor of the tag
+commit. A body longer than GitHub's limit of 125,000 characters fails before
+the downloads.
+
 This route uses the workflow's GitHub token and needs no package-index
 credentials. The workflow has no PyPI step: 0.4.0 is distributed as GitHub
 release assets only, and those assets do not establish PyPI publication. PyPI
@@ -253,7 +298,9 @@ the GitHub release assets remain the documented standalone download route.
 The `Release rehearsal` workflow runs the same selection and downloads, on
 dispatch, against the latest successful native run on main, with its own
 read-only token. It reads no tag, does not look for an existing release and
-stops before `gh release create`. Dispatch it before tagging with
+stops before `gh release create`. Its summary lists the assets and shows the
+release body that a tag at that commit would publish, a candidate's
+introduction included. Dispatch it before tagging with
 `gh workflow run release-rehearsal.yml --repo elong0527/yamaa`; its log names
 the run it rehearsed. To rehearse another run, check out that run's commit,
 fetch `origin/main`, and run the selector with an authenticated GitHub CLI:
@@ -395,6 +442,10 @@ owns decoding behavior.
   release.
 - Distribute 0.4.0 as GitHub release assets only; `release.yml` has no PyPI
   step.
+- Publish release candidates as GitHub pre-releases from `yamaa-vX.Y.Z-rc.N`
+  tags, with Python version `X.Y.ZrcN` and Cargo version `X.Y.Z-rc.N`. The R
+  package keeps `X.Y.Z` through the candidates, and each candidate's release
+  body tells R users to reinstall the final release (#3030 D53).
 - Read only the live records of a SAS7BDAT dataset that holds records
   deleted in place, and refuse it as `source_sas_invalid` with cause
   `deleted_records` when its count of deleted records and the records marked

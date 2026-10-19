@@ -11,7 +11,7 @@ import re
 import unittest
 
 import yaml
-from tools.ci import native
+from tools.ci import native, release_assets
 from tools.ci import select_release_artifacts as release
 from tools.paths import ROOT
 from tools.validation._repository_yaml import UniqueKeyLoader
@@ -23,10 +23,10 @@ def evaluate(expression, context):
     """Evaluate the GitHub expression subset that native.yml names use.
 
     Operands are quoted strings and context properties such as matrix.os;
-    the operators are ==, && and ||, with GitHub's precedence and operand
+    the operators are ==, !=, && and ||, with GitHub's precedence and operand
     results. Anything else fails rather than being guessed.
     """
-    tokens = re.findall(r"'[^']*'|==|&&|\|\||[^\s=&|]+", expression)
+    tokens = re.findall(r"'[^']*'|==|!=|&&|\|\||[^\s=!&|]+", expression)
     if not tokens:
         raise AssertionError(f"this test cannot evaluate {expression!r}")
 
@@ -41,9 +41,9 @@ def evaluate(expression, context):
 
     def comparison():
         value = operand()
-        while tokens[:1] == ["=="]:
-            tokens.pop(0)
-            value = value == operand()
+        while tokens[:1] in (["=="], ["!="]):
+            equal = tokens.pop(0) == "=="
+            value = (value == operand()) == equal
         return value
 
     def conjunction():
@@ -100,7 +100,13 @@ def native_run_jobs():
             name = expand(job.get("name", job_id), context)
             if name in jobs:
                 raise AssertionError(f"more than one native job is named {name}")
-            jobs[name] = {"steps": [], "uploads": [], "downloads": []}
+            jobs[name] = {
+                "steps": [],
+                "uploads": [],
+                "downloads": [],
+                "definitions": job["steps"],
+                "context": context,
+            }
             for step in job["steps"]:
                 jobs[name]["steps"].append(step.get("name"))
                 action = step.get("uses", "").split("@")[0]
@@ -141,15 +147,44 @@ class NativeWorkflowContract(unittest.TestCase):
         for job, artifacts in self.jobs.items():
             for artifact in artifacts["uploads"]:
                 uploaders.setdefault(artifact, []).append(job)
-        producers, _ = release.release_artifacts(self.coverage)
+        producers = release_assets.artifacts(release_assets.declared(self.coverage))
         for artifact, producer in producers.items():
             with self.subTest(artifact=artifact):
                 self.assertEqual(uploaders.get(artifact), [producer])
 
+    def test_only_the_source_platform_keeps_its_python_source_archive(self):
+        # A release artifact holds exactly its declared assets, so the other
+        # Python build lanes drop the source archive they built as a check.
+        sources = {
+            asset.producer
+            for asset in release_assets.declared(self.coverage)
+            if asset.kind == "sdist"
+        }
+        for lane in self.coverage["build"]["include"]:
+            job = "native-dist ({os}, {python})".format(**lane)
+            with self.subTest(job=job):
+                steps = self.jobs[job]["definitions"]
+                removal = 'rm "${RUNNER_TEMP}"/native-dist/*.tar.gz'
+                [step] = [step for step in steps if step.get("run") == removal]
+                # After the distribution checks, before the upload.
+                names = [item.get("name") for item in steps]
+                self.assertLess(
+                    names.index("Check Python distribution contents"),
+                    steps.index(step),
+                )
+                self.assertLess(
+                    steps.index(step), names.index("Preserve distributions")
+                )
+                self.assertEqual(
+                    evaluate(step["if"], self.jobs[job]["context"]),
+                    job not in sources,
+                )
+
     def test_every_source_lane_installs_the_published_source_archives(self):
         # macOS and Windows install the Linux-built archives a release
         # publishes, rather than building their own.
-        producers, linux = release.release_artifacts(self.coverage)
+        producers = release_assets.artifacts(release_assets.declared(self.coverage))
+        linux = native.SOURCE_PLATFORM
         python_source = f"native-python-{linux}-{native.BUILD_PYTHON}"
         r_source = f"native-r-{linux}"
         self.assertLessEqual({python_source, r_source}, set(producers))
@@ -183,10 +218,12 @@ class NativeWorkflowContract(unittest.TestCase):
             ("matrix.form == 'source' && 'ubuntu-24.04' || matrix.os", "ubuntu-24.04"),
             ("matrix.form == 'wheel' && 'ubuntu-24.04' || matrix.os", "macos-15"),
             ("matrix.os", "macos-15"),
+            ("matrix.os != 'ubuntu-24.04'", True),
+            ("matrix.form != 'source'", False),
         ):
             with self.subTest(expression=expression):
                 self.assertEqual(evaluate(expression, context), expected)
-        for expression in ("runner.os == 'Windows'", "matrix.form != 'wheel'", "", "("):
+        for expression in ("runner.os == 'Windows'", "matrix.form ! 'wheel'", "", "("):
             with (
                 self.subTest(expression=expression),
                 self.assertRaisesRegex(AssertionError, "cannot evaluate"),

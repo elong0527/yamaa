@@ -16,6 +16,8 @@ class PackageNotices(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         (self.root / "python").mkdir()
+        (self.root / "tools/packaging").mkdir(parents=True)
+        (self.root / "tools/packaging/release.toml").write_text('version = "0.4.0"\n')
         (self.root / "python/pyproject.toml").write_text(
             '[project]\nversion = "0.4.0"\n'
             'license-files = ["LICENSE.txt", "LICENSE-THIRD-PARTY.txt"]\n'
@@ -72,6 +74,36 @@ class PackageNotices(unittest.TestCase):
         other = self.tar("yamaa-0.4.1.tar.gz", {})
         with self.assertRaisesRegex(ValueError, "not a yamaa 0.4.0"):
             packages.check_archive(other, self.root)
+
+    def test_a_candidate_names_python_packages_and_the_r_archive_differently(self):
+        # #3030 D53: the R package keeps the final version through candidates.
+        (self.root / "tools/packaging/release.toml").write_text(
+            'version = "1.0.0"\ncandidate = 1\n'
+        )
+        wheel = self.root / "yamaa-1.0.0rc1-cp312-abi3-win_amd64.whl"
+        with zipfile.ZipFile(wheel, "w") as archive:
+            for name, payload in self.notices.items():
+                archive.writestr(f"yamaa-1.0.0rc1.dist-info/licenses/{name}", payload)
+        sdist = self.tar(
+            "yamaa-1.0.0rc1.tar.gz",
+            {f"yamaa-1.0.0rc1/{name}": data for name, data in self.notices.items()},
+        )
+        r_source = self.tar(
+            "yamaa_1.0.0.tar.gz",
+            {f"yamaa/inst/{name}": data for name, data in self.notices.items()},
+        )
+        for path in (wheel, sdist, r_source):
+            with self.subTest(archive=path.name):
+                self.assertEqual(len(packages.check_archive(path, self.root)), 2)
+        for name in ("yamaa_1.0.0rc1.tar.gz", "yamaa-1.0.0.tar.gz"):
+            other = self.tar(name, {})
+            with (
+                self.subTest(archive=name),
+                self.assertRaisesRegex(
+                    ValueError, "not a yamaa 1.0.0 release candidate 1 wheel"
+                ),
+            ):
+                packages.check_archive(other, self.root)
 
 
 if __name__ == "__main__":
