@@ -877,6 +877,7 @@ jobs:
           name: native-r-ubuntu-24.04
           path: ${{ runner.temp }}/published
       - name: Check the R source package as CRAN does
+        id: check
         env:
           R_LIBS: ${{ runner.temp }}/library
           http_proxy: http://127.0.0.1:9
@@ -884,17 +885,22 @@ jobs:
           ALL_PROXY: http://127.0.0.1:9
           NO_PROXY: ''
         run: |
+          echo "directory=${RUNNER_TEMP}/cran-check" >> "${GITHUB_OUTPUT}"
           python3 -m tools.commands.check_r --archive "${RUNNER_TEMP}"/published/yamaa_*.tar.gz \
             --work-dir "${RUNNER_TEMP}/cran-check"
+      # In a container job, ${{ runner.temp }} names the runner's directory,
+      # which the runner maps to the container's only at the start of an
+      # input, so it would map the first of these paths alone. The check step
+      # names its directory as the container sees it.
       - name: Preserve the CRAN check
-        if: always()
+        if: ${{ always() && steps.check.outputs.directory != '' }}
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: native-cran-${{ matrix.platform }}
           path: |
-            ${{ runner.temp }}/cran-check/yamaa.Rcheck/00check.log
-            ${{ runner.temp }}/cran-check/yamaa.Rcheck/00install.out
-            ${{ runner.temp }}/cran-check/yamaa.Rcheck/tests/*.Rout*
+            ${{ steps.check.outputs.directory }}/yamaa.Rcheck/00check.log
+            ${{ steps.check.outputs.directory }}/yamaa.Rcheck/00install.out
+            ${{ steps.check.outputs.directory }}/yamaa.Rcheck/tests/*.Rout*
           if-no-files-found: ignore
 
   public-cohort:
