@@ -7,7 +7,8 @@ use std::{
     path::PathBuf,
     sync::atomic::{AtomicUsize, Ordering},
 };
-use yamaa_adapters::{file_application, issue_rows::Issue, specification_report::Identity};
+use yamaa_adapters::{file_application, specification_report::Identity};
+use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::domain_entry::Request;
 use yamaa_core::json::Value;
 
@@ -27,7 +28,7 @@ impl Fixture {
         }
         Self(root)
     }
-    fn run(&self) -> Result<file_application::Domain, Vec<Issue>> {
+    fn run(&self) -> Result<file_application::Domain, Vec<Diagnostic>> {
         let specification = self.0.join("spec.yaml");
         let specification = specification.to_str().unwrap();
         file_application::domain(
@@ -59,13 +60,13 @@ impl Drop for Fixture {
     }
 }
 
-fn issue_rows(issues: &[Issue]) -> Value {
+fn issue_rows(issues: &[Diagnostic]) -> Value {
     Value::Array(
         issues
             .iter()
             .map(|issue| {
-                let mut value = issue.as_value();
-                value["context"] = issue.context.clone();
+                let mut value = yamaa_adapters::report_storage::diagnostic_value(issue);
+                value["context"] = yamaa_core::json::Value::Object(issue.context.clone());
                 value
             })
             .collect(),

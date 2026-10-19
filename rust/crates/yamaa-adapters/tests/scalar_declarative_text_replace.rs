@@ -48,7 +48,7 @@ impl Fixture {
         fs::write(fixture.0.join("input.csv"), input).unwrap();
         fixture
     }
-    fn attempt(&self) -> Result<file_application::Domain, Vec<yamaa_adapters::issue_rows::Issue>> {
+    fn attempt(&self) -> Result<file_application::Domain, Vec<yamaa_core::diagnostic::Diagnostic>> {
         let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
         file_application::domain(
             yamaa_core::project_function::Language::Python,
@@ -72,8 +72,8 @@ impl Drop for Fixture {
         fs::remove_dir_all(&self.0).unwrap();
     }
 }
-fn issue_json(issue: &yamaa_adapters::issue_rows::Issue) -> Json {
-    json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+fn issue_json(issue: &yamaa_core::diagnostic::Diagnostic) -> Json {
+    json!({"phase":issue.phase(),"condition":issue.condition(),"requirement":issue.requirement(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
 }
 fn issues(fixture: &Fixture) -> Vec<Json> {
     match fixture.attempt() {

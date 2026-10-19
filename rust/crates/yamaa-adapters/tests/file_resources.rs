@@ -254,7 +254,7 @@ mod file {
                 assert_eq!(issues.len(), expected.len(), "{issues:?}");
                 assert!(issues
                     .iter()
-                    .all(|issue| issue.condition == "missing_required_field"));
+                    .all(|issue| issue.condition() == "missing_required_field"));
                 let mut paths = issues
                     .iter()
                     .flat_map(|issue| issue.spec_paths.iter().map(String::as_str))
@@ -316,12 +316,12 @@ mod file {
                     for issues in [checked, built] {
                         assert_eq!(issues.len(), 1, "{written:?}, expanded={expanded}");
                         let issue = &issues[0];
-                        assert_eq!(issue.phase, "validation");
-                        assert_eq!(issue.condition, "resource_path_not_normalized");
-                        assert_eq!(issue.requirement.as_deref(), Some(requirement));
+                        assert_eq!(issue.phase(), "validation");
+                        assert_eq!(issue.condition(), "resource_path_not_normalized");
+                        assert_eq!(issue.requirement(), Some(requirement));
                         assert_eq!(issue.spec_paths, ["input.SRC.path"]);
                         assert_eq!(
-                            issue.context.clone(),
+                            yamaa_core::json::Value::Object(issue.context.clone()),
                             yamaa_adapters::json!({"dataset":"SRC","path":written})
                         );
                     }
@@ -380,12 +380,12 @@ mod file {
                     },
                 );
                 assert_eq!(issues.len(), 1);
-                assert_eq!(issues[0].phase, "validation");
-                assert_eq!(issues[0].condition, condition);
-                assert_eq!(issues[0].requirement.as_deref(), Some(requirement));
+                assert_eq!(issues[0].phase(), "validation");
+                assert_eq!(issues[0].condition(), condition);
+                assert_eq!(issues[0].requirement(), Some(requirement));
                 assert_eq!(issues[0].spec_paths, ["input.SRC.path"]);
                 assert_eq!(
-                    issues[0].context.clone(),
+                    yamaa_core::json::Value::Object(issues[0].context.clone()),
                     yamaa_adapters::json!({"dataset":"SRC","path":written})
                 );
                 assert!(!study.0.join("entry/output.csv").exists());
@@ -810,8 +810,8 @@ mod file {
             assert!(
                 run.issues()
                     .iter()
-                    .any(|i| i.requirement.as_deref() == Some("REQ-0919")
-                        && i.condition == "origin_source_not_admitted"),
+                    .any(|i| i.requirement() == Some("REQ-0919")
+                        && i.condition() == "origin_source_not_admitted"),
                 "{:?}",
                 run.issues()
             );
@@ -827,9 +827,10 @@ mod file {
             assert!(
                 run.issues()
                     .iter()
-                    .any(|i| i.condition == "allowed_values_failed"
-                        && yamaa_adapters::json_wire::encode(&i.context).contains("CL_GLUCOSE")
-                        && yamaa_adapters::json_wire::encode(&i.context).contains("GLUC")),
+                    .any(|i| i.condition() == "allowed_values_failed"
+                        && yamaa_adapters::json_wire::encode_object(&i.context)
+                            .contains("CL_GLUCOSE")
+                        && yamaa_adapters::json_wire::encode_object(&i.context).contains("GLUC")),
                 "{:?}",
                 run.issues()
             );
@@ -898,8 +899,8 @@ mod file {
                     .iter()
                     .map(|issue| {
                         yamaa_adapters::json!({
-                            "phase": issue.phase, "condition": issue.condition,
-                            "requirement": issue.requirement, "spec_paths": issue.spec_paths,
+                            "phase": issue.phase(), "condition": issue.condition(),
+                            "requirement": issue.requirement(), "spec_paths": issue.spec_paths,
                             "context": issue.context.clone()
                         })
                     })
@@ -1023,7 +1024,7 @@ mod file {
                         None,
                     );
                     let actual: Vec<_> = run.issues().iter().map(|issue| yamaa_adapters::json!({
-                "phase": issue.phase, "condition": issue.condition, "requirement": issue.requirement,
+                "phase": issue.phase(), "condition": issue.condition(), "requirement": issue.requirement(),
                 "spec_paths": issue.spec_paths,
                 "context": issue.context.clone()
             })).collect();
@@ -1111,14 +1112,14 @@ mod file {
             let refusal = run
                 .issues()
                 .iter()
-                .find(|issue| issue.requirement.as_deref() == Some("SUB-27"))
+                .find(|issue| issue.requirement() == Some("SUB-27"))
                 .unwrap_or_else(|| panic!("{:?}", run.issues()));
-            assert_eq!(refusal.condition, "value_not_permitted");
+            assert_eq!(refusal.condition(), "value_not_permitted");
             assert_eq!(refusal.spec_paths, ["sdtm.specs[0].columns.VSDTM.type"]);
             // The details of the specification's own refusal, beside the
             // `detail` every composition finding carries.
             assert_eq!(
-                refusal.context,
+                yamaa_core::json::Value::Object(refusal.context.clone()),
                 yamaa_adapters::json!({"detail": "VSDTM", "column": "VSDTM", "value": "datetime", "class": "FINDINGS", "permitted": ["str", "date"]})
             );
             assert!(run.save().is_err());
@@ -1135,7 +1136,7 @@ mod file {
             assert!(run
                 .issues()
                 .iter()
-                .any(|i| i.condition == "submission_length_invalid"));
+                .any(|i| i.condition() == "submission_length_invalid"));
             assert!(run.save().is_err());
             assert!(!temp.0.join("define.xml").exists());
             assert!(!temp.0.join("dm.json").exists());
@@ -1146,10 +1147,10 @@ mod file {
             assert!(run.save().is_err());
             assert!(run.failure().is_some());
             assert!(!temp.0.join("dm.json").exists());
-            assert!(run.issues().iter().any(|i| i.phase == "engine"
-                && i.condition == "engine_rejected"
-                && i.requirement.is_none()
-                && yamaa_adapters::json_wire::encode(&i.context)
+            assert!(run.issues().iter().any(|i| i.phase() == "engine"
+                && i.condition() == "engine_rejected"
+                && i.requirement().is_none()
+                && yamaa_adapters::json_wire::encode_object(&i.context)
                     .contains("publication_target_admission")));
             assert!(matches!(
                 run.failure(),
@@ -1194,11 +1195,11 @@ mod file {
             let mut result = temp.run("2026-09-11T00:00:00");
             assert_eq!(result.issues().len(), 1, "{:?}", result.issues());
             let issue = &result.issues()[0];
-            assert_eq!(issue.phase, "validation");
-            assert_eq!(issue.condition, "transport_path_collision");
-            assert_eq!(issue.requirement.as_deref(), Some("REQ-1226"));
+            assert_eq!(issue.phase(), "validation");
+            assert_eq!(issue.condition(), "transport_path_collision");
+            assert_eq!(issue.requirement(), Some("REQ-1226"));
             assert_eq!(issue.spec_paths, ["sdtm.specs[1]"]);
-            assert!(yamaa_adapters::json_wire::encode(&issue.context).contains("dm.json"));
+            assert!(yamaa_adapters::json_wire::encode_object(&issue.context).contains("dm.json"));
             let reads = result.capture_reads();
             assert!(result.save().is_err());
             assert_eq!(reads, result.capture_reads());
@@ -1224,7 +1225,7 @@ mod file {
             assert!(run
                 .issues()
                 .iter()
-                .any(|i| i.condition == "producer_contract_mismatch"));
+                .any(|i| i.condition() == "producer_contract_mismatch"));
             assert!(run.save().is_err());
             let run = temp.run("2026-09-11");
             assert!(run.issues().iter().any(|i| i.spec_paths == ["created"]));
@@ -1306,8 +1307,8 @@ mod file {
             assert!(run
                 .issues()
                 .iter()
-                .any(|i| i.condition == "artifact_outside_document"
-                    && i.requirement.as_deref() == Some("REQ-1021")));
+                .any(|i| i.condition() == "artifact_outside_document"
+                    && i.requirement() == Some("REQ-1021")));
             assert!(run.save().is_err());
             assert!(!temp.0.join("package").exists());
             // REQ1230 assigns a stale output contract to REQ0535, before JSON schema.
@@ -1322,8 +1323,8 @@ mod file {
             assert!(run
                 .issues()
                 .iter()
-                .any(|i| i.condition == "producer_contract_mismatch"
-                    && i.requirement.as_deref() == Some("REQ-0535")));
+                .any(|i| i.condition() == "producer_contract_mismatch"
+                    && i.requirement() == Some("REQ-0535")));
             assert!(run.save().is_err());
             assert!(!temp.0.join("define.xml").exists());
             // A missing declared field is the same contract cause, before typed CSV
@@ -1333,7 +1334,7 @@ mod file {
             assert!(run
                 .issues()
                 .iter()
-                .any(|issue| issue.requirement.as_deref() == Some("REQ-0535")));
+                .any(|issue| issue.requirement() == Some("REQ-0535")));
             assert!(run.save().is_err());
             assert!(!temp.0.join("define.xml").exists());
             // REQ0957 preserves the verification phase, offending value and row key.
@@ -1342,10 +1343,10 @@ mod file {
             let issue = run
                 .issues()
                 .iter()
-                .find(|i| i.requirement.as_deref() == Some("REQ-0957"))
+                .find(|i| i.requirement() == Some("REQ-0957"))
                 .unwrap();
-            assert_eq!(issue.phase, "verification");
-            let context: yamaa_core::json::Value = issue.context.clone();
+            assert_eq!(issue.phase(), "verification");
+            let context = yamaa_core::json::Value::Object(issue.context.clone());
             assert_eq!(context["value"], "Z");
             assert!(context["key_values"]
                 .as_array()
@@ -1422,8 +1423,8 @@ mod file {
                 fs::write(temp.0.join("spec.yaml"), spec).unwrap();
                 let mut result = temp.run("2026-09-11T00:00:00");
                 assert!(
-                    result.issues().iter().any(|i| i.condition == condition
-                        && i.requirement.as_deref() == Some(requirement)),
+                    result.issues().iter().any(|i| i.condition() == condition
+                        && i.requirement() == Some(requirement)),
                     "{:?}",
                     result.issues()
                 );
@@ -1454,7 +1455,7 @@ mod file {
                     result
                         .issues()
                         .iter()
-                        .any(|i| i.condition == "origin_contradicts_derivation"
+                        .any(|i| i.condition() == "origin_contradicts_derivation"
                             && i.spec_paths[0].contains("AEDECOD")),
                     refuted,
                     "{:?}",
@@ -1514,11 +1515,7 @@ mod file {
                     assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
                     let issue = &run.issues()[0];
                     assert_eq!(
-                        (
-                            issue.phase.as_str(),
-                            issue.condition.as_str(),
-                            issue.requirement.as_deref()
-                        ),
+                        (issue.phase(), issue.condition(), issue.requirement()),
                         ("validation", "origin_document_missing", Some("REQ-0893"))
                     );
                     assert_eq!(issue.spec_paths, [format!("sdtm.specs[0].columns.{path}")]);
@@ -1562,7 +1559,7 @@ mod file {
             metadata_only(&temp, "sdtm", "Submission");
             let run = temp.run("2026-09-11T00:00:00");
             assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
-            assert_eq!(run.issues()[0].condition, "origin_source_not_admitted");
+            assert_eq!(run.issues()[0].condition(), "origin_source_not_admitted");
             assert_eq!(
                 run.issues()[0].spec_paths,
                 ["sdtm.specs[0].columns.AGEU.submission.origin"]
@@ -1605,7 +1602,7 @@ mod file {
                 replace_spec(&temp, assigned, origin);
                 let run = send(&temp);
                 assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
-                assert_eq!(run.issues()[0].condition, "origin_source_not_admitted");
+                assert_eq!(run.issues()[0].condition(), "origin_source_not_admitted");
                 assert_eq!(
                     run.issues()[0].spec_paths,
                     ["send.specs[0].columns.AGEU.submission.origin"]
@@ -1682,16 +1679,12 @@ mod file {
             assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
             let issue = &run.issues()[0];
             assert_eq!(
-                (
-                    issue.phase.as_str(),
-                    issue.condition.as_str(),
-                    issue.requirement.as_deref()
-                ),
+                (issue.phase(), issue.condition(), issue.requirement()),
                 ("validation", "predecessor_label_mismatch", Some("SUB-20"))
             );
             assert_eq!(issue.spec_paths, ["adam.specs[0].columns.USUBJID.label"]);
             assert_eq!(
-                issue.context,
+                yamaa_core::json::Value::Object(issue.context.clone()),
                 yamaa_adapters::json!({"detail": "USUBJID", "label": "Subject Identifier", "predecessor": "LB.USUBJID", "predecessor_label": "Unique Subject Identifier"})
             );
             assert!(run.save().is_err());
@@ -1700,10 +1693,7 @@ mod file {
             let (_, run) = cross_section(STUDY_ADLB, &published.replace(",LB\n", ",XX\n"), true);
             assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
             assert_eq!(
-                (
-                    run.issues()[0].condition.as_str(),
-                    run.issues()[0].requirement.as_deref()
-                ),
+                (run.issues()[0].condition(), run.issues()[0].requirement()),
                 ("allowed_values_failed", Some("REQ-1156"))
             );
             assert_eq!(run.issues()[0].context["value"], "XX");
@@ -1719,7 +1709,7 @@ mod file {
                 false,
             );
             assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
-            assert_eq!(run.issues()[0].condition, "allowed_values_failed");
+            assert_eq!(run.issues()[0].condition(), "allowed_values_failed");
             assert_eq!(run.issues()[0].context["value"], "LB");
         }
     }

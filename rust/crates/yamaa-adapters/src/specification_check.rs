@@ -1,38 +1,10 @@
-//! Encode core-owned static check findings without executing or entering a port.
-use crate::{specification_diagnostics::portable_diagnostic, specification_run_view::RunView};
+//! Core-owned static check findings, read without executing or entering a port.
+use crate::specification_run_view::RunView;
+use yamaa_core::diagnostic::Diagnostic;
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum Error {
-    InvalidContext,
-    Encode,
-}
-impl Error {
-    pub fn message(&self) -> &'static str {
-        match self {
-            Self::InvalidContext => "invalid check issue context",
-            Self::Encode => "check issue encoding failed",
-        }
-    }
-}
-
-/// Both hosts receive the same encoded payload; context stays a structured
-/// tree inside it, so neither host narrows its scalar values.
-pub fn issues(run: &dyn RunView) -> Result<String, Error> {
-    Ok(crate::issue_rows::encode(&crate::issue_rows::collect(
-        issue_rows(run)?,
-    )))
-}
-
-pub fn issue_rows(run: &dyn RunView) -> Result<Vec<crate::issue_rows::Issue>, Error> {
-    let rows = run
-        .check_diagnostics()
-        .into_iter()
-        .map(|finding| {
-            crate::issue_rows::Issue::from_diagnostic(portable_diagnostic(finding))
-                .map_err(|_| Error::InvalidContext)
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(rows)
+/// The static check findings of a compiled specification, in report order.
+pub fn issues(run: &dyn RunView) -> Vec<Diagnostic> {
+    run.check_diagnostics()
 }
 
 #[cfg(all(test, feature = "yaml"))]
@@ -54,8 +26,12 @@ mod tests {
             "../tests/fixtures/check_invalid_regex_truth.json"
         ))
         .unwrap();
-        let expected = crate::json_wire::encode(&expected);
-        assert_eq!(issues(&run).unwrap(), expected);
-        assert_eq!(issues(&run).unwrap(), expected);
+        for _ in 0..2 {
+            let rendered = issues(&run)
+                .iter()
+                .map(crate::report_storage::diagnostic_value)
+                .collect::<Vec<_>>();
+            assert_eq!(yamaa_core::json::Value::Array(rendered), expected);
+        }
     }
 }

@@ -44,7 +44,6 @@ mod source_ordinal;
 pub mod specification_diagnostics;
 
 pub mod diagnostic_record;
-pub mod issue_rows;
 pub(crate) mod run_report;
 pub mod specification_check;
 pub mod specification_report;
@@ -110,6 +109,3 @@ pub mod ipc_table;
 mod report_scalar;
 mod schema_outcomes;
 mod yaml_diagnostics;
-
-#[cfg(test)]
-mod test_diagnostic_truth;

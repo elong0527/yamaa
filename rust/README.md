@@ -431,8 +431,10 @@ pub struct SourceSpan { pub start: usize, pub end: usize }  // #[non_exhaustive]
 pub struct Report { pub diagnostics: Vec<Diagnostic> }  // #[non_exhaustive]
 ```
 
-This is the public form of `issue_rows::Issue` (phase, condition, requirement,
-spec paths, structured context and optional geometry). `DiagnosticContext` is
+This is the public form of core's `yamaa_core::diagnostic::Diagnostic`, the one
+record from the failure site to this edge: the registry names its phase,
+condition and requirement, and it carries spec paths, structured context and
+optional geometry. `DiagnosticContext` is
 a structured value map, not a formatted string: `ContextValue` keeps integer
 tokens exact (`Int`, `Uint`, or `Wide` with the decimal spelling of a token
 outside both 64-bit ranges), fraction/exponent tokens as `Float`, and nested
@@ -568,7 +570,7 @@ was removed. Any module not listed here is internal by default.
 | `file_workflow` | Internal -- `SelectionError` converts into diagnostics/`Error`. |
 | `host_resources` | Facade -- the `ResourceResolver` trait, `MemoryResolver`, and the resolver request/reply/failure types. |
 | `ipc_table` | Internal -- `TableError` converts into the facade `TableError`; `Table::ipc` is the public IPC route. |
-| `issue_rows` | Facade -- `Diagnostic` and `Report` are the public form of `Issue`; the module itself is internal. |
+| `issue_rows` | Removed -- core's `Diagnostic` is the one record; the facade's `Diagnostic` and `Report` are its public form. |
 | `project_application` | Internal -- selection failures convert into diagnostics. |
 | `project_attempt` | Internal -- host-failure traversal; failures surface as `Error::Host`. |
 | `project_lock` | Facade -- `LockFinding`/`LockReason` are the public lock-finding types and `decode_renv_lock` is the public renv admission; lock-kind detection stays internal (the engine supplies `LockKind` through `LockContext`). |

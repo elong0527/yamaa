@@ -100,15 +100,14 @@ mod file {
                     document.declaring_source(&findings[0].spec_paths[0]),
                     Some(parent.as_str())
                 );
-                let issues =
-                    yamaa_adapters::specification_check::issue_rows(prepared.run()).unwrap();
+                let issues = yamaa_adapters::specification_check::issues(prepared.run());
                 assert_eq!(issues.len(), 1);
-                assert_eq!(issues[0].phase, "validation");
-                assert_eq!(issues[0].condition, "invalid_expression");
-                assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0188"));
+                assert_eq!(issues[0].phase(), "validation");
+                assert_eq!(issues[0].condition(), "invalid_expression");
+                assert_eq!(issues[0].requirement(), Some("REQ-0188"));
                 assert_eq!(issues[0].spec_paths, ["rows[1].filter"]);
                 assert_eq!(
-                    issues[0].context.clone(),
+                    yamaa_core::json::Value::Object(issues[0].context.clone()),
                     yamaa_adapters::json!({"predicate": "ID >", "position": 4})
                 );
                 assert_eq!(
@@ -162,10 +161,10 @@ mod file {
                     .declaring_source(&findings[0].spec_paths[0]),
                 Some(parent.as_str())
             );
-            let issues = yamaa_adapters::specification_check::issue_rows(prepared.run()).unwrap();
+            let issues = yamaa_adapters::specification_check::issues(prepared.run());
             assert_eq!(issues.len(), 1);
             assert_eq!(
-                yamaa_adapters::json_wire::encode(&issues[0].context),
+                yamaa_adapters::json_wire::encode_object(&issues[0].context),
                 "{\"pattern\":\"(\"}"
             );
             assert_eq!(
@@ -292,12 +291,12 @@ mod file {
             assert!(result.output().is_none());
             assert_eq!(result.issues().len(), 1);
             let finding = &result.issues()[0];
-            assert_eq!(finding.phase, "ingest");
-            assert_eq!(finding.condition, "resource_path_content_changed");
-            assert_eq!(finding.requirement.as_deref(), Some("REQ-0788"));
+            assert_eq!(finding.phase(), "ingest");
+            assert_eq!(finding.condition(), "resource_path_content_changed");
+            assert_eq!(finding.requirement(), Some("REQ-0788"));
             assert_eq!(finding.spec_paths, ["input.SRC.path"]);
             assert_eq!(
-                finding.context.clone(),
+                yamaa_core::json::Value::Object(finding.context.clone()),
                 yamaa_adapters::json!({"dataset":"SRC","path":"input.csv"})
             );
             for _ in 0..2 {
@@ -325,16 +324,16 @@ mod file {
                 identity(&path),
             );
             assert_eq!(issues.len(), 1);
-            assert_eq!(issues[0].phase, "validation");
-            assert_eq!(issues[0].condition, "project_environment_missing");
+            assert_eq!(issues[0].phase(), "validation");
+            assert_eq!(issues[0].condition(), "project_environment_missing");
             assert_eq!(
-                issues[0].context,
+                yamaa_core::json::Value::Object(issues[0].context.clone()),
                 yamaa_adapters::json!({
                     "cause": "missing", "path": project,
                 })
             );
             assert_eq!(issues[0].spec_paths, ["environment"]);
-            assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0694"));
+            assert_eq!(issues[0].requirement(), Some("REQ-0694"));
             fs::write(
                 study.0.join("spec.yaml"),
                 VALID.replace("input: {SRC: input.csv}", "input: {SRC: input.unknown}"),
@@ -352,12 +351,12 @@ mod file {
             .err()
             .unwrap();
             assert_eq!(issues.len(), 1);
-            assert_eq!(issues[0].condition, "source_profile_unknown");
-            assert_eq!(issues[0].phase, "validation");
-            assert_eq!(issues[0].requirement, Some("REQ-0852".into()));
+            assert_eq!(issues[0].condition(), "source_profile_unknown");
+            assert_eq!(issues[0].phase(), "validation");
+            assert_eq!(issues[0].requirement(), Some("REQ-0852"));
             assert_eq!(issues[0].spec_paths, ["input.SRC.path"]);
             assert_eq!(
-                yamaa_adapters::json_wire::encode(&issues[0].context),
+                yamaa_adapters::json_wire::encode_object(&issues[0].context),
                 "{\"dataset\":\"SRC\",\"path\":\"input.unknown\"}"
             );
             assert!(!study.0.join("input.csv").exists());
@@ -405,11 +404,11 @@ mod file {
             .err()
             .unwrap();
             assert_eq!(issues.len(), 1);
-            assert_eq!(issues[0].condition, "resource_path_not_regular_file");
-            assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0785"));
+            assert_eq!(issues[0].condition(), "resource_path_not_regular_file");
+            assert_eq!(issues[0].requirement(), Some("REQ-0785"));
             assert_eq!(issues[0].spec_paths, ["input.SRC.path"]);
             assert_eq!(
-                yamaa_adapters::json_wire::encode(&issues[0].context),
+                yamaa_adapters::json_wire::encode_object(&issues[0].context),
                 "{\"dataset\":\"SRC\",\"path\":\"input.unknown\"}"
             );
             fs::remove_dir(study.0.join("input.unknown")).unwrap();
@@ -424,7 +423,7 @@ mod file {
             )
             .err()
             .unwrap();
-            assert_eq!(issues[0].condition, "source_profile_unknown");
+            assert_eq!(issues[0].condition(), "source_profile_unknown");
             assert!(!study.0.join("output.csv").exists());
         }
         #[test]
@@ -451,7 +450,7 @@ mod file {
             assert_eq!(result.observations(), observations);
             assert_eq!(result.issues().len(), 1);
             assert_eq!(
-                yamaa_adapters::json_wire::encode(&result.issues()[0].context),
+                yamaa_adapters::json_wire::encode_object(&result.issues()[0].context),
                 "{\"code\":\"invalid_target\",\"stage\":\"output\"}"
             );
             assert_eq!(result.output().unwrap(), before);
@@ -582,10 +581,10 @@ mod file {
             assert!(result.save().is_err());
             let issues = result.issues();
             // REQ-0783 classifies an authored study-source link before any byte read.
-            assert_eq!(issues[0].condition, "resource_path_symlink");
-            assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0783"));
+            assert_eq!(issues[0].condition(), "resource_path_symlink");
+            assert_eq!(issues[0].requirement(), Some("REQ-0783"));
             assert_eq!(
-                yamaa_adapters::json_wire::encode(&issues[0].context),
+                yamaa_adapters::json_wire::encode_object(&issues[0].context),
                 "{\"dataset\":\"SRC\",\"path\":\"../outside-link.csv\"}"
             );
             std::os::unix::fs::symlink("spec.yaml", study.0.join("entry/link.yaml")).unwrap();
@@ -636,7 +635,7 @@ mod file {
                 assert!(result.output().is_some());
                 assert!(!result.save().unwrap());
                 assert_eq!(
-                    yamaa_adapters::json_wire::encode(&result.issues()[0].context),
+                    yamaa_adapters::json_wire::encode_object(&result.issues()[0].context),
                     "{\"code\":\"invalid_target\",\"stage\":\"output\"}"
                 );
                 if existing {
@@ -825,12 +824,12 @@ mod file {
                     ] {
                         assert_eq!(issues.len(), 1, "{resource}, {environment:?}");
                         let issue = &issues[0];
-                        assert_eq!(issue.phase, "engine");
-                        assert_eq!(issue.condition, "engine_rejected");
-                        assert_eq!(issue.requirement, None);
+                        assert_eq!(issue.phase(), "engine");
+                        assert_eq!(issue.condition(), "engine_rejected");
+                        assert_eq!(issue.requirement(), None);
                         assert_eq!(issue.spec_paths, [path]);
                         assert_eq!(
-                            issue.context.clone(),
+                            yamaa_core::json::Value::Object(issue.context.clone()),
                             json!({
                                 "stage":"prepare", "code":"compiler_limit", "resource":resource, "limit":limit, "actual":actual,
                             })
@@ -912,12 +911,12 @@ mod file {
                     .unwrap(),
                 ] {
                     assert_eq!(issues.len(), 1);
-                    assert_eq!(issues[0].phase, "validation");
-                    assert_eq!(issues[0].condition, "invalid_field_type");
-                    assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0065"));
+                    assert_eq!(issues[0].phase(), "validation");
+                    assert_eq!(issues[0].condition(), "invalid_field_type");
+                    assert_eq!(issues[0].requirement(), Some("REQ-0065"));
                     assert_eq!(issues[0].spec_paths, ["rows[0].group_by"]);
                     assert_eq!(
-                        issues[0].context.clone(),
+                        yamaa_core::json::Value::Object(issues[0].context.clone()),
                         json!({"row":"r", "group_by":vec!["ID"; Limits::KEYS]}),
                     );
                 }
@@ -1132,12 +1131,12 @@ mod file {
                 ] {
                     assert_eq!(issues.len(), 1);
                     let issue = &issues[0];
-                    assert_eq!(issue.phase, "validation");
-                    assert_eq!(issue.condition, "schema_version_mismatch");
-                    assert_eq!(issue.requirement.as_deref(), Some("REQ-0281"));
+                    assert_eq!(issue.phase(), "validation");
+                    assert_eq!(issue.condition(), "schema_version_mismatch");
+                    assert_eq!(issue.requirement(), Some("REQ-0281"));
                     assert_eq!(issue.spec_paths, ["schema_version"]);
                     assert_eq!(
-                        yamaa_adapters::json_wire::encode(&issue.context),
+                        yamaa_adapters::json_wire::encode_object(&issue.context),
                         format!(r#"{{"actual":{digits},"expected":"1.0"}}"#)
                     );
                 }
@@ -1159,14 +1158,14 @@ mod file {
             assert!(result.output().is_none());
             let findings = result.issues();
             assert_eq!(findings.len(), 1);
-            assert_eq!(findings[0].phase, "verification");
-            assert_eq!(findings[0].condition, "matches_failed");
-            assert_eq!(findings[0].requirement.as_deref(), Some("REQ-0379"));
+            assert_eq!(findings[0].phase(), "verification");
+            assert_eq!(findings[0].condition(), "matches_failed");
+            assert_eq!(findings[0].requirement(), Some("REQ-0379"));
             assert_eq!(
                 findings[0].spec_paths,
                 ["columns.TERM.verifications[0].matches"]
             );
-            let context: yamaa_core::json::Value = findings[0].context.clone();
+            let context = yamaa_core::json::Value::Object(findings[0].context.clone());
             assert_eq!(
                 context,
                 yamaa_adapters::json!({"column":"TERM","failure_count":1,"keys":[{"ID":1}]})
@@ -1790,10 +1789,11 @@ mod file {
             }
         }
         const VALID: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
-        fn failure(study: &Study, source: &str) -> String {
+        /// The report rows of a refused preparation's language findings.
+        fn failure(study: &Study, source: &str) -> Value {
             match study.prepare(source) {
                 Ok(_) => panic!("expected preparation failure"),
-                Err(error) => error.into_message(),
+                Err(error) => crate::support::preparation_findings(error),
             }
         }
         #[test]
@@ -1802,10 +1802,7 @@ mod file {
             let prepared = study.prepare(VALID).unwrap();
             assert_eq!(prepared.capture_reads(), 1);
             assert_eq!(prepared.run().document().source().bytes, VALID.as_bytes());
-            assert_eq!(
-                yamaa_adapters::specification_check::issues(prepared.run()).unwrap(),
-                "[]"
-            );
+            assert!(yamaa_adapters::specification_check::issues(prepared.run()).is_empty());
             assert_eq!(prepared.capture_reads(), 1);
             // Compilation uses the retained original model rather than reopening entry YAML.
             fs::write(study.0.join("entry/spec.yaml"), b"[changed").unwrap();
@@ -1852,30 +1849,25 @@ mod file {
         #[test]
         fn entry_version_finding_precedes_parent_and_study_authority() {
             let study = Study::new();
-            let actual: Value = yamaa_adapters::json_wire::decode(&failure(
+            let actual: Value = failure(
                 &study,
                 &format!(
                     "{}parent: ../outside/missing.yaml\n",
                     VALID.replace("'1.0'", "'99.0'")
                 ),
-            ))
-            .unwrap();
+            );
             assert_eq!(
                 actual,
-                json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[{"phase":"validation","condition":"schema_version_mismatch","requirement":"REQ-0245","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":"99.0","source":study.resource_key("entry/spec.yaml"),"entry":study.resource_key("entry/spec.yaml")}}]}})
+                json!([{"phase":"validation","condition":"schema_version_mismatch","requirement":"REQ-0245","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":"99.0","source":study.resource_key("entry/spec.yaml"),"entry":study.resource_key("entry/spec.yaml")}}])
             );
         }
         #[test]
         fn missing_parent_retains_complete_authored_reference_finding() {
             let study = Study::new();
-            let actual: Value = yamaa_adapters::json_wire::decode(&failure(
-                &study,
-                &format!("{VALID}parent: absent.yaml\n"),
-            ))
-            .unwrap();
+            let actual: Value = failure(&study, &format!("{VALID}parent: absent.yaml\n"));
             assert_eq!(
                 actual,
-                json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[{"phase":"validation","condition":"parent_not_found","requirement":"REQ-0654","spec_paths":["parent"],"context":{"path":"absent.yaml","source":study.resource_key("entry/spec.yaml")}}]}})
+                json!([{"phase":"validation","condition":"parent_not_found","requirement":"REQ-0654","spec_paths":["parent"],"context":{"path":"absent.yaml","source":study.resource_key("entry/spec.yaml")}}])
             );
         }
         #[test]
@@ -1886,14 +1878,10 @@ mod file {
                 "schema_version: '1.0'\ndomain: bad-name\n",
             )
             .unwrap();
-            let actual: Value = yamaa_adapters::json_wire::decode(&failure(
-                &study,
-                &format!("{VALID}parent: ../parent/base.yaml\n"),
-            ))
-            .unwrap();
+            let actual: Value = failure(&study, &format!("{VALID}parent: ../parent/base.yaml\n"));
             assert_eq!(
                 actual,
-                json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[{"phase":"validation","condition":"pattern_mismatch","requirement":"REQ-0287","spec_paths":["domain"],"context":{"value":"bad-name","pattern":"^[A-Za-z_][A-Za-z0-9_]*$","source":study.resource_key("parent/base.yaml"),"entry":study.resource_key("entry/spec.yaml")}}]}})
+                json!([{"phase":"validation","condition":"pattern_mismatch","requirement":"REQ-0287","spec_paths":["domain"],"context":{"value":"bad-name","pattern":"^[A-Za-z_][A-Za-z0-9_]*$","source":study.resource_key("parent/base.yaml"),"entry":study.resource_key("entry/spec.yaml")}}])
             );
         }
         #[test]
@@ -1911,10 +1899,7 @@ mod file {
             );
             assert_eq!(prepared.run().source().path, "../parent/input.csv");
             // No data file was needed for model preparation or declaration-only checking.
-            assert_eq!(
-                yamaa_adapters::specification_check::issues(prepared.run()).unwrap(),
-                "[]"
-            );
+            assert!(yamaa_adapters::specification_check::issues(prepared.run()).is_empty());
             fs::write(study.0.join("parent/input.csv"), b"ID\n1\n").unwrap();
             let mut run_scope = prepared.run_scope(None);
             assert!(prepared
@@ -1938,8 +1923,11 @@ mod file {
                 study.0.join("entry/link.yaml"),
             )
             .unwrap();
+            let Err(error) = study.prepare(&format!("{VALID}parent: link.yaml\n")) else {
+                panic!("expected preparation failure")
+            };
             assert_eq!(
-                failure(&study, &format!("{VALID}parent: link.yaml\n")),
+                crate::support::retained_resource_message(error),
                 "resource path contains a symbolic link"
             );
             let resources =
@@ -1953,7 +1941,10 @@ mod file {
                 Ok(_) => panic!("root escape accepted"),
                 Err(error) => error,
             };
-            assert_eq!(error.into_message(), "resource path outside approved roots");
+            assert_eq!(
+                crate::support::retained_resource_message(error),
+                "resource path outside approved roots"
+            );
         }
 
         #[cfg(unix)]
@@ -1977,10 +1968,10 @@ mod file {
                 Ok(_) => panic!("unreadable parent accepted through fallback"),
                 Err(error) => error,
             };
-            let actual: Value = yamaa_adapters::json_wire::decode(&error.into_message()).unwrap();
+            let actual = crate::support::preparation_findings(error);
             assert_eq!(
                 actual,
-                json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[{"phase":"validation","condition":"parent_not_found","requirement":"REQ-0654","spec_paths":["parent"],"context":{"path":"blocked.yaml","source":study.resource_key("entry/spec.yaml")}}]}})
+                json!([{"phase":"validation","condition":"parent_not_found","requirement":"REQ-0654","spec_paths":["parent"],"context":{"path":"blocked.yaml","source":study.resource_key("entry/spec.yaml")}}])
             );
         }
         #[test]
@@ -2156,14 +2147,10 @@ mod file {
                 ("absent.yaml", "resource_path_missing"),
                 (".", "resource_path_not_regular_file"),
             ] {
-                let actual: Value = yamaa_adapters::json_wire::decode(&failure(
-                    &study,
-                    &DICTIONARY_SPEC.replace("dict.yaml", path),
-                ))
-                .unwrap();
+                let actual: Value = failure(&study, &DICTIONARY_SPEC.replace("dict.yaml", path));
                 assert_eq!(
                     actual,
-                    json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[{"phase":"validation","condition":condition,"requirement":"REQ-0785","spec_paths":["columns.X.derivation.mapping.dict"],"context":{"path":path}}]}})
+                    json!([{"phase":"validation","condition":condition,"requirement":"REQ-0785","spec_paths":["columns.X.derivation.mapping.dict"],"context":{"path":path}}])
                 );
             }
         }
@@ -2171,9 +2158,8 @@ mod file {
         fn dictionary_invalid_content_retains_original_typed_schema_context_before_study() {
             let study = Study::new();
             fs::write(study.0.join("entry/dict.yaml"), "7: answer\n").unwrap();
-            let actual: Value =
-                yamaa_adapters::json_wire::decode(&failure(&study, DICTIONARY_SPEC)).unwrap();
-            let diagnostics = actual["outcome"]["diagnostics"].as_array().unwrap();
+            let actual = failure(&study, DICTIONARY_SPEC);
+            let diagnostics = actual.as_array().unwrap();
             assert_eq!(diagnostics.len(), 1);
             assert_eq!(diagnostics[0]["condition"], "invalid_field_type");
             assert_eq!(
@@ -2201,7 +2187,7 @@ mod file {
                 Err(error) => error,
             };
             assert_eq!(
-                error.into_message(),
+                crate::support::retained_resource_message(error),
                 "resource path contains a symbolic link"
             );
         }

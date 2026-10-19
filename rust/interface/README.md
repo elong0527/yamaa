@@ -43,8 +43,10 @@ specify a boundary version starting at 1 in `yamaa-adapters`, severity
 `error`/`warning` (all current conditions are errors), and unchanged optional core
 span/route geometry. The `records` import names roles, not guessed Rust symbols
 or a second schema. The generator resolves each role to its public symbol in
-`yamaa_adapters::diagnostic_record` (`BOUNDARY_VERSION`, `DiagnosticRecord`,
-`ResultRecord` and `PlanRecord`); an unresolved role is a generation error.
+`yamaa_adapters::diagnostic_record` (`BOUNDARY_VERSION`, `ResultRecord` and
+`PlanRecord`), and the diagnostic role to core's
+`yamaa_core::diagnostic::Diagnostic`, the one record from the failure site to
+the edge; an unresolved role is a generation error.
 The imported version constant is the single
 runtime source for both hosts; neither generator embeds a separately maintained
 version number. `format_version` versions the IDL grammar only.

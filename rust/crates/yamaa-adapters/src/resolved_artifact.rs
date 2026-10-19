@@ -45,8 +45,14 @@ pub fn resolve(
         yamaa_core::build::Prepared::Ordinary(prepared) => prepared.resolved_specification(),
     };
     artifact.map_err(|error| match error {
-        Error::Resource(error) => crate::file_application::resource_failure("resolve", &error),
-        _ => crate::file_application::rejected("resolve", "artifact_representation"),
+        Error::Resource(error) => crate::file_application::resource_failure(
+            yamaa_core::application_issue::Stage::Resolve,
+            &error,
+        ),
+        _ => crate::file_application::rejected(
+            yamaa_core::application_issue::Stage::Resolve,
+            yamaa_core::application_issue::Fault::ArtifactRepresentation,
+        ),
     })
 }
 

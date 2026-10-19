@@ -35,20 +35,21 @@ mod diagnostics {
 
         #[test]
         fn fixed_refusals_preserve_exact_resource_facts_and_authored_paths() {
-            for (stage, code) in [
-                ("capture", "resource_limit"),
-                ("prepare", "compiler_limit"),
-                ("check", "compiler_limit"),
-                ("ingest", "source_limit"),
-                ("bind", "source_limit"),
-                ("execute", "execution_limit"),
-                ("build", "source_boundary"),
-                ("build", "execution_boundary"),
-                ("output", "resource_limit"),
+            use yamaa_core::application_issue::{Fault, Stage};
+            for (stage, fault, code) in [
+                (Stage::Capture, Fault::ResourceLimit, "resource_limit"),
+                (Stage::Prepare, Fault::CompilerLimit, "compiler_limit"),
+                (Stage::Check, Fault::CompilerLimit, "compiler_limit"),
+                (Stage::Ingest, Fault::SourceLimit, "source_limit"),
+                (Stage::Bind, Fault::SourceLimit, "source_limit"),
+                (Stage::Execute, Fault::ExecutionLimit, "execution_limit"),
+                (Stage::Build, Fault::SourceBoundary, "source_boundary"),
+                (Stage::Build, Fault::ExecutionBoundary, "execution_boundary"),
+                (Stage::Output, Fault::ResourceLimit, "resource_limit"),
             ] {
                 let finding = yamaa_core::application_issue::resource_rejected(
                     stage,
-                    code,
+                    fault,
                     "bytes",
                     7,
                     Some(8),
@@ -60,7 +61,7 @@ mod diagnostics {
                 assert_eq!(
                     finding.context,
                     [
-                        ("stage".into(), JsonValue::String(stage.into())),
+                        ("stage".into(), JsonValue::String(stage.as_str().into())),
                         ("code".into(), JsonValue::String(code.into())),
                         ("resource".into(), JsonValue::String("bytes".into())),
                         ("limit".into(), JsonValue::from(7)),
@@ -72,8 +73,8 @@ mod diagnostics {
                 assert_eq!(finding.operand_route, None);
             }
             let finding = yamaa_core::application_issue::resource_rejected(
-                "execute",
-                "execution_limit",
+                Stage::Execute,
+                Fault::ExecutionLimit,
                 "table_cells",
                 640_000_000,
                 None,
@@ -91,10 +92,11 @@ mod diagnostics {
             );
             assert_eq!(finding.spec_paths, ["columns"]);
             assert_eq!(
-                yamaa_core::application_issue::rejected("capture", "changed").context,
+                yamaa_core::application_issue::rejected(Stage::Capture, Fault::ResourceChanged)
+                    .context,
                 [
                     ("stage".into(), JsonValue::String("capture".into())),
-                    ("code".into(), JsonValue::String("changed".into())),
+                    ("code".into(), JsonValue::String("resource_changed".into())),
                 ]
                 .into()
             );
@@ -132,10 +134,13 @@ mod diagnostics {
                     [("operation", "environment")].as_slice(),
                 ),
                 (
-                    yamaa_core::application_issue::rejected("capture", "changed"),
+                    yamaa_core::application_issue::rejected(
+                        yamaa_core::application_issue::Stage::Capture,
+                        yamaa_core::application_issue::Fault::ResourceChanged,
+                    ),
                     "engine",
                     "engine_rejected",
-                    [("code", "changed"), ("stage", "capture")].as_slice(),
+                    [("code", "resource_changed"), ("stage", "capture")].as_slice(),
                 ),
             ] {
                 let definition = finding.definition();

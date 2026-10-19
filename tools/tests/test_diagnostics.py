@@ -446,6 +446,39 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
                     ],
                 )
 
+    def test_json_text_is_decoded_only_in_codecs(self):
+        source = (
+            "pub fn read(text: &str) -> Value {\n"
+            "    crate::json_wire::decode(text).unwrap()\n"
+            "}\n"
+            "use crate::json_wire::{decode_slice, encode};\n"
+            "// json_wire::decode in a comment is not a call\n"
+            'const NOTE: &str = "json_wire::decode";\n'
+            "#[cfg(test)]\n"
+            "mod tests {\n"
+            '    fn fixture() -> Value { crate::json_wire::decode("{}").unwrap() }\n'
+            "}\n"
+            '#[cfg(all(test, feature = "yaml"))]\n'
+            'fn probe() { yamaa_adapters::json_wire::decode_array("[]").unwrap(); }\n'
+        )
+        self.write("rust/crates/yamaa-adapters/src/rows.rs", source)
+        self.write("rust/crates/yamaa/src/api.rs", source)
+        self.assertEqual(
+            self.errors(),
+            [
+                "rust/crates/yamaa/src/api.rs:2: JSON text decoded outside a codec",
+                "rust/crates/yamaa/src/api.rs:4: JSON text decoded outside a codec",
+                "rust/crates/yamaa-adapters/src/rows.rs:2: JSON text decoded outside a codec",
+                "rust/crates/yamaa-adapters/src/rows.rs:4: JSON text decoded outside a codec",
+            ],
+        )
+        for codec in sorted(guard.JSON_CODECS):
+            with self.subTest(codec=codec):
+                self.write(str(codec), source)
+        (self.root / "rust/crates/yamaa-adapters/src/rows.rs").unlink()
+        (self.root / "rust/crates/yamaa/src/api.rs").unlink()
+        self.assertEqual(self.errors(), [])
+
     def test_registered_condition_literal_is_reported_once_as_a_new_site(self):
         self.write(
             "rust/crates/yamaa-adapters/src/rows.rs",
