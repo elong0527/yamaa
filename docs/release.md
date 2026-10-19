@@ -15,9 +15,9 @@ open gates live in GitHub issues and pull requests, not here.
   which has glibc 2.28, and runs the conformance corpus there with that
   system's Python 3.12.
 - R source builds with R 4.4.0 or later on Linux x86_64, macOS arm64 and
-  Windows x64, each passing strict `R CMD check` with **Status: OK** on R
-  4.6.1. The floor follows an audit of the R C API that the binding calls;
-  R 4.4 is checked on Linux.
+  Windows x64, each passing `R CMD check --as-cran` on R 4.6.1 with only the
+  notes that `R/yamaa/cran-comments.md` explains. The floor follows an audit
+  of the R C API that the binding calls; R 4.4 is checked on Linux.
 - Other runtimes and architectures, macOS x86_64 among them (#3030 D49),
   free-threaded Python, musl and R binary packages are not supported. R is
   distributed as a GitHub source tarball, and from 1.0.0 on CRAN, as
@@ -108,9 +108,9 @@ the public project submission API.
 The Rust workspace declares MSRV 1.90 and builds with Rust 1.99.1, the
 toolchain that `rust/rust-toolchain.toml` pins; a CI job checks and lints it
 with Rust 1.90.0. The R source package runs Cargo from outside its bundled
-workspace, so it builds with the caller's toolchain, which must be Rust 1.90
-or later: Windows R builds need the GNU target on that toolchain,
-`rustup target add x86_64-pc-windows-gnu`. Canonical
+workspace, so it builds with the caller's toolchain, whose Cargo and rustc
+must each be 1.90 or later: Windows R builds need the GNU target on that
+toolchain, `rustup target add x86_64-pc-windows-gnu`. Canonical
 release builds use `rust/Cargo.lock`, including unchanged copies in both source
 packages. Arrow and Parquet are supported at exactly 57.3.0 with flatbuffers
 25.12.19, so an embedder whose graph holds Arrow 57.3.0 builds the engine
@@ -371,13 +371,13 @@ own their source inventories, patches and licenses. Both parser authors' MIT
 notices remain in the distributed `LICENSE-YAML.txt`.
 
 Both source packages carry `rust/rust-toolchain.toml` unchanged, and neither
-installation reads it. The R package's `src/Makevars` and `src/Makevars.win`
-run Cargo from `src/`, and pip builds the Python source archive from its root,
-both outside that declaration, so both build with the caller's default
-toolchain, which must be Rust 1.90 or later, and rustup never installs a
-toolchain during an installation. The file names Rust 1.99.1 in rustup's
-minimal profile and no other component, for builds inside the bundled
-workspace.
+installation reads it. The R package runs Cargo from `src/`, and pip builds
+the Python source archive from its root, both outside that declaration, so
+both build with the caller's default toolchain, which must be Rust 1.90 or
+later. The R build also sets `RUSTUP_AUTO_INSTALL=0`, so rustup installs no
+toolchain even where a `rust-toolchain.toml` in a parent directory names one.
+The file names Rust 1.99.1 in rustup's minimal profile and no other
+component, for builds inside the bundled workspace.
 
 The R source package builds offline, as CRAN's Repository Policy and its
 guidance for packages that use Rust ask. `tools/staging/stage_r_package.py`
@@ -385,14 +385,24 @@ runs `tools/staging/vendor_crates.py`, which writes the crates.io crates that
 the unchanged `Cargo.lock` selects, as `cargo vendor` writes them, to
 `src/rust/vendor.tar.xz`, a reproducible xz-compressed tar. The archive is
 written when the package is staged and never committed, and the package
-carries the script as `tools/vendor_crates.py`. The Makevars unpack the
-archive below `src/rust/target`, give Cargo a home there whose configuration,
-`src/rust/vendor-config.toml`, replaces crates.io with the unpacked crates,
-and run `cargo build --locked --offline -j 2`. The installation therefore
-reads nothing from the network, runs at most two jobs and writes nothing
-outside the build tree and the temporary directory. The Makevars report the
-rustc and Cargo versions before compiling and stop with installation advice
-when either is missing or rustc is older than 1.90.
+carries the script as `tools/vendor_crates.py`.
+
+The package's `configure` and `configure.win` run `tools/configure.R`, as
+CRAN's guidance asks. It looks for `cargo` and `rustc` on the PATH and then in
+`~/.cargo/bin` (or `$CARGO_HOME/bin`), requires each to be at least the
+`rust-version` that the bundled `src/rust/Cargo.toml` declares, reports both
+versions in the installation log before compilation starts, and otherwise
+stops with installation advice. On Windows it also requires the GNU target.
+It writes `src/Makevars` or `src/Makevars.win` from their `.in` templates with
+the paths it checked, and on macOS the deployment target. The Makevars unpack
+the archive below `src/rust/target`, give Cargo a home there whose
+configuration, `src/rust/vendor-config.toml`, replaces crates.io with the
+unpacked crates, and run `cargo build --locked --offline -j 2` with
+`MAKEFLAGS` cleared: Cargo otherwise joins the jobserver of a parallel make
+(GNU make 4.4 passes it to every command) and runs as many jobs as make
+allows. The installation therefore reads nothing from the network, runs at
+most two jobs and writes nothing outside the build tree and the temporary
+directory.
 
 CRAN's policy admits no binary executable code in a source package. The
 script leaves out the prebuilt WebAssembly objects that `wit-bindgen` ships,
@@ -402,8 +412,9 @@ wrote them, apart from the entries of the files left out: like the checksums
 in `Cargo.lock`, they belong to the packaging tool, and the script computes no
 digest of its own. `inst/AUTHORS`, written at staging from `cargo metadata`,
 gives every bundled crate's declared authors, license and repository, and
-names the files left out; `DESCRIPTION` credits those authors and refers to
-it.
+names the files left out; `DESCRIPTION` credits those authors, and the
+authors of the bundled ReadStat C sources, as contributors and copyright
+holders.
 
 The installed R package carries only the test inputs that its installed suites
 read, and each third-party SAS fixture keeps its license beside it.

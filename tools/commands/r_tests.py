@@ -1,7 +1,8 @@
-"""Build, install and check the R package in a fresh external directory."""
+"""Build, install and check the R package as CRAN does, in a fresh external directory."""
 
 import os
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -53,6 +54,20 @@ def install(work):
 
 
 def main():
+    # The package's configure step runs in R, so its tests run here, beside
+    # the package check, rather than with the Python tests.
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "-q",
+            "-rs",
+            "tools/tests/test_r_configure.py",
+        ],
+        cwd=ROOT,
+        check=True,
+    )
     with tempfile.TemporaryDirectory(prefix="yamaa-r-check-") as directory:
         work = Path(directory)
         archive, environment = install(work)

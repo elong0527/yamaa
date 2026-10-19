@@ -339,12 +339,27 @@ installs the supported Python wheel/source and R source combinations on
 dispatch or on a `qualification/issue-*` push. It checks public
 benchmark conformance, installed host suites, packaging, optimized Rust behavior
 and portable math. Passing ordinary CI does not qualify a release. The final
-merged revision needs complete native evidence, including strict R package
-checks with `Status: OK`. A release tag publishes the native run that its
+merged revision needs complete native evidence, including the R package
+checks below. A release tag publishes the native run that its
 `Qualified-Run` trailer names, and the `Release rehearsal` workflow, dispatched
 before tagging, runs the same selection against the latest successful main run
 without publishing;
 see [publication](docs/release.md#publication).
+
+Every R package check, in CI's `r` job (`make test-r`), native
+qualification and the `R-CMD-check` workflow, runs `R CMD check --as-cran`
+through `tools/commands/check_r.py`, with the settings of CRAN's own checks
+that `--as-cran` leaves off. It fails on any NOTE, WARNING or ERROR that
+`R/yamaa/cran-comments.md` does not explain: its `EXPECTED_NOTES` lists the
+explained notes with the lines each may print, and a test keeps that list
+equal to the notes that the file's "R CMD check results" section names. To
+accept a new note, explain it there and add it to `EXPECTED_NOTES` in the same
+pull request; a warning or an error is never accepted. Remote checks (CRAN's
+package index, URLs and the clock) stay off unless the caller sets
+`_R_CHECK_CRAN_INCOMING_REMOTE_` or `_R_CHECK_SYSTEM_CLOCK_`. The Linux jobs
+install `checkbashisms` and `aspell`, so the check also covers the configure
+scripts and the spelling of `DESCRIPTION`; elsewhere R warns that it lacks
+`checkbashisms`, and that one warning passes.
 
 Documentation deployment and Harbor evaluations have separate workflows.
 Harbor owns its task-build, oracle and changed-input checks; see its

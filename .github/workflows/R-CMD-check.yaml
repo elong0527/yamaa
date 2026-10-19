@@ -12,6 +12,11 @@
 # 3. Platform checks are release lanes, not development checks: they run
 #    on each release branch push and on dispatch. CI's `r` job runs the
 #    same strict check on Ubuntu for every pull request.
+# 4. The check is `R CMD check --as-cran` through tools/commands/check_r.py,
+#    which fails on any NOTE, WARNING or ERROR that R/yamaa/cran-comments.md
+#    does not explain. The Linux lanes install checkbashisms and aspell, and
+#    macOS checkbashisms, so the check covers the configure scripts and the
+#    spelling of DESCRIPTION as CRAN's does.
 #
 # The offline-install jobs build the source package once and install it
 # with the network disabled, as CRAN's policy for packages that use Rust
@@ -81,8 +86,16 @@ jobs:
       - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
         with:
           working-directory: R/yamaa
-          extra-packages: any::rcmdcheck
-          needs: check
+
+      - name: Install the programs that CRAN's checks use
+        if: runner.os != 'Windows'
+        run: |
+          if [ "${{ runner.os }}" = Linux ]; then
+            sudo apt-get update
+            sudo apt-get install --yes --no-install-recommends devscripts aspell aspell-en
+          else
+            HOMEBREW_NO_AUTO_UPDATE=1 brew install checkbashisms
+          fi
 
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
@@ -133,13 +146,23 @@ jobs:
           path: r-cmd-check/yamaa_*.tar.gz
           if-no-files-found: error
 
-      - uses: r-lib/actions/check-r-package@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+      - name: Check the source package as CRAN does
+        env:
+          R_LIBS: ${{ env.R_LIBS_USER }}
+        run: |
+          python -m tools.commands.check_r --archive r-cmd-check/yamaa_*.tar.gz \
+            --work-dir "${RUNNER_TEMP}/r-check"
+
+      - name: Preserve the check results
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
-          working-directory: r-cmd-check/yamaa
-          args: 'c("--no-manual")'
-          build_args: '"--no-manual"'
-          upload-snapshots: true
-          upload-results: true
+          name: r-check-${{ matrix.config.os }}-${{ matrix.config.r }}
+          path: |
+            ${{ runner.temp }}/r-check/yamaa.Rcheck/00check.log
+            ${{ runner.temp }}/r-check/yamaa.Rcheck/00install.out
+            ${{ runner.temp }}/r-check/yamaa.Rcheck/tests/*.Rout*
+          if-no-files-found: ignore
 
   source-package:
     name: source package
