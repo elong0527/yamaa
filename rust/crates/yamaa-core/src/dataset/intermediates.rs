@@ -212,6 +212,12 @@ fn contains_window(expression: &Expression) -> bool {
         Expression::Case(branches) => branches
             .iter()
             .any(|branch| contains_window(&branch.assignment.expression)),
+        // Preparation refuses a window in a derive binding; a hand-built
+        // plan that holds one still keeps every record.
+        Expression::Aggregate(aggregate) => aggregate
+            .derivations()
+            .iter()
+            .any(|binding| contains_window(&binding.assignment.expression)),
         _ => false,
     }
 }
