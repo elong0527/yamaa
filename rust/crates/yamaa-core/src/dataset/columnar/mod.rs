@@ -279,17 +279,34 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
     }
 }
 
+/// A sized view of a table port.
+struct Borrowed<'t, T: ?Sized>(&'t T);
+impl<T: TableAccess + ?Sized> TableAccess for Borrowed<'_, T> {
+    type Error = T::Error;
+    fn schema(&self) -> &TableSchema {
+        self.0.schema()
+    }
+    fn row_count(&self) -> usize {
+        self.0.row_count()
+    }
+    fn cell(&self, row: usize, column: usize) -> Result<ValueRef<'_>, CellError<T::Error>> {
+        self.0.cell(row, column)
+    }
+}
+
 impl ResolvedPlan {
-    /// Execute the resolved plan over the admitted sources and the explicit
-    /// function port once, retaining handler and verification evidence on
-    /// success and failure, as `DatasetPlan::execute` does.
-    pub(crate) fn execute<E>(
+    /// Execute the admitted sources and the explicit function port once,
+    /// retaining handler and verification evidence on success and failure.
+    /// Binding returned this plan already resolved, and a run writes nothing
+    /// into it.
+    pub fn execute<T: TableAccess + ?Sized>(
         &self,
-        primary: &dyn TableAccess<Error = E>,
-        secondary: &[&dyn TableAccess<Error = E>],
-        functions: &mut dyn FunctionPort<Error = E>,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionPort<Error = T::Error>,
         observer: Option<&mut dyn FnMut(ExecutionEvent)>,
-    ) -> ExecutionAttempt<E> {
+    ) -> ExecutionAttempt<T::Error> {
+        let primary = Borrowed(table);
         let mut ignore = |_| {};
         let observer = observer.unwrap_or(&mut ignore);
         let active = std::cell::Cell::new(ExecutionPhase::Admission);
@@ -304,7 +321,7 @@ impl ResolvedPlan {
         observer(ExecutionEvent::Phase(ExecutionPhase::Admission));
         let mut run = Run {
             plan: self,
-            primary,
+            primary: &primary,
             secondary,
             functions,
             handlers: Handlers::new(self),

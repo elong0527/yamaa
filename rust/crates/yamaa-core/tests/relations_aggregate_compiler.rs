@@ -366,6 +366,8 @@ mod relations {
     }
     mod declarative_flags {
         use crate::support::diagnostic::declarative_flags::*;
+        use crate::support::resolved;
+        use yamaa_core::dataset::resolved::{Op, OperandRole};
         #[test]
 
         fn raw_truth_literals_presence_null_and_complete_name_map() {
@@ -533,11 +535,11 @@ mod relations {
                 .unwrap()
                 .bind(&source)
                 .unwrap();
-            assert_eq!(plan.templates().len(), 16);
-            let flags = plan
-                .columns()
-                .filter_map(|assignment| match &assignment.expression {
-                    yamaa_core::dataset::Expression::Flag(flag) => Some(flag),
+            assert_eq!(resolved::templates(&plan).len(), 16);
+            let flags = resolved::columns(&plan)
+                .into_iter()
+                .filter_map(|binding| match resolved::op(&plan, binding.expr) {
+                    Op::Flag(flag) => Some(flag),
                     _ => None,
                 })
                 .collect::<Vec<_>>();
@@ -565,12 +567,12 @@ mod relations {
             }])
             .unwrap();
             let plan = prepared.bind(&source).unwrap();
-            let yamaa_core::dataset::Expression::Case(branches) =
-                &plan.column_bindings()[0].assignment.expression
-            else {
+            let case = resolved::columns(&plan)[0].expr;
+            assert_eq!(resolved::op(&plan, case), &Op::Case);
+            let when = resolved::operands(&plan, case, OperandRole::When)[0];
+            let Op::Predicate(when) = resolved::op(&plan, when) else {
                 panic!("case")
             };
-            let when = branches[0].when.as_ref().unwrap();
             assert_eq!(when.bindings().len(), 1);
             assert_eq!(when.plan().identifiers().collect::<Vec<_>>(), ["ID"]);
             // The subject is one written operand, resolved again for each comparison.
@@ -682,6 +684,7 @@ mod relations {
     mod intermediate_match_values {
         //! Independent normalized-document admission, with no engine or host effects.
         use crate::support::document::Tree;
+        use crate::support::resolved;
         use yamaa_core::{
             dataset::{MatchRead, MatchValue},
             schema::{Document, DocumentNode as N, SpecificationDocument},
@@ -819,7 +822,7 @@ mod relations {
                         .unwrap();
                 let (src, tab) = schemas();
                 let plan = prepared.bind_sources(&[&src, &tab]).unwrap();
-                let keys = &plan.intermediates()[0].keys;
+                let keys = &resolved::intermediates(&plan)[0].keys;
                 assert_eq!(keys.len(), 1);
                 assert_eq!(keys[0].source_column, 0);
                 assert_eq!(keys[0].path, "intermediates[0].key.K");
@@ -835,7 +838,7 @@ mod relations {
                     matches!(read, MatchRead::Output { column: 1, .. }),
                     source == "N"
                 );
-                assert_eq!(plan.output().columns().len(), 3);
+                assert_eq!(resolved::output(&plan).columns().len(), 3);
             }
             let prepared = PreparedSpecification::prepare(&doc(Tree::map(vec![(
                 "KNUM",
@@ -845,7 +848,7 @@ mod relations {
             let (src, tab) = schemas();
             let plan = prepared.bind_sources(&[&src, &tab]).unwrap();
             assert!(matches!(
-                &plan.intermediates()[0].keys[0].value,
+                &resolved::intermediates(&plan)[0].keys[0].value,
                 MatchValue::Source(MatchRead::Record { column: 1, .. })
             ));
         }
@@ -980,7 +983,7 @@ mod relations {
             let (src, tab) = schemas();
             let plan = prepared.bind_sources(&[&src, &tab]).unwrap();
             assert_eq!(
-                plan.intermediates()[0].keys[0].value,
+                resolved::intermediates(&plan)[0].keys[0].value,
                 MatchValue::Literal(Value::Str("SRC.ABSENT".into()))
             );
             assert_eq!(
@@ -1096,14 +1099,14 @@ mod relations {
             let (src, tab) = schemas();
             let plan = prepared.bind_sources(&[&src, &tab]).unwrap();
             assert_eq!(
-                plan.output()
+                resolved::output(&plan)
                     .columns()
                     .iter()
                     .map(|column| column.name.as_str())
                     .collect::<Vec<_>>(),
                 ["ID", "N", "V"]
             );
-            let item = &plan.intermediates()[0];
+            let item = resolved::intermediates(&plan)[0];
             assert_eq!(item.output_dependencies().collect::<Vec<_>>(), [1]);
             let MatchValue::Expression(expression) = &item.keys[0].value else {
                 panic!("bound shared scalar")

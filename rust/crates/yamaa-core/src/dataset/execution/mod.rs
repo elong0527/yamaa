@@ -1,12 +1,10 @@
 //! The outcome of executing a dataset plan: the dataset, the evidence an
-//! attempt retains on success and failure, and the failures it reports. The
-//! plan runs over its resolved form (`dataset/resolved`), column at a time
-//! over typed buffers (`dataset/columnar`).
+//! attempt retains on success and failure, and the failures it reports.
+//! Binding resolves the plan once (`dataset/resolved`), and each run executes
+//! that resolved plan column at a time over typed buffers (`dataset/columnar`).
 
 mod diagnostics;
 
-use super::*;
-use crate::function_invocation::FunctionPort;
 use crate::{
     conversion::ConversionError,
     numeric_lifecycle::{HandlerCount, HandlerCountOverflow},
@@ -301,48 +299,3 @@ impl<E: std::fmt::Debug> std::fmt::Display for ExecutionError<E> {
     }
 }
 impl<E: std::fmt::Debug> std::error::Error for ExecutionError<E> {}
-
-impl DatasetPlan {
-    /// Execute the admitted sources and explicit function port once, retaining
-    /// handler and verification evidence on both success and failure.
-    pub fn execute<T: TableAccess + ?Sized>(
-        &self,
-        table: &T,
-        secondary: &[&dyn TableAccess<Error = T::Error>],
-        functions: &mut dyn FunctionPort<Error = T::Error>,
-        observer: Option<&mut dyn FnMut(ExecutionEvent)>,
-    ) -> ExecutionAttempt<T::Error> {
-        match self.resolve() {
-            Ok(resolved) => resolved.execute(&Borrowed(table), secondary, functions, observer),
-            // Binding resolves every plan it accepts, so a failure here is a
-            // compiler or resolver defect: loud in debug builds, refused as
-            // a schema mismatch otherwise.
-            Err(error) => {
-                if cfg!(debug_assertions) {
-                    panic!("an unresolvable plan reached execution: {error}");
-                }
-                ExecutionAttempt {
-                    result: Err(Box::new(ExecutionError::SchemaMismatch)),
-                    handler_counts: Vec::new(),
-                    retained_verifications: Vec::new(),
-                    template_rows: Vec::new(),
-                }
-            }
-        }
-    }
-}
-
-/// A sized view of a table port.
-struct Borrowed<'t, T: ?Sized>(&'t T);
-impl<T: TableAccess + ?Sized> TableAccess for Borrowed<'_, T> {
-    type Error = T::Error;
-    fn schema(&self) -> &TableSchema {
-        self.0.schema()
-    }
-    fn row_count(&self) -> usize {
-        self.0.row_count()
-    }
-    fn cell(&self, row: usize, column: usize) -> Result<ValueRef<'_>, CellError<T::Error>> {
-        self.0.cell(row, column)
-    }
-}

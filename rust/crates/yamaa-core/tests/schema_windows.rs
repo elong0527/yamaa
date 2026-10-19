@@ -246,8 +246,12 @@ mod schema {
     mod specification_compiler {
         //! Compile normalized documents using only the core crate and immutable schemas.
         use crate::support::id_source_schema as source;
+        use crate::support::resolved;
         use yamaa_core::{
-            dataset::{DatasetPlan, Expression},
+            dataset::{
+                resolved::{Op, OperandRole},
+                ResolvedPlan,
+            },
             schema::{Document, DocumentNode as N, SpecificationDocument},
             specification::{
                 BindError, BindFinding, PreflightFinding, PrepareError, PreparedSpecification,
@@ -535,11 +539,14 @@ mod schema {
             let prepared =
                 PreparedSpecification::prepare(&case_document("SRC.ID > 0", "1")).unwrap();
             let plan = prepared.bind(&source()).unwrap();
-            let Expression::Case(branches) = &plan.column_bindings()[0].assignment.expression
-            else {
+            let case = resolved::columns(&plan)[0].expr;
+            let Op::Case = resolved::op(&plan, case) else {
                 panic!("ordered case");
             };
-            let when = branches[0].when.as_ref().unwrap();
+            let when = resolved::operands(&plan, case, OperandRole::When)[0];
+            let Op::Predicate(when) = resolved::op(&plan, when) else {
+                panic!("ordered case");
+            };
             assert_eq!(when.collected(), ["SRC.ID"]);
             assert_eq!(
                 when.plan().spec_path(),
@@ -557,15 +564,16 @@ mod schema {
                 PreparedSpecification::prepare(&document("ID + 1 / 0", "input.csv")).unwrap();
             assert_eq!(prepared.source().path, "input.csv");
             assert_eq!(prepared.projection(), ["ID", "VALUE"]);
-            let plan: DatasetPlan = prepared.bind(&source()).unwrap();
-            assert_eq!(plan.source(), &source());
-            assert_eq!(plan.keys(), [0]);
-            assert_eq!(
-                plan.templates()[0].assignments[0].expression,
-                Expression::Source(0)
-            );
-            let Expression::Compute(compute) = &plan.column_bindings()[0].assignment.expression
-            else {
+            let plan: ResolvedPlan = prepared.bind(&source()).unwrap();
+            assert_eq!(resolved::source(&plan), &source());
+            assert_eq!(resolved::keys(&plan), [0]);
+            assert!(resolved::reads_source(
+                &plan,
+                resolved::row(&plan, 0)[0].expr,
+                0
+            ));
+            let binding = resolved::columns(&plan)[0];
+            let Op::Compute(compute) = resolved::op(&plan, binding.expr) else {
                 panic!("compiled numeric declaration")
             };
             assert_eq!(
@@ -573,10 +581,7 @@ mod schema {
                 "columns.VALUE.derivation.compute"
             );
             // Division by zero remains deferred until an application actually executes a row.
-            assert_eq!(
-                plan.column_bindings()[0].assignment.path,
-                "columns.VALUE.derivation.compute"
-            );
+            assert_eq!(&*binding.path, "columns.VALUE.derivation.compute");
         }
 
         #[test]
@@ -619,7 +624,9 @@ mod schema {
             let prepared =
                 PreparedSpecification::prepare(&document("ID + 1", "input.csv")).unwrap();
             assert_eq!(
-                prepared.bind(&source()).unwrap().output().columns().len(),
+                resolved::output(&prepared.bind(&source()).unwrap())
+                    .columns()
+                    .len(),
                 2
             );
         }
@@ -752,7 +759,7 @@ mod schema {
             use yamaa_core::dataset::WindowKind;
             let prepared = PreparedSpecification::prepare(&window_document("ID > 0")).unwrap();
             let plan = prepared.bind(&source()).unwrap();
-            let Expression::Window(window) = &plan.column_bindings()[0].assignment.expression
+            let Op::Window { window, .. } = resolved::op(&plan, resolved::columns(&plan)[0].expr)
             else {
                 panic!("compiled window")
             };
@@ -770,15 +777,18 @@ mod schema {
                 .unwrap()
                 .bind(&source())
                 .unwrap();
-            let Expression::ContextWindow(window) =
-                &qualified.column_bindings()[0].assignment.expression
+            let Op::ContextWindow {
+                context: window, ..
+            } = resolved::op(&qualified, resolved::columns(&qualified)[0].expr)
             else {
                 panic!("qualified source window");
             };
             assert_eq!(window.sources, vec![("SRC.ID".into(), 0)]);
             assert_eq!(
                 window.window.filter.as_ref().unwrap().bindings()[0].read,
-                yamaa_core::bound_expression::Read::Column(qualified.output().columns().len())
+                yamaa_core::bound_expression::Read::Column(
+                    resolved::output(&qualified).columns().len()
+                )
             );
         }
 
@@ -797,8 +807,8 @@ mod schema {
                             .unwrap()
                             .bind(&source())
                             .unwrap();
-                        let Expression::Window(window) =
-                            &plan.column_bindings()[0].assignment.expression
+                        let Op::Window { window, .. } =
+                            resolved::op(&plan, resolved::columns(&plan)[0].expr)
                         else {
                             panic!("compiled rank")
                         };
@@ -841,16 +851,11 @@ mod schema {
             ] {
                 let prepared = PreparedSpecification::prepare(&literal_document(node)).unwrap();
                 let plan = prepared.bind(&source()).unwrap();
-                assert_eq!(
-                    plan.column_bindings()[0].assignment.expression,
-                    Expression::Literal(value)
-                );
-                assert_eq!(
-                    plan.column_bindings()[0].assignment.path,
-                    "columns.VALUE.derivation.literal"
-                );
-                assert_eq!(plan.output().columns()[1].kind, ColumnType::Int);
-                assert_eq!(plan.keys(), [0]);
+                let literal = resolved::columns(&plan)[0];
+                assert_eq!(resolved::op(&plan, literal.expr), &Op::Literal(value));
+                assert_eq!(&*literal.path, "columns.VALUE.derivation.literal");
+                assert_eq!(resolved::output(&plan).columns()[1].kind, ColumnType::Int);
+                assert_eq!(resolved::keys(&plan), [0]);
             }
             // A Boolean converts to no column type (VALUE-3), so its int column
             // is refused before any record is read (VALUE-24).
@@ -914,33 +919,24 @@ mod schema {
                 );
                 let prepared = PreparedSpecification::prepare(&document).unwrap();
                 let plan = prepared.bind(&source()).unwrap();
-                let handlers = plan.conversion_handlers();
+                let handlers = resolved::conversion_handlers(&plan);
                 assert_eq!(handlers.len(), 1);
+                let (assignment_path, handler) = handlers[0];
+                assert_eq!(assignment_path, "columns.VALUE.derivation.literal");
+                assert_eq!(handler.spec_path, "columns.VALUE.derivation.unconvertible");
+                assert_eq!(handler.value, value);
                 assert_eq!(
-                    handlers[0].assignment_path,
-                    "columns.VALUE.derivation.literal"
+                    resolved::conversion_handler(&plan, "columns.VALUE.derivation.literal"),
+                    Some(handler)
                 );
                 assert_eq!(
-                    handlers[0].handler.spec_path,
-                    "columns.VALUE.derivation.unconvertible"
+                    resolved::op(&plan, resolved::columns(&plan)[0].expr),
+                    &Op::Literal(Value::Bool(true))
                 );
-                assert_eq!(handlers[0].handler.value, value);
-                assert_eq!(
-                    plan.conversion_handler("columns.VALUE.derivation.literal"),
-                    Some(&handlers[0].handler)
-                );
-                assert_eq!(
-                    plan.column_bindings()[0].assignment.expression,
-                    Expression::Literal(Value::Bool(true))
-                );
-                assert_eq!(plan.keys(), [0]);
+                assert_eq!(resolved::keys(&plan), [0]);
             }
             let prepared = PreparedSpecification::prepare(&literal_document(N::Null)).unwrap();
-            assert!(prepared
-                .bind(&source())
-                .unwrap()
-                .conversion_handlers()
-                .is_empty());
+            assert!(resolved::conversion_handlers(&prepared.bind(&source()).unwrap()).is_empty());
         }
 
         #[test]
@@ -1005,30 +1001,27 @@ mod schema {
                     .unwrap()
                     .bind(&source())
                     .unwrap();
-                let handlers = plan.conversion_handlers();
+                let handlers = resolved::conversion_handlers(&plan);
                 assert_eq!(handlers.len(), if count == 1 { 1 } else { 2 });
+                assert_eq!(handlers[0].0, "rows[0].derivations.VALUE.literal");
                 assert_eq!(
-                    handlers[0].assignment_path,
-                    "rows[0].derivations.VALUE.literal"
-                );
-                assert_eq!(
-                    handlers[0].handler.spec_path,
+                    handlers[0].1.spec_path,
                     "rows[0].derivations.VALUE.unconvertible"
                 );
-                assert_eq!(handlers[0].handler.value, Value::Int(7));
+                assert_eq!(handlers[0].1.value, Value::Int(7));
                 if count == 3 {
-                    assert_eq!(handlers[1].handler.value, Value::Missing);
+                    assert_eq!(handlers[1].1.value, Value::Missing);
                     assert_eq!(
-                        handlers[1].handler.spec_path,
+                        handlers[1].1.spec_path,
                         "columns.VALUE.derivation.unconvertible"
                     );
                     // Unneeded defaults stay column-phase per template: the two
                     // inheriting templates carry no row assignments and share
                     // the single column-phase default.
-                    assert!(plan.templates()[1].assignments.is_empty());
-                    assert!(plan.templates()[2].assignments.is_empty());
+                    assert!(resolved::row(&plan, 1).is_empty());
+                    assert!(resolved::row(&plan, 2).is_empty());
                     assert_eq!(
-                        plan.column_bindings()[1].assignment.path,
+                        &*resolved::columns(&plan)[1].path,
                         "columns.VALUE.derivation.literal"
                     );
                 }
@@ -1248,9 +1241,9 @@ mod schema {
                     .unwrap()
                     .bind(&source())
                     .unwrap();
-                assert_eq!(plan.templates()[0].assignments.len(), 2);
-                assert!(plan.templates()[0].filter.is_some());
-                assert!(plan.column_bindings().is_empty());
+                assert_eq!(resolved::row(&plan, 0).len(), 2);
+                assert!(resolved::templates(&plan)[0].filter.is_some());
+                assert!(resolved::columns(&plan).is_empty());
             }
         }
 
@@ -1361,17 +1354,17 @@ mod schema {
                 let document = operation_document("case", payload, "input.csv");
                 let prepared = PreparedSpecification::prepare(&document).unwrap();
                 let plan = prepared.bind(&source()).unwrap();
-                let Expression::Case(branches) = &plan.column_bindings()[0].assignment.expression
-                else {
+                let case = resolved::columns(&plan)[0].expr;
+                let Op::Case = resolved::op(&plan, case) else {
                     panic!("nested source operation")
                 };
-                let Expression::SourceBinding {
-                    source,
+                let binding = resolved::operands(&plan, case, OperandRole::Branch)[0];
+                let Op::SourceBinding {
                     absent,
                     variable_absent,
                     path: bound_path,
                     ..
-                } = &branches[0].assignment.expression
+                } = resolved::op(&plan, binding)
                 else {
                     panic!("source options lost")
                 };
@@ -1381,8 +1374,9 @@ mod schema {
                     assert_eq!(absent, &Some(Value::Int(7)));
                 } else {
                     assert_eq!(absent, &None);
+                    let source = resolved::operands(&plan, binding, OperandRole::Value)[0];
                     assert!(
-                        matches!(&source.expression, Expression::Collect { selection: Some(selection), .. } if selection.keep == yamaa_core::dataset::Keep::First && selection.order_by.len()==1)
+                        matches!(resolved::op(&plan, source), Op::Collect { selection: Some(selection), .. } if selection.keep == yamaa_core::dataset::Keep::First && selection.order_by.len()==1)
                     );
                 }
             }
@@ -1410,9 +1404,11 @@ mod schema {
                 .unwrap();
             let prepared = PreparedSpecification::prepare(&document).unwrap();
             let plan = prepared.bind(&source()).unwrap();
-            assert!(matches!(&plan.templates()[0].assignments[0].expression,
-        Expression::SourceBinding { source, absent: Some(Value::Int(7)), variable_absent: true, .. }
-        if matches!(source.expression, Expression::Literal(Value::Missing))));
+            let binding = resolved::row(&plan, 0)[0].expr;
+            let source = resolved::operands(&plan, binding, OperandRole::Value)[0];
+            assert!(matches!(resolved::op(&plan, binding),
+        Op::SourceBinding { absent: Some(Value::Int(7)), variable_absent: true, .. }
+        if matches!(resolved::op(&plan, source), Op::Literal(Value::Missing))));
         }
 
         #[test]
@@ -1433,30 +1429,26 @@ mod schema {
             );
             let prepared = PreparedSpecification::prepare(&document).unwrap();
             let plan = prepared.bind(&source()).unwrap();
-            let Expression::FirstAvailable(selection) =
-                &plan.column_bindings()[0].assignment.expression
-            else {
+            let selection = resolved::columns(&plan)[0].expr;
+            let Op::FirstAvailable { sources, .. } = resolved::op(&plan, selection) else {
                 panic!("compiled first_available");
             };
             assert_eq!(
-                selection.sources()[0].path,
+                sources[0],
                 "columns.VALUE.derivation.first_available.sources[0]"
             );
+            let operands = resolved::operands(&plan, selection, OperandRole::Selection);
             assert!(matches!(
-                &selection.sources()[0].read,
-                yamaa_core::dataset::SelectionRead::Collect { identifier, .. } if identifier == "SRC.ID"
+                resolved::op(&plan, operands[0]),
+                Op::Collect { identifier, .. } if identifier == "SRC.ID"
             ));
-            let yamaa_core::dataset::SelectionRead::Expression(assignment) =
-                &selection.sources()[1].read
-            else {
-                panic!("nested source expression");
-            };
+            let assignment = plan.expr(operands[1]);
             assert_eq!(
-                assignment.path,
+                &*assignment.path,
                 "columns.VALUE.derivation.first_available.sources[1]"
             );
-            assert!(matches!(&assignment.expression,
-        Expression::SourceBinding { path, .. } if path == &assignment.path));
+            assert!(matches!(&assignment.op,
+        Op::SourceBinding { path, .. } if **path == *assignment.path));
         }
 
         #[test]
@@ -1518,12 +1510,13 @@ mod schema {
                 .unwrap()
                 .bind(&source())
                 .unwrap();
+            let verifications = resolved::verifications(&plan);
             assert!(matches!(
-                &plan.verifications()[0].check,
+                verifications[0],
                 yamaa_core::dataset::Check::PredicateDeclaration(_)
             ));
             assert!(
-                matches!(&plan.verifications()[1].check, yamaa_core::dataset::Check::InvalidDiagnostic(d)
+                matches!(verifications[1], yamaa_core::dataset::Check::InvalidDiagnostic(d)
         if d.code == yamaa_core::diagnostic::ConditionCode::ExpressionInvalid)
             );
         }

@@ -809,8 +809,9 @@ pub enum ResolutionError {
 
 impl DatasetPlan {
     /// Compile this bound plan into its resolved graph and check its
-    /// topology. Binding calls this on every plan it returns.
-    pub fn resolve(&self) -> Result<ResolvedPlan, ResolutionError> {
+    /// topology. Binding calls this once on every plan it binds and returns
+    /// the resolved plan in place of the bound one.
+    pub(crate) fn resolve(&self) -> Result<ResolvedPlan, ResolutionError> {
         let resolved = build::resolve(self)?;
         verify::verify(&resolved)?;
         Ok(resolved)

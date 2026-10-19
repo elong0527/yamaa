@@ -467,7 +467,7 @@ impl CancellationToken {
 ```
 
 Hosts wire interrupts into the token (#2685). Threading the token through
-`DatasetPlan::execute` is #2684; partial-result, publication and cleanup rules
+`ResolvedPlan::execute` is #2684; partial-result, publication and cleanup rules
 on cancellation are #2688. The token shape is settled here so those issues do
 not reopen it.
 
@@ -611,7 +611,7 @@ Every operation family and verification check is classified into one of three
 categories over an arbitrary (un-clustered) stream of primary data partitions:
 
 - **`safe`**: Evaluates independently per primary data partition $P_i$ (and per
-  candidate row within $P_i$) using only the immutable `DatasetPlan` and
+  candidate row within $P_i$) using only the immutable `ResolvedPlan` and
   immutable secondary tables. Concatenating the per-partition outputs in
   partition order reproduces the whole-table output directly.
 - **`safe-with-combine-step`**: Evaluates per partition $P_i$ while updating a
@@ -744,7 +744,7 @@ R$ and $P_i.\text{cell}(j, c) = T.\text{cell}(\text{base}_i + j, c)$ for all $i
 i} r_m$. Secondary tables and the function port are identical in both runs.
 
 Partitioned execution over $(P_0, \dots, P_{k-1})$ satisfies **whole-table
-equivalence** with `DatasetPlan::execute(T, secondary, functions, observer)` if
+equivalence** with `ResolvedPlan::execute(T, secondary, functions, observer)` if
 and only if all five properties below hold for every partition split (including
 empty partitions $r_i = 0$ and single-row partitions $r_i = 1$):
 

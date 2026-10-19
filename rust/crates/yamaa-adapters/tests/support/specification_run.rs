@@ -15,7 +15,7 @@ pub(crate) use yamaa_core::{
     value::Value,
 };
 
-pub(crate) use yamaa_core::dataset::{self, DatasetPlan};
+pub(crate) use yamaa_core::dataset::{self, ResolvedPlan};
 
 /// Rows of a converted readable JSON fixture (formerly hex-encoded TSV).
 pub(crate) fn fixture_rows(truth: &str) -> Vec<yamaa_core::json::Value> {
@@ -95,7 +95,7 @@ pub(crate) fn prepare(schema: &Arc<CapturedSchema>, source: &[u8]) -> PreparedDo
         })
         .unwrap()
 }
-pub(crate) fn lower(spec: &SpecificationDocument, source: &TableSchema) -> DatasetPlan {
+pub(crate) fn lower(spec: &SpecificationDocument, source: &TableSchema) -> ResolvedPlan {
     yamaa_core::specification::PreparedSpecification::prepare(spec)
         .unwrap()
         .bind(source)

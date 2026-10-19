@@ -1,5 +1,6 @@
 //! Owned causes reached by the compiler and eager donor uniqueness descriptor.
 use crate::support::document::Tree;
+use crate::support::resolved::intermediates;
 use std::collections::BTreeSet;
 use yamaa_core::json::Value as V;
 use yamaa_core::{
@@ -468,7 +469,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             .unwrap()
             .bind_sources(&[&src, &donor])
             .unwrap_or_else(|error| panic!("{name}: {error:?}"));
-        let item = &plan.intermediates()[0];
+        let item = intermediates(&plan)[0];
         let derived = item.derivations.as_ref().unwrap();
         assert_eq!(
             derived.column_kind(donor.columns().len()),
@@ -478,7 +479,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     }
     let prepared = PreparedSpecification::prepare(&model(vec![unique()], false)).unwrap();
     let plan = prepared.bind_sources(&[&src, &donor]).unwrap();
-    let item = &plan.intermediates()[0];
+    let item = intermediates(&plan)[0];
     reached.insert(check(
         item.unique[0].diagnostic(item, &donor, "D", 1),
         "verification",

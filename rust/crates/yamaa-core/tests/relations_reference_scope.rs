@@ -653,9 +653,10 @@ mod relations {
     mod row_intermediate_context {
         //! Row admission uses original named selectors and actual completed match values.
         use crate::support::document::Tree;
+        use crate::support::resolved;
         use crate::support::table_schema as schema;
         use yamaa_core::{
-            dataset::{Expression, RowMode},
+            dataset::resolved::Grain,
             schema::{Document, DocumentNode as N, SpecificationDocument},
             specification::{BindError, PrepareError, PreparedSpecification},
             value::{ColumnType as T, Value},
@@ -783,39 +784,27 @@ mod relations {
                     vec![&src, &donor]
                 };
                 let plan = prepared.bind_sources(&schemas).unwrap();
-                assert_eq!(plan.secondary()[0].name, "DONOR");
+                assert_eq!(resolved::secondary(&plan)[0].name, "DONOR");
                 assert_eq!(
-                    plan.intermediates()[0]
+                    resolved::intermediates(&plan)[0]
                         .output_dependencies()
                         .collect::<Vec<_>>(),
                     [1]
                 );
-                for template in plan.templates() {
-                    assert_eq!(template.mode, RowMode::Records);
+                for (index, template) in resolved::templates(&plan).into_iter().enumerate() {
+                    assert_eq!(resolved::grain(template), &Grain::Records);
+                    let row = resolved::row(&plan, index);
                     assert_eq!(
-                        template
-                            .assignments
-                            .iter()
-                            .map(|a| a.column)
+                        row.iter()
+                            .map(|binding| binding.column.index())
                             .collect::<Vec<_>>(),
                         [0, 1, 2]
                     );
-                    assert!(matches!(
-                        template.assignments[2].expression,
-                        Expression::Intermediate {
-                            index: 0,
-                            column: 1
-                        }
-                    ));
+                    assert!(resolved::reads_intermediate(&plan, row[2].expr, 0, 1));
                 }
-                assert_eq!(plan.column_bindings().len(), 1);
-                assert!(matches!(
-                    plan.column_bindings()[0].assignment.expression,
-                    Expression::Intermediate {
-                        index: 0,
-                        column: 1
-                    }
-                ));
+                let columns = resolved::columns(&plan);
+                assert_eq!(columns.len(), 1);
+                assert!(resolved::reads_intermediate(&plan, columns[0].expr, 0, 1));
             }
         }
         #[test]
@@ -906,15 +895,10 @@ mod relations {
             let src = schema(&[("ID", T::Str), ("K", T::Str)]);
             let donor = schema(&[("K", T::Str), ("V", T::Str)]);
             let plan = prepared.bind_sources(&[&src, &donor]).unwrap();
-            for template in plan.templates() {
-                assert_eq!(template.mode, RowMode::Groups(vec![0, 1]));
-                assert!(matches!(
-                    template.assignments[2].expression,
-                    Expression::Intermediate {
-                        index: 0,
-                        column: 1
-                    }
-                ));
+            for (index, template) in resolved::templates(&plan).into_iter().enumerate() {
+                assert_eq!(resolved::grain(template), &Grain::Groups(vec![0, 1]));
+                let row = resolved::row(&plan, index);
+                assert!(resolved::reads_intermediate(&plan, row[2].expr, 0, 1));
             }
         }
         #[test]
@@ -971,7 +955,7 @@ mod relations {
             let src = schema(&[("ID", T::Str), ("K", T::Str), (&huge, T::Str)]);
             let donor = schema(&[("K", T::Str), ("V", T::Str)]);
             let plan = prepared.bind_sources(&[&src, &donor]).unwrap();
-            assert_eq!(plan.source().columns()[2].name, huge);
+            assert_eq!(resolved::source(&plan).columns()[2].name, huge);
             assert_eq!(src.columns()[2].name, huge);
         }
     }
