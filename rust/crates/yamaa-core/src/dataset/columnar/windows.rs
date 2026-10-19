@@ -15,6 +15,9 @@ use std::collections::HashMap;
 #[derive(Default)]
 pub(super) struct Runs {
     runs: HashMap<WindowId, WindowRun>,
+    /// Output aggregates' indexes and filter answers, kept for the unit as
+    /// window runs are: the frame values they read do not change in one.
+    pub(super) outputs: super::aggregates::Outputs,
 }
 
 /// A small cached answer: never a cloned payload.

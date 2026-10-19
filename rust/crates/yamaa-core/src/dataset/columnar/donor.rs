@@ -5,6 +5,7 @@
 //! augment only the records whose stored keys match it (LOOKUP-15); every
 //! donor handler counts each time the records are built.
 use super::frame::{Frame, Identity};
+use super::index::Index;
 use super::relations::{self, Site};
 use super::{Cx, Fail, Footprint, Run, Table};
 use crate::dataset::execution::ExecutionError;
@@ -13,22 +14,71 @@ use crate::dataset::{Intermediate, IntermediateDerivations, IntermediateSource};
 use crate::limits::Limits;
 use crate::table::{TableAccess, TableSchema};
 use crate::value::Value;
+use std::cell::OnceCell;
 use std::rc::Rc;
 
-/// A materialized donor: its completed records.
+/// A materialized donor: its completed records, and the key index over
+/// them once a match builds it.
 pub(super) struct Donor {
     frame: Frame,
     schema: TableSchema,
+    index: OnceCell<Option<Index>>,
+}
+
+/// The records a read selects among: a donor's, or the range of a shared
+/// donor that holds the matched records of several current rows.
+#[derive(Clone)]
+pub(super) struct Built {
+    donor: Rc<Donor>,
+    start: usize,
+    rows: usize,
+}
+
+impl Built {
+    /// Records `start..start + rows` of a shared donor.
+    pub(super) fn part(donor: &Rc<Donor>, start: usize, rows: usize) -> Self {
+        Self {
+            donor: Rc::clone(donor),
+            start,
+            rows,
+        }
+    }
+
+    fn whole(donor: Rc<Donor>) -> Self {
+        let rows = donor.frame.rows();
+        Self {
+            donor,
+            start: 0,
+            rows,
+        }
+    }
+
+    pub(super) fn table<E>(&self) -> Table<'_, E> {
+        Table::Rows {
+            frame: &self.donor.frame,
+            schema: &self.donor.schema,
+            start: self.start,
+            rows: self.rows,
+        }
+    }
+
+    pub(super) fn donor(&self) -> &Donor {
+        &self.donor
+    }
 }
 
 impl Donor {
-    pub(super) fn table<E>(&self) -> Table<'_, E> {
-        Table::Rows {
-            frame: &self.frame,
-            schema: &self.schema,
-            start: 0,
-            rows: self.frame.rows(),
+    /// The key index over the records, built on first use; none when a
+    /// record's key cannot be indexed exactly.
+    pub(super) fn index<E>(
+        &self,
+        build: impl FnOnce() -> Result<Option<Index>, Fail<E>>,
+    ) -> Result<Option<&Index>, Fail<E>> {
+        if self.index.get().is_none() {
+            let built = build()?;
+            let _ = self.index.set(built);
         }
+        Ok(self.index.get().and_then(Option::as_ref))
     }
 }
 
@@ -41,7 +91,7 @@ pub(super) fn materialize<E>(
     relation: RelationId,
     site: Option<Site<'_>>,
     row: Option<usize>,
-) -> Result<Option<Rc<Donor>>, Fail<E>> {
+) -> Result<Option<Built>, Fail<E>> {
     let plan = run.plan;
     let item = relations::item(plan, relation);
     let Some(derived) = &item.derivations else {
@@ -55,9 +105,9 @@ pub(super) fn materialize<E>(
         return Ok(Some(data));
     }
     let current = current_fields(run, cx, item, derived, site, row)?;
-    let data = build(run, cx, relation, &current, None)?;
+    let data = Built::whole(build(run, cx, relation, &current, 0, Records::All)?);
     run.relations
-        .insert_materialized(relation, key, Rc::clone(&data));
+        .insert_materialized(relation, key, data.clone());
     Ok(Some(data))
 }
 
@@ -66,13 +116,18 @@ pub(super) fn materialize<E>(
 /// fields resolve first, as for every build, then the match values, and only
 /// the records whose stored keys match them are augmented. The others keep
 /// no derived value: no later step of the match reads one.
+///
+/// `compact` builds the matched records alone, at positions of their own;
+/// otherwise every record keeps its source position and only the matched
+/// ones are augmented, so a failure names the source row.
 pub(super) fn materialize_matched<E>(
     run: &mut Run<'_, '_, E>,
     cx: &Cx<'_, E>,
     relation: RelationId,
     site: Site<'_>,
     row: usize,
-) -> Result<(Rc<Donor>, relations::MatchValues), Fail<E>> {
+    compact: bool,
+) -> Result<(Built, relations::MatchValues), Fail<E>> {
     let plan = run.plan;
     let item = relations::item(plan, relation);
     let derived = item
@@ -81,15 +136,21 @@ pub(super) fn materialize_matched<E>(
         .expect("an intermediate deriving matched records has derivations");
     let current = current_fields(run, cx, item, derived, Some(site), Some(row))?;
     let keys = relations::match_values(run, cx, relation, item, row)?;
-    let matched = relations::matched_records(plan, cx, item, &keys)?;
-    let data = build(run, cx, relation, &current, Some(&matched))?;
+    let mut matched = Vec::new();
+    relations::matched_records(run, cx, relation, item, &keys, &mut matched)?;
+    let records = if compact {
+        Records::Compact(&matched)
+    } else {
+        Records::Matched(&matched)
+    };
+    let data = Built::whole(build(run, cx, relation, &current, 0, records)?);
     run.relations
-        .insert_materialized(relation, Some(cx.frame.identity(row)), Rc::clone(&data));
+        .insert_materialized(relation, Some(cx.frame.identity(row)), data.clone());
     Ok((data, keys))
 }
 
 /// The current record's fields a derived intermediate's derivations read.
-fn current_fields<E>(
+pub(super) fn current_fields<E>(
     run: &mut Run<'_, '_, E>,
     cx: &Cx<'_, E>,
     item: &Intermediate,
@@ -114,15 +175,48 @@ fn current_fields<E>(
     Ok(current)
 }
 
-/// A derived intermediate's donor records: every stored field copied, then
-/// each derivation evaluated for every record, or for the `matched` records
-/// only.
+/// The donor records a build augments.
+#[derive(Clone, Copy)]
+enum Records<'r> {
+    /// Every record.
+    All,
+    /// Every record at its source position, only these augmented.
+    Matched(&'r [usize]),
+    /// Only these records, at positions of their own.
+    Compact(&'r [usize]),
+}
+
+/// The matched records of several current rows in one compact build, each
+/// record with its own row's current values, `stride` per record.
+pub(super) fn build_matched<E>(
+    run: &mut Run<'_, '_, E>,
+    cx: &Cx<'_, E>,
+    relation: RelationId,
+    current: &[Value],
+    stride: usize,
+    records: &[usize],
+) -> Result<Rc<Donor>, Fail<E>> {
+    build(
+        run,
+        cx,
+        relation,
+        current,
+        stride,
+        Records::Compact(records),
+    )
+}
+
+/// A derived intermediate's donor records: their stored fields copied, then
+/// each derivation evaluated in declaration order for the records augmented.
+/// `current` is one set of current values, or one set per record when
+/// `stride` is its width.
 fn build<E>(
     run: &mut Run<'_, '_, E>,
     cx: &Cx<'_, E>,
     relation: RelationId,
     current: &[Value],
-    matched: Option<&[usize]>,
+    stride: usize,
+    records: Records<'_>,
 ) -> Result<Rc<Donor>, Fail<E>> {
     let plan = run.plan;
     let item = relations::item(plan, relation);
@@ -166,8 +260,18 @@ fn build<E>(
         })
     })?;
     let mut frame = Frame::new(output.columns().len());
-    for source_row in 0..table.row_count() {
-        let row = frame.push(0, Identity::Candidate(source_row), &[source_row]);
+    let all: Vec<usize>;
+    let stored = match records {
+        Records::Compact(rows) => rows,
+        Records::All | Records::Matched(_) => {
+            all = (0..table.row_count()).collect();
+            &all
+        }
+    };
+    for (position, &source_row) in stored.iter().enumerate() {
+        // A record's member is its position in the donor's input; only a
+        // compact build moves it from the source row.
+        let row = frame.push(0, Identity::Candidate(source_row), &[position]);
         for column in 0..derived.stored_columns {
             let value = relations::cell(table, item, source_row, column)?;
             frame.complete(row, column, value);
@@ -186,12 +290,12 @@ fn build<E>(
                 .map_or(cx.primary, |index| cx.secondary[index])
         })
         .collect();
-    let all: Vec<usize>;
-    let rows = match matched {
-        Some(rows) => rows,
-        None => {
-            all = (0..frame.rows()).collect();
-            &all
+    let positions: Vec<usize>;
+    let rows = match records {
+        Records::Matched(rows) => rows,
+        Records::All | Records::Compact(_) => {
+            positions = (0..frame.rows()).collect();
+            &positions
         }
     };
     let saved_relations =
@@ -203,6 +307,7 @@ fn build<E>(
         &mut frame,
         rows,
         current,
+        stride,
         &input_schema,
         &secondary,
         item,
@@ -214,11 +319,13 @@ fn build<E>(
     Ok(Rc::new(Donor {
         frame,
         schema: output,
+        index: OnceCell::new(),
     }))
 }
 
 /// Evaluate every derivation over the donor records `rows`, in declaration
-/// order.
+/// order. `current` is one set of current values for every record, or one
+/// set per record when `stride` is its width.
 #[allow(clippy::too_many_arguments)]
 fn derive<E>(
     run: &mut Run<'_, '_, E>,
@@ -226,6 +333,7 @@ fn derive<E>(
     frame: &mut Frame,
     rows: &[usize],
     current: &[Value],
+    stride: usize,
     input_schema: &TableSchema,
     secondary: &[Table<'_, E>],
     item: &Intermediate,
@@ -255,6 +363,7 @@ fn derive<E>(
                     let input = Table::Input {
                         frame,
                         current,
+                        stride,
                         schema: input_schema,
                     };
                     let cx = Cx {
