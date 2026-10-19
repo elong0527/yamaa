@@ -1060,15 +1060,9 @@ mod file {
         }
         #[test]
         fn ae_and_vs_metadata_only_fixed_time_projection_has_independent_structure() {
-            for (name, id, count, has_acrf, codelist) in [
-                ("sdtm-ae-coding", "AE", 7, true, "MEDDRA"),
-                (
-                    "sdtm-vs-epoch-from-subject-elements",
-                    "VS",
-                    8,
-                    false,
-                    "EPOCH",
-                ),
+            for (name, id, count, codelist) in [
+                ("sdtm-ae-coding", "AE", 7, "MEDDRA"),
+                ("sdtm-vs-epoch-from-subject-elements", "VS", 8, "EPOCH"),
             ] {
                 let temp = Temp::fixture(name, false);
                 let run = temp.run("2026-09-30T00:00:00");
@@ -1080,7 +1074,9 @@ mod file {
                 assert!(xml.contains("SourceSystemVersion=\"1.0\""));
                 assert!(xml.contains(&format!("OID=\"IG.{id}\" Name=\"{id}\"")));
                 assert_eq!(xml.matches("<ItemDef ").count(), count);
-                assert_eq!(xml.contains("<def:AnnotatedCRF>"), has_acrf);
+                // Each project declares the annotated case report form its
+                // collected values reference.
+                assert!(xml.contains("<def:AnnotatedCRF>"));
                 assert!(xml.contains(&format!("OID=\"CL.{codelist}\"")));
                 if id == "AE" {
                     // SDTMIG requires the dictionary-derived term, a synonym
@@ -1089,13 +1085,28 @@ mod file {
                         "<ItemRef ItemOID=\"IT.AE.AEDECOD\" OrderNumber=\"6\" Mandatory=\"Yes\" Role=\"Synonym Qualifier\""
                     ));
                 } else {
-                    // EPOCH is a permissible timing variable the sponsor
-                    // derives from the subject's elements.
-                    assert!(xml.contains(
-                        "<ItemRef ItemOID=\"IT.VS.EPOCH\" OrderNumber=\"8\" Mandatory=\"No\" Role=\"Timing\" MethodOID=\"MT.VS.EPOCH\"/>"
-                    ));
-                    assert!(item(xml, "IT.VS.EPOCH")
-                        .contains("<def:Origin Type=\"Derived\" Source=\"Sponsor\"/>"));
+                    // The investigator collects the result and its date-time,
+                    // and under Other each references the annotated form with
+                    // no page. EPOCH is a permissible timing variable the
+                    // sponsor derives from the subject's elements.
+                    for fragment in [
+                        "<ItemRef ItemOID=\"IT.VS.VSORRES\" OrderNumber=\"6\" Mandatory=\"No\" Role=\"Result Qualifier\"/>",
+                        "<ItemRef ItemOID=\"IT.VS.VSDTC\" OrderNumber=\"7\" Mandatory=\"No\" Role=\"Timing\"/>",
+                        "<ItemRef ItemOID=\"IT.VS.EPOCH\" OrderNumber=\"8\" Mandatory=\"No\" Role=\"Timing\" MethodOID=\"MT.VS.EPOCH\"/>",
+                    ] {
+                        assert!(xml.contains(fragment), "{fragment}");
+                    }
+                    let collected = "<def:Origin Type=\"Collected\" Source=\"Investigator\">\n          <def:DocumentRef leafID=\"LF.acrf\"/>\n        </def:Origin>";
+                    for (oid, origin) in [
+                        ("IT.VS.VSORRES", collected),
+                        ("IT.VS.VSDTC", collected),
+                        (
+                            "IT.VS.EPOCH",
+                            "<def:Origin Type=\"Derived\" Source=\"Sponsor\"/>",
+                        ),
+                    ] {
+                        assert!(item(xml, oid).contains(origin), "{oid}");
+                    }
                 }
                 assert!(!temp
                     .0

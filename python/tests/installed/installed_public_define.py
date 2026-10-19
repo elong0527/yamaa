@@ -436,16 +436,15 @@ class PublicDefine(unittest.TestCase):
 
     def test_ae_vs_independent_fixed_time_schema_and_structure(self):
         expected = {
-            "sdtm-ae-coding": ("AE", TRUTH["ae_columns"], "Submission", "MEDDRA", True),
+            "sdtm-ae-coding": ("AE", TRUTH["ae_columns"], "Submission", "MEDDRA"),
             "sdtm-vs-epoch-from-subject-elements": (
                 "VS",
                 TRUTH["vs_columns"],
                 "Other",
                 "EPOCH",
-                False,
             ),
         }
-        for name, (id_, columns, context, codelist, acrf) in expected.items():
+        for name, (id_, columns, context, codelist) in expected.items():
             with self.subTest(name=name):
                 directory = self.fixture(name)
                 result = self.call(directory, "2026-09-30T00:00:00")
@@ -468,8 +467,11 @@ class PublicDefine(unittest.TestCase):
                 self.assertEqual(
                     xml.xpath("//o:CodeList/@OID", namespaces=NS), ["CL." + codelist]
                 )
+                # Each project declares the annotated case report form its
+                # collected values reference.
                 self.assertEqual(
-                    bool(xml.xpath("//d:AnnotatedCRF", namespaces=NS)), acrf
+                    xml.xpath("//d:AnnotatedCRF/d:DocumentRef/@leafID", namespaces=NS),
+                    ["LF.acrf"],
                 )
                 if id_ == "AE":
                     self.assertEqual(
@@ -502,10 +504,15 @@ class PublicDefine(unittest.TestCase):
                         ["partialDatetime"],
                     )
                     # Each column's role, whether it is mandatory, and its
-                    # origin: type, source and document references. EPOCH is
-                    # a permissible timing variable the sponsor derives from
-                    # the subject's elements.
+                    # origin: type, source and document references. The
+                    # investigator collects the result and its date-time, and
+                    # under Other each references the annotated form with no
+                    # page. EPOCH is a permissible timing variable the sponsor
+                    # derives from the subject's elements.
+                    collected = ("Collected", "Investigator")
                     for name, role, mandatory, origin, documents in (
+                        ("VSORRES", "Result Qualifier", "No", collected, ["LF.acrf"]),
+                        ("VSDTC", "Timing", "No", collected, ["LF.acrf"]),
                         ("EPOCH", "Timing", "No", ("Derived", "Sponsor"), []),
                     ):
                         reference = f"//o:ItemRef[@ItemOID='IT.VS.{name}']"
@@ -526,6 +533,12 @@ class PublicDefine(unittest.TestCase):
                         self.assertEqual(
                             declared[0].xpath("d:DocumentRef/@leafID", namespaces=NS),
                             documents,
+                        )
+                        self.assertEqual(
+                            declared[0].xpath(
+                                "d:DocumentRef/d:PDFPageRef", namespaces=NS
+                            ),
+                            [],
                         )
 
     def test_missing_artifact_only_when_requested_and_semantic_failure_zero_writes(
