@@ -273,45 +273,43 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         "invalid_field_type",
         "REQ-0339",
     );
-    for (alias, req, codes) in [
+    // A column type or day rule outside its closed values keeps the rule that
+    // closes them (VALUE-1, TIME-10); every other constraint is SCHEMA-12's.
+    for (alias, codes) in [
         (
             "custom",
-            "REQ-0287",
             [
-                SchemaDescriptorValueNotPermitted,
-                SchemaDescriptorPatternMismatch,
-                SchemaDescriptorMinimumLength,
-                SchemaDescriptorInvalidSize,
+                (SchemaDescriptorValueNotPermitted, "REQ-0287"),
+                (SchemaDescriptorPatternMismatch, "REQ-0287"),
+                (SchemaDescriptorMinimumLength, "REQ-0287"),
+                (SchemaDescriptorInvalidSize, "REQ-0287"),
             ],
         ),
         (
             "column_type",
-            "REQ-0012",
             [
-                SchemaColumnTypeValueNotPermitted,
-                SchemaColumnTypePatternMismatch,
-                SchemaColumnTypeMinimumLength,
-                SchemaColumnTypeInvalidSize,
+                (SchemaColumnTypeValueNotPermitted, "REQ-0012"),
+                (SchemaColumnTypePatternMismatch, "SCHEMA-12"),
+                (SchemaColumnTypeMinimumLength, "SCHEMA-12"),
+                (SchemaColumnTypeInvalidSize, "SCHEMA-12"),
             ],
         ),
         (
             "day_rule",
-            "REQ-0609",
             [
-                SchemaDayRuleValueNotPermitted,
-                SchemaDayRulePatternMismatch,
-                SchemaDayRuleMinimumLength,
-                SchemaDayRuleInvalidSize,
+                (SchemaDayRuleValueNotPermitted, "REQ-0609"),
+                (SchemaDayRulePatternMismatch, "SCHEMA-12"),
+                (SchemaDayRuleMinimumLength, "SCHEMA-12"),
+                (SchemaDayRuleInvalidSize, "SCHEMA-12"),
             ],
         ),
         (
             "time_rule",
-            "REQ-1184",
             [
-                SchemaTimeRuleValueNotPermitted,
-                SchemaTimeRulePatternMismatch,
-                SchemaTimeRuleMinimumLength,
-                SchemaTimeRuleInvalidSize,
+                (SchemaTimeRuleValueNotPermitted, "SCHEMA-12"),
+                (SchemaTimeRulePatternMismatch, "SCHEMA-12"),
+                (SchemaTimeRuleMinimumLength, "SCHEMA-12"),
+                (SchemaTimeRuleInvalidSize, "SCHEMA-12"),
             ],
         ),
     ] {
@@ -331,7 +329,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             .validate_document(&document(T::map(vec![("v", T::text("x"))])))
             .unwrap();
         assert_eq!(findings.len(), 3);
-        for (code, condition) in codes[..3].iter().copied().zip([
+        for ((code, req), condition) in codes[..3].iter().copied().zip([
             "value_not_permitted",
             "pattern_mismatch",
             "minimum_length",
@@ -352,7 +350,8 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         let findings = sized
             .validate_document(&document(T::map(vec![("v", T::List(vec![]))])))
             .unwrap();
-        check(&mut reached, &findings, codes[3], "v", "invalid_size", req);
+        let (code, req) = codes[3];
+        check(&mut reached, &findings, code, "v", "invalid_size", req);
     }
     let layer_schema = schema(
         vec![
@@ -376,14 +375,14 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             SchemaLayerInvalidFieldType,
             "columns",
             "invalid_field_type",
-            "REQ-0658",
+            "SCHEMA-12",
         ),
         (
             vec![("schema_version", T::text("1.0")), ("extra", T::text("x"))],
             SchemaLayerUnknownField,
             "extra",
             "unknown_field",
-            "REQ-0658",
+            "SCHEMA-13",
         ),
         (
             vec![
@@ -393,7 +392,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             SchemaLayerMissingRequiredField,
             "columns[0].name",
             "missing_required_field",
-            "REQ-0658",
+            "SCHEMA-13",
         ),
         (
             vec![

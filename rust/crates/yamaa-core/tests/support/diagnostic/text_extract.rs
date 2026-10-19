@@ -54,7 +54,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             op.unknown_diagnostic(),
             "validation",
             "unknown_field",
-            "REQ-0308",
+            "NAME-3",
             format!("{path}.source"),
             vec![("identifier", V::String("SRC.TEXT".into()))],
         ),

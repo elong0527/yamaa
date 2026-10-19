@@ -1012,7 +1012,7 @@ mod schema {
                     ("duplicate_identifier", "REQ-0659") => {
                         yamaa_core::diagnostic::ConditionCode::SchemaLayerIdentifierRepeated
                     }
-                    ("invalid_field_type", "REQ-0658") => {
+                    ("invalid_field_type", "SCHEMA-12") => {
                         yamaa_core::diagnostic::ConditionCode::SchemaLayerInvalidFieldType
                     }
                     ("invalid_clear", "REQ-0660") => {
@@ -1182,7 +1182,7 @@ mod schema {
                     [finding(
                         path,
                         "invalid_field_type",
-                        "REQ-0658",
+                        "SCHEMA-12",
                         vec![("expected", expected), ("actual", C::LayerKind(actual))]
                     )]
                 );
@@ -2162,9 +2162,15 @@ mod schema {
                     ("kind", "minimum_length")
                 ]
             );
-            assert!(result
-                .iter()
-                .all(|d| d.definition().requirement == Some("REQ-0012")));
+            // A type outside the closed list is VALUE-1's; the other
+            // constraints are the schema language's.
+            assert_eq!(
+                result
+                    .iter()
+                    .map(|d| d.definition().requirement)
+                    .collect::<Vec<_>>(),
+                [Some("REQ-0012"), Some("SCHEMA-12"), Some("SCHEMA-12")]
+            );
             let result = validate(&schema, "kind", V::boolean(true), false);
             assert_eq!(findings(&result), [("kind", "invalid_field_type")]);
             assert_eq!(result[0].definition().requirement, Some("REQ-0287"));

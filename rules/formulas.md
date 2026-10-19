@@ -640,6 +640,7 @@ derivation rather than choosing by value or record order; this is not a
 missing-value case. The failure reports the enclosing row, the group values
 and the record count.
 
+Fails: `aggregate_multiple_records`.
 Evidence: `negative-multiple-baselines`, `negative-adlb-duplicate-wbc`, `adam-adlb-bds`.
 Replaces: REQ-0482, REQ-0494, REQ-0501.
 
@@ -709,6 +710,7 @@ an operator or numeric function is numeric: every reduction and grouped
 identifier in it must be numeric, and [Values](values.md)
 promotion gives its type.
 
+Fails: `incompatible_input_type`, `incomparable_sources`.
 Evidence: `negative-sum-non-numeric`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`.
 Replaces: REQ-0313, REQ-0317, REQ-0487, REQ-0488, REQ-0489, REQ-0490,
 REQ-0510, REQ-0511.

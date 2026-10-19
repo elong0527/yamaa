@@ -429,7 +429,7 @@
         "spec_paths": [
           "columns.BLFL.derivation.baseline_flag"
         ],
-        "requirement": "REQ-0322",
+        "requirement": "WINDOW-9",
         "context": {
           "column": "BLFL",
           "date": "2025-01-09",

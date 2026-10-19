@@ -12,7 +12,12 @@ class DiagnosticGuardTests(unittest.TestCase):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
         self.root = Path(self.directory.name)
-        self.write("rules/values.md", "**REQ-0001.** A normative requirement.\n")
+        # The registry cites REQ-0001, which this card replaces.
+        self.write(
+            "rules/values.md",
+            '# Values\n\n<a id="value-1"></a>\n\n### VALUE-1. Values are valid\n\n'
+            "A value is valid.\n\nFails: `invalid_value`.\nReplaces: REQ-0001.\n",
+        )
         self.write(
             str(guard.NULL_POLICY),
             "Explicit implementation exception.\n"
@@ -429,10 +434,47 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
                 )
         self.card_file("Fails: `engine_rejected`, `invalid_value`.\n")
         self.assertEqual(self.errors(), [])
-        # A legacy REQ ID, even one a card replaces, carries no Fails line.
-        path.write_text(path.read_text().replace('Some("LAYER-1")', 'Some("REQ-0002")'))
-        self.card_file("")
+
+    def test_requirement_cause_reports_a_condition_its_replacing_card_names(self):
+        path = self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs"
+        path.write_text(
+            path.read_text().replace('Some("REQ-0001")', 'Some("REQ-0002")')
+        )
+        for fails in ("", "Fails: `engine_rejected`.\n"):
+            with self.subTest(fails=fails):
+                self.card_file(fails)
+                self.assertEqual(
+                    self.errors(),
+                    [
+                        "core diagnostic registry:Invalid: REQ-0002 is replaced by "
+                        "LAYER-1, which does not name invalid_value in its Fails line"
+                    ],
+                )
+        self.card_file("Fails: `engine_rejected`, `invalid_value`.\n")
         self.assertEqual(self.errors(), [])
+
+    def test_legacy_requirement_cannot_be_cited(self):
+        self.write("rules/values.md", "**REQ-0001.** A normative requirement.\n")
+        self.assertEqual(
+            self.errors(),
+            [
+                "core diagnostic registry:Invalid: REQ-0001 is a legacy requirement "
+                "with no Fails line naming invalid_value"
+            ],
+        )
+
+    def test_undefined_citation_is_reported_once(self):
+        path = self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs"
+        path.write_text(
+            path.read_text().replace('Some("REQ-0001")', 'Some("REQ-0009")')
+        )
+        self.assertEqual(
+            self.errors(),
+            [
+                "rust/crates/yamaa-core/src/diagnostic/mod.rs:2: "
+                "undefined requirement REQ-0009"
+            ],
+        )
 
     def test_undefined_card_id_and_unknown_prefix_are_rejected(self):
         self.card_file()

@@ -21,7 +21,7 @@ adding a keyword takes one complete registry entry. An unknown keyword or an
 unknown payload field fails validation, and an unsatisfied semantic constraint
 of an operation fails.
 
-Evidence: `schema-expressions`, `rust/crates/yamaa-core/tests/schema_references.rs::registry_and_bare_derivation_diagnostics_preserve_paths_and_context`, `negative-tied-baseline`.
+Evidence: `schema-expressions`, `rust/crates/yamaa-core/tests/schema_references.rs::registry_and_bare_derivation_diagnostics_preserve_paths_and_context`.
 Replaces: REQ-0045, REQ-0288, REQ-0289, REQ-0318, REQ-0321, REQ-0322.
 
 `schema_expression_*.yaml` and `schema_function.yaml` contribute the entries of
@@ -309,6 +309,7 @@ missing when it is omitted, counted under `missing`. A present source with no
 dictionary entry returns `unmapped`, and fails without it; `missing` never
 answers an unmapped source ([COLUMN-10](columns.md#column-10)).
 
+Fails: `incompatible_input_type`.
 Evidence: `schema-text-mapping`, `schema-text-mapping-unmapped`, `negative-mapping-unmapped-value`, `schema-missing-input-default`.
 Replaces: REQ-0304, REQ-1110.
 
@@ -351,6 +352,7 @@ right-closed and left-open; with `right: false`, the default, they are
 left-closed and right-open. A missing source returns `missing`, or missing
 when it is omitted, counted under `missing`, and a non-numeric source fails.
 
+Fails: `incompatible_input_type`, `invalid_field_type`.
 Evidence: `schema-expressions`, `negative-cut-coded`, `schema-missing-input-default`.
 Replaces: REQ-0306, REQ-1118.
 

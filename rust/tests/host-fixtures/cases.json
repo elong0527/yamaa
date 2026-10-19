@@ -3850,7 +3850,7 @@
             {
               "phase": "derivation",
               "condition": "ambiguous_baseline",
-              "requirement": "REQ-0322",
+              "requirement": "WINDOW-9",
               "spec_paths": [
                 "intermediates[0].key.M.baseline_flag"
               ],
