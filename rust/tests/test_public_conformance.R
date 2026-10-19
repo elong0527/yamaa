@@ -109,6 +109,19 @@ plan <- read_plan(plan_root)
 stopifnot(all(vapply(plan, is.character, logical(1L))), identical(plan$entry, c("", "0")),
   identical(plan$variant, c("", "empty_child")), identical(plan$environment, rep("r/environment.yaml", 2L)))
 unlink(plan_root, recursive=TRUE, force=TRUE)
+# observed_plan: the measurements close the observations, so their plan is the
+# last one named, after a plan named earlier and however many characters
+# outside the Basic Multilingual Plane come before it. R's default regular
+# expressions count each such character as two UTF-16 code units on Windows,
+# so there this checks that the match and the slice count alike.
+observations <- function(plan) paste0('{"protocol":"held-observations/1","report":{"tables":[{"value":"',
+  strrep(paste0(intToUtf8(0x1F600L), "\u00e9"), 42L), '"}],"plan":"compiled"},"measurements":{"plan":"',
+  plan, '","protocol":"application-measurements/1","stages":[]}}')
+stopifnot(identical(observed_plan(observations("compiled")), "compiled"),
+  identical(observed_plan(observations("reused")), "reused"),
+  identical(observed_plan(observations("refused")), "refused"),
+  is.null(observed_plan('{"protocol":"held-observations/1","report":null,"measurements":{}}')))
 cat("lossless R public tables typed by declaration, exact int and temporal cells, float bits and issue JSON passed\n")
 cat("move_inputs cross-filesystem copy-and-delete fallback passed\n")
 cat("read_plan keeps blank and filled plan columns as text passed\n")
+cat("observed_plan reads the measurements' plan after characters outside the BMP passed\n")
