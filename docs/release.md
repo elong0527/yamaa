@@ -310,26 +310,21 @@ candidate N-1: that candidate's tag must exist and be an ancestor of the tag
 commit. A body longer than GitHub's limit of 125,000 characters fails before
 the downloads.
 
-The GitHub release uses the workflow's GitHub token. Once it exists, the
-workflow's `pypi` job uploads the release's Python packages to PyPI: the
-wheels and the source archive, the same bytes, which the publishing job hands
-over before it creates the GitHub release and which are never rebuilt. The R
-source package stays a GitHub release asset. The upload uses PyPI trusted
-publishing, so the repository stores no PyPI credential: the job runs in the
-`pypi` environment with only the `id-token: write` permission, and
-`pypa/gh-action-pypi-publish` exchanges its OpenID Connect token for a
-short-lived upload token. The trusted publisher of the `yamaa` project on PyPI
-names the repository `elong0527/yamaa`, the workflow `release.yml` and the
-environment `pypi`; configuring it is an owner action (#3063, #3030 D47). If
-the upload fails after the GitHub release exists, fix the cause and re-run the
-failed `pypi` job: it uploads the same files and skips those already on PyPI.
+The GitHub release uses the workflow's GitHub token, and the workflow
+publishes nothing else. The owner uploads a release's Python packages to PyPI
+with the owner's own credentials (#3030 D57): the wheels and the source
+archive, downloaded unchanged from the GitHub release with
+`gh release download <tag> --repo elong0527/yamaa --pattern 'yamaa-*'`, so
+the bytes on PyPI are the ones the release holds and nothing is rebuilt. The R
+source package stays a GitHub release asset. yamaa 0.5.0 is published as a
+GitHub release only, with no PyPI upload (#2848).
 
 A final release is installed with `pip install yamaa`. A candidate's version,
 X.Y.ZrcN, is a PyPI pre-release, which a bare `pip install yamaa` does not
 install reliably, so its release body gives
-`pip install --pre yamaa==X.Y.ZrcN`. yamaa 0.4.0 was distributed as GitHub
-release assets only. The GitHub release assets remain the standalone download
-route for every package.
+`pip install --pre yamaa==X.Y.ZrcN`. yamaa 0.4.0 and 0.5.0 were distributed
+as GitHub release assets only. The GitHub release assets remain the standalone
+download route for every package.
 
 The `Release rehearsal` workflow runs the same selection and downloads, on
 dispatch, against the latest successful native run on main, with its own
@@ -357,8 +352,8 @@ remaining note. A release reaches its channels in this order:
    describes.
 2. The GitHub release that `release.yml` creates from the tag's qualified
    native run.
-3. The Python packages on PyPI, which the workflow's `pypi` job uploads once
-   the GitHub release exists.
+3. The Python packages on PyPI, which the owner uploads from that GitHub
+   release's assets (#3030 D57).
 4. The R source tarball on CRAN: the `yamaa_X.Y.Z.tar.gz` asset of that final
    GitHub release, unchanged, submitted through CRAN's web form by the
    maintainer that `DESCRIPTION` names. A candidate's R tarball carries the
@@ -543,9 +538,9 @@ owns decoding behavior.
 - The `yamaa` facade crate is the only supported Rust surface;
   `yamaa-adapters` and `yamaa-core` are internal and may change in any
   release.
-- Distribute 0.4.0 as GitHub release assets only. From the 1.0.0
-  candidates, `release.yml` also uploads each release's Python packages to
-  PyPI with trusted publishing (#3030 D13, D14, D47).
+- Distribute 0.4.0 and 0.5.0 as GitHub release assets only. From the 1.0.0
+  candidates, the owner also uploads each release's Python packages to PyPI
+  from its GitHub release assets (#3030 D13, D14, D57).
 - Publish release candidates as GitHub pre-releases from `yamaa-vX.Y.Z-rc.N`
   tags, with Python version `X.Y.ZrcN` and Cargo version `X.Y.Z-rc.N`. The R
   package keeps `X.Y.Z` through the candidates, and each candidate's release

@@ -566,13 +566,6 @@ def select_release(root, repository_name, tag, destination, run_id=None):
         download_artifact(repository_name, artifact, destination)
     declared = release_assets.declared(coverage)
     assets = downloaded_assets(destination, selected, identity, root, declared)
-    # PyPI receives the Python packages among them. Staging them here lets the
-    # workflow hand them over before it creates the GitHub release, which a
-    # failed run cannot create again.
-    (destination / "pypi-packages").mkdir()
-    for asset, path in zip(declared, assets, strict=True):
-        if asset.kind in release_assets.PYTHON_KINDS:
-            shutil.copyfile(path, destination / "pypi-packages" / path.name)
     (destination / "source-revision.txt").write_text(revision + "\n", encoding="utf-8")
     (destination / "asset-paths.txt").write_text(
         "".join(f"{path.resolve()}\n" for path in assets), encoding="utf-8"
