@@ -518,7 +518,6 @@ jobs:
           mkdir -p native-r-library
           python -m tools.packaging.check_cargo_lock --output-dir "${RUNNER_TEMP}/rust-dependencies" yamaa_0.5.0.tar.gz
           python -m tools.packaging.check_package_notices yamaa_0.5.0.tar.gz
-          R CMD INSTALL --library="${RUNNER_TEMP}/native-r-library" "${GITHUB_WORKSPACE}/rust/tests/project-programs/r"
           R CMD INSTALL --library="${RUNNER_TEMP}/native-r-library" yamaa_0.5.0.tar.gz
           if [ "${{ runner.os }}" = Windows ]; then
             python -c 'from pathlib import Path; import shutil; dlls = list(Path("native-r-library/yamaa/libs").rglob("yamaa.dll")); assert len(dlls) == 1, "installed R DLL is missing or ambiguous"; shutil.copy2(dlls[0], "windows-r-toolchain/yamaa.dll")'
@@ -545,6 +544,8 @@ jobs:
           R_LIBS: ${{ runner.temp }}/native-r-library
           PUBLIC_CONFORMANCE_PACKAGE_FORM: source
         run: |
+          # The original benchmarks use project programs; package checks do not.
+          R CMD INSTALL --library="${RUNNER_TEMP}/native-r-library" "${GITHUB_WORKSPACE}/rust/tests/project-programs/r"
           python -m pip install py-yaml12==0.2.0 pyarrow==25.0.1
           python -I -m tools.conformance.public_conformance plan \
             --fixtures "${GITHUB_WORKSPACE}/benchmarks" --output public-conformance-plan

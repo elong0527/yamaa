@@ -103,9 +103,9 @@ qualify_changed_specification <- function() {
 qualify_changed_specification()
 
 qualify_changed_function_contract <- function() {
-  studies <- system.file("project-original", package = "yamaa", mustWork = TRUE)
-  stopifnot(file.copy(file.path(studies, "schema-functions"), root, recursive = TRUE))
-  case <- file.path(root, "schema-functions")
+  studies <- system.file("project-base", package = "yamaa", mustWork = TRUE)
+  stopifnot(file.copy(file.path(studies, "base-round"), root, recursive = TRUE))
+  case <- file.path(root, "base-round")
   spec <- yamaa_project(file.path(case, "project.yaml"))$spec("TEST")
   expected <- read_text(file.path(case, "expected", "test.csv"))
   saved <- function(run) {
@@ -114,14 +114,15 @@ qualify_changed_function_contract <- function() {
   }
   first <- spec$run()
   stopifnot(compiled(first), identical(saved(first), expected), !compiled(spec$run()))
-  # The function's default number of decimals changes in the environment
+  # The function's default number of significant digits changes in the environment
   # file: the run compiles the new contract and uses it.
   environment <- file.path(case, "r", "environment.yaml")
   original <- read_text(environment)
-  write_text(environment, sub(truth$function_default$before, truth$function_default$after,
-    original, fixed = TRUE))
+  write_text(environment, sub("default: 3", "default: 2",
+    sub("args: {x: 2.375}, result: 2.38", "args: {x: 2.375}, result: 2.4",
+      original, fixed = TRUE), fixed = TRUE))
   changed <- spec$run()
-  stopifnot(compiled(changed), identical(saved(changed), truth$function_output_csv),
+  stopifnot(compiled(changed), identical(saved(changed), "ID,RESULT\n01,2.4\n02,-1.1\n03,\n"),
     !compiled(spec$run()))
   write_text(environment, original)
   restored <- spec$run()

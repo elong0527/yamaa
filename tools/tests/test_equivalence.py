@@ -61,7 +61,7 @@ class EquivalenceGateTests(unittest.TestCase):
             str(ROOT / "benchmarks"),
         )
         self.assertEqual(gate.compared, ["python", "r"])
-        executors, python_runner, test_r_runner, r_runner = (
+        executors, python_runner, project_install, test_r_runner, r_runner = (
             call.args[0] for call in gate.subprocess.call_args_list
         )
         self.assertEqual(
@@ -93,10 +93,20 @@ class EquivalenceGateTests(unittest.TestCase):
             python_runner[python_runner.index("--source-revision") + 1], "abc123"
         )
         self.assertEqual(
+            project_install,
+            [
+                "R",
+                "CMD",
+                "INSTALL",
+                "--library=fresh-library",
+                str(ROOT / "rust/tests/project-programs/r"),
+            ],
+        )
+        self.assertEqual(
             test_r_runner[2], str(ROOT / "rust/tests/test_public_conformance.R")
         )
         self.assertEqual(r_runner[2], str(ROOT / "rust/tests/public_conformance.R"))
-        r_environment = gate.subprocess.call_args_list[3].kwargs["env"]
+        r_environment = gate.subprocess.call_args_list[4].kwargs["env"]
         self.assertEqual(r_environment["R_LIBS"], "fresh-library")
         self.assertEqual(r_environment["PUBLIC_CONFORMANCE_PACKAGE_FORM"], "source")
         self.assertEqual(gate.suites.call_args.args[0], Path("venv/bin/python"))

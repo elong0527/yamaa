@@ -1,0 +1,3 @@
+schema_version: '1.0'
+environments: {r: r/environment.yaml}
+adam: {specs: [spec.yaml]}
