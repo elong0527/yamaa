@@ -34,11 +34,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     # Cold optimized test builds on Windows can consume more than 20 minutes.
     # Leave time for the complete shared guard and assessment suites afterward.
-    timeout-minutes: ${{ matrix.os == 'windows-latest' && 60 || matrix.os == 'macos-15' && 45 || 30 }}
+    timeout-minutes: ${{ matrix.os == 'windows-2025' && 60 || matrix.os == 'macos-15' && 45 || 30 }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-15, windows-latest]
+        os: [ubuntu-24.04, macos-15, windows-2025]
         python: ['3.14']
     steps:
       - name: Preserve fixture bytes and symlinks on Windows
@@ -160,7 +160,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-15, windows-latest, ubuntu-24.04-arm]
+        os: [ubuntu-24.04, macos-15, windows-2025, ubuntu-24.04-arm]
         python: ['3.14']
     steps:
       # The source archive carries crate fixtures, so keep their bytes exact.
@@ -270,7 +270,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-15, windows-latest, ubuntu-24.04-arm]
+        os: [ubuntu-24.04, macos-15, windows-2025, ubuntu-24.04-arm]
         python: ['3.12', '3.13', '3.14', '3.15']
         form: [wheel, source]
     env:
@@ -565,11 +565,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     # The package installs twice, once on its own and once inside R CMD
     # check, and each build runs at most two Cargo jobs, as CRAN requires.
-    timeout-minutes: ${{ matrix.os == 'windows-latest' && 75 || 40 }}
+    timeout-minutes: ${{ matrix.os == 'windows-2025' && 75 || 40 }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-15, windows-latest]
+        os: [ubuntu-24.04, macos-15, windows-2025]
     steps:
       - name: Preserve fixture bytes and symlinks on Windows
         if: runner.os == 'Windows'
@@ -766,11 +766,11 @@ jobs:
     # rust-version, the two-year-old toolchain that CRAN's guidance asks a
     # package to be tested with; the build reads the vendored crates, runs two
     # jobs, and sits behind a proxy that refuses connections.
-    timeout-minutes: ${{ matrix.os == 'windows-latest' && 90 || 75 }}
+    timeout-minutes: ${{ matrix.os == 'windows-2025' && 90 || 75 }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-15, windows-latest]
+        os: [ubuntu-24.04, macos-15, windows-2025]
         r: [devel, release, '4.4']
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
