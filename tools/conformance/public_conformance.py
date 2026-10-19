@@ -41,14 +41,14 @@ def platform_matches(runtime, platform, recorded):
         prefixes = {
             "ubuntu-24.04": "Linux-",
             "macos-15": "macOS-",
-            "windows-latest": "Windows-",
+            "windows-2025": "Windows-",
         }
         return platform in prefixes and recorded.startswith(prefixes[platform])
     if runtime == "r":
         patterns = {
             "ubuntu-24.04": r"x86_64-(?:pc|unknown)-linux-gnu",
             "macos-15": r"aarch64-apple-darwin[0-9]+",
-            "windows-latest": r"x86_64-w64-mingw32",
+            "windows-2025": r"x86_64-w64-mingw32",
         }
         return (
             platform in patterns
