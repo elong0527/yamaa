@@ -2,7 +2,8 @@
 //! A driver field that a window partitions, orders or reads by is a scalar
 //! source of each row. Under grouped construction it must be a group key: a
 //! grouped row template's window fails under REQ-0067, and a column-level
-//! window under REQ-0107, before any data is read.
+//! window under REQ-0107, before any data is read. The declarations decide
+//! it, so `check` reports the same refusal.
 use std::{
     fs,
     path::PathBuf,
@@ -34,16 +35,36 @@ impl Fixture {
                 specification,
                 environment: None,
             },
-            Identity {
-                runtime: "test",
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "window-group-sources",
-                specification,
-                base_directory: ".",
-            },
+            identity(specification),
         )
         .unwrap()
+    }
+    /// The issues `check` reports, without reading the source.
+    fn check(&self) -> Vec<yamaa_core::json::Value> {
+        let specification = self.0.join("spec.yaml");
+        let specification = specification.to_str().unwrap();
+        file_application::check(
+            yamaa_core::project_function::Language::Python,
+            Request {
+                specification,
+                environment: None,
+            },
+            identity(specification),
+        )
+        .iter()
+        .map(issue)
+        .collect()
+    }
+}
+
+fn identity(specification: &str) -> Identity<'_> {
+    Identity {
+        runtime: "test",
+        runtime_version: "test",
+        engine_version: yamaa_core::VERSION,
+        example: "window-group-sources",
+        specification,
+        base_directory: ".",
     }
 }
 impl Drop for Fixture {
@@ -92,27 +113,32 @@ fn grouped_windows_read_only_group_keys_of_the_driver() {
             None,
         ),
     ] {
-        // A field outside the groups is refused; a group key and a value of
-        // the grouped row both build.
+        // A field outside the groups is refused, by `check` as by `domain`; a
+        // group key and a value of the grouped row both build.
         let fixture = Fixture::new(&specification.replace("ORDER", "SRC.VAL"));
-        let mut context = yamaa_adapters::json!({"identifier": "SRC.VAL", "dataset": "SRC"});
-        if let Some(row) = row {
-            context["row"] = yamaa_adapters::json!(row);
-        }
-        let mut domain = fixture.run();
-        assert_eq!(
-            domain.issues().iter().map(issue).collect::<Vec<_>>(),
-            vec![yamaa_adapters::json!({
+        let refused = |identifier: &str, path: &str| {
+            let mut context = yamaa_adapters::json!({"identifier": identifier, "dataset": "SRC"});
+            if let Some(row) = row {
+                context["row"] = yamaa_adapters::json!(row);
+            }
+            yamaa_adapters::json!({
                 "phase": "validation",
                 "condition": "ungrouped_driver_field",
                 "requirement": requirement,
                 "spec_paths": [path],
                 "context": context
-            })]
+            })
+        };
+        let mut domain = fixture.run();
+        assert_eq!(
+            domain.issues().iter().map(issue).collect::<Vec<_>>(),
+            vec![refused("SRC.VAL", path)]
         );
         assert!(domain.save().is_err());
+        assert_eq!(fixture.check(), vec![refused("SRC.VAL", path)]);
         for order in ["SRC.ID", "LOW"] {
             let fixture = Fixture::new(&specification.replace("ORDER", order));
+            assert!(fixture.check().is_empty(), "{order}: {:?}", fixture.check());
             let mut domain = fixture.run();
             assert!(domain.issues().is_empty(), "{order}: {:?}", domain.issues());
             assert!(domain.save().unwrap(), "{order}");
@@ -125,6 +151,8 @@ fn grouped_windows_read_only_group_keys_of_the_driver() {
         }
         // A refused group read does not hide another read the binder refuses:
         // the unknown field is reported at its own entry in the same pass.
+        // Whether the source stores a field is known only once it is read, so
+        // to `check` both fields are driver fields outside the groups.
         let fixture = Fixture::new(&specification.replace("ORDER", "SRC.VAL, SRC.MISSING"));
         let domain = fixture.run();
         let reported = domain
@@ -138,8 +166,26 @@ fn grouped_windows_read_only_group_keys_of_the_driver() {
             "{reported:?}"
         );
         assert!(
-            reported.contains(&("unknown_field".into(), vec![missing])),
+            reported.contains(&("unknown_field".into(), vec![missing.clone()])),
             "{reported:?}"
+        );
+        assert_eq!(
+            fixture.check(),
+            vec![refused("SRC.VAL", path), refused("SRC.MISSING", &missing)]
+        );
+        // So a field the source does not store at all is outside the groups to
+        // `check`, and unknown to `domain`.
+        let fixture = Fixture::new(&specification.replace("ORDER", "SRC.MISSING"));
+        assert_eq!(fixture.check(), vec![refused("SRC.MISSING", path)]);
+        assert_eq!(
+            fixture.run().issues().iter().map(issue).collect::<Vec<_>>(),
+            vec![yamaa_adapters::json!({
+                "phase": "validation",
+                "condition": "unknown_field",
+                "requirement": "REQ-0103",
+                "spec_paths": [path],
+                "context": {"identifier": "SRC.MISSING"}
+            })]
         );
     }
 }

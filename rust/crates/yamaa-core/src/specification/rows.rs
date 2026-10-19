@@ -2270,13 +2270,16 @@ impl Rows {
 }
 
 impl Rows {
+    /// `primary` is the input behind the first row template, which binds a
+    /// column holding a qualified aggregate, as in [`Rows::bind`].
     pub(super) fn check_findings(
         &self,
         output: &TableSchema,
+        primary: &str,
         input: &dyn Fn(&str) -> crate::result_type::ResultType,
         findings: &mut Vec<BindFinding>,
     ) -> Result<(), BindError> {
-        self.declaration_findings(findings)?;
+        self.declaration_findings(primary, findings)?;
         // Static types in binding order: each template's derivations, then the
         // column-phase defaults, a shared default stating one derivation.
         for declaration in self
@@ -2423,7 +2426,35 @@ impl Rows {
             .chain(templates)
             .collect()
     }
-    fn declaration_findings(&self, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
+    /// The driver of each binding [`Rows::bind`] makes of a column-phase
+    /// declaration: `primary` for a column holding a qualified aggregate
+    /// (LOOKUP-18), and otherwise each distinct driver of the row templates
+    /// that leave the column to this phase, in construction order.
+    fn column_drivers<'a>(
+        &'a self,
+        declaration: &RowDeclaration,
+        primary: &'a str,
+    ) -> Vec<&'a str> {
+        if declaration.aggregates() {
+            return vec![primary];
+        }
+        let mut drivers = Vec::new();
+        for template in &self.templates {
+            let leaves = !template
+                .declarations
+                .iter()
+                .any(|derived| derived.column == declaration.column);
+            if leaves && !drivers.contains(&template.driver.as_str()) {
+                drivers.push(template.driver.as_str());
+            }
+        }
+        drivers
+    }
+    fn declaration_findings(
+        &self,
+        primary: &str,
+        findings: &mut Vec<BindFinding>,
+    ) -> Result<(), BindError> {
         let groups = self.column_groups();
         let column_groups = groups
             .iter()
@@ -2431,14 +2462,16 @@ impl Rows {
             .collect::<Vec<_>>();
         for declaration in &self.columns {
             if let RowOperation::Shared(branch) = &declaration.operation {
+                let drivers = self.column_drivers(declaration, primary);
                 static_checks::scoped_branch(
                     branch,
-                    Some((
-                        "",
-                        Phase::Column {
+                    Some(static_checks::Scope {
+                        drivers: &drivers,
+                        row: None,
+                        phase: Some(Phase::Column {
                             groups: &column_groups,
-                        },
-                    )),
+                        }),
+                    }),
                     findings,
                 )?;
             }
@@ -2456,16 +2489,18 @@ impl Rows {
                     findings,
                 )?;
             }
+            let driver = [template.driver.as_str()];
             for declaration in &template.declarations {
                 if let RowOperation::Shared(branch) = &declaration.operation {
                     static_checks::scoped_branch(
                         branch,
-                        Some((
-                            &template.driver,
-                            Phase::Row {
+                        Some(static_checks::Scope {
+                            drivers: &driver,
+                            row: Some(&template.id),
+                            phase: Some(Phase::Row {
                                 group_by: groups.as_deref(),
-                            },
-                        )),
+                            }),
+                        }),
                         findings,
                     )?;
                 }

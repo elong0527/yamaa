@@ -86,30 +86,21 @@ pub fn validate(
         return Ok(findings);
     }
     match scope.phase {
-        Phase::Row { group_by } => {
+        Phase::Row { .. } => {
             let exempt = scope.joined
                 || matches!(scope.reach, Reach::Declared | Reach::Record)
                 || (scope.reach == Reach::Scalar && !is_driver);
             if !exempt {
                 if scope.drivers.first().copied() != Some(qualifier) {
                     findings.push(Finding::RowPhase);
-                } else if scope.reach == Reach::Scalar
-                    && group_by.is_some_and(|group| !group.contains(&name))
-                {
-                    findings.push(Finding::RowGroup);
+                } else if scope.reach == Reach::Scalar {
+                    findings.extend(group_finding(name, scope.phase));
                 }
             }
         }
-        Phase::Column { groups } => {
-            // Only a grouped row template driven by the qualifier builds rows
-            // whose driver record is a group; another driver's groups leave
-            // the read scalar (NAME-4).
-            if scope.reach == Reach::Scalar
-                && groups
-                    .iter()
-                    .any(|&(driver, group)| driver == qualifier && !group.contains(&name))
-            {
-                findings.push(Finding::ColumnGroup);
+        Phase::Column { .. } => {
+            if scope.reach == Reach::Scalar {
+                findings.extend(group_finding(name, scope.phase));
             }
         }
     }
@@ -120,4 +111,23 @@ pub fn validate(
         findings.push(Finding::IncompatibleInputType { expected, actual });
     }
     Ok(findings)
+}
+
+/// The grouping finding of a scalar read of the driver field `name` (NAME-4),
+/// which the declarations decide alone. In a grouped row template the field
+/// must be in its `group_by`. In the column phase, every grouped row template
+/// driven by the field's dataset must group by it; another driver's groups
+/// leave the read scalar. [`validate`] reports it once the catalog has found
+/// the field, and a check without source schemas asks for it directly.
+pub fn group_finding(name: &str, phase: Phase<'_>) -> Option<Finding> {
+    let (qualifier, _) = name.split_once('.')?;
+    match phase {
+        Phase::Row { group_by } => group_by
+            .is_some_and(|group| !group.contains(&name))
+            .then_some(Finding::RowGroup),
+        Phase::Column { groups } => groups
+            .iter()
+            .any(|&(driver, group)| driver == qualifier && !group.contains(&name))
+            .then_some(Finding::ColumnGroup),
+    }
 }

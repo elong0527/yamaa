@@ -8,6 +8,12 @@
 //! and the window operation; it used to build, ordering those rows by the
 //! records of another dataset at the same positions. The same window over
 //! row templates that share the driver builds unchanged.
+//!
+//! Two other refusals of a window's qualified read are decided from the
+//! declarations as well, so `check` reports them where `domain` does: a field
+//! of the shared driver that a grouped row template does not group by
+//! (REQ-0107), and a field of a dataset whose records build none of the rows,
+//! in any window (REQ-0103).
 use std::{
     fs,
     path::PathBuf,
@@ -78,24 +84,33 @@ impl Fixture {
     /// `check` and `domain` report exactly these WINDOW-11 refusals, each as
     /// (operand path, field, drivers, window operation).
     fn refused(&self, expected: &[(&str, &str, &[&str], &str)]) {
-        let expected = expected
-            .iter()
-            .map(|&(path, identifier, drivers, operation)| {
-                yamaa_adapters::json!({
-                    "phase": "validation",
-                    "condition": "unknown_field",
-                    "requirement": "WINDOW-11",
-                    "spec_paths": [path],
-                    "context": {
-                        "identifier": identifier,
-                        "drivers": drivers,
-                        "operation": operation
-                    }
+        self.reports(
+            &expected
+                .iter()
+                .map(|&(path, identifier, drivers, operation)| {
+                    yamaa_adapters::json!({
+                        "phase": "validation",
+                        "condition": "unknown_field",
+                        "requirement": "WINDOW-11",
+                        "spec_paths": [path],
+                        "context": {
+                            "identifier": identifier,
+                            "drivers": drivers,
+                            "operation": operation
+                        }
+                    })
                 })
-            })
-            .collect::<Vec<_>>();
-        assert_eq!(self.issues(), expected);
-        assert_eq!(self.check().iter().map(row).collect::<Vec<_>>(), expected);
+                .collect::<Vec<_>>(),
+        );
+    }
+    /// `check` and `domain` report exactly `expected`.
+    fn reports(&self, expected: &[Value]) {
+        assert_eq!(self.issues(), expected, "domain");
+        assert_eq!(
+            self.check().iter().map(row).collect::<Vec<_>>(),
+            expected,
+            "check"
+        );
     }
     /// `check` finds nothing and `domain` saves exactly `expected`.
     fn saved(&self, expected: &str) {
@@ -123,6 +138,29 @@ fn row(issue: &Issue) -> Value {
         "requirement": issue.requirement,
         "spec_paths": issue.spec_paths,
         "context": issue.context.clone()
+    })
+}
+
+/// A column-level read of `dataset`'s field outside a grouped row template's
+/// groups (REQ-0107).
+fn ungrouped(path: &str, identifier: &str, dataset: &str) -> Value {
+    yamaa_adapters::json!({
+        "phase": "validation",
+        "condition": "ungrouped_driver_field",
+        "requirement": "REQ-0107",
+        "spec_paths": [path],
+        "context": {"identifier": identifier, "dataset": dataset}
+    })
+}
+
+/// A window's read of a dataset other than the driver of its rows (REQ-0103).
+fn unknown(path: &str, identifier: &str) -> Value {
+    yamaa_adapters::json!({
+        "phase": "validation",
+        "condition": "unknown_field",
+        "requirement": "REQ-0103",
+        "spec_paths": [path],
+        "context": {"identifier": identifier}
     })
 }
 
@@ -378,16 +416,34 @@ fn a_window_whose_templates_share_the_driver_builds_unchanged() {
 
 #[test]
 fn a_grouped_template_over_the_shared_driver_still_reads_only_its_group_keys() {
+    // A grouped row holds one value of each group key, not an age, so `check`
+    // refuses the read from the declarations, as `domain` does.
     let grouped = "  - {id: grouped, dataset: DM, group_by: [DM.USUBJID], derivations: {USUBJID: DM.USUBJID, SRC: {literal: DMG}, SEQ: {literal: 1}}}\n";
-    assert_eq!(
-        numbered("", &[SUBJECTS, grouped], "DM.AGE").issues(),
-        vec![yamaa_adapters::json!({
-            "phase": "validation",
-            "condition": "ungrouped_driver_field",
-            "requirement": "REQ-0107",
-            "spec_paths": [ORDER],
-            "context": {"identifier": "DM.AGE", "dataset": "DM"}
-        })]
+    numbered("", &[SUBJECTS, grouped], "DM.AGE").reports(&[ungrouped(ORDER, "DM.AGE", "DM")]);
+    // So is a window in a case result.
+    Fixture::new(&specification(
+        "",
+        &[SUBJECTS, grouped],
+        "",
+        "int",
+        "{case: [{when: \"SRC = 'DM'\", then: {row_number: {window: {order_by: [DM.AGE]}}}}, {otherwise: {literal: 0}}]}",
+    ))
+    .reports(&[ungrouped(
+        "columns.ORD.derivation.case[0].then.row_number.window.order_by[0]",
+        "DM.AGE",
+        "DM",
+    )]);
+    // And a window over a named intermediate driver that one template groups.
+    let grouped_serious = "  - {id: grouped, dataset: SER, group_by: [SER.USUBJID], derivations: {USUBJID: SER.USUBJID, SRC: {literal: SERG}, SEQ: {literal: 1}}}\n";
+    numbered(INTERMEDIATES, &[SERIOUS, grouped_serious], "SER.AESEQ").reports(&[ungrouped(
+        ORDER,
+        "SER.AESEQ",
+        "SER",
+    )]);
+    // The group key itself checks clean and builds; each subject's two rows
+    // tie and keep row-template order.
+    numbered("", &[SUBJECTS, grouped], "DM.USUBJID").saved(
+        "USUBJID,SRC,SEQ,ORD\nS1,DM,0,1\nS2,DM,0,3\nS3,DM,0,5\nS1,DMG,1,2\nS2,DMG,1,4\nS3,DMG,1,6\n",
     );
 }
 
@@ -407,15 +463,80 @@ fn a_column_every_row_completes_in_its_own_scope_orders_every_row() {
 }
 
 #[test]
-fn a_read_of_an_input_no_row_is_built_from_keeps_its_binding_finding() {
-    assert_eq!(
-        numbered("", &[SUBJECTS, EVENTS], "LB.LBSEQ").issues(),
-        vec![yamaa_adapters::json!({
-            "phase": "validation",
-            "condition": "unknown_field",
-            "requirement": "REQ-0103",
-            "spec_paths": [ORDER],
-            "context": {"identifier": "LB.LBSEQ"}
-        })]
+fn a_read_of_a_dataset_no_row_is_built_from_is_refused_before_any_data_is_read() {
+    // An input that builds no row, whether or not the templates share a driver.
+    for rows in [&[SUBJECTS, EVENTS][..], &[SUBJECTS]] {
+        numbered("", rows, "LB.LBSEQ").reports(&[unknown(ORDER, "LB.LBSEQ")]);
+    }
+    // A dataset nothing declares.
+    numbered("", &[SUBJECTS, EVENTS], "ZZ.ZZSEQ").reports(&[unknown(ORDER, "ZZ.ZZSEQ")]);
+    // The input a shared named intermediate driver reads: the rows are built
+    // from SER, so AE is another dataset for them.
+    let again = SERIOUS
+        .replace("id: serious", "id: again")
+        .replace("literal: SER}", "literal: SER2}");
+    numbered(INTERMEDIATES, &[SERIOUS, &again], "AE.AESEQ").reports(&[unknown(ORDER, "AE.AESEQ")]);
+    // The operands first, then each name of the filter once, in sorted order.
+    let filter = "columns.ORD.derivation.row_number.window.filter";
+    Fixture::new(&specification(
+        "",
+        &[SUBJECTS, EVENTS],
+        "",
+        "int",
+        "{row_number: {window: {order_by: [LB.LBSEQ], filter: 'ZZ.FLAG = 1 AND LB.LBSEQ > 0 AND ZZ.FLAG < 3'}}}",
+    ))
+    .reports(&[
+        unknown(ORDER, "LB.LBSEQ"),
+        unknown(filter, "LB.LBSEQ"),
+        unknown(filter, "ZZ.FLAG"),
+    ]);
+    // The shared driver's own field checks clean and builds.
+    numbered("", &[SUBJECTS], "DM.AGE")
+        .saved("USUBJID,SRC,SEQ,ORD\nS1,DM,0,2\nS2,DM,0,1\nS3,DM,0,3\n");
+}
+
+#[test]
+fn a_window_in_a_row_template_or_without_row_templates_reads_only_its_driver() {
+    // A row template's own window reads its driver's records: another
+    // template's driver and an input that builds no row are both refused.
+    let own = |order: &str| {
+        let subjects = format!(
+            "  - {{id: subjects, dataset: DM, derivations: {{USUBJID: DM.USUBJID, SRC: {{literal: DM}}, SEQ: {{literal: 0}}, ORD: {{row_number: {{window: {{order_by: [{order}]}}}}}}}}}}\n"
+        );
+        let events = "  - {id: events, dataset: AE, derivations: {USUBJID: AE.USUBJID, SRC: {literal: AE}, SEQ: AE.AESEQ, ORD: {literal: 0}}}\n";
+        Fixture::new(&specification(
+            "",
+            &[&subjects, events],
+            "",
+            "int",
+            "{literal: 0}",
+        ))
+    };
+    for order in ["AE.AESEQ", "LB.LBSEQ"] {
+        own(order).reports(&[unknown(
+            "rows[0].derivations.ORD.row_number.window.order_by[0]",
+            order,
+        )]);
+    }
+    own("DM.AGE").saved(
+        "USUBJID,SRC,SEQ,ORD\nS1,DM,0,2\nS2,DM,0,1\nS3,DM,0,3\nS1,AE,1,0\nS1,AE,2,0\nS2,AE,1,0\nS1,AE,3,0\n",
     );
+    // Without row templates, the driver's records build every row.
+    let base = |order: &str| {
+        Fixture::new(&format!(
+            "schema_version: \"1.0\"\n\
+             domain: XX\n\
+             keys: [USUBJID]\n\
+             base: DM\n\
+             output: {{path: out.csv, columns: [USUBJID, ORD]}}\n\
+             input:\n\
+             \x20 DM: {{path: dm.csv, types: {{AGE: int}}}}\n\
+             \x20 LB: {{path: lb.csv, types: {{LBSEQ: int}}}}\n\
+             columns:\n\
+             \x20 - {{name: USUBJID, type: str, derivation: DM.USUBJID}}\n\
+             \x20 - {{name: ORD, type: int, derivation: {{row_number: {{window: {{order_by: [{order}]}}}}}}}}\n"
+        ))
+    };
+    base("LB.LBSEQ").reports(&[unknown(ORDER, "LB.LBSEQ")]);
+    base("DM.AGE").saved("USUBJID,ORD\nS1,2\nS2,1\nS3,3\n");
 }

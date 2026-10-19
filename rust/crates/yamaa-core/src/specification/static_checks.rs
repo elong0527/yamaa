@@ -1,7 +1,21 @@
 //! Retained declaration findings share the compiled operations used by build.
 //! Checking never obtains source schemas, activates functions, or executes a plan.
 use super::*;
-use crate::{diagnostic::Diagnostic, result_type::ResultType};
+use crate::{diagnostic::Diagnostic, reference_scope::Phase, result_type::ResultType};
+
+/// The rows a derivation evaluates on, as binding scopes its reads.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct Scope<'a> {
+    /// The dataset whose records build those rows, once for each binding:
+    /// the driver without row templates, a row template's own driver, or in
+    /// the column phase the driver of each binding the derivation gets
+    /// (`Rows::column_drivers`).
+    pub(super) drivers: &'a [&'a str],
+    /// The row template of a row-phase derivation.
+    pub(super) row: Option<&'a str>,
+    /// The grouping phase under row templates; without them there is none.
+    pub(super) phase: Option<Phase<'a>>,
+}
 
 /// The static types of one derivation over the types `input` declares, as
 /// binding checks them: each flag condition and case predicate (FORMULA-5,
@@ -73,7 +87,7 @@ pub(super) fn branch(
 
 pub(super) fn scoped_branch(
     branch: &cases::Branch,
-    scope: Option<(&str, crate::reference_scope::Phase<'_>)>,
+    scope: Option<Scope<'_>>,
     findings: &mut Vec<BindFinding>,
 ) -> Result<(), BindError> {
     if let Some(Err(error)) = branch.predicate() {
@@ -106,25 +120,34 @@ pub(super) fn qualified_numeric_findings(
 fn operation(
     op: &Operation,
     path: &str,
+    scope: Scope<'_>,
     output: Option<&TableSchema>,
     findings: &mut Vec<BindFinding>,
 ) -> Result<(), BindError> {
     // Build already uses this declaration pass for flags, padding, nested cases
     // and numeric failures. Keep exactly its paths/causes.
     derivations::declaration_findings(op, path, findings)?;
-    filters(op, path, None, output, findings)
+    filters(op, path, Some(scope), output, findings)
 }
 
 fn source_filter(
     source: &source_expressions::Declaration,
     path: &str,
-    scope: Option<(&str, crate::reference_scope::Phase<'_>)>,
+    scope: Option<Scope<'_>>,
     findings: &mut Vec<BindFinding>,
 ) -> Result<(), BindError> {
-    if scope.is_some_and(|(driver, phase)| {
-        source.reject_group_key_filter(path, driver, phase, findings)
-    }) {
-        return Ok(());
+    // A row-phase read's driver is its row template's own; the column phase
+    // decides from the groups alone.
+    if let Some(Scope {
+        drivers,
+        phase: Some(phase),
+        ..
+    }) = scope
+    {
+        let driver = drivers.first().copied().unwrap_or_default();
+        if source.reject_group_key_filter(path, driver, phase, findings) {
+            return Ok(());
+        }
     }
     source.check_findings(path, findings)
 }
@@ -132,7 +155,7 @@ fn source_filter(
 fn filters(
     op: &Operation,
     path: &str,
-    scope: Option<(&str, crate::reference_scope::Phase<'_>)>,
+    scope: Option<Scope<'_>>,
     output: Option<&TableSchema>,
     findings: &mut Vec<BindFinding>,
 ) -> Result<(), BindError> {
@@ -152,7 +175,7 @@ fn filters(
             source_filter(&mapping.source, &format!("{path}.source"), scope, findings)?
         }
         Operation::Window(window) => {
-            window.check_findings(findings)?;
+            window.check_findings(scope, findings)?;
             if let Some(output) = output {
                 window.check_output_types(output, findings);
             }
@@ -202,6 +225,13 @@ impl PreparedSpecification {
                     .collect::<BTreeMap<_, _>>()
             });
             let input = |name: &str| self.declared_input(name);
+            // Without row templates, the driver's records build every row.
+            let driver = [self.source().name.as_str()];
+            let scope = Scope {
+                drivers: &driver,
+                row: None,
+                phase: None,
+            };
             let mut dependencies = Vec::new();
             for (column, declaration) in self.declarations.iter().enumerate() {
                 let start = findings.len();
@@ -218,6 +248,7 @@ impl PreparedSpecification {
                 operation(
                     &declaration.operation,
                     &declaration.path,
+                    scope,
                     self.rows.is_none().then_some(&self.output),
                     findings,
                 )?;
@@ -236,7 +267,7 @@ impl PreparedSpecification {
                 self.formula_dependencies(&dependencies, findings)?;
             }
             if let Some(rows) = &self.rows {
-                rows.check_findings(&self.output, &input, findings)?;
+                rows.check_findings(&self.output, &self.source().name, &input, findings)?;
             }
             // Binding admits range values once every row's reads are bound.
             lookup_range::check(
