@@ -1,0 +1,17 @@
+yamaa: "1.0"
+type: spec
+parent: spec_organization.yaml
+input:
+  LB:
+    types:
+      USUBJID: str
+      LBTESTCD: str
+      LBSTRESN: float
+      LBSTRESU: str
+
+columns:
+  - name: AVAL
+    label: Compound Standardized Result
+
+metadata:
+  scope: compound

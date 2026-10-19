@@ -15,10 +15,13 @@ root <- normalizePath(root, winslash = "/")
 
 # How a run got its plan, from its private measurements: compiled, refused or
 # reused. The measurements close the observations, so their plan is the last
-# one named.
+# one named. Match and slice bytes. On Windows, R's default regular expressions
+# count UTF-16 code units, two for a character outside the Basic Multilingual
+# Plane, while a character slice counts it once, so each one before the plan
+# would move the slice one character on.
 plan_of <- function(run) {
   text <- yamaa:::.run_observations(run, include_measurements = TRUE)
-  found <- regmatches(text, gregexpr('"plan":"[a-z]+"', text))[[1L]]
+  found <- regmatches(text, gregexpr('"plan":"[a-z]+"', text, useBytes = TRUE))[[1L]]
   sub('^"plan":"([a-z]+)"$', "\\1", found[[length(found)]])
 }
 compiled <- function(run) !identical(plan_of(run), "reused")

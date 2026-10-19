@@ -205,7 +205,7 @@ expressions return the value they select, never a converted one, and a
 selected temporal value keeps its collected precision. The result type each
 expression declares is [EXPR-14](#expr-14)'s.
 
-Evidence: `rust/crates/yamaa-core/tests/dataset_callbacks.rs::first_available_skips_unselected_reads_and_does_not_fallback_after_conversion`, `schema-expressions`.
+Evidence: `rust/crates/yamaa-adapters/tests/fixtures/first_available.json`, `schema-expressions`.
 Replaces: REQ-0315.
 
 ## Conditional selection
