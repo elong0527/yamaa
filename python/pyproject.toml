@@ -1,7 +1,6 @@
 [build-system]
 requires = ["maturin==1.9.6"]
-build-backend = "yamaa_build_backend"
-backend-path = ["."]
+build-backend = "maturin"
 
 [project]
 name = "yamaa"
@@ -78,7 +77,13 @@ tooling = [
 
 [tool.maturin]
 locked = true
-include = [{path = "yamaa_build_backend.py", format = "sdist"}]
+# The source archive builds offline: tools/staging/engine_bundle.py stages
+# the crates.io crates that its trimmed lock selects beside this file, with
+# the Cargo configuration that reads them (#3030 D55).
+include = [
+  {path = ".cargo/config.toml", format = "sdist"},
+  {path = "vendor/**/*", format = "sdist"},
+]
 bindings = "pyo3"
 features = ["extension-module"]
 module-name = "yamaa._native"
@@ -106,11 +111,10 @@ preset = "default"
 
 [tool.uv]
 # `make setup` installs a built wheel, which uv rebuilds only when a file listed
-# here changes. List every wheel input: the package files, the build backend,
-# and the Rust sources the backend restores into a source archive. Paths are
-# relative to this directory. uv walks everything under a glob's literal prefix,
-# so no glob starts at `.`, `..` or `../rust`, which hold `.venv`, `build` and
-# `target`.
+# here changes. List every wheel input: the package files and the Rust
+# workspace that the extension compiles. Paths are relative to this directory.
+# uv walks everything under a glob's literal prefix, so no glob starts at `.`,
+# `..` or `../rust`, which hold `.venv`, `build` and `target`.
 cache-keys = [
   { file = "pyproject.toml" },
   { file = "README.md" },
@@ -120,7 +124,6 @@ cache-keys = [
   { file = "LICENSE-UNICODE.txt" },
   { file = "LICENSE-YAML.txt" },
   { file = "src/**" },
-  { file = "yamaa_build_backend.py" },
   { file = "../rust/Cargo.toml" },
   { file = "../rust/Cargo.lock" },
   { file = "../rust/rust-toolchain.toml" },

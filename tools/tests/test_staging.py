@@ -326,3 +326,340 @@ class StagingTests(unittest.TestCase):
             with self.assertRaises(FileExistsError):
                 staging.stage(destination)
             self.assertEqual(marker.read_text(), "prior build")
+
+
+class NativeFixtureTests(unittest.TestCase):
+    """The benchmark files that the R package's crate tests compile in."""
+
+    def compile_fixture(self, root, declared=True):
+        workspace = root / "rust"
+        name = "benchmarks/original/expected/out.csv"
+        original = root / name
+        original.parent.mkdir(parents=True)
+        original.write_bytes(b"ID\n1\n")
+        manifest = workspace / "qualification/native-source-fixtures.json"
+        manifest.parent.mkdir(parents=True)
+        manifest.write_text(
+            json.dumps(
+                {
+                    "format": "yamaa-native-source-fixtures/1",
+                    "files": [name] if declared else [],
+                }
+            )
+        )
+        source = workspace / "crates/engine/tests/original.rs"
+        source.parent.mkdir(parents=True)
+        return workspace, source, original, name
+
+    def test_ordinary_compile_literals_admit_all_macro_delimiters(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace, source, original, name = self.compile_fixture(Path(directory))
+            for macro in ("include_str", "include_bytes"):
+                for opening, closing in (("(", ")"), ("[", "]"), ("{", "}")):
+                    with self.subTest(macro=macro, opening=opening):
+                        source.write_text(
+                            "fn main() { let _ = "
+                            + macro
+                            + "!"
+                            + opening
+                            + json.dumps("../../../../" + name)
+                            + closing
+                            + "; }\n"
+                        )
+                        selected = staging.native_test_fixtures(workspace)
+                        self.assertEqual(selected[1], (name, original))
+                        self.assertEqual(selected[1][1].read_bytes(), b"ID\n1\n")
+
+    def test_brace_bracket_compile_literals_refuse_absolute_and_undeclared_inputs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace, source, original, name = self.compile_fixture(
+                Path(directory), declared=False
+            )
+            for macro in ("include_str", "include_bytes"):
+                for opening, closing in (("[", "]"), ("{", "}")):
+                    for path, reason in (
+                        (str(original.resolve()), "unescaped relative paths"),
+                        ("../../../../" + name, "not declared"),
+                    ):
+                        with self.subTest(macro=macro, opening=opening, path=path):
+                            source.write_text(
+                                "fn main() { let _ = "
+                                + macro
+                                + "!"
+                                + opening
+                                + json.dumps(path)
+                                + closing
+                                + "; }\n"
+                            )
+                            with self.assertRaisesRegex(ValueError, reason):
+                                staging.native_test_fixtures(workspace)
+
+    def test_raw_compile_literals_refuse_before_staging(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace, source, original, _ = self.compile_fixture(Path(directory))
+            for macro in ("include_str", "include_bytes"):
+                for opening, closing in (("(", ")"), ("[", "]"), ("{", "}")):
+                    for hashes in ("", "#", "###"):
+                        with self.subTest(macro=macro, opening=opening, hashes=hashes):
+                            literal = (
+                                "r"
+                                + hashes
+                                + '"'
+                                + str(original.resolve())
+                                + '"'
+                                + hashes
+                            )
+                            source.write_text(
+                                "fn main() { let _ = "
+                                + macro
+                                + "!"
+                                + opening
+                                + literal
+                                + closing
+                                + "; }\n"
+                            )
+                            with self.assertRaisesRegex(
+                                ValueError, "ordinary string literals"
+                            ):
+                                staging.native_test_fixtures(workspace)
+
+    def test_dynamic_and_nonliteral_compile_arguments_refuse_before_staging(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace, source, _, _ = self.compile_fixture(Path(directory))
+            for macro in ("include_str", "include_bytes"):
+                for opening, closing in (("(", ")"), ("[", "]"), ("{", "}")):
+                    for value in (
+                        'concat!("../../../../", "benchmarks/original/expected/out.csv")',
+                        'env!("YAMAA_GUARD_CONTROL_PATH")',
+                        "SOURCE_PATH",
+                    ):
+                        with self.subTest(macro=macro, opening=opening, value=value):
+                            source.write_text(
+                                "fn main() { let _ = "
+                                + macro
+                                + "!"
+                                + opening
+                                + value
+                                + closing
+                                + "; }\n"
+                            )
+                            with self.assertRaisesRegex(
+                                ValueError, "ordinary string literals"
+                            ):
+                                staging.native_test_fixtures(workspace)
+
+    def test_comment_separated_compile_tokens_refuse_before_staging(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace, source, original, _ = self.compile_fixture(Path(directory))
+            for macro in ("include_str", "include_bytes"):
+                for gap in ("/* gap */", "/* outer /* inner */ gap */", "// gap\n"):
+                    for opening, closing in (("(", ")"), ("[", "]"), ("{", "}")):
+                        for before_bang in (True, False):
+                            with self.subTest(
+                                macro=macro,
+                                gap=gap,
+                                opening=opening,
+                                before_bang=before_bang,
+                            ):
+                                tokens = (
+                                    macro + gap + "!" + opening
+                                    if before_bang
+                                    else macro + "!" + gap + opening
+                                )
+                                source.write_text(
+                                    "fn main() { let _ = "
+                                    + tokens
+                                    + json.dumps(str(original.resolve()))
+                                    + closing
+                                    + "; }\n"
+                                )
+                                with self.assertRaisesRegex(
+                                    ValueError, "ordinary string literals"
+                                ):
+                                    staging.native_test_fixtures(workspace)
+
+    def test_spaced_bang_arguments_follow_literal_admission(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace, source, original, name = self.compile_fixture(Path(directory))
+            for macro in ("include_str", "include_bytes"):
+                with self.subTest(macro=macro, kind="ordinary"):
+                    source.write_text(
+                        "fn main() { let _ = "
+                        + macro
+                        + " ! ("
+                        + json.dumps("../../../../" + name)
+                        + "); }\n"
+                    )
+                    selected = staging.native_test_fixtures(workspace)
+                    self.assertEqual(selected[1], (name, original))
+                for value in (
+                    'r"' + str(original.resolve()) + '"',
+                    'concat!("../../../../", "benchmarks/original/expected/out.csv")',
+                ):
+                    with self.subTest(macro=macro, value=value):
+                        source.write_text(
+                            "fn main() { let _ = " + macro + " ! (" + value + "); }\n"
+                        )
+                        with self.assertRaisesRegex(
+                            ValueError, "ordinary string literals"
+                        ):
+                            staging.native_test_fixtures(workspace)
+
+    def test_absolute_and_drive_compile_paths_cannot_read_the_original_checkout(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            workspace = root / "rust"
+            manifest = workspace / "qualification/native-source-fixtures.json"
+            manifest.parent.mkdir(parents=True)
+            name = "benchmarks/original/expected/out.csv"
+            original = root / name
+            original.parent.mkdir(parents=True)
+            original.write_bytes(b"ID\n1\n")
+            manifest.write_text(
+                json.dumps(
+                    {"format": "yamaa-native-source-fixtures/1", "files": [name]}
+                )
+            )
+            source = workspace / "crates/engine/tests/original.rs"
+            source.parent.mkdir(parents=True)
+            for path in (
+                str(original.resolve()),
+                "C:/original/out.csv",
+                r"C:\original\out.csv",
+            ):
+                with self.subTest(path=path):
+                    source.write_text(
+                        f"const INPUT: &str = include_str!({json.dumps(path)});\n"
+                    )
+                    with self.assertRaisesRegex(ValueError, "unescaped relative paths"):
+                        staging.native_test_fixtures(workspace)
+
+    def test_compile_symlink_alias_is_not_replaced_by_its_declared_regular_target(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            workspace = root / "rust"
+            manifest = workspace / "qualification/native-source-fixtures.json"
+            manifest.parent.mkdir(parents=True)
+            name = "benchmarks/original/expected/out.csv"
+            original = root / name
+            original.parent.mkdir(parents=True)
+            original.write_bytes(b"ID\n1\n")
+            manifest.write_text(
+                json.dumps(
+                    {"format": "yamaa-native-source-fixtures/1", "files": [name]}
+                )
+            )
+            alias = root / "benchmarks/alias"
+            try:
+                alias.symlink_to(original.parent, target_is_directory=True)
+            except OSError as error:
+                self.skipTest(f"compile-input symlink witness is unavailable: {error}")
+            source = workspace / "crates/engine/tests/original.rs"
+            source.parent.mkdir(parents=True)
+            source.write_text(
+                'const INPUT: &str = include_str!("../../../../benchmarks/alias/out.csv");\n'
+            )
+            with self.assertRaisesRegex(
+                ValueError, "compile fixtures must not be symlinks"
+            ):
+                staging.native_test_fixtures(workspace)
+
+    def test_external_compile_fixture_must_be_declared_before_building_archive(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            workspace = root / "rust"
+            manifest = workspace / "qualification/native-source-fixtures.json"
+            manifest.parent.mkdir(parents=True)
+            source = workspace / "crates/engine/tests/original.rs"
+            source.parent.mkdir(parents=True)
+            name = "benchmarks/original/expected/out.csv"
+            original = root / name
+            original.parent.mkdir(parents=True)
+            original.write_bytes(b"ID\n1\n")
+            source.write_text(
+                "const ORIGINAL: &str = include_str!(\n"
+                '    "../../../../benchmarks/original/expected/out.csv"\n);\n'
+            )
+            manifest.write_text(
+                json.dumps({"format": "yamaa-native-source-fixtures/1", "files": []})
+            )
+            with self.assertRaisesRegex(ValueError, "compile fixture is not declared"):
+                staging.native_test_fixtures(workspace)
+            manifest.write_text(
+                json.dumps(
+                    {"format": "yamaa-native-source-fixtures/1", "files": [name]}
+                )
+            )
+            selected = staging.native_test_fixtures(workspace)
+            self.assertEqual(selected[1][0], name)
+            self.assertEqual(selected[1][1].read_bytes(), b"ID\n1\n")
+
+    def test_native_fixture_manifest_selects_exact_regular_original_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            workspace = root / "rust"
+            manifest = workspace / "qualification/native-source-fixtures.json"
+            manifest.parent.mkdir(parents=True)
+            name = "benchmarks/independent/expected/document.xml"
+            original = root / name
+            original.parent.mkdir(parents=True)
+            original.write_bytes(b"independent fixed-time document\n")
+            (original.parent / "unselected.csv").write_bytes(b"not selected\n")
+            manifest.write_text(
+                json.dumps(
+                    {"format": "yamaa-native-source-fixtures/1", "files": [name]}
+                )
+            )
+            selected = staging.native_test_fixtures(workspace)
+            self.assertEqual(
+                [name for name, _ in selected],
+                ["rust/qualification/native-source-fixtures.json", name],
+            )
+            self.assertEqual(
+                selected[1][1].read_bytes(), b"independent fixed-time document\n"
+            )
+            original.unlink()
+            with self.assertRaisesRegex(ValueError, "missing"):
+                staging.native_test_fixtures(workspace)
+
+    def test_native_fixture_manifest_refuses_ambiguous_or_unselected_paths(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory) / "rust"
+            manifest = workspace / "qualification/native-source-fixtures.json"
+            manifest.parent.mkdir(parents=True)
+            for files in (
+                ["../private"],
+                ["/benchmarks/private"],
+                ["benchmarks/../private"],
+                ["benchmarks/a\\b"],
+                ["benchmarks/a:stream"],
+                ["benchmarks/a", "benchmarks/a"],
+            ):
+                with self.subTest(files=files):
+                    manifest.write_text(
+                        json.dumps(
+                            {"format": "yamaa-native-source-fixtures/1", "files": files}
+                        )
+                    )
+                    with self.assertRaisesRegex(ValueError, "fixture path"):
+                        staging.native_test_fixtures(workspace)
+
+    def test_native_fixture_scan_ignores_ancestor_build_or_cache_names(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "target" / "checkout"
+            root.mkdir(parents=True)
+            workspace, source, original, name = self.compile_fixture(root)
+            source.write_text(
+                "fn main() { let _ = include_str!("
+                + json.dumps(str(original.resolve()))
+                + "); }\n"
+            )
+            with self.assertRaisesRegex(ValueError, "unescaped relative paths"):
+                staging.native_test_fixtures(workspace)
+            source.write_text(
+                "fn main() { let _ = include_str!("
+                + json.dumps("../../../../" + name)
+                + "); }\n"
+            )
+            selected = staging.native_test_fixtures(workspace)
+            self.assertEqual(selected[1], (name, original))
