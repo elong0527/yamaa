@@ -31,6 +31,7 @@ from pathlib import Path, PurePosixPath
 import yaml
 from tools.docs.pages import CANONICAL, GENERATED, GENERATED_DIRECTORIES
 from tools.paths import ROOT
+from tools.rules.migrate import SENTINELS
 from tools.rules.model import (
     GENERATED_PAGES,
     LEGACY_PREFIX,
@@ -117,6 +118,8 @@ CITATION_EXEMPT = {
     # A synthetic diagnostic record that names no rule, and this table.
     "python/tests/test_native_results.py": frozenset({"REQ-0000"}),
     "tools/rules/check.py": frozenset({"REQ-0000", "VALUE-32"}),
+    # The sentinel IDs the citations command leaves as written.
+    "tools/rules/migrate.py": SENTINELS,
     "tools/tests/test_diagnostics.py": None,
     "tools/tests/test_rule_reference.py": None,
     "tools/tests/test_rules_check.py": None,
