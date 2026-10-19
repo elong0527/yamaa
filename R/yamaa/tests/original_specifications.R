@@ -1,3 +1,9 @@
+# The truth is JSON, and jsonlite, which reads it, is a suggested package:
+# where it is not installed, the file is skipped before it changes anything.
+if (!requireNamespace("jsonlite", quietly = TRUE)) {
+  message("Skipped original_specifications.R: its truth is JSON, and jsonlite, a suggested package, is not installed")
+  quit(save = "no")
+}
 # Build tools may include Python, but the installed runtime probe must not see it.
 original_path <- Sys.getenv("PATH")
 runtime_path <- tempfile("native-only-path-")
@@ -8,12 +14,6 @@ if(nzchar(rm_path)) invisible(file.symlink(rm_path,file.path(runtime_path,"rm"))
 Sys.setenv(PATH=runtime_path)
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 library(yamaa)
-# The truth is JSON, and jsonlite, which reads it, is a suggested package:
-# where it is not installed, the file is skipped.
-if (!requireNamespace("jsonlite", quietly = TRUE)) {
-  message("Skipped original_specifications.R: its truth is JSON, and jsonlite, a suggested package, is not installed")
-  quit(save = "no")
-}
 host_fixture_root <- if(file.exists("host-fixtures/reader.R")) "host-fixtures" else
   system.file("host-fixtures",package="yamaa",mustWork=TRUE)
 source(file.path(host_fixture_root,"reader.R"),local=TRUE)
