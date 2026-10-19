@@ -513,18 +513,17 @@ impl Declarations {
         self.0.iter().any(|declaration| declaration.path == path)
     }
 
-    pub(super) fn add_call_uses(&self, uses: &mut [usize]) -> Result<(), PrepareError> {
-        let mut calls = Vec::new();
-        for item in self.0.iter() {
-            for derived in &item.derivations {
-                derivations::calls(&derived.branch.operation, &mut calls);
-            }
-        }
-        for call in calls {
-            let count = uses.get_mut(call).ok_or(PrepareError::Internal)?;
-            *count = count.checked_add(1).ok_or(PrepareError::Internal)?;
-        }
-        Ok(())
+    /// Each intermediate's name and path with its derivations.
+    pub(super) fn audit_entries(
+        &self,
+    ) -> impl Iterator<Item = (&str, &str, &[intermediate_derivations::Derivation])> {
+        self.0.iter().map(|item| {
+            (
+                item.name.as_str(),
+                item.path.as_str(),
+                &item.derivations[..],
+            )
+        })
     }
     pub(super) fn for_reader(&self, reader: &str) -> Self {
         Self(std::sync::Arc::clone(&self.0), Some(reader.into()))

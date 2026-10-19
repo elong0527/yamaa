@@ -929,19 +929,6 @@ pub(super) fn bind_selection(
     )
 }
 
-pub(super) fn calls(operation: &Operation, result: &mut Vec<usize>) {
-    match operation {
-        Operation::ProjectFunction { call, .. } => result.push(*call),
-        Operation::Aggregate(operation) => operation.calls(result),
-        Operation::Case(branches) => {
-            for branch in branches {
-                calls(&branch.operation, result);
-            }
-        }
-        _ => (),
-    }
-}
-
 /// Inspect authored dependencies before selecting per-template column defaults.
 pub(super) fn references(
     d: &Document,

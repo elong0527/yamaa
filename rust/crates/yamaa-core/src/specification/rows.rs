@@ -23,15 +23,6 @@ enum RowOperation {
     Source(String),
 }
 impl RowOperation {
-    fn calls(&self) -> Vec<usize> {
-        let mut calls = Vec::new();
-        match self {
-            Self::ProjectFunction { call, .. } => calls.push(*call),
-            Self::Shared(branch) => derivations::calls(&branch.operation, &mut calls),
-            _ => (),
-        }
-        calls
-    }
     /// EXPR-14: the row derivation's result type; a bare source has its
     /// variable's type.
     fn result_type(
@@ -52,6 +43,8 @@ struct RowDeclaration {
     handler: Option<crate::conversion::LiteralHandler>,
     column: usize,
     path: String,
+    /// The document node of the derivation's operation.
+    value: usize,
     operation: RowOperation,
 }
 impl RowDeclaration {
@@ -147,7 +140,8 @@ fn declaration(
 ) -> Result<RowDeclaration, PrepareError> {
     closed_fields(d, id, &["value", "unconvertible"], &prefix)?;
     let handler = literal_handler(d, id, &prefix)?;
-    let &[(op, payload)] = mapping(d, field(d, id, "value")?)? else {
+    let value = field(d, id, "value")?;
+    let &[(op, payload)] = mapping(d, value)? else {
         return Err(PrepareError::Internal);
     };
     let op = text(d, op)?;
@@ -190,6 +184,7 @@ fn declaration(
         handler,
         column,
         path,
+        value,
         operation,
     })
 }
@@ -1891,23 +1886,28 @@ impl Rows {
             columns: lowered_columns,
         })
     }
-    pub(super) fn call_uses(
+    /// Each row declaration's operation node and path, with the branch it
+    /// shares with case and column lowering.
+    pub(super) fn audit_entries(
         &self,
-        calls: &crate::project_calls::ProjectCalls,
-    ) -> Result<Vec<usize>, PrepareError> {
-        let mut uses = std::vec![0usize; calls.calls().len()];
-        for declaration in self
-            .templates
+    ) -> impl Iterator<Item = (usize, &str, Option<&cases::Branch>)> + '_ {
+        self.templates
             .iter()
-            .flat_map(|t| &t.declarations)
+            .flat_map(|template| &template.declarations)
             .chain(&self.columns)
-        {
-            for call in declaration.operation.calls() {
-                let count = uses.get_mut(call).ok_or(PrepareError::Internal)?;
-                *count = count.checked_add(1).ok_or(PrepareError::Internal)?;
-            }
-        }
-        Ok(uses)
+            .map(|declaration| {
+                let branch = match &declaration.operation {
+                    RowOperation::Shared(branch) => Some(branch),
+                    _ => None,
+                };
+                (declaration.value, declaration.path.as_str(), branch)
+            })
+    }
+    /// The operation node of each row declaration: once for each template
+    /// that evaluates it at the row phase, and once if the column phase
+    /// completes it.
+    pub(super) fn declaration_values(&self) -> impl Iterator<Item = usize> + '_ {
+        self.audit_entries().map(|(value, ..)| value)
     }
 
     #[allow(clippy::too_many_arguments)]

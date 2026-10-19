@@ -23,6 +23,10 @@ pub(super) fn reading_path<'a>(derivations: &'a [Derivation], identifier: &str) 
         .map(|derivation| derivation.branch.path.as_str())
 }
 impl Derivation {
+    /// The entry's path, `intermediates[i].derivations.<name>`.
+    pub(super) fn path(&self) -> &str {
+        &self.path
+    }
     fn assignment_path(&self) -> &str {
         if self.typed.is_some() {
             &self.path
@@ -121,7 +125,7 @@ pub(super) fn prepare(
             Some(dataset),
         )?;
         if let Some(project) = project {
-            let refused = functions::donor_keep_findings(project, &branch.operation, named)?;
+            let refused = functions::donor_keep_findings(project, value, named)?;
             if !refused.is_empty() {
                 return Err(PrepareError::Invalid(refused));
             }

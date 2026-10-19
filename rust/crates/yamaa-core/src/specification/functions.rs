@@ -112,70 +112,96 @@ pub(super) struct Prepared {
     pub calls: ProjectCalls,
     pub nodes: BTreeMap<usize, usize>,
     pub returns: BTreeMap<usize, ColumnType>,
+    /// The calls each derivation evaluates, by its operation's document node.
+    sites: BTreeMap<usize, Vec<usize>>,
+    /// The calls intermediate derivations evaluate.
+    bindings: Vec<usize>,
+}
+impl Prepared {
+    /// The calls of the derivation whose operation is the document node `value`.
+    pub(super) fn site_calls(&self, value: usize) -> &[usize] {
+        self.sites.get(&value).map_or(&[], Vec::as_slice)
+    }
+    /// Each call's uses in a spec with row templates: one for each row
+    /// declaration (by its operation node) that evaluates it, and one for
+    /// each intermediate derivation.
+    pub(super) fn row_uses(
+        &self,
+        declarations: impl Iterator<Item = usize>,
+    ) -> Result<Vec<usize>, PrepareError> {
+        let mut uses = std::vec![0usize; self.calls.calls().len()];
+        for &call in declarations
+            .flat_map(|value| self.site_calls(value))
+            .chain(&self.bindings)
+        {
+            let count = uses.get_mut(call).ok_or(PrepareError::Internal)?;
+            *count = count.checked_add(1).ok_or(PrepareError::Internal)?;
+        }
+        Ok(uses)
+    }
 }
 fn invalid(finding: FunctionFinding) -> PreflightFinding {
     PreflightFinding::ProjectFunction(finding)
 }
 
-fn collect_calls(
-    d: &Document,
-    value: usize,
-    path: &str,
-    depth: usize,
+/// One call a derivation evaluates: its payload node, path and whether its
+/// references read a record context (an aggregate binding or a donor).
+struct Request {
+    node: usize,
+    path: String,
     contextual: bool,
-    requests: &mut Vec<(usize, String, bool)>,
-) -> Result<(), PrepareError> {
-    if depth > crate::limits::Limits::SEMANTIC_DEPTH {
-        return Err(PrepareError::limit(
-            "semantic_depth",
-            crate::limits::Limits::SEMANTIC_DEPTH,
-            Some(depth),
-            Some(path),
-        ));
-    }
+}
 
-    if let Some(node) = d.field(value, "function") {
-        requests.push((node, format!("{path}.function"), contextual));
-    }
-    if let Some(bindings) = d
-        .field(value, "aggregate")
-        .and_then(|payload| d.field(payload, "derive"))
-        .filter(|&node| !matches!(d.nodes()[node], N::Null))
-    {
-        for (index, &binding) in sequence(d, bindings)?.iter().enumerate() {
-            let value = field(d, field(d, binding, "derivation")?, "value")?;
-            collect_calls(
-                d,
-                value,
-                &format!("{path}.aggregate.derive[{index}].derivation"),
-                depth + 1,
-                true,
-                requests,
-            )?;
-        }
-    }
-    if let Some(case) = d.field(value, "case") {
-        let branches = sequence(d, case)?;
-        for (index, &branch) in branches.iter().enumerate() {
-            for name in ["then", "otherwise"] {
-                if let Some(value) = d.field(branch, name) {
-                    collect_calls(
-                        d,
-                        value,
-                        &format!("{path}.case[{index}].{name}"),
-                        depth + 1,
-                        contextual,
-                        requests,
-                    )?;
+/// Every call the derivations evaluate, in today's occurrence order:
+/// columns, then intermediate derivations, then row template overrides.
+fn requests(
+    d: &Document,
+    lowered: &crate::front_end::v0_5::Lowered,
+) -> (Vec<Request>, BTreeMap<usize, Vec<usize>>, Vec<usize>) {
+    use crate::ast::{ExprKind, Notation, Owner, Scope, Step};
+    let spec = lowered.spec();
+    let sites = spec.sites();
+    let mut requests = Vec::new();
+    let mut by_site = BTreeMap::new();
+    let mut bindings = Vec::new();
+    let passes: [fn(&Owner) -> bool; 3] = [
+        |owner| matches!(owner, Owner::Default { .. }),
+        |owner| matches!(owner, Owner::Binding { .. }),
+        |owner| matches!(owner, Owner::Override { .. }),
+    ];
+    for pass in passes {
+        for site in sites.iter().filter(|site| pass(&site.owner)) {
+            let mut found = Vec::new();
+            spec.walk(site.root, site.scope, |at, scope| {
+                if matches!(spec.expr(at).kind, ExprKind::Call { .. }) {
+                    found.push((at, scope != Scope::Row));
                 }
+                Step::Continue
+            });
+            let mut indices = Vec::new();
+            for (call, contextual) in found {
+                let Some(node) = d.field(lowered.origin(call), "function") else {
+                    continue;
+                };
+                indices.push(requests.len());
+                requests.push(Request {
+                    node,
+                    path: spec.render(spec.expr(call).meta.path, Notation::V0_5),
+                    contextual,
+                });
             }
+            if matches!(site.owner, Owner::Binding { .. }) {
+                bindings.extend(&indices);
+            }
+            by_site.insert(lowered.origin(site.root), indices);
         }
     }
-    Ok(())
+    (requests, by_site, bindings)
 }
 
 pub(super) fn prepare(
     d: &Document,
+    lowered: &crate::front_end::v0_5::Lowered,
     columns: &[usize],
     functions: &[Function],
     undeclared: Option<crate::project_function::Language>,
@@ -195,62 +221,12 @@ pub(super) fn prepare(
             return Err(PrepareError::Internal);
         }
     }
-    let mut requests = Vec::new();
-    for &column in columns {
-        if let Some(value) = d
-            .field(column, "derivation")
-            .and_then(|id| d.field(id, "value"))
-        {
-            let name = text(d, field(d, column, "name")?)?;
-            collect_calls(
-                d,
-                value,
-                &format!("columns.{name}.derivation"),
-                0,
-                false,
-                &mut requests,
-            )?;
-        }
-    }
-    if let Some(items) = d
-        .field(d.root(), "intermediates")
-        .filter(|&id| !matches!(d.nodes()[id], N::Null))
-    {
-        for (index, &item) in sequence(d, items)?.iter().enumerate() {
-            if let Some(derived) = d
-                .field(item, "derivations")
-                .filter(|&id| !matches!(d.nodes()[id], N::Null))
-            {
-                for &(name, handled) in mapping(d, derived)? {
-                    let path = format!("intermediates[{index}].derivations.{}", text(d, name)?);
-                    let (value, path) = intermediate_derivations::value(d, handled, &path)?;
-                    collect_calls(d, value, &path, 0, true, &mut requests)?;
-                }
-            }
-        }
-    }
+    let (requests, sites, bindings) = requests(d, lowered);
     let has_rows = present(d, d.root(), "rows");
-    if has_rows {
-        let rows = sequence(d, field(d, d.root(), "rows")?)?;
-        for (row, &node) in rows.iter().enumerate() {
-            for &(name, derivation) in mapping(d, field(d, node, "derivations")?)? {
-                if let Some(value) = d.field(derivation, "value") {
-                    collect_calls(
-                        d,
-                        value,
-                        &format!("rows[{row}].derivations.{}", text(d, name)?),
-                        0,
-                        false,
-                        &mut requests,
-                    )?;
-                }
-            }
-        }
-    }
     let mut calls = Vec::new();
     let mut origins = Vec::new();
     let mut findings = Vec::new();
-    for (request, (node, path, _)) in requests.iter().enumerate() {
+    for (request, Request { node, path, .. }) in requests.iter().enumerate() {
         match project_call_document::decode(d, *node, path) {
             Ok(call) => {
                 origins.push((request, *node, path.clone(), call.name.clone()));
@@ -336,7 +312,7 @@ pub(super) fn prepare(
     let uses = std::vec![usize::from(!has_rows); calls.len()];
     let contextual = origins
         .iter()
-        .map(|(request, _, _, _)| requests[*request].2)
+        .map(|(request, _, _, _)| requests[*request].contextual)
         .collect::<Vec<_>>();
     let admitted =
         match ProjectCalls::admit_contextual(functions, calls, &types, &uses, &contextual) {
@@ -454,6 +430,8 @@ pub(super) fn prepare(
         calls,
         nodes,
         returns,
+        sites,
+        bindings,
     })
 }
 
@@ -466,11 +444,7 @@ pub(super) fn select_rows(
 ) -> Result<Prepared, PrepareError> {
     let calls = ProjectCalls::admit_with_uses(functions, prepared.calls.into_located_calls(), uses)
         .map_err(|_| PrepareError::Internal)?;
-    Ok(Prepared {
-        calls,
-        nodes: prepared.nodes,
-        returns: prepared.returns,
-    })
+    Ok(Prepared { calls, ..prepared })
 }
 
 /// A project function that an intermediate derivation calls is invoked once
@@ -480,13 +454,11 @@ pub(super) fn select_rows(
 /// reading one, which are the ones its derivations may read.
 pub(super) fn donor_keep_findings(
     project: &Prepared,
-    operation: &Operation,
+    value: usize,
     named: &intermediates::Declarations,
 ) -> Result<Vec<PreflightFinding>, PrepareError> {
-    let mut calls = Vec::new();
-    derivations::calls(operation, &mut calls);
     let mut findings = Vec::new();
-    for call in calls {
+    for &call in project.site_calls(value) {
         let located = &project
             .calls
             .calls()

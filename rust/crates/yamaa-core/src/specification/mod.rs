@@ -27,6 +27,7 @@ mod intermediate_range;
 mod intermediates;
 mod lookup_diagnostics;
 mod lookup_range;
+mod lowering_audit;
 mod match_values;
 mod relation_predicates;
 mod result_types;
@@ -1340,6 +1341,10 @@ impl PreparedSpecification {
         let d = spec.document();
         let root = d.root();
         check_prepare_limits(d)?;
+        // The typed tree of the same admitted document. Project calls are
+        // analysed on it; every other declaration is still compiled from
+        // the document below.
+        let lowered = crate::front_end::v0_5::lower(spec, None);
         // Link admission precedes every other declaration finding: a refused
         // type authority or contract leaves nothing to compile against.
         let contracts = crate::producer_contract::admit(spec, links).map_err(|error| {
@@ -1389,7 +1394,7 @@ impl PreparedSpecification {
         // environment document, and unknown calls retain ordinary static causes.
         // A project without an environment for the host names that cause instead.
         let functions = functions.unwrap_or(&[]);
-        let project = match functions::prepare(d, columns, functions, undeclared) {
+        let project = match functions::prepare(d, &lowered, columns, functions, undeclared) {
             Ok(project) => Some(project),
             Err(PrepareError::Invalid(errors)) => {
                 findings.extend(errors);
@@ -1521,8 +1526,7 @@ impl PreparedSpecification {
             )?;
             let project = match project {
                 Some(project) => {
-                    let mut uses = rows.call_uses(&project.calls)?;
-                    intermediates.add_call_uses(&mut uses)?;
+                    let uses = project.row_uses(rows.declaration_values())?;
                     Some(functions::select_rows(project, functions, &uses)?)
                 }
                 None => None,
@@ -1549,7 +1553,8 @@ impl PreparedSpecification {
                 verifications,
                 column_verifications,
             }
-            .finish_checks();
+            .finish_checks()
+            .map(|prepared| prepared.audit_lowering(&lowered));
         }
         let declarations = prepare_column_declarations(
             d,
@@ -1589,6 +1594,7 @@ impl PreparedSpecification {
             column_verifications,
         }
         .finish_checks()
+        .map(|prepared| prepared.audit_lowering(&lowered))
     }
     pub fn source(&self) -> &SourceDeclaration {
         &self.sources[self.driver]
