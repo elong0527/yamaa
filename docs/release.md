@@ -15,9 +15,10 @@ open gates live in GitHub issues and pull requests, not here.
   which has glibc 2.28, and runs the conformance corpus there with that
   system's Python 3.12.
 - R source builds with R 4.4.0 or later on Linux x86_64, macOS arm64 and
-  Windows x64, each passing `R CMD check --as-cran` on R 4.6.1 with only the
-  notes that `R/yamaa/cran-comments.md` explains. The floor follows an audit
-  of the R C API that the binding calls; R 4.4 is checked on Linux.
+  Windows x64, each passing `R CMD check --as-cran` with only the notes that
+  `R/yamaa/cran-comments.md` explains: with R 4.6.1, and in CRAN's incoming
+  checks with R-devel, R-release and R 4.4 and the minimum Rust. The floor
+  follows an audit of the R C API that the binding calls.
 - Other runtimes and architectures, macOS x86_64 among them (#3030 D49),
   free-threaded Python, musl and R binary packages are not supported. R is
   distributed as a GitHub source tarball, and from 1.0.0 on CRAN, as
@@ -35,8 +36,24 @@ Rtools45 and the GNU Rust target, as
 describes.
 
 `.github/workflows/native.yml` builds, installs and tests every supported
-combination on manual dispatch. A release is cut from a commit whose complete
-native run passed. Development PRs do not run the release lanes, so before a
+combination on manual dispatch and weekly on main. A release is cut from a
+commit whose complete native run passed.
+
+The native run also runs CRAN's incoming checks on the R source archive that a
+release publishes, the bytes of its `native-r-ubuntu-24.04` artifact: its
+`native-cran` jobs. Each runs `R CMD check --as-cran` through
+`tools/commands/check_r.py`, which fails on any NOTE, WARNING or ERROR that
+`R/yamaa/cran-comments.md` does not explain and on a tarball above the 15 MB
+that it requests. The build reads the vendored crates behind a proxy that
+refuses connections and runs two Cargo jobs.
+
+- With R-devel, R-release and R 4.4, on Linux, macOS and Windows, Cargo and
+  rustc are the workspace's `rust-version`, 1.82: the two-year-old toolchain
+  that CRAN's guidance asks a package to be tested with.
+- In R-hub v2's `gcc16` container, CRAN's r-devel-linux-x86_64-fedora-gcc
+  configuration (R-devel built with GCC 16 on Fedora 44, with CRAN's check
+  settings), the build uses the Cargo and rustc that Fedora packages, as
+  CRAN's Linux check servers use their distribution's. Development PRs do not run the release lanes, so before a
 release also dispatch R-CMD-check, Dependency graphs and Release compatibility
 on the candidate. Release compatibility checks the minimum toolchain, the R
 source package built with it, minimal format builds, Python 3.15 and minimum
@@ -265,8 +282,8 @@ run of the same commit cannot replace the run the release was reviewed against.
 The named run must be a completed successful native run of the peeled tag
 commit: a scheduled main run, a main dispatch, or a same-repository
 `qualification/issue-*` push. It requires all installed lanes, shared
-Rust/math, complete cohort comparisons and strict R package checks to have
-passed. Branch dispatches cannot release. A tag other than the one the release
+Rust/math, complete cohort comparisons, strict R package checks and CRAN's
+incoming checks to have passed. Branch dispatches cannot release. A tag other than the one the release
 identity names fails before any request: a candidate tag on a final release, a
 final release tag on a candidate, or another version or candidate number. So
 does a lightweight tag or a missing, repeated or malformed trailer, and a named
@@ -350,8 +367,9 @@ python -m tools.ci.select_release_artifacts --repository elong0527/yamaa \
 
 CRAN receives 1.0.0, never a candidate (#3030 D1). Before submitting, the
 candidates pass `R CMD check --as-cran` on R-devel, win-builder and the macOS
-builder, and `R/yamaa/cran-comments.md` records the results and explains every
-remaining note. A release reaches its channels in this order:
+builder, beside the qualifying native run's CRAN checks, and
+`R/yamaa/cran-comments.md` records the results and explains every remaining
+note. A release reaches its channels in this order:
 
 1. The final release tag `yamaa-vX.Y.Z`, pushed as [Publication](#publication)
    describes.

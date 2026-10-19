@@ -274,6 +274,15 @@ def required_jobs(coverage):
             "Run installed R supplemental suites outside checkout",
             "Check R source package outside checkout",
         )
+    # CRAN's incoming checks of the R source archive a release publishes.
+    for platform in coverage["cran"]["os"]:
+        for version in coverage["cran"]["r"]:
+            jobs[f"native-cran ({platform}, R {version})"] = (
+                "Check the R source package as CRAN does",
+                "Confirm that the build used the minimum Rust",
+            )
+    for platform in coverage["cran_container"]["platform"]:
+        jobs[f"native-cran ({platform})"] = ("Check the R source package as CRAN does",)
     return jobs
 
 
