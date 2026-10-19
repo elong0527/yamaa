@@ -62,6 +62,12 @@ cd yamaa
 make setup
 ```
 
+The development package requires only Polars and packaging at runtime. Its
+optional `style` extra adds the Python YAML readers used by the style checker;
+from a source checkout, install it with `python -m pip install './python[style]'`.
+The `test` extra also includes these readers, plus PyArrow, lxml and Pydantic
+for independent artifact and conformance checks. `make setup` installs it.
+
 yamaa 0.4.0 is published as GitHub release assets, not on PyPI. The
 [release guidance](https://github.com/elong0527/yamaa/blob/yamaa-v0.4.0/docs/release.md#supported-platforms)
 lists the supported Python versions and platforms.
