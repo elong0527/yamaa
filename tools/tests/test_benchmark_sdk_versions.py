@@ -11,6 +11,8 @@ from tools.packaging import check_benchmark_sdk_versions as guard
 def fixture(root):
     (root / "R/yamaa").mkdir(parents=True)
     (root / "python").mkdir()
+    (root / "tools/packaging").mkdir(parents=True)
+    (root / "tools/packaging/release.toml").write_text('version = "0.3.0"\n')
     (root / "R/yamaa/DESCRIPTION").write_text("Package: yamaa\nVersion: 0.3.0\n")
     (root / "python/pyproject.toml").write_text(
         '[project]\nname="yamaa"\nversion="0.3.0"\n'
@@ -79,18 +81,32 @@ class BenchmarkSdkVersions(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             fixture(root)
-            for text in (
-                '[project]\nversion="0.4.0"\n',
-                'project="invalid"\n',
-                '[project]\nname="yamaa"\n',
+            for text, version in (
+                ('[project]\nversion="0.4.0"\n', "'0.4.0'"),
+                ('project="invalid"\n', "None"),
+                ('[project]\nname="yamaa"\n', "None"),
             ):
                 with self.subTest(text=text):
                     (root / "python/pyproject.toml").write_text(text)
                     self.assertEqual(
                         guard.violations(root),
-                        ["prepared Python/R SDK versions differ"],
+                        [
+                            f"python/pyproject.toml: version {version} is not "
+                            "'0.3.0', the Python version of release 0.3.0"
+                        ],
                     )
+            (root / "python/pyproject.toml").write_text(
+                '[project]\nname="yamaa"\nversion="0.3.0"\n'
+            )
             description = root / "R/yamaa/DESCRIPTION"
+            description.write_text("Package: yamaa\nVersion: 0.4.0\n")
+            self.assertEqual(
+                guard.violations(root),
+                [
+                    "R/yamaa/DESCRIPTION: Version '0.4.0' is not '0.3.0', "
+                    "the R version of release 0.3.0"
+                ],
+            )
             for text in (
                 "Package: yamaa\n",
                 "Version: \n",
@@ -175,6 +191,93 @@ class BenchmarkSdkVersions(unittest.TestCase):
                     self.assertEqual(second.read_bytes(), original_second)
                     if not unreadable:
                         self.assertEqual(first.read_bytes(), b"\xff")
+
+
+class CandidateSdkVersions(unittest.TestCase):
+    """A candidate's Python version marks it; R and the SDK pins keep X.Y.Z."""
+
+    def candidate(self, root):
+        lock = fixture(root)
+        (root / "tools/packaging/release.toml").write_text(
+            'version = "1.0.0"\ncandidate = 2\n'
+        )
+        (root / "R/yamaa/DESCRIPTION").write_text("Package: yamaa\nVersion: 1.0.0\n")
+        (root / "python/pyproject.toml").write_text(
+            '[project]\nname="yamaa"\nversion="1.0.0rc2"\n'
+        )
+        for path in root.glob("benchmarks/*/r/renv.lock"):
+            path.write_text(path.read_text().replace('"0.3.0"', '"1.0.0"'))
+        return lock
+
+    def test_the_candidate_spellings_agree(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.candidate(root)
+            self.assertEqual(guard.violations(root), [])
+
+    def test_a_candidate_spelled_in_r_or_a_final_python_version_is_refused(self):
+        for relative, old, new, error in [
+            (
+                "R/yamaa/DESCRIPTION",
+                "Version: 1.0.0",
+                "Version: 1.0.0rc2",
+                "R/yamaa/DESCRIPTION: Version '1.0.0rc2' is not '1.0.0', the R "
+                "version of release 1.0.0 release candidate 2",
+            ),
+            (
+                "python/pyproject.toml",
+                '"1.0.0rc2"',
+                '"1.0.0"',
+                "python/pyproject.toml: version '1.0.0' is not '1.0.0rc2', the "
+                "Python version of release 1.0.0 release candidate 2",
+            ),
+            (
+                "python/pyproject.toml",
+                '"1.0.0rc2"',
+                '"1.0.0rc1"',
+                "python/pyproject.toml: version '1.0.0rc1' is not '1.0.0rc2', the "
+                "Python version of release 1.0.0 release candidate 2",
+            ),
+            (
+                "benchmarks/first/r/renv.lock",
+                '"Version": "1.0.0"',
+                '"Version": "1.0.0rc2"',
+                "benchmarks/first/r/renv.lock: SDK version '1.0.0rc2' differs from "
+                "prepared '1.0.0'",
+            ),
+        ]:
+            with (
+                self.subTest(relative=relative, new=new),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                root = Path(directory)
+                self.candidate(root)
+                path = root / relative
+                self.assertIn(old, path.read_text())
+                path.write_text(path.read_text().replace(old, new, 1))
+                self.assertEqual(guard.violations(root), [error])
+
+    def test_a_missing_or_invalid_declaration_is_the_one_violation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fixture(root)
+            declaration = root / "tools/packaging/release.toml"
+            declaration.write_text('version = "0.3"\n')
+            self.assertEqual(
+                guard.violations(root),
+                [
+                    "tools/packaging/release.toml: the release version must be "
+                    "X.Y.Z, not '0.3'"
+                ],
+            )
+            declaration.unlink()
+            [error] = guard.violations(root)
+            self.assertTrue(
+                error.startswith(
+                    "tools/packaging/release.toml: unreadable release identity"
+                ),
+                error,
+            )
 
 
 if __name__ == "__main__":

@@ -53,13 +53,13 @@ previous <- setwd(work)
 writeLines(c("schema_version: '1.0'", "environments: {r: environment.yaml}",
   "adam: {specs: [spec.yaml]}"), "project.yaml")
 identity_function <- function(name, type, cases, extra = character()) c(
-  paste0("  ", name, ":"), "    function: yamaabenchmarks::project_value",
+  paste0("  ", name, ":"), "    function: base::identity",
   paste0("    description: Return the ", type, " argument unchanged."), extra,
   paste0("    params: [{name: x, type: ", type,
     if (length(extra)) ", accepts_missing: true" else "", "}]"),
   paste0("    returns: ", type), "    tests:", paste0("      - ", cases))
 missing_case <- "{id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}"
-ratio <- readLines(system.file("project-original", "schema-functions", "r", "environment.yaml",
+rounding <- readLines(system.file("project-base", "base-round", "r", "environment.yaml",
   package = "yamaa", mustWork = TRUE))
 writeLines(c("schema_version: '1.0'", "functions:",
   identity_function("int_value", "int", c(
@@ -87,7 +87,18 @@ writeLines(c("schema_version: '1.0'", "functions:",
     "{id: boundary, covers: [boundary], args: {x: 0}, result: 0}",
     "{id: missing, covers: ['accepted-missing:x', nullable-output], args: {x: null}, result: null}"),
     "    may_return_missing: true"),
-  ratio[seq(which(ratio == "functions:") + 1L, length(ratio))]), "environment.yaml")
+  rounding[seq(which(rounding == "functions:") + 1L, length(rounding))],
+  "  bool_value:", "    function: base::ifelse",
+  "    description: Select an integer using a boolean argument.",
+  "    params:", "      - {name: test, type: bool}",
+  "      - {name: yes, type: int, required: false, default: 1}",
+  "      - {name: no, type: int, required: false, default: 0}",
+  "    returns: int", "    tests:",
+  "      - {id: true-value, covers: [normal, boundary, 'boolean-true:test', 'default:yes', 'default:no'], args: {test: true}, result: 1}",
+  "      - {id: false-value, covers: ['boolean-false:test'], args: {test: false, yes: 1, no: 0}, result: 0}",
+  "      - {id: missing-test, covers: ['short-circuit-missing:test'], args: {test: null, yes: 1, no: 0}, result: null}",
+  "      - {id: missing-yes, covers: ['short-circuit-missing:yes'], args: {test: true, yes: null, no: 0}, result: null}",
+  "      - {id: missing-no, covers: ['short-circuit-missing:no'], args: {test: false, yes: 1, no: null}, result: null}"), "environment.yaml")
 
 # One build calls every function, so activation runs every declared case.
 writeLines(c("schema_version: '1.0'", "domain: TEST", "keys: [ID]",
@@ -99,8 +110,8 @@ writeLines(c("schema_version: '1.0'", "domain: TEST", "keys: [ID]",
   "  - {name: D, type: date, derivation: {function: {name: date_value, args: {x: SRC.D}}}}",
   "  - {name: T, type: datetime, derivation: {function: {name: datetime_value, args: {x: SRC.T}}}}",
   "  - {name: M, type: int, derivation: {function: {name: maybe_int, args: {x: SRC.M}}}}",
-  "  - name: P", "    type: float", "    derivation:", "      function:", "        name: project_ratio",
-  "        args: {numerator: SRC.F, denominator: 4.0, adjust: {literal: null}, as_percent: true}",
+  "  - name: P", "    type: float", "    derivation:", "      function:", "        name: rounded_value",
+  "        args: {x: SRC.F}",
   "output: {path: output.csv, columns: [ID, I, F, S, D, T, M, P]}"), "spec.yaml")
 writeBin(charToRaw(enc2utf8(paste0("ID,I,F,S,D,T,M\n",
   "1,7,2.5,\u00e9t\u00e9,2024-02-29,2024-02-29T12:30:45,5\n",
@@ -120,17 +131,17 @@ for (attempt in 1:2) {
     identical(built$output$D, as.Date(c("2024-02-29", "0001-01-01", NA))),
     identical(built$output$T, as.POSIXct(c("2024-02-29 12:30:45", "9999-12-31 23:59:59", NA), tz = "UTC")),
     identical(built$output$M, c(5, NA, -2^53)),
-    identical(built$output$P, c(62.5, -12.5, NA)))
+    identical(built$output$P, c(2.5, -0.5, NA)))
   # Each argument arrives as its one plain R value: int as double, accepted
-  # missing as logical NA, bool as logical and an omitted default by value.
+  # missing as logical NA and an omitted default by value.
   stopifnot(received(list(x = 7)), received(list(x = 2^53)), received(list(x = -2^53)),
     received(list(x = 2.5)), received(list(x = "\u00e9t\u00e9")), received(list(x = "")),
     received(list(x = as.Date("2024-02-29"))), received(list(x = as.Date("0001-01-01"))),
     received(list(x = as.POSIXct("2024-02-29 12:30:45", tz = "UTC"))),
     received(list(x = as.POSIXct("9999-12-31 23:59:59", tz = "UTC"))),
     received(list(x = 5)), received(list(x = NA)),
-    received(list(numerator = 2.5, denominator = 4, decimals = 2, adjust = NA, as_percent = TRUE)),
-    received(list(numerator = 1, denominator = 2, decimals = 2, adjust = 0, as_percent = FALSE)),
+    received(list(x = 2.5, digits = 3)),
+    received(list(x = 2.375, digits = 3)),
     !received(list(x = NULL)))
   text <- Filter(function(arguments) identical(arguments, list(x = "\u00e9t\u00e9")), seen)[[1L]]$x
   stopifnot(identical(Encoding(text), "UTF-8"),
@@ -138,20 +149,21 @@ for (attempt in 1:2) {
       list(class = c("POSIXct", "POSIXt"), tzone = "UTC")))
   stopifnot(is.null(built$save()), identical(rawfile("output.csv"), charToRaw(enc2utf8(paste0(
     "ID,I,F,S,D,T,M,P\n",
-    "1,7,2.5,\u00e9t\u00e9,2024-02-29,2024-02-29T12:30:45,5,62.5\n",
-    "2,9007199254740992,-0.5,x,0001-01-01,9999-12-31T23:59:59,,-12.5\n",
+    "1,7,2.5,\u00e9t\u00e9,2024-02-29,2024-02-29T12:30:45,5,2.5\n",
+    "2,9007199254740992,-0.5,x,0001-01-01,9999-12-31T23:59:59,,-0.5\n",
     "3,-9007199254740992,,,,,-9007199254740992,\n")))))
   unlink("output.csv")
 }
 cat("plain R function arguments and results round trip every type and repeat\n")
 
 # One function column over authored cells, each cell raw bytes or text.
-column <- function(type, name, cells, resolve = capabilities$resolve) {
+column <- function(type, name, cells, resolve = capabilities$resolve,
+                   parameter = "x", argument = "SRC.X") {
   writeLines(c("schema_version: '1.0'", "domain: TEST", "keys: [ID]",
     paste0("input: {SRC: {path: input.csv, types: {ID: int, X: ", type, "}}}"),
     "columns:", "  - {name: ID, type: int, derivation: SRC.ID}",
     paste0("  - {name: X, type: ", type, ", derivation: {function: {name: ", name,
-      ", args: {x: SRC.X}}}}"),
+      ", args: {", parameter, ": ", argument, "}}}}"),
     "output: {path: output.csv, columns: [ID, X]}"), "spec.yaml")
   rows <- lapply(seq_along(cells), function(index) c(charToRaw(paste0(index, ",")),
     if (is.raw(cells[[index]])) cells[[index]] else charToRaw(enc2utf8(cells[[index]])),
@@ -159,6 +171,18 @@ column <- function(type, name, cells, resolve = capabilities$resolve) {
   writeBin(c(charToRaw("ID,X\n"), unlist(rows)), "input.csv")
   with_resolve(resolve, run())
 }
+
+# Boolean arguments stay logical; missing short-circuits the call.
+seen <- list()
+for (value in c("true", "false", "null")) {
+  logicals <- column("int", "bool_value", list("1"), wrapped(record),
+    parameter = "test", argument = if (value == "null") "{literal: null}" else value)
+  stopifnot(nrow(logicals$issues) == 0L,
+    identical(logicals$output$X, switch(value, true = 1, false = 0, null = NA_real_)))
+}
+stopifnot(received(list(test = TRUE, yes = 1, no = 0)),
+  received(list(test = FALSE, yes = 1, no = 0)),
+  !received(list(test = NA, yes = 1, no = 0)))
 
 # Text beyond one MiB crosses both ways whole and saves exact bytes.
 large <- paste0(strrep("\u00e9", 524289L), "complete")

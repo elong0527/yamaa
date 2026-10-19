@@ -1,9 +1,11 @@
 """Run repository checks shared by local Make targets and pull request CI."""
 
 import argparse
+import os
 import subprocess
 import sys
 
+from tools.ci import fuzz
 from tools.paths import ROOT, WORKSPACE
 
 LINT_PATHS = [
@@ -52,7 +54,8 @@ def main():
         run("cargo", "fmt", "--all", "--check", cwd=WORKSPACE)
         # The outside-workspace check and the fuzz targets are workspaces of
         # their own, out of reach of `--all`. CI's minimum-toolchain job builds
-        # and tests the first; the Fuzz workflow builds and runs the second.
+        # and tests the first; the Fuzz workflow builds and runs the second,
+        # and Clippy below also lints it on every pull request.
         for manifest in ("tests/embedder/Cargo.toml", "fuzz/Cargo.toml"):
             run(
                 "cargo",
@@ -70,6 +73,29 @@ def main():
             *(("--exclude", "yamaa-r") if args.without_r else ()),
             "--all-targets",
             "--all-features",
+            "--",
+            "-D",
+            "warnings",
+            cwd=WORKSPACE,
+        )
+        # Clippy type-checks the fuzz targets as `cargo check` does, so an
+        # engine change that breaks a target fails here, not only in the
+        # nightly fuzz run. Like the Fuzz workflow, it builds on a copy of the
+        # canonical lock, with the workspace toolchain instead of the fuzzing
+        # nightly, and shares the workspace's build directory unless the caller
+        # chose one.
+        fuzz.copy_lock()
+        run(
+            "cargo",
+            "clippy",
+            "--manifest-path",
+            str(fuzz.FUZZ / "Cargo.toml"),
+            "--all-targets",
+            *(
+                ()
+                if "CARGO_TARGET_DIR" in os.environ
+                else ("--target-dir", str(WORKSPACE / "target"))
+            ),
             "--",
             "-D",
             "warnings",

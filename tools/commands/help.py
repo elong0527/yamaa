@@ -8,8 +8,9 @@ HELP = """yamaa repository commands (run from the repository root)
   quick             Before a push: check-lint without the R binding, then
                     check-repository. Runs no test suite and needs no R.
   check             Run the five PR checks below, in the same order locally.
-  check-lint        Ruff, cargo fmt and workspace Clippy (requires R as well).
-                    Needs Clippy and rustfmt added to the pinned Rust toolchain.
+  check-lint        Ruff, cargo fmt, workspace Clippy (requires R as well) and Clippy
+                    over the fuzz targets. Needs Clippy and rustfmt added to the
+                    pinned Rust toolchain, and a C++ compiler for libFuzzer.
   check-repository  Repository/rule/notice validation and a strict generated docs build.
   test-rust         cargo test --locked --workspace, including both host bindings.
                     Needs the selected Python interpreter and R 4.6.1.

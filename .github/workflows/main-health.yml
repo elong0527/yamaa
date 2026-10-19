@@ -3,9 +3,12 @@ name: Main health
 # Main is checked on schedules rather than after every merge, so a failing
 # main run is the only sign that main is broken. Keep one open issue per
 # workflow while its newest main run fails, and close it when one succeeds.
-# Only CI and Fuzz, on their schedules, and Docs, on each merge, run on main
-# without a person starting them; whoever dispatches a release lane sees its
-# result.
+# Fuzz is the exception: a failing run opens its issue or comments on it, and
+# a person closes it. A later green run does not show that a crash is fixed,
+# because the next run may not find the same input again and runs keep no
+# corpus. Only CI and Fuzz, on their schedules, and Docs, on each merge, run on
+# main without a person starting them; whoever dispatches a release lane sees
+# its result.
 on:
   workflow_run:
     workflows:
@@ -51,6 +54,31 @@ jobs:
     steps:
       - name: Open, update or close the workflow's issue
         run: |
+          title="main is red: $WORKFLOW"
+          number="$(gh issue list --state open --label main-red --limit 100 --json number,title \
+            | jq -r --arg title "$title" '[.[] | select(.title == $title)][0].number // empty')"
+          if [ "$WORKFLOW" = Fuzz ]; then
+            # Every failing run is reported, even one a newer run overtook,
+            # and a comment per run keeps the link to its reproducing input.
+            # A green run leaves the issue to a person.
+            if [ "$CONCLUSION" = success ]; then
+              echo "A green Fuzz run leaves any open issue to a person."
+              exit 0
+            fi
+            report="The $RUN_EVENT run of Fuzz on main ended in $CONCLUSION at $HEAD_SHA: $RUN_URL"
+            if [ -n "$number" ]; then
+              gh issue comment "$number" --body "$report"
+            else
+              gh label create main-red --color B60205 \
+                --description "A main-branch check is failing" --force
+              gh issue create --title "$title" --label main-red --body "$report
+
+          A failing fuzz job keeps its reproducing input as an artifact of its run, and each later failing run comments here.
+
+          A green run does not close this issue, because the next run may not find the same input again. Fix the crash with a unit test, commit its input as a regression input (rust/fuzz/README.md), then close the issue."
+            fi
+            exit 0
+          fi
           # A re-run of an older run can finish after a newer run. A re-run
           # keeps its run number, so only the run with the highest number
           # among the reported main runs decides the issue.
@@ -62,9 +90,6 @@ jobs:
             echo "$WORKFLOW run $RUN_NUMBER was overtaken by run $newest; the issue is unchanged."
             exit 0
           fi
-          title="main is red: $WORKFLOW"
-          number="$(gh issue list --state open --label main-red --limit 100 --json number,title \
-            | jq -r --arg title "$title" '[.[] | select(.title == $title)][0].number // empty')"
           body="The latest $RUN_EVENT run of $WORKFLOW on main ended in $CONCLUSION at $HEAD_SHA.
 
           Latest failing run: $RUN_URL

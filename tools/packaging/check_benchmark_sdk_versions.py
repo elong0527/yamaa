@@ -1,28 +1,47 @@
-"""Keep benchmark R SDK pins coherent with the prepared Python/R release."""
+"""Keep the host package versions and benchmark R SDK pins on the release identity.
+
+The Python and R packages each carry their own spelling of the release that
+tools/packaging/release.toml names, and every benchmark R environment pins the
+R spelling. For a release candidate that is the final version, since an R
+version cannot mark a candidate (#3030 D53).
+"""
 
 import argparse
 import json
 import tomllib
 from pathlib import Path
 
+from tools.packaging import release_identity
 from tools.paths import ROOT
 
 
-def violations(root: Path) -> list[str]:
+def violations(root: Path, identity=None) -> list[str]:
+    """List the version disagreements; `identity` defaults to the tree's own."""
+    if identity is None:
+        try:
+            identity = release_identity.read(root)
+        except ValueError as error:
+            return [str(error)]
     errors = []
-    description = root / "R/yamaa/DESCRIPTION"
     try:
-        description_text = description.read_text(encoding="utf-8")
+        description = (root / "R/yamaa/DESCRIPTION").read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as error:
-        return [f"R/yamaa/DESCRIPTION: unreadable metadata: {error}"]
-    versions = [
-        line.removeprefix("Version:").strip()
-        for line in description_text.splitlines()
-        if line.startswith("Version:")
-    ]
-    if len(versions) != 1 or not versions[0]:
-        return ["R/yamaa/DESCRIPTION must declare exactly one nonempty Version"]
-    expected = versions[0]
+        errors.append(f"R/yamaa/DESCRIPTION: unreadable metadata: {error}")
+    else:
+        versions = [
+            line.removeprefix("Version:").strip()
+            for line in description.splitlines()
+            if line.startswith("Version:")
+        ]
+        if len(versions) != 1 or not versions[0]:
+            errors.append(
+                "R/yamaa/DESCRIPTION must declare exactly one nonempty Version"
+            )
+        elif versions[0] != identity.r:
+            errors.append(
+                f"R/yamaa/DESCRIPTION: Version {versions[0]!r} is not "
+                f"{identity.r!r}, the R version of release {identity}"
+            )
     try:
         python = tomllib.loads(
             (root / "python/pyproject.toml").read_text(encoding="utf-8")
@@ -31,8 +50,12 @@ def violations(root: Path) -> list[str]:
         errors.append(f"python/pyproject.toml: unreadable or invalid metadata: {error}")
     else:
         project = python.get("project")
-        if not isinstance(project, dict) or project.get("version") != expected:
-            errors.append("prepared Python/R SDK versions differ")
+        version = project.get("version") if isinstance(project, dict) else None
+        if version != identity.python:
+            errors.append(
+                f"python/pyproject.toml: version {version!r} is not "
+                f"{identity.python!r}, the Python version of release {identity}"
+            )
     locks = sorted((root / "benchmarks").glob("*/r/renv.lock"))
     if not locks:
         errors.append("no benchmark R SDK locks found")
@@ -47,9 +70,10 @@ def violations(root: Path) -> list[str]:
         sdk = packages.get("yamaa") if isinstance(packages, dict) else None
         if not isinstance(sdk, dict) or sdk.get("Package") != "yamaa":
             errors.append(f"{name}: SDK entry missing or malformed")
-        elif not isinstance(sdk.get("Version"), str) or sdk["Version"] != expected:
+        elif not isinstance(sdk.get("Version"), str) or sdk["Version"] != identity.r:
             errors.append(
-                f"{name}: SDK version {sdk.get('Version')!r} differs from prepared {expected!r}"
+                f"{name}: SDK version {sdk.get('Version')!r} differs from prepared "
+                f"{identity.r!r}"
             )
     return errors
 
@@ -61,7 +85,7 @@ def main() -> None:
     errors = violations(args.root)
     if errors:
         raise SystemExit("\n".join(errors))
-    print("PASS: benchmark R SDK locks match the prepared Python/R release")
+    print("PASS: host package versions and benchmark R SDK locks match the release")
 
 
 if __name__ == "__main__":

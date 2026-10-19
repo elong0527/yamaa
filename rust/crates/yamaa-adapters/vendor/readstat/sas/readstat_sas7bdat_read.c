@@ -12,6 +12,7 @@
 #include "../readstat_convert.h"
 #include "../readstat_malloc.h"
 extern int yamaa_readstat_admit(size_t, size_t);
+extern int yamaa_readstat_admit_bytes(uint64_t);
 extern readstat_error_t yamaa_readstat_deleted_records(void);
 
 typedef struct col_info_s {
@@ -689,8 +690,6 @@ cleanup:
 }
 
 static readstat_error_t sas7bdat_parse_subheader_rle(const char *subheader, size_t len, sas7bdat_ctx_t *ctx) {
-    if (ctx->row_limit == ctx->parsed_row_count)
-        return READSTAT_OK;
     /* Without an output buffer the decompressor only counts bytes. */
     if (!sas7bdat_row_buffer_holds_row(ctx))
         return READSTAT_ERROR_PARSE;
@@ -717,8 +716,16 @@ cleanup:
 }
 
 static readstat_error_t sas7bdat_parse_subheader_compressed(const char *subheader, size_t len, sas7bdat_ctx_t *ctx) {
-    /* Columns submitted for uncompressed rows allocated no row buffer. They
-     * already fit the admitted row length, so allocate it on first use. */
+    /* Only live records are decompressed, each to the row length: a record
+     * after them is not read, in RDC as in RLE. Before a record is
+     * decompressed, the live records times the row length are admitted as
+     * source bytes, so that decompression writes no more than a source file
+     * may hold. Only then is the row buffer allocated, at the first record
+     * decompressed. The columns submitted before it fit the row length. */
+    if (ctx->parsed_row_count >= ctx->row_limit)
+        return READSTAT_OK;
+    if (!yamaa_readstat_admit_bytes((uint64_t)ctx->row_limit * ctx->row_length))
+        return READSTAT_ERROR_MALLOC;
     if (ctx->row == NULL && ctx->row_length) {
         READSTAT_RESIZE_OR_RETURN(ctx->row, ctx->row_length);
         ctx->row_buffer_len = ctx->row_length;
@@ -912,11 +919,6 @@ static readstat_error_t sas7bdat_submit_columns(sas7bdat_ctx_t *ctx, int compres
         } else {
             index_after_skipping++;
         }
-    }
-    if (retval != READSTAT_OK) goto cleanup;
-    if (compressed) {
-        READSTAT_RESIZE_OR_CLEANUP(ctx->row, ctx->row_length);
-        ctx->row_buffer_len = ctx->row_length;
     }
 cleanup:
     return retval;

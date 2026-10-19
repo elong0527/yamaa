@@ -61,6 +61,60 @@ installed directly, for example with `remotes::install_github()`. From a
 repository checkout, `make test-r` builds and checks a fresh source package;
 see the [contributor guide](../../CONTRIBUTING.md).
 
+## What the source package contains
+
+`tools/staging/stage_r_package.py` assembles the standalone package before
+`R CMD build` creates the release archive. The archive contains:
+
+| Location | Contents | Installed for users? |
+| --- | --- | --- |
+| `R/`, `man/`, `NAMESPACE`, `DESCRIPTION` | R facade, help, native registration and package metadata | Yes; R converts code and help to its installed formats |
+| `src/` | C entry point, build rules, the shared Rust workspace, Cargo lock and toolchain declaration, native test inputs, vendored YAML parser and ReadStat C sources | Compiled into `libs/yamaa.so` or `libs/yamaa.dll`; sources are not ordinarily installed |
+| `inst/` | License notices and the specification, grammar, project, Define-XML and host test fixtures | Yes; copied to the package root |
+| `tests/` | Installed-host regression scripts | Used by `R CMD check`; not ordinarily installed |
+
+All five Rust workspace members are retained to preserve the canonical Cargo
+manifest and lock, including the Python binding's source. Building `yamaa-r`
+does not compile that Python binding and does not require Python. The package
+does not bundle prebuilt native libraries or the complete registry dependency
+sources: Cargo downloads missing locked crates during installation. The local
+vendored parser and ReadStat sources are only part of that dependency graph.
+
+The R runtime imports `utils`, which ships with R. `arrow` and `jsonlite` are
+suggested packages used by the regression scripts to inspect saved files.
+`yamaabenchmarks` is not required to build, install, use or check the R
+package. Its packaged project tests use base R callables such as
+`base::identity`, `base::signif` and `base::ifelse`.
+The original benchmark projects still use their separate helper package in
+repository qualification, outside the source package's test dependency graph.
+
+## CRAN preparation
+
+A successful repository check is not a CRAN acceptance decision. Before a
+submission, run `R CMD check --as-cran` on the built tarball with current R
+release and R-devel, and validate Windows and macOS as well as Linux.
+
+The current build still needs work against CRAN's
+[Rust guidance](https://cran.r-project.org/web/packages/using_rust.html):
+check Cargo and rustc availability and versions before compiling, report the
+compiler version, avoid automatic toolchain installation, limit Cargo to one
+or two jobs, and prepare an appropriately compressed vendor bundle so builds
+can run without downloading crates. The minimum Rust version must also be
+verified against the full locked dependency graph, not only our workspace.
+
+CRAN-style checks also flag the patch-level R requirement (`R >= 4.6.1`).
+The planned R 4.4 floor and binding C API audit are tracked in
+[#3058](https://github.com/elong0527/yamaa/issues/3058).
+Inspect termination symbols linked
+from Rust and native libraries, including `abort`, and establish whether they
+can be reached before explaining any retained symbols in a submission.
+
+Review the archive and installed library against the
+[CRAN policies](https://cran.r-project.org/web/packages/policies.html),
+particularly source size, copyright coverage of linked dependencies, build
+time, and test time. `inst/` fixtures remain installed for every user; moving
+test-only resources under `tests/` is a possible further size reduction.
+
 ## Learn more
 
 - Package help: `?yamaa_spec`, `?yamaa_project` and `?yamaa_read_odm`.

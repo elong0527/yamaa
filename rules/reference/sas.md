@@ -128,7 +128,7 @@ cells, retained values, page and row work, and header work are admitted before
 their corresponding allocations where the physical framing supplies those
 counts.
 
-Evidence: `rust/crates/yamaa-adapters/src/sas_source/native.rs::fixed_header_geometry_is_checked_before_retaining_any_columns_or_rows`, `rust/crates/yamaa-adapters/src/resource_diagnostics.rs::fixed_sas_boundary_keeps_its_bound_and_input_owner`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::references_bouncing_between_pages_cannot_read_more_than_the_file_holds`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::the_row_limit_admits_live_records_not_stored_ones`, `python/tests/installed/installed_sas_sources.py::test_held_output_and_repeat_saves_survive_source_and_specification_mutation`.
+Evidence: `rust/crates/yamaa-adapters/src/sas_source/native.rs::fixed_header_geometry_is_checked_before_retaining_any_columns_or_rows`, `rust/crates/yamaa-adapters/src/resource_diagnostics.rs::fixed_sas_boundary_keeps_its_bound_and_input_owner`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::references_bouncing_between_pages_cannot_read_more_than_the_file_holds`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::the_row_limit_admits_live_records_not_stored_ones`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::decompressed_records_are_admitted_as_source_bytes_before_any_is_decompressed`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::a_small_file_cannot_decompress_to_more_than_the_source_byte_limit`, `python/tests/installed/installed_sas_sources.py::test_held_output_and_repeat_saves_survive_source_and_specification_mutation`.
 Replaces: REQ-1316.
 
 Resource refusal is separate from semantic source invalidity.
@@ -140,6 +140,12 @@ The stored bytes that moved-record references read ([SAS-8](#sas-8)) are page
 work. Together they may not exceed the bytes of the file's pages, so following
 references costs no more than a multiple of the file's size. A file whose
 references would read more fails as `malformed` ([SAS-7](#sas-7)).
+
+Each live record of a compressed `sas7bdat` input decompresses to the row
+length, and no record after the live records is decompressed. The live records
+times the row length are source bytes: they are admitted under the source byte
+limit before any record is decompressed, and a file over it is refused as that
+limit.
 
 <a id="sas-7"></a>
 

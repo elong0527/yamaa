@@ -1,5 +1,8 @@
 """The fuzz targets, their seeds, regression inputs and pull request selection."""
 
+import gzip
+import io
+import tarfile
 import tempfile
 import tomllib
 import unittest
@@ -52,11 +55,22 @@ class FuzzTargets(unittest.TestCase):
                         self.assertTrue(path.is_file())
 
     def test_the_workflow_filters_pull_requests_by_every_reader(self):
-        workflow = yaml.load(
-            (ROOT / ".github/workflows/fuzz.yml").read_text(encoding="utf-8"),
-            Loader=UniqueKeyLoader,
+        self.assertEqual(
+            workflow()["on"]["pull_request"]["paths"], fuzz.workflow_paths()
         )
-        self.assertEqual(workflow["on"]["pull_request"]["paths"], fuzz.workflow_paths())
+
+    def test_every_dispatch_choice_fits_the_job_timeout(self):
+        # Installing the nightly and cargo-fuzz, building the target and
+        # writing its seeds take well under ten minutes on a cold cache;
+        # thirty leave room for a slower runner.
+        setup_minutes = 30
+        definition = workflow()
+        seconds = definition["on"]["workflow_dispatch"]["inputs"]["seconds"]
+        self.assertEqual(seconds["type"], "choice")
+        self.assertIn(seconds["default"], seconds["options"])
+        longest = max(int(choice) for choice in seconds["options"])
+        timeout = definition["jobs"]["fuzz"]["timeout-minutes"]
+        self.assertLessEqual(longest + setup_minutes * 60, timeout * 60)
 
     def test_a_change_selects_the_targets_that_read_it(self):
         everything = list(fuzz.TARGETS)
@@ -68,18 +82,27 @@ class FuzzTargets(unittest.TestCase):
                 ["sas7bdat", "xport"],
             ),
             (["rust/crates/yamaa-core/src/typed_csv.rs"], ["csv", "dataset_json"]),
-            # The SAS reader builds its table through the shared batch writer.
+            # The SAS reader builds its table through the shared batch writer,
+            # and the ODM reader reports that module's table errors.
             (
                 ["rust/crates/yamaa-adapters/src/ipc_table.rs"],
-                ["csv", "dataset_json", "sas7bdat", "xport"],
+                ["csv", "dataset_json", "odm_xml", "sas7bdat", "xport"],
             ),
             (["rust/crates/yamaa-adapters/src/parquet_source/reader.rs"], ["parquet"]),
+            (["rust/crates/yamaa-adapters/src/odm_xml/archive.rs"], ["odm_xml"]),
+            (["rust/crates/yamaa-core/src/odm_items.rs"], ["odm_xml"]),
             (["rust/vendor/saphyr-parser/src/lib.rs"], ["specification"]),
             (["rust/fuzz/fuzz_targets/csv.rs"], ["csv"]),
             (["rust/fuzz/regressions/xport/zero-variables.hex"], ["xport"]),
             (["rust/fuzz/src/lib.rs"], everything),
             (["tools/ci/fuzz.py"], everything),
             (["rust/Cargo.lock"], everything),
+            # Every reader enforces the fixed limits and builds the core table
+            # and value types, and dataset_json matches them exhaustively.
+            (["rust/crates/yamaa-core/src/limits.rs"], everything),
+            (["rust/crates/yamaa-core/src/table.rs"], everything),
+            (["rust/crates/yamaa-core/src/value.rs"], everything),
+            (["rust/crates/yamaa-core/src/specification_run.rs"], everything),
             (["rust/fuzz/README.md", "README.md"], []),
             # A directory reader matches only below it, not a sibling prefix.
             (["rust/crates/yamaa-adapters/src/sas_source_extra.rs"], []),
@@ -116,6 +139,46 @@ class RegressionInputs(unittest.TestCase):
             self.assertTrue(all(path.read_bytes() in copies for path in fixtures))
             with self.assertRaises(FileExistsError):
                 fuzz.seed("xport", destination)
+
+    def test_odm_seeds_add_each_fixture_as_the_member_of_tar_archives(self):
+        fixtures = fuzz.committed(fuzz.TARGETS["odm_xml"].seeds)
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / "seeds"
+            self.assertEqual(fuzz.seed("odm_xml", destination), len(fixtures))
+            written = sorted(destination.iterdir())
+            self.assertEqual(len(written), 5 * len(fixtures))
+        for path in fixtures:
+            archives = fuzz.archives(path)
+            with self.subTest(fixture=path.name):
+                # Fixed metadata and timestamps make each archive reproducible.
+                self.assertEqual(archives, fuzz.archives(path))
+                self.assertEqual(
+                    archives["ustar"], gzip.decompress(archives["ustar-gzip"])
+                )
+                long = fuzz.LONG_MEMBER.format(name=path.name)
+                for kind, name, marker in (
+                    ("ustar", path.name, None),
+                    ("gnu", long, b"././@LongLink"),
+                    ("pax", long, b"path="),
+                ):
+                    with tarfile.open(fileobj=io.BytesIO(archives[kind])) as archive:
+                        (member,) = archive.getmembers()
+                        self.assertEqual(member.name, name)
+                        self.assertEqual(
+                            archive.extractfile(member).read(), path.read_bytes()
+                        )
+                    if marker:
+                        # The name exceeds a ustar header's 100 bytes, so a GNU
+                        # long-name entry or a PAX path record precedes it.
+                        self.assertGreater(len(name.encode()), 100)
+                        self.assertIn(marker, archives[kind][:1024])
+
+
+def workflow():
+    return yaml.load(
+        (ROOT / ".github/workflows/fuzz.yml").read_text(encoding="utf-8"),
+        Loader=UniqueKeyLoader,
+    )
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@
 
 import argparse
 import fnmatch
+import json
 import shutil
 from pathlib import Path
 
@@ -18,10 +19,6 @@ UNREAD_BY_R_SUITES = (
     # The Python suites' truth codec and their XML and JSON schema validation.
     "host_fixtures.py",
     "define-fixtures/schemas/**",
-    # R runs no Python entries. public_environment.R reads one case's Python
-    # lock, as a packaging lock in a foreign syntax.
-    "project-original/*/python/uv.lock",
-    "!project-original/negative-function-contract/python/uv.lock",
     # Top-level JSON truth; the R suites read the generated R truth instead.
     "specification-original/*.json",
     # R strings cannot hold NUL, so original_specifications.R skips this case.
@@ -133,9 +130,26 @@ def stage(destination: Path):
     from tools.staging import stage_grammar_inputs as grammar_helper
 
     grammar_helper.stage(resources / "grammar-original")
+    # Package checks use base R functions. The original project studies and
+    # their separately installed helper belong to public benchmark qualification.
+    projects = resources / "project-base"
+    negative = projects / "negative-function-contract"
     from tools.staging import stage_project_inputs as project_helper
 
-    project_helper.stage(resources / "project-original")
+    # Retain the foreign Python lock for the R lock-kind refusal test.
+    project_helper.stage_case(
+        REPOSITORY / "benchmarks/negative-function-contract", negative
+    )
+    environment = negative / "r/environment.yaml"
+    environment.write_text(
+        environment.read_text().replace(
+            "yamaabenchmarks::project_value", "base::identity"
+        )
+    )
+    lock = json.loads((negative / "r/renv.lock").read_text())
+    del lock["Packages"]["yamaabenchmarks"]
+    for case in (negative, projects / "base-round"):
+        (case / "r/renv.lock").write_text(json.dumps(lock, indent=2) + "\n")
     from tools.staging import stage_define_inputs as define_helper
 
     define_helper.stage(resources / "define-fixtures")
